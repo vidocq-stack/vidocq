@@ -46,7 +46,9 @@ public final class VaubanBceBeanInfo implements BeanInfo {
 
     @Override
     public Collection<AnnotationInfo> qualifiers() {
-        return List.of(); // simplified for invoker tests
+        return descriptor.qualifiers().stream()
+                .map(q -> (AnnotationInfo) new SimpleAnnotationInfo(q.annotationName().value(), java.util.Map.of()))
+                .toList();
     }
 
     @Override
