@@ -2,6 +2,9 @@ package fr.vidocq.vidocq.examples.rest;
 
 import fr.vidocq.vidocq.core.Vidocq;
 
+import java.io.IOException;
+import java.util.logging.LogManager;
+
 /**
  * Point d'entrée de l'application REST d'exemple.
  * <p>
@@ -22,7 +25,9 @@ import fr.vidocq.vidocq.core.Vidocq;
  */
 public class RestExampleApp {
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws IOException {
+        LogManager.getLogManager().readConfiguration(
+                RestExampleApp.class.getResourceAsStream("/logging.properties"));
         Vidocq.main(args);
     }
 }
