@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.1.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.1.0 http://maven.apache.org/xsd/maven-4.1.0.xsd">
+    <modelVersion>4.1.0</modelVersion>
+
+    <parent>
+        <groupId>fr.vidocq.vidocq</groupId>
+        <artifactId>vidocq-core-extensions</artifactId>
+    </parent>
+
+    <artifactId>vidocq-rest-extension</artifactId>
+    <name>Vidocq :: Core Extensions :: REST</name>
+    <description>JAX-RS extension for Vidocq using Jersey and Grizzly</description>
+
+    <properties>
+        <jersey.version>4.0.2</jersey.version>
+    </properties>
+
+    <dependencies>
+        <!-- Vidocq SPI -->
+        <dependency>
+            <groupId>fr.vidocq.vidocq</groupId>
+            <artifactId>vidocq-spi</artifactId>
+        </dependency>
+
+        <!-- Vauban CDI -->
+        <dependency>
+            <groupId>fr.vidocq.vauban</groupId>
+            <artifactId>vauban-core</artifactId>
+        </dependency>
+
+        <!-- Jersey JAX-RS + Grizzly HTTP -->
+        <dependency>
+            <groupId>org.glassfish.jersey.containers</groupId>
+            <artifactId>jersey-container-grizzly2-http</artifactId>
+            <version>${jersey.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.glassfish.jersey.inject</groupId>
+            <artifactId>jersey-hk2</artifactId>
+            <version>${jersey.version}</version>
+        </dependency>
+
+        <!-- Jakarta REST API -->
+        <dependency>
+            <groupId>jakarta.ws.rs</groupId>
+            <artifactId>jakarta.ws.rs-api</artifactId>
+            <version>4.0.0</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

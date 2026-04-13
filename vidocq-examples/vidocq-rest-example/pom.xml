@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.1.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.1.0 http://maven.apache.org/xsd/maven-4.1.0.xsd">
+    <modelVersion>4.1.0</modelVersion>
+
+    <parent>
+        <groupId>fr.vidocq.vidocq</groupId>
+        <artifactId>vidocq-examples</artifactId>
+    </parent>
+
+    <artifactId>vidocq-rest-example</artifactId>
+    <name>Vidocq :: Examples :: REST</name>
+    <description>REST service example using Vidocq</description>
+
+    <dependencies>
+        <!-- Vidocq Core -->
+        <dependency>
+            <groupId>fr.vidocq.vidocq</groupId>
+            <artifactId>vidocq-core</artifactId>
+        </dependency>
+
+        <!-- REST Extension -->
+        <dependency>
+            <groupId>fr.vidocq.vidocq</groupId>
+            <artifactId>vidocq-rest-extension</artifactId>
+        </dependency>
+
+        <!-- Jakarta REST API -->
+        <dependency>
+            <groupId>jakarta.ws.rs</groupId>
+            <artifactId>jakarta.ws.rs-api</artifactId>
+            <version>4.0.0</version>
+        </dependency>
+
+        <!-- Vauban Indexer (annotation processing) -->
+        <dependency>
+            <groupId>fr.vidocq.vauban</groupId>
+            <artifactId>vauban-indexer</artifactId>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>fr.vidocq.vidocq</groupId>
+                <artifactId>vidocq-maven-plugin</artifactId>
+                <version>${project.version}</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>generate</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

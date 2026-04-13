@@ -1,0 +1,104 @@
+# Vidocq
+
+Modular Java SE application server built on [Vauban](https://github.com/VidocqMP/vauban) (CDI 4.1).
+
+## Architecture
+
+Vidocq is a lightweight server with a Quarkus-inspired extension mechanism, but simpler:
+
+```
+vidocq-spi          Extension interfaces (VidocqExtension, VidocqConfiguration)
+vidocq-core         Engine: bootstrap, extension discovery, lifecycle
+vidocq-maven-plugin Maven plugin: bean indexing + distribution ZIP packaging
+```
+
+### Extension mechanism
+
+Extensions implement `VidocqExtension` and are discovered via `ServiceLoader`.
+
+Lifecycle:
+
+1. **configure** — configuration before CDI boot
+2. **beforeStart** — enrich the `VaubanContainerBuilder`
+3. **onStart** — CDI container is ready, start services
+4. **onStop** — shutdown (reverse priority order)
+
+```java
+public class MyExtension implements VidocqExtension {
+
+    @Override
+    public String name() { return "my-extension"; }
+
+    @Override
+    public int priority() { return 1000; }
+
+    @Override
+    public void onStart(ExtensionContext context) {
+        // CDI container is ready
+        var beanManager = context.beanManager();
+    }
+}
+```
+
+Registration via `META-INF/services/fr.vidocq.vidocq.spi.VidocqExtension` or `module-info.java`:
+
+```java
+provides VidocqExtension with MyExtension;
+```
+
+### Configuration
+
+Properties are resolved in order:
+1. System properties (`-Dkey=value`)
+2. Environment variables (`KEY_NAME`)
+3. `vidocq.properties` classpath resource
+
+## Prerequisites
+
+- Java 25 (`sdk use java 25-tem`)
+- Maven 4.0.0-rc-5 (`sdk use maven 4.0.0-rc-5`)
+
+## Build
+
+```bash
+mvn clean install
+```
+
+## Packaging
+
+With the Maven plugin:
+
+```xml
+<plugin>
+    <groupId>fr.vidocq.vidocq</groupId>
+    <artifactId>vidocq-maven-plugin</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+    <executions>
+        <execution>
+            <goals>
+                <goal>generate</goal>
+                <goal>package</goal>
+            </goals>
+        </execution>
+    </executions>
+</plugin>
+```
+
+Produces a distribution ZIP:
+
+```
+myapp-1.0/
+  bin/myapp.sh    Unix launcher (module-path)
+  bin/myapp.cmd   Windows launcher
+  lib/*.jar       Application + dependencies
+```
+
+## Available extensions
+
+| Extension | Description |
+|-----------|-------------|
+| [vidocq-rest-extension](https://github.com/VidocqMP/vidocq-rest-extension) | JAX-RS via Jersey + Grizzly |
+
+## License
+
+Apache License 2.0

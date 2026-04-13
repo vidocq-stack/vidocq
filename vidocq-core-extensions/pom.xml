@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.1.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.1.0 http://maven.apache.org/xsd/maven-4.1.0.xsd">
+    <modelVersion>4.1.0</modelVersion>
+
+    <parent>
+        <groupId>fr.vidocq.vidocq</groupId>
+        <artifactId>vidocq-parent</artifactId>
+    </parent>
+
+    <artifactId>vidocq-core-extensions</artifactId>
+    <packaging>pom</packaging>
+    <name>Vidocq :: Core Extensions</name>
+    <description>MicroProfile 7.1 core extensions for Vidocq</description>
+
+    <modules>
+        <module>vidocq-rest-extension</module>
+    </modules>
+</project>
