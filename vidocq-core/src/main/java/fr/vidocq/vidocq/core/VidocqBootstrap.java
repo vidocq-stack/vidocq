@@ -35,6 +35,7 @@ public final class VidocqBootstrap {
 
     private VidocqConfiguration configuration;
     private List<VidocqExtension> extensions = List.of();
+    private List<String> additionalBeanClassNames;
     private VaubanContainer container;
 
     private VidocqBootstrap() {}
@@ -63,6 +64,16 @@ public final class VidocqBootstrap {
     }
 
     /**
+     * Phase 1 (variante) : configure avec des classes beans additionnelles.
+     * Utilisé par le container Arquillian pour injecter les classes du deployment.
+     */
+    public VidocqBootstrap configure(java.util.List<String> additionalBeanClassNames) {
+        configure();
+        this.additionalBeanClassNames = additionalBeanClassNames;
+        return this;
+    }
+
+    /**
      * Phase 2 : boot du container CDI et démarrage des extensions.
      */
     public VidocqBootstrap start() {
@@ -71,6 +82,18 @@ public final class VidocqBootstrap {
         // Build CDI container
         VaubanContainerBuilder builder = VaubanContainer.builder()
                 .scanClasspath();
+
+        // Add extra bean classes (e.g. from Arquillian deployment)
+        if (additionalBeanClassNames != null) {
+            ClassLoader cl = Thread.currentThread().getContextClassLoader();
+            for (String className : additionalBeanClassNames) {
+                try {
+                    builder.addBeanClass(cl.loadClass(className));
+                } catch (ClassNotFoundException e) {
+                    LOG.log(System.Logger.Level.WARNING, "Bean class not found: " + className);
+                }
+            }
+        }
 
         for (VidocqExtension ext : extensions) {
             ext.beforeStart(builder);
@@ -104,7 +127,7 @@ public final class VidocqBootstrap {
         }
     }
 
-    private void shutdown() {
+    public void shutdown() {
         LOG.log(System.Logger.Level.INFO, "Vidocq - Shutting down");
 
         // Stop extensions in reverse order

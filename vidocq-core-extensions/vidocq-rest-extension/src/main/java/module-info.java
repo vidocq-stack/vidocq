@@ -11,6 +11,8 @@ module fr.vidocq.vidocq.ext.rest {
     requires org.glassfish.hk2.api;
     requires org.glassfish.grizzly.http.server;
 
+    opens fr.vidocq.vidocq.ext.rest to fr.vidocq.vauban.core;
+
     provides fr.vidocq.vidocq.spi.VidocqExtension
             with fr.vidocq.vidocq.ext.rest.RestExtension;
 
