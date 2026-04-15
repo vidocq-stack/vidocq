@@ -37,6 +37,7 @@ public final class VidocqBootstrap {
     private List<VidocqExtension> extensions = List.of();
     private List<String> additionalBeanClassNames;
     private VaubanContainer container;
+    private long startTime;
 
     private VidocqBootstrap() {}
 
@@ -51,6 +52,7 @@ public final class VidocqBootstrap {
      * Phase 1 : charge la configuration et découvre les extensions.
      */
     public VidocqBootstrap configure() {
+        this.startTime = System.nanoTime();
         LOG.log(System.Logger.Level.INFO, "Vidocq - Configuration phase");
 
         this.configuration = new VidocqConfigurationImpl();
@@ -111,7 +113,10 @@ public final class VidocqBootstrap {
         // Shutdown hook
         Runtime.getRuntime().addShutdownHook(new Thread(this::shutdown, "vidocq-shutdown"));
 
-        LOG.log(System.Logger.Level.INFO, "Vidocq - Started");
+        long elapsed = System.nanoTime() - startTime;
+        long ms = elapsed / 1_000_000;
+        long us = (elapsed / 1_000) % 1_000;
+        LOG.log(System.Logger.Level.INFO, "Vidocq - Started in " + ms + "." + String.format("%03d", us) + " ms");
         return this;
     }
 

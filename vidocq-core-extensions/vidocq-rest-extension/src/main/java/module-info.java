@@ -1,3 +1,6 @@
+import fr.vidocq.vidocq.ext.rest.VidocqRestExtension;
+import fr.vidocq.vidocq.ext.rest.VidocqRestScopeBCE;
+
 module fr.vidocq.vidocq.ext.rest {
     requires fr.vidocq.vidocq.spi;
     requires fr.vidocq.vauban.core;
@@ -14,8 +17,8 @@ module fr.vidocq.vidocq.ext.rest {
     opens fr.vidocq.vidocq.ext.rest to fr.vidocq.vauban.core;
 
     provides fr.vidocq.vidocq.spi.VidocqExtension
-            with fr.vidocq.vidocq.ext.rest.RestExtension;
+            with VidocqRestExtension;
 
     provides jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension
-            with fr.vidocq.vidocq.ext.rest.RestScopeExtension;
+            with VidocqRestScopeBCE;
 }

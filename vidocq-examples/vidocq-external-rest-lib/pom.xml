@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.1.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.1.0 http://maven.apache.org/xsd/maven-4.1.0.xsd">
+    <modelVersion>4.1.0</modelVersion>
+
+    <parent>
+        <groupId>fr.vidocq.vidocq</groupId>
+        <artifactId>vidocq-examples</artifactId>
+    </parent>
+
+    <artifactId>vidocq-external-rest-lib</artifactId>
+    <name>Vidocq :: Examples :: External REST Library</name>
+    <description>
+        Simulates a third-party JAR with JAX-RS resources and CDI beans.
+        No VaubanProcessor APT, no Maven plugin — plain Java compilation.
+        The consuming application must handle bean discovery and proxy generation.
+    </description>
+
+    <!--
+        Volontairement PAS de VaubanProcessor APT ni de vidocq-maven-plugin.
+        Ce module simule une dependance externe non pre-traitee.
+        Pas de META-INF/vauban-beans.list, pas de vauban-bce-processed.
+    -->
+
+    <dependencies>
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.ws.rs</groupId>
+            <artifactId>jakarta.ws.rs-api</artifactId>
+            <version>4.0.0</version>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.inject</groupId>
+            <artifactId>jakarta.inject-api</artifactId>
+            <version>2.0.1</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- Disable annotation processing explicitly -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <proc>none</proc>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

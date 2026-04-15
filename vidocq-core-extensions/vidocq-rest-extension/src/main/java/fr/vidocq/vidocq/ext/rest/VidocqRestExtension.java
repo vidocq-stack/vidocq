@@ -24,9 +24,9 @@ import org.glassfish.jersey.server.model.ResourceMethod;
  *   <li>{@code vidocq.rest.port} — port d'écoute (défaut: {@code 8080})</li>
  * </ul>
  */
-public class RestExtension implements VidocqExtension {
+public class VidocqRestExtension implements VidocqExtension {
 
-    private static final System.Logger LOG = System.getLogger(RestExtension.class.getName());
+    private static final System.Logger LOG = System.getLogger(VidocqRestExtension.class.getName());
 
     private String host = "0.0.0.0";
     private int port = 8080;

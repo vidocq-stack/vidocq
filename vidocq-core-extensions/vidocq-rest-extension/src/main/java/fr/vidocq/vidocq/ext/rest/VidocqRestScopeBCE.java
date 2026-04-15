@@ -17,10 +17,11 @@ import jakarta.ws.rs.Path;
  * Comportement identique à MicroProfile REST Client / SmallRye JAX-RS.
  * </p>
  */
-public class RestScopeExtension implements BuildCompatibleExtension {
+public class VidocqRestScopeBCE implements BuildCompatibleExtension {
 
-    private static final System.Logger LOG = System.getLogger(RestScopeExtension.class.getName());
+    private static final System.Logger LOG = System.getLogger(VidocqRestScopeBCE.class.getName());
 
+    @SuppressWarnings("unused")
     @Enhancement(types = Object.class, withAnnotations = Path.class)
     public void addDefaultScope(ClassConfig clazz) {
         var info = clazz.info();
