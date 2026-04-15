@@ -1,13 +1,6 @@
-### ===================================================================
-### Vidocq REST Example — Tests des endpoints
-### Lancer RestExampleApp puis executer ces requetes depuis IntelliJ
-### ===================================================================
-
-### -------------------------------------------------------------------
+// ### Vidocq REST Example — Tests des endpoints
+// ### Lancer RestExampleApp puis executer ces requetes depuis IntelliJ
 ### HelloSimpleJaxRSResource (@Path sans scope CDI — enrichi par BCE)
-### -------------------------------------------------------------------
-
-### GET /hello-simple-jaxrs — texte
 GET http://localhost:8080/hello-simple-jaxrs
 Accept: text/plain
 
@@ -19,8 +12,6 @@ Accept: text/plain
         client.assert(response.body.length > 0, "Body should not be empty");
     });
 %}
-
-###
 
 ### GET /hello-simple-jaxrs/json — JSON
 GET http://localhost:8080/hello-simple-jaxrs/json
@@ -35,11 +26,7 @@ Accept: application/json
     });
 %}
 
-### -------------------------------------------------------------------
 ### HelloCDIRequestScopedResource (@RequestScoped explicite)
-### -------------------------------------------------------------------
-
-### GET /hello-cdi-request-scoped — texte
 GET http://localhost:8080/hello-cdi-request-scoped
 Accept: text/plain
 
@@ -61,11 +48,7 @@ Accept: application/json
     });
 %}
 
-### -------------------------------------------------------------------
 ### HelloCDIApplicationScopedResource (@ApplicationScoped explicite)
-### -------------------------------------------------------------------
-
-### GET /hello-cdi-application-scoped — texte
 GET http://localhost:8080/hello-cdi-application-scoped
 Accept: text/plain
 
@@ -74,8 +57,6 @@ Accept: text/plain
         client.assert(response.status === 200, "Expected 200, got " + response.status);
     });
 %}
-
-###
 
 ### GET /hello-cdi-application-scoped/json — JSON
 GET http://localhost:8080/hello-cdi-application-scoped/json
@@ -87,11 +68,7 @@ Accept: application/json
     });
 %}
 
-### -------------------------------------------------------------------
 ### ExternalResource (librairie externe non pre-traitee par APT)
-### -------------------------------------------------------------------
-
-### GET /external — texte
 GET http://localhost:8080/external
 Accept: text/plain
 
@@ -104,11 +81,7 @@ Accept: text/plain
     });
 %}
 
-### -------------------------------------------------------------------
 ### 404 — endpoint inexistant
-### -------------------------------------------------------------------
-
-### GET /unknown — doit retourner 404
 GET http://localhost:8080/unknown
 Accept: text/plain
 
