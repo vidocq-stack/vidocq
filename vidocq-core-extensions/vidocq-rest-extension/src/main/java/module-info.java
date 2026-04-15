@@ -7,12 +7,14 @@ module fr.vidocq.vidocq.ext.rest {
 
     requires jakarta.cdi;
     requires jakarta.ws.rs;
+    requires jakarta.servlet;
     requires org.glassfish.jersey.core.server;
-    requires org.glassfish.jersey.container.grizzly2.http;
+    requires org.glassfish.jersey.container.servlet;
     requires org.glassfish.jersey.inject.hk2;
     requires org.glassfish.hk2.utilities;
     requires org.glassfish.hk2.api;
-    requires org.glassfish.grizzly.http.server;
+    requires org.eclipse.jetty.server;
+    requires org.eclipse.jetty.ee10.servlet;
 
     opens fr.vidocq.vidocq.ext.rest to fr.vidocq.vauban.core;
 

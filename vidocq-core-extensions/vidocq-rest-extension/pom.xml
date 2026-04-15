@@ -11,10 +11,11 @@
 
     <artifactId>vidocq-rest-extension</artifactId>
     <name>Vidocq :: Core Extensions :: REST</name>
-    <description>JAX-RS extension for Vidocq using Jersey and Grizzly</description>
+    <description>JAX-RS extension for Vidocq using Jersey and Jetty 12</description>
 
     <properties>
         <jersey.version>4.0.2</jersey.version>
+        <jetty.version>12.1.6</jetty.version>
     </properties>
 
     <dependencies>
@@ -30,16 +31,23 @@
             <artifactId>vauban-core</artifactId>
         </dependency>
 
-        <!-- Jersey JAX-RS + Grizzly HTTP -->
+        <!-- Jersey JAX-RS -->
         <dependency>
             <groupId>org.glassfish.jersey.containers</groupId>
-            <artifactId>jersey-container-grizzly2-http</artifactId>
+            <artifactId>jersey-container-servlet</artifactId>
             <version>${jersey.version}</version>
         </dependency>
         <dependency>
             <groupId>org.glassfish.jersey.inject</groupId>
             <artifactId>jersey-hk2</artifactId>
             <version>${jersey.version}</version>
+        </dependency>
+
+        <!-- Jetty 12 -->
+        <dependency>
+            <groupId>org.eclipse.jetty.ee10</groupId>
+            <artifactId>jetty-ee10-servlet</artifactId>
+            <version>${jetty.version}</version>
         </dependency>
 
         <!-- Jakarta REST API -->

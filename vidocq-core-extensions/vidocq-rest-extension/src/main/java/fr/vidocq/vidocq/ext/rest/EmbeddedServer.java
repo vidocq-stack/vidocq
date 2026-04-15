@@ -1,82 +1,76 @@
 package fr.vidocq.vidocq.ext.rest;
 
 import fr.vidocq.vauban.core.context.RequestContext;
-import org.glassfish.grizzly.http.server.HttpHandler;
-import org.glassfish.grizzly.http.server.HttpServer;
-import org.glassfish.grizzly.http.server.Request;
-import org.glassfish.grizzly.http.server.Response;
-import org.glassfish.jersey.grizzly2.httpserver.GrizzlyHttpServerFactory;
-import org.glassfish.jersey.server.ResourceConfig;
+import jakarta.servlet.DispatcherType;
+import jakarta.servlet.ServletException;
+import org.eclipse.jetty.ee10.servlet.FilterHolder;
+import org.eclipse.jetty.ee10.servlet.ServletContextHandler;
+import org.eclipse.jetty.ee10.servlet.ServletHolder;
+import org.eclipse.jetty.server.Server;
+import org.eclipse.jetty.server.ServerConnector;
+import org.glassfish.jersey.servlet.ServletContainer;
 
 import java.io.IOException;
-import java.net.URI;
+import java.util.EnumSet;
 
 /**
- * Serveur HTTP embarqué basé sur Grizzly.
+ * Serveur HTTP embarque base sur Jetty 12.
  * <p>
- * Wrapper léger autour de {@link GrizzlyHttpServerFactory} pour
- * démarrer/arrêter le serveur HTTP avec une configuration Jersey.
- * </p>
- * <p>
- * Chaque requête HTTP est enveloppée dans {@link RequestContext#runInScope(Runnable)}
- * pour activer le contexte CDI {@code @RequestScoped}.
+ * Un filtre Servlet enveloppe chaque requete dans
+ * {@link RequestContext#runInScope(Runnable)} pour activer le
+ * contexte CDI {@code @RequestScoped}.
  * </p>
  */
 final class EmbeddedServer {
 
     private static final System.Logger LOG = System.getLogger(EmbeddedServer.class.getName());
 
-    private HttpServer server;
+    private Server server;
 
-    void start(String host, int port, ResourceConfig resourceConfig) {
-        URI baseUri = URI.create("http://" + host + ":" + port + "/");
+    void start(String host, int port, org.glassfish.jersey.server.ResourceConfig resourceConfig) {
+        server = new Server();
 
-        // Create server without starting (false)
-        this.server = GrizzlyHttpServerFactory.createHttpServer(baseUri, resourceConfig, false);
+        // Connector
+        var connector = new ServerConnector(server);
+        connector.setHost(host);
+        connector.setPort(port);
+        server.addConnector(connector);
 
-        // Wrap the Jersey handler with CDI request scope activation
-        var serverConfig = server.getServerConfiguration();
-        var handlers = serverConfig.getHttpHandlersWithMapping();
+        // Servlet context with Jersey
+        var context = new ServletContextHandler("/");
+        var jerseyServlet = new ServletHolder(new ServletContainer(resourceConfig));
+        context.addServlet(jerseyServlet, "/*");
 
+        // CDI request scope filter
         RequestContext requestContext = new RequestContext();
-
-        for (var entry : handlers.entrySet()) {
-            HttpHandler original = entry.getKey();
-            var mappings = entry.getValue();
-
-            serverConfig.removeHttpHandler(original);
-
-            HttpHandler wrapped = new HttpHandler() {
-                @Override
-                public void service(Request request, Response response) throws Exception {
-                    requestContext.runInScope(() -> {
-                        try {
-                            original.service(request, response);
-                        } catch (Exception e) {
-                            throw new RuntimeException(e);
-                        }
-                    });
-                }
-            };
-
-            String[] paths = new String[mappings.length];
-            for (int i = 0; i < mappings.length; i++) {
-                paths[i] = mappings[i].getContextPath();
+        context.addFilter(new FilterHolder(
+                (request, response, chain)
+                        -> requestContext.runInScope(() -> {
+            try {
+                chain.doFilter(request, response);
+            } catch (IOException | ServletException e) {
+                throw new RuntimeException(e);
             }
-            serverConfig.addHttpHandler(wrapped, paths);
-        }
+        })), "/*", EnumSet.of(DispatcherType.REQUEST));
+
+        server.setHandler(context);
 
         try {
             server.start();
-        } catch (IOException e) {
-            throw new IllegalStateException("Failed to start Grizzly HTTP server on " + baseUri, e);
+            LOG.log(System.Logger.Level.INFO, "Jetty server started on http://" + host + ":" + port + "/");
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to start Jetty on " + host + ":" + port, e);
         }
     }
 
     void stop() {
         if (server != null) {
-            server.shutdownNow();
-            LOG.log(System.Logger.Level.INFO, "Grizzly HTTP server stopped");
+            try {
+                server.stop();
+                LOG.log(System.Logger.Level.INFO, "Jetty server stopped");
+            } catch (Exception e) {
+                LOG.log(System.Logger.Level.ERROR, "Error stopping Jetty", e);
+            }
         }
     }
 }
