@@ -20,7 +20,7 @@
             <artifactId>vidocq-core</artifactId>
         </dependency>
 
-        <!-- REST Extension -->
+        <!-- REST Extension (fournit RestScopeExtension BCE) -->
         <dependency>
             <groupId>fr.vidocq.vidocq</groupId>
             <artifactId>vidocq-rest-extension</artifactId>
@@ -33,15 +33,26 @@
             <version>4.0.0</version>
         </dependency>
 
-        <!-- Vauban Indexer (annotation processing) -->
         <dependency>
             <groupId>fr.vidocq.vauban</groupId>
             <artifactId>vauban-indexer</artifactId>
+        </dependency>
+
+        <!-- Librairie externe non pre-traitee (simule un JAR tiers) -->
+        <dependency>
+            <groupId>fr.vidocq.vidocq</groupId>
+            <artifactId>vidocq-external-rest-lib</artifactId>
+            <version>${project.version}</version>
         </dependency>
     </dependencies>
 
     <build>
         <plugins>
+            <!--
+                vidocq:generate traite les dependances non pre-traitees.
+                Au runtime, les BCEs @Enhancement s'executent automatiquement
+                pour les beans sans scope (via BceProcessor.processEnhancementOnly).
+            -->
             <plugin>
                 <groupId>fr.vidocq.vidocq</groupId>
                 <artifactId>vidocq-maven-plugin</artifactId>

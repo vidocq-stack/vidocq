@@ -15,6 +15,7 @@
     <description>Example applications for Vidocq</description>
 
     <modules>
+        <module>vidocq-external-rest-lib</module>
         <module>vidocq-rest-example</module>
     </modules>
 </project>

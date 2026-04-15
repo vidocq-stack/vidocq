@@ -22,16 +22,16 @@ import java.util.List;
 
 /**
  * Genere l'index des beans CDI et pre-genere les proxies/intercepteurs
- * pour une application Vidocq.
+ * pour les dependances non pre-traitees par le VaubanProcessor APT.
  * <p>
- * Delegue a {@link VaubanGenerator} qui :
- * <ol>
- *   <li>Scanne les classes du projet et ses dependances</li>
- *   <li>Execute la decouverte de beans CDI (scopes, intercepteurs, producers)</li>
- *   <li>Pre-genere les client proxies ({@code _ClientProxy}) pour les beans normal-scoped</li>
- *   <li>Pre-genere les sous-classes interceptees ({@code $$Intercepted})</li>
- *   <li>Ecrit {@code META-INF/vauban-beans.list}</li>
- * </ol>
+ * Pour les classes du projet, le VaubanProcessor APT fait tout a la compilation.
+ * Ce Mojo traite les JARs de dependances qui n'ont pas ete pre-traites
+ * (pas de {@code META-INF/vauban-bce-processed}).
+ * </p>
+ * <p>
+ * Au runtime, les BCEs {@code @Enhancement} s'executent automatiquement
+ * pour les beans sans scope provenant de JARs non pre-traites
+ * (via {@code BceProcessor.processEnhancementOnly()}).
  * </p>
  */
 @Mojo(name = "generate",
@@ -47,7 +47,7 @@ public class VidocqGenerateMojo extends AbstractMojo {
 
     @Override
     public void execute() throws MojoExecutionException {
-        getLog().info("Vidocq - Generating bean index and proxies");
+        getLog().info("Vidocq - Generating bean index and proxies for dependencies");
 
         Path classesDir = outputDirectory.toPath();
         if (!Files.isDirectory(classesDir)) {
@@ -56,20 +56,34 @@ public class VidocqGenerateMojo extends AbstractMojo {
         }
 
         try {
-            // Only scan Vidocq/Vauban JARs, not Jersey/HK2 internals.
-            // Third-party beans are not CDI-managed by Vidocq.
-            List<Path> vidocqExtensionJars = collectVidocqExtensionJars();
+            List<Path> vidocqDeps = collectVidocqDependencies();
+            if (vidocqDeps.isEmpty()) {
+                getLog().info("No Vidocq dependencies to process");
+                return;
+            }
 
-            // Build a ClassLoader with project classes + all dependencies
-            // so VaubanGenerator can resolve types for proxy generation
-            URLClassLoader classLoader = buildClassLoader(vidocqExtensionJars, classesDir);
+            boolean aptProcessed = Files.exists(classesDir.resolve("META-INF/vauban-bce-processed"));
+            if (aptProcessed) {
+                getLog().info("APT already processed project classes (vauban-bce-processed found)");
+            }
+
+            URLClassLoader classLoader = buildClassLoader(classesDir);
 
             var config = new VaubanGenerator.Config(
-                    vidocqExtensionJars,
-                    classesDir,
+                    vidocqDeps,
+                    aptProcessed ? null : classesDir,
                     classesDir,
                     classLoader
             );
+
+            // Sauvegarder le beans.list existant (genere par l'APT)
+            Path beansListPath = classesDir.resolve("META-INF/vauban-beans.list");
+            List<String> existingBeans = new ArrayList<>();
+            if (Files.exists(beansListPath)) {
+                existingBeans = Files.readAllLines(beansListPath).stream()
+                        .filter(l -> !l.isBlank() && !l.startsWith("#"))
+                        .toList();
+            }
 
             GenerationResult result;
             try {
@@ -78,7 +92,20 @@ public class VidocqGenerateMojo extends AbstractMojo {
                 classLoader.close();
             }
 
-            getLog().info("Bean index: " + result.discoveredBeanClasses().size() + " class(es)");
+            // Merger les beans de l'APT avec ceux des dependances
+            if (!existingBeans.isEmpty()) {
+                var merged = new java.util.TreeSet<>(existingBeans);
+                merged.addAll(result.discoveredBeanClasses());
+                Files.createDirectories(beansListPath.getParent());
+                var lines = new ArrayList<String>();
+                lines.add("# Vauban discovered beans — APT + vidocq-maven-plugin");
+                lines.addAll(merged);
+                Files.write(beansListPath, lines);
+                getLog().info("Bean index (merged): " + merged.size() + " class(es)");
+            } else {
+                getLog().info("Bean index: " + result.discoveredBeanClasses().size() + " class(es)");
+            }
+
             for (String cls : result.discoveredBeanClasses()) {
                 getLog().info("  - " + cls);
             }
@@ -106,7 +133,7 @@ public class VidocqGenerateMojo extends AbstractMojo {
         }
     }
 
-    private URLClassLoader buildClassLoader(List<Path> jars, Path classesDir) throws MalformedURLException {
+    private URLClassLoader buildClassLoader(Path classesDir) throws MalformedURLException {
         List<URL> urls = new ArrayList<>();
         urls.add(classesDir.toUri().toURL());
         for (var artifact : project.getArtifacts()) {
@@ -117,17 +144,16 @@ public class VidocqGenerateMojo extends AbstractMojo {
         return new URLClassLoader(urls.toArray(new URL[0]), getClass().getClassLoader());
     }
 
-    private List<Path> collectVidocqExtensionJars() {
-        List<Path> jars = new ArrayList<>();
+    private List<Path> collectVidocqDependencies() {
+        List<Path> deps = new ArrayList<>();
         for (var artifact : project.getArtifacts()) {
-            if (artifact.getFile() != null && artifact.getFile().getName().endsWith(".jar")) {
-                // Only include Vidocq/Vauban JARs that may contain CDI beans
+            if (artifact.getFile() != null) {
                 String groupId = artifact.getGroupId();
                 if (groupId.startsWith("fr.vidocq.")) {
-                    jars.add(artifact.getFile().toPath());
+                    deps.add(artifact.getFile().toPath());
                 }
             }
         }
-        return jars;
+        return deps;
     }
 }

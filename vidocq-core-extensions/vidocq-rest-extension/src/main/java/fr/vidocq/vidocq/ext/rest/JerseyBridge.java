@@ -63,7 +63,6 @@ final class JerseyBridge {
         config.register(cdiBinder);
 
         Set<Bean<?>> allBeans = beanManager.getBeans(Object.class, Any.Literal.INSTANCE);
-        LOG.log(System.Logger.Level.INFO, "CDI beans discovered: " + allBeans.size());
         for (Bean<?> bean : allBeans) {
             Class<?> beanClass = bean.getBeanClass();
             if (beanClass.isAnnotationPresent(Path.class)) {

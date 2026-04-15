@@ -22,6 +22,10 @@
             <groupId>fr.vidocq.vauban</groupId>
             <artifactId>vauban-core</artifactId>
         </dependency>
+        <dependency>
+            <groupId>fr.vidocq.vauban</groupId>
+            <artifactId>vauban-classloader-spi</artifactId>
+        </dependency>
 
         <dependency>
             <groupId>org.junit.jupiter</groupId>
