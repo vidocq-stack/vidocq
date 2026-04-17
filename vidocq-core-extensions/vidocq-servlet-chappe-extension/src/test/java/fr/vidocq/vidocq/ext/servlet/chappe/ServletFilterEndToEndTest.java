@@ -11,11 +11,9 @@ import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.net.ServerSocket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -29,11 +27,6 @@ class ServletFilterEndToEndTest {
 
     private Server server;
     private int port;
-
-    @BeforeEach
-    void setUp() throws Exception {
-        this.port = freePort();
-    }
 
     @AfterEach
     void tearDown() {
@@ -116,8 +109,9 @@ class ServletFilterEndToEndTest {
                 FilterMapping.onRequest(UrlPatternMatcher.of("/*"), f2, "F2")
         ));
         var bridge = new ChappeServletBridge(dispatcher, reg, new VidocqServletContext("/"), "/");
-        server = Server.builder().host("127.0.0.1").port(port).handler(bridge).build();
-        server.start();
+        var r = TestServerLauncher.start(bridge);
+        server = r.server;
+        port = r.port;
 
         assertEquals("f1|f2", get("http://127.0.0.1:" + port + "/t").body());
     }
@@ -129,15 +123,9 @@ class ServletFilterEndToEndTest {
         var reg = new FilterRegistry(List.of(
                 FilterMapping.onRequest(UrlPatternMatcher.of(filterPattern), filter, "F")));
         var bridge = new ChappeServletBridge(dispatcher, reg, new VidocqServletContext("/"), "/");
-        Server s = Server.builder().host("127.0.0.1").port(port).handler(bridge).build();
-        s.start();
-        return s;
-    }
-
-    private static int freePort() throws Exception {
-        try (ServerSocket s = new ServerSocket(0)) {
-            return s.getLocalPort();
-        }
+        var r = TestServerLauncher.start(bridge);
+        this.port = r.port;
+        return r.server;
     }
 
     private static HttpResponse<String> get(String url) throws Exception {

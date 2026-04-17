@@ -2,6 +2,8 @@ package fr.vidocq.vidocq.ext.servlet.chappe.session;
 
 import jakarta.servlet.ServletContext;
 import jakarta.servlet.http.HttpSession;
+import jakarta.servlet.http.HttpSessionBindingEvent;
+import jakarta.servlet.http.HttpSessionBindingListener;
 
 import java.util.Collections;
 import java.util.Enumeration;
@@ -55,16 +57,43 @@ public final class HttpSessionImpl implements HttpSession {
     }
     @Override public void setAttribute(String name, Object value) {
         checkValid();
-        if (value == null) attributes.remove(name);
-        else attributes.put(name, value);
+        if (value == null) { removeAttribute(name); return; }
+        Object previous = attributes.put(name, value);
+        // HttpSessionBindingListener (spec Servlet 6.1 §7.7.3)
+        if (value instanceof HttpSessionBindingListener l) {
+            l.valueBound(new HttpSessionBindingEvent(this, name, value));
+        }
+        if (previous instanceof HttpSessionBindingListener l) {
+            l.valueUnbound(new HttpSessionBindingEvent(this, name, previous));
+        }
+        if (previous == null) {
+            manager.listenerRegistry().fireSessionAttributeAdded(this, name, value);
+        } else {
+            manager.listenerRegistry().fireSessionAttributeReplaced(this, name, previous);
+        }
     }
-    @Override public void removeAttribute(String name) { checkValid(); attributes.remove(name); }
+    @Override public void removeAttribute(String name) {
+        checkValid();
+        Object previous = attributes.remove(name);
+        if (previous == null) return;
+        if (previous instanceof HttpSessionBindingListener l) {
+            l.valueUnbound(new HttpSessionBindingEvent(this, name, previous));
+        }
+        manager.listenerRegistry().fireSessionAttributeRemoved(this, name, previous);
+    }
 
     @Override public void invalidate() {
         checkValid();
         invalidated = true;
-        attributes.clear();
-        manager.onInvalidate(id);
+        // Unbind attributes before destroying to trigger binding listeners + attribute removed events.
+        for (String name : Collections.list(Collections.enumeration(attributes.keySet()))) {
+            Object v = attributes.remove(name);
+            if (v instanceof HttpSessionBindingListener l) {
+                l.valueUnbound(new HttpSessionBindingEvent(this, name, v));
+            }
+            manager.listenerRegistry().fireSessionAttributeRemoved(this, name, v);
+        }
+        manager.onInvalidate(this);
     }
 
     @Override public boolean isNew() { checkValid(); return newSession; }

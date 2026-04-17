@@ -8,11 +8,13 @@ import fr.vidocq.vidocq.ext.servlet.chappe.container.VidocqServletContext;
 import fr.vidocq.vidocq.ext.servlet.chappe.dispatcher.FilterMapping;
 import fr.vidocq.vidocq.ext.servlet.chappe.dispatcher.FilterRegistry;
 import fr.vidocq.vidocq.ext.servlet.chappe.dispatcher.ServletDispatcher;
+import fr.vidocq.vidocq.ext.servlet.chappe.listener.ListenerRegistry;
 import fr.vidocq.vidocq.ext.servlet.chappe.session.InMemorySessionStore;
 import fr.vidocq.vidocq.ext.servlet.chappe.session.SessionManager;
 import fr.vidocq.vidocq.spi.ExtensionContext;
 import fr.vidocq.vidocq.spi.VidocqExtension;
 
+import java.util.EventListener;
 import java.util.List;
 
 /**
@@ -36,6 +38,8 @@ public final class VidocqServletChappeExtension implements VidocqExtension {
     private String contextPath = "/";
     private String listener = ChappeListener.DEFAULT;
     private int sessionTimeoutSeconds = 30 * 60;
+    private VidocqServletContext activeContext;
+    private ListenerRegistry activeRegistry;
 
     @Override
     public String name() {
@@ -61,23 +65,35 @@ public final class VidocqServletChappeExtension implements VidocqExtension {
                 WebAppDiscovery.discoverServlets(context.beanManager());
         List<FilterMapping> filterMappings =
                 WebAppDiscovery.discoverFilters(context.beanManager());
+        List<EventListener> eventListeners =
+                WebAppDiscovery.discoverListeners(context.beanManager());
 
-        if (servletMappings.isEmpty() && filterMappings.isEmpty()) {
+        if (servletMappings.isEmpty() && filterMappings.isEmpty() && eventListeners.isEmpty()) {
             LOG.log(System.Logger.Level.INFO,
-                    "No @WebServlet / @WebFilter beans discovered — servlet extension inactive");
+                    "No @WebServlet / @WebFilter / @WebListener beans discovered — servlet extension inactive");
             return;
         }
 
         ServletDispatcher dispatcher = new ServletDispatcher(servletMappings);
         FilterRegistry filterRegistry = new FilterRegistry(filterMappings);
+        ListenerRegistry listeners = new ListenerRegistry();
+        listeners.registerAll(eventListeners);
+
         VidocqServletContext servletContext = new VidocqServletContext(contextPath);
+        servletContext.setListenerRegistry(listeners);
         SessionManager sessionManager = new SessionManager(
                 new InMemorySessionStore(), servletContext, sessionTimeoutSeconds);
+        sessionManager.setListenerRegistry(listeners);
         ChappeServletBridge bridge = new ChappeServletBridge(
                 dispatcher, filterRegistry, servletContext, sessionManager, contextPath);
 
         String mountPrefix = "/".equals(contextPath) ? "" : contextPath;
         ChappeMountPoint.instance().mount(listener, mountPrefix.isEmpty() ? "/" : mountPrefix, bridge);
+
+        // Fire contextInitialized on all registered ServletContextListeners.
+        listeners.fireContextInitialized(servletContext);
+        this.activeContext = servletContext;
+        this.activeRegistry = listeners;
 
         for (ServletDispatcher.Mapping m : servletMappings) {
             LOG.log(System.Logger.Level.INFO,
@@ -87,6 +103,16 @@ public final class VidocqServletChappeExtension implements VidocqExtension {
             LOG.log(System.Logger.Level.INFO,
                     "Mapped filter {0} -> {1} [{2}]",
                     m.filterName(), m.matcher().pattern(), m.dispatcherTypes());
+        }
+        for (EventListener l : eventListeners) {
+            LOG.log(System.Logger.Level.INFO, "Registered listener: {0}", l.getClass().getName());
+        }
+    }
+
+    @Override
+    public void onStop() {
+        if (activeRegistry != null && activeContext != null) {
+            activeRegistry.fireContextDestroyed(activeContext);
         }
     }
 }

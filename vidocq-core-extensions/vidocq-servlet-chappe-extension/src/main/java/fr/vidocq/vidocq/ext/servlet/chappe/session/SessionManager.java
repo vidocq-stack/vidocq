@@ -1,5 +1,6 @@
 package fr.vidocq.vidocq.ext.servlet.chappe.session;
 
+import fr.vidocq.vidocq.ext.servlet.chappe.listener.ListenerRegistry;
 import jakarta.servlet.ServletContext;
 import jakarta.servlet.http.HttpSession;
 
@@ -22,6 +23,7 @@ public final class SessionManager {
     private final SecureRandom random = new SecureRandom();
     private final ServletContext servletContext;
     private final int defaultMaxInactiveSeconds;
+    private ListenerRegistry listenerRegistry = new ListenerRegistry();
 
     public SessionManager(SessionStore store, ServletContext servletContext,
                           int defaultMaxInactiveSeconds) {
@@ -29,6 +31,12 @@ public final class SessionManager {
         this.servletContext = servletContext;
         this.defaultMaxInactiveSeconds = defaultMaxInactiveSeconds;
     }
+
+    public void setListenerRegistry(ListenerRegistry registry) {
+        this.listenerRegistry = registry;
+    }
+
+    public ListenerRegistry listenerRegistry() { return listenerRegistry; }
 
     /** Résolution d'une session existante par son ID, en vérifiant l'expiration. */
     public HttpSessionImpl find(String id) {
@@ -50,12 +58,14 @@ public final class SessionManager {
         String id = generateId();
         HttpSessionImpl s = new HttpSessionImpl(id, servletContext, this, defaultMaxInactiveSeconds);
         store.put(s);
+        listenerRegistry.fireSessionCreated(s);
         return s;
     }
 
     /** Hook de callback depuis {@link HttpSessionImpl#invalidate}. */
-    void onInvalidate(String id) {
-        store.remove(id);
+    void onInvalidate(HttpSessionImpl session) {
+        listenerRegistry.fireSessionDestroyed(session);
+        store.remove(session.getId());
     }
 
     public SessionStore store() { return store; }

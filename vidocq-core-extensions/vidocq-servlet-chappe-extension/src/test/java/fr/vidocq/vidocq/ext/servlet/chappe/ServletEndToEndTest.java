@@ -9,11 +9,9 @@ import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.net.ServerSocket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -33,14 +31,15 @@ class ServletEndToEndTest {
     private Server server;
     private int port;
 
-    @BeforeEach
-    void setUp() throws Exception {
-        this.port = freePort();
-    }
-
     @AfterEach
     void tearDown() {
         if (server != null) server.stop();
+    }
+
+    private void startWith(fr.vidocq.chappe.api.Handler handler) {
+        var r = TestServerLauncher.start(handler);
+        this.server = r.server;
+        this.port = r.port;
     }
 
     @Test
@@ -58,8 +57,7 @@ class ServletEndToEndTest {
                 new ServletDispatcher.Mapping(UrlPatternMatcher.of("/hello"), hello, "HelloServlet")));
         var bridge = new ChappeServletBridge(dispatcher, new VidocqServletContext("/"), "/");
 
-        server = Server.builder().host("127.0.0.1").port(port).handler(bridge).build();
-        server.start();
+        startWith(bridge);
 
         assertEquals("Hello, world", body(get("http://127.0.0.1:" + port + "/hello")));
         assertEquals("Hello, alice", body(get("http://127.0.0.1:" + port + "/hello?name=alice")));
@@ -72,8 +70,7 @@ class ServletEndToEndTest {
                 new ServletDispatcher.Mapping(UrlPatternMatcher.of("/known"), s, "K")));
         var bridge = new ChappeServletBridge(dispatcher, new VidocqServletContext("/"), "/");
 
-        server = Server.builder().host("127.0.0.1").port(port).handler(bridge).build();
-        server.start();
+        startWith(bridge);
 
         HttpResponse<String> resp = get("http://127.0.0.1:" + port + "/unknown");
         assertEquals(404, resp.statusCode());
@@ -92,8 +89,7 @@ class ServletEndToEndTest {
                 new ServletDispatcher.Mapping(UrlPatternMatcher.of("/api/*"), echo, "Echo")));
         var bridge = new ChappeServletBridge(dispatcher, new VidocqServletContext("/"), "/");
 
-        server = Server.builder().host("127.0.0.1").port(port).handler(bridge).build();
-        server.start();
+        startWith(bridge);
 
         assertEquals("/api|/users/42",
                 body(get("http://127.0.0.1:" + port + "/api/users/42")));
@@ -112,18 +108,11 @@ class ServletEndToEndTest {
                 new ServletDispatcher.Mapping(UrlPatternMatcher.of("/t"), s, "T")));
         var bridge = new ChappeServletBridge(dispatcher, new VidocqServletContext("/"), "/");
 
-        server = Server.builder().host("127.0.0.1").port(port).handler(bridge).build();
-        server.start();
+        startWith(bridge);
 
         HttpResponse<String> r = get("http://127.0.0.1:" + port + "/t");
         assertEquals(418, r.statusCode());
         assertEquals("teapot", r.headers().firstValue("X-Custom").orElse(null));
-    }
-
-    private static int freePort() throws Exception {
-        try (ServerSocket s = new ServerSocket(0)) {
-            return s.getLocalPort();
-        }
     }
 
     private static HttpResponse<String> get(String url) throws Exception {

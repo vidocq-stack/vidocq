@@ -1,5 +1,6 @@
 package fr.vidocq.vidocq.ext.servlet.chappe.container;
 
+import fr.vidocq.vidocq.ext.servlet.chappe.listener.ListenerRegistry;
 import jakarta.servlet.Filter;
 import jakarta.servlet.FilterRegistration;
 import jakarta.servlet.RequestDispatcher;
@@ -34,11 +35,18 @@ public final class VidocqServletContext implements ServletContext {
     private String requestCharacterEncoding = "UTF-8";
     private String responseCharacterEncoding = "UTF-8";
     private int sessionTimeout = 30;
+    private ListenerRegistry listenerRegistry = new ListenerRegistry();
 
     public VidocqServletContext(String contextPath) {
         this.contextPath = contextPath;
         this.serverInfo = "Vidocq Servlet/Chappe";
     }
+
+    public void setListenerRegistry(ListenerRegistry registry) {
+        this.listenerRegistry = registry;
+    }
+
+    public ListenerRegistry listenerRegistry() { return listenerRegistry; }
 
     @Override public String getContextPath() { return contextPath; }
     @Override public ServletContext getContext(String uripath) { return null; }
@@ -71,10 +79,15 @@ public final class VidocqServletContext implements ServletContext {
         return Collections.enumeration(attributes.keySet());
     }
     @Override public void setAttribute(String name, Object object) {
-        if (object == null) attributes.remove(name);
-        else attributes.put(name, object);
+        if (object == null) { removeAttribute(name); return; }
+        Object previous = attributes.put(name, object);
+        if (previous == null) listenerRegistry.fireContextAttributeAdded(this, name, object);
+        else listenerRegistry.fireContextAttributeReplaced(this, name, previous);
     }
-    @Override public void removeAttribute(String name) { attributes.remove(name); }
+    @Override public void removeAttribute(String name) {
+        Object previous = attributes.remove(name);
+        if (previous != null) listenerRegistry.fireContextAttributeRemoved(this, name, previous);
+    }
 
     @Override public String getServletContextName() { return "vidocq"; }
 

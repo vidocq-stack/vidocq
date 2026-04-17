@@ -232,10 +232,26 @@ public final class HttpServletRequestImpl implements HttpServletRequest {
         return Collections.enumeration(attributes.keySet());
     }
     @Override public void setAttribute(String name, Object o) {
-        if (o == null) attributes.remove(name);
-        else attributes.put(name, o);
+        if (o == null) { removeAttribute(name); return; }
+        Object previous = attributes.put(name, o);
+        fr.vidocq.vidocq.ext.servlet.chappe.listener.ListenerRegistry reg = servletContextRegistry();
+        if (reg == null) return;
+        if (previous == null) reg.fireRequestAttributeAdded(servletContext, this, name, o);
+        else reg.fireRequestAttributeReplaced(servletContext, this, name, previous);
     }
-    @Override public void removeAttribute(String name) { attributes.remove(name); }
+    @Override public void removeAttribute(String name) {
+        Object previous = attributes.remove(name);
+        if (previous == null) return;
+        var reg = servletContextRegistry();
+        if (reg != null) reg.fireRequestAttributeRemoved(servletContext, this, name, previous);
+    }
+
+    private fr.vidocq.vidocq.ext.servlet.chappe.listener.ListenerRegistry servletContextRegistry() {
+        if (servletContext instanceof fr.vidocq.vidocq.ext.servlet.chappe.container.VidocqServletContext v) {
+            return v.listenerRegistry();
+        }
+        return null;
+    }
 
     // ---- Locale ----
 

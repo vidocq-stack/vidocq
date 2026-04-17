@@ -5,11 +5,11 @@ import fr.vidocq.chappe.api.Handler;
 import fr.vidocq.chappe.api.Request;
 import fr.vidocq.chappe.api.Response;
 import fr.vidocq.chappe.api.StatusCode;
-import fr.vidocq.vidocq.ext.servlet.chappe.container.VidocqServletContext;
 import fr.vidocq.vidocq.ext.servlet.chappe.dispatcher.FilterRegistry;
 import fr.vidocq.vidocq.ext.servlet.chappe.dispatcher.ServletDispatcher;
 import fr.vidocq.vidocq.ext.servlet.chappe.dispatcher.VidocqFilterChain;
 import fr.vidocq.vidocq.ext.servlet.chappe.http.CookieCodec;
+import fr.vidocq.vidocq.ext.servlet.chappe.listener.ListenerRegistry;
 import fr.vidocq.vidocq.ext.servlet.chappe.session.HttpSessionImpl;
 import fr.vidocq.vidocq.ext.servlet.chappe.session.SessionManager;
 import jakarta.servlet.DispatcherType;
@@ -36,13 +36,13 @@ public final class ChappeServletBridge implements Handler {
 
     private final ServletDispatcher dispatcher;
     private final FilterRegistry filterRegistry;
-    private final VidocqServletContext servletContext;
+    private final fr.vidocq.vidocq.ext.servlet.chappe.container.VidocqServletContext servletContext;
     private final SessionManager sessionManager;
     private final String contextPath;
 
     public ChappeServletBridge(ServletDispatcher dispatcher,
                                FilterRegistry filterRegistry,
-                               VidocqServletContext servletContext,
+                               fr.vidocq.vidocq.ext.servlet.chappe.container.VidocqServletContext servletContext,
                                SessionManager sessionManager,
                                String contextPath) {
         this.dispatcher = dispatcher;
@@ -55,14 +55,14 @@ public final class ChappeServletBridge implements Handler {
     /** Construction sans sessions. */
     public ChappeServletBridge(ServletDispatcher dispatcher,
                                FilterRegistry filterRegistry,
-                               VidocqServletContext servletContext,
+                               fr.vidocq.vidocq.ext.servlet.chappe.container.VidocqServletContext servletContext,
                                String contextPath) {
         this(dispatcher, filterRegistry, servletContext, null, contextPath);
     }
 
     /** Construction minimale (compat tests). */
     public ChappeServletBridge(ServletDispatcher dispatcher,
-                               VidocqServletContext servletContext,
+                               fr.vidocq.vidocq.ext.servlet.chappe.container.VidocqServletContext servletContext,
                                String contextPath) {
         this(dispatcher, new FilterRegistry(List.of()), servletContext, null, contextPath);
     }
@@ -71,6 +71,7 @@ public final class ChappeServletBridge implements Handler {
     public Response handle(Request request) throws Exception {
         String path = request.path();
         Optional<ServletDispatcher.Mapping> match = dispatcher.find(path);
+        ListenerRegistry registry = servletContext.listenerRegistry();
 
         HttpServletRequestImpl req;
         HttpServletResponseImpl res = new HttpServletResponseImpl();
@@ -82,12 +83,15 @@ public final class ChappeServletBridge implements Handler {
             if (filters.isEmpty()) {
                 return notFound();
             }
+            registry.fireRequestInitialized(servletContext, req);
             VidocqFilterChain chain = new VidocqFilterChain(filters, null);
             try {
                 chain.doFilter(req, res);
             } catch (ServletException e) {
+                registry.fireRequestDestroyed(servletContext, req);
                 return error(e);
             }
+            registry.fireRequestDestroyed(servletContext, req);
             if (res.getStatus() == 200 && res.bodyBytes().length == 0) {
                 return notFound();
             }
@@ -104,11 +108,14 @@ public final class ChappeServletBridge implements Handler {
         List<Filter> filters = filterRegistry.chainFor(path, DispatcherType.REQUEST);
         VidocqFilterChain chain = new VidocqFilterChain(filters, m.servlet());
 
+        registry.fireRequestInitialized(servletContext, req);
         try {
             chain.doFilter(req, res);
         } catch (ServletException e) {
+            registry.fireRequestDestroyed(servletContext, req);
             return error(e);
         }
+        registry.fireRequestDestroyed(servletContext, req);
         maybeAttachSessionCookie(req, res);
         return toChappeResponse(res);
     }

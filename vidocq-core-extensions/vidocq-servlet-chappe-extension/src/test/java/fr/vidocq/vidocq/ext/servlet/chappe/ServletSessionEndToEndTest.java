@@ -17,7 +17,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.net.ServerSocket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -35,8 +34,7 @@ class ServletSessionEndToEndTest {
     private VidocqServletContext ctx;
 
     @BeforeEach
-    void setUp() throws Exception {
-        this.port = freePort();
+    void setUp() {
         this.ctx = new VidocqServletContext("/");
         this.sessionManager = new SessionManager(new InMemorySessionStore(), ctx, 1800);
     }
@@ -148,8 +146,9 @@ class ServletSessionEndToEndTest {
                 new ServletDispatcher.Mapping(UrlPatternMatcher.of(pattern), servlet, "S")));
         var bridge = new ChappeServletBridge(
                 dispatcher, new FilterRegistry(List.of()), ctx, sessionManager, "/");
-        server = Server.builder().host("127.0.0.1").port(port).handler(bridge).build();
-        server.start();
+        var r = TestServerLauncher.start(bridge);
+        this.server = r.server;
+        this.port = r.port;
     }
 
     private static String extractSessionId(HttpResponse<?> r) {
@@ -160,10 +159,6 @@ class ServletSessionEndToEndTest {
                     return h.substring(eq + 1, semi < 0 ? h.length() : semi);
                 })
                 .orElse(null);
-    }
-
-    private static int freePort() throws Exception {
-        try (ServerSocket s = new ServerSocket(0)) { return s.getLocalPort(); }
     }
 
     private static HttpResponse<String> get(String url, String jsessionid) throws Exception {

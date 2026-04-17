@@ -12,10 +12,12 @@ import jakarta.servlet.DispatcherType;
 import jakarta.servlet.Filter;
 import jakarta.servlet.Servlet;
 import jakarta.servlet.annotation.WebFilter;
+import jakarta.servlet.annotation.WebListener;
 import jakarta.servlet.annotation.WebServlet;
 
 import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.EventListener;
 import java.util.List;
 import java.util.Set;
 
@@ -48,6 +50,17 @@ public final class WebAppDiscovery {
             }
         }
         return mappings;
+    }
+
+    public static List<EventListener> discoverListeners(BeanManager beanManager) {
+        List<EventListener> listeners = new ArrayList<>();
+        Set<Bean<?>> beans = beanManager.getBeans(EventListener.class, ANY);
+        for (Bean<?> bean : beans) {
+            Class<?> cls = bean.getBeanClass();
+            if (cls.getAnnotation(WebListener.class) == null) continue;
+            listeners.add((EventListener) resolveInstance(beanManager, bean, EventListener.class));
+        }
+        return listeners;
     }
 
     public static List<FilterMapping> discoverFilters(BeanManager beanManager) {
