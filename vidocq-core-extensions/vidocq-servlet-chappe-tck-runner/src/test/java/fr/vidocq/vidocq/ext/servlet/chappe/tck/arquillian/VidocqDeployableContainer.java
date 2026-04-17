@@ -1,6 +1,8 @@
 package fr.vidocq.vidocq.ext.servlet.chappe.tck.arquillian;
 
 import fr.vidocq.vidocq.ext.servlet.chappe.tck.ServletTestHarness;
+import fr.vidocq.vidocq.ext.servlet.chappe.webxml.WebAppDescriptor;
+import fr.vidocq.vidocq.ext.servlet.chappe.webxml.WebXmlParser;
 import jakarta.servlet.Filter;
 import jakarta.servlet.annotation.WebFilter;
 import jakarta.servlet.annotation.WebListener;
@@ -73,6 +75,7 @@ public class VidocqDeployableContainer implements DeployableContainer<VidocqCont
         var cl = Thread.currentThread().getContextClassLoader();
         List<String> registered = new ArrayList<>();
 
+        // 1) Classes @WebServlet/@WebFilter/@WebListener dans /WEB-INF/classes/
         for (Node node : flatten(war).values()) {
             String path = node.getPath().get();
             if (!path.endsWith(".class")) continue;
@@ -86,7 +89,22 @@ public class VidocqDeployableContainer implements DeployableContainer<VidocqCont
             registerIfAnnotated(builder, cls, registered);
         }
 
+        // 2) web.xml : enregistre les servlets/filters/listeners déclarés
+        Node webXml = war.get("/WEB-INF/web.xml");
+        if (webXml != null && webXml.getAsset() != null) {
+            try (var in = webXml.getAsset().openStream()) {
+                WebAppDescriptor desc = WebXmlParser.parse(in);
+                registerFromWebXml(builder, desc, cl, registered);
+            } catch (Exception e) {
+                System.err.println("[VidocqTCK] failed to parse web.xml: " + e);
+            }
+        }
+
         harness = builder.start();
+
+        System.err.println("[VidocqTCK] deploy archive=" + war.getName()
+                + " host=" + config.getHost() + " port=" + harness.port()
+                + " servlets=" + registered + " baseUrl=" + harness.baseUrl());
 
         ProtocolMetaData pmd = new ProtocolMetaData();
         var ctx = new HTTPContext(config.getHost(), harness.port());
@@ -95,6 +113,48 @@ public class VidocqDeployableContainer implements DeployableContainer<VidocqCont
                 registered.isEmpty() ? "_vidocq" : registered.get(0), "/"));
         pmd.addContext(ctx);
         return pmd;
+    }
+
+    private static void registerFromWebXml(ServletTestHarness.Builder builder,
+                                           WebAppDescriptor desc, ClassLoader cl,
+                                           List<String> registered) {
+        var instances = new java.util.HashMap<String, jakarta.servlet.Servlet>();
+        for (WebAppDescriptor.ServletDef sd : desc.servlets()) {
+            if (sd.className() == null) continue;
+            try {
+                Class<?> c = Class.forName(sd.className(), true, cl);
+                if (!jakarta.servlet.Servlet.class.isAssignableFrom(c)) continue;
+                jakarta.servlet.Servlet s = (jakarta.servlet.Servlet) c.getDeclaredConstructor().newInstance();
+                instances.put(sd.name(), s);
+            } catch (ReflectiveOperationException ignored) {}
+        }
+        for (WebAppDescriptor.ServletMappingDef m : desc.servletMappings()) {
+            jakarta.servlet.Servlet s = instances.get(m.servletName());
+            if (s != null) {
+                builder.servlet(m.urlPattern(), s);
+                registered.add(m.servletName());
+            }
+        }
+        var filterInstances = new java.util.HashMap<String, jakarta.servlet.Filter>();
+        for (WebAppDescriptor.FilterDef fd : desc.filters()) {
+            try {
+                Class<?> c = Class.forName(fd.className(), true, cl);
+                if (!jakarta.servlet.Filter.class.isAssignableFrom(c)) continue;
+                jakarta.servlet.Filter f = (jakarta.servlet.Filter) c.getDeclaredConstructor().newInstance();
+                filterInstances.put(fd.name(), f);
+            } catch (ReflectiveOperationException ignored) {}
+        }
+        for (WebAppDescriptor.FilterMappingDef m : desc.filterMappings()) {
+            jakarta.servlet.Filter f = filterInstances.get(m.filterName());
+            if (f != null) builder.filter(m.urlPattern(), f);
+        }
+        for (String lc : desc.listenerClasses()) {
+            try {
+                Class<?> c = Class.forName(lc, true, cl);
+                if (!java.util.EventListener.class.isAssignableFrom(c)) continue;
+                builder.listener((java.util.EventListener) c.getDeclaredConstructor().newInstance());
+            } catch (ReflectiveOperationException ignored) {}
+        }
     }
 
     @SuppressWarnings("unchecked")

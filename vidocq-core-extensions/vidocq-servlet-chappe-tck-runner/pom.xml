@@ -1,52 +1,102 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.1.0"
+<!--
+    Projet Maven STANDALONE en Model Version 4.0.0.
+
+    Ce module est volontairement EN DEHORS du reactor Maven 4.1 principal de
+    Vidocq car ShrinkWrap Maven Resolver 1.2.6 (dépendance transitive du TCK
+    officiel) ne supporte pas le format Model Version 4.1.0. Son
+    ClasspathWorkspaceReader scanne le reactor courant et rejette le pom
+    racine avec "Bad artifact coordinates ... jar:".
+
+    Dépendances internes (vidocq-spi, vidocq-servlet-chappe-extension, etc.)
+    sont gelées sur la version 0.1.0-SNAPSHOT installée dans le repo M2 local.
+    Avant d'exécuter le TCK :
+        cd /Users/yblazart/projects/perso/vidocq/vidocq
+        mvn install -DskipTests \
+            -pl vidocq-spi,vidocq-core,\
+                vidocq-core-extensions/vidocq-chappe-extension,\
+                vidocq-core-extensions/vidocq-servlet-chappe-extension -am
+
+    Puis :
+        cd vidocq-core-extensions/vidocq-servlet-chappe-tck-runner
+        mvn test -Ptck-official -Dtest='ServletTests#DoDestroyedTest' -DfailIfNoTests=false
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.1.0 http://maven.apache.org/xsd/maven-4.1.0.xsd">
-    <modelVersion>4.1.0</modelVersion>
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
 
-    <parent>
-        <groupId>fr.vidocq.vidocq</groupId>
-        <artifactId>vidocq-core-extensions</artifactId>
-    </parent>
-
+    <groupId>fr.vidocq.vidocq</groupId>
     <artifactId>vidocq-servlet-chappe-tck-runner</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+    <packaging>jar</packaging>
+
     <name>Vidocq :: Core Extensions :: Servlet TCK Runner</name>
     <description>Harness de conformance Jakarta Servlet 6.1 et point d'entrée pour le TCK officiel</description>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.release>25</maven.compiler.release>
+        <vidocq.version>0.1.0-SNAPSHOT</vidocq.version>
+        <chappe.version>0.1.0-SNAPSHOT</chappe.version>
+    </properties>
 
     <dependencies>
         <dependency>
             <groupId>fr.vidocq.vidocq</groupId>
             <artifactId>vidocq-servlet-chappe-extension</artifactId>
+            <version>${vidocq.version}</version>
         </dependency>
         <dependency>
             <groupId>fr.vidocq.chappe</groupId>
             <artifactId>chappe-api</artifactId>
+            <version>${chappe.version}</version>
         </dependency>
         <dependency>
             <groupId>fr.vidocq.chappe</groupId>
             <artifactId>chappe-core</artifactId>
+            <version>${chappe.version}</version>
         </dependency>
         <dependency>
             <groupId>jakarta.servlet</groupId>
             <artifactId>jakarta.servlet-api</artifactId>
+            <version>6.1.0</version>
         </dependency>
 
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
+            <version>5.10.2</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
 
-    <profiles>
-        <!--
-            Profil d'exécution du TCK Jakarta Servlet 6.1 officiel.
-            Activation : mvn -Ptck-official verify
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>4.0.0-beta-4</version>
+                    <configuration>
+                        <release>25</release>
+                    </configuration>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <version>3.5.5</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-resources-plugin</artifactId>
+                    <version>3.3.1</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
 
-            Prérequis : installation locale des artifacts Eclipse Foundation
-            (jakarta.tck:servlet-tck-runtime:6.1.0 + jakarta.tck:servlet-tck-util:6.1.0)
-            via artifact-install.sh du ZIP du TCK. Voir README.md.
-        -->
+    <profiles>
         <profile>
             <id>tck-official</id>
             <build>
@@ -82,6 +132,9 @@
                                 <include>**/*Tests.class</include>
                             </includes>
                             <workingDirectory>${project.build.directory}/tck-workdir</workingDirectory>
+                            <trimStackTrace>false</trimStackTrace>
+                            <redirectTestOutputToFile>false</redirectTestOutputToFile>
+                            <useFile>false</useFile>
                             <systemPropertyVariables>
                                 <webServerHost>127.0.0.1</webServerHost>
                                 <webServerPort>8080</webServerPort>
@@ -133,15 +186,14 @@
                     <version>2.0.16</version>
                     <scope>test</scope>
                 </dependency>
+                <!-- JUnit 4 requis par org.jboss.arquillian.junit.State (result tracker) -->
+                <dependency>
+                    <groupId>junit</groupId>
+                    <artifactId>junit</artifactId>
+                    <version>4.13.2</version>
+                    <scope>test</scope>
+                </dependency>
             </dependencies>
         </profile>
     </profiles>
-
-    <!--
-        Signature tests :
-        Le plugin sigtest-maven-plugin (org.netbeans.tools:sigtest-maven-plugin)
-        vérifie la conformité binaire à la signature Jakarta Servlet 6.1. Activer
-        en profil -Psignature une fois le binaire de signature téléchargé depuis
-        Eclipse Foundation. Voir README.md section "Signature tests".
-    -->
 </project>

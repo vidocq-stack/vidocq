@@ -17,6 +17,7 @@ module fr.vidocq.vidocq.ext.servlet.chappe {
     exports fr.vidocq.vidocq.ext.servlet.chappe.listener;
     exports fr.vidocq.vidocq.ext.servlet.chappe.security;
     exports fr.vidocq.vidocq.ext.servlet.chappe.session;
+    exports fr.vidocq.vidocq.ext.servlet.chappe.webxml;
 
     provides fr.vidocq.vidocq.spi.VidocqExtension
             with fr.vidocq.vidocq.ext.servlet.chappe.VidocqServletChappeExtension;
