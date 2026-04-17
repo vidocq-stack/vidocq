@@ -417,7 +417,11 @@ public final class HttpServletRequestImpl implements HttpServletRequest {
     private fr.vidocq.vidocq.ext.servlet.chappe.async.AsyncContextImpl asyncContext;
     private jakarta.servlet.http.HttpServletResponse boundResponse;
 
-    public void bindResponse(jakarta.servlet.http.HttpServletResponse res) { this.boundResponse = res; }
+    public void bindResponse(jakarta.servlet.http.HttpServletResponse res) {
+        this.boundResponse = res;
+        // Permet à la response de reconstruire une URL absolue pour sendRedirect(path).
+        if (res instanceof HttpServletResponseImpl impl) impl.bindRequest(this);
+    }
     public fr.vidocq.vidocq.ext.servlet.chappe.async.AsyncContextImpl asyncContextInternal() { return asyncContext; }
 
     @Override public AsyncContext startAsync() {

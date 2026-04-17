@@ -16,6 +16,12 @@ public final class ServletOutputStreamImpl extends ServletOutputStream {
 
     private final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
     private boolean closed;
+    private Runnable onFlush = () -> {};
+
+    /** Hook exécuté à chaque flush() — typiquement marque la réponse committed. */
+    public void setFlushListener(Runnable onFlush) {
+        this.onFlush = onFlush == null ? () -> {} : onFlush;
+    }
 
     @Override
     public boolean isReady() {
@@ -41,7 +47,10 @@ public final class ServletOutputStreamImpl extends ServletOutputStream {
 
     @Override
     public void flush() {
-        // Buffer accumulation only — real flush happens on response commit.
+        // En vrai, pas d'I/O : le body est transféré au bridge en fin de dispatch.
+        // Mais sémantiquement, flush() doit marquer la réponse comme committed
+        // (Servlet 6.1 §5.2) — on délègue ça au listener.
+        onFlush.run();
     }
 
     @Override

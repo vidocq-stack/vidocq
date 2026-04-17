@@ -31,6 +31,7 @@ public final class HttpServletResponseImpl implements HttpServletResponse {
     private String characterEncoding;
     private Locale locale = Locale.getDefault();
     private final ServletOutputStreamImpl outputStream = new ServletOutputStreamImpl();
+    { outputStream.setFlushListener(() -> committed = true); }
     private PrintWriter writer;
     private boolean streamAcquired;
     private boolean committed;
@@ -46,9 +47,16 @@ public final class HttpServletResponseImpl implements HttpServletResponse {
         setStatus(sc);
         this.errorTriggered = true;
         this.errorMessage = msg;
-        // Default body written only if no error page handles the status.
-        setContentType("text/plain;charset=utf-8");
-        if (msg != null) getOutputStream().write(msg.getBytes(charset()));
+        // Servlet 6.1 §5.8 : sendError vide le buffer — tout ce que le servlet
+        // a écrit avant est jeté. On écrit ensuite le msg par défaut en bytes
+        // bruts directement dans le buffer interne pour éviter le conflit
+        // getWriter()/getOutputStream() (IllegalStateException).
+        outputStream.resetBuffer();
+        writer = null;
+        streamAcquired = false;
+        // Par convention des conteneurs servlet, sendError renvoie une page d'erreur HTML.
+        setContentType("text/html");
+        if (msg != null) outputStream.write(msg.getBytes(charset()));
         committed = true;
     }
     @Override public void sendError(int sc) throws IOException { sendError(sc, null); }
@@ -63,15 +71,43 @@ public final class HttpServletResponseImpl implements HttpServletResponse {
     @Override public void sendRedirect(String location) throws IOException {
         if (committed) throw new IllegalStateException("response already committed");
         setStatus(SC_FOUND);
-        setHeader("Location", location);
+        setHeader("Location", toAbsoluteRedirectUrl(location));
         committed = true;
     }
     @Override public void sendRedirect(String location, int sc, boolean clearBuffer) throws IOException {
         if (clearBuffer) resetBuffer();
         setStatus(sc);
-        setHeader("Location", location);
+        setHeader("Location", toAbsoluteRedirectUrl(location));
         committed = true;
     }
+
+    /** Servlet 6.1 §5.8.2 — sendRedirect doit produire une URL absolue. */
+    private String toAbsoluteRedirectUrl(String location) {
+        if (location == null) return null;
+        // Déjà absolu.
+        if (location.regionMatches(true, 0, "http://", 0, 7)
+                || location.regionMatches(true, 0, "https://", 0, 8)) return location;
+        if (boundRequest == null) return location;
+        String scheme = boundRequest.getScheme();
+        String host = boundRequest.getServerName();
+        int port = boundRequest.getServerPort();
+        boolean defaultPort = ("http".equals(scheme) && port == 80)
+                || ("https".equals(scheme) && port == 443);
+        var sb = new StringBuilder(scheme).append("://").append(host);
+        if (!defaultPort) sb.append(':').append(port);
+        if (location.startsWith("/")) {
+            sb.append(location);
+        } else {
+            // Chemin relatif — résolu par rapport à l'URI de la requête.
+            String uri = boundRequest.getRequestURI();
+            int slash = uri.lastIndexOf('/');
+            sb.append(slash >= 0 ? uri.substring(0, slash + 1) : "/").append(location);
+        }
+        return sb.toString();
+    }
+
+    private jakarta.servlet.http.HttpServletRequest boundRequest;
+    public void bindRequest(jakarta.servlet.http.HttpServletRequest req) { this.boundRequest = req; }
 
     // ---- Headers ----
 
@@ -88,10 +124,17 @@ public final class HttpServletResponseImpl implements HttpServletResponse {
     @Override public void setIntHeader(String name, int value) { setHeader(name, Integer.toString(value)); }
     @Override public void addIntHeader(String name, int value) { addHeader(name, Integer.toString(value)); }
     @Override public void setDateHeader(String name, long date) {
-        throw new UnsupportedOperationException("setDateHeader not implemented");
+        setHeader(name, formatHttpDate(date));
     }
     @Override public void addDateHeader(String name, long date) {
-        throw new UnsupportedOperationException();
+        addHeader(name, formatHttpDate(date));
+    }
+
+    /** RFC 7231 §7.1.1.1 — IMF-fixdate : "Sun, 06 Nov 1994 08:49:37 GMT". */
+    private static String formatHttpDate(long dateMillis) {
+        return java.time.format.DateTimeFormatter.RFC_1123_DATE_TIME
+                .withZone(java.time.ZoneOffset.UTC)
+                .format(java.time.Instant.ofEpochMilli(dateMillis));
     }
     @Override public boolean containsHeader(String name) { return headers.containsKey(name); }
     @Override public String getHeader(String name) {
@@ -123,6 +166,8 @@ public final class HttpServletResponseImpl implements HttpServletResponse {
 
     @Override public String getContentType() { return contentType; }
     @Override public void setContentType(String type) {
+        // Servlet 6.1 §5.4 : si la réponse est déjà committed, setContentType est silencieusement ignoré.
+        if (committed) return;
         this.contentType = type;
         if (type != null) {
             int idx = type.toLowerCase(Locale.ROOT).indexOf("charset=");
@@ -133,8 +178,12 @@ public final class HttpServletResponseImpl implements HttpServletResponse {
     @Override public String getCharacterEncoding() {
         return characterEncoding == null ? "ISO-8859-1" : characterEncoding;
     }
-    @Override public void setCharacterEncoding(String charset) { this.characterEncoding = charset; }
+    @Override public void setCharacterEncoding(String charset) {
+        if (committed) return;
+        this.characterEncoding = charset;
+    }
     @Override public void setCharacterEncoding(Charset encoding) {
+        if (committed) return;
         this.characterEncoding = encoding == null ? null : encoding.name();
     }
     @Override public void setContentLength(int len) { setIntHeader("Content-Length", len); }
@@ -162,8 +211,15 @@ public final class HttpServletResponseImpl implements HttpServletResponse {
 
     // ---- Buffer / commit ----
 
-    @Override public void setBufferSize(int size) { /* no-op — full buffering in memory */ }
-    @Override public int getBufferSize() { return outputStream.size(); }
+    // Taille de buffer nominale exposée au servlet — on bufferise tout en mémoire,
+    // donc la capacité effective est illimitée, mais on expose une valeur usuelle
+    // (8 KiB) conforme aux attentes des tests TCK.
+    private int bufferSize = 8192;
+    @Override public void setBufferSize(int size) {
+        if (outputStream.size() > 0) throw new IllegalStateException("content already written");
+        this.bufferSize = size;
+    }
+    @Override public int getBufferSize() { return bufferSize; }
     @Override public void flushBuffer() {
         if (writer != null) writer.flush();
         committed = true;
@@ -186,7 +242,12 @@ public final class HttpServletResponseImpl implements HttpServletResponse {
         writer = null;
         streamAcquired = false;
     }
-    @Override public void setLocale(Locale loc) { this.locale = loc; }
+    @Override public void setLocale(Locale loc) {
+        if (committed || loc == null) { this.locale = loc; return; }
+        this.locale = loc;
+        // Servlet 6.1 §5.4 : setLocale définit Content-Language (tag BCP 47).
+        setHeader("Content-Language", loc.toLanguageTag());
+    }
     @Override public Locale getLocale() { return locale; }
 
     // ---- URL encoding ----
