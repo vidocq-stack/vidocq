@@ -352,15 +352,28 @@ public final class HttpServletRequestImpl implements HttpServletRequest {
     @Override public <T extends HttpUpgradeHandler> T upgrade(Class<T> handlerClass) {
         throw new UnsupportedOperationException("upgrade not implemented");
     }
+    private fr.vidocq.vidocq.ext.servlet.chappe.async.AsyncContextImpl asyncContext;
+    private jakarta.servlet.http.HttpServletResponse boundResponse;
+
+    public void bindResponse(jakarta.servlet.http.HttpServletResponse res) { this.boundResponse = res; }
+    public fr.vidocq.vidocq.ext.servlet.chappe.async.AsyncContextImpl asyncContextInternal() { return asyncContext; }
+
     @Override public AsyncContext startAsync() {
-        throw new UnsupportedOperationException("async not implemented");
+        if (boundResponse == null) throw new IllegalStateException("response not bound");
+        return startAsync(this, boundResponse);
     }
     @Override public AsyncContext startAsync(jakarta.servlet.ServletRequest req, ServletResponse res) {
-        throw new UnsupportedOperationException();
+        boolean original = (req == this && res == boundResponse);
+        this.asyncContext = new fr.vidocq.vidocq.ext.servlet.chappe.async.AsyncContextImpl(
+                req, res, servletContext, original);
+        return asyncContext;
     }
-    @Override public boolean isAsyncStarted() { return false; }
-    @Override public boolean isAsyncSupported() { return false; }
-    @Override public AsyncContext getAsyncContext() { throw new IllegalStateException("no async context"); }
+    @Override public boolean isAsyncStarted() { return asyncContext != null; }
+    @Override public boolean isAsyncSupported() { return true; }
+    @Override public AsyncContext getAsyncContext() {
+        if (asyncContext == null) throw new IllegalStateException("no async context");
+        return asyncContext;
+    }
     @Override public ServletConnection getServletConnection() {
         throw new UnsupportedOperationException("ServletConnection not implemented");
     }

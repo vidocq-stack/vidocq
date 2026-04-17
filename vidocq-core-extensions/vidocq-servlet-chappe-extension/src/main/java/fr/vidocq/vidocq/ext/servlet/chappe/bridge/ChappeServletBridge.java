@@ -10,6 +10,7 @@ import fr.vidocq.vidocq.ext.servlet.chappe.dispatcher.DispatchTarget;
 import fr.vidocq.vidocq.ext.servlet.chappe.dispatcher.FilterRegistry;
 import fr.vidocq.vidocq.ext.servlet.chappe.dispatcher.RequestDispatcherImpl;
 import fr.vidocq.vidocq.ext.servlet.chappe.dispatcher.ServletDispatcher;
+import fr.vidocq.vidocq.ext.servlet.chappe.async.AsyncContextImpl;
 import fr.vidocq.vidocq.ext.servlet.chappe.dispatcher.VidocqFilterChain;
 import fr.vidocq.vidocq.ext.servlet.chappe.error.ErrorPageRegistry;
 import fr.vidocq.vidocq.ext.servlet.chappe.http.CookieCodec;
@@ -111,11 +112,13 @@ public final class ChappeServletBridge implements Handler, RequestDispatcherImpl
                 pathInfo, request.query());
         req = new HttpServletRequestImpl(request, servletContext, contextPath, servletPath, pathInfo,
                 sessionManager);
+        req.bindResponse(res);
 
         registry.fireRequestInitialized(servletContext, req);
         Throwable thrown = null;
         try {
             invoke(target, req, res, DispatcherType.REQUEST);
+            thrown = awaitAsyncIfStarted(req, res);
         } catch (ServletException | IOException | RuntimeException e) {
             thrown = e;
         }
@@ -135,6 +138,36 @@ public final class ChappeServletBridge implements Handler, RequestDispatcherImpl
 
     private boolean errorPageHandled(HttpServletRequestImpl req) {
         return req.getAttribute("jakarta.servlet.error.handled") != null;
+    }
+
+    /**
+     * Si le servlet a démarré un async, bloque jusqu'à complete/dispatch/timeout. En cas de
+     * dispatch, re-résout et ré-exécute la chaîne sous {@link DispatcherType#ASYNC}.
+     * Renvoie une {@link Throwable} si un timeout s'est produit et n'a pas été géré par listener.
+     */
+    private Throwable awaitAsyncIfStarted(HttpServletRequestImpl req, HttpServletResponseImpl res) {
+        AsyncContextImpl ac = req.asyncContextInternal();
+        if (ac == null) return null;
+        ac.awaitCompletion();
+        if (ac.hasDispatch()) {
+            String dispatchPath = ac.dispatchPath();
+            String relative = dispatchPath.startsWith(contextPath) && !contextPath.equals("/")
+                    ? dispatchPath.substring(contextPath.length()) : dispatchPath;
+            var target = new DispatchResolver(dispatcher).resolve(relative).orElse(null);
+            if (target != null) {
+                try {
+                    var wrapped = new AsyncDispatchRequest(req, target);
+                    invoke(target, wrapped, res, DispatcherType.ASYNC);
+                } catch (ServletException | IOException | RuntimeException e) {
+                    return e;
+                }
+            }
+        }
+        if (ac.timedOut() && !res.isCommitted() && res.bodyBytes().length == 0) {
+            try { res.sendError(503, "async timeout"); }
+            catch (IOException ignored) {}
+        }
+        return null;
     }
 
     private void maybeHandleError(HttpServletRequestImpl req, HttpServletResponseImpl res,
