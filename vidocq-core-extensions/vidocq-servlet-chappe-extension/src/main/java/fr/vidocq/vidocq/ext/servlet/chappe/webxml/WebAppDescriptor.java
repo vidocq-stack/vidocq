@@ -17,7 +17,12 @@ public final class WebAppDescriptor {
     public record ServletDef(String name, String className, Map<String, String> initParams) {}
     public record ServletMappingDef(String servletName, String urlPattern) {}
     public record FilterDef(String name, String className, Map<String, String> initParams) {}
-    public record FilterMappingDef(String filterName, String urlPattern, Set<DispatcherType> dispatcherTypes) {}
+    public record FilterMappingDef(String filterName, String urlPattern, String servletName,
+                                   Set<DispatcherType> dispatcherTypes) {
+        public FilterMappingDef(String filterName, String urlPattern, Set<DispatcherType> dispatcherTypes) {
+            this(filterName, urlPattern, null, dispatcherTypes);
+        }
+    }
     public record ErrorPageDef(Integer statusCode, String exceptionType, String location) {}
 
     private final Map<String, String> contextParams;

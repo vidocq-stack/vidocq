@@ -153,8 +153,16 @@ public class VidocqDeployableContainer implements DeployableContainer<VidocqCont
         }
         for (WebAppDescriptor.FilterMappingDef m : desc.filterMappings()) {
             jakarta.servlet.Filter f = filterInstances.get(m.filterName());
-            if (f != null) builder.filter(m.urlPattern(), f,
-                    filterParams.getOrDefault(m.filterName(), java.util.Map.of()));
+            if (f == null) continue;
+            var params = filterParams.getOrDefault(m.filterName(), java.util.Map.of());
+            if (m.urlPattern() != null) {
+                builder.filter(m.urlPattern(), f, params);
+            } else if (m.servletName() != null) {
+                // Résout le servlet-name en ses url-patterns via servletMappings
+                for (String pattern : desc.patternsFor(m.servletName())) {
+                    builder.filter(pattern, f, params);
+                }
+            }
         }
         for (String lc : desc.listenerClasses()) {
             try {

@@ -110,7 +110,10 @@ public final class WebXmlParser {
         if (types.isEmpty()) types = EnumSet.of(DispatcherType.REQUEST);
         var out = new ArrayList<WebAppDescriptor.FilterMappingDef>();
         for (Element url : childrenByTag(e, "url-pattern")) {
-            out.add(new WebAppDescriptor.FilterMappingDef(filterName, text(url), types));
+            out.add(new WebAppDescriptor.FilterMappingDef(filterName, text(url), null, types));
+        }
+        for (Element sn : childrenByTag(e, "servlet-name")) {
+            out.add(new WebAppDescriptor.FilterMappingDef(filterName, null, text(sn), types));
         }
         return out;
     }
