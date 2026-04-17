@@ -212,6 +212,10 @@ public final class ServletTestHarness implements AutoCloseable {
                 }
             }
 
+            // Fin de la phase d'initialisation (Servlet 6.1 §4.4) — après cet appel,
+            // les méthodes de configuration dynamique doivent throw IllegalStateException.
+            ctx.markInitialized();
+
             var bridge = new ChappeServletBridge(new ServletDispatcher(liveServlets),
                     new FilterRegistry(liveFilters), ctx, sessions, contextPath);
 

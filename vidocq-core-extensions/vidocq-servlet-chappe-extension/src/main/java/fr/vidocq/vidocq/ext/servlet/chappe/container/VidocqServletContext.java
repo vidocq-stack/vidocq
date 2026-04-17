@@ -44,11 +44,16 @@ public final class VidocqServletContext implements ServletContext {
             new fr.vidocq.vidocq.ext.servlet.chappe.error.ErrorPageRegistry();
     private fr.vidocq.vidocq.ext.servlet.chappe.security.SecurityProvider securityProvider =
             new fr.vidocq.vidocq.ext.servlet.chappe.security.AnonymousSecurityProvider();
+    private boolean initialized;
 
     public VidocqServletContext(String contextPath) {
         this.contextPath = contextPath;
         this.serverInfo = "Vidocq Servlet/Chappe";
     }
+
+    /** Marqueur de fin d'initialisation (Servlet 6.1 §4.4) — après cet appel,
+     *  les méthodes de configuration dynamique doivent throw {@link IllegalStateException}. */
+    public void markInitialized() { this.initialized = true; }
 
     public void setListenerRegistry(ListenerRegistry registry) {
         this.listenerRegistry = registry;
@@ -110,6 +115,7 @@ public final class VidocqServletContext implements ServletContext {
         return Collections.enumeration(initParameters.keySet());
     }
     @Override public boolean setInitParameter(String name, String value) {
+        if (initialized) throw alreadyInitialized();
         return initParameters.putIfAbsent(name, value) == null;
     }
 
@@ -131,32 +137,38 @@ public final class VidocqServletContext implements ServletContext {
     @Override public String getServletContextName() { return "vidocq"; }
 
     // ---- Dynamic registration — not supported in M2a ----
+    // Servlet 6.1 §4.4 : après initialisation du contexte, ces méthodes doivent throw
+    // IllegalStateException. Avant initialisation, elles throw UnsupportedOperationException
+    // tant que la feature n'est pas implémentée.
 
-    @Override public ServletRegistration.Dynamic addServlet(String s, String s1) { throw unsupported(); }
-    @Override public ServletRegistration.Dynamic addServlet(String s, Servlet servlet) { throw unsupported(); }
-    @Override public ServletRegistration.Dynamic addServlet(String s, Class<? extends Servlet> c) { throw unsupported(); }
-    @Override public ServletRegistration.Dynamic addJspFile(String s, String s1) { throw unsupported(); }
-    @Override public <T extends Servlet> T createServlet(Class<T> c) { throw unsupported(); }
+    @Override public ServletRegistration.Dynamic addServlet(String s, String s1) { throw dynamicUnavailable(); }
+    @Override public ServletRegistration.Dynamic addServlet(String s, Servlet servlet) { throw dynamicUnavailable(); }
+    @Override public ServletRegistration.Dynamic addServlet(String s, Class<? extends Servlet> c) { throw dynamicUnavailable(); }
+    @Override public ServletRegistration.Dynamic addJspFile(String s, String s1) { throw dynamicUnavailable(); }
+    @Override public <T extends Servlet> T createServlet(Class<T> c) { throw dynamicUnavailable(); }
     @Override public ServletRegistration getServletRegistration(String name) { return null; }
     @Override public Map<String, ? extends ServletRegistration> getServletRegistrations() { return Map.of(); }
-    @Override public FilterRegistration.Dynamic addFilter(String s, String s1) { throw unsupported(); }
-    @Override public FilterRegistration.Dynamic addFilter(String s, Filter f) { throw unsupported(); }
-    @Override public FilterRegistration.Dynamic addFilter(String s, Class<? extends Filter> c) { throw unsupported(); }
-    @Override public <T extends Filter> T createFilter(Class<T> c) { throw unsupported(); }
+    @Override public FilterRegistration.Dynamic addFilter(String s, String s1) { throw dynamicUnavailable(); }
+    @Override public FilterRegistration.Dynamic addFilter(String s, Filter f) { throw dynamicUnavailable(); }
+    @Override public FilterRegistration.Dynamic addFilter(String s, Class<? extends Filter> c) { throw dynamicUnavailable(); }
+    @Override public <T extends Filter> T createFilter(Class<T> c) { throw dynamicUnavailable(); }
     @Override public FilterRegistration getFilterRegistration(String name) { return null; }
     @Override public Map<String, ? extends FilterRegistration> getFilterRegistrations() { return Map.of(); }
 
     // ---- Listeners — not supported in M2a ----
 
-    @Override public void addListener(String className) { throw unsupported(); }
-    @Override public <T extends java.util.EventListener> void addListener(T t) { throw unsupported(); }
-    @Override public void addListener(Class<? extends java.util.EventListener> listenerClass) { throw unsupported(); }
-    @Override public <T extends java.util.EventListener> T createListener(Class<T> c) { throw unsupported(); }
+    @Override public void addListener(String className) { throw dynamicUnavailable(); }
+    @Override public <T extends java.util.EventListener> void addListener(T t) { throw dynamicUnavailable(); }
+    @Override public void addListener(Class<? extends java.util.EventListener> listenerClass) { throw dynamicUnavailable(); }
+    @Override public <T extends java.util.EventListener> T createListener(Class<T> c) { throw dynamicUnavailable(); }
 
     // ---- Sessions — stubs ----
 
-    @Override public SessionCookieConfig getSessionCookieConfig() { throw unsupported(); }
-    @Override public void setSessionTrackingModes(Set<SessionTrackingMode> modes) { throw unsupported(); }
+    @Override public SessionCookieConfig getSessionCookieConfig() { throw dynamicUnavailable(); }
+    @Override public void setSessionTrackingModes(Set<SessionTrackingMode> modes) {
+        if (initialized) throw alreadyInitialized();
+        throw dynamicUnavailable();
+    }
     @Override public Set<SessionTrackingMode> getDefaultSessionTrackingModes() {
         return EnumSet.of(SessionTrackingMode.COOKIE);
     }
@@ -182,7 +194,13 @@ public final class VidocqServletContext implements ServletContext {
         this.responseCharacterEncoding = encoding == null ? null : encoding.name();
     }
 
-    private static UnsupportedOperationException unsupported() {
+    private RuntimeException dynamicUnavailable() {
+        // Servlet 6.1 §4.4 : après initialisation, IllegalStateException est requis.
+        if (initialized) return alreadyInitialized();
         return new UnsupportedOperationException("dynamic registration not implemented in M2a");
+    }
+
+    private static IllegalStateException alreadyInitialized() {
+        return new IllegalStateException("ServletContext already initialized");
     }
 }
