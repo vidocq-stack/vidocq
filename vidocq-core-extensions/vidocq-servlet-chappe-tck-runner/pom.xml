@@ -38,6 +38,105 @@
         </dependency>
     </dependencies>
 
+    <profiles>
+        <!--
+            Profil d'exécution du TCK Jakarta Servlet 6.1 officiel.
+            Activation : mvn -Ptck-official verify
+
+            Prérequis : installation locale des artifacts Eclipse Foundation
+            (jakarta.tck:servlet-tck-runtime:6.1.0 + jakarta.tck:servlet-tck-util:6.1.0)
+            via artifact-install.sh du ZIP du TCK. Voir README.md.
+        -->
+        <profile>
+            <id>tck-official</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-resources-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>copy-tck-workdir-pom</id>
+                                <phase>process-test-resources</phase>
+                                <goals><goal>copy-resources</goal></goals>
+                                <configuration>
+                                    <outputDirectory>${project.build.directory}/tck-workdir</outputDirectory>
+                                    <resources>
+                                        <resource>
+                                            <directory>${project.basedir}/src/test/tck-resources</directory>
+                                            <includes><include>pom.xml</include></includes>
+                                        </resource>
+                                    </resources>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <dependenciesToScan>
+                                <dependency>jakarta.tck:servlet-tck-runtime</dependency>
+                            </dependenciesToScan>
+                            <includes>
+                                <include>**/*Tests.class</include>
+                            </includes>
+                            <workingDirectory>${project.build.directory}/tck-workdir</workingDirectory>
+                            <systemPropertyVariables>
+                                <webServerHost>127.0.0.1</webServerHost>
+                                <webServerPort>8080</webServerPort>
+                                <ts_home>${project.build.directory}/test-classes</ts_home>
+                            </systemPropertyVariables>
+                            <argLine>
+                                --add-opens fr.vidocq.vidocq.ext.servlet.chappe.tck/fr.vidocq.vidocq.ext.servlet.chappe.tck.arquillian=ALL-UNNAMED
+                                --add-opens fr.vidocq.vidocq.ext.servlet.chappe.tck/fr.vidocq.vidocq.ext.servlet.chappe.tck=ALL-UNNAMED
+                                --add-exports fr.vidocq.vidocq.ext.servlet.chappe.tck/fr.vidocq.vidocq.ext.servlet.chappe.tck.arquillian=ALL-UNNAMED
+                            </argLine>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+            <dependencies>
+                <dependency>
+                    <groupId>jakarta.tck</groupId>
+                    <artifactId>servlet-tck-runtime</artifactId>
+                    <version>6.1.0</version>
+                    <scope>test</scope>
+                </dependency>
+                <dependency>
+                    <groupId>jakarta.tck</groupId>
+                    <artifactId>servlet-tck-util</artifactId>
+                    <version>6.1.0</version>
+                    <scope>test</scope>
+                </dependency>
+                <dependency>
+                    <groupId>org.jboss.shrinkwrap</groupId>
+                    <artifactId>shrinkwrap-api</artifactId>
+                    <version>1.2.6</version>
+                    <scope>test</scope>
+                </dependency>
+                <dependency>
+                    <groupId>org.jboss.shrinkwrap</groupId>
+                    <artifactId>shrinkwrap-impl-base</artifactId>
+                    <version>1.2.6</version>
+                    <scope>test</scope>
+                </dependency>
+                <dependency>
+                    <groupId>org.slf4j</groupId>
+                    <artifactId>slf4j-api</artifactId>
+                    <version>2.0.16</version>
+                    <scope>test</scope>
+                </dependency>
+                <dependency>
+                    <groupId>org.slf4j</groupId>
+                    <artifactId>slf4j-simple</artifactId>
+                    <version>2.0.16</version>
+                    <scope>test</scope>
+                </dependency>
+            </dependencies>
+        </profile>
+    </profiles>
+
     <!--
         Signature tests :
         Le plugin sigtest-maven-plugin (org.netbeans.tools:sigtest-maven-plugin)

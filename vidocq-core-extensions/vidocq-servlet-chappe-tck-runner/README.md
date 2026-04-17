@@ -121,3 +121,47 @@ Ces exclusions seront listées dans `tck-exclusions.md` lors de l'intégration.
 3. Ajouter un profil Maven `-Ptck-official` qui inclut `jakarta.tck:servlet-api-tck-tests`
 4. Documenter les exclusions et lancer `mvn -Ptck-official verify`
 5. Reporter les résultats de conformité (nombre de tests passants / total)
+
+### État de l'intégration TCK officielle
+
+Infrastructure posée et opérationnelle jusqu'à l'appel de `getTestArchive()` :
+
+- ✅ TCK Jakarta Servlet 6.1.0 téléchargé depuis Eclipse Foundation
+  (`https://download.eclipse.org/jakartaee/servlet/6.1/jakarta-servlet-tck-6.1.0.zip`)
+- ✅ Artifacts installés localement : `jakarta.tck:servlet-tck-runtime:6.1.0`,
+  `jakarta.tck:servlet-tck-util:6.1.0`, `jakarta.tck:servlet-tck:6.1.0` (pom)
+- ✅ Profil Maven `-Ptck-official` ajoute les deps Arquillian + ShrinkWrap + slf4j
+- ✅ `VidocqDeployableContainer` + `VidocqContainerConfiguration` +
+  `VidocqContainerExtension` (SPI `LoadableExtension`) compilent
+- ✅ Surefire configuré : `<dependenciesToScan>`, `argLine --add-opens`,
+  `workingDirectory = target/tck-workdir`
+- ✅ Pom auxiliaire Maven 4.0 copié dans `target/tck-workdir/pom.xml`
+- ✅ Arquillian détecte notre container, l'instancie, appelle
+  `getTestArchive()` du test TCK
+
+**Point de blocage actuel** : ShrinkWrap Maven Resolver 1.2.6 utilise un
+`ClasspathWorkspaceReader` qui scanne le reactor Maven courant. Il tombe sur
+le pom principal (Model Version **4.1.0** avec parent inherited) et échoue :
+
+```
+Bad artifact coordinates fr.vidocq.vidocq:vidocq-servlet-chappe-tck-runner:jar:,
+expected format is <groupId>:<artifactId>[:<extension>[:<classifier>]]:<version>
+```
+
+ShrinkWrap 1.2.6 ne supporte pas Maven 4.1.
+
+**Contournement possibles** :
+
+1. Extraire le tck-runner en projet Maven standalone hors du reactor principal,
+   avec Model Version 4.0.0 et dépendances gelées sur des artifacts installés.
+2. Attendre une version de ShrinkWrap Resolver supportant Maven 4.1
+   (upstream : https://github.com/shrinkwrap/resolver).
+3. Forker ShrinkWrap et patcher `ClasspathWorkspaceReader.createFoundArtifact`
+   pour gérer le format 4.1.
+
+Commande actuelle (stoppe sur le blocage ci-dessus) :
+```
+mvn -pl vidocq-core-extensions/vidocq-servlet-chappe-tck-runner test \
+    -Ptck-official -Dtest='ServletTests#DoDestroyedTest' \
+    -DfailIfNoTests=false
+```
