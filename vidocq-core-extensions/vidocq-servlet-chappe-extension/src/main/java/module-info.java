@@ -9,6 +9,14 @@ module fr.vidocq.vidocq.ext.servlet.chappe {
     requires static java.net.http;
 
     exports fr.vidocq.vidocq.ext.servlet.chappe;
+    exports fr.vidocq.vidocq.ext.servlet.chappe.bridge;
+    exports fr.vidocq.vidocq.ext.servlet.chappe.container;
+    exports fr.vidocq.vidocq.ext.servlet.chappe.dispatcher;
+    exports fr.vidocq.vidocq.ext.servlet.chappe.error;
+    exports fr.vidocq.vidocq.ext.servlet.chappe.http;
+    exports fr.vidocq.vidocq.ext.servlet.chappe.listener;
+    exports fr.vidocq.vidocq.ext.servlet.chappe.security;
+    exports fr.vidocq.vidocq.ext.servlet.chappe.session;
 
     provides fr.vidocq.vidocq.spi.VidocqExtension
             with fr.vidocq.vidocq.ext.servlet.chappe.VidocqServletChappeExtension;

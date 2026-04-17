@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.1.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.1.0 http://maven.apache.org/xsd/maven-4.1.0.xsd">
+    <modelVersion>4.1.0</modelVersion>
+
+    <parent>
+        <groupId>fr.vidocq.vidocq</groupId>
+        <artifactId>vidocq-core-extensions</artifactId>
+    </parent>
+
+    <artifactId>vidocq-servlet-chappe-tck-runner</artifactId>
+    <name>Vidocq :: Core Extensions :: Servlet TCK Runner</name>
+    <description>Harness de conformance Jakarta Servlet 6.1 et point d'entrée pour le TCK officiel</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>fr.vidocq.vidocq</groupId>
+            <artifactId>vidocq-servlet-chappe-extension</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>fr.vidocq.chappe</groupId>
+            <artifactId>chappe-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>fr.vidocq.chappe</groupId>
+            <artifactId>chappe-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.servlet</groupId>
+            <artifactId>jakarta.servlet-api</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <!--
+        Signature tests :
+        Le plugin sigtest-maven-plugin (org.netbeans.tools:sigtest-maven-plugin)
+        vérifie la conformité binaire à la signature Jakarta Servlet 6.1. Activer
+        en profil -Psignature une fois le binaire de signature téléchargé depuis
+        Eclipse Foundation. Voir README.md section "Signature tests".
+    -->
+</project>
