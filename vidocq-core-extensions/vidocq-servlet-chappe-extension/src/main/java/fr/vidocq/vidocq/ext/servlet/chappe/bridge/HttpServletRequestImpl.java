@@ -345,10 +345,31 @@ public final class HttpServletRequestImpl implements HttpServletRequest {
         throw new ServletException("login not implemented");
     }
     @Override public void logout() {}
-    @Override public Collection<Part> getParts() {
-        throw new UnsupportedOperationException("multipart not implemented");
+
+    private java.util.List<fr.vidocq.vidocq.ext.servlet.chappe.http.PartImpl> parsedParts;
+
+    @Override public Collection<Part> getParts() throws IOException {
+        ensurePartsParsed();
+        return new ArrayList<>(parsedParts);
     }
-    @Override public Part getPart(String name) { throw new UnsupportedOperationException(); }
+    @Override public Part getPart(String name) throws IOException {
+        ensurePartsParsed();
+        for (var p : parsedParts) if (name.equals(p.getName())) return p;
+        return null;
+    }
+
+    private void ensurePartsParsed() throws IOException {
+        if (parsedParts != null) return;
+        String ct = getContentType();
+        if (ct == null || !ct.toLowerCase(Locale.ROOT).startsWith("multipart/form-data")) {
+            parsedParts = List.of();
+            return;
+        }
+        String boundary = fr.vidocq.vidocq.ext.servlet.chappe.http.MultipartParser.extractBoundary(ct);
+        if (boundary == null) { parsedParts = List.of(); return; }
+        parsedParts = fr.vidocq.vidocq.ext.servlet.chappe.http.MultipartParser.parse(
+                chappe.body().asInputStream(), boundary);
+    }
     @Override public <T extends HttpUpgradeHandler> T upgrade(Class<T> handlerClass) {
         throw new UnsupportedOperationException("upgrade not implemented");
     }
