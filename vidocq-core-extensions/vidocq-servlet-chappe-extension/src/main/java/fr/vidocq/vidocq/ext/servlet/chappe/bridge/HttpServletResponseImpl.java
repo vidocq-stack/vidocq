@@ -164,27 +164,67 @@ public final class HttpServletResponseImpl implements HttpServletResponse {
 
     // ---- Content-Type / charset ----
 
-    @Override public String getContentType() { return contentType; }
+    /** Type MIME "brut" (sans le charset) dérivé de setContentType. */
+    private String mediaType;
+    private boolean charsetExplicit;
+    /** Le charset est verrouillé après getWriter() (Servlet 6.1 §5.4). */
+    private boolean charsetLocked;
+
+    @Override public String getContentType() {
+        if (contentType == null) return null;
+        if (contentType.toLowerCase(Locale.ROOT).contains("charset=") || characterEncoding == null) {
+            return contentType;
+        }
+        return mediaType + ";charset=" + characterEncoding;
+    }
     @Override public void setContentType(String type) {
         // Servlet 6.1 §5.4 : si la réponse est déjà committed, setContentType est silencieusement ignoré.
         if (committed) return;
         this.contentType = type;
-        if (type != null) {
-            int idx = type.toLowerCase(Locale.ROOT).indexOf("charset=");
-            if (idx >= 0) this.characterEncoding = type.substring(idx + 8).trim();
-            setHeader("Content-Type", type);
+        if (type == null) return;
+        int idx = type.toLowerCase(Locale.ROOT).indexOf("charset=");
+        if (idx >= 0) {
+            this.mediaType = type.substring(0, idx).replaceAll(";\\s*$", "").trim();
+            // Le charset du contentType n'est accepté que si pas encore verrouillé par getWriter().
+            if (!charsetLocked) {
+                this.characterEncoding = type.substring(idx + 8).trim();
+                this.charsetExplicit = true;
+            }
+        } else {
+            this.mediaType = type;
         }
+        refreshContentTypeHeader();
     }
     @Override public String getCharacterEncoding() {
         return characterEncoding == null ? "ISO-8859-1" : characterEncoding;
     }
     @Override public void setCharacterEncoding(String charset) {
-        if (committed) return;
+        if (committed || charsetLocked) return;
         this.characterEncoding = charset;
+        this.charsetExplicit = (charset != null);
+        refreshContentTypeHeader();
     }
     @Override public void setCharacterEncoding(Charset encoding) {
-        if (committed) return;
+        if (committed || charsetLocked) return;
         this.characterEncoding = encoding == null ? null : encoding.name();
+        this.charsetExplicit = (encoding != null);
+        refreshContentTypeHeader();
+    }
+
+    /** Recalcule l'en-tête {@code Content-Type} en combinant mediaType + charset. */
+    private void refreshContentTypeHeader() {
+        if (mediaType == null) return;
+        // Pour les types text/*, on inclut toujours le charset (explicite ou défaut
+        // "ISO-8859-1", cf. Servlet 6.1 §5.4) afin que le header Content-Type final
+        // reflète l'encodage réellement utilisé par getWriter().
+        boolean isText = mediaType.toLowerCase(Locale.ROOT).startsWith("text/");
+        String enc = characterEncoding != null ? characterEncoding
+                : (isText ? "ISO-8859-1" : null);
+        String composed = enc != null ? mediaType + ";charset=" + enc : mediaType;
+        List<String> list = new ArrayList<>();
+        list.add(composed);
+        headers.put("Content-Type", list);
+        this.contentType = composed;
     }
     @Override public void setContentLength(int len) { setIntHeader("Content-Length", len); }
     @Override public void setContentLengthLong(long len) { setHeader("Content-Length", Long.toString(len)); }
@@ -199,7 +239,10 @@ public final class HttpServletResponseImpl implements HttpServletResponse {
     @Override public PrintWriter getWriter() throws IOException {
         if (streamAcquired) throw new IllegalStateException("getOutputStream() already called");
         if (writer == null) {
+            // Servlet 6.1 §5.4 : getWriter lock le charset au premier appel.
+            charsetLocked = true;
             writer = new PrintWriter(new java.io.OutputStreamWriter(outputStream, charset()), false);
+            refreshContentTypeHeader();
         }
         return writer;
     }
@@ -247,6 +290,16 @@ public final class HttpServletResponseImpl implements HttpServletResponse {
         this.locale = loc;
         // Servlet 6.1 §5.4 : setLocale définit Content-Language (tag BCP 47).
         setHeader("Content-Language", loc.toLanguageTag());
+        // Si le charset n'est pas explicite, résout via locale-encoding-mapping-list du web.xml.
+        if (!charsetExplicit && boundRequest != null
+                && boundRequest.getServletContext() instanceof
+                fr.vidocq.vidocq.ext.servlet.chappe.container.VidocqServletContext vctx) {
+            String enc = vctx.encodingForLocale(loc);
+            if (enc != null) {
+                this.characterEncoding = enc;
+                refreshContentTypeHeader();
+            }
+        }
     }
     @Override public Locale getLocale() { return locale; }
 

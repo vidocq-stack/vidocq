@@ -118,6 +118,7 @@ public class VidocqDeployableContainer implements DeployableContainer<VidocqCont
     private static void registerFromWebXml(ServletTestHarness.Builder builder,
                                            WebAppDescriptor desc, ClassLoader cl,
                                            List<String> registered) {
+        builder.localeEncodingMappings(desc.localeEncodingMappings());
         var instances = new java.util.HashMap<String, jakarta.servlet.Servlet>();
         var servletParams = new java.util.HashMap<String, java.util.Map<String, String>>();
         for (WebAppDescriptor.ServletDef sd : desc.servlets()) {

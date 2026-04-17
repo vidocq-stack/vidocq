@@ -54,6 +54,7 @@ public final class WebXmlParser {
         var listenerClasses = new ArrayList<String>();
         var errorPages = new ArrayList<WebAppDescriptor.ErrorPageDef>();
         int sessionTimeoutMinutes = -1;
+        var localeEncodingMappings = new LinkedHashMap<String, String>();
 
         for (Element e : children(root)) {
             switch (e.getTagName()) {
@@ -80,11 +81,19 @@ public final class WebXmlParser {
                     String t = firstText(e, "session-timeout");
                     if (t != null) sessionTimeoutMinutes = Integer.parseInt(t.trim());
                 }
+                case "locale-encoding-mapping-list" -> {
+                    for (Element m : childrenByTag(e, "locale-encoding-mapping")) {
+                        String loc = firstText(m, "locale");
+                        String enc = firstText(m, "encoding");
+                        if (loc != null && enc != null) localeEncodingMappings.put(loc, enc);
+                    }
+                }
                 default -> { /* ignore unrecognized elements */ }
             }
         }
         return new WebAppDescriptor(contextParams, servlets, servletMappings, filters,
-                filterMappings, listenerClasses, errorPages, sessionTimeoutMinutes);
+                filterMappings, listenerClasses, errorPages, sessionTimeoutMinutes,
+                localeEncodingMappings);
     }
 
     private static WebAppDescriptor.ServletDef parseServlet(Element e) {

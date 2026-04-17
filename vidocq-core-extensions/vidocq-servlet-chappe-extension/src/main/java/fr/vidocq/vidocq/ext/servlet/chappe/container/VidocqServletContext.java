@@ -45,6 +45,24 @@ public final class VidocqServletContext implements ServletContext {
     private fr.vidocq.vidocq.ext.servlet.chappe.security.SecurityProvider securityProvider =
             new fr.vidocq.vidocq.ext.servlet.chappe.security.AnonymousSecurityProvider();
     private boolean initialized;
+    private Map<String, String> localeEncodingMappings = Map.of();
+
+    /** Mapping &lt;locale&gt; → &lt;encoding&gt; issu du {@code web.xml} (Servlet 6.1 §14.4). */
+    public void setLocaleEncodingMappings(Map<String, String> mappings) {
+        this.localeEncodingMappings = mappings == null ? Map.of() : Map.copyOf(mappings);
+    }
+    public String encodingForLocale(java.util.Locale locale) {
+        if (locale == null || localeEncodingMappings.isEmpty()) return null;
+        String lang = locale.getLanguage();
+        String country = locale.getCountry();
+        // Essaie la forme complète "lang-country" (cf. web.xml §14.4), puis "lang".
+        if (country != null && !country.isEmpty()) {
+            String full = lang + "-" + country.toLowerCase(java.util.Locale.ROOT);
+            String v = localeEncodingMappings.get(full);
+            if (v != null) return v;
+        }
+        return localeEncodingMappings.get(lang);
+    }
 
     public VidocqServletContext(String contextPath) {
         this.contextPath = contextPath;

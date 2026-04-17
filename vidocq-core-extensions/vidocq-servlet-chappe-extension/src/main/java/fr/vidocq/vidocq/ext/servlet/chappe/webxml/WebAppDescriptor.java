@@ -33,6 +33,7 @@ public final class WebAppDescriptor {
     private final List<String> listenerClasses;
     private final List<ErrorPageDef> errorPages;
     private final int sessionTimeoutMinutes;
+    private final Map<String, String> localeEncodingMappings;
 
     public WebAppDescriptor(Map<String, String> contextParams,
                             List<ServletDef> servlets,
@@ -42,6 +43,19 @@ public final class WebAppDescriptor {
                             List<String> listenerClasses,
                             List<ErrorPageDef> errorPages,
                             int sessionTimeoutMinutes) {
+        this(contextParams, servlets, servletMappings, filters, filterMappings,
+                listenerClasses, errorPages, sessionTimeoutMinutes, Map.of());
+    }
+
+    public WebAppDescriptor(Map<String, String> contextParams,
+                            List<ServletDef> servlets,
+                            List<ServletMappingDef> servletMappings,
+                            List<FilterDef> filters,
+                            List<FilterMappingDef> filterMappings,
+                            List<String> listenerClasses,
+                            List<ErrorPageDef> errorPages,
+                            int sessionTimeoutMinutes,
+                            Map<String, String> localeEncodingMappings) {
         this.contextParams = Collections.unmodifiableMap(new LinkedHashMap<>(contextParams));
         this.servlets = List.copyOf(servlets);
         this.servletMappings = List.copyOf(servletMappings);
@@ -50,11 +64,13 @@ public final class WebAppDescriptor {
         this.listenerClasses = List.copyOf(listenerClasses);
         this.errorPages = List.copyOf(errorPages);
         this.sessionTimeoutMinutes = sessionTimeoutMinutes;
+        this.localeEncodingMappings = Collections.unmodifiableMap(
+                new LinkedHashMap<>(localeEncodingMappings));
     }
 
     public static WebAppDescriptor empty() {
         return new WebAppDescriptor(Map.of(), List.of(), List.of(), List.of(), List.of(), List.of(),
-                List.of(), -1);
+                List.of(), -1, Map.of());
     }
 
     public Map<String, String> contextParams() { return contextParams; }
@@ -65,6 +81,7 @@ public final class WebAppDescriptor {
     public List<String> listenerClasses() { return listenerClasses; }
     public List<ErrorPageDef> errorPages() { return errorPages; }
     public int sessionTimeoutMinutes() { return sessionTimeoutMinutes; }
+    public Map<String, String> localeEncodingMappings() { return localeEncodingMappings; }
 
     public boolean isEmpty() {
         return contextParams.isEmpty() && servlets.isEmpty() && filters.isEmpty()

@@ -120,6 +120,12 @@ public final class ServletTestHarness implements AutoCloseable {
                 new java.util.IdentityHashMap<>();
         private String contextPath = "/";
         private SecurityProvider securityProvider;
+        private java.util.Map<String, String> localeEncodingMappings = java.util.Map.of();
+
+        public Builder localeEncodingMappings(java.util.Map<String, String> m) {
+            this.localeEncodingMappings = m == null ? java.util.Map.of() : java.util.Map.copyOf(m);
+            return this;
+        }
 
         public Builder servlet(String urlPattern, jakarta.servlet.Servlet servlet) {
             return servlet(urlPattern, servlet, java.util.Map.of());
@@ -168,6 +174,7 @@ public final class ServletTestHarness implements AutoCloseable {
         public ServletTestHarness start() {
             VidocqServletContext ctx = new VidocqServletContext(contextPath);
             ctx.setErrorPages(errorPages);
+            ctx.setLocaleEncodingMappings(localeEncodingMappings);
             ListenerRegistry registry = new ListenerRegistry();
             registry.registerAll(listeners);
             ctx.setListenerRegistry(registry);
