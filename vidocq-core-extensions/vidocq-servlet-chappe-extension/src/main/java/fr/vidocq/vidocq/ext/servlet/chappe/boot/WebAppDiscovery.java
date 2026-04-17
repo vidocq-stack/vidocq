@@ -1,5 +1,6 @@
 package fr.vidocq.vidocq.ext.servlet.chappe.boot;
 
+import fr.vidocq.vidocq.ext.servlet.chappe.dispatcher.FilterMapping;
 import fr.vidocq.vidocq.ext.servlet.chappe.dispatcher.ServletDispatcher;
 import fr.vidocq.vidocq.ext.servlet.chappe.dispatcher.UrlPatternMatcher;
 import jakarta.enterprise.inject.Any;
@@ -7,48 +8,77 @@ import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.enterprise.inject.spi.CDI;
 import jakarta.enterprise.util.AnnotationLiteral;
+import jakarta.servlet.DispatcherType;
+import jakarta.servlet.Filter;
 import jakarta.servlet.Servlet;
+import jakarta.servlet.annotation.WebFilter;
 import jakarta.servlet.annotation.WebServlet;
 
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 
 /**
- * Scanne le {@link BeanManager} Vauban pour découvrir les beans CDI annotés
- * {@code @WebServlet} et les transformer en {@link ServletDispatcher.Mapping}.
+ * Scanne le {@link BeanManager} Vauban pour découvrir :
+ * <ul>
+ *   <li>les beans CDI annotés {@code @WebServlet} → {@link ServletDispatcher.Mapping}</li>
+ *   <li>les beans CDI annotés {@code @WebFilter} → {@link FilterMapping}</li>
+ * </ul>
  *
- * <p>Chaque url-pattern déclaré dans {@code @WebServlet.value}/{@code .urlPatterns}
- * produit un mapping. La même instance de servlet est partagée entre tous ses patterns
- * (les servlets sont traités en singleton au sens Servlet 6.1 §2.2).</p>
+ * <p>Chaque url-pattern produit un mapping. Les servlets et filtres sont
+ * traités en singleton au sens Servlet 6.1 §2.2.</p>
  */
 public final class WebAppDiscovery {
 
     private static final AnnotationLiteral<Any> ANY = new AnnotationLiteral<Any>() {};
 
-    public static List<ServletDispatcher.Mapping> discover(BeanManager beanManager) {
+    public static List<ServletDispatcher.Mapping> discoverServlets(BeanManager beanManager) {
         List<ServletDispatcher.Mapping> mappings = new ArrayList<>();
         Set<Bean<?>> beans = beanManager.getBeans(Servlet.class, ANY);
         for (Bean<?> bean : beans) {
             Class<?> cls = bean.getBeanClass();
             WebServlet ann = cls.getAnnotation(WebServlet.class);
             if (ann == null) continue;
-            Servlet instance = resolveInstance(beanManager, bean);
-            String servletName = ann.name().isEmpty() ? cls.getSimpleName() : ann.name();
-            String[] patterns = ann.urlPatterns().length > 0 ? ann.urlPatterns() : ann.value();
-            for (String pattern : patterns) {
+            Servlet instance = (Servlet) resolveInstance(beanManager, bean, Servlet.class);
+            String name = ann.name().isEmpty() ? cls.getSimpleName() : ann.name();
+            for (String pattern : effectivePatterns(ann.urlPatterns(), ann.value())) {
                 mappings.add(new ServletDispatcher.Mapping(
-                        UrlPatternMatcher.of(pattern), instance, servletName));
+                        UrlPatternMatcher.of(pattern), instance, name));
             }
         }
         return mappings;
     }
 
+    public static List<FilterMapping> discoverFilters(BeanManager beanManager) {
+        List<FilterMapping> mappings = new ArrayList<>();
+        Set<Bean<?>> beans = beanManager.getBeans(Filter.class, ANY);
+        for (Bean<?> bean : beans) {
+            Class<?> cls = bean.getBeanClass();
+            WebFilter ann = cls.getAnnotation(WebFilter.class);
+            if (ann == null) continue;
+            Filter instance = (Filter) resolveInstance(beanManager, bean, Filter.class);
+            String name = ann.filterName().isEmpty() ? cls.getSimpleName() : ann.filterName();
+            Set<DispatcherType> types = ann.dispatcherTypes().length == 0
+                    ? EnumSet.of(DispatcherType.REQUEST)
+                    : EnumSet.copyOf(List.of(ann.dispatcherTypes()));
+            for (String pattern : effectivePatterns(ann.urlPatterns(), ann.value())) {
+                mappings.add(new FilterMapping(
+                        UrlPatternMatcher.of(pattern), instance, name, types));
+            }
+        }
+        return mappings;
+    }
+
+    /** Retourne {@code @WebServlet.urlPatterns} si non vide, sinon {@code .value}. */
+    private static String[] effectivePatterns(String[] urlPatterns, String[] value) {
+        return urlPatterns.length > 0 ? urlPatterns : value;
+    }
+
     @SuppressWarnings("unchecked")
-    private static Servlet resolveInstance(BeanManager bm, Bean<?> bean) {
+    private static Object resolveInstance(BeanManager bm, Bean<?> bean, Class<?> type) {
         Bean<Object> b = (Bean<Object>) bean;
-        Object ref = bm.getReference(b, Servlet.class, bm.createCreationalContext(b));
-        return (Servlet) ref;
+        return bm.getReference(b, type, bm.createCreationalContext(b));
     }
 
     public static BeanManager lookupBeanManager() {

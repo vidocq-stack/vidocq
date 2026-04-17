@@ -5,6 +5,8 @@ import fr.vidocq.vidocq.ext.chappe.ChappeMountPoint;
 import fr.vidocq.vidocq.ext.servlet.chappe.boot.WebAppDiscovery;
 import fr.vidocq.vidocq.ext.servlet.chappe.bridge.ChappeServletBridge;
 import fr.vidocq.vidocq.ext.servlet.chappe.container.VidocqServletContext;
+import fr.vidocq.vidocq.ext.servlet.chappe.dispatcher.FilterMapping;
+import fr.vidocq.vidocq.ext.servlet.chappe.dispatcher.FilterRegistry;
 import fr.vidocq.vidocq.ext.servlet.chappe.dispatcher.ServletDispatcher;
 import fr.vidocq.vidocq.spi.ExtensionContext;
 import fr.vidocq.vidocq.spi.VidocqExtension;
@@ -50,25 +52,34 @@ public final class VidocqServletChappeExtension implements VidocqExtension {
 
     @Override
     public void onStart(ExtensionContext context) {
-        List<ServletDispatcher.Mapping> mappings =
-                WebAppDiscovery.discover(context.beanManager());
+        List<ServletDispatcher.Mapping> servletMappings =
+                WebAppDiscovery.discoverServlets(context.beanManager());
+        List<FilterMapping> filterMappings =
+                WebAppDiscovery.discoverFilters(context.beanManager());
 
-        if (mappings.isEmpty()) {
+        if (servletMappings.isEmpty() && filterMappings.isEmpty()) {
             LOG.log(System.Logger.Level.INFO,
-                    "No @WebServlet beans discovered — servlet extension inactive");
+                    "No @WebServlet / @WebFilter beans discovered — servlet extension inactive");
             return;
         }
 
-        ServletDispatcher dispatcher = new ServletDispatcher(mappings);
+        ServletDispatcher dispatcher = new ServletDispatcher(servletMappings);
+        FilterRegistry filterRegistry = new FilterRegistry(filterMappings);
         VidocqServletContext servletContext = new VidocqServletContext(contextPath);
-        ChappeServletBridge bridge = new ChappeServletBridge(dispatcher, servletContext, contextPath);
+        ChappeServletBridge bridge = new ChappeServletBridge(
+                dispatcher, filterRegistry, servletContext, contextPath);
 
         String mountPrefix = "/".equals(contextPath) ? "" : contextPath;
         ChappeMountPoint.instance().mount(listener, mountPrefix.isEmpty() ? "/" : mountPrefix, bridge);
 
-        for (ServletDispatcher.Mapping m : mappings) {
+        for (ServletDispatcher.Mapping m : servletMappings) {
             LOG.log(System.Logger.Level.INFO,
                     "Mapped servlet {0} -> {1}", m.servletName(), m.matcher().pattern());
+        }
+        for (FilterMapping m : filterMappings) {
+            LOG.log(System.Logger.Level.INFO,
+                    "Mapped filter {0} -> {1} [{2}]",
+                    m.filterName(), m.matcher().pattern(), m.dispatcherTypes());
         }
     }
 }
