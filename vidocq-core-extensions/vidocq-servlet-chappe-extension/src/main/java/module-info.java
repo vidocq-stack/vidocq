@@ -5,6 +5,7 @@ module fr.vidocq.vidocq.ext.servlet.chappe {
     requires fr.vidocq.chappe.api;
     requires transitive jakarta.servlet;
     requires jakarta.cdi;
+    requires java.xml;
     requires static java.net.http;
 
     exports fr.vidocq.vidocq.ext.servlet.chappe;
