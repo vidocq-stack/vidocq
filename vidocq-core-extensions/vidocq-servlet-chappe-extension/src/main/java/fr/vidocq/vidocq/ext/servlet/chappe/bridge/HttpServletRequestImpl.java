@@ -73,9 +73,22 @@ public final class HttpServletRequestImpl implements HttpServletRequest {
         this.sessionManager = sessionManager;
     }
 
+    private fr.vidocq.vidocq.ext.servlet.chappe.security.AuthenticatedUser currentUser;
+    private String authType;
+
+    public void bindAuthenticated(fr.vidocq.vidocq.ext.servlet.chappe.security.AuthenticatedUser user,
+                                  String authType) {
+        this.currentUser = user;
+        this.authType = authType;
+    }
+
+    public fr.vidocq.vidocq.ext.servlet.chappe.security.AuthenticatedUser currentUser() {
+        return currentUser;
+    }
+
     // ---- Request line & URI ----
 
-    @Override public String getAuthType() { return null; }
+    @Override public String getAuthType() { return authType; }
     @Override public String getMethod() { return chappe.method().name(); }
     @Override public String getProtocol() { return chappe.version().toString(); }
     @Override public String getScheme() { return chappe.scheme(); }
@@ -292,9 +305,11 @@ public final class HttpServletRequestImpl implements HttpServletRequest {
         }
         return parsedCookies.length == 0 ? null : parsedCookies;
     }
-    @Override public String getRemoteUser() { return null; }
-    @Override public boolean isUserInRole(String role) { return false; }
-    @Override public Principal getUserPrincipal() { return null; }
+    @Override public String getRemoteUser() { return currentUser == null ? null : currentUser.name(); }
+    @Override public boolean isUserInRole(String role) {
+        return currentUser != null && currentUser.hasRole(role);
+    }
+    @Override public Principal getUserPrincipal() { return currentUser; }
     @Override public String getRequestedSessionId() {
         if (requestedSessionId == null) {
             requestedSessionId = extractSessionIdFromCookies();
@@ -340,11 +355,37 @@ public final class HttpServletRequestImpl implements HttpServletRequest {
     }
 
     public HttpSessionImpl boundSession() { return currentSession; }
-    @Override public boolean authenticate(jakarta.servlet.http.HttpServletResponse response) { return false; }
-    @Override public void login(String username, String password) throws ServletException {
-        throw new ServletException("login not implemented");
+
+    @Override public boolean authenticate(jakarta.servlet.http.HttpServletResponse response) throws IOException {
+        if (currentUser != null) return true;
+        var provider = resolveSecurityProvider();
+        var basic = new fr.vidocq.vidocq.ext.servlet.chappe.security.BasicAuthenticator(provider);
+        var user = basic.tryAuthenticate(getHeader("Authorization")).orElse(null);
+        if (user == null) {
+            response.setHeader("WWW-Authenticate", basic.challengeHeaderValue());
+            response.sendError(401, "Unauthorized");
+            return false;
+        }
+        bindAuthenticated(user, "BASIC");
+        return true;
     }
-    @Override public void logout() {}
+    @Override public void login(String username, String password) throws ServletException {
+        if (currentUser != null) throw new ServletException("already authenticated");
+        var user = resolveSecurityProvider().authenticate(username, password).orElse(null);
+        if (user == null) throw new ServletException("invalid credentials");
+        bindAuthenticated(user, "BASIC");
+    }
+    @Override public void logout() {
+        currentUser = null;
+        authType = null;
+    }
+
+    private fr.vidocq.vidocq.ext.servlet.chappe.security.SecurityProvider resolveSecurityProvider() {
+        if (servletContext instanceof fr.vidocq.vidocq.ext.servlet.chappe.container.VidocqServletContext v) {
+            return v.securityProvider();
+        }
+        return new fr.vidocq.vidocq.ext.servlet.chappe.security.AnonymousSecurityProvider();
+    }
 
     private java.util.List<fr.vidocq.vidocq.ext.servlet.chappe.http.PartImpl> parsedParts;
 

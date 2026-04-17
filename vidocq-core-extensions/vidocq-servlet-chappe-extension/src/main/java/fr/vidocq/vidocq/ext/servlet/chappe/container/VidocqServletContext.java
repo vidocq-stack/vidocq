@@ -42,6 +42,8 @@ public final class VidocqServletContext implements ServletContext {
     private RequestDispatcherImpl.Invoker dispatchInvoker;
     private fr.vidocq.vidocq.ext.servlet.chappe.error.ErrorPageRegistry errorPages =
             new fr.vidocq.vidocq.ext.servlet.chappe.error.ErrorPageRegistry();
+    private fr.vidocq.vidocq.ext.servlet.chappe.security.SecurityProvider securityProvider =
+            new fr.vidocq.vidocq.ext.servlet.chappe.security.AnonymousSecurityProvider();
 
     public VidocqServletContext(String contextPath) {
         this.contextPath = contextPath;
@@ -65,6 +67,14 @@ public final class VidocqServletContext implements ServletContext {
 
     public void setErrorPages(fr.vidocq.vidocq.ext.servlet.chappe.error.ErrorPageRegistry errorPages) {
         this.errorPages = errorPages;
+    }
+
+    public fr.vidocq.vidocq.ext.servlet.chappe.security.SecurityProvider securityProvider() {
+        return securityProvider;
+    }
+
+    public void setSecurityProvider(fr.vidocq.vidocq.ext.servlet.chappe.security.SecurityProvider provider) {
+        this.securityProvider = java.util.Objects.requireNonNull(provider);
     }
 
     @Override public String getContextPath() { return contextPath; }

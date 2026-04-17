@@ -117,6 +117,12 @@ public final class ChappeServletBridge implements Handler, RequestDispatcherImpl
         registry.fireRequestInitialized(servletContext, req);
         Throwable thrown = null;
         try {
+            var enforcer = new fr.vidocq.vidocq.ext.servlet.chappe.security.SecurityConstraintEnforcer(
+                    servletContext.securityProvider());
+            if (!enforcer.enforce(m.servlet().getClass(), req, res)) {
+                registry.fireRequestDestroyed(servletContext, req);
+                return toChappeResponse(res);
+            }
             invoke(target, req, res, DispatcherType.REQUEST);
             thrown = awaitAsyncIfStarted(req, res);
         } catch (ServletException | IOException | RuntimeException e) {
