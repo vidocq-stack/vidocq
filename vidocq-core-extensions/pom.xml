@@ -15,6 +15,7 @@
     <description>MicroProfile 7.1 core extensions for Vidocq</description>
 
     <modules>
+        <module>vidocq-chappe-extension</module>
         <module>vidocq-rest-extension</module>
     </modules>
 </project>

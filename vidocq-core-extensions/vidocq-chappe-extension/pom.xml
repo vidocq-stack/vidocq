@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.1.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.1.0 http://maven.apache.org/xsd/maven-4.1.0.xsd">
+    <modelVersion>4.1.0</modelVersion>
+
+    <parent>
+        <groupId>fr.vidocq.vidocq</groupId>
+        <artifactId>vidocq-core-extensions</artifactId>
+    </parent>
+
+    <artifactId>vidocq-chappe-extension</artifactId>
+    <name>Vidocq :: Core Extensions :: Chappe Engine</name>
+    <description>Socle moteur Chappe partagé entre extensions (servlet, rest, ...)</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>fr.vidocq.vidocq</groupId>
+            <artifactId>vidocq-spi</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>fr.vidocq.vauban</groupId>
+            <artifactId>vauban-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>fr.vidocq.chappe</groupId>
+            <artifactId>chappe-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>fr.vidocq.chappe</groupId>
+            <artifactId>chappe-core</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

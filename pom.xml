@@ -33,6 +33,7 @@
         <maven.compiler.release>25</maven.compiler.release>
 
         <vauban.version>0.1.0-SNAPSHOT</vauban.version>
+        <chappe.version>0.1.0-SNAPSHOT</chappe.version>
         <jakarta.cdi.version>4.1.0</jakarta.cdi.version>
         <junit.version>6.0.3</junit.version>
         <arquillian.version>1.8.0.Final</arquillian.version>
@@ -78,10 +79,32 @@
                 <version>${vauban.version}</version>
             </dependency>
 
+            <!-- Chappe HTTP server -->
+            <dependency>
+                <groupId>fr.vidocq.chappe</groupId>
+                <artifactId>chappe-api</artifactId>
+                <version>${chappe.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>fr.vidocq.chappe</groupId>
+                <artifactId>chappe-core</artifactId>
+                <version>${chappe.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>fr.vidocq.chappe</groupId>
+                <artifactId>chappe-http</artifactId>
+                <version>${chappe.version}</version>
+            </dependency>
+
             <!-- Vidocq modules -->
             <dependency>
                 <groupId>fr.vidocq.vidocq</groupId>
                 <artifactId>vidocq-spi</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>fr.vidocq.vidocq</groupId>
+                <artifactId>vidocq-chappe-extension</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
