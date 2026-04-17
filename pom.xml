@@ -35,6 +35,8 @@
         <vauban.version>0.1.0-SNAPSHOT</vauban.version>
         <chappe.version>0.1.0-SNAPSHOT</chappe.version>
         <jakarta.cdi.version>4.1.0</jakarta.cdi.version>
+        <jakarta.servlet.version>6.1.0</jakarta.servlet.version>
+        <jakarta.annotation.version>3.0.0</jakarta.annotation.version>
         <junit.version>6.0.3</junit.version>
         <arquillian.version>1.8.0.Final</arquillian.version>
     </properties>
@@ -55,6 +57,20 @@
                 <groupId>jakarta.enterprise</groupId>
                 <artifactId>jakarta.enterprise.cdi-api</artifactId>
                 <version>${jakarta.cdi.version}</version>
+            </dependency>
+
+            <!-- Jakarta Servlet API 6.1 -->
+            <dependency>
+                <groupId>jakarta.servlet</groupId>
+                <artifactId>jakarta.servlet-api</artifactId>
+                <version>${jakarta.servlet.version}</version>
+            </dependency>
+
+            <!-- Jakarta Annotations -->
+            <dependency>
+                <groupId>jakarta.annotation</groupId>
+                <artifactId>jakarta.annotation-api</artifactId>
+                <version>${jakarta.annotation.version}</version>
             </dependency>
 
             <!-- Vauban -->
@@ -105,6 +121,11 @@
             <dependency>
                 <groupId>fr.vidocq.vidocq</groupId>
                 <artifactId>vidocq-chappe-extension</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>fr.vidocq.vidocq</groupId>
+                <artifactId>vidocq-servlet-chappe-extension</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

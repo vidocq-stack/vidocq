@@ -16,6 +16,7 @@
 
     <modules>
         <module>vidocq-chappe-extension</module>
+        <module>vidocq-servlet-chappe-extension</module>
         <module>vidocq-rest-extension</module>
     </modules>
 </project>
