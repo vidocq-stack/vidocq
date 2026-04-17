@@ -187,22 +187,11 @@ public final class HttpServletResponseImpl implements HttpServletResponse {
     public Map<String, List<String>> allHeaders() {
         Map<String, List<String>> out = new LinkedHashMap<>();
         for (var e : headers.entrySet()) out.put(e.getKey(), List.copyOf(e.getValue()));
-        // sérialiser les cookies en Set-Cookie
         for (Cookie c : cookies) {
-            out.computeIfAbsent("Set-Cookie", _ -> new ArrayList<>()).add(serializeCookie(c));
+            out.computeIfAbsent("Set-Cookie", _ -> new ArrayList<>())
+                    .add(fr.vidocq.vidocq.ext.servlet.chappe.http.CookieCodec.serializeSetCookie(c));
         }
         return out;
-    }
-
-    private static String serializeCookie(Cookie c) {
-        StringBuilder sb = new StringBuilder();
-        sb.append(c.getName()).append('=').append(c.getValue() == null ? "" : c.getValue());
-        if (c.getPath() != null) sb.append("; Path=").append(c.getPath());
-        if (c.getDomain() != null) sb.append("; Domain=").append(c.getDomain());
-        if (c.getMaxAge() >= 0) sb.append("; Max-Age=").append(c.getMaxAge());
-        if (c.getSecure()) sb.append("; Secure");
-        if (c.isHttpOnly()) sb.append("; HttpOnly");
-        return sb.toString();
     }
 
     public Set<String> headerNames() {

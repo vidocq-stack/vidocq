@@ -9,9 +9,13 @@ import fr.vidocq.vidocq.ext.servlet.chappe.container.VidocqServletContext;
 import fr.vidocq.vidocq.ext.servlet.chappe.dispatcher.FilterRegistry;
 import fr.vidocq.vidocq.ext.servlet.chappe.dispatcher.ServletDispatcher;
 import fr.vidocq.vidocq.ext.servlet.chappe.dispatcher.VidocqFilterChain;
+import fr.vidocq.vidocq.ext.servlet.chappe.http.CookieCodec;
+import fr.vidocq.vidocq.ext.servlet.chappe.session.HttpSessionImpl;
+import fr.vidocq.vidocq.ext.servlet.chappe.session.SessionManager;
 import jakarta.servlet.DispatcherType;
 import jakarta.servlet.Filter;
 import jakarta.servlet.ServletException;
+import jakarta.servlet.http.Cookie;
 
 import java.util.List;
 import java.util.Map;
@@ -24,6 +28,7 @@ import java.util.Optional;
  *   <li>Construit la chaîne de filtres applicables via {@link FilterRegistry}</li>
  *   <li>Construit {@link HttpServletRequestImpl} + {@link HttpServletResponseImpl}</li>
  *   <li>Appelle {@code chain.doFilter(req, res)} qui invoquera finalement le servlet</li>
+ *   <li>Émet {@code Set-Cookie JSESSIONID} si une session a été créée</li>
  *   <li>Matérialise la réponse Chappe immuable</li>
  * </ol>
  */
@@ -32,23 +37,34 @@ public final class ChappeServletBridge implements Handler {
     private final ServletDispatcher dispatcher;
     private final FilterRegistry filterRegistry;
     private final VidocqServletContext servletContext;
+    private final SessionManager sessionManager;
     private final String contextPath;
 
     public ChappeServletBridge(ServletDispatcher dispatcher,
                                FilterRegistry filterRegistry,
                                VidocqServletContext servletContext,
+                               SessionManager sessionManager,
                                String contextPath) {
         this.dispatcher = dispatcher;
         this.filterRegistry = filterRegistry;
         this.servletContext = servletContext;
+        this.sessionManager = sessionManager;
         this.contextPath = contextPath;
     }
 
-    /** Construction sans filtres (compat, tests). */
+    /** Construction sans sessions. */
+    public ChappeServletBridge(ServletDispatcher dispatcher,
+                               FilterRegistry filterRegistry,
+                               VidocqServletContext servletContext,
+                               String contextPath) {
+        this(dispatcher, filterRegistry, servletContext, null, contextPath);
+    }
+
+    /** Construction minimale (compat tests). */
     public ChappeServletBridge(ServletDispatcher dispatcher,
                                VidocqServletContext servletContext,
                                String contextPath) {
-        this(dispatcher, new FilterRegistry(List.of()), servletContext, contextPath);
+        this(dispatcher, new FilterRegistry(List.of()), servletContext, null, contextPath);
     }
 
     @Override
@@ -60,9 +76,8 @@ public final class ChappeServletBridge implements Handler {
         HttpServletResponseImpl res = new HttpServletResponseImpl();
 
         if (match.isEmpty()) {
-            // Pas de servlet : applique néanmoins les filtres sur le path (Servlet 6.1
-            // autorise les filters sans servlet via REQUEST/ERROR), puis 404 par défaut.
-            req = new HttpServletRequestImpl(request, servletContext, contextPath, path, null);
+            req = new HttpServletRequestImpl(request, servletContext, contextPath, path, null,
+                    sessionManager);
             List<Filter> filters = filterRegistry.chainFor(path, DispatcherType.REQUEST);
             if (filters.isEmpty()) {
                 return notFound();
@@ -73,17 +88,18 @@ public final class ChappeServletBridge implements Handler {
             } catch (ServletException e) {
                 return error(e);
             }
-            // Si aucun filter n'a écrit, renvoyer 404.
             if (res.getStatus() == 200 && res.bodyBytes().length == 0) {
                 return notFound();
             }
+            maybeAttachSessionCookie(req, res);
             return toChappeResponse(res);
         }
 
         ServletDispatcher.Mapping m = match.get();
         String servletPath = servletPathFor(m, path);
         String pathInfo = pathInfoFor(m, path, servletPath);
-        req = new HttpServletRequestImpl(request, servletContext, contextPath, servletPath, pathInfo);
+        req = new HttpServletRequestImpl(request, servletContext, contextPath, servletPath, pathInfo,
+                sessionManager);
 
         List<Filter> filters = filterRegistry.chainFor(path, DispatcherType.REQUEST);
         VidocqFilterChain chain = new VidocqFilterChain(filters, m.servlet());
@@ -93,7 +109,22 @@ public final class ChappeServletBridge implements Handler {
         } catch (ServletException e) {
             return error(e);
         }
+        maybeAttachSessionCookie(req, res);
         return toChappeResponse(res);
+    }
+
+    private void maybeAttachSessionCookie(HttpServletRequestImpl req, HttpServletResponseImpl res) {
+        HttpSessionImpl session = req.boundSession();
+        if (session == null || session.isInvalidated()) return;
+        // Émet un Set-Cookie uniquement pour les sessions nouvellement créées
+        // et non déjà présentées par le client.
+        String requested = req.getRequestedSessionId();
+        if (!session.getId().equals(requested)) {
+            Cookie c = new Cookie(SessionManager.COOKIE_NAME, session.getId());
+            c.setPath("/".equals(contextPath) ? "/" : contextPath);
+            c.setHttpOnly(true);
+            res.addHeader("Set-Cookie", CookieCodec.serializeSetCookie(c));
+        }
     }
 
     static String servletPathFor(ServletDispatcher.Mapping m, String path) {

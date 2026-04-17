@@ -8,6 +8,8 @@ import fr.vidocq.vidocq.ext.servlet.chappe.container.VidocqServletContext;
 import fr.vidocq.vidocq.ext.servlet.chappe.dispatcher.FilterMapping;
 import fr.vidocq.vidocq.ext.servlet.chappe.dispatcher.FilterRegistry;
 import fr.vidocq.vidocq.ext.servlet.chappe.dispatcher.ServletDispatcher;
+import fr.vidocq.vidocq.ext.servlet.chappe.session.InMemorySessionStore;
+import fr.vidocq.vidocq.ext.servlet.chappe.session.SessionManager;
 import fr.vidocq.vidocq.spi.ExtensionContext;
 import fr.vidocq.vidocq.spi.VidocqExtension;
 
@@ -33,6 +35,7 @@ public final class VidocqServletChappeExtension implements VidocqExtension {
 
     private String contextPath = "/";
     private String listener = ChappeListener.DEFAULT;
+    private int sessionTimeoutSeconds = 30 * 60;
 
     @Override
     public String name() {
@@ -48,6 +51,8 @@ public final class VidocqServletChappeExtension implements VidocqExtension {
     public void configure(fr.vidocq.vidocq.spi.VidocqConfiguration config) {
         this.contextPath = config.property("vidocq.servlet.context-path", "/");
         this.listener = config.property("vidocq.servlet.listener", ChappeListener.DEFAULT);
+        this.sessionTimeoutSeconds = Integer.parseInt(
+                config.property("vidocq.servlet.session.timeout-seconds", "1800"));
     }
 
     @Override
@@ -66,8 +71,10 @@ public final class VidocqServletChappeExtension implements VidocqExtension {
         ServletDispatcher dispatcher = new ServletDispatcher(servletMappings);
         FilterRegistry filterRegistry = new FilterRegistry(filterMappings);
         VidocqServletContext servletContext = new VidocqServletContext(contextPath);
+        SessionManager sessionManager = new SessionManager(
+                new InMemorySessionStore(), servletContext, sessionTimeoutSeconds);
         ChappeServletBridge bridge = new ChappeServletBridge(
-                dispatcher, filterRegistry, servletContext, contextPath);
+                dispatcher, filterRegistry, servletContext, sessionManager, contextPath);
 
         String mountPrefix = "/".equals(contextPath) ? "" : contextPath;
         ChappeMountPoint.instance().mount(listener, mountPrefix.isEmpty() ? "/" : mountPrefix, bridge);

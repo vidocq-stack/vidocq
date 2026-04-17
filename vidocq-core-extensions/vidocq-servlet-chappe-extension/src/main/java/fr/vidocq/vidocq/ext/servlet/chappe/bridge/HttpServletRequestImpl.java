@@ -1,6 +1,9 @@
 package fr.vidocq.vidocq.ext.servlet.chappe.bridge;
 
 import fr.vidocq.chappe.api.Request;
+import fr.vidocq.vidocq.ext.servlet.chappe.http.CookieCodec;
+import fr.vidocq.vidocq.ext.servlet.chappe.session.HttpSessionImpl;
+import fr.vidocq.vidocq.ext.servlet.chappe.session.SessionManager;
 import jakarta.servlet.AsyncContext;
 import jakarta.servlet.DispatcherType;
 import jakarta.servlet.RequestDispatcher;
@@ -45,18 +48,29 @@ public final class HttpServletRequestImpl implements HttpServletRequest {
     private final String servletPath;
     private final String pathInfo;
     private final ServletContext servletContext;
+    private final SessionManager sessionManager;
     private final Map<String, Object> attributes = new HashMap<>();
     private String characterEncoding;
     private ServletInputStream inputStream;
     private BufferedReader reader;
+    private Cookie[] parsedCookies;
+    private String requestedSessionId;
+    private HttpSessionImpl currentSession;
 
     public HttpServletRequestImpl(Request chappe, ServletContext ctx,
                                   String contextPath, String servletPath, String pathInfo) {
+        this(chappe, ctx, contextPath, servletPath, pathInfo, null);
+    }
+
+    public HttpServletRequestImpl(Request chappe, ServletContext ctx,
+                                  String contextPath, String servletPath, String pathInfo,
+                                  SessionManager sessionManager) {
         this.chappe = chappe;
         this.servletContext = ctx;
         this.contextPath = contextPath;
         this.servletPath = servletPath;
         this.pathInfo = pathInfo;
+        this.sessionManager = sessionManager;
     }
 
     // ---- Request line & URI ----
@@ -243,20 +257,61 @@ public final class HttpServletRequestImpl implements HttpServletRequest {
 
     // ---- Unimplemented Servlet 6.1 features (future milestones) ----
 
-    @Override public Cookie[] getCookies() { return new Cookie[0]; }
+    @Override public Cookie[] getCookies() {
+        if (parsedCookies == null) {
+            parsedCookies = CookieCodec.parseCookieHeader(getHeader("Cookie"))
+                    .toArray(new Cookie[0]);
+        }
+        return parsedCookies.length == 0 ? null : parsedCookies;
+    }
     @Override public String getRemoteUser() { return null; }
     @Override public boolean isUserInRole(String role) { return false; }
     @Override public Principal getUserPrincipal() { return null; }
-    @Override public String getRequestedSessionId() { return null; }
+    @Override public String getRequestedSessionId() {
+        if (requestedSessionId == null) {
+            requestedSessionId = extractSessionIdFromCookies();
+        }
+        return requestedSessionId;
+    }
     @Override public HttpSession getSession(boolean create) {
-        if (create) throw new UnsupportedOperationException("sessions not implemented");
-        return null;
+        if (currentSession != null && !currentSession.isInvalidated()) return currentSession;
+        if (sessionManager == null) {
+            if (create) throw new IllegalStateException("no SessionManager bound");
+            return null;
+        }
+        String id = getRequestedSessionId();
+        HttpSessionImpl existing = id == null ? null : sessionManager.find(id);
+        if (existing != null) {
+            currentSession = existing;
+            return existing;
+        }
+        if (!create) return null;
+        currentSession = sessionManager.createNew();
+        return currentSession;
     }
     @Override public HttpSession getSession() { return getSession(true); }
-    @Override public String changeSessionId() { throw new UnsupportedOperationException(); }
-    @Override public boolean isRequestedSessionIdValid() { return false; }
-    @Override public boolean isRequestedSessionIdFromCookie() { return false; }
+    @Override public String changeSessionId() {
+        HttpSession s = getSession(false);
+        if (s == null) throw new IllegalStateException("no session");
+        throw new UnsupportedOperationException("changeSessionId not implemented");
+    }
+    @Override public boolean isRequestedSessionIdValid() {
+        String id = getRequestedSessionId();
+        return id != null && sessionManager != null && sessionManager.find(id) != null;
+    }
+    @Override public boolean isRequestedSessionIdFromCookie() { return getRequestedSessionId() != null; }
     @Override public boolean isRequestedSessionIdFromURL() { return false; }
+
+    private String extractSessionIdFromCookies() {
+        Cookie[] cookies = getCookies();
+        if (cookies == null) return null;
+        for (Cookie c : cookies) {
+            if (SessionManager.COOKIE_NAME.equals(c.getName())) return c.getValue();
+        }
+        return null;
+    }
+
+    public HttpSessionImpl boundSession() { return currentSession; }
     @Override public boolean authenticate(jakarta.servlet.http.HttpServletResponse response) { return false; }
     @Override public void login(String username, String password) throws ServletException {
         throw new ServletException("login not implemented");
