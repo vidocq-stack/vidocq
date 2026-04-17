@@ -51,11 +51,28 @@ public final class ServletTestHarness implements AutoCloseable {
     private final HttpClient client;
     private final String contextPath;
 
+    private final java.util.List<jakarta.servlet.Servlet> initializedServlets;
+    private final java.util.List<jakarta.servlet.Filter> initializedFilters;
+    private final fr.vidocq.vidocq.ext.servlet.chappe.listener.ListenerRegistry listenerRegistry;
+    private final fr.vidocq.vidocq.ext.servlet.chappe.container.VidocqServletContext servletContext;
+
     private ServletTestHarness(Server server, int port, String contextPath) {
+        this(server, port, contextPath, java.util.List.of(), java.util.List.of(), null, null);
+    }
+
+    private ServletTestHarness(Server server, int port, String contextPath,
+                               java.util.List<jakarta.servlet.Servlet> initializedServlets,
+                               java.util.List<jakarta.servlet.Filter> initializedFilters,
+                               fr.vidocq.vidocq.ext.servlet.chappe.listener.ListenerRegistry listenerRegistry,
+                               fr.vidocq.vidocq.ext.servlet.chappe.container.VidocqServletContext servletContext) {
         this.server = server;
         this.port = port;
         this.contextPath = contextPath;
         this.client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build();
+        this.initializedServlets = initializedServlets;
+        this.initializedFilters = initializedFilters;
+        this.listenerRegistry = listenerRegistry;
+        this.servletContext = servletContext;
     }
 
     public int port() { return port; }
@@ -78,6 +95,16 @@ public final class ServletTestHarness implements AutoCloseable {
 
     @Override public void close() {
         if (server != null) server.stop();
+        // Cycle de vie Servlet 6.1 §2.3.4 : destroy() en ordre inverse d'init().
+        for (int i = initializedFilters.size() - 1; i >= 0; i--) {
+            try { initializedFilters.get(i).destroy(); } catch (RuntimeException ignored) {}
+        }
+        for (int i = initializedServlets.size() - 1; i >= 0; i--) {
+            try { initializedServlets.get(i).destroy(); } catch (RuntimeException ignored) {}
+        }
+        if (listenerRegistry != null && servletContext != null) {
+            try { listenerRegistry.fireContextDestroyed(servletContext); } catch (RuntimeException ignored) {}
+        }
     }
 
     public static Builder builder() { return new Builder(); }
@@ -88,20 +115,35 @@ public final class ServletTestHarness implements AutoCloseable {
         private final List<FilterMapping> filters = new ArrayList<>();
         private final List<EventListener> listeners = new ArrayList<>();
         private final ErrorPageRegistry errorPages = new ErrorPageRegistry();
+        // initParams par identité d'instance (servlet ou filter) — utilisés par start() lors du init()
+        private final java.util.IdentityHashMap<Object, java.util.Map<String, String>> initParams =
+                new java.util.IdentityHashMap<>();
         private String contextPath = "/";
         private SecurityProvider securityProvider;
 
         public Builder servlet(String urlPattern, jakarta.servlet.Servlet servlet) {
+            return servlet(urlPattern, servlet, java.util.Map.of());
+        }
+
+        public Builder servlet(String urlPattern, jakarta.servlet.Servlet servlet,
+                               java.util.Map<String, String> servletInitParams) {
             servlets.add(new ServletDispatcher.Mapping(
                     fr.vidocq.vidocq.ext.servlet.chappe.dispatcher.UrlPatternMatcher.of(urlPattern),
                     servlet, servlet.getClass().getSimpleName()));
+            initParams.put(servlet, java.util.Map.copyOf(servletInitParams));
             return this;
         }
 
         public Builder filter(String urlPattern, jakarta.servlet.Filter filter) {
+            return filter(urlPattern, filter, java.util.Map.of());
+        }
+
+        public Builder filter(String urlPattern, jakarta.servlet.Filter filter,
+                              java.util.Map<String, String> filterInitParams) {
             filters.add(FilterMapping.onRequest(
                     fr.vidocq.vidocq.ext.servlet.chappe.dispatcher.UrlPatternMatcher.of(urlPattern),
                     filter, filter.getClass().getSimpleName()));
+            initParams.put(filter, java.util.Map.copyOf(filterInitParams));
             return this;
         }
 
@@ -129,12 +171,48 @@ public final class ServletTestHarness implements AutoCloseable {
             SessionManager sessions = new SessionManager(new InMemorySessionStore(), ctx, 1800);
             sessions.setListenerRegistry(registry);
 
-            var bridge = new ChappeServletBridge(new ServletDispatcher(servlets),
-                    new FilterRegistry(filters), ctx, sessions, contextPath);
-
             registry.fireContextInitialized(ctx);
+
+            // Cycle de vie Servlet 6.1 §2.3 : init() avant la première requête.
+            // Les servlets dont init échoue (UnavailableException etc.) sont exclus du dispatcher
+            // — les requêtes vers eux tomberont sur le 404 par défaut. La spec §2.3.3.2 tolère ce
+            // comportement en mode non-permanent.
+            var initialized = new java.util.ArrayList<jakarta.servlet.Servlet>();
+            var liveServlets = new java.util.ArrayList<ServletDispatcher.Mapping>();
+            for (var m : servlets) {
+                var params = initParams.getOrDefault(m.servlet(), java.util.Map.of());
+                var cfg = new fr.vidocq.vidocq.ext.servlet.chappe.container.ServletConfigImpl(
+                        m.servletName(), ctx, params);
+                try {
+                    m.servlet().init(cfg);
+                    initialized.add(m.servlet());
+                    liveServlets.add(m);
+                } catch (jakarta.servlet.ServletException e) {
+                    System.err.println("[ServletTestHarness] init failed for "
+                            + m.servletName() + ": " + e.getMessage());
+                }
+            }
+            var initializedFilters = new java.util.ArrayList<jakarta.servlet.Filter>();
+            var liveFilters = new java.util.ArrayList<FilterMapping>();
+            for (var fm : filters) {
+                var params = initParams.getOrDefault(fm.filter(), java.util.Map.of());
+                try {
+                    fm.filter().init(new fr.vidocq.vidocq.ext.servlet.chappe.container.FilterConfigImpl(
+                            fm.filterName(), ctx, params));
+                    initializedFilters.add(fm.filter());
+                    liveFilters.add(fm);
+                } catch (jakarta.servlet.ServletException e) {
+                    System.err.println("[ServletTestHarness] init failed for filter "
+                            + fm.filterName() + ": " + e.getMessage());
+                }
+            }
+
+            var bridge = new ChappeServletBridge(new ServletDispatcher(liveServlets),
+                    new FilterRegistry(liveFilters), ctx, sessions, contextPath);
+
             int port = startServerWithRetry(bridge);
-            return new ServletTestHarness(currentServer, port, contextPath);
+            return new ServletTestHarness(currentServer, port, contextPath,
+                    initialized, initializedFilters, registry, ctx);
         }
 
         private Server currentServer;

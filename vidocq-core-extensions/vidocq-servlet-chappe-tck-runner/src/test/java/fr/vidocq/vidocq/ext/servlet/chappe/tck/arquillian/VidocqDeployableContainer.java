@@ -119,6 +119,7 @@ public class VidocqDeployableContainer implements DeployableContainer<VidocqCont
                                            WebAppDescriptor desc, ClassLoader cl,
                                            List<String> registered) {
         var instances = new java.util.HashMap<String, jakarta.servlet.Servlet>();
+        var servletParams = new java.util.HashMap<String, java.util.Map<String, String>>();
         for (WebAppDescriptor.ServletDef sd : desc.servlets()) {
             if (sd.className() == null) continue;
             try {
@@ -126,27 +127,34 @@ public class VidocqDeployableContainer implements DeployableContainer<VidocqCont
                 if (!jakarta.servlet.Servlet.class.isAssignableFrom(c)) continue;
                 jakarta.servlet.Servlet s = (jakarta.servlet.Servlet) c.getDeclaredConstructor().newInstance();
                 instances.put(sd.name(), s);
+                servletParams.put(sd.name(),
+                        sd.initParams() == null ? java.util.Map.of() : sd.initParams());
             } catch (ReflectiveOperationException ignored) {}
         }
         for (WebAppDescriptor.ServletMappingDef m : desc.servletMappings()) {
             jakarta.servlet.Servlet s = instances.get(m.servletName());
             if (s != null) {
-                builder.servlet(m.urlPattern(), s);
+                builder.servlet(m.urlPattern(), s,
+                        servletParams.getOrDefault(m.servletName(), java.util.Map.of()));
                 registered.add(m.servletName());
             }
         }
         var filterInstances = new java.util.HashMap<String, jakarta.servlet.Filter>();
+        var filterParams = new java.util.HashMap<String, java.util.Map<String, String>>();
         for (WebAppDescriptor.FilterDef fd : desc.filters()) {
             try {
                 Class<?> c = Class.forName(fd.className(), true, cl);
                 if (!jakarta.servlet.Filter.class.isAssignableFrom(c)) continue;
                 jakarta.servlet.Filter f = (jakarta.servlet.Filter) c.getDeclaredConstructor().newInstance();
                 filterInstances.put(fd.name(), f);
+                filterParams.put(fd.name(),
+                        fd.initParams() == null ? java.util.Map.of() : fd.initParams());
             } catch (ReflectiveOperationException ignored) {}
         }
         for (WebAppDescriptor.FilterMappingDef m : desc.filterMappings()) {
             jakarta.servlet.Filter f = filterInstances.get(m.filterName());
-            if (f != null) builder.filter(m.urlPattern(), f);
+            if (f != null) builder.filter(m.urlPattern(), f,
+                    filterParams.getOrDefault(m.filterName(), java.util.Map.of()));
         }
         for (String lc : desc.listenerClasses()) {
             try {
