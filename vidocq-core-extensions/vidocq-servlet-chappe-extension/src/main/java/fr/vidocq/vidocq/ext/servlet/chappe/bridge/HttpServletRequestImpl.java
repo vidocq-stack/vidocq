@@ -90,7 +90,11 @@ public final class HttpServletRequestImpl implements HttpServletRequest {
 
     @Override public String getAuthType() { return authType; }
     @Override public String getMethod() { return chappe.method().name(); }
-    @Override public String getProtocol() { return chappe.version().toString(); }
+    @Override public String getProtocol() {
+        // Chappe expose HttpVersion sous forme "HTTP_1_1" — la spec Servlet attend
+        // la forme HTTP standard "HTTP/1.1".
+        return chappe.version().toString().replace('_', '.').replaceFirst("\\.", "/");
+    }
     @Override public String getScheme() { return chappe.scheme(); }
     @Override public boolean isSecure() { return chappe.isSecure(); }
     @Override public String getRequestURI() { return chappe.path(); }
@@ -105,7 +109,11 @@ public final class HttpServletRequestImpl implements HttpServletRequest {
         sb.append(chappe.path());
         return sb;
     }
-    @Override public String getContextPath() { return contextPath; }
+    @Override public String getContextPath() {
+        // Servlet 6.1 §3.5 : pour le root context "/", getContextPath() doit
+        // retourner une chaîne vide. Pour "/foo", retourner "/foo".
+        return "/".equals(contextPath) ? "" : contextPath;
+    }
     @Override public String getServletPath() { return servletPath; }
     @Override public String getPathInfo() { return pathInfo; }
     @Override public String getPathTranslated() { return null; }
@@ -135,8 +143,15 @@ public final class HttpServletRequestImpl implements HttpServletRequest {
         return Integer.parseInt(v);
     }
     @Override public long getDateHeader(String name) {
-        if (getHeader(name) == null) return -1;
-        throw new UnsupportedOperationException("getDateHeader parsing not implemented");
+        String v = getHeader(name);
+        if (v == null) return -1;
+        // Servlet 6.1 §3.4 : supporte RFC 7231 IMF-fixdate + formats hérités RFC 850/ANSI-C.
+        try {
+            return java.time.ZonedDateTime.parse(v, java.time.format.DateTimeFormatter.RFC_1123_DATE_TIME)
+                    .toInstant().toEpochMilli();
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Cannot parse date header '" + name + "': " + v, e);
+        }
     }
     @Override public String getContentType() { return getHeader("Content-Type"); }
     @Override public int getContentLength() {
@@ -149,49 +164,98 @@ public final class HttpServletRequestImpl implements HttpServletRequest {
     }
 
     // ---- Parameters (query-string only for this milestone) ----
+    //
+    // On reparse chappe.query() nous-mêmes pour préserver les valeurs multiples
+    // (?p=a&p=b retourne {"p": ["a","b"]}), ce que chappe.queryParams() ne
+    // fait pas (map de String→String, une seule valeur par clé).
+
+    private Map<String, List<String>> parsedParams;
+    private Map<String, List<String>> parameters() {
+        if (parsedParams != null) return parsedParams;
+        var out = new java.util.LinkedHashMap<String, List<String>>();
+        String q = chappe.query();
+        if (q != null && !q.isEmpty()) {
+            for (String pair : q.split("&")) {
+                int eq = pair.indexOf('=');
+                String k = eq < 0 ? pair : pair.substring(0, eq);
+                String v = eq < 0 ? "" : pair.substring(eq + 1);
+                if (k.isEmpty()) continue;
+                k = java.net.URLDecoder.decode(k, StandardCharsets.UTF_8);
+                v = java.net.URLDecoder.decode(v, StandardCharsets.UTF_8);
+                out.computeIfAbsent(k, _ -> new ArrayList<>()).add(v);
+            }
+        }
+        return parsedParams = out;
+    }
 
     @Override public String getParameter(String name) {
-        return chappe.queryParams().get(name);
+        List<String> v = parameters().get(name);
+        return v == null || v.isEmpty() ? null : v.get(0);
     }
     @Override public Enumeration<String> getParameterNames() {
-        return Collections.enumeration(chappe.queryParams().keySet());
+        return Collections.enumeration(parameters().keySet());
     }
     @Override public String[] getParameterValues(String name) {
-        String v = chappe.queryParams().get(name);
-        return v == null ? null : new String[] {v};
+        List<String> v = parameters().get(name);
+        return v == null ? null : v.toArray(new String[0]);
     }
     @Override public Map<String, String[]> getParameterMap() {
         Map<String, String[]> map = new HashMap<>();
-        for (Map.Entry<String, String> e : chappe.queryParams().entrySet()) {
-            map.put(e.getKey(), new String[] {e.getValue()});
+        for (var e : parameters().entrySet()) {
+            map.put(e.getKey(), e.getValue().toArray(new String[0]));
         }
         return Collections.unmodifiableMap(map);
     }
 
     // ---- Body ----
 
+    private boolean encodingLocked;
+
     @Override public ServletInputStream getInputStream() throws IOException {
         if (reader != null) throw new IllegalStateException("getReader() already called");
         if (inputStream == null) {
             inputStream = new ServletInputStreamImpl(chappe.body().asInputStream());
+            encodingLocked = true;
         }
         return inputStream;
     }
     @Override public BufferedReader getReader() throws IOException {
         if (inputStream != null) throw new IllegalStateException("getInputStream() already called");
         if (reader == null) {
-            Charset cs = characterEncoding == null
-                    ? StandardCharsets.UTF_8 : Charset.forName(characterEncoding);
+            String enc = getCharacterEncoding();
+            Charset cs;
+            try {
+                cs = enc == null ? StandardCharsets.UTF_8 : Charset.forName(enc);
+            } catch (RuntimeException e) {
+                // Servlet 6.1 §3.11 : encoding invalide → UnsupportedEncodingException.
+                throw new java.io.UnsupportedEncodingException(enc);
+            }
             reader = new BufferedReader(new InputStreamReader(
                     chappe.body().asInputStream(), cs));
+            encodingLocked = true;
         }
         return reader;
     }
-    @Override public String getCharacterEncoding() { return characterEncoding; }
-    @Override public void setCharacterEncoding(String env) {
+    @Override public String getCharacterEncoding() {
+        if (characterEncoding != null) return characterEncoding;
+        // Servlet 6.1 §3.11 : si l'en-tête Content-Type contient "charset=", c'est lui.
+        String ct = getHeader("Content-Type");
+        if (ct != null) {
+            int idx = ct.toLowerCase(Locale.ROOT).indexOf("charset=");
+            if (idx >= 0) return ct.substring(idx + 8).trim();
+        }
+        return null;
+    }
+    @Override public void setCharacterEncoding(String env) throws java.io.UnsupportedEncodingException {
+        // Servlet 6.1 §3.11 : appel après getReader()/getInputStream() est un no-op.
+        if (encodingLocked) return;
+        if (env != null && !Charset.isSupported(env)) {
+            throw new java.io.UnsupportedEncodingException(env);
+        }
         this.characterEncoding = env;
     }
     @Override public void setCharacterEncoding(Charset encoding) {
+        if (encodingLocked) return;
         this.characterEncoding = encoding == null ? null : encoding.name();
     }
 
@@ -268,9 +332,45 @@ public final class HttpServletRequestImpl implements HttpServletRequest {
 
     // ---- Locale ----
 
-    @Override public Locale getLocale() { return Locale.getDefault(); }
+    @Override public Locale getLocale() {
+        var list = acceptedLocales();
+        return list.isEmpty() ? Locale.getDefault() : list.get(0);
+    }
     @Override public Enumeration<Locale> getLocales() {
-        return Collections.enumeration(List.of(Locale.getDefault()));
+        var list = acceptedLocales();
+        return Collections.enumeration(list.isEmpty() ? List.of(Locale.getDefault()) : list);
+    }
+
+    /** Parse l'en-tête {@code Accept-Language} (RFC 7231 §5.3.5) en liste triée par qualité. */
+    private List<Locale> acceptedLocales() {
+        String h = getHeader("Accept-Language");
+        if (h == null || h.isBlank()) return List.of();
+        record Tagged(Locale loc, double q, int order) {}
+        var items = new ArrayList<Tagged>();
+        int i = 0;
+        for (String token : h.split(",")) {
+            token = token.trim();
+            if (token.isEmpty()) continue;
+            String tag = token;
+            double q = 1.0;
+            int semi = token.indexOf(';');
+            if (semi >= 0) {
+                tag = token.substring(0, semi).trim();
+                for (String p : token.substring(semi + 1).split(";")) {
+                    p = p.trim();
+                    if (p.startsWith("q=")) {
+                        try { q = Double.parseDouble(p.substring(2)); } catch (NumberFormatException ignored) {}
+                    }
+                }
+            }
+            try { items.add(new Tagged(Locale.forLanguageTag(tag), q, i++)); }
+            catch (RuntimeException ignored) {}
+        }
+        items.sort((a, b) -> {
+            int c = Double.compare(b.q, a.q);
+            return c != 0 ? c : Integer.compare(a.order, b.order);
+        });
+        return items.stream().filter(t -> t.q > 0).map(Tagged::loc).toList();
     }
 
     // ---- Dispatcher / context ----
