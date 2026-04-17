@@ -3,7 +3,7 @@ package fr.vidocq.examples.servlet;
 import fr.vidocq.vidocq.ext.servlet.chappe.container.VidocqServletContext;
 import fr.vidocq.vidocq.ext.servlet.chappe.security.AuthenticatedUser;
 import fr.vidocq.vidocq.ext.servlet.chappe.security.SecurityProvider;
-import jakarta.inject.Singleton;
+import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.servlet.ServletContextEvent;
 import jakarta.servlet.ServletContextListener;
 import jakarta.servlet.annotation.WebListener;
@@ -16,7 +16,7 @@ import java.util.Set;
  * Installe un {@link SecurityProvider} de démonstration au démarrage et journalise
  * les événements de cycle de vie.
  */
-@Singleton
+@ApplicationScoped
 @WebListener
 public class StartupListener implements ServletContextListener {
 
