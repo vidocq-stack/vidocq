@@ -88,7 +88,7 @@ public final class VidocqServletChappeExtension implements VidocqExtension {
                 dispatcher, filterRegistry, servletContext, sessionManager, contextPath);
 
         String mountPrefix = "/".equals(contextPath) ? "" : contextPath;
-        ChappeMountPoint.instance().mount(listener, mountPrefix.isEmpty() ? "/" : mountPrefix, bridge);
+        ChappeMountPoint.instance().mount(listener, mountPrefix, bridge);
 
         // Fire contextInitialized on all registered ServletContextListeners.
         listeners.fireContextInitialized(servletContext);

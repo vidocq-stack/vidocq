@@ -17,5 +17,6 @@
     <modules>
         <module>vidocq-external-rest-lib</module>
         <module>vidocq-rest-example</module>
+        <module>vidocq-servlet-example</module>
     </modules>
 </project>
