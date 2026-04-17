@@ -1,6 +1,7 @@
 package fr.vidocq.vidocq.spi;
 
 import fr.vidocq.vauban.core.container.VaubanContainer;
+import fr.vidocq.vidocq.spi.config.VidocqConfig;
 import jakarta.enterprise.inject.spi.BeanManager;
 
 /**
@@ -21,10 +22,16 @@ public interface ExtensionContext {
     VaubanContainer container();
 
     /**
-     * La configuration Vidocq.
-     * <p>The Vidocq configuration.</p>
+     * La configuration Vidocq (API historique, en cours de remplacement par {@link #config()}).
+     * <p>The legacy Vidocq configuration; prefer {@link #config()}.</p>
      */
     VidocqConfiguration configuration();
+
+    /**
+     * La configuration Vidocq moderne (sources typées, alignée MicroProfile Config).
+     * <p>Modern Vidocq configuration (typed sources, MicroProfile Config aligned).</p>
+     */
+    VidocqConfig config();
 
     /**
      * Raccourci vers le BeanManager CDI.

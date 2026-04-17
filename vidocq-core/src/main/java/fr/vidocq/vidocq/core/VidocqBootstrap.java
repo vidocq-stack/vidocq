@@ -2,9 +2,11 @@ package fr.vidocq.vidocq.core;
 
 import fr.vidocq.vauban.core.container.VaubanContainer;
 import fr.vidocq.vauban.core.container.VaubanContainerBuilder;
+import fr.vidocq.vidocq.core.config.VidocqConfigImpl;
 import fr.vidocq.vidocq.spi.ExtensionContext;
 import fr.vidocq.vidocq.spi.VidocqConfiguration;
 import fr.vidocq.vidocq.spi.VidocqExtension;
+import fr.vidocq.vidocq.spi.config.VidocqConfig;
 
 import java.util.Collections;
 import java.util.List;
@@ -33,6 +35,7 @@ public final class VidocqBootstrap {
 
     private final CountDownLatch shutdownLatch = new CountDownLatch(1);
 
+    private VidocqConfig config;
     private VidocqConfiguration configuration;
     private List<VidocqExtension> extensions = List.of();
     private List<String> additionalBeanClassNames;
@@ -55,7 +58,8 @@ public final class VidocqBootstrap {
         this.startTime = System.nanoTime();
         LOG.log(System.Logger.Level.INFO, "Vidocq - Configuration phase");
 
-        this.configuration = new VidocqConfigurationImpl();
+        this.config = new VidocqConfigImpl();
+        this.configuration = new VidocqConfigurationImpl(config);
         this.extensions = ExtensionLoader.load();
 
         for (VidocqExtension ext : extensions) {
@@ -104,7 +108,7 @@ public final class VidocqBootstrap {
         this.container = builder.build();
 
         // Notify extensions
-        ExtensionContext context = new ExtensionContextImpl(container, configuration);
+        ExtensionContext context = new ExtensionContextImpl(container, configuration, config);
         for (VidocqExtension ext : extensions) {
             LOG.log(System.Logger.Level.INFO, "Starting extension: {0}", ext.name());
             ext.onStart(context);
