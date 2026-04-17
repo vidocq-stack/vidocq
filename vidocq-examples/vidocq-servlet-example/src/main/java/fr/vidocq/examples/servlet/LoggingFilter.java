@@ -1,6 +1,6 @@
 package fr.vidocq.examples.servlet;
 
-import jakarta.inject.Singleton;
+import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.servlet.Filter;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -12,7 +12,7 @@ import jakarta.servlet.http.HttpServletResponse;
 
 import java.io.IOException;
 
-@Singleton
+@ApplicationScoped
 @WebFilter("/*")
 public class LoggingFilter implements Filter {
 

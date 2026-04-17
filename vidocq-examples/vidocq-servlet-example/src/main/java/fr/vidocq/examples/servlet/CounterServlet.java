@@ -1,6 +1,6 @@
 package fr.vidocq.examples.servlet;
 
-import jakarta.inject.Singleton;
+import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
@@ -9,7 +9,7 @@ import jakarta.servlet.http.HttpSession;
 
 import java.io.IOException;
 
-@Singleton
+@ApplicationScoped
 @WebServlet("/count")
 public class CounterServlet extends HttpServlet {
 

@@ -44,7 +44,7 @@
 
 ---
 
-## 6. ClientProxy : override de methode protected avec invokevirtual au lieu de invokespecial
+## 6. ~~ClientProxy : invokevirtual sur methode protected cross-package rejete par le verifier~~ FIXE
 
 **Symptome :** `VerifyError: Bad access to protected data in invokevirtual` au demarrage d'une application utilisant des servlets `@ApplicationScoped` qui heritent de `HttpServlet`.
 
@@ -73,8 +73,8 @@ public class HelloServlet extends HttpServlet {
 ```
 Lancement → `VerifyError` immediat.
 
-**Contournement :** utiliser un scope pseudo (`@jakarta.inject.Singleton` ou `@Dependent`) qui ne genere pas de ClientProxy. L'exemple `vidocq-servlet-example` utilise `@Singleton` partout pour cette raison.
+**Explication JVMS §4.10.1.9 :** quand une methode `protected` est declaree dans une superclasse, le verifier exige que le type statique du receiver sur la pile soit assignable a la classe courante. Le delegate est cast en `HelloServlet` (la bean class), type qui n'est **pas** assignable a `_ClientProxy` (c'est l'inverse — `_ClientProxy extends HelloServlet`). Le bypass same-runtime-package ne s'applique pas quand la methode protected est declaree plus haut (ex. `HttpServlet.doHead` dans `jakarta.servlet.http`, package distinct du proxy).
 
-**Fix attendu :** dans le generateur de ClientProxy, emettre `invokespecial` pour les super-calls de methodes overridees (meme semantique que `super.methodName(args)` en source Java), independamment de la visibilite de la methode.
+**Fix livre :** `RuntimeClientProxyGenerator` emet desormais un dispatch par {@link java.lang.invoke.MethodHandle} pour les methodes protected (ou package-private) declarees dans une superclasse situee dans un package different du proxy. Chaque methode concernee obtient un champ `private static final MethodHandle $$mh_<name>` initialise dans `<clinit>` via `MethodHandles.privateLookupIn(beanClass, MethodHandles.lookup()).findVirtual(...)`. L'override du proxy invoque `$$mh_<name>.invokeExact(delegate, args)` au lieu de `invokevirtual`. MethodHandle n'est pas soumis aux verifications statiques §4.10.1.9 : l'acces est controle au runtime par la `Lookup` privilegiee.
 
-**Status :** OUVERT. Decouvert lors de l'integration de `vidocq-servlet-chappe-extension` (jalon M2a+). Affecte tous les beans normal-scoped qui heritent de classes avec methodes protected.
+**Status :** FIXE dans Vauban 0.1.0-SNAPSHOT (`RuntimeClientProxyGenerator`). 4 tests unitaires ajoutes pour le cas protected cross-package. L'exemple `vidocq-servlet-example` utilise desormais `@ApplicationScoped` partout sans contournement, demarrage mesure en 48 ms avec 3 servlets + 1 filter + 1 listener, tous les endpoints (incluant BASIC auth et sessions) repondent correctement.

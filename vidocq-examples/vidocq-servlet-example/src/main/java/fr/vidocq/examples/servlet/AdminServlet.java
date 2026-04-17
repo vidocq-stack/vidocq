@@ -1,6 +1,6 @@
 package fr.vidocq.examples.servlet;
 
-import jakarta.inject.Singleton;
+import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.servlet.annotation.HttpConstraint;
 import jakarta.servlet.annotation.ServletSecurity;
 import jakarta.servlet.annotation.WebServlet;
@@ -10,7 +10,7 @@ import jakarta.servlet.http.HttpServletResponse;
 
 import java.io.IOException;
 
-@Singleton
+@ApplicationScoped
 @WebServlet("/admin")
 @ServletSecurity(@HttpConstraint(rolesAllowed = "admin"))
 public class AdminServlet extends HttpServlet {
