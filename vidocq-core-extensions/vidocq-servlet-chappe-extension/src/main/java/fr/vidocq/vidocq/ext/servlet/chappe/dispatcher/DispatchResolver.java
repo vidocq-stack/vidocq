@@ -1,0 +1,57 @@
+package fr.vidocq.vidocq.ext.servlet.chappe.dispatcher;
+
+import java.util.Objects;
+import java.util.Optional;
+
+/**
+ * Résout un path relatif (sans contextPath) en un {@link DispatchTarget} à partir
+ * du {@link ServletDispatcher}.
+ */
+public final class DispatchResolver {
+
+    private final ServletDispatcher dispatcher;
+
+    public DispatchResolver(ServletDispatcher dispatcher) {
+        this.dispatcher = Objects.requireNonNull(dispatcher);
+    }
+
+    /** {@code path} : chemin relatif au contextPath, peut contenir une query. */
+    public Optional<DispatchTarget> resolve(String path) {
+        String justPath = path;
+        String queryString = null;
+        int q = path.indexOf('?');
+        if (q >= 0) {
+            justPath = path.substring(0, q);
+            queryString = path.substring(q + 1);
+        }
+        Optional<ServletDispatcher.Mapping> match = dispatcher.find(justPath);
+        if (match.isEmpty()) return Optional.empty();
+        ServletDispatcher.Mapping m = match.get();
+        String servletPath = servletPathFor(m, justPath);
+        String pathInfo = pathInfoFor(m, justPath, servletPath);
+        return Optional.of(new DispatchTarget(m.servlet(), m.servletName(),
+                justPath, servletPath, pathInfo, queryString));
+    }
+
+    public static String servletPathFor(ServletDispatcher.Mapping m, String path) {
+        return switch (m.matcher().kind()) {
+            case EXACT -> m.matcher().pattern();
+            case PREFIX -> {
+                String prefix = m.matcher().pattern();
+                yield prefix.substring(0, prefix.length() - 2);
+            }
+            case EXTENSION -> path;
+            case DEFAULT, EMPTY -> "";
+        };
+    }
+
+    public static String pathInfoFor(ServletDispatcher.Mapping m, String path, String servletPath) {
+        return switch (m.matcher().kind()) {
+            case PREFIX -> {
+                String rest = path.substring(servletPath.length());
+                yield rest.isEmpty() ? null : rest;
+            }
+            case EXACT, EXTENSION, DEFAULT, EMPTY -> null;
+        };
+    }
+}

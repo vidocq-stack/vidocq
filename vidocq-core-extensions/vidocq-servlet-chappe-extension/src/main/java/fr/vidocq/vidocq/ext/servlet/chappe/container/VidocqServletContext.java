@@ -1,5 +1,7 @@
 package fr.vidocq.vidocq.ext.servlet.chappe.container;
 
+import fr.vidocq.vidocq.ext.servlet.chappe.dispatcher.DispatchResolver;
+import fr.vidocq.vidocq.ext.servlet.chappe.dispatcher.RequestDispatcherImpl;
 import fr.vidocq.vidocq.ext.servlet.chappe.listener.ListenerRegistry;
 import jakarta.servlet.Filter;
 import jakarta.servlet.FilterRegistration;
@@ -36,6 +38,10 @@ public final class VidocqServletContext implements ServletContext {
     private String responseCharacterEncoding = "UTF-8";
     private int sessionTimeout = 30;
     private ListenerRegistry listenerRegistry = new ListenerRegistry();
+    private DispatchResolver dispatchResolver;
+    private RequestDispatcherImpl.Invoker dispatchInvoker;
+    private fr.vidocq.vidocq.ext.servlet.chappe.error.ErrorPageRegistry errorPages =
+            new fr.vidocq.vidocq.ext.servlet.chappe.error.ErrorPageRegistry();
 
     public VidocqServletContext(String contextPath) {
         this.contextPath = contextPath;
@@ -48,6 +54,19 @@ public final class VidocqServletContext implements ServletContext {
 
     public ListenerRegistry listenerRegistry() { return listenerRegistry; }
 
+    public void setDispatchInfrastructure(DispatchResolver resolver, RequestDispatcherImpl.Invoker invoker) {
+        this.dispatchResolver = resolver;
+        this.dispatchInvoker = invoker;
+    }
+
+    public fr.vidocq.vidocq.ext.servlet.chappe.error.ErrorPageRegistry errorPages() {
+        return errorPages;
+    }
+
+    public void setErrorPages(fr.vidocq.vidocq.ext.servlet.chappe.error.ErrorPageRegistry errorPages) {
+        this.errorPages = errorPages;
+    }
+
     @Override public String getContextPath() { return contextPath; }
     @Override public ServletContext getContext(String uripath) { return null; }
     @Override public int getMajorVersion() { return 6; }
@@ -58,7 +77,17 @@ public final class VidocqServletContext implements ServletContext {
     @Override public Set<String> getResourcePaths(String path) { return Set.of(); }
     @Override public java.net.URL getResource(String path) { return null; }
     @Override public java.io.InputStream getResourceAsStream(String path) { return null; }
-    @Override public RequestDispatcher getRequestDispatcher(String path) { return null; }
+    @Override public RequestDispatcher getRequestDispatcher(String path) {
+        if (path == null || dispatchResolver == null || dispatchInvoker == null) return null;
+        String resolvePath = path;
+        if (!contextPath.equals("/") && path.startsWith(contextPath)) {
+            resolvePath = path.substring(contextPath.length());
+            if (resolvePath.isEmpty()) resolvePath = "/";
+        }
+        return dispatchResolver.resolve(resolvePath)
+                .<RequestDispatcher>map(t -> new RequestDispatcherImpl(t, dispatchInvoker))
+                .orElse(null);
+    }
     @Override public RequestDispatcher getNamedDispatcher(String name) { return null; }
     @Override public void log(String msg) { System.getLogger("servlet.log").log(System.Logger.Level.INFO, msg); }
     @Override public void log(String message, Throwable throwable) {

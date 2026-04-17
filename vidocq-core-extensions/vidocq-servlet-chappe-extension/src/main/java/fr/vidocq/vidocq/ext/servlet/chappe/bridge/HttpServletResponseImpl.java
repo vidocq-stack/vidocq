@@ -34,6 +34,8 @@ public final class HttpServletResponseImpl implements HttpServletResponse {
     private PrintWriter writer;
     private boolean streamAcquired;
     private boolean committed;
+    private boolean errorTriggered;
+    private String errorMessage;
 
     // ---- Status ----
 
@@ -42,11 +44,22 @@ public final class HttpServletResponseImpl implements HttpServletResponse {
     @Override public void sendError(int sc, String msg) throws IOException {
         if (committed) throw new IllegalStateException("response already committed");
         setStatus(sc);
+        this.errorTriggered = true;
+        this.errorMessage = msg;
+        // Default body written only if no error page handles the status.
         setContentType("text/plain;charset=utf-8");
         if (msg != null) getOutputStream().write(msg.getBytes(charset()));
         committed = true;
     }
     @Override public void sendError(int sc) throws IOException { sendError(sc, null); }
+
+    public boolean isErrorTriggered() { return errorTriggered; }
+    public String errorMessage() { return errorMessage; }
+    public void clearErrorState() {
+        this.errorTriggered = false;
+        this.errorMessage = null;
+        this.committed = false;
+    }
     @Override public void sendRedirect(String location) throws IOException {
         if (committed) throw new IllegalStateException("response already committed");
         setStatus(SC_FOUND);
@@ -157,8 +170,9 @@ public final class HttpServletResponseImpl implements HttpServletResponse {
     }
     @Override public void resetBuffer() {
         if (committed) throw new IllegalStateException("committed");
-        // outputStream n'a pas de reset → recrée un simple impl
-        throw new UnsupportedOperationException("resetBuffer not implemented");
+        outputStream.resetBuffer();
+        writer = null;
+        streamAcquired = false;
     }
     @Override public boolean isCommitted() { return committed; }
     @Override public void reset() {
@@ -168,6 +182,9 @@ public final class HttpServletResponseImpl implements HttpServletResponse {
         cookies.clear();
         contentType = null;
         characterEncoding = null;
+        outputStream.resetBuffer();
+        writer = null;
+        streamAcquired = false;
     }
     @Override public void setLocale(Locale loc) { this.locale = loc; }
     @Override public Locale getLocale() { return locale; }

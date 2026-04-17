@@ -265,7 +265,19 @@ public final class HttpServletRequestImpl implements HttpServletRequest {
     @Override public DispatcherType getDispatcherType() { return DispatcherType.REQUEST; }
     @Override public ServletContext getServletContext() { return servletContext; }
     @Override public RequestDispatcher getRequestDispatcher(String path) {
-        throw new UnsupportedOperationException("request dispatcher not implemented");
+        if (path == null) return null;
+        String absolute;
+        if (path.startsWith("/")) {
+            absolute = contextPath.equals("/") ? path : contextPath + path;
+        } else {
+            // résolution relative au path courant (parent du servletPath+pathInfo)
+            String current = servletPath + (pathInfo == null ? "" : pathInfo);
+            int slash = current.lastIndexOf('/');
+            String parent = slash <= 0 ? "/" : current.substring(0, slash + 1);
+            String full = contextPath.equals("/") ? parent + path : contextPath + parent + path;
+            absolute = full;
+        }
+        return servletContext.getRequestDispatcher(absolute);
     }
     @Override public HttpServletMapping getHttpServletMapping() {
         throw new UnsupportedOperationException();

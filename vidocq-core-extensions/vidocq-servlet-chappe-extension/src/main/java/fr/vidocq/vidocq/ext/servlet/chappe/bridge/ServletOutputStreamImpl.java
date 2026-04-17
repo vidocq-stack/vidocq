@@ -56,4 +56,8 @@ public final class ServletOutputStreamImpl extends ServletOutputStream {
     public int size() {
         return buffer.size();
     }
+
+    public void resetBuffer() {
+        buffer.reset();
+    }
 }
