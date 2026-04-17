@@ -140,9 +140,14 @@ public final class ServletTestHarness implements AutoCloseable {
 
         public Builder filter(String urlPattern, jakarta.servlet.Filter filter,
                               java.util.Map<String, String> filterInitParams) {
+            return filter(urlPattern, filter, filter.getClass().getSimpleName(), filterInitParams);
+        }
+
+        public Builder filter(String urlPattern, jakarta.servlet.Filter filter, String filterName,
+                              java.util.Map<String, String> filterInitParams) {
             filters.add(FilterMapping.onRequest(
                     fr.vidocq.vidocq.ext.servlet.chappe.dispatcher.UrlPatternMatcher.of(urlPattern),
-                    filter, filter.getClass().getSimpleName()));
+                    filter, filterName));
             initParams.put(filter, java.util.Map.copyOf(filterInitParams));
             return this;
         }

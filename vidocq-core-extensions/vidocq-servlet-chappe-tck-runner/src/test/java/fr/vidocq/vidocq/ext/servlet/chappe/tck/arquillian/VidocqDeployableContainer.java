@@ -156,11 +156,11 @@ public class VidocqDeployableContainer implements DeployableContainer<VidocqCont
             if (f == null) continue;
             var params = filterParams.getOrDefault(m.filterName(), java.util.Map.of());
             if (m.urlPattern() != null) {
-                builder.filter(m.urlPattern(), f, params);
+                builder.filter(m.urlPattern(), f, m.filterName(), params);
             } else if (m.servletName() != null) {
                 // Résout le servlet-name en ses url-patterns via servletMappings
                 for (String pattern : desc.patternsFor(m.servletName())) {
-                    builder.filter(pattern, f, params);
+                    builder.filter(pattern, f, m.filterName(), params);
                 }
             }
         }
