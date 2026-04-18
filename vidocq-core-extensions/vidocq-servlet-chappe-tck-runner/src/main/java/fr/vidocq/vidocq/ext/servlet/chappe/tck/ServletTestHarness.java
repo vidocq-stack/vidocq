@@ -121,9 +121,20 @@ public final class ServletTestHarness implements AutoCloseable {
         private String contextPath = "/";
         private SecurityProvider securityProvider;
         private java.util.Map<String, String> localeEncodingMappings = java.util.Map.of();
+        private java.util.Map<String, String> contextInitParams = new java.util.LinkedHashMap<>();
 
         public Builder localeEncodingMappings(java.util.Map<String, String> m) {
             this.localeEncodingMappings = m == null ? java.util.Map.of() : java.util.Map.copyOf(m);
+            return this;
+        }
+
+        public Builder contextInitParam(String name, String value) {
+            contextInitParams.put(name, value);
+            return this;
+        }
+
+        public Builder contextInitParams(java.util.Map<String, String> params) {
+            if (params != null) contextInitParams.putAll(params);
             return this;
         }
 
@@ -175,6 +186,14 @@ public final class ServletTestHarness implements AutoCloseable {
             VidocqServletContext ctx = new VidocqServletContext(contextPath);
             ctx.setErrorPages(errorPages);
             ctx.setLocaleEncodingMappings(localeEncodingMappings);
+            // Init params du <context-param> (web.xml) — doivent être posés avant markInitialized.
+            for (var e : contextInitParams.entrySet()) ctx.setInitParameter(e.getKey(), e.getValue());
+            // Servlet 6.1 §4.8.1 : attribut "jakarta.servlet.context.tempdir" requis.
+            try {
+                java.nio.file.Path tmp = java.nio.file.Files.createTempDirectory("vidocq-servlet-");
+                tmp.toFile().deleteOnExit();
+                ctx.setAttribute("jakarta.servlet.context.tempdir", tmp.toFile());
+            } catch (java.io.IOException ignored) {}
             ListenerRegistry registry = new ListenerRegistry();
             registry.registerAll(listeners);
             ctx.setListenerRegistry(registry);

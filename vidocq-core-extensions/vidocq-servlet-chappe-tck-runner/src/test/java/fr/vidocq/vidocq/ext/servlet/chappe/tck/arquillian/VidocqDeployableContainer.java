@@ -119,6 +119,7 @@ public class VidocqDeployableContainer implements DeployableContainer<VidocqCont
                                            WebAppDescriptor desc, ClassLoader cl,
                                            List<String> registered) {
         builder.localeEncodingMappings(desc.localeEncodingMappings());
+        builder.contextInitParams(desc.contextParams());
         var instances = new java.util.HashMap<String, jakarta.servlet.Servlet>();
         var servletParams = new java.util.HashMap<String, java.util.Map<String, String>>();
         for (WebAppDescriptor.ServletDef sd : desc.servlets()) {

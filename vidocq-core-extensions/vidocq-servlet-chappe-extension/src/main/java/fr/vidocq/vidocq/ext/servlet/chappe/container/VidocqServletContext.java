@@ -106,7 +106,28 @@ public final class VidocqServletContext implements ServletContext {
     @Override public int getMinorVersion() { return 1; }
     @Override public int getEffectiveMajorVersion() { return 6; }
     @Override public int getEffectiveMinorVersion() { return 1; }
-    @Override public String getMimeType(String file) { return null; }
+    @Override public String getMimeType(String file) {
+        if (file == null) return null;
+        int dot = file.lastIndexOf('.');
+        if (dot < 0) return null;
+        String ext = file.substring(dot + 1).toLowerCase(java.util.Locale.ROOT);
+        return switch (ext) {
+            case "class" -> "application/x-java-class";
+            case "html", "htm" -> "text/html";
+            case "txt" -> "text/plain";
+            case "xml" -> "text/xml";
+            case "json" -> "application/json";
+            case "css" -> "text/css";
+            case "js"  -> "application/javascript";
+            case "jpg", "jpeg" -> "image/jpeg";
+            case "png" -> "image/png";
+            case "gif" -> "image/gif";
+            case "svg" -> "image/svg+xml";
+            case "pdf" -> "application/pdf";
+            case "zip" -> "application/zip";
+            default -> java.net.URLConnection.guessContentTypeFromName(file);
+        };
+    }
     @Override public Set<String> getResourcePaths(String path) { return Set.of(); }
     @Override public java.net.URL getResource(String path) { return null; }
     @Override public java.io.InputStream getResourceAsStream(String path) { return null; }
@@ -117,11 +138,12 @@ public final class VidocqServletContext implements ServletContext {
         if (path == null) return null;
         if (!path.startsWith("/")) return null; // doit être absolu dans le contexte
         if (dispatchResolver == null || dispatchInvoker == null) return null;
-        String resolvePath = path;
+        String tmp = path;
         if (!contextPath.equals("/") && path.startsWith(contextPath)) {
-            resolvePath = path.substring(contextPath.length());
-            if (resolvePath.isEmpty()) resolvePath = "/";
+            tmp = path.substring(contextPath.length());
+            if (tmp.isEmpty()) tmp = "/";
         }
+        final String resolvePath = tmp;
         return dispatchResolver.resolve(resolvePath)
                 .<RequestDispatcher>map(t -> new RequestDispatcherImpl(t, dispatchInvoker))
                 .orElseGet(() -> RequestDispatcherImpl.notFound(resolvePath));
