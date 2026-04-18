@@ -47,6 +47,15 @@ public final class VidocqServletContext implements ServletContext {
     private boolean initialized;
     private boolean programmaticListenerActive;
     private Map<String, String> localeEncodingMappings = Map.of();
+    private final java.util.LinkedHashMap<String, DynamicServletRegistration> dynamicServlets = new java.util.LinkedHashMap<>();
+    private final java.util.LinkedHashMap<String, DynamicFilterRegistration> dynamicFilters = new java.util.LinkedHashMap<>();
+
+    public Map<String, DynamicServletRegistration> dynamicServletRegistrations() {
+        return java.util.Collections.unmodifiableMap(dynamicServlets);
+    }
+    public Map<String, DynamicFilterRegistration> dynamicFilterRegistrations() {
+        return java.util.Collections.unmodifiableMap(dynamicFilters);
+    }
 
     /** Active/désactive la phase "programmatic listener init" — pendant celle-ci,
      *  les méthodes de configuration dynamique doivent throw UOE (§4.4.3). */
@@ -238,30 +247,93 @@ public final class VidocqServletContext implements ServletContext {
     // IllegalStateException. Avant initialisation, elles throw UnsupportedOperationException
     // tant que la feature n'est pas implémentée.
 
-    @Override public ServletRegistration.Dynamic addServlet(String s, String s1) { throw dynamicUnavailable(); }
-    @Override public ServletRegistration.Dynamic addServlet(String s, Servlet servlet) { throw dynamicUnavailable(); }
-    @Override public ServletRegistration.Dynamic addServlet(String s, Class<? extends Servlet> c) { throw dynamicUnavailable(); }
-    @Override public ServletRegistration.Dynamic addJspFile(String s, String s1) { throw dynamicUnavailable(); }
-    @Override public <T extends Servlet> T createServlet(Class<T> c) { throw dynamicUnavailable(); }
+    @Override public ServletRegistration.Dynamic addServlet(String name, String className) {
+        if (programmaticListenerActive) throw programmaticForbidden();
+        if (initialized) throw alreadyInitialized();
+        if (dynamicServlets.containsKey(name)) return null;
+        var r = new DynamicServletRegistration(name, className);
+        dynamicServlets.put(name, r);
+        return r;
+    }
+    @Override public ServletRegistration.Dynamic addServlet(String name, Servlet servlet) {
+        if (programmaticListenerActive) throw programmaticForbidden();
+        if (initialized) throw alreadyInitialized();
+        if (dynamicServlets.containsKey(name)) return null;
+        var r = new DynamicServletRegistration(name, servlet);
+        dynamicServlets.put(name, r);
+        return r;
+    }
+    @Override public ServletRegistration.Dynamic addServlet(String name, Class<? extends Servlet> c) {
+        if (programmaticListenerActive) throw programmaticForbidden();
+        if (initialized) throw alreadyInitialized();
+        if (dynamicServlets.containsKey(name)) return null;
+        var r = new DynamicServletRegistration(name, c);
+        dynamicServlets.put(name, r);
+        return r;
+    }
+    @Override public ServletRegistration.Dynamic addJspFile(String name, String jspFile) {
+        if (programmaticListenerActive) throw programmaticForbidden();
+        if (initialized) throw alreadyInitialized();
+        // JSP non supporté — on enregistre quand même la registration pour les tests qui
+        // vérifient le flux de configuration (la request vers cette URL renverra 404).
+        if (dynamicServlets.containsKey(name)) return null;
+        var r = new DynamicServletRegistration(name, (String) null);
+        dynamicServlets.put(name, r);
+        return r;
+    }
+    @Override public <T extends Servlet> T createServlet(Class<T> c) throws jakarta.servlet.ServletException {
+        if (programmaticListenerActive) throw programmaticForbidden();
+        try { return c.getDeclaredConstructor().newInstance(); }
+        catch (ReflectiveOperationException e) {
+            throw new jakarta.servlet.ServletException("cannot instantiate servlet " + c.getName(), e);
+        }
+    }
     @Override public ServletRegistration getServletRegistration(String name) {
         if (programmaticListenerActive) throw programmaticForbidden();
-        return null;
+        return dynamicServlets.get(name);
     }
     @Override public Map<String, ? extends ServletRegistration> getServletRegistrations() {
         if (programmaticListenerActive) throw programmaticForbidden();
-        return Map.of();
+        return java.util.Collections.unmodifiableMap(dynamicServlets);
     }
-    @Override public FilterRegistration.Dynamic addFilter(String s, String s1) { throw dynamicUnavailable(); }
-    @Override public FilterRegistration.Dynamic addFilter(String s, Filter f) { throw dynamicUnavailable(); }
-    @Override public FilterRegistration.Dynamic addFilter(String s, Class<? extends Filter> c) { throw dynamicUnavailable(); }
-    @Override public <T extends Filter> T createFilter(Class<T> c) { throw dynamicUnavailable(); }
+    @Override public FilterRegistration.Dynamic addFilter(String name, String className) {
+        if (programmaticListenerActive) throw programmaticForbidden();
+        if (initialized) throw alreadyInitialized();
+        if (dynamicFilters.containsKey(name)) return null;
+        var r = new DynamicFilterRegistration(name, className);
+        dynamicFilters.put(name, r);
+        return r;
+    }
+    @Override public FilterRegistration.Dynamic addFilter(String name, Filter f) {
+        if (programmaticListenerActive) throw programmaticForbidden();
+        if (initialized) throw alreadyInitialized();
+        if (dynamicFilters.containsKey(name)) return null;
+        var r = new DynamicFilterRegistration(name, f);
+        dynamicFilters.put(name, r);
+        return r;
+    }
+    @Override public FilterRegistration.Dynamic addFilter(String name, Class<? extends Filter> c) {
+        if (programmaticListenerActive) throw programmaticForbidden();
+        if (initialized) throw alreadyInitialized();
+        if (dynamicFilters.containsKey(name)) return null;
+        var r = new DynamicFilterRegistration(name, c);
+        dynamicFilters.put(name, r);
+        return r;
+    }
+    @Override public <T extends Filter> T createFilter(Class<T> c) throws jakarta.servlet.ServletException {
+        if (programmaticListenerActive) throw programmaticForbidden();
+        try { return c.getDeclaredConstructor().newInstance(); }
+        catch (ReflectiveOperationException e) {
+            throw new jakarta.servlet.ServletException("cannot instantiate filter " + c.getName(), e);
+        }
+    }
     @Override public FilterRegistration getFilterRegistration(String name) {
         if (programmaticListenerActive) throw programmaticForbidden();
-        return null;
+        return dynamicFilters.get(name);
     }
     @Override public Map<String, ? extends FilterRegistration> getFilterRegistrations() {
         if (programmaticListenerActive) throw programmaticForbidden();
-        return Map.of();
+        return java.util.Collections.unmodifiableMap(dynamicFilters);
     }
 
     // ---- Listeners ----
@@ -292,13 +364,12 @@ public final class VidocqServletContext implements ServletContext {
             throw new IllegalArgumentException("cannot instantiate " + listenerClass, e);
         }
     }
-    @Override public <T extends java.util.EventListener> T createListener(Class<T> c) {
+    @Override public <T extends java.util.EventListener> T createListener(Class<T> c) throws jakarta.servlet.ServletException {
         if (programmaticListenerActive) throw programmaticForbidden();
         if (initialized) throw alreadyInitialized();
         try { return c.getDeclaredConstructor().newInstance(); }
         catch (ReflectiveOperationException e) {
-            throw new jakarta.servlet.ServletException("cannot instantiate " + c, e) instanceof
-                    jakarta.servlet.ServletException se ? new IllegalArgumentException(se) : null;
+            throw new jakarta.servlet.ServletException("cannot instantiate listener " + c.getName(), e);
         }
     }
 

@@ -221,6 +221,10 @@ public final class ServletTestHarness implements AutoCloseable {
 
             registry.fireContextInitialized(ctx);
 
+            // Matérialisation des registrations dynamiques (SCI + listener-initialized) :
+            // on les transfère dans la liste des servlets/filters avant la phase init().
+            materializeDynamicRegistrations(ctx);
+
             // Cycle de vie Servlet 6.1 §2.3 : init() avant la première requête.
             // Les servlets dont init échoue (UnavailableException etc.) sont exclus du dispatcher
             // — les requêtes vers eux tomberont sur le 404 par défaut. La spec §2.3.3.2 tolère ce
@@ -292,6 +296,81 @@ public final class ServletTestHarness implements AutoCloseable {
             int port = startServerWithRetry(bridge);
             return new ServletTestHarness(currentServer, port, contextPath,
                     initialized, initializedFilters, registry, ctx);
+        }
+
+        /** Transfère les ServletRegistration.Dynamic / FilterRegistration.Dynamic du
+         *  context vers les listes servlets/filters — sans remplacer ce que le
+         *  web.xml a déjà déclaré (qui a précédence en cas de doublon). */
+        private void materializeDynamicRegistrations(VidocqServletContext ctx) {
+            var cl = Thread.currentThread().getContextClassLoader();
+            // Mapping par nom pour dédupliquer avec web.xml.
+            var existingNames = new java.util.HashSet<String>();
+            for (var m : servlets) existingNames.add(m.servletName());
+
+            for (var e : ctx.dynamicServletRegistrations().entrySet()) {
+                String name = e.getKey();
+                if (existingNames.contains(name)) continue;
+                var reg = e.getValue();
+                jakarta.servlet.Servlet instance = reg.instance();
+                if (instance == null) {
+                    try {
+                        Class<? extends jakarta.servlet.Servlet> c = reg.klass();
+                        if (c == null && reg.getClassName() != null) {
+                            c = (Class<? extends jakarta.servlet.Servlet>) Class.forName(reg.getClassName(), true, cl);
+                        }
+                        if (c == null) continue; // addJspFile sans impl réelle
+                        instance = c.getDeclaredConstructor().newInstance();
+                    } catch (ReflectiveOperationException ex) {
+                        System.err.println("[ServletTestHarness] cannot instantiate dynamic servlet "
+                                + name + ": " + ex);
+                        continue;
+                    }
+                }
+                for (String pattern : reg.getMappings()) {
+                    servlets.add(new ServletDispatcher.Mapping(
+                            fr.vidocq.vidocq.ext.servlet.chappe.dispatcher.UrlPatternMatcher.of(pattern),
+                            instance, name));
+                }
+                // initParams portés par identité d'instance — même clé pour toutes les mappings.
+                initParams.put(instance, java.util.Map.copyOf(reg.getInitParameters()));
+            }
+
+            var existingFilterNames = new java.util.HashSet<String>();
+            for (var fm : filters) existingFilterNames.add(fm.filterName());
+            for (var e : ctx.dynamicFilterRegistrations().entrySet()) {
+                String name = e.getKey();
+                if (existingFilterNames.contains(name)) continue;
+                var reg = e.getValue();
+                jakarta.servlet.Filter instance = reg.instance();
+                if (instance == null) {
+                    try {
+                        Class<? extends jakarta.servlet.Filter> c = reg.klass();
+                        if (c == null && reg.getClassName() != null) {
+                            c = (Class<? extends jakarta.servlet.Filter>) Class.forName(reg.getClassName(), true, cl);
+                        }
+                        if (c == null) continue;
+                        instance = c.getDeclaredConstructor().newInstance();
+                    } catch (ReflectiveOperationException ex) {
+                        System.err.println("[ServletTestHarness] cannot instantiate dynamic filter "
+                                + name + ": " + ex);
+                        continue;
+                    }
+                }
+                for (var mapping : reg.allMappings()) {
+                    for (String pattern : mapping.urlPatterns()) {
+                        filter(pattern, instance, name, reg.getInitParameters());
+                    }
+                    // servlet-name mappings : résolution vers les url-patterns des servlets cibles.
+                    for (String servletName : mapping.servletNames()) {
+                        for (var sm : new java.util.ArrayList<>(servlets)) {
+                            if (servletName.equals(sm.servletName())) {
+                                filter(sm.matcher().pattern(), instance, name, reg.getInitParameters());
+                            }
+                        }
+                    }
+                }
+                initParams.put(instance, java.util.Map.copyOf(reg.getInitParameters()));
+            }
         }
 
         private Server currentServer;
