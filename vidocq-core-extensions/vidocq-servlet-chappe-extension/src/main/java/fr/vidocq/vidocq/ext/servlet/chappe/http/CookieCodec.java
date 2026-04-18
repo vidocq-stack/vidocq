@@ -43,11 +43,36 @@ public final class CookieCodec {
         sb.append(c.getName()).append('=').append(c.getValue() == null ? "" : c.getValue());
         if (c.getPath() != null) sb.append("; Path=").append(c.getPath());
         if (c.getDomain() != null) sb.append("; Domain=").append(c.getDomain());
-        if (c.getMaxAge() >= 0) sb.append("; Max-Age=").append(c.getMaxAge());
+        int age = c.getMaxAge();
+        if (age == 0) {
+            // Servlet 6.1 §7 / RFC 6265 : Max-Age=0 → le cookie expire immédiatement.
+            // On émet un Expires dans le passé (compat clients qui ne suivent pas Max-Age).
+            sb.append("; Expires=Thu, 01 Jan 1970 00:00:00 GMT");
+        } else if (age > 0) {
+            sb.append("; Max-Age=").append(age);
+        }
         if (c.getSecure()) sb.append("; Secure");
         if (c.isHttpOnly()) sb.append("; HttpOnly");
         String sameSite = c.getAttribute("SameSite");
         if (sameSite != null) sb.append("; SameSite=").append(sameSite);
+        // Servlet 6.1 §7.1 : l'attribut "Partitioned" (Chrome partitioning) est émis comme flag.
+        String partitioned = c.getAttribute("Partitioned");
+        // Le flag Partitioned est actif si l'attribut est défini (valeur non-null), même vide.
+        if (partitioned != null && (partitioned.isEmpty() || "true".equalsIgnoreCase(partitioned))) {
+            sb.append("; Partitioned");
+        }
+        // Autres attributs custom passés par setAttribute() sortent tels quels (clé=valeur).
+        for (var e : c.getAttributes().entrySet()) {
+            String k = e.getKey();
+            if (k == null) continue;
+            String kl = k.toLowerCase(java.util.Locale.ROOT);
+            if (kl.equals("samesite") || kl.equals("partitioned")
+                    || kl.equals("path") || kl.equals("domain")
+                    || kl.equals("max-age") || kl.equals("secure")
+                    || kl.equals("httponly") || kl.equals("comment")) continue;
+            sb.append("; ").append(k);
+            if (e.getValue() != null && !e.getValue().isEmpty()) sb.append('=').append(e.getValue());
+        }
         return sb.toString();
     }
 }
