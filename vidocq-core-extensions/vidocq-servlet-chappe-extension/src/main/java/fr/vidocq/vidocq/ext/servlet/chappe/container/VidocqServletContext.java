@@ -45,7 +45,12 @@ public final class VidocqServletContext implements ServletContext {
     private fr.vidocq.vidocq.ext.servlet.chappe.security.SecurityProvider securityProvider =
             new fr.vidocq.vidocq.ext.servlet.chappe.security.AnonymousSecurityProvider();
     private boolean initialized;
+    private boolean programmaticListenerActive;
     private Map<String, String> localeEncodingMappings = Map.of();
+
+    /** Active/désactive la phase "programmatic listener init" — pendant celle-ci,
+     *  les méthodes de configuration dynamique doivent throw UOE (§4.4.3). */
+    public void setProgrammaticListenerActive(boolean active) { this.programmaticListenerActive = active; }
 
     /** Mapping &lt;locale&gt; → &lt;encoding&gt; issu du {@code web.xml} (Servlet 6.1 §14.4). */
     public void setLocaleEncodingMappings(Map<String, String> mappings) {
@@ -246,12 +251,53 @@ public final class VidocqServletContext implements ServletContext {
     @Override public FilterRegistration getFilterRegistration(String name) { return null; }
     @Override public Map<String, ? extends FilterRegistration> getFilterRegistrations() { return Map.of(); }
 
-    // ---- Listeners — not supported in M2a ----
+    // ---- Listeners ----
+    // Servlet 6.1 §4.4 : addListener n'est autorisé que pendant l'initialisation
+    // (SCI.onStartup ou contextInitialized d'un listener non-programmatique).
 
-    @Override public void addListener(String className) { throw dynamicUnavailable(); }
-    @Override public <T extends java.util.EventListener> void addListener(T t) { throw dynamicUnavailable(); }
-    @Override public void addListener(Class<? extends java.util.EventListener> listenerClass) { throw dynamicUnavailable(); }
-    @Override public <T extends java.util.EventListener> T createListener(Class<T> c) { throw dynamicUnavailable(); }
+    @Override public void addListener(String className) {
+        if (programmaticListenerActive) throw programmaticForbidden();
+        if (initialized) throw alreadyInitialized();
+        try {
+            Class<?> c = Class.forName(className, true, getClassLoader());
+            addProgrammaticListener((java.util.EventListener) c.getDeclaredConstructor().newInstance());
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalArgumentException("cannot load listener " + className, e);
+        }
+    }
+    @Override public <T extends java.util.EventListener> void addListener(T t) {
+        if (programmaticListenerActive) throw programmaticForbidden();
+        if (initialized) throw alreadyInitialized();
+        addProgrammaticListener(t);
+    }
+    @Override public void addListener(Class<? extends java.util.EventListener> listenerClass) {
+        if (programmaticListenerActive) throw programmaticForbidden();
+        if (initialized) throw alreadyInitialized();
+        try {
+            addProgrammaticListener(listenerClass.getDeclaredConstructor().newInstance());
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalArgumentException("cannot instantiate " + listenerClass, e);
+        }
+    }
+    @Override public <T extends java.util.EventListener> T createListener(Class<T> c) {
+        if (programmaticListenerActive) throw programmaticForbidden();
+        if (initialized) throw alreadyInitialized();
+        try { return c.getDeclaredConstructor().newInstance(); }
+        catch (ReflectiveOperationException e) {
+            throw new jakarta.servlet.ServletException("cannot instantiate " + c, e) instanceof
+                    jakarta.servlet.ServletException se ? new IllegalArgumentException(se) : null;
+        }
+    }
+
+    private void addProgrammaticListener(java.util.EventListener l) {
+        if (listenerRegistry == null) listenerRegistry = new ListenerRegistry();
+        listenerRegistry.register(l, true);
+    }
+
+    private static UnsupportedOperationException programmaticForbidden() {
+        return new UnsupportedOperationException(
+                "dynamic configuration not allowed from a programmatic listener");
+    }
 
     // ---- Sessions — stubs ----
 

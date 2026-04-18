@@ -100,6 +100,11 @@ public class VidocqDeployableContainer implements DeployableContainer<VidocqCont
             }
         }
 
+        // 3) Découverte des ServletContainerInitializer (Servlet 6.1 §4.4) :
+        //    - fichier META-INF/services/jakarta.servlet.ServletContainerInitializer dans le WAR
+        //    - et (par extension) tout fichier du même nom déployé ailleurs sous /WEB-INF/classes/
+        discoverAndRegisterSCIs(war, cl, builder);
+
         harness = builder.start();
 
         System.err.println("[VidocqTCK] deploy archive=" + war.getName()
@@ -189,6 +194,35 @@ public class VidocqDeployableContainer implements DeployableContainer<VidocqCont
                     }
                 } catch (ClassNotFoundException ignored) {}
             }
+        }
+    }
+
+    /** Parcourt le WAR à la recherche de fichiers {@code META-INF/services/
+     *  jakarta.servlet.ServletContainerInitializer} et enregistre les SCI
+     *  référencés auprès du builder. */
+    private static void discoverAndRegisterSCIs(WebArchive war, ClassLoader cl,
+                                                ServletTestHarness.Builder builder) {
+        for (Node node : flatten(war).values()) {
+            String path = node.getPath().get();
+            if (!path.endsWith("/jakarta.servlet.ServletContainerInitializer")) continue;
+            if (node.getAsset() == null) continue;
+            try (var in = node.getAsset().openStream()) {
+                try (var reader = new java.io.BufferedReader(new java.io.InputStreamReader(in))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        String fqn = line.trim();
+                        if (fqn.isEmpty() || fqn.startsWith("#")) continue;
+                        try {
+                            Class<?> c = Class.forName(fqn, true, cl);
+                            builder.servletContainerInitializer(
+                                    (jakarta.servlet.ServletContainerInitializer)
+                                            c.getDeclaredConstructor().newInstance());
+                        } catch (Throwable t) {
+                            System.err.println("[VidocqTCK] failed to load SCI " + fqn + ": " + t);
+                        }
+                    }
+                }
+            } catch (java.io.IOException ignored) {}
         }
     }
 

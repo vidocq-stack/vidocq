@@ -37,13 +37,25 @@ public final class ListenerRegistry {
     private final List<HttpSessionListener> sessionListeners = new ArrayList<>();
     private final List<HttpSessionAttributeListener> sessionAttrListeners = new ArrayList<>();
 
-    public void register(EventListener listener) {
+    /** Identifie les listeners ajoutés programmatiquement (ctx.addListener...) —
+     *  Servlet 6.1 §4.4.3 : ils n'ont pas accès aux API de configuration dynamique. */
+    private final java.util.IdentityHashMap<EventListener, Boolean> programmatic =
+            new java.util.IdentityHashMap<>();
+
+    public void register(EventListener listener) { register(listener, false); }
+
+    public void register(EventListener listener, boolean isProgrammatic) {
         if (listener instanceof ServletContextListener l) contextListeners.add(l);
         if (listener instanceof ServletContextAttributeListener l) contextAttrListeners.add(l);
         if (listener instanceof ServletRequestListener l) requestListeners.add(l);
         if (listener instanceof ServletRequestAttributeListener l) requestAttrListeners.add(l);
         if (listener instanceof HttpSessionListener l) sessionListeners.add(l);
         if (listener instanceof HttpSessionAttributeListener l) sessionAttrListeners.add(l);
+        programmatic.put(listener, isProgrammatic);
+    }
+
+    public boolean isProgrammatic(EventListener l) {
+        return Boolean.TRUE.equals(programmatic.get(l));
     }
 
     public void registerAll(List<? extends EventListener> listeners) {
@@ -55,7 +67,16 @@ public final class ListenerRegistry {
     public void fireContextInitialized(ServletContext ctx) {
         if (contextListeners.isEmpty()) return;
         var evt = new ServletContextEvent(ctx);
-        for (var l : contextListeners) l.contextInitialized(evt);
+        for (var l : contextListeners) {
+            boolean prog = isProgrammatic(l);
+            if (prog && ctx instanceof fr.vidocq.vidocq.ext.servlet.chappe.container.VidocqServletContext vctx) {
+                vctx.setProgrammaticListenerActive(true);
+                try { l.contextInitialized(evt); }
+                finally { vctx.setProgrammaticListenerActive(false); }
+            } else {
+                l.contextInitialized(evt);
+            }
+        }
     }
 
     public void fireContextDestroyed(ServletContext ctx) {

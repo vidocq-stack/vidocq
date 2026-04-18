@@ -182,6 +182,12 @@ public final class ServletTestHarness implements AutoCloseable {
         public Builder contextPath(String path) { this.contextPath = path; return this; }
         public Builder securityProvider(SecurityProvider p) { this.securityProvider = p; return this; }
 
+        private final java.util.List<jakarta.servlet.ServletContainerInitializer> sciList = new ArrayList<>();
+        public Builder servletContainerInitializer(jakarta.servlet.ServletContainerInitializer sci) {
+            if (sci != null) sciList.add(sci);
+            return this;
+        }
+
         public ServletTestHarness start() {
             VidocqServletContext ctx = new VidocqServletContext(contextPath);
             ctx.setErrorPages(errorPages);
@@ -201,6 +207,17 @@ public final class ServletTestHarness implements AutoCloseable {
 
             SessionManager sessions = new SessionManager(new InMemorySessionStore(), ctx, 1800);
             sessions.setListenerRegistry(registry);
+
+            // Servlet 6.1 §4.4 : les SCI onStartup() sont appelés avant contextInitialized
+            // des listeners. Pendant onStartup, les API dynamiques (addListener etc.) sont
+            // autorisées (le context n'est pas encore "initialized" au sens de §4.4).
+            for (var sci : sciList) {
+                try { sci.onStartup(null, ctx); }
+                catch (jakarta.servlet.ServletException e) {
+                    System.err.println("[ServletTestHarness] SCI.onStartup failed ("
+                            + sci.getClass().getName() + "): " + e.getMessage());
+                }
+            }
 
             registry.fireContextInitialized(ctx);
 
