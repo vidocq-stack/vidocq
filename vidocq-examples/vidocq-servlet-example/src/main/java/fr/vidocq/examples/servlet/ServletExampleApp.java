@@ -27,7 +27,7 @@ import java.util.logging.LogManager;
  */
 public class ServletExampleApp {
 
-    public static void main(String[] args) throws IOException {
+    static void main(String[] args) throws IOException {
         LogManager.getLogManager().readConfiguration(
                 ServletExampleApp.class.getResourceAsStream("/logging.properties"));
         Vidocq.main(args);

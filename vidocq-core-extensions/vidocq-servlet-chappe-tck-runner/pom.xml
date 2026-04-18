@@ -69,6 +69,12 @@
             <version>5.10.2</version>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>org.jboss.arquillian.container</groupId>
+            <artifactId>arquillian-container-spi</artifactId>
+            <version>1.8.0.Final</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
@@ -125,6 +131,7 @@
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-surefire-plugin</artifactId>
                         <configuration>
+                            <useModulePath>false</useModulePath>
                             <dependenciesToScan>
                                 <dependency>jakarta.tck:servlet-tck-runtime</dependency>
                             </dependenciesToScan>
@@ -140,11 +147,6 @@
                                 <webServerPort>8080</webServerPort>
                                 <ts_home>${project.build.directory}/test-classes</ts_home>
                             </systemPropertyVariables>
-                            <argLine>
-                                --add-opens fr.vidocq.vidocq.ext.servlet.chappe.tck/fr.vidocq.vidocq.ext.servlet.chappe.tck.arquillian=ALL-UNNAMED
-                                --add-opens fr.vidocq.vidocq.ext.servlet.chappe.tck/fr.vidocq.vidocq.ext.servlet.chappe.tck=ALL-UNNAMED
-                                --add-exports fr.vidocq.vidocq.ext.servlet.chappe.tck/fr.vidocq.vidocq.ext.servlet.chappe.tck.arquillian=ALL-UNNAMED
-                            </argLine>
                         </configuration>
                     </plugin>
                 </plugins>
