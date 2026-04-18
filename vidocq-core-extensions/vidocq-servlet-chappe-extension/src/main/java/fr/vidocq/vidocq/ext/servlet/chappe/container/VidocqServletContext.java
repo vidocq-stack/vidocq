@@ -52,17 +52,63 @@ public final class VidocqServletContext implements ServletContext {
         this.localeEncodingMappings = mappings == null ? Map.of() : Map.copyOf(mappings);
     }
     public String encodingForLocale(java.util.Locale locale) {
-        if (locale == null || localeEncodingMappings.isEmpty()) return null;
+        if (locale == null) return null;
         String lang = locale.getLanguage();
         String country = locale.getCountry();
-        // Essaie la forme complète "lang-country" (cf. web.xml §14.4), puis "lang".
-        if (country != null && !country.isEmpty()) {
-            String full = lang + "-" + country.toLowerCase(java.util.Locale.ROOT);
-            String v = localeEncodingMappings.get(full);
+        // 1) Mappings explicites du web.xml (§14.4) — prioritaires.
+        if (!localeEncodingMappings.isEmpty()) {
+            if (country != null && !country.isEmpty()) {
+                String full = lang + "-" + country.toLowerCase(java.util.Locale.ROOT);
+                String v = localeEncodingMappings.get(full);
+                if (v != null) return v;
+            }
+            String v = localeEncodingMappings.get(lang);
             if (v != null) return v;
         }
-        return localeEncodingMappings.get(lang);
+        // 2) Défauts du conteneur (table alignée avec Tomcat / Servlet 6.1).
+        return DEFAULT_LOCALE_ENCODINGS.get(lang);
     }
+
+    private static final Map<String, String> DEFAULT_LOCALE_ENCODINGS = Map.ofEntries(
+            Map.entry("ar", "ISO-8859-6"),
+            Map.entry("be", "ISO-8859-5"),
+            Map.entry("bg", "ISO-8859-5"),
+            Map.entry("ca", "ISO-8859-1"),
+            Map.entry("cs", "ISO-8859-2"),
+            Map.entry("da", "ISO-8859-1"),
+            Map.entry("de", "ISO-8859-1"),
+            Map.entry("el", "ISO-8859-7"),
+            Map.entry("en", "ISO-8859-1"),
+            Map.entry("es", "ISO-8859-1"),
+            Map.entry("et", "ISO-8859-1"),
+            Map.entry("fi", "ISO-8859-1"),
+            Map.entry("fr", "ISO-8859-1"),
+            Map.entry("hr", "ISO-8859-2"),
+            Map.entry("hu", "ISO-8859-2"),
+            Map.entry("is", "ISO-8859-1"),
+            Map.entry("it", "ISO-8859-1"),
+            Map.entry("iw", "ISO-8859-8"),
+            Map.entry("ja", "Shift_JIS"),
+            Map.entry("ko", "EUC-KR"),
+            Map.entry("lt", "ISO-8859-2"),
+            Map.entry("lv", "ISO-8859-2"),
+            Map.entry("mk", "ISO-8859-5"),
+            Map.entry("nl", "ISO-8859-1"),
+            Map.entry("no", "ISO-8859-1"),
+            Map.entry("pl", "ISO-8859-2"),
+            Map.entry("pt", "ISO-8859-1"),
+            Map.entry("ro", "ISO-8859-2"),
+            Map.entry("ru", "ISO-8859-5"),
+            Map.entry("sh", "ISO-8859-5"),
+            Map.entry("sk", "ISO-8859-2"),
+            Map.entry("sl", "ISO-8859-2"),
+            Map.entry("sq", "ISO-8859-2"),
+            Map.entry("sr", "ISO-8859-5"),
+            Map.entry("sv", "ISO-8859-1"),
+            Map.entry("tr", "ISO-8859-9"),
+            Map.entry("uk", "ISO-8859-5"),
+            Map.entry("zh", "GB2312"),
+            Map.entry("zh_TW", "Big5"));
 
     public VidocqServletContext(String contextPath) {
         this.contextPath = contextPath;

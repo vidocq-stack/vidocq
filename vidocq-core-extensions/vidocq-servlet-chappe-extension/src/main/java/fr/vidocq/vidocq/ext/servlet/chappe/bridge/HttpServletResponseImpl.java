@@ -196,7 +196,8 @@ public final class HttpServletResponseImpl implements HttpServletResponse {
         refreshContentTypeHeader();
     }
     @Override public String getCharacterEncoding() {
-        return characterEncoding == null ? "ISO-8859-1" : characterEncoding;
+        // Servlet 6.1 §5.4 : null si aucun encoding n'a été explicitement setté.
+        return characterEncoding;
     }
     @Override public void setCharacterEncoding(String charset) {
         if (committed || charsetLocked) return;
@@ -239,7 +240,14 @@ public final class HttpServletResponseImpl implements HttpServletResponse {
     @Override public PrintWriter getWriter() throws IOException {
         if (streamAcquired) throw new IllegalStateException("getOutputStream() already called");
         if (writer == null) {
-            // Servlet 6.1 §5.4 : getWriter lock le charset au premier appel.
+            // Servlet 6.1 §5.4 : si le charset a été explicitement setté et qu'il n'est
+            // pas supporté par la JVM, getWriter doit throw UnsupportedEncodingException.
+            if (characterEncoding != null && !Charset.isSupported(characterEncoding)) {
+                throw new java.io.UnsupportedEncodingException(characterEncoding);
+            }
+            // Résout le charset (ISO-8859-1 par défaut) et verrouille — le state
+            // reflète désormais le charset réellement utilisé pour écrire le body.
+            if (characterEncoding == null) characterEncoding = "ISO-8859-1";
             charsetLocked = true;
             writer = new PrintWriter(new java.io.OutputStreamWriter(outputStream, charset()), false);
             refreshContentTypeHeader();
@@ -249,7 +257,8 @@ public final class HttpServletResponseImpl implements HttpServletResponse {
 
     private Charset charset() {
         if (characterEncoding == null) return StandardCharsets.ISO_8859_1;
-        return Charset.forName(characterEncoding);
+        try { return Charset.forName(characterEncoding); }
+        catch (RuntimeException e) { return StandardCharsets.ISO_8859_1; }
     }
 
     // ---- Buffer / commit ----
@@ -281,6 +290,9 @@ public final class HttpServletResponseImpl implements HttpServletResponse {
         cookies.clear();
         contentType = null;
         characterEncoding = null;
+        mediaType = null;
+        charsetExplicit = false;
+        charsetLocked = false;
         outputStream.resetBuffer();
         writer = null;
         streamAcquired = false;
