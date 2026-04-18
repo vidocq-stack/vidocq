@@ -173,6 +173,23 @@ public class VidocqDeployableContainer implements DeployableContainer<VidocqCont
                 builder.listener((java.util.EventListener) c.getDeclaredConstructor().newInstance());
             } catch (ReflectiveOperationException ignored) {}
         }
+        // Error pages du web.xml — indispensable pour les TCK qui attendent
+        // un dispatch sur <location> en cas d'exception ou de status code.
+        for (WebAppDescriptor.ErrorPageDef ep : desc.errorPages()) {
+            if (ep.location() == null) continue;
+            if (ep.statusCode() != null) {
+                builder.errorPage(ep.statusCode(), ep.location());
+            } else if (ep.exceptionType() != null) {
+                try {
+                    Class<?> c = Class.forName(ep.exceptionType(), true, cl);
+                    if (Throwable.class.isAssignableFrom(c)) {
+                        @SuppressWarnings("unchecked")
+                        Class<? extends Throwable> exc = (Class<? extends Throwable>) c;
+                        builder.errorPage(exc, ep.location());
+                    }
+                } catch (ClassNotFoundException ignored) {}
+            }
+        }
     }
 
     @SuppressWarnings("unchecked")

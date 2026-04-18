@@ -219,8 +219,24 @@ public final class ServletTestHarness implements AutoCloseable {
                     initialized.add(m.servlet());
                     liveServlets.add(m);
                 } catch (jakarta.servlet.ServletException e) {
+                    // Servlet 6.1 §2.3.3 : un servlet dont init() a failé doit renvoyer
+                    // 500 (ou 503) à toute requête ultérieure, pas 404. On substitue un
+                    // stub qui émet le 500 plutôt que d'exclure du dispatcher.
                     System.err.println("[ServletTestHarness] init failed for "
                             + m.servletName() + ": " + e.getMessage());
+                    // Re-throw la ServletException à chaque requête — permet aux
+                    // <error-page> mappées sur jakarta.servlet.ServletException d'être
+                    // activées (TCK GenericServletTests attend ce dispatch).
+                    final jakarta.servlet.ServletException initFailure = e;
+                    jakarta.servlet.Servlet stub = new jakarta.servlet.GenericServlet() {
+                        @Override public void service(jakarta.servlet.ServletRequest req,
+                                                      jakarta.servlet.ServletResponse res)
+                                throws jakarta.servlet.ServletException {
+                            throw initFailure;
+                        }
+                    };
+                    liveServlets.add(new ServletDispatcher.Mapping(
+                            m.matcher(), stub, m.servletName()));
                 }
             }
             var initializedFilters = new java.util.ArrayList<jakarta.servlet.Filter>();
