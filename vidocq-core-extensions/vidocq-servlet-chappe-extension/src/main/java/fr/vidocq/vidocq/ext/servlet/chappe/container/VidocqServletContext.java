@@ -211,6 +211,7 @@ public final class VidocqServletContext implements ServletContext {
         return Collections.enumeration(initParameters.keySet());
     }
     @Override public boolean setInitParameter(String name, String value) {
+        if (programmaticListenerActive) throw programmaticForbidden();
         if (initialized) throw alreadyInitialized();
         return initParameters.putIfAbsent(name, value) == null;
     }
@@ -242,14 +243,26 @@ public final class VidocqServletContext implements ServletContext {
     @Override public ServletRegistration.Dynamic addServlet(String s, Class<? extends Servlet> c) { throw dynamicUnavailable(); }
     @Override public ServletRegistration.Dynamic addJspFile(String s, String s1) { throw dynamicUnavailable(); }
     @Override public <T extends Servlet> T createServlet(Class<T> c) { throw dynamicUnavailable(); }
-    @Override public ServletRegistration getServletRegistration(String name) { return null; }
-    @Override public Map<String, ? extends ServletRegistration> getServletRegistrations() { return Map.of(); }
+    @Override public ServletRegistration getServletRegistration(String name) {
+        if (programmaticListenerActive) throw programmaticForbidden();
+        return null;
+    }
+    @Override public Map<String, ? extends ServletRegistration> getServletRegistrations() {
+        if (programmaticListenerActive) throw programmaticForbidden();
+        return Map.of();
+    }
     @Override public FilterRegistration.Dynamic addFilter(String s, String s1) { throw dynamicUnavailable(); }
     @Override public FilterRegistration.Dynamic addFilter(String s, Filter f) { throw dynamicUnavailable(); }
     @Override public FilterRegistration.Dynamic addFilter(String s, Class<? extends Filter> c) { throw dynamicUnavailable(); }
     @Override public <T extends Filter> T createFilter(Class<T> c) { throw dynamicUnavailable(); }
-    @Override public FilterRegistration getFilterRegistration(String name) { return null; }
-    @Override public Map<String, ? extends FilterRegistration> getFilterRegistrations() { return Map.of(); }
+    @Override public FilterRegistration getFilterRegistration(String name) {
+        if (programmaticListenerActive) throw programmaticForbidden();
+        return null;
+    }
+    @Override public Map<String, ? extends FilterRegistration> getFilterRegistrations() {
+        if (programmaticListenerActive) throw programmaticForbidden();
+        return Map.of();
+    }
 
     // ---- Listeners ----
     // Servlet 6.1 §4.4 : addListener n'est autorisé que pendant l'initialisation
