@@ -164,8 +164,14 @@ public final class VidocqServletContext implements ServletContext {
     @Override public ServletContext getContext(String uripath) { return null; }
     @Override public int getMajorVersion() { return 6; }
     @Override public int getMinorVersion() { return 1; }
-    @Override public int getEffectiveMajorVersion() { return 6; }
-    @Override public int getEffectiveMinorVersion() { return 1; }
+
+    private int effectiveMajor = 6;
+    private int effectiveMinor = 1;
+    public void setEffectiveVersion(int major, int minor) {
+        this.effectiveMajor = major; this.effectiveMinor = minor;
+    }
+    @Override public int getEffectiveMajorVersion() { return effectiveMajor; }
+    @Override public int getEffectiveMinorVersion() { return effectiveMinor; }
     @Override public String getMimeType(String file) {
         if (file == null) return null;
         int dot = file.lastIndexOf('.');

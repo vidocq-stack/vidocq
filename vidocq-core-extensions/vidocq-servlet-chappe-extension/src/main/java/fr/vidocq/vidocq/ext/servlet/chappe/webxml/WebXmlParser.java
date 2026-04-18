@@ -93,7 +93,7 @@ public final class WebXmlParser {
         }
         return new WebAppDescriptor(contextParams, servlets, servletMappings, filters,
                 filterMappings, listenerClasses, errorPages, sessionTimeoutMinutes,
-                localeEncodingMappings);
+                localeEncodingMappings).withVersion(root.getAttribute("version"));
     }
 
     private static WebAppDescriptor.ServletDef parseServlet(Element e) {

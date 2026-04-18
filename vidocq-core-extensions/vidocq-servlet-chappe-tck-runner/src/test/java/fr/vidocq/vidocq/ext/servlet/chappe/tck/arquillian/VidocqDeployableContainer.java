@@ -125,6 +125,14 @@ public class VidocqDeployableContainer implements DeployableContainer<VidocqCont
                                            List<String> registered) {
         builder.localeEncodingMappings(desc.localeEncodingMappings());
         builder.contextInitParams(desc.contextParams());
+        // Version déclarée dans web-app/version → exposée via getEffectiveMajorVersion.
+        String v = desc.version();
+        int dot = v.indexOf('.');
+        try {
+            int major = Integer.parseInt(dot < 0 ? v : v.substring(0, dot));
+            int minor = dot < 0 ? 0 : Integer.parseInt(v.substring(dot + 1));
+            builder.effectiveVersion(major, minor);
+        } catch (NumberFormatException ignored) {}
         var instances = new java.util.HashMap<String, jakarta.servlet.Servlet>();
         var servletParams = new java.util.HashMap<String, java.util.Map<String, String>>();
         for (WebAppDescriptor.ServletDef sd : desc.servlets()) {

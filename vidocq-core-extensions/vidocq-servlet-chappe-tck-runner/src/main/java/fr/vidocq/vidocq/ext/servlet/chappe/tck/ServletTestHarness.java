@@ -138,6 +138,11 @@ public final class ServletTestHarness implements AutoCloseable {
             return this;
         }
 
+        private int effectiveMajor = 6, effectiveMinor = 1;
+        public Builder effectiveVersion(int major, int minor) {
+            this.effectiveMajor = major; this.effectiveMinor = minor; return this;
+        }
+
         public Builder servlet(String urlPattern, jakarta.servlet.Servlet servlet) {
             return servlet(urlPattern, servlet, java.util.Map.of());
         }
@@ -192,6 +197,7 @@ public final class ServletTestHarness implements AutoCloseable {
             VidocqServletContext ctx = new VidocqServletContext(contextPath);
             ctx.setErrorPages(errorPages);
             ctx.setLocaleEncodingMappings(localeEncodingMappings);
+            ctx.setEffectiveVersion(effectiveMajor, effectiveMinor);
             // Init params du <context-param> (web.xml) — doivent être posés avant markInitialized.
             for (var e : contextInitParams.entrySet()) ctx.setInitParameter(e.getKey(), e.getValue());
             // Servlet 6.1 §4.8.1 : attribut "jakarta.servlet.context.tempdir" requis.

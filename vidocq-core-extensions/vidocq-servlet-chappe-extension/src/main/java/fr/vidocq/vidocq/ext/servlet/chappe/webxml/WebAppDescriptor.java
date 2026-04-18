@@ -34,6 +34,13 @@ public final class WebAppDescriptor {
     private final List<ErrorPageDef> errorPages;
     private final int sessionTimeoutMinutes;
     private final Map<String, String> localeEncodingMappings;
+    /** Version déclarée dans l'attribut {@code web-app/version} (par défaut "6.0"). */
+    private String version = "6.0";
+    public String version() { return version; }
+    public WebAppDescriptor withVersion(String v) {
+        if (v != null && !v.isBlank()) this.version = v;
+        return this;
+    }
 
     public WebAppDescriptor(Map<String, String> contextParams,
                             List<ServletDef> servlets,
