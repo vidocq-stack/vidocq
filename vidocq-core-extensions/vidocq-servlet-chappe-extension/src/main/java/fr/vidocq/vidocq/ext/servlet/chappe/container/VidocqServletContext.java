@@ -111,7 +111,12 @@ public final class VidocqServletContext implements ServletContext {
     @Override public java.net.URL getResource(String path) { return null; }
     @Override public java.io.InputStream getResourceAsStream(String path) { return null; }
     @Override public RequestDispatcher getRequestDispatcher(String path) {
-        if (path == null || dispatchResolver == null || dispatchInvoker == null) return null;
+        // Servlet 6.1 §9.1 : retourne un dispatcher non-null pour tout chemin relatif au
+        // contexte, même si aucun servlet n'est mappé (un forward/include sur ce path
+        // renverra 404 si aucune ressource correspond).
+        if (path == null) return null;
+        if (!path.startsWith("/")) return null; // doit être absolu dans le contexte
+        if (dispatchResolver == null || dispatchInvoker == null) return null;
         String resolvePath = path;
         if (!contextPath.equals("/") && path.startsWith(contextPath)) {
             resolvePath = path.substring(contextPath.length());
@@ -119,7 +124,7 @@ public final class VidocqServletContext implements ServletContext {
         }
         return dispatchResolver.resolve(resolvePath)
                 .<RequestDispatcher>map(t -> new RequestDispatcherImpl(t, dispatchInvoker))
-                .orElse(null);
+                .orElseGet(() -> RequestDispatcherImpl.notFound(resolvePath));
     }
     @Override public RequestDispatcher getNamedDispatcher(String name) { return null; }
     @Override public void log(String msg) { System.getLogger("servlet.log").log(System.Logger.Level.INFO, msg); }

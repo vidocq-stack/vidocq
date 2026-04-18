@@ -40,6 +40,23 @@ public final class RequestDispatcherImpl implements RequestDispatcher {
         this.invoker = invoker;
     }
 
+    /** Dispatcher stub pour un chemin sans ressource — forward/include émettent 404. */
+    public static RequestDispatcher notFound(String path) {
+        return new RequestDispatcher() {
+            @Override public void forward(ServletRequest request, ServletResponse response)
+                    throws IOException {
+                if (response instanceof HttpServletResponse res) {
+                    if (res.isCommitted()) throw new IllegalStateException("response already committed");
+                    res.resetBuffer();
+                    res.sendError(HttpServletResponse.SC_NOT_FOUND, "No resource at " + path);
+                }
+            }
+            @Override public void include(ServletRequest request, ServletResponse response) {
+                // Pas de contenu inclus — la cible n'existe pas.
+            }
+        };
+    }
+
     @Override
     public void forward(ServletRequest request, ServletResponse response)
             throws ServletException, IOException {
