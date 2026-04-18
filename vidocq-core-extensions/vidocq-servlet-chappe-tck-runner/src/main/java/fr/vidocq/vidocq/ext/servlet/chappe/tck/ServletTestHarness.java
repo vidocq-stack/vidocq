@@ -227,11 +227,22 @@ public final class ServletTestHarness implements AutoCloseable {
                     // Re-throw la ServletException à chaque requête — permet aux
                     // <error-page> mappées sur jakarta.servlet.ServletException d'être
                     // activées (TCK GenericServletTests attend ce dispatch).
+                    // Cas particulier §2.3.3.2 : UnavailableException permanent → 404,
+                    // temporary → 503.
                     final jakarta.servlet.ServletException initFailure = e;
                     jakarta.servlet.Servlet stub = new jakarta.servlet.GenericServlet() {
                         @Override public void service(jakarta.servlet.ServletRequest req,
                                                       jakarta.servlet.ServletResponse res)
-                                throws jakarta.servlet.ServletException {
+                                throws jakarta.servlet.ServletException, java.io.IOException {
+                            if (initFailure instanceof jakarta.servlet.UnavailableException ue) {
+                                var http = (jakarta.servlet.http.HttpServletResponse) res;
+                                if (ue.isPermanent()) {
+                                    http.sendError(404, ue.getMessage());
+                                } else {
+                                    http.sendError(503, ue.getMessage());
+                                }
+                                return;
+                            }
                             throw initFailure;
                         }
                     };

@@ -183,12 +183,35 @@ public final class ChappeServletBridge implements Handler, RequestDispatcherImpl
         Integer errorStatus = null;
         if (thrown != null) {
             location = pages.findByException(thrown).orElse(null);
-            errorStatus = 500;
+            // Servlet 6.1 §2.3.3.2 : UnavailableException remonte explicitement
+            // un status 404 (permanent) ou 503 (temporary) au lieu du 500 générique.
+            Throwable root = thrown;
+            while (root.getCause() != null && !(root instanceof jakarta.servlet.UnavailableException)) {
+                root = root.getCause();
+            }
+            if (root instanceof jakarta.servlet.UnavailableException ue) {
+                errorStatus = ue.isPermanent() ? 404 : 503;
+            } else {
+                errorStatus = 500;
+            }
         } else if (res.isErrorTriggered()) {
             errorStatus = res.getStatus();
             location = pages.findByStatus(errorStatus).orElse(null);
         }
-        if (location == null) return;
+        if (location == null) {
+            // Pas d'error-page mappée : on applique tout de même le status approprié
+            // (404/503 pour UnavailableException) et on court-circuite le error()
+            // générique du handler.
+            if (thrown instanceof jakarta.servlet.UnavailableException
+                    || (thrown != null && thrown.getCause() instanceof jakarta.servlet.UnavailableException)) {
+                res.clearErrorState();
+                res.resetBuffer();
+                try { res.sendError(errorStatus, thrown.getMessage()); }
+                catch (IOException ignored) {}
+                req.setAttribute("jakarta.servlet.error.handled", Boolean.TRUE);
+            }
+            return;
+        }
 
         var target = new DispatchResolver(dispatcher).resolve(location).orElse(null);
         if (target == null) return;
