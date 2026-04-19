@@ -76,6 +76,9 @@ public class VidocqDeployableContainer implements DeployableContainer<VidocqCont
         List<String> registered = new ArrayList<>();
 
         // 1) Classes @WebServlet/@WebFilter/@WebListener dans /WEB-INF/classes/
+        //    + collecte des class-names du WAR pour simuler l'isolation classloader
+        //    (certaines TCK classes NotFound sont dans le jar runtime mais pas dans le WAR).
+        var warClassNames = new java.util.HashSet<String>();
         for (Node node : flatten(war).values()) {
             String path = node.getPath().get();
             if (!path.endsWith(".class")) continue;
@@ -83,11 +86,13 @@ public class VidocqDeployableContainer implements DeployableContainer<VidocqCont
             String className = path
                     .substring("/WEB-INF/classes/".length(), path.length() - ".class".length())
                     .replace('/', '.');
+            warClassNames.add(className);
             Class<?> cls;
             try { cls = Class.forName(className, true, cl); }
             catch (Throwable t) { continue; }
             registerIfAnnotated(builder, cls, registered);
         }
+        builder.restrictToWarClasses(warClassNames);
 
         // 2) web.xml : enregistre les servlets/filters/listeners déclarés
         Node webXml = war.get("/WEB-INF/web.xml");
@@ -125,6 +130,9 @@ public class VidocqDeployableContainer implements DeployableContainer<VidocqCont
                                            List<String> registered) {
         builder.localeEncodingMappings(desc.localeEncodingMappings());
         builder.contextInitParams(desc.contextParams());
+        if (desc.sessionTimeoutMinutes() > 0) {
+            builder.sessionTimeoutMinutes(desc.sessionTimeoutMinutes());
+        }
         // Version déclarée dans web-app/version → exposée via getEffectiveMajorVersion.
         String v = desc.version();
         int dot = v.indexOf('.');

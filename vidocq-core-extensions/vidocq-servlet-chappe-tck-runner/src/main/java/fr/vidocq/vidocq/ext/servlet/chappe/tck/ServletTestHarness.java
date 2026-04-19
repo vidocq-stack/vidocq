@@ -143,6 +143,20 @@ public final class ServletTestHarness implements AutoCloseable {
             this.effectiveMajor = major; this.effectiveMinor = minor; return this;
         }
 
+        private int sessionTimeoutMinutes = -1;
+        public Builder sessionTimeoutMinutes(int minutes) {
+            this.sessionTimeoutMinutes = minutes; return this;
+        }
+
+        private java.util.Set<String> warClassNames = null; // null = pas d'isolation
+        /** Restreint les registrations dynamiques instanciées par nom/class aux
+         *  classes effectivement présentes dans le WAR — simule un WebAppClassLoader
+         *  isolé sans construire de ClassLoader séparé. */
+        public Builder restrictToWarClasses(java.util.Set<String> classNames) {
+            this.warClassNames = classNames == null ? null : java.util.Set.copyOf(classNames);
+            return this;
+        }
+
         public Builder servlet(String urlPattern, jakarta.servlet.Servlet servlet) {
             return servlet(urlPattern, servlet, java.util.Map.of());
         }
@@ -198,6 +212,7 @@ public final class ServletTestHarness implements AutoCloseable {
             ctx.setErrorPages(errorPages);
             ctx.setLocaleEncodingMappings(localeEncodingMappings);
             ctx.setEffectiveVersion(effectiveMajor, effectiveMinor);
+            if (sessionTimeoutMinutes > 0) ctx.setSessionTimeoutInternal(sessionTimeoutMinutes);
             // Init params du <context-param> (web.xml) — doivent être posés avant markInitialized.
             for (var e : contextInitParams.entrySet()) ctx.setInitParameter(e.getKey(), e.getValue());
             // Servlet 6.1 §4.8.1 : attribut "jakarta.servlet.context.tempdir" requis.
@@ -325,12 +340,16 @@ public final class ServletTestHarness implements AutoCloseable {
                             c = (Class<? extends jakarta.servlet.Servlet>) Class.forName(reg.getClassName(), true, cl);
                         }
                         if (c == null) continue; // addJspFile sans impl réelle
+                        // Isolation classloader : ignore les classes absentes du WAR.
+                        if (warClassNames != null && !warClassNames.contains(c.getName())) continue;
                         instance = c.getDeclaredConstructor().newInstance();
                     } catch (ReflectiveOperationException ex) {
                         System.err.println("[ServletTestHarness] cannot instantiate dynamic servlet "
                                 + name + ": " + ex);
                         continue;
                     }
+                } else if (warClassNames != null && !warClassNames.contains(instance.getClass().getName())) {
+                    continue;
                 }
                 for (String pattern : reg.getMappings()) {
                     servlets.add(new ServletDispatcher.Mapping(
@@ -355,12 +374,15 @@ public final class ServletTestHarness implements AutoCloseable {
                             c = (Class<? extends jakarta.servlet.Filter>) Class.forName(reg.getClassName(), true, cl);
                         }
                         if (c == null) continue;
+                        if (warClassNames != null && !warClassNames.contains(c.getName())) continue;
                         instance = c.getDeclaredConstructor().newInstance();
                     } catch (ReflectiveOperationException ex) {
                         System.err.println("[ServletTestHarness] cannot instantiate dynamic filter "
                                 + name + ": " + ex);
                         continue;
                     }
+                } else if (warClassNames != null && !warClassNames.contains(instance.getClass().getName())) {
+                    continue;
                 }
                 for (var mapping : reg.allMappings()) {
                     for (String pattern : mapping.urlPatterns()) {

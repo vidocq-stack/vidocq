@@ -284,6 +284,10 @@ public final class ChappeServletBridge implements Handler, RequestDispatcherImpl
     }
 
     private static Response error(Throwable e) {
+        // Log full stack for debugging — silent if DEBUG not set.
+        if (Boolean.getBoolean("vidocq.servlet.debug")) {
+            e.printStackTrace(System.err);
+        }
         return Response.builder()
                 .status(StatusCode.INTERNAL_SERVER_ERROR)
                 .header("Content-Type", "text/plain")

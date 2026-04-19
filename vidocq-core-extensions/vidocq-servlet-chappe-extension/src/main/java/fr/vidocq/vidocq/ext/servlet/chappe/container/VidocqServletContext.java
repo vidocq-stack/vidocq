@@ -221,27 +221,37 @@ public final class VidocqServletContext implements ServletContext {
     }
     @Override public String getRealPath(String path) { return null; }
     @Override public String getServerInfo() { return serverInfo; }
-    @Override public String getInitParameter(String name) { return initParameters.get(name); }
+    @Override public String getInitParameter(String name) {
+        if (name == null) throw new NullPointerException("name is null");
+        return initParameters.get(name);
+    }
     @Override public Enumeration<String> getInitParameterNames() {
         return Collections.enumeration(initParameters.keySet());
     }
     @Override public boolean setInitParameter(String name, String value) {
+        if (name == null) throw new NullPointerException("name is null");
         if (programmaticListenerActive) throw programmaticForbidden();
         if (initialized) throw alreadyInitialized();
         return initParameters.putIfAbsent(name, value) == null;
     }
 
-    @Override public Object getAttribute(String name) { return attributes.get(name); }
+    @Override public Object getAttribute(String name) {
+        // Servlet 6.1 §4.0 : NullPointerException sur name null.
+        if (name == null) throw new NullPointerException("name is null");
+        return attributes.get(name);
+    }
     @Override public Enumeration<String> getAttributeNames() {
         return Collections.enumeration(attributes.keySet());
     }
     @Override public void setAttribute(String name, Object object) {
+        if (name == null) throw new NullPointerException("name is null");
         if (object == null) { removeAttribute(name); return; }
         Object previous = attributes.put(name, object);
         if (previous == null) listenerRegistry.fireContextAttributeAdded(this, name, object);
         else listenerRegistry.fireContextAttributeReplaced(this, name, previous);
     }
     @Override public void removeAttribute(String name) {
+        if (name == null) throw new NullPointerException("name is null");
         Object previous = attributes.remove(name);
         if (previous != null) listenerRegistry.fireContextAttributeRemoved(this, name, previous);
     }
@@ -403,7 +413,14 @@ public final class VidocqServletContext implements ServletContext {
         return EnumSet.of(SessionTrackingMode.COOKIE);
     }
     @Override public int getSessionTimeout() { return sessionTimeout; }
-    @Override public void setSessionTimeout(int sessionTimeout) { this.sessionTimeout = sessionTimeout; }
+    @Override public void setSessionTimeout(int sessionTimeout) {
+        if (programmaticListenerActive) throw programmaticForbidden();
+        if (initialized) throw alreadyInitialized();
+        this.sessionTimeout = sessionTimeout;
+    }
+    /** Setter interne (contourne les checks) — utilisé par le harness pour
+     *  propager la valeur de {@code <session-timeout>} du web.xml. */
+    public void setSessionTimeoutInternal(int minutes) { this.sessionTimeout = minutes; }
 
     @Override public JspConfigDescriptor getJspConfigDescriptor() { return null; }
     @Override public ClassLoader getClassLoader() { return Thread.currentThread().getContextClassLoader(); }
