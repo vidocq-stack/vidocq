@@ -181,9 +181,19 @@ public final class ServletTestHarness implements AutoCloseable {
 
         public Builder filter(String urlPattern, jakarta.servlet.Filter filter, String filterName,
                               java.util.Map<String, String> filterInitParams) {
-            filters.add(FilterMapping.onRequest(
+            return filter(urlPattern, filter, filterName, filterInitParams,
+                    java.util.EnumSet.of(jakarta.servlet.DispatcherType.REQUEST));
+        }
+
+        public Builder filter(String urlPattern, jakarta.servlet.Filter filter, String filterName,
+                              java.util.Map<String, String> filterInitParams,
+                              java.util.Set<jakarta.servlet.DispatcherType> dispatcherTypes) {
+            filters.add(new FilterMapping(
                     fr.vidocq.vidocq.ext.servlet.chappe.dispatcher.UrlPatternMatcher.of(urlPattern),
-                    filter, filterName));
+                    filter, filterName,
+                    dispatcherTypes == null || dispatcherTypes.isEmpty()
+                            ? java.util.EnumSet.of(jakarta.servlet.DispatcherType.REQUEST)
+                            : java.util.EnumSet.copyOf(dispatcherTypes)));
             initParams.put(filter, java.util.Map.copyOf(filterInitParams));
             return this;
         }
@@ -385,14 +395,16 @@ public final class ServletTestHarness implements AutoCloseable {
                     continue;
                 }
                 for (var mapping : reg.allMappings()) {
+                    var dispatchers = mapping.dispatchers();
                     for (String pattern : mapping.urlPatterns()) {
-                        filter(pattern, instance, name, reg.getInitParameters());
+                        filter(pattern, instance, name, reg.getInitParameters(), dispatchers);
                     }
                     // servlet-name mappings : résolution vers les url-patterns des servlets cibles.
                     for (String servletName : mapping.servletNames()) {
                         for (var sm : new java.util.ArrayList<>(servlets)) {
                             if (servletName.equals(sm.servletName())) {
-                                filter(sm.matcher().pattern(), instance, name, reg.getInitParameters());
+                                filter(sm.matcher().pattern(), instance, name,
+                                        reg.getInitParameters(), dispatchers);
                             }
                         }
                     }
