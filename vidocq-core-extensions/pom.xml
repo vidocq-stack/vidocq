@@ -28,9 +28,9 @@
         Son ClasspathWorkspaceReader crash avec "Bad artifact coordinates ... jar:".
 
         Profil tck-official activé via :
-          ./run-official-tck.sh                       : smoke test
-          ./run-official-tck.sh all                   : suite complète (option double-tiret all)
-          ./run-official-tck.sh -Dtest=ServletTests   : classe ciblée
+          ./run-official-tck-servlet6.1.sh                       : smoke test
+          ./run-official-tck-servlet6.1.sh all                   : suite complète (option double-tiret all)
+          ./run-official-tck-servlet6.1.sh -Dtest=ServletTests   : classe ciblée
 
         Le module compile et teste indépendamment, ses artefacts restent
         disponibles en SNAPSHOT local après un mvn install du reactor.

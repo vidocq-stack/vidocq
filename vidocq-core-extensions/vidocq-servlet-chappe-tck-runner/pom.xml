@@ -12,9 +12,9 @@
     sont gelées sur la version 0.1.0-SNAPSHOT installée dans le repo M2 local.
 
     Le lancement passe par le script :
-        ./run-official-tck.sh                     (smoke test)
-        ./run-official-tck.sh all                 (suite complète ; option double-tiret all dans le shell)
-        ./run-official-tck.sh -Dtest=ServletTests (classe ciblée)
+        ./run-official-tck-servlet6.1.sh                     (smoke test)
+        ./run-official-tck-servlet6.1.sh all                 (suite complète ; option double-tiret all dans le shell)
+        ./run-official-tck-servlet6.1.sh -Dtest=ServletTests (classe ciblée)
 
     Détails dans README.md de ce module.
 -->

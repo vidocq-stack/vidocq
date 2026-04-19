@@ -270,9 +270,9 @@ mvn install:install-file \
 Depuis la racine du projet :
 
 ```bash
-./run-official-tck.sh                     # smoke test
-./run-official-tck.sh --all               # suite complete (~10 min)
-./run-official-tck.sh -Dtest=ServletTests # une classe ciblee
+./run-official-tck-servlet6.1.sh                     # smoke test
+./run-official-tck-servlet6.1.sh --all               # suite complete (~10 min)
+./run-official-tck-servlet6.1.sh -Dtest=ServletTests # une classe ciblee
 ```
 
 Le script installe les modules Vidocq en M2 local, se place dans le

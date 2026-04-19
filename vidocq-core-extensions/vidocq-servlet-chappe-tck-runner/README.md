@@ -78,10 +78,10 @@ mvn install:install-file \
 Depuis la **racine** du projet Vidocq :
 
 ```bash
-./run-official-tck.sh                     # smoke test (DoDestroyedTest)
-./run-official-tck.sh --all               # suite TCK complète (~10 min)
-./run-official-tck.sh -Dtest=ServletTests # une classe Tests entière
-./run-official-tck.sh -Dtest=ServletTests#DoInit1Test   # une seule méthode
+./run-official-tck-servlet6.1.sh                     # smoke test (DoDestroyedTest)
+./run-official-tck-servlet6.1.sh --all               # suite TCK complète (~10 min)
+./run-official-tck-servlet6.1.sh -Dtest=ServletTests # une classe Tests entière
+./run-official-tck-servlet6.1.sh -Dtest=ServletTests#DoInit1Test   # une seule méthode
 ```
 
 Le script :
@@ -102,7 +102,7 @@ Dans une pipeline (GitHub Actions, GitLab CI, etc.) :
   run: mvn install -DskipTests
 
 - name: Run Jakarta Servlet 6.1 TCK
-  run: ./run-official-tck.sh --all
+  run: ./run-official-tck-servlet6.1.sh --all
   # Prérequis : cache des artefacts TCK dans ~/.m2 (cf. section ci-dessus)
 ```
 

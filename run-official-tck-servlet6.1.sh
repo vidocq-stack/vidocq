@@ -12,9 +12,9 @@ set -e
 #    - jakarta.tck:servlet-tck:6.1.0 (pom)
 #
 # Utilisation :
-#   ./run-official-tck.sh                          # Lance un test de fumée
-#   ./run-official-tck.sh --all                    # Lance TOUTE la suite (long !)
-#   ./run-official-tck.sh -Dtest=ServletTests      # Lance toute une classe
+#   ./run-official-tck-servlet6.1.sh                          # Lance un test de fumée
+#   ./run-official-tck-servlet6.1.sh --all                    # Lance TOUTE la suite (long !)
+#   ./run-official-tck-servlet6.1.sh -Dtest=ServletTests      # Lance toute une classe
 # ==============================================================================
 
 # S'assurer qu'on est à la racine du projet
@@ -47,7 +47,7 @@ DEFAULT_TEST=""
 if [[ "$*" != *"-Dtest="* && "$USE_ALL" == "false" ]]; then
     DEFAULT_TEST="-Dtest=servlet.tck.api.jakarta_servlet.servlet.ServletTests#DoDestroyedTest"
     echo "💡 Aucun test spécifié. Utilisation du test par défaut (smoke test) : $DEFAULT_TEST"
-    echo "💡 Pour lancer l'intégralité du TCK officiel, utilisez : ./run-official-tck.sh --all"
+    echo "💡 Pour lancer l'intégralité du TCK officiel, utilisez : ./run-official-tck-servlet6.1.sh --all"
 fi
 
 echo "🧪 [3/3] Exécution de Maven avec le profil tck-official..."
