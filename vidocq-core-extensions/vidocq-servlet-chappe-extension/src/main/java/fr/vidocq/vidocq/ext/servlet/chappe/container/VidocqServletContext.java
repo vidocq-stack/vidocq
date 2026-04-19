@@ -383,6 +383,18 @@ public final class VidocqServletContext implements ServletContext {
     @Override public <T extends java.util.EventListener> T createListener(Class<T> c) throws jakarta.servlet.ServletException {
         if (programmaticListenerActive) throw programmaticForbidden();
         if (initialized) throw alreadyInitialized();
+        // Servlet 6.1 §4.4 : seule une classe implémentant une interface reconnue
+        // peut être instanciée par createListener.
+        if (!jakarta.servlet.ServletContextListener.class.isAssignableFrom(c)
+                && !jakarta.servlet.ServletContextAttributeListener.class.isAssignableFrom(c)
+                && !jakarta.servlet.ServletRequestListener.class.isAssignableFrom(c)
+                && !jakarta.servlet.ServletRequestAttributeListener.class.isAssignableFrom(c)
+                && !jakarta.servlet.http.HttpSessionListener.class.isAssignableFrom(c)
+                && !jakarta.servlet.http.HttpSessionAttributeListener.class.isAssignableFrom(c)
+                && !jakarta.servlet.http.HttpSessionIdListener.class.isAssignableFrom(c)) {
+            throw new IllegalArgumentException(
+                    "class " + c.getName() + " does not implement any supported listener interface");
+        }
         try { return c.getDeclaredConstructor().newInstance(); }
         catch (ReflectiveOperationException e) {
             throw new jakarta.servlet.ServletException("cannot instantiate listener " + c.getName(), e);
@@ -390,6 +402,18 @@ public final class VidocqServletContext implements ServletContext {
     }
 
     private void addProgrammaticListener(java.util.EventListener l) {
+        // Servlet 6.1 §4.4 : rejette un EventListener qui n'implémente aucune des
+        // interfaces écoute reconnues.
+        if (!(l instanceof jakarta.servlet.ServletContextListener
+                || l instanceof jakarta.servlet.ServletContextAttributeListener
+                || l instanceof jakarta.servlet.ServletRequestListener
+                || l instanceof jakarta.servlet.ServletRequestAttributeListener
+                || l instanceof jakarta.servlet.http.HttpSessionListener
+                || l instanceof jakarta.servlet.http.HttpSessionAttributeListener
+                || l instanceof jakarta.servlet.http.HttpSessionIdListener)) {
+            throw new IllegalArgumentException(
+                    "listener " + l.getClass().getName() + " does not implement any supported listener interface");
+        }
         if (listenerRegistry == null) listenerRegistry = new ListenerRegistry();
         listenerRegistry.register(l, true);
     }
@@ -399,19 +423,30 @@ public final class VidocqServletContext implements ServletContext {
                 "dynamic configuration not allowed from a programmatic listener");
     }
 
-    // ---- Sessions — stubs ----
+    // ---- Sessions ----
 
-    @Override public SessionCookieConfig getSessionCookieConfig() { throw dynamicUnavailable(); }
+    private Set<SessionTrackingMode> effectiveSessionTrackingModes; // null = défaut COOKIE
+    private final fr.vidocq.vidocq.ext.servlet.chappe.session.VidocqSessionCookieConfig sessionCookieConfig
+            = new fr.vidocq.vidocq.ext.servlet.chappe.session.VidocqSessionCookieConfig(this);
+    @Override public SessionCookieConfig getSessionCookieConfig() { return sessionCookieConfig; }
     @Override public void setSessionTrackingModes(Set<SessionTrackingMode> modes) {
+        if (programmaticListenerActive) throw programmaticForbidden();
         if (initialized) throw alreadyInitialized();
-        throw dynamicUnavailable();
+        if (modes != null && modes.contains(SessionTrackingMode.SSL) && modes.size() > 1) {
+            throw new IllegalArgumentException("SSL tracking mode is mutually exclusive");
+        }
+        this.effectiveSessionTrackingModes = modes == null ? null : EnumSet.copyOf(modes);
     }
     @Override public Set<SessionTrackingMode> getDefaultSessionTrackingModes() {
         return EnumSet.of(SessionTrackingMode.COOKIE);
     }
     @Override public Set<SessionTrackingMode> getEffectiveSessionTrackingModes() {
-        return EnumSet.of(SessionTrackingMode.COOKIE);
+        return effectiveSessionTrackingModes == null
+                ? EnumSet.of(SessionTrackingMode.COOKIE)
+                : EnumSet.copyOf(effectiveSessionTrackingModes);
     }
+    /** Flag "initialized" n'empêche plus la lecture des tracking modes depuis un contextInitialized. */
+    public boolean isInitializedInternal() { return initialized; }
     @Override public int getSessionTimeout() { return sessionTimeout; }
     @Override public void setSessionTimeout(int sessionTimeout) {
         if (programmaticListenerActive) throw programmaticForbidden();
