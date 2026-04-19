@@ -29,7 +29,7 @@
 
         Profil tck-official activé via :
           ./run-official-tck.sh                       : smoke test
-          ./run-official-tck.sh [all]                 : suite complète
+          ./run-official-tck.sh all                   : suite complète (option double-tiret all)
           ./run-official-tck.sh -Dtest=ServletTests   : classe ciblée
 
         Le module compile et teste indépendamment, ses artefacts restent

@@ -231,11 +231,54 @@ myapp-1.0/
 | Spec | Extension | Status |
 |------|-----------|--------|
 | JAX-RS 4.0 (REST) | `vidocq-rest-extension` | Done |
+| Jakarta Servlet 6.1 | `vidocq-servlet-chappe-extension` | Done (~90% TCK) |
 | MicroProfile Config | - | Planned |
 | MicroProfile Health | - | Planned |
 | MicroProfile Metrics | - | Planned |
 | MicroProfile OpenAPI | - | Planned |
 | MicroProfile JWT Auth | - | Planned |
+
+## TCK Jakarta Servlet 6.1
+
+L'extension `vidocq-servlet-chappe-extension` est validee contre le **TCK
+officiel Jakarta Servlet 6.1** (Eclipse Foundation), avec un taux de passage
+actuel de ~90% sur les packages `api.*`.
+
+> ⚠️ Le module TCK runner est volontairement **en dehors du reactor**
+> Maven principal : ShrinkWrap Maven Resolver (dependance transitive du TCK)
+> ne sait pas parser les POMs `Model 4.1.0`. Lance-le via le script dedie.
+
+### Prerequis
+
+Les artefacts TCK ne sont pas sur Maven Central. Installe-les une fois :
+
+```bash
+curl -Lo /tmp/tck.zip \
+  https://download.eclipse.org/jakartaee/servlet/6.1/jakarta-servlet-tck-6.1.0.zip
+unzip /tmp/tck.zip -d /tmp/servlet-tck
+
+mvn install:install-file \
+  -Dfile=/tmp/servlet-tck/jakarta-servlet-tck/lib/servlet-tck-runtime-6.1.0.jar \
+  -DgroupId=jakarta.tck -DartifactId=servlet-tck-runtime -Dversion=6.1.0 -Dpackaging=jar
+mvn install:install-file \
+  -Dfile=/tmp/servlet-tck/jakarta-servlet-tck/lib/servlet-tck-util-6.1.0.jar \
+  -DgroupId=jakarta.tck -DartifactId=servlet-tck-util -Dversion=6.1.0 -Dpackaging=jar
+```
+
+### Lancement
+
+Depuis la racine du projet :
+
+```bash
+./run-official-tck.sh                     # smoke test
+./run-official-tck.sh --all               # suite complete (~10 min)
+./run-official-tck.sh -Dtest=ServletTests # une classe ciblee
+```
+
+Le script installe les modules Vidocq en M2 local, se place dans le
+module TCK (cwd compatible ShrinkWrap) puis lance le profil `tck-official`.
+
+Details dans [`vidocq-core-extensions/vidocq-servlet-chappe-tck-runner/README.md`](vidocq-core-extensions/vidocq-servlet-chappe-tck-runner/README.md).
 
 ## Licence
 

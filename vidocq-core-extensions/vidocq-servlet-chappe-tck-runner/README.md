@@ -1,167 +1,169 @@
 # vidocq-servlet-chappe-tck-runner
 
-Harness de conformance Jakarta Servlet 6.1 pour `vidocq-servlet-chappe-extension`.
+Harness de conformance et exécuteur du **TCK officiel Jakarta Servlet 6.1**
+pour `vidocq-servlet-chappe-extension`.
 
-Fournit :
+Ce module :
 
-1. un **harness programmatique** (`ServletTestHarness`) qui démarre un serveur Chappe local avec notre bridge servlet, utilisable depuis JUnit sans container externe ;
-2. une **suite de tests de conformance** organisée par chapitre de la spec, exécutée à chaque build ;
-3. un **point d'entrée** documenté pour brancher le TCK officiel Eclipse Foundation quand il sera intégré.
+1. Expose un **harness programmatique** (`ServletTestHarness`) qui démarre un
+   serveur Chappe local avec notre bridge servlet, utilisable depuis JUnit
+   sans container externe.
+2. Contient un adaptateur **Arquillian** (`VidocqDeployableContainer`) qui
+   packe les `WebArchive` ShrinkWrap du TCK sur ce harness.
+3. Exécute le **TCK Jakarta Servlet 6.1.0** (Eclipse Foundation) via le profil
+   Maven `-Ptck-official`.
 
-## Harness
+## Pourquoi ce module est hors du reactor principal
+
+> 📌 **Ceci est important si vous voulez lancer le TCK en CI.**
+
+`vidocq-servlet-chappe-tck-runner` est volontairement **EN DEHORS** du
+`<modules>` de `vidocq-core-extensions`. Il utilise un pom en
+`modelVersion 4.0.0` standalone (sans `<parent>`).
+
+**Raison** : ShrinkWrap Maven Resolver 3.3 (dépendance transitive du
+TCK officiel Jakarta) s'appuie sur `maven-resolver 1.9` / `maven-model 3.9`
+qui ne savent pas parser les POMs `Model 4.1.0`. Son
+`ClasspathWorkspaceReader` scanne le reactor courant pour résoudre les
+artifacts locaux et échoue dès qu'il rencontre un POM Vidocq (version
+implicite via parent) :
+
+```
+Bad artifact coordinates fr.vidocq.vidocq:vidocq-servlet-chappe-extension:jar:,
+expected format is <groupId>:<artifactId>[:<extension>[:<classifier>]]:<version>
+```
+
+Laisser le module dans le reactor `Model 4.1.0` rend tout lancement
+TCK depuis la racine impossible. Alternatives considérées :
+
+- Forcer `maven-model-builder 4.0.0-rc-5` : ne résout pas, le crash
+  est en amont dans `ClasspathWorkspaceReader.createFoundArtifact`.
+- Attendre une release ShrinkWrap compatible Maven 4.1 : pas de date.
+- Forker ShrinkWrap : lourd pour un gain marginal.
+
+Tant qu'upstream ShrinkWrap ne gère pas Model 4.1, le module reste
+détaché du reactor et se lance via le script dédié.
+
+## Workflow utilisateur
+
+### Prérequis : installer les artefacts du TCK
+
+Le TCK Eclipse Foundation n'est **pas** publié sur Maven Central. Il faut
+télécharger le zip et installer les 3 artifacts en dépôt local une fois :
+
+```bash
+# Télécharge le TCK
+curl -Lo /tmp/jakarta-servlet-tck-6.1.0.zip \
+  https://download.eclipse.org/jakartaee/servlet/6.1/jakarta-servlet-tck-6.1.0.zip
+unzip /tmp/jakarta-servlet-tck-6.1.0.zip -d /tmp/servlet-tck
+
+# Installe les 3 artifacts dans ~/.m2
+mvn install:install-file \
+  -Dfile=/tmp/servlet-tck/jakarta-servlet-tck/lib/servlet-tck-runtime-6.1.0.jar \
+  -DgroupId=jakarta.tck -DartifactId=servlet-tck-runtime -Dversion=6.1.0 \
+  -Dpackaging=jar
+mvn install:install-file \
+  -Dfile=/tmp/servlet-tck/jakarta-servlet-tck/lib/servlet-tck-util-6.1.0.jar \
+  -DgroupId=jakarta.tck -DartifactId=servlet-tck-util -Dversion=6.1.0 \
+  -Dpackaging=jar
+# Le pom agrégateur (optionnel, référencé par certains tests pluggability)
+mvn install:install-file \
+  -Dfile=/tmp/servlet-tck/jakarta-servlet-tck/pom.xml \
+  -DgroupId=jakarta.tck -DartifactId=servlet-tck -Dversion=6.1.0 \
+  -Dpackaging=pom
+```
+
+### Lancer le TCK
+
+Depuis la **racine** du projet Vidocq :
+
+```bash
+./run-official-tck.sh                     # smoke test (DoDestroyedTest)
+./run-official-tck.sh --all               # suite TCK complète (~10 min)
+./run-official-tck.sh -Dtest=ServletTests # une classe Tests entière
+./run-official-tck.sh -Dtest=ServletTests#DoInit1Test   # une seule méthode
+```
+
+Le script :
+
+1. Installe d'abord en dépôt local les modules dont dépend le TCK runner :
+   `vidocq-spi`, `vidocq-core`, `vidocq-chappe-extension`,
+   `vidocq-servlet-chappe-extension`.
+2. Se place dans `vidocq-core-extensions/vidocq-servlet-chappe-tck-runner/`
+   (indispensable : le `cwd` doit contenir le pom Model 4.0).
+3. Lance `mvn test -Ptck-official` avec les arguments transmis.
+
+### Intégration CI
+
+Dans une pipeline (GitHub Actions, GitLab CI, etc.) :
+
+```yaml
+- name: Build reactor
+  run: mvn install -DskipTests
+
+- name: Run Jakarta Servlet 6.1 TCK
+  run: ./run-official-tck.sh --all
+  # Prérequis : cache des artefacts TCK dans ~/.m2 (cf. section ci-dessus)
+```
+
+## Harness programmatique
+
+Utilisable indépendamment du TCK, pour des tests JUnit ad hoc :
 
 ```java
 try (var h = ServletTestHarness.builder()
         .servlet("/hello", new HelloServlet())
         .filter("/*", new LoggingFilter())
+        .errorPage(404, "/notFound")
+        .contextPath("/app")
         .securityProvider(myProvider)
         .start()) {
-    HttpResponse<String> r = h.get("/hello?name=alice");
+    HttpResponse<String> r = h.get("/app/hello?name=alice");
     assertEquals(200, r.statusCode());
 }
 ```
 
-Fonctionnalités :
+Fonctionnalités supportées :
 
-- `servlet(urlPattern, servlet)`, `filter(urlPattern, filter)`, `listener(listener)` — contribution programmatique
-- `errorPage(status, location)`, `errorPage(Class<? extends Throwable>, location)`
-- `contextPath(path)`, `securityProvider(provider)`
-- Port libre auto-alloué avec retry absorbant les courses avec Chappe bind
-- `AutoCloseable` : `close()` arrête le serveur
+- `servlet`, `filter`, `listener`, `errorPage`, `contextPath`,
+  `securityProvider`, `sessionTimeoutMinutes`, `localeEncodingMappings`,
+  `contextInitParams`, `servletContainerInitializer`
+- Port libre auto-alloué avec retry (absorbe les courses bind)
+- `AutoCloseable` : `close()` arrête le serveur et fire les destroy()
 
-## Conformance tests
+## État de conformité TCK Jakarta Servlet 6.1
 
-Les tests couvrent les chapitres principaux de la spec :
+Au dernier run complet (cf. `target/surefire-reports/`), le profil
+`tck-official` passe **~90 %** des tests Jakarta Servlet 6.1 sur les
+packages `api.*`. Les non-conformités restantes :
 
-| Chapitre | Fichier |
+| Cluster | Raison |
 |---|---|
-| §12 URL patterns + §9 RequestDispatcher | `ConformanceDispatcherTest` |
-| §7 HttpSession | `ConformanceSessionTest` |
-| §6 Filters | `ConformanceFilterTest` |
-| §2.3.3.3 Async | `ConformanceAsyncTest` |
-| §13 Security | `ConformanceSecurityTest` |
+| `dispatchtest.DispatchTests` (~18 err) | Cross-context dispatch (`ServletContext.getContext`) non implémenté |
+| `registration.RegistrationTests` (10 err) | `CommonServlets.jar` auto-attaché au WAR non scanné |
+| `asynccontext.*` (~11 err) | Cas pointus du timeout / startAsync after dispatch |
+| `httpservletrequest.HttpServletRequestTests` (3 err) | `getRequestedSessionId` semantics + TCK bug substring |
+| Tests JSP (`sc40.addJsp*`, TLD) | Pas de JSP engine |
 
-Ils ne remplacent pas le TCK officiel mais reproduisent les scénarios typiques et donnent une couverture exécutable en CI sans licence externe.
+Les détails sont dans l'historique git (branche `main`, recherche `TCK`).
 
-## TCK officiel Jakarta Servlet 6.1
+## Implémentation Arquillian
 
-### Licence
+`VidocqDeployableContainer` est enregistré via le SPI
+`org.jboss.arquillian.core.spi.LoadableExtension` dans
+`src/test/resources/META-INF/services/`.
 
-Le TCK est distribué sous **EFTL** (Eclipse Foundation Technology Compatibility Kit License). Une signature de la license est requise pour exécuter la suite et publier les résultats.
+Il :
 
-### Obtention
+1. Lit le `WebArchive` ShrinkWrap passé par `@Deployment`.
+2. Scanne les classes `/WEB-INF/classes/*.class` avec `@WebServlet/@WebFilter/@WebListener`.
+3. Parse `WEB-INF/web.xml` (servlets, filters, listeners, error-pages,
+   context-params, session-timeout, locale-encoding-mapping-list).
+4. Découvre les `ServletContainerInitializer` via
+   `META-INF/services/jakarta.servlet.ServletContainerInitializer`.
+5. Démarre un `ServletTestHarness` et expose son URL en `HTTPContext`.
+6. Supporte le multi-deployment (plusieurs WAR en parallèle, utilisé
+   par `DispatchTests`).
 
-Repository : https://github.com/jakartaee/servlet (répertoire `tck/`), tag correspondant à Jakarta EE 11. Téléchargement manuel en ZIP ou via `git clone`.
-
-Les artifacts nécessaires :
-
-- `jakarta-servlet-tck-<version>.zip` — suite de tests
-- `jakarta.tck:servlet-api-tck-tests` — classes Java des tests
-- `sigtest-maven-plugin` — signature tests binaires
-
-Aucun de ces artifacts n'est publié sur Maven Central ; il faut les installer localement ou les héberger dans un dépôt interne.
-
-### Adapter Arquillian
-
-Le TCK s'appuie sur `arquillian-core` et requiert un `DeployableContainer` qui :
-
-1. Accepte un `ShrinkWrap` `WebArchive` (WAR packagé)
-2. Extrait les classes servlet/filter/listener + `web.xml`
-3. Déploie via `WebXmlContributor` + instanciation par `Class.forName`
-4. Expose l'URL racine du contexte HTTP
-5. Arrête proprement à la fin du test
-
-Squelette envisagé :
-
-```java
-public final class VidocqServletArquillianContainer
-        implements DeployableContainer<VidocqServletContainerConfig> {
-    public ProtocolMetaData deploy(Archive<?> archive) { ... }
-    public void undeploy(Archive<?> archive) { ... }
-    public void start() { ... }
-    public void stop() { ... }
-}
-```
-
-Le harness `ServletTestHarness` couvre 80 % du travail — reste le packaging du WAR et le mapping classes JAR → classloader isolé.
-
-### Signature tests
-
-`sigtest-maven-plugin` vérifie qu'aucune dépendance API (`jakarta.servlet.*`) n'a dérivé de la version ratifiée. À activer en profil `-Psignature` avec :
-
-```xml
-<plugin>
-  <groupId>org.netbeans.tools</groupId>
-  <artifactId>sigtest-maven-plugin</artifactId>
-  <version>1.7</version>
-  <configuration>
-    <packages>jakarta.servlet,jakarta.servlet.http,jakarta.servlet.annotation</packages>
-    <sigfile>${project.basedir}/src/sigtest/jakarta.servlet-6.1.sig</sigfile>
-  </configuration>
-</plugin>
-```
-
-Le fichier `.sig` est généré par le TCK officiel.
-
-### Exclusions légitimes documentées
-
-Fonctionnalités hors scope actuel à exclure de la suite TCK :
-
-- Tests JSP (spec distincte, pas un requis Servlet standalone)
-- Jakarta Authentication complète — seul BASIC est livré, FORM / DIGEST / CLIENT-CERT sont reportés
-- Clustering de sessions
-- Full JNDI (`java:comp/env`)
-
-Ces exclusions seront listées dans `tck-exclusions.md` lors de l'intégration.
-
-### Roadmap d'activation
-
-1. Télécharger le TCK et installer les artifacts en repo local
-2. Créer `VidocqServletArquillianContainer` s'appuyant sur `ServletTestHarness`
-3. Ajouter un profil Maven `-Ptck-official` qui inclut `jakarta.tck:servlet-api-tck-tests`
-4. Documenter les exclusions et lancer `mvn -Ptck-official verify`
-5. Reporter les résultats de conformité (nombre de tests passants / total)
-
-### État de l'intégration TCK officielle
-
-Infrastructure posée et opérationnelle jusqu'à l'appel de `getTestArchive()` :
-
-- ✅ TCK Jakarta Servlet 6.1.0 téléchargé depuis Eclipse Foundation
-  (`https://download.eclipse.org/jakartaee/servlet/6.1/jakarta-servlet-tck-6.1.0.zip`)
-- ✅ Artifacts installés localement : `jakarta.tck:servlet-tck-runtime:6.1.0`,
-  `jakarta.tck:servlet-tck-util:6.1.0`, `jakarta.tck:servlet-tck:6.1.0` (pom)
-- ✅ Profil Maven `-Ptck-official` ajoute les deps Arquillian + ShrinkWrap + slf4j
-- ✅ `VidocqDeployableContainer` + `VidocqContainerConfiguration` +
-  `VidocqContainerExtension` (SPI `LoadableExtension`) compilent
-- ✅ Surefire configuré : `<dependenciesToScan>`, `argLine --add-opens`,
-  `workingDirectory = target/tck-workdir`
-- ✅ Pom auxiliaire Maven 4.0 copié dans `target/tck-workdir/pom.xml`
-- ✅ Arquillian détecte notre container, l'instancie, appelle
-  `getTestArchive()` du test TCK
-
-**Point de blocage actuel** : ShrinkWrap Maven Resolver 1.2.6 utilise un
-`ClasspathWorkspaceReader` qui scanne le reactor Maven courant. Il tombe sur
-le pom principal (Model Version **4.1.0** avec parent inherited) et échoue :
-
-```
-Bad artifact coordinates fr.vidocq.vidocq:vidocq-servlet-chappe-tck-runner:jar:,
-expected format is <groupId>:<artifactId>[:<extension>[:<classifier>]]:<version>
-```
-
-ShrinkWrap 1.2.6 ne supporte pas Maven 4.1.
-
-**Contournement possibles** :
-
-1. Extraire le tck-runner en projet Maven standalone hors du reactor principal,
-   avec Model Version 4.0.0 et dépendances gelées sur des artifacts installés.
-2. Attendre une version de ShrinkWrap Resolver supportant Maven 4.1
-   (upstream : https://github.com/shrinkwrap/resolver).
-3. Forker ShrinkWrap et patcher `ClasspathWorkspaceReader.createFoundArtifact`
-   pour gérer le format 4.1.
-
-Commande actuelle (stoppe sur le blocage ci-dessus) :
-```
-mvn -pl vidocq-core-extensions/vidocq-servlet-chappe-tck-runner test \
-    -Ptck-official -Dtest='ServletTests#DoDestroyedTest' \
-    -DfailIfNoTests=false
-```
+Signature tests `sigtest-maven-plugin` pas encore branché — à ajouter
+en profil `-Psigtest` si nécessaire pour certifier la conformité API.
