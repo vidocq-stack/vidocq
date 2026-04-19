@@ -144,6 +144,11 @@
                                 <webServerPort>8080</webServerPort>
                                 <ts_home>${project.build.directory}/test-classes</ts_home>
                             </systemPropertyVariables>
+                            <!-- Certains tests TCK injectent Cookie/Host/etc. que
+                                 Java HttpClient refuse par défaut (JDK-8203771).
+                                 La propriété doit être passée en argLine car elle
+                                 est lue au static init de jdk.internal.net.http. -->
+                            <argLine>-Djdk.httpclient.allowRestrictedHeaders=host,connection,content-length,expect,upgrade,origin,date,via,cookie</argLine>
                         </configuration>
                     </plugin>
                 </plugins>

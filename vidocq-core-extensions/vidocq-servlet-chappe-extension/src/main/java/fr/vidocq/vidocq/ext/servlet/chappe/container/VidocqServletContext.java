@@ -446,7 +446,10 @@ public final class VidocqServletContext implements ServletContext {
     private Set<SessionTrackingMode> effectiveSessionTrackingModes; // null = défaut COOKIE
     private final fr.vidocq.vidocq.ext.servlet.chappe.session.VidocqSessionCookieConfig sessionCookieConfig
             = new fr.vidocq.vidocq.ext.servlet.chappe.session.VidocqSessionCookieConfig(this);
-    @Override public SessionCookieConfig getSessionCookieConfig() { return sessionCookieConfig; }
+    @Override public SessionCookieConfig getSessionCookieConfig() {
+        if (programmaticListenerActive) throw programmaticForbidden();
+        return sessionCookieConfig;
+    }
     @Override public void setSessionTrackingModes(Set<SessionTrackingMode> modes) {
         if (programmaticListenerActive) throw programmaticForbidden();
         if (initialized) throw alreadyInitialized();

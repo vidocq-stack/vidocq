@@ -28,13 +28,31 @@ public final class CookieCodec {
             String name = trimmed.substring(0, eq).trim();
             String val = trimmed.substring(eq + 1).trim();
             if (name.isEmpty()) continue;
+            // RFC 6265 §5.4 : un header Cookie client ne contient que des cookies nus
+            // (name=value). Certains clients (ou le TCK) peuvent tout de même y glisser
+            // des cookie-attributes (Domain, Path, Expires, Max-Age, ...) copiés depuis
+            // un Set-Cookie précédent — on les ignore pour ne pas les exposer comme
+            // "vrais" cookies.
+            if (isReservedAttribute(name)) continue;
             // Retire les guillemets autour de la valeur (cookie-value quoted-string).
             if (val.length() >= 2 && val.startsWith("\"") && val.endsWith("\"")) {
                 val = val.substring(1, val.length() - 1);
             }
-            out.add(new Cookie(name, val));
+            try {
+                out.add(new Cookie(name, val));
+            } catch (IllegalArgumentException ignored) {
+                // Nom/valeur non conformes aux règles Cookie — on skip silencieusement.
+            }
         }
         return out;
+    }
+
+    private static boolean isReservedAttribute(String name) {
+        String n = name.toLowerCase(java.util.Locale.ROOT);
+        return n.equals("domain") || n.equals("path") || n.equals("expires")
+                || n.equals("max-age") || n.equals("secure") || n.equals("httponly")
+                || n.equals("samesite") || n.equals("partitioned") || n.equals("comment")
+                || n.startsWith("$");
     }
 
     /** Sérialise un {@link Cookie} complet en ligne {@code Set-Cookie}. */
