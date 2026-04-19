@@ -11,4 +11,9 @@ public record DispatchTarget(Servlet servlet,
                              String path,
                              String servletPath,
                              String pathInfo,
-                             String queryString) {}
+                             String queryString) {
+    /** Clone with a new queryString (utilisé pour les async dispatches). */
+    public DispatchTarget withQueryString(String qs) {
+        return new DispatchTarget(servlet, servletName, path, servletPath, pathInfo, qs);
+    }
+}

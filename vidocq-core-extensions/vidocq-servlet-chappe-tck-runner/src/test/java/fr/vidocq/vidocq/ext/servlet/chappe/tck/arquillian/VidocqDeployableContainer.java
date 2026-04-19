@@ -37,6 +37,8 @@ public class VidocqDeployableContainer implements DeployableContainer<VidocqCont
 
     private VidocqContainerConfiguration config;
     private ServletTestHarness harness;
+    /** Support multi-deployment (Arquillian peut déployer plusieurs WAR pour un test). */
+    private final java.util.LinkedHashMap<String, ServletTestHarness> harnessesByArchive = new java.util.LinkedHashMap<>();
 
     @Override
     public Class<VidocqContainerConfiguration> getConfigurationClass() {
@@ -60,6 +62,10 @@ public class VidocqDeployableContainer implements DeployableContainer<VidocqCont
 
     @Override
     public void stop() throws LifecycleException {
+        for (var h : harnessesByArchive.values()) {
+            try { h.close(); } catch (RuntimeException ignored) {}
+        }
+        harnessesByArchive.clear();
         if (harness != null) { harness.close(); harness = null; }
     }
 
@@ -70,7 +76,8 @@ public class VidocqDeployableContainer implements DeployableContainer<VidocqCont
             throw new DeploymentException("only WebArchive supported, got " + archive.getClass());
         }
 
-        if (harness != null) harness.close();
+        // Nouveau deployment : garde les harnesses existants vivants en parallèle
+        // (certains tests TCK comme DispatchTests déploient plusieurs WAR).
         var builder = ServletTestHarness.builder();
         // Fixe le contextPath au nom du WAR (sans extension) — le TCK client
         // envoie typiquement des URLs en /<war-name>/... et getContextPath()
@@ -120,6 +127,7 @@ public class VidocqDeployableContainer implements DeployableContainer<VidocqCont
         discoverAndRegisterSCIs(war, cl, builder);
 
         harness = builder.start();
+        harnessesByArchive.put(archive.getName(), harness);
 
         System.err.println("[VidocqTCK] deploy archive=" + war.getName()
                 + " host=" + config.getHost() + " port=" + harness.port()
@@ -290,7 +298,9 @@ public class VidocqDeployableContainer implements DeployableContainer<VidocqCont
 
     @Override
     public void undeploy(Archive<?> archive) {
-        if (harness != null) { harness.close(); harness = null; }
+        ServletTestHarness h = harnessesByArchive.remove(archive.getName());
+        if (h != null) h.close();
+        if (harness == h) harness = null;
     }
 
     @Override public void deploy(Descriptor descriptor) {}

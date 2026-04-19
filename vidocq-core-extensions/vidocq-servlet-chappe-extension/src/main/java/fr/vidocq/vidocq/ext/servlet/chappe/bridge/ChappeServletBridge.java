@@ -160,22 +160,32 @@ public final class ChappeServletBridge implements Handler, RequestDispatcherImpl
     private Throwable awaitAsyncIfStarted(HttpServletRequestImpl req, HttpServletResponseImpl res) {
         AsyncContextImpl ac = req.asyncContextInternal();
         if (ac == null) return null;
-        ac.awaitCompletion();
-        if (ac.hasDispatch()) {
+        // Boucle : le servlet re-dispatché peut appeler startAsync+dispatch à nouveau
+        // (§2.3.3.3 startAsyncAgainTest*). Max 16 dispatches pour éviter les boucles.
+        for (int i = 0; i < 16; i++) {
+            ac.awaitCompletion();
+            if (!ac.hasDispatch()) break;
             String dispatchPath = ac.dispatchPath();
             String relative = dispatchPath.startsWith(contextPath) && !contextPath.equals("/")
                     ? dispatchPath.substring(contextPath.length()) : dispatchPath;
+            // Sépare le queryString du path avant résolution.
+            String qs = null;
+            int q = relative.indexOf('?');
+            if (q >= 0) { qs = relative.substring(q + 1); relative = relative.substring(0, q); }
             var target = new DispatchResolver(dispatcher).resolve(relative).orElse(null);
-            if (target != null) {
-                try {
-                    var wrapped = new AsyncDispatchRequest(req, target);
-                    invoke(target, wrapped, res, DispatcherType.ASYNC);
-                } catch (ServletException | IOException | RuntimeException e) {
-                    return e;
-                }
+            if (target == null) break;
+            if (qs != null) target = target.withQueryString(qs);
+            try {
+                var wrapped = new AsyncDispatchRequest(req, target);
+                invoke(target, wrapped, res, DispatcherType.ASYNC);
+            } catch (ServletException | IOException | RuntimeException e) {
+                return e;
             }
+            // Le servlet re-dispatché a pu (ou non) appeler startAsync+dispatch à nouveau.
+            ac = req.asyncContextInternal();
+            if (ac == null) break;
         }
-        if (ac.timedOut() && !res.isCommitted() && res.bodyBytes().length == 0) {
+        if (ac != null && ac.timedOut() && !res.isCommitted() && res.bodyBytes().length == 0) {
             try { res.sendError(503, "async timeout"); }
             catch (IOException ignored) {}
         }
