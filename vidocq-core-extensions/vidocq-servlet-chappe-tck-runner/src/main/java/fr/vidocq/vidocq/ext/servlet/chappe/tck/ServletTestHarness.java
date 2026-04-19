@@ -148,6 +148,11 @@ public final class ServletTestHarness implements AutoCloseable {
             this.sessionTimeoutMinutes = minutes; return this;
         }
 
+        private final java.util.Set<String> reservedServletNames = new java.util.HashSet<>();
+        private final java.util.Set<String> reservedFilterNames = new java.util.HashSet<>();
+        public Builder reservedServletName(String n) { reservedServletNames.add(n); return this; }
+        public Builder reservedFilterName(String n) { reservedFilterNames.add(n); return this; }
+
         private java.util.Set<String> warClassNames = null; // null = pas d'isolation
         /** Restreint les registrations dynamiques instanciées par nom/class aux
          *  classes effectivement présentes dans le WAR — simule un WebAppClassLoader
@@ -223,6 +228,8 @@ public final class ServletTestHarness implements AutoCloseable {
             ctx.setLocaleEncodingMappings(localeEncodingMappings);
             ctx.setEffectiveVersion(effectiveMajor, effectiveMinor);
             if (sessionTimeoutMinutes > 0) ctx.setSessionTimeoutInternal(sessionTimeoutMinutes);
+            for (String n : reservedServletNames) ctx.reserveServletName(n);
+            for (String n : reservedFilterNames) ctx.reserveFilterName(n);
             // Init params du <context-param> (web.xml) — doivent être posés avant markInitialized.
             for (var e : contextInitParams.entrySet()) ctx.setInitParameter(e.getKey(), e.getValue());
             // Servlet 6.1 §4.8.1 : attribut "jakarta.servlet.context.tempdir" requis.

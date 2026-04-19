@@ -49,6 +49,11 @@ public final class VidocqServletContext implements ServletContext {
     private Map<String, String> localeEncodingMappings = Map.of();
     private final java.util.LinkedHashMap<String, DynamicServletRegistration> dynamicServlets = new java.util.LinkedHashMap<>();
     private final java.util.LinkedHashMap<String, DynamicFilterRegistration> dynamicFilters = new java.util.LinkedHashMap<>();
+    /** Noms réservés par le web.xml — un addServlet/addFilter avec ce nom doit retourner null. */
+    private final java.util.Set<String> reservedServletNames = new java.util.HashSet<>();
+    private final java.util.Set<String> reservedFilterNames = new java.util.HashSet<>();
+    public void reserveServletName(String name) { reservedServletNames.add(name); }
+    public void reserveFilterName(String name) { reservedFilterNames.add(name); }
 
     public Map<String, DynamicServletRegistration> dynamicServletRegistrations() {
         return java.util.Collections.unmodifiableMap(dynamicServlets);
@@ -266,7 +271,7 @@ public final class VidocqServletContext implements ServletContext {
     @Override public ServletRegistration.Dynamic addServlet(String name, String className) {
         if (programmaticListenerActive) throw programmaticForbidden();
         if (initialized) throw alreadyInitialized();
-        if (dynamicServlets.containsKey(name)) return null;
+        if (dynamicServlets.containsKey(name) || reservedServletNames.contains(name)) return null;
         var r = new DynamicServletRegistration(name, className);
         dynamicServlets.put(name, r);
         return r;
@@ -274,7 +279,7 @@ public final class VidocqServletContext implements ServletContext {
     @Override public ServletRegistration.Dynamic addServlet(String name, Servlet servlet) {
         if (programmaticListenerActive) throw programmaticForbidden();
         if (initialized) throw alreadyInitialized();
-        if (dynamicServlets.containsKey(name)) return null;
+        if (dynamicServlets.containsKey(name) || reservedServletNames.contains(name)) return null;
         var r = new DynamicServletRegistration(name, servlet);
         dynamicServlets.put(name, r);
         return r;
@@ -282,7 +287,7 @@ public final class VidocqServletContext implements ServletContext {
     @Override public ServletRegistration.Dynamic addServlet(String name, Class<? extends Servlet> c) {
         if (programmaticListenerActive) throw programmaticForbidden();
         if (initialized) throw alreadyInitialized();
-        if (dynamicServlets.containsKey(name)) return null;
+        if (dynamicServlets.containsKey(name) || reservedServletNames.contains(name)) return null;
         var r = new DynamicServletRegistration(name, c);
         dynamicServlets.put(name, r);
         return r;
@@ -292,7 +297,7 @@ public final class VidocqServletContext implements ServletContext {
         if (initialized) throw alreadyInitialized();
         // JSP non supporté — on enregistre quand même la registration pour les tests qui
         // vérifient le flux de configuration (la request vers cette URL renverra 404).
-        if (dynamicServlets.containsKey(name)) return null;
+        if (dynamicServlets.containsKey(name) || reservedServletNames.contains(name)) return null;
         var r = new DynamicServletRegistration(name, (String) null);
         dynamicServlets.put(name, r);
         return r;
@@ -401,6 +406,12 @@ public final class VidocqServletContext implements ServletContext {
         }
     }
 
+    private boolean contextInitializedPhase;
+    /** Active/désactive la phase d'appel des {@code contextInitialized} des listeners
+     *  déclarés (web.xml/@WebListener) — pendant cette phase, addListener
+     *  d'un ServletContextListener doit throw IllegalArgumentException (§4.4). */
+    public void setContextInitializedPhase(boolean active) { this.contextInitializedPhase = active; }
+
     private void addProgrammaticListener(java.util.EventListener l) {
         // Servlet 6.1 §4.4 : rejette un EventListener qui n'implémente aucune des
         // interfaces écoute reconnues.
@@ -413,6 +424,13 @@ public final class VidocqServletContext implements ServletContext {
                 || l instanceof jakarta.servlet.http.HttpSessionIdListener)) {
             throw new IllegalArgumentException(
                     "listener " + l.getClass().getName() + " does not implement any supported listener interface");
+        }
+        // §4.4 : addListener d'un ServletContextListener n'est autorisé que depuis
+        // un SCI.onStartup — jamais depuis un contextInitialized d'un autre SCL.
+        if (contextInitializedPhase && l instanceof jakarta.servlet.ServletContextListener) {
+            throw new IllegalArgumentException(
+                    "ServletContextListener " + l.getClass().getName()
+                            + " can only be added from a ServletContainerInitializer");
         }
         if (listenerRegistry == null) listenerRegistry = new ListenerRegistry();
         listenerRegistry.register(l, true);

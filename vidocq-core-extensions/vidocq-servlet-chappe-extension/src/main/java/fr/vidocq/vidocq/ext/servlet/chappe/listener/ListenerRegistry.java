@@ -67,18 +67,23 @@ public final class ListenerRegistry {
     public void fireContextInitialized(ServletContext ctx) {
         if (contextListeners.isEmpty()) return;
         var evt = new ServletContextEvent(ctx);
-        // Copie défensive : un listener peut ajouter programmatiquement d'autres
-        // listeners pendant son contextInitialized (ils ne reçoivent pas l'évènement
-        // courant mais seront notifiés des évènements suivants).
-        for (var l : new ArrayList<>(contextListeners)) {
-            boolean prog = isProgrammatic(l);
-            if (prog && ctx instanceof fr.vidocq.vidocq.ext.servlet.chappe.container.VidocqServletContext vctx) {
-                vctx.setProgrammaticListenerActive(true);
-                try { l.contextInitialized(evt); }
-                finally { vctx.setProgrammaticListenerActive(false); }
-            } else {
-                l.contextInitialized(evt);
+        var vctx = ctx instanceof fr.vidocq.vidocq.ext.servlet.chappe.container.VidocqServletContext v ? v : null;
+        if (vctx != null) vctx.setContextInitializedPhase(true);
+        try {
+            // Copie défensive : un listener peut ajouter programmatiquement d'autres
+            // listeners pendant son contextInitialized.
+            for (var l : new ArrayList<>(contextListeners)) {
+                boolean prog = isProgrammatic(l);
+                if (prog && vctx != null) {
+                    vctx.setProgrammaticListenerActive(true);
+                    try { l.contextInitialized(evt); }
+                    finally { vctx.setProgrammaticListenerActive(false); }
+                } else {
+                    l.contextInitialized(evt);
+                }
             }
+        } finally {
+            if (vctx != null) vctx.setContextInitializedPhase(false);
         }
     }
 

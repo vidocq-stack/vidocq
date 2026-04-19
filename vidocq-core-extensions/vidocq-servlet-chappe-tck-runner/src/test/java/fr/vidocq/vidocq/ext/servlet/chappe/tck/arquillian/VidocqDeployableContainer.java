@@ -130,6 +130,8 @@ public class VidocqDeployableContainer implements DeployableContainer<VidocqCont
                                            List<String> registered) {
         builder.localeEncodingMappings(desc.localeEncodingMappings());
         builder.contextInitParams(desc.contextParams());
+        for (var sd : desc.servlets()) if (sd.name() != null) builder.reservedServletName(sd.name());
+        for (var fd : desc.filters()) if (fd.name() != null) builder.reservedFilterName(fd.name());
         if (desc.sessionTimeoutMinutes() > 0) {
             builder.sessionTimeoutMinutes(desc.sessionTimeoutMinutes());
         }
