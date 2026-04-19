@@ -79,7 +79,13 @@ public final class ChappeServletBridge implements Handler, RequestDispatcherImpl
 
     @Override
     public Response handle(Request request) throws Exception {
-        String path = request.path();
+        String rawPath = request.path();
+        // Strip le contextPath du path entrant avant le dispatching.
+        String path = rawPath;
+        if (!contextPath.isEmpty() && !"/".equals(contextPath) && rawPath.startsWith(contextPath)) {
+            path = rawPath.substring(contextPath.length());
+            if (path.isEmpty()) path = "/";
+        }
         Optional<ServletDispatcher.Mapping> match = dispatcher.find(path);
         ListenerRegistry registry = servletContext.listenerRegistry();
 

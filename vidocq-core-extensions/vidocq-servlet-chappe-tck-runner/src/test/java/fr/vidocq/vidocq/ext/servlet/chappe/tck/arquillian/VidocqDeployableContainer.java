@@ -72,6 +72,15 @@ public class VidocqDeployableContainer implements DeployableContainer<VidocqCont
 
         if (harness != null) harness.close();
         var builder = ServletTestHarness.builder();
+        // Fixe le contextPath au nom du WAR (sans extension) — le TCK client
+        // envoie typiquement des URLs en /<war-name>/... et getContextPath()
+        // doit remonter ce chemin.
+        String archiveName = archive.getName();
+        if (archiveName != null) {
+            String ctxName = archiveName;
+            if (ctxName.endsWith(".war")) ctxName = ctxName.substring(0, ctxName.length() - 4);
+            if (!ctxName.isEmpty()) builder.contextPath("/" + ctxName);
+        }
         var cl = Thread.currentThread().getContextClassLoader();
         List<String> registered = new ArrayList<>();
 
