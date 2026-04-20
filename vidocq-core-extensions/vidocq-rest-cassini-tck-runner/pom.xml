@@ -177,6 +177,24 @@
                     <version>4.0.2</version>
                     <scope>test</scope>
                 </dependency>
+                <!--
+                    JAXB media module pour Jersey client : les TCK qui
+                    postent un JAXBElement<String> en text/xml ont besoin
+                    d'un MBW JAXB côté CLIENT. Ajout purement test-scope,
+                    Cassini server reste indépendant.
+                -->
+                <dependency>
+                    <groupId>org.glassfish.jersey.media</groupId>
+                    <artifactId>jersey-media-jaxb</artifactId>
+                    <version>4.0.2</version>
+                    <scope>test</scope>
+                </dependency>
+                <dependency>
+                    <groupId>org.glassfish.jaxb</groupId>
+                    <artifactId>jaxb-runtime</artifactId>
+                    <version>4.0.5</version>
+                    <scope>test</scope>
+                </dependency>
                 <dependency>
                     <groupId>org.jboss.shrinkwrap</groupId>
                     <artifactId>shrinkwrap-api</artifactId>
