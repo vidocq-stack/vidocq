@@ -5,6 +5,7 @@ import fr.vidocq.vidocq.ext.rest.cassini.internal.context.CassiniHttpHeaders;
 import fr.vidocq.vidocq.ext.rest.cassini.internal.context.CassiniRequest;
 import fr.vidocq.vidocq.ext.rest.cassini.internal.context.CassiniSecurityContext;
 import fr.vidocq.vidocq.ext.rest.cassini.internal.context.CassiniUriInfo;
+import jakarta.ws.rs.BeanParam;
 import jakarta.ws.rs.CookieParam;
 import jakarta.ws.rs.DefaultValue;
 import jakarta.ws.rs.FormParam;
@@ -64,9 +65,14 @@ public final class ParamExtractor {
             FormParam formParam = p.getAnnotation(FormParam.class);
             MatrixParam matrixParam = p.getAnnotation(MatrixParam.class);
             Context context = p.getAnnotation(Context.class);
+            BeanParam beanParam = p.getAnnotation(BeanParam.class);
 
             if (context != null) {
                 args[i] = resolveContext(p.getType(), match, request);
+                continue;
+            }
+            if (beanParam != null) {
+                args[i] = instantiateBeanParam(p.getType(), match, request);
                 continue;
             }
             if (pathParam != null) {
@@ -105,12 +111,23 @@ public final class ParamExtractor {
             Class<? extends Annotation> t = a.annotationType();
             if (t == PathParam.class || t == QueryParam.class || t == HeaderParam.class
                     || t == CookieParam.class || t == FormParam.class || t == MatrixParam.class
-                    || t == DefaultValue.class || t == Context.class) {
+                    || t == DefaultValue.class || t == Context.class || t == BeanParam.class) {
                 return false;
             }
             if (t.getName().startsWith("jakarta.ws.rs.")) return false;
         }
         return true;
+    }
+
+    private static Object instantiateBeanParam(Class<?> type, MatchResult match, Request request) {
+        try {
+            Object instance = type.getDeclaredConstructor().newInstance();
+            FieldInjector.inject(instance, match, request);
+            return instance;
+        } catch (ReflectiveOperationException e) {
+            throw new WebApplicationException("Failed to instantiate @BeanParam "
+                    + type.getName() + ": " + e.getMessage(), 500);
+        }
     }
 
     private static Object resolveContext(Class<?> type, MatchResult match, Request request) {

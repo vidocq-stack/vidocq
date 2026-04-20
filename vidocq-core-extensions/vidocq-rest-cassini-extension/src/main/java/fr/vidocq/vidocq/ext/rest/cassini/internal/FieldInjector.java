@@ -5,6 +5,7 @@ import fr.vidocq.vidocq.ext.rest.cassini.internal.context.CassiniHttpHeaders;
 import fr.vidocq.vidocq.ext.rest.cassini.internal.context.CassiniRequest;
 import fr.vidocq.vidocq.ext.rest.cassini.internal.context.CassiniSecurityContext;
 import fr.vidocq.vidocq.ext.rest.cassini.internal.context.CassiniUriInfo;
+import jakarta.ws.rs.BeanParam;
 import jakarta.ws.rs.CookieParam;
 import jakarta.ws.rs.DefaultValue;
 import jakarta.ws.rs.FormParam;
@@ -60,6 +61,18 @@ public final class FieldInjector {
     private static Object resolveFieldValue(Field f, MatchResult match, Request request) {
         Context ctx = f.getAnnotation(Context.class);
         if (ctx != null) return resolveContext(f.getType(), match, request);
+
+        BeanParam bp = f.getAnnotation(BeanParam.class);
+        if (bp != null) {
+            try {
+                Object nested = f.getType().getDeclaredConstructor().newInstance();
+                inject(nested, match, request);
+                return nested;
+            } catch (ReflectiveOperationException e) {
+                throw new WebApplicationException("Failed to instantiate @BeanParam field "
+                        + f.getName() + ": " + e.getMessage(), 500);
+            }
+        }
 
         String def = defaultValue(f);
         PathParam pp = f.getAnnotation(PathParam.class);
