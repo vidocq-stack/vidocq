@@ -32,6 +32,7 @@ public final class DynamicServletRegistration implements ServletRegistration.Dyn
     private MultipartConfigElement multipart;
     private String runAsRole;
     private ServletSecurityElement security;
+    private VidocqServletContext owner;
 
     public DynamicServletRegistration(String name, Servlet instance) {
         this.name = name; this.instance = instance;
@@ -42,6 +43,10 @@ public final class DynamicServletRegistration implements ServletRegistration.Dyn
     public DynamicServletRegistration(String name, String className) {
         this.name = name; this.className = className;
     }
+
+    /** Relie cette registration à son context — permet addMapping d'interroger
+     *  les autres registrations / reserved url-patterns pour détecter les conflits. */
+    void attach(VidocqServletContext ctx) { this.owner = ctx; }
 
     @Override public String getName() { return name; }
     @Override public String getClassName() {
@@ -70,13 +75,22 @@ public final class DynamicServletRegistration implements ServletRegistration.Dyn
     }
 
     @Override public Set<String> addMapping(String... urlPatterns) {
+        // Servlet 6.1 §4.4 / ServletRegistration.addMapping : si *un* pattern est déjà
+        // mappé à un autre servlet (web.xml ou autre dynamic), AUCUN update n'est fait
+        // et la méthode retourne l'ensemble des patterns en conflit.
         Set<String> conflicts = new LinkedHashSet<>();
         for (String p : urlPatterns) {
-            if (!mappings.add(p)) conflicts.add(p);
+            if (mappings.contains(p)) continue; // déjà sur CE servlet : pas un conflit
+            if (owner != null && owner.isUrlPatternMappedElsewhere(name, p)) conflicts.add(p);
         }
+        if (!conflicts.isEmpty()) return conflicts;
+        for (String p : urlPatterns) mappings.add(p);
         return conflicts;
     }
     @Override public Collection<String> getMappings() { return Collections.unmodifiableSet(mappings); }
+    /** Ajoute un url-pattern sans passer par le check de conflits — réservé au harness
+     *  pour peupler les ServletRegistration issues du web.xml / @WebServlet. */
+    void addMappingDirect(String pattern) { if (pattern != null) mappings.add(pattern); }
     @Override public String getRunAsRole() { return runAsRole; }
     @Override public void setRunAsRole(String roleName) { this.runAsRole = roleName; }
 

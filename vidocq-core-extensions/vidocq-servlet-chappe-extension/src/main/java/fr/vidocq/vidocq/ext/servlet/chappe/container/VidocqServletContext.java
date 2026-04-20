@@ -49,11 +49,61 @@ public final class VidocqServletContext implements ServletContext {
     private Map<String, String> localeEncodingMappings = Map.of();
     private final java.util.LinkedHashMap<String, DynamicServletRegistration> dynamicServlets = new java.util.LinkedHashMap<>();
     private final java.util.LinkedHashMap<String, DynamicFilterRegistration> dynamicFilters = new java.util.LinkedHashMap<>();
+    /** Registrations "statiques" (web.xml / @WebServlet) — exposées par
+     *  {@link #getServletRegistrations()} mais jamais matérialisées à nouveau
+     *  par le harness (elles sont déjà dans la liste des servlets actifs). */
+    private final java.util.LinkedHashMap<String, DynamicServletRegistration> staticServlets = new java.util.LinkedHashMap<>();
+    private final java.util.LinkedHashMap<String, DynamicFilterRegistration> staticFilters = new java.util.LinkedHashMap<>();
+
+    /** Enregistre une ServletRegistration "statique" (issue du web.xml/@WebServlet).
+     *  Le nom est aussi marqué réservé pour bloquer un éventuel addServlet dynamique. */
+    public DynamicServletRegistration registerStaticServlet(String name, Class<? extends Servlet> klass,
+                                                            java.util.List<String> patterns,
+                                                            java.util.Map<String, String> initParams,
+                                                            boolean asyncSupported) {
+        DynamicServletRegistration r = new DynamicServletRegistration(name, klass);
+        r.attach(this);
+        if (initParams != null) r.setInitParameters(new java.util.LinkedHashMap<>(initParams));
+        if (patterns != null) for (String p : patterns) r.addMappingDirect(p);
+        r.setAsyncSupported(asyncSupported);
+        staticServlets.put(name, r);
+        reservedServletNames.add(name);
+        if (patterns != null) for (String p : patterns) reserveUrlPattern(p);
+        return r;
+    }
+
+    public DynamicFilterRegistration registerStaticFilter(String name, Class<? extends Filter> klass,
+                                                          java.util.Map<String, String> initParams) {
+        DynamicFilterRegistration r = new DynamicFilterRegistration(name, klass);
+        if (initParams != null) r.setInitParameters(new java.util.LinkedHashMap<>(initParams));
+        staticFilters.put(name, r);
+        reservedFilterNames.add(name);
+        return r;
+    }
     /** Noms réservés par le web.xml — un addServlet/addFilter avec ce nom doit retourner null. */
     private final java.util.Set<String> reservedServletNames = new java.util.HashSet<>();
     private final java.util.Set<String> reservedFilterNames = new java.util.HashSet<>();
+    /** URL patterns déjà mappés par le web.xml à un servlet statique. */
+    private final java.util.Set<String> reservedUrlPatterns = new java.util.HashSet<>();
     public void reserveServletName(String name) { reservedServletNames.add(name); }
     public void reserveFilterName(String name) { reservedFilterNames.add(name); }
+    public void reserveUrlPattern(String pattern) {
+        if (pattern != null && !pattern.isEmpty()) reservedUrlPatterns.add(pattern);
+    }
+
+    /** Indique si {@code pattern} est déjà mappé à un servlet *autre* que
+     *  {@code selfName} — que ce soit par le web.xml ou par une autre
+     *  {@link DynamicServletRegistration}. Utilisé par addMapping (§4.4)
+     *  pour appliquer la sémantique "all or nothing" sur les conflits. */
+    public boolean isUrlPatternMappedElsewhere(String selfName, String pattern) {
+        if (pattern == null) return false;
+        if (reservedUrlPatterns.contains(pattern)) return true;
+        for (var entry : dynamicServlets.entrySet()) {
+            if (entry.getKey().equals(selfName)) continue;
+            if (entry.getValue().getMappings().contains(pattern)) return true;
+        }
+        return false;
+    }
 
     public Map<String, DynamicServletRegistration> dynamicServletRegistrations() {
         return java.util.Collections.unmodifiableMap(dynamicServlets);
@@ -322,6 +372,7 @@ public final class VidocqServletContext implements ServletContext {
         if (initialized) throw alreadyInitialized();
         if (dynamicServlets.containsKey(name) || reservedServletNames.contains(name)) return null;
         var r = new DynamicServletRegistration(name, className);
+        r.attach(this);
         dynamicServlets.put(name, r);
         return r;
     }
@@ -330,6 +381,7 @@ public final class VidocqServletContext implements ServletContext {
         if (initialized) throw alreadyInitialized();
         if (dynamicServlets.containsKey(name) || reservedServletNames.contains(name)) return null;
         var r = new DynamicServletRegistration(name, servlet);
+        r.attach(this);
         dynamicServlets.put(name, r);
         return r;
     }
@@ -338,6 +390,7 @@ public final class VidocqServletContext implements ServletContext {
         if (initialized) throw alreadyInitialized();
         if (dynamicServlets.containsKey(name) || reservedServletNames.contains(name)) return null;
         var r = new DynamicServletRegistration(name, c);
+        r.attach(this);
         dynamicServlets.put(name, r);
         return r;
     }
@@ -348,6 +401,7 @@ public final class VidocqServletContext implements ServletContext {
         // vérifient le flux de configuration (la request vers cette URL renverra 404).
         if (dynamicServlets.containsKey(name) || reservedServletNames.contains(name)) return null;
         var r = new DynamicServletRegistration(name, (String) null);
+        r.attach(this);
         dynamicServlets.put(name, r);
         return r;
     }
@@ -360,11 +414,16 @@ public final class VidocqServletContext implements ServletContext {
     }
     @Override public ServletRegistration getServletRegistration(String name) {
         if (programmaticListenerActive) throw programmaticForbidden();
-        return dynamicServlets.get(name);
+        var d = dynamicServlets.get(name);
+        return d != null ? d : staticServlets.get(name);
     }
     @Override public Map<String, ? extends ServletRegistration> getServletRegistrations() {
         if (programmaticListenerActive) throw programmaticForbidden();
-        return java.util.Collections.unmodifiableMap(dynamicServlets);
+        // §4.4 : retourne *toutes* les ServletRegistration — web.xml + dynamiques.
+        var merged = new java.util.LinkedHashMap<String, ServletRegistration>();
+        merged.putAll(staticServlets);
+        merged.putAll(dynamicServlets);
+        return java.util.Collections.unmodifiableMap(merged);
     }
     @Override public FilterRegistration.Dynamic addFilter(String name, String className) {
         if (programmaticListenerActive) throw programmaticForbidden();
@@ -399,11 +458,15 @@ public final class VidocqServletContext implements ServletContext {
     }
     @Override public FilterRegistration getFilterRegistration(String name) {
         if (programmaticListenerActive) throw programmaticForbidden();
-        return dynamicFilters.get(name);
+        var d = dynamicFilters.get(name);
+        return d != null ? d : staticFilters.get(name);
     }
     @Override public Map<String, ? extends FilterRegistration> getFilterRegistrations() {
         if (programmaticListenerActive) throw programmaticForbidden();
-        return java.util.Collections.unmodifiableMap(dynamicFilters);
+        var merged = new java.util.LinkedHashMap<String, FilterRegistration>();
+        merged.putAll(staticFilters);
+        merged.putAll(dynamicFilters);
+        return java.util.Collections.unmodifiableMap(merged);
     }
 
     // ---- Listeners ----

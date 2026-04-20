@@ -153,8 +153,10 @@ public final class ServletTestHarness implements AutoCloseable {
 
         private final java.util.Set<String> reservedServletNames = new java.util.HashSet<>();
         private final java.util.Set<String> reservedFilterNames = new java.util.HashSet<>();
+        private final java.util.Set<String> reservedUrlPatterns = new java.util.HashSet<>();
         public Builder reservedServletName(String n) { reservedServletNames.add(n); return this; }
         public Builder reservedFilterName(String n) { reservedFilterNames.add(n); return this; }
+        public Builder reservedUrlPattern(String p) { reservedUrlPatterns.add(p); return this; }
 
         private java.util.Set<String> warClassNames = null; // null = pas d'isolation
         /** Restreint les registrations dynamiques instanciées par nom/class aux
@@ -254,6 +256,11 @@ public final class ServletTestHarness implements AutoCloseable {
             if (sessionTimeoutMinutes > 0) ctx.setSessionTimeoutInternal(sessionTimeoutMinutes);
             for (String n : reservedServletNames) ctx.reserveServletName(n);
             for (String n : reservedFilterNames) ctx.reserveFilterName(n);
+            for (String p : reservedUrlPatterns) ctx.reserveUrlPattern(p);
+            // Expose les servlets/filtres déclarés en web.xml/@WebServlet via
+            // ServletContext.getServletRegistrations() — visibilité exigée par
+            // le TCK (RegistrationTests.servletRegistrationsTest).
+            materializeStaticRegistrations(ctx);
             // Init params du <context-param> (web.xml) — doivent être posés avant markInitialized.
             for (var e : contextInitParams.entrySet()) ctx.setInitParameter(e.getKey(), e.getValue());
             // Servlet 6.1 §4.8.1 : attribut "jakarta.servlet.context.tempdir" requis.
@@ -361,6 +368,38 @@ public final class ServletTestHarness implements AutoCloseable {
             int port = startServerWithRetry(bridge);
             return new ServletTestHarness(currentServer, port, contextPath,
                     initialized, initializedFilters, registry, ctx);
+        }
+
+        /** Expose les servlets/filtres statiques (web.xml / @WebServlet) au {@link
+         *  VidocqServletContext} afin que {@code getServletRegistration(s)} les
+         *  retourne correctement. Les url-patterns sont "réservés" (empêche
+         *  addMapping dynamique de les écraser) via ce même chemin. */
+        @SuppressWarnings("unchecked")
+        private void materializeStaticRegistrations(VidocqServletContext ctx) {
+            // Regroupe les url-patterns par servletName pour ne créer qu'une seule
+            // registration par servlet statique.
+            var patternsByName = new java.util.LinkedHashMap<String, java.util.List<String>>();
+            for (var m : servlets) {
+                patternsByName
+                        .computeIfAbsent(m.servletName(), k -> new java.util.ArrayList<>())
+                        .add(m.matcher().pattern());
+            }
+            for (var m : servlets) {
+                String name = m.servletName();
+                if (ctx.getServletRegistration(name) != null) continue;
+                var patterns = patternsByName.get(name);
+                var params = initParams.getOrDefault(m.servlet(), java.util.Map.of());
+                ctx.registerStaticServlet(name,
+                        (Class<? extends jakarta.servlet.Servlet>) m.servlet().getClass(),
+                        patterns, params, m.asyncSupported());
+            }
+            for (var fm : filters) {
+                String name = fm.filterName();
+                if (ctx.getFilterRegistration(name) != null) continue;
+                var params = initParams.getOrDefault(fm.filter(), java.util.Map.of());
+                ctx.registerStaticFilter(name,
+                        (Class<? extends jakarta.servlet.Filter>) fm.filter().getClass(), params);
+            }
         }
 
         /** Transfère les ServletRegistration.Dynamic / FilterRegistration.Dynamic du

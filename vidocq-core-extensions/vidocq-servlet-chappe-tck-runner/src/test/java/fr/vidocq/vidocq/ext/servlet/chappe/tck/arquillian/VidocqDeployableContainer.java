@@ -159,6 +159,12 @@ public class VidocqDeployableContainer implements DeployableContainer<VidocqCont
         if (desc.displayName() != null) builder.servletContextName(desc.displayName());
         for (var sd : desc.servlets()) if (sd.name() != null) builder.reservedServletName(sd.name());
         for (var fd : desc.filters()) if (fd.name() != null) builder.reservedFilterName(fd.name());
+        // §4.4 ServletRegistration.addMapping : un url-pattern déjà mappé par le web.xml
+        // est "réservé" — un addMapping dynamique qui tente de le re-mapper doit être
+        // refusé et la méthode doit retourner ce pattern dans le set des conflits.
+        for (var m : desc.servletMappings()) {
+            if (m.urlPattern() != null) builder.reservedUrlPattern(m.urlPattern());
+        }
         if (desc.sessionTimeoutMinutes() > 0) {
             builder.sessionTimeoutMinutes(desc.sessionTimeoutMinutes());
         }
