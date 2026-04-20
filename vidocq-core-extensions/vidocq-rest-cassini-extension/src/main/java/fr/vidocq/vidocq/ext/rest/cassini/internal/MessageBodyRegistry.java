@@ -74,6 +74,7 @@ public final class MessageBodyRegistry {
         writers.add(new StreamingOutputWriter());
         writers.add(new InputStreamWriter());
         writers.add(new FileWriter());
+        writers.add(new FallbackToStringWriter());
 
         readers.add(new ByteArrayReader());
         readers.add(new StringReader());
@@ -156,6 +157,19 @@ public final class MessageBodyRegistry {
         @Override public void writeTo(StreamingOutput v, Class<?> t, Type gt, Annotation[] a, MediaType mt,
                                       MultivaluedMap<String, Object> h, OutputStream s) throws IOException {
             v.write(s);
+        }
+    }
+
+    // ---- Fallback toString ----
+    /** Dernier recours : sérialise toute entity via {@code String.valueOf(v).getBytes(UTF-8)}.
+     *  Couvre les types applicatifs quelconques (beans simples, enums, etc.) quand le
+     *  client n'a pas enregistré de MBW dédié. Conforme à l'esprit de
+     *  StringMessageBodyWriter étendu à tout Object. */
+    static final class FallbackToStringWriter implements MessageBodyWriter<Object> {
+        @Override public boolean isWriteable(Class<?> t, Type gt, Annotation[] a, MediaType mt) { return true; }
+        @Override public void writeTo(Object v, Class<?> t, Type gt, Annotation[] a, MediaType mt,
+                                      MultivaluedMap<String, Object> h, OutputStream s) throws IOException {
+            s.write(String.valueOf(v).getBytes(charset(mt)));
         }
     }
 
