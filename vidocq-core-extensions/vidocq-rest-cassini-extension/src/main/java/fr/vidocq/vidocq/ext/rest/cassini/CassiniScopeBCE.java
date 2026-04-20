@@ -1,4 +1,4 @@
-package fr.vidocq.vidocq.ext.rest;
+package fr.vidocq.vidocq.ext.rest.cassini;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.Dependent;
@@ -11,15 +11,12 @@ import jakarta.inject.Singleton;
 import jakarta.ws.rs.Path;
 
 /**
- * Build Compatible Extension qui ajoute automatiquement {@code @RequestScoped}
- * aux classes annotées {@code @Path} si aucun scope CDI n'est présent.
- * <p>
- * Comportement identique à MicroProfile REST Client / SmallRye JAX-RS.
- * </p>
+ * Ajoute {@code @RequestScoped} par défaut aux classes {@code @Path}
+ * dépourvues de scope CDI explicite.
  */
-public class VidocqRestScopeBCE implements BuildCompatibleExtension {
+public class CassiniScopeBCE implements BuildCompatibleExtension {
 
-    private static final System.Logger LOG = System.getLogger(VidocqRestScopeBCE.class.getName());
+    private static final System.Logger LOG = System.getLogger(CassiniScopeBCE.class.getName());
 
     @SuppressWarnings("unused")
     @Enhancement(types = Object.class, withAnnotations = Path.class)

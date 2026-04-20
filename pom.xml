@@ -140,7 +140,7 @@
             </dependency>
             <dependency>
                 <groupId>fr.vidocq.vidocq</groupId>
-                <artifactId>vidocq-rest-extension</artifactId>
+                <artifactId>vidocq-rest-cassini-extension</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

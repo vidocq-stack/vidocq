@@ -15,8 +15,12 @@
     <description>Example applications for Vidocq</description>
 
     <modules>
-        <module>vidocq-external-rest-lib</module>
-        <module>vidocq-rest-example</module>
         <module>vidocq-servlet-example</module>
     </modules>
+
+    <!--
+        vidocq-rest-example et vidocq-external-rest-lib sortis du reactor
+        pendant la migration Jersey → Cassini. Seront ré-intégrés en
+        Phase 3 (migration post-parité fonctionnelle).
+    -->
 </project>

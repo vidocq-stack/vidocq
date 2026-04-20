@@ -16,6 +16,10 @@
 
     <modules>
         <module>vidocq-arquillian</module>
-        <module>vidocq-it-rest-extension</module>
     </modules>
+
+    <!--
+        vidocq-it-rest-extension sort du reactor pendant la migration
+        Jersey → Cassini. Sera réécrit en Phase 3 contre Cassini.
+    -->
 </project>

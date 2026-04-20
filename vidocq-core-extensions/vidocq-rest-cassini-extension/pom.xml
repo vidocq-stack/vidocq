@@ -9,54 +9,51 @@
         <artifactId>vidocq-core-extensions</artifactId>
     </parent>
 
-    <artifactId>vidocq-rest-extension</artifactId>
-    <name>Vidocq :: Core Extensions :: REST</name>
-    <description>JAX-RS extension for Vidocq using Jersey and Jetty 12</description>
+    <artifactId>vidocq-rest-cassini-extension</artifactId>
+    <name>Vidocq :: Core Extensions :: REST (Cassini)</name>
+    <description>Implémentation Jakarta RESTful Web Services 4.0 sur le moteur HTTP Chappe</description>
 
     <properties>
-        <jersey.version>4.0.2</jersey.version>
-        <jetty.version>12.1.6</jetty.version>
+        <jakarta.ws.rs.version>4.0.0</jakarta.ws.rs.version>
     </properties>
 
     <dependencies>
-        <!-- Vidocq SPI -->
         <dependency>
             <groupId>fr.vidocq.vidocq</groupId>
             <artifactId>vidocq-spi</artifactId>
         </dependency>
-
-        <!-- Vauban CDI -->
+        <dependency>
+            <groupId>fr.vidocq.vidocq</groupId>
+            <artifactId>vidocq-chappe-extension</artifactId>
+        </dependency>
         <dependency>
             <groupId>fr.vidocq.vauban</groupId>
             <artifactId>vauban-core</artifactId>
         </dependency>
-
-        <!-- Jersey JAX-RS -->
         <dependency>
-            <groupId>org.glassfish.jersey.containers</groupId>
-            <artifactId>jersey-container-servlet</artifactId>
-            <version>${jersey.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.glassfish.jersey.inject</groupId>
-            <artifactId>jersey-hk2</artifactId>
-            <version>${jersey.version}</version>
+            <groupId>fr.vidocq.chappe</groupId>
+            <artifactId>chappe-api</artifactId>
         </dependency>
 
-        <!-- Jetty 12 -->
-        <dependency>
-            <groupId>org.eclipse.jetty.ee10</groupId>
-            <artifactId>jetty-ee10-servlet</artifactId>
-            <version>${jetty.version}</version>
-        </dependency>
-
-        <!-- Jakarta REST API -->
         <dependency>
             <groupId>jakarta.ws.rs</groupId>
             <artifactId>jakarta.ws.rs-api</artifactId>
-            <version>4.0.0</version>
+            <version>${jakarta.ws.rs.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.annotation</groupId>
+            <artifactId>jakarta.annotation-api</artifactId>
         </dependency>
 
+        <dependency>
+            <groupId>fr.vidocq.chappe</groupId>
+            <artifactId>chappe-core</artifactId>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>

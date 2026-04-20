@@ -17,8 +17,15 @@
     <modules>
         <module>vidocq-chappe-extension</module>
         <module>vidocq-servlet-chappe-extension</module>
-        <module>vidocq-rest-extension</module>
+        <module>vidocq-rest-cassini-extension</module>
     </modules>
+
+    <!--
+        vidocq-rest-extension (Jersey 4 + Jetty 12) est décommissionné,
+        remplacé par vidocq-rest-cassini-extension (runtime JAX-RS 4.0 natif
+        sur Jetty 12). Sources conservées hors reactor le temps de la
+        migration complète.
+    -->
 
     <!--
         vidocq-servlet-chappe-tck-runner est volontairement EN DEHORS du reactor :
