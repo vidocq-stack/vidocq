@@ -36,23 +36,36 @@ public final class Invoker {
 
     private final Function<Class<?>, Object> resolver;
     private final MessageBodyRegistry registry;
+    private final ExceptionMapperRegistry exceptionMappers;
 
     public Invoker(Function<Class<?>, Object> resolver) {
-        this(resolver, new MessageBodyRegistry());
+        this(resolver, new MessageBodyRegistry(), new ExceptionMapperRegistry());
     }
 
     public Invoker(Function<Class<?>, Object> resolver, MessageBodyRegistry registry) {
+        this(resolver, registry, new ExceptionMapperRegistry());
+    }
+
+    public Invoker(Function<Class<?>, Object> resolver, MessageBodyRegistry registry,
+                   ExceptionMapperRegistry exceptionMappers) {
         this.resolver = resolver;
         this.registry = registry;
+        this.exceptionMappers = exceptionMappers;
     }
 
     public MessageBodyRegistry registry() { return registry; }
+    public ExceptionMapperRegistry exceptionMappers() { return exceptionMappers; }
 
     public static Invoker forBeanManager(BeanManager bm) {
         return forBeanManager(bm, new MessageBodyRegistry());
     }
 
     public static Invoker forBeanManager(BeanManager bm, MessageBodyRegistry registry) {
+        return forBeanManager(bm, registry, ExceptionMapperRegistry.discover(bm));
+    }
+
+    public static Invoker forBeanManager(BeanManager bm, MessageBodyRegistry registry,
+                                         ExceptionMapperRegistry exMappers) {
         AnnotationLiteral<Any> any = new AnnotationLiteral<Any>() {};
         return new Invoker(type -> {
             Set<Bean<?>> beans = bm.getBeans(type, any);
@@ -60,7 +73,7 @@ public final class Invoker {
             if (bean == null) throw new IllegalStateException("No CDI bean for " + type.getName());
             var cc = bm.createCreationalContext(bean);
             return bm.getReference(bean, type, cc);
-        }, registry);
+        }, registry, exMappers);
     }
 
     public Response invoke(MatchResult match, Request request) throws Exception {
@@ -96,8 +109,10 @@ public final class Invoker {
             result = route.javaMethod().invoke(target, args);
         } catch (InvocationTargetException ite) {
             Throwable cause = ite.getCause();
+            var mapped = exceptionMappers.map(cause);
+            if (mapped.isPresent()) return fromJaxRs(mapped.get(), route, chosen);
             if (cause instanceof WebApplicationException wae) {
-                return renderWebAppException(wae);
+                return renderWebAppException(wae, route, chosen);
             }
             if (cause instanceof Exception ex) throw ex;
             throw new RuntimeException(cause);
@@ -197,12 +212,13 @@ public final class Invoker {
         return chosen;
     }
 
-    private Response renderWebAppException(WebApplicationException wae) {
+    private Response renderWebAppException(WebApplicationException wae, ResourceMethod route,
+                                           MediaType chosen) throws IOException {
         jakarta.ws.rs.core.Response r = wae.getResponse();
-        int status = r == null ? 500 : r.getStatus();
+        if (r != null) return fromJaxRs(r, route, chosen);
         String msg = wae.getMessage() == null ? "" : wae.getMessage();
         return Response.builder()
-                .status(StatusCode.of(status))
+                .status(StatusCode.INTERNAL_SERVER_ERROR)
                 .header("Content-Type", "text/plain;charset=utf-8")
                 .body(Body.of(msg))
                 .build();

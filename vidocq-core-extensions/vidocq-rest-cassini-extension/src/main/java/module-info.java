@@ -1,5 +1,6 @@
 import fr.vidocq.vidocq.ext.rest.cassini.CassiniExtension;
 import fr.vidocq.vidocq.ext.rest.cassini.CassiniScopeBCE;
+import fr.vidocq.vidocq.ext.rest.cassini.internal.runtime.CassiniRuntimeDelegate;
 
 module fr.vidocq.vidocq.ext.rest.cassini {
     requires transitive fr.vidocq.vidocq.spi;
@@ -22,4 +23,7 @@ module fr.vidocq.vidocq.ext.rest.cassini {
 
     provides jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension
             with CassiniScopeBCE;
+
+    provides jakarta.ws.rs.ext.RuntimeDelegate
+            with CassiniRuntimeDelegate;
 }

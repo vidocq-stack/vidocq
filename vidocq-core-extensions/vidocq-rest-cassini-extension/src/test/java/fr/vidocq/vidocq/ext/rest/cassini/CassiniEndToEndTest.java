@@ -2,10 +2,14 @@ package fr.vidocq.vidocq.ext.rest.cassini;
 
 import fr.vidocq.chappe.api.Server;
 import fr.vidocq.vidocq.ext.rest.cassini.internal.CassiniRestBridge;
+import fr.vidocq.vidocq.ext.rest.cassini.internal.ExceptionMapperRegistry;
 import fr.vidocq.vidocq.ext.rest.cassini.internal.Invoker;
+import fr.vidocq.vidocq.ext.rest.cassini.internal.MessageBodyRegistry;
 import fr.vidocq.vidocq.ext.rest.cassini.internal.ResourceMethod;
 import fr.vidocq.vidocq.ext.rest.cassini.internal.ResourceScanner;
 import fr.vidocq.vidocq.ext.rest.cassini.internal.UriRouter;
+import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.ext.ExceptionMapper;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.CookieParam;
 import jakarta.ws.rs.core.Context;
@@ -72,6 +76,32 @@ class CassiniEndToEndTest {
     public static class UserResource {
         @GET @Path("/me")     public String me()      { return "current-user"; }
         @GET @Path("/{id}")   public String byId()    { return "by-id"; }
+    }
+
+    @Path("/resp")
+    public static class ResponseResource {
+        @GET @Path("/created")
+        public Response created() {
+            return Response.status(201).entity("new").header("Location", "/resp/42").build();
+        }
+
+        @GET @Path("/notfound")
+        public Response notFound() {
+            return Response.status(Response.Status.NOT_FOUND).entity("missing").build();
+        }
+
+        @GET @Path("/boom")
+        public String boom() { throw new MyDomainException("kaboom"); }
+    }
+
+    public static class MyDomainException extends RuntimeException {
+        public MyDomainException(String m) { super(m); }
+    }
+
+    public static final class MyDomainExceptionMapper implements ExceptionMapper<MyDomainException> {
+        @Override public Response toResponse(MyDomainException e) {
+            return Response.status(418).entity("mapped:" + e.getMessage()).build();
+        }
     }
 
     @Path("/ctx")
@@ -347,7 +377,39 @@ class CassiniEndToEndTest {
         assertEquals("secure=false;principal=null", r.body());
     }
 
+    @Test
+    void responseBuilderPropagatesStatusEntityAndHeaders() throws Exception {
+        start(new ResponseResource());
+        HttpResponse<String> r = get("/resp/created");
+        assertEquals(201, r.statusCode());
+        assertEquals("new", r.body());
+        assertEquals(Optional.of("/resp/42"), r.headers().firstValue("Location"));
+    }
+
+    @Test
+    void responseStatusFromEnum() throws Exception {
+        start(new ResponseResource());
+        HttpResponse<String> r = get("/resp/notfound");
+        assertEquals(404, r.statusCode());
+        assertEquals("missing", r.body());
+    }
+
+    @Test
+    void exceptionMapperRendersTeapot() throws Exception {
+        ExceptionMapperRegistry mappers = new ExceptionMapperRegistry();
+        mappers.register(MyDomainException.class, new MyDomainExceptionMapper());
+        startWith(mappers, new ResponseResource());
+
+        HttpResponse<String> r = get("/resp/boom");
+        assertEquals(418, r.statusCode());
+        assertEquals("mapped:kaboom", r.body());
+    }
+
     private void start(Object... resources) {
+        startWith(new ExceptionMapperRegistry(), resources);
+    }
+
+    private void startWith(ExceptionMapperRegistry mappers, Object... resources) {
         Map<Class<?>, Object> beans = new HashMap<>();
         Class<?>[] classes = new Class<?>[resources.length];
         for (int i = 0; i < resources.length; i++) {
@@ -356,7 +418,7 @@ class CassiniEndToEndTest {
         }
         List<ResourceMethod> routes = ResourceScanner.discover(classes);
         UriRouter router = new UriRouter(routes);
-        Invoker invoker = new Invoker(beans::get);
+        Invoker invoker = new Invoker(beans::get, new MessageBodyRegistry(), mappers);
         CassiniRestBridge bridge = new CassiniRestBridge(router, invoker);
         var res = TestServerLauncher.start(bridge);
         this.server = res.server;

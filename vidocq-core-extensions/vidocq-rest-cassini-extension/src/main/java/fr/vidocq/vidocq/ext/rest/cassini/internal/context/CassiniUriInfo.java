@@ -4,6 +4,7 @@ import fr.vidocq.chappe.api.Request;
 import jakarta.ws.rs.core.MultivaluedHashMap;
 import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.core.PathSegment;
+import fr.vidocq.vidocq.ext.rest.cassini.internal.runtime.CassiniUriBuilder;
 import jakarta.ws.rs.core.UriBuilder;
 import jakarta.ws.rs.core.UriInfo;
 
@@ -56,7 +57,7 @@ public final class CassiniUriInfo implements UriInfo {
     @Override public URI getRequestUri() { return request.uri(); }
 
     @Override public UriBuilder getRequestUriBuilder() {
-        throw new UnsupportedOperationException("UriBuilder not available before M2e");
+        return CassiniUriBuilder.fromUri(getRequestUri());
     }
 
     @Override public URI getAbsolutePath() {
@@ -67,7 +68,7 @@ public final class CassiniUriInfo implements UriInfo {
     }
 
     @Override public UriBuilder getAbsolutePathBuilder() {
-        throw new UnsupportedOperationException("UriBuilder not available before M2e");
+        return CassiniUriBuilder.fromUri(getAbsolutePath());
     }
 
     @Override public URI getBaseUri() {
@@ -79,7 +80,7 @@ public final class CassiniUriInfo implements UriInfo {
     }
 
     @Override public UriBuilder getBaseUriBuilder() {
-        throw new UnsupportedOperationException("UriBuilder not available before M2e");
+        return CassiniUriBuilder.fromUri(getBaseUri());
     }
 
     @Override public MultivaluedMap<String, String> getPathParameters() { return getPathParameters(true); }
