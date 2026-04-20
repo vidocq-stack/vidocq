@@ -64,6 +64,11 @@ public class VidocqCassiniDeployableContainer implements DeployableContainer<Vid
         String ctxName = archiveName == null ? "" : archiveName;
         if (ctxName.endsWith(".war")) ctxName = ctxName.substring(0, ctxName.length() - 4);
         if (!ctxName.isEmpty()) builder.contextPath("/" + ctxName);
+        // Fixe le port à celui attendu par le client TCK (webServerPort, défaut 8080).
+        // Le TCK lit cette propriété au static init — impossible d'inverser la
+        // dépendance. Un seul harness actif à la fois → pas de collision.
+        String portProp = System.getProperty("webServerPort", "8080");
+        try { builder.port(Integer.parseInt(portProp)); } catch (NumberFormatException ignored) {}
 
         var cl = Thread.currentThread().getContextClassLoader();
         List<String> registered = new java.util.ArrayList<>();
