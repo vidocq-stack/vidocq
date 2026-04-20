@@ -4,6 +4,10 @@ import fr.vidocq.chappe.api.Body;
 import fr.vidocq.chappe.api.Request;
 import fr.vidocq.chappe.api.Response;
 import fr.vidocq.chappe.api.StatusCode;
+import fr.vidocq.vidocq.ext.rest.cassini.internal.context.CassiniUriInfo;
+import fr.vidocq.vidocq.ext.rest.cassini.internal.filter.CassiniRequestContext;
+import fr.vidocq.vidocq.ext.rest.cassini.internal.filter.CassiniResponseContext;
+import fr.vidocq.vidocq.ext.rest.cassini.internal.filter.FilterRegistry;
 import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanManager;
@@ -37,6 +41,10 @@ public final class Invoker {
     private final Function<Class<?>, Object> resolver;
     private final MessageBodyRegistry registry;
     private final ExceptionMapperRegistry exceptionMappers;
+    private FilterRegistry filters = new FilterRegistry();
+
+    public void setFilters(FilterRegistry f) { this.filters = f == null ? new FilterRegistry() : f; }
+    public FilterRegistry filters() { return filters; }
 
     public Invoker(Function<Class<?>, Object> resolver) {
         this(resolver, new MessageBodyRegistry(), new ExceptionMapperRegistry());
@@ -102,7 +110,22 @@ public final class Invoker {
             args[resolved.bodyIndex()] = readEntity(p, contentType, request);
         }
 
-        // 3. Invoke
+        // 3. Post-matching request filters
+        CassiniRequestContext rctx = null;
+        if (!filters.postMatching().isEmpty() || !filters.responseFilters().isEmpty()) {
+            rctx = new CassiniRequestContext(request, new CassiniUriInfo(
+                    request, request.contextPath(), match.pathParams()));
+            for (var fe : filters.postMatching()) {
+                if (!fe.appliesTo(route.javaMethod(), route.beanClass())) continue;
+                try { fe.instance().filter(rctx); }
+                catch (java.io.IOException e) { throw new RuntimeException(e); }
+                if (rctx.isAborted()) {
+                    return runResponseFiltersAndWrite(rctx, rctx.abortedResponse(), route, chosen);
+                }
+            }
+        }
+
+        // 4. Invoke
         Object target = resolver.apply(route.beanClass());
         Object result;
         try {
@@ -110,16 +133,79 @@ public final class Invoker {
         } catch (InvocationTargetException ite) {
             Throwable cause = ite.getCause();
             var mapped = exceptionMappers.map(cause);
-            if (mapped.isPresent()) return fromJaxRs(mapped.get(), route, chosen);
+            if (mapped.isPresent()) return runResponseFiltersAndWrite(rctx, mapped.get(), route, chosen);
             if (cause instanceof WebApplicationException wae) {
-                return renderWebAppException(wae, route, chosen);
+                return renderWebAppException(wae, route, chosen, rctx);
             }
             if (cause instanceof Exception ex) throw ex;
             throw new RuntimeException(cause);
         }
 
-        // 4. Marshal
+        // 5. Marshal + response filters
+        if (rctx != null && !filters.responseFilters().isEmpty()) {
+            return runResponseFiltersForResult(rctx, result, route, chosen);
+        }
         return marshal(result, route, chosen);
+    }
+
+    private Response runResponseFiltersAndWrite(CassiniRequestContext rctx,
+                                                jakarta.ws.rs.core.Response userResp,
+                                                ResourceMethod route, MediaType chosen) throws IOException {
+        int status = userResp.getStatus();
+        Object entity = userResp.getEntity();
+        MultivaluedMap<String, Object> headers = MessageBodyRegistry.outHeaders();
+        for (var e : userResp.getStringHeaders().entrySet()) for (String v : e.getValue()) headers.add(e.getKey(), v);
+
+        CassiniResponseContext rctx2 = new CassiniResponseContext(status, entity,
+                entity == null ? null : entity.getClass(), headers);
+        for (var fe : filters.responseFilters()) {
+            if (!fe.appliesTo(route.javaMethod(), route.beanClass())) continue;
+            try { fe.instance().filter(rctx, rctx2); }
+            catch (java.io.IOException e) { throw new RuntimeException(e); }
+        }
+        return writeFromContext(rctx2, route, chosen);
+    }
+
+    private Response runResponseFiltersForResult(CassiniRequestContext rctx, Object result,
+                                                  ResourceMethod route, MediaType chosen) throws IOException {
+        MultivaluedMap<String, Object> headers = MessageBodyRegistry.outHeaders();
+        int status = (result == null) ? 204 : 200;
+        Object entity = (result instanceof jakarta.ws.rs.core.Response jr) ? jr.getEntity() : result;
+        if (result instanceof jakarta.ws.rs.core.Response jr2) {
+            status = jr2.getStatus();
+            for (var e : jr2.getStringHeaders().entrySet()) for (String v : e.getValue()) headers.add(e.getKey(), v);
+        }
+
+        CassiniResponseContext rctx2 = new CassiniResponseContext(status, entity,
+                entity == null ? null : entity.getClass(), headers);
+        for (var fe : filters.responseFilters()) {
+            if (!fe.appliesTo(route.javaMethod(), route.beanClass())) continue;
+            try { fe.instance().filter(rctx, rctx2); }
+            catch (java.io.IOException e) { throw new RuntimeException(e); }
+        }
+        return writeFromContext(rctx2, route, chosen);
+    }
+
+    private Response writeFromContext(CassiniResponseContext rctx, ResourceMethod route, MediaType chosen) throws IOException {
+        Object entity = rctx.getEntity();
+        int status = rctx.getStatus();
+        MultivaluedMap<String, Object> headers = rctx.getHeaders();
+        if (entity == null) {
+            var b = Response.builder().status(StatusCode.of(status)).body(Body.empty());
+            for (var e : headers.entrySet()) for (Object v : e.getValue()) b.header(e.getKey(), String.valueOf(v));
+            return b.build();
+        }
+        MediaType mt = rctx.getMediaType() != null ? rctx.getMediaType() : chosen;
+        // Strip Content-Type from headers map (re-added by writeEntity)
+        java.util.Map<String, java.util.List<String>> extra = new java.util.LinkedHashMap<>();
+        for (var e : headers.entrySet()) {
+            if ("Content-Type".equalsIgnoreCase(e.getKey())) continue;
+            java.util.List<String> vs = new java.util.ArrayList<>();
+            for (Object v : e.getValue()) vs.add(String.valueOf(v));
+            extra.put(e.getKey(), vs);
+        }
+        return writeEntity(entity, rctx.getEntityType() == null ? entity.getClass() : rctx.getEntityType(),
+                rctx.getEntityAnnotations(), mt, StatusCode.of(status), extra);
     }
 
     private boolean hasRequestBody(Request request) {
@@ -213,9 +299,13 @@ public final class Invoker {
     }
 
     private Response renderWebAppException(WebApplicationException wae, ResourceMethod route,
-                                           MediaType chosen) throws IOException {
+                                           MediaType chosen, CassiniRequestContext rctx) throws IOException {
         jakarta.ws.rs.core.Response r = wae.getResponse();
-        if (r != null) return fromJaxRs(r, route, chosen);
+        if (r != null) {
+            if (rctx != null && !filters.responseFilters().isEmpty())
+                return runResponseFiltersAndWrite(rctx, r, route, chosen);
+            return fromJaxRs(r, route, chosen);
+        }
         String msg = wae.getMessage() == null ? "" : wae.getMessage();
         return Response.builder()
                 .status(StatusCode.INTERNAL_SERVER_ERROR)

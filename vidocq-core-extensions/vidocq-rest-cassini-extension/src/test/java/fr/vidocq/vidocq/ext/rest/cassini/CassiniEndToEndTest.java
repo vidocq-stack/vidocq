@@ -8,6 +8,11 @@ import fr.vidocq.vidocq.ext.rest.cassini.internal.MessageBodyRegistry;
 import fr.vidocq.vidocq.ext.rest.cassini.internal.ResourceMethod;
 import fr.vidocq.vidocq.ext.rest.cassini.internal.ResourceScanner;
 import fr.vidocq.vidocq.ext.rest.cassini.internal.UriRouter;
+import fr.vidocq.vidocq.ext.rest.cassini.internal.filter.FilterRegistry;
+import jakarta.ws.rs.container.ContainerRequestContext;
+import jakarta.ws.rs.container.ContainerRequestFilter;
+import jakarta.ws.rs.container.ContainerResponseContext;
+import jakarta.ws.rs.container.ContainerResponseFilter;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.ext.ExceptionMapper;
 import jakarta.ws.rs.Consumes;
@@ -405,11 +410,66 @@ class CassiniEndToEndTest {
         assertEquals("mapped:kaboom", r.body());
     }
 
+    @Test
+    void responseFilterAddsHeader() throws Exception {
+        FilterRegistry fr = new FilterRegistry();
+        fr.addResponse((ContainerRequestContext req, ContainerResponseContext resp) -> {
+            resp.getHeaders().putSingle("X-Trace", "cassini");
+        });
+        startWith(fr, new HelloResource());
+
+        HttpResponse<String> r = get("/hello");
+        assertEquals(200, r.statusCode());
+        assertEquals(Optional.of("cassini"), r.headers().firstValue("X-Trace"));
+    }
+
+    @Test
+    void requestFilterAborts() throws Exception {
+        FilterRegistry fr = new FilterRegistry();
+        fr.addRequest((ContainerRequestContext req) -> {
+            String tok = req.getHeaderString("X-Token");
+            if (!"ok".equals(tok)) {
+                req.abortWith(Response.status(401).entity("unauthorized").build());
+            }
+        });
+        startWith(fr, new HelloResource());
+
+        HttpResponse<String> r1 = get("/hello");
+        assertEquals(401, r1.statusCode());
+        assertEquals("unauthorized", r1.body());
+
+        HttpResponse<String> r2 = send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/hello"))
+                .header("X-Token", "ok").GET().build());
+        assertEquals(200, r2.statusCode());
+        assertEquals("Hello from Cassini!", r2.body());
+    }
+
+    @Test
+    void requestFilterSetsProperty() throws Exception {
+        FilterRegistry fr = new FilterRegistry();
+        fr.addRequest(req -> req.setProperty("cassini.trace", "yes"));
+        fr.addResponse((req, resp) -> resp.getHeaders().putSingle("X-Trace",
+                String.valueOf(req.getProperty("cassini.trace"))));
+        startWith(fr, new HelloResource());
+
+        HttpResponse<String> r = get("/hello");
+        assertEquals(200, r.statusCode());
+        assertEquals(Optional.of("yes"), r.headers().firstValue("X-Trace"));
+    }
+
     private void start(Object... resources) {
-        startWith(new ExceptionMapperRegistry(), resources);
+        startWith(new ExceptionMapperRegistry(), new FilterRegistry(), resources);
     }
 
     private void startWith(ExceptionMapperRegistry mappers, Object... resources) {
+        startWith(mappers, new FilterRegistry(), resources);
+    }
+
+    private void startWith(FilterRegistry filters, Object... resources) {
+        startWith(new ExceptionMapperRegistry(), filters, resources);
+    }
+
+    private void startWith(ExceptionMapperRegistry mappers, FilterRegistry filters, Object... resources) {
         Map<Class<?>, Object> beans = new HashMap<>();
         Class<?>[] classes = new Class<?>[resources.length];
         for (int i = 0; i < resources.length; i++) {
@@ -419,6 +479,7 @@ class CassiniEndToEndTest {
         List<ResourceMethod> routes = ResourceScanner.discover(classes);
         UriRouter router = new UriRouter(routes);
         Invoker invoker = new Invoker(beans::get, new MessageBodyRegistry(), mappers);
+        invoker.setFilters(filters);
         CassiniRestBridge bridge = new CassiniRestBridge(router, invoker);
         var res = TestServerLauncher.start(bridge);
         this.server = res.server;
