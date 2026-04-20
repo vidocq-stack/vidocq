@@ -68,7 +68,7 @@ public final class CassiniRestBridge implements Handler {
         try {
             requestContext.runInScope(() -> {
                 try {
-                    holder[0] = invoker.invoke(result);
+                    holder[0] = invoker.invoke(result, request);
                 } catch (Exception e) {
                     holder[0] = e;
                 }

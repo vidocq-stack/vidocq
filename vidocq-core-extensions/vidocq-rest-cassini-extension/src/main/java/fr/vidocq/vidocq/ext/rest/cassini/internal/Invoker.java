@@ -1,6 +1,7 @@
 package fr.vidocq.vidocq.ext.rest.cassini.internal;
 
 import fr.vidocq.chappe.api.Body;
+import fr.vidocq.chappe.api.Request;
 import fr.vidocq.chappe.api.Response;
 import fr.vidocq.chappe.api.StatusCode;
 import jakarta.enterprise.inject.Any;
@@ -48,12 +49,13 @@ public final class Invoker {
         });
     }
 
-    public Response invoke(MatchResult match) throws Exception {
+    public Response invoke(MatchResult match, Request request) throws Exception {
         ResourceMethod route = match.method();
         Object target = resolver.apply(route.beanClass());
+        Object[] args = ParamExtractor.resolve(route, match, request);
         Object result;
         try {
-            result = route.javaMethod().invoke(target);
+            result = route.javaMethod().invoke(target, args);
         } catch (InvocationTargetException ite) {
             Throwable cause = ite.getCause();
             if (cause instanceof Exception ex) throw ex;

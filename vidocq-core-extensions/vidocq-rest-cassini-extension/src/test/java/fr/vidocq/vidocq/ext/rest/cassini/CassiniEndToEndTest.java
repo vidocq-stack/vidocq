@@ -6,10 +6,16 @@ import fr.vidocq.vidocq.ext.rest.cassini.internal.Invoker;
 import fr.vidocq.vidocq.ext.rest.cassini.internal.ResourceMethod;
 import fr.vidocq.vidocq.ext.rest.cassini.internal.ResourceScanner;
 import fr.vidocq.vidocq.ext.rest.cassini.internal.UriRouter;
+import jakarta.ws.rs.CookieParam;
+import jakarta.ws.rs.DefaultValue;
+import jakarta.ws.rs.FormParam;
 import jakarta.ws.rs.GET;
+import jakarta.ws.rs.HeaderParam;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
+import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -60,6 +66,41 @@ class CassiniEndToEndTest {
     public static class UserResource {
         @GET @Path("/me")     public String me()      { return "current-user"; }
         @GET @Path("/{id}")   public String byId()    { return "by-id"; }
+    }
+
+    @Path("/params")
+    public static class ParamResource {
+        @GET @Path("/path/{id}")
+        public String path(@PathParam("id") int id) {
+            return "id=" + id;
+        }
+
+        @GET @Path("/query")
+        public String query(@QueryParam("q") String q,
+                            @QueryParam("n") @DefaultValue("5") int n) {
+            return "q=" + q + ";n=" + n;
+        }
+
+        @GET @Path("/tags")
+        public String tags(@QueryParam("tag") List<String> tags) {
+            return "tags=" + String.join(",", tags);
+        }
+
+        @GET @Path("/header")
+        public String header(@HeaderParam("X-User") String user) {
+            return "user=" + user;
+        }
+
+        @GET @Path("/cookie")
+        public String cookie(@CookieParam("session") String sid) {
+            return "sid=" + sid;
+        }
+
+        @POST @Path("/form")
+        public String form(@FormParam("name") String name,
+                           @FormParam("age") int age) {
+            return "name=" + name + ";age=" + age;
+        }
     }
 
     @Test
@@ -115,6 +156,51 @@ class CassiniEndToEndTest {
 
         assertEquals("current-user", get("/users/me").body());
         assertEquals("by-id", get("/users/42").body());
+    }
+
+    @Test
+    void pathParamCoercesToInt() throws Exception {
+        start(new ParamResource());
+        assertEquals("id=42", get("/params/path/42").body());
+    }
+
+    @Test
+    void queryParamWithDefault() throws Exception {
+        start(new ParamResource());
+        assertEquals("q=hi;n=5", get("/params/query?q=hi").body());
+        assertEquals("q=hi;n=12", get("/params/query?q=hi&n=12").body());
+    }
+
+    @Test
+    void queryParamAsList() throws Exception {
+        start(new ParamResource());
+        assertEquals("tags=a,b,c", get("/params/tags?tag=a&tag=b&tag=c").body());
+    }
+
+    @Test
+    void headerParam() throws Exception {
+        start(new ParamResource());
+        HttpResponse<String> r = send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/params/header"))
+                .header("X-User", "claude").GET().build());
+        assertEquals("user=claude", r.body());
+    }
+
+    @Test
+    void cookieParam() throws Exception {
+        start(new ParamResource());
+        HttpResponse<String> r = send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/params/cookie"))
+                .header("Cookie", "session=xyz; tracker=1").GET().build());
+        assertEquals("sid=xyz", r.body());
+    }
+
+    @Test
+    void formParam() throws Exception {
+        start(new ParamResource());
+        HttpResponse<String> r = send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/params/form"))
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.ofString("name=yann&age=42"))
+                .build());
+        assertEquals("name=yann;age=42", r.body());
     }
 
     private void start(Object... resources) {
