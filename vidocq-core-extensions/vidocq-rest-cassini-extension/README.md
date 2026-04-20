@@ -1,8 +1,7 @@
 # vidocq-rest-cassini-extension
 
 Implémentation **Jakarta RESTful Web Services 4.0** pour Vidocq, montée sur le
-moteur HTTP maison **Chappe** (via `ChappeMountPoint`). Remplace le précédent
-`vidocq-rest-extension` qui s'appuyait sur Jersey 4 + Jetty 12.
+moteur HTTP maison **Chappe** (via `ChappeMountPoint`). 
 
 ## Cassini — d'où vient le nom ?
 

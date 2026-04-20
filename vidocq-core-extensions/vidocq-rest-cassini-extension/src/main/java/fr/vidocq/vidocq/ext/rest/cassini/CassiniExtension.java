@@ -2,9 +2,17 @@ package fr.vidocq.vidocq.ext.rest.cassini;
 
 import fr.vidocq.vauban.core.container.VaubanContainerBuilder;
 import fr.vidocq.vidocq.ext.chappe.ChappeListener;
+import fr.vidocq.vidocq.ext.chappe.ChappeMountPoint;
+import fr.vidocq.vidocq.ext.rest.cassini.internal.CassiniRestBridge;
+import fr.vidocq.vidocq.ext.rest.cassini.internal.Invoker;
+import fr.vidocq.vidocq.ext.rest.cassini.internal.ResourceMethod;
+import fr.vidocq.vidocq.ext.rest.cassini.internal.ResourceScanner;
+import fr.vidocq.vidocq.ext.rest.cassini.internal.UriRouter;
 import fr.vidocq.vidocq.spi.ExtensionContext;
 import fr.vidocq.vidocq.spi.VidocqConfiguration;
 import fr.vidocq.vidocq.spi.VidocqExtension;
+
+import java.util.List;
 
 /**
  * Extension Cassini — runtime Jakarta RESTful Web Services 4.0 monté sur le
@@ -12,7 +20,7 @@ import fr.vidocq.vidocq.spi.VidocqExtension;
  *
  * <p>Priorité 500 : tourne après {@code ChappeEngineExtension} et avant
  * {@code ChappeServerBootstrap}, afin de contribuer un handler JAX-RS au
- * {@code ChappeMountPoint} via un bridge dédié.</p>
+ * {@link ChappeMountPoint} via {@link CassiniRestBridge}.</p>
  *
  * <h3>Configuration</h3>
  * <ul>
@@ -49,9 +57,29 @@ public final class CassiniExtension implements VidocqExtension {
 
     @Override
     public void onStart(ExtensionContext context) {
+        List<ResourceMethod> routes = ResourceScanner.discover(context.beanManager());
+        if (routes.isEmpty()) {
+            LOG.log(System.Logger.Level.INFO,
+                    "No @Path beans discovered — Cassini REST extension inactive");
+            return;
+        }
+
+        UriRouter router = new UriRouter(routes);
+        Invoker invoker = Invoker.forBeanManager(context.beanManager());
+        CassiniRestBridge bridge = new CassiniRestBridge(router, invoker);
+
+        String mountPrefix = "/".equals(contextPath) ? "" : contextPath;
+        ChappeMountPoint.instance().mount(listener, mountPrefix, bridge);
+
+        for (ResourceMethod r : routes) {
+            LOG.log(System.Logger.Level.INFO,
+                    "  Endpoint {0} {1}{2} -> {3}.{4}",
+                    r.httpMethod(), contextPath, r.path(),
+                    r.beanClass().getSimpleName(), r.javaMethod().getName());
+        }
         LOG.log(System.Logger.Level.INFO,
-                "Cassini REST extension scaffolded (listener={0}, contextPath={1}) — M1 dispatcher pending",
-                listener, contextPath);
+                "Cassini REST extension mounted on listener={0} prefix={1} ({2} endpoint(s))",
+                listener, mountPrefix.isEmpty() ? "/" : mountPrefix, routes.size());
     }
 
     @Override

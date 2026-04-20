@@ -11,6 +11,8 @@ module fr.vidocq.vidocq.ext.rest.cassini {
     requires jakarta.cdi;
     requires jakarta.annotation;
 
+    requires static java.net.http;
+
     exports fr.vidocq.vidocq.ext.rest.cassini;
 
     opens fr.vidocq.vidocq.ext.rest.cassini to fr.vidocq.vauban.core;
