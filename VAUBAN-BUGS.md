@@ -78,3 +78,47 @@ Lancement → `VerifyError` immediat.
 **Fix livre :** `RuntimeClientProxyGenerator` emet desormais un dispatch par {@link java.lang.invoke.MethodHandle} pour les methodes protected (ou package-private) declarees dans une superclasse situee dans un package different du proxy. Chaque methode concernee obtient un champ `private static final MethodHandle $$mh_<name>` initialise dans `<clinit>` via `MethodHandles.privateLookupIn(beanClass, MethodHandles.lookup()).findVirtual(...)`. L'override du proxy invoque `$$mh_<name>.invokeExact(delegate, args)` au lieu de `invokevirtual`. MethodHandle n'est pas soumis aux verifications statiques §4.10.1.9 : l'acces est controle au runtime par la `Lookup` privilegiee.
 
 **Status :** FIXE dans Vauban 0.1.0-SNAPSHOT (`RuntimeClientProxyGenerator`). 4 tests unitaires ajoutes pour le cas protected cross-package. L'exemple `vidocq-servlet-example` utilise desormais `@ApplicationScoped` partout sans contournement, demarrage mesure en 48 ms avec 3 servlets + 1 filter + 1 listener, tous les endpoints (incluant BASIC auth et sessions) repondent correctement.
+
+---
+
+## 7. Régression : BCE @RequestScoped auto sur @Path non appliquée au runtime BeanManager
+
+**Symptome :** Un bean `@Path` sans scope CDI explicite, enrichi par une BCE
+`@Enhancement(types = Object.class, withAnnotations = Path.class)` qui lui
+ajoute `@RequestScoped`, n'est **pas** exposé par
+`BeanManager.getBeans(Object.class, @Any)` au runtime.
+
+**Contexte :** `CassiniScopeBCE` (clone de l'ancien `VidocqRestScopeBCE` du
+bug #5) scanne les classes `@Path` et leur ajoute `@RequestScoped` si aucun
+scope n'est présent. Au build-time :
+
+- `_ClientProxy` est bien généré pour la classe enrichie
+- le FQN apparaît dans `META-INF/vauban-beans.list`
+
+Au runtime cependant, Cassini's `ResourceScanner.discover` n'observe **que**
+les beans avec scope CDI *explicite* dans le source. L'exemple
+`vidocq-rest-example` :
+
+- `HelloCDIRequestScopedResource` (scope explicite) → OK, 4 endpoints visibles
+- `HelloCDIApplicationScopedResource` (scope explicite) → OK
+- `HelloSimpleJaxRSResource` (scope via BCE) → **invisible au runtime**
+- `fr.vidocq.vidocq.examples.extlib.ExternalResource` (scope via BCE sur
+  librairie externe) → **invisible au runtime**
+
+**Indice :** le marker `META-INF/vauban-bce-processed` (documenté dans le
+bug #5 comme "écrit par le VaubanProcessor APT") n'existe **dans aucun**
+module du reactor (0 match sur `find`). Laisse supposer que la chaîne APT
+→ BCE documentée dans #5 n'est plus exécutée, ou que la v0.1.0-SNAPSHOT
+actuelle a régressé sur ce point.
+
+**Workaround :** annoter explicitement les classes `@Path` avec
+`@RequestScoped` (ou autre scope CDI normal). L'extension Cassini est
+totalement fonctionnelle sous cette contrainte.
+
+**Status :** non confirmé côté Vauban. À investiguer :
+1. Le `VaubanProcessor` APT est-il toujours invoqué à la compilation du
+   consommateur ?
+2. Reçoit-il la liste des BCEs via ServiceLoader sur le classpath au moment
+   de la compilation ?
+3. Écrit-il effectivement les annotations ajoutées par `clazz.addAnnotation()`
+   dans le bytecode généré (vs. seulement le proxy) ?

@@ -10,23 +10,25 @@
     </parent>
 
     <artifactId>vidocq-rest-example</artifactId>
-    <name>Vidocq :: Examples :: REST</name>
-    <description>REST service example using Vidocq</description>
+    <name>Vidocq :: Examples :: REST (Cassini)</name>
+    <description>REST service example using the Cassini JAX-RS runtime on Chappe</description>
 
     <dependencies>
-        <!-- Vidocq Core -->
         <dependency>
             <groupId>fr.vidocq.vidocq</groupId>
             <artifactId>vidocq-core</artifactId>
         </dependency>
 
-        <!-- REST Extension (fournit RestScopeExtension BCE) -->
         <dependency>
             <groupId>fr.vidocq.vidocq</groupId>
-            <artifactId>vidocq-rest-extension</artifactId>
+            <artifactId>vidocq-rest-cassini-extension</artifactId>
         </dependency>
 
-        <!-- Jakarta REST API -->
+        <dependency>
+            <groupId>fr.vidocq.chappe</groupId>
+            <artifactId>chappe-core</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>jakarta.ws.rs</groupId>
             <artifactId>jakarta.ws.rs-api</artifactId>
@@ -38,7 +40,6 @@
             <artifactId>vauban-indexer</artifactId>
         </dependency>
 
-        <!-- Librairie externe non pre-traitee (simule un JAR tiers) -->
         <dependency>
             <groupId>fr.vidocq.vidocq</groupId>
             <artifactId>vidocq-external-rest-lib</artifactId>
@@ -48,11 +49,6 @@
 
     <build>
         <plugins>
-            <!--
-                vidocq:generate traite les dependances non pre-traitees.
-                Au runtime, les BCEs @Enhancement s'executent automatiquement
-                pour les beans sans scope (via BceProcessor.processEnhancementOnly).
-            -->
             <plugin>
                 <groupId>fr.vidocq.vidocq</groupId>
                 <artifactId>vidocq-maven-plugin</artifactId>
