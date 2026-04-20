@@ -10,6 +10,7 @@ import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.WebApplicationException;
 
+import java.lang.annotation.Annotation;
 import java.lang.reflect.Parameter;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
@@ -26,15 +27,21 @@ import java.util.Map;
  *
  * <p>M2b : support de {@link PathParam}, {@link QueryParam}, {@link HeaderParam},
  * {@link CookieParam}, {@link FormParam}, {@link MatrixParam},
- * {@link DefaultValue}. Valeurs simples ou {@code List/Set/SortedSet}.</p>
+ * {@link DefaultValue}. Les paramètres sans annotation JAX-RS sont
+ * considérés comme le corps de la requête — leur index est exposé via
+ * {@link ResolvedArgs#bodyIndex} et sera rempli par l'Invoker via un
+ * {@link MessageBodyRegistry}.</p>
  */
 public final class ParamExtractor {
 
+    public record ResolvedArgs(Object[] args, int bodyIndex) {}
+
     private ParamExtractor() {}
 
-    public static Object[] resolve(ResourceMethod route, MatchResult match, Request request) {
+    public static ResolvedArgs resolve(ResourceMethod route, MatchResult match, Request request) {
         Parameter[] params = route.javaMethod().getParameters();
         Object[] args = new Object[params.length];
+        int bodyIndex = -1;
         Map<String, List<String>> formCache = null;
         Map<String, List<String>> queryCache = null;
 
@@ -69,11 +76,28 @@ public final class ParamExtractor {
             } else if (matrixParam != null) {
                 List<String> raws = matrix(request, matrixParam.value());
                 args[i] = coerce(p, raws.isEmpty() ? emptyOrDefault(def) : raws);
+            } else if (isBodyCandidate(p)) {
+                if (bodyIndex < 0) bodyIndex = i;
+                args[i] = ParamValueConverter.defaultForType(p.getType());
             } else {
                 args[i] = ParamValueConverter.defaultForType(p.getType());
             }
         }
-        return args;
+        return new ResolvedArgs(args, bodyIndex);
+    }
+
+    /** Vrai si le paramètre n'a aucune annotation JAX-RS reconnue → candidat body. */
+    private static boolean isBodyCandidate(Parameter p) {
+        for (Annotation a : p.getAnnotations()) {
+            Class<? extends Annotation> t = a.annotationType();
+            if (t == PathParam.class || t == QueryParam.class || t == HeaderParam.class
+                    || t == CookieParam.class || t == FormParam.class || t == MatrixParam.class
+                    || t == DefaultValue.class) {
+                return false;
+            }
+            if (t.getName().startsWith("jakarta.ws.rs.")) return false;
+        }
+        return true;
     }
 
     private static Object coerce(Parameter p, List<String> raws) {

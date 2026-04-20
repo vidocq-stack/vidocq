@@ -24,7 +24,7 @@ class UriRouterBestMatchTest {
 
     private ResourceMethod make(String verb, String template, String methodName) throws Exception {
         Method m = Handlers.class.getDeclaredMethod(methodName);
-        return new ResourceMethod(Handlers.class, m, verb, UriTemplate.compile(template), Set.of());
+        return new ResourceMethod(Handlers.class, m, verb, UriTemplate.compile(template), Set.of(), Set.of());
     }
 
     @Test

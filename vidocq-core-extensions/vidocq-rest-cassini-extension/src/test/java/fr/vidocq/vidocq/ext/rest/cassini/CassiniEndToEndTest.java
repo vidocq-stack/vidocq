@@ -6,12 +6,14 @@ import fr.vidocq.vidocq.ext.rest.cassini.internal.Invoker;
 import fr.vidocq.vidocq.ext.rest.cassini.internal.ResourceMethod;
 import fr.vidocq.vidocq.ext.rest.cassini.internal.ResourceScanner;
 import fr.vidocq.vidocq.ext.rest.cassini.internal.UriRouter;
+import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.CookieParam;
 import jakarta.ws.rs.DefaultValue;
 import jakarta.ws.rs.FormParam;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.HeaderParam;
 import jakarta.ws.rs.POST;
+import jakarta.ws.rs.PUT;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
@@ -66,6 +68,30 @@ class CassiniEndToEndTest {
     public static class UserResource {
         @GET @Path("/me")     public String me()      { return "current-user"; }
         @GET @Path("/{id}")   public String byId()    { return "by-id"; }
+    }
+
+    @Path("/body")
+    public static class BodyResource {
+        @POST @Path("/echo-string")
+        @Consumes("text/plain") @Produces("text/plain")
+        public String echoString(String body) { return "echo:" + body; }
+
+        @POST @Path("/echo-bytes")
+        @Consumes("application/octet-stream")
+        @Produces("application/octet-stream")
+        public byte[] echoBytes(byte[] body) { return body; }
+
+        @PUT @Path("/json-only")
+        @Consumes("application/json")
+        public String jsonOnly(String body) { return "got:" + body; }
+
+        @GET @Path("/json")
+        @Produces("application/json")
+        public String json() { return "{\"k\":1}"; }
+
+        @GET @Path("/xml")
+        @Produces("application/xml")
+        public String xml() { return "<k>1</k>"; }
     }
 
     @Path("/params")
@@ -201,6 +227,59 @@ class CassiniEndToEndTest {
                 .POST(HttpRequest.BodyPublishers.ofString("name=yann&age=42"))
                 .build());
         assertEquals("name=yann;age=42", r.body());
+    }
+
+    @Test
+    void bodyStringRoundTrip() throws Exception {
+        start(new BodyResource());
+        HttpResponse<String> r = send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/body/echo-string"))
+                .header("Content-Type", "text/plain")
+                .POST(HttpRequest.BodyPublishers.ofString("hello"))
+                .build());
+        assertEquals(200, r.statusCode());
+        assertEquals("echo:hello", r.body());
+    }
+
+    @Test
+    void bodyByteArrayRoundTrip() throws Exception {
+        start(new BodyResource());
+        byte[] payload = {1, 2, 3, 4, 5};
+        HttpResponse<byte[]> r = HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/body/echo-bytes"))
+                        .header("Content-Type", "application/octet-stream")
+                        .POST(HttpRequest.BodyPublishers.ofByteArray(payload)).build(),
+                HttpResponse.BodyHandlers.ofByteArray());
+        assertEquals(200, r.statusCode());
+        assertEquals("application/octet-stream",
+                r.headers().firstValue("Content-Type").orElse(""));
+        org.junit.jupiter.api.Assertions.assertArrayEquals(payload, r.body());
+    }
+
+    @Test
+    void consumesMismatchYields415() throws Exception {
+        start(new BodyResource());
+        HttpResponse<String> r = send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/body/json-only"))
+                .header("Content-Type", "text/plain")
+                .PUT(HttpRequest.BodyPublishers.ofString("x"))
+                .build());
+        assertEquals(415, r.statusCode());
+    }
+
+    @Test
+    void producesMismatchYields406() throws Exception {
+        start(new BodyResource());
+        HttpResponse<String> r = send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/body/json"))
+                .header("Accept", "image/png").GET().build());
+        assertEquals(406, r.statusCode());
+    }
+
+    @Test
+    void acceptNegotiationPicksMatchingProduces() throws Exception {
+        start(new BodyResource());
+        HttpResponse<String> r = send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/body/json"))
+                .header("Accept", "application/xml;q=0.1, application/json;q=0.9").GET().build());
+        assertEquals(200, r.statusCode());
+        assertTrue(r.headers().firstValue("Content-Type").orElse("").startsWith("application/json"));
     }
 
     private void start(Object... resources) {

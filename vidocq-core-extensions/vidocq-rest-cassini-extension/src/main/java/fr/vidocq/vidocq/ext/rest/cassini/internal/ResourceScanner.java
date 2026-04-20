@@ -12,6 +12,7 @@ import jakarta.ws.rs.OPTIONS;
 import jakarta.ws.rs.PATCH;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.PUT;
+import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 
@@ -57,6 +58,7 @@ public final class ResourceScanner {
             if (root == null) continue;
             String basePath = normalize(root.value());
             Set<String> classProduces = produces(cls.getAnnotation(Produces.class));
+            Set<String> classConsumes = consumes(cls.getAnnotation(Consumes.class));
 
             for (Method m : cls.getDeclaredMethods()) {
                 String verb = resolveHttpMethod(m);
@@ -64,9 +66,11 @@ public final class ResourceScanner {
                 Path sub = m.getAnnotation(Path.class);
                 String full = (sub == null) ? basePath : combine(basePath, normalize(sub.value()));
                 Set<String> methodProduces = produces(m.getAnnotation(Produces.class));
-                Set<String> effective = methodProduces.isEmpty() ? classProduces : methodProduces;
+                Set<String> methodConsumes = consumes(m.getAnnotation(Consumes.class));
+                Set<String> effProd = methodProduces.isEmpty() ? classProduces : methodProduces;
+                Set<String> effCons = methodConsumes.isEmpty() ? classConsumes : methodConsumes;
                 m.setAccessible(true);
-                out.add(new ResourceMethod(cls, m, verb, UriTemplate.compile(full), effective));
+                out.add(new ResourceMethod(cls, m, verb, UriTemplate.compile(full), effProd, effCons));
             }
         }
         return out;
@@ -88,6 +92,11 @@ public final class ResourceScanner {
     }
 
     private static Set<String> produces(Produces ann) {
+        if (ann == null || ann.value().length == 0) return Set.of();
+        return new LinkedHashSet<>(List.of(ann.value()));
+    }
+
+    private static Set<String> consumes(Consumes ann) {
         if (ann == null || ann.value().length == 0) return Set.of();
         return new LinkedHashSet<>(List.of(ann.value()));
     }
