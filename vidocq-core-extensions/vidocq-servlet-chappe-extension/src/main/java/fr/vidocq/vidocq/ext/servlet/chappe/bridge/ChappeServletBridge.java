@@ -80,12 +80,27 @@ public final class ChappeServletBridge implements Handler, RequestDispatcherImpl
     @Override
     public Response handle(Request request) throws Exception {
         String rawPath = request.path();
+        // URL rewriting (§7.1) : extrait un jsessionid inline du path et le retire
+        // du path utilisé pour le dispatching.
+        String urlSessionId = null;
+        int sidx = rawPath.indexOf(";jsessionid=");
+        if (sidx >= 0) {
+            int endSid = sidx + ";jsessionid=".length();
+            int stop = endSid;
+            while (stop < rawPath.length() && rawPath.charAt(stop) != ';'
+                    && rawPath.charAt(stop) != '/' && rawPath.charAt(stop) != '?') {
+                stop++;
+            }
+            urlSessionId = rawPath.substring(endSid, stop);
+            rawPath = rawPath.substring(0, sidx) + rawPath.substring(stop);
+        }
         // Strip le contextPath du path entrant avant le dispatching.
         String path = rawPath;
         if (!contextPath.isEmpty() && !"/".equals(contextPath) && rawPath.startsWith(contextPath)) {
             path = rawPath.substring(contextPath.length());
             if (path.isEmpty()) path = "/";
         }
+        final String finalUrlSessionId = urlSessionId;
         Optional<ServletDispatcher.Mapping> match = dispatcher.find(path);
         ListenerRegistry registry = servletContext.listenerRegistry();
 
@@ -96,6 +111,7 @@ public final class ChappeServletBridge implements Handler, RequestDispatcherImpl
             req = new HttpServletRequestImpl(request, servletContext, contextPath, path, null,
                     sessionManager);
             req.bindResponse(res);
+            req.setUrlSessionId(finalUrlSessionId);
             List<Filter> filters = filterRegistry.chainFor(path, DispatcherType.REQUEST);
             if (filters.isEmpty()) {
                 // Pas de mapping ni de filtre : 404 + error-page si mappée (§9.9.1).
@@ -133,6 +149,7 @@ public final class ChappeServletBridge implements Handler, RequestDispatcherImpl
                 sessionManager);
         req.bindResponse(res);
         req.setAsyncSupported(m.asyncSupported());
+        req.setUrlSessionId(finalUrlSessionId);
 
         registry.fireRequestInitialized(servletContext, req);
         Throwable thrown = null;

@@ -138,9 +138,15 @@ public class VidocqDeployableContainer implements DeployableContainer<VidocqCont
 
         ProtocolMetaData pmd = new ProtocolMetaData();
         var ctx = new HTTPContext(config.getHost(), harness.port());
-        // Enregistre au moins un servlet pour que la URL soit résolue par le protocole Servlet 3.0.
+        // Le "contextRoot" du servlet Arquillian est le path sous lequel les tests TCK font
+        // leurs requêtes ; il doit être égal à notre contextPath pour que HttpRequestClient
+        // cible la bonne URL. Pour un WAR root (/), on passe "/" car Arquillian derive
+        // getPath() depuis l'URL injectée ; sinon on passe le contextPath du WAR.
+        String tckContextRoot = harness.baseUrl().substring(
+                ("http://" + config.getHost() + ":" + harness.port()).length());
+        if (tckContextRoot.isEmpty()) tckContextRoot = "/";
         ctx.add(new org.jboss.arquillian.container.spi.client.protocol.metadata.Servlet(
-                registered.isEmpty() ? "_vidocq" : registered.get(0), "/"));
+                registered.isEmpty() ? "_vidocq" : registered.get(0), tckContextRoot));
         pmd.addContext(ctx);
         return pmd;
     }

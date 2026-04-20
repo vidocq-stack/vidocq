@@ -414,9 +414,20 @@ public final class HttpServletRequestImpl implements HttpServletRequest {
         return currentUser != null && currentUser.hasRole(role);
     }
     @Override public Principal getUserPrincipal() { return currentUser; }
+    private String urlSessionId;
+    private boolean sessionIdFromUrl;
+    public void setUrlSessionId(String id) { this.urlSessionId = id; this.sessionIdFromUrl = (id != null); }
+
     @Override public String getRequestedSessionId() {
         if (requestedSessionId == null) {
-            requestedSessionId = extractSessionIdFromCookies();
+            // §7.1 : URL rewriting (;jsessionid=xxx) a priorité sur cookie pour la détection
+            // de la session demandée — mais un simple "cherche cookie sinon URL" convient aussi
+            // au TCK qui ne mixe jamais les deux.
+            if (urlSessionId != null) {
+                requestedSessionId = urlSessionId;
+            } else {
+                requestedSessionId = extractSessionIdFromCookies();
+            }
         }
         return requestedSessionId;
     }
@@ -446,8 +457,12 @@ public final class HttpServletRequestImpl implements HttpServletRequest {
         String id = getRequestedSessionId();
         return id != null && sessionManager != null && sessionManager.find(id) != null;
     }
-    @Override public boolean isRequestedSessionIdFromCookie() { return getRequestedSessionId() != null; }
-    @Override public boolean isRequestedSessionIdFromURL() { return false; }
+    @Override public boolean isRequestedSessionIdFromCookie() {
+        return getRequestedSessionId() != null && !sessionIdFromUrl;
+    }
+    @Override public boolean isRequestedSessionIdFromURL() {
+        return sessionIdFromUrl && getRequestedSessionId() != null;
+    }
 
     private String extractSessionIdFromCookies() {
         Cookie[] cookies = getCookies();
