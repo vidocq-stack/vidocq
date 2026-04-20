@@ -103,11 +103,17 @@ public final class Invoker {
         MediaType chosen = negotiated.orElse(MediaType.WILDCARD_TYPE);
 
         // 2. Resolve args
-        ParamExtractor.ResolvedArgs resolved = ParamExtractor.resolve(route, match, request);
-        Object[] args = resolved.args();
-        if (resolved.bodyIndex() >= 0 && hasRequestBody(request)) {
-            Parameter p = route.javaMethod().getParameters()[resolved.bodyIndex()];
-            args[resolved.bodyIndex()] = readEntity(p, contentType, request);
+        ParamExtractor.ResolvedArgs resolved;
+        Object[] args;
+        try {
+            resolved = ParamExtractor.resolve(route, match, request);
+            args = resolved.args();
+            if (resolved.bodyIndex() >= 0 && hasRequestBody(request)) {
+                Parameter p = route.javaMethod().getParameters()[resolved.bodyIndex()];
+                args[resolved.bodyIndex()] = readEntity(p, contentType, request);
+            }
+        } catch (WebApplicationException wae) {
+            return renderWebAppException(wae, route, chosen, null);
         }
 
         // 3. Post-matching request filters
@@ -127,7 +133,11 @@ public final class Invoker {
 
         // 4. Invoke
         Object target = resolver.apply(route.beanClass());
-        FieldInjector.inject(target, match, request);
+        try {
+            FieldInjector.inject(target, match, request);
+        } catch (WebApplicationException wae) {
+            return renderWebAppException(wae, route, chosen, rctx);
+        }
         Object result;
         try {
             result = route.javaMethod().invoke(target, args);

@@ -149,8 +149,11 @@ public final class ParamExtractor {
         } catch (WebApplicationException w) {
             throw w;
         } catch (RuntimeException e) {
+            // §3.2 : @PathParam/@MatrixParam → 404, autres → 400
+            int status = (p.getAnnotation(PathParam.class) != null
+                    || p.getAnnotation(MatrixParam.class) != null) ? 404 : 400;
             throw new WebApplicationException("Invalid value for parameter "
-                    + p.getName() + ": " + e.getMessage(), 400);
+                    + p.getName() + ": " + e.getMessage(), status);
         }
     }
 

@@ -77,25 +77,20 @@ public final class ParamValueConverter {
 
         try {
             Method valueOf = type.getDeclaredMethod("valueOf", String.class);
-            if (Modifier.isStatic(valueOf.getModifiers())) return valueOf.invoke(null, raw);
-        } catch (NoSuchMethodException ignored) {
-        } catch (ReflectiveOperationException e) {
-            throw badRequest("valueOf(" + raw + ") failed for " + type.getName() + ": " + e.getMessage());
-        }
+            if (Modifier.isStatic(valueOf.getModifiers())) {
+                return invokeOrPropagate(valueOf, null, raw);
+            }
+        } catch (NoSuchMethodException ignored) {}
         try {
             Method fromString = type.getDeclaredMethod("fromString", String.class);
-            if (Modifier.isStatic(fromString.getModifiers())) return fromString.invoke(null, raw);
-        } catch (NoSuchMethodException ignored) {
-        } catch (ReflectiveOperationException e) {
-            throw badRequest("fromString(" + raw + ") failed for " + type.getName() + ": " + e.getMessage());
-        }
+            if (Modifier.isStatic(fromString.getModifiers())) {
+                return invokeOrPropagate(fromString, null, raw);
+            }
+        } catch (NoSuchMethodException ignored) {}
         try {
             Constructor<?> c = type.getDeclaredConstructor(String.class);
-            return c.newInstance(raw);
-        } catch (NoSuchMethodException ignored) {
-        } catch (ReflectiveOperationException e) {
-            throw badRequest("Constructor(String) failed for " + type.getName() + ": " + e.getMessage());
-        }
+            return newInstanceOrPropagate(c, raw);
+        } catch (NoSuchMethodException ignored) {}
         throw badRequest("No converter for type " + type.getName());
     }
 
@@ -108,5 +103,35 @@ public final class ParamValueConverter {
 
     private static WebApplicationException badRequest(String msg) {
         return new WebApplicationException(msg, Response.Status.BAD_REQUEST);
+    }
+
+    /** Appelle une méthode statique. Si elle lève une WebApplicationException
+     *  (ou l'emballe via InvocationTargetException), on la propage
+     *  telle quelle — JAX-RS §3.2 impose de respecter son status. Les
+     *  autres exceptions deviennent un 400 par défaut. */
+    private static Object invokeOrPropagate(Method m, Object instance, Object... args) {
+        try {
+            return m.invoke(instance, args);
+        } catch (IllegalAccessException e) {
+            throw badRequest(m.getName() + " inaccessible: " + e.getMessage());
+        } catch (java.lang.reflect.InvocationTargetException ite) {
+            Throwable cause = ite.getCause();
+            if (cause instanceof WebApplicationException wae) throw wae;
+            if (cause instanceof RuntimeException re) throw re;
+            throw badRequest(m.getName() + " failed: " + (cause == null ? "?" : cause.getMessage()));
+        }
+    }
+
+    private static Object newInstanceOrPropagate(Constructor<?> c, Object... args) {
+        try {
+            return c.newInstance(args);
+        } catch (IllegalAccessException | InstantiationException e) {
+            throw badRequest("Constructor(String) inaccessible: " + e.getMessage());
+        } catch (java.lang.reflect.InvocationTargetException ite) {
+            Throwable cause = ite.getCause();
+            if (cause instanceof WebApplicationException wae) throw wae;
+            if (cause instanceof RuntimeException re) throw re;
+            throw badRequest("Constructor(String) failed: " + (cause == null ? "?" : cause.getMessage()));
+        }
     }
 }

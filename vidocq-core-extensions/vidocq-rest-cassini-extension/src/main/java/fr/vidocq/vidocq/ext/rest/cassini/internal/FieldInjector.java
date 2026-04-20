@@ -122,6 +122,7 @@ public final class FieldInjector {
         Class<?> element = ParamValueConverter.isListLike(raw)
                 ? genericElementType(f.getGenericType()) : raw;
         try { return ParamValueConverter.coerce(raw, element, raws); }
+        catch (WebApplicationException wae) { throw wae; }
         catch (RuntimeException e) {
             throw new WebApplicationException("Invalid value for field "
                     + f.getName() + ": " + e.getMessage(), 400);
