@@ -369,7 +369,7 @@ public final class VidocqServletContext implements ServletContext {
     @Override public FilterRegistration.Dynamic addFilter(String name, String className) {
         if (programmaticListenerActive) throw programmaticForbidden();
         if (initialized) throw alreadyInitialized();
-        if (dynamicFilters.containsKey(name)) return null;
+        if (dynamicFilters.containsKey(name) || reservedFilterNames.contains(name)) return null;
         var r = new DynamicFilterRegistration(name, className);
         dynamicFilters.put(name, r);
         return r;
@@ -377,7 +377,7 @@ public final class VidocqServletContext implements ServletContext {
     @Override public FilterRegistration.Dynamic addFilter(String name, Filter f) {
         if (programmaticListenerActive) throw programmaticForbidden();
         if (initialized) throw alreadyInitialized();
-        if (dynamicFilters.containsKey(name)) return null;
+        if (dynamicFilters.containsKey(name) || reservedFilterNames.contains(name)) return null;
         var r = new DynamicFilterRegistration(name, f);
         dynamicFilters.put(name, r);
         return r;
@@ -385,7 +385,7 @@ public final class VidocqServletContext implements ServletContext {
     @Override public FilterRegistration.Dynamic addFilter(String name, Class<? extends Filter> c) {
         if (programmaticListenerActive) throw programmaticForbidden();
         if (initialized) throw alreadyInitialized();
-        if (dynamicFilters.containsKey(name)) return null;
+        if (dynamicFilters.containsKey(name) || reservedFilterNames.contains(name)) return null;
         var r = new DynamicFilterRegistration(name, c);
         dynamicFilters.put(name, r);
         return r;
