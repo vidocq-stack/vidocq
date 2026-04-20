@@ -105,7 +105,7 @@ public final class Invoker {
         // 2. Resolve args
         ParamExtractor.ResolvedArgs resolved = ParamExtractor.resolve(route, match, request);
         Object[] args = resolved.args();
-        if (resolved.bodyIndex() >= 0) {
+        if (resolved.bodyIndex() >= 0 && hasRequestBody(request)) {
             Parameter p = route.javaMethod().getParameters()[resolved.bodyIndex()];
             args[resolved.bodyIndex()] = readEntity(p, contentType, request);
         }
@@ -127,6 +127,7 @@ public final class Invoker {
 
         // 4. Invoke
         Object target = resolver.apply(route.beanClass());
+        FieldInjector.inject(target, match, request);
         Object result;
         try {
             result = route.javaMethod().invoke(target, args);

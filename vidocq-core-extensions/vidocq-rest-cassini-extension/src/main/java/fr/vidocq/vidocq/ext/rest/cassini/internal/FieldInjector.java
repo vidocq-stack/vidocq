@@ -1,0 +1,186 @@
+package fr.vidocq.vidocq.ext.rest.cassini.internal;
+
+import fr.vidocq.chappe.api.Request;
+import fr.vidocq.vidocq.ext.rest.cassini.internal.context.CassiniHttpHeaders;
+import fr.vidocq.vidocq.ext.rest.cassini.internal.context.CassiniRequest;
+import fr.vidocq.vidocq.ext.rest.cassini.internal.context.CassiniSecurityContext;
+import fr.vidocq.vidocq.ext.rest.cassini.internal.context.CassiniUriInfo;
+import jakarta.ws.rs.CookieParam;
+import jakarta.ws.rs.DefaultValue;
+import jakarta.ws.rs.FormParam;
+import jakarta.ws.rs.HeaderParam;
+import jakarta.ws.rs.MatrixParam;
+import jakarta.ws.rs.PathParam;
+import jakarta.ws.rs.QueryParam;
+import jakarta.ws.rs.WebApplicationException;
+import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.HttpHeaders;
+import jakarta.ws.rs.core.SecurityContext;
+import jakarta.ws.rs.core.UriInfo;
+
+import java.lang.reflect.Field;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * Injecte dans les champs d'une instance de ressource les valeurs
+ * {@link PathParam}/{@link QueryParam}/{@link HeaderParam}/{@link CookieParam}/
+ * {@link FormParam}/{@link MatrixParam} ainsi que les injections {@link Context}
+ * (UriInfo, HttpHeaders, Request, SecurityContext) déclarées au niveau
+ * champ (§3.2 / §9).
+ *
+ * <p>Pour chaque requête, on parcourt les champs déclarés et on set
+ * leur valeur via reflection. Les instances JAX-RS étant typiquement
+ * {@code @RequestScoped} (donc une nouvelle instance de backing par
+ * requête côté CDI), cette ré-injection est sûre.</p>
+ */
+public final class FieldInjector {
+
+    private FieldInjector() {}
+
+    public static void inject(Object target, MatchResult match, Request request) {
+        if (target == null) return;
+        Class<?> cls = target.getClass();
+        while (cls != null && cls != Object.class) {
+            for (Field f : cls.getDeclaredFields()) {
+                if (java.lang.reflect.Modifier.isStatic(f.getModifiers())) continue;
+                Object value = resolveFieldValue(f, match, request);
+                if (value != null) setField(target, f, value);
+            }
+            cls = cls.getSuperclass();
+        }
+    }
+
+    private static Object resolveFieldValue(Field f, MatchResult match, Request request) {
+        Context ctx = f.getAnnotation(Context.class);
+        if (ctx != null) return resolveContext(f.getType(), match, request);
+
+        String def = defaultValue(f);
+        PathParam pp = f.getAnnotation(PathParam.class);
+        if (pp != null) {
+            String raw = match.pathParams().get(pp.value());
+            return coerce(f, raw == null ? emptyOrDef(def) : List.of(raw));
+        }
+        QueryParam qp = f.getAnnotation(QueryParam.class);
+        if (qp != null) {
+            List<String> raws = parseQuery(request.query()).getOrDefault(qp.value(), List.of());
+            return coerce(f, raws.isEmpty() ? emptyOrDef(def) : raws);
+        }
+        HeaderParam hp = f.getAnnotation(HeaderParam.class);
+        if (hp != null) {
+            List<String> raws = request.headers().all(hp.value());
+            return coerce(f, raws.isEmpty() ? emptyOrDef(def) : raws);
+        }
+        CookieParam cp = f.getAnnotation(CookieParam.class);
+        if (cp != null) {
+            String raw = cookie(request, cp.value());
+            return coerce(f, raw == null ? emptyOrDef(def) : List.of(raw));
+        }
+        MatrixParam mp = f.getAnnotation(MatrixParam.class);
+        if (mp != null) {
+            List<String> raws = matrix(request, mp.value());
+            return coerce(f, raws.isEmpty() ? emptyOrDef(def) : raws);
+        }
+        FormParam fp = f.getAnnotation(FormParam.class);
+        if (fp != null) {
+            Map<String, List<String>> form = readForm(request);
+            List<String> raws = form.getOrDefault(fp.value(), List.of());
+            return coerce(f, raws.isEmpty() ? emptyOrDef(def) : raws);
+        }
+        return null;
+    }
+
+    private static Object resolveContext(Class<?> type, MatchResult match, Request request) {
+        if (type == UriInfo.class) return new CassiniUriInfo(request, request.contextPath(), match.pathParams());
+        if (type == HttpHeaders.class) return new CassiniHttpHeaders(request);
+        if (type == jakarta.ws.rs.core.Request.class) return new CassiniRequest(request.method().name());
+        if (type == SecurityContext.class) return new CassiniSecurityContext(request);
+        return null;
+    }
+
+    private static Object coerce(Field f, List<String> raws) {
+        Class<?> raw = f.getType();
+        Class<?> element = ParamValueConverter.isListLike(raw)
+                ? genericElementType(f.getGenericType()) : raw;
+        try { return ParamValueConverter.coerce(raw, element, raws); }
+        catch (RuntimeException e) {
+            throw new WebApplicationException("Invalid value for field "
+                    + f.getName() + ": " + e.getMessage(), 400);
+        }
+    }
+
+    private static Class<?> genericElementType(Type t) {
+        if (t instanceof ParameterizedType pt && pt.getActualTypeArguments().length == 1
+                && pt.getActualTypeArguments()[0] instanceof Class<?> c) return c;
+        return String.class;
+    }
+
+    private static void setField(Object target, Field f, Object v) {
+        try { f.setAccessible(true); f.set(target, v); }
+        catch (IllegalAccessException e) { throw new RuntimeException(e); }
+    }
+
+    private static List<String> emptyOrDef(String def) { return def == null ? List.of() : List.of(def); }
+    private static String defaultValue(Field f) {
+        DefaultValue d = f.getAnnotation(DefaultValue.class);
+        return d == null ? null : d.value();
+    }
+
+    private static Map<String, List<String>> parseQuery(String raw) {
+        if (raw == null || raw.isEmpty()) return new LinkedHashMap<>();
+        return FormDecoder.parse(raw);
+    }
+
+    private static String cookie(Request request, String name) {
+        for (String header : request.headers().all("Cookie")) {
+            for (String pair : header.split(";")) {
+                int eq = pair.indexOf('=');
+                if (eq < 0) continue;
+                String n = pair.substring(0, eq).trim();
+                if (n.equals(name)) {
+                    String v = pair.substring(eq + 1).trim();
+                    if (v.startsWith("\"") && v.endsWith("\"") && v.length() >= 2) {
+                        v = v.substring(1, v.length() - 1);
+                    }
+                    return v;
+                }
+            }
+        }
+        return null;
+    }
+
+    private static List<String> matrix(Request request, String name) {
+        List<String> out = new ArrayList<>();
+        String path = request.pathInfo();
+        if (path == null) return out;
+        for (String seg : path.split("/")) {
+            int semi = seg.indexOf(';');
+            if (semi < 0) continue;
+            for (String pair : seg.substring(semi + 1).split(";")) {
+                int eq = pair.indexOf('=');
+                String n = eq < 0 ? pair : pair.substring(0, eq);
+                if (URLDecoder.decode(n, StandardCharsets.UTF_8).equals(name)) {
+                    out.add(eq < 0 ? "" : URLDecoder.decode(pair.substring(eq + 1), StandardCharsets.UTF_8));
+                }
+            }
+        }
+        return out;
+    }
+
+    private static Map<String, List<String>> readForm(Request request) {
+        try {
+            var body = request.body();
+            if (body == null || body.contentLength() == 0) return new LinkedHashMap<>();
+            byte[] bytes = body.asInputStream().readAllBytes();
+            return FormDecoder.decode(bytes);
+        } catch (Exception e) {
+            throw new WebApplicationException("Failed to read form body: " + e.getMessage(), 400);
+        }
+    }
+}
