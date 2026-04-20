@@ -131,6 +131,16 @@ public final class Invoker {
         Object result;
         try {
             result = route.javaMethod().invoke(target, args);
+        } catch (IllegalArgumentException iae) {
+            StringBuilder sb = new StringBuilder("Argument mismatch on ")
+                    .append(route.beanClass().getName()).append('.')
+                    .append(route.javaMethod().getName()).append("(): ");
+            Parameter[] ps = route.javaMethod().getParameters();
+            for (int i = 0; i < ps.length; i++) {
+                sb.append("\n  [").append(i).append("] param=").append(ps[i].getType().getSimpleName())
+                        .append(" arg=").append(args[i] == null ? "null" : args[i].getClass().getSimpleName());
+            }
+            throw new RuntimeException(sb.toString(), iae);
         } catch (InvocationTargetException ite) {
             Throwable cause = ite.getCause();
             var mapped = exceptionMappers.map(cause);
