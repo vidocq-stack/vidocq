@@ -35,7 +35,7 @@ public final class UriRouter {
     }
 
     public Optional<MatchResult> match(String httpMethod, String path) {
-        String p = normalize(path);
+        String p = stripMatrixParams(normalize(path));
         for (ResourceMethod r : routes) {
             Optional<Map<String, String>> params = r.template().match(p);
             if (params.isPresent() && r.httpMethod().equalsIgnoreCase(httpMethod)) {
@@ -45,12 +45,30 @@ public final class UriRouter {
         return Optional.empty();
     }
 
+    /** §3.7 : les matrix params (segments contenant ';') ne participent pas
+     *  au matching URI → on les strippe avant d'essayer les templates. */
+    static String stripMatrixParams(String path) {
+        if (path == null || path.indexOf(';') < 0) return path;
+        StringBuilder sb = new StringBuilder(path.length());
+        int start = 0;
+        while (start < path.length()) {
+            int slash = path.indexOf('/', start);
+            int end = slash < 0 ? path.length() : slash;
+            int semi = path.indexOf(';', start);
+            int stop = (semi >= 0 && semi < end) ? semi : end;
+            sb.append(path, start, stop);
+            start = end;
+            if (slash >= 0) { sb.append('/'); start = slash + 1; }
+        }
+        return sb.toString();
+    }
+
     public List<ResourceMethod> routes() {
         return routes;
     }
 
     public List<String> methodsAllowedFor(String path) {
-        String p = normalize(path);
+        String p = stripMatrixParams(normalize(path));
         List<String> verbs = new ArrayList<>();
         for (ResourceMethod r : routes) {
             if (r.template().match(p).isPresent() && !verbs.contains(r.httpMethod())) {
