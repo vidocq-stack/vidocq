@@ -187,12 +187,22 @@ public final class FieldInjector {
         return out;
     }
 
+    private static final String FORM_CACHE_ATTR = "cassini.formCache";
+
+    @SuppressWarnings("unchecked")
     private static Map<String, List<String>> readForm(Request request) {
+        Object cached = request.attribute(FORM_CACHE_ATTR);
+        if (cached instanceof Map) return (Map<String, List<String>>) cached;
         try {
             var body = request.body();
-            if (body == null || body.contentLength() == 0) return new LinkedHashMap<>();
-            byte[] bytes = body.asInputStream().readAllBytes();
-            return FormDecoder.decode(bytes);
+            Map<String, List<String>> parsed;
+            if (body == null || body.contentLength() == 0) {
+                parsed = new LinkedHashMap<>();
+            } else {
+                parsed = FormDecoder.decode(body.asInputStream().readAllBytes());
+            }
+            request.attribute(FORM_CACHE_ATTR, parsed);
+            return parsed;
         } catch (Exception e) {
             throw new WebApplicationException("Failed to read form body: " + e.getMessage(), 400);
         }
