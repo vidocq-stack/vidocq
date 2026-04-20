@@ -15,6 +15,10 @@ module fr.vidocq.vidocq.ext.rest.cassini {
     requires static java.net.http;
 
     exports fr.vidocq.vidocq.ext.rest.cassini;
+    exports fr.vidocq.vidocq.ext.rest.cassini.internal
+            to fr.vidocq.vidocq.ext.rest.cassini.tck;
+    exports fr.vidocq.vidocq.ext.rest.cassini.internal.filter
+            to fr.vidocq.vidocq.ext.rest.cassini.tck;
 
     opens fr.vidocq.vidocq.ext.rest.cassini to fr.vidocq.vauban.core;
 

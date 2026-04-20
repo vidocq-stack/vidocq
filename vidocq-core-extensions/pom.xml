@@ -23,8 +23,16 @@
     <!--
         vidocq-rest-extension (Jersey 4 + Jetty 12) est décommissionné,
         remplacé par vidocq-rest-cassini-extension (runtime JAX-RS 4.0 natif
-        sur Jetty 12). Sources conservées hors reactor le temps de la
-        migration complète.
+        sur Chappe).
+
+        Deux modules TCK runners sont volontairement EN DEHORS du reactor
+        (ShrinkWrap Maven Resolver 3.3 vs Model 4.1.0) :
+        - vidocq-servlet-chappe-tck-runner   (Servlet 6.1 TCK, ~99 %)
+        - vidocq-rest-cassini-tck-runner     (REST 4.0 TCK, scaffolding)
+
+        Lancement via les scripts dédiés à la racine du projet :
+          ./run-official-tck-servlet6.1.sh
+          ./run-official-tck-restful-4.0.sh
     -->
 
     <!--
