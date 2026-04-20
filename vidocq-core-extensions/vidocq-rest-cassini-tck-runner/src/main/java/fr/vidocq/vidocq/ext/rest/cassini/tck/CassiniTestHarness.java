@@ -11,7 +11,9 @@ import fr.vidocq.vidocq.ext.rest.cassini.internal.MessageBodyRegistry;
 import fr.vidocq.vidocq.ext.rest.cassini.internal.ResourceMethod;
 import fr.vidocq.vidocq.ext.rest.cassini.internal.ResourceScanner;
 import fr.vidocq.vidocq.ext.rest.cassini.internal.UriRouter;
+import fr.vidocq.vidocq.ext.rest.cassini.internal.ExceptionMapperRegistry;
 import fr.vidocq.vidocq.ext.rest.cassini.internal.filter.FilterRegistry;
+import jakarta.ws.rs.ext.ExceptionMapper;
 
 import java.net.ServerSocket;
 import java.util.HashMap;
@@ -51,8 +53,32 @@ public final class CassiniTestHarness implements AutoCloseable {
 
     public static final class Builder {
         private final Map<Class<?>, Object> beans = new HashMap<>();
+        private final FilterRegistry filters = new FilterRegistry();
+        private final ExceptionMapperRegistry exceptionMappers = new ExceptionMapperRegistry();
         private String contextPath = "/";
         private Integer fixedPort;
+
+        public Builder provider(Object instance) {
+            filters.register(instance);
+            if (instance instanceof ExceptionMapper<?> em) {
+                registerExceptionMapper(em);
+            }
+            return this;
+        }
+
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        private void registerExceptionMapper(ExceptionMapper em) {
+            for (var iface : em.getClass().getGenericInterfaces()) {
+                if (iface instanceof java.lang.reflect.ParameterizedType pt
+                        && pt.getRawType() == ExceptionMapper.class
+                        && pt.getActualTypeArguments().length == 1
+                        && pt.getActualTypeArguments()[0] instanceof Class<?> c
+                        && Throwable.class.isAssignableFrom(c)) {
+                    exceptionMappers.register((Class) c, em);
+                    return;
+                }
+            }
+        }
 
         public Builder resource(Object instance) {
             beans.put(instance.getClass(), instance);
@@ -79,9 +105,8 @@ public final class CassiniTestHarness implements AutoCloseable {
             Class<?>[] classes = beans.keySet().toArray(Class<?>[]::new);
             List<ResourceMethod> routes = ResourceScanner.discover(classes);
             UriRouter router = new UriRouter(routes);
-            Invoker invoker = new Invoker(beans::get, new MessageBodyRegistry(),
-                    new ExceptionMapperRegistry());
-            invoker.setFilters(new FilterRegistry());
+            Invoker invoker = new Invoker(beans::get, new MessageBodyRegistry(), exceptionMappers);
+            invoker.setFilters(filters);
             CassiniRestBridge bridge = new CassiniRestBridge(router, invoker);
             final String prefix = "/".equals(contextPath) ? "" : contextPath;
             Handler rootHandler = prefix.isEmpty() ? bridge : new ContextStrippingHandler(prefix, bridge);

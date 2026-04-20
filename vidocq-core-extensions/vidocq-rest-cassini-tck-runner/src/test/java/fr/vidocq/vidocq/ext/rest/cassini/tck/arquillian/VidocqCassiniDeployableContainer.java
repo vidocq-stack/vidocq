@@ -3,6 +3,7 @@ package fr.vidocq.vidocq.ext.rest.cassini.tck.arquillian;
 import fr.vidocq.vidocq.ext.rest.cassini.tck.CassiniTestHarness;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.core.Application;
+import jakarta.ws.rs.ext.Provider;
 import org.jboss.arquillian.container.spi.client.container.DeployableContainer;
 import org.jboss.arquillian.container.spi.client.container.DeploymentException;
 import org.jboss.arquillian.container.spi.client.container.LifecycleException;
@@ -87,6 +88,11 @@ public class VidocqCassiniDeployableContainer implements DeployableContainer<Vid
                     builder.resourceClass(cls);
                     registered.add(cls.getSimpleName());
                 } catch (RuntimeException ignored) {}
+            } else if (cls.isAnnotationPresent(Provider.class)) {
+                try {
+                    Object instance = cls.getDeclaredConstructor().newInstance();
+                    builder.provider(instance);
+                } catch (ReflectiveOperationException ignored) {}
             }
         }
 

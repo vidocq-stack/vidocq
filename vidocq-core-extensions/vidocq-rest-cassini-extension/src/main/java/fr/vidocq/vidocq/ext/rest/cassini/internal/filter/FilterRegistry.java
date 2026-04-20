@@ -38,6 +38,13 @@ public final class FilterRegistry {
         responseFilters.sort(Comparator.comparingInt(FilterEntry<ContainerResponseFilter>::priority).reversed());
     }
 
+    /** Enregistre un filtre d'après son type, sans distinction request/response.
+     *  Si l'instance implémente les deux, elle est ajoutée aux deux listes. */
+    public void register(Object instance) {
+        if (instance instanceof ContainerRequestFilter r) addRequest(r);
+        if (instance instanceof ContainerResponseFilter r) addResponse(r);
+    }
+
     public List<FilterEntry<ContainerRequestFilter>> requestFilters() { return requestFilters; }
     public List<FilterEntry<ContainerResponseFilter>> responseFilters() { return responseFilters; }
 
