@@ -54,9 +54,13 @@ public final class HttpServletResponseImpl implements HttpServletResponse {
         outputStream.resetBuffer();
         writer = null;
         streamAcquired = false;
-        // Par convention des conteneurs servlet, sendError renvoie une page d'erreur HTML.
+        // Par convention des conteneurs servlet, sendError renvoie une page d'erreur HTML
+        // minimaliste qui inclut le status + le message — cf. Tomcat/Jetty ErrorPages.
         setContentType("text/html");
-        if (msg != null) outputStream.write(msg.getBytes(charset()));
+        String safeMsg = msg == null ? "" : msg;
+        String body = "<html><head><title>HTTP Error " + sc + "</title></head><body>"
+                + "<h1>HTTP Status " + sc + " - " + safeMsg + "</h1></body></html>";
+        outputStream.write(body.getBytes(charset()));
         committed = true;
     }
     @Override public void sendError(int sc) throws IOException { sendError(sc, null); }

@@ -370,6 +370,7 @@ public final class VidocqServletContext implements ServletContext {
     @Override public ServletRegistration.Dynamic addServlet(String name, String className) {
         if (programmaticListenerActive) throw programmaticForbidden();
         if (initialized) throw alreadyInitialized();
+        requireNonEmptyName(name, "servletName");
         if (dynamicServlets.containsKey(name) || reservedServletNames.contains(name)) return null;
         var r = new DynamicServletRegistration(name, className);
         r.attach(this);
@@ -379,6 +380,7 @@ public final class VidocqServletContext implements ServletContext {
     @Override public ServletRegistration.Dynamic addServlet(String name, Servlet servlet) {
         if (programmaticListenerActive) throw programmaticForbidden();
         if (initialized) throw alreadyInitialized();
+        requireNonEmptyName(name, "servletName");
         if (dynamicServlets.containsKey(name) || reservedServletNames.contains(name)) return null;
         var r = new DynamicServletRegistration(name, servlet);
         r.attach(this);
@@ -388,6 +390,7 @@ public final class VidocqServletContext implements ServletContext {
     @Override public ServletRegistration.Dynamic addServlet(String name, Class<? extends Servlet> c) {
         if (programmaticListenerActive) throw programmaticForbidden();
         if (initialized) throw alreadyInitialized();
+        requireNonEmptyName(name, "servletName");
         if (dynamicServlets.containsKey(name) || reservedServletNames.contains(name)) return null;
         var r = new DynamicServletRegistration(name, c);
         r.attach(this);
@@ -397,6 +400,8 @@ public final class VidocqServletContext implements ServletContext {
     @Override public ServletRegistration.Dynamic addJspFile(String name, String jspFile) {
         if (programmaticListenerActive) throw programmaticForbidden();
         if (initialized) throw alreadyInitialized();
+        // §4.4 addJspFile : IllegalArgumentException si servletName null ou vide.
+        requireNonEmptyName(name, "servletName");
         // JSP non supporté — on enregistre quand même la registration pour les tests qui
         // vérifient le flux de configuration (la request vers cette URL renverra 404).
         if (dynamicServlets.containsKey(name) || reservedServletNames.contains(name)) return null;
@@ -404,6 +409,12 @@ public final class VidocqServletContext implements ServletContext {
         r.attach(this);
         dynamicServlets.put(name, r);
         return r;
+    }
+
+    private static void requireNonEmptyName(String name, String arg) {
+        if (name == null || name.isEmpty()) {
+            throw new IllegalArgumentException(arg + " is null or empty");
+        }
     }
     @Override public <T extends Servlet> T createServlet(Class<T> c) throws jakarta.servlet.ServletException {
         if (programmaticListenerActive) throw programmaticForbidden();
@@ -428,6 +439,7 @@ public final class VidocqServletContext implements ServletContext {
     @Override public FilterRegistration.Dynamic addFilter(String name, String className) {
         if (programmaticListenerActive) throw programmaticForbidden();
         if (initialized) throw alreadyInitialized();
+        requireNonEmptyName(name, "filterName");
         if (dynamicFilters.containsKey(name) || reservedFilterNames.contains(name)) return null;
         var r = new DynamicFilterRegistration(name, className);
         dynamicFilters.put(name, r);
@@ -436,6 +448,7 @@ public final class VidocqServletContext implements ServletContext {
     @Override public FilterRegistration.Dynamic addFilter(String name, Filter f) {
         if (programmaticListenerActive) throw programmaticForbidden();
         if (initialized) throw alreadyInitialized();
+        requireNonEmptyName(name, "filterName");
         if (dynamicFilters.containsKey(name) || reservedFilterNames.contains(name)) return null;
         var r = new DynamicFilterRegistration(name, f);
         dynamicFilters.put(name, r);
@@ -444,6 +457,7 @@ public final class VidocqServletContext implements ServletContext {
     @Override public FilterRegistration.Dynamic addFilter(String name, Class<? extends Filter> c) {
         if (programmaticListenerActive) throw programmaticForbidden();
         if (initialized) throw alreadyInitialized();
+        requireNonEmptyName(name, "filterName");
         if (dynamicFilters.containsKey(name) || reservedFilterNames.contains(name)) return null;
         var r = new DynamicFilterRegistration(name, c);
         dynamicFilters.put(name, r);

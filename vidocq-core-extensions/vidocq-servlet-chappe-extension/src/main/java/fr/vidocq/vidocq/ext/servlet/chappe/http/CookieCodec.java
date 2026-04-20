@@ -34,10 +34,9 @@ public final class CookieCodec {
             // un Set-Cookie précédent — on les ignore pour ne pas les exposer comme
             // "vrais" cookies.
             if (isReservedAttribute(name)) continue;
-            // Retire les guillemets autour de la valeur (cookie-value quoted-string).
-            if (val.length() >= 2 && val.startsWith("\"") && val.endsWith("\"")) {
-                val = val.substring(1, val.length() - 1);
-            }
+            // RFC 6265 : la valeur peut être encadrée de guillemets ; on préserve ceux-ci
+            // (comportement attendu par TCK CookieTests.getValueQuotedTest — la valeur
+            // ne doit pas être déguillementée lors de la lecture côté serveur).
             try {
                 out.add(new Cookie(name, val));
             } catch (IllegalArgumentException ignored) {
