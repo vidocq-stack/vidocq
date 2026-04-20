@@ -8,6 +8,10 @@ import fr.vidocq.vidocq.ext.rest.cassini.internal.ResourceScanner;
 import fr.vidocq.vidocq.ext.rest.cassini.internal.UriRouter;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.CookieParam;
+import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.HttpHeaders;
+import jakarta.ws.rs.core.SecurityContext;
+import jakarta.ws.rs.core.UriInfo;
 import jakarta.ws.rs.DefaultValue;
 import jakarta.ws.rs.FormParam;
 import jakarta.ws.rs.GET;
@@ -68,6 +72,32 @@ class CassiniEndToEndTest {
     public static class UserResource {
         @GET @Path("/me")     public String me()      { return "current-user"; }
         @GET @Path("/{id}")   public String byId()    { return "by-id"; }
+    }
+
+    @Path("/ctx")
+    public static class ContextResource {
+        @GET @Path("/uri/{id}")
+        public String uri(@PathParam("id") String id, @Context UriInfo info) {
+            return "path=" + info.getPath()
+                    + ";params=" + info.getPathParameters().getFirst("id")
+                    + ";queryFoo=" + info.getQueryParameters().getFirst("foo");
+        }
+
+        @GET @Path("/headers")
+        public String headers(@Context HttpHeaders h) {
+            String xUser = h.getHeaderString("X-User");
+            return "xUser=" + xUser + ";accepts=" + h.getAcceptableMediaTypes().size();
+        }
+
+        @GET @Path("/method")
+        public String method(@Context jakarta.ws.rs.core.Request r) {
+            return "m=" + r.getMethod();
+        }
+
+        @GET @Path("/sec")
+        public String sec(@Context SecurityContext s) {
+            return "secure=" + s.isSecure() + ";principal=" + s.getUserPrincipal();
+        }
     }
 
     @Path("/body")
@@ -280,6 +310,41 @@ class CassiniEndToEndTest {
                 .header("Accept", "application/xml;q=0.1, application/json;q=0.9").GET().build());
         assertEquals(200, r.statusCode());
         assertTrue(r.headers().firstValue("Content-Type").orElse("").startsWith("application/json"));
+    }
+
+    @Test
+    void contextUriInfoExposesPathAndQueryParams() throws Exception {
+        start(new ContextResource());
+        HttpResponse<String> r = get("/ctx/uri/42?foo=bar");
+        assertEquals(200, r.statusCode());
+        assertTrue(r.body().contains("params=42"));
+        assertTrue(r.body().contains("queryFoo=bar"));
+    }
+
+    @Test
+    void contextHttpHeaders() throws Exception {
+        start(new ContextResource());
+        HttpResponse<String> r = send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/ctx/headers"))
+                .header("Accept", "application/json, text/plain")
+                .header("X-User", "claude").GET().build());
+        assertEquals(200, r.statusCode());
+        assertEquals("xUser=claude;accepts=2", r.body());
+    }
+
+    @Test
+    void contextRequestProvidesMethod() throws Exception {
+        start(new ContextResource());
+        HttpResponse<String> r = get("/ctx/method");
+        assertEquals(200, r.statusCode());
+        assertEquals("m=GET", r.body());
+    }
+
+    @Test
+    void contextSecurityContextIsAnonymous() throws Exception {
+        start(new ContextResource());
+        HttpResponse<String> r = get("/ctx/sec");
+        assertEquals(200, r.statusCode());
+        assertEquals("secure=false;principal=null", r.body());
     }
 
     private void start(Object... resources) {

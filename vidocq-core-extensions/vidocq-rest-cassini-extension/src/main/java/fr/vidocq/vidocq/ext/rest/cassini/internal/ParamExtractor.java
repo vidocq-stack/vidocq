@@ -1,6 +1,10 @@
 package fr.vidocq.vidocq.ext.rest.cassini.internal;
 
 import fr.vidocq.chappe.api.Request;
+import fr.vidocq.vidocq.ext.rest.cassini.internal.context.CassiniHttpHeaders;
+import fr.vidocq.vidocq.ext.rest.cassini.internal.context.CassiniRequest;
+import fr.vidocq.vidocq.ext.rest.cassini.internal.context.CassiniSecurityContext;
+import fr.vidocq.vidocq.ext.rest.cassini.internal.context.CassiniUriInfo;
 import jakarta.ws.rs.CookieParam;
 import jakarta.ws.rs.DefaultValue;
 import jakarta.ws.rs.FormParam;
@@ -9,6 +13,10 @@ import jakarta.ws.rs.MatrixParam;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.WebApplicationException;
+import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.HttpHeaders;
+import jakarta.ws.rs.core.SecurityContext;
+import jakarta.ws.rs.core.UriInfo;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Parameter;
@@ -55,7 +63,12 @@ public final class ParamExtractor {
             CookieParam cookieParam = p.getAnnotation(CookieParam.class);
             FormParam formParam = p.getAnnotation(FormParam.class);
             MatrixParam matrixParam = p.getAnnotation(MatrixParam.class);
+            Context context = p.getAnnotation(Context.class);
 
+            if (context != null) {
+                args[i] = resolveContext(p.getType(), match, request);
+                continue;
+            }
             if (pathParam != null) {
                 String raw = match.pathParams().get(pathParam.value());
                 args[i] = coerce(p, raw == null ? emptyOrDefault(def) : List.of(raw));
@@ -92,12 +105,21 @@ public final class ParamExtractor {
             Class<? extends Annotation> t = a.annotationType();
             if (t == PathParam.class || t == QueryParam.class || t == HeaderParam.class
                     || t == CookieParam.class || t == FormParam.class || t == MatrixParam.class
-                    || t == DefaultValue.class) {
+                    || t == DefaultValue.class || t == Context.class) {
                 return false;
             }
             if (t.getName().startsWith("jakarta.ws.rs.")) return false;
         }
         return true;
+    }
+
+    private static Object resolveContext(Class<?> type, MatchResult match, Request request) {
+        if (type == UriInfo.class) return new CassiniUriInfo(request, request.contextPath(), match.pathParams());
+        if (type == HttpHeaders.class) return new CassiniHttpHeaders(request);
+        if (type == jakarta.ws.rs.core.Request.class) return new CassiniRequest(request.method().name());
+        if (type == SecurityContext.class) return new CassiniSecurityContext(request);
+        if (type == Request.class) return request; // Chappe Request passthrough (utile pour tests)
+        throw new WebApplicationException("Unsupported @Context type: " + type.getName(), 500);
     }
 
     private static Object coerce(Parameter p, List<String> raws) {
