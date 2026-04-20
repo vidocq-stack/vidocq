@@ -66,7 +66,7 @@ public final class ResourceScanner {
                 Set<String> methodProduces = produces(m.getAnnotation(Produces.class));
                 Set<String> effective = methodProduces.isEmpty() ? classProduces : methodProduces;
                 m.setAccessible(true);
-                out.add(new ResourceMethod(cls, m, verb, full, effective));
+                out.add(new ResourceMethod(cls, m, verb, UriTemplate.compile(full), effective));
             }
         }
         return out;

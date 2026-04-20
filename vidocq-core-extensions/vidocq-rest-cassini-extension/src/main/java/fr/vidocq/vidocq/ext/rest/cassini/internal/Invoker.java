@@ -48,7 +48,8 @@ public final class Invoker {
         });
     }
 
-    public Response invoke(ResourceMethod route) throws Exception {
+    public Response invoke(MatchResult match) throws Exception {
+        ResourceMethod route = match.method();
         Object target = resolver.apply(route.beanClass());
         Object result;
         try {

@@ -56,6 +56,12 @@ class CassiniEndToEndTest {
         public void log() { /* void → 204 */ }
     }
 
+    @Path("/users")
+    public static class UserResource {
+        @GET @Path("/me")     public String me()      { return "current-user"; }
+        @GET @Path("/{id}")   public String byId()    { return "by-id"; }
+    }
+
     @Test
     void getHelloReturnsPlainText() throws Exception {
         start(new HelloResource(), new ApiResource());
@@ -101,6 +107,14 @@ class CassiniEndToEndTest {
         HttpResponse<String> r = post("/hello");
         assertEquals(405, r.statusCode());
         assertEquals(Optional.of("GET"), r.headers().firstValue("Allow"));
+    }
+
+    @Test
+    void literalBeatsTemplate() throws Exception {
+        start(new UserResource());
+
+        assertEquals("current-user", get("/users/me").body());
+        assertEquals("by-id", get("/users/42").body());
     }
 
     private void start(Object... resources) {
