@@ -130,9 +130,10 @@
                         <configuration>
                             <useModulePath>false</useModulePath>
                             <dependenciesToScan>
-                                <dependency>jakarta.tck:jakarta-restful-ws-tck</dependency>
+                                <dependency>jakarta.ws.rs:jakarta-restful-ws-tck</dependency>
                             </dependenciesToScan>
                             <includes>
+                                <include>**/*IT.class</include>
                                 <include>**/*Test.class</include>
                                 <include>**/*Tests.class</include>
                             </includes>
@@ -152,9 +153,28 @@
             </build>
             <dependencies>
                 <dependency>
-                    <groupId>jakarta.tck</groupId>
+                    <groupId>jakarta.ws.rs</groupId>
                     <artifactId>jakarta-restful-ws-tck</artifactId>
-                    <version>4.0.0</version>
+                    <version>4.0.1</version>
+                    <scope>test</scope>
+                </dependency>
+                <!--
+                    Jersey client en test-scope : le TCK est côté-serveur,
+                    il utilise un jakarta.ws.rs.client.Client pour piloter
+                    le serveur sous test. Cassini n'a pas de Client (hors
+                    scope du sprint initial) — on délègue à Jersey Client
+                    qui s'installe en ClientBuilder via ServiceLoader.
+                -->
+                <dependency>
+                    <groupId>org.glassfish.jersey.core</groupId>
+                    <artifactId>jersey-client</artifactId>
+                    <version>4.0.2</version>
+                    <scope>test</scope>
+                </dependency>
+                <dependency>
+                    <groupId>org.glassfish.jersey.inject</groupId>
+                    <artifactId>jersey-hk2</artifactId>
+                    <version>4.0.2</version>
                     <scope>test</scope>
                 </dependency>
                 <dependency>
