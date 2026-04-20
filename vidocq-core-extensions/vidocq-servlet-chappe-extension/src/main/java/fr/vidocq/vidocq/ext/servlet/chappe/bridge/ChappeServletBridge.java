@@ -95,8 +95,16 @@ public final class ChappeServletBridge implements Handler, RequestDispatcherImpl
         if (match.isEmpty()) {
             req = new HttpServletRequestImpl(request, servletContext, contextPath, path, null,
                     sessionManager);
+            req.bindResponse(res);
             List<Filter> filters = filterRegistry.chainFor(path, DispatcherType.REQUEST);
-            if (filters.isEmpty()) return notFound();
+            if (filters.isEmpty()) {
+                // Pas de mapping ni de filtre : 404 + error-page si mappée (§9.9.1).
+                try { res.sendError(404); } catch (IOException ignored) {}
+                try { maybeHandleError(req, res, null, null); }
+                catch (ServletException e) { return error(e); }
+                if (!errorPageHandled(req)) return notFound();
+                return toChappeResponse(res);
+            }
 
             registry.fireRequestInitialized(servletContext, req);
             try {
@@ -106,7 +114,12 @@ public final class ChappeServletBridge implements Handler, RequestDispatcherImpl
                 return error(e);
             }
             registry.fireRequestDestroyed(servletContext, req);
-            if (res.getStatus() == 200 && res.bodyBytes().length == 0) return notFound();
+            if (res.getStatus() == 200 && res.bodyBytes().length == 0) {
+                try { res.sendError(404); } catch (IOException ignored) {}
+                try { maybeHandleError(req, res, null, null); }
+                catch (ServletException e) { return error(e); }
+                if (!errorPageHandled(req)) return notFound();
+            }
             maybeAttachSessionCookie(req, res);
             return toChappeResponse(res);
         }
@@ -119,6 +132,7 @@ public final class ChappeServletBridge implements Handler, RequestDispatcherImpl
         req = new HttpServletRequestImpl(request, servletContext, contextPath, servletPath, pathInfo,
                 sessionManager);
         req.bindResponse(res);
+        req.setAsyncSupported(m.asyncSupported());
 
         registry.fireRequestInitialized(servletContext, req);
         Throwable thrown = null;
@@ -166,18 +180,43 @@ public final class ChappeServletBridge implements Handler, RequestDispatcherImpl
             ac.awaitCompletion();
             if (!ac.hasDispatch()) break;
             String dispatchPath = ac.dispatchPath();
-            String relative = dispatchPath.startsWith(contextPath) && !contextPath.equals("/")
-                    ? dispatchPath.substring(contextPath.length()) : dispatchPath;
-            // Sépare le queryString du path avant résolution.
-            String qs = null;
-            int q = relative.indexOf('?');
-            if (q >= 0) { qs = relative.substring(q + 1); relative = relative.substring(0, q); }
-            var target = new DispatchResolver(dispatcher).resolve(relative).orElse(null);
-            if (target == null) break;
-            if (qs != null) target = target.withQueryString(qs);
+            jakarta.servlet.ServletContext targetCtx = ac.dispatchContext();
             try {
-                var wrapped = new AsyncDispatchRequest(req, target);
-                invoke(target, wrapped, res, DispatcherType.ASYNC);
+                if (targetCtx instanceof fr.vidocq.vidocq.ext.servlet.chappe.container.VidocqServletContext vctx
+                        && vctx != servletContext) {
+                    // §2.3.3.3 + §9.4 : cross-context async dispatch — route vers le bridge
+                    // cible en utilisant son resolver/invoker.
+                    String tgtCtxPath = vctx.getContextPath();
+                    String relative = dispatchPath;
+                    if (!tgtCtxPath.equals("/") && relative.startsWith(tgtCtxPath)) {
+                        relative = relative.substring(tgtCtxPath.length());
+                        if (relative.isEmpty()) relative = "/";
+                    }
+                    String qs = null;
+                    int q = relative.indexOf('?');
+                    if (q >= 0) { qs = relative.substring(q + 1); relative = relative.substring(0, q); }
+                    var resolver = vctx.dispatchResolver();
+                    var invoker = vctx.dispatchInvoker();
+                    if (resolver == null || invoker == null) break;
+                    var target = resolver.resolve(relative).orElse(null);
+                    if (target == null) break;
+                    if (qs != null) target = target.withQueryString(qs);
+                    var wrapped = new AsyncDispatchRequest(req, target, vctx, tgtCtxPath);
+                    req.clearAsyncContext();
+                    invoker.invoke(target, wrapped, res, DispatcherType.ASYNC);
+                } else {
+                    String relative = dispatchPath.startsWith(contextPath) && !contextPath.equals("/")
+                            ? dispatchPath.substring(contextPath.length()) : dispatchPath;
+                    String qs = null;
+                    int q = relative.indexOf('?');
+                    if (q >= 0) { qs = relative.substring(q + 1); relative = relative.substring(0, q); }
+                    var target = new DispatchResolver(dispatcher).resolve(relative).orElse(null);
+                    if (target == null) break;
+                    if (qs != null) target = target.withQueryString(qs);
+                    var wrapped = new AsyncDispatchRequest(req, target);
+                    req.clearAsyncContext();
+                    invoke(target, wrapped, res, DispatcherType.ASYNC);
+                }
             } catch (ServletException | IOException | RuntimeException e) {
                 return e;
             }
@@ -249,7 +288,11 @@ public final class ChappeServletBridge implements Handler, RequestDispatcherImpl
 
         try {
             res.setStatus(errorStatus);
-            invoke(target, req, res, DispatcherType.ERROR);
+            // §10.9.2 : la request du servlet d'erreur doit retourner DispatcherType.ERROR.
+            DispatcherType previous = req.getDispatcherType();
+            req.setDispatcherType(DispatcherType.ERROR);
+            try { invoke(target, req, res, DispatcherType.ERROR); }
+            finally { req.setDispatcherType(previous); }
         } catch (IOException | RuntimeException e) {
             throw new ServletException("error dispatch failed", e);
         }

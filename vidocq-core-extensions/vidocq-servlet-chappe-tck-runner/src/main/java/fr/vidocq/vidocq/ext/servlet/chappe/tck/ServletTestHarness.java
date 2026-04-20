@@ -105,6 +105,9 @@ public final class ServletTestHarness implements AutoCloseable {
         if (listenerRegistry != null && servletContext != null) {
             try { listenerRegistry.fireContextDestroyed(servletContext); } catch (RuntimeException ignored) {}
         }
+        if (servletContext != null) {
+            fr.vidocq.vidocq.ext.servlet.chappe.container.CrossContextRegistry.unregister(servletContext);
+        }
     }
 
     public static Builder builder() { return new Builder(); }
@@ -168,9 +171,19 @@ public final class ServletTestHarness implements AutoCloseable {
 
         public Builder servlet(String urlPattern, jakarta.servlet.Servlet servlet,
                                java.util.Map<String, String> servletInitParams) {
+            return servlet(urlPattern, servlet, servlet.getClass().getSimpleName(), servletInitParams);
+        }
+
+        public Builder servlet(String urlPattern, jakarta.servlet.Servlet servlet, String servletName,
+                               java.util.Map<String, String> servletInitParams) {
+            return servlet(urlPattern, servlet, servletName, servletInitParams, true);
+        }
+
+        public Builder servlet(String urlPattern, jakarta.servlet.Servlet servlet, String servletName,
+                               java.util.Map<String, String> servletInitParams, boolean asyncSupported) {
             servlets.add(new ServletDispatcher.Mapping(
                     fr.vidocq.vidocq.ext.servlet.chappe.dispatcher.UrlPatternMatcher.of(urlPattern),
-                    servlet, servlet.getClass().getSimpleName()));
+                    servlet, servletName, asyncSupported));
             initParams.put(servlet, java.util.Map.copyOf(servletInitParams));
             return this;
         }
@@ -216,6 +229,15 @@ public final class ServletTestHarness implements AutoCloseable {
         public Builder contextPath(String path) { this.contextPath = path; return this; }
         public Builder securityProvider(SecurityProvider p) { this.securityProvider = p; return this; }
 
+        private fr.vidocq.vidocq.ext.servlet.chappe.container.VidocqServletContext.ResourceProvider resourceProvider;
+        public Builder resourceProvider(
+                fr.vidocq.vidocq.ext.servlet.chappe.container.VidocqServletContext.ResourceProvider provider) {
+            this.resourceProvider = provider; return this;
+        }
+
+        private String servletContextName;
+        public Builder servletContextName(String n) { this.servletContextName = n; return this; }
+
         private final java.util.List<jakarta.servlet.ServletContainerInitializer> sciList = new ArrayList<>();
         public Builder servletContainerInitializer(jakarta.servlet.ServletContainerInitializer sci) {
             if (sci != null) sciList.add(sci);
@@ -227,6 +249,8 @@ public final class ServletTestHarness implements AutoCloseable {
             ctx.setErrorPages(errorPages);
             ctx.setLocaleEncodingMappings(localeEncodingMappings);
             ctx.setEffectiveVersion(effectiveMajor, effectiveMinor);
+            if (resourceProvider != null) ctx.setResourceProvider(resourceProvider);
+            if (servletContextName != null) ctx.setServletContextName(servletContextName);
             if (sessionTimeoutMinutes > 0) ctx.setSessionTimeoutInternal(sessionTimeoutMinutes);
             for (String n : reservedServletNames) ctx.reserveServletName(n);
             for (String n : reservedFilterNames) ctx.reserveFilterName(n);
@@ -330,6 +354,9 @@ public final class ServletTestHarness implements AutoCloseable {
 
             var bridge = new ChappeServletBridge(new ServletDispatcher(liveServlets),
                     new FilterRegistry(liveFilters), ctx, sessions, contextPath);
+
+            // Enregistre le context dans le registre cross-context (§4.8 / async dispatch cross-ctx).
+            fr.vidocq.vidocq.ext.servlet.chappe.container.CrossContextRegistry.register(ctx);
 
             int port = startServerWithRetry(bridge);
             return new ServletTestHarness(currentServer, port, contextPath,

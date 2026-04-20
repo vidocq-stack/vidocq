@@ -149,6 +149,9 @@ public final class VidocqServletContext implements ServletContext {
         this.dispatchInvoker = invoker;
     }
 
+    public DispatchResolver dispatchResolver() { return dispatchResolver; }
+    public RequestDispatcherImpl.Invoker dispatchInvoker() { return dispatchInvoker; }
+
     public fr.vidocq.vidocq.ext.servlet.chappe.error.ErrorPageRegistry errorPages() {
         return errorPages;
     }
@@ -166,7 +169,12 @@ public final class VidocqServletContext implements ServletContext {
     }
 
     @Override public String getContextPath() { return contextPath; }
-    @Override public ServletContext getContext(String uripath) { return null; }
+    @Override public ServletContext getContext(String uripath) {
+        // Servlet 6.1 §4.8 : le conteneur peut retourner null si cross-context non supporté.
+        // Ici, on résout via le registre des contextes déployés dans le même JVM.
+        if (uripath == null || uripath.isEmpty() || !uripath.startsWith("/")) return null;
+        return CrossContextRegistry.lookup(uripath);
+    }
     @Override public int getMajorVersion() { return 6; }
     @Override public int getMinorVersion() { return 1; }
 
@@ -199,9 +207,41 @@ public final class VidocqServletContext implements ServletContext {
             default -> java.net.URLConnection.guessContentTypeFromName(file);
         };
     }
-    @Override public Set<String> getResourcePaths(String path) { return Set.of(); }
-    @Override public java.net.URL getResource(String path) { return null; }
-    @Override public java.io.InputStream getResourceAsStream(String path) { return null; }
+    /**
+     * Source de ressources du WAR — fournie par le DeployableContainer au démarrage
+     * du harness. Le provider expose les chemins connus et ouvre les flux.
+     */
+    public interface ResourceProvider {
+        /** Liste les chemins immédiats sous {@code path} (type {@code /WEB-INF/}). */
+        Set<String> listPaths(String path);
+        java.io.InputStream openStream(String path);
+        /** Retourne une URL (par exemple {@code file:}) qui expose {@code path}
+         *  dans une forme respectant la casse et la structure du path, ou null. */
+        default java.net.URL toUrl(String path) { return null; }
+    }
+
+    private ResourceProvider resourceProvider;
+    public void setResourceProvider(ResourceProvider provider) { this.resourceProvider = provider; }
+
+    @Override public Set<String> getResourcePaths(String path) {
+        if (path == null || !path.startsWith("/")) return null;
+        if (resourceProvider == null) return null;
+        Set<String> out = resourceProvider.listPaths(path);
+        return (out == null || out.isEmpty()) ? null : out;
+    }
+    @Override public java.net.URL getResource(String path) throws java.net.MalformedURLException {
+        if (path == null) return null;
+        if (!path.startsWith("/")) {
+            throw new java.net.MalformedURLException("path must start with '/': " + path);
+        }
+        if (resourceProvider == null) return null;
+        return resourceProvider.toUrl(path);
+    }
+    @Override public java.io.InputStream getResourceAsStream(String path) {
+        if (path == null || !path.startsWith("/")) return null;
+        if (resourceProvider == null) return null;
+        return resourceProvider.openStream(path);
+    }
     @Override public RequestDispatcher getRequestDispatcher(String path) {
         // Servlet 6.1 §9.1 : retourne un dispatcher non-null pour tout chemin relatif au
         // contexte, même si aucun servlet n'est mappé (un forward/include sur ce path
@@ -219,7 +259,12 @@ public final class VidocqServletContext implements ServletContext {
                 .<RequestDispatcher>map(t -> new RequestDispatcherImpl(t, dispatchInvoker))
                 .orElseGet(() -> RequestDispatcherImpl.notFound(resolvePath));
     }
-    @Override public RequestDispatcher getNamedDispatcher(String name) { return null; }
+    @Override public RequestDispatcher getNamedDispatcher(String name) {
+        if (dispatchResolver == null || dispatchInvoker == null || name == null) return null;
+        return dispatchResolver.resolveByName(name)
+                .<RequestDispatcher>map(t -> new RequestDispatcherImpl(t, dispatchInvoker))
+                .orElse(null);
+    }
     @Override public void log(String msg) { System.getLogger("servlet.log").log(System.Logger.Level.INFO, msg); }
     @Override public void log(String message, Throwable throwable) {
         System.getLogger("servlet.log").log(System.Logger.Level.ERROR, message, throwable);
@@ -261,7 +306,11 @@ public final class VidocqServletContext implements ServletContext {
         if (previous != null) listenerRegistry.fireContextAttributeRemoved(this, name, previous);
     }
 
-    @Override public String getServletContextName() { return "vidocq"; }
+    private String servletContextName = "vidocq";
+    public void setServletContextName(String name) {
+        if (name != null && !name.isEmpty()) this.servletContextName = name;
+    }
+    @Override public String getServletContextName() { return servletContextName; }
 
     // ---- Dynamic registration — not supported in M2a ----
     // Servlet 6.1 §4.4 : après initialisation du contexte, ces méthodes doivent throw

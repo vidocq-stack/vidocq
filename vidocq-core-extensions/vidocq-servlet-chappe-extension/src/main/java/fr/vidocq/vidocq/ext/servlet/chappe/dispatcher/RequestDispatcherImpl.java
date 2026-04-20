@@ -60,8 +60,9 @@ public final class RequestDispatcherImpl implements RequestDispatcher {
     @Override
     public void forward(ServletRequest request, ServletResponse response)
             throws ServletException, IOException {
-        if (!(request instanceof HttpServletRequest req)
-                || !(response instanceof HttpServletResponse res)) {
+        HttpServletRequest req = unwrapHttp(request);
+        HttpServletResponse res = unwrapHttpResponse(response);
+        if (req == null || res == null) {
             throw new ServletException("non-HTTP dispatch");
         }
         if (res.isCommitted()) {
@@ -86,8 +87,9 @@ public final class RequestDispatcherImpl implements RequestDispatcher {
     @Override
     public void include(ServletRequest request, ServletResponse response)
             throws ServletException, IOException {
-        if (!(request instanceof HttpServletRequest req)
-                || !(response instanceof HttpServletResponse res)) {
+        HttpServletRequest req = unwrapHttp(request);
+        HttpServletResponse res = unwrapHttpResponse(response);
+        if (req == null || res == null) {
             throw new ServletException("non-HTTP dispatch");
         }
         String fullUri = req.getContextPath().equals("/") ? target.path()
@@ -101,5 +103,26 @@ public final class RequestDispatcherImpl implements RequestDispatcher {
         var wrappedReq = new IncludedRequest(req, target);
         var wrappedRes = new IncludedResponse(res);
         invoker.invoke(target, wrappedReq, wrappedRes, DispatcherType.INCLUDE);
+    }
+
+    /** Unwrap via {@link jakarta.servlet.ServletRequestWrapper#getRequest()} jusqu'à
+     *  trouver un {@link HttpServletRequest}. Permet à un ServletRequestWrapper de
+     *  base (non-Http) de déclencher un forward/include. */
+    private static HttpServletRequest unwrapHttp(ServletRequest r) {
+        while (r != null) {
+            if (r instanceof HttpServletRequest h) return h;
+            if (r instanceof jakarta.servlet.ServletRequestWrapper w) r = w.getRequest();
+            else return null;
+        }
+        return null;
+    }
+
+    private static HttpServletResponse unwrapHttpResponse(ServletResponse r) {
+        while (r != null) {
+            if (r instanceof HttpServletResponse h) return h;
+            if (r instanceof jakarta.servlet.ServletResponseWrapper w) r = w.getResponse();
+            else return null;
+        }
+        return null;
     }
 }

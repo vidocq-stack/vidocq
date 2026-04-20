@@ -2,6 +2,7 @@ package fr.vidocq.vidocq.ext.servlet.chappe.bridge;
 
 import fr.vidocq.vidocq.ext.servlet.chappe.dispatcher.DispatchTarget;
 import jakarta.servlet.DispatcherType;
+import jakarta.servlet.ServletContext;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletRequestWrapper;
 
@@ -13,11 +14,25 @@ public final class AsyncDispatchRequest extends HttpServletRequestWrapper {
 
     private final DispatchTarget target;
     private final java.util.Map<String, String[]> dispatchParams;
+    private final ServletContext overrideContext;
+    private final String overrideContextPath;
 
     public AsyncDispatchRequest(HttpServletRequest original, DispatchTarget target) {
+        this(original, target, null, null);
+    }
+
+    /**
+     * Construit un wrapper pour cross-context async dispatch : {@code overrideContext} est
+     * le {@link ServletContext} cible (différent du context d'origine) et son contextPath
+     * est substitué dans {@link #getRequestURI()} et {@link #getContextPath()}.
+     */
+    public AsyncDispatchRequest(HttpServletRequest original, DispatchTarget target,
+                                ServletContext overrideContext, String overrideContextPath) {
         super(original);
         this.target = target;
         this.dispatchParams = parseQuery(target.queryString());
+        this.overrideContext = overrideContext;
+        this.overrideContextPath = overrideContextPath;
     }
 
     private static java.util.Map<String, String[]> parseQuery(String qs) {
@@ -66,12 +81,16 @@ public final class AsyncDispatchRequest extends HttpServletRequestWrapper {
     @Override public String getServletPath() { return target.servletPath(); }
     @Override public String getPathInfo() { return target.pathInfo(); }
     @Override public String getQueryString() { return target.queryString(); }
+    @Override public String getContextPath() {
+        return overrideContextPath != null ? overrideContextPath : super.getContextPath();
+    }
+    @Override public ServletContext getServletContext() {
+        return overrideContext != null ? overrideContext : super.getServletContext();
+    }
     @Override public String getRequestURI() {
-        HttpServletRequest d = (HttpServletRequest) getRequest();
-        String ctx = d.getContextPath();
+        String ctx = getContextPath();
         return ctx.equals("/") ? target.path() : ctx + target.path();
     }
-    // Servlet 6.1 §2.3.3.3 : après un async dispatch, isAsyncStarted() doit retourner
-    // false dans le servlet re-dispatché. L'async est "consommé" par le dispatch.
-    @Override public boolean isAsyncStarted() { return false; }
+    // §2.3.3.3 : isAsyncStarted reste géré par la request originale
+    // (false si consommé par dispatch, true si re-startAsync).
 }

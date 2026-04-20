@@ -14,12 +14,18 @@ import java.util.Optional;
  */
 public final class ServletDispatcher {
 
-    /** Association pattern ↔ servlet. */
-    public record Mapping(UrlPatternMatcher matcher, Servlet servlet, String servletName) {
+    /** Association pattern ↔ servlet. {@code asyncSupported} reflète
+     *  {@code <async-supported>} du web.xml (ou {@code @WebServlet(asyncSupported=...)}) ;
+     *  défaut : {@code true} pour les constructeurs sans cet argument. */
+    public record Mapping(UrlPatternMatcher matcher, Servlet servlet, String servletName,
+                          boolean asyncSupported) {
         public Mapping {
             Objects.requireNonNull(matcher);
             Objects.requireNonNull(servlet);
             Objects.requireNonNull(servletName);
+        }
+        public Mapping(UrlPatternMatcher matcher, Servlet servlet, String servletName) {
+            this(matcher, servlet, servletName, true);
         }
     }
 

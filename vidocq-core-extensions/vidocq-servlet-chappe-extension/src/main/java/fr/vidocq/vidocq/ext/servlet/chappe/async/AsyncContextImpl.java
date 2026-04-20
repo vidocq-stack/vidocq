@@ -47,6 +47,7 @@ public final class AsyncContextImpl implements AsyncContext {
     private final CompletableFuture<Void> completion = new CompletableFuture<>();
     private volatile long timeoutMs = DEFAULT_TIMEOUT_MS;
     private volatile String dispatchPath;
+    private volatile ServletContext dispatchContext;
     private volatile boolean completed;
     private volatile boolean timedOut;
 
@@ -67,9 +68,26 @@ public final class AsyncContextImpl implements AsyncContext {
     @Override public boolean hasOriginalRequestAndResponse() { return originalRequestAndResponse; }
 
     @Override public void dispatch() {
-        String uri = request instanceof jakarta.servlet.http.HttpServletRequest h
-                ? h.getRequestURI() : null;
+        // §2.3.3.3 : zero-arg dispatch => URI originale (avec queryString) de la request
+        // qui a appelé startAsync. Le TCK peut wrapper la request via ServletRequestWrapper
+        // (non-Http), on doit unwrap jusqu'au HttpServletRequest sous-jacent.
+        jakarta.servlet.http.HttpServletRequest h = unwrapHttp(request);
+        String uri = null;
+        if (h != null) {
+            uri = h.getRequestURI();
+            String qs = h.getQueryString();
+            if (qs != null && !qs.isEmpty()) uri = uri + "?" + qs;
+        }
         dispatch(uri);
+    }
+
+    private static jakarta.servlet.http.HttpServletRequest unwrapHttp(ServletRequest r) {
+        while (r != null) {
+            if (r instanceof jakarta.servlet.http.HttpServletRequest h) return h;
+            if (r instanceof jakarta.servlet.ServletRequestWrapper w) r = w.getRequest();
+            else return null;
+        }
+        return null;
     }
 
     @Override public void dispatch(String path) { dispatch(servletContext, path); }
@@ -77,6 +95,7 @@ public final class AsyncContextImpl implements AsyncContext {
     @Override public void dispatch(ServletContext ctx, String path) {
         if (completed) throw new IllegalStateException("async already completed");
         this.dispatchPath = path;
+        this.dispatchContext = ctx;
         completeInternal(false);
     }
 
@@ -100,11 +119,17 @@ public final class AsyncContextImpl implements AsyncContext {
         listeners.add(new ListenerRegistration(listener, req, res));
     }
 
-    @Override public <T extends AsyncListener> T createListener(Class<T> clazz) {
+    @Override public <T extends AsyncListener> T createListener(Class<T> clazz)
+            throws jakarta.servlet.ServletException {
+        // §2.3.3.4 : createListener doit throw ServletException en cas d'échec
+        // d'instanciation (le TCK asyncListenerTest1/6 en dépend avec ACListenerBad).
         try {
             return clazz.getDeclaredConstructor().newInstance();
         } catch (ReflectiveOperationException e) {
-            throw new RuntimeException(e);
+            Throwable cause = e instanceof java.lang.reflect.InvocationTargetException ite && ite.getCause() != null
+                    ? ite.getCause() : e;
+            throw new jakarta.servlet.ServletException(
+                    "cannot instantiate listener " + clazz.getName() + ": " + cause.getMessage(), cause);
         }
     }
 
@@ -132,6 +157,8 @@ public final class AsyncContextImpl implements AsyncContext {
 
     public boolean hasDispatch() { return dispatchPath != null; }
     public String dispatchPath() { return dispatchPath; }
+    /** Contexte cible d'un cross-context dispatch — null pour un dispatch intra-contexte. */
+    public ServletContext dispatchContext() { return dispatchContext; }
     public boolean timedOut() { return timedOut; }
     public boolean isCompleted() { return completed; }
 

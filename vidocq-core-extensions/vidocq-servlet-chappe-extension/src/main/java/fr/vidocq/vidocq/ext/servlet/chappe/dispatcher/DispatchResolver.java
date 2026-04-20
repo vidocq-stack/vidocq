@@ -45,6 +45,20 @@ public final class DispatchResolver {
         };
     }
 
+    /** Résolution par nom de servlet (Servlet 6.1 §9.1 getNamedDispatcher). */
+    public Optional<DispatchTarget> resolveByName(String servletName) {
+        if (servletName == null) return Optional.empty();
+        for (ServletDispatcher.Mapping m : dispatcher.mappings()) {
+            if (servletName.equals(m.servletName())) {
+                // Pas de path associé — servletPath/pathInfo/query laissés vides pour un
+                // dispatcher nommé (§9.3 : ne reflète pas l'URL d'origine).
+                return Optional.of(new DispatchTarget(m.servlet(), m.servletName(),
+                        "/", "", null, null));
+            }
+        }
+        return Optional.empty();
+    }
+
     public static String pathInfoFor(ServletDispatcher.Mapping m, String path, String servletPath) {
         return switch (m.matcher().kind()) {
             case PREFIX -> {

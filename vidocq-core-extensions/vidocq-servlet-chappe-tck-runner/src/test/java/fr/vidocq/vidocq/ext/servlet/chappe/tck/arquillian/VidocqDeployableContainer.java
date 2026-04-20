@@ -126,6 +126,9 @@ public class VidocqDeployableContainer implements DeployableContainer<VidocqCont
         //    - et (par extension) tout fichier du même nom déployé ailleurs sous /WEB-INF/classes/
         discoverAndRegisterSCIs(war, cl, builder);
 
+        // 4) ResourceProvider exposant les fichiers du WAR au ServletContext (§4.6).
+        builder.resourceProvider(new WarResourceProvider(war));
+
         harness = builder.start();
         harnessesByArchive.put(archive.getName(), harness);
 
@@ -147,6 +150,7 @@ public class VidocqDeployableContainer implements DeployableContainer<VidocqCont
                                            List<String> registered) {
         builder.localeEncodingMappings(desc.localeEncodingMappings());
         builder.contextInitParams(desc.contextParams());
+        if (desc.displayName() != null) builder.servletContextName(desc.displayName());
         for (var sd : desc.servlets()) if (sd.name() != null) builder.reservedServletName(sd.name());
         for (var fd : desc.filters()) if (fd.name() != null) builder.reservedFilterName(fd.name());
         if (desc.sessionTimeoutMinutes() > 0) {
@@ -162,6 +166,7 @@ public class VidocqDeployableContainer implements DeployableContainer<VidocqCont
         } catch (NumberFormatException ignored) {}
         var instances = new java.util.HashMap<String, jakarta.servlet.Servlet>();
         var servletParams = new java.util.HashMap<String, java.util.Map<String, String>>();
+        var asyncSupportedByName = new java.util.HashMap<String, Boolean>();
         for (WebAppDescriptor.ServletDef sd : desc.servlets()) {
             if (sd.className() == null) continue;
             try {
@@ -171,13 +176,15 @@ public class VidocqDeployableContainer implements DeployableContainer<VidocqCont
                 instances.put(sd.name(), s);
                 servletParams.put(sd.name(),
                         sd.initParams() == null ? java.util.Map.of() : sd.initParams());
+                asyncSupportedByName.put(sd.name(), sd.asyncSupported());
             } catch (ReflectiveOperationException ignored) {}
         }
         for (WebAppDescriptor.ServletMappingDef m : desc.servletMappings()) {
             jakarta.servlet.Servlet s = instances.get(m.servletName());
             if (s != null) {
-                builder.servlet(m.urlPattern(), s,
-                        servletParams.getOrDefault(m.servletName(), java.util.Map.of()));
+                boolean async = asyncSupportedByName.getOrDefault(m.servletName(), Boolean.FALSE);
+                builder.servlet(m.urlPattern(), s, m.servletName(),
+                        servletParams.getOrDefault(m.servletName(), java.util.Map.of()), async);
                 registered.add(m.servletName());
             }
         }
@@ -270,7 +277,10 @@ public class VidocqDeployableContainer implements DeployableContainer<VidocqCont
             try {
                 jakarta.servlet.Servlet s = (jakarta.servlet.Servlet) cls.getDeclaredConstructor().newInstance();
                 String[] patterns = ws.urlPatterns().length > 0 ? ws.urlPatterns() : ws.value();
-                for (String p : patterns) builder.servlet(p, s);
+                String name = ws.name().isEmpty() ? cls.getName() : ws.name();
+                for (String p : patterns) {
+                    builder.servlet(p, s, name, java.util.Map.of(), ws.asyncSupported());
+                }
                 registered.add(cls.getSimpleName());
             } catch (ReflectiveOperationException ignored) {}
             return;
@@ -305,4 +315,80 @@ public class VidocqDeployableContainer implements DeployableContainer<VidocqCont
 
     @Override public void deploy(Descriptor descriptor) {}
     @Override public void undeploy(Descriptor descriptor) {}
+
+    /** Expose les fichiers d'un {@link WebArchive} via l'API
+     *  {@link fr.vidocq.vidocq.ext.servlet.chappe.container.VidocqServletContext.ResourceProvider}.
+     *  Matérialise les assets dans un tempdir miroir afin que {@code getResource()} puisse
+     *  retourner une {@code file:} URL contenant le path d'origine (requis par TCK
+     *  ServletContextTests.getResource qui vérifie que l'URL contient {@code /WEB-INF/web.xml}). */
+    private static final class WarResourceProvider
+            implements fr.vidocq.vidocq.ext.servlet.chappe.container.VidocqServletContext.ResourceProvider {
+        private final WebArchive war;
+        private final java.nio.file.Path mirror;
+
+        WarResourceProvider(WebArchive war) {
+            this.war = war;
+            java.nio.file.Path base;
+            try {
+                base = java.nio.file.Files.createTempDirectory("vidocq-war-");
+                base.toFile().deleteOnExit();
+            } catch (java.io.IOException e) {
+                base = null;
+            }
+            this.mirror = base;
+            if (mirror != null) materialize();
+        }
+
+        private void materialize() {
+            for (Node node : war.getContent().values()) {
+                String p = node.getPath().get();
+                if (p == null || p.isEmpty()) continue;
+                try {
+                    String rel = p.startsWith("/") ? p.substring(1) : p;
+                    java.nio.file.Path dst = mirror.resolve(rel);
+                    if (node.getAsset() == null) {
+                        java.nio.file.Files.createDirectories(dst);
+                    } else {
+                        java.nio.file.Files.createDirectories(dst.getParent());
+                        try (var in = node.getAsset().openStream()) {
+                            java.nio.file.Files.copy(in, dst,
+                                    java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                        }
+                    }
+                } catch (java.io.IOException ignored) {}
+            }
+        }
+
+        @Override public java.util.Set<String> listPaths(String path) {
+            if (path == null || !path.startsWith("/")) return null;
+            String prefix = path.endsWith("/") ? path : path + "/";
+            java.util.Set<String> out = new java.util.LinkedHashSet<>();
+            for (Node node : war.getContent().values()) {
+                String p = node.getPath().get();
+                if (p == null || !p.startsWith(prefix) || p.equals(prefix)) continue;
+                String rest = p.substring(prefix.length());
+                int slash = rest.indexOf('/');
+                if (slash >= 0) {
+                    out.add(prefix + rest.substring(0, slash + 1));
+                } else if (!rest.isEmpty()) {
+                    out.add(prefix + rest);
+                }
+            }
+            return out;
+        }
+
+        @Override public java.io.InputStream openStream(String path) {
+            if (path == null) return null;
+            Node node = war.get(path);
+            if (node == null || node.getAsset() == null) return null;
+            return node.getAsset().openStream();
+        }
+
+        @Override public java.net.URL toUrl(String path) {
+            if (mirror == null || path == null || !path.startsWith("/")) return null;
+            java.nio.file.Path p = mirror.resolve(path.substring(1));
+            if (!java.nio.file.Files.exists(p)) return null;
+            try { return p.toUri().toURL(); } catch (java.net.MalformedURLException e) { return null; }
+        }
+    }
 }

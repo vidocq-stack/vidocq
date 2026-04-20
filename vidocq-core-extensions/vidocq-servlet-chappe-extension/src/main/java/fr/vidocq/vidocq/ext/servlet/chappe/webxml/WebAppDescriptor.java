@@ -14,7 +14,12 @@ import java.util.Set;
  */
 public final class WebAppDescriptor {
 
-    public record ServletDef(String name, String className, Map<String, String> initParams) {}
+    public record ServletDef(String name, String className, Map<String, String> initParams,
+                             boolean asyncSupported) {
+        public ServletDef(String name, String className, Map<String, String> initParams) {
+            this(name, className, initParams, false);
+        }
+    }
     public record ServletMappingDef(String servletName, String urlPattern) {}
     public record FilterDef(String name, String className, Map<String, String> initParams) {}
     public record FilterMappingDef(String filterName, String urlPattern, String servletName,
@@ -39,6 +44,15 @@ public final class WebAppDescriptor {
     public String version() { return version; }
     public WebAppDescriptor withVersion(String v) {
         if (v != null && !v.isBlank()) this.version = v;
+        return this;
+    }
+
+    /** {@code <display-name>} du web.xml — exposé via {@link
+     *  jakarta.servlet.ServletContext#getServletContextName()}. */
+    private String displayName;
+    public String displayName() { return displayName; }
+    public WebAppDescriptor withDisplayName(String v) {
+        if (v != null && !v.isBlank()) this.displayName = v;
         return this;
     }
 

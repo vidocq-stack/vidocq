@@ -375,7 +375,11 @@ public final class HttpServletRequestImpl implements HttpServletRequest {
 
     // ---- Dispatcher / context ----
 
-    @Override public DispatcherType getDispatcherType() { return DispatcherType.REQUEST; }
+    private DispatcherType dispatcherType = DispatcherType.REQUEST;
+    public void setDispatcherType(DispatcherType type) {
+        if (type != null) this.dispatcherType = type;
+    }
+    @Override public DispatcherType getDispatcherType() { return dispatcherType; }
     @Override public ServletContext getServletContext() { return servletContext; }
     @Override public RequestDispatcher getRequestDispatcher(String path) {
         if (path == null) return null;
@@ -523,19 +527,44 @@ public final class HttpServletRequestImpl implements HttpServletRequest {
         if (res instanceof HttpServletResponseImpl impl) impl.bindRequest(this);
     }
     public fr.vidocq.vidocq.ext.servlet.chappe.async.AsyncContextImpl asyncContextInternal() { return asyncContext; }
+    /** Reset l'état async — utilisé par le bridge entre deux dispatches async
+     *  pour qu'un startAsync dans le servlet redispatched crée un nouveau contexte. */
+    public void clearAsyncContext() { this.asyncContext = null; }
+
+    private boolean asyncSupported = true;
+    /** Fixe si la chaîne (servlet + filters) supporte async — propagé par le bridge. */
+    public void setAsyncSupported(boolean v) { this.asyncSupported = v; }
 
     @Override public AsyncContext startAsync() {
         if (boundResponse == null) throw new IllegalStateException("response not bound");
         return startAsync(this, boundResponse);
     }
     @Override public AsyncContext startAsync(jakarta.servlet.ServletRequest req, ServletResponse res) {
+        // Servlet 6.1 §2.3.3.1 : startAsync doit throw IllegalStateException si la request
+        // n'est pas éligible (servlet ou filtre de la chaîne en asyncSupported=false).
+        if (!asyncSupported) {
+            throw new IllegalStateException(
+                    "async not supported on this servlet/filter chain");
+        }
+        // §2.3.3.1 : startAsync doit throw ISE si un async est déjà en place sur
+        // cette request (completed OU dispatched OU en cours). Le bridge reset
+        // explicitement via clearAsyncContext() avant un ré-invoke ASYNC.
+        if (asyncContext != null) {
+            throw new IllegalStateException("async already started on this request");
+        }
         boolean original = (req == this && res == boundResponse);
         this.asyncContext = new fr.vidocq.vidocq.ext.servlet.chappe.async.AsyncContextImpl(
                 req, res, servletContext, original);
         return asyncContext;
     }
-    @Override public boolean isAsyncStarted() { return asyncContext != null; }
-    @Override public boolean isAsyncSupported() { return true; }
+    @Override public boolean isAsyncStarted() {
+        // §2.3.3.3 : true tant que le servlet (ou son dispatch) est encore en cours —
+        // reste true après un complete() pendant la fin du service(). Le flag bascule
+        // à false dès qu'un dispatch est planifié (le request original cède sa place
+        // au servlet redispatched, cf. TCK asyncStartedTest4).
+        return asyncContext != null && !asyncContext.hasDispatch();
+    }
+    @Override public boolean isAsyncSupported() { return asyncSupported; }
     @Override public AsyncContext getAsyncContext() {
         if (asyncContext == null) throw new IllegalStateException("no async context");
         return asyncContext;
