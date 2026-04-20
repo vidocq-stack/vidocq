@@ -7,6 +7,8 @@ import jakarta.enterprise.util.AnnotationLiteral;
 import jakarta.ws.rs.container.ContainerRequestFilter;
 import jakarta.ws.rs.container.ContainerResponseFilter;
 import jakarta.ws.rs.ext.Provider;
+import jakarta.ws.rs.ext.ReaderInterceptor;
+import jakarta.ws.rs.ext.WriterInterceptor;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -27,6 +29,8 @@ public final class FilterRegistry {
 
     private final List<FilterEntry<ContainerRequestFilter>> requestFilters = new ArrayList<>();
     private final List<FilterEntry<ContainerResponseFilter>> responseFilters = new ArrayList<>();
+    private final List<FilterEntry<ReaderInterceptor>> readerInterceptors = new ArrayList<>();
+    private final List<FilterEntry<WriterInterceptor>> writerInterceptors = new ArrayList<>();
 
     public void addRequest(ContainerRequestFilter filter) {
         requestFilters.add(FilterEntry.of(filter));
@@ -43,7 +47,22 @@ public final class FilterRegistry {
     public void register(Object instance) {
         if (instance instanceof ContainerRequestFilter r) addRequest(r);
         if (instance instanceof ContainerResponseFilter r) addResponse(r);
+        if (instance instanceof ReaderInterceptor r) addReaderInterceptor(r);
+        if (instance instanceof WriterInterceptor r) addWriterInterceptor(r);
     }
+
+    public void addReaderInterceptor(ReaderInterceptor i) {
+        readerInterceptors.add(FilterEntry.of(i));
+        readerInterceptors.sort(Comparator.comparingInt(FilterEntry::priority));
+    }
+
+    public void addWriterInterceptor(WriterInterceptor i) {
+        writerInterceptors.add(FilterEntry.of(i));
+        writerInterceptors.sort(Comparator.comparingInt(FilterEntry::priority));
+    }
+
+    public List<FilterEntry<ReaderInterceptor>> readerInterceptors() { return readerInterceptors; }
+    public List<FilterEntry<WriterInterceptor>> writerInterceptors() { return writerInterceptors; }
 
     public List<FilterEntry<ContainerRequestFilter>> requestFilters() { return requestFilters; }
     public List<FilterEntry<ContainerResponseFilter>> responseFilters() { return responseFilters; }
@@ -72,6 +91,14 @@ public final class FilterRegistry {
             if (ContainerResponseFilter.class.isAssignableFrom(cls)) {
                 if (instance == null) instance = bm.getReference(bean, cls, bm.createCreationalContext(bean));
                 reg.addResponse((ContainerResponseFilter) instance);
+            }
+            if (ReaderInterceptor.class.isAssignableFrom(cls)) {
+                if (instance == null) instance = bm.getReference(bean, cls, bm.createCreationalContext(bean));
+                reg.addReaderInterceptor((ReaderInterceptor) instance);
+            }
+            if (WriterInterceptor.class.isAssignableFrom(cls)) {
+                if (instance == null) instance = bm.getReference(bean, cls, bm.createCreationalContext(bean));
+                reg.addWriterInterceptor((WriterInterceptor) instance);
             }
         }
         return reg;

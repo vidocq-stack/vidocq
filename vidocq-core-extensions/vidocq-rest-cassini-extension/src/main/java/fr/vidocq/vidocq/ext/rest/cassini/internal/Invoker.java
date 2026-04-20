@@ -5,8 +5,10 @@ import fr.vidocq.chappe.api.Request;
 import fr.vidocq.chappe.api.Response;
 import fr.vidocq.chappe.api.StatusCode;
 import fr.vidocq.vidocq.ext.rest.cassini.internal.context.CassiniUriInfo;
+import fr.vidocq.vidocq.ext.rest.cassini.internal.filter.CassiniReaderInterceptorContext;
 import fr.vidocq.vidocq.ext.rest.cassini.internal.filter.CassiniRequestContext;
 import fr.vidocq.vidocq.ext.rest.cassini.internal.filter.CassiniResponseContext;
+import fr.vidocq.vidocq.ext.rest.cassini.internal.filter.CassiniWriterInterceptorContext;
 import fr.vidocq.vidocq.ext.rest.cassini.internal.filter.FilterRegistry;
 import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.spi.Bean;
@@ -249,7 +251,11 @@ public final class Invoker {
                 .orElseThrow(() -> new WebApplicationException(
                         "No MessageBodyReader for " + type.getName() + " / " + MediaTypes.format(ct), 415));
         try (InputStream in = request.body().asInputStream()) {
-            return reader.readFrom(type, genericType, anns, ct, headers, in);
+            if (filters.readerInterceptors().isEmpty()) {
+                return reader.readFrom(type, genericType, anns, ct, headers, in);
+            }
+            return new CassiniReaderInterceptorContext(filters.readerInterceptors(),
+                    reader, type, genericType, anns, ct, headers, in).proceed();
         }
     }
 
@@ -275,7 +281,12 @@ public final class Invoker {
                         "No MessageBodyWriter for " + type.getName() + " / " + MediaTypes.format(mt), 500));
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         MultivaluedMap<String, Object> outHeaders = MessageBodyRegistry.outHeaders();
-        MessageBodyRegistry.writeTo(writer, entity, type, genericType, anns, mt, outHeaders, bos);
+        if (filters.writerInterceptors().isEmpty()) {
+            MessageBodyRegistry.writeTo(writer, entity, type, genericType, anns, mt, outHeaders, bos);
+        } else {
+            new CassiniWriterInterceptorContext(filters.writerInterceptors(), writer,
+                    entity, type, genericType, anns, mt, outHeaders, bos).proceed();
+        }
 
         var b = Response.builder().status(status).body(Body.of(bos.toByteArray()));
         b.header("Content-Type", MediaTypes.format(mt));
