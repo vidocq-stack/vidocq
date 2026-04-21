@@ -172,18 +172,109 @@ public final class CassiniResponse extends Response {
     }
 
     @Override public MultivaluedMap<String, Object> getMetadata() { return headers; }
-    @Override public MultivaluedMap<String, Object> getHeaders() { return headers; }
+    @Override public MultivaluedMap<String, Object> getHeaders() {
+        return new HttpHeadersViewObject(headers);
+    }
+
+    /** Variante typée {@code Object} de {@link HttpHeadersView}. Utilisé par
+     *  {@code Response.getMetadata()} §4.3 qui doit tolérer la casse des
+     *  noms HTTP (RFC 7230 §3.2). */
+    private static final class HttpHeadersViewObject implements MultivaluedMap<String, Object> {
+        private final MultivaluedMap<String, Object> backing;
+        HttpHeadersViewObject(MultivaluedMap<String, Object> backing) { this.backing = backing; }
+        private String findKey(Object key) {
+            if (key == null) return null;
+            String s = (String) key;
+            if (backing.containsKey(s)) return s;
+            for (String k : backing.keySet()) if (k != null && k.equalsIgnoreCase(s)) return k;
+            return s;
+        }
+        @Override public java.util.List<Object> get(Object key) { return backing.get(findKey(key)); }
+        @Override public Object getFirst(String key) { return backing.getFirst(findKey(key)); }
+        @Override public boolean containsKey(Object key) {
+            if (key == null) return false;
+            String s = (String) key;
+            if (backing.containsKey(s)) return true;
+            for (String k : backing.keySet()) if (k != null && k.equalsIgnoreCase(s)) return true;
+            return false;
+        }
+        @Override public java.util.List<Object> remove(Object key) { return backing.remove(findKey(key)); }
+        @Override public java.util.List<Object> put(String key, java.util.List<Object> value) { return backing.put(key, value); }
+        @Override public void add(String key, Object value) { backing.add(key, value); }
+        @Override public void addAll(String key, Object... newValues) { backing.addAll(key, newValues); }
+        @Override public void addAll(String key, java.util.List<Object> valueList) { backing.addAll(key, valueList); }
+        @Override public void addFirst(String key, Object value) { backing.addFirst(key, value); }
+        @Override public void putSingle(String key, Object value) { backing.putSingle(key, value); }
+        @Override public int size() { return backing.size(); }
+        @Override public boolean isEmpty() { return backing.isEmpty(); }
+        @Override public boolean containsValue(Object value) { return backing.containsValue(value); }
+        @Override public void clear() { backing.clear(); }
+        @Override public java.util.Set<String> keySet() { return backing.keySet(); }
+        @Override public java.util.Collection<java.util.List<Object>> values() { return backing.values(); }
+        @Override public java.util.Set<java.util.Map.Entry<String, java.util.List<Object>>> entrySet() { return backing.entrySet(); }
+        @Override public void putAll(java.util.Map<? extends String, ? extends java.util.List<Object>> m) { backing.putAll(m); }
+        @Override public boolean equalsIgnoreValueOrder(MultivaluedMap<String, Object> om) { return backing.equalsIgnoreValueOrder(om); }
+    }
 
     @Override public MultivaluedMap<String, String> getStringHeaders() {
+        // Conserve la casse d'origine pour la stringification ; expose une
+        // vue case-insensitive pour get/getFirst (HTTP headers RFC 7230 §3.2).
         MultivaluedMap<String, String> m = new MultivaluedHashMap<>();
         for (var e : headers.entrySet()) {
             for (Object v : e.getValue()) m.add(e.getKey(), headerToString(v));
         }
-        return m;
+        return new HttpHeadersView(m);
+    }
+
+    /** Vue case-insensitive d'un MultivaluedMap conservant la casse d'origine
+     *  pour l'entrySet/keySet mais tolérant différentes casses lors des get. */
+    private static final class HttpHeadersView implements MultivaluedMap<String, String> {
+        private final MultivaluedMap<String, String> backing;
+        HttpHeadersView(MultivaluedMap<String, String> backing) { this.backing = backing; }
+        private String findKey(Object key) {
+            if (key == null) return null;
+            String s = (String) key;
+            if (backing.containsKey(s)) return s;
+            for (String k : backing.keySet()) if (k != null && k.equalsIgnoreCase(s)) return k;
+            return s;
+        }
+        @Override public java.util.List<String> get(Object key) { return backing.get(findKey(key)); }
+        @Override public String getFirst(String key) { return backing.getFirst(findKey(key)); }
+        @Override public boolean containsKey(Object key) {
+            if (key == null) return false;
+            String s = (String) key;
+            if (backing.containsKey(s)) return true;
+            for (String k : backing.keySet()) if (k != null && k.equalsIgnoreCase(s)) return true;
+            return false;
+        }
+        @Override public java.util.List<String> remove(Object key) { return backing.remove(findKey(key)); }
+        @Override public java.util.List<String> put(String key, java.util.List<String> value) { return backing.put(key, value); }
+        @Override public void add(String key, String value) { backing.add(key, value); }
+        @Override public void addAll(String key, String... newValues) { backing.addAll(key, newValues); }
+        @Override public void addAll(String key, java.util.List<String> valueList) { backing.addAll(key, valueList); }
+        @Override public void addFirst(String key, String value) { backing.addFirst(key, value); }
+        @Override public void putSingle(String key, String value) { backing.putSingle(key, value); }
+        @Override public int size() { return backing.size(); }
+        @Override public boolean isEmpty() { return backing.isEmpty(); }
+        @Override public boolean containsValue(Object value) { return backing.containsValue(value); }
+        @Override public void clear() { backing.clear(); }
+        @Override public java.util.Set<String> keySet() { return backing.keySet(); }
+        @Override public java.util.Collection<java.util.List<String>> values() { return backing.values(); }
+        @Override public java.util.Set<java.util.Map.Entry<String, java.util.List<String>>> entrySet() { return backing.entrySet(); }
+        @Override public void putAll(java.util.Map<? extends String, ? extends java.util.List<String>> m) {
+            backing.putAll(m);
+        }
+        @Override public boolean equalsIgnoreValueOrder(MultivaluedMap<String, String> om) {
+            return backing.equalsIgnoreValueOrder(om);
+        }
     }
 
     @Override public String getHeaderString(String name) {
-        java.util.List<Object> v = headers.get(name);
+        // Recherche case-insensitive pour HTTP.
+        java.util.List<Object> v = null;
+        for (var e : headers.entrySet()) {
+            if (e.getKey().equalsIgnoreCase(name)) { v = e.getValue(); break; }
+        }
         if (v == null || v.isEmpty()) return null;
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < v.size(); i++) {
@@ -192,6 +283,7 @@ public final class CassiniResponse extends Response {
         }
         return sb.toString();
     }
+
 
     /** Sérialise un header via HeaderDelegate si disponible (§4.3). */
     @SuppressWarnings({"rawtypes", "unchecked"})
