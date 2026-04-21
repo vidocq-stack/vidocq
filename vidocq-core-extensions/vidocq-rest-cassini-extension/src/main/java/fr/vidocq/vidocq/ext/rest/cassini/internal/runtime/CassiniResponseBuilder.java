@@ -175,11 +175,39 @@ public final class CassiniResponseBuilder extends Response.ResponseBuilder {
         return this;
     }
 
-    @Override public Response.ResponseBuilder variants(Variant... variants) { return this; }
-    @Override public Response.ResponseBuilder variants(List<Variant> variants) { return this; }
-    @Override public Response.ResponseBuilder links(Link... links) { return this; }
-    @Override public Response.ResponseBuilder link(URI uri, String rel) { return this; }
-    @Override public Response.ResponseBuilder link(String uri, String rel) { return this; }
+    @Override public Response.ResponseBuilder variants(Variant... variants) {
+        if (variants == null) { headers.remove("Vary"); return this; }
+        // §4.4 : Vary header produced from the varying dimensions
+        java.util.Set<String> dims = new java.util.LinkedHashSet<>();
+        for (Variant v : variants) {
+            if (v.getMediaType() != null) dims.add("Accept");
+            if (v.getLanguage() != null) dims.add("Accept-Language");
+            if (v.getEncoding() != null) dims.add("Accept-Encoding");
+        }
+        if (!dims.isEmpty()) headers.putSingle("Vary", String.join(", ", dims));
+        return this;
+    }
+    @Override public Response.ResponseBuilder variants(List<Variant> variants) {
+        return variants == null ? variants((Variant[]) null) : variants(variants.toArray(new Variant[0]));
+    }
+    @Override public Response.ResponseBuilder links(Link... links) {
+        if (links == null) { headers.remove("Link"); return this; }
+        headers.remove("Link");
+        for (Link l : links) headers.add("Link", l);
+        return this;
+    }
+    @Override public Response.ResponseBuilder link(URI uri, String rel) {
+        if (uri == null) throw new IllegalArgumentException("uri is null");
+        Link l = Link.fromUri(uri).rel(rel).build();
+        headers.add("Link", l);
+        return this;
+    }
+    @Override public Response.ResponseBuilder link(String uri, String rel) {
+        if (uri == null) throw new IllegalArgumentException("uri is null");
+        Link l = Link.fromUri(uri).rel(rel).build();
+        headers.add("Link", l);
+        return this;
+    }
 
     private static MultivaluedMap<String, Object> copy(MultivaluedMap<String, Object> src) {
         return new MultivaluedHashMap<>(src);
