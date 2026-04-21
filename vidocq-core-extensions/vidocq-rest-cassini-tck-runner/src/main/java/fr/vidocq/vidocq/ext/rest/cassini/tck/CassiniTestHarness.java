@@ -14,6 +14,8 @@ import fr.vidocq.vidocq.ext.rest.cassini.internal.UriRouter;
 import fr.vidocq.vidocq.ext.rest.cassini.internal.ExceptionMapperRegistry;
 import fr.vidocq.vidocq.ext.rest.cassini.internal.filter.FilterRegistry;
 import jakarta.ws.rs.ext.ExceptionMapper;
+import jakarta.ws.rs.ext.MessageBodyReader;
+import jakarta.ws.rs.ext.MessageBodyWriter;
 
 import java.net.ServerSocket;
 import java.util.HashMap;
@@ -55,6 +57,7 @@ public final class CassiniTestHarness implements AutoCloseable {
         private final Map<Class<?>, Object> beans = new HashMap<>();
         private final FilterRegistry filters = new FilterRegistry();
         private final ExceptionMapperRegistry exceptionMappers = new ExceptionMapperRegistry();
+        private final MessageBodyRegistry bodies = new MessageBodyRegistry();
         private String contextPath = "/";
         private Integer fixedPort;
 
@@ -63,6 +66,8 @@ public final class CassiniTestHarness implements AutoCloseable {
             if (instance instanceof ExceptionMapper<?> em) {
                 registerExceptionMapper(em);
             }
+            if (instance instanceof MessageBodyReader<?> r) bodies.addReader(r);
+            if (instance instanceof MessageBodyWriter<?> w) bodies.addWriter(w);
             return this;
         }
 
@@ -105,7 +110,7 @@ public final class CassiniTestHarness implements AutoCloseable {
             Class<?>[] classes = beans.keySet().toArray(Class<?>[]::new);
             List<ResourceMethod> routes = ResourceScanner.discover(classes);
             UriRouter router = new UriRouter(routes);
-            Invoker invoker = new Invoker(beans::get, new MessageBodyRegistry(), exceptionMappers);
+            Invoker invoker = new Invoker(beans::get, bodies, exceptionMappers);
             invoker.setFilters(filters);
             CassiniRestBridge bridge = new CassiniRestBridge(router, invoker);
             final String prefix = "/".equals(contextPath) ? "" : contextPath;
