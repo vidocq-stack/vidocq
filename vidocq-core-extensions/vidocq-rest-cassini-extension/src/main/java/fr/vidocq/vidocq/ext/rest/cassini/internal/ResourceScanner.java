@@ -61,7 +61,7 @@ public final class ResourceScanner {
             Set<String> classProduces = produces(cls.getAnnotation(Produces.class));
             Set<String> classConsumes = consumes(cls.getAnnotation(Consumes.class));
 
-            for (Method m : cls.getDeclaredMethods()) {
+            for (Method m : collectInheritedMethods(cls)) {
                 // §3.3.1 : une méthode de ressource doit être publique.
                 if (!java.lang.reflect.Modifier.isPublic(m.getModifiers())) continue;
                 String verb = resolveHttpMethod(m);
@@ -94,6 +94,67 @@ public final class ResourceScanner {
             }
         }
         return out;
+    }
+
+    /**
+     * §3.6 : les annotations JAX-RS portées par une super-classe ou une
+     * interface sont héritées. On collecte les méthodes et on remplace
+     * chacune par sa version la plus dérivée portant au moins une
+     * annotation JAX-RS reconnue.
+     */
+    private static java.util.List<Method> collectInheritedMethods(Class<?> cls) {
+        java.util.LinkedHashMap<String, Method> merged = new java.util.LinkedHashMap<>();
+        // 1. méthodes déclarées directement
+        for (Method m : cls.getDeclaredMethods()) {
+            merged.put(signature(m), effectiveMethod(m, cls));
+        }
+        // 2. méthodes de la hiérarchie héritées (super-classes + interfaces)
+        for (Method m : cls.getMethods()) {
+            if (m.getDeclaringClass() == Object.class) continue;
+            String sig = signature(m);
+            if (merged.containsKey(sig)) continue;
+            Method eff = effectiveMethod(m, cls);
+            merged.put(sig, eff);
+        }
+        return new java.util.ArrayList<>(merged.values());
+    }
+
+    /** Signature = nom + types de param (ignore le type de retour). */
+    private static String signature(Method m) {
+        StringBuilder sb = new StringBuilder(m.getName()).append('(');
+        for (Class<?> p : m.getParameterTypes()) sb.append(p.getName()).append(',');
+        return sb.append(')').toString();
+    }
+
+    /** Retourne la méthode la plus dérivée dans la hiérarchie de {@code cls}
+     *  correspondant à la même signature que {@code m}, en priorisant celle
+     *  qui porte une annotation JAX-RS (héritage §3.6). */
+    private static Method effectiveMethod(Method m, Class<?> cls) {
+        if (hasJaxrsAnnotation(m)) return m;
+        // Remonter super-classes
+        Class<?> sup = cls.getSuperclass();
+        while (sup != null && sup != Object.class) {
+            try {
+                Method parent = sup.getDeclaredMethod(m.getName(), m.getParameterTypes());
+                if (hasJaxrsAnnotation(parent)) return parent;
+            } catch (NoSuchMethodException ignored) {}
+            sup = sup.getSuperclass();
+        }
+        // Remonter interfaces
+        for (Class<?> iface : cls.getInterfaces()) {
+            try {
+                Method parent = iface.getDeclaredMethod(m.getName(), m.getParameterTypes());
+                if (hasJaxrsAnnotation(parent)) return parent;
+            } catch (NoSuchMethodException ignored) {}
+        }
+        return m;
+    }
+
+    private static boolean hasJaxrsAnnotation(Method m) {
+        for (Annotation a : m.getAnnotations()) {
+            if (a.annotationType().getName().startsWith("jakarta.ws.rs.")) return true;
+        }
+        return false;
     }
 
     /** Compte les caractères littéraux hors {templates} dans un path. */
