@@ -88,6 +88,16 @@ public final class Invoker {
 
     public Response invoke(MatchResult match, Request request) throws Exception {
         ResourceMethod route = match.method();
+        ParamExtractor.setProviders(new fr.vidocq.vidocq.ext.rest.cassini.internal.context.CassiniProviders(
+                registry, exceptionMappers));
+        try {
+            return invokeInternal(match, request, route);
+        } finally {
+            ParamExtractor.clearProviders();
+        }
+    }
+
+    private Response invokeInternal(MatchResult match, Request request, ResourceMethod route) throws Exception {
 
         // 1. Negotiation
         MediaType contentType = MediaTypes.parse(request.headers().firstOrNull("Content-Type"));

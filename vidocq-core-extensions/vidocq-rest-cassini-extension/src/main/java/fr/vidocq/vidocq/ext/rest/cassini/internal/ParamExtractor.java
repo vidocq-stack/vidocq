@@ -2,6 +2,7 @@ package fr.vidocq.vidocq.ext.rest.cassini.internal;
 
 import fr.vidocq.chappe.api.Request;
 import fr.vidocq.vidocq.ext.rest.cassini.internal.context.CassiniHttpHeaders;
+import fr.vidocq.vidocq.ext.rest.cassini.internal.context.CassiniProviders;
 import fr.vidocq.vidocq.ext.rest.cassini.internal.context.CassiniRequest;
 import fr.vidocq.vidocq.ext.rest.cassini.internal.context.CassiniSecurityContext;
 import fr.vidocq.vidocq.ext.rest.cassini.internal.context.CassiniUriInfo;
@@ -18,6 +19,7 @@ import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.SecurityContext;
 import jakarta.ws.rs.core.UriInfo;
+import jakarta.ws.rs.ext.Providers;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Parameter;
@@ -44,6 +46,13 @@ import java.util.Map;
 public final class ParamExtractor {
 
     public record ResolvedArgs(Object[] args, int bodyIndex) {}
+
+    private static ThreadLocal<Providers> CURRENT_PROVIDERS = new ThreadLocal<>();
+
+    /** Permet à l'Invoker d'exposer un Providers au resolveContext pour la durée d'une requête. */
+    public static void setProviders(Providers p) { CURRENT_PROVIDERS.set(p); }
+    public static void clearProviders() { CURRENT_PROVIDERS.remove(); }
+    public static Providers currentProviders() { return CURRENT_PROVIDERS.get(); }
 
     private ParamExtractor() {}
 
@@ -135,6 +144,10 @@ public final class ParamExtractor {
         if (type == HttpHeaders.class) return new CassiniHttpHeaders(request);
         if (type == jakarta.ws.rs.core.Request.class) return new CassiniRequest(request);
         if (type == SecurityContext.class) return new CassiniSecurityContext(request);
+        if (type == Providers.class) {
+            Providers p = CURRENT_PROVIDERS.get();
+            if (p != null) return p;
+        }
         if (type == Request.class) return request; // Chappe Request passthrough (utile pour tests)
         throw new WebApplicationException("Unsupported @Context type: " + type.getName(), 500);
     }

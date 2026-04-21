@@ -114,6 +114,7 @@ public final class FieldInjector {
         if (type == HttpHeaders.class) return new CassiniHttpHeaders(request);
         if (type == jakarta.ws.rs.core.Request.class) return new CassiniRequest(request);
         if (type == SecurityContext.class) return new CassiniSecurityContext(request);
+        if (type == jakarta.ws.rs.ext.Providers.class) return ParamExtractor.currentProviders();
         return null;
     }
 
