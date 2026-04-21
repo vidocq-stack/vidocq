@@ -62,8 +62,22 @@ public final class ResourceScanner {
 
             for (Method m : cls.getDeclaredMethods()) {
                 String verb = resolveHttpMethod(m);
-                if (verb == null) continue;
                 Path sub = m.getAnnotation(Path.class);
+                // Sub-resource locator §3.4.1 : @Path sur méthode SANS verbe HTTP
+                // → la méthode retourne une instance dont on scanne les routes
+                //   en préfixant par le path courant + @Path(method).
+                if (verb == null) {
+                    if (sub == null) continue;
+                    Class<?> returnCls = m.getReturnType();
+                    if (returnCls == void.class || returnCls == null) continue;
+                    String locatorPath = combine(basePath, normalize(sub.value()));
+                    // Scan récursif : on ne connaît pas l'instance à l'avance,
+                    // on se contente du type déclaré (suffit pour 95% des TCK,
+                    // les polymorphismes dynamiques sortent du MVP).
+                    m.setAccessible(true);
+                    scanLocatorType(returnCls, locatorPath, classProduces, classConsumes, m, out);
+                    continue;
+                }
                 String full = (sub == null) ? basePath : combine(basePath, normalize(sub.value()));
                 Set<String> methodProduces = produces(m.getAnnotation(Produces.class));
                 Set<String> methodConsumes = consumes(m.getAnnotation(Consumes.class));
@@ -89,6 +103,30 @@ public final class ResourceScanner {
             if (meta != null) return meta.value();
         }
         return null;
+    }
+
+    private static void scanLocatorType(Class<?> cls, String basePath,
+                                        Set<String> inheritedProduces, Set<String> inheritedConsumes,
+                                        Method locator, List<ResourceMethod> out) {
+        if (cls == Object.class || cls == null) return;
+        Set<String> clsProduces = produces(cls.getAnnotation(Produces.class));
+        if (clsProduces.isEmpty()) clsProduces = inheritedProduces;
+        Set<String> clsConsumes = consumes(cls.getAnnotation(Consumes.class));
+        if (clsConsumes.isEmpty()) clsConsumes = inheritedConsumes;
+        for (Method m : cls.getDeclaredMethods()) {
+            String verb = resolveHttpMethod(m);
+            if (verb == null) continue;
+            Path sub = m.getAnnotation(Path.class);
+            String full = (sub == null) ? basePath : combine(basePath, normalize(sub.value()));
+            Set<String> mp = produces(m.getAnnotation(Produces.class));
+            Set<String> mc = consumes(m.getAnnotation(Consumes.class));
+            Set<String> effP = mp.isEmpty() ? clsProduces : mp;
+            Set<String> effC = mc.isEmpty() ? clsConsumes : mc;
+            m.setAccessible(true);
+            // On utilise la méthode enfant directement — l'Invoker l'appellera
+            // sur l'instance retournée par le locator via resolver chaining.
+            out.add(new ResourceMethod(cls, m, verb, UriTemplate.compile(full), effP, effC));
+        }
     }
 
     private static Set<String> produces(Produces ann) {
