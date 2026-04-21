@@ -88,7 +88,7 @@ public final class ParamExtractor {
                 String raw = match.pathParams().get(pathParam.value());
                 args[i] = coerce(p, raw == null ? emptyOrDefault(def) : List.of(raw));
             } else if (queryParam != null) {
-                if (queryCache == null) queryCache = parseQuery(request.query());
+                if (queryCache == null) queryCache = parsedQueryFromRequest(request);
                 List<String> raws = queryCache.getOrDefault(queryParam.value(), List.of());
                 args[i] = coerce(p, raws.isEmpty() ? emptyOrDefault(def) : raws);
             } else if (headerParam != null) {
@@ -190,6 +190,18 @@ public final class ParamExtractor {
     private static Map<String, List<String>> parseQuery(String raw) {
         if (raw == null || raw.isEmpty()) return new LinkedHashMap<>();
         return FormDecoder.parse(raw);
+    }
+
+    private static Map<String, List<String>> parsedQueryFromRequest(Request request) {
+        String q = request.query();
+        if (q == null || q.isEmpty()) {
+            java.net.URI u = request.uri();
+            if (u != null) {
+                String raw = u.getRawQuery();
+                if (raw != null && !raw.isEmpty()) q = raw;
+            }
+        }
+        return parseQuery(q);
     }
 
     private static String cookie(Request request, String name) {

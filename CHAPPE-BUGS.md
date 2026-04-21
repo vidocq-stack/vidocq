@@ -66,6 +66,32 @@ deux fois sur la même connexion.
 
 ---
 
+## 5. `Request.query()` — retourne null alors que le rawUri contient un query string
+
+**Symptôme** : pour un `POST /ctx/resource/queryfield?bpeQuery=FIRST&innerQuery=SECOND`
+envoyé par le client TCK, `request.query()` depuis Cassini retourne
+`null`. Cassini ne peut donc pas extraire les `@QueryParam`.
+
+Diag ajouté dans FieldInjector : `query=null`, `parsedKeys=[]` → le
+bean `bpeQuery`/`innerQuery` restent null, le TCK voit `Anythingnullnull`
+au lieu de `Anything&bpeQuery=FIRST&innerQuery=SECOND`.
+
+**Cas déclencheur précis** : routes arrivant via un `Handler` wrapper
+qui réécrit `path()` (cf. `CassiniTestHarness.ContextStrippingHandler`
+qui stripe le contextPath). Quand seul `path()` est surchargé,
+Chappe a peut-être un parser qui ne restitue pas `query()` ensuite.
+À vérifier côté `HttpRequestImpl.ensurePathQueryParsed` et interaction
+avec les setters.
+
+**Workaround Cassini** : fallback sur `request.uri().getRawQuery()`.
+Malheureusement inefficace si `request.uri()` a aussi été amputé de
+la query par le même parser.
+
+**Impact TCK** : ~10 tests beanparam.plain qui échouent sur des
+`@QueryParam` injectés dans des fields de `@BeanParam`.
+
+---
+
 ## 4. `Request.uri()` — authority parfois absente
 
 **Symptôme** : dans l'Invoker Cassini, `request.uri().getAuthority()` retourne

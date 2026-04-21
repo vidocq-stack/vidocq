@@ -82,7 +82,7 @@ public final class FieldInjector {
         }
         QueryParam qp = f.getAnnotation(QueryParam.class);
         if (qp != null) {
-            List<String> raws = parseQuery(request.query()).getOrDefault(qp.value(), List.of());
+            List<String> raws = parsedQueryParams(request).getOrDefault(qp.value(), List.of());
             return coerce(f, raws.isEmpty() ? emptyOrDef(def) : raws);
         }
         HeaderParam hp = f.getAnnotation(HeaderParam.class);
@@ -150,6 +150,21 @@ public final class FieldInjector {
     private static Map<String, List<String>> parseQuery(String raw) {
         if (raw == null || raw.isEmpty()) return new LinkedHashMap<>();
         return FormDecoder.parse(raw);
+    }
+
+    /** Résout la query depuis request.query() ou, si null, depuis request.uri().
+     *  Chappe retourne parfois null pour query() quand le path a été rewrité
+     *  par un handler intermédiaire (ContextStrippingHandler côté TCK harness). */
+    private static Map<String, List<String>> parsedQueryParams(Request request) {
+        String q = request.query();
+        if (q == null || q.isEmpty()) {
+            java.net.URI u = request.uri();
+            if (u != null) {
+                String raw = u.getRawQuery();
+                if (raw != null && !raw.isEmpty()) q = raw;
+            }
+        }
+        return parseQuery(q);
     }
 
     private static String cookie(Request request, String name) {
