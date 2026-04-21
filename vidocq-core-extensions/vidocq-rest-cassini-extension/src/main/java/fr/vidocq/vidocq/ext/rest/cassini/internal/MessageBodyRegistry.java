@@ -355,8 +355,10 @@ public final class MessageBodyRegistry {
                 }
                 jakarta.xml.bind.JAXBContext ctx = jakarta.xml.bind.JAXBContext.newInstance(t);
                 return ctx.createUnmarshaller().unmarshal(in);
+            } catch (jakarta.xml.bind.UnmarshalException e) {
+                throw new jakarta.ws.rs.BadRequestException("Invalid XML body: " + e.getMessage());
             } catch (Exception e) {
-                throw new IOException(e);
+                throw new jakarta.ws.rs.BadRequestException("Failed to parse XML: " + e.getMessage());
             }
         }
     }
@@ -381,18 +383,36 @@ public final class MessageBodyRegistry {
                                          MultivaluedMap<String, String> h, InputStream in) throws IOException {
             String s = new String(in.readAllBytes(), charset(mt));
             Class<?> c = t;
-            if (c == Boolean.class || c == boolean.class) return Boolean.valueOf(s);
-            if (c == Character.class || c == char.class) return s.isEmpty() ? (char) 0 : Character.valueOf(s.charAt(0));
-            if (c == Byte.class || c == byte.class) return Byte.valueOf(s);
-            if (c == Short.class || c == short.class) return Short.valueOf(s);
-            if (c == Integer.class || c == int.class) return Integer.valueOf(s);
-            if (c == Long.class || c == long.class) return Long.valueOf(s);
-            if (c == Float.class || c == float.class) return Float.valueOf(s);
-            if (c == Double.class || c == double.class) return Double.valueOf(s);
-            if (c == java.math.BigDecimal.class) return new java.math.BigDecimal(s);
-            if (c == java.math.BigInteger.class) return new java.math.BigInteger(s);
-            if (c == Number.class) return new java.math.BigDecimal(s);
-            return s;
+            try {
+                if (c == Boolean.class || c == boolean.class) {
+                    // Boolean.valueOf est permissif — il faut rejeter les non "true/false" pour
+                    // être conforme §4.2.3 (un body vide/invalide → 400).
+                    if (!("true".equalsIgnoreCase(s) || "false".equalsIgnoreCase(s))) {
+                        throw new jakarta.ws.rs.BadRequestException(
+                                "Invalid Boolean body: '" + s + "'");
+                    }
+                    return Boolean.valueOf(s);
+                }
+                if (c == Character.class || c == char.class) {
+                    if (s.isEmpty()) throw new jakarta.ws.rs.BadRequestException(
+                            "Empty Character body");
+                    return Character.valueOf(s.charAt(0));
+                }
+                if (c == Byte.class || c == byte.class) return Byte.valueOf(s);
+                if (c == Short.class || c == short.class) return Short.valueOf(s);
+                if (c == Integer.class || c == int.class) return Integer.valueOf(s);
+                if (c == Long.class || c == long.class) return Long.valueOf(s);
+                if (c == Float.class || c == float.class) return Float.valueOf(s);
+                if (c == Double.class || c == double.class) return Double.valueOf(s);
+                if (c == java.math.BigDecimal.class) return new java.math.BigDecimal(s);
+                if (c == java.math.BigInteger.class) return new java.math.BigInteger(s);
+                if (c == Number.class) return new java.math.BigDecimal(s);
+                return s;
+            } catch (NumberFormatException | ArithmeticException e) {
+                // §4.2.4 : un body inparsable pour un MBR standard → 400.
+                throw new jakarta.ws.rs.BadRequestException(
+                        "Invalid body for " + c.getSimpleName() + ": '" + s + "'");
+            }
         }
     }
 
