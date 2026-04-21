@@ -127,12 +127,28 @@ public final class CassiniRuntimeDelegate extends RuntimeDelegate {
             return this;
         }
         @Override public Link.Builder link(String link) { return uri(link); }
-        @Override public Link.Builder uri(java.net.URI uri) { this.uri = uri; return this; }
-        @Override public Link.Builder uri(String uri) { this.uri = java.net.URI.create(uri); return this; }
+        @Override public Link.Builder uri(java.net.URI uri) {
+            if (uri == null) throw new IllegalArgumentException("uri");
+            // Validation basique §4.3.4 : path vide ou authority vide non-null rejetés
+            if (uri.getScheme() != null && uri.getAuthority() != null
+                    && uri.getHost() == null && !uri.getRawAuthority().isEmpty()) {
+                throw new IllegalArgumentException("malformed URI: " + uri);
+            }
+            this.uri = uri;
+            return this;
+        }
+        @Override public Link.Builder uri(String uri) {
+            try { return uri(new java.net.URI(uri)); }
+            catch (java.net.URISyntaxException e) { throw new IllegalArgumentException(e); }
+        }
         @Override public Link.Builder baseUri(java.net.URI uri) { this.baseUri = uri; return this; }
         @Override public Link.Builder baseUri(String uri) { this.baseUri = java.net.URI.create(uri); return this; }
         @Override public Link.Builder uriBuilder(jakarta.ws.rs.core.UriBuilder ub) { this.uriBuilder = ub; return this; }
-        @Override public Link.Builder rel(String rel) { params.put("rel", rel); return this; }
+        @Override public Link.Builder rel(String rel) {
+            String existing = params.get("rel");
+            params.put("rel", existing == null ? rel : existing + " " + rel);
+            return this;
+        }
         @Override public Link.Builder title(String t) { params.put("title", t); return this; }
         @Override public Link.Builder type(String t) { params.put("type", t); return this; }
         @Override public Link.Builder param(String n, String v) { params.put(n, v); return this; }
