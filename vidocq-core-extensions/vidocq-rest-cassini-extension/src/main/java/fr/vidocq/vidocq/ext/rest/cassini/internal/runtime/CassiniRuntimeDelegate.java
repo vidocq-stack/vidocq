@@ -40,6 +40,12 @@ public final class CassiniRuntimeDelegate extends RuntimeDelegate {
     @SuppressWarnings("unchecked")
     public <T> HeaderDelegate<T> createHeaderDelegate(Class<T> type) {
         if (type == MediaType.class) return (HeaderDelegate<T>) new MediaTypeDelegate();
+        if (type == jakarta.ws.rs.core.NewCookie.class) return (HeaderDelegate<T>) new NewCookieDelegate();
+        if (type == jakarta.ws.rs.core.Cookie.class) return (HeaderDelegate<T>) new CookieDelegate();
+        if (type == jakarta.ws.rs.core.EntityTag.class) return (HeaderDelegate<T>) new EntityTagDelegate();
+        if (type == jakarta.ws.rs.core.CacheControl.class) return (HeaderDelegate<T>) new CacheControlDelegate();
+        if (type == jakarta.ws.rs.core.Link.class) return (HeaderDelegate<T>) new LinkDelegate();
+        if (type == java.util.Date.class) return (HeaderDelegate<T>) new DateDelegate();
         return (HeaderDelegate<T>) new ToStringDelegate();
     }
 
@@ -71,6 +77,148 @@ public final class CassiniRuntimeDelegate extends RuntimeDelegate {
     private static final class ToStringDelegate implements HeaderDelegate<Object> {
         @Override public Object fromString(String value) { return value; }
         @Override public String toString(Object value) { return value == null ? "" : value.toString(); }
+    }
+
+    private static final class NewCookieDelegate implements HeaderDelegate<jakarta.ws.rs.core.NewCookie> {
+        @Override public jakarta.ws.rs.core.NewCookie fromString(String s) {
+            // Parsing basique name=value; attr=val; ...
+            String[] parts = s.split(";");
+            String name = null, value = null, path = null, domain = null, comment = null;
+            int maxAge = -1; boolean secure = false, httpOnly = false;
+            int version = 1;
+            for (int i = 0; i < parts.length; i++) {
+                String p = parts[i].trim();
+                int eq = p.indexOf('=');
+                String k = eq < 0 ? p : p.substring(0, eq).trim();
+                String v = eq < 0 ? "" : stripQuotes(p.substring(eq + 1).trim());
+                if (i == 0) { name = k; value = v; continue; }
+                switch (k.toLowerCase(java.util.Locale.ROOT)) {
+                    case "path": path = v; break;
+                    case "domain": domain = v; break;
+                    case "comment": comment = v; break;
+                    case "max-age": try { maxAge = Integer.parseInt(v); } catch (Exception e) {} break;
+                    case "version": try { version = Integer.parseInt(v); } catch (Exception e) {} break;
+                    case "secure": secure = true; break;
+                    case "httponly": httpOnly = true; break;
+                }
+            }
+            return new jakarta.ws.rs.core.NewCookie.Builder(name).value(value).path(path)
+                    .domain(domain).comment(comment).maxAge(maxAge).version(version)
+                    .secure(secure).httpOnly(httpOnly).build();
+        }
+        @Override public String toString(jakarta.ws.rs.core.NewCookie c) {
+            StringBuilder sb = new StringBuilder();
+            sb.append(c.getName()).append('=').append(quoteIfNeeded(c.getValue()));
+            if (c.getVersion() > 0) sb.append(";Version=").append(c.getVersion());
+            if (c.getPath() != null) sb.append(";Path=").append(quoteIfNeeded(c.getPath()));
+            if (c.getDomain() != null) sb.append(";Domain=").append(quoteIfNeeded(c.getDomain()));
+            if (c.getMaxAge() != -1) sb.append(";Max-Age=").append(c.getMaxAge());
+            if (c.getComment() != null) sb.append(";Comment=").append(quoteIfNeeded(c.getComment()));
+            if (c.isSecure()) sb.append(";Secure");
+            if (c.isHttpOnly()) sb.append(";HttpOnly");
+            return sb.toString();
+        }
+    }
+
+    private static final class CookieDelegate implements HeaderDelegate<jakarta.ws.rs.core.Cookie> {
+        @Override public jakarta.ws.rs.core.Cookie fromString(String s) {
+            int eq = s.indexOf('=');
+            if (eq < 0) return new jakarta.ws.rs.core.Cookie.Builder(s.trim()).build();
+            String name = s.substring(0, eq).trim();
+            String value = stripQuotes(s.substring(eq + 1).trim());
+            return new jakarta.ws.rs.core.Cookie.Builder(name).value(value).build();
+        }
+        @Override public String toString(jakarta.ws.rs.core.Cookie c) {
+            return c.getName() + "=" + quoteIfNeeded(c.getValue());
+        }
+    }
+
+    private static final class EntityTagDelegate implements HeaderDelegate<jakarta.ws.rs.core.EntityTag> {
+        @Override public jakarta.ws.rs.core.EntityTag fromString(String s) {
+            boolean weak = s.startsWith("W/");
+            String tag = weak ? s.substring(2) : s;
+            tag = stripQuotes(tag.trim());
+            return new jakarta.ws.rs.core.EntityTag(tag, weak);
+        }
+        @Override public String toString(jakarta.ws.rs.core.EntityTag e) {
+            return (e.isWeak() ? "W/" : "") + "\"" + e.getValue() + "\"";
+        }
+    }
+
+    private static final class CacheControlDelegate implements HeaderDelegate<jakarta.ws.rs.core.CacheControl> {
+        @Override public jakarta.ws.rs.core.CacheControl fromString(String s) {
+            jakarta.ws.rs.core.CacheControl cc = new jakarta.ws.rs.core.CacheControl();
+            cc.setNoTransform(false); // default true in spec; flip
+            return cc;
+        }
+        @Override public String toString(jakarta.ws.rs.core.CacheControl c) {
+            StringBuilder sb = new StringBuilder();
+            if (c.isNoCache()) append(sb, "no-cache");
+            if (c.isNoStore()) append(sb, "no-store");
+            if (c.isNoTransform()) append(sb, "no-transform");
+            if (c.isPrivate()) append(sb, "private");
+            if (c.isMustRevalidate()) append(sb, "must-revalidate");
+            if (c.isProxyRevalidate()) append(sb, "proxy-revalidate");
+            if (c.getMaxAge() != -1) append(sb, "max-age=" + c.getMaxAge());
+            if (c.getSMaxAge() != -1) append(sb, "s-maxage=" + c.getSMaxAge());
+            return sb.toString();
+        }
+        private static void append(StringBuilder sb, String v) {
+            if (sb.length() > 0) sb.append(", ");
+            sb.append(v);
+        }
+    }
+
+    private static final class LinkDelegate implements HeaderDelegate<jakarta.ws.rs.core.Link> {
+        @Override public jakarta.ws.rs.core.Link fromString(String s) {
+            // Format: <uri>; rel=xxx; title="yyy"
+            String trimmed = s.trim();
+            int gt = trimmed.indexOf('>');
+            String uri = trimmed.startsWith("<") && gt > 0 ? trimmed.substring(1, gt) : trimmed;
+            jakarta.ws.rs.core.Link.Builder b = jakarta.ws.rs.core.Link.fromUri(uri);
+            if (gt > 0 && gt < trimmed.length() - 1) {
+                String rest = trimmed.substring(gt + 1);
+                for (String p : rest.split(";")) {
+                    String pp = p.trim();
+                    int eq = pp.indexOf('=');
+                    if (eq < 0) continue;
+                    b.param(pp.substring(0, eq).trim(),
+                            stripQuotes(pp.substring(eq + 1).trim()));
+                }
+            }
+            return b.build();
+        }
+        @Override public String toString(jakarta.ws.rs.core.Link l) {
+            StringBuilder sb = new StringBuilder("<").append(l.getUri()).append('>');
+            for (var e : l.getParams().entrySet()) {
+                sb.append(";").append(e.getKey()).append("=\"").append(e.getValue()).append('"');
+            }
+            return sb.toString();
+        }
+    }
+
+    private static final class DateDelegate implements HeaderDelegate<java.util.Date> {
+        private static final java.text.SimpleDateFormat FMT;
+        static {
+            FMT = new java.text.SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss 'GMT'", java.util.Locale.US);
+            FMT.setTimeZone(java.util.TimeZone.getTimeZone("GMT"));
+        }
+        @Override public synchronized java.util.Date fromString(String s) {
+            try { return FMT.parse(s); } catch (Exception e) { return null; }
+        }
+        @Override public synchronized String toString(java.util.Date d) { return FMT.format(d); }
+    }
+
+    private static String stripQuotes(String v) {
+        if (v.length() >= 2 && v.startsWith("\"") && v.endsWith("\"")) {
+            return v.substring(1, v.length() - 1);
+        }
+        return v;
+    }
+    private static String quoteIfNeeded(String v) {
+        if (v == null) return "";
+        if (v.contains(" ") || v.contains(";") || v.contains(",")) return "\"" + v + "\"";
+        return v;
     }
 
     /** Stub {@link Variant.VariantListBuilder} — collecte media types/langs/encodings
