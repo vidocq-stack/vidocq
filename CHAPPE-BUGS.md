@@ -64,45 +64,96 @@ en keep-alive et n'arrive pas à lire la response status line.
 À reproduire avec `curl --http1.1 -v -b name=x http://.../CookieParamTest`
 deux fois sur la même connexion.
 
+**Investigation 2026-04-21** : inspection de `HttpConnection` (boucle
+keep-alive : `parse → body → dispatch → write → reset → loop`) et
+`HttpResponseWriter` (séparateurs CRLF, Content-Length directement
+sérialisé dans le buffer). La logique est conforme et `KeepAliveTest`
+passe (2 tests). Pas de cause racine identifiée hors contexte TCK ;
+probablement une incompatibilité spécifique à Apache HttpClient 3.x
+(client très ancien) qui n'attend pas la réponse comme un client
+moderne. À reprendre si on arrive à reproduire hors TCK avec curl.
+
 ---
 
-## 5. `Request.query()` — retourne null alors que le rawUri contient un query string
+## 6. TCK POST + query string — Apache HttpClient 3.x perd la query côté wire
 
-**Symptôme** : pour un `POST /ctx/resource/queryfield?bpeQuery=FIRST&innerQuery=SECOND`
+**Symptôme** : le TCK `ee.rs.beanparam.plain.JAXRSClientIT#queryParamOnFieldTest`
+envoie (selon le log Arquillian) :
+```
+POST http://.../queryfield?bpeQuery=FIRST&innerQuery=SECOND
+body=Anything
+```
+Côté serveur, `request.rawUri = /queryfield` (sans query), donc
+`request.query() = null` et `request.uri() = http://host/queryfield`
+(sans `?...`).
+
+**Vérifié** : Chappe parse correctement la request-line (tests
+Chappe + ajouts côté Cassini confirmant `rawUri` retourne ce qui a
+été reçu sur le wire). Les composants Cassini (ContextStrippingHandler,
+wrappers) délèguent `query()` fidèlement.
+
+**Cause présumée** : Apache HttpClient 3.x — utilisé par la couche
+`webclient.http.HttpRequest` du TCK — réécrit la request-line pour
+POST en stripant la query string et ne l'incorpore pas au body non
+plus (contrairement à un HttpClient 4.x/5.x moderne qui préserverait
+la query). La TCK client layer est commune.io.JAXRSCommonClient ->
+HttpRequest (org.apache.commons.httpclient.HttpMethodBase 3.1).
+
+**Impact** : ~10 tests `beanparam.plain.*ParamOnField*Test` qui
+dépendent de query string sur POST. Workaround côté Cassini :
+fallback sur `request.uri().getRawQuery()` — mais inefficace ici
+puisque l'URI n'a pas la query non plus.
+
+**Non actionnable côté serveur** : le client TCK ne nous envoie
+simplement pas les query params. À reprendre si une config TCK ou
+un patch HttpClient 3.x permet de préserver.
+
+---
+
+## 5. ~~`Request.query()` — retourne null alors que le rawUri contient un query string~~ NON REPRODUIT
+
+**Symptôme initial** : pour un `POST /ctx/resource/queryfield?bpeQuery=FIRST&innerQuery=SECOND`
 envoyé par le client TCK, `request.query()` depuis Cassini retourne
-`null`. Cassini ne peut donc pas extraire les `@QueryParam`.
+`null`.
 
-Diag ajouté dans FieldInjector : `query=null`, `parsedKeys=[]` → le
-bean `bpeQuery`/`innerQuery` restent null, le TCK voit `Anythingnullnull`
-au lieu de `Anything&bpeQuery=FIRST&innerQuery=SECOND`.
+**Investigation 2026-04-21** : deux tests ciblés ajoutés côté Chappe
+(`ExtensionSpiTest#mountPreservesQueryString` et
+`#externalWrapperPreservesQueryString`) couvrent exactement ce scénario :
+route montée via `Router.mount("/ctx", ...)` et wrapper externe qui ne
+surcharge que `path()` (reproduisant `ContextStrippingHandler`). Les
+deux passent — `query()` est correctement restitué dans les deux cas.
+`HttpRequestImpl.ensurePathQueryParsed` parse `rawUri` indépendamment
+de toute réécriture downstream, et les wrappers (mount() et
+`ContextStrippingHandler`) délèguent bien `query()` à la requête
+d'origine.
 
-**Cas déclencheur précis** : routes arrivant via un `Handler` wrapper
-qui réécrit `path()` (cf. `CassiniTestHarness.ContextStrippingHandler`
-qui stripe le contextPath). Quand seul `path()` est surchargé,
-Chappe a peut-être un parser qui ne restitue pas `query()` ensuite.
-À vérifier côté `HttpRequestImpl.ensurePathQueryParsed` et interaction
-avec les setters.
-
-**Workaround Cassini** : fallback sur `request.uri().getRawQuery()`.
-Malheureusement inefficace si `request.uri()` a aussi été amputé de
-la query par le même parser.
-
-**Impact TCK** : ~10 tests beanparam.plain qui échouent sur des
-`@QueryParam` injectés dans des fields de `@BeanParam`.
+**Status** : probablement un JAR Chappe stale (comme bug #1). Après
+un bump Chappe, le workaround Cassini (`request.uri().getRawQuery()`
+en fallback dans `FieldInjector.parsedQueryParams` et
+`ParamExtractor.parsedQueryFromRequest`) peut être retiré.
 
 ---
 
-## 4. `Request.uri()` — authority parfois absente
+## 4. ~~`Request.uri()` — authority parfois absente~~ FIXÉ upstream 2026-04-21
 
 **Symptôme** : dans l'Invoker Cassini, `request.uri().getAuthority()` retourne
-`null` sur certains paths, ce qui oblige à reconstruire le baseUri à partir
-du header `Host` (fallback 127.0.0.1).
+`null`, ce qui oblige à reconstruire le baseUri à partir du header `Host`
+(fallback 127.0.0.1).
 
-**Cas déclencheur** : non confirmé précisément — peut-être lorsque la
-request-line HTTP est path-only (RFC 9112 §3.2.1 `origin-form`), ce qui
-est le comportement normal du client HTTP 1.1 avec un `Host` header
-séparé.
+**Cause confirmée** : `HttpRequestImpl.uri()` faisait `URI.create(rawUri)`
+sur un `rawUri` origin-form (RFC 9112 §3.2.1, la forme normale en
+HTTP/1.1), donc `/foo?bar=1` — ce qui produit une URI avec `authority=null`,
+`scheme=null`, `host=null`.
 
-**Attente** : `Request.uri()` devrait reconstruire une URI absolue à partir
-de `Host` pour que `uri.getAuthority()` soit toujours renseigné. Aujourd'hui
-le caller doit le faire lui-même (cf. `Invoker.invoke` dans Cassini).
+**Fix** : `HttpRequestImpl.uri()` reconstruit désormais une URI absolue
+`scheme://host+rawUri` en lisant le header `Host`. Si le `rawUri` est
+déjà absolute-form (proxy), il est utilisé tel quel. Si `Host` est absent,
+fallback sur `URI.create(rawUri)` (comportement historique).
+
+- Source : `chappe-http/src/main/java/fr/vidocq/chappe/http/HttpRequestImpl.java`
+  — méthode `buildUri()`.
+- Test de non-régression : `ExtensionSpiTest#requestUriHasAuthorityFromHostHeader`.
+- 65/65 tests Chappe passent après le fix.
+
+**Action côté Cassini** : le fallback `Host` dans `Invoker` reste en place
+(rétro-compat avec Chappe anciens), mais deviendra redondant après bump.
