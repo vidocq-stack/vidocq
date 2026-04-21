@@ -127,9 +127,12 @@ public final class Invoker {
     private Response invokeInternal(MatchResult match, Request request, ResourceMethod route) throws Exception {
 
         // 1. Negotiation
-        MediaType contentType = MediaTypes.parse(request.headers().firstOrNull("Content-Type"));
+        String ctHeader = request.headers().firstOrNull("Content-Type");
+        MediaType contentType = MediaTypes.parse(ctHeader);
         List<MediaType> consumes = MediaTypes.fromSet(route.consumes());
-        if (hasRequestBody(request) && !MediaTypes.consumesMatches(contentType, consumes)) {
+        // §3.7.2 : si la requête a un Content-Type ou un body, filtre sur @Consumes.
+        boolean checkConsumes = hasRequestBody(request) || ctHeader != null;
+        if (checkConsumes && !consumes.isEmpty() && !MediaTypes.consumesMatches(contentType, consumes)) {
             return Response.of(StatusCode.UNSUPPORTED_MEDIA_TYPE);
         }
 

@@ -21,8 +21,12 @@ import java.util.Optional;
  */
 public final class UriRouter {
 
+    // §3.7.2 : d'abord la spécificité du @Path racine (classe), puis celle
+    // du template combiné. Une sous-ressource @Path("resource/subresource")
+    // doit battre une méthode @Path("subresource") sur @Path("resource").
     private static final Comparator<ResourceMethod> BY_SPECIFICITY =
-            Comparator.comparingInt((ResourceMethod r) -> r.template().literalChars()).reversed()
+            Comparator.comparingInt((ResourceMethod r) -> r.classPathLiterals()).reversed()
+                    .thenComparing(Comparator.comparingInt((ResourceMethod r) -> r.template().literalChars()).reversed())
                     .thenComparing(Comparator.comparingInt((ResourceMethod r) -> r.template().totalCaptures()).reversed())
                     .thenComparing(Comparator.comparingInt(r -> r.template().defaultCaptures()));
 

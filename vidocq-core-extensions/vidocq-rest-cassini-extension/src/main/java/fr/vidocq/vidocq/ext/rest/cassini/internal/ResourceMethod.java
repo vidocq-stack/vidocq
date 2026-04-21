@@ -21,11 +21,18 @@ public record ResourceMethod(
         Set<String> produces,
         Set<String> consumes,
         Class<?> rootBeanClass,
-        Method locator) {
+        Method locator,
+        int classPathLiterals) {
 
     public ResourceMethod(Class<?> beanClass, Method javaMethod, String httpMethod,
                           UriTemplate template, Set<String> produces, Set<String> consumes) {
-        this(beanClass, javaMethod, httpMethod, template, produces, consumes, null, null);
+        this(beanClass, javaMethod, httpMethod, template, produces, consumes, null, null, 0);
+    }
+
+    public ResourceMethod(Class<?> beanClass, Method javaMethod, String httpMethod,
+                          UriTemplate template, Set<String> produces, Set<String> consumes,
+                          Class<?> rootBeanClass, Method locator) {
+        this(beanClass, javaMethod, httpMethod, template, produces, consumes, rootBeanClass, locator, 0);
     }
 
     public String path() {

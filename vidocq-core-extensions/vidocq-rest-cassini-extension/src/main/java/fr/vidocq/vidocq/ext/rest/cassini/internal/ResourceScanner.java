@@ -57,6 +57,7 @@ public final class ResourceScanner {
             Path root = cls.getAnnotation(Path.class);
             if (root == null) continue;
             String basePath = normalize(root.value());
+            int classLits = countLiterals(basePath);
             Set<String> classProduces = produces(cls.getAnnotation(Produces.class));
             Set<String> classConsumes = consumes(cls.getAnnotation(Consumes.class));
 
@@ -77,7 +78,7 @@ public final class ResourceScanner {
                     Set<String> inhProd = locatorProduces.isEmpty() ? classProduces : locatorProduces;
                     Set<String> inhCons = locatorConsumes.isEmpty() ? classConsumes : locatorConsumes;
                     m.setAccessible(true);
-                    scanLocatorType(returnCls, locatorPath, inhProd, inhCons, m, out);
+                    scanLocatorType(returnCls, locatorPath, inhProd, inhCons, m, classLits, out);
                     continue;
                 }
                 String full = (sub == null) ? basePath : combine(basePath, normalize(sub.value()));
@@ -86,10 +87,24 @@ public final class ResourceScanner {
                 Set<String> effProd = methodProduces.isEmpty() ? classProduces : methodProduces;
                 Set<String> effCons = methodConsumes.isEmpty() ? classConsumes : methodConsumes;
                 m.setAccessible(true);
-                out.add(new ResourceMethod(cls, m, verb, UriTemplate.compile(full), effProd, effCons));
+                out.add(new ResourceMethod(cls, m, verb, UriTemplate.compile(full),
+                        effProd, effCons, null, null, classLits));
             }
         }
         return out;
+    }
+
+    /** Compte les caractères littéraux hors {templates} dans un path. */
+    private static int countLiterals(String path) {
+        if (path == null) return 0;
+        int n = 0; int depth = 0;
+        for (int i = 0; i < path.length(); i++) {
+            char c = path.charAt(i);
+            if (c == '{') depth++;
+            else if (c == '}') { if (depth > 0) depth--; }
+            else if (depth == 0) n++;
+        }
+        return n;
     }
 
     private static String resolveHttpMethod(Method m) {
@@ -109,7 +124,7 @@ public final class ResourceScanner {
 
     private static void scanLocatorType(Class<?> cls, String basePath,
                                         Set<String> inheritedProduces, Set<String> inheritedConsumes,
-                                        Method locator, List<ResourceMethod> out) {
+                                        Method locator, int rootClassLiterals, List<ResourceMethod> out) {
         if (cls == Object.class || cls == null) return;
         Set<String> clsProduces = produces(cls.getAnnotation(Produces.class));
         if (clsProduces.isEmpty()) clsProduces = inheritedProduces;
@@ -127,7 +142,7 @@ public final class ResourceScanner {
             Set<String> effC = mc.isEmpty() ? clsConsumes : mc;
             m.setAccessible(true);
             out.add(new ResourceMethod(cls, m, verb, UriTemplate.compile(full), effP, effC,
-                    rootBean, locator));
+                    rootBean, locator, rootClassLiterals));
         }
     }
 
