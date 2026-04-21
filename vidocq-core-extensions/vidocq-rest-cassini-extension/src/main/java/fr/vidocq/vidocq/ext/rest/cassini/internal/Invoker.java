@@ -87,6 +87,15 @@ public final class Invoker {
     }
 
     public Response invoke(MatchResult match, Request request) throws Exception {
+        return invoke(java.util.List.of(match), request);
+    }
+
+    /** Résout la meilleure route parmi les candidats en fonction des Accept/
+     *  Content-Type de la requête (§3.7.2). Passe à invoke(MatchResult, Request)
+     *  canonique avec le gagnant. */
+    public Response invoke(java.util.List<MatchResult> candidates, Request request) throws Exception {
+        if (candidates.isEmpty()) throw new IllegalArgumentException("no candidates");
+        MatchResult match = pickBestMatch(candidates, request);
         ResourceMethod route = match.method();
         ParamExtractor.setProviders(new fr.vidocq.vidocq.ext.rest.cassini.internal.context.CassiniProviders(
                 registry, exceptionMappers, filters.contextResolvers()));
@@ -388,6 +397,35 @@ public final class Invoker {
             return MediaType.APPLICATION_OCTET_STREAM_TYPE;
         }
         return chosen;
+    }
+
+    /** §3.7.2 : parmi les candidats (même path+verb), choisir celui dont
+     *  @Consumes matche Content-Type ET @Produces matche Accept (spécificité
+     *  maximale). Si aucun ne matche, retourne le premier (l'Invoker remontera
+     *  415 ou 406 plus tard). */
+    private MatchResult pickBestMatch(java.util.List<MatchResult> candidates, Request request) {
+        if (candidates.size() == 1) return candidates.get(0);
+        MediaType ct = MediaTypes.parse(request.headers().firstOrNull("Content-Type"));
+        java.util.List<MediaType> accepts = MediaTypes.parseList(request.headers().firstOrNull("Accept"));
+        MatchResult best = null;
+        int bestScore = -1;
+        for (MatchResult c : candidates) {
+            var cons = MediaTypes.fromSet(c.method().consumes());
+            if (hasRequestBody(request) && !cons.isEmpty() && !MediaTypes.consumesMatches(ct, cons)) continue;
+            var prod = MediaTypes.fromSet(c.method().produces());
+            int score = 0;
+            if (!prod.isEmpty()) {
+                var pick = MediaTypes.pickProduced(accepts, prod);
+                if (pick.isEmpty()) continue;
+                // Score : exact match > wildcard subtype > wildcard type
+                MediaType p = pick.get();
+                if (!p.isWildcardType() && !p.isWildcardSubtype()) score = 3;
+                else if (!p.isWildcardType()) score = 2;
+                else score = 1;
+            }
+            if (score > bestScore) { best = c; bestScore = score; }
+        }
+        return best != null ? best : candidates.get(0);
     }
 
     private Response renderWebAppException(WebApplicationException wae, ResourceMethod route,

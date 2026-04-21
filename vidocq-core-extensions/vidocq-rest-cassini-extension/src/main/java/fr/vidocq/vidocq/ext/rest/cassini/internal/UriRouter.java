@@ -35,14 +35,23 @@ public final class UriRouter {
     }
 
     public Optional<MatchResult> match(String httpMethod, String path) {
+        var all = matchAll(httpMethod, path);
+        return all.isEmpty() ? Optional.empty() : Optional.of(all.get(0));
+    }
+
+    /** Retourne tous les ResourceMethod qui matchent (verb, path).
+     *  L'Invoker utilise cette liste pour filtrer par @Consumes (Content-Type
+     *  requête) et @Produces (Accept header) §3.7.2. */
+    public List<MatchResult> matchAll(String httpMethod, String path) {
         String p = stripMatrixParams(normalize(path));
+        List<MatchResult> out = new ArrayList<>();
         for (ResourceMethod r : routes) {
             Optional<Map<String, String>> params = r.template().match(p);
             if (params.isPresent() && r.httpMethod().equalsIgnoreCase(httpMethod)) {
-                return Optional.of(new MatchResult(r, params.get()));
+                out.add(new MatchResult(r, params.get()));
             }
         }
-        return Optional.empty();
+        return out;
     }
 
     /** §3.7 : les matrix params (segments contenant ';') ne participent pas

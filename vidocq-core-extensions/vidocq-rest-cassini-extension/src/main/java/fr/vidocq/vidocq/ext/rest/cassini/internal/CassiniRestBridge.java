@@ -45,7 +45,8 @@ public final class CassiniRestBridge implements Handler {
     public Response handle(Request request) throws Exception {
         String verb = request.method().name();
         String path = normalize(request.pathInfo());
-        Optional<MatchResult> match = router.match(verb, path);
+        List<MatchResult> candidates = router.matchAll(verb, path);
+        Optional<MatchResult> match = candidates.isEmpty() ? Optional.empty() : Optional.of(candidates.get(0));
 
         if (match.isEmpty()) {
             List<String> allowed = router.methodsAllowedFor(path);
@@ -68,7 +69,7 @@ public final class CassiniRestBridge implements Handler {
         try {
             requestContext.runInScope(() -> {
                 try {
-                    holder[0] = invoker.invoke(result, request);
+                    holder[0] = invoker.invoke(candidates, request);
                 } catch (Exception e) {
                     holder[0] = e;
                 }
