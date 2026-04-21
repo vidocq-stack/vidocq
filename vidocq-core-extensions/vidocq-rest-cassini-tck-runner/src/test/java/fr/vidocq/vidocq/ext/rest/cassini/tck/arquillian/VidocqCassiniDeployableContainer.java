@@ -73,6 +73,7 @@ public class VidocqCassiniDeployableContainer implements DeployableContainer<Vid
 
         var cl = Thread.currentThread().getContextClassLoader();
         List<String> registered = new java.util.ArrayList<>();
+        List<String> providers = new java.util.ArrayList<>();
 
         for (Node node : war.getContent().values()) {
             String path = node.getPath().get();
@@ -92,6 +93,7 @@ public class VidocqCassiniDeployableContainer implements DeployableContainer<Vid
                 try {
                     Object instance = cls.getDeclaredConstructor().newInstance();
                     builder.provider(instance);
+                    providers.add(cls.getSimpleName());
                 } catch (ReflectiveOperationException ignored) {}
             }
         }
@@ -101,7 +103,8 @@ public class VidocqCassiniDeployableContainer implements DeployableContainer<Vid
 
         System.err.println("[VidocqCassiniTCK] deploy archive=" + war.getName()
                 + " host=" + config.getHost() + " port=" + harness.port()
-                + " resources=" + registered + " baseUrl=" + harness.baseUrl());
+                + " resources=" + registered + " providers=" + providers
+                + " baseUrl=" + harness.baseUrl());
 
         ProtocolMetaData pmd = new ProtocolMetaData();
         HTTPContext ctx = new HTTPContext(config.getHost(), harness.port());
