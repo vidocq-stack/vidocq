@@ -133,7 +133,7 @@ public final class ParamExtractor {
     private static Object resolveContext(Class<?> type, MatchResult match, Request request) {
         if (type == UriInfo.class) return new CassiniUriInfo(request, request.contextPath(), match.pathParams());
         if (type == HttpHeaders.class) return new CassiniHttpHeaders(request);
-        if (type == jakarta.ws.rs.core.Request.class) return new CassiniRequest(request.method().name());
+        if (type == jakarta.ws.rs.core.Request.class) return new CassiniRequest(request);
         if (type == SecurityContext.class) return new CassiniSecurityContext(request);
         if (type == Request.class) return request; // Chappe Request passthrough (utile pour tests)
         throw new WebApplicationException("Unsupported @Context type: " + type.getName(), 500);

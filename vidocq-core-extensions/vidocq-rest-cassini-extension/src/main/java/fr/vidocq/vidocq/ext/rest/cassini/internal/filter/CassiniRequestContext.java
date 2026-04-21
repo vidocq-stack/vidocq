@@ -78,7 +78,7 @@ public final class CassiniRequestContext implements ContainerRequestContext {
     @Override public void setRequestUri(URI baseUri, URI requestUri) { this.baseUri = baseUri; this.requestUri = requestUri; }
 
     @Override public jakarta.ws.rs.core.Request getRequest() {
-        return new fr.vidocq.vidocq.ext.rest.cassini.internal.context.CassiniRequest(method);
+        return new fr.vidocq.vidocq.ext.rest.cassini.internal.context.CassiniRequest(request);
     }
 
     @Override public String getMethod() { return method; }
