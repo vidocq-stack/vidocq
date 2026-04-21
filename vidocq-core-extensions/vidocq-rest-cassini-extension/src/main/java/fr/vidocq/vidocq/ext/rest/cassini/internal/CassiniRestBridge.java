@@ -51,6 +51,17 @@ public final class CassiniRestBridge implements Handler {
         if (match.isEmpty()) {
             List<String> allowed = router.methodsAllowedFor(path);
             if (!allowed.isEmpty()) {
+                // §3.3.5 : OPTIONS sans handler explicite → 200 + Allow header
+                if ("OPTIONS".equalsIgnoreCase(verb)) {
+                    if (!allowed.contains("OPTIONS")) allowed.add("OPTIONS");
+                    if (allowed.contains("GET") && !allowed.contains("HEAD")) allowed.add("HEAD");
+                    return Response.builder()
+                            .status(StatusCode.OK)
+                            .header("Allow", String.join(", ", allowed))
+                            .header("Content-Type", "application/vnd.sun.wadl+xml")
+                            .body(Body.empty())
+                            .build();
+                }
                 return Response.builder()
                         .status(StatusCode.METHOD_NOT_ALLOWED)
                         .header("Allow", String.join(", ", allowed))
