@@ -200,20 +200,46 @@ public final class CassiniUriBuilder extends UriBuilder {
 
     private URI buildInternal(Object[] values, Map<String, ?> valueMap, boolean encodeSlash) {
         String substituted = substituteTemplates(path.toString(), values, valueMap);
-        try {
-            StringBuilder q = new StringBuilder();
-            for (var e : query.entrySet()) {
-                for (String v : e.getValue()) {
-                    String resolved = substituteTemplates(v, values, valueMap);
-                    if (q.length() > 0) q.append('&');
-                    q.append(e.getKey()).append('=').append(resolved);
-                }
+        String fragmentResolved = substituteTemplates(fragment, values, valueMap);
+        StringBuilder q = new StringBuilder();
+        for (var e : query.entrySet()) {
+            for (String v : e.getValue()) {
+                String resolved = substituteTemplates(v, values, valueMap);
+                if (q.length() > 0) q.append('&');
+                q.append(e.getKey()).append('=').append(resolved);
             }
-            return new URI(scheme, userInfo, host, port, substituted,
-                    q.length() == 0 ? null : q.toString(),
-                    substituteTemplates(fragment, values, valueMap));
+        }
+        String query = q.length() == 0 ? null : q.toString();
+
+        // Schéma sans authority → URI opaque (mailto:, urn:, news:, etc.)
+        // On utilise le constructeur (scheme, ssp, fragment) et on laisse
+        // URI parser le reste brut.
+        boolean hasAuthority = host != null && !host.isEmpty();
+        try {
+            if (scheme != null && !hasAuthority && (substituted == null || !substituted.startsWith("/"))) {
+                String ssp = substituted == null ? "" : substituted;
+                if (query != null) ssp = ssp + "?" + query;
+                return new URI(scheme, ssp, fragmentResolved);
+            }
+            return new URI(scheme, userInfo, host, port, substituted, query, fragmentResolved);
         } catch (URISyntaxException e) {
-            throw new RuntimeException(e);
+            // Fallback : construction brute via toTemplate-like assembly
+            try {
+                StringBuilder sb = new StringBuilder();
+                if (scheme != null) sb.append(scheme).append(':');
+                if (hasAuthority) {
+                    sb.append("//");
+                    if (userInfo != null) sb.append(userInfo).append('@');
+                    sb.append(host);
+                    if (port >= 0) sb.append(':').append(port);
+                }
+                if (substituted != null) sb.append(substituted);
+                if (query != null) sb.append('?').append(query);
+                if (fragmentResolved != null) sb.append('#').append(fragmentResolved);
+                return new URI(sb.toString());
+            } catch (URISyntaxException fatal) {
+                throw new RuntimeException(fatal);
+            }
         }
     }
 

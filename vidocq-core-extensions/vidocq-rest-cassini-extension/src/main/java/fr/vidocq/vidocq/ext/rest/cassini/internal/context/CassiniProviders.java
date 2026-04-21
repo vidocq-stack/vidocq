@@ -22,10 +22,17 @@ public final class CassiniProviders implements Providers {
 
     private final MessageBodyRegistry bodies;
     private final ExceptionMapperRegistry exceptionMappers;
+    private final java.util.List<ContextResolver<?>> contextResolvers;
 
     public CassiniProviders(MessageBodyRegistry bodies, ExceptionMapperRegistry exceptionMappers) {
+        this(bodies, exceptionMappers, java.util.List.of());
+    }
+
+    public CassiniProviders(MessageBodyRegistry bodies, ExceptionMapperRegistry exceptionMappers,
+                            java.util.List<ContextResolver<?>> contextResolvers) {
         this.bodies = bodies;
         this.exceptionMappers = exceptionMappers;
+        this.contextResolvers = contextResolvers;
     }
 
     @Override
@@ -52,7 +59,39 @@ public final class CassiniProviders implements Providers {
     }
 
     @Override
+    @SuppressWarnings({"rawtypes", "unchecked"})
     public <T> ContextResolver<T> getContextResolver(Class<T> contextType, MediaType mediaType) {
+        for (ContextResolver<?> cr : contextResolvers) {
+            Class<?> param = resolveContextType(cr.getClass());
+            if (param == null) continue;
+            if (!contextType.isAssignableFrom(param)) continue;
+            // Vérifie mediaType compat via @Produces sur cr
+            jakarta.ws.rs.Produces prod = cr.getClass().getAnnotation(jakarta.ws.rs.Produces.class);
+            if (prod != null && mediaType != null) {
+                boolean ok = false;
+                for (String mt : prod.value()) {
+                    MediaType declared = fr.vidocq.vidocq.ext.rest.cassini.internal.MediaTypes.parse(mt);
+                    if (fr.vidocq.vidocq.ext.rest.cassini.internal.MediaTypes.matches(declared, mediaType)) {
+                        ok = true; break;
+                    }
+                }
+                if (!ok) continue;
+            }
+            return (ContextResolver<T>) cr;
+        }
         return null;
+    }
+
+    private static Class<?> resolveContextType(Class<?> cls) {
+        for (java.lang.reflect.Type iface : cls.getGenericInterfaces()) {
+            if (iface instanceof java.lang.reflect.ParameterizedType pt
+                    && pt.getRawType() == ContextResolver.class
+                    && pt.getActualTypeArguments().length == 1
+                    && pt.getActualTypeArguments()[0] instanceof Class<?> c) {
+                return c;
+            }
+        }
+        Class<?> sup = cls.getSuperclass();
+        return sup == null || sup == Object.class ? null : resolveContextType(sup);
     }
 }

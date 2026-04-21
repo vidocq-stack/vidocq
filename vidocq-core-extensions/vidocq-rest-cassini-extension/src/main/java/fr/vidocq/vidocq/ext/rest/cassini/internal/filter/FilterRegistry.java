@@ -7,6 +7,7 @@ import jakarta.enterprise.util.AnnotationLiteral;
 import jakarta.ws.rs.container.ContainerRequestFilter;
 import jakarta.ws.rs.container.ContainerResponseFilter;
 import jakarta.ws.rs.ext.Provider;
+import jakarta.ws.rs.ext.ContextResolver;
 import jakarta.ws.rs.ext.ReaderInterceptor;
 import jakarta.ws.rs.ext.WriterInterceptor;
 
@@ -31,6 +32,7 @@ public final class FilterRegistry {
     private final List<FilterEntry<ContainerResponseFilter>> responseFilters = new ArrayList<>();
     private final List<FilterEntry<ReaderInterceptor>> readerInterceptors = new ArrayList<>();
     private final List<FilterEntry<WriterInterceptor>> writerInterceptors = new ArrayList<>();
+    private final List<ContextResolver<?>> contextResolvers = new ArrayList<>();
 
     public void addRequest(ContainerRequestFilter filter) {
         requestFilters.add(FilterEntry.of(filter));
@@ -49,7 +51,11 @@ public final class FilterRegistry {
         if (instance instanceof ContainerResponseFilter r) addResponse(r);
         if (instance instanceof ReaderInterceptor r) addReaderInterceptor(r);
         if (instance instanceof WriterInterceptor r) addWriterInterceptor(r);
+        if (instance instanceof ContextResolver<?> r) addContextResolver(r);
     }
+
+    public void addContextResolver(ContextResolver<?> r) { contextResolvers.add(r); }
+    public List<ContextResolver<?>> contextResolvers() { return contextResolvers; }
 
     public void addReaderInterceptor(ReaderInterceptor i) {
         readerInterceptors.add(FilterEntry.of(i));
@@ -99,6 +105,10 @@ public final class FilterRegistry {
             if (WriterInterceptor.class.isAssignableFrom(cls)) {
                 if (instance == null) instance = bm.getReference(bean, cls, bm.createCreationalContext(bean));
                 reg.addWriterInterceptor((WriterInterceptor) instance);
+            }
+            if (ContextResolver.class.isAssignableFrom(cls)) {
+                if (instance == null) instance = bm.getReference(bean, cls, bm.createCreationalContext(bean));
+                reg.addContextResolver((ContextResolver<?>) instance);
             }
         }
         return reg;

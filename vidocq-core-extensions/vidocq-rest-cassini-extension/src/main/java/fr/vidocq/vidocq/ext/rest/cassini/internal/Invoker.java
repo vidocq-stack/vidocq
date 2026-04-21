@@ -89,7 +89,7 @@ public final class Invoker {
     public Response invoke(MatchResult match, Request request) throws Exception {
         ResourceMethod route = match.method();
         ParamExtractor.setProviders(new fr.vidocq.vidocq.ext.rest.cassini.internal.context.CassiniProviders(
-                registry, exceptionMappers));
+                registry, exceptionMappers, filters.contextResolvers()));
         try {
             return invokeInternal(match, request, route);
         } finally {
