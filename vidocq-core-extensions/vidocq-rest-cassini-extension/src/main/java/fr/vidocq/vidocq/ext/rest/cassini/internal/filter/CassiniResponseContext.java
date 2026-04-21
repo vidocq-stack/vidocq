@@ -76,26 +76,89 @@ public final class CassiniResponseContext implements ContainerResponseContext {
         return containsHeaderString(n, ",", p);
     }
 
-    @Override public Set<String> getAllowedMethods() { return Set.of(); }
-    @Override public Date getDate() { return null; }
-    @Override public Locale getLanguage() { return null; }
-    @Override public int getLength() { return -1; }
+    @Override public Set<String> getAllowedMethods() {
+        Object v = headers.getFirst("Allow");
+        if (v == null) return Set.of();
+        Set<String> out = new java.util.LinkedHashSet<>();
+        for (String tok : v.toString().split(",")) out.add(tok.trim().toUpperCase(Locale.ROOT));
+        return out;
+    }
+    @Override public Date getDate() { return parseHttpDate(headers.getFirst("Date")); }
+    @Override public Locale getLanguage() {
+        Object v = headers.getFirst("Content-Language");
+        return v == null ? null : Locale.forLanguageTag(v.toString());
+    }
+    @Override public int getLength() {
+        Object v = headers.getFirst("Content-Length");
+        if (v == null) return -1;
+        try { return Integer.parseInt(v.toString()); } catch (NumberFormatException e) { return -1; }
+    }
     @Override public MediaType getMediaType() {
         Object v = headers.getFirst("Content-Type");
         if (v == null) return null;
         return v instanceof MediaType mt ? mt : MediaTypes.parse(v.toString());
     }
-    @Override public Map<String, NewCookie> getCookies() { return Map.of(); }
-    @Override public EntityTag getEntityTag() { return null; }
-    @Override public Date getLastModified() { return null; }
+    @Override public Map<String, NewCookie> getCookies() {
+        Map<String, NewCookie> out = new java.util.HashMap<>();
+        java.util.List<Object> vs = headers.get("Set-Cookie");
+        if (vs == null) return out;
+        for (Object v : vs) {
+            if (v instanceof NewCookie nc) out.put(nc.getName(), nc);
+            else try {
+                NewCookie nc = NewCookie.valueOf(v.toString());
+                out.put(nc.getName(), nc);
+            } catch (Exception ignored) {}
+        }
+        return out;
+    }
+    @Override public EntityTag getEntityTag() {
+        Object v = headers.getFirst("ETag");
+        if (v == null) return null;
+        if (v instanceof EntityTag et) return et;
+        try { return EntityTag.valueOf(v.toString()); } catch (Exception e) { return null; }
+    }
+    @Override public Date getLastModified() { return parseHttpDate(headers.getFirst("Last-Modified")); }
     @Override public URI getLocation() {
         Object v = headers.getFirst("Location");
         return v == null ? null : URI.create(v.toString());
     }
-    @Override public Set<Link> getLinks() { return Set.of(); }
-    @Override public boolean hasLink(String relation) { return false; }
-    @Override public Link getLink(String relation) { return null; }
-    @Override public Link.Builder getLinkBuilder(String relation) { throw new UnsupportedOperationException(); }
+    @Override public Set<Link> getLinks() {
+        java.util.List<Object> vs = headers.get("Link");
+        if (vs == null || vs.isEmpty()) return Set.of();
+        Set<Link> out = new java.util.LinkedHashSet<>();
+        for (Object v : vs) {
+            if (v instanceof Link l) { out.add(l); continue; }
+            try { out.add(Link.valueOf(v.toString())); } catch (Exception ignored) {}
+        }
+        return out;
+    }
+    @Override public boolean hasLink(String relation) {
+        for (Link l : getLinks()) if (relation != null && relation.equals(l.getRel())) return true;
+        return false;
+    }
+    @Override public Link getLink(String relation) {
+        for (Link l : getLinks()) if (relation != null && relation.equals(l.getRel())) return l;
+        return null;
+    }
+    @Override public Link.Builder getLinkBuilder(String relation) {
+        Link l = getLink(relation);
+        return l == null ? null : Link.fromLink(l);
+    }
+
+    private static Date parseHttpDate(Object v) {
+        if (v == null) return null;
+        if (v instanceof Date d) return d;
+        String s = v.toString();
+        for (String fmt : new String[] {
+                "EEE, dd MMM yyyy HH:mm:ss zzz",
+                "EEEE, dd-MMM-yy HH:mm:ss zzz",
+                "EEE MMM d HH:mm:ss yyyy"}) {
+            try {
+                return new java.text.SimpleDateFormat(fmt, Locale.US).parse(s);
+            } catch (java.text.ParseException ignored) {}
+        }
+        return null;
+    }
 
     @Override public boolean hasEntity() { return entity != null; }
     @Override public Object getEntity() { return entity; }
