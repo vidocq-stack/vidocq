@@ -1,90 +1,207 @@
 package fr.vidocq.vidocq.ext.rest.cassini.internal.runtime;
 
-import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.core.UriBuilder;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 /**
- * Implémentation minimaliste de {@link UriBuilder}. Couvre scheme/host/port/
- * path/queryParam/fragment. Les opérations {@code resolveTemplate*},
- * {@code matrixParam}, les Link-builders et builders à partir d'une
- * ressource annotée ne sont pas encore implémentés.
+ * Implémentation {@link UriBuilder} alignée sur RFC 3986 et §6 du spec
+ * Jakarta REST 4.0. L'encoding est appliqué composant par composant :
+ * PATH, QUERY_PARAM, MATRIX_PARAM, FRAGMENT. Les triplets {@code %XX}
+ * sont préservés (mode template) pour les valeurs passées aux méthodes
+ * {@code xxxParam}/{@code path}, mais re-encodés pour les valeurs de
+ * template substituées en mode {@code build*()} non-encoded.
  */
 public final class CassiniUriBuilder extends UriBuilder {
 
+    private enum Comp { PATH, QUERY_PARAM, MATRIX_PARAM, FRAGMENT }
+
     private String scheme;
+    private String ssp;            // pour URI opaques (mailto:, urn:, …)
     private String userInfo;
     private String host;
     private int port = -1;
     private StringBuilder path = new StringBuilder();
     private final Map<String, List<String>> query = new LinkedHashMap<>();
     private String fragment;
+    /** Valeurs résolues + si la valeur est déjà encodée (FromEncoded). */
     private final Map<String, Object> resolvedTemplates = new LinkedHashMap<>();
+    private final Map<String, Boolean> resolvedTemplatesEncoded = new LinkedHashMap<>();
 
     public CassiniUriBuilder() {}
 
+    // --- Factories ---
+
     public static UriBuilder fromResource(Class<?> resource) {
         if (resource == null) throw new IllegalArgumentException("resource is null");
-        CassiniUriBuilder b = new CassiniUriBuilder();
         jakarta.ws.rs.Path p = resource.getAnnotation(jakarta.ws.rs.Path.class);
         if (p == null) throw new IllegalArgumentException("resource not @Path annotated: " + resource.getName());
+        CassiniUriBuilder b = new CassiniUriBuilder();
         b.path.append(p.value());
         return b;
     }
 
     public static UriBuilder fromUri(URI uri) {
+        if (uri == null) throw new IllegalArgumentException("uri is null");
         CassiniUriBuilder b = new CassiniUriBuilder();
-        b.scheme = uri.getScheme();
-        b.userInfo = uri.getUserInfo();
-        b.host = uri.getHost();
-        b.port = uri.getPort();
-        if (uri.getRawPath() != null) b.path.append(uri.getRawPath());
-        b.fragment = uri.getFragment();
+        b.copyFrom(uri);
         return b;
+    }
+
+    public static UriBuilder fromUri(String uri) {
+        if (uri == null) throw new IllegalArgumentException("uri is null");
+        try { return fromUri(new URI(uri)); }
+        catch (URISyntaxException e) { throw new IllegalArgumentException(e); }
+    }
+
+    private void copyFrom(URI uri) {
+        this.scheme = uri.getScheme();
+        if (uri.isOpaque()) {
+            this.ssp = uri.getRawSchemeSpecificPart();
+        } else {
+            this.userInfo = uri.getRawUserInfo();
+            this.host = uri.getHost();
+            this.port = uri.getPort();
+            if (uri.getRawPath() != null) { this.path.setLength(0); this.path.append(uri.getRawPath()); }
+            String q = uri.getRawQuery();
+            if (q != null) { this.query.clear(); parseQueryInto(q); }
+        }
+        if (uri.getRawFragment() != null) this.fragment = uri.getRawFragment();
+    }
+
+    private void parseQueryInto(String q) {
+        for (String pair : q.split("&")) {
+            int eq = pair.indexOf('=');
+            String k = eq < 0 ? pair : pair.substring(0, eq);
+            String v = eq < 0 ? "" : pair.substring(eq + 1);
+            query.computeIfAbsent(k, x -> new ArrayList<>()).add(v);
+        }
     }
 
     @Override public UriBuilder clone() {
         CassiniUriBuilder b = new CassiniUriBuilder();
-        b.scheme = scheme;
-        b.userInfo = userInfo;
-        b.host = host;
-        b.port = port;
+        b.scheme = scheme; b.ssp = ssp;
+        b.userInfo = userInfo; b.host = host; b.port = port;
         b.path = new StringBuilder(path);
-        b.query.putAll(query);
+        for (var e : query.entrySet()) b.query.put(e.getKey(), new ArrayList<>(e.getValue()));
         b.fragment = fragment;
+        b.resolvedTemplates.putAll(resolvedTemplates);
+        b.resolvedTemplatesEncoded.putAll(resolvedTemplatesEncoded);
         return b;
     }
 
+    // --- URI/uriString ---
+
     @Override public UriBuilder uri(URI uri) {
-        if (uri.getScheme() != null) scheme = uri.getScheme();
-        if (uri.getUserInfo() != null) userInfo = uri.getUserInfo();
-        if (uri.getHost() != null) host = uri.getHost();
-        if (uri.getPort() != -1) port = uri.getPort();
-        if (uri.getRawPath() != null) { path.setLength(0); path.append(uri.getRawPath()); }
-        if (uri.getFragment() != null) fragment = uri.getFragment();
+        if (uri == null) throw new IllegalArgumentException("uri is null");
+        copyFrom(uri);
         return this;
     }
 
     @Override public UriBuilder uri(String uriTemplate) {
         if (uriTemplate == null) throw new IllegalArgumentException("uri is null");
-        return uri(URI.create(uriTemplate));
+        try {
+            URI u = new URI(uriTemplate);
+            // Accepte également les templates avec {name} en path — URI n'accepte pas
+            // les '{' en authority, mais ici on utilise URI.create pour le valider
+            // globalement.
+            return uri(u);
+        } catch (URISyntaxException e) {
+            // Template contient peut-être {x} — parser manuellement.
+            return parseUriTemplate(uriTemplate);
+        }
+    }
+
+    private UriBuilder parseUriTemplate(String s) {
+        // Parseur minimaliste : scheme://authority/path?query#fragment
+        int fragIdx = s.indexOf('#');
+        String body = fragIdx < 0 ? s : s.substring(0, fragIdx);
+        String frag = fragIdx < 0 ? null : s.substring(fragIdx + 1);
+        int qIdx = body.indexOf('?');
+        String beforeQ = qIdx < 0 ? body : body.substring(0, qIdx);
+        String q = qIdx < 0 ? null : body.substring(qIdx + 1);
+        int colonIdx = beforeQ.indexOf(':');
+        int slashSlash = beforeQ.indexOf("//");
+        String sch = null, rest;
+        if (colonIdx > 0 && (slashSlash < 0 || colonIdx < slashSlash)) {
+            sch = beforeQ.substring(0, colonIdx);
+            rest = beforeQ.substring(colonIdx + 1);
+        } else { rest = beforeQ; }
+        String auth = null, pathPart;
+        if (rest.startsWith("//")) {
+            int slash = rest.indexOf('/', 2);
+            if (slash < 0) { auth = rest.substring(2); pathPart = ""; }
+            else { auth = rest.substring(2, slash); pathPart = rest.substring(slash); }
+        } else { pathPart = rest; }
+        this.scheme = sch;
+        if (auth != null) {
+            int at = auth.indexOf('@');
+            String hostPort = at < 0 ? auth : auth.substring(at + 1);
+            this.userInfo = at < 0 ? null : auth.substring(0, at);
+            int colon = hostPort.lastIndexOf(':');
+            if (colon >= 0) {
+                this.host = hostPort.substring(0, colon);
+                try { this.port = Integer.parseInt(hostPort.substring(colon + 1)); }
+                catch (NumberFormatException nfe) { this.port = -1; }
+            } else { this.host = hostPort; }
+        }
+        this.path.setLength(0);
+        if (!pathPart.isEmpty()) this.path.append(pathPart);
+        if (q != null) { this.query.clear(); parseQueryInto(q); }
+        if (frag != null) this.fragment = frag;
+        return this;
     }
 
     @Override public UriBuilder scheme(String scheme) { this.scheme = scheme; return this; }
 
-    @Override public UriBuilder schemeSpecificPart(String ssp) { return this; }
+    @Override public UriBuilder schemeSpecificPart(String ssp) {
+        if (ssp == null) throw new IllegalArgumentException("ssp is null");
+        // Validation minimale : doit parser comme URI (scheme:ssp).
+        try {
+            URI u = new URI((scheme == null ? "http" : scheme) + ":" + ssp);
+            if (u.isOpaque()) {
+                this.ssp = u.getRawSchemeSpecificPart();
+                this.userInfo = null; this.host = null; this.port = -1;
+                this.path.setLength(0); this.query.clear();
+            } else {
+                // URI hiérarchique : propager authority/path/query.
+                this.ssp = null;
+                if (u.getRawUserInfo() != null) this.userInfo = u.getRawUserInfo();
+                if (u.getHost() != null) this.host = u.getHost();
+                if (u.getPort() != -1) this.port = u.getPort();
+                if (u.getRawPath() != null) { this.path.setLength(0); this.path.append(u.getRawPath()); }
+                if (u.getRawQuery() != null) { this.query.clear(); parseQueryInto(u.getRawQuery()); }
+            }
+        } catch (URISyntaxException e) { throw new IllegalArgumentException(e); }
+        return this;
+    }
 
     @Override public UriBuilder userInfo(String ui) { this.userInfo = ui; return this; }
 
-    @Override public UriBuilder host(String host) { this.host = host; return this; }
+    @Override public UriBuilder host(String host) {
+        if (host != null && host.isEmpty()) throw new IllegalArgumentException("host is empty");
+        if (host != null) {
+            // Valide qu'on peut former scheme://host sans syntax error.
+            try { new URI(scheme == null ? "http" : scheme, null, host, -1, "/", null, null); }
+            catch (URISyntaxException e) { throw new IllegalArgumentException(e); }
+        }
+        this.host = host;
+        return this;
+    }
 
-    @Override public UriBuilder port(int port) { this.port = port; return this; }
+    @Override public UriBuilder port(int port) {
+        if (port < -1) throw new IllegalArgumentException("port must be >= -1");
+        this.port = port;
+        return this;
+    }
+
+    // --- Path ---
 
     @Override public UriBuilder replacePath(String p) { this.path = new StringBuilder(p == null ? "" : p); return this; }
 
@@ -97,57 +214,74 @@ public final class CassiniUriBuilder extends UriBuilder {
     }
 
     @Override @SuppressWarnings("rawtypes") public UriBuilder path(Class resource) {
-        if (resource != null) {
-            jakarta.ws.rs.Path p = (jakarta.ws.rs.Path) resource.getAnnotation(jakarta.ws.rs.Path.class);
-            if (p != null) path(p.value());
-        }
+        if (resource == null) throw new IllegalArgumentException("resource is null");
+        jakarta.ws.rs.Path p = (jakarta.ws.rs.Path) resource.getAnnotation(jakarta.ws.rs.Path.class);
+        if (p == null) throw new IllegalArgumentException("resource is not @Path annotated: " + resource.getName());
+        path(p.value());
         return this;
     }
+
     @Override @SuppressWarnings({"rawtypes","unchecked"}) public UriBuilder path(Class resource, String method) {
-        if (resource == null || method == null) return this;
+        if (resource == null) throw new IllegalArgumentException("resource is null");
+        if (method == null) throw new IllegalArgumentException("method is null");
+        java.lang.reflect.Method found = null;
         for (java.lang.reflect.Method m : resource.getMethods()) {
             if (!m.getName().equals(method)) continue;
-            jakarta.ws.rs.Path p = m.getAnnotation(jakarta.ws.rs.Path.class);
-            if (p != null) { path(p.value()); return this; }
+            if (m.getAnnotation(jakarta.ws.rs.Path.class) == null) continue;
+            if (found != null) throw new IllegalArgumentException(
+                    "Multiple methods named '" + method + "' annotated with @Path on " + resource.getName());
+            found = m;
         }
+        if (found == null) throw new IllegalArgumentException(
+                "No method '" + method + "' with @Path on " + resource.getName());
+        path(found.getAnnotation(jakarta.ws.rs.Path.class).value());
         return this;
     }
+
     @Override public UriBuilder path(java.lang.reflect.Method method) {
-        if (method == null) return this;
+        if (method == null) throw new IllegalArgumentException("method is null");
         jakarta.ws.rs.Path p = method.getAnnotation(jakarta.ws.rs.Path.class);
-        if (p != null) path(p.value());
+        if (p == null) throw new IllegalArgumentException("method is not @Path annotated: " + method);
+        path(p.value());
         return this;
     }
 
     @Override public UriBuilder segment(String... segments) {
-        for (String s : segments) path(s);
-        return this;
-    }
-
-    @Override public UriBuilder replaceMatrix(String m) {
-        // Remplace les matrix params du dernier segment path §6.1.
-        int lastSlash = path.lastIndexOf("/");
-        int keepFrom = lastSlash < 0 ? 0 : lastSlash;
-        // Strip ';xxx' sur le segment courant après lastSlash
-        int semi = path.indexOf(";", keepFrom);
-        if (semi >= 0) path.setLength(semi);
-        if (m != null && !m.isEmpty()) {
-            path.append(';').append(m);
+        if (segments == null) throw new IllegalArgumentException("segments is null");
+        for (String s : segments) {
+            if (s == null) throw new IllegalArgumentException("segment is null");
+            // Encode le segment comme un path-segment : '/' est toujours encodé en %2F
+            String enc = encode(s, Comp.PATH, true, true);
+            if (path.length() > 0 && path.charAt(path.length() - 1) != '/') path.append('/');
+            path.append(enc);
         }
         return this;
     }
+
+    // --- Matrix params ---
+
+    @Override public UriBuilder replaceMatrix(String m) {
+        int lastSlash = path.lastIndexOf("/");
+        int keepFrom = lastSlash < 0 ? 0 : lastSlash;
+        int semi = path.indexOf(";", keepFrom);
+        if (semi >= 0) path.setLength(semi);
+        if (m != null && !m.isEmpty()) path.append(';').append(m);
+        return this;
+    }
+
     @Override public UriBuilder matrixParam(String name, Object... values) {
         if (name == null) throw new IllegalArgumentException("name is null");
         if (values == null) throw new IllegalArgumentException("values is null");
         for (Object v : values) {
             if (v == null) throw new IllegalArgumentException("matrix value is null");
-            path.append(';').append(name).append('=').append(String.valueOf(v));
+            path.append(';').append(encode(name, Comp.MATRIX_PARAM, true, true))
+                .append('=').append(encode(String.valueOf(v), Comp.MATRIX_PARAM, true, true));
         }
         return this;
     }
+
     @Override public UriBuilder replaceMatrixParam(String name, Object... values) {
         if (name == null) throw new IllegalArgumentException("name is null");
-        // Strip occurrences existantes de ;name= dans le dernier segment
         int lastSlash = path.lastIndexOf("/");
         int start = lastSlash < 0 ? 0 : lastSlash;
         StringBuilder rebuilt = new StringBuilder();
@@ -155,10 +289,10 @@ public final class CassiniUriBuilder extends UriBuilder {
         String segment = path.substring(start);
         String[] parts = segment.split(";");
         boolean first = true;
+        String encName = encode(name, Comp.MATRIX_PARAM, true, true);
         for (String p : parts) {
             if (p.isEmpty()) continue;
-            if (!first && p.startsWith(name + "=")) continue;
-            if (!first && p.equals(name)) continue;
+            if (!first && (p.startsWith(encName + "=") || p.equals(encName))) continue;
             if (!first) rebuilt.append(';');
             rebuilt.append(p);
             first = false;
@@ -169,15 +303,12 @@ public final class CassiniUriBuilder extends UriBuilder {
         return this;
     }
 
+    // --- Query params ---
+
     @Override public UriBuilder replaceQuery(String q) {
         query.clear();
         if (q == null || q.isEmpty()) return this;
-        for (String pair : q.split("&")) {
-            int eq = pair.indexOf('=');
-            String k = eq < 0 ? pair : pair.substring(0, eq);
-            String v = eq < 0 ? "" : pair.substring(eq + 1);
-            query.computeIfAbsent(k, x -> new ArrayList<>()).add(v);
-        }
+        parseQueryInto(q);
         return this;
     }
 
@@ -186,180 +317,199 @@ public final class CassiniUriBuilder extends UriBuilder {
         if (values == null) throw new IllegalArgumentException("values is null");
         for (Object v : values) {
             if (v == null) throw new IllegalArgumentException("query value is null");
-            query.computeIfAbsent(name, k -> new ArrayList<>()).add(String.valueOf(v));
+            query.computeIfAbsent(encode(name, Comp.QUERY_PARAM, true, true), k -> new ArrayList<>())
+                 .add(encode(String.valueOf(v), Comp.QUERY_PARAM, true, true));
         }
         return this;
     }
 
     @Override public UriBuilder replaceQueryParam(String name, Object... values) {
-        query.remove(name);
+        if (name == null) throw new IllegalArgumentException("name is null");
+        query.remove(encode(name, Comp.QUERY_PARAM, true, true));
         if (values != null && values.length > 0) queryParam(name, values);
         return this;
     }
 
     @Override public UriBuilder fragment(String f) { this.fragment = f; return this; }
 
+    // --- Resolve template ---
+
     @Override public UriBuilder resolveTemplate(String name, Object value) {
+        return resolveTemplate(name, value, true);
+    }
+
+    @Override public UriBuilder resolveTemplate(String name, Object value, boolean encodeSlashInPath) {
         if (name == null) throw new IllegalArgumentException("name is null");
         if (value == null) throw new IllegalArgumentException("value is null");
-        resolvedTemplates.put(name, value); return this;
-    }
-    @Override public UriBuilder resolveTemplate(String name, Object value, boolean encodeSlashInPath) {
-        return resolveTemplate(name, value);
-    }
-    @Override public UriBuilder resolveTemplateFromEncoded(String name, Object value) {
-        return resolveTemplate(name, value);
-    }
-    @Override public UriBuilder resolveTemplates(Map<String, Object> templateValues) {
-        if (templateValues == null) throw new IllegalArgumentException("templateValues is null");
-        for (var e : templateValues.entrySet()) resolveTemplate(e.getKey(), e.getValue());
+        resolvedTemplates.put(name, value);
+        resolvedTemplatesEncoded.put(name, false);
         return this;
     }
-    @Override public UriBuilder resolveTemplates(Map<String, Object> templateValues, boolean encodeSlashInPath) {
-        return resolveTemplates(templateValues);
+
+    @Override public UriBuilder resolveTemplateFromEncoded(String name, Object value) {
+        if (name == null) throw new IllegalArgumentException("name is null");
+        if (value == null) throw new IllegalArgumentException("value is null");
+        resolvedTemplates.put(name, value);
+        resolvedTemplatesEncoded.put(name, true);
+        return this;
     }
-    @Override public UriBuilder resolveTemplatesFromEncoded(Map<String, Object> templateValues) {
-        return resolveTemplates(templateValues);
+
+    @Override public UriBuilder resolveTemplates(Map<String, Object> values) {
+        if (values == null) throw new IllegalArgumentException("values is null");
+        for (var e : values.entrySet()) resolveTemplate(e.getKey(), e.getValue());
+        return this;
     }
+
+    @Override public UriBuilder resolveTemplates(Map<String, Object> values, boolean encodeSlashInPath) {
+        if (values == null) throw new IllegalArgumentException("values is null");
+        for (var e : values.entrySet()) resolveTemplate(e.getKey(), e.getValue(), encodeSlashInPath);
+        return this;
+    }
+
+    @Override public UriBuilder resolveTemplatesFromEncoded(Map<String, Object> values) {
+        if (values == null) throw new IllegalArgumentException("values is null");
+        for (var e : values.entrySet()) resolveTemplateFromEncoded(e.getKey(), e.getValue());
+        return this;
+    }
+
+    // --- Build ---
 
     @Override public URI buildFromMap(Map<String, ?> values) {
         if (values == null) throw new IllegalArgumentException("values is null");
-        return buildInternal(null, values, true);
+        return buildInternal(null, values, true, false);
     }
     @Override public URI buildFromMap(Map<String, ?> values, boolean encodeSlashInPath) {
         if (values == null) throw new IllegalArgumentException("values is null");
-        return buildInternal(null, values, encodeSlashInPath);
+        return buildInternal(null, values, encodeSlashInPath, false);
     }
     @Override public URI buildFromEncodedMap(Map<String, ?> values) {
         if (values == null) throw new IllegalArgumentException("values is null");
-        return buildInternal(null, values, true);
+        return buildInternal(null, values, true, true);
     }
 
     @Override public URI build(Object... values) {
         if (values == null) throw new IllegalArgumentException("values is null");
-        return buildInternal(values, null, true);
+        return buildInternal(values, null, true, false);
     }
     @Override public URI build(Object[] values, boolean encodeSlashInPath) {
         if (values == null) throw new IllegalArgumentException("values is null");
-        return buildInternal(values, null, encodeSlashInPath);
+        return buildInternal(values, null, encodeSlashInPath, false);
     }
     @Override public URI buildFromEncoded(Object... values) {
         if (values == null) throw new IllegalArgumentException("values is null");
-        return buildInternal(values, null, true);
+        return buildInternal(values, null, true, true);
     }
 
-    private URI buildInternal(Object[] values, Map<String, ?> valueMap, boolean encodeSlash) {
-        // Un seul posIdx + seen map pour path + query + fragment pour que
-        // les templates répétés entre ces sections réutilisent la valeur.
+    private URI buildInternal(Object[] values, Map<String, ?> valueMap,
+                              boolean encodeSlash, boolean valuesAlreadyEncoded) {
         Map<String, Object> seen = new LinkedHashMap<>();
-        int[] posIdx = new int[] {0};
-        String substituted = substituteTemplates(path.toString(), values, valueMap, seen, posIdx);
-        String fragmentResolved = substituteTemplates(fragment, values, valueMap, seen, posIdx);
+        int[] posIdx = new int[]{0};
+        String pathOut = substituteLiteralAndTemplates(path.toString(), values, valueMap,
+                seen, posIdx, Comp.PATH, encodeSlash, valuesAlreadyEncoded);
+        String fragmentOut = substituteLiteralAndTemplates(fragment, values, valueMap,
+                seen, posIdx, Comp.FRAGMENT, true, valuesAlreadyEncoded);
         StringBuilder q = new StringBuilder();
         for (var e : query.entrySet()) {
             for (String v : e.getValue()) {
-                String resolved = substituteTemplates(v, values, valueMap, seen, posIdx);
+                String subst = substituteLiteralAndTemplates(v, values, valueMap,
+                        seen, posIdx, Comp.QUERY_PARAM, true, valuesAlreadyEncoded);
                 if (q.length() > 0) q.append('&');
-                q.append(e.getKey()).append('=').append(resolved);
+                q.append(e.getKey()).append('=').append(subst);
             }
         }
-        String query = q.length() == 0 ? null : q.toString();
+        String queryOut = q.length() == 0 ? null : q.toString();
 
-        // Schéma sans authority → URI opaque (mailto:, urn:, news:, etc.)
-        // On utilise le constructeur (scheme, ssp, fragment) et on laisse
-        // URI parser le reste brut.
-        boolean hasAuthority = host != null && !host.isEmpty();
-        try {
-            if (scheme != null && !hasAuthority && (substituted == null || !substituted.startsWith("/"))) {
-                String ssp = substituted == null ? "" : substituted;
-                if (query != null) ssp = ssp + "?" + query;
-                return new URI(scheme, ssp, fragmentResolved);
+        // Assemblage brut (les parties sont déjà encodées).
+        StringBuilder sb = new StringBuilder();
+        if (scheme != null) sb.append(scheme).append(':');
+        if (ssp != null && !ssp.isEmpty() && host == null) {
+            sb.append(ssp);
+        } else {
+            boolean hasAuthority = host != null && !host.isEmpty();
+            if (hasAuthority) {
+                sb.append("//");
+                if (userInfo != null) sb.append(userInfo).append('@');
+                sb.append(host);
+                if (port >= 0) sb.append(':').append(port);
             }
-            return new URI(scheme, userInfo, host, port, substituted, query, fragmentResolved);
-        } catch (URISyntaxException e) {
-            // Fallback : construction brute via toTemplate-like assembly
-            try {
-                StringBuilder sb = new StringBuilder();
-                if (scheme != null) sb.append(scheme).append(':');
-                if (hasAuthority) {
-                    sb.append("//");
-                    if (userInfo != null) sb.append(userInfo).append('@');
-                    sb.append(host);
-                    if (port >= 0) sb.append(':').append(port);
-                }
-                if (substituted != null) sb.append(substituted);
-                if (query != null) sb.append('?').append(query);
-                if (fragmentResolved != null) sb.append('#').append(fragmentResolved);
-                return new URI(sb.toString());
-            } catch (URISyntaxException fatal) {
-                throw new RuntimeException(fatal);
-            }
+            if (pathOut != null) sb.append(pathOut);
+            if (queryOut != null) sb.append('?').append(queryOut);
         }
+        if (fragmentOut != null) sb.append('#').append(fragmentOut);
+        try { return new URI(sb.toString()); }
+        catch (URISyntaxException e) { throw new jakarta.ws.rs.core.UriBuilderException(e); }
     }
 
-    private String substituteTemplates(String tpl, Object[] values, Map<String, ?> valueMap) {
-        if (tpl == null || tpl.isEmpty()) return tpl;
-        return substituteTemplates(tpl, values, valueMap, new LinkedHashMap<>(), new int[] {0});
-    }
-
-    private String substituteTemplates(String tpl, Object[] values, Map<String, ?> valueMap,
-                                       Map<String, Object> seen, int[] posIdx) {
+    /** Walk le template : segments littéraux encodés en préservant les triplets
+     *  {@code %XX} (déjà typés), valeurs de {name} encodées selon {@code valuesAlreadyEncoded}. */
+    private String substituteLiteralAndTemplates(String tpl, Object[] values, Map<String, ?> valueMap,
+                                                 Map<String, Object> seen, int[] posIdx,
+                                                 Comp comp, boolean encodeSlash,
+                                                 boolean valuesAlreadyEncoded) {
         if (tpl == null || tpl.isEmpty()) return tpl;
         StringBuilder out = new StringBuilder();
         int i = 0;
+        int litStart = 0;
         while (i < tpl.length()) {
             char c = tpl.charAt(i);
             if (c == '{') {
                 int end = tpl.indexOf('}', i);
-                if (end < 0) { out.append(tpl, i, tpl.length()); break; }
+                if (end < 0) break;
+                // Flush littéral
+                if (i > litStart) out.append(encode(tpl.substring(litStart, i), comp, true, false));
                 String inside = tpl.substring(i + 1, end).trim();
                 int colon = inside.indexOf(':');
                 String name = colon < 0 ? inside : inside.substring(0, colon).trim();
                 Object val;
-                if (resolvedTemplates.containsKey(name)) val = resolvedTemplates.get(name);
-                else if (valueMap != null && valueMap.containsKey(name)) val = valueMap.get(name);
-                else if (seen.containsKey(name)) val = seen.get(name);
-                else if (values != null && posIdx[0] < values.length) {
+                boolean valEncoded = valuesAlreadyEncoded;
+                if (resolvedTemplates.containsKey(name)) {
+                    val = resolvedTemplates.get(name);
+                    valEncoded = resolvedTemplatesEncoded.getOrDefault(name, false);
+                } else if (valueMap != null && valueMap.containsKey(name)) {
+                    val = valueMap.get(name);
+                } else if (seen.containsKey(name)) {
+                    val = seen.get(name);
+                } else if (values != null && posIdx[0] < values.length) {
                     val = values[posIdx[0]++];
                     seen.put(name, val);
                 } else {
                     throw new IllegalArgumentException(
                             "No value supplied for template parameter " + name);
                 }
-                if (val == null) {
-                    throw new IllegalArgumentException(
-                            "Null value supplied for template parameter " + name);
-                }
-                out.append(String.valueOf(val));
+                if (val == null) throw new IllegalArgumentException(
+                        "Null value supplied for template parameter " + name);
+                out.append(encode(String.valueOf(val), comp, valEncoded, encodeSlash));
                 i = end + 1;
-            } else {
-                out.append(c);
-                i++;
-            }
+                litStart = i;
+            } else { i++; }
         }
+        if (litStart < tpl.length()) out.append(encode(tpl.substring(litStart), comp, true, false));
         return out.toString();
     }
 
     @Override public String toTemplate() {
         StringBuilder sb = new StringBuilder();
         if (scheme != null) sb.append(scheme).append(':');
-        if (host != null) { sb.append("//"); if (userInfo != null) sb.append(userInfo).append('@');
-                            sb.append(host); if (port >= 0) sb.append(':').append(port); }
+        if (host != null) {
+            sb.append("//");
+            if (userInfo != null) sb.append(userInfo).append('@');
+            sb.append(host);
+            if (port >= 0) sb.append(':').append(port);
+        }
         sb.append(resolveStoredTemplates(path.toString()));
         if (!query.isEmpty()) {
             sb.append('?');
             boolean first = true;
             for (var e : query.entrySet())
-                for (String v : e.getValue()) { if (!first) sb.append('&'); first = false;
-                                                sb.append(e.getKey()).append('=')
-                                                  .append(resolveStoredTemplates(v)); }
+                for (String v : e.getValue()) {
+                    if (!first) sb.append('&'); first = false;
+                    sb.append(e.getKey()).append('=').append(resolveStoredTemplates(v));
+                }
         }
         if (fragment != null) sb.append('#').append(resolveStoredTemplates(fragment));
         return sb.toString();
     }
 
-    /** Applique uniquement les templates déjà résolus via resolveTemplate()
-     *  (pas de positional substitution). Laisse le reste tel quel. */
     private String resolveStoredTemplates(String tpl) {
         if (tpl == null || tpl.isEmpty() || resolvedTemplates.isEmpty()) return tpl;
         StringBuilder out = new StringBuilder();
@@ -372,13 +522,79 @@ public final class CassiniUriBuilder extends UriBuilder {
                 String inside = tpl.substring(i + 1, end).trim();
                 int colon = inside.indexOf(':');
                 String name = colon < 0 ? inside : inside.substring(0, colon).trim();
-                if (resolvedTemplates.containsKey(name)) {
-                    out.append(String.valueOf(resolvedTemplates.get(name)));
-                } else {
-                    out.append('{').append(inside).append('}');
-                }
+                if (resolvedTemplates.containsKey(name)) out.append(String.valueOf(resolvedTemplates.get(name)));
+                else out.append('{').append(inside).append('}');
                 i = end + 1;
             } else { out.append(c); i++; }
+        }
+        return out.toString();
+    }
+
+    // --- Encoding helpers ---
+
+    private static final String UNRESERVED_EXTRA = "-._~";
+
+    private static boolean isUnreserved(char c) {
+        return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')
+                || UNRESERVED_EXTRA.indexOf(c) >= 0;
+    }
+
+    private static boolean isHex(char c) {
+        return (c >= '0' && c <= '9') || (c >= 'A' && c <= 'F') || (c >= 'a' && c <= 'f');
+    }
+
+    private static boolean allowed(Comp comp, char c, boolean encodeSlash) {
+        // Sous-delims selon composant.
+        switch (comp) {
+            case PATH:
+                if (c == '/') return !encodeSlash;
+                // pchar = unreserved / pct-encoded / sub-delims / ":" / "@"
+                return "!$&'()*+,;=:@".indexOf(c) >= 0;
+            case QUERY_PARAM:
+                // query chars, mais '&' et '=' sont les séparateurs → encoder
+                return "!$'()*+,;:@/?".indexOf(c) >= 0;
+            case FRAGMENT:
+                return "!$&'()*+,;=:@/?".indexOf(c) >= 0;
+            case MATRIX_PARAM:
+                // ';' et '=' sont les séparateurs → encoder
+                return "!$&'()*+,:@/".indexOf(c) >= 0;
+        }
+        return false;
+    }
+
+    /**
+     * Encode {@code s} pour le composant donné.
+     *
+     * @param preservePercent si {@code true}, un {@code %XX} valide déjà encodé
+     *                       est préservé sans re-encodage. Si {@code false},
+     *                       {@code %} est encodé en {@code %25}.
+     * @param encodeSlash    applique seulement au composant PATH : {@code true}
+     *                       encode {@code /} en {@code %2F}.
+     */
+    private static String encode(String s, Comp comp, boolean preservePercent, boolean encodeSlash) {
+        if (s == null || s.isEmpty()) return s;
+        StringBuilder out = new StringBuilder(s.length());
+        int i = 0;
+        while (i < s.length()) {
+            char c = s.charAt(i);
+            if (preservePercent && c == '%' && i + 2 < s.length()
+                    && isHex(s.charAt(i + 1)) && isHex(s.charAt(i + 2))) {
+                out.append('%').append(s.charAt(i + 1)).append(s.charAt(i + 2));
+                i += 3;
+                continue;
+            }
+            if (isUnreserved(c) || allowed(comp, c, encodeSlash)) {
+                out.append(c);
+                i++;
+            } else {
+                byte[] bytes = String.valueOf(c).getBytes(StandardCharsets.UTF_8);
+                for (byte b : bytes) {
+                    out.append('%');
+                    out.append(Character.toUpperCase(Character.forDigit((b >> 4) & 0xF, 16)));
+                    out.append(Character.toUpperCase(Character.forDigit(b & 0xF, 16)));
+                }
+                i++;
+            }
         }
         return out.toString();
     }
