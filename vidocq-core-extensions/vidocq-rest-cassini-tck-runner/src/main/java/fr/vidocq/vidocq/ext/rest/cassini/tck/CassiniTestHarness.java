@@ -54,7 +54,10 @@ public final class CassiniTestHarness implements AutoCloseable {
     public static Builder builder() { return new Builder(); }
 
     public static final class Builder {
+        /** Instances fournies explicitement (résolues à l'identique par requête). */
         private final Map<Class<?>, Object> beans = new HashMap<>();
+        /** Classes à instancier par-requête (JAX-RS §3.1.1). */
+        private final java.util.Set<Class<?>> perRequestClasses = new java.util.LinkedHashSet<>();
         private final FilterRegistry filters = new FilterRegistry();
         private final ExceptionMapperRegistry exceptionMappers = new ExceptionMapperRegistry();
         private final MessageBodyRegistry bodies = new MessageBodyRegistry();
@@ -91,12 +94,51 @@ public final class CassiniTestHarness implements AutoCloseable {
         }
 
         public Builder resourceClass(Class<?> cls) {
-            try {
-                beans.put(cls, cls.getDeclaredConstructor().newInstance());
-            } catch (ReflectiveOperationException e) {
-                throw new RuntimeException("failed to instantiate " + cls, e);
+            // §3.1.1 : seule une classe publique et non abstraite peut être
+            // une ressource root. Les constructeurs non-public → la classe
+            // est ignorée (→ 404 visible depuis le TCK).
+            if (!java.lang.reflect.Modifier.isPublic(cls.getModifiers())) {
+                return this;
             }
+            if (java.lang.reflect.Modifier.isAbstract(cls.getModifiers())) {
+                return this;
+            }
+            if (pickConstructor(cls) == null) {
+                return this;
+            }
+            perRequestClasses.add(cls);
             return this;
+        }
+
+        /** §3.1.1 : choisit le constructeur public avec le plus de paramètres
+         *  injectables (@Context, @*Param). Retourne {@code null} si aucun
+         *  constructeur public approprié n'existe. */
+        private static java.lang.reflect.Constructor<?> pickConstructor(Class<?> cls) {
+            java.lang.reflect.Constructor<?> best = null;
+            int bestScore = -1;
+            for (var c : cls.getConstructors()) { // public only
+                int paramCount = c.getParameterCount();
+                boolean allInjectable = true;
+                for (var p : c.getParameters()) {
+                    if (!isInjectable(p)) { allInjectable = false; break; }
+                }
+                if (!allInjectable) continue;
+                if (paramCount > bestScore) { bestScore = paramCount; best = c; }
+            }
+            return best;
+        }
+
+        private static boolean isInjectable(java.lang.reflect.Parameter p) {
+            if (p.getAnnotation(jakarta.ws.rs.core.Context.class) != null) return true;
+            if (p.getAnnotation(jakarta.ws.rs.PathParam.class) != null) return true;
+            if (p.getAnnotation(jakarta.ws.rs.QueryParam.class) != null) return true;
+            if (p.getAnnotation(jakarta.ws.rs.HeaderParam.class) != null) return true;
+            if (p.getAnnotation(jakarta.ws.rs.CookieParam.class) != null) return true;
+            if (p.getAnnotation(jakarta.ws.rs.MatrixParam.class) != null) return true;
+            if (p.getAnnotation(jakarta.ws.rs.FormParam.class) != null) return true;
+            if (p.getAnnotation(jakarta.ws.rs.BeanParam.class) != null) return true;
+            // Un constructeur no-arg est trivialement "tous injectables".
+            return false;
         }
 
         public Builder contextPath(String path) {
@@ -107,10 +149,33 @@ public final class CassiniTestHarness implements AutoCloseable {
         public Builder port(int port) { this.fixedPort = port; return this; }
 
         public CassiniTestHarness start() {
-            Class<?>[] classes = beans.keySet().toArray(Class<?>[]::new);
-            List<ResourceMethod> routes = ResourceScanner.discover(classes);
+            java.util.Set<Class<?>> allClasses = new java.util.LinkedHashSet<>(beans.keySet());
+            allClasses.addAll(perRequestClasses);
+            List<ResourceMethod> routes = ResourceScanner.discover(allClasses.toArray(Class<?>[]::new));
             UriRouter router = new UriRouter(routes);
-            Invoker invoker = new Invoker(beans::get, bodies, exceptionMappers);
+            // Résolveur : instances fixes OU instanciation par-requête avec
+            // injection constructeur (@Context/@*Param) §3.1.1.
+            java.util.function.Function<Class<?>, Object> resolver = cls -> {
+                Object fixed = beans.get(cls);
+                if (fixed != null) return fixed;
+                var ctor = pickConstructor(cls);
+                if (ctor == null) {
+                    throw new RuntimeException("No suitable constructor on " + cls);
+                }
+                try {
+                    if (ctor.getParameterCount() == 0) {
+                        return ctor.newInstance();
+                    }
+                    var match = Invoker.CURRENT_MATCH.get();
+                    var req = Invoker.CURRENT_REQUEST.get();
+                    Object[] args = fr.vidocq.vidocq.ext.rest.cassini.internal.ParamExtractor
+                            .resolveConstructorArgs(ctor.getParameters(), match, req);
+                    return ctor.newInstance(args);
+                } catch (ReflectiveOperationException e) {
+                    throw new RuntimeException("Failed to instantiate " + cls, e);
+                }
+            };
+            Invoker invoker = new Invoker(resolver, bodies, exceptionMappers);
             invoker.setFilters(filters);
             CassiniRestBridge bridge = new CassiniRestBridge(router, invoker);
             final String prefix = "/".equals(contextPath) ? "" : contextPath;

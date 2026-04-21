@@ -40,6 +40,12 @@ import java.util.function.Function;
  */
 public final class Invoker {
 
+    /** Contexte exposé pendant l'appel {@link #resolver} pour permettre à des
+     *  résolveurs (ex. harness TCK) de créer des instances avec injection
+     *  constructeur §3.1.1. */
+    public static final ThreadLocal<MatchResult> CURRENT_MATCH = new ThreadLocal<>();
+    public static final ThreadLocal<Request> CURRENT_REQUEST = new ThreadLocal<>();
+
     private final Function<Class<?>, Object> resolver;
     private final MessageBodyRegistry registry;
     private final ExceptionMapperRegistry exceptionMappers;
@@ -120,6 +126,8 @@ public final class Invoker {
         } finally {
             ParamExtractor.clearProviders();
             FieldInjector.clearFormCache();
+            CURRENT_MATCH.remove();
+            CURRENT_REQUEST.remove();
             fr.vidocq.vidocq.ext.rest.cassini.internal.runtime.CassiniResponseBuilder.clearBaseUri();
         }
     }
@@ -179,6 +187,8 @@ public final class Invoker {
 
         // 4. Invoke
         Object target;
+        CURRENT_MATCH.set(match);
+        CURRENT_REQUEST.set(request);
         try {
             if (route.isLocated()) {
                 // Sub-resource locator §3.4.1 : instantier la ressource racine,

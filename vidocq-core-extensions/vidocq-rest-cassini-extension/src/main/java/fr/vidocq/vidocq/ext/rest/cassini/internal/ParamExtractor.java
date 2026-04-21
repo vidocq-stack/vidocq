@@ -56,6 +56,60 @@ public final class ParamExtractor {
 
     private ParamExtractor() {}
 
+    /**
+     * Résout les arguments d'un constructeur de ressource (§3.1.1).
+     * Les paramètres sans annotation JAX-RS reçoivent leur valeur par défaut
+     * (un constructeur ne peut pas consommer le body).
+     */
+    public static Object[] resolveConstructorArgs(Parameter[] params, MatchResult match, Request request) {
+        Object[] args = new Object[params.length];
+        for (int i = 0; i < params.length; i++) {
+            args[i] = resolveInjectedParam(params[i], match, request);
+        }
+        return args;
+    }
+
+    private static Object resolveInjectedParam(Parameter p, MatchResult match, Request request) {
+        String def = defaultValue(p);
+        Context context = p.getAnnotation(Context.class);
+        if (context != null) return resolveContext(p.getType(), match, request);
+
+        BeanParam beanParam = p.getAnnotation(BeanParam.class);
+        if (beanParam != null) return instantiateBeanParam(p.getType(), match, request);
+
+        PathParam pathParam = p.getAnnotation(PathParam.class);
+        if (pathParam != null) {
+            String raw = match.pathParams().get(pathParam.value());
+            return coerce(p, raw == null ? emptyOrDefault(def) : List.of(raw));
+        }
+        QueryParam queryParam = p.getAnnotation(QueryParam.class);
+        if (queryParam != null) {
+            List<String> raws = parsedQueryFromRequest(request).getOrDefault(queryParam.value(), List.of());
+            return coerce(p, raws.isEmpty() ? emptyOrDefault(def) : raws);
+        }
+        HeaderParam headerParam = p.getAnnotation(HeaderParam.class);
+        if (headerParam != null) {
+            List<String> raws = request.headers().all(headerParam.value());
+            return coerce(p, raws.isEmpty() ? emptyOrDefault(def) : raws);
+        }
+        CookieParam cookieParam = p.getAnnotation(CookieParam.class);
+        if (cookieParam != null) {
+            String raw = cookie(request, cookieParam.value());
+            return coerce(p, raw == null ? emptyOrDefault(def) : List.of(raw));
+        }
+        MatrixParam matrixParam = p.getAnnotation(MatrixParam.class);
+        if (matrixParam != null) {
+            List<String> raws = matrix(request, matrixParam.value());
+            return coerce(p, raws.isEmpty() ? emptyOrDefault(def) : raws);
+        }
+        FormParam formParam = p.getAnnotation(FormParam.class);
+        if (formParam != null) {
+            List<String> raws = readForm(request).getOrDefault(formParam.value(), List.of());
+            return coerce(p, raws.isEmpty() ? emptyOrDefault(def) : raws);
+        }
+        return ParamValueConverter.defaultForType(p.getType());
+    }
+
     public static ResolvedArgs resolve(ResourceMethod route, MatchResult match, Request request) {
         Parameter[] params = route.javaMethod().getParameters();
         Object[] args = new Object[params.length];
