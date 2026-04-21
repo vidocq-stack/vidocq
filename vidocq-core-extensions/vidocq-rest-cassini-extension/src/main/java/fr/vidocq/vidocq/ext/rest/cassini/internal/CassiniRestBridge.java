@@ -75,7 +75,16 @@ public final class CassiniRestBridge implements Handler {
                 }
             });
             if (holder[0] instanceof Exception ex) throw ex;
-            return (Response) holder[0];
+            Response resp = (Response) holder[0];
+            // §3.3.5 : HEAD invoqué sur méthode @GET → on renvoie le header
+            // mais on remplace le body par vide (le client n'en a pas besoin
+            // pour HEAD).
+            if ("HEAD".equalsIgnoreCase(verb) && !"HEAD".equalsIgnoreCase(result.method().httpMethod())) {
+                var b = Response.builder().status(resp.status());
+                for (var e : resp.headers()) b.header(e.name(), e.value());
+                return b.body(fr.vidocq.chappe.api.Body.empty()).build();
+            }
+            return resp;
         } catch (Exception e) {
             LOG.log(System.Logger.Level.ERROR, "Cassini handler error on " + verb + " " + path, e);
             return Response.builder()

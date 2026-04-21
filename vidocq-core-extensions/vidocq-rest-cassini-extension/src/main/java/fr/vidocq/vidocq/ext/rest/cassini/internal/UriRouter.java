@@ -51,6 +51,15 @@ public final class UriRouter {
                 out.add(new MatchResult(r, params.get()));
             }
         }
+        // §3.3.5 : HEAD → GET fallback (body discard côté Bridge)
+        if (out.isEmpty() && "HEAD".equalsIgnoreCase(httpMethod)) {
+            for (ResourceMethod r : routes) {
+                Optional<Map<String, String>> params = r.template().match(p);
+                if (params.isPresent() && "GET".equalsIgnoreCase(r.httpMethod())) {
+                    out.add(new MatchResult(r, params.get()));
+                }
+            }
+        }
         return out;
     }
 
