@@ -306,25 +306,67 @@ public final class CassiniRuntimeDelegate extends RuntimeDelegate {
         @Override public Link.Builder baseUri(String uri) { this.baseUri = java.net.URI.create(uri); return this; }
         @Override public Link.Builder uriBuilder(jakarta.ws.rs.core.UriBuilder ub) { this.uriBuilder = ub; return this; }
         @Override public Link.Builder rel(String rel) {
+            if (rel == null) throw new IllegalArgumentException("rel");
             String existing = params.get("rel");
             params.put("rel", existing == null ? rel : existing + " " + rel);
             return this;
         }
+        @Override public Link.Builder param(String name, String value) {
+            if (name == null) throw new IllegalArgumentException("name");
+            params.put(name, value);
+            return this;
+        }
         @Override public Link.Builder title(String t) { params.put("title", t); return this; }
         @Override public Link.Builder type(String t) { params.put("type", t); return this; }
-        @Override public Link.Builder param(String n, String v) { params.put(n, v); return this; }
 
         @Override public Link build(Object... values) {
-            java.net.URI effective = uri != null ? uri
-                    : (uriBuilder != null ? uriBuilder.build(values) : java.net.URI.create(""));
+            if (values == null) throw new IllegalArgumentException("values");
+            String uriStr;
+            if (uri != null) uriStr = uri.toString();
+            else if (uriBuilder != null) uriStr = uriBuilder.build(values).toString();
+            else uriStr = "";
+            // Décode %7B/%7D en {} pour substituer, puis substitue positionnellement.
+            String decoded = uriStr.replace("%7B", "{").replace("%7D", "}")
+                    .replace("%7b", "{").replace("%7d", "}");
+            String substituted = substituteTemplates(decoded, values);
+            if (substituted.indexOf('{') >= 0) {
+                throw new IllegalArgumentException(
+                        "value not supplied for template in link uri: " + decoded);
+            }
+            java.net.URI effective = java.net.URI.create(substituted);
             if (baseUri != null) effective = baseUri.resolve(effective);
             return new StubLink(effective, java.util.Map.copyOf(params));
         }
 
         @Override public Link buildRelativized(java.net.URI base, Object... values) {
+            if (base == null) throw new IllegalArgumentException("base");
             Link l = build(values);
             java.net.URI rel = base.relativize(l.getUri());
             return new StubLink(rel, l.getParams());
+        }
+
+        private static String substituteTemplates(String tpl, Object[] values) {
+            if (tpl == null || tpl.indexOf('{') < 0) return tpl;
+            StringBuilder out = new StringBuilder();
+            int i = 0, pos = 0;
+            java.util.Map<String, Object> seen = new java.util.LinkedHashMap<>();
+            while (i < tpl.length()) {
+                char c = tpl.charAt(i);
+                if (c == '{') {
+                    int end = tpl.indexOf('}', i);
+                    if (end < 0) { out.append(tpl, i, tpl.length()); break; }
+                    String name = tpl.substring(i + 1, end).trim();
+                    int colon = name.indexOf(':');
+                    if (colon >= 0) name = name.substring(0, colon).trim();
+                    Object val;
+                    if (seen.containsKey(name)) val = seen.get(name);
+                    else if (pos < values.length) { val = values[pos++]; seen.put(name, val); }
+                    else { out.append('{').append(tpl, i + 1, end).append('}'); i = end + 1; continue; }
+                    out.append(val);
+                    i = end + 1;
+                } else { out.append(c); i++; }
+            }
+            return out.toString();
         }
     }
 
