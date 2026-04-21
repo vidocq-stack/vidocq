@@ -345,15 +345,41 @@ public final class CassiniUriBuilder extends UriBuilder {
         if (scheme != null) sb.append(scheme).append(':');
         if (host != null) { sb.append("//"); if (userInfo != null) sb.append(userInfo).append('@');
                             sb.append(host); if (port >= 0) sb.append(':').append(port); }
-        sb.append(path);
+        sb.append(resolveStoredTemplates(path.toString()));
         if (!query.isEmpty()) {
             sb.append('?');
             boolean first = true;
             for (var e : query.entrySet())
                 for (String v : e.getValue()) { if (!first) sb.append('&'); first = false;
-                                                sb.append(e.getKey()).append('=').append(v); }
+                                                sb.append(e.getKey()).append('=')
+                                                  .append(resolveStoredTemplates(v)); }
         }
-        if (fragment != null) sb.append('#').append(fragment);
+        if (fragment != null) sb.append('#').append(resolveStoredTemplates(fragment));
         return sb.toString();
+    }
+
+    /** Applique uniquement les templates déjà résolus via resolveTemplate()
+     *  (pas de positional substitution). Laisse le reste tel quel. */
+    private String resolveStoredTemplates(String tpl) {
+        if (tpl == null || tpl.isEmpty() || resolvedTemplates.isEmpty()) return tpl;
+        StringBuilder out = new StringBuilder();
+        int i = 0;
+        while (i < tpl.length()) {
+            char c = tpl.charAt(i);
+            if (c == '{') {
+                int end = tpl.indexOf('}', i);
+                if (end < 0) { out.append(tpl, i, tpl.length()); break; }
+                String inside = tpl.substring(i + 1, end).trim();
+                int colon = inside.indexOf(':');
+                String name = colon < 0 ? inside : inside.substring(0, colon).trim();
+                if (resolvedTemplates.containsKey(name)) {
+                    out.append(String.valueOf(resolvedTemplates.get(name)));
+                } else {
+                    out.append('{').append(inside).append('}');
+                }
+                i = end + 1;
+            } else { out.append(c); i++; }
+        }
+        return out.toString();
     }
 }
