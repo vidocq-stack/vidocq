@@ -228,12 +228,9 @@ public final class ParamExtractor {
         return out;
     }
 
-    private static final String FORM_CACHE_ATTR = "cassini.formCache";
-
-    @SuppressWarnings("unchecked")
     private static Map<String, List<String>> readForm(Request request) {
-        Object cached = request.attribute(FORM_CACHE_ATTR);
-        if (cached instanceof Map) return (Map<String, List<String>>) cached;
+        Map<String, List<String>> cached = FieldInjector.FORM_CACHE.get();
+        if (cached != null) return cached;
         try {
             var body = request.body();
             Map<String, List<String>> parsed;
@@ -242,7 +239,7 @@ public final class ParamExtractor {
             } else {
                 parsed = FormDecoder.decode(body.asInputStream().readAllBytes());
             }
-            request.attribute(FORM_CACHE_ATTR, parsed);
+            FieldInjector.FORM_CACHE.set(parsed);
             return parsed;
         } catch (Exception e) {
             throw new WebApplicationException("Failed to read form body: " + e.getMessage(), 400);

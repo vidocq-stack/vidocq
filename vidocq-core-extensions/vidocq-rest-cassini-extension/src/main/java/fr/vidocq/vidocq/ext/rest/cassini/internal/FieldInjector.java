@@ -188,12 +188,11 @@ public final class FieldInjector {
         return out;
     }
 
-    private static final String FORM_CACHE_ATTR = "cassini.formCache";
+    static final ThreadLocal<Map<String, List<String>>> FORM_CACHE = new ThreadLocal<>();
 
-    @SuppressWarnings("unchecked")
     private static Map<String, List<String>> readForm(Request request) {
-        Object cached = request.attribute(FORM_CACHE_ATTR);
-        if (cached instanceof Map) return (Map<String, List<String>>) cached;
+        Map<String, List<String>> cached = FORM_CACHE.get();
+        if (cached != null) return cached;
         try {
             var body = request.body();
             Map<String, List<String>> parsed;
@@ -202,10 +201,12 @@ public final class FieldInjector {
             } else {
                 parsed = FormDecoder.decode(body.asInputStream().readAllBytes());
             }
-            request.attribute(FORM_CACHE_ATTR, parsed);
+            FORM_CACHE.set(parsed);
             return parsed;
         } catch (Exception e) {
             throw new WebApplicationException("Failed to read form body: " + e.getMessage(), 400);
         }
     }
+
+    public static void clearFormCache() { FORM_CACHE.remove(); }
 }

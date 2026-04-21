@@ -104,6 +104,7 @@ public final class Invoker {
             return invokeInternal(match, request, route);
         } finally {
             ParamExtractor.clearProviders();
+            FieldInjector.clearFormCache();
             fr.vidocq.vidocq.ext.rest.cassini.internal.runtime.CassiniResponseBuilder.clearBaseUri();
         }
     }
