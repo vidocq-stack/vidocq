@@ -274,19 +274,22 @@ public final class CassiniUriBuilder extends UriBuilder {
                 String inside = tpl.substring(i + 1, end).trim();
                 int colon = inside.indexOf(':');
                 String name = colon < 0 ? inside : inside.substring(0, colon).trim();
-                Object val = null;
+                Object val;
                 if (resolvedTemplates.containsKey(name)) val = resolvedTemplates.get(name);
                 else if (valueMap != null && valueMap.containsKey(name)) val = valueMap.get(name);
                 else if (seen.containsKey(name)) val = seen.get(name);
                 else if (values != null && posIdx[0] < values.length) {
                     val = values[posIdx[0]++];
                     seen.put(name, val);
+                } else {
+                    throw new IllegalArgumentException(
+                            "No value supplied for template parameter " + name);
                 }
                 if (val == null) {
-                    out.append('{').append(inside).append('}');
-                } else {
-                    out.append(String.valueOf(val));
+                    throw new IllegalArgumentException(
+                            "Null value supplied for template parameter " + name);
                 }
+                out.append(String.valueOf(val));
                 i = end + 1;
             } else {
                 out.append(c);
