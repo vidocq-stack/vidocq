@@ -29,6 +29,13 @@ public final class FormDecoder {
     }
 
     public static Map<String, List<String>> parse(String body) {
+        return parse(body, true);
+    }
+
+    /** Si {@code decode} est {@code false}, préserve les triplets {@code %XX}
+     *  bruts et ne transforme pas {@code '+'} en espace — utilisé pour
+     *  {@code @Encoded} §3.2. */
+    public static Map<String, List<String>> parse(String body, boolean decode) {
         Map<String, List<String>> out = new LinkedHashMap<>();
         if (body == null || body.isEmpty()) return out;
         for (String pair : body.split("&")) {
@@ -37,11 +44,13 @@ public final class FormDecoder {
             String name;
             String value;
             if (eq < 0) {
-                name = decodeToken(pair);
+                name = decode ? decodeToken(pair) : pair;
                 value = "";
             } else {
-                name = decodeToken(pair.substring(0, eq));
-                value = decodeToken(pair.substring(eq + 1));
+                String rawName = pair.substring(0, eq);
+                String rawValue = pair.substring(eq + 1);
+                name = decode ? decodeToken(rawName) : rawName;
+                value = decode ? decodeToken(rawValue) : rawValue;
             }
             out.computeIfAbsent(name, k -> new ArrayList<>()).add(value);
         }

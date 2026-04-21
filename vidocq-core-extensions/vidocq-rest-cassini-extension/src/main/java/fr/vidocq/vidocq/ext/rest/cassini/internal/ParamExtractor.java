@@ -71,6 +71,7 @@ public final class ParamExtractor {
 
     private static Object resolveInjectedParam(Parameter p, MatchResult match, Request request) {
         String def = defaultValue(p);
+        boolean encoded = p.getAnnotation(jakarta.ws.rs.Encoded.class) != null;
         Context context = p.getAnnotation(Context.class);
         if (context != null) return resolveContext(p.getType(), match, request);
 
@@ -84,7 +85,7 @@ public final class ParamExtractor {
         }
         QueryParam queryParam = p.getAnnotation(QueryParam.class);
         if (queryParam != null) {
-            List<String> raws = parsedQueryFromRequest(request).getOrDefault(queryParam.value(), List.of());
+            List<String> raws = parsedQueryFromRequest(request, encoded).getOrDefault(queryParam.value(), List.of());
             return coerce(p, raws.isEmpty() ? emptyOrDefault(def) : raws);
         }
         HeaderParam headerParam = p.getAnnotation(HeaderParam.class);
@@ -99,12 +100,12 @@ public final class ParamExtractor {
         }
         MatrixParam matrixParam = p.getAnnotation(MatrixParam.class);
         if (matrixParam != null) {
-            List<String> raws = matrix(request, matrixParam.value());
+            List<String> raws = matrix(request, matrixParam.value(), encoded);
             return coerce(p, raws.isEmpty() ? emptyOrDefault(def) : raws);
         }
         FormParam formParam = p.getAnnotation(FormParam.class);
         if (formParam != null) {
-            List<String> raws = readForm(request).getOrDefault(formParam.value(), List.of());
+            List<String> raws = readForm(request, encoded).getOrDefault(formParam.value(), List.of());
             return coerce(p, raws.isEmpty() ? emptyOrDefault(def) : raws);
         }
         return ParamValueConverter.defaultForType(p.getType());
@@ -116,10 +117,15 @@ public final class ParamExtractor {
         int bodyIndex = -1;
         Map<String, List<String>> formCache = null;
         Map<String, List<String>> queryCache = null;
+        Map<String, List<String>> formCacheEncoded = null;
+        Map<String, List<String>> queryCacheEncoded = null;
+        boolean methodEncoded = route.javaMethod().getAnnotation(jakarta.ws.rs.Encoded.class) != null
+                || route.beanClass().getAnnotation(jakarta.ws.rs.Encoded.class) != null;
 
         for (int i = 0; i < params.length; i++) {
             Parameter p = params[i];
             String def = defaultValue(p);
+            boolean encoded = methodEncoded || p.getAnnotation(jakarta.ws.rs.Encoded.class) != null;
 
             PathParam pathParam = p.getAnnotation(PathParam.class);
             QueryParam queryParam = p.getAnnotation(QueryParam.class);
@@ -142,8 +148,15 @@ public final class ParamExtractor {
                 String raw = match.pathParams().get(pathParam.value());
                 args[i] = coerce(p, raw == null ? emptyOrDefault(def) : List.of(raw));
             } else if (queryParam != null) {
-                if (queryCache == null) queryCache = parsedQueryFromRequest(request);
-                List<String> raws = queryCache.getOrDefault(queryParam.value(), List.of());
+                Map<String, List<String>> cache;
+                if (encoded) {
+                    if (queryCacheEncoded == null) queryCacheEncoded = parsedQueryFromRequest(request, true);
+                    cache = queryCacheEncoded;
+                } else {
+                    if (queryCache == null) queryCache = parsedQueryFromRequest(request, false);
+                    cache = queryCache;
+                }
+                List<String> raws = cache.getOrDefault(queryParam.value(), List.of());
                 args[i] = coerce(p, raws.isEmpty() ? emptyOrDefault(def) : raws);
             } else if (headerParam != null) {
                 List<String> raws = request.headers().all(headerParam.value());
@@ -152,11 +165,18 @@ public final class ParamExtractor {
                 String raw = cookie(request, cookieParam.value());
                 args[i] = coerce(p, raw == null ? emptyOrDefault(def) : List.of(raw));
             } else if (formParam != null) {
-                if (formCache == null) formCache = readForm(request);
-                List<String> raws = formCache.getOrDefault(formParam.value(), List.of());
+                Map<String, List<String>> cache;
+                if (encoded) {
+                    if (formCacheEncoded == null) formCacheEncoded = readForm(request, true);
+                    cache = formCacheEncoded;
+                } else {
+                    if (formCache == null) formCache = readForm(request, false);
+                    cache = formCache;
+                }
+                List<String> raws = cache.getOrDefault(formParam.value(), List.of());
                 args[i] = coerce(p, raws.isEmpty() ? emptyOrDefault(def) : raws);
             } else if (matrixParam != null) {
-                List<String> raws = matrix(request, matrixParam.value());
+                List<String> raws = matrix(request, matrixParam.value(), encoded);
                 args[i] = coerce(p, raws.isEmpty() ? emptyOrDefault(def) : raws);
             } else if (isBodyCandidate(p)) {
                 if (bodyIndex < 0) bodyIndex = i;
@@ -251,12 +271,12 @@ public final class ParamExtractor {
         return String.class;
     }
 
-    private static Map<String, List<String>> parseQuery(String raw) {
+    private static Map<String, List<String>> parseQuery(String raw, boolean encoded) {
         if (raw == null || raw.isEmpty()) return new LinkedHashMap<>();
-        return FormDecoder.parse(raw);
+        return FormDecoder.parse(raw, !encoded);
     }
 
-    private static Map<String, List<String>> parsedQueryFromRequest(Request request) {
+    private static Map<String, List<String>> parsedQueryFromRequest(Request request, boolean encoded) {
         String q = request.query();
         if (q == null || q.isEmpty()) {
             java.net.URI u = request.uri();
@@ -265,7 +285,7 @@ public final class ParamExtractor {
                 if (raw != null && !raw.isEmpty()) q = raw;
             }
         }
-        return parseQuery(q);
+        return parseQuery(q, encoded);
     }
 
     private static String cookie(Request request, String name) {
@@ -286,7 +306,7 @@ public final class ParamExtractor {
         return null;
     }
 
-    private static List<String> matrix(Request request, String name) {
+    private static List<String> matrix(Request request, String name, boolean encoded) {
         List<String> out = new ArrayList<>();
         String path = request.pathInfo();
         if (path == null) return out;
@@ -297,7 +317,11 @@ public final class ParamExtractor {
                 int eq = pair.indexOf('=');
                 String n = eq < 0 ? pair : pair.substring(0, eq);
                 if (URLDecoder.decode(n, StandardCharsets.UTF_8).equals(name)) {
-                    out.add(eq < 0 ? "" : URLDecoder.decode(pair.substring(eq + 1), StandardCharsets.UTF_8));
+                    if (eq < 0) out.add("");
+                    else {
+                        String v = pair.substring(eq + 1);
+                        out.add(encoded ? v : URLDecoder.decode(v, StandardCharsets.UTF_8));
+                    }
                 }
             }
         }
@@ -305,18 +329,32 @@ public final class ParamExtractor {
     }
 
     private static Map<String, List<String>> readForm(Request request) {
-        Map<String, List<String>> cached = FieldInjector.FORM_CACHE.get();
-        if (cached != null) return cached;
+        return readForm(request, false);
+    }
+    private static Map<String, List<String>> readForm(Request request, boolean encoded) {
+        // On a deux caches distincts selon le mode (decoded vs @Encoded).
+        if (encoded) {
+            Map<String, List<String>> enc = FieldInjector.FORM_CACHE_ENCODED.get();
+            if (enc != null) return enc;
+        } else {
+            Map<String, List<String>> cached = FieldInjector.FORM_CACHE.get();
+            if (cached != null) return cached;
+        }
         try {
             var body = request.body();
-            Map<String, List<String>> parsed;
-            if (body == null || body.contentLength() == 0) {
-                parsed = new LinkedHashMap<>();
+            byte[] bytes = (body == null || body.contentLength() == 0)
+                    ? new byte[0] : body.asInputStream().readAllBytes();
+            if (encoded) {
+                String s = new String(bytes, StandardCharsets.UTF_8);
+                Map<String, List<String>> parsed = FormDecoder.parse(s, false);
+                FieldInjector.FORM_CACHE_ENCODED.set(parsed);
+                return parsed;
             } else {
-                parsed = FormDecoder.decode(body.asInputStream().readAllBytes());
+                Map<String, List<String>> parsed = bytes.length == 0
+                        ? new LinkedHashMap<>() : FormDecoder.decode(bytes);
+                FieldInjector.FORM_CACHE.set(parsed);
+                return parsed;
             }
-            FieldInjector.FORM_CACHE.set(parsed);
-            return parsed;
         } catch (Exception e) {
             throw new WebApplicationException("Failed to read form body: " + e.getMessage(), 400);
         }

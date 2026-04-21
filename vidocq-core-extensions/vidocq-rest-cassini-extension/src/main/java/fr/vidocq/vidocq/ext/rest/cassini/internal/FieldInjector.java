@@ -75,6 +75,8 @@ public final class FieldInjector {
         }
 
         String def = defaultValue(f);
+        boolean encoded = f.getAnnotation(jakarta.ws.rs.Encoded.class) != null
+                || f.getDeclaringClass().getAnnotation(jakarta.ws.rs.Encoded.class) != null;
         PathParam pp = f.getAnnotation(PathParam.class);
         if (pp != null) {
             String raw = match.pathParams().get(pp.value());
@@ -82,7 +84,7 @@ public final class FieldInjector {
         }
         QueryParam qp = f.getAnnotation(QueryParam.class);
         if (qp != null) {
-            List<String> raws = parsedQueryParams(request).getOrDefault(qp.value(), List.of());
+            List<String> raws = parsedQueryParams(request, encoded).getOrDefault(qp.value(), List.of());
             return coerce(f, raws.isEmpty() ? emptyOrDef(def) : raws);
         }
         HeaderParam hp = f.getAnnotation(HeaderParam.class);
@@ -97,12 +99,12 @@ public final class FieldInjector {
         }
         MatrixParam mp = f.getAnnotation(MatrixParam.class);
         if (mp != null) {
-            List<String> raws = matrix(request, mp.value());
+            List<String> raws = matrix(request, mp.value(), encoded);
             return coerce(f, raws.isEmpty() ? emptyOrDef(def) : raws);
         }
         FormParam fp = f.getAnnotation(FormParam.class);
         if (fp != null) {
-            Map<String, List<String>> form = readForm(request);
+            Map<String, List<String>> form = readForm(request, encoded);
             List<String> raws = form.getOrDefault(fp.value(), List.of());
             return coerce(f, raws.isEmpty() ? emptyOrDef(def) : raws);
         }
@@ -148,15 +150,15 @@ public final class FieldInjector {
         return d == null ? null : d.value();
     }
 
-    private static Map<String, List<String>> parseQuery(String raw) {
+    private static Map<String, List<String>> parseQuery(String raw, boolean encoded) {
         if (raw == null || raw.isEmpty()) return new LinkedHashMap<>();
-        return FormDecoder.parse(raw);
+        return FormDecoder.parse(raw, !encoded);
     }
 
     /** Résout la query depuis request.query() ou, si null, depuis request.uri().
      *  Chappe retourne parfois null pour query() quand le path a été rewrité
      *  par un handler intermédiaire (ContextStrippingHandler côté TCK harness). */
-    private static Map<String, List<String>> parsedQueryParams(Request request) {
+    private static Map<String, List<String>> parsedQueryParams(Request request, boolean encoded) {
         String q = request.query();
         if (q == null || q.isEmpty()) {
             java.net.URI u = request.uri();
@@ -165,7 +167,7 @@ public final class FieldInjector {
                 if (raw != null && !raw.isEmpty()) q = raw;
             }
         }
-        return parseQuery(q);
+        return parseQuery(q, encoded);
     }
 
     private static String cookie(Request request, String name) {
@@ -186,7 +188,7 @@ public final class FieldInjector {
         return null;
     }
 
-    private static List<String> matrix(Request request, String name) {
+    private static List<String> matrix(Request request, String name, boolean encoded) {
         List<String> out = new ArrayList<>();
         String path = request.pathInfo();
         if (path == null) return out;
@@ -197,7 +199,11 @@ public final class FieldInjector {
                 int eq = pair.indexOf('=');
                 String n = eq < 0 ? pair : pair.substring(0, eq);
                 if (URLDecoder.decode(n, StandardCharsets.UTF_8).equals(name)) {
-                    out.add(eq < 0 ? "" : URLDecoder.decode(pair.substring(eq + 1), StandardCharsets.UTF_8));
+                    if (eq < 0) out.add("");
+                    else {
+                        String v = pair.substring(eq + 1);
+                        out.add(encoded ? v : URLDecoder.decode(v, StandardCharsets.UTF_8));
+                    }
                 }
             }
         }
@@ -205,24 +211,38 @@ public final class FieldInjector {
     }
 
     static final ThreadLocal<Map<String, List<String>>> FORM_CACHE = new ThreadLocal<>();
+    static final ThreadLocal<Map<String, List<String>>> FORM_CACHE_ENCODED = new ThreadLocal<>();
 
-    private static Map<String, List<String>> readForm(Request request) {
-        Map<String, List<String>> cached = FORM_CACHE.get();
-        if (cached != null) return cached;
+    private static Map<String, List<String>> readForm(Request request, boolean encoded) {
+        if (encoded) {
+            Map<String, List<String>> enc = FORM_CACHE_ENCODED.get();
+            if (enc != null) return enc;
+        } else {
+            Map<String, List<String>> cached = FORM_CACHE.get();
+            if (cached != null) return cached;
+        }
         try {
             var body = request.body();
-            Map<String, List<String>> parsed;
-            if (body == null || body.contentLength() == 0) {
-                parsed = new LinkedHashMap<>();
+            byte[] bytes = (body == null || body.contentLength() == 0)
+                    ? new byte[0] : body.asInputStream().readAllBytes();
+            if (encoded) {
+                Map<String, List<String>> parsed = FormDecoder.parse(
+                        new String(bytes, java.nio.charset.StandardCharsets.UTF_8), false);
+                FORM_CACHE_ENCODED.set(parsed);
+                return parsed;
             } else {
-                parsed = FormDecoder.decode(body.asInputStream().readAllBytes());
+                Map<String, List<String>> parsed = bytes.length == 0
+                        ? new LinkedHashMap<>() : FormDecoder.decode(bytes);
+                FORM_CACHE.set(parsed);
+                return parsed;
             }
-            FORM_CACHE.set(parsed);
-            return parsed;
         } catch (Exception e) {
             throw new WebApplicationException("Failed to read form body: " + e.getMessage(), 400);
         }
     }
 
-    public static void clearFormCache() { FORM_CACHE.remove(); }
+    public static void clearFormCache() {
+        FORM_CACHE.remove();
+        FORM_CACHE_ENCODED.remove();
+    }
 }
