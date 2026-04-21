@@ -303,6 +303,12 @@ public final class Invoker {
                         "No MessageBodyWriter for " + type.getName() + " / " + MediaTypes.format(mt), 500));
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         MultivaluedMap<String, Object> outHeaders = MessageBodyRegistry.outHeaders();
+        // Peupler outHeaders avec les extraHeaders AVANT le chain interceptor
+        // pour que WriterInterceptor.aroundWriteTo.getHeaders() voie ce que
+        // la ResourceMethod/ResponseBuilder a produit. Les interceptors
+        // peuvent encore muter ; on relit ensuite pour build.
+        for (var e : extraHeaders.entrySet())
+            for (String v : e.getValue()) outHeaders.add(e.getKey(), v);
         if (filters.writerInterceptors().isEmpty()) {
             MessageBodyRegistry.writeTo(writer, entity, type, genericType, anns, mt, outHeaders, bos);
         } else {
@@ -312,7 +318,10 @@ public final class Invoker {
 
         var b = Response.builder().status(status).body(Body.of(bos.toByteArray()));
         b.header("Content-Type", MediaTypes.format(mt));
-        for (var e : extraHeaders.entrySet()) for (String v : e.getValue()) b.header(e.getKey(), v);
+        for (var e : outHeaders.entrySet()) {
+            if ("Content-Type".equalsIgnoreCase(e.getKey())) continue;
+            for (Object v : e.getValue()) b.header(e.getKey(), String.valueOf(v));
+        }
         return b.build();
     }
 
