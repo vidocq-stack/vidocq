@@ -163,7 +163,7 @@ public final class CassiniResponse extends Response {
     @Override public MultivaluedMap<String, String> getStringHeaders() {
         MultivaluedMap<String, String> m = new MultivaluedHashMap<>();
         for (var e : headers.entrySet()) {
-            for (Object v : e.getValue()) m.add(e.getKey(), String.valueOf(v));
+            for (Object v : e.getValue()) m.add(e.getKey(), headerToString(v));
         }
         return m;
     }
@@ -174,9 +174,22 @@ public final class CassiniResponse extends Response {
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < v.size(); i++) {
             if (i > 0) sb.append(',');
-            sb.append(v.get(i));
+            sb.append(headerToString(v.get(i)));
         }
         return sb.toString();
+    }
+
+    /** Sérialise un header via HeaderDelegate si disponible (§4.3). */
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static String headerToString(Object v) {
+        if (v == null) return "";
+        if (v instanceof String s) return s;
+        try {
+            jakarta.ws.rs.ext.RuntimeDelegate.HeaderDelegate hd =
+                    jakarta.ws.rs.ext.RuntimeDelegate.getInstance().createHeaderDelegate(v.getClass());
+            if (hd != null) return hd.toString(v);
+        } catch (Exception ignored) {}
+        return String.valueOf(v);
     }
 
     public static MultivaluedMap<String, Object> immutable(MultivaluedMap<String, Object> h) {
