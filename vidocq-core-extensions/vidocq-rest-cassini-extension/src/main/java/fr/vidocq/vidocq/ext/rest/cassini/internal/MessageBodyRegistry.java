@@ -80,6 +80,7 @@ public final class MessageBodyRegistry {
         writers.add(new DataSourceWriter());
         writers.add(new JaxbWriter());
         writers.add(new FormUrlEncodedWriter());
+        writers.add(new PrimitiveWriter());
         writers.add(new FallbackToStringWriter());
 
         readers.add(new ByteArrayReader());
@@ -91,6 +92,7 @@ public final class MessageBodyRegistry {
         readers.add(new DataSourceReader());
         readers.add(new JaxbReader());
         readers.add(new FormUrlEncodedReader());
+        readers.add(new PrimitiveReader());
     }
 
     private static Charset charset(MediaType mt) {
@@ -357,6 +359,50 @@ public final class MessageBodyRegistry {
                 throw new IOException(e);
             }
         }
+    }
+
+    // ---- Primitives / wrappers / BigDecimal / BigInteger / Character ----
+    /** §4.2.3 : Number, Boolean, Character, primitives, BigDecimal, BigInteger
+     *  sérialisés en {@code text/plain} via {@code String.valueOf} / parse. */
+    static final class PrimitiveWriter implements MessageBodyWriter<Object> {
+        @Override public boolean isWriteable(Class<?> t, Type gt, Annotation[] a, MediaType mt) {
+            return isPrimitiveLike(t);
+        }
+        @Override public void writeTo(Object v, Class<?> t, Type gt, Annotation[] a, MediaType mt,
+                                      MultivaluedMap<String, Object> h, OutputStream s) throws IOException {
+            s.write(String.valueOf(v).getBytes(charset(mt)));
+        }
+    }
+    static final class PrimitiveReader implements MessageBodyReader<Object> {
+        @Override public boolean isReadable(Class<?> t, Type gt, Annotation[] a, MediaType mt) {
+            return isPrimitiveLike(t);
+        }
+        @Override public Object readFrom(Class<Object> t, Type gt, Annotation[] a, MediaType mt,
+                                         MultivaluedMap<String, String> h, InputStream in) throws IOException {
+            String s = new String(in.readAllBytes(), charset(mt));
+            Class<?> c = t;
+            if (c == Boolean.class || c == boolean.class) return Boolean.valueOf(s);
+            if (c == Character.class || c == char.class) return s.isEmpty() ? (char) 0 : Character.valueOf(s.charAt(0));
+            if (c == Byte.class || c == byte.class) return Byte.valueOf(s);
+            if (c == Short.class || c == short.class) return Short.valueOf(s);
+            if (c == Integer.class || c == int.class) return Integer.valueOf(s);
+            if (c == Long.class || c == long.class) return Long.valueOf(s);
+            if (c == Float.class || c == float.class) return Float.valueOf(s);
+            if (c == Double.class || c == double.class) return Double.valueOf(s);
+            if (c == java.math.BigDecimal.class) return new java.math.BigDecimal(s);
+            if (c == java.math.BigInteger.class) return new java.math.BigInteger(s);
+            if (c == Number.class) return new java.math.BigDecimal(s);
+            return s;
+        }
+    }
+
+    private static boolean isPrimitiveLike(Class<?> t) {
+        if (t.isPrimitive()) return true;
+        return t == Boolean.class || t == Character.class || t == Byte.class
+                || t == Short.class || t == Integer.class || t == Long.class
+                || t == Float.class || t == Double.class
+                || t == java.math.BigDecimal.class || t == java.math.BigInteger.class
+                || t == Number.class;
     }
 
     private static boolean isXmlMediaType(MediaType mt) {
