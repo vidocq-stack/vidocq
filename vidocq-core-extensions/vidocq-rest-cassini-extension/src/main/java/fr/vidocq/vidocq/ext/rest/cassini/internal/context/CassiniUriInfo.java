@@ -54,17 +54,32 @@ public final class CassiniUriInfo implements UriInfo {
         return Collections.unmodifiableList(segs);
     }
 
-    @Override public URI getRequestUri() { return request.uri(); }
+    @Override public URI getRequestUri() {
+        URI u = request.uri();
+        if (u != null && u.isAbsolute()) return u;
+        return resolveAbsolute(u == null ? request.path() : u.toString());
+    }
+
+    private URI resolveAbsolute(String pathAndQuery) {
+        try {
+            String scheme = request.isSecure() ? "https" : "http";
+            String host = request.headers().firstOrNull("Host");
+            if (host == null || host.isEmpty()) host = "127.0.0.1";
+            String pq = pathAndQuery == null ? "/" : pathAndQuery;
+            if (!pq.startsWith("/")) pq = "/" + pq;
+            return new URI(scheme + "://" + host + pq);
+        } catch (Exception e) { return request.uri(); }
+    }
 
     @Override public UriBuilder getRequestUriBuilder() {
         return CassiniUriBuilder.fromUri(getRequestUri());
     }
 
     @Override public URI getAbsolutePath() {
-        URI u = request.uri();
+        URI req = getRequestUri();
         try {
-            return new URI(u.getScheme(), u.getAuthority(), u.getPath(), null, null);
-        } catch (Exception e) { return u; }
+            return new URI(req.getScheme(), req.getAuthority(), req.getPath(), null, null);
+        } catch (Exception e) { return req; }
     }
 
     @Override public UriBuilder getAbsolutePathBuilder() {
@@ -72,11 +87,11 @@ public final class CassiniUriInfo implements UriInfo {
     }
 
     @Override public URI getBaseUri() {
-        URI u = request.uri();
+        URI req = getRequestUri();
         try {
             String base = contextPath.isEmpty() || "/".equals(contextPath) ? "/" : contextPath + "/";
-            return new URI(u.getScheme(), u.getAuthority(), base, null, null);
-        } catch (Exception e) { return u; }
+            return new URI(req.getScheme(), req.getAuthority(), base, null, null);
+        } catch (Exception e) { return req; }
     }
 
     @Override public UriBuilder getBaseUriBuilder() {
