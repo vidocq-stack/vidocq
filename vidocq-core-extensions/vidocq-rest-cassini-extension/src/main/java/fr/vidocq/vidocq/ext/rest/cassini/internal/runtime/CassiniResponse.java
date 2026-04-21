@@ -62,9 +62,16 @@ public final class CassiniResponse extends Response {
     @Override public <T> T readEntity(Class<T> t, Annotation[] a) { return t.cast(entity); }
     @Override public <T> T readEntity(GenericType<T> t, Annotation[] a) { @SuppressWarnings("unchecked") T x = (T) entity; return x; }
 
+    private boolean closed = false;
+
     @Override public boolean hasEntity() { return entity != null; }
-    @Override public boolean bufferEntity() { return false; }
-    @Override public void close() { /* no-op */ }
+    @Override public boolean bufferEntity() {
+        if (closed) throw new IllegalStateException("Response has been closed");
+        // Notre CassiniResponse stocke déjà l'entity en mémoire, le buffering
+        // est donc toujours effectif — on retourne true §4.3.
+        return true;
+    }
+    @Override public void close() { this.closed = true; }
 
     @Override public MediaType getMediaType() {
         Object v = headers.getFirst("Content-Type");
