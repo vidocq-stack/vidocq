@@ -71,11 +71,13 @@ public final class ResourceScanner {
                     Class<?> returnCls = m.getReturnType();
                     if (returnCls == void.class || returnCls == null) continue;
                     String locatorPath = combine(basePath, normalize(sub.value()));
-                    // Scan récursif : on ne connaît pas l'instance à l'avance,
-                    // on se contente du type déclaré (suffit pour 95% des TCK,
-                    // les polymorphismes dynamiques sortent du MVP).
+                    // Héritage @Produces/@Consumes : locator méthode > classe.
+                    Set<String> locatorProduces = produces(m.getAnnotation(Produces.class));
+                    Set<String> locatorConsumes = consumes(m.getAnnotation(Consumes.class));
+                    Set<String> inhProd = locatorProduces.isEmpty() ? classProduces : locatorProduces;
+                    Set<String> inhCons = locatorConsumes.isEmpty() ? classConsumes : locatorConsumes;
                     m.setAccessible(true);
-                    scanLocatorType(returnCls, locatorPath, classProduces, classConsumes, m, out);
+                    scanLocatorType(returnCls, locatorPath, inhProd, inhCons, m, out);
                     continue;
                 }
                 String full = (sub == null) ? basePath : combine(basePath, normalize(sub.value()));
