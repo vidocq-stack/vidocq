@@ -91,20 +91,71 @@ public final class CassiniResponse extends Response {
         return out;
     }
 
-    @Override public Map<String, NewCookie> getCookies() { return Map.of(); }
-    @Override public EntityTag getEntityTag() { return null; }
-    @Override public Date getDate() { return null; }
-    @Override public Date getLastModified() { return null; }
+    @Override public Map<String, NewCookie> getCookies() {
+        Map<String, NewCookie> out = new java.util.HashMap<>();
+        java.util.List<Object> vs = headers.get("Set-Cookie");
+        if (vs == null) return out;
+        for (Object v : vs) {
+            if (v instanceof NewCookie nc) out.put(nc.getName(), nc);
+        }
+        return out;
+    }
+    @Override public EntityTag getEntityTag() {
+        Object v = headers.getFirst("ETag");
+        if (v == null) return null;
+        if (v instanceof EntityTag et) return et;
+        try { return EntityTag.valueOf(v.toString()); } catch (Exception e) { return null; }
+    }
+    @Override public Date getDate() { return parseHttpDate(headers.getFirst("Date")); }
+    @Override public Date getLastModified() { return parseHttpDate(headers.getFirst("Last-Modified")); }
+
+    private static Date parseHttpDate(Object v) {
+        if (v == null) return null;
+        if (v instanceof Date d) return d;
+        String s = v.toString();
+        for (String fmt : new String[] {
+                "EEE, dd MMM yyyy HH:mm:ss zzz",
+                "EEEE, dd-MMM-yy HH:mm:ss zzz",
+                "EEE MMM d HH:mm:ss yyyy"}) {
+            try {
+                return new java.text.SimpleDateFormat(fmt, Locale.US).parse(s);
+            } catch (java.text.ParseException ignored) {}
+        }
+        return null;
+    }
 
     @Override public URI getLocation() {
         Object v = headers.getFirst("Location");
         return v == null ? null : URI.create(v.toString());
     }
 
-    @Override public Set<Link> getLinks() { return Set.of(); }
-    @Override public boolean hasLink(String relation) { return false; }
-    @Override public Link getLink(String relation) { return null; }
-    @Override public Link.Builder getLinkBuilder(String relation) { throw new UnsupportedOperationException(); }
+    @Override public Set<Link> getLinks() {
+        java.util.List<Object> vs = headers.get("Link");
+        if (vs == null || vs.isEmpty()) return Set.of();
+        Set<Link> out = new java.util.LinkedHashSet<>();
+        for (Object v : vs) {
+            if (v instanceof Link l) { out.add(l); continue; }
+            Link parsed = parseLink(v.toString());
+            if (parsed != null) out.add(parsed);
+        }
+        return out;
+    }
+    @Override public boolean hasLink(String relation) {
+        for (Link l : getLinks()) if (relation != null && relation.equals(l.getRel())) return true;
+        return false;
+    }
+    @Override public Link getLink(String relation) {
+        for (Link l : getLinks()) if (relation != null && relation.equals(l.getRel())) return l;
+        return null;
+    }
+    @Override public Link.Builder getLinkBuilder(String relation) {
+        Link l = getLink(relation);
+        return l == null ? null : Link.fromLink(l);
+    }
+
+    private static Link parseLink(String raw) {
+        try { return Link.valueOf(raw); } catch (Exception e) { return null; }
+    }
 
     @Override public MultivaluedMap<String, Object> getMetadata() { return headers; }
     @Override public MultivaluedMap<String, Object> getHeaders() { return headers; }
