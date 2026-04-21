@@ -120,8 +120,9 @@ public final class CassiniResponseBuilder extends Response.ResponseBuilder {
     }
 
     @Override public Response.ResponseBuilder contentLocation(URI location) {
-        if (location == null) headers.remove("Content-Location");
-        else headers.putSingle("Content-Location", location.toString());
+        if (location == null) { headers.remove("Content-Location"); return this; }
+        URI resolved = resolveAgainstBase(location);
+        headers.putSingle("Content-Location", resolved.toString());
         return this;
     }
 
@@ -144,9 +145,22 @@ public final class CassiniResponseBuilder extends Response.ResponseBuilder {
     }
 
     @Override public Response.ResponseBuilder location(URI location) {
-        if (location == null) headers.remove("Location");
-        else headers.putSingle("Location", location.toString());
+        if (location == null) { headers.remove("Location"); return this; }
+        URI resolved = resolveAgainstBase(location);
+        headers.putSingle("Location", resolved.toString());
         return this;
+    }
+
+    /** ThreadLocal baseUri pour résoudre les URIs relatives §6.7. */
+    private static final ThreadLocal<URI> BASE_URI = new ThreadLocal<>();
+    public static void setBaseUri(URI base) { BASE_URI.set(base); }
+    public static void clearBaseUri() { BASE_URI.remove(); }
+
+    private static URI resolveAgainstBase(URI location) {
+        if (location.isAbsolute()) return location;
+        URI base = BASE_URI.get();
+        if (base == null) return location;
+        return base.resolve(location);
     }
 
     @Override public Response.ResponseBuilder tag(EntityTag tag) {

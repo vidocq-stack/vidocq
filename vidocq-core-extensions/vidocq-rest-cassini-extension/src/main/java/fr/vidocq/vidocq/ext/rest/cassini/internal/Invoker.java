@@ -91,9 +91,20 @@ public final class Invoker {
         ParamExtractor.setProviders(new fr.vidocq.vidocq.ext.rest.cassini.internal.context.CassiniProviders(
                 registry, exceptionMappers, filters.contextResolvers()));
         try {
+            java.net.URI u = request.uri();
+            if (u != null) {
+                try {
+                    String ctx = request.contextPath();
+                    if (ctx == null) ctx = "";
+                    java.net.URI base = new java.net.URI(u.getScheme(), u.getAuthority(),
+                            (ctx.isEmpty() ? "/" : ctx + "/"), null, null);
+                    fr.vidocq.vidocq.ext.rest.cassini.internal.runtime.CassiniResponseBuilder.setBaseUri(base);
+                } catch (Exception ignored) {}
+            }
             return invokeInternal(match, request, route);
         } finally {
             ParamExtractor.clearProviders();
+            fr.vidocq.vidocq.ext.rest.cassini.internal.runtime.CassiniResponseBuilder.clearBaseUri();
         }
     }
 
