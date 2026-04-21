@@ -13,6 +13,9 @@ module fr.vidocq.vidocq.ext.rest.cassini {
     requires jakarta.annotation;
 
     requires static java.net.http;
+    requires java.xml;
+    requires static jakarta.xml.bind;
+    requires static jakarta.activation;
 
     exports fr.vidocq.vidocq.ext.rest.cassini;
     exports fr.vidocq.vidocq.ext.rest.cassini.internal

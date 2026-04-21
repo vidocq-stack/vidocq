@@ -75,6 +75,10 @@ public final class MessageBodyRegistry {
         writers.add(new StreamingOutputWriter());
         writers.add(new InputStreamWriter());
         writers.add(new FileWriter());
+        writers.add(new ReaderWriter());
+        writers.add(new SourceWriter());
+        writers.add(new DataSourceWriter());
+        writers.add(new JaxbWriter());
         writers.add(new FormUrlEncodedWriter());
         writers.add(new FallbackToStringWriter());
 
@@ -83,6 +87,9 @@ public final class MessageBodyRegistry {
         readers.add(new InputStreamReaderMBR());
         readers.add(new ReaderReaderMBR());
         readers.add(new FileReader());
+        readers.add(new SourceReader());
+        readers.add(new DataSourceReader());
+        readers.add(new JaxbReader());
         readers.add(new FormUrlEncodedReader());
     }
 
@@ -233,6 +240,131 @@ public final class MessageBodyRegistry {
                                       MultivaluedMap<String, Object> h, OutputStream s) throws IOException {
             try (InputStream in = new FileInputStream(v)) { in.transferTo(s); }
         }
+    }
+
+    // ---- Reader (writer) ----
+    static final class ReaderWriter implements MessageBodyWriter<Reader> {
+        @Override public boolean isWriteable(Class<?> t, Type gt, Annotation[] a, MediaType mt) {
+            return Reader.class.isAssignableFrom(t);
+        }
+        @Override public void writeTo(Reader v, Class<?> t, Type gt, Annotation[] a, MediaType mt,
+                                      MultivaluedMap<String, Object> h, OutputStream s) throws IOException {
+            OutputStreamWriter w = new OutputStreamWriter(s, charset(mt));
+            char[] buf = new char[4096]; int n;
+            while ((n = v.read(buf)) > 0) w.write(buf, 0, n);
+            w.flush();
+        }
+    }
+
+    // ---- javax.xml.transform.Source ----
+    static final class SourceWriter implements MessageBodyWriter<javax.xml.transform.Source> {
+        @Override public boolean isWriteable(Class<?> t, Type gt, Annotation[] a, MediaType mt) {
+            return javax.xml.transform.Source.class.isAssignableFrom(t);
+        }
+        @Override public void writeTo(javax.xml.transform.Source v, Class<?> t, Type gt, Annotation[] a, MediaType mt,
+                                      MultivaluedMap<String, Object> h, OutputStream s) throws IOException {
+            try {
+                javax.xml.transform.Transformer tr = javax.xml.transform.TransformerFactory.newInstance().newTransformer();
+                tr.transform(v, new javax.xml.transform.stream.StreamResult(s));
+            } catch (javax.xml.transform.TransformerException e) {
+                throw new IOException(e);
+            }
+        }
+    }
+    static final class SourceReader implements MessageBodyReader<javax.xml.transform.Source> {
+        @Override public boolean isReadable(Class<?> t, Type gt, Annotation[] a, MediaType mt) {
+            return javax.xml.transform.Source.class.isAssignableFrom(t);
+        }
+        @Override public javax.xml.transform.Source readFrom(Class<javax.xml.transform.Source> t, Type gt,
+                                                             Annotation[] a, MediaType mt,
+                                                             MultivaluedMap<String, String> h, InputStream in) {
+            return new javax.xml.transform.stream.StreamSource(in);
+        }
+    }
+
+    // ---- jakarta.activation.DataSource ----
+    static final class DataSourceWriter implements MessageBodyWriter<jakarta.activation.DataSource> {
+        @Override public boolean isWriteable(Class<?> t, Type gt, Annotation[] a, MediaType mt) {
+            return jakarta.activation.DataSource.class.isAssignableFrom(t);
+        }
+        @Override public void writeTo(jakarta.activation.DataSource v, Class<?> t, Type gt, Annotation[] a, MediaType mt,
+                                      MultivaluedMap<String, Object> h, OutputStream s) throws IOException {
+            try (InputStream in = v.getInputStream()) { in.transferTo(s); }
+        }
+    }
+    static final class DataSourceReader implements MessageBodyReader<jakarta.activation.DataSource> {
+        @Override public boolean isReadable(Class<?> t, Type gt, Annotation[] a, MediaType mt) {
+            return jakarta.activation.DataSource.class.isAssignableFrom(t);
+        }
+        @Override public jakarta.activation.DataSource readFrom(Class<jakarta.activation.DataSource> t, Type gt,
+                                                                 Annotation[] a, MediaType mt,
+                                                                 MultivaluedMap<String, String> h, InputStream in) throws IOException {
+            final byte[] bytes = in.readAllBytes();
+            final String ct = mt == null ? "application/octet-stream" : mt.toString();
+            return new jakarta.activation.DataSource() {
+                @Override public InputStream getInputStream() { return new java.io.ByteArrayInputStream(bytes); }
+                @Override public OutputStream getOutputStream() { throw new UnsupportedOperationException(); }
+                @Override public String getContentType() { return ct; }
+                @Override public String getName() { return ""; }
+            };
+        }
+    }
+
+    // ---- JAXB (@XmlRootElement et JAXBElement) ----
+    static final class JaxbWriter implements MessageBodyWriter<Object> {
+        @Override public boolean isWriteable(Class<?> t, Type gt, Annotation[] a, MediaType mt) {
+            if (mt == null) return false;
+            if (!isXmlMediaType(mt)) return false;
+            return t.isAnnotationPresent(jakarta.xml.bind.annotation.XmlRootElement.class)
+                    || jakarta.xml.bind.JAXBElement.class.isAssignableFrom(t);
+        }
+        @Override public void writeTo(Object v, Class<?> t, Type gt, Annotation[] a, MediaType mt,
+                                      MultivaluedMap<String, Object> h, OutputStream s) throws IOException {
+            try {
+                Class<?> ctxClass = t;
+                if (v instanceof jakarta.xml.bind.JAXBElement<?> el) {
+                    ctxClass = el.getDeclaredType();
+                }
+                jakarta.xml.bind.JAXBContext ctx = jakarta.xml.bind.JAXBContext.newInstance(ctxClass);
+                jakarta.xml.bind.Marshaller m = ctx.createMarshaller();
+                m.setProperty(jakarta.xml.bind.Marshaller.JAXB_ENCODING, charset(mt).name());
+                m.marshal(v, s);
+            } catch (jakarta.xml.bind.JAXBException e) {
+                throw new IOException(e);
+            }
+        }
+    }
+    static final class JaxbReader implements MessageBodyReader<Object> {
+        @Override public boolean isReadable(Class<?> t, Type gt, Annotation[] a, MediaType mt) {
+            if (mt == null) return false;
+            if (!isXmlMediaType(mt)) return false;
+            return t.isAnnotationPresent(jakarta.xml.bind.annotation.XmlRootElement.class)
+                    || jakarta.xml.bind.JAXBElement.class.isAssignableFrom(t);
+        }
+        @Override public Object readFrom(Class<Object> t, Type gt, Annotation[] a, MediaType mt,
+                                         MultivaluedMap<String, String> h, InputStream in) throws IOException {
+            try {
+                if (jakarta.xml.bind.JAXBElement.class.isAssignableFrom(t) && gt instanceof java.lang.reflect.ParameterizedType pt
+                        && pt.getActualTypeArguments().length == 1
+                        && pt.getActualTypeArguments()[0] instanceof Class<?> innerCls) {
+                    jakarta.xml.bind.JAXBContext ctx = jakarta.xml.bind.JAXBContext.newInstance(innerCls);
+                    return ctx.createUnmarshaller().unmarshal(
+                            javax.xml.stream.XMLInputFactory.newInstance().createXMLStreamReader(in), innerCls);
+                }
+                jakarta.xml.bind.JAXBContext ctx = jakarta.xml.bind.JAXBContext.newInstance(t);
+                return ctx.createUnmarshaller().unmarshal(in);
+            } catch (Exception e) {
+                throw new IOException(e);
+            }
+        }
+    }
+
+    private static boolean isXmlMediaType(MediaType mt) {
+        if (mt == null) return false;
+        String ty = mt.getType(), st = mt.getSubtype();
+        if ("application".equalsIgnoreCase(ty) && ("xml".equalsIgnoreCase(st) || st.toLowerCase().endsWith("+xml"))) return true;
+        if ("text".equalsIgnoreCase(ty) && "xml".equalsIgnoreCase(st)) return true;
+        return false;
     }
 
     /** Fabrique un MultivaluedMap<String, String> depuis les headers Chappe. */
