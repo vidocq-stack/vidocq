@@ -62,6 +62,8 @@ public final class ResourceScanner {
             Set<String> classConsumes = consumes(cls.getAnnotation(Consumes.class));
 
             for (Method m : cls.getDeclaredMethods()) {
+                // §3.3.1 : une méthode de ressource doit être publique.
+                if (!java.lang.reflect.Modifier.isPublic(m.getModifiers())) continue;
                 String verb = resolveHttpMethod(m);
                 Path sub = m.getAnnotation(Path.class);
                 // Sub-resource locator §3.4.1 : @Path sur méthode SANS verbe HTTP

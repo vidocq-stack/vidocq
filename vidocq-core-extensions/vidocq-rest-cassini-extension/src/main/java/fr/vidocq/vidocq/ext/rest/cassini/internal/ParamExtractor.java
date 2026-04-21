@@ -202,6 +202,16 @@ public final class ParamExtractor {
             Providers p = CURRENT_PROVIDERS.get();
             if (p != null) return p;
         }
+        if (type == jakarta.ws.rs.core.Application.class) {
+            // §9.4 : Application est l'instance de l'Application JAX-RS.
+            // On fournit une instance minimale (pas d'Application user-level
+            // configurée côté harness).
+            return new jakarta.ws.rs.core.Application();
+        }
+        if (type == jakarta.ws.rs.ext.ContextResolver.class) {
+            Providers p = CURRENT_PROVIDERS.get();
+            if (p != null) return p;
+        }
         if (type == Request.class) return request; // Chappe Request passthrough (utile pour tests)
         throw new WebApplicationException("Unsupported @Context type: " + type.getName(), 500);
     }
