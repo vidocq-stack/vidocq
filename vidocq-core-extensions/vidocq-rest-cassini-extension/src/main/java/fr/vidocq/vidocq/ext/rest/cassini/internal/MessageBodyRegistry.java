@@ -4,6 +4,7 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.MultivaluedHashMap;
 import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.core.StreamingOutput;
+import fr.vidocq.vidocq.ext.rest.cassini.internal.FormDecoder;
 import jakarta.ws.rs.ext.MessageBodyReader;
 import jakarta.ws.rs.ext.MessageBodyWriter;
 
@@ -74,12 +75,15 @@ public final class MessageBodyRegistry {
         writers.add(new StreamingOutputWriter());
         writers.add(new InputStreamWriter());
         writers.add(new FileWriter());
+        writers.add(new FormUrlEncodedWriter());
         writers.add(new FallbackToStringWriter());
 
         readers.add(new ByteArrayReader());
         readers.add(new StringReader());
         readers.add(new InputStreamReaderMBR());
         readers.add(new ReaderReaderMBR());
+        readers.add(new FileReader());
+        readers.add(new FormUrlEncodedReader());
     }
 
     private static Charset charset(MediaType mt) {
@@ -157,6 +161,55 @@ public final class MessageBodyRegistry {
         @Override public void writeTo(StreamingOutput v, Class<?> t, Type gt, Annotation[] a, MediaType mt,
                                       MultivaluedMap<String, Object> h, OutputStream s) throws IOException {
             v.write(s);
+        }
+    }
+
+    // ---- File reader (écrit dans un fichier temporaire) ----
+    static final class FileReader implements MessageBodyReader<File> {
+        @Override public boolean isReadable(Class<?> t, Type gt, Annotation[] a, MediaType mt) { return File.class.isAssignableFrom(t); }
+        @Override public File readFrom(Class<File> t, Type gt, Annotation[] a, MediaType mt,
+                                       MultivaluedMap<String, String> h, InputStream in) throws IOException {
+            java.nio.file.Path tmp = java.nio.file.Files.createTempFile("cassini-upload-", ".bin");
+            try (OutputStream os = java.nio.file.Files.newOutputStream(tmp)) {
+                in.transferTo(os);
+            }
+            File f = tmp.toFile();
+            f.deleteOnExit();
+            return f;
+        }
+    }
+
+    // ---- MultivaluedMap<String,String> pour application/x-www-form-urlencoded ----
+    static final class FormUrlEncodedReader implements MessageBodyReader<MultivaluedMap<String, String>> {
+        @Override public boolean isReadable(Class<?> t, Type gt, Annotation[] a, MediaType mt) {
+            return MultivaluedMap.class.isAssignableFrom(t)
+                    && (mt == null || "application/x-www-form-urlencoded".equalsIgnoreCase(
+                            mt.getType() + "/" + mt.getSubtype()));
+        }
+        @Override public MultivaluedMap<String, String> readFrom(Class<MultivaluedMap<String, String>> t, Type gt,
+                                                                  Annotation[] a, MediaType mt,
+                                                                  MultivaluedMap<String, String> h, InputStream in) throws IOException {
+            var parsed = FormDecoder.decode(in.readAllBytes());
+            MultivaluedMap<String, String> out = new MultivaluedHashMap<>();
+            for (var e : parsed.entrySet()) for (String v : e.getValue()) out.add(e.getKey(), v);
+            return out;
+        }
+    }
+    static final class FormUrlEncodedWriter implements MessageBodyWriter<MultivaluedMap<String, String>> {
+        @Override public boolean isWriteable(Class<?> t, Type gt, Annotation[] a, MediaType mt) {
+            return MultivaluedMap.class.isAssignableFrom(t);
+        }
+        @Override public void writeTo(MultivaluedMap<String, String> v, Class<?> t, Type gt, Annotation[] a,
+                                      MediaType mt, MultivaluedMap<String, Object> h, OutputStream s) throws IOException {
+            StringBuilder sb = new StringBuilder();
+            for (var e : v.entrySet()) {
+                for (String val : e.getValue()) {
+                    if (sb.length() > 0) sb.append('&');
+                    sb.append(java.net.URLEncoder.encode(e.getKey(), StandardCharsets.UTF_8))
+                      .append('=').append(java.net.URLEncoder.encode(val == null ? "" : val, StandardCharsets.UTF_8));
+                }
+            }
+            s.write(sb.toString().getBytes(charset(mt)));
         }
     }
 
