@@ -71,7 +71,10 @@ public final class CassiniUriBuilder extends UriBuilder {
         return this;
     }
 
-    @Override public UriBuilder uri(String uriTemplate) { return uri(URI.create(uriTemplate)); }
+    @Override public UriBuilder uri(String uriTemplate) {
+        if (uriTemplate == null) throw new IllegalArgumentException("uri is null");
+        return uri(URI.create(uriTemplate));
+    }
 
     @Override public UriBuilder scheme(String scheme) { this.scheme = scheme; return this; }
 
@@ -86,7 +89,8 @@ public final class CassiniUriBuilder extends UriBuilder {
     @Override public UriBuilder replacePath(String p) { this.path = new StringBuilder(p == null ? "" : p); return this; }
 
     @Override public UriBuilder path(String segment) {
-        if (segment == null || segment.isEmpty()) return this;
+        if (segment == null) throw new IllegalArgumentException("path is null");
+        if (segment.isEmpty()) return this;
         if (path.length() > 0 && path.charAt(path.length() - 1) != '/' && !segment.startsWith("/")) path.append('/');
         path.append(segment);
         return this;
@@ -137,7 +141,12 @@ public final class CassiniUriBuilder extends UriBuilder {
     }
 
     @Override public UriBuilder queryParam(String name, Object... values) {
-        for (Object v : values) query.computeIfAbsent(name, k -> new ArrayList<>()).add(String.valueOf(v));
+        if (name == null) throw new IllegalArgumentException("name is null");
+        if (values == null) throw new IllegalArgumentException("values is null");
+        for (Object v : values) {
+            if (v == null) throw new IllegalArgumentException("query value is null");
+            query.computeIfAbsent(name, k -> new ArrayList<>()).add(String.valueOf(v));
+        }
         return this;
     }
 
@@ -199,12 +208,16 @@ public final class CassiniUriBuilder extends UriBuilder {
     }
 
     private URI buildInternal(Object[] values, Map<String, ?> valueMap, boolean encodeSlash) {
-        String substituted = substituteTemplates(path.toString(), values, valueMap);
-        String fragmentResolved = substituteTemplates(fragment, values, valueMap);
+        // Un seul posIdx + seen map pour path + query + fragment pour que
+        // les templates répétés entre ces sections réutilisent la valeur.
+        Map<String, Object> seen = new LinkedHashMap<>();
+        int[] posIdx = new int[] {0};
+        String substituted = substituteTemplates(path.toString(), values, valueMap, seen, posIdx);
+        String fragmentResolved = substituteTemplates(fragment, values, valueMap, seen, posIdx);
         StringBuilder q = new StringBuilder();
         for (var e : query.entrySet()) {
             for (String v : e.getValue()) {
-                String resolved = substituteTemplates(v, values, valueMap);
+                String resolved = substituteTemplates(v, values, valueMap, seen, posIdx);
                 if (q.length() > 0) q.append('&');
                 q.append(e.getKey()).append('=').append(resolved);
             }
@@ -245,9 +258,14 @@ public final class CassiniUriBuilder extends UriBuilder {
 
     private String substituteTemplates(String tpl, Object[] values, Map<String, ?> valueMap) {
         if (tpl == null || tpl.isEmpty()) return tpl;
+        return substituteTemplates(tpl, values, valueMap, new LinkedHashMap<>(), new int[] {0});
+    }
+
+    private String substituteTemplates(String tpl, Object[] values, Map<String, ?> valueMap,
+                                       Map<String, Object> seen, int[] posIdx) {
+        if (tpl == null || tpl.isEmpty()) return tpl;
         StringBuilder out = new StringBuilder();
         int i = 0;
-        int posIdx = 0;
         while (i < tpl.length()) {
             char c = tpl.charAt(i);
             if (c == '{') {
@@ -259,7 +277,11 @@ public final class CassiniUriBuilder extends UriBuilder {
                 Object val = null;
                 if (resolvedTemplates.containsKey(name)) val = resolvedTemplates.get(name);
                 else if (valueMap != null && valueMap.containsKey(name)) val = valueMap.get(name);
-                else if (values != null && posIdx < values.length) val = values[posIdx++];
+                else if (seen.containsKey(name)) val = seen.get(name);
+                else if (values != null && posIdx[0] < values.length) {
+                    val = values[posIdx[0]++];
+                    seen.put(name, val);
+                }
                 if (val == null) {
                     out.append('{').append(inside).append('}');
                 } else {
