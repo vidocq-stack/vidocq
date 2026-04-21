@@ -22,6 +22,10 @@ public final class CassiniRuntimeDelegate extends RuntimeDelegate {
 
     @Override public UriBuilder createUriBuilder() { return new CassiniUriBuilder(); }
 
+    // Expose fromResource/fromMethod via UriBuilder.fromResource side (static fallback).
+    // UriBuilder.fromResource() calls createUriBuilder().uri(...) internally in spec,
+    // but CassiniUriBuilder.fromResource(Class) is our own helper.
+
     @Override public Response.ResponseBuilder createResponseBuilder() { return new CassiniResponseBuilder(); }
 
     @Override public Variant.VariantListBuilder createVariantListBuilder() {

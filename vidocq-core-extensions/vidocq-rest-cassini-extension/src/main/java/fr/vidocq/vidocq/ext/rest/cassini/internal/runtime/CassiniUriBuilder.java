@@ -25,8 +25,18 @@ public final class CassiniUriBuilder extends UriBuilder {
     private StringBuilder path = new StringBuilder();
     private final Map<String, List<String>> query = new LinkedHashMap<>();
     private String fragment;
+    private final Map<String, Object> resolvedTemplates = new LinkedHashMap<>();
 
     public CassiniUriBuilder() {}
+
+    public static UriBuilder fromResource(Class<?> resource) {
+        if (resource == null) throw new IllegalArgumentException("resource is null");
+        CassiniUriBuilder b = new CassiniUriBuilder();
+        jakarta.ws.rs.Path p = resource.getAnnotation(jakarta.ws.rs.Path.class);
+        if (p == null) throw new IllegalArgumentException("resource not @Path annotated: " + resource.getName());
+        b.path.append(p.value());
+        return b;
+    }
 
     public static UriBuilder fromUri(URI uri) {
         CassiniUriBuilder b = new CassiniUriBuilder();
@@ -82,9 +92,28 @@ public final class CassiniUriBuilder extends UriBuilder {
         return this;
     }
 
-    @Override @SuppressWarnings("rawtypes") public UriBuilder path(Class resource) { return this; }
-    @Override @SuppressWarnings("rawtypes") public UriBuilder path(Class resource, String method) { return this; }
-    @Override public UriBuilder path(java.lang.reflect.Method method) { return this; }
+    @Override @SuppressWarnings("rawtypes") public UriBuilder path(Class resource) {
+        if (resource != null) {
+            jakarta.ws.rs.Path p = (jakarta.ws.rs.Path) resource.getAnnotation(jakarta.ws.rs.Path.class);
+            if (p != null) path(p.value());
+        }
+        return this;
+    }
+    @Override @SuppressWarnings({"rawtypes","unchecked"}) public UriBuilder path(Class resource, String method) {
+        if (resource == null || method == null) return this;
+        for (java.lang.reflect.Method m : resource.getMethods()) {
+            if (!m.getName().equals(method)) continue;
+            jakarta.ws.rs.Path p = m.getAnnotation(jakarta.ws.rs.Path.class);
+            if (p != null) { path(p.value()); return this; }
+        }
+        return this;
+    }
+    @Override public UriBuilder path(java.lang.reflect.Method method) {
+        if (method == null) return this;
+        jakarta.ws.rs.Path p = method.getAnnotation(jakarta.ws.rs.Path.class);
+        if (p != null) path(p.value());
+        return this;
+    }
 
     @Override public UriBuilder segment(String... segments) {
         for (String s : segments) path(s);
@@ -120,38 +149,119 @@ public final class CassiniUriBuilder extends UriBuilder {
 
     @Override public UriBuilder fragment(String f) { this.fragment = f; return this; }
 
-    @Override public UriBuilder resolveTemplate(String name, Object value) { return this; }
-    @Override public UriBuilder resolveTemplate(String name, Object value, boolean encodeSlashInPath) { return this; }
-    @Override public UriBuilder resolveTemplateFromEncoded(String name, Object value) { return this; }
-    @Override public UriBuilder resolveTemplates(Map<String, Object> templateValues) { return this; }
-    @Override public UriBuilder resolveTemplates(Map<String, Object> templateValues, boolean encodeSlashInPath) { return this; }
-    @Override public UriBuilder resolveTemplatesFromEncoded(Map<String, Object> templateValues) { return this; }
+    @Override public UriBuilder resolveTemplate(String name, Object value) {
+        if (name == null) throw new IllegalArgumentException("name is null");
+        if (value == null) throw new IllegalArgumentException("value is null");
+        resolvedTemplates.put(name, value); return this;
+    }
+    @Override public UriBuilder resolveTemplate(String name, Object value, boolean encodeSlashInPath) {
+        return resolveTemplate(name, value);
+    }
+    @Override public UriBuilder resolveTemplateFromEncoded(String name, Object value) {
+        return resolveTemplate(name, value);
+    }
+    @Override public UriBuilder resolveTemplates(Map<String, Object> templateValues) {
+        if (templateValues == null) throw new IllegalArgumentException("templateValues is null");
+        for (var e : templateValues.entrySet()) resolveTemplate(e.getKey(), e.getValue());
+        return this;
+    }
+    @Override public UriBuilder resolveTemplates(Map<String, Object> templateValues, boolean encodeSlashInPath) {
+        return resolveTemplates(templateValues);
+    }
+    @Override public UriBuilder resolveTemplatesFromEncoded(Map<String, Object> templateValues) {
+        return resolveTemplates(templateValues);
+    }
 
-    @Override public URI buildFromMap(Map<String, ?> values) { return build(); }
-    @Override public URI buildFromMap(Map<String, ?> values, boolean encodeSlashInPath) { return build(); }
-    @Override public URI buildFromEncodedMap(Map<String, ?> values) { return build(); }
+    @Override public URI buildFromMap(Map<String, ?> values) {
+        if (values == null) throw new IllegalArgumentException("values is null");
+        return buildInternal(null, values, true);
+    }
+    @Override public URI buildFromMap(Map<String, ?> values, boolean encodeSlashInPath) {
+        if (values == null) throw new IllegalArgumentException("values is null");
+        return buildInternal(null, values, encodeSlashInPath);
+    }
+    @Override public URI buildFromEncodedMap(Map<String, ?> values) {
+        if (values == null) throw new IllegalArgumentException("values is null");
+        return buildInternal(null, values, true);
+    }
 
     @Override public URI build(Object... values) {
+        if (values == null) throw new IllegalArgumentException("values is null");
+        return buildInternal(values, null, true);
+    }
+    @Override public URI build(Object[] values, boolean encodeSlashInPath) {
+        if (values == null) throw new IllegalArgumentException("values is null");
+        return buildInternal(values, null, encodeSlashInPath);
+    }
+    @Override public URI buildFromEncoded(Object... values) {
+        if (values == null) throw new IllegalArgumentException("values is null");
+        return buildInternal(values, null, true);
+    }
+
+    private URI buildInternal(Object[] values, Map<String, ?> valueMap, boolean encodeSlash) {
+        String substituted = substituteTemplates(path.toString(), values, valueMap);
         try {
             StringBuilder q = new StringBuilder();
             for (var e : query.entrySet()) {
                 for (String v : e.getValue()) {
+                    String resolved = substituteTemplates(v, values, valueMap);
                     if (q.length() > 0) q.append('&');
-                    q.append(e.getKey()).append('=').append(v);
+                    q.append(e.getKey()).append('=').append(resolved);
                 }
             }
-            return new URI(scheme, userInfo, host, port, path.toString(),
-                    q.length() == 0 ? null : q.toString(), fragment);
+            return new URI(scheme, userInfo, host, port, substituted,
+                    q.length() == 0 ? null : q.toString(),
+                    substituteTemplates(fragment, values, valueMap));
         } catch (URISyntaxException e) {
             throw new RuntimeException(e);
         }
     }
 
-    @Override public URI build(Object[] values, boolean encodeSlashInPath) { return build(values); }
-    @Override public URI buildFromEncoded(Object... values) { return build(values); }
+    private String substituteTemplates(String tpl, Object[] values, Map<String, ?> valueMap) {
+        if (tpl == null || tpl.isEmpty()) return tpl;
+        StringBuilder out = new StringBuilder();
+        int i = 0;
+        int posIdx = 0;
+        while (i < tpl.length()) {
+            char c = tpl.charAt(i);
+            if (c == '{') {
+                int end = tpl.indexOf('}', i);
+                if (end < 0) { out.append(tpl, i, tpl.length()); break; }
+                String inside = tpl.substring(i + 1, end).trim();
+                int colon = inside.indexOf(':');
+                String name = colon < 0 ? inside : inside.substring(0, colon).trim();
+                Object val = null;
+                if (resolvedTemplates.containsKey(name)) val = resolvedTemplates.get(name);
+                else if (valueMap != null && valueMap.containsKey(name)) val = valueMap.get(name);
+                else if (values != null && posIdx < values.length) val = values[posIdx++];
+                if (val == null) {
+                    out.append('{').append(inside).append('}');
+                } else {
+                    out.append(String.valueOf(val));
+                }
+                i = end + 1;
+            } else {
+                out.append(c);
+                i++;
+            }
+        }
+        return out.toString();
+    }
 
     @Override public String toTemplate() {
-        URI u = build();
-        return u == null ? "" : u.toString();
+        StringBuilder sb = new StringBuilder();
+        if (scheme != null) sb.append(scheme).append(':');
+        if (host != null) { sb.append("//"); if (userInfo != null) sb.append(userInfo).append('@');
+                            sb.append(host); if (port >= 0) sb.append(':').append(port); }
+        sb.append(path);
+        if (!query.isEmpty()) {
+            sb.append('?');
+            boolean first = true;
+            for (var e : query.entrySet())
+                for (String v : e.getValue()) { if (!first) sb.append('&'); first = false;
+                                                sb.append(e.getKey()).append('=').append(v); }
+        }
+        if (fragment != null) sb.append('#').append(fragment);
+        return sb.toString();
     }
 }
