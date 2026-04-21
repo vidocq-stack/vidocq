@@ -171,7 +171,7 @@ public final class CassiniResponseBuilder extends Response.ResponseBuilder {
 
     @Override public Response.ResponseBuilder tag(String tag) {
         if (tag == null) headers.remove("ETag");
-        else headers.putSingle("ETag", tag);
+        else headers.putSingle("ETag", new jakarta.ws.rs.core.EntityTag(tag));
         return this;
     }
 

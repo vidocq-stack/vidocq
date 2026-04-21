@@ -67,9 +67,10 @@ public final class CassiniResponse extends Response {
     @Override public boolean hasEntity() { return entity != null; }
     @Override public boolean bufferEntity() {
         if (closed) throw new IllegalStateException("Response has been closed");
-        // Notre CassiniResponse stocke déjà l'entity en mémoire, le buffering
-        // est donc toujours effectif — on retourne true §4.3.
-        return true;
+        // §4.3 : retourne false si aucun backing stream à buffer (entity
+        // déjà stockée en mémoire). true uniquement si un stream existait
+        // et a été copié.
+        return false;
     }
     @Override public void close() { this.closed = true; }
 
@@ -91,10 +92,16 @@ public final class CassiniResponse extends Response {
     }
 
     @Override public Set<String> getAllowedMethods() {
-        Object v = headers.getFirst("Allow");
-        if (v == null) return Set.of();
+        java.util.List<Object> vs = headers.get("Allow");
+        if (vs == null || vs.isEmpty()) return Set.of();
         Set<String> out = new java.util.LinkedHashSet<>();
-        for (String tok : v.toString().split(",")) out.add(tok.trim().toUpperCase(Locale.ROOT));
+        for (Object v : vs) {
+            if (v == null) continue;
+            for (String tok : v.toString().split(",")) {
+                String t = tok.trim();
+                if (!t.isEmpty()) out.add(t.toUpperCase(Locale.ROOT));
+            }
+        }
         return out;
     }
 
