@@ -7,34 +7,22 @@
 
 ---
 
-## 1. `Request.attribute(String, Object)` default method — non persistant
+## 1. ~~`Request.attribute(String, Object)` default method — non persistant~~ FIXÉ upstream
 
-**Symptôme** : `request.attribute("cassini.formCache", parsedForm)` suivi de
-`request.attribute("cassini.formCache")` retourne `null` — l'attribut écrit
-n'est pas relu.
+**Symptôme initial** : `request.attribute("cassini.formCache", parsedForm)`
+suivi de `request.attribute("cassini.formCache")` retournait `null` dans
+un JAR chappe-api 0.1.0-SNAPSHOT publié au repo local.
 
-**Contexte** : le runtime REST veut cacher des objets par-requête (corps
-form-urlencoded parsé, etc.) pour éviter de les recalculer N fois pendant
-l'injection des @FormParam / @BeanParam. L'API Chappe expose deux default
-methods :
+**Status** : les sources actuelles (`chappe-http/.../HttpRequestImpl.java`
+lignes 69 + 202-212) ont une `LinkedHashMap attributes` backing et les
+overrides `attribute(String)` / `attribute(String, Object)` qui lisent
+et écrivent dessus. Le JAR local `~/.m2/repository/fr/vidocq/chappe/
+chappe-api/0.1.0-SNAPSHOT/` avait probablement été généré avant ce fix.
 
-```java
-// chappe-api Request.java (approx.)
-public default java.lang.Object attribute(java.lang.String);
-public default fr.vidocq.chappe.api.Request attribute(java.lang.String, java.lang.Object);
-```
-
-Sans override concret dans `DefaultRequest` (ou l'impl HTTP), ces méthodes
-se comportent comme des no-op : le get retourne toujours `null`, le set est
-silencieusement ignoré.
-
-**Workaround Cassini** : stockage en `ThreadLocal` dans `FieldInjector`
-+ reset en `Invoker.invoke` finally. Non idéal (impacte les requêtes sur
-virtual threads et fait traîner un état statique par classloader).
-
-**Fix suggéré** : backing `Map<String, Object>` dans l'impl Chappe de
-`Request` (ConcurrentHashMap initialisée paresseusement), nettoyée au retour
-du `HttpConnection.run()`.
+**Action côté Cassini** : le workaround ThreadLocal reste en place pour
+l'instant (évite de dépendre d'une version précise de Chappe). À retirer
+quand un bump Chappe sera effectué et que Cassini pourra se reposer sur
+la persistance des attributs.
 
 ---
 
