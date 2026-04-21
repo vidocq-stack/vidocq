@@ -129,7 +129,7 @@ public final class CassiniUriBuilder extends UriBuilder {
         int lastSlash = path.lastIndexOf("/");
         int keepFrom = lastSlash < 0 ? 0 : lastSlash;
         // Strip ';xxx' sur le segment courant après lastSlash
-        int semi = path.indexOf(';', keepFrom);
+        int semi = path.indexOf(";", keepFrom);
         if (semi >= 0) path.setLength(semi);
         if (m != null && !m.isEmpty()) {
             path.append(';').append(m);
