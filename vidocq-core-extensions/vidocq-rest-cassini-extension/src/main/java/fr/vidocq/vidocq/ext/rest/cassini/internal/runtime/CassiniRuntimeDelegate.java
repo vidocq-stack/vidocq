@@ -286,6 +286,19 @@ public final class CassiniRuntimeDelegate extends RuntimeDelegate {
             return this;
         }
         @Override public Link.Builder uri(String uri) {
+            if (uri == null) throw new IllegalArgumentException("uri");
+            // Les templates JAX-RS {name} ne sont pas valides pour java.net.URI.
+            // On les encode en %7Bname%7D le temps de parser, puis on rétablit
+            // la forme originale dans l'URI stockée si elle reste templatée.
+            if (uri.indexOf('{') >= 0 || uri.indexOf('}') >= 0) {
+                String encoded = uri.replace("{", "%7B").replace("}", "%7D");
+                try {
+                    java.net.URI u = new java.net.URI(encoded);
+                    return uri(u);
+                } catch (java.net.URISyntaxException e) {
+                    throw new IllegalArgumentException(e);
+                }
+            }
             try { return uri(new java.net.URI(uri)); }
             catch (java.net.URISyntaxException e) { throw new IllegalArgumentException(e); }
         }
