@@ -91,16 +91,22 @@ public final class Invoker {
         ParamExtractor.setProviders(new fr.vidocq.vidocq.ext.rest.cassini.internal.context.CassiniProviders(
                 registry, exceptionMappers, filters.contextResolvers()));
         try {
-            java.net.URI u = request.uri();
-            if (u != null) {
-                try {
-                    String ctx = request.contextPath();
-                    if (ctx == null) ctx = "";
-                    java.net.URI base = new java.net.URI(u.getScheme(), u.getAuthority(),
-                            (ctx.isEmpty() ? "/" : ctx + "/"), null, null);
-                    fr.vidocq.vidocq.ext.rest.cassini.internal.runtime.CassiniResponseBuilder.setBaseUri(base);
-                } catch (Exception ignored) {}
-            }
+            try {
+                java.net.URI u = request.uri();
+                String scheme = u != null && u.getScheme() != null ? u.getScheme()
+                        : (request.isSecure() ? "https" : "http");
+                String authority = u != null && u.getAuthority() != null ? u.getAuthority() : null;
+                if (authority == null) {
+                    String host = request.headers().firstOrNull("Host");
+                    if (host != null && !host.isEmpty()) authority = host;
+                }
+                if (authority == null) authority = "127.0.0.1";
+                String ctx = request.contextPath();
+                if (ctx == null) ctx = "";
+                String basePath = ctx.isEmpty() ? "/" : ctx + "/";
+                java.net.URI base = new java.net.URI(scheme + "://" + authority + basePath);
+                fr.vidocq.vidocq.ext.rest.cassini.internal.runtime.CassiniResponseBuilder.setBaseUri(base);
+            } catch (Exception ignored) {}
             return invokeInternal(match, request, route);
         } finally {
             ParamExtractor.clearProviders();
