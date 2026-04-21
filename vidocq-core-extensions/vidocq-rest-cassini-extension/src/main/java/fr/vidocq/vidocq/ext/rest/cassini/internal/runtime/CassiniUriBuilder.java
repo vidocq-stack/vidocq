@@ -124,9 +124,50 @@ public final class CassiniUriBuilder extends UriBuilder {
         return this;
     }
 
-    @Override public UriBuilder replaceMatrix(String m) { return this; }
-    @Override public UriBuilder matrixParam(String name, Object... values) { return this; }
-    @Override public UriBuilder replaceMatrixParam(String name, Object... values) { return this; }
+    @Override public UriBuilder replaceMatrix(String m) {
+        // Remplace les matrix params du dernier segment path §6.1.
+        int lastSlash = path.lastIndexOf("/");
+        int keepFrom = lastSlash < 0 ? 0 : lastSlash;
+        // Strip ';xxx' sur le segment courant après lastSlash
+        int semi = path.indexOf(';', keepFrom);
+        if (semi >= 0) path.setLength(semi);
+        if (m != null && !m.isEmpty()) {
+            path.append(';').append(m);
+        }
+        return this;
+    }
+    @Override public UriBuilder matrixParam(String name, Object... values) {
+        if (name == null) throw new IllegalArgumentException("name is null");
+        if (values == null) throw new IllegalArgumentException("values is null");
+        for (Object v : values) {
+            if (v == null) throw new IllegalArgumentException("matrix value is null");
+            path.append(';').append(name).append('=').append(String.valueOf(v));
+        }
+        return this;
+    }
+    @Override public UriBuilder replaceMatrixParam(String name, Object... values) {
+        if (name == null) throw new IllegalArgumentException("name is null");
+        // Strip occurrences existantes de ;name= dans le dernier segment
+        int lastSlash = path.lastIndexOf("/");
+        int start = lastSlash < 0 ? 0 : lastSlash;
+        StringBuilder rebuilt = new StringBuilder();
+        rebuilt.append(path, 0, start);
+        String segment = path.substring(start);
+        String[] parts = segment.split(";");
+        boolean first = true;
+        for (String p : parts) {
+            if (p.isEmpty()) continue;
+            if (!first && p.startsWith(name + "=")) continue;
+            if (!first && p.equals(name)) continue;
+            if (!first) rebuilt.append(';');
+            rebuilt.append(p);
+            first = false;
+        }
+        path.setLength(0);
+        path.append(rebuilt);
+        if (values != null && values.length > 0) matrixParam(name, values);
+        return this;
+    }
 
     @Override public UriBuilder replaceQuery(String q) {
         query.clear();
