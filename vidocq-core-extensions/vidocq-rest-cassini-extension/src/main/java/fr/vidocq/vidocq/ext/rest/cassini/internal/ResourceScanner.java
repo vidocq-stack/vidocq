@@ -113,6 +113,7 @@ public final class ResourceScanner {
         if (clsProduces.isEmpty()) clsProduces = inheritedProduces;
         Set<String> clsConsumes = consumes(cls.getAnnotation(Consumes.class));
         if (clsConsumes.isEmpty()) clsConsumes = inheritedConsumes;
+        Class<?> rootBean = locator.getDeclaringClass();
         for (Method m : cls.getDeclaredMethods()) {
             String verb = resolveHttpMethod(m);
             if (verb == null) continue;
@@ -123,9 +124,8 @@ public final class ResourceScanner {
             Set<String> effP = mp.isEmpty() ? clsProduces : mp;
             Set<String> effC = mc.isEmpty() ? clsConsumes : mc;
             m.setAccessible(true);
-            // On utilise la méthode enfant directement — l'Invoker l'appellera
-            // sur l'instance retournée par le locator via resolver chaining.
-            out.add(new ResourceMethod(cls, m, verb, UriTemplate.compile(full), effP, effC));
+            out.add(new ResourceMethod(cls, m, verb, UriTemplate.compile(full), effP, effC,
+                    rootBean, locator));
         }
     }
 

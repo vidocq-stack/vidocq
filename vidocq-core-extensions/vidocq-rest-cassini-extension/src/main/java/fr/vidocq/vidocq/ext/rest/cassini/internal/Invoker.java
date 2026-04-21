@@ -156,11 +156,34 @@ public final class Invoker {
         }
 
         // 4. Invoke
-        Object target = resolver.apply(route.beanClass());
+        Object target;
         try {
-            FieldInjector.inject(target, match, request);
+            if (route.isLocated()) {
+                // Sub-resource locator §3.4.1 : instantier la ressource racine,
+                // injecter ses fields, appeler le locator pour obtenir l'instance
+                // sous-ressource, puis injecter ses fields.
+                Object root = resolver.apply(route.rootBeanClass());
+                FieldInjector.inject(root, match, request);
+                target = route.locator().invoke(root);
+                if (target == null) {
+                    return renderWebAppException(
+                            new WebApplicationException("Sub-resource locator returned null", 404),
+                            route, chosen, rctx);
+                }
+                FieldInjector.inject(target, match, request);
+            } else {
+                target = resolver.apply(route.beanClass());
+                FieldInjector.inject(target, match, request);
+            }
         } catch (WebApplicationException wae) {
             return renderWebAppException(wae, route, chosen, rctx);
+        } catch (InvocationTargetException ite) {
+            Throwable cause = ite.getCause();
+            if (cause instanceof WebApplicationException wae) {
+                return renderWebAppException(wae, route, chosen, rctx);
+            }
+            if (cause instanceof Exception ex) throw ex;
+            throw new RuntimeException(cause);
         }
         Object result;
         try {
