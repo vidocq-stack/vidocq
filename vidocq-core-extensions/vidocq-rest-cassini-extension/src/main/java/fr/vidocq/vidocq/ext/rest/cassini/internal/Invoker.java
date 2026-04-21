@@ -147,8 +147,12 @@ public final class Invoker {
         try {
             resolved = ParamExtractor.resolve(route, match, request);
             args = resolved.args();
-            if (resolved.bodyIndex() >= 0 && hasRequestBody(request)) {
+            if (resolved.bodyIndex() >= 0) {
                 Parameter p = route.javaMethod().getParameters()[resolved.bodyIndex()];
+                // §4.2.4 : Standard providers DOIVENT retourner un objet non
+                // null même pour un body vide (String=="", byte[]=new byte[0],
+                // InputStream=empty stream, …). On lit donc toujours via MBR
+                // quand un param body est présent.
                 args[resolved.bodyIndex()] = readEntity(p, contentType, request);
             }
         } catch (WebApplicationException wae) {
