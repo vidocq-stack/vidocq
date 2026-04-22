@@ -107,7 +107,15 @@ public final class CassiniUriInfo implements UriInfo {
 
     @Override public MultivaluedMap<String, String> getPathParameters(boolean decode) {
         MultivaluedMap<String, String> m = new MultivaluedHashMap<>();
-        pathParams.forEach(m::add);
+        pathParams.forEach((k, v) -> {
+            String val = v;
+            if (decode && v != null && v.indexOf('%') >= 0) {
+                try { val = java.net.URLDecoder.decode(v.replace("+", "%2B"),
+                        java.nio.charset.StandardCharsets.UTF_8); }
+                catch (Exception ignored) {}
+            }
+            m.add(k, val);
+        });
         return m;
     }
 
@@ -115,7 +123,25 @@ public final class CassiniUriInfo implements UriInfo {
 
     @Override public MultivaluedMap<String, String> getQueryParameters(boolean decode) {
         MultivaluedMap<String, String> m = new MultivaluedHashMap<>();
-        request.queryParams().forEach(m::add);
+        // Chappe.queryParams() est déjà décodée. En mode decode=false, on
+        // relit depuis uri().getRawQuery().
+        String rawQuery = null;
+        if (!decode) {
+            java.net.URI u = request.uri();
+            rawQuery = u == null ? null : u.getRawQuery();
+            if (rawQuery == null) rawQuery = request.query();
+        }
+        if (!decode && rawQuery != null) {
+            for (String pair : rawQuery.split("&")) {
+                if (pair.isEmpty()) continue;
+                int eq = pair.indexOf('=');
+                String k = eq < 0 ? pair : pair.substring(0, eq);
+                String v = eq < 0 ? "" : pair.substring(eq + 1);
+                m.add(k, v);
+            }
+        } else {
+            request.queryParams().forEach(m::add);
+        }
         return m;
     }
 
