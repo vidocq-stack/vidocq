@@ -70,9 +70,21 @@ public final class ParamValueConverter {
         }
 
         if (type.isEnum()) {
-            @SuppressWarnings({"unchecked", "rawtypes"})
-            Enum<?> e = Enum.valueOf((Class<Enum>) type.asSubclass(Enum.class), raw);
-            return e;
+            // §3.2 : pour un enum avec fromString(String), celui-ci a priorité
+            // sur Enum.valueOf (sinon un enum built-in valueOf chope toujours).
+            try {
+                Method fs = type.getDeclaredMethod("fromString", String.class);
+                if (Modifier.isStatic(fs.getModifiers())) {
+                    return invokeOrPropagate(fs, null, raw);
+                }
+            } catch (NoSuchMethodException ignored) {}
+            try {
+                @SuppressWarnings({"unchecked", "rawtypes"})
+                Enum<?> e = Enum.valueOf((Class<Enum>) type.asSubclass(Enum.class), raw);
+                return e;
+            } catch (IllegalArgumentException iae) {
+                return null;
+            }
         }
 
         try {
