@@ -230,6 +230,13 @@ public final class ParamExtractor {
             rctx.markPostMatching();
             return rctx;
         }
+        if (type == jakarta.ws.rs.container.ResourceInfo.class) {
+            var route = match.method();
+            return new jakarta.ws.rs.container.ResourceInfo() {
+                @Override public java.lang.reflect.Method getResourceMethod() { return route.javaMethod(); }
+                @Override public Class<?> getResourceClass() { return route.beanClass(); }
+            };
+        }
         if (type == jakarta.ws.rs.core.Application.class) {
             // §9.4 : Application est l'instance de l'Application JAX-RS.
             // On fournit une instance minimale (pas d'Application user-level

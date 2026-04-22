@@ -119,6 +119,13 @@ public final class FieldInjector {
         if (type == SecurityContext.class) return new CassiniSecurityContext(request);
         if (type == jakarta.ws.rs.ext.Providers.class) return ParamExtractor.currentProviders();
         if (type == jakarta.ws.rs.core.Application.class) return new jakarta.ws.rs.core.Application();
+        if (type == jakarta.ws.rs.container.ResourceInfo.class) {
+            var route = match.method();
+            return new jakarta.ws.rs.container.ResourceInfo() {
+                @Override public java.lang.reflect.Method getResourceMethod() { return route.javaMethod(); }
+                @Override public Class<?> getResourceClass() { return route.beanClass(); }
+            };
+        }
         if (type == jakarta.ws.rs.container.ContainerRequestContext.class) {
             var rctx = new fr.vidocq.vidocq.ext.rest.cassini.internal.filter.CassiniRequestContext(
                     request, new CassiniUriInfo(request, request.contextPath(), match.pathParams()));
