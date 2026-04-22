@@ -80,7 +80,8 @@ public final class FieldInjector {
         PathParam pp = f.getAnnotation(PathParam.class);
         if (pp != null) {
             String raw = match.pathParams().get(pp.value());
-            return coerce(f, raw == null ? emptyOrDef(def) : List.of(raw));
+            String val = raw == null ? null : (encoded ? raw : decodePath(raw));
+            return coerce(f, val == null ? emptyOrDef(def) : List.of(val));
         }
         QueryParam qp = f.getAnnotation(QueryParam.class);
         if (qp != null) {
@@ -154,6 +155,12 @@ public final class FieldInjector {
     private static String defaultValue(Field f) {
         DefaultValue d = f.getAnnotation(DefaultValue.class);
         return d == null ? null : d.value();
+    }
+
+    private static String decodePath(String s) {
+        if (s == null || s.indexOf('%') < 0) return s;
+        try { return URLDecoder.decode(s.replace("+", "%2B"), StandardCharsets.UTF_8); }
+        catch (Exception e) { return s; }
     }
 
     private static Map<String, List<String>> parseQuery(String raw, boolean encoded) {

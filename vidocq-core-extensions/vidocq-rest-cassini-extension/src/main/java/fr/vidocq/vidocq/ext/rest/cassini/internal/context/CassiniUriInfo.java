@@ -122,10 +122,16 @@ public final class CassiniUriInfo implements UriInfo {
     @Override public List<String> getMatchedURIs() { return getMatchedURIs(true); }
 
     @Override public List<String> getMatchedURIs(boolean decode) {
-        // Minimaliste : retourne uniquement l'URI complète matchée.
-        // §9.2.1 : une liste de un élément satisfait la plupart des tests.
+        // §9.2.1 : liste des URI matchées, de la plus spécifique (méthode)
+        // à la plus large (ressource racine). Minimaliste : on décompose
+        // le pathInfo en deux niveaux (méthode puis classe) dès qu'il y a
+        // au moins un '/'.
         String p = decode ? getPath() : getPath(false);
-        return p.isEmpty() ? List.of() : List.of(p);
+        if (p == null || p.isEmpty()) return List.of();
+        int lastSlash = p.lastIndexOf('/');
+        if (lastSlash <= 0) return List.of(p);
+        String parent = p.substring(0, lastSlash);
+        return List.of(p, parent);
     }
 
     @Override public String getMatchedResourceTemplate() { return ""; }

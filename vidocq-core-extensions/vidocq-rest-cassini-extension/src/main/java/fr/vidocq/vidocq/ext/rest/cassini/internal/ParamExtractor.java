@@ -81,7 +81,8 @@ public final class ParamExtractor {
         PathParam pathParam = p.getAnnotation(PathParam.class);
         if (pathParam != null) {
             String raw = match.pathParams().get(pathParam.value());
-            return coerce(p, raw == null ? emptyOrDefault(def) : List.of(raw));
+            String val = raw == null ? null : (encoded ? raw : decodePath(raw));
+            return coerce(p, val == null ? emptyOrDefault(def) : List.of(val));
         }
         QueryParam queryParam = p.getAnnotation(QueryParam.class);
         if (queryParam != null) {
@@ -146,7 +147,8 @@ public final class ParamExtractor {
             }
             if (pathParam != null) {
                 String raw = match.pathParams().get(pathParam.value());
-                args[i] = coerce(p, raw == null ? emptyOrDefault(def) : List.of(raw));
+                String val = raw == null ? null : (encoded ? raw : decodePath(raw));
+                args[i] = coerce(p, val == null ? emptyOrDefault(def) : List.of(val));
             } else if (queryParam != null) {
                 Map<String, List<String>> cache;
                 if (encoded) {
@@ -275,6 +277,14 @@ public final class ParamExtractor {
             return c;
         }
         return String.class;
+    }
+
+    /** Décode %XX de path params comme {@link URLDecoder} mais sans remplacer
+     *  '+' par espace (path ≠ form-urlencoded). */
+    private static String decodePath(String s) {
+        if (s == null || s.indexOf('%') < 0) return s;
+        try { return URLDecoder.decode(s.replace("+", "%2B"), StandardCharsets.UTF_8); }
+        catch (Exception e) { return s; }
     }
 
     private static Map<String, List<String>> parseQuery(String raw, boolean encoded) {
