@@ -70,7 +70,11 @@ public final class CassiniWriterInterceptorContext implements WriterInterceptorC
     @Override public void removeProperty(String name) { properties.remove(name); }
 
     @Override public Annotation[] getAnnotations() { return annotations; }
-    @Override public void setAnnotations(Annotation[] a) { this.annotations = a == null ? new Annotation[0] : a; }
+    @Override public void setAnnotations(Annotation[] a) {
+        // §7.2 : setAnnotations(null) doit lever NullPointerException.
+        if (a == null) throw new NullPointerException("annotations is null");
+        this.annotations = a;
+    }
     @Override public Class<?> getType() { return type; }
     @Override public void setType(Class<?> t) { this.type = t; }
     @Override public Type getGenericType() { return genericType; }
