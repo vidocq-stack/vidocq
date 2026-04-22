@@ -536,6 +536,12 @@ public final class CassiniRuntimeDelegate extends RuntimeDelegate {
             params.clear();
             int gt = s.indexOf('>');
             if (s.startsWith("<") && gt > 0) {
+                // Format: <uri>; ... — uri doit être non-vide ; caractères
+                // après '>' ne doivent pas contenir d'autre '<' ni '>'.
+                if (gt == 1) throw new IllegalArgumentException("empty URI in Link: " + link);
+                if (s.indexOf('<', 1) >= 0 || s.indexOf('>', gt + 1) >= 0) {
+                    throw new IllegalArgumentException("malformed Link header: " + link);
+                }
                 uri(s.substring(1, gt));
                 String rest = gt + 1 < s.length() ? s.substring(gt + 1) : "";
                 for (String p : rest.split(";")) {
