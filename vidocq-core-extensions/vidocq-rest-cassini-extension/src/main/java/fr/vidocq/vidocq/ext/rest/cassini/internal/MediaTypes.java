@@ -111,7 +111,15 @@ public final class MediaTypes {
     public static List<MediaType> fromSet(java.util.Set<String> raws) {
         if (raws == null || raws.isEmpty()) return List.of();
         List<MediaType> out = new ArrayList<>(raws.size());
-        for (String r : raws) out.add(parse(r));
+        for (String r : raws) {
+            // Jersey/RestEasy tolèrent @Consumes/@Produces("a,b") — un seul
+            // String contenant plusieurs media-types séparés par virgule.
+            if (r != null && r.indexOf(',') >= 0 && r.indexOf(';') < 0) {
+                for (String tok : r.split(",")) if (!tok.isBlank()) out.add(parse(tok));
+            } else {
+                out.add(parse(r));
+            }
+        }
         return Collections.unmodifiableList(out);
     }
 
