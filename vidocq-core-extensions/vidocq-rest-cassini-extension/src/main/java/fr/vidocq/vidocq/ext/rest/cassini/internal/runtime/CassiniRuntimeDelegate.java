@@ -34,12 +34,15 @@ public final class CassiniRuntimeDelegate extends RuntimeDelegate {
     }
 
     @Override public <T> T createEndpoint(Application application, Class<T> endpointType) {
+        if (application == null) throw new IllegalArgumentException("application is null");
+        if (endpointType == null) throw new IllegalArgumentException("endpointType is null");
         throw new UnsupportedOperationException("createEndpoint not supported");
     }
 
     @Override
     @SuppressWarnings("unchecked")
     public <T> HeaderDelegate<T> createHeaderDelegate(Class<T> type) {
+        if (type == null) throw new IllegalArgumentException("type is null");
         if (type == MediaType.class) return (HeaderDelegate<T>) new MediaTypeDelegate();
         if (type == jakarta.ws.rs.core.NewCookie.class) return (HeaderDelegate<T>) new NewCookieDelegate();
         if (type == jakarta.ws.rs.core.Cookie.class) return (HeaderDelegate<T>) new CookieDelegate();
@@ -243,17 +246,24 @@ public final class CassiniRuntimeDelegate extends RuntimeDelegate {
     }
 
     private static final class MediaTypeDelegate implements HeaderDelegate<MediaType> {
-        @Override public MediaType fromString(String value) { return MediaTypes.parse(value); }
+        @Override public MediaType fromString(String value) {
+            if (value == null) throw new IllegalArgumentException("value is null");
+            return MediaTypes.parse(value);
+        }
         @Override public String toString(MediaType value) { return MediaTypes.format(value); }
     }
 
     private static final class ToStringDelegate implements HeaderDelegate<Object> {
-        @Override public Object fromString(String value) { return value; }
+        @Override public Object fromString(String value) {
+            if (value == null) throw new IllegalArgumentException("value is null");
+            return value;
+        }
         @Override public String toString(Object value) { return value == null ? "" : value.toString(); }
     }
 
     private static final class NewCookieDelegate implements HeaderDelegate<jakarta.ws.rs.core.NewCookie> {
         @Override public jakarta.ws.rs.core.NewCookie fromString(String s) {
+            if (s == null) throw new IllegalArgumentException("value is null");
             // Parsing basique name=value; attr=val; ...
             String[] parts = s.split(";");
             String name = null, value = null, path = null, domain = null, comment = null;
@@ -295,6 +305,7 @@ public final class CassiniRuntimeDelegate extends RuntimeDelegate {
 
     private static final class CookieDelegate implements HeaderDelegate<jakarta.ws.rs.core.Cookie> {
         @Override public jakarta.ws.rs.core.Cookie fromString(String s) {
+            if (s == null) throw new IllegalArgumentException("value is null");
             int eq = s.indexOf('=');
             if (eq < 0) return new jakarta.ws.rs.core.Cookie.Builder(s.trim()).build();
             String name = s.substring(0, eq).trim();
@@ -308,6 +319,7 @@ public final class CassiniRuntimeDelegate extends RuntimeDelegate {
 
     private static final class EntityTagDelegate implements HeaderDelegate<jakarta.ws.rs.core.EntityTag> {
         @Override public jakarta.ws.rs.core.EntityTag fromString(String s) {
+            if (s == null) throw new IllegalArgumentException("value is null");
             boolean weak = s.startsWith("W/");
             String tag = weak ? s.substring(2) : s;
             tag = stripQuotes(tag.trim());
@@ -320,20 +332,61 @@ public final class CassiniRuntimeDelegate extends RuntimeDelegate {
 
     private static final class CacheControlDelegate implements HeaderDelegate<jakarta.ws.rs.core.CacheControl> {
         @Override public jakarta.ws.rs.core.CacheControl fromString(String s) {
+            if (s == null) throw new IllegalArgumentException("value is null");
             jakarta.ws.rs.core.CacheControl cc = new jakarta.ws.rs.core.CacheControl();
-            cc.setNoTransform(false); // default true in spec; flip
+            cc.setNoTransform(false);
+            for (String tok : s.split(",")) {
+                String t = tok.trim();
+                if (t.isEmpty()) continue;
+                int eq = t.indexOf('=');
+                String name = eq < 0 ? t : t.substring(0, eq).trim();
+                String value = eq < 0 ? "" : stripQuotes(t.substring(eq + 1).trim());
+                switch (name.toLowerCase(java.util.Locale.ROOT)) {
+                    case "no-cache":
+                        cc.setNoCache(true);
+                        if (!value.isEmpty()) cc.getNoCacheFields().add(stripQuotes(value));
+                        break;
+                    case "no-store": cc.setNoStore(true); break;
+                    case "no-transform": cc.setNoTransform(true); break;
+                    case "private":
+                        cc.setPrivate(true);
+                        if (!value.isEmpty()) cc.getPrivateFields().add(stripQuotes(value));
+                        break;
+                    case "public": break;
+                    case "must-revalidate": cc.setMustRevalidate(true); break;
+                    case "proxy-revalidate": cc.setProxyRevalidate(true); break;
+                    case "max-age":
+                        try { cc.setMaxAge(Integer.parseInt(value)); } catch (Exception e) {}
+                        break;
+                    case "s-maxage":
+                        try { cc.setSMaxAge(Integer.parseInt(value)); } catch (Exception e) {}
+                        break;
+                    default:
+                        cc.getCacheExtension().put(name, value);
+                }
+            }
             return cc;
         }
         @Override public String toString(jakarta.ws.rs.core.CacheControl c) {
             StringBuilder sb = new StringBuilder();
-            if (c.isNoCache()) append(sb, "no-cache");
+            if (c.isPrivate()) {
+                if (c.getPrivateFields().isEmpty()) append(sb, "private");
+                else append(sb, "private=\"" + String.join(",", c.getPrivateFields()) + "\"");
+            }
+            if (c.isNoCache()) {
+                if (c.getNoCacheFields().isEmpty()) append(sb, "no-cache");
+                else append(sb, "no-cache=\"" + String.join(",", c.getNoCacheFields()) + "\"");
+            }
             if (c.isNoStore()) append(sb, "no-store");
             if (c.isNoTransform()) append(sb, "no-transform");
-            if (c.isPrivate()) append(sb, "private");
             if (c.isMustRevalidate()) append(sb, "must-revalidate");
             if (c.isProxyRevalidate()) append(sb, "proxy-revalidate");
             if (c.getMaxAge() != -1) append(sb, "max-age=" + c.getMaxAge());
             if (c.getSMaxAge() != -1) append(sb, "s-maxage=" + c.getSMaxAge());
+            for (var e : c.getCacheExtension().entrySet()) {
+                String v = e.getValue();
+                append(sb, e.getKey() + (v == null || v.isEmpty() ? "" : "=" + v));
+            }
             return sb.toString();
         }
         private static void append(StringBuilder sb, String v) {
@@ -344,6 +397,7 @@ public final class CassiniRuntimeDelegate extends RuntimeDelegate {
 
     private static final class LinkDelegate implements HeaderDelegate<jakarta.ws.rs.core.Link> {
         @Override public jakarta.ws.rs.core.Link fromString(String s) {
+            if (s == null) throw new IllegalArgumentException("value is null");
             // Format: <uri>; rel=xxx; title="yyy"
             String trimmed = s.trim();
             int gt = trimmed.indexOf('>');
@@ -377,6 +431,7 @@ public final class CassiniRuntimeDelegate extends RuntimeDelegate {
             FMT.setTimeZone(java.util.TimeZone.getTimeZone("GMT"));
         }
         @Override public synchronized java.util.Date fromString(String s) {
+            if (s == null) throw new IllegalArgumentException("value is null");
             try { return FMT.parse(s); } catch (Exception e) { return null; }
         }
         @Override public synchronized String toString(java.util.Date d) { return FMT.format(d); }
