@@ -344,7 +344,15 @@ public final class Invoker {
         MessageBodyReader reader = registry.findReader(type, genericType, anns, ct)
                 .orElseThrow(() -> new WebApplicationException(
                         "No MessageBodyReader for " + type.getName() + " / " + MediaTypes.format(ct), 415));
-        try (InputStream in = request.body().asInputStream()) {
+        // Si @FormParam a déjà consommé le body, replay depuis le cache.
+        byte[] cached = FieldInjector.BODY_CACHE.get();
+        InputStream src;
+        if (cached != null) {
+            src = new java.io.ByteArrayInputStream(cached);
+        } else {
+            src = request.body().asInputStream();
+        }
+        try (InputStream in = src) {
             if (filters.readerInterceptors().isEmpty()) {
                 return reader.readFrom(type, genericType, anns, ct, headers, in);
             }

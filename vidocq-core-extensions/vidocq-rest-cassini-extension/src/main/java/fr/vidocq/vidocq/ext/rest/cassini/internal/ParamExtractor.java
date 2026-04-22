@@ -382,9 +382,13 @@ public final class ParamExtractor {
             if (cached != null) return cached;
         }
         try {
-            var body = request.body();
-            byte[] bytes = (body == null || body.contentLength() == 0)
-                    ? new byte[0] : body.asInputStream().readAllBytes();
+            byte[] bytes = FieldInjector.BODY_CACHE.get();
+            if (bytes == null) {
+                var body = request.body();
+                bytes = (body == null || body.contentLength() == 0)
+                        ? new byte[0] : body.asInputStream().readAllBytes();
+                FieldInjector.BODY_CACHE.set(bytes);
+            }
             if (encoded) {
                 String s = new String(bytes, StandardCharsets.UTF_8);
                 Map<String, List<String>> parsed = FormDecoder.parse(s, false);

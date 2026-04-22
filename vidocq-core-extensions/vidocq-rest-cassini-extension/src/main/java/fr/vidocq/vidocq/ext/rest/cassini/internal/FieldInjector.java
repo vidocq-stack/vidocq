@@ -243,6 +243,9 @@ public final class FieldInjector {
 
     static final ThreadLocal<Map<String, List<String>>> FORM_CACHE = new ThreadLocal<>();
     static final ThreadLocal<Map<String, List<String>>> FORM_CACHE_ENCODED = new ThreadLocal<>();
+    /** Cache des bytes du body consommés par {@link #readForm} pour les
+     *  MBR invoqués après (@FormParam + body String injectés ensemble). */
+    public static final ThreadLocal<byte[]> BODY_CACHE = new ThreadLocal<>();
 
     private static Map<String, List<String>> readForm(Request request, boolean encoded) {
         if (encoded) {
@@ -253,9 +256,13 @@ public final class FieldInjector {
             if (cached != null) return cached;
         }
         try {
-            var body = request.body();
-            byte[] bytes = (body == null || body.contentLength() == 0)
-                    ? new byte[0] : body.asInputStream().readAllBytes();
+            byte[] bytes = BODY_CACHE.get();
+            if (bytes == null) {
+                var body = request.body();
+                bytes = (body == null || body.contentLength() == 0)
+                        ? new byte[0] : body.asInputStream().readAllBytes();
+                BODY_CACHE.set(bytes);
+            }
             if (encoded) {
                 Map<String, List<String>> parsed = FormDecoder.parse(
                         new String(bytes, java.nio.charset.StandardCharsets.UTF_8), false);
@@ -275,5 +282,6 @@ public final class FieldInjector {
     public static void clearFormCache() {
         FORM_CACHE.remove();
         FORM_CACHE_ENCODED.remove();
+        BODY_CACHE.remove();
     }
 }
