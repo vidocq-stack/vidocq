@@ -140,10 +140,7 @@ public final class FieldInjector {
         Class<?> element = ParamValueConverter.isListLike(raw)
                 ? genericElementType(f.getGenericType()) : raw;
         try { return ParamValueConverter.coerce(raw, element, raws); }
-        catch (WebApplicationException wae) {
-            if (f.getAnnotation(FormParam.class) != null) return null;
-            throw wae;
-        }
+        catch (WebApplicationException wae) { throw wae; }
         catch (RuntimeException e) {
             if (f.getAnnotation(PathParam.class) != null
                     || f.getAnnotation(MatrixParam.class) != null) {
@@ -151,7 +148,6 @@ public final class FieldInjector {
                         + f.getName() + ": " + e.getMessage(), e,
                         jakarta.ws.rs.core.Response.status(404).build());
             }
-            if (f.getAnnotation(FormParam.class) != null) return null;
             throw new WebApplicationException("Invalid value for field "
                     + f.getName() + ": " + e.getMessage(), e,
                     jakarta.ws.rs.core.Response.status(400).build());
