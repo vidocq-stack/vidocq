@@ -436,11 +436,8 @@ public final class CassiniRuntimeDelegate extends RuntimeDelegate {
         }
         @Override public Link.Builder uri(java.net.URI uri) {
             if (uri == null) throw new IllegalArgumentException("uri");
-            // Validation basique §4.3.4 : path vide ou authority vide non-null rejetés
-            if (uri.getScheme() != null && uri.getAuthority() != null
-                    && uri.getHost() == null && !uri.getRawAuthority().isEmpty()) {
-                throw new IllegalArgumentException("malformed URI: " + uri);
-            }
+            // Validation repoussée à build() pour que les URI malformées
+            // lèvent UriBuilderException (§4.3.4) plutôt qu'IAE.
             this.uri = uri;
             return this;
         }
@@ -480,30 +477,31 @@ public final class CassiniRuntimeDelegate extends RuntimeDelegate {
 
         @Override public Link build(Object... values) {
             if (values == null) throw new IllegalArgumentException("values");
+            String uriStr;
+            if (uri != null) uriStr = uri.toString();
+            else if (uriBuilder != null) uriStr = uriBuilder.build(values).toString();
+            else uriStr = "";
+            String decoded = uriStr.replace("%7B", "{").replace("%7D", "}")
+                    .replace("%7b", "{").replace("%7d", "}");
+            String substituted = substituteTemplates(decoded, values);
+            // §4.3.4 : template non résolu → IAE (pas UriBuilderException).
+            if (substituted.indexOf('{') >= 0) {
+                throw new IllegalArgumentException(
+                        "value not supplied for template in link uri: " + decoded);
+            }
+            // §4.3.4 : URI malformée → UriBuilderException.
+            java.net.URI effective;
             try {
-                String uriStr;
-                if (uri != null) uriStr = uri.toString();
-                else if (uriBuilder != null) uriStr = uriBuilder.build(values).toString();
-                else uriStr = "";
-                String decoded = uriStr.replace("%7B", "{").replace("%7D", "}")
-                        .replace("%7b", "{").replace("%7d", "}");
-                String substituted = substituteTemplates(decoded, values);
-                if (substituted.indexOf('{') >= 0) {
-                    throw new jakarta.ws.rs.core.UriBuilderException(
-                            "value not supplied for template in link uri: " + decoded);
-                }
-                java.net.URI effective = new java.net.URI(substituted);
-                if (baseUri != null) effective = baseUri.resolve(effective);
-                if (effective.getScheme() != null && effective.getAuthority() != null
-                        && effective.getHost() == null && !effective.getRawAuthority().isEmpty()) {
-                    throw new jakarta.ws.rs.core.UriBuilderException("malformed URI: " + effective);
-                }
-                return new StubLink(effective, java.util.Map.copyOf(params));
+                effective = new java.net.URI(substituted);
             } catch (java.net.URISyntaxException e) {
                 throw new jakarta.ws.rs.core.UriBuilderException(e);
-            } catch (IllegalArgumentException e) {
-                throw new jakarta.ws.rs.core.UriBuilderException(e);
             }
+            if (baseUri != null) effective = baseUri.resolve(effective);
+            if (effective.getScheme() != null && effective.getAuthority() != null
+                    && effective.getHost() == null && !effective.getRawAuthority().isEmpty()) {
+                throw new jakarta.ws.rs.core.UriBuilderException("malformed URI: " + effective);
+            }
+            return new StubLink(effective, java.util.Map.copyOf(params));
         }
 
         @Override public Link buildRelativized(java.net.URI base, Object... values) {
