@@ -252,13 +252,14 @@ public final class ParamExtractor {
         try {
             return ParamValueConverter.coerce(raw, element, raws);
         } catch (WebApplicationException w) {
-            // §3.2 : @PathParam/@MatrixParam/@HeaderParam propagent — ce
-            // dernier passe par ExceptionMapper<WAE>. Les autres
-            // (FormParam, QueryParam, CookieParam) laissent le paramètre
-            // à null/default — la méthode gère elle-même.
+            // §3.2 : @PathParam/@MatrixParam/@HeaderParam/@CookieParam propagent
+            // — les deux derniers passent par ExceptionMapper<WAE>. Les
+            // @QueryParam/@FormParam laissent le paramètre à null/default —
+            // la méthode gère elle-même.
             if (p.getAnnotation(PathParam.class) != null
                     || p.getAnnotation(MatrixParam.class) != null
-                    || p.getAnnotation(HeaderParam.class) != null) throw w;
+                    || p.getAnnotation(HeaderParam.class) != null
+                    || p.getAnnotation(CookieParam.class) != null) throw w;
             return ParamValueConverter.defaultForType(p.getType());
         } catch (RuntimeException e) {
             if (p.getAnnotation(PathParam.class) != null
@@ -266,7 +267,8 @@ public final class ParamExtractor {
                 throw new WebApplicationException("Invalid value for parameter "
                         + p.getName() + ": " + e.getMessage(), 404);
             }
-            if (p.getAnnotation(HeaderParam.class) != null) {
+            if (p.getAnnotation(HeaderParam.class) != null
+                    || p.getAnnotation(CookieParam.class) != null) {
                 throw new WebApplicationException("Invalid value for parameter "
                         + p.getName() + ": " + e.getMessage(), 400);
             }

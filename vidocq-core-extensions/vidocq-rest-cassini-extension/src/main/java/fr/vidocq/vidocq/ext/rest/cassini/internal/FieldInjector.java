@@ -136,7 +136,8 @@ public final class FieldInjector {
         catch (WebApplicationException wae) {
             if (f.getAnnotation(PathParam.class) != null
                     || f.getAnnotation(MatrixParam.class) != null
-                    || f.getAnnotation(HeaderParam.class) != null) throw wae;
+                    || f.getAnnotation(HeaderParam.class) != null
+                    || f.getAnnotation(CookieParam.class) != null) throw wae;
             return null;
         }
         catch (RuntimeException e) {
@@ -145,7 +146,8 @@ public final class FieldInjector {
                 throw new WebApplicationException("Invalid value for field "
                         + f.getName() + ": " + e.getMessage(), 404);
             }
-            if (f.getAnnotation(HeaderParam.class) != null) {
+            if (f.getAnnotation(HeaderParam.class) != null
+                    || f.getAnnotation(CookieParam.class) != null) {
                 throw new WebApplicationException("Invalid value for field "
                         + f.getName() + ": " + e.getMessage(), 400);
             }
