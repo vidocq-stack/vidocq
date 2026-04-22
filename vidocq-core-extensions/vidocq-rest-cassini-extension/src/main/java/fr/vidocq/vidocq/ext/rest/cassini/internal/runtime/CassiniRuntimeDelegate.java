@@ -628,7 +628,10 @@ public final class CassiniRuntimeDelegate extends RuntimeDelegate {
                     && effective.getHost() == null && !effective.getRawAuthority().isEmpty()) {
                 throw new jakarta.ws.rs.core.UriBuilderException("malformed URI: " + effective);
             }
-            return new StubLink(effective, java.util.Map.copyOf(params));
+            // LinkedHashMap : préserve l'ordre d'insertion des params
+            // (contrairement à Map.copyOf qui ne le garantit pas).
+            return new StubLink(effective, java.util.Collections.unmodifiableMap(
+                    new java.util.LinkedHashMap<>(params)));
         }
 
         @Override public Link buildRelativized(java.net.URI base, Object... values) {
