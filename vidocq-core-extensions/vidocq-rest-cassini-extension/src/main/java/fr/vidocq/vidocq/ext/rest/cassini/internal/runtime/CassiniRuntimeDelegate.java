@@ -306,14 +306,41 @@ public final class CassiniRuntimeDelegate extends RuntimeDelegate {
     private static final class CookieDelegate implements HeaderDelegate<jakarta.ws.rs.core.Cookie> {
         @Override public jakarta.ws.rs.core.Cookie fromString(String s) {
             if (s == null) throw new IllegalArgumentException("value is null");
-            int eq = s.indexOf('=');
-            if (eq < 0) return new jakarta.ws.rs.core.Cookie.Builder(s.trim()).build();
-            String name = s.substring(0, eq).trim();
-            String value = stripQuotes(s.substring(eq + 1).trim());
-            return new jakarta.ws.rs.core.Cookie.Builder(name).value(value).build();
+            // Parsing RFC 2965 / 6265 : $Version=1; NAME=VALUE; $Path="/"; $Domain=".."
+            // Jersey normalise en lowercase name/value pour Cookie.valueOf §4.3.
+            String name = null, value = null, path = null, domain = null;
+            int version = 0;
+            for (String pair : s.split(";")) {
+                String p = pair.trim();
+                if (p.isEmpty()) continue;
+                int eq = p.indexOf('=');
+                String k = eq < 0 ? p : p.substring(0, eq).trim();
+                String v = eq < 0 ? "" : stripQuotes(p.substring(eq + 1).trim());
+                if ("$Version".equalsIgnoreCase(k)) {
+                    try { version = Integer.parseInt(v); } catch (Exception ignored) {}
+                } else if ("$Path".equalsIgnoreCase(k)) {
+                    path = v;
+                } else if ("$Domain".equalsIgnoreCase(k)) {
+                    domain = v;
+                } else if (name == null) {
+                    name = k.toLowerCase(java.util.Locale.ROOT);
+                    value = v.toLowerCase(java.util.Locale.ROOT);
+                }
+            }
+            if (name == null) name = s.trim().toLowerCase(java.util.Locale.ROOT);
+            jakarta.ws.rs.core.Cookie.Builder b = new jakarta.ws.rs.core.Cookie.Builder(name)
+                    .value(value).version(version);
+            if (path != null) b.path(path);
+            if (domain != null) b.domain(domain);
+            return b.build();
         }
         @Override public String toString(jakarta.ws.rs.core.Cookie c) {
-            return c.getName() + "=" + quoteIfNeeded(c.getValue());
+            StringBuilder sb = new StringBuilder();
+            if (c.getVersion() > 0) sb.append("$Version=").append(c.getVersion()).append(";");
+            sb.append(c.getName()).append('=').append(quoteIfNeeded(c.getValue()));
+            if (c.getPath() != null) sb.append(";$Path=").append(quoteIfNeeded(c.getPath()));
+            if (c.getDomain() != null) sb.append(";$Domain=").append(quoteIfNeeded(c.getDomain()));
+            return sb.toString();
         }
     }
 

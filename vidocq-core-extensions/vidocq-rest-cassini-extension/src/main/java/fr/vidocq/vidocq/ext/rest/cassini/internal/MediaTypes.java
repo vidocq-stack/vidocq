@@ -69,9 +69,10 @@ public final class MediaTypes {
                     if (best == null || specificity(candidate) > specificity(best)) best = candidate;
                 }
             }
-            // §3.8 : un media-type encore wildcard à ce stade est ambigu
-            // (deux côtés wild) — non-match (→ 406).
-            if (best != null && !best.isWildcardType() && !best.isWildcardSubtype()) {
+            // §3.8 : un media-type encore wildcard sur SUBTYPE à ce stade
+            // (Accept=text/* et @Produces=text/*) est ambigu — non-match.
+            // Wildcard-type (*/*) est OK (ressource universelle).
+            if (best != null && !best.isWildcardSubtype()) {
                 return Optional.of(best);
             }
         }
