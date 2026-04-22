@@ -252,13 +252,19 @@ public final class ParamExtractor {
         try {
             return ParamValueConverter.coerce(raw, element, raws);
         } catch (WebApplicationException w) {
-            throw w;
+            // §3.2 : @PathParam/@MatrixParam propagent ; les autres param
+            // types (FormParam, QueryParam, HeaderParam, CookieParam)
+            // laissent le paramètre à null/default — la méthode gère.
+            if (p.getAnnotation(PathParam.class) != null
+                    || p.getAnnotation(MatrixParam.class) != null) throw w;
+            return ParamValueConverter.defaultForType(p.getType());
         } catch (RuntimeException e) {
-            // §3.2 : @PathParam/@MatrixParam → 404, autres → 400
-            int status = (p.getAnnotation(PathParam.class) != null
-                    || p.getAnnotation(MatrixParam.class) != null) ? 404 : 400;
-            throw new WebApplicationException("Invalid value for parameter "
-                    + p.getName() + ": " + e.getMessage(), status);
+            if (p.getAnnotation(PathParam.class) != null
+                    || p.getAnnotation(MatrixParam.class) != null) {
+                throw new WebApplicationException("Invalid value for parameter "
+                        + p.getName() + ": " + e.getMessage(), 404);
+            }
+            return ParamValueConverter.defaultForType(p.getType());
         }
     }
 
