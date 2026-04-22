@@ -271,13 +271,22 @@ public final class Invoker {
         MultivaluedMap<String, Object> headers = MessageBodyRegistry.outHeaders();
         int status = (result == null) ? 204 : 200;
         Object entity = (result instanceof jakarta.ws.rs.core.Response jr) ? jr.getEntity() : result;
+        java.lang.annotation.Annotation[] entityAnnotations = null;
         if (result instanceof jakarta.ws.rs.core.Response jr2) {
             status = jr2.getStatus();
             for (var e : jr2.getStringHeaders().entrySet()) for (String v : e.getValue()) headers.add(e.getKey(), v);
+            // Les annotations de l'entity sont internes au CassiniResponse
+            // (§6.7.4 : exposées via ContainerResponseContext.getEntityAnnotations).
+            if (jr2 instanceof fr.vidocq.vidocq.ext.rest.cassini.internal.runtime.CassiniResponse cr) {
+                entityAnnotations = cr.entityAnnotations();
+            }
+        }
+        if ((entityAnnotations == null || entityAnnotations.length == 0) && route.javaMethod() != null) {
+            entityAnnotations = route.javaMethod().getAnnotations();
         }
 
         CassiniResponseContext rctx2 = new CassiniResponseContext(status, entity,
-                entity == null ? null : entity.getClass(), headers);
+                entity == null ? null : entity.getClass(), entityAnnotations, headers);
         for (var fe : filters.responseFilters()) {
             if (!fe.appliesTo(route.javaMethod(), route.beanClass())) continue;
             try { fe.instance().filter(rctx, rctx2); }

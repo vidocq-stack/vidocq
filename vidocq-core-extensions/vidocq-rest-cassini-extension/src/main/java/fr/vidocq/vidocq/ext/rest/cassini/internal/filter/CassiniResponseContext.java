@@ -37,10 +37,16 @@ public final class CassiniResponseContext implements ContainerResponseContext {
 
     public CassiniResponseContext(int status, Object entity, Type entityType,
                                   MultivaluedMap<String, Object> headers) {
+        this(status, entity, entityType, null, headers);
+    }
+
+    public CassiniResponseContext(int status, Object entity, Type entityType,
+                                  Annotation[] annotations, MultivaluedMap<String, Object> headers) {
         this.status = status;
         this.statusInfo = Response.Status.fromStatusCode(status);
         this.entity = entity;
         this.entityType = entityType;
+        if (annotations != null) this.annotations = annotations;
         this.headers = headers == null ? new MultivaluedHashMap<>() : headers;
     }
 
