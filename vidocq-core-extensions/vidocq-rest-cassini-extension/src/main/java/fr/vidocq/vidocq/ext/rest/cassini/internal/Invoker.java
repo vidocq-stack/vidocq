@@ -170,11 +170,14 @@ public final class Invoker {
             return renderWebAppException(wae, route, chosen, null);
         }
 
-        // 3. Post-matching request filters
+        // 3. Post-matching request filters — marquer le contexte comme
+        //    post-matching avant leur exécution pour que les setters
+        //    protégés (setRequestUri, setMethod, etc.) lèvent ISE §6.6.
         CassiniRequestContext rctx = null;
         if (!filters.postMatching().isEmpty() || !filters.responseFilters().isEmpty()) {
             rctx = new CassiniRequestContext(request, new CassiniUriInfo(
                     request, request.contextPath(), match.pathParams()));
+            rctx.markPostMatching();
             for (var fe : filters.postMatching()) {
                 if (!fe.appliesTo(route.javaMethod(), route.beanClass())) continue;
                 try { fe.instance().filter(rctx); }

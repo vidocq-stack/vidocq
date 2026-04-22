@@ -222,6 +222,12 @@ public final class ParamExtractor {
             Providers p = CURRENT_PROVIDERS.get();
             if (p != null) return p;
         }
+        if (type == jakarta.ws.rs.container.ContainerRequestContext.class) {
+            var rctx = new fr.vidocq.vidocq.ext.rest.cassini.internal.filter.CassiniRequestContext(
+                    request, new CassiniUriInfo(request, request.contextPath(), match.pathParams()));
+            rctx.markPostMatching();
+            return rctx;
+        }
         if (type == jakarta.ws.rs.core.Application.class) {
             // §9.4 : Application est l'instance de l'Application JAX-RS.
             // On fournit une instance minimale (pas d'Application user-level

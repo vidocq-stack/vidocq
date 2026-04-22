@@ -43,6 +43,12 @@ public final class CassiniRequestContext implements ContainerRequestContext {
     private SecurityContext securityContext;
     private UriInfo uriInfo;
     private Response aborted;
+    /** §6.6 : vrai quand le matching a déjà eu lieu — empêche setMethod /
+     *  setRequestUri / setSecurityContext / setEntityStream / abortWith
+     *  depuis un filtre @PostMatching pour les mutations illégales. */
+    private boolean postMatching = false;
+
+    public void markPostMatching() { this.postMatching = true; }
 
     public CassiniRequestContext(Request request, UriInfo uriInfo) {
         this.request = request;
@@ -74,15 +80,24 @@ public final class CassiniRequestContext implements ContainerRequestContext {
     @Override public void removeProperty(String name) { properties.remove(name); }
 
     @Override public UriInfo getUriInfo() { return uriInfo; }
-    @Override public void setRequestUri(URI requestUri) { this.requestUri = requestUri; }
-    @Override public void setRequestUri(URI baseUri, URI requestUri) { this.baseUri = baseUri; this.requestUri = requestUri; }
+    @Override public void setRequestUri(URI requestUri) {
+        if (postMatching) throw new IllegalStateException("setRequestUri cannot be called in post-matching filters (§6.6)");
+        this.requestUri = requestUri;
+    }
+    @Override public void setRequestUri(URI baseUri, URI requestUri) {
+        if (postMatching) throw new IllegalStateException("setRequestUri cannot be called in post-matching filters (§6.6)");
+        this.baseUri = baseUri; this.requestUri = requestUri;
+    }
 
     @Override public jakarta.ws.rs.core.Request getRequest() {
         return new fr.vidocq.vidocq.ext.rest.cassini.internal.context.CassiniRequest(request);
     }
 
     @Override public String getMethod() { return method; }
-    @Override public void setMethod(String method) { this.method = method; }
+    @Override public void setMethod(String method) {
+        if (postMatching) throw new IllegalStateException("setMethod cannot be called in post-matching filters (§6.6)");
+        this.method = method;
+    }
 
     @Override public MultivaluedMap<String, String> getHeaders() { return headers; }
 
@@ -116,12 +131,21 @@ public final class CassiniRequestContext implements ContainerRequestContext {
     }
 
     @Override public InputStream getEntityStream() { return entityStream; }
-    @Override public void setEntityStream(InputStream input) { this.entityStream = input; }
+    @Override public void setEntityStream(InputStream input) {
+        if (postMatching) throw new IllegalStateException("setEntityStream cannot be called in post-matching filters (§6.6)");
+        this.entityStream = input;
+    }
 
     @Override public SecurityContext getSecurityContext() { return securityContext; }
-    @Override public void setSecurityContext(SecurityContext context) { this.securityContext = context; }
+    @Override public void setSecurityContext(SecurityContext context) {
+        if (postMatching) throw new IllegalStateException("setSecurityContext cannot be called in post-matching filters (§6.6)");
+        this.securityContext = context;
+    }
 
-    @Override public void abortWith(Response response) { this.aborted = response; }
+    @Override public void abortWith(Response response) {
+        if (postMatching) throw new IllegalStateException("abortWith cannot be called in post-matching filters (§6.6)");
+        this.aborted = response;
+    }
 
     public MediaType parsedContentType() {
         return MediaTypes.parse(getHeaderString("Content-Type"));
