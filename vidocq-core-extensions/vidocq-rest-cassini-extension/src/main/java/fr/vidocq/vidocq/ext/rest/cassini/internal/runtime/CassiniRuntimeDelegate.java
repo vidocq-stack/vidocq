@@ -104,9 +104,11 @@ public final class CassiniRuntimeDelegate extends RuntimeDelegate {
         CassiniSeBootstrapInstance(Application application, SeBootstrap.Configuration requested) {
             Object p = requested.property(SeBootstrap.Configuration.PORT);
             int reqPort = p instanceof Number n ? n.intValue() : -1;
-            if (reqPort < 0) {
-                try (var ss = new java.net.ServerSocket(0)) { reqPort = ss.getLocalPort(); }
-                catch (java.io.IOException e) { throw new RuntimeException(e); }
+            // PORT=-1 (FREE_PORT) ou 0 → demander un port libre au kernel.
+            if (reqPort <= 0) {
+                try (var ss = new java.net.ServerSocket(0, 50, java.net.InetAddress.getByName("127.0.0.1"))) {
+                    reqPort = ss.getLocalPort();
+                } catch (java.io.IOException e) { throw new RuntimeException(e); }
             }
             // Config qui reflète le port effectif (lu par les clients TCK).
             java.util.Map<String, Object> effective = new java.util.HashMap<>();
@@ -119,6 +121,10 @@ public final class CassiniRuntimeDelegate extends RuntimeDelegate {
                 if (v != null) effective.put(k, v);
             }
             effective.put(SeBootstrap.Configuration.PORT, reqPort);
+            // Le serveur bind sur 127.0.0.1 ; expose la même chose au client
+            // pour éviter la dépendance à la résolution locale de "localhost"
+            // (IPv4/IPv6 selon plateforme).
+            effective.put(SeBootstrap.Configuration.HOST, "localhost");
             this.config = new CassiniBootstrapConfig(java.util.Map.copyOf(effective));
 
             try {
@@ -163,8 +169,18 @@ public final class CassiniRuntimeDelegate extends RuntimeDelegate {
                 invoker.setFilters(filters);
                 var bridge = new fr.vidocq.vidocq.ext.rest.cassini.internal.CassiniRestBridge(router, invoker);
                 String rootPath = (String) requested.property(SeBootstrap.Configuration.ROOT_PATH);
-                final String prefix = (rootPath == null || "/".equals(rootPath) || rootPath.isEmpty())
+                String appPath = "";
+                jakarta.ws.rs.ApplicationPath ap =
+                        application.getClass().getAnnotation(jakarta.ws.rs.ApplicationPath.class);
+                if (ap != null) {
+                    appPath = ap.value();
+                    if (!appPath.isEmpty() && !appPath.startsWith("/")) appPath = "/" + appPath;
+                    if (appPath.length() > 1 && appPath.endsWith("/")) appPath = appPath.substring(0, appPath.length() - 1);
+                }
+                String rootNorm = (rootPath == null || "/".equals(rootPath) || rootPath.isEmpty())
                         ? "" : (rootPath.startsWith("/") ? rootPath : "/" + rootPath);
+                if (rootNorm.length() > 1 && rootNorm.endsWith("/")) rootNorm = rootNorm.substring(0, rootNorm.length() - 1);
+                final String prefix = rootNorm + appPath;
                 fr.vidocq.chappe.api.Handler handler = prefix.isEmpty() ? bridge
                         : req -> {
                     String pth = req.path() == null ? "/" : req.path();
@@ -173,12 +189,35 @@ public final class CassiniRuntimeDelegate extends RuntimeDelegate {
                                 .status(fr.vidocq.chappe.api.StatusCode.NOT_FOUND)
                                 .body(fr.vidocq.chappe.api.Body.empty()).build();
                     }
-                    return bridge.handle(req);
+                    // Strip le prefix pour que le routeur matche les @Path
+                    // des ressources (qui ne connaissent pas le root-path).
+                    String stripped = pth.substring(prefix.length());
+                    if (stripped.isEmpty()) stripped = "/";
+                    final String newPath = stripped;
+                    fr.vidocq.chappe.api.Request remapped = new fr.vidocq.chappe.api.Request() {
+                        @Override public fr.vidocq.chappe.api.HttpMethod method() { return req.method(); }
+                        @Override public java.net.URI uri() { return req.uri(); }
+                        @Override public String path() { return newPath; }
+                        @Override public String query() { return req.query(); }
+                        @Override public fr.vidocq.chappe.api.HttpVersion version() { return req.version(); }
+                        @Override public fr.vidocq.chappe.api.Headers headers() { return req.headers(); }
+                        @Override public fr.vidocq.chappe.api.Body body() { return req.body(); }
+                        @Override public java.util.Map<String, String> pathParams() { return req.pathParams(); }
+                        @Override public java.util.Map<String, String> queryParams() { return req.queryParams(); }
+                        @Override public String contextPath() { return prefix; }
+                        @Override public String pathInfo() { return newPath; }
+                    };
+                    return bridge.handle(remapped);
                 };
+                String hostToBind = "127.0.0.1";
                 fr.vidocq.chappe.api.Server s = fr.vidocq.chappe.api.Server.builder()
-                        .host("localhost").port(reqPort).handler(handler).build();
+                        .host(hostToBind).port(reqPort).handler(handler).build();
                 s.start();
                 this.server = s;
+                if (System.getProperty("cassini.sebootstrap.debug") != null) {
+                    System.err.println("[SeBootstrap] started on " + hostToBind + ":" + reqPort
+                            + " prefix='" + prefix + "' routes=" + routes.size());
+                }
             } catch (RuntimeException e) {
                 this.server = null;
             }
