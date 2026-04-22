@@ -75,9 +75,21 @@ public final class CassiniResponse extends Response {
     @Override public void close() { this.closed = true; }
 
     @Override public MediaType getMediaType() {
-        Object v = headers.getFirst("Content-Type");
+        Object v = headerCaseInsensitive("Content-Type");
         if (v == null) return null;
         return v instanceof MediaType mt ? mt : MediaTypes.parse(v.toString());
+    }
+
+    private Object headerCaseInsensitive(String name) {
+        Object v = headers.getFirst(name);
+        if (v != null) return v;
+        for (var e : headers.entrySet()) {
+            if (name.equalsIgnoreCase(e.getKey())) {
+                var vs = e.getValue();
+                if (vs != null && !vs.isEmpty()) return vs.get(0);
+            }
+        }
+        return null;
     }
 
     @Override public Locale getLanguage() {
