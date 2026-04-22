@@ -33,7 +33,7 @@ public final class CassiniResponseContext implements ContainerResponseContext {
     private Type entityType;
     private Annotation[] annotations = new Annotation[0];
     private final MultivaluedMap<String, Object> headers;
-    private OutputStream entityStream;
+    private OutputStream entityStream = new java.io.ByteArrayOutputStream();
 
     public CassiniResponseContext(int status, Object entity, Type entityType,
                                   MultivaluedMap<String, Object> headers) {
