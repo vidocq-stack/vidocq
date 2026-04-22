@@ -407,6 +407,8 @@ public final class Invoker {
         if (entity == null) {
             var b = Response.builder().status(status).body(Body.empty());
             for (var e : headers.entrySet()) for (String v : e.getValue()) b.header(e.getKey(), v);
+            // Content-Type utilisateur : on le rémet explicitement (filtré plus haut).
+            if (jr.getMediaType() != null) b.header("Content-Type", MediaTypes.format(jr.getMediaType()));
             return b.build();
         }
         return writeEntity(entity, route.javaMethod().getGenericReturnType(),
