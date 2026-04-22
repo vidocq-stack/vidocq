@@ -145,6 +145,11 @@
                                 <webServerHost>127.0.0.1</webServerHost>
                                 <webServerPort>8080</webServerPort>
                                 <ts_home>${project.build.directory}/test-classes</ts_home>
+                                <!-- Force l'usage du CassiniRuntimeDelegate côté TCK : Jersey
+                                     est aussi sur le classpath (client), et sans cette
+                                     property l'ordre ServiceLoader peut sélectionner le
+                                     mauvais fournisseur. -->
+                                <jakarta.ws.rs.ext.RuntimeDelegate>fr.vidocq.vidocq.ext.rest.cassini.internal.runtime.CassiniRuntimeDelegate</jakarta.ws.rs.ext.RuntimeDelegate>
                             </systemPropertyVariables>
                             <argLine>-Djdk.httpclient.allowRestrictedHeaders=host,connection,content-length,expect,upgrade,origin,date,via,cookie</argLine>
                         </configuration>

@@ -171,7 +171,7 @@ public final class CassiniResponse extends Response {
         try { return Link.valueOf(raw); } catch (Exception e) { return null; }
     }
 
-    @Override public MultivaluedMap<String, Object> getMetadata() { return headers; }
+    @Override public MultivaluedMap<String, Object> getMetadata() { return getHeaders(); }
     @Override public MultivaluedMap<String, Object> getHeaders() {
         return new HttpHeadersViewObject(headers);
     }
