@@ -199,7 +199,12 @@ public final class Invoker {
                 // sous-ressource, puis injecter ses fields.
                 Object root = resolver.apply(route.rootBeanClass());
                 FieldInjector.inject(root, match, request);
-                target = route.locator().invoke(root);
+                // Locator peut prendre @PathParam/@QueryParam etc. comme arguments.
+                java.lang.reflect.Parameter[] lps = route.locator().getParameters();
+                Object[] lArgs = lps.length == 0 ? new Object[0]
+                        : ParamExtractor.resolveConstructorArgs(lps, match, request);
+                route.locator().setAccessible(true);
+                target = route.locator().invoke(root, lArgs);
                 if (target == null) {
                     return renderWebAppException(
                             new WebApplicationException("Sub-resource locator returned null", 404),
