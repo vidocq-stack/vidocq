@@ -439,25 +439,38 @@ public final class Invoker {
      *  @Consumes matche Content-Type ET @Produces matche Accept (spécificité
      *  maximale). Si aucun ne matche, retourne le premier (l'Invoker remontera
      *  415 ou 406 plus tard). */
+    /** Retourne le qs le plus élevé parmi les @Produces de la route. */
+    private static double sourceQuality(java.util.List<MediaType> produces) {
+        double best = 0;
+        for (MediaType p : produces) {
+            String qs = p.getParameters().get("qs");
+            double v = 1.0;
+            if (qs != null) try { v = Double.parseDouble(qs); } catch (Exception ignored) {}
+            if (v > best) best = v;
+        }
+        return best;
+    }
+
     private MatchResult pickBestMatch(java.util.List<MatchResult> candidates, Request request) {
         if (candidates.size() == 1) return candidates.get(0);
         MediaType ct = MediaTypes.parse(request.headers().firstOrNull("Content-Type"));
         java.util.List<MediaType> accepts = MediaTypes.parseList(request.headers().firstOrNull("Accept"));
         MatchResult best = null;
-        int bestScore = -1;
+        double bestScore = -1;
         for (MatchResult c : candidates) {
             var cons = MediaTypes.fromSet(c.method().consumes());
             if (hasRequestBody(request) && !cons.isEmpty() && !MediaTypes.consumesMatches(ct, cons)) continue;
             var prod = MediaTypes.fromSet(c.method().produces());
-            int score = 0;
+            double score = 0;
             if (!prod.isEmpty()) {
                 var pick = MediaTypes.pickProduced(accepts, prod);
                 if (pick.isEmpty()) continue;
-                // Score : exact match > wildcard subtype > wildcard type
                 MediaType p = pick.get();
-                if (!p.isWildcardType() && !p.isWildcardSubtype()) score = 3;
-                else if (!p.isWildcardType()) score = 2;
-                else score = 1;
+                // §3.7.2 : spécificité + qs. qs pondère entre méthodes matchant
+                // la même Accept mais avec des @Produces différents.
+                double spec = (!p.isWildcardType() ? 2 : 0) + (!p.isWildcardSubtype() ? 1 : 0);
+                double qs = sourceQuality(prod);
+                score = spec + qs;
             }
             if (score > bestScore) { best = c; bestScore = score; }
         }

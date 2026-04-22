@@ -60,25 +60,36 @@ public final class MediaTypes {
                                                    List<MediaType> produces) {
         boolean producesExplicit = !produces.isEmpty();
         if (produces.isEmpty()) produces = List.of(WILDCARD);
-        // Accept absent → */*.
         List<MediaType> effectiveAccepts = accepts.isEmpty() ? List.of(WILDCARD) : accepts;
         List<MediaType> sortedAccepts = new ArrayList<>(effectiveAccepts);
         sortedAccepts.sort(Comparator.comparingDouble(MediaTypes::quality).reversed());
         for (MediaType a : sortedAccepts) {
             MediaType best = null;
+            double bestSourceQ = -1;
+            int bestSpec = -1;
             for (MediaType p : produces) {
-                if (matches(a, p)) {
-                    MediaType candidate = p.isWildcardSubtype() || p.isWildcardType() ? a : p;
-                    if (best == null || specificity(candidate) > specificity(best)) best = candidate;
+                if (!matches(a, p)) continue;
+                MediaType candidate = p.isWildcardSubtype() || p.isWildcardType() ? a : p;
+                double sq = sourceQuality(p);
+                int spec = specificity(candidate);
+                // Prioriser qs plus élevé, puis spécificité.
+                if (sq > bestSourceQ || (sq == bestSourceQ && spec > bestSpec)) {
+                    best = candidate;
+                    bestSourceQ = sq;
+                    bestSpec = spec;
                 }
             }
             if (best == null) continue;
-            // §3.8 : wildcard-subtype à ce stade ambigu uniquement si
-            // @Produces explicite sans alternative concrète.
             if (producesExplicit && best.isWildcardSubtype()) continue;
             return Optional.of(best);
         }
         return Optional.empty();
+    }
+
+    private static double sourceQuality(MediaType mt) {
+        String qs = mt.getParameters().get("qs");
+        if (qs == null) return 1.0;
+        try { return Double.parseDouble(qs); } catch (NumberFormatException e) { return 1.0; }
     }
 
     /** Content-Type requête vs @Consumes method. */
