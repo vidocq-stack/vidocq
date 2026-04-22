@@ -11,6 +11,7 @@ import jakarta.ws.rs.core.UriBuilder;
 import jakarta.ws.rs.core.Variant;
 import jakarta.ws.rs.ext.RuntimeDelegate;
 
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
 /**
@@ -58,15 +59,148 @@ public final class CassiniRuntimeDelegate extends RuntimeDelegate {
     }
 
     @Override public SeBootstrap.Configuration.Builder createConfigurationBuilder() {
-        throw new UnsupportedOperationException("SeBootstrap not supported");
+        return new CassiniBootstrapConfigBuilder();
     }
 
     @Override public CompletionStage<SeBootstrap.Instance> bootstrap(Application application, SeBootstrap.Configuration config) {
-        throw new UnsupportedOperationException("SeBootstrap not supported");
+        return CompletableFuture.supplyAsync(() -> new CassiniSeBootstrapInstance(application, config));
     }
 
     @Override public CompletionStage<SeBootstrap.Instance> bootstrap(Class<? extends Application> clazz, SeBootstrap.Configuration config) {
-        throw new UnsupportedOperationException("SeBootstrap not supported");
+        try {
+            return bootstrap(clazz.getDeclaredConstructor().newInstance(), config);
+        } catch (ReflectiveOperationException e) {
+            return CompletableFuture.failedFuture(e);
+        }
+    }
+
+    private static final class CassiniBootstrapConfigBuilder implements SeBootstrap.Configuration.Builder {
+        private final java.util.Map<String, Object> props = new java.util.HashMap<>();
+        CassiniBootstrapConfigBuilder() {
+            props.put(SeBootstrap.Configuration.PROTOCOL, "HTTP");
+            props.put(SeBootstrap.Configuration.HOST, "localhost");
+            props.put(SeBootstrap.Configuration.PORT, -1);
+            props.put(SeBootstrap.Configuration.ROOT_PATH, "/");
+        }
+        @Override public SeBootstrap.Configuration.Builder property(String name, Object value) {
+            props.put(name, value); return this;
+        }
+        @Override public <T> SeBootstrap.Configuration.Builder from(java.util.function.BiFunction<String, Class<T>, java.util.Optional<T>> src) {
+            return this;
+        }
+        @Override public SeBootstrap.Configuration build() {
+            return new CassiniBootstrapConfig(java.util.Map.copyOf(props));
+        }
+    }
+
+    private record CassiniBootstrapConfig(java.util.Map<String, Object> props) implements SeBootstrap.Configuration {
+        @Override public Object property(String name) { return props.get(name); }
+    }
+
+    private static final class CassiniSeBootstrapInstance implements SeBootstrap.Instance {
+        private final SeBootstrap.Configuration config;
+        private volatile fr.vidocq.chappe.api.Server server;
+
+        CassiniSeBootstrapInstance(Application application, SeBootstrap.Configuration requested) {
+            Object p = requested.property(SeBootstrap.Configuration.PORT);
+            int reqPort = p instanceof Number n ? n.intValue() : -1;
+            if (reqPort < 0) {
+                try (var ss = new java.net.ServerSocket(0)) { reqPort = ss.getLocalPort(); }
+                catch (java.io.IOException e) { throw new RuntimeException(e); }
+            }
+            // Config qui reflète le port effectif (lu par les clients TCK).
+            java.util.Map<String, Object> effective = new java.util.HashMap<>();
+            for (String k : new String[]{SeBootstrap.Configuration.PROTOCOL,
+                    SeBootstrap.Configuration.HOST, SeBootstrap.Configuration.PORT,
+                    SeBootstrap.Configuration.ROOT_PATH,
+                    SeBootstrap.Configuration.SSL_CLIENT_AUTHENTICATION,
+                    SeBootstrap.Configuration.SSL_CONTEXT}) {
+                Object v = requested.property(k);
+                if (v != null) effective.put(k, v);
+            }
+            effective.put(SeBootstrap.Configuration.PORT, reqPort);
+            this.config = new CassiniBootstrapConfig(java.util.Map.copyOf(effective));
+
+            try {
+                java.util.Set<Class<?>> resourceClasses = new java.util.LinkedHashSet<>();
+                java.util.Map<Class<?>, Object> resourceSingletons = new java.util.HashMap<>();
+                if (application.getClasses() != null) resourceClasses.addAll(application.getClasses());
+                if (application.getSingletons() != null) {
+                    for (Object o : application.getSingletons()) {
+                        resourceClasses.add(o.getClass());
+                        resourceSingletons.put(o.getClass(), o);
+                    }
+                }
+                java.util.Set<Class<?>> pathClasses = new java.util.LinkedHashSet<>();
+                var filters = new fr.vidocq.vidocq.ext.rest.cassini.internal.filter.FilterRegistry();
+                var bodies = new fr.vidocq.vidocq.ext.rest.cassini.internal.MessageBodyRegistry();
+                var mappers = new fr.vidocq.vidocq.ext.rest.cassini.internal.ExceptionMapperRegistry();
+                for (Class<?> c : resourceClasses) {
+                    if (c.isAnnotationPresent(jakarta.ws.rs.Path.class)) pathClasses.add(c);
+                    if (c.isAnnotationPresent(jakarta.ws.rs.ext.Provider.class)) {
+                        Object inst = resourceSingletons.computeIfAbsent(c, k -> {
+                            try { return k.getDeclaredConstructor().newInstance(); }
+                            catch (ReflectiveOperationException e) { return null; }
+                        });
+                        if (inst == null) continue;
+                        filters.register(inst);
+                        if (inst instanceof jakarta.ws.rs.ext.MessageBodyReader<?> r) bodies.addReader(r);
+                        if (inst instanceof jakarta.ws.rs.ext.MessageBodyWriter<?> w) bodies.addWriter(w);
+                    }
+                }
+                var routes = fr.vidocq.vidocq.ext.rest.cassini.internal.ResourceScanner
+                        .discover(pathClasses.toArray(Class<?>[]::new));
+                var router = new fr.vidocq.vidocq.ext.rest.cassini.internal.UriRouter(routes);
+                java.util.function.Function<Class<?>, Object> resolver = cls -> {
+                    Object fixed = resourceSingletons.get(cls);
+                    if (fixed != null) return fixed;
+                    try { return cls.getDeclaredConstructor().newInstance(); }
+                    catch (ReflectiveOperationException e) {
+                        throw new RuntimeException("Failed to instantiate " + cls, e);
+                    }
+                };
+                var invoker = new fr.vidocq.vidocq.ext.rest.cassini.internal.Invoker(resolver, bodies, mappers);
+                invoker.setFilters(filters);
+                var bridge = new fr.vidocq.vidocq.ext.rest.cassini.internal.CassiniRestBridge(router, invoker);
+                String rootPath = (String) requested.property(SeBootstrap.Configuration.ROOT_PATH);
+                final String prefix = (rootPath == null || "/".equals(rootPath) || rootPath.isEmpty())
+                        ? "" : (rootPath.startsWith("/") ? rootPath : "/" + rootPath);
+                fr.vidocq.chappe.api.Handler handler = prefix.isEmpty() ? bridge
+                        : req -> {
+                    String pth = req.path() == null ? "/" : req.path();
+                    if (!pth.startsWith(prefix)) {
+                        return fr.vidocq.chappe.api.Response.builder()
+                                .status(fr.vidocq.chappe.api.StatusCode.NOT_FOUND)
+                                .body(fr.vidocq.chappe.api.Body.empty()).build();
+                    }
+                    return bridge.handle(req);
+                };
+                fr.vidocq.chappe.api.Server s = fr.vidocq.chappe.api.Server.builder()
+                        .host("localhost").port(reqPort).handler(handler).build();
+                s.start();
+                this.server = s;
+            } catch (RuntimeException e) {
+                this.server = null;
+            }
+        }
+
+        @Override public SeBootstrap.Configuration configuration() { return config; }
+
+        @Override public CompletionStage<SeBootstrap.Instance.StopResult> stop() {
+            return CompletableFuture.supplyAsync(() -> {
+                if (server != null) {
+                    try { server.stop(); } catch (RuntimeException ignored) {}
+                }
+                return new SeBootstrap.Instance.StopResult() {
+                    @Override public <T> T unwrap(Class<T> nativeClass) { throw new IllegalArgumentException(); }
+                };
+            });
+        }
+
+        @Override public <T> T unwrap(Class<T> nativeClass) {
+            if (nativeClass.isInstance(server)) return nativeClass.cast(server);
+            throw new IllegalArgumentException("Cannot unwrap to " + nativeClass);
+        }
     }
 
     private static final class MediaTypeDelegate implements HeaderDelegate<MediaType> {
