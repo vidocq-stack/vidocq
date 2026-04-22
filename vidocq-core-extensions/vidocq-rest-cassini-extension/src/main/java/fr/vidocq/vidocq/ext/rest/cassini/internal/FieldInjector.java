@@ -135,7 +135,8 @@ public final class FieldInjector {
         try { return ParamValueConverter.coerce(raw, element, raws); }
         catch (WebApplicationException wae) {
             if (f.getAnnotation(PathParam.class) != null
-                    || f.getAnnotation(MatrixParam.class) != null) throw wae;
+                    || f.getAnnotation(MatrixParam.class) != null
+                    || f.getAnnotation(HeaderParam.class) != null) throw wae;
             return null;
         }
         catch (RuntimeException e) {
@@ -143,6 +144,10 @@ public final class FieldInjector {
                     || f.getAnnotation(MatrixParam.class) != null) {
                 throw new WebApplicationException("Invalid value for field "
                         + f.getName() + ": " + e.getMessage(), 404);
+            }
+            if (f.getAnnotation(HeaderParam.class) != null) {
+                throw new WebApplicationException("Invalid value for field "
+                        + f.getName() + ": " + e.getMessage(), 400);
             }
             return null;
         }

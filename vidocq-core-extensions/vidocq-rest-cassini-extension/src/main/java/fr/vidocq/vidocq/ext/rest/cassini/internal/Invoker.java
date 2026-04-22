@@ -459,6 +459,16 @@ public final class Invoker {
 
     private Response renderWebAppException(WebApplicationException wae, ResourceMethod route,
                                            MediaType chosen, CassiniRequestContext rctx) throws IOException {
+        // §4.4 : si un ExceptionMapper est enregistré pour WebApplicationException
+        // ou un de ses super-types, il doit être appelé en priorité sur la
+        // réponse embarquée dans l'exception.
+        var mapped = exceptionMappers.map(wae);
+        if (mapped.isPresent()) {
+            jakarta.ws.rs.core.Response r = mapped.get();
+            if (rctx != null && !filters.responseFilters().isEmpty())
+                return runResponseFiltersAndWrite(rctx, r, route, chosen);
+            return fromJaxRs(r, route, chosen);
+        }
         jakarta.ws.rs.core.Response r = wae.getResponse();
         if (r != null) {
             if (rctx != null && !filters.responseFilters().isEmpty())
