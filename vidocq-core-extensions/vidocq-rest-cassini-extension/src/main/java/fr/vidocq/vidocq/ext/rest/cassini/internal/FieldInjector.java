@@ -141,11 +141,8 @@ public final class FieldInjector {
                 ? genericElementType(f.getGenericType()) : raw;
         try { return ParamValueConverter.coerce(raw, element, raws); }
         catch (WebApplicationException wae) {
-            if (f.getAnnotation(PathParam.class) != null
-                    || f.getAnnotation(MatrixParam.class) != null
-                    || f.getAnnotation(HeaderParam.class) != null
-                    || f.getAnnotation(CookieParam.class) != null) throw wae;
-            return null;
+            if (f.getAnnotation(FormParam.class) != null) return null;
+            throw wae;
         }
         catch (RuntimeException e) {
             if (f.getAnnotation(PathParam.class) != null
@@ -153,12 +150,9 @@ public final class FieldInjector {
                 throw new WebApplicationException("Invalid value for field "
                         + f.getName() + ": " + e.getMessage(), 404);
             }
-            if (f.getAnnotation(HeaderParam.class) != null
-                    || f.getAnnotation(CookieParam.class) != null) {
-                throw new WebApplicationException("Invalid value for field "
-                        + f.getName() + ": " + e.getMessage(), 400);
-            }
-            return null;
+            if (f.getAnnotation(FormParam.class) != null) return null;
+            throw new WebApplicationException("Invalid value for field "
+                    + f.getName() + ": " + e.getMessage(), 400);
         }
     }
 

@@ -259,27 +259,24 @@ public final class ParamExtractor {
         try {
             return ParamValueConverter.coerce(raw, element, raws);
         } catch (WebApplicationException w) {
-            // §3.2 : @PathParam/@MatrixParam/@HeaderParam/@CookieParam propagent
-            // — les deux derniers passent par ExceptionMapper<WAE>. Les
-            // @QueryParam/@FormParam laissent le paramètre à null/default —
-            // la méthode gère elle-même.
-            if (p.getAnnotation(PathParam.class) != null
-                    || p.getAnnotation(MatrixParam.class) != null
-                    || p.getAnnotation(HeaderParam.class) != null
-                    || p.getAnnotation(CookieParam.class) != null) throw w;
-            return ParamValueConverter.defaultForType(p.getType());
+            // §3.2 : tous les @*Param propagent l'exception (elle passe
+            // par ExceptionMapper<WAE>). Seuls @FormParam restent silencieux
+            // (TCK formparam tests attendent 200 sur l'échec de conversion).
+            if (p.getAnnotation(FormParam.class) != null) {
+                return ParamValueConverter.defaultForType(p.getType());
+            }
+            throw w;
         } catch (RuntimeException e) {
             if (p.getAnnotation(PathParam.class) != null
                     || p.getAnnotation(MatrixParam.class) != null) {
                 throw new WebApplicationException("Invalid value for parameter "
                         + p.getName() + ": " + e.getMessage(), 404);
             }
-            if (p.getAnnotation(HeaderParam.class) != null
-                    || p.getAnnotation(CookieParam.class) != null) {
-                throw new WebApplicationException("Invalid value for parameter "
-                        + p.getName() + ": " + e.getMessage(), 400);
+            if (p.getAnnotation(FormParam.class) != null) {
+                return ParamValueConverter.defaultForType(p.getType());
             }
-            return ParamValueConverter.defaultForType(p.getType());
+            throw new WebApplicationException("Invalid value for parameter "
+                    + p.getName() + ": " + e.getMessage(), 400);
         }
     }
 
