@@ -58,8 +58,11 @@ public final class MediaTypes {
     /** Prend Accept client + @Produces method, renvoie le best-match (le plus spécifique). */
     public static Optional<MediaType> pickProduced(List<MediaType> accepts,
                                                    List<MediaType> produces) {
+        boolean producesExplicit = !produces.isEmpty();
         if (produces.isEmpty()) produces = List.of(WILDCARD);
-        List<MediaType> sortedAccepts = new ArrayList<>(accepts);
+        // Accept absent → */*.
+        List<MediaType> effectiveAccepts = accepts.isEmpty() ? List.of(WILDCARD) : accepts;
+        List<MediaType> sortedAccepts = new ArrayList<>(effectiveAccepts);
         sortedAccepts.sort(Comparator.comparingDouble(MediaTypes::quality).reversed());
         for (MediaType a : sortedAccepts) {
             MediaType best = null;
@@ -69,12 +72,11 @@ public final class MediaTypes {
                     if (best == null || specificity(candidate) > specificity(best)) best = candidate;
                 }
             }
-            // §3.8 : un media-type encore wildcard sur SUBTYPE à ce stade
-            // (Accept=text/* et @Produces=text/*) est ambigu — non-match.
-            // Wildcard-type (*/*) est OK (ressource universelle).
-            if (best != null && !best.isWildcardSubtype()) {
-                return Optional.of(best);
-            }
+            if (best == null) continue;
+            // §3.8 : wildcard-subtype à ce stade ambigu uniquement si
+            // @Produces explicite sans alternative concrète.
+            if (producesExplicit && best.isWildcardSubtype()) continue;
+            return Optional.of(best);
         }
         return Optional.empty();
     }
