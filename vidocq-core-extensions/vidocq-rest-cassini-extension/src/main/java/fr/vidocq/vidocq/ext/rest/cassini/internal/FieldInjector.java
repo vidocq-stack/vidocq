@@ -148,11 +148,13 @@ public final class FieldInjector {
             if (f.getAnnotation(PathParam.class) != null
                     || f.getAnnotation(MatrixParam.class) != null) {
                 throw new WebApplicationException("Invalid value for field "
-                        + f.getName() + ": " + e.getMessage(), 404);
+                        + f.getName() + ": " + e.getMessage(), e,
+                        jakarta.ws.rs.core.Response.status(404).build());
             }
             if (f.getAnnotation(FormParam.class) != null) return null;
             throw new WebApplicationException("Invalid value for field "
-                    + f.getName() + ": " + e.getMessage(), 400);
+                    + f.getName() + ": " + e.getMessage(), e,
+                    jakarta.ws.rs.core.Response.status(400).build());
         }
     }
 

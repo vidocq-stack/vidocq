@@ -270,14 +270,21 @@ public final class ParamExtractor {
             if (p.getAnnotation(PathParam.class) != null
                     || p.getAnnotation(MatrixParam.class) != null) {
                 throw new WebApplicationException("Invalid value for parameter "
-                        + p.getName() + ": " + e.getMessage(), 404);
+                        + p.getName() + ": " + e.getMessage(), e, javax404Response(404));
             }
             if (p.getAnnotation(FormParam.class) != null) {
                 return ParamValueConverter.defaultForType(p.getType());
             }
             throw new WebApplicationException("Invalid value for parameter "
-                    + p.getName() + ": " + e.getMessage(), 400);
+                    + p.getName() + ": " + e.getMessage(), e, javax404Response(400));
         }
+    }
+
+    /** Construit une Response stub sans RuntimeDelegate pour conserver le
+     *  statut cible. Utilisé par coerce() car {@code new WebApplicationException(cause, status)}
+     *  nécessite une Response pour joindre la cause. */
+    private static jakarta.ws.rs.core.Response javax404Response(int status) {
+        return jakarta.ws.rs.core.Response.status(status).build();
     }
 
     private static List<String> emptyOrDefault(String def) {
