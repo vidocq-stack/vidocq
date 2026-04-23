@@ -56,7 +56,13 @@ public final class ExceptionMapperRegistry {
         return reg;
     }
 
+    /** §4.4 : si un ExceptionMapper lève lui-même une exception pendant
+     *  sa propre exécution, celle-ci ne doit pas être mappée à nouveau —
+     *  elle doit remonter en 500. Ce flag per-thread empêche la récursion. */
+    private static final ThreadLocal<Boolean> MAPPING = ThreadLocal.withInitial(() -> false);
+
     public Optional<Response> map(Throwable t) {
+        if (MAPPING.get()) return Optional.empty();
         Registration<?> best = null;
         for (Registration<?> r : mappers) {
             if (r.exceptionType().isInstance(t)) {
@@ -66,9 +72,14 @@ public final class ExceptionMapperRegistry {
             }
         }
         if (best == null) return Optional.empty();
-        @SuppressWarnings({"rawtypes", "unchecked"})
-        Response r = ((ExceptionMapper) best.mapper()).toResponse(t);
-        return Optional.ofNullable(r);
+        MAPPING.set(true);
+        try {
+            @SuppressWarnings({"rawtypes", "unchecked"})
+            Response r = ((ExceptionMapper) best.mapper()).toResponse(t);
+            return Optional.ofNullable(r);
+        } finally {
+            MAPPING.set(false);
+        }
     }
 
     public int size() { return mappers.size(); }

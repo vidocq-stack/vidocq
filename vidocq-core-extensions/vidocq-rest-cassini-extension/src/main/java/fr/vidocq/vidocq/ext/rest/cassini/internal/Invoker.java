@@ -134,6 +134,29 @@ public final class Invoker {
 
     private Response invokeInternal(MatchResult match, Request request, ResourceMethod route) throws Exception {
 
+        // 0. Pre-matching request filters §6.6 — exécutés avant toute
+        //    négociation. S'ils throw, on passe par ExceptionMapper.
+        CassiniRequestContext preCtx = null;
+        if (!filters.preMatching().isEmpty()) {
+            preCtx = new CassiniRequestContext(request, new CassiniUriInfo(
+                    request, request.contextPath(), match.pathParams()));
+            for (var fe : filters.preMatching()) {
+                try { fe.instance().filter(preCtx); }
+                catch (java.io.IOException e) {
+                    Response mapped = mapFilterThrowable(e, route, null, preCtx);
+                    if (mapped != null) return mapped;
+                    throw e;
+                } catch (RuntimeException e) {
+                    Response mapped = mapFilterThrowable(e, route, null, preCtx);
+                    if (mapped != null) return mapped;
+                    throw e;
+                }
+                if (preCtx.isAborted()) {
+                    return runResponseFiltersAndWrite(preCtx, preCtx.abortedResponse(), route, null);
+                }
+            }
+        }
+
         // 1. Negotiation
         String ctHeader = request.headers().firstOrNull("Content-Type");
         MediaType contentType = MediaTypes.parse(ctHeader);
@@ -168,6 +191,11 @@ public final class Invoker {
             }
         } catch (WebApplicationException wae) {
             return renderWebAppException(wae, route, chosen, null);
+        } catch (RuntimeException re) {
+            // §4.4 : les ReaderInterceptor peuvent lever → mapper.
+            Response mapped = mapFilterThrowable(re, route, chosen, preCtx);
+            if (mapped != null) return mapped;
+            throw re;
         }
 
         // 3. Post-matching request filters — marquer le contexte comme
@@ -181,7 +209,15 @@ public final class Invoker {
             for (var fe : filters.postMatching()) {
                 if (!fe.appliesTo(route.javaMethod(), route.beanClass())) continue;
                 try { fe.instance().filter(rctx); }
-                catch (java.io.IOException e) { throw new RuntimeException(e); }
+                catch (java.io.IOException e) {
+                    Response mapped = mapFilterThrowable(e, route, chosen, rctx);
+                    if (mapped != null) return mapped;
+                    throw new RuntimeException(e);
+                } catch (RuntimeException e) {
+                    Response mapped = mapFilterThrowable(e, route, chosen, rctx);
+                    if (mapped != null) return mapped;
+                    throw e;
+                }
                 if (rctx.isAborted()) {
                     return runResponseFiltersAndWrite(rctx, rctx.abortedResponse(), route, chosen);
                 }
@@ -249,11 +285,20 @@ public final class Invoker {
             throw new RuntimeException(cause);
         }
 
-        // 5. Marshal + response filters
-        if (rctx != null && !filters.responseFilters().isEmpty()) {
-            return runResponseFiltersForResult(rctx, result, route, chosen);
+        // 5. Marshal + response filters — les WriterInterceptor peuvent
+        //    lancer des exceptions : on les route via ExceptionMapper.
+        try {
+            if (rctx != null && !filters.responseFilters().isEmpty()) {
+                return runResponseFiltersForResult(rctx, result, route, chosen);
+            }
+            return marshal(result, route, chosen);
+        } catch (WebApplicationException wae) {
+            return renderWebAppException(wae, route, chosen, rctx);
+        } catch (RuntimeException re) {
+            Response mapped = mapFilterThrowable(re, route, chosen, rctx);
+            if (mapped != null) return mapped;
+            throw re;
         }
-        return marshal(result, route, chosen);
     }
 
     private Response runResponseFiltersAndWrite(CassiniRequestContext rctx,
@@ -489,6 +534,26 @@ public final class Invoker {
             if (score > bestScore) { best = c; bestScore = score; }
         }
         return best != null ? best : candidates.get(0);
+    }
+
+    /** §4.4 : si un filtre / interceptor lève une exception, on la passe
+     *  à l'ExceptionMapper s'il y en a un. Retourne {@code null} si aucun
+     *  mapper n'est applicable — l'appelant décidera de la remonter. */
+    private Response mapFilterThrowable(Throwable t, ResourceMethod route, MediaType chosen,
+                                        CassiniRequestContext rctx) throws IOException {
+        Throwable cause = t;
+        if (t instanceof java.io.IOException && t.getCause() != null) cause = t.getCause();
+        if (cause instanceof WebApplicationException wae) {
+            return renderWebAppException(wae, route, chosen, rctx);
+        }
+        var mapped = exceptionMappers.map(cause);
+        if (mapped.isPresent()) {
+            MediaType mt = chosen == null ? MediaType.WILDCARD_TYPE : chosen;
+            if (rctx != null && !filters.responseFilters().isEmpty())
+                return runResponseFiltersAndWrite(rctx, mapped.get(), route, mt);
+            return fromJaxRs(mapped.get(), route, mt);
+        }
+        return null;
     }
 
     private Response renderWebAppException(WebApplicationException wae, ResourceMethod route,
