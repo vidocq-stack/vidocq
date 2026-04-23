@@ -55,7 +55,12 @@ public final class CassiniResponse extends Response {
         };
     }
 
-    @Override public Object getEntity() { return entity; }
+    @Override public Object getEntity() {
+        if (closed) throw new IllegalStateException("Response has been closed");
+        // §4.3 : GenericEntity wrap est dévoilé côté lecture.
+        if (entity instanceof jakarta.ws.rs.core.GenericEntity<?> ge) return ge.getEntity();
+        return entity;
+    }
 
     @Override public <T> T readEntity(Class<T> type) { return type.cast(entity); }
     @Override public <T> T readEntity(GenericType<T> type) { @SuppressWarnings("unchecked") T t = (T) entity; return t; }
@@ -64,7 +69,10 @@ public final class CassiniResponse extends Response {
 
     private boolean closed = false;
 
-    @Override public boolean hasEntity() { return entity != null; }
+    @Override public boolean hasEntity() {
+        if (closed) throw new IllegalStateException("Response has been closed");
+        return entity != null;
+    }
     @Override public boolean bufferEntity() {
         if (closed) throw new IllegalStateException("Response has been closed");
         // §4.3 : retourne false si aucun backing stream à buffer (entity
