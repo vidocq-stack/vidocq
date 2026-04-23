@@ -113,7 +113,8 @@ public final class FieldInjector {
     }
 
     private static Object resolveContext(Class<?> type, MatchResult match, Request request) {
-        if (type == UriInfo.class) return new CassiniUriInfo(request, request.contextPath(), match.pathParams());
+        if (type == UriInfo.class) return new CassiniUriInfo(request, request.contextPath(),
+                match.pathParams(), match.method() == null ? null : match.method().path());
         if (type == HttpHeaders.class) return new CassiniHttpHeaders(request);
         if (type == jakarta.ws.rs.core.Request.class) return new CassiniRequest(request);
         if (type == SecurityContext.class) return new CassiniSecurityContext(request);

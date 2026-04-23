@@ -182,7 +182,9 @@ public final class CassiniTestHarness implements AutoCloseable {
             Handler rootHandler = prefix.isEmpty() ? bridge : new ContextStrippingHandler(prefix, bridge);
 
             RuntimeException last = null;
-            int attempts = fixedPort != null ? 1 : 5;
+            // Retry plus agressif sur port fixe (port 8080 peut rester en
+            // TIME_WAIT entre deux tests). 10 tentatives avec 100 ms.
+            int attempts = fixedPort != null ? 10 : 5;
             for (int attempt = 0; attempt < attempts; attempt++) {
                 int port;
                 if (fixedPort != null) {
@@ -198,7 +200,14 @@ public final class CassiniTestHarness implements AutoCloseable {
                     String url = "http://127.0.0.1:" + port
                             + ("/".equals(contextPath) ? "" : contextPath);
                     return new CassiniTestHarness(server, port, url);
-                } catch (RuntimeException e) { last = e; }
+                } catch (RuntimeException e) {
+                    last = e;
+                    if (fixedPort != null && attempt + 1 < attempts) {
+                        try { Thread.sleep(100); } catch (InterruptedException ie) {
+                            Thread.currentThread().interrupt();
+                        }
+                    }
+                }
             }
             throw last;
         }

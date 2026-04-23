@@ -30,9 +30,16 @@ public final class CassiniUriInfo implements UriInfo {
     private final Map<String, String> pathParams;
 
     public CassiniUriInfo(Request request, String contextPath, Map<String, String> pathParams) {
+        this(request, contextPath, pathParams, null);
+    }
+
+    private final String matchedTemplate;
+    public CassiniUriInfo(Request request, String contextPath, Map<String, String> pathParams,
+                          String matchedTemplate) {
         this.request = request;
         this.contextPath = contextPath == null ? "" : contextPath;
         this.pathParams = pathParams == null ? Map.of() : pathParams;
+        this.matchedTemplate = matchedTemplate;
     }
 
     @Override public String getPath() { return getPath(true); }
@@ -160,7 +167,9 @@ public final class CassiniUriInfo implements UriInfo {
         return List.of(p, parent);
     }
 
-    @Override public String getMatchedResourceTemplate() { return ""; }
+    @Override public String getMatchedResourceTemplate() {
+        return matchedTemplate == null ? "" : matchedTemplate;
+    }
 
     @Override public List<Object> getMatchedResources() {
         // Minimaliste : on ne conserve pas la chaîne d'instances de ressource
