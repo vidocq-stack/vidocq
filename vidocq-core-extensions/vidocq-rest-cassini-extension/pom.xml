@@ -48,18 +48,18 @@
             <groupId>jakarta.annotation</groupId>
             <artifactId>jakarta.annotation-api</artifactId>
         </dependency>
-        <!-- Optionnels pour les MBR/MBW standards §4.2.3 (JAXB, DataSource). -->
+        <!-- MBR/MBW standards §4.2.3 : JAXB + Jakarta Activation.
+             Non-optionnels pour que le scan BCE du vidocq-maven-plugin
+             puisse résoudre les références statiques aux Jaxb*/DataSource*. -->
         <dependency>
             <groupId>jakarta.xml.bind</groupId>
             <artifactId>jakarta.xml.bind-api</artifactId>
             <version>4.0.2</version>
-            <optional>true</optional>
         </dependency>
         <dependency>
             <groupId>jakarta.activation</groupId>
             <artifactId>jakarta.activation-api</artifactId>
             <version>2.1.3</version>
-            <optional>true</optional>
         </dependency>
 
         <dependency>

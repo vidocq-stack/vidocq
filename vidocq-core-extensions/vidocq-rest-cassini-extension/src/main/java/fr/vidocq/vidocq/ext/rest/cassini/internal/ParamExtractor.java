@@ -229,6 +229,7 @@ public final class ParamExtractor {
             var rctx = new fr.vidocq.vidocq.ext.rest.cassini.internal.filter.CassiniRequestContext(
                     request, new CassiniUriInfo(request, request.contextPath(), match.pathParams()));
             rctx.markPostMatching();
+            rctx.markPostResource();
             return rctx;
         }
         if (type == jakarta.ws.rs.container.ResourceInfo.class) {

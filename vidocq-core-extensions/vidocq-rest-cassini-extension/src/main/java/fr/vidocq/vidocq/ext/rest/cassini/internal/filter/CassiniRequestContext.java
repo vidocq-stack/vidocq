@@ -143,9 +143,17 @@ public final class CassiniRequestContext implements ContainerRequestContext {
     }
 
     @Override public void abortWith(Response response) {
-        if (postMatching) throw new IllegalStateException("abortWith cannot be called in post-matching filters (§6.6)");
+        // §6.6 : abortWith autorisé dans pre-matching ET post-matching filters.
+        // Interdit quand le context est injecté dans une méthode/champ de
+        // ressource (flag postResource).
+        if (postResource) throw new IllegalStateException("abortWith cannot be called from resource methods (§6.6)");
         this.aborted = response;
     }
+
+    /** Flag séparé : true uniquement quand on injecte le context dans la
+     *  resource method (pas dans les filtres). */
+    private boolean postResource = false;
+    public void markPostResource() { this.postResource = true; }
 
     public MediaType parsedContentType() {
         return MediaTypes.parse(getHeaderString("Content-Type"));

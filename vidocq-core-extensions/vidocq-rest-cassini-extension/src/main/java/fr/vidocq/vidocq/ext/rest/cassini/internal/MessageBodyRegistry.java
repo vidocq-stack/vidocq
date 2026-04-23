@@ -77,8 +77,8 @@ public final class MessageBodyRegistry {
         writers.add(new FileWriter());
         writers.add(new ReaderWriter());
         writers.add(new SourceWriter());
-        writers.add(new DataSourceWriter());
-        writers.add(new JaxbWriter());
+        if (activationAvailable()) writers.add(new DataSourceWriter());
+        if (jaxbAvailable()) writers.add(new JaxbWriter());
         writers.add(new FormUrlEncodedWriter());
         writers.add(new PrimitiveWriter());
         writers.add(new FallbackToStringWriter());
@@ -89,10 +89,31 @@ public final class MessageBodyRegistry {
         readers.add(new ReaderReaderMBR());
         readers.add(new FileReader());
         readers.add(new SourceReader());
-        readers.add(new DataSourceReader());
-        readers.add(new JaxbReader());
+        if (activationAvailable()) readers.add(new DataSourceReader());
+        if (jaxbAvailable()) readers.add(new JaxbReader());
         readers.add(new FormUrlEncodedReader());
         readers.add(new PrimitiveReader());
+    }
+
+    /** JAXB est optionnel : si {@code jakarta.xml.bind} n'est pas sur le
+     *  classpath, on n'enregistre pas les MBR/MBW associés. */
+    private static boolean jaxbAvailable() {
+        return classPresent("jakarta.xml.bind.JAXBContext");
+    }
+
+    /** Jakarta Activation est optionnel : si {@code jakarta.activation} n'est
+     *  pas sur le classpath, on n'enregistre pas les MBR/MBW {@code DataSource}. */
+    private static boolean activationAvailable() {
+        return classPresent("jakarta.activation.DataSource");
+    }
+
+    private static boolean classPresent(String fqcn) {
+        try {
+            Class.forName(fqcn, false, MessageBodyRegistry.class.getClassLoader());
+            return true;
+        } catch (ClassNotFoundException e) {
+            return false;
+        }
     }
 
     private static Charset charset(MediaType mt) {
