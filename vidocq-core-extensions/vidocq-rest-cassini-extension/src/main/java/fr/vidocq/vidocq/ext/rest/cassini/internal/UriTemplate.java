@@ -51,6 +51,11 @@ public final class UriTemplate {
         String t = normalize(template);
         StringBuilder regex = new StringBuilder("^");
         List<String> names = new ArrayList<>();
+        // §3.7 : même paramètre peut apparaître plusieurs fois dans le path
+        // template (ex. /resource/{id}/sub/{id}). Les occurrences répétées
+        // partagent le nom logique mais doivent avoir des noms de groupe
+        // capturant distincts pour regex (javaregex interdit doubles).
+        java.util.Map<String, Integer> seen = new java.util.HashMap<>();
         int literals = 0;
         int total = 0;
         int defaults = 0;
@@ -74,9 +79,16 @@ public final class UriTemplate {
                     paramRegex = inside.substring(colon + 1).trim();
                 }
                 if (name.isEmpty()) throw new IllegalArgumentException("Empty param name in template: " + template);
+                int occurrence = seen.merge(name, 1, Integer::sum);
                 names.add(name);
                 total++;
-                regex.append("(?<").append(name).append(">").append(paramRegex).append(")");
+                if (occurrence == 1) {
+                    regex.append("(?<").append(name).append(">").append(paramRegex).append(")");
+                } else {
+                    // Back-reference : la n-ième occurrence doit matcher la
+                    // valeur de la 1ère (cohérence du path param).
+                    regex.append("\\k<").append(name).append(">");
+                }
                 i = end + 1;
             } else {
                 regex.append(Pattern.quote(String.valueOf(c)));
@@ -85,7 +97,9 @@ public final class UriTemplate {
             }
         }
         regex.append("$");
-        return new UriTemplate(t, Pattern.compile(regex.toString()), List.copyOf(names),
+        // Dédup paramNames pour que match() ne tente pas getGroup(sameName) deux fois.
+        List<String> uniq = new ArrayList<>(new java.util.LinkedHashSet<>(names));
+        return new UriTemplate(t, Pattern.compile(regex.toString()), List.copyOf(uniq),
                 literals, total, defaults);
     }
 
