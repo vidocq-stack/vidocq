@@ -62,17 +62,17 @@ public final class CassiniRestBridge implements Handler {
                             .body(Body.empty())
                             .build();
                 }
-                return Response.builder()
-                        .status(StatusCode.METHOD_NOT_ALLOWED)
-                        .header("Allow", String.join(", ", allowed))
-                        .body(Body.empty())
-                        .build();
+                // §3.7.2 : 405 doit passer via WebApplicationException pour
+                // que les ExceptionMapper<WebApplicationException> de l'app
+                // puissent l'intercepter.
+                var r405 = jakarta.ws.rs.core.Response.status(405)
+                        .header("Allow", String.join(", ", allowed)).build();
+                return invoker.renderThrowable(
+                        new jakarta.ws.rs.WebApplicationException(r405), request);
             }
-            return Response.builder()
-                    .status(StatusCode.NOT_FOUND)
-                    .header("Content-Type", "text/plain;charset=utf-8")
-                    .body(Body.of(("No resource matches " + verb + " " + path).getBytes(StandardCharsets.UTF_8)))
-                    .build();
+            return invoker.renderThrowable(
+                    new jakarta.ws.rs.NotFoundException("No resource matches " + verb + " " + path),
+                    request);
         }
 
         MatchResult result = match.get();

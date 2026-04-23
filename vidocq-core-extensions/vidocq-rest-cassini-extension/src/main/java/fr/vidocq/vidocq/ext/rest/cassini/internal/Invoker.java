@@ -164,14 +164,15 @@ public final class Invoker {
         // §3.7.2 : si la requête a un Content-Type ou un body, filtre sur @Consumes.
         boolean checkConsumes = hasRequestBody(request) || ctHeader != null;
         if (checkConsumes && !consumes.isEmpty() && !MediaTypes.consumesMatches(contentType, consumes)) {
-            return Response.of(StatusCode.UNSUPPORTED_MEDIA_TYPE);
+            // §3.7.2 : 415 via WAE pour laisser l'ExceptionMapper intercepter.
+            return renderWebAppException(new jakarta.ws.rs.NotSupportedException(), route, null, null);
         }
 
         List<MediaType> accepts = MediaTypes.parseList(request.headers().firstOrNull("Accept"));
         List<MediaType> produces = MediaTypes.fromSet(route.produces());
         Optional<MediaType> negotiated = MediaTypes.pickProduced(accepts, produces);
         if (negotiated.isEmpty() && !produces.isEmpty()) {
-            return Response.of(StatusCode.NOT_ACCEPTABLE);
+            return renderWebAppException(new jakarta.ws.rs.NotAcceptableException(), route, null, null);
         }
         MediaType chosen = negotiated.orElse(MediaType.WILDCARD_TYPE);
 
@@ -475,8 +476,9 @@ public final class Invoker {
             if (jr.getMediaType() != null) b.header("Content-Type", MediaTypes.format(jr.getMediaType()));
             return b.build();
         }
-        return writeEntity(entity, route.javaMethod().getGenericReturnType(),
-                route.javaMethod().getAnnotations(), chosen, status, headers);
+        Type gt = route == null ? entity.getClass() : route.javaMethod().getGenericReturnType();
+        Annotation[] anns = route == null ? new Annotation[0] : route.javaMethod().getAnnotations();
+        return writeEntity(entity, gt, anns, chosen, status, headers);
     }
 
     /**
@@ -485,6 +487,7 @@ public final class Invoker {
      * naturel, on le substitue. Sinon on respecte le négocié.
      */
     private static MediaType defaultFor(MediaType chosen, Class<?> entityType) {
+        if (chosen == null) chosen = MediaType.WILDCARD_TYPE;
         if (!chosen.isWildcardType()) return chosen;
         if (CharSequence.class.isAssignableFrom(entityType)) return MediaType.TEXT_PLAIN_TYPE;
         if (byte[].class == entityType || InputStream.class.isAssignableFrom(entityType)
@@ -534,6 +537,33 @@ public final class Invoker {
             if (score > bestScore) { best = c; bestScore = score; }
         }
         return best != null ? best : candidates.get(0);
+    }
+
+    /** §3.7.2 / §4.4 : rend une réponse pour une exception hors-scope de la
+     *  résolution (pas de MatchResult — typiquement 404/405 depuis le bridge).
+     *  Consulte d'abord les ExceptionMapper applicatifs ; sinon, renvoie la
+     *  Response portée par la WAE, ou un 500 par défaut. */
+    public Response renderThrowable(Throwable t, Request request) throws IOException {
+        ParamExtractor.setProviders(new fr.vidocq.vidocq.ext.rest.cassini.internal.context.CassiniProviders(
+                registry, exceptionMappers, filters.contextResolvers()));
+        try {
+            var mapped = exceptionMappers.map(t);
+            if (mapped.isPresent()) {
+                return fromJaxRs(mapped.get(), null, MediaType.WILDCARD_TYPE);
+            }
+            if (t instanceof WebApplicationException wae && wae.getResponse() != null) {
+                return fromJaxRs(wae.getResponse(), null, MediaType.WILDCARD_TYPE);
+            }
+            String msg = t.getMessage() == null ? "" : t.getMessage();
+            int status = t instanceof WebApplicationException wae2 && wae2.getResponse() != null
+                    ? wae2.getResponse().getStatus() : 500;
+            return Response.builder()
+                    .status(StatusCode.of(status))
+                    .header("Content-Type", "text/plain;charset=utf-8")
+                    .body(Body.of(msg)).build();
+        } finally {
+            ParamExtractor.clearProviders();
+        }
     }
 
     /** §4.4 : si un filtre / interceptor lève une exception, on la passe
