@@ -25,8 +25,16 @@ public final class MediaTypes {
         if (raw == null || raw.isBlank()) return WILDCARD;
         String[] parts = raw.split(";");
         String[] ts = parts[0].trim().split("/", 2);
+        if (ts.length < 2) {
+            throw new IllegalArgumentException("Invalid media type: " + raw);
+        }
         String type = ts[0].trim().isEmpty() ? "*" : ts[0].trim();
-        String subtype = ts.length > 1 && !ts[1].trim().isEmpty() ? ts[1].trim() : "*";
+        String subtype = ts[1].trim().isEmpty() ? "*" : ts[1].trim();
+        // RFC 7231 token : lettres, chiffres, et quelques symboles. On rejette
+        // les caractères clairement invalides (backslash, espace, etc.).
+        if (!isValidMediaTypeToken(type) || !isValidMediaTypeToken(subtype)) {
+            throw new IllegalArgumentException("Invalid media type: " + raw);
+        }
         Map<String, String> params = new HashMap<>();
         for (int i = 1; i < parts.length; i++) {
             String seg = parts[i].trim();
@@ -36,6 +44,18 @@ public final class MediaTypes {
             else params.put(seg.substring(0, eq).trim(), unquote(seg.substring(eq + 1).trim()));
         }
         return new MediaType(type, subtype, params);
+    }
+
+    private static boolean isValidMediaTypeToken(String s) {
+        if (s == null || s.isEmpty()) return false;
+        if ("*".equals(s)) return true;
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c == '\\' || c == '"' || c == ',' || c == ';' || c == '=' || c == ' '
+                    || c == '<' || c == '>' || c == '(' || c == ')' || c == '[' || c == ']'
+                    || c <= 31 || c >= 127) return false;
+        }
+        return true;
     }
 
     public static List<MediaType> parseList(String raw) {
