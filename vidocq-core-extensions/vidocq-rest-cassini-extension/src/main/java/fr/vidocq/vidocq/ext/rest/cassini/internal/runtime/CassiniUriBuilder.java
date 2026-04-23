@@ -33,6 +33,8 @@ public final class CassiniUriBuilder extends UriBuilder {
     /** Valeurs résolues + si la valeur est déjà encodée (FromEncoded). */
     private final Map<String, Object> resolvedTemplates = new LinkedHashMap<>();
     private final Map<String, Boolean> resolvedTemplatesEncoded = new LinkedHashMap<>();
+    /** Par variable : encoder les '/' contenus dans la valeur ? */
+    private final Map<String, Boolean> resolvedTemplatesEncodeSlash = new LinkedHashMap<>();
 
     public CassiniUriBuilder() {}
 
@@ -61,14 +63,26 @@ public final class CassiniUriBuilder extends UriBuilder {
     }
 
     private void copyFrom(URI uri) {
-        this.scheme = uri.getScheme();
+        // §6.4.2 : uri(URI) merge — les composants non-null du nouvel URI
+        // remplacent l'état courant, les composants null le laissent intact.
+        if (uri.getScheme() != null) this.scheme = uri.getScheme();
         if (uri.isOpaque()) {
             this.ssp = uri.getRawSchemeSpecificPart();
+            this.userInfo = null; this.host = null; this.port = -1;
+            this.path.setLength(0); this.query.clear();
         } else {
-            this.userInfo = uri.getRawUserInfo();
-            this.host = uri.getHost();
-            this.port = uri.getPort();
-            if (uri.getRawPath() != null) { this.path.setLength(0); this.path.append(uri.getRawPath()); }
+            // Passer à hiérarchique → le ssp d'une ancienne URI opaque
+            // (ex: mailto:foo@bar) devient obsolète : son contenu est repris
+            // via le path.
+            this.ssp = null;
+            if (uri.getHost() != null) {
+                this.userInfo = uri.getRawUserInfo();
+                this.host = uri.getHost();
+                this.port = uri.getPort();
+            }
+            if (uri.getRawPath() != null && !uri.getRawPath().isEmpty()) {
+                this.path.setLength(0); this.path.append(uri.getRawPath());
+            }
             String q = uri.getRawQuery();
             if (q != null) { this.query.clear(); parseQueryInto(q); }
         }
@@ -79,7 +93,8 @@ public final class CassiniUriBuilder extends UriBuilder {
         for (String pair : q.split("&")) {
             int eq = pair.indexOf('=');
             String k = eq < 0 ? pair : pair.substring(0, eq);
-            String v = eq < 0 ? "" : pair.substring(eq + 1);
+            // null = pair sans '=' (ex: "foo"), "" = pair avec '=' vide (ex: "foo=").
+            String v = eq < 0 ? null : pair.substring(eq + 1);
             query.computeIfAbsent(k, x -> new ArrayList<>()).add(v);
         }
     }
@@ -93,6 +108,7 @@ public final class CassiniUriBuilder extends UriBuilder {
         b.fragment = fragment;
         b.resolvedTemplates.putAll(resolvedTemplates);
         b.resolvedTemplatesEncoded.putAll(resolvedTemplatesEncoded);
+        b.resolvedTemplatesEncodeSlash.putAll(resolvedTemplatesEncodeSlash);
         return b;
     }
 
@@ -343,6 +359,7 @@ public final class CassiniUriBuilder extends UriBuilder {
         if (value == null) throw new IllegalArgumentException("value is null");
         resolvedTemplates.put(name, value);
         resolvedTemplatesEncoded.put(name, false);
+        resolvedTemplatesEncodeSlash.put(name, encodeSlashInPath);
         return this;
     }
 
@@ -351,6 +368,7 @@ public final class CassiniUriBuilder extends UriBuilder {
         if (value == null) throw new IllegalArgumentException("value is null");
         resolvedTemplates.put(name, value);
         resolvedTemplatesEncoded.put(name, true);
+        resolvedTemplatesEncodeSlash.put(name, false);
         return this;
     }
 
@@ -411,10 +429,13 @@ public final class CassiniUriBuilder extends UriBuilder {
         StringBuilder q = new StringBuilder();
         for (var e : query.entrySet()) {
             for (String v : e.getValue()) {
-                String subst = substituteLiteralAndTemplates(v, values, valueMap,
-                        seen, posIdx, Comp.QUERY_PARAM, true, valuesAlreadyEncoded);
                 if (q.length() > 0) q.append('&');
-                q.append(e.getKey()).append('=').append(subst);
+                q.append(e.getKey());
+                if (v != null) {
+                    String subst = substituteLiteralAndTemplates(v, values, valueMap,
+                            seen, posIdx, Comp.QUERY_PARAM, true, valuesAlreadyEncoded);
+                    q.append('=').append(subst);
+                }
             }
         }
         String queryOut = q.length() == 0 ? null : q.toString();
@@ -462,9 +483,14 @@ public final class CassiniUriBuilder extends UriBuilder {
                 String name = colon < 0 ? inside : inside.substring(0, colon).trim();
                 Object val;
                 boolean valEncoded = valuesAlreadyEncoded;
+                // §6 : quand la valeur est déjà pré-encodée (buildFromEncoded*),
+                // les '/' qu'elle contient doivent être préservés — elle
+                // représente ce que l'appelant a choisi d'émettre.
+                boolean valEncodeSlash = valuesAlreadyEncoded ? false : encodeSlash;
                 if (resolvedTemplates.containsKey(name)) {
                     val = resolvedTemplates.get(name);
                     valEncoded = resolvedTemplatesEncoded.getOrDefault(name, false);
+                    valEncodeSlash = resolvedTemplatesEncodeSlash.getOrDefault(name, encodeSlash);
                 } else if (valueMap != null && valueMap.containsKey(name)) {
                     val = valueMap.get(name);
                 } else if (seen.containsKey(name)) {
@@ -478,7 +504,7 @@ public final class CassiniUriBuilder extends UriBuilder {
                 }
                 if (val == null) throw new IllegalArgumentException(
                         "Null value supplied for template parameter " + name);
-                out.append(encode(String.valueOf(val), comp, valEncoded, encodeSlash));
+                out.append(encode(String.valueOf(val), comp, valEncoded, valEncodeSlash));
                 i = end + 1;
                 litStart = i;
             } else { i++; }
@@ -503,7 +529,8 @@ public final class CassiniUriBuilder extends UriBuilder {
             for (var e : query.entrySet())
                 for (String v : e.getValue()) {
                     if (!first) sb.append('&'); first = false;
-                    sb.append(e.getKey()).append('=').append(resolveStoredTemplates(v));
+                    sb.append(e.getKey());
+                    if (v != null) sb.append('=').append(resolveStoredTemplates(v));
                 }
         }
         if (fragment != null) sb.append('#').append(resolveStoredTemplates(fragment));
@@ -511,6 +538,10 @@ public final class CassiniUriBuilder extends UriBuilder {
     }
 
     private String resolveStoredTemplates(String tpl) {
+        return resolveStoredTemplates(tpl, Comp.PATH);
+    }
+
+    private String resolveStoredTemplates(String tpl, Comp comp) {
         if (tpl == null || tpl.isEmpty() || resolvedTemplates.isEmpty()) return tpl;
         StringBuilder out = new StringBuilder();
         int i = 0;
@@ -522,8 +553,11 @@ public final class CassiniUriBuilder extends UriBuilder {
                 String inside = tpl.substring(i + 1, end).trim();
                 int colon = inside.indexOf(':');
                 String name = colon < 0 ? inside : inside.substring(0, colon).trim();
-                if (resolvedTemplates.containsKey(name)) out.append(String.valueOf(resolvedTemplates.get(name)));
-                else out.append('{').append(inside).append('}');
+                if (resolvedTemplates.containsKey(name)) {
+                    boolean enc = resolvedTemplatesEncoded.getOrDefault(name, false);
+                    boolean encSlash = resolvedTemplatesEncodeSlash.getOrDefault(name, true);
+                    out.append(encode(String.valueOf(resolvedTemplates.get(name)), comp, enc, encSlash));
+                } else out.append('{').append(inside).append('}');
                 i = end + 1;
             } else { out.append(c); i++; }
         }
@@ -581,6 +615,12 @@ public final class CassiniUriBuilder extends UriBuilder {
                     && isHex(s.charAt(i + 1)) && isHex(s.charAt(i + 2))) {
                 out.append('%').append(s.charAt(i + 1)).append(s.charAt(i + 2));
                 i += 3;
+                continue;
+            }
+            // Query string : ' ' → '+' (application/x-www-form-urlencoded).
+            if (comp == Comp.QUERY_PARAM && c == ' ') {
+                out.append('+');
+                i++;
                 continue;
             }
             if (isUnreserved(c) || allowed(comp, c, encodeSlash)) {
