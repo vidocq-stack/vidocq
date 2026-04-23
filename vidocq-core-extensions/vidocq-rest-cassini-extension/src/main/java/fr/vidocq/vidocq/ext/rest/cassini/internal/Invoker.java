@@ -375,6 +375,12 @@ public final class Invoker {
     private Response writeEntity(Object entity, Type genericType, Annotation[] anns,
                                  MediaType chosen, StatusCode status,
                                  Map<String, List<String>> extraHeaders) throws IOException {
+        // §4.2.4 : GenericEntity décrit un type paramétré ; on déballe et
+        // on utilise le type "raw"/"genericType" effectif pour le MBW.
+        if (entity instanceof jakarta.ws.rs.core.GenericEntity<?> ge) {
+            genericType = ge.getType();
+            entity = ge.getEntity();
+        }
         Class<?> type = entity.getClass();
         final MediaType mt = defaultFor(chosen, type);
         @SuppressWarnings({"rawtypes", "unchecked"})
