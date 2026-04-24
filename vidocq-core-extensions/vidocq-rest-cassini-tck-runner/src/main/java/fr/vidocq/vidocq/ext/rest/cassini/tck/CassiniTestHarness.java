@@ -63,6 +63,15 @@ public final class CassiniTestHarness implements AutoCloseable {
         private final MessageBodyRegistry bodies = new MessageBodyRegistry();
         private String contextPath = "/";
         private Integer fixedPort;
+        private jakarta.ws.rs.core.Application application;
+
+        /** Publie l'instance Application user-level : injectée via @Context
+         *  {@link jakarta.ws.rs.core.Application} dans les méthodes/champs
+         *  de ressource (§9.4). */
+        public Builder application(jakarta.ws.rs.core.Application app) {
+            this.application = app;
+            return this;
+        }
 
         public Builder provider(Object instance) {
             filters.register(instance);
@@ -179,7 +188,14 @@ public final class CassiniTestHarness implements AutoCloseable {
             invoker.setFilters(filters);
             CassiniRestBridge bridge = new CassiniRestBridge(router, invoker);
             final String prefix = "/".equals(contextPath) ? "" : contextPath;
-            Handler rootHandler = prefix.isEmpty() ? bridge : new ContextStrippingHandler(prefix, bridge);
+            final jakarta.ws.rs.core.Application appInstance = this.application;
+            Handler wrappedBridge = appInstance == null ? bridge : (Handler) request -> {
+                fr.vidocq.vidocq.ext.rest.cassini.internal.ParamExtractor.setApplication(appInstance);
+                try { return bridge.handle(request); }
+                finally { fr.vidocq.vidocq.ext.rest.cassini.internal.ParamExtractor.clearApplication(); }
+            };
+            Handler rootHandler = prefix.isEmpty() ? wrappedBridge
+                    : new ContextStrippingHandler(prefix, wrappedBridge);
 
             RuntimeException last = null;
             // Retry plus agressif sur port fixe (port 8080 peut rester en
@@ -223,7 +239,7 @@ public final class CassiniTestHarness implements AutoCloseable {
      * fait dans l'intégration Vidocq normale, mais sans dépendre du moteur
      * complet (le harness embarque juste un Chappe Server nu).
      */
-    private record ContextStrippingHandler(String prefix, CassiniRestBridge delegate) implements Handler {
+    private record ContextStrippingHandler(String prefix, Handler delegate) implements Handler {
         @Override public Response handle(Request request) throws Exception {
             String path = request.path();
             if (path == null) path = "/";

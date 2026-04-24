@@ -48,6 +48,9 @@ public final class ParamExtractor {
     public record ResolvedArgs(Object[] args, int bodyIndex) {}
 
     private static ThreadLocal<Providers> CURRENT_PROVIDERS = new ThreadLocal<>();
+    private static final ThreadLocal<jakarta.ws.rs.core.Application> CURRENT_APPLICATION = new ThreadLocal<>();
+    public static void setApplication(jakarta.ws.rs.core.Application app) { CURRENT_APPLICATION.set(app); }
+    public static void clearApplication() { CURRENT_APPLICATION.remove(); }
 
     /** Permet à l'Invoker d'exposer un Providers au resolveContext pour la durée d'une requête. */
     public static void setProviders(Providers p) { CURRENT_PROVIDERS.set(p); }
@@ -240,10 +243,11 @@ public final class ParamExtractor {
             };
         }
         if (type == jakarta.ws.rs.core.Application.class) {
-            // §9.4 : Application est l'instance de l'Application JAX-RS.
-            // On fournit une instance minimale (pas d'Application user-level
-            // configurée côté harness).
-            return new jakarta.ws.rs.core.Application();
+            // §9.4 : l'Application est l'instance user-level si l'harness
+            // (ou l'intégration) en a publié une via setCurrentApplication()
+            // — sinon on retourne une Application minimale.
+            jakarta.ws.rs.core.Application app = CURRENT_APPLICATION.get();
+            return app != null ? app : new jakarta.ws.rs.core.Application();
         }
         if (type == jakarta.ws.rs.ext.ContextResolver.class) {
             Providers p = CURRENT_PROVIDERS.get();

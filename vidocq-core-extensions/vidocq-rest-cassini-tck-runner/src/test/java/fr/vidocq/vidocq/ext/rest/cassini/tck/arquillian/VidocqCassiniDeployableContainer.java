@@ -75,28 +75,41 @@ public class VidocqCassiniDeployableContainer implements DeployableContainer<Vid
         List<String> registered = new java.util.ArrayList<>();
         List<String> providers = new java.util.ArrayList<>();
 
+        // Étape 1 : collecter toutes les classes du WAR.
+        List<Class<?>> classes = new java.util.ArrayList<>();
         for (Node node : war.getContent().values()) {
             String path = node.getPath().get();
             if (!path.endsWith(".class")) continue;
             if (!path.startsWith("/WEB-INF/classes/")) continue;
             String className = path.substring("/WEB-INF/classes/".length(),
                     path.length() - ".class".length()).replace('/', '.');
-            Class<?> cls;
-            try { cls = Class.forName(className, true, cl); }
-            catch (Throwable t) { continue; }
-            if (cls.isAnnotationPresent(Path.class)) {
-                try {
-                    builder.resourceClass(cls);
-                    registered.add(cls.getSimpleName());
-                } catch (RuntimeException ignored) {}
-            } else if (cls.isAnnotationPresent(Provider.class)) {
-                try {
-                    Object instance = cls.getDeclaredConstructor().newInstance();
-                    builder.provider(instance);
-                    providers.add(cls.getSimpleName());
-                } catch (ReflectiveOperationException ignored) {}
+            try { classes.add(Class.forName(className, true, cl)); }
+            catch (Throwable t) { /* ignored */ }
+        }
+
+        // Étape 2 : si une sous-classe d'Application est présente, l'instancier
+        // et respecter getClasses()/getSingletons() (§2.3.2). Sinon, scan libre.
+        Application appInstance = null;
+        for (Class<?> c : classes) {
+            if (Application.class.isAssignableFrom(c) && !Application.class.equals(c)) {
+                try { appInstance = (Application) c.getDeclaredConstructor().newInstance(); break; }
+                catch (ReflectiveOperationException ignored) {}
             }
         }
+        java.util.Set<Class<?>> appClasses = appInstance == null ? java.util.Set.of() : appInstance.getClasses();
+        java.util.Set<Object> appSingletons = appInstance == null ? java.util.Set.of() : appInstance.getSingletons();
+        boolean appFiltersResources = appInstance != null
+                && (!appClasses.isEmpty() || !appSingletons.isEmpty());
+
+        // Étape 3 : enregistrer resources + providers.
+        if (appFiltersResources) {
+            for (Class<?> c : appClasses) registerDiscovered(c, builder, registered, providers);
+            for (Object s : appSingletons) registerSingleton(s, builder, registered, providers);
+        } else {
+            for (Class<?> c : classes) registerDiscovered(c, builder, registered, providers);
+        }
+        // Expose l'instance Application pour injection @Context Application (§9.4).
+        if (appInstance != null) builder.application(appInstance);
 
         CassiniTestHarness harness = builder.start();
         harnesses.put(archive.getName(), harness);
@@ -123,4 +136,50 @@ public class VidocqCassiniDeployableContainer implements DeployableContainer<Vid
 
     @Override public void deploy(Descriptor descriptor) {}
     @Override public void undeploy(Descriptor descriptor) {}
+
+    private static void registerDiscovered(Class<?> cls, CassiniTestHarness.Builder b,
+                                           List<String> registered, List<String> providers) {
+        if (cls.isAnnotationPresent(Path.class)) {
+            try { b.resourceClass(cls); registered.add(cls.getSimpleName()); }
+            catch (RuntimeException ignored) {}
+        } else if (cls.isAnnotationPresent(Provider.class)) {
+            try {
+                Object instance = cls.getDeclaredConstructor().newInstance();
+                b.provider(instance);
+                providers.add(cls.getSimpleName());
+            } catch (ReflectiveOperationException ignored) {}
+        }
+    }
+
+    private static void registerSingleton(Object instance, CassiniTestHarness.Builder b,
+                                          List<String> registered, List<String> providers) {
+        Class<?> cls = instance.getClass();
+        if (cls.isAnnotationPresent(Path.class)) {
+            b.resource(instance); registered.add(cls.getSimpleName());
+            return;
+        }
+        // §9.4 : un singleton peut être un provider sans annotation @Provider
+        // s'il implémente un des types standards (MBR, MBW, ExceptionMapper,
+        // ContextResolver, Feature, DynamicFeature, Filter, Interceptor).
+        if (cls.isAnnotationPresent(Provider.class) || isProviderType(instance)) {
+            b.provider(instance); providers.add(cls.getSimpleName());
+            return;
+        }
+        // Singleton utilitaire sans type reconnu : on l'expose comme ressource.
+        b.resource(instance); registered.add(cls.getSimpleName());
+    }
+
+    private static boolean isProviderType(Object instance) {
+        return instance instanceof jakarta.ws.rs.ext.MessageBodyReader<?>
+                || instance instanceof jakarta.ws.rs.ext.MessageBodyWriter<?>
+                || instance instanceof jakarta.ws.rs.ext.ExceptionMapper<?>
+                || instance instanceof jakarta.ws.rs.ext.ContextResolver<?>
+                || instance instanceof jakarta.ws.rs.ext.ReaderInterceptor
+                || instance instanceof jakarta.ws.rs.ext.WriterInterceptor
+                || instance instanceof jakarta.ws.rs.ext.ParamConverterProvider
+                || instance instanceof jakarta.ws.rs.container.ContainerRequestFilter
+                || instance instanceof jakarta.ws.rs.container.ContainerResponseFilter
+                || instance instanceof jakarta.ws.rs.container.DynamicFeature
+                || instance instanceof jakarta.ws.rs.core.Feature;
+    }
 }
