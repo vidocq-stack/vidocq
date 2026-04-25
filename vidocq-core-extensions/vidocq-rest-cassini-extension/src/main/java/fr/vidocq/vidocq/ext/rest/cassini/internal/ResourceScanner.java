@@ -110,6 +110,13 @@ public final class ResourceScanner {
                     Set<String> inhProd = locatorProduces.isEmpty() ? classProduces : locatorProduces;
                     Set<String> inhCons = locatorConsumes.isEmpty() ? classConsumes : locatorConsumes;
                     m.setAccessible(true);
+                    // §3.4.1 : si le type de retour est Response, le locator EST le handler
+                    // terminal — on crée une route directe "*" (toutes méthodes HTTP).
+                    if (jakarta.ws.rs.core.Response.class.isAssignableFrom(returnCls)) {
+                        out.add(new ResourceMethod(cls, m, "*", UriTemplate.compile(locatorPath),
+                                inhProd, inhCons, null, null, classLits));
+                        continue;
+                    }
                     scanLocatorType(returnCls, locatorPath, inhProd, inhCons,
                             cls, new java.util.ArrayList<>(java.util.List.of(m)),
                             classLits, new java.util.HashSet<>(), out);
@@ -243,6 +250,12 @@ public final class ResourceScanner {
                 Set<String> inhP = np.isEmpty() ? clsProduces : np;
                 Set<String> inhC = nc.isEmpty() ? clsConsumes : nc;
                 m.setAccessible(true);
+                if (jakarta.ws.rs.core.Response.class.isAssignableFrom(nestedReturn)) {
+                    java.util.List<Method> chain = java.util.List.copyOf(locatorChain);
+                    out.add(new ResourceMethod(cls, m, "*", UriTemplate.compile(nestedPath),
+                            inhP, inhC, rootBeanClass, chain, rootClassLiterals));
+                    continue;
+                }
                 java.util.List<Method> extended = new java.util.ArrayList<>(locatorChain);
                 extended.add(m);
                 scanLocatorType(nestedReturn, nestedPath, inhP, inhC,

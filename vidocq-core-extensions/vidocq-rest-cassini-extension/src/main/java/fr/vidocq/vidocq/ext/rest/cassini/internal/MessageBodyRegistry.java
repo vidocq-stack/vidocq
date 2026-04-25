@@ -1,5 +1,7 @@
 package fr.vidocq.vidocq.ext.rest.cassini.internal;
 
+import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.MultivaluedHashMap;
 import jakarta.ws.rs.core.MultivaluedMap;
@@ -10,6 +12,7 @@ import jakarta.ws.rs.ext.MessageBodyWriter;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
+import java.util.Comparator;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -57,27 +60,70 @@ public final class MessageBodyRegistry {
     @SuppressWarnings("unchecked")
     public <T> Optional<MessageBodyReader<T>> findReader(Class<T> type, Type genericType,
                                                          Annotation[] anns, MediaType mt) {
+        Class<?> boxed = box(type);
+        List<MessageBodyReader<?>> candidates = new ArrayList<>();
         for (MessageBodyReader<?> r : readers) {
-            if (r.isReadable(type, genericType, anns, mt)) {
-                return Optional.of((MessageBodyReader<T>) r);
-            }
+            // §4.2.1 : pré-filtrer par le type générique T du MBR.
+            Class<?> rType = resolveProviderType(r.getClass(), MessageBodyReader.class);
+            if (rType != null && rType != Object.class && !rType.isAssignableFrom(boxed)) continue;
+            if (r.isReadable(type, genericType, anns, mt)) candidates.add(r);
         }
-        return Optional.empty();
+        if (candidates.isEmpty()) return Optional.empty();
+        // §4.2.4 step 1 : trier par spécificité du media type @Consumes.
+        // Sort stable → en cas d'égalité, les providers en tête de liste
+        // (user-provided, insérés à l'index 0) gagnent sur les built-in (en fin).
+        candidates.sort(Comparator.comparingInt(
+                (MessageBodyReader<?> r) -> consumesSpecificity(r.getClass().getAnnotation(Consumes.class), mt)
+        ).reversed());
+        return Optional.of((MessageBodyReader<T>) candidates.get(0));
     }
 
     @SuppressWarnings("unchecked")
     public <T> Optional<MessageBodyWriter<T>> findWriter(Class<?> type, Type genericType,
                                                          Annotation[] anns, MediaType mt) {
+        Class<?> boxed = box(type);
+        List<MessageBodyWriter<?>> candidates = new ArrayList<>();
         for (MessageBodyWriter<?> w : writers) {
-            if (w.isWriteable(type, genericType, anns, mt)) {
-                return Optional.of((MessageBodyWriter<T>) w);
-            }
+            Class<?> wType = resolveProviderType(w.getClass(), MessageBodyWriter.class);
+            if (wType != null && wType != Object.class && !wType.isAssignableFrom(boxed)) continue;
+            if (w.isWriteable(type, genericType, anns, mt)) candidates.add(w);
         }
-        return Optional.empty();
+        if (candidates.isEmpty()) return Optional.empty();
+        candidates.sort(Comparator.comparingInt(
+                (MessageBodyWriter<?> w) -> producesSpecificity(w.getClass().getAnnotation(Produces.class), mt)
+        ).reversed());
+        return Optional.of((MessageBodyWriter<T>) candidates.get(0));
+    }
+
+    // §4.2.4 step 1 : spécificité du match entre @Consumes déclaré et le media type demandé.
+    // 0 = wildcard (ou pas d'annotation), 1 = type/*, 2 = type/subtype exact.
+    private static int consumesSpecificity(Consumes consumes, MediaType requested) {
+        if (consumes == null || requested == null) return 0;
+        int best = 0;
+        for (String s : consumes.value()) {
+            MediaType declared = MediaType.valueOf(s);
+            if (!declared.isCompatible(requested)) continue;
+            if (!declared.isWildcardType() && !declared.isWildcardSubtype()) best = Math.max(best, 2);
+            else if (!declared.isWildcardType()) best = Math.max(best, 1);
+        }
+        return best;
+    }
+
+    private static int producesSpecificity(Produces produces, MediaType requested) {
+        if (produces == null || requested == null) return 0;
+        int best = 0;
+        for (String s : produces.value()) {
+            MediaType declared = MediaType.valueOf(s);
+            if (!declared.isCompatible(requested)) continue;
+            if (!declared.isWildcardType() && !declared.isWildcardSubtype()) best = Math.max(best, 2);
+            else if (!declared.isWildcardType()) best = Math.max(best, 1);
+        }
+        return best;
     }
 
     private void registerBuiltins() {
-        // The last added has priority (addXxx inserts at 0), so order matters.
+        // Built-in providers : ajoutés à la FIN (les providers user, ajoutés
+        // via addReader/addWriter, sont à l'index 0 et gagnent à spécificité égale).
         writers.add(new ByteArrayWriter());
         writers.add(new StringWriter());
         writers.add(new StreamingOutputWriter());
@@ -218,6 +264,7 @@ public final class MessageBodyRegistry {
     }
 
     // ---- MultivaluedMap<String,String> pour application/x-www-form-urlencoded ----
+    @Consumes("application/x-www-form-urlencoded")
     static final class FormUrlEncodedReader implements MessageBodyReader<MultivaluedMap<String, String>> {
         @Override public boolean isReadable(Class<?> t, Type gt, Annotation[] a, MediaType mt) {
             return MultivaluedMap.class.isAssignableFrom(t)
@@ -233,6 +280,7 @@ public final class MessageBodyRegistry {
             return out;
         }
     }
+    @Produces("application/x-www-form-urlencoded")
     static final class FormUrlEncodedWriter implements MessageBodyWriter<MultivaluedMap<String, String>> {
         @Override public boolean isWriteable(Class<?> t, Type gt, Annotation[] a, MediaType mt) {
             return MultivaluedMap.class.isAssignableFrom(t);
@@ -243,7 +291,7 @@ public final class MessageBodyRegistry {
             for (var e : v.entrySet()) {
                 for (String val : e.getValue()) {
                     if (sb.length() > 0) sb.append('&');
-                    sb.append(java.net.URLEncoder.encode(e.getKey(), StandardCharsets.UTF_8))
+                    sb.append(java.net.URLEncoder.encode(e.getKey() == null ? "" : e.getKey(), StandardCharsets.UTF_8))
                       .append('=').append(java.net.URLEncoder.encode(val == null ? "" : val, StandardCharsets.UTF_8));
                 }
             }
@@ -288,6 +336,7 @@ public final class MessageBodyRegistry {
     }
 
     // ---- javax.xml.transform.Source ----
+    @Produces({"application/xml", "text/xml", "application/*+xml"})
     static final class SourceWriter implements MessageBodyWriter<javax.xml.transform.Source> {
         @Override public boolean isWriteable(Class<?> t, Type gt, Annotation[] a, MediaType mt) {
             return javax.xml.transform.Source.class.isAssignableFrom(t);
@@ -302,6 +351,7 @@ public final class MessageBodyRegistry {
             }
         }
     }
+    @Consumes({"application/xml", "text/xml", "application/*+xml"})
     static final class SourceReader implements MessageBodyReader<javax.xml.transform.Source> {
         @Override public boolean isReadable(Class<?> t, Type gt, Annotation[] a, MediaType mt) {
             return javax.xml.transform.Source.class.isAssignableFrom(t);
@@ -342,6 +392,7 @@ public final class MessageBodyRegistry {
     }
 
     // ---- JAXB (@XmlRootElement et JAXBElement) ----
+    @Produces({"application/xml", "text/xml", "application/*+xml"})
     static final class JaxbWriter implements MessageBodyWriter<Object> {
         @Override public boolean isWriteable(Class<?> t, Type gt, Annotation[] a, MediaType mt) {
             if (mt == null) return false;
@@ -365,6 +416,7 @@ public final class MessageBodyRegistry {
             }
         }
     }
+    @Consumes({"application/xml", "text/xml", "application/*+xml"})
     static final class JaxbReader implements MessageBodyReader<Object> {
         @Override public boolean isReadable(Class<?> t, Type gt, Annotation[] a, MediaType mt) {
             if (mt == null) return false;
@@ -395,6 +447,7 @@ public final class MessageBodyRegistry {
     // ---- Primitives / wrappers / BigDecimal / BigInteger / Character ----
     /** §4.2.3 : Number, Boolean, Character, primitives, BigDecimal, BigInteger
      *  sérialisés en {@code text/plain} via {@code String.valueOf} / parse. */
+    @Produces("text/plain")
     static final class PrimitiveWriter implements MessageBodyWriter<Object> {
         @Override public boolean isWriteable(Class<?> t, Type gt, Annotation[] a, MediaType mt) {
             return isPrimitiveLike(t);
@@ -404,6 +457,7 @@ public final class MessageBodyRegistry {
             s.write(String.valueOf(v).getBytes(charset(mt)));
         }
     }
+    @Consumes("text/plain")
     static final class PrimitiveReader implements MessageBodyReader<Object> {
         @Override public boolean isReadable(Class<?> t, Type gt, Annotation[] a, MediaType mt) {
             return isPrimitiveLike(t);
@@ -482,5 +536,34 @@ public final class MessageBodyRegistry {
                                Type genericType, Annotation[] anns, MediaType mt,
                                MultivaluedMap<String, Object> headers, OutputStream os) throws IOException {
         w.writeTo(value, type, genericType, anns, mt, headers, os);
+    }
+
+    /** Résout le type générique T de {@code providerInterface} (MBR ou MBW) pour {@code cls}. */
+    static Class<?> resolveProviderType(Class<?> cls, Class<?> providerInterface) {
+        for (java.lang.reflect.Type iface : cls.getGenericInterfaces()) {
+            if (iface instanceof java.lang.reflect.ParameterizedType pt
+                    && pt.getRawType() == providerInterface
+                    && pt.getActualTypeArguments().length == 1) {
+                java.lang.reflect.Type arg = pt.getActualTypeArguments()[0];
+                if (arg instanceof Class<?> c) return c;
+                if (arg instanceof java.lang.reflect.WildcardType) return Object.class;
+                return Object.class;
+            }
+        }
+        Class<?> sup = cls.getSuperclass();
+        return (sup == null || sup == Object.class) ? null : resolveProviderType(sup, providerInterface);
+    }
+
+    /** Boxing primitif → wrapper pour comparaison de type MBR/MBW. */
+    static Class<?> box(Class<?> t) {
+        if (t == boolean.class) return Boolean.class;
+        if (t == byte.class)    return Byte.class;
+        if (t == short.class)   return Short.class;
+        if (t == int.class)     return Integer.class;
+        if (t == long.class)    return Long.class;
+        if (t == float.class)   return Float.class;
+        if (t == double.class)  return Double.class;
+        if (t == char.class)    return Character.class;
+        return t;
     }
 }

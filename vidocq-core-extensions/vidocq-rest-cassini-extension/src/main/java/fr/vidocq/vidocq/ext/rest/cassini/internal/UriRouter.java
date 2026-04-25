@@ -56,7 +56,7 @@ public final class UriRouter {
         List<MatchResult> out = new ArrayList<>();
         for (ResourceMethod r : routes) {
             Optional<java.util.Map<String, java.util.List<String>>> params = r.template().match(p);
-            if (params.isPresent() && r.httpMethod().equalsIgnoreCase(httpMethod)) {
+            if (params.isPresent() && (r.httpMethod().equals("*") || r.httpMethod().equalsIgnoreCase(httpMethod))) {
                 // rawParams : valeurs avec matrix params, pour PathSegment injection §3.2.
                 Optional<java.util.Map<String, java.util.List<String>>> rawParams = r.template().match(normalized);
                 out.add(new MatchResult(r, params.get(), rawParams.orElse(params.get())));

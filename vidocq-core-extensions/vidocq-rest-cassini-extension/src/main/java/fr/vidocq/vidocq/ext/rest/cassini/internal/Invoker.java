@@ -302,11 +302,13 @@ public final class Invoker {
             throw new RuntimeException(sb.toString(), iae);
         } catch (InvocationTargetException ite) {
             Throwable cause = ite.getCause();
-            var mapped = exceptionMappers.map(cause);
-            if (mapped.isPresent()) return runResponseFiltersAndWrite(rctx, mapped.get(), route, chosen);
+            // §4.3.1 : WAE avant le mapper — renderWebAppException gère la logique
+            // "entité présente → pas de mapper, pas d'entité → mapper si disponible".
             if (cause instanceof WebApplicationException wae) {
                 return renderWebAppException(wae, route, chosen, rctx);
             }
+            var mapped = exceptionMappers.map(cause);
+            if (mapped.isPresent()) return runResponseFiltersAndWrite(rctx, mapped.get(), route, chosen);
             if (cause instanceof Exception ex) throw ex;
             throw new RuntimeException(cause);
         }
@@ -664,17 +666,21 @@ public final class Invoker {
 
     private Response renderWebAppException(WebApplicationException wae, ResourceMethod route,
                                            MediaType chosen, CassiniRequestContext rctx) throws IOException {
-        // §4.4 : si un ExceptionMapper est enregistré pour WebApplicationException
-        // ou un de ses super-types, il doit être appelé en priorité sur la
-        // réponse embarquée dans l'exception.
-        var mapped = exceptionMappers.map(wae);
-        if (mapped.isPresent()) {
-            jakarta.ws.rs.core.Response r = mapped.get();
+        jakarta.ws.rs.core.Response r = wae.getResponse();
+        // §4.3.1 : si la réponse embarquée a une entité, le mapper NE DOIT PAS être invoqué.
+        if (r != null && r.hasEntity()) {
             if (rctx != null && !filters.responseFilters().isEmpty())
                 return runResponseFiltersAndWrite(rctx, r, route, chosen);
             return fromJaxRs(r, route, chosen);
         }
-        jakarta.ws.rs.core.Response r = wae.getResponse();
+        // §4.4 : sinon, tenter l'ExceptionMapper.
+        var mapped = exceptionMappers.map(wae);
+        if (mapped.isPresent()) {
+            jakarta.ws.rs.core.Response mr = mapped.get();
+            if (rctx != null && !filters.responseFilters().isEmpty())
+                return runResponseFiltersAndWrite(rctx, mr, route, chosen);
+            return fromJaxRs(mr, route, chosen);
+        }
         if (r != null) {
             if (rctx != null && !filters.responseFilters().isEmpty())
                 return runResponseFiltersAndWrite(rctx, r, route, chosen);
