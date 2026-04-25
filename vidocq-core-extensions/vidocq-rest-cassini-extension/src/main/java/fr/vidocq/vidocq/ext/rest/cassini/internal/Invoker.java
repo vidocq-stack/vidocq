@@ -80,15 +80,38 @@ public final class Invoker {
         return forBeanManager(bm, registry, ExceptionMapperRegistry.discover(bm));
     }
 
+    /** §3.1.1 : instancie une classe @Path sans bean CDI via l'API standard
+     *  {@code BeanManager.getInjectionTargetFactory(AnnotatedType)} — produce
+     *  + inject + postConstruct. */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static Object instantiateWithInjection(BeanManager bm, Class<?> type) {
+        try {
+            jakarta.enterprise.inject.spi.AnnotatedType at = bm.createAnnotatedType(type);
+            jakarta.enterprise.inject.spi.InjectionTargetFactory factory = bm.getInjectionTargetFactory(at);
+            jakarta.enterprise.inject.spi.InjectionTarget it = factory.createInjectionTarget(null);
+            jakarta.enterprise.context.spi.CreationalContext cc = bm.createCreationalContext(null);
+            Object instance = it.produce(cc);
+            it.inject(instance, cc);
+            it.postConstruct(instance);
+            return instance;
+        } catch (RuntimeException e) {
+            throw new IllegalStateException("Failed to instantiate " + type.getName(), e);
+        }
+    }
+
     public static Invoker forBeanManager(BeanManager bm, MessageBodyRegistry registry,
                                          ExceptionMapperRegistry exMappers) {
         AnnotationLiteral<Any> any = new AnnotationLiteral<Any>() {};
         return new Invoker(type -> {
             Set<Bean<?>> beans = bm.getBeans(type, any);
             Bean<?> bean = bm.resolve(beans);
-            if (bean == null) throw new IllegalStateException("No CDI bean for " + type.getName());
-            var cc = bm.createCreationalContext(bean);
-            return bm.getReference(bean, type, cc);
+            if (bean != null) {
+                var cc = bm.createCreationalContext(bean);
+                return bm.getReference(bean, type, cc);
+            }
+            // §3.1.1 : une classe @Path sans bean CDI → on instancie per-request
+            // via InjectionTargetFactory (constructeur + @Inject fields).
+            return instantiateWithInjection(bm, type);
         }, registry, exMappers);
     }
 

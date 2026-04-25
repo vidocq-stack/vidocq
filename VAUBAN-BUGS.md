@@ -264,25 +264,15 @@ le cas "JAR brut" — fallback BCE full au runtime) :
 
 ---
 
-## 5. `BeanManager.getInjectionTargetFactory(AnnotatedType)` — Not yet implemented
+## 5. ~~`BeanManager.getInjectionTargetFactory(AnnotatedType)` — Not yet implemented~~ FIXÉ
 
-**Symptome :** `java.lang.IllegalStateException: Not yet implemented` levé
-depuis `fr.vidocq.vauban.core.container.VaubanBeanManager.getInjectionTargetFactory`
-(ligne 629).
+**Symptome initial :** `java.lang.IllegalStateException: Not yet implemented`
+levé depuis `fr.vidocq.vauban.core.container.VaubanBeanManager.getInjectionTargetFactory`.
 
-**Contexte :** Cassini veut instancier une classe `@Path` sans scope CDI
-explicite (cas §3.1.1 JAX-RS : ressource par défaut per-request). Sans
-bean CDI résolu, on passe par l'API standard
-`bm.getInjectionTargetFactory(bm.createAnnotatedType(type))` pour obtenir
-un `InjectionTarget` permettant d'instancier la classe et d'injecter ses
-`@Inject` fields.
+**Contexte :** Cassini instancie les classes `@Path` sans scope CDI explicite
+(§3.1.1 JAX-RS : ressources par défaut per-request) via l'API standard
+`bm.getInjectionTargetFactory(bm.createAnnotatedType(type))`.
 
-**Status :** non implémenté côté Vauban. Workaround côté Cassini :
-instantier via constructeur public no-args puis résoudre manuellement
-les `@Inject` fields via `bm.getBeans(fieldType)` + `bm.getReference`.
-Cette approche n'honore pas les `@Inject` constructeurs, les `@PostConstruct`
-et les producers mais couvre le cas majoritaire des ressources REST.
-
-À implémenter côté Vauban : soit `getInjectionTargetFactory()` complet,
-soit un mode "synthetic bean for class" permettant d'obtenir une instance
-pilotée par CDI sans enregistrement préalable comme bean.
+**Status :** fixé côté Vauban. Cassini utilise désormais
+`InjectionTargetFactory.createInjectionTarget(null)` + `produce/inject/postConstruct`
+dans `Invoker.instantiateWithInjection`.

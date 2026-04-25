@@ -48,7 +48,37 @@ public final class ResourceScanner {
         for (Bean<?> bean : beanManager.getBeans(Object.class, ANY)) {
             classes.add(bean.getBeanClass());
         }
+        // §3.1.1 : les classes @Path sans scope CDI sont quand même des
+        // ressources JAX-RS (par défaut per-request). Vauban expose la liste
+        // complète des classes scannées via META-INF/vauban-beans.list — on
+        // ajoute celles annotées @Path qui auraient échappé au BeanManager.
+        classes.addAll(discoverVaubanBeans());
         return discover(classes.toArray(Class<?>[]::new));
+    }
+
+    private static Set<Class<?>> discoverVaubanBeans() {
+        Set<Class<?>> out = new LinkedHashSet<>();
+        try {
+            ClassLoader cl = Thread.currentThread().getContextClassLoader();
+            if (cl == null) cl = ResourceScanner.class.getClassLoader();
+            java.util.Enumeration<java.net.URL> urls = cl.getResources("META-INF/vauban-beans.list");
+            while (urls.hasMoreElements()) {
+                java.net.URL url = urls.nextElement();
+                try (var br = new java.io.BufferedReader(new java.io.InputStreamReader(
+                        url.openStream(), java.nio.charset.StandardCharsets.UTF_8))) {
+                    String line;
+                    while ((line = br.readLine()) != null) {
+                        String s = line.trim();
+                        if (s.isEmpty() || s.startsWith("#")) continue;
+                        try {
+                            Class<?> c = Class.forName(s, false, cl);
+                            if (c.isAnnotationPresent(Path.class)) out.add(c);
+                        } catch (Throwable ignored) {}
+                    }
+                }
+            }
+        } catch (java.io.IOException ignored) {}
+        return out;
     }
 
     public static List<ResourceMethod> discover(Class<?>... classes) {
