@@ -271,20 +271,21 @@ public final class ParamExtractor {
         Class<?> element = ParamValueConverter.isListLike(raw)
                 ? genericElementType(p.getParameterizedType())
                 : raw;
+        boolean notFoundParam = p.getAnnotation(PathParam.class) != null
+                || p.getAnnotation(MatrixParam.class) != null
+                || p.getAnnotation(QueryParam.class) != null;
         try {
             return ParamValueConverter.coerce(raw, element, raws);
         } catch (WebApplicationException w) {
-            // §3.2 : tous les @*Param propagent — ExceptionMapper<WAE> les
-            // reçoit avec la cause originelle (IAE, NumberFormat, etc.).
+            // §3.2 : @PathParam/@QueryParam/@MatrixParam → 404 ; @HeaderParam/@CookieParam → 400.
+            if (notFoundParam && w.getResponse() != null && w.getResponse().getStatus() == 400) {
+                throw new WebApplicationException(w.getMessage(), w.getCause(), javax404Response(404));
+            }
             throw w;
         } catch (RuntimeException e) {
-            if (p.getAnnotation(PathParam.class) != null
-                    || p.getAnnotation(MatrixParam.class) != null) {
-                throw new WebApplicationException("Invalid value for parameter "
-                        + p.getName() + ": " + e.getMessage(), e, javax404Response(404));
-            }
             throw new WebApplicationException("Invalid value for parameter "
-                    + p.getName() + ": " + e.getMessage(), e, javax404Response(400));
+                    + p.getName() + ": " + e.getMessage(), e,
+                    javax404Response(notFoundParam ? 404 : 400));
         }
     }
 

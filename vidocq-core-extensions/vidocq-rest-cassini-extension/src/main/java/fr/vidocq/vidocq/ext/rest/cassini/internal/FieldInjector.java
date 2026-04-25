@@ -142,18 +142,22 @@ public final class FieldInjector {
         Class<?> raw = f.getType();
         Class<?> element = ParamValueConverter.isListLike(raw)
                 ? genericElementType(f.getGenericType()) : raw;
+        boolean notFound = f.getAnnotation(PathParam.class) != null
+                || f.getAnnotation(MatrixParam.class) != null
+                || f.getAnnotation(QueryParam.class) != null;
         try { return ParamValueConverter.coerce(raw, element, raws); }
-        catch (WebApplicationException wae) { throw wae; }
-        catch (RuntimeException e) {
-            if (f.getAnnotation(PathParam.class) != null
-                    || f.getAnnotation(MatrixParam.class) != null) {
-                throw new WebApplicationException("Invalid value for field "
-                        + f.getName() + ": " + e.getMessage(), e,
+        catch (WebApplicationException wae) {
+            // §3.2 : @PathParam/@QueryParam/@MatrixParam conversion failure → 404.
+            if (notFound && wae.getResponse() != null && wae.getResponse().getStatus() == 400) {
+                throw new WebApplicationException(wae.getMessage(), wae.getCause(),
                         jakarta.ws.rs.core.Response.status(404).build());
             }
+            throw wae;
+        }
+        catch (RuntimeException e) {
             throw new WebApplicationException("Invalid value for field "
                     + f.getName() + ": " + e.getMessage(), e,
-                    jakarta.ws.rs.core.Response.status(400).build());
+                    jakarta.ws.rs.core.Response.status(notFound ? 404 : 400).build());
         }
     }
 
