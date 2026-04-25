@@ -83,9 +83,10 @@ public final class ParamExtractor {
 
         PathParam pathParam = p.getAnnotation(PathParam.class);
         if (pathParam != null) {
-            String raw = match.pathParams().get(pathParam.value());
-            String val = raw == null ? null : (encoded ? raw : decodePath(raw));
-            return coerce(p, val == null ? emptyOrDefault(def) : List.of(val));
+            List<String> raws = match.pathParams().getOrDefault(pathParam.value(), List.of());
+            if (raws.isEmpty()) return coerce(p, emptyOrDefault(def));
+            List<String> vals = encoded ? raws : raws.stream().map(ParamExtractor::decodePath).toList();
+            return coerce(p, vals);
         }
         QueryParam queryParam = p.getAnnotation(QueryParam.class);
         if (queryParam != null) {
@@ -149,9 +150,12 @@ public final class ParamExtractor {
                 continue;
             }
             if (pathParam != null) {
-                String raw = match.pathParams().get(pathParam.value());
-                String val = raw == null ? null : (encoded ? raw : decodePath(raw));
-                args[i] = coerce(p, val == null ? emptyOrDefault(def) : List.of(val));
+                List<String> raws = match.pathParams().getOrDefault(pathParam.value(), List.of());
+                if (raws.isEmpty()) { args[i] = coerce(p, emptyOrDefault(def)); }
+                else {
+                    List<String> vals = encoded ? raws : raws.stream().map(ParamExtractor::decodePath).toList();
+                    args[i] = coerce(p, vals);
+                }
             } else if (queryParam != null) {
                 Map<String, List<String>> cache;
                 if (encoded) {

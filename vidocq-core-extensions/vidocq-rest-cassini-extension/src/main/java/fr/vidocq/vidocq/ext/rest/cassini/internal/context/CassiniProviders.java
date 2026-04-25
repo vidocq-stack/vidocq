@@ -48,14 +48,8 @@ public final class CassiniProviders implements Providers {
     }
 
     @Override
-    @SuppressWarnings({"rawtypes", "unchecked"})
     public <T extends Throwable> ExceptionMapper<T> getExceptionMapper(Class<T> type) {
-        try {
-            Throwable dummy = type.getDeclaredConstructor().newInstance();
-            return exceptionMappers.map(dummy).map(r -> (ExceptionMapper<T>) null).orElse(null);
-        } catch (Exception ignored) {
-            return null;
-        }
+        return exceptionMappers.findMapper(type);
     }
 
     @Override

@@ -27,14 +27,14 @@ public final class CassiniUriInfo implements UriInfo {
 
     private final Request request;
     private final String contextPath;
-    private final Map<String, String> pathParams;
+    private final Map<String, List<String>> pathParams;
 
-    public CassiniUriInfo(Request request, String contextPath, Map<String, String> pathParams) {
+    public CassiniUriInfo(Request request, String contextPath, Map<String, List<String>> pathParams) {
         this(request, contextPath, pathParams, null);
     }
 
     private final String matchedTemplate;
-    public CassiniUriInfo(Request request, String contextPath, Map<String, String> pathParams,
+    public CassiniUriInfo(Request request, String contextPath, Map<String, List<String>> pathParams,
                           String matchedTemplate) {
         this.request = request;
         this.contextPath = contextPath == null ? "" : contextPath;
@@ -114,14 +114,16 @@ public final class CassiniUriInfo implements UriInfo {
 
     @Override public MultivaluedMap<String, String> getPathParameters(boolean decode) {
         MultivaluedMap<String, String> m = new MultivaluedHashMap<>();
-        pathParams.forEach((k, v) -> {
-            String val = v;
-            if (decode && v != null && v.indexOf('%') >= 0) {
-                try { val = java.net.URLDecoder.decode(v.replace("+", "%2B"),
-                        java.nio.charset.StandardCharsets.UTF_8); }
-                catch (Exception ignored) {}
+        pathParams.forEach((k, values) -> {
+            for (String v : values) {
+                String val = v;
+                if (decode && v != null && v.indexOf('%') >= 0) {
+                    try { val = java.net.URLDecoder.decode(v.replace("+", "%2B"),
+                            java.nio.charset.StandardCharsets.UTF_8); }
+                    catch (Exception ignored) {}
+                }
+                m.add(k, val);
             }
-            m.add(k, val);
         });
         return m;
     }

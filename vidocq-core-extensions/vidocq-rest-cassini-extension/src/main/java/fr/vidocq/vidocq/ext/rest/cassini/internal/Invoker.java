@@ -211,7 +211,7 @@ public final class Invoker {
                 // null même pour un body vide (String=="", byte[]=new byte[0],
                 // InputStream=empty stream, …). On lit donc toujours via MBR
                 // quand un param body est présent.
-                args[resolved.bodyIndex()] = readEntity(p, contentType, request);
+                args[resolved.bodyIndex()] = readEntity(p, contentType, request, route);
             }
         } catch (WebApplicationException wae) {
             return renderWebAppException(wae, route, chosen, null);
@@ -391,7 +391,7 @@ public final class Invoker {
             extra.put(e.getKey(), vs);
         }
         return writeEntity(entity, rctx.getEntityType() == null ? entity.getClass() : rctx.getEntityType(),
-                rctx.getEntityAnnotations(), mt, StatusCode.of(status), extra);
+                rctx.getEntityAnnotations(), mt, StatusCode.of(status), extra, route);
     }
 
     private boolean hasRequestBody(Request request) {
@@ -403,7 +403,7 @@ public final class Invoker {
         return request.headers().contains("Content-Type") && len != 0;
     }
 
-    private Object readEntity(Parameter p, MediaType ct, Request request) throws IOException {
+    private Object readEntity(Parameter p, MediaType ct, Request request, ResourceMethod route) throws IOException {
         Class<?> type = p.getType();
         Type genericType = p.getParameterizedType();
         Annotation[] anns = p.getAnnotations();
@@ -421,11 +421,13 @@ public final class Invoker {
         } else {
             src = request.body().asInputStream();
         }
+        var rInterceptors = route == null ? filters.readerInterceptors()
+                : filters.readerInterceptorsFor(route.javaMethod(), route.beanClass());
         try (InputStream in = src) {
-            if (filters.readerInterceptors().isEmpty()) {
+            if (rInterceptors.isEmpty()) {
                 return reader.readFrom(type, genericType, anns, ct, headers, in);
             }
-            return new CassiniReaderInterceptorContext(filters.readerInterceptors(),
+            return new CassiniReaderInterceptorContext(rInterceptors,
                     reader, type, genericType, anns, ct, headers, in).proceed();
         }
     }
@@ -438,12 +440,12 @@ public final class Invoker {
             return fromJaxRs(jr, route, chosen);
         }
         return writeEntity(result, route.javaMethod().getGenericReturnType(),
-                route.javaMethod().getAnnotations(), chosen, StatusCode.OK, Map.of());
+                route.javaMethod().getAnnotations(), chosen, StatusCode.OK, Map.of(), route);
     }
 
     private Response writeEntity(Object entity, Type genericType, Annotation[] anns,
                                  MediaType chosen, StatusCode status,
-                                 Map<String, List<String>> extraHeaders) throws IOException {
+                                 Map<String, List<String>> extraHeaders, ResourceMethod route) throws IOException {
         // §4.2.4 : GenericEntity décrit un type paramétré ; on déballe et
         // on utilise le type "raw"/"genericType" effectif pour le MBW.
         if (entity instanceof jakarta.ws.rs.core.GenericEntity<?> ge) {
@@ -464,10 +466,12 @@ public final class Invoker {
         // peuvent encore muter ; on relit ensuite pour build.
         for (var e : extraHeaders.entrySet())
             for (String v : e.getValue()) outHeaders.add(e.getKey(), v);
-        if (filters.writerInterceptors().isEmpty()) {
+        var wInterceptors = route == null ? filters.writerInterceptors()
+                : filters.writerInterceptorsFor(route.javaMethod(), route.beanClass());
+        if (wInterceptors.isEmpty()) {
             MessageBodyRegistry.writeTo(writer, entity, type, genericType, anns, mt, outHeaders, bos);
         } else {
-            new CassiniWriterInterceptorContext(filters.writerInterceptors(), writer,
+            new CassiniWriterInterceptorContext(wInterceptors, writer,
                     entity, type, genericType, anns, mt, outHeaders, bos).proceed();
         }
 
@@ -501,7 +505,7 @@ public final class Invoker {
         }
         Type gt = route == null ? entity.getClass() : route.javaMethod().getGenericReturnType();
         Annotation[] anns = route == null ? new Annotation[0] : route.javaMethod().getAnnotations();
-        return writeEntity(entity, gt, anns, chosen, status, headers);
+        return writeEntity(entity, gt, anns, chosen, status, headers, route);
     }
 
     /**

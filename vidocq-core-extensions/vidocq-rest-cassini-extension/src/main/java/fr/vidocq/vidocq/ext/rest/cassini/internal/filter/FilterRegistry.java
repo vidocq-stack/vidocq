@@ -70,6 +70,18 @@ public final class FilterRegistry {
     public List<FilterEntry<ReaderInterceptor>> readerInterceptors() { return readerInterceptors; }
     public List<FilterEntry<WriterInterceptor>> writerInterceptors() { return writerInterceptors; }
 
+    /** §6.5.3 : filtre les reader interceptors par @NameBinding sur la méthode/classe cible. */
+    public List<FilterEntry<ReaderInterceptor>> readerInterceptorsFor(java.lang.reflect.Method m, Class<?> cls) {
+        if (readerInterceptors.isEmpty()) return readerInterceptors;
+        return readerInterceptors.stream().filter(e -> e.appliesTo(m, cls)).toList();
+    }
+
+    /** §6.5.3 : filtre les writer interceptors par @NameBinding sur la méthode/classe cible. */
+    public List<FilterEntry<WriterInterceptor>> writerInterceptorsFor(java.lang.reflect.Method m, Class<?> cls) {
+        if (writerInterceptors.isEmpty()) return writerInterceptors;
+        return writerInterceptors.stream().filter(e -> e.appliesTo(m, cls)).toList();
+    }
+
     public List<FilterEntry<ContainerRequestFilter>> requestFilters() { return requestFilters; }
     public List<FilterEntry<ContainerResponseFilter>> responseFilters() { return responseFilters; }
 

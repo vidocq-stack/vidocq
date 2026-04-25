@@ -43,8 +43,16 @@ public final class MessageBodyRegistry {
         registerBuiltins();
     }
 
-    public void addReader(MessageBodyReader<?> r) { readers.add(0, r); }
-    public void addWriter(MessageBodyWriter<?> w) { writers.add(0, w); }
+    public void addReader(MessageBodyReader<?> r) {
+        jakarta.ws.rs.ConstrainedTo ct = r.getClass().getAnnotation(jakarta.ws.rs.ConstrainedTo.class);
+        if (ct != null && ct.value() == jakarta.ws.rs.RuntimeType.CLIENT) return;
+        readers.add(0, r);
+    }
+    public void addWriter(MessageBodyWriter<?> w) {
+        jakarta.ws.rs.ConstrainedTo ct = w.getClass().getAnnotation(jakarta.ws.rs.ConstrainedTo.class);
+        if (ct != null && ct.value() == jakarta.ws.rs.RuntimeType.CLIENT) return;
+        writers.add(0, w);
+    }
 
     @SuppressWarnings("unchecked")
     public <T> Optional<MessageBodyReader<T>> findReader(Class<T> type, Type genericType,

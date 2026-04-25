@@ -79,9 +79,10 @@ public final class FieldInjector {
                 || f.getDeclaringClass().getAnnotation(jakarta.ws.rs.Encoded.class) != null;
         PathParam pp = f.getAnnotation(PathParam.class);
         if (pp != null) {
-            String raw = match.pathParams().get(pp.value());
-            String val = raw == null ? null : (encoded ? raw : decodePath(raw));
-            return coerce(f, val == null ? emptyOrDef(def) : List.of(val));
+            List<String> raws = match.pathParams().getOrDefault(pp.value(), List.of());
+            if (raws.isEmpty()) return coerce(f, emptyOrDef(def));
+            List<String> vals = encoded ? raws : raws.stream().map(FieldInjector::decodePath).toList();
+            return coerce(f, vals);
         }
         QueryParam qp = f.getAnnotation(QueryParam.class);
         if (qp != null) {

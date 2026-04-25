@@ -32,16 +32,24 @@ public final class UriTemplate {
 
     private final String template;
     private final Pattern pattern;
+    /** Noms logiques des paramètres (dans l'ordre, avec doublons). */
     private final List<String> paramNames;
+    /** Noms de groupes capturants dans le regex (uniques, parallèles à paramNames). */
+    private final List<String> groupNames;
+    /** Noms logiques dédupliqués (ordre de première apparition). */
+    private final List<String> uniqParamNames;
     private final int literalChars;
     private final int totalCaptures;
     private final int defaultCaptures;
 
     private UriTemplate(String template, Pattern pattern, List<String> paramNames,
+                        List<String> groupNames, List<String> uniqParamNames,
                         int literalChars, int totalCaptures, int defaultCaptures) {
         this.template = template;
         this.pattern = pattern;
         this.paramNames = paramNames;
+        this.groupNames = groupNames;
+        this.uniqParamNames = uniqParamNames;
         this.literalChars = literalChars;
         this.totalCaptures = totalCaptures;
         this.defaultCaptures = defaultCaptures;
@@ -50,11 +58,10 @@ public final class UriTemplate {
     public static UriTemplate compile(String template) {
         String t = normalize(template);
         StringBuilder regex = new StringBuilder("^");
-        List<String> names = new ArrayList<>();
-        // §3.7 : même paramètre peut apparaître plusieurs fois dans le path
-        // template (ex. /resource/{id}/sub/{id}). Les occurrences répétées
-        // partagent le nom logique mais doivent avoir des noms de groupe
-        // capturant distincts pour regex (javaregex interdit doubles).
+        List<String> names = new ArrayList<>();   // logiques, avec doublons
+        List<String> groups = new ArrayList<>();  // noms de groupe regex, uniques
+        // §3.7 : même paramètre peut apparaître plusieurs fois (ex. /{id}/{id}/{id}).
+        // Chaque occurrence capture indépendamment pour alimenter List<String> @PathParam.
         java.util.Map<String, Integer> seen = new java.util.HashMap<>();
         int literals = 0;
         int total = 0;
@@ -79,16 +86,13 @@ public final class UriTemplate {
                     paramRegex = inside.substring(colon + 1).trim();
                 }
                 if (name.isEmpty()) throw new IllegalArgumentException("Empty param name in template: " + template);
-                int occurrence = seen.merge(name, 1, Integer::sum);
+                seen.merge(name, 1, Integer::sum);
                 names.add(name);
+                // Nom de groupe positionnel p0, p1, p2… — valide en Java regex (alphanum seul)
+                String groupName = "p" + total;
+                groups.add(groupName);
                 total++;
-                if (occurrence == 1) {
-                    regex.append("(?<").append(name).append(">").append(paramRegex).append(")");
-                } else {
-                    // Back-reference : la n-ième occurrence doit matcher la
-                    // valeur de la 1ère (cohérence du path param).
-                    regex.append("\\k<").append(name).append(">");
-                }
+                regex.append("(?<").append(groupName).append(">").append(paramRegex).append(")");
                 i = end + 1;
             } else {
                 regex.append(Pattern.quote(String.valueOf(c)));
@@ -97,23 +101,29 @@ public final class UriTemplate {
             }
         }
         regex.append("$");
-        // Dédup paramNames pour que match() ne tente pas getGroup(sameName) deux fois.
         List<String> uniq = new ArrayList<>(new java.util.LinkedHashSet<>(names));
-        return new UriTemplate(t, Pattern.compile(regex.toString()), List.copyOf(uniq),
+        return new UriTemplate(t, Pattern.compile(regex.toString()),
+                List.copyOf(names), List.copyOf(groups), List.copyOf(uniq),
                 literals, total, defaults);
     }
 
-    public Optional<Map<String, String>> match(String path) {
+    /** Retourne les path params multi-valués (plusieurs occurrences du même nom → List). */
+    public Optional<Map<String, List<String>>> match(String path) {
         Matcher m = pattern.matcher(path);
         if (!m.matches()) return Optional.empty();
         if (paramNames.isEmpty()) return Optional.of(Map.of());
-        Map<String, String> params = new LinkedHashMap<>();
-        for (String n : paramNames) params.put(n, m.group(n));
+        Map<String, List<String>> params = new LinkedHashMap<>();
+        for (int i = 0; i < paramNames.size(); i++) {
+            String logicalName = paramNames.get(i);
+            String groupName = groupNames.get(i);
+            String val = m.group(groupName);
+            params.computeIfAbsent(logicalName, k -> new ArrayList<>()).add(val);
+        }
         return Optional.of(params);
     }
 
     public String template() { return template; }
-    public List<String> paramNames() { return paramNames; }
+    public List<String> paramNames() { return uniqParamNames; }
     public int literalChars() { return literalChars; }
     public int totalCaptures() { return totalCaptures; }
     public int defaultCaptures() { return defaultCaptures; }

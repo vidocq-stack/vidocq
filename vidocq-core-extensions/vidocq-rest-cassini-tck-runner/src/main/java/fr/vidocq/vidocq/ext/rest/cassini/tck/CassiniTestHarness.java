@@ -157,24 +157,23 @@ public final class CassiniTestHarness implements AutoCloseable {
 
         public Builder port(int port) { this.fixedPort = port; return this; }
 
-        public CassiniTestHarness start() {
+        /** Construit le bridge + handler sans démarrer de serveur.
+         *  Utilisé par {@link fr.vidocq.vidocq.ext.rest.cassini.tck.arquillian.VidocqCassiniDeployableContainer}
+         *  pour le serveur partagé multi-contextes. */
+        public record BuiltHandler(Handler bridgeHandler, String prefix) {}
+
+        public BuiltHandler buildHandler() {
             java.util.Set<Class<?>> allClasses = new java.util.LinkedHashSet<>(beans.keySet());
             allClasses.addAll(perRequestClasses);
             List<ResourceMethod> routes = ResourceScanner.discover(allClasses.toArray(Class<?>[]::new));
             UriRouter router = new UriRouter(routes);
-            // Résolveur : instances fixes OU instanciation par-requête avec
-            // injection constructeur (@Context/@*Param) §3.1.1.
             java.util.function.Function<Class<?>, Object> resolver = cls -> {
                 Object fixed = beans.get(cls);
                 if (fixed != null) return fixed;
                 var ctor = pickConstructor(cls);
-                if (ctor == null) {
-                    throw new RuntimeException("No suitable constructor on " + cls);
-                }
+                if (ctor == null) throw new RuntimeException("No suitable constructor on " + cls);
                 try {
-                    if (ctor.getParameterCount() == 0) {
-                        return ctor.newInstance();
-                    }
+                    if (ctor.getParameterCount() == 0) return ctor.newInstance();
                     var match = Invoker.CURRENT_MATCH.get();
                     var req = Invoker.CURRENT_REQUEST.get();
                     Object[] args = fr.vidocq.vidocq.ext.rest.cassini.internal.ParamExtractor
@@ -194,8 +193,13 @@ public final class CassiniTestHarness implements AutoCloseable {
                 try { return bridge.handle(request); }
                 finally { fr.vidocq.vidocq.ext.rest.cassini.internal.ParamExtractor.clearApplication(); }
             };
-            Handler rootHandler = prefix.isEmpty() ? wrappedBridge
-                    : new ContextStrippingHandler(prefix, wrappedBridge);
+            return new BuiltHandler(wrappedBridge, prefix);
+        }
+
+        public CassiniTestHarness start() {
+            BuiltHandler bh = buildHandler();
+            Handler rootHandler = bh.prefix().isEmpty() ? bh.bridgeHandler()
+                    : new ContextStrippingHandler(bh.prefix(), bh.bridgeHandler());
 
             RuntimeException last = null;
             // Retry plus agressif sur port fixe (port 8080 peut rester en

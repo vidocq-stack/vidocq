@@ -1,5 +1,11 @@
 package fr.vidocq.vidocq.ext.rest.cassini.tck.arquillian;
 
+import fr.vidocq.chappe.api.Handler;
+import fr.vidocq.chappe.api.Request;
+import fr.vidocq.chappe.api.Response;
+import fr.vidocq.chappe.api.Server;
+import fr.vidocq.chappe.api.StatusCode;
+import fr.vidocq.chappe.api.Body;
 import fr.vidocq.vidocq.ext.rest.cassini.tck.CassiniTestHarness;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.core.Application;
@@ -18,6 +24,7 @@ import org.jboss.shrinkwrap.descriptor.api.Descriptor;
 
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Adaptateur Arquillian qui déploie un {@link WebArchive} de test TCK REST
@@ -34,7 +41,17 @@ import java.util.List;
 public class VidocqCassiniDeployableContainer implements DeployableContainer<VidocqContainerConfiguration> {
 
     private VidocqContainerConfiguration config;
-    private final LinkedHashMap<String, CassiniTestHarness> harnesses = new LinkedHashMap<>();
+
+    /** prefix → bridge handler (sans ContextStrippingHandler — géré par le dispatcher). */
+    private final LinkedHashMap<String, Handler> contextHandlers = new LinkedHashMap<>();
+    /** archive name → prefix (pour undeploy). */
+    private final LinkedHashMap<String, String> archivePrefixes = new LinkedHashMap<>();
+    /** archive name → baseUrl (pour ProtocolMetaData). */
+    private final LinkedHashMap<String, String> archiveBaseUrls = new LinkedHashMap<>();
+
+    /** Serveur partagé unique sur le port 8080. */
+    private Server sharedServer;
+    private int sharedPort;
 
     @Override public Class<VidocqContainerConfiguration> getConfigurationClass() {
         return VidocqContainerConfiguration.class;
@@ -49,10 +66,72 @@ public class VidocqCassiniDeployableContainer implements DeployableContainer<Vid
     @Override public void start() throws LifecycleException {}
 
     @Override public void stop() throws LifecycleException {
-        for (var h : harnesses.values()) {
-            try { h.close(); } catch (RuntimeException ignored) {}
+        stopSharedServer();
+        contextHandlers.clear();
+        archivePrefixes.clear();
+        archiveBaseUrls.clear();
+    }
+
+    private void stopSharedServer() {
+        if (sharedServer != null) {
+            try { sharedServer.stop(); } catch (RuntimeException ignored) {}
+            sharedServer = null;
         }
-        harnesses.clear();
+    }
+
+    /** Redémarre le serveur partagé avec tous les contextes actuellement enregistrés. */
+    private void restartSharedServer(int port) {
+        stopSharedServer();
+        if (contextHandlers.isEmpty()) return;
+        // Snapshot immutable pour le handler
+        var snapshot = new LinkedHashMap<>(contextHandlers);
+        Handler dispatcher = request -> {
+            String path = request.path() == null ? "/" : request.path();
+            // Longest-prefix match
+            String bestPrefix = null;
+            Handler best = null;
+            for (var e : snapshot.entrySet()) {
+                String pfx = e.getKey();
+                if (path.startsWith(pfx) && (bestPrefix == null || pfx.length() > bestPrefix.length())) {
+                    bestPrefix = pfx;
+                    best = e.getValue();
+                }
+            }
+            if (best == null) {
+                return Response.builder().status(StatusCode.NOT_FOUND).body(Body.empty()).build();
+            }
+            final String stripped = path.substring(bestPrefix.length());
+            final String newPath = stripped.isEmpty() ? "/" : stripped;
+            final String finalPrefix = bestPrefix;
+            Request remapped = new Request() {
+                @Override public fr.vidocq.chappe.api.HttpMethod method() { return request.method(); }
+                @Override public java.net.URI uri() { return request.uri(); }
+                @Override public String path() { return newPath; }
+                @Override public String query() { return request.query(); }
+                @Override public fr.vidocq.chappe.api.HttpVersion version() { return request.version(); }
+                @Override public fr.vidocq.chappe.api.Headers headers() { return request.headers(); }
+                @Override public fr.vidocq.chappe.api.Body body() { return request.body(); }
+                @Override public java.util.Map<String, String> pathParams() { return request.pathParams(); }
+                @Override public java.util.Map<String, String> queryParams() { return request.queryParams(); }
+                @Override public String contextPath() { return finalPrefix; }
+                @Override public String pathInfo() { return newPath; }
+                @Override public boolean isSecure() { return request.isSecure(); }
+            };
+            return best.handle(remapped);
+        };
+        RuntimeException last = null;
+        for (int attempt = 0; attempt < 10; attempt++) {
+            try {
+                sharedServer = Server.builder().host("127.0.0.1").port(port).handler(dispatcher).build();
+                sharedServer.start();
+                sharedPort = port;
+                return;
+            } catch (RuntimeException e) {
+                last = e;
+                try { Thread.sleep(100); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
+            }
+        }
+        throw last;
     }
 
     @Override public ProtocolMetaData deploy(Archive<?> archive) throws DeploymentException {
@@ -64,12 +143,12 @@ public class VidocqCassiniDeployableContainer implements DeployableContainer<Vid
         String archiveName = war.getName();
         String ctxName = archiveName == null ? "" : archiveName;
         if (ctxName.endsWith(".war")) ctxName = ctxName.substring(0, ctxName.length() - 4);
-        if (!ctxName.isEmpty()) builder.contextPath("/" + ctxName);
-        // Fixe le port à celui attendu par le client TCK (webServerPort, défaut 8080).
-        // Le TCK lit cette propriété au static init — impossible d'inverser la
-        // dépendance. Un seul harness actif à la fois → pas de collision.
+        String prefix = ctxName.isEmpty() ? "" : "/" + ctxName;
+        if (!prefix.isEmpty()) builder.contextPath(prefix);
+
         String portProp = System.getProperty("webServerPort", "8080");
-        try { builder.port(Integer.parseInt(portProp)); } catch (NumberFormatException ignored) {}
+        int port = 8080;
+        try { port = Integer.parseInt(portProp); } catch (NumberFormatException ignored) {}
 
         var cl = Thread.currentThread().getContextClassLoader();
         List<String> registered = new java.util.ArrayList<>();
@@ -87,8 +166,7 @@ public class VidocqCassiniDeployableContainer implements DeployableContainer<Vid
             catch (Throwable t) { /* ignored */ }
         }
 
-        // Étape 2 : si une sous-classe d'Application est présente, l'instancier
-        // et respecter getClasses()/getSingletons() (§2.3.2). Sinon, scan libre.
+        // Étape 2 : Application sub-class → getClasses()/getSingletons().
         Application appInstance = null;
         for (Class<?> c : classes) {
             if (Application.class.isAssignableFrom(c) && !Application.class.equals(c)) {
@@ -108,30 +186,43 @@ public class VidocqCassiniDeployableContainer implements DeployableContainer<Vid
         } else {
             for (Class<?> c : classes) registerDiscovered(c, builder, registered, providers);
         }
-        // Expose l'instance Application pour injection @Context Application (§9.4).
         if (appInstance != null) builder.application(appInstance);
 
-        CassiniTestHarness harness = builder.start();
-        harnesses.put(archive.getName(), harness);
+        // Construire le bridge sans démarrer de serveur, puis enregistrer dans
+        // le dispatcher partagé. Le serveur partagé est (re)démarré pour prendre
+        // en compte tous les contextes connus.
+        CassiniTestHarness.Builder.BuiltHandler bh = builder.buildHandler();
+        String actualPrefix = bh.prefix();
+        contextHandlers.put(actualPrefix, bh.bridgeHandler());
+        archivePrefixes.put(archive.getName(), actualPrefix);
+
+        String baseUrl = "http://" + config.getHost() + ":" + port + actualPrefix;
+        archiveBaseUrls.put(archive.getName(), baseUrl);
+
+        restartSharedServer(port);
 
         System.err.println("[VidocqCassiniTCK] deploy archive=" + war.getName()
-                + " host=" + config.getHost() + " port=" + harness.port()
+                + " host=" + config.getHost() + " port=" + port
                 + " resources=" + registered + " providers=" + providers
-                + " baseUrl=" + harness.baseUrl());
+                + " baseUrl=" + baseUrl);
 
         ProtocolMetaData pmd = new ProtocolMetaData();
-        HTTPContext ctx = new HTTPContext(config.getHost(), harness.port());
-        String contextRoot = harness.baseUrl().substring(
-                ("http://" + config.getHost() + ":" + harness.port()).length());
-        if (contextRoot.isEmpty()) contextRoot = "/";
+        HTTPContext ctx = new HTTPContext(config.getHost(), port);
+        String contextRoot = actualPrefix.isEmpty() ? "/" : actualPrefix;
         ctx.add(new Servlet(registered.isEmpty() ? "_cassini" : registered.get(0), contextRoot));
         pmd.addContext(ctx);
         return pmd;
     }
 
     @Override public void undeploy(Archive<?> archive) {
-        CassiniTestHarness h = harnesses.remove(archive.getName());
-        if (h != null) h.close();
+        String prefix = archivePrefixes.remove(archive.getName());
+        if (prefix != null) contextHandlers.remove(prefix);
+        archiveBaseUrls.remove(archive.getName());
+        if (contextHandlers.isEmpty()) {
+            stopSharedServer();
+        } else {
+            restartSharedServer(sharedPort);
+        }
     }
 
     @Override public void deploy(Descriptor descriptor) {}

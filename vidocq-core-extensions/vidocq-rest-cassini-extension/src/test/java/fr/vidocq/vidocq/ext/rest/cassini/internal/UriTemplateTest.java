@@ -2,6 +2,7 @@ package fr.vidocq.vidocq.ext.rest.cassini.internal;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -23,9 +24,9 @@ class UriTemplateTest {
     @Test
     void defaultParamCaptures() {
         UriTemplate t = UriTemplate.compile("/users/{id}");
-        Optional<Map<String, String>> m = t.match("/users/42");
+        Optional<Map<String, List<String>>> m = t.match("/users/42");
         assertTrue(m.isPresent());
-        assertEquals("42", m.get().get("id"));
+        assertEquals(List.of("42"), m.get().get("id"));
         assertTrue(t.match("/users/42/posts").isEmpty());
         assertEquals(1, t.totalCaptures());
         assertEquals(1, t.defaultCaptures());
@@ -43,18 +44,18 @@ class UriTemplateTest {
     @Test
     void greedyRegexSpansSegments() {
         UriTemplate t = UriTemplate.compile("/files/{path:.*}");
-        Optional<Map<String, String>> m = t.match("/files/a/b/c.txt");
+        Optional<Map<String, List<String>>> m = t.match("/files/a/b/c.txt");
         assertTrue(m.isPresent());
-        assertEquals("a/b/c.txt", m.get().get("path"));
+        assertEquals(List.of("a/b/c.txt"), m.get().get("path"));
     }
 
     @Test
     void multiParamTemplate() {
         UriTemplate t = UriTemplate.compile("/users/{uid}/posts/{pid}");
-        Optional<Map<String, String>> m = t.match("/users/42/posts/7");
+        Optional<Map<String, List<String>>> m = t.match("/users/42/posts/7");
         assertTrue(m.isPresent());
-        assertEquals("42", m.get().get("uid"));
-        assertEquals("7", m.get().get("pid"));
+        assertEquals(List.of("42"), m.get().get("uid"));
+        assertEquals(List.of("7"), m.get().get("pid"));
     }
 
     @Test

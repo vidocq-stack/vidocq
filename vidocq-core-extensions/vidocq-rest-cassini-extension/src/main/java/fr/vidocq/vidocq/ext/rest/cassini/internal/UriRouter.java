@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+
 /**
  * Routeur Cassini : sélection best-match JAX-RS 4.0 §3.7.2.
  *
@@ -50,7 +51,7 @@ public final class UriRouter {
         String p = stripMatrixParams(normalize(path));
         List<MatchResult> out = new ArrayList<>();
         for (ResourceMethod r : routes) {
-            Optional<Map<String, String>> params = r.template().match(p);
+            Optional<java.util.Map<String, java.util.List<String>>> params = r.template().match(p);
             if (params.isPresent() && r.httpMethod().equalsIgnoreCase(httpMethod)) {
                 out.add(new MatchResult(r, params.get()));
             }
@@ -58,7 +59,7 @@ public final class UriRouter {
         // §3.3.5 : HEAD → GET fallback (body discard côté Bridge)
         if (out.isEmpty() && "HEAD".equalsIgnoreCase(httpMethod)) {
             for (ResourceMethod r : routes) {
-                Optional<Map<String, String>> params = r.template().match(p);
+                Optional<java.util.Map<String, java.util.List<String>>> params = r.template().match(p);
                 if (params.isPresent() && "GET".equalsIgnoreCase(r.httpMethod())) {
                     out.add(new MatchResult(r, params.get()));
                 }

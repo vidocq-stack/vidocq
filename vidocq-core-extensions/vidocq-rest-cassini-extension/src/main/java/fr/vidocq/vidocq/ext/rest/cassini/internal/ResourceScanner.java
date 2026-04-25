@@ -110,7 +110,7 @@ public final class ResourceScanner {
                     Set<String> inhProd = locatorProduces.isEmpty() ? classProduces : locatorProduces;
                     Set<String> inhCons = locatorConsumes.isEmpty() ? classConsumes : locatorConsumes;
                     m.setAccessible(true);
-                    scanLocatorType(returnCls, locatorPath, inhProd, inhCons, m, classLits, out);
+                    scanLocatorType(returnCls, locatorPath, inhProd, inhCons, m, classLits, new java.util.HashSet<>(), out);
                     continue;
                 }
                 String full = (sub == null) ? basePath : combine(basePath, normalize(sub.value()));
@@ -217,17 +217,33 @@ public final class ResourceScanner {
 
     private static void scanLocatorType(Class<?> cls, String basePath,
                                         Set<String> inheritedProduces, Set<String> inheritedConsumes,
-                                        Method locator, int rootClassLiterals, List<ResourceMethod> out) {
-        if (cls == Object.class || cls == null) return;
+                                        Method locator, int rootClassLiterals,
+                                        java.util.Set<Class<?>> visited, List<ResourceMethod> out) {
+        if (cls == null || cls == Object.class) return;
+        if (!visited.add(cls)) return; // cycle détecté
         Set<String> clsProduces = produces(cls.getAnnotation(Produces.class));
         if (clsProduces.isEmpty()) clsProduces = inheritedProduces;
         Set<String> clsConsumes = consumes(cls.getAnnotation(Consumes.class));
         if (clsConsumes.isEmpty()) clsConsumes = inheritedConsumes;
         Class<?> rootBean = locator.getDeclaringClass();
-        for (Method m : cls.getDeclaredMethods()) {
+        for (Method m : collectInheritedMethods(cls)) {
+            if (!java.lang.reflect.Modifier.isPublic(m.getModifiers())) continue;
             String verb = resolveHttpMethod(m);
-            if (verb == null) continue;
             Path sub = m.getAnnotation(Path.class);
+            if (verb == null) {
+                // Sous-locator de niveau N+1 : §3.4.1 récursion
+                if (sub == null) continue;
+                Class<?> nestedReturn = m.getReturnType();
+                if (nestedReturn == void.class || nestedReturn == null) continue;
+                String nestedPath = combine(basePath, normalize(sub.value()));
+                Set<String> np = produces(m.getAnnotation(Produces.class));
+                Set<String> nc = consumes(m.getAnnotation(Consumes.class));
+                Set<String> inhP = np.isEmpty() ? clsProduces : np;
+                Set<String> inhC = nc.isEmpty() ? clsConsumes : nc;
+                m.setAccessible(true);
+                scanLocatorType(nestedReturn, nestedPath, inhP, inhC, locator, rootClassLiterals, new java.util.HashSet<>(visited), out);
+                continue;
+            }
             String full = (sub == null) ? basePath : combine(basePath, normalize(sub.value()));
             Set<String> mp = produces(m.getAnnotation(Produces.class));
             Set<String> mc = consumes(m.getAnnotation(Consumes.class));

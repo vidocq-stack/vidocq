@@ -82,6 +82,20 @@ public final class ExceptionMapperRegistry {
         }
     }
 
+    /** §10.2 : retourne le mapper le plus spécifique pour {@code type} sans l'exécuter. */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public <T extends Throwable> ExceptionMapper<T> findMapper(Class<T> type) {
+        Registration<?> best = null;
+        for (Registration<?> r : mappers) {
+            if (r.exceptionType().isAssignableFrom(type)) {
+                if (best == null || best.exceptionType().isAssignableFrom(r.exceptionType())) {
+                    best = r;
+                }
+            }
+        }
+        return best == null ? null : (ExceptionMapper<T>) best.mapper();
+    }
+
     public int size() { return mappers.size(); }
 
     @SuppressWarnings("unchecked")
