@@ -1,6 +1,9 @@
 package fr.vidocq.vidocq.ext.rest.cassini.internal;
 
 import jakarta.ws.rs.WebApplicationException;
+import jakarta.ws.rs.core.MultivaluedHashMap;
+import jakarta.ws.rs.core.MultivaluedMap;
+import jakarta.ws.rs.core.PathSegment;
 import jakarta.ws.rs.core.Response;
 
 import java.lang.reflect.Constructor;
@@ -56,6 +59,7 @@ public final class ParamValueConverter {
     public static Object coerceSingle(Class<?> type, String raw) {
         if (raw == null) return defaultForType(type);
         if (type == String.class || type == CharSequence.class) return raw;
+        if (PathSegment.class.isAssignableFrom(type)) return parsePathSegment(raw);
 
         if (type == boolean.class || type == Boolean.class) return Boolean.parseBoolean(raw);
         if (type == byte.class    || type == Byte.class)    return Byte.parseByte(raw);
@@ -117,6 +121,25 @@ public final class ParamValueConverter {
         if (type == float.class)   return Float.valueOf(0f);
         if (type == double.class)  return Double.valueOf(0d);
         return 0;
+    }
+
+    /** §3.2 : PathSegment depuis un segment brut "path;k1=v1;k2=v2". */
+    public static PathSegment parsePathSegment(String raw) {
+        if (raw == null) raw = "";
+        String[] parts = raw.split(";", -1);
+        String path = parts[0];
+        MultivaluedMap<String, String> matrix = new MultivaluedHashMap<>();
+        for (int i = 1; i < parts.length; i++) {
+            int eq = parts[i].indexOf('=');
+            if (eq < 0) matrix.add(parts[i], "");
+            else matrix.add(parts[i].substring(0, eq), parts[i].substring(eq + 1));
+        }
+        final String p = path;
+        final MultivaluedMap<String, String> m = matrix;
+        return new PathSegment() {
+            @Override public String getPath() { return p; }
+            @Override public MultivaluedMap<String, String> getMatrixParameters() { return m; }
+        };
     }
 
     private static WebApplicationException badRequest(String msg) {

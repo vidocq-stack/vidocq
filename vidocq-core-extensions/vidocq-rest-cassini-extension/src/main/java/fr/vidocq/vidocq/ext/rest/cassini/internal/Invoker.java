@@ -255,22 +255,24 @@ public final class Invoker {
         try {
             if (route.isLocated()) {
                 // Sub-resource locator §3.4.1 : instantier la ressource racine,
-                // injecter ses fields, appeler le locator pour obtenir l'instance
-                // sous-ressource, puis injecter ses fields.
+                // parcourir la chaîne de locators, injecter fields à chaque étape.
                 Object root = resolver.apply(route.rootBeanClass());
                 FieldInjector.inject(root, match, request);
-                // Locator peut prendre @PathParam/@QueryParam etc. comme arguments.
-                java.lang.reflect.Parameter[] lps = route.locator().getParameters();
-                Object[] lArgs = lps.length == 0 ? new Object[0]
-                        : ParamExtractor.resolveConstructorArgs(lps, match, request);
-                route.locator().setAccessible(true);
-                target = route.locator().invoke(root, lArgs);
-                if (target == null) {
-                    return renderWebAppException(
-                            new WebApplicationException("Sub-resource locator returned null", 404),
-                            route, chosen, rctx);
+                Object intermediate = root;
+                for (java.lang.reflect.Method locStep : route.locatorChain()) {
+                    java.lang.reflect.Parameter[] lps = locStep.getParameters();
+                    Object[] lArgs = lps.length == 0 ? new Object[0]
+                            : ParamExtractor.resolveConstructorArgs(lps, match, request);
+                    locStep.setAccessible(true);
+                    intermediate = locStep.invoke(intermediate, lArgs);
+                    if (intermediate == null) {
+                        return renderWebAppException(
+                                new WebApplicationException("Sub-resource locator returned null", 404),
+                                route, chosen, rctx);
+                    }
+                    FieldInjector.inject(intermediate, match, request);
                 }
-                FieldInjector.inject(target, match, request);
+                target = intermediate;
             } else {
                 target = resolver.apply(route.beanClass());
                 FieldInjector.inject(target, match, request);
@@ -550,20 +552,67 @@ public final class Invoker {
             var cons = MediaTypes.fromSet(c.method().consumes());
             if (hasRequestBody(request) && !cons.isEmpty() && !MediaTypes.consumesMatches(ct, cons)) continue;
             var prod = MediaTypes.fromSet(c.method().produces());
-            double score = 0;
+            // §3.7.2 : @Consumes spécificité domine @Produces (scalé ×10).
+            // text/plain > text/* > */* > absence de @Consumes (si ct présent).
+            double consScore = consumesSpecificity(ct, cons);
+            double prodScore = 0;
             if (!prod.isEmpty()) {
                 var pick = MediaTypes.pickProduced(accepts, prod);
                 if (pick.isEmpty()) continue;
-                MediaType p = pick.get();
-                // §3.7.2 : spécificité + qs. qs pondère entre méthodes matchant
-                // la même Accept mais avec des @Produces différents.
-                double spec = (!p.isWildcardType() ? 2 : 0) + (!p.isWildcardSubtype() ? 1 : 0);
+                // §3.7.2 : qs (source quality) prime sur la spécificité @Produces
+                // (text/* qs=1.0 > text/xml qs=0.7) ; spec et acceptQ servent de
+                // tiebreaker pour égalités qs.
+                double spec = producesAnnotationSpecificity(accepts, prod);
                 double qs = sourceQuality(prod);
-                score = spec + qs;
+                // q-value de l'Accept matché : textb;q=0.5 > texta;q=0.4.
+                double acceptQ = bestAcceptQuality(accepts, prod);
+                prodScore = qs * 10 + spec + acceptQ;
             }
+            // classPathLiterals domine : une route dont la classe @Path est
+            // plus spécifique prime toujours sur @Consumes/@Produces (§3.7.2).
+            double score = c.method().classPathLiterals() * 100.0 + consScore * 10 + prodScore;
             if (score > bestScore) { best = c; bestScore = score; }
         }
         return best != null ? best : candidates.get(0);
+    }
+
+    /** Spécificité du @Produces le mieux classé qui matche un Accept, calculée
+     *  sur l'annotation (pas sur le type résolu après wildcard expansion). */
+    private static double producesAnnotationSpecificity(List<MediaType> accepts, List<MediaType> produces) {
+        double best = 0;
+        for (MediaType a : accepts) {
+            for (MediaType p : produces) {
+                if (!MediaTypes.matches(a, p)) continue;
+                double spec = (!p.isWildcardType() ? 2 : 0) + (!p.isWildcardSubtype() ? 1 : 0);
+                if (spec > best) best = spec;
+            }
+        }
+        return best;
+    }
+
+    /** q-value du meilleur Accept qui matche un @Produces. */
+    private static double bestAcceptQuality(List<MediaType> accepts, List<MediaType> produces) {
+        double best = 0;
+        for (MediaType a : accepts) {
+            for (MediaType p : produces) {
+                if (!MediaTypes.matches(a, p)) continue;
+                double q = MediaTypes.quality(a);
+                if (q > best) best = q;
+            }
+        }
+        return best;
+    }
+
+    /** Retourne la spécificité du @Consumes le plus précis qui matche ct. */
+    private static double consumesSpecificity(MediaType ct, java.util.List<MediaType> consumes) {
+        if (ct == null || consumes.isEmpty()) return 0;
+        double best = 0;
+        for (MediaType c : consumes) {
+            if (!MediaTypes.consumesMatches(ct, java.util.List.of(c))) continue;
+            double spec = (!c.isWildcardType() ? 2 : 0) + (!c.isWildcardSubtype() ? 1 : 0);
+            if (spec > best) best = spec;
+        }
+        return best;
     }
 
     /** §3.7.2 / §4.4 : rend une réponse pour une exception hors-scope de la

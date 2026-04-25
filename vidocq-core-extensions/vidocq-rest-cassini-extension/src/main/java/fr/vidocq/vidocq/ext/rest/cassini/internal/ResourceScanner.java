@@ -110,7 +110,9 @@ public final class ResourceScanner {
                     Set<String> inhProd = locatorProduces.isEmpty() ? classProduces : locatorProduces;
                     Set<String> inhCons = locatorConsumes.isEmpty() ? classConsumes : locatorConsumes;
                     m.setAccessible(true);
-                    scanLocatorType(returnCls, locatorPath, inhProd, inhCons, m, classLits, new java.util.HashSet<>(), out);
+                    scanLocatorType(returnCls, locatorPath, inhProd, inhCons,
+                            cls, new java.util.ArrayList<>(java.util.List.of(m)),
+                            classLits, new java.util.HashSet<>(), out);
                     continue;
                 }
                 String full = (sub == null) ? basePath : combine(basePath, normalize(sub.value()));
@@ -217,7 +219,8 @@ public final class ResourceScanner {
 
     private static void scanLocatorType(Class<?> cls, String basePath,
                                         Set<String> inheritedProduces, Set<String> inheritedConsumes,
-                                        Method locator, int rootClassLiterals,
+                                        Class<?> rootBeanClass, java.util.List<Method> locatorChain,
+                                        int rootClassLiterals,
                                         java.util.Set<Class<?>> visited, List<ResourceMethod> out) {
         if (cls == null || cls == Object.class) return;
         if (!visited.add(cls)) return; // cycle détecté
@@ -225,7 +228,6 @@ public final class ResourceScanner {
         if (clsProduces.isEmpty()) clsProduces = inheritedProduces;
         Set<String> clsConsumes = consumes(cls.getAnnotation(Consumes.class));
         if (clsConsumes.isEmpty()) clsConsumes = inheritedConsumes;
-        Class<?> rootBean = locator.getDeclaringClass();
         for (Method m : collectInheritedMethods(cls)) {
             if (!java.lang.reflect.Modifier.isPublic(m.getModifiers())) continue;
             String verb = resolveHttpMethod(m);
@@ -241,7 +243,11 @@ public final class ResourceScanner {
                 Set<String> inhP = np.isEmpty() ? clsProduces : np;
                 Set<String> inhC = nc.isEmpty() ? clsConsumes : nc;
                 m.setAccessible(true);
-                scanLocatorType(nestedReturn, nestedPath, inhP, inhC, locator, rootClassLiterals, new java.util.HashSet<>(visited), out);
+                java.util.List<Method> extended = new java.util.ArrayList<>(locatorChain);
+                extended.add(m);
+                scanLocatorType(nestedReturn, nestedPath, inhP, inhC,
+                        rootBeanClass, extended, rootClassLiterals,
+                        new java.util.HashSet<>(visited), out);
                 continue;
             }
             String full = (sub == null) ? basePath : combine(basePath, normalize(sub.value()));
@@ -251,7 +257,7 @@ public final class ResourceScanner {
             Set<String> effC = mc.isEmpty() ? clsConsumes : mc;
             m.setAccessible(true);
             out.add(new ResourceMethod(cls, m, verb, UriTemplate.compile(full), effP, effC,
-                    rootBean, locator, rootClassLiterals));
+                    rootBeanClass, java.util.List.copyOf(locatorChain), rootClassLiterals));
         }
     }
 

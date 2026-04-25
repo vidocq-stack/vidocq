@@ -25,11 +25,14 @@ public final class UriRouter {
     // §3.7.2 : d'abord la spécificité du @Path racine (classe), puis celle
     // du template combiné. Une sous-ressource @Path("resource/subresource")
     // doit battre une méthode @Path("subresource") sur @Path("resource").
+    // En cas d'égalité, les routes directes (non-locatées) passent avant les
+    // routes issues d'un sub-resource locator (§3.7.2 Step 2c > Step 2d).
     private static final Comparator<ResourceMethod> BY_SPECIFICITY =
             Comparator.comparingInt((ResourceMethod r) -> r.classPathLiterals()).reversed()
                     .thenComparing(Comparator.comparingInt((ResourceMethod r) -> r.template().literalChars()).reversed())
                     .thenComparing(Comparator.comparingInt((ResourceMethod r) -> r.template().totalCaptures()).reversed())
-                    .thenComparing(Comparator.comparingInt(r -> r.template().defaultCaptures()));
+                    .thenComparing(Comparator.comparingInt(r -> r.template().defaultCaptures()))
+                    .thenComparing(r -> r.isLocated() ? 1 : 0); // routes directes avant locatées
 
     private final List<ResourceMethod> routes;
 
@@ -48,12 +51,15 @@ public final class UriRouter {
      *  L'Invoker utilise cette liste pour filtrer par @Consumes (Content-Type
      *  requête) et @Produces (Accept header) §3.7.2. */
     public List<MatchResult> matchAll(String httpMethod, String path) {
-        String p = stripMatrixParams(normalize(path));
+        String normalized = normalize(path);
+        String p = stripMatrixParams(normalized); // chemin sans matrix params pour le matching
         List<MatchResult> out = new ArrayList<>();
         for (ResourceMethod r : routes) {
             Optional<java.util.Map<String, java.util.List<String>>> params = r.template().match(p);
             if (params.isPresent() && r.httpMethod().equalsIgnoreCase(httpMethod)) {
-                out.add(new MatchResult(r, params.get()));
+                // rawParams : valeurs avec matrix params, pour PathSegment injection §3.2.
+                Optional<java.util.Map<String, java.util.List<String>>> rawParams = r.template().match(normalized);
+                out.add(new MatchResult(r, params.get(), rawParams.orElse(params.get())));
             }
         }
         // §3.3.5 : HEAD → GET fallback (body discard côté Bridge)
@@ -61,7 +67,8 @@ public final class UriRouter {
             for (ResourceMethod r : routes) {
                 Optional<java.util.Map<String, java.util.List<String>>> params = r.template().match(p);
                 if (params.isPresent() && "GET".equalsIgnoreCase(r.httpMethod())) {
-                    out.add(new MatchResult(r, params.get()));
+                    Optional<java.util.Map<String, java.util.List<String>>> rawParams = r.template().match(normalized);
+                    out.add(new MatchResult(r, params.get(), rawParams.orElse(params.get())));
                 }
             }
         }

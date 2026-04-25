@@ -83,7 +83,10 @@ public final class ParamExtractor {
 
         PathParam pathParam = p.getAnnotation(PathParam.class);
         if (pathParam != null) {
-            List<String> raws = match.pathParams().getOrDefault(pathParam.value(), List.of());
+            // PathSegment : on veut les segments avec matrix params (rawPathParams).
+            boolean needsRaw = jakarta.ws.rs.core.PathSegment.class.isAssignableFrom(p.getType());
+            List<String> raws = (needsRaw ? match.rawPathParams() : match.pathParams())
+                    .getOrDefault(pathParam.value(), List.of());
             if (raws.isEmpty()) return coerce(p, emptyOrDefault(def));
             List<String> vals = encoded ? raws : raws.stream().map(ParamExtractor::decodePath).toList();
             return coerce(p, vals);
@@ -150,7 +153,9 @@ public final class ParamExtractor {
                 continue;
             }
             if (pathParam != null) {
-                List<String> raws = match.pathParams().getOrDefault(pathParam.value(), List.of());
+                boolean needsRaw = jakarta.ws.rs.core.PathSegment.class.isAssignableFrom(p.getType());
+                List<String> raws = (needsRaw ? match.rawPathParams() : match.pathParams())
+                        .getOrDefault(pathParam.value(), List.of());
                 if (raws.isEmpty()) { args[i] = coerce(p, emptyOrDefault(def)); }
                 else {
                     List<String> vals = encoded ? raws : raws.stream().map(ParamExtractor::decodePath).toList();
