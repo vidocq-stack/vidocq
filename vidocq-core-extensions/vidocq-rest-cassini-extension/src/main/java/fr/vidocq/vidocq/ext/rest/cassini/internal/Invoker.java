@@ -128,6 +128,7 @@ public final class Invoker {
         ResourceMethod route = match.method();
         ParamExtractor.setProviders(new fr.vidocq.vidocq.ext.rest.cassini.internal.context.CassiniProviders(
                 registry, exceptionMappers, filters.contextResolvers()));
+        ParamExtractor.setParamConverterProviders(filters.paramConverterProviders());
         try {
             try {
                 java.net.URI u = request.uri();
@@ -148,6 +149,7 @@ public final class Invoker {
             return invokeInternal(match, request, route);
         } finally {
             ParamExtractor.clearProviders();
+            ParamExtractor.clearParamConverterProviders();
             FieldInjector.clearFormCache();
             CURRENT_MATCH.remove();
             CURRENT_REQUEST.remove();

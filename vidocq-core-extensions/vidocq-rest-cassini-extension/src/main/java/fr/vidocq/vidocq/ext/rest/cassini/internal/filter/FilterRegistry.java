@@ -6,6 +6,7 @@ import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.enterprise.util.AnnotationLiteral;
 import jakarta.ws.rs.container.ContainerRequestFilter;
 import jakarta.ws.rs.container.ContainerResponseFilter;
+import jakarta.ws.rs.ext.ParamConverterProvider;
 import jakarta.ws.rs.ext.Provider;
 import jakarta.ws.rs.ext.ContextResolver;
 import jakarta.ws.rs.ext.ReaderInterceptor;
@@ -33,6 +34,7 @@ public final class FilterRegistry {
     private final List<FilterEntry<ReaderInterceptor>> readerInterceptors = new ArrayList<>();
     private final List<FilterEntry<WriterInterceptor>> writerInterceptors = new ArrayList<>();
     private final List<ContextResolver<?>> contextResolvers = new ArrayList<>();
+    private final List<ParamConverterProvider> paramConverterProviders = new ArrayList<>();
 
     public void addRequest(ContainerRequestFilter filter) {
         requestFilters.add(FilterEntry.of(filter));
@@ -52,10 +54,14 @@ public final class FilterRegistry {
         if (instance instanceof ReaderInterceptor r) addReaderInterceptor(r);
         if (instance instanceof WriterInterceptor r) addWriterInterceptor(r);
         if (instance instanceof ContextResolver<?> r) addContextResolver(r);
+        if (instance instanceof ParamConverterProvider p) addParamConverterProvider(p);
     }
 
     public void addContextResolver(ContextResolver<?> r) { contextResolvers.add(r); }
     public List<ContextResolver<?>> contextResolvers() { return contextResolvers; }
+
+    public void addParamConverterProvider(ParamConverterProvider p) { paramConverterProviders.add(p); }
+    public List<ParamConverterProvider> paramConverterProviders() { return paramConverterProviders; }
 
     public void addReaderInterceptor(ReaderInterceptor i) {
         readerInterceptors.add(FilterEntry.of(i));

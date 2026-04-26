@@ -57,6 +57,13 @@ public final class ParamExtractor {
     public static void clearProviders() { CURRENT_PROVIDERS.remove(); }
     public static Providers currentProviders() { return CURRENT_PROVIDERS.get(); }
 
+    private static final ThreadLocal<java.util.List<jakarta.ws.rs.ext.ParamConverterProvider>> CURRENT_PCPS =
+            new ThreadLocal<>();
+    public static void setParamConverterProviders(java.util.List<jakarta.ws.rs.ext.ParamConverterProvider> ps) {
+        CURRENT_PCPS.set(ps);
+    }
+    public static void clearParamConverterProviders() { CURRENT_PCPS.remove(); }
+
     private ParamExtractor() {}
 
     /**
@@ -274,6 +281,10 @@ public final class ParamExtractor {
         boolean notFoundParam = p.getAnnotation(PathParam.class) != null
                 || p.getAnnotation(MatrixParam.class) != null
                 || p.getAnnotation(QueryParam.class) != null;
+        // §6.1.4 : laisser les ParamConverterProvider applicatifs agir sur le
+        // type avant le fallback ParamValueConverter (constructeurs, valueOf,…).
+        Object userConverted = tryUserParamConverter(raw, element, p, raws);
+        if (userConverted != USE_FALLBACK) return userConverted;
         try {
             return ParamValueConverter.coerce(raw, element, raws);
         } catch (WebApplicationException w) {
@@ -294,6 +305,62 @@ public final class ParamExtractor {
      *  nécessite une Response pour joindre la cause. */
     private static jakarta.ws.rs.core.Response javax404Response(int status) {
         return jakarta.ws.rs.core.Response.status(status).build();
+    }
+
+    /** Sentinelle : aucun ParamConverter applicatif ne gère ce type. */
+    private static final Object USE_FALLBACK = new Object();
+
+    /** §6.1.4 : interroge les ParamConverterProvider enregistrés et délègue la
+     *  conversion s'ils retournent un ParamConverter compatible.
+     *  Retourne {@link #USE_FALLBACK} si aucun converter applicable, sinon
+     *  l'objet converti (ou null si raws est vide et le converter accepte ""). */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static Object tryUserParamConverter(Class<?> raw, Class<?> element, Parameter p, List<String> raws) {
+        java.util.List<jakarta.ws.rs.ext.ParamConverterProvider> pcps = CURRENT_PCPS.get();
+        if (pcps == null || pcps.isEmpty()) return USE_FALLBACK;
+        // §6.1.4 : on offre d'abord le type "raw" (collection ou direct) puis
+        // l'element type (pour List<X> avec un converter pour X).
+        Class<?> targetType = raw;
+        java.lang.reflect.Type targetGeneric = p.getParameterizedType();
+        java.lang.annotation.Annotation[] anns = p.getAnnotations();
+        jakarta.ws.rs.ext.ParamConverter conv = null;
+        for (var pcp : pcps) {
+            try {
+                conv = pcp.getConverter(targetType, targetGeneric, anns);
+                if (conv != null) break;
+            } catch (RuntimeException ignored) {}
+        }
+        if (conv == null && element != raw) {
+            // collection-like : essayer sur l'élément
+            for (var pcp : pcps) {
+                try {
+                    conv = pcp.getConverter(element, element, anns);
+                    if (conv != null) break;
+                } catch (RuntimeException ignored) {}
+            }
+            if (conv != null) {
+                java.util.List<Object> out = new java.util.ArrayList<>();
+                for (String r : raws) {
+                    try { out.add(conv.fromString(r)); }
+                    catch (RuntimeException e) {
+                        throw new WebApplicationException("Invalid value for parameter "
+                                + p.getName() + ": " + e.getMessage(), e, javax404Response(400));
+                    }
+                }
+                if (raw == java.util.Set.class) return new java.util.LinkedHashSet<>(out);
+                if (raw == java.util.SortedSet.class) return new java.util.TreeSet<>((java.util.List) out);
+                return out;
+            }
+            return USE_FALLBACK;
+        }
+        if (conv == null) return USE_FALLBACK;
+        String value = raws.isEmpty() ? null : raws.get(0);
+        try {
+            return conv.fromString(value);
+        } catch (RuntimeException e) {
+            throw new WebApplicationException("Invalid value for parameter "
+                    + p.getName() + ": " + e.getMessage(), e, javax404Response(400));
+        }
     }
 
     private static List<String> emptyOrDefault(String def) {
