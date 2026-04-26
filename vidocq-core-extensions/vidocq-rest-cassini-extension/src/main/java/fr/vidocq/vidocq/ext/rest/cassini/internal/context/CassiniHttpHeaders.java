@@ -72,7 +72,11 @@ public final class CassiniHttpHeaders implements HttpHeaders {
 
     @Override public Locale getLanguage() {
         String raw = request.headers().firstOrNull("Content-Language");
-        return raw == null ? null : Locale.forLanguageTag(raw);
+        if (raw == null) return null;
+        // §4.3 : on accepte aussi la convention Java "en_US" en plus du
+        // RFC 5646 "en-US" — Locale.forLanguageTag attend les dashes,
+        // sinon on tombe sur Locale.ROOT.
+        return Locale.forLanguageTag(raw.replace('_', '-'));
     }
 
     @Override public Map<String, Cookie> getCookies() {
