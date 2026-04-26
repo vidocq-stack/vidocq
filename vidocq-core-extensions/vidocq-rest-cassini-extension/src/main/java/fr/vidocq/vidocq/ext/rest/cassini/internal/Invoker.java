@@ -379,8 +379,19 @@ public final class Invoker {
                 entityAnnotations = cr.entityAnnotations();
             }
         }
-        if ((entityAnnotations == null || entityAnnotations.length == 0) && route.javaMethod() != null) {
-            entityAnnotations = route.javaMethod().getAnnotations();
+        // §6.7.4 : getEntityAnnotations() retourne les annotations de la
+        // méthode resource fusionnées avec celles passées explicitement à
+        // ResponseBuilder.entity(Object, Annotation[]).
+        if (route.javaMethod() != null) {
+            Annotation[] methodAnns = route.javaMethod().getAnnotations();
+            if (entityAnnotations == null || entityAnnotations.length == 0) {
+                entityAnnotations = methodAnns;
+            } else {
+                Annotation[] merged = new Annotation[methodAnns.length + entityAnnotations.length];
+                System.arraycopy(methodAnns, 0, merged, 0, methodAnns.length);
+                System.arraycopy(entityAnnotations, 0, merged, methodAnns.length, entityAnnotations.length);
+                entityAnnotations = merged;
+            }
         }
 
         CassiniResponseContext rctx2 = new CassiniResponseContext(status, entity,
