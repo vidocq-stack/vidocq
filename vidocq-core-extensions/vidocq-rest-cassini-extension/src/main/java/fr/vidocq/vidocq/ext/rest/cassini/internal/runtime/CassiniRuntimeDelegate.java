@@ -89,7 +89,25 @@ public final class CassiniRuntimeDelegate extends RuntimeDelegate {
             props.put(name, value); return this;
         }
         @Override public <T> SeBootstrap.Configuration.Builder from(java.util.function.BiFunction<String, Class<T>, java.util.Optional<T>> src) {
+            // §3.10 : interroge la fonction externe pour les clés standard.
+            tryRead(src, SeBootstrap.Configuration.PROTOCOL, String.class);
+            tryRead(src, SeBootstrap.Configuration.HOST, String.class);
+            tryRead(src, SeBootstrap.Configuration.PORT, Integer.class);
+            tryRead(src, SeBootstrap.Configuration.ROOT_PATH, String.class);
+            tryRead(src, SeBootstrap.Configuration.SSL_CLIENT_AUTHENTICATION,
+                    SeBootstrap.Configuration.SSLClientAuthentication.class);
+            tryRead(src, SeBootstrap.Configuration.SSL_CONTEXT, javax.net.ssl.SSLContext.class);
             return this;
+        }
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        private <T, V> void tryRead(java.util.function.BiFunction<String, Class<T>, java.util.Optional<T>> src,
+                                    String key, Class<V> type) {
+            try {
+                Object raw = ((java.util.function.BiFunction) src).apply(key, type);
+                if (raw instanceof java.util.Optional<?> opt) {
+                    opt.ifPresent(v -> props.put(key, v));
+                }
+            } catch (RuntimeException ignored) {}
         }
         @Override public SeBootstrap.Configuration build() {
             return new CassiniBootstrapConfig(java.util.Map.copyOf(props));
