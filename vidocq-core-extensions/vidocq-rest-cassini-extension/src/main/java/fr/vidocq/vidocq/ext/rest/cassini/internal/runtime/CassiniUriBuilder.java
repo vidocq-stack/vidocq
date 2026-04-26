@@ -122,14 +122,15 @@ public final class CassiniUriBuilder extends UriBuilder {
 
     @Override public UriBuilder uri(String uriTemplate) {
         if (uriTemplate == null) throw new IllegalArgumentException("uri is null");
+        // §11.1 : doit lever IllegalArgumentException si la chaîne n'est pas
+        // une URI valide (et n'est pas un template avec {name}).
         try {
             URI u = new URI(uriTemplate);
-            // Accepte également les templates avec {name} en path — URI n'accepte pas
-            // les '{' en authority, mais ici on utilise URI.create pour le valider
-            // globalement.
             return uri(u);
         } catch (URISyntaxException e) {
-            // Template contient peut-être {x} — parser manuellement.
+            if (!uriTemplate.contains("{")) {
+                throw new IllegalArgumentException("Invalid URI: " + uriTemplate, e);
+            }
             return parseUriTemplate(uriTemplate);
         }
     }
@@ -333,8 +334,12 @@ public final class CassiniUriBuilder extends UriBuilder {
         if (values == null) throw new IllegalArgumentException("values is null");
         for (Object v : values) {
             if (v == null) throw new IllegalArgumentException("query value is null");
+            // §3.7.4.4 : queryParam value encode space en '+' (style HTML form,
+            // confirmé par TCK queryParamTest5). replaceQuery au contraire
+            // garde le raw et l'encode-rebuild en %20.
+            String formEncoded = String.valueOf(v).replace(" ", "+");
             query.computeIfAbsent(encode(name, Comp.QUERY_PARAM, true, true), k -> new ArrayList<>())
-                 .add(encode(String.valueOf(v), Comp.QUERY_PARAM, true, true));
+                 .add(encode(formEncoded, Comp.QUERY_PARAM, true, true));
         }
         return this;
     }
@@ -617,12 +622,9 @@ public final class CassiniUriBuilder extends UriBuilder {
                 i += 3;
                 continue;
             }
-            // Query string : ' ' → '+' (application/x-www-form-urlencoded).
-            if (comp == Comp.QUERY_PARAM && c == ' ') {
-                out.append('+');
-                i++;
-                continue;
-            }
+            // §3.7.4.4 : RFC 3986 dans une query d'URI exige '%20' (et non '+'
+            // qui est la convention application/x-www-form-urlencoded).
+            // Le test TCK replaceQueryTest3 valide explicitement %20.
             if (isUnreserved(c) || allowed(comp, c, encodeSlash)) {
                 out.append(c);
                 i++;
