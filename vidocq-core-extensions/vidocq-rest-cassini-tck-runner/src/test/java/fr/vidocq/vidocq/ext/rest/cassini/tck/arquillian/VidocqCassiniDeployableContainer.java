@@ -252,11 +252,43 @@ public class VidocqCassiniDeployableContainer implements DeployableContainer<Vid
         } else if (cls.isAnnotationPresent(Provider.class) || isProviderClass(cls)) {
             // §9.4 : Application.getClasses() peut renvoyer une classe qui
             // implémente un type provider standard sans porter @Provider.
-            try {
-                Object instance = cls.getDeclaredConstructor().newInstance();
+            // §9.2 : un provider singleton peut avoir des constructeurs
+            // @Context-only — on choisit le plus large public et instancie
+            // avec null aux args. Les fields @Context seront ré-injectés
+            // per-request par injectProviderContexts().
+            Object instance = instantiateProvider(cls);
+            if (instance != null) {
                 b.provider(instance);
                 providers.add(cls.getSimpleName());
-            } catch (ReflectiveOperationException ignored) {}
+            }
+        }
+    }
+
+    private static Object instantiateProvider(Class<?> cls) {
+        try {
+            return cls.getDeclaredConstructor().newInstance();
+        } catch (ReflectiveOperationException ignored) {}
+        // Pas de constructeur no-arg : choisir le ctor public avec le plus
+        // d'arguments dont chacun est @Context (ou type connu). On passe null
+        // — les fields @Context seront injectés à l'invocation.
+        java.lang.reflect.Constructor<?> best = null;
+        int bestParams = -1;
+        for (var c : cls.getConstructors()) {
+            boolean ok = true;
+            for (var pp : c.getParameters()) {
+                if (pp.getAnnotation(jakarta.ws.rs.core.Context.class) == null) { ok = false; break; }
+            }
+            if (ok && c.getParameterCount() > bestParams) {
+                best = c;
+                bestParams = c.getParameterCount();
+            }
+        }
+        if (best == null) return null;
+        try {
+            Object[] args = new Object[best.getParameterCount()];
+            return best.newInstance(args);
+        } catch (ReflectiveOperationException e) {
+            return null;
         }
     }
 
