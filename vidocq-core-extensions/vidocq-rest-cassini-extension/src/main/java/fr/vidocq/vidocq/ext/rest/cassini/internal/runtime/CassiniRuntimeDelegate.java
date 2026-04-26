@@ -701,5 +701,14 @@ public final class CassiniRuntimeDelegate extends RuntimeDelegate {
             for (var e : params.entrySet()) sb.append(';').append(e.getKey()).append("=\"").append(e.getValue()).append('"');
             return sb.toString();
         }
+        @Override public boolean equals(Object o) {
+            if (this == o) return true;
+            if (!(o instanceof Link l)) return false;
+            return java.util.Objects.equals(uri, l.getUri())
+                    && java.util.Objects.equals(params, l.getParams());
+        }
+        @Override public int hashCode() {
+            return java.util.Objects.hash(uri, params);
+        }
     }
 }
