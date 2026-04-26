@@ -33,7 +33,14 @@ public final class CassiniResponseContext implements ContainerResponseContext {
     private Type entityType;
     private Annotation[] annotations = new Annotation[0];
     private final MultivaluedMap<String, Object> headers;
-    private OutputStream entityStream = new java.io.ByteArrayOutputStream();
+    private final java.io.ByteArrayOutputStream originalStream = new java.io.ByteArrayOutputStream();
+    private OutputStream entityStream = originalStream;
+
+    /** Sink d'origine (ByteArrayOutputStream) — utilisé par le runtime pour
+     *  collecter le body final même quand un filter a wrappé entityStream
+     *  via setEntityStream(). Le wrapper applicatif est censé forwarder vers
+     *  ce sink (cf. tests TCK setEntityStreamTest). */
+    public java.io.ByteArrayOutputStream originalStream() { return originalStream; }
 
     public CassiniResponseContext(int status, Object entity, Type entityType,
                                   MultivaluedMap<String, Object> headers) {

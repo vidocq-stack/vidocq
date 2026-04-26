@@ -470,6 +470,35 @@ public final class Invoker {
             return b.build();
         }
         MediaType mt = rctx.getMediaType() != null ? rctx.getMediaType() : chosen;
+        // §6.7.4.2 : si un ContainerResponseFilter a wrappé l'entityStream
+        // via setEntityStream(), MBW.writeTo doit écrire dans ce wrapper —
+        // le wrapper forwarde vers le originalStream que le runtime collecte.
+        if (rctx.getEntityStream() != rctx.originalStream()) {
+            Class<?> type = entity.getClass();
+            Type gt = rctx.getEntityType() == null ? type : rctx.getEntityType();
+            Annotation[] anns = rctx.getEntityAnnotations() == null
+                    ? new Annotation[0] : rctx.getEntityAnnotations();
+            @SuppressWarnings({"rawtypes", "unchecked"})
+            jakarta.ws.rs.ext.MessageBodyWriter writer = registry.findWriter(type, gt, anns, mt)
+                    .orElseThrow(() -> new WebApplicationException(
+                            "No MessageBodyWriter for " + type.getName() + " / " + MediaTypes.format(mt), 500));
+            injectProviderContexts(writer, null);
+            MultivaluedMap<String, Object> outHeaders = MessageBodyRegistry.outHeaders();
+            for (var e : headers.entrySet()) {
+                if ("Content-Type".equalsIgnoreCase(e.getKey())) continue;
+                for (Object v : e.getValue()) outHeaders.add(e.getKey(), v);
+            }
+            MessageBodyRegistry.writeTo(writer, entity, type, gt, anns, mt, outHeaders, rctx.getEntityStream());
+            try { rctx.getEntityStream().close(); } catch (IOException ignored) {}
+            byte[] body = rctx.originalStream().toByteArray();
+            var b = Response.builder().status(StatusCode.of(status)).body(Body.of(body));
+            b.header("Content-Type", MediaTypes.format(mt));
+            for (var e : outHeaders.entrySet()) {
+                if ("Content-Type".equalsIgnoreCase(e.getKey())) continue;
+                for (Object v : e.getValue()) b.header(e.getKey(), String.valueOf(v));
+            }
+            return b.build();
+        }
         // Strip Content-Type from headers map (re-added by writeEntity)
         java.util.Map<String, java.util.List<String>> extra = new java.util.LinkedHashMap<>();
         for (var e : headers.entrySet()) {
