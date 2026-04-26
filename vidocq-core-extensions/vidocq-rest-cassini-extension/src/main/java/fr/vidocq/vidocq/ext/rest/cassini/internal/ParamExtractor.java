@@ -65,6 +65,18 @@ public final class ParamExtractor {
     }
     public static void clearParamConverterProviders() { CURRENT_PCPS.remove(); }
 
+    /** §11.1 (SSE) : sink+sse partagés pour la durée de l'invocation
+     *  d'une méthode resource avec @Produces text/event-stream. */
+    private static final ThreadLocal<fr.vidocq.vidocq.ext.rest.cassini.internal.sse.CassiniSseEventSink> CURRENT_SINK =
+            new ThreadLocal<>();
+    public static void setCurrentSink(fr.vidocq.vidocq.ext.rest.cassini.internal.sse.CassiniSseEventSink s) {
+        CURRENT_SINK.set(s);
+    }
+    public static fr.vidocq.vidocq.ext.rest.cassini.internal.sse.CassiniSseEventSink currentSink() {
+        return CURRENT_SINK.get();
+    }
+    public static void clearCurrentSink() { CURRENT_SINK.remove(); }
+
     private ParamExtractor() {}
 
     /**
@@ -292,6 +304,15 @@ public final class ParamExtractor {
                     return resource;
                 }
             };
+        }
+        if (type == jakarta.ws.rs.sse.Sse.class) {
+            return new fr.vidocq.vidocq.ext.rest.cassini.internal.sse.CassiniSse();
+        }
+        if (type == jakarta.ws.rs.sse.SseEventSink.class) {
+            var s = CURRENT_SINK.get();
+            if (s != null) return s;
+            // Pas de sink courant : §11.1 attend qu'on en construise un nouveau.
+            return new fr.vidocq.vidocq.ext.rest.cassini.internal.sse.CassiniSseEventSink(null);
         }
         if (type == jakarta.ws.rs.core.Configuration.class) {
             return new jakarta.ws.rs.core.Configuration() {

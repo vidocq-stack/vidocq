@@ -334,6 +334,19 @@ public final class Invoker {
             throw new RuntimeException(cause);
         }
         Object result;
+        // §11.1 : si la méthode a un paramètre SseEventSink, on remplace
+        // l'arg par notre instance (CassiniSseEventSink) et on capture le
+        // résultat sérialisé en response après l'invocation.
+        fr.vidocq.vidocq.ext.rest.cassini.internal.sse.CassiniSseEventSink sseSink = null;
+        Parameter[] params = route.javaMethod().getParameters();
+        for (int pi = 0; pi < params.length; pi++) {
+            if (params[pi].getType() == jakarta.ws.rs.sse.SseEventSink.class) {
+                sseSink = new fr.vidocq.vidocq.ext.rest.cassini.internal.sse.CassiniSseEventSink(registry);
+                args[pi] = sseSink;
+                ParamExtractor.setCurrentSink(sseSink);
+                break;
+            }
+        }
         try {
             result = route.javaMethod().invoke(target, args);
         } catch (IllegalArgumentException iae) {
@@ -359,6 +372,18 @@ public final class Invoker {
             throw new RuntimeException(cause);
         }
 
+        // §11.1 : méthode SSE → on retourne le contenu bufferisé du sink
+        // comme corps text/event-stream (la méthode a typiquement un
+        // return type void et c'est le sink qui contient les events).
+        if (sseSink != null) {
+            ParamExtractor.clearCurrentSink();
+            byte[] body = sseSink.toByteArray();
+            return Response.builder()
+                    .status(StatusCode.OK)
+                    .header("Content-Type", "text/event-stream")
+                    .body(Body.of(body))
+                    .build();
+        }
         // 5. Marshal + response filters — les WriterInterceptor peuvent
         //    lancer des exceptions : on les route via ExceptionMapper.
         try {
