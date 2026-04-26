@@ -462,12 +462,16 @@ public final class Invoker {
         // re-injectés à chaque appel pour exposer le contexte courant.
         injectProviderContexts(reader, request);
         // Si @FormParam a déjà consommé le body, replay depuis le cache.
+        // Sinon, on bufferise pour que les FieldInjector @BeanParam ultérieurs
+        // (sur la ressource elle-même) puissent re-lire le body côté @FormParam.
         byte[] cached = FieldInjector.BODY_CACHE.get();
         InputStream src;
         if (cached != null) {
             src = new java.io.ByteArrayInputStream(cached);
         } else {
-            src = request.body().asInputStream();
+            byte[] all = request.body() == null ? new byte[0] : request.body().asInputStream().readAllBytes();
+            FieldInjector.BODY_CACHE.set(all);
+            src = new java.io.ByteArrayInputStream(all);
         }
         var rInterceptors = route == null ? filters.readerInterceptors()
                 : filters.readerInterceptorsFor(route.javaMethod(), route.beanClass());
