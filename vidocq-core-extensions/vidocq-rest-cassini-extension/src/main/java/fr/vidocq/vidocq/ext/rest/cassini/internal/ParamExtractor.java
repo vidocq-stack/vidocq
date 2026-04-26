@@ -264,7 +264,14 @@ public final class ParamExtractor {
             // (ou l'intégration) en a publié une via setCurrentApplication()
             // — sinon on retourne une Application minimale.
             jakarta.ws.rs.core.Application app = CURRENT_APPLICATION.get();
-            return app != null ? app : new jakarta.ws.rs.core.Application();
+            if (app != null) {
+                // §9.2 : @Context fields de la sous-classe Application doivent
+                // exposer le contexte courant (proxy injection per-request).
+                try { fr.vidocq.vidocq.ext.rest.cassini.internal.FieldInjector.inject(app, match, request); }
+                catch (RuntimeException ignored) {}
+                return app;
+            }
+            return new jakarta.ws.rs.core.Application();
         }
         if (type == jakarta.ws.rs.ext.ContextResolver.class) {
             Providers p = CURRENT_PROVIDERS.get();
