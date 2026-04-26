@@ -434,7 +434,7 @@ public final class Invoker {
                 return reader.readFrom(type, genericType, anns, ct, headers, in);
             }
             return new CassiniReaderInterceptorContext(rInterceptors,
-                    reader, type, genericType, anns, ct, headers, in).proceed();
+                    reader, registry, type, genericType, anns, ct, headers, in).proceed();
         }
     }
 
@@ -477,7 +477,7 @@ public final class Invoker {
         if (wInterceptors.isEmpty()) {
             MessageBodyRegistry.writeTo(writer, entity, type, genericType, anns, mt, outHeaders, bos);
         } else {
-            new CassiniWriterInterceptorContext(wInterceptors, writer,
+            new CassiniWriterInterceptorContext(wInterceptors, writer, registry,
                     entity, type, genericType, anns, mt, outHeaders, bos).proceed();
         }
 

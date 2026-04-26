@@ -1,5 +1,6 @@
 package fr.vidocq.vidocq.ext.rest.cassini.internal.filter;
 
+import fr.vidocq.vidocq.ext.rest.cassini.internal.MessageBodyRegistry;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.ext.MessageBodyReader;
@@ -24,6 +25,7 @@ public final class CassiniReaderInterceptorContext implements ReaderInterceptorC
 
     @SuppressWarnings("rawtypes")
     private final MessageBodyReader terminal;
+    private final MessageBodyRegistry registry;
     private final MultivaluedMap<String, String> headers;
     private final Map<String, Object> properties = new HashMap<>();
     private InputStream stream;
@@ -37,8 +39,18 @@ public final class CassiniReaderInterceptorContext implements ReaderInterceptorC
                                            MessageBodyReader terminal, Class<?> type, Type genericType,
                                            Annotation[] annotations, MediaType mediaType,
                                            MultivaluedMap<String, String> headers, InputStream stream) {
+        this(interceptors, terminal, null, type, genericType, annotations, mediaType, headers, stream);
+    }
+
+    @SuppressWarnings("rawtypes")
+    public CassiniReaderInterceptorContext(List<FilterEntry<ReaderInterceptor>> interceptors,
+                                           MessageBodyReader terminal, MessageBodyRegistry registry,
+                                           Class<?> type, Type genericType,
+                                           Annotation[] annotations, MediaType mediaType,
+                                           MultivaluedMap<String, String> headers, InputStream stream) {
         this.interceptors = interceptors;
         this.terminal = terminal;
+        this.registry = registry;
         this.type = type;
         this.genericType = genericType;
         this.annotations = annotations == null ? new Annotation[0] : annotations;
@@ -54,7 +66,13 @@ public final class CassiniReaderInterceptorContext implements ReaderInterceptorC
             ReaderInterceptor i = interceptors.get(index++).instance();
             return i.aroundReadFrom(this);
         }
-        return terminal.readFrom(type, genericType, annotations, mediaType, headers, stream);
+        // §7.2 : setType peut avoir changé le type cible ; re-sélectionner
+        // un MBR compatible si le terminal initial ne convient plus.
+        MessageBodyReader r = terminal;
+        if (registry != null && !r.isReadable(type, genericType, annotations, mediaType)) {
+            r = registry.findReader(type, genericType, annotations, mediaType).orElse(terminal);
+        }
+        return r.readFrom(type, genericType, annotations, mediaType, headers, stream);
     }
 
     @Override public Object getProperty(String name) { return properties.get(name); }

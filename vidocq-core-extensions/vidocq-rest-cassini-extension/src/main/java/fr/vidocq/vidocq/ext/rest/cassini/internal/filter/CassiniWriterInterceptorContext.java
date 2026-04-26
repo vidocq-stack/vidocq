@@ -1,5 +1,6 @@
 package fr.vidocq.vidocq.ext.rest.cassini.internal.filter;
 
+import fr.vidocq.vidocq.ext.rest.cassini.internal.MessageBodyRegistry;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.ext.MessageBodyWriter;
@@ -27,6 +28,7 @@ public final class CassiniWriterInterceptorContext implements WriterInterceptorC
 
     @SuppressWarnings("rawtypes")
     private final MessageBodyWriter terminal;
+    private final MessageBodyRegistry registry;
     private final MultivaluedMap<String, Object> headers;
     private final Map<String, Object> properties = new HashMap<>();
     private OutputStream stream;
@@ -42,8 +44,18 @@ public final class CassiniWriterInterceptorContext implements WriterInterceptorC
                                            Class<?> type, Type genericType, Annotation[] annotations,
                                            MediaType mediaType, MultivaluedMap<String, Object> headers,
                                            OutputStream stream) {
+        this(interceptors, terminal, null, entity, type, genericType, annotations, mediaType, headers, stream);
+    }
+
+    @SuppressWarnings("rawtypes")
+    public CassiniWriterInterceptorContext(List<FilterEntry<WriterInterceptor>> interceptors,
+                                           MessageBodyWriter terminal, MessageBodyRegistry registry,
+                                           Object entity, Class<?> type, Type genericType,
+                                           Annotation[] annotations, MediaType mediaType,
+                                           MultivaluedMap<String, Object> headers, OutputStream stream) {
         this.interceptors = interceptors;
         this.terminal = terminal;
+        this.registry = registry;
         this.entity = entity;
         this.type = type;
         this.genericType = genericType;
@@ -60,7 +72,14 @@ public final class CassiniWriterInterceptorContext implements WriterInterceptorC
             WriterInterceptor i = interceptors.get(index++).instance();
             i.aroundWriteTo(this);
         } else {
-            terminal.writeTo(entity, type, genericType, annotations, mediaType, headers, stream);
+            // §7.2 : setEntity/setType peut avoir changé le type pendant la
+            // chaîne ; re-sélectionner un MBW compatible si le terminal
+            // initial ne convient plus.
+            MessageBodyWriter w = terminal;
+            if (entity != null && registry != null && !w.isWriteable(type, genericType, annotations, mediaType)) {
+                w = registry.findWriter(type, genericType, annotations, mediaType).orElse(terminal);
+            }
+            w.writeTo(entity, type, genericType, annotations, mediaType, headers, stream);
         }
     }
 
