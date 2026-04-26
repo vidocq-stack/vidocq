@@ -26,18 +26,23 @@ import java.util.Set;
 public final class CassiniResponseBuilder extends Response.ResponseBuilder {
 
     private int status = 200;
+    private boolean statusExplicit = false;
     private String reason;
     private Object entity;
     private Annotation[] annotations;
     private final MultivaluedMap<String, Object> headers = new MultivaluedHashMap<>();
 
     @Override public Response build() {
-        return new CassiniResponse(status, reason, entity, annotations, copy(headers));
+        // §3.5 : statut par défaut = 200 si entity != null, 204 sinon. Si
+        // l'appelant a explicitement positionné un statut, on le respecte.
+        int s = statusExplicit ? status : (entity == null ? 204 : 200);
+        return new CassiniResponse(s, reason, entity, annotations, copy(headers));
     }
 
     @Override public Response.ResponseBuilder clone() {
         CassiniResponseBuilder c = new CassiniResponseBuilder();
         c.status = status;
+        c.statusExplicit = statusExplicit;
         c.reason = reason;
         c.entity = entity;
         c.annotations = annotations;
@@ -45,8 +50,8 @@ public final class CassiniResponseBuilder extends Response.ResponseBuilder {
         return c;
     }
 
-    @Override public Response.ResponseBuilder status(int s) { this.status = s; this.reason = null; return this; }
-    @Override public Response.ResponseBuilder status(int s, String r) { this.status = s; this.reason = r; return this; }
+    @Override public Response.ResponseBuilder status(int s) { this.status = s; this.reason = null; this.statusExplicit = true; return this; }
+    @Override public Response.ResponseBuilder status(int s, String r) { this.status = s; this.reason = r; this.statusExplicit = true; return this; }
 
     @Override public Response.ResponseBuilder entity(Object e) { this.entity = e; return this; }
     @Override public Response.ResponseBuilder entity(Object e, Annotation[] a) { this.entity = e; this.annotations = a; return this; }
