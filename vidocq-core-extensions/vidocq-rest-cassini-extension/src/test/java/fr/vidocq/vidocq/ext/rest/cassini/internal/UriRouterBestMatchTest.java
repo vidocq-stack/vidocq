@@ -46,7 +46,7 @@ class UriRouterBestMatchTest {
 
         MatchResult res = r.match("GET", "/items/42").orElseThrow();
         assertEquals("numeric", res.method().javaMethod().getName());
-        assertEquals("42", res.pathParams().get("id"));
+        assertEquals(List.of("42"), res.pathParams().get("id"));
     }
 
     @Test
