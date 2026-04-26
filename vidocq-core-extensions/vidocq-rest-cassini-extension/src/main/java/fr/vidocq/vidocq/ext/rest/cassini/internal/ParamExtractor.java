@@ -51,6 +51,7 @@ public final class ParamExtractor {
     private static final ThreadLocal<jakarta.ws.rs.core.Application> CURRENT_APPLICATION = new ThreadLocal<>();
     public static void setApplication(jakarta.ws.rs.core.Application app) { CURRENT_APPLICATION.set(app); }
     public static void clearApplication() { CURRENT_APPLICATION.remove(); }
+    public static jakarta.ws.rs.core.Application currentApplication() { return CURRENT_APPLICATION.get(); }
 
     /** Permet à l'Invoker d'exposer un Providers au resolveContext pour la durée d'une requête. */
     public static void setProviders(Providers p) { CURRENT_PROVIDERS.set(p); }

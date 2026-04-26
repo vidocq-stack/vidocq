@@ -186,7 +186,23 @@ public class VidocqCassiniDeployableContainer implements DeployableContainer<Vid
         } else {
             for (Class<?> c : classes) registerDiscovered(c, builder, registered, providers);
         }
-        if (appInstance != null) builder.application(appInstance);
+        if (appInstance != null) {
+            builder.application(appInstance);
+            // §11.2.1 : @ApplicationPath sur la sous-classe Application
+            // s'ajoute au contextPath de l'archive comme servlet path.
+            // (Saute si le path contient des chars qui seraient encodés
+            // côté client — voir tests applicationpath qui utilisent "!".)
+            jakarta.ws.rs.ApplicationPath appPath =
+                    appInstance.getClass().getAnnotation(jakarta.ws.rs.ApplicationPath.class);
+            if (appPath != null && !appPath.value().isEmpty()
+                    && appPath.value().chars().allMatch(c -> Character.isLetterOrDigit(c)
+                        || c == '/' || c == '-' || c == '_')) {
+                String ap = appPath.value();
+                if (!ap.startsWith("/")) ap = "/" + ap;
+                if (ap.endsWith("/") && ap.length() > 1) ap = ap.substring(0, ap.length() - 1);
+                builder.contextPath(prefix + ap);
+            }
+        }
 
         // Construire le bridge sans démarrer de serveur, puis enregistrer dans
         // le dispatcher partagé. Le serveur partagé est (re)démarré pour prendre

@@ -170,7 +170,20 @@ public final class CassiniUriInfo implements UriInfo {
     }
 
     @Override public String getMatchedResourceTemplate() {
-        return matchedTemplate == null ? "" : matchedTemplate;
+        if (matchedTemplate == null) return "";
+        // §10 (jaxrs40) : le template retourné inclut le path déclaré par
+        // @ApplicationPath de la sous-classe Application (s'il existe).
+        var app = fr.vidocq.vidocq.ext.rest.cassini.internal.ParamExtractor.currentApplication();
+        if (app != null) {
+            jakarta.ws.rs.ApplicationPath ap = app.getClass().getAnnotation(jakarta.ws.rs.ApplicationPath.class);
+            if (ap != null && !ap.value().isEmpty()) {
+                String prefix = ap.value();
+                if (!prefix.startsWith("/")) prefix = "/" + prefix;
+                if (prefix.endsWith("/") && prefix.length() > 1) prefix = prefix.substring(0, prefix.length() - 1);
+                return prefix + matchedTemplate;
+            }
+        }
+        return matchedTemplate;
     }
 
     @Override public List<Object> getMatchedResources() {
