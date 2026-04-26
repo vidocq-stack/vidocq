@@ -490,11 +490,22 @@ public final class Invoker {
             entity = ge.getEntity();
         }
         Class<?> type = entity.getClass();
-        final MediaType mt = defaultFor(chosen, type);
+        MediaType mtSelect = defaultFor(chosen, type);
         @SuppressWarnings({"rawtypes", "unchecked"})
-        MessageBodyWriter writer = registry.findWriter(type, genericType, anns, mt)
+        MessageBodyWriter writer = registry.findWriter(type, genericType, anns, mtSelect)
                 .orElseThrow(() -> new WebApplicationException(
-                        "No MessageBodyWriter for " + type.getName() + " / " + MediaTypes.format(mt), 500));
+                        "No MessageBodyWriter for " + type.getName() + " / " + MediaTypes.format(mtSelect), 500));
+        // §4.2.4 : si la méthode n'a pas spécifié de Content-Type, hériter du
+        // @Produces du MBW sélectionné (premier media type concret déclaré).
+        MediaType mt = mtSelect;
+        if (mt.isWildcardType()) {
+            jakarta.ws.rs.Produces wp = writer.getClass().getAnnotation(jakarta.ws.rs.Produces.class);
+            if (wp != null && wp.value().length > 0) {
+                MediaType inferred = MediaType.valueOf(wp.value()[0]);
+                if (!inferred.isWildcardType()) mt = inferred;
+            }
+        }
+        final MediaType finalMt = mt;
         injectProviderContexts(writer, null);
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         MultivaluedMap<String, Object> outHeaders = MessageBodyRegistry.outHeaders();
@@ -507,14 +518,14 @@ public final class Invoker {
         var wInterceptors = route == null ? filters.writerInterceptors()
                 : filters.writerInterceptorsFor(route.javaMethod(), route.beanClass());
         if (wInterceptors.isEmpty()) {
-            MessageBodyRegistry.writeTo(writer, entity, type, genericType, anns, mt, outHeaders, bos);
+            MessageBodyRegistry.writeTo(writer, entity, type, genericType, anns, finalMt, outHeaders, bos);
         } else {
             new CassiniWriterInterceptorContext(wInterceptors, writer, registry,
-                    entity, type, genericType, anns, mt, outHeaders, bos).proceed();
+                    entity, type, genericType, anns, finalMt, outHeaders, bos).proceed();
         }
 
         var b = Response.builder().status(status).body(Body.of(bos.toByteArray()));
-        b.header("Content-Type", MediaTypes.format(mt));
+        b.header("Content-Type", MediaTypes.format(finalMt));
         for (var e : outHeaders.entrySet()) {
             if ("Content-Type".equalsIgnoreCase(e.getKey())) continue;
             for (Object v : e.getValue()) b.header(e.getKey(), String.valueOf(v));
