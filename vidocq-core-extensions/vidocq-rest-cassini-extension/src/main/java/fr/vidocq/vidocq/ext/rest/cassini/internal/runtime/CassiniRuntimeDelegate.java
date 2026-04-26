@@ -314,7 +314,8 @@ public final class CassiniRuntimeDelegate extends RuntimeDelegate {
         @Override public jakarta.ws.rs.core.Cookie fromString(String s) {
             if (s == null) throw new IllegalArgumentException("value is null");
             // Parsing RFC 2965 / 6265 : $Version=1; NAME=VALUE; $Path="/"; $Domain=".."
-            // Jersey normalise en lowercase name/value pour Cookie.valueOf §4.3.
+            // §4.3 : préserve la casse du name et de la value (le test
+            // checkCreatedHeaderDelegateCookieTest fait un round-trip).
             String name = null, value = null, path = null, domain = null;
             int version = 0;
             for (String pair : s.split(";")) {
@@ -330,11 +331,11 @@ public final class CassiniRuntimeDelegate extends RuntimeDelegate {
                 } else if ("$Domain".equalsIgnoreCase(k)) {
                     domain = v;
                 } else if (name == null) {
-                    name = k.toLowerCase(java.util.Locale.ROOT);
-                    value = v.toLowerCase(java.util.Locale.ROOT);
+                    name = k;
+                    value = v;
                 }
             }
-            if (name == null) name = s.trim().toLowerCase(java.util.Locale.ROOT);
+            if (name == null) name = s.trim();
             jakarta.ws.rs.core.Cookie.Builder b = new jakarta.ws.rs.core.Cookie.Builder(name)
                     .value(value).version(version);
             if (path != null) b.path(path);
