@@ -218,7 +218,10 @@ public final class Invoker {
                 // null même pour un body vide (String=="", byte[]=new byte[0],
                 // InputStream=empty stream, …). On lit donc toujours via MBR
                 // quand un param body est présent.
-                args[resolved.bodyIndex()] = readEntity(p, contentType, request, route);
+                // §4.2.4 (suite) : pour la sélection du MBR, le défaut quand
+                // Content-Type est absent est application/octet-stream.
+                MediaType readMt = (ctHeader == null) ? MediaType.APPLICATION_OCTET_STREAM_TYPE : contentType;
+                args[resolved.bodyIndex()] = readEntity(p, readMt, request, route);
             }
         } catch (WebApplicationException wae) {
             return renderWebAppException(wae, route, chosen, null);
