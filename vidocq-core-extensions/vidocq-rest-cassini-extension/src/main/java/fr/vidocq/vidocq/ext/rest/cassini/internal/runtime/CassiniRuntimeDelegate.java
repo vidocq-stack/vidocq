@@ -250,7 +250,10 @@ public final class CassiniRuntimeDelegate extends RuntimeDelegate {
             if (value == null) throw new IllegalArgumentException("value is null");
             return MediaTypes.parse(value);
         }
-        @Override public String toString(MediaType value) { return MediaTypes.format(value); }
+        @Override public String toString(MediaType value) {
+            if (value == null) throw new IllegalArgumentException("value is null");
+            return MediaTypes.format(value);
+        }
     }
 
     private static final class ToStringDelegate implements HeaderDelegate<Object> {
@@ -258,7 +261,10 @@ public final class CassiniRuntimeDelegate extends RuntimeDelegate {
             if (value == null) throw new IllegalArgumentException("value is null");
             return value;
         }
-        @Override public String toString(Object value) { return value == null ? "" : value.toString(); }
+        @Override public String toString(Object value) {
+            if (value == null) throw new IllegalArgumentException("value is null");
+            return value.toString();
+        }
     }
 
     private static final class NewCookieDelegate implements HeaderDelegate<jakarta.ws.rs.core.NewCookie> {
@@ -290,6 +296,7 @@ public final class CassiniRuntimeDelegate extends RuntimeDelegate {
                     .secure(secure).httpOnly(httpOnly).build();
         }
         @Override public String toString(jakarta.ws.rs.core.NewCookie c) {
+            if (c == null) throw new IllegalArgumentException("value is null");
             StringBuilder sb = new StringBuilder();
             sb.append(c.getName()).append('=').append(quoteIfNeeded(c.getValue()));
             if (c.getVersion() > 0) sb.append(";Version=").append(c.getVersion());
@@ -335,6 +342,7 @@ public final class CassiniRuntimeDelegate extends RuntimeDelegate {
             return b.build();
         }
         @Override public String toString(jakarta.ws.rs.core.Cookie c) {
+            if (c == null) throw new IllegalArgumentException("value is null");
             StringBuilder sb = new StringBuilder();
             if (c.getVersion() > 0) sb.append("$Version=").append(c.getVersion()).append(";");
             sb.append(c.getName()).append('=').append(quoteIfNeeded(c.getValue()));
@@ -353,6 +361,7 @@ public final class CassiniRuntimeDelegate extends RuntimeDelegate {
             return new jakarta.ws.rs.core.EntityTag(tag, weak);
         }
         @Override public String toString(jakarta.ws.rs.core.EntityTag e) {
+            if (e == null) throw new IllegalArgumentException("value is null");
             return (e.isWeak() ? "W/" : "") + "\"" + e.getValue() + "\"";
         }
     }
@@ -395,6 +404,7 @@ public final class CassiniRuntimeDelegate extends RuntimeDelegate {
             return cc;
         }
         @Override public String toString(jakarta.ws.rs.core.CacheControl c) {
+            if (c == null) throw new IllegalArgumentException("value is null");
             StringBuilder sb = new StringBuilder();
             if (c.isPrivate()) {
                 if (c.getPrivateFields().isEmpty()) append(sb, "private");
@@ -443,6 +453,7 @@ public final class CassiniRuntimeDelegate extends RuntimeDelegate {
             return b.build();
         }
         @Override public String toString(jakarta.ws.rs.core.Link l) {
+            if (l == null) throw new IllegalArgumentException("value is null");
             StringBuilder sb = new StringBuilder("<").append(l.getUri()).append('>');
             for (var e : l.getParams().entrySet()) {
                 sb.append(";").append(e.getKey()).append("=\"").append(e.getValue()).append('"');
