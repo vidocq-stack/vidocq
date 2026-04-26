@@ -66,7 +66,12 @@ public final class ExceptionMapperRegistry {
         Registration<?> best = null;
         for (Registration<?> r : mappers) {
             if (r.exceptionType().isInstance(t)) {
-                if (best == null || best.exceptionType().isAssignableFrom(r.exceptionType())) {
+                if (best == null) {
+                    best = r;
+                } else if (best.exceptionType() == r.exceptionType()) {
+                    // §4.4 / §4.1.4 : même type d'exception → priority basse gagne.
+                    if (priorityOf(r.mapper()) < priorityOf(best.mapper())) best = r;
+                } else if (best.exceptionType().isAssignableFrom(r.exceptionType())) {
                     best = r;
                 }
             }
@@ -97,6 +102,11 @@ public final class ExceptionMapperRegistry {
     }
 
     public int size() { return mappers.size(); }
+
+    private static int priorityOf(Object o) {
+        jakarta.annotation.Priority p = o.getClass().getAnnotation(jakarta.annotation.Priority.class);
+        return p == null ? jakarta.ws.rs.Priorities.USER : p.value();
+    }
 
     @SuppressWarnings("unchecked")
     private static Class<? extends Throwable> resolveExceptionType(Class<?> mapperClass) {

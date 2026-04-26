@@ -60,8 +60,17 @@ public final class FilterRegistry {
     public void addContextResolver(ContextResolver<?> r) { contextResolvers.add(r); }
     public List<ContextResolver<?>> contextResolvers() { return contextResolvers; }
 
-    public void addParamConverterProvider(ParamConverterProvider p) { paramConverterProviders.add(p); }
+    public void addParamConverterProvider(ParamConverterProvider p) {
+        paramConverterProviders.add(p);
+        // §4.1.4 : tri par @Priority croissant (priorité haute = valeur basse).
+        paramConverterProviders.sort(Comparator.comparingInt(FilterRegistry::priorityOf));
+    }
     public List<ParamConverterProvider> paramConverterProviders() { return paramConverterProviders; }
+
+    private static int priorityOf(Object instance) {
+        jakarta.annotation.Priority p = instance.getClass().getAnnotation(jakarta.annotation.Priority.class);
+        return p == null ? jakarta.ws.rs.Priorities.USER : p.value();
+    }
 
     public void addReaderInterceptor(ReaderInterceptor i) {
         readerInterceptors.add(FilterEntry.of(i));
