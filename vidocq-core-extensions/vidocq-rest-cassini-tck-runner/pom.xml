@@ -145,6 +145,14 @@
                                 <webServerHost>127.0.0.1</webServerHost>
                                 <webServerPort>8080</webServerPort>
                                 <ts_home>${project.build.directory}/test-classes</ts_home>
+                                <!-- §11.2 Basic Auth : credentials TCK pour les tests
+                                     securitycontext.basic. user/password = identité
+                                     valide ; authuser/authpassword = autre user pour
+                                     les tests d'isolation. -->
+                                <user>j2ee</user>
+                                <password>j2ee</password>
+                                <authuser>javajoe</authuser>
+                                <authpassword>javajoe</authpassword>
                                 <!-- Force l'usage du CassiniRuntimeDelegate côté TCK : Jersey
                                      est aussi sur le classpath (client), et sans cette
                                      property l'ordre ServiceLoader peut sélectionner le

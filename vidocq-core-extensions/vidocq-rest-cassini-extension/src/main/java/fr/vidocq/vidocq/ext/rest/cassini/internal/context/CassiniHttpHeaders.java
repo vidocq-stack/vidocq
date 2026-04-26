@@ -76,20 +76,51 @@ public final class CassiniHttpHeaders implements HttpHeaders {
     }
 
     @Override public Map<String, Cookie> getCookies() {
+        // §4.3.2 / RFC 2109 : un Cookie header peut combiner plusieurs cookies
+        // séparés par ';' avec attributs $Version/$Path/$Domain qui s'appliquent
+        // au cookie suivant ($Version) ou précédent ($Path/$Domain).
         Map<String, Cookie> out = new HashMap<>();
         for (String header : request.headers().all("Cookie")) {
+            int currentVersion = 0;
+            String pendingName = null, pendingValue = null;
+            String pendingPath = null, pendingDomain = null;
             for (String pair : header.split(";")) {
                 int eq = pair.indexOf('=');
                 if (eq < 0) continue;
                 String n = pair.substring(0, eq).trim();
                 String v = pair.substring(eq + 1).trim();
-                if (v.startsWith("\"") && v.endsWith("\"") && v.length() >= 2) {
+                if (v.length() >= 2 && v.charAt(0) == '"' && v.charAt(v.length() - 1) == '"') {
                     v = v.substring(1, v.length() - 1);
                 }
-                out.put(n, new Cookie.Builder(n).value(v).build());
+                if ("$Version".equalsIgnoreCase(n)) {
+                    try { currentVersion = Integer.parseInt(v); } catch (NumberFormatException ignored) {}
+                } else if ("$Path".equalsIgnoreCase(n)) {
+                    pendingPath = v;
+                } else if ("$Domain".equalsIgnoreCase(n)) {
+                    pendingDomain = v;
+                } else {
+                    if (pendingName != null) {
+                        flushCookie(out, pendingName, pendingValue, currentVersion, pendingPath, pendingDomain);
+                        pendingPath = null;
+                        pendingDomain = null;
+                    }
+                    pendingName = n;
+                    pendingValue = v;
+                }
+            }
+            if (pendingName != null) {
+                flushCookie(out, pendingName, pendingValue, currentVersion, pendingPath, pendingDomain);
             }
         }
         return out;
+    }
+
+    private static void flushCookie(Map<String, Cookie> out, String name, String value,
+                                    int version, String path, String domain) {
+        Cookie.Builder b = new Cookie.Builder(name).value(value).version(version);
+        if (path != null) b.path(path);
+        if (domain != null) b.domain(domain);
+        out.put(name, b.build());
     }
 
     @Override public Date getDate() {
