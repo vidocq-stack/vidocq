@@ -233,13 +233,29 @@ public class VidocqCassiniDeployableContainer implements DeployableContainer<Vid
         if (cls.isAnnotationPresent(Path.class)) {
             try { b.resourceClass(cls); registered.add(cls.getSimpleName()); }
             catch (RuntimeException ignored) {}
-        } else if (cls.isAnnotationPresent(Provider.class)) {
+        } else if (cls.isAnnotationPresent(Provider.class) || isProviderClass(cls)) {
+            // §9.4 : Application.getClasses() peut renvoyer une classe qui
+            // implémente un type provider standard sans porter @Provider.
             try {
                 Object instance = cls.getDeclaredConstructor().newInstance();
                 b.provider(instance);
                 providers.add(cls.getSimpleName());
             } catch (ReflectiveOperationException ignored) {}
         }
+    }
+
+    private static boolean isProviderClass(Class<?> cls) {
+        return jakarta.ws.rs.ext.MessageBodyReader.class.isAssignableFrom(cls)
+                || jakarta.ws.rs.ext.MessageBodyWriter.class.isAssignableFrom(cls)
+                || jakarta.ws.rs.ext.ExceptionMapper.class.isAssignableFrom(cls)
+                || jakarta.ws.rs.ext.ContextResolver.class.isAssignableFrom(cls)
+                || jakarta.ws.rs.ext.ReaderInterceptor.class.isAssignableFrom(cls)
+                || jakarta.ws.rs.ext.WriterInterceptor.class.isAssignableFrom(cls)
+                || jakarta.ws.rs.ext.ParamConverterProvider.class.isAssignableFrom(cls)
+                || jakarta.ws.rs.container.ContainerRequestFilter.class.isAssignableFrom(cls)
+                || jakarta.ws.rs.container.ContainerResponseFilter.class.isAssignableFrom(cls)
+                || jakarta.ws.rs.container.DynamicFeature.class.isAssignableFrom(cls)
+                || jakarta.ws.rs.core.Feature.class.isAssignableFrom(cls);
     }
 
     private static void registerSingleton(Object instance, CassiniTestHarness.Builder b,
