@@ -552,7 +552,16 @@ public final class Invoker {
             if (jr.getMediaType() != null) b.header("Content-Type", MediaTypes.format(jr.getMediaType()));
             return b.build();
         }
-        Type gt = route == null ? entity.getClass() : route.javaMethod().getGenericReturnType();
+        // §7.2 / §4.2.4 : quand la méthode déclare retourner Response (wrapper),
+        // le genericType passé au MBW / WriterInterceptorContext est celui de
+        // l'entity réelle, pas Response.class.
+        Type gt;
+        if (route == null) {
+            gt = entity.getClass();
+        } else {
+            Type ret = route.javaMethod().getGenericReturnType();
+            gt = (ret == jakarta.ws.rs.core.Response.class) ? entity.getClass() : ret;
+        }
         // §4.2.4 : si l'utilisateur a passé des annotations via
         // ResponseBuilder.entity(Object, Annotation[]), elles priment sur celles
         // de la méthode pour le MessageBodyWriter.isWriteable / writeTo.
