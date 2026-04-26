@@ -45,6 +45,10 @@ public final class Invoker {
      *  constructeur §3.1.1. */
     public static final ThreadLocal<MatchResult> CURRENT_MATCH = new ThreadLocal<>();
     public static final ThreadLocal<Request> CURRENT_REQUEST = new ThreadLocal<>();
+    /** §6.5 (UriInfo.getMatchedResources) : chaîne d'instances de ressource
+     *  matchées pour la requête courante (root → la plus profonde via locators). */
+    public static final ThreadLocal<java.util.List<Object>> CURRENT_MATCHED_RESOURCES =
+            ThreadLocal.withInitial(java.util.ArrayList::new);
 
     private final Function<Class<?>, Object> resolver;
     private final MessageBodyRegistry registry;
@@ -153,6 +157,7 @@ public final class Invoker {
             FieldInjector.clearFormCache();
             CURRENT_MATCH.remove();
             CURRENT_REQUEST.remove();
+            CURRENT_MATCHED_RESOURCES.remove();
             fr.vidocq.vidocq.ext.rest.cassini.internal.runtime.CassiniResponseBuilder.clearBaseUri();
         }
     }
@@ -256,12 +261,15 @@ public final class Invoker {
         Object target;
         CURRENT_MATCH.set(match);
         CURRENT_REQUEST.set(request);
+        java.util.List<Object> matched = new java.util.ArrayList<>();
+        CURRENT_MATCHED_RESOURCES.set(matched);
         try {
             if (route.isLocated()) {
                 // Sub-resource locator §3.4.1 : instantier la ressource racine,
                 // parcourir la chaîne de locators, injecter fields à chaque étape.
                 Object root = resolver.apply(route.rootBeanClass());
                 FieldInjector.inject(root, match, request);
+                matched.add(0, root);
                 Object intermediate = root;
                 for (java.lang.reflect.Method locStep : route.locatorChain()) {
                     java.lang.reflect.Parameter[] lps = locStep.getParameters();
@@ -275,11 +283,13 @@ public final class Invoker {
                                 route, chosen, rctx);
                     }
                     FieldInjector.inject(intermediate, match, request);
+                    matched.add(0, intermediate);
                 }
                 target = intermediate;
             } else {
                 target = resolver.apply(route.beanClass());
                 FieldInjector.inject(target, match, request);
+                matched.add(target);
             }
         } catch (WebApplicationException wae) {
             return renderWebAppException(wae, route, chosen, rctx);

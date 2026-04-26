@@ -187,11 +187,8 @@ public final class CassiniUriInfo implements UriInfo {
     }
 
     @Override public List<Object> getMatchedResources() {
-        // Minimaliste : on ne conserve pas la chaîne d'instances de ressource
-        // côté Cassini ; renvoyer une liste vide est conforme au contrat
-        // (null interdit, liste permise). Les tests TCK précis qui lisent
-        // le nom de la classe resource échoueront tant qu'on ne remplit pas.
-        return List.of();
+        var matched = fr.vidocq.vidocq.ext.rest.cassini.internal.Invoker.CURRENT_MATCHED_RESOURCES.get();
+        return matched == null ? List.of() : List.copyOf(matched);
     }
 
     @Override public URI resolve(URI uri) { return getBaseUri().resolve(uri); }
