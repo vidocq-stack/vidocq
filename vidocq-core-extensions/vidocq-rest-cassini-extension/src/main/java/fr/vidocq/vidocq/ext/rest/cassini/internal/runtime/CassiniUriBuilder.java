@@ -225,7 +225,15 @@ public final class CassiniUriBuilder extends UriBuilder {
     @Override public UriBuilder path(String segment) {
         if (segment == null) throw new IllegalArgumentException("path is null");
         if (segment.isEmpty()) return this;
-        if (path.length() > 0 && path.charAt(path.length() - 1) != '/' && !segment.startsWith("/")) path.append('/');
+        // §6 : éviter les doubles slashes au join. Ajoute un séparateur si
+        // nécessaire et déduplique l'éventuel slash leading du segment.
+        boolean endsWithSlash = path.length() > 0 && path.charAt(path.length() - 1) == '/';
+        boolean startsWithSlash = segment.startsWith("/");
+        if (path.length() > 0 && !endsWithSlash && !startsWithSlash) {
+            path.append('/');
+        } else if (endsWithSlash && startsWithSlash) {
+            segment = segment.substring(1);
+        }
         path.append(segment);
         return this;
     }
