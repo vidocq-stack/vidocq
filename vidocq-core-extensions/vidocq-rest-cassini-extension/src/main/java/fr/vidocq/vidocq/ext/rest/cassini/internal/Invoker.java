@@ -162,6 +162,35 @@ public final class Invoker {
         }
     }
 
+    /** §6.6.1 : exécute les pre-matching filters avant le routing. Retourne
+     *  une Response si un filtre a fait abortWith() ou null pour continuer
+     *  vers le matching. Réplique l'exécution dans invokeInternal() pour
+     *  qu'on reste compatible quand le routing matche par la suite. */
+    public Response runPreMatching(Request request) throws Exception {
+        if (filters.preMatching().isEmpty()) return null;
+        ParamExtractor.setProviders(new fr.vidocq.vidocq.ext.rest.cassini.internal.context.CassiniProviders(
+                registry, exceptionMappers, filters.contextResolvers()));
+        try {
+            CassiniRequestContext preCtx = new CassiniRequestContext(request, new CassiniUriInfo(
+                    request, request.contextPath(), java.util.Map.of()));
+            for (var fe : filters.preMatching()) {
+                try { fe.instance().filter(preCtx); }
+                catch (java.io.IOException | RuntimeException e) {
+                    Response mapped = mapFilterThrowable(e, null, null, preCtx);
+                    if (mapped != null) return mapped;
+                    if (e instanceof RuntimeException re) throw re;
+                    throw new RuntimeException(e);
+                }
+                if (preCtx.isAborted()) {
+                    return runResponseFiltersAndWrite(preCtx, preCtx.abortedResponse(), null, null);
+                }
+            }
+            return null;
+        } finally {
+            ParamExtractor.clearProviders();
+        }
+    }
+
     private Response invokeInternal(MatchResult match, Request request, ResourceMethod route) throws Exception {
 
         // 0. Pre-matching request filters §6.6 — exécutés avant toute
@@ -357,7 +386,9 @@ public final class Invoker {
         CassiniResponseContext rctx2 = new CassiniResponseContext(status, entity,
                 entity == null ? null : entity.getClass(), headers);
         for (var fe : filters.responseFilters()) {
-            if (!fe.appliesTo(route.javaMethod(), route.beanClass())) continue;
+            // route null = pré-matching abort : on applique les filtres globaux,
+            // pas le filtrage par méthode.
+            if (route != null && !fe.appliesTo(route.javaMethod(), route.beanClass())) continue;
             try { fe.instance().filter(rctx, rctx2); }
             catch (java.io.IOException e) { throw new RuntimeException(e); }
         }

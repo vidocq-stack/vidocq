@@ -45,6 +45,22 @@ public final class CassiniRestBridge implements Handler {
     public Response handle(Request request) throws Exception {
         String verb = request.method().name();
         String path = normalize(request.pathInfo());
+        // §6.6.1 : pre-matching filters s'exécutent AVANT le routing → si
+        // l'un d'eux abortWith(), retourner directement sans tenter de
+        // matcher une route (sinon /chemin-inexistant tombe en 404 même
+        // si un filter aurait short-circuité).
+        var preMatchFilters = invoker.filters().preMatching();
+        if (!preMatchFilters.isEmpty()) {
+            Object[] holderPre = new Object[1];
+            try {
+                requestContext.runInScope(() -> {
+                    try { holderPre[0] = invoker.runPreMatching(request); }
+                    catch (Exception e) { holderPre[0] = e; }
+                });
+            } catch (Exception ignored) {}
+            if (holderPre[0] instanceof Response r) return r;
+            if (holderPre[0] instanceof Exception ex) throw ex;
+        }
         List<MatchResult> candidates = router.matchAll(verb, path);
         Optional<MatchResult> match = candidates.isEmpty() ? Optional.empty() : Optional.of(candidates.get(0));
 

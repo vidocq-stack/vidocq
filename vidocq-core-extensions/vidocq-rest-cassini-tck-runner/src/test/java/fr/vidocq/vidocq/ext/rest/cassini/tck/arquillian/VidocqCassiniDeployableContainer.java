@@ -186,6 +186,51 @@ public class VidocqCassiniDeployableContainer implements DeployableContainer<Vid
         } else {
             for (Class<?> c : classes) registerDiscovered(c, builder, registered, providers);
         }
+        // §10 : ServiceLoader (META-INF/services/) — Feature et DynamicFeature
+        // peuvent être déclarés ici en plus de Application.getClasses().
+        java.util.Set<Class<?>> features = new java.util.LinkedHashSet<>();
+        for (Class<?> c : (appFiltersResources ? appClasses : classes)) {
+            if (jakarta.ws.rs.core.Feature.class.isAssignableFrom(c)) features.add(c);
+        }
+        for (String spi : new String[]{
+                "jakarta.ws.rs.core.Feature",
+                "jakarta.ws.rs.container.DynamicFeature"}) {
+            for (Node node : war.getContent().values()) {
+                String np = node.getPath().get();
+                if (!np.equals("/WEB-INF/classes/META-INF/services/" + spi)) continue;
+                try (var br = new java.io.BufferedReader(new java.io.InputStreamReader(
+                        node.getAsset().openStream(), java.nio.charset.StandardCharsets.UTF_8))) {
+                    String line;
+                    while ((line = br.readLine()) != null) {
+                        String s = line.trim();
+                        if (s.isEmpty() || s.startsWith("#")) continue;
+                        try { features.add(Class.forName(s, true, cl)); }
+                        catch (Throwable ignored) {}
+                    }
+                } catch (java.io.IOException ignored) {}
+            }
+        }
+        // §10 : invoquer Feature.configure() — register() délègue au builder.
+        for (Class<?> c : features) {
+            if (!c.isInterface() && !java.lang.reflect.Modifier.isAbstract(c.getModifiers())
+                    && jakarta.ws.rs.core.Feature.class.isAssignableFrom(c)) {
+                try {
+                    jakarta.ws.rs.core.Feature feature =
+                            (jakarta.ws.rs.core.Feature) c.getDeclaredConstructor().newInstance();
+                    jakarta.ws.rs.core.FeatureContext fctx = new CassiniFeatureContext(builder, registered, providers);
+                    feature.configure(fctx);
+                    providers.add(c.getSimpleName());
+                } catch (ReflectiveOperationException ignored) {}
+            } else if (jakarta.ws.rs.container.DynamicFeature.class.isAssignableFrom(c)) {
+                // DynamicFeature : enregistre comme provider — le bridge
+                // l'appelle par méthode resource au scan-time (M2g).
+                try {
+                    Object instance = c.getDeclaredConstructor().newInstance();
+                    builder.provider(instance);
+                    providers.add(c.getSimpleName());
+                } catch (ReflectiveOperationException ignored) {}
+            }
+        }
         if (appInstance != null) {
             builder.application(appInstance);
             // §11.2.1 : @ApplicationPath sur la sous-classe Application
@@ -336,5 +381,64 @@ public class VidocqCassiniDeployableContainer implements DeployableContainer<Vid
                 || instance instanceof jakarta.ws.rs.container.ContainerResponseFilter
                 || instance instanceof jakarta.ws.rs.container.DynamicFeature
                 || instance instanceof jakarta.ws.rs.core.Feature;
+    }
+
+    /** §10 FeatureContext minimal : .register() délègue au harness builder. */
+    private static final class CassiniFeatureContext implements jakarta.ws.rs.core.FeatureContext {
+        private final CassiniTestHarness.Builder builder;
+        private final List<String> registered;
+        private final List<String> providers;
+        private final java.util.Map<String, Object> properties = new java.util.LinkedHashMap<>();
+
+        CassiniFeatureContext(CassiniTestHarness.Builder b, List<String> r, List<String> p) {
+            this.builder = b;
+            this.registered = r;
+            this.providers = p;
+        }
+
+        @Override public jakarta.ws.rs.core.Configuration getConfiguration() {
+            return new jakarta.ws.rs.core.Configuration() {
+                @Override public jakarta.ws.rs.RuntimeType getRuntimeType() { return jakarta.ws.rs.RuntimeType.SERVER; }
+                @Override public java.util.Map<String, Object> getProperties() { return properties; }
+                @Override public Object getProperty(String name) { return properties.get(name); }
+                @Override public java.util.Collection<String> getPropertyNames() { return properties.keySet(); }
+                @Override public boolean isEnabled(jakarta.ws.rs.core.Feature f) { return false; }
+                @Override public boolean isEnabled(Class<? extends jakarta.ws.rs.core.Feature> fc) { return false; }
+                @Override public boolean isRegistered(Object component) { return false; }
+                @Override public boolean isRegistered(Class<?> componentClass) { return false; }
+                @Override public java.util.Map<Class<?>, Integer> getContracts(Class<?> c) { return java.util.Map.of(); }
+                @Override public java.util.Set<Class<?>> getClasses() { return java.util.Set.of(); }
+                @Override public java.util.Set<Object> getInstances() { return java.util.Set.of(); }
+            };
+        }
+        @Override public jakarta.ws.rs.core.FeatureContext property(String name, Object value) {
+            properties.put(name, value); return this;
+        }
+        @Override public jakarta.ws.rs.core.FeatureContext register(Class<?> componentClass) {
+            registerDiscovered(componentClass, builder, registered, providers);
+            return this;
+        }
+        @Override public jakarta.ws.rs.core.FeatureContext register(Class<?> componentClass, int priority) {
+            return register(componentClass);
+        }
+        @Override public jakarta.ws.rs.core.FeatureContext register(Class<?> componentClass, Class<?>... contracts) {
+            return register(componentClass);
+        }
+        @Override public jakarta.ws.rs.core.FeatureContext register(Class<?> componentClass, java.util.Map<Class<?>, Integer> contracts) {
+            return register(componentClass);
+        }
+        @Override public jakarta.ws.rs.core.FeatureContext register(Object component) {
+            registerSingleton(component, builder, registered, providers);
+            return this;
+        }
+        @Override public jakarta.ws.rs.core.FeatureContext register(Object component, int priority) {
+            return register(component);
+        }
+        @Override public jakarta.ws.rs.core.FeatureContext register(Object component, Class<?>... contracts) {
+            return register(component);
+        }
+        @Override public jakarta.ws.rs.core.FeatureContext register(Object component, java.util.Map<Class<?>, Integer> contracts) {
+            return register(component);
+        }
     }
 }

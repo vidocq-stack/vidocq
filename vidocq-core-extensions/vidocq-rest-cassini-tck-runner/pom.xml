@@ -200,6 +200,18 @@
                     <version>4.0.5</version>
                     <scope>test</scope>
                 </dependency>
+                <!--
+                    SSE client provider : les tests TCK SSE utilisent
+                    SseEventSource.target() qui charge SseEventSource.Builder
+                    via ServiceLoader. Sans ce module, ClassNotFoundException
+                    côté CLIENT. Le serveur Cassini ne dépend pas de Jersey.
+                -->
+                <dependency>
+                    <groupId>org.glassfish.jersey.media</groupId>
+                    <artifactId>jersey-media-sse</artifactId>
+                    <version>4.0.2</version>
+                    <scope>test</scope>
+                </dependency>
                 <dependency>
                     <groupId>org.jboss.shrinkwrap</groupId>
                     <artifactId>shrinkwrap-api</artifactId>
