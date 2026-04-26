@@ -215,11 +215,13 @@ public final class Invoker {
             }
         } catch (WebApplicationException wae) {
             return renderWebAppException(wae, route, chosen, null);
-        } catch (RuntimeException re) {
-            // §4.4 : les ReaderInterceptor peuvent lever → mapper.
+        } catch (RuntimeException | java.io.IOException re) {
+            // §4.4 : les MessageBodyReader / ReaderInterceptor peuvent lever
+            // (RuntimeException ou IOException) → on tente l'ExceptionMapper.
             Response mapped = mapFilterThrowable(re, route, chosen, preCtx);
             if (mapped != null) return mapped;
-            throw re;
+            if (re instanceof RuntimeException rrt) throw rrt;
+            throw new RuntimeException(re);
         }
 
         // 3. Post-matching request filters — marquer le contexte comme
@@ -508,7 +510,17 @@ public final class Invoker {
             return b.build();
         }
         Type gt = route == null ? entity.getClass() : route.javaMethod().getGenericReturnType();
-        Annotation[] anns = route == null ? new Annotation[0] : route.javaMethod().getAnnotations();
+        // §4.2.4 : si l'utilisateur a passé des annotations via
+        // ResponseBuilder.entity(Object, Annotation[]), elles priment sur celles
+        // de la méthode pour le MessageBodyWriter.isWriteable / writeTo.
+        Annotation[] anns = null;
+        if (jr instanceof fr.vidocq.vidocq.ext.rest.cassini.internal.runtime.CassiniResponse cr) {
+            Annotation[] entAnns = cr.entityAnnotations();
+            if (entAnns != null && entAnns.length > 0) anns = entAnns;
+        }
+        if (anns == null) {
+            anns = route == null ? new Annotation[0] : route.javaMethod().getAnnotations();
+        }
         return writeEntity(entity, gt, anns, chosen, status, headers, route);
     }
 
