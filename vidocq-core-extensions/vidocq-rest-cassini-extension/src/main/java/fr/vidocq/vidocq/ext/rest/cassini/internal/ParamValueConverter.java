@@ -1,7 +1,7 @@
 package fr.vidocq.vidocq.ext.rest.cassini.internal;
 
 import jakarta.ws.rs.WebApplicationException;
-import jakarta.ws.rs.core.MultivaluedHashMap;
+import jakarta.ws.rs.core.AbstractMultivaluedMap;
 import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.core.PathSegment;
 import jakarta.ws.rs.core.Response;
@@ -123,12 +123,14 @@ public final class ParamValueConverter {
         return 0;
     }
 
-    /** §3.2 : PathSegment depuis un segment brut "path;k1=v1;k2=v2". */
+    /** §3.2 : PathSegment depuis un segment brut "path;k1=v1;k2=v2".
+     *  L'ordre de déclaration des matrix params est préservé (LinkedHashMap),
+     *  exigé par les TCK qui comparent les sérialisations littérales. */
     public static PathSegment parsePathSegment(String raw) {
         if (raw == null) raw = "";
         String[] parts = raw.split(";", -1);
         String path = parts[0];
-        MultivaluedMap<String, String> matrix = new MultivaluedHashMap<>();
+        MultivaluedMap<String, String> matrix = new OrderedMultivaluedMap();
         for (int i = 1; i < parts.length; i++) {
             int eq = parts[i].indexOf('=');
             if (eq < 0) matrix.add(parts[i], "");
@@ -140,6 +142,11 @@ public final class ParamValueConverter {
             @Override public String getPath() { return p; }
             @Override public MultivaluedMap<String, String> getMatrixParameters() { return m; }
         };
+    }
+
+    /** MultivaluedMap qui préserve l'ordre d'insertion des clés. */
+    private static final class OrderedMultivaluedMap extends AbstractMultivaluedMap<String, String> {
+        OrderedMultivaluedMap() { super(new java.util.LinkedHashMap<>()); }
     }
 
     private static WebApplicationException badRequest(String msg) {

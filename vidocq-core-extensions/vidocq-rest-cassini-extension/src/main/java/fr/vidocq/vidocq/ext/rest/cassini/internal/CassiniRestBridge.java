@@ -47,7 +47,6 @@ public final class CassiniRestBridge implements Handler {
         String path = normalize(request.pathInfo());
         List<MatchResult> candidates = router.matchAll(verb, path);
         Optional<MatchResult> match = candidates.isEmpty() ? Optional.empty() : Optional.of(candidates.get(0));
-        System.err.println("[DBG] " + verb + " " + path + " → " + (match.isPresent() ? "MATCH:" + match.get().method().beanClass().getSimpleName() + "." + match.get().method().javaMethod().getName() : "NO_MATCH(allowed=" + router.methodsAllowedFor(path) + ")"));
 
         if (match.isEmpty()) {
             List<String> allowed = router.methodsAllowedFor(path);

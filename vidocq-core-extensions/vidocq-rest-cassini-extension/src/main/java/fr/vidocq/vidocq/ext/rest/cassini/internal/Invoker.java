@@ -570,9 +570,20 @@ public final class Invoker {
                 double acceptQ = bestAcceptQuality(accepts, prod);
                 prodScore = qs * 10 + spec + acceptQ;
             }
-            // classPathLiterals domine : une route dont la classe @Path est
-            // plus spécifique prime toujours sur @Consumes/@Produces (§3.7.2).
-            double score = c.method().classPathLiterals() * 100.0 + consScore * 10 + prodScore;
+            // §3.7.2 : spécificité du URI template domine d'abord (literalChars
+            // desc, totalCaptures desc, defaultCaptures asc), puis @Consumes,
+            // puis @Produces. Échelles : classPathLiterals (×1e8) > template
+            // literalChars (×1e6) > totalCaptures (×1e3) > defaultCaptures inversé
+            // (×1) > consumes (×10) > produces.
+            int classLits = c.method().classPathLiterals();
+            int tplLits = c.method().template().literalChars();
+            int totalCaps = c.method().template().totalCaptures();
+            int defaultCaps = c.method().template().defaultCaptures();
+            double score = classLits * 1e8
+                    + tplLits * 1e6
+                    + totalCaps * 1e3
+                    + (1000 - defaultCaps)
+                    + consScore * 10 + prodScore;
             if (score > bestScore) { best = c; bestScore = score; }
         }
         return best != null ? best : candidates.get(0);
