@@ -270,6 +270,37 @@ public final class ParamExtractor {
             Providers p = CURRENT_PROVIDERS.get();
             if (p != null) return p;
         }
+        if (type == jakarta.ws.rs.container.ResourceContext.class) {
+            // Stub minimal §6.5.2 : per-request injection sur instance neuve.
+            return new jakarta.ws.rs.container.ResourceContext() {
+                @Override public <T> T getResource(Class<T> resourceClass) {
+                    try {
+                        T r = resourceClass.getDeclaredConstructor().newInstance();
+                        fr.vidocq.vidocq.ext.rest.cassini.internal.FieldInjector.inject(r, match, request);
+                        return r;
+                    } catch (ReflectiveOperationException e) { return null; }
+                }
+                @Override public <T> T initResource(T resource) {
+                    fr.vidocq.vidocq.ext.rest.cassini.internal.FieldInjector.inject(resource, match, request);
+                    return resource;
+                }
+            };
+        }
+        if (type == jakarta.ws.rs.core.Configuration.class) {
+            return new jakarta.ws.rs.core.Configuration() {
+                @Override public jakarta.ws.rs.RuntimeType getRuntimeType() { return jakarta.ws.rs.RuntimeType.SERVER; }
+                @Override public java.util.Map<String, Object> getProperties() { return java.util.Map.of(); }
+                @Override public Object getProperty(String name) { return null; }
+                @Override public java.util.Collection<String> getPropertyNames() { return java.util.List.of(); }
+                @Override public boolean isEnabled(jakarta.ws.rs.core.Feature feature) { return false; }
+                @Override public boolean isEnabled(Class<? extends jakarta.ws.rs.core.Feature> featureClass) { return false; }
+                @Override public boolean isRegistered(Object component) { return false; }
+                @Override public boolean isRegistered(Class<?> componentClass) { return false; }
+                @Override public java.util.Map<Class<?>, Integer> getContracts(Class<?> componentClass) { return java.util.Map.of(); }
+                @Override public java.util.Set<Class<?>> getClasses() { return java.util.Set.of(); }
+                @Override public java.util.Set<Object> getInstances() { return java.util.Set.of(); }
+            };
+        }
         if (type == Request.class) return request; // Chappe Request passthrough (utile pour tests)
         throw new WebApplicationException("Unsupported @Context type: " + type.getName(), 500);
     }
