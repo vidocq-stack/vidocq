@@ -402,6 +402,19 @@ public final class Invoker {
                 rctx.getEntityAnnotations(), mt, StatusCode.of(status), extra, route);
     }
 
+    /** §9.2 : injecte les @Context fields d'un provider singleton avant
+     *  l'appel à readFrom/writeTo en utilisant le match et la requête courants
+     *  (capturés via ThreadLocal sur la requête en cours). */
+    private void injectProviderContexts(Object provider, Request requestOpt) {
+        // Skip les classes builtin internes (pas de @Context dedans, optimisation).
+        Class<?> cls = provider.getClass();
+        if (cls.getName().startsWith("fr.vidocq.vidocq.ext.rest.cassini.internal.MessageBodyRegistry$")) return;
+        Request req = requestOpt != null ? requestOpt : CURRENT_REQUEST.get();
+        MatchResult match = CURRENT_MATCH.get();
+        if (req == null || match == null) return;
+        try { FieldInjector.inject(provider, match, req); } catch (RuntimeException ignored) {}
+    }
+
     private boolean hasRequestBody(Request request) {
         Body b = request.body();
         if (b == null) return false;
@@ -421,6 +434,9 @@ public final class Invoker {
         MessageBodyReader reader = registry.findReader(type, genericType, anns, ct)
                 .orElseThrow(() -> new WebApplicationException(
                         "No MessageBodyReader for " + type.getName() + " / " + MediaTypes.format(ct), 415));
+        // §9.2 : @Context fields des providers user-level (singletons) sont
+        // re-injectés à chaque appel pour exposer le contexte courant.
+        injectProviderContexts(reader, request);
         // Si @FormParam a déjà consommé le body, replay depuis le cache.
         byte[] cached = FieldInjector.BODY_CACHE.get();
         InputStream src;
@@ -466,6 +482,7 @@ public final class Invoker {
         MessageBodyWriter writer = registry.findWriter(type, genericType, anns, mt)
                 .orElseThrow(() -> new WebApplicationException(
                         "No MessageBodyWriter for " + type.getName() + " / " + MediaTypes.format(mt), 500));
+        injectProviderContexts(writer, null);
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         MultivaluedMap<String, Object> outHeaders = MessageBodyRegistry.outHeaders();
         // Peupler outHeaders avec les extraHeaders AVANT le chain interceptor

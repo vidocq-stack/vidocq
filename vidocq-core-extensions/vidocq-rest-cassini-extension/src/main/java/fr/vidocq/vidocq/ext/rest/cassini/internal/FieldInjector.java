@@ -135,6 +135,45 @@ public final class FieldInjector {
             rctx.markPostResource();
             return rctx;
         }
+        if (type == jakarta.ws.rs.container.ResourceContext.class) {
+            // §6.5.2 stub minimal : getResource(class) instancie via constructor
+            // no-arg + injection de fields (per-request).
+            return new jakarta.ws.rs.container.ResourceContext() {
+                @Override public <T> T getResource(Class<T> resourceClass) {
+                    try {
+                        T r = resourceClass.getDeclaredConstructor().newInstance();
+                        FieldInjector.inject(r, match, request);
+                        return r;
+                    } catch (ReflectiveOperationException e) {
+                        return null;
+                    }
+                }
+                @Override public <T> T initResource(T resource) {
+                    FieldInjector.inject(resource, match, request);
+                    return resource;
+                }
+            };
+        }
+        if (type == jakarta.ws.rs.core.Configuration.class) {
+            // Stub minimal §10.1 : pas de Properties / Features dynamiques.
+            return new jakarta.ws.rs.core.Configuration() {
+                @Override public jakarta.ws.rs.RuntimeType getRuntimeType() {
+                    return jakarta.ws.rs.RuntimeType.SERVER;
+                }
+                @Override public java.util.Map<String, Object> getProperties() { return java.util.Map.of(); }
+                @Override public Object getProperty(String name) { return null; }
+                @Override public java.util.Collection<String> getPropertyNames() { return java.util.List.of(); }
+                @Override public boolean isEnabled(jakarta.ws.rs.core.Feature feature) { return false; }
+                @Override public boolean isEnabled(Class<? extends jakarta.ws.rs.core.Feature> featureClass) { return false; }
+                @Override public boolean isRegistered(Object component) { return false; }
+                @Override public boolean isRegistered(Class<?> componentClass) { return false; }
+                @Override public java.util.Map<Class<?>, Integer> getContracts(Class<?> componentClass) {
+                    return java.util.Map.of();
+                }
+                @Override public java.util.Set<Class<?>> getClasses() { return java.util.Set.of(); }
+                @Override public java.util.Set<Object> getInstances() { return java.util.Set.of(); }
+            };
+        }
         return null;
     }
 
