@@ -8,7 +8,7 @@ set -e
 # Prérequis :
 # 1. Avoir installé localement les artifacts du TCK officiel (non-publics) :
 #    - jakarta.tck:jakarta-restful-ws-tck:4.0.0
-#    Cf. vidocq-core-extensions/vidocq-rest-cassini-tck-runner/README.md
+#    Cf. vidocq-mps-core-extensions/vidocq-mps-rest-cassini-tck-runner/README.md
 #
 # Utilisation :
 #   ./run-official-tck-restful-4.0.sh                          # smoke test
@@ -40,7 +40,7 @@ echo "======================================="
 echo " Étape 2 — Lancement du TCK REST 4.0   "
 echo "======================================="
 
-cd vidocq-core-extensions/vidocq-rest-cassini-tck-runner
+cd vidocq-mps-core-extensions/vidocq-mps-rest-cassini-tck-runner
 
 if $USE_ALL; then
     mvn -Ptck-official verify "${MVN_ARGS[@]}"

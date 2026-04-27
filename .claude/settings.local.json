@@ -138,7 +138,8 @@
       "Bash(awk NR>=720 && NR<=770 *)",
       "Bash(javap -v /tmp/tck-sources/ee/jakarta/tck/ws/rs/ee/rs/RuntimeExceptionMapper.class)",
       "Bash(awk '/toResponse\\\\\\(java.lang.RuntimeException\\\\\\)/,/^  public.*Response/')",
-      "Bash(javap -v /tmp/tck-sources/ee/jakarta/tck/ws/rs/ee/rs/RuntimeExceptionMapper.class grep -n 'toResponse\\\\|sipush\\\\|bipush\\\\|status:' /tmp/rem.txt)"
+      "Bash(javap -v /tmp/tck-sources/ee/jakarta/tck/ws/rs/ee/rs/RuntimeExceptionMapper.class grep -n 'toResponse\\\\|sipush\\\\|bipush\\\\|status:' /tmp/rem.txt)",
+      "Bash(git mv *)"
     ]
   }
 }

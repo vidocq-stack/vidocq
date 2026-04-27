@@ -6,12 +6,12 @@
     <modelVersion>4.1.0</modelVersion>
 
     <groupId>io.vidocq.mpserver</groupId>
-    <artifactId>vidocq-parent</artifactId>
+    <artifactId>vidocq-mps-parent</artifactId>
     <version>0.1.0-SNAPSHOT</version>
     <packaging>pom</packaging>
 
-    <name>Vidocq</name>
-    <description>Modular application server built on Vauban CDI 4.1</description>
+    <name>Vidocq MicroProfile Server</name>
+    <description>MicroProfile application server built on Vauban CDI 4.1</description>
     <url>https://github.com/VidocqMP/vidocq</url>
 
     <developers>
@@ -115,37 +115,37 @@
             <!-- Vidocq modules -->
             <dependency>
                 <groupId>io.vidocq.mpserver</groupId>
-                <artifactId>vidocq-spi</artifactId>
+                <artifactId>vidocq-mps-spi</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.mpserver</groupId>
-                <artifactId>vidocq-chappe-extension</artifactId>
+                <artifactId>vidocq-mps-chappe-extension</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.mpserver</groupId>
-                <artifactId>vidocq-servlet-chappe-extension</artifactId>
+                <artifactId>vidocq-mps-servlet-chappe-extension</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.mpserver</groupId>
-                <artifactId>vidocq-servlet-chappe-tck-runner</artifactId>
+                <artifactId>vidocq-mps-servlet-chappe-tck-runner</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.mpserver</groupId>
-                <artifactId>vidocq-core</artifactId>
+                <artifactId>vidocq-mps-core</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.mpserver</groupId>
-                <artifactId>vidocq-rest-cassini-extension</artifactId>
+                <artifactId>vidocq-mps-rest-cassini-extension</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.mpserver</groupId>
-                <artifactId>vidocq-arquillian</artifactId>
+                <artifactId>vidocq-mps-arquillian</artifactId>
                 <version>${project.version}</version>
             </dependency>
 

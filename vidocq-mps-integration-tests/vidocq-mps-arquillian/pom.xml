@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.1.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.1.0 http://maven.apache.org/xsd/maven-4.1.0.xsd">
+    <modelVersion>4.1.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.mpserver</groupId>
+        <artifactId>vidocq-mps-integration-tests</artifactId>
+    </parent>
+
+    <artifactId>vidocq-mps-arquillian</artifactId>
+    <name>Vidocq :: Arquillian Container</name>
+    <description>Arquillian embedded container adapter for Vidocq</description>
+
+    <dependencies>
+        <!-- Vidocq -->
+        <dependency>
+            <groupId>io.vidocq.mpserver</groupId>
+            <artifactId>vidocq-mps-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.mpserver</groupId>
+            <artifactId>vidocq-mps-spi</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-core</artifactId>
+        </dependency>
+
+        <!-- Arquillian SPI -->
+        <dependency>
+            <groupId>org.jboss.arquillian.container</groupId>
+            <artifactId>arquillian-container-spi</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.jboss.arquillian.container</groupId>
+            <artifactId>arquillian-container-test-spi</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.jboss.shrinkwrap</groupId>
+            <artifactId>shrinkwrap-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.jboss.shrinkwrap</groupId>
+            <artifactId>shrinkwrap-impl-base</artifactId>
+        </dependency>
+    </dependencies>
+</project>

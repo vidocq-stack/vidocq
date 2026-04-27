@@ -34,12 +34,12 @@ done
 
 echo "🚀 [1/3] Installation des composants Vidocq dans le dépôt local..."
 mvn install -DskipTests \
-    -pl vidocq-spi,vidocq-core,\
-vidocq-core-extensions/vidocq-chappe-extension,\
-vidocq-core-extensions/vidocq-servlet-chappe-extension -am
+    -pl vidocq-mps-spi,vidocq-mps-core,\
+vidocq-mps-core-extensions/vidocq-mps-chappe-extension,\
+vidocq-mps-core-extensions/vidocq-mps-servlet-chappe-extension -am
 
 echo "📂 [2/3] Navigation vers le module TCK Runner (mode standalone)..."
-cd vidocq-core-extensions/vidocq-servlet-chappe-tck-runner
+cd vidocq-mps-core-extensions/vidocq-mps-servlet-chappe-tck-runner
 
 # Préparation des arguments
 # Si aucun test n'est spécifié et pas d'option --all, on lance un test simple

@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.1.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.1.0 http://maven.apache.org/xsd/maven-4.1.0.xsd">
+    <modelVersion>4.1.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.mpserver</groupId>
+        <artifactId>vidocq-mps-examples</artifactId>
+    </parent>
+
+    <artifactId>vidocq-mps-rest-example</artifactId>
+    <name>Vidocq :: Examples :: REST (Cassini)</name>
+    <description>REST service example using the Cassini JAX-RS runtime on Chappe</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.mpserver</groupId>
+            <artifactId>vidocq-mps-core</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>io.vidocq.mpserver</groupId>
+            <artifactId>vidocq-mps-rest-cassini-extension</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>fr.vidocq.chappe</groupId>
+            <artifactId>chappe-core</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>jakarta.ws.rs</groupId>
+            <artifactId>jakarta.ws.rs-api</artifactId>
+            <version>4.0.0</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-indexer</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>io.vidocq.mpserver</groupId>
+            <artifactId>vidocq-mps-external-rest-lib</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>io.vidocq.mpserver</groupId>
+                <artifactId>vidocq-mps-maven-plugin</artifactId>
+                <version>${project.version}</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>generate</goal>
+                        </goals>
+                        <configuration>
+                            <scanDependencies>
+                                <scanDependency>io.vidocq.mpserver:vidocq-mps-external-rest-lib</scanDependency>
+                            </scanDependencies>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>
