@@ -5,7 +5,7 @@
     <modelVersion>4.1.0</modelVersion>
 
     <parent>
-        <groupId>fr.vidocq.vidocq</groupId>
+        <groupId>io.vidocq.mpserver</groupId>
         <artifactId>vidocq-integration-tests</artifactId>
     </parent>
 
@@ -22,15 +22,15 @@
     <dependencies>
         <!-- Vidocq runtime -->
         <dependency>
-            <groupId>fr.vidocq.vidocq</groupId>
+            <groupId>io.vidocq.mpserver</groupId>
             <artifactId>vidocq-core</artifactId>
         </dependency>
         <dependency>
-            <groupId>fr.vidocq.vidocq</groupId>
+            <groupId>io.vidocq.mpserver</groupId>
             <artifactId>vidocq-rest-extension</artifactId>
         </dependency>
         <dependency>
-            <groupId>fr.vidocq.vauban</groupId>
+            <groupId>io.vidocq.vauban</groupId>
             <artifactId>vauban-core</artifactId>
         </dependency>
 
@@ -52,7 +52,7 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>fr.vidocq.vidocq</groupId>
+            <groupId>io.vidocq.mpserver</groupId>
             <artifactId>vidocq-arquillian</artifactId>
             <scope>test</scope>
         </dependency>

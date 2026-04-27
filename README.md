@@ -160,7 +160,7 @@ public class MonExtension implements VidocqExtension {
 }
 ```
 
-Enregistrement via `META-INF/services/fr.vidocq.vidocq.spi.VidocqExtension` ou `module-info.java` :
+Enregistrement via `META-INF/services/io.vidocq.mpserver.spi.VidocqExtension` ou `module-info.java` :
 
 ```java
 provides VidocqExtension with MonExtension;
@@ -204,7 +204,7 @@ Les proprietes sont resolues dans l'ordre :
 
 ```xml
 <plugin>
-    <groupId>fr.vidocq.vidocq</groupId>
+    <groupId>io.vidocq.mpserver</groupId>
     <artifactId>vidocq-maven-plugin</artifactId>
     <executions>
         <execution>

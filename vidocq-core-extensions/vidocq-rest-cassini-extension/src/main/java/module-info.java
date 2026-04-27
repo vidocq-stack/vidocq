@@ -1,11 +1,11 @@
-import fr.vidocq.vidocq.ext.rest.cassini.CassiniExtension;
-import fr.vidocq.vidocq.ext.rest.cassini.CassiniScopeBCE;
-import fr.vidocq.vidocq.ext.rest.cassini.internal.runtime.CassiniRuntimeDelegate;
+import io.vidocq.mpserver.ext.rest.cassini.CassiniExtension;
+import io.vidocq.mpserver.ext.rest.cassini.CassiniScopeBCE;
+import io.vidocq.mpserver.ext.rest.cassini.internal.runtime.CassiniRuntimeDelegate;
 
-module fr.vidocq.vidocq.ext.rest.cassini {
-    requires transitive fr.vidocq.vidocq.spi;
-    requires fr.vidocq.vidocq.ext.chappe;
-    requires fr.vidocq.vauban.core;
+module io.vidocq.mpserver.ext.rest.cassini {
+    requires transitive io.vidocq.mpserver.spi;
+    requires io.vidocq.mpserver.ext.chappe;
+    requires io.vidocq.vauban.core;
     requires fr.vidocq.chappe.api;
 
     requires transitive jakarta.ws.rs;
@@ -17,15 +17,15 @@ module fr.vidocq.vidocq.ext.rest.cassini {
     requires static jakarta.xml.bind;
     requires static jakarta.activation;
 
-    exports fr.vidocq.vidocq.ext.rest.cassini;
-    exports fr.vidocq.vidocq.ext.rest.cassini.internal
-            to fr.vidocq.vidocq.ext.rest.cassini.tck;
-    exports fr.vidocq.vidocq.ext.rest.cassini.internal.filter
-            to fr.vidocq.vidocq.ext.rest.cassini.tck;
+    exports io.vidocq.mpserver.ext.rest.cassini;
+    exports io.vidocq.mpserver.ext.rest.cassini.internal
+            to io.vidocq.mpserver.ext.rest.cassini.tck;
+    exports io.vidocq.mpserver.ext.rest.cassini.internal.filter
+            to io.vidocq.mpserver.ext.rest.cassini.tck;
 
-    opens fr.vidocq.vidocq.ext.rest.cassini to fr.vidocq.vauban.core;
+    opens io.vidocq.mpserver.ext.rest.cassini to io.vidocq.vauban.core;
 
-    provides fr.vidocq.vidocq.spi.VidocqExtension
+    provides io.vidocq.mpserver.spi.VidocqExtension
             with CassiniExtension;
 
     provides jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension

@@ -5,7 +5,7 @@
     <modelVersion>4.1.0</modelVersion>
 
     <parent>
-        <groupId>fr.vidocq.vidocq</groupId>
+        <groupId>io.vidocq.mpserver</groupId>
         <artifactId>vidocq-examples</artifactId>
     </parent>
 
@@ -15,12 +15,12 @@
 
     <dependencies>
         <dependency>
-            <groupId>fr.vidocq.vidocq</groupId>
+            <groupId>io.vidocq.mpserver</groupId>
             <artifactId>vidocq-core</artifactId>
         </dependency>
 
         <dependency>
-            <groupId>fr.vidocq.vidocq</groupId>
+            <groupId>io.vidocq.mpserver</groupId>
             <artifactId>vidocq-rest-cassini-extension</artifactId>
         </dependency>
 
@@ -36,12 +36,12 @@
         </dependency>
 
         <dependency>
-            <groupId>fr.vidocq.vauban</groupId>
+            <groupId>io.vidocq.vauban</groupId>
             <artifactId>vauban-indexer</artifactId>
         </dependency>
 
         <dependency>
-            <groupId>fr.vidocq.vidocq</groupId>
+            <groupId>io.vidocq.mpserver</groupId>
             <artifactId>vidocq-external-rest-lib</artifactId>
             <version>${project.version}</version>
         </dependency>
@@ -50,7 +50,7 @@
     <build>
         <plugins>
             <plugin>
-                <groupId>fr.vidocq.vidocq</groupId>
+                <groupId>io.vidocq.mpserver</groupId>
                 <artifactId>vidocq-maven-plugin</artifactId>
                 <version>${project.version}</version>
                 <executions>

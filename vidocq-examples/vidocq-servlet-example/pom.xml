@@ -5,7 +5,7 @@
     <modelVersion>4.1.0</modelVersion>
 
     <parent>
-        <groupId>fr.vidocq.vidocq</groupId>
+        <groupId>io.vidocq.mpserver</groupId>
         <artifactId>vidocq-examples</artifactId>
     </parent>
 
@@ -15,15 +15,15 @@
 
     <dependencies>
         <dependency>
-            <groupId>fr.vidocq.vidocq</groupId>
+            <groupId>io.vidocq.mpserver</groupId>
             <artifactId>vidocq-core</artifactId>
         </dependency>
         <dependency>
-            <groupId>fr.vidocq.vidocq</groupId>
+            <groupId>io.vidocq.mpserver</groupId>
             <artifactId>vidocq-chappe-extension</artifactId>
         </dependency>
         <dependency>
-            <groupId>fr.vidocq.vidocq</groupId>
+            <groupId>io.vidocq.mpserver</groupId>
             <artifactId>vidocq-servlet-chappe-extension</artifactId>
         </dependency>
         <dependency>
@@ -31,7 +31,7 @@
             <artifactId>jakarta.servlet-api</artifactId>
         </dependency>
         <dependency>
-            <groupId>fr.vidocq.vauban</groupId>
+            <groupId>io.vidocq.vauban</groupId>
             <artifactId>vauban-indexer</artifactId>
         </dependency>
     </dependencies>
@@ -39,7 +39,7 @@
     <build>
         <plugins>
             <plugin>
-                <groupId>fr.vidocq.vidocq</groupId>
+                <groupId>io.vidocq.mpserver</groupId>
                 <artifactId>vidocq-maven-plugin</artifactId>
                 <version>${project.version}</version>
                 <executions>

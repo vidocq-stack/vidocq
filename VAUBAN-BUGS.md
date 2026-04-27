@@ -102,7 +102,7 @@ les beans avec scope CDI *explicite* dans le source. L'exemple
 - `HelloCDIRequestScopedResource` (scope explicite) → OK, 4 endpoints visibles
 - `HelloCDIApplicationScopedResource` (scope explicite) → OK
 - `HelloSimpleJaxRSResource` (scope via BCE) → **invisible au runtime**
-- `fr.vidocq.vidocq.examples.extlib.ExternalResource` (scope via BCE sur
+- `io.vidocq.mpserver.examples.extlib.ExternalResource` (scope via BCE sur
   librairie externe) → **invisible au runtime**
 
 **Indice :** le marker `META-INF/vauban-bce-processed` (documenté dans le
@@ -176,8 +176,8 @@ l'APT doit produire de nouveaux artefacts, pas modifier ce que javac a écrit).
 
    ```
    # <BCE-FQN>;<target-class-FQN>
-   fr.vidocq.cassini.scope.CassiniScopeBCE;fr.vidocq.vidocq.examples.rest.HelloSimpleJaxRSResource
-   fr.vidocq.cassini.scope.CassiniScopeBCE;fr.vidocq.vidocq.examples.extlib.ExternalResource
+   fr.vidocq.cassini.scope.CassiniScopeBCE;io.vidocq.mpserver.examples.rest.HelloSimpleJaxRSResource
+   fr.vidocq.cassini.scope.CassiniScopeBCE;io.vidocq.mpserver.examples.extlib.ExternalResource
    ```
 
    Une classe est inscrite ssi son `VaubanClassConfig` contient au moins
@@ -267,7 +267,7 @@ le cas "JAR brut" — fallback BCE full au runtime) :
 ## 5. ~~`BeanManager.getInjectionTargetFactory(AnnotatedType)` — Not yet implemented~~ FIXÉ
 
 **Symptome initial :** `java.lang.IllegalStateException: Not yet implemented`
-levé depuis `fr.vidocq.vauban.core.container.VaubanBeanManager.getInjectionTargetFactory`.
+levé depuis `io.vidocq.vauban.core.container.VaubanBeanManager.getInjectionTargetFactory`.
 
 **Contexte :** Cassini instancie les classes `@Path` sans scope CDI explicite
 (§3.1.1 JAX-RS : ressources par défaut per-request) via l'API standard

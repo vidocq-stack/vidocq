@@ -1,15 +1,15 @@
-module fr.vidocq.vidocq.core {
-    requires transitive fr.vidocq.vidocq.spi;
-    requires fr.vidocq.vauban.core;
+module io.vidocq.mpserver.core {
+    requires transitive io.vidocq.mpserver.spi;
+    requires io.vidocq.vauban.core;
 
-    exports fr.vidocq.vidocq.core;
-    exports fr.vidocq.vidocq.core.config;
+    exports io.vidocq.mpserver.core;
+    exports io.vidocq.mpserver.core.config;
 
-    uses fr.vidocq.vidocq.spi.VidocqExtension;
-    uses fr.vidocq.vidocq.spi.config.ConfigSource;
+    uses io.vidocq.mpserver.spi.VidocqExtension;
+    uses io.vidocq.mpserver.spi.config.ConfigSource;
 
-    provides fr.vidocq.vidocq.spi.config.ConfigSource with
-            fr.vidocq.vidocq.core.config.SystemPropertiesConfigSource,
-            fr.vidocq.vidocq.core.config.EnvConfigSource,
-            fr.vidocq.vidocq.core.config.PropertiesFileConfigSource;
+    provides io.vidocq.mpserver.spi.config.ConfigSource with
+            io.vidocq.mpserver.core.config.SystemPropertiesConfigSource,
+            io.vidocq.mpserver.core.config.EnvConfigSource,
+            io.vidocq.mpserver.core.config.PropertiesFileConfigSource;
 }

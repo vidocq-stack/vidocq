@@ -1,9 +1,9 @@
-module fr.vidocq.vidocq.spi {
-    requires transitive fr.vidocq.vauban.core;
+module io.vidocq.mpserver.spi {
+    requires transitive io.vidocq.vauban.core;
 
-    exports fr.vidocq.vidocq.spi;
-    exports fr.vidocq.vidocq.spi.config;
+    exports io.vidocq.mpserver.spi;
+    exports io.vidocq.mpserver.spi.config;
 
-    uses fr.vidocq.vidocq.spi.VidocqExtension;
-    uses fr.vidocq.vidocq.spi.config.ConfigSource;
+    uses io.vidocq.mpserver.spi.VidocqExtension;
+    uses io.vidocq.mpserver.spi.config.ConfigSource;
 }

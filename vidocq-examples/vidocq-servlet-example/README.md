@@ -19,7 +19,7 @@ Tout le cycle Vidocq est exercé : découverte CDI, moteur Chappe partagé, disp
 ```
 mvn -pl vidocq-examples/vidocq-servlet-example -am package
 java -p target/classes:... --module-path ... \
-     -m vidocq.example.servlet/fr.vidocq.examples.servlet.ServletExampleApp
+     -m vidocq.example.servlet/io.vidocq.mpserver.examples.servlet.ServletExampleApp
 ```
 
 Plus simple via `mvn exec:exec` (à configurer) ou en packagé jar-with-deps.

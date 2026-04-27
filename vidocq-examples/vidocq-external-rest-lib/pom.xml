@@ -5,7 +5,7 @@
     <modelVersion>4.1.0</modelVersion>
 
     <parent>
-        <groupId>fr.vidocq.vidocq</groupId>
+        <groupId>io.vidocq.mpserver</groupId>
         <artifactId>vidocq-examples</artifactId>
     </parent>
 

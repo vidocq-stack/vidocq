@@ -40,7 +40,7 @@ public class MyExtension implements VidocqExtension {
 }
 ```
 
-Registration via `META-INF/services/fr.vidocq.vidocq.spi.VidocqExtension` or `module-info.java`:
+Registration via `META-INF/services/io.vidocq.mpserver.spi.VidocqExtension` or `module-info.java`:
 
 ```java
 provides VidocqExtension with MyExtension;
@@ -70,7 +70,7 @@ With the Maven plugin:
 
 ```xml
 <plugin>
-    <groupId>fr.vidocq.vidocq</groupId>
+    <groupId>io.vidocq.mpserver</groupId>
     <artifactId>vidocq-maven-plugin</artifactId>
     <version>0.1.0-SNAPSHOT</version>
     <executions>

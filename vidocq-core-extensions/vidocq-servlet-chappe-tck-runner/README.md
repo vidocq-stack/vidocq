@@ -29,7 +29,7 @@ artifacts locaux et échoue dès qu'il rencontre un POM Vidocq (version
 implicite via parent) :
 
 ```
-Bad artifact coordinates fr.vidocq.vidocq:vidocq-servlet-chappe-extension:jar:,
+Bad artifact coordinates io.vidocq.mpserver:vidocq-servlet-chappe-extension:jar:,
 expected format is <groupId>:<artifactId>[:<extension>[:<classifier>]]:<version>
 ```
 

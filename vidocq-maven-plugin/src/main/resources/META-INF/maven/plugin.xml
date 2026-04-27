@@ -2,7 +2,7 @@
 <plugin>
     <name>Vidocq :: Maven Plugin</name>
     <description>Build-time bean indexing and application packaging for Vidocq</description>
-    <groupId>fr.vidocq.vidocq</groupId>
+    <groupId>io.vidocq.mpserver</groupId>
     <artifactId>vidocq-maven-plugin</artifactId>
     <version>0.1.0-SNAPSHOT</version>
     <goalPrefix>vidocq</goalPrefix>
@@ -20,7 +20,7 @@
             <requiresOnline>false</requiresOnline>
             <aggregator>false</aggregator>
             <phase>process-classes</phase>
-            <implementation>fr.vidocq.vidocq.maven.VidocqGenerateMojo</implementation>
+            <implementation>io.vidocq.mpserver.maven.VidocqGenerateMojo</implementation>
             <language>java</language>
             <instantiationStrategy>per-lookup</instantiationStrategy>
             <threadSafe>false</threadSafe>
@@ -58,7 +58,7 @@
             <requiresOnline>false</requiresOnline>
             <aggregator>false</aggregator>
             <phase>package</phase>
-            <implementation>fr.vidocq.vidocq.maven.VidocqPackageMojo</implementation>
+            <implementation>io.vidocq.mpserver.maven.VidocqPackageMojo</implementation>
             <language>java</language>
             <instantiationStrategy>per-lookup</instantiationStrategy>
             <threadSafe>false</threadSafe>
@@ -110,7 +110,7 @@
                 <project implementation="org.apache.maven.project.MavenProject"
                          default-value="${project}"/>
                 <mainClass implementation="java.lang.String"
-                           default-value="fr.vidocq.vidocq.core.Vidocq">${vidocq.mainClass}</mainClass>
+                           default-value="io.vidocq.mpserver.core.Vidocq">${vidocq.mainClass}</mainClass>
                 <scriptName implementation="java.lang.String"
                             default-value="${project.artifactId}">${vidocq.scriptName}</scriptName>
                 <jvmArgs implementation="java.lang.String"
