@@ -16,6 +16,8 @@ module io.vidocq.mpserver.ext.rest.cassini {
     requires java.xml;
     requires static jakarta.xml.bind;
     requires static jakarta.activation;
+    requires static jakarta.json;
+    requires static jakarta.json.bind;
 
     exports io.vidocq.mpserver.ext.rest.cassini;
     exports io.vidocq.mpserver.ext.rest.cassini.internal
