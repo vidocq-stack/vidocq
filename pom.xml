@@ -19,7 +19,40 @@
             <name>Yann Blazart</name>
             <email>yann.blazart@gmail.com</email>
         </developer>
+        <developer>
+            <name>Antoine Sabot Durand</name>
+            <email>antoine@sabot-durand.net</email>
+        </developer>
     </developers>
+
+    <distributionManagement>
+        <repository>
+            <id>forgejo-vidocq</id>
+            <url>https://forge.vidocq.dev/api/packages/vidocq/maven</url>
+        </repository>
+        <snapshotRepository>
+            <id>forgejo-vidocq</id>
+            <url>https://forge.vidocq.dev/api/packages/vidocq/maven</url>
+        </snapshotRepository>
+    </distributionManagement>
+
+    <repositories>
+        <repository>
+            <id>forgejo-vidocq</id>
+            <url>https://forge.vidocq.dev/api/packages/vidocq/maven</url>
+            <releases><enabled>true</enabled></releases>
+            <snapshots><enabled>true</enabled></snapshots>
+        </repository>
+    </repositories>
+
+    <pluginRepositories>
+        <pluginRepository>
+            <id>forgejo-vidocq</id>
+            <url>https://forge.vidocq.dev/api/packages/vidocq/maven</url>
+            <releases><enabled>true</enabled></releases>
+            <snapshots><enabled>true</enabled></snapshots>
+        </pluginRepository>
+    </pluginRepositories>
 
     <licenses>
         <license>

@@ -1,1 +1,1 @@
-fr.vidocq.vidocq.arquillian.VidocqLoadableExtension
+io.vidocq.mpserver.arquillian.VidocqLoadableExtension
