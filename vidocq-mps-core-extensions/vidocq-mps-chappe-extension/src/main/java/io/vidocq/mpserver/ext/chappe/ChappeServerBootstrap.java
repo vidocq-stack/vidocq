@@ -1,7 +1,7 @@
 package io.vidocq.mpserver.ext.chappe;
 
-import fr.vidocq.chappe.api.Router;
-import fr.vidocq.chappe.api.Server;
+import io.vidocq.chappe.api.Router;
+import io.vidocq.chappe.api.Server;
 import io.vidocq.mpserver.spi.ExtensionContext;
 import io.vidocq.mpserver.spi.VidocqExtension;
 import io.vidocq.mpserver.spi.config.VidocqConfig;

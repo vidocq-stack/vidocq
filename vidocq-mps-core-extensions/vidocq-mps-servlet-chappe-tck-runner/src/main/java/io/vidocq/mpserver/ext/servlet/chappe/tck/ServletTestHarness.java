@@ -1,7 +1,7 @@
 package io.vidocq.mpserver.ext.servlet.chappe.tck;
 
-import fr.vidocq.chappe.api.Handler;
-import fr.vidocq.chappe.api.Server;
+import io.vidocq.chappe.api.Handler;
+import io.vidocq.chappe.api.Server;
 import io.vidocq.mpserver.ext.servlet.chappe.bridge.ChappeServletBridge;
 import io.vidocq.mpserver.ext.servlet.chappe.container.VidocqServletContext;
 import io.vidocq.mpserver.ext.servlet.chappe.dispatcher.FilterMapping;

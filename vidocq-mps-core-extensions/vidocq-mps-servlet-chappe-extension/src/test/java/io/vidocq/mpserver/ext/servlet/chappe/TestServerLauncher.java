@@ -1,7 +1,7 @@
 package io.vidocq.mpserver.ext.servlet.chappe;
 
-import fr.vidocq.chappe.api.Handler;
-import fr.vidocq.chappe.api.Server;
+import io.vidocq.chappe.api.Handler;
+import io.vidocq.chappe.api.Server;
 
 import java.net.ServerSocket;
 

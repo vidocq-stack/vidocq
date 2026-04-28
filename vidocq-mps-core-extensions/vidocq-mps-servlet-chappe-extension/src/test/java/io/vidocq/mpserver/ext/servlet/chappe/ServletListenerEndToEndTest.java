@@ -1,6 +1,6 @@
 package io.vidocq.mpserver.ext.servlet.chappe;
 
-import fr.vidocq.chappe.api.Server;
+import io.vidocq.chappe.api.Server;
 import io.vidocq.mpserver.ext.servlet.chappe.bridge.ChappeServletBridge;
 import io.vidocq.mpserver.ext.servlet.chappe.container.VidocqServletContext;
 import io.vidocq.mpserver.ext.servlet.chappe.dispatcher.FilterRegistry;

@@ -1,10 +1,10 @@
 package io.vidocq.mpserver.ext.servlet.chappe.bridge;
 
-import fr.vidocq.chappe.api.Body;
-import fr.vidocq.chappe.api.Handler;
-import fr.vidocq.chappe.api.Request;
-import fr.vidocq.chappe.api.Response;
-import fr.vidocq.chappe.api.StatusCode;
+import io.vidocq.chappe.api.Body;
+import io.vidocq.chappe.api.Handler;
+import io.vidocq.chappe.api.Request;
+import io.vidocq.chappe.api.Response;
+import io.vidocq.chappe.api.StatusCode;
 import io.vidocq.mpserver.ext.servlet.chappe.dispatcher.DispatchResolver;
 import io.vidocq.mpserver.ext.servlet.chappe.dispatcher.DispatchTarget;
 import io.vidocq.mpserver.ext.servlet.chappe.dispatcher.FilterRegistry;

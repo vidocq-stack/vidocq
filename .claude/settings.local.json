@@ -139,7 +139,11 @@
       "Bash(javap -v /tmp/tck-sources/ee/jakarta/tck/ws/rs/ee/rs/RuntimeExceptionMapper.class)",
       "Bash(awk '/toResponse\\\\\\(java.lang.RuntimeException\\\\\\)/,/^  public.*Response/')",
       "Bash(javap -v /tmp/tck-sources/ee/jakarta/tck/ws/rs/ee/rs/RuntimeExceptionMapper.class grep -n 'toResponse\\\\|sipush\\\\|bipush\\\\|status:' /tmp/rem.txt)",
-      "Bash(git mv *)"
+      "Bash(git mv *)",
+      "Bash(rm -rf .idea vidocq-mps-examples .DS_Store)",
+      "Bash(rtk git *)",
+      "Bash(git merge --allow-unrelated-histories -X ours cassini-extract/main -m 'merge: import cassini sources from vidocq-mps via git filter-repo *)",
+      "Bash(git rm *)"
     ]
   }
 }

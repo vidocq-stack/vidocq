@@ -20,7 +20,7 @@ import java.util.TreeMap;
 
 /**
  * {@link HttpServletResponse} qui accumule l'état (status, headers, body) et se matérialise
- * en {@link fr.vidocq.chappe.api.Response Response} Chappe immuable à la fin du dispatch.
+ * en {@link io.vidocq.chappe.api.Response Response} Chappe immuable à la fin du dispatch.
  */
 public final class HttpServletResponseImpl implements HttpServletResponse {
 

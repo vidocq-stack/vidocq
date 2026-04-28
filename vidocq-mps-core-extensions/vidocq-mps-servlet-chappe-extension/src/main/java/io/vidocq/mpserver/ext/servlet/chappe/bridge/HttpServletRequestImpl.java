@@ -1,6 +1,6 @@
 package io.vidocq.mpserver.ext.servlet.chappe.bridge;
 
-import fr.vidocq.chappe.api.Request;
+import io.vidocq.chappe.api.Request;
 import io.vidocq.mpserver.ext.servlet.chappe.http.CookieCodec;
 import io.vidocq.mpserver.ext.servlet.chappe.session.HttpSessionImpl;
 import io.vidocq.mpserver.ext.servlet.chappe.session.SessionManager;

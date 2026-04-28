@@ -2,7 +2,7 @@ module io.vidocq.mpserver.ext.servlet.chappe {
     requires transitive io.vidocq.mpserver.spi;
     requires io.vidocq.mpserver.ext.chappe;
     requires io.vidocq.vauban.core;
-    requires fr.vidocq.chappe.api;
+    requires io.vidocq.chappe.api;
     requires transitive jakarta.servlet;
     requires jakarta.cdi;
     requires java.xml;

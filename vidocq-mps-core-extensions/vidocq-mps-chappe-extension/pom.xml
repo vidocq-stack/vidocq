@@ -23,11 +23,11 @@
             <artifactId>vauban-core</artifactId>
         </dependency>
         <dependency>
-            <groupId>fr.vidocq.chappe</groupId>
+            <groupId>io.vidocq.chappe</groupId>
             <artifactId>chappe-api</artifactId>
         </dependency>
         <dependency>
-            <groupId>fr.vidocq.chappe</groupId>
+            <groupId>io.vidocq.chappe</groupId>
             <artifactId>chappe-core</artifactId>
             <scope>runtime</scope>
         </dependency>

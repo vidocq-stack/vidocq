@@ -8,7 +8,7 @@ import java.io.IOException;
 
 /**
  * {@link ServletOutputStream} qui accumule dans un {@link ByteArrayOutputStream} interne.
- * Le contenu est transféré à la {@link fr.vidocq.chappe.api.Response} en fin de dispatch.
+ * Le contenu est transféré à la {@link io.vidocq.chappe.api.Response} en fin de dispatch.
  *
  * <p><em>Non-blocking I/O n'est pas implémenté dans ce jalon.</em></p>
  */

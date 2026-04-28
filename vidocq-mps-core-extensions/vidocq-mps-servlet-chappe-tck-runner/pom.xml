@@ -45,12 +45,12 @@
             <version>${vidocq.version}</version>
         </dependency>
         <dependency>
-            <groupId>fr.vidocq.chappe</groupId>
+            <groupId>io.vidocq.chappe</groupId>
             <artifactId>chappe-api</artifactId>
             <version>${chappe.version}</version>
         </dependency>
         <dependency>
-            <groupId>fr.vidocq.chappe</groupId>
+            <groupId>io.vidocq.chappe</groupId>
             <artifactId>chappe-core</artifactId>
             <version>${chappe.version}</version>
         </dependency>

@@ -82,6 +82,7 @@
 
         <vauban.version>0.1.0-SNAPSHOT</vauban.version>
         <chappe.version>0.1.0-SNAPSHOT</chappe.version>
+        <cassini.version>0.1.0-SNAPSHOT</cassini.version>
         <jakarta.cdi.version>4.1.0</jakarta.cdi.version>
         <jakarta.servlet.version>6.1.0</jakarta.servlet.version>
         <jakarta.annotation.version>3.0.0</jakarta.annotation.version>
@@ -143,21 +144,43 @@
                 <version>${vauban.version}</version>
             </dependency>
 
-            <!-- Chappe HTTP server -->
+            <!-- Chappe HTTP server (Q3 : groupId aligné io.vidocq.chappe) -->
             <dependency>
-                <groupId>fr.vidocq.chappe</groupId>
+                <groupId>io.vidocq.chappe</groupId>
                 <artifactId>chappe-api</artifactId>
                 <version>${chappe.version}</version>
             </dependency>
             <dependency>
-                <groupId>fr.vidocq.chappe</groupId>
+                <groupId>io.vidocq.chappe</groupId>
                 <artifactId>chappe-core</artifactId>
                 <version>${chappe.version}</version>
             </dependency>
             <dependency>
-                <groupId>fr.vidocq.chappe</groupId>
+                <groupId>io.vidocq.chappe</groupId>
                 <artifactId>chappe-http</artifactId>
                 <version>${chappe.version}</version>
+            </dependency>
+
+            <!-- Cassini standalone (extrait de vidocq-mps en avril 2026) -->
+            <dependency>
+                <groupId>io.vidocq.cassini</groupId>
+                <artifactId>cassini-api</artifactId>
+                <version>${cassini.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.cassini</groupId>
+                <artifactId>cassini-core</artifactId>
+                <version>${cassini.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.cassini</groupId>
+                <artifactId>cassini-cdi</artifactId>
+                <version>${cassini.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.cassini</groupId>
+                <artifactId>cassini-chappe</artifactId>
+                <version>${cassini.version}</version>
             </dependency>
 
             <!-- Vidocq modules -->

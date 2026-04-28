@@ -5,7 +5,7 @@ import java.util.Objects;
 /**
  * Description d'un listener Chappe (un couple host:port, avec ou sans TLS).
  * <p>
- * Chappe alloue une instance {@link fr.vidocq.chappe.api.Server} par listener.
+ * Chappe alloue une instance {@link io.vidocq.chappe.api.Server} par listener.
  * Les extensions contributrices identifient le listener par son {@link #name()}.
  * </p>
  *

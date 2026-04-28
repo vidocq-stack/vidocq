@@ -1,26 +1,29 @@
 package io.vidocq.mpserver.ext.rest.cassini;
 
-import io.vidocq.vauban.core.container.VaubanContainerBuilder;
+import io.vidocq.cassini.chappe.ChappeHttpAdapter;
+import io.vidocq.cassini.internal.ExceptionMapperRegistry;
+import io.vidocq.cassini.internal.Invoker;
+import io.vidocq.cassini.internal.MessageBodyRegistry;
+import io.vidocq.cassini.internal.ResourceMethod;
+import io.vidocq.cassini.internal.ResourceScanner;
+import io.vidocq.cassini.internal.UriRouter;
 import io.vidocq.mpserver.ext.chappe.ChappeListener;
 import io.vidocq.mpserver.ext.chappe.ChappeMountPoint;
-import io.vidocq.mpserver.ext.rest.cassini.internal.CassiniRestBridge;
-import io.vidocq.mpserver.ext.rest.cassini.internal.Invoker;
-import io.vidocq.mpserver.ext.rest.cassini.internal.ResourceMethod;
-import io.vidocq.mpserver.ext.rest.cassini.internal.ResourceScanner;
-import io.vidocq.mpserver.ext.rest.cassini.internal.UriRouter;
 import io.vidocq.mpserver.spi.ExtensionContext;
 import io.vidocq.mpserver.spi.VidocqConfiguration;
 import io.vidocq.mpserver.spi.VidocqExtension;
+import io.vidocq.vauban.core.container.VaubanContainerBuilder;
+import io.vidocq.vauban.core.context.RequestContext;
 
 import java.util.List;
 
 /**
- * Extension Cassini — runtime Jakarta RESTful Web Services 4.0 monté sur le
- * moteur HTTP Chappe.
+ * Extension Vidocq-MPS qui branche {@link io.vidocq.cassini} (Jakarta REST 4.0
+ * standalone) sur le moteur HTTP Chappe via {@link ChappeHttpAdapter}.
  *
  * <p>Priorité 500 : tourne après {@code ChappeEngineExtension} et avant
  * {@code ChappeServerBootstrap}, afin de contribuer un handler JAX-RS au
- * {@link ChappeMountPoint} via {@link CassiniRestBridge}.</p>
+ * {@link ChappeMountPoint}.
  *
  * <h3>Configuration</h3>
  * <ul>
@@ -66,7 +69,11 @@ public final class CassiniExtension implements VidocqExtension {
 
         UriRouter router = new UriRouter(routes);
         Invoker invoker = Invoker.forBeanManager(context.beanManager());
-        CassiniRestBridge bridge = new CassiniRestBridge(router, invoker);
+
+        // Activation @RequestScoped via Vauban autour de chaque dispatch.
+        RequestContext requestContext = new RequestContext();
+        ChappeHttpAdapter.Scoped scoped = requestContext::runInScope;
+        ChappeHttpAdapter bridge = new ChappeHttpAdapter(router, invoker, scoped);
 
         String mountPrefix = "/".equals(contextPath) ? "" : contextPath;
         ChappeMountPoint.instance().mount(listener, mountPrefix, bridge);

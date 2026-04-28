@@ -1,7 +1,7 @@
 package io.vidocq.mpserver.ext.chappe;
 
-import fr.vidocq.chappe.api.Handler;
-import fr.vidocq.chappe.api.Router;
+import io.vidocq.chappe.api.Handler;
+import io.vidocq.chappe.api.Router;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -18,7 +18,7 @@ import java.util.Objects;
  * {@code vidocq-rest-chappe-extension}, ...) appellent
  * {@link #mount(String, String, Handler)} durant leur phase {@code onStart}.
  * {@link ChappeServerBootstrap} assemble ensuite les {@link Router} et démarre un
- * {@link fr.vidocq.chappe.api.Server Server} par listener.
+ * {@link io.vidocq.chappe.api.Server Server} par listener.
  * </p>
  *
  * <p>Thread-safety : toutes les contributions doivent être faites pendant la phase

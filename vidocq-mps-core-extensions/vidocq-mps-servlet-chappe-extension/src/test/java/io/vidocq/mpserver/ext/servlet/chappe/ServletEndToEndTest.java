@@ -1,6 +1,6 @@
 package io.vidocq.mpserver.ext.servlet.chappe;
 
-import fr.vidocq.chappe.api.Server;
+import io.vidocq.chappe.api.Server;
 import io.vidocq.mpserver.ext.servlet.chappe.bridge.ChappeServletBridge;
 import io.vidocq.mpserver.ext.servlet.chappe.container.VidocqServletContext;
 import io.vidocq.mpserver.ext.servlet.chappe.dispatcher.ServletDispatcher;
@@ -36,7 +36,7 @@ class ServletEndToEndTest {
         if (server != null) server.stop();
     }
 
-    private void startWith(fr.vidocq.chappe.api.Handler handler) {
+    private void startWith(io.vidocq.chappe.api.Handler handler) {
         var r = TestServerLauncher.start(handler);
         this.server = r.server;
         this.port = r.port;

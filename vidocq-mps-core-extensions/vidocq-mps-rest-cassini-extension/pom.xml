@@ -11,13 +11,24 @@
 
     <artifactId>vidocq-mps-rest-cassini-extension</artifactId>
     <name>Vidocq :: Core Extensions :: REST (Cassini)</name>
-    <description>Implémentation Jakarta RESTful Web Services 4.0 sur le moteur HTTP Chappe</description>
-
-    <properties>
-        <jakarta.ws.rs.version>4.0.0</jakarta.ws.rs.version>
-    </properties>
+    <description>Extension Vidocq-MPS qui branche Cassini (Jakarta REST 4.0 standalone) sur le moteur HTTP Chappe via le SPI io.vidocq.cassini.spi.http</description>
 
     <dependencies>
+        <!-- Cassini standalone — extrait avril 2026 vers io.vidocq.cassini -->
+        <dependency>
+            <groupId>io.vidocq.cassini</groupId>
+            <artifactId>cassini-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.cassini</groupId>
+            <artifactId>cassini-cdi</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.cassini</groupId>
+            <artifactId>cassini-chappe</artifactId>
+        </dependency>
+
+        <!-- Vidocq-MPS SPI + Chappe extension -->
         <dependency>
             <groupId>io.vidocq.mpserver</groupId>
             <artifactId>vidocq-mps-spi</artifactId>
@@ -30,15 +41,10 @@
             <groupId>io.vidocq.vauban</groupId>
             <artifactId>vauban-core</artifactId>
         </dependency>
-        <dependency>
-            <groupId>fr.vidocq.chappe</groupId>
-            <artifactId>chappe-api</artifactId>
-        </dependency>
 
         <dependency>
-            <groupId>jakarta.ws.rs</groupId>
-            <artifactId>jakarta.ws.rs-api</artifactId>
-            <version>${jakarta.ws.rs.version}</version>
+            <groupId>io.vidocq.chappe</groupId>
+            <artifactId>chappe-api</artifactId>
         </dependency>
         <dependency>
             <groupId>jakarta.enterprise</groupId>
@@ -48,49 +54,7 @@
             <groupId>jakarta.annotation</groupId>
             <artifactId>jakarta.annotation-api</artifactId>
         </dependency>
-        <!-- MBR/MBW standards §4.2.3 : JAXB + Jakarta Activation.
-             Non-optionnels pour que le scan BCE du vidocq-maven-plugin
-             puisse résoudre les références statiques aux Jaxb*/DataSource*. -->
-        <dependency>
-            <groupId>jakarta.xml.bind</groupId>
-            <artifactId>jakarta.xml.bind-api</artifactId>
-            <version>4.0.2</version>
-        </dependency>
-        <dependency>
-            <groupId>jakarta.activation</groupId>
-            <artifactId>jakarta.activation-api</artifactId>
-            <version>2.1.3</version>
-        </dependency>
-        <!-- §4.2.3 / Core Profile : JSON-B (Jakarta JSON Binding 3.0).
-             API + impl Yasson + Parsson (JSON-P). MBR/MBW JSON (POJO) inclus
-             dans Cassini (CassiniJsonbReaderWriter) — utilise Jsonb depuis un
-             ContextResolver<Jsonb> si fourni par l'application, sinon default. -->
-        <dependency>
-            <groupId>jakarta.json.bind</groupId>
-            <artifactId>jakarta.json.bind-api</artifactId>
-            <version>3.0.1</version>
-        </dependency>
-        <dependency>
-            <groupId>jakarta.json</groupId>
-            <artifactId>jakarta.json-api</artifactId>
-            <version>2.1.3</version>
-        </dependency>
-        <dependency>
-            <groupId>org.eclipse</groupId>
-            <artifactId>yasson</artifactId>
-            <version>3.0.4</version>
-        </dependency>
-        <dependency>
-            <groupId>org.eclipse.parsson</groupId>
-            <artifactId>parsson</artifactId>
-            <version>1.1.7</version>
-        </dependency>
 
-        <dependency>
-            <groupId>fr.vidocq.chappe</groupId>
-            <artifactId>chappe-core</artifactId>
-            <scope>test</scope>
-        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>

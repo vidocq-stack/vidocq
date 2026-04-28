@@ -25,7 +25,7 @@
         </dependency>
 
         <dependency>
-            <groupId>fr.vidocq.chappe</groupId>
+            <groupId>io.vidocq.chappe</groupId>
             <artifactId>chappe-core</artifactId>
         </dependency>
 
