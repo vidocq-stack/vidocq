@@ -22,6 +22,8 @@ module io.vidocq.mpserver.ext.rest.cassini {
             to io.vidocq.mpserver.ext.rest.cassini.tck;
     exports io.vidocq.mpserver.ext.rest.cassini.internal.filter
             to io.vidocq.mpserver.ext.rest.cassini.tck;
+    exports io.vidocq.mpserver.ext.rest.cassini.internal.context
+            to io.vidocq.mpserver.ext.rest.cassini.tck;
 
     opens io.vidocq.mpserver.ext.rest.cassini to io.vidocq.vauban.core;
 
