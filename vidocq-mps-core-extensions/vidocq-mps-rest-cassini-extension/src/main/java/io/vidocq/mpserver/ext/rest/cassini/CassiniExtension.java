@@ -1,12 +1,9 @@
 package io.vidocq.mpserver.ext.rest.cassini;
 
+import io.vidocq.cassini.cdi.vauban.VaubanBeanProvider;
 import io.vidocq.cassini.chappe.ChappeHttpAdapter;
-import io.vidocq.cassini.internal.ExceptionMapperRegistry;
-import io.vidocq.cassini.internal.Invoker;
-import io.vidocq.cassini.internal.MessageBodyRegistry;
-import io.vidocq.cassini.internal.ResourceMethod;
-import io.vidocq.cassini.internal.ResourceScanner;
-import io.vidocq.cassini.internal.UriRouter;
+import io.vidocq.cassini.spi.bean.BeanProvider;
+import io.vidocq.cassini.spi.http.CassiniStack;
 import io.vidocq.mpserver.ext.chappe.ChappeListener;
 import io.vidocq.mpserver.ext.chappe.ChappeMountPoint;
 import io.vidocq.mpserver.spi.ExtensionContext;
@@ -15,15 +12,21 @@ import io.vidocq.mpserver.spi.VidocqExtension;
 import io.vidocq.vauban.core.container.VaubanContainerBuilder;
 import io.vidocq.vauban.core.context.RequestContext;
 
-import java.util.List;
+import java.util.Set;
 
 /**
- * Extension Vidocq-MPS qui branche {@link io.vidocq.cassini} (Jakarta REST 4.0
- * standalone) sur le moteur HTTP Chappe via {@link ChappeHttpAdapter}.
+ * Extension Vidocq-MPS qui branche Cassini (Jakarta REST 4.0 standalone) sur le
+ * moteur HTTP Chappe via {@link ChappeHttpAdapter}.
  *
  * <p>Priorité 500 : tourne après {@code ChappeEngineExtension} et avant
  * {@code ChappeServerBootstrap}, afin de contribuer un handler JAX-RS au
  * {@link ChappeMountPoint}.
+ *
+ * <p>Le bootstrap passe par la SPI publique {@link CassiniStack#builder()} :
+ * cassini-core fournit le {@code BuilderFactory} via ServiceLoader, et un
+ * {@link VaubanBeanProvider} construit sur le {@code VaubanContainer} du
+ * runtime expose les ressources {@code @Path}/{@code @Provider} découvertes
+ * par CDI.
  *
  * <h3>Configuration</h3>
  * <ul>
@@ -60,33 +63,29 @@ public final class CassiniExtension implements VidocqExtension {
 
     @Override
     public void onStart(ExtensionContext context) {
-        List<ResourceMethod> routes = ResourceScanner.discover(context.beanManager());
-        if (routes.isEmpty()) {
+        BeanProvider beanProvider = new VaubanBeanProvider(context.container());
+        Set<Class<?>> resourceClasses = beanProvider.getResourceClasses();
+        if (resourceClasses.isEmpty()) {
             LOG.log(System.Logger.Level.INFO,
                     "No @Path beans discovered — Cassini REST extension inactive");
             return;
         }
 
-        UriRouter router = new UriRouter(routes);
-        Invoker invoker = Invoker.forBeanManager(context.beanManager());
+        CassiniStack stack = CassiniStack.builder()
+                .beanProvider(beanProvider)
+                .build();
 
         // Activation @RequestScoped via Vauban autour de chaque dispatch.
         RequestContext requestContext = new RequestContext();
         ChappeHttpAdapter.Scoped scoped = requestContext::runInScope;
-        ChappeHttpAdapter bridge = new ChappeHttpAdapter(router, invoker, scoped);
+        ChappeHttpAdapter bridge = new ChappeHttpAdapter(stack.adapter(), scoped);
 
         String mountPrefix = "/".equals(contextPath) ? "" : contextPath;
         ChappeMountPoint.instance().mount(listener, mountPrefix, bridge);
 
-        for (ResourceMethod r : routes) {
-            LOG.log(System.Logger.Level.INFO,
-                    "  Endpoint {0} {1}{2} -> {3}.{4}",
-                    r.httpMethod(), contextPath, r.path(),
-                    r.beanClass().getSimpleName(), r.javaMethod().getName());
-        }
         LOG.log(System.Logger.Level.INFO,
-                "Cassini REST extension mounted on listener={0} prefix={1} ({2} endpoint(s))",
-                listener, mountPrefix.isEmpty() ? "/" : mountPrefix, routes.size());
+                "Cassini REST extension mounted on listener={0} prefix={1} ({2} resource class(es))",
+                listener, mountPrefix.isEmpty() ? "/" : mountPrefix, resourceClasses.size());
     }
 
     @Override

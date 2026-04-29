@@ -6,8 +6,8 @@ module io.vidocq.mpserver.ext.rest.cassini {
     requires io.vidocq.vauban.core;
 
     requires io.vidocq.cassini.api;
-    requires io.vidocq.cassini.core;
     requires io.vidocq.cassini.chappe;
+    requires io.vidocq.cassini.cdi.vauban;
 
     requires io.vidocq.chappe.api;
     requires jakarta.cdi;
