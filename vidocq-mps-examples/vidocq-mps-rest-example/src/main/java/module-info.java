@@ -13,4 +13,9 @@ module io.vidocq.mpserver.examples.rest {
 
     // JAX-RS et JSON-B font de la reflection sur ressources et records.
     opens io.vidocq.mpserver.examples.rest;
+
+    // java.util.logging.LogManager instancie StdoutHandler par réflexion via
+    // Class.newInstance() lors du load de logging.properties — requiert que
+    // le package soit exporté à java.logging.
+    exports io.vidocq.mpserver.logging to java.logging;
 }
