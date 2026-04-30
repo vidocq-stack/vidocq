@@ -129,5 +129,121 @@
                           default-value="${project.build.directory}"/>
             </configuration>
         </mojo>
+
+        <!-- vidocq:jlink -->
+        <mojo>
+            <goal>jlink</goal>
+            <description>Package application as a self-contained jlink runtime image</description>
+            <requiresDependencyResolution>runtime</requiresDependencyResolution>
+            <requiresDirectInvocation>false</requiresDirectInvocation>
+            <requiresProject>true</requiresProject>
+            <requiresOnline>false</requiresOnline>
+            <aggregator>false</aggregator>
+            <phase>package</phase>
+            <implementation>io.vidocq.mpserver.maven.VidocqJlinkMojo</implementation>
+            <language>java</language>
+            <instantiationStrategy>per-lookup</instantiationStrategy>
+            <threadSafe>false</threadSafe>
+            <parameters>
+                <parameter>
+                    <name>project</name>
+                    <type>org.apache.maven.project.MavenProject</type>
+                    <required>true</required>
+                    <editable>false</editable>
+                    <description>The Maven project</description>
+                </parameter>
+                <parameter>
+                    <name>mainModule</name>
+                    <type>java.lang.String</type>
+                    <required>true</required>
+                    <editable>true</editable>
+                    <description>Java module containing the main class</description>
+                </parameter>
+                <parameter>
+                    <name>mainClass</name>
+                    <type>java.lang.String</type>
+                    <required>true</required>
+                    <editable>true</editable>
+                    <description>Fully qualified main class</description>
+                </parameter>
+                <parameter>
+                    <name>launcher</name>
+                    <type>java.lang.String</type>
+                    <required>false</required>
+                    <editable>true</editable>
+                    <description>Launcher script base name</description>
+                </parameter>
+                <parameter>
+                    <name>distDir</name>
+                    <type>java.io.File</type>
+                    <required>false</required>
+                    <editable>true</editable>
+                    <description>jlink output directory</description>
+                </parameter>
+                <parameter>
+                    <name>modsDir</name>
+                    <type>java.io.File</type>
+                    <required>false</required>
+                    <editable>false</editable>
+                    <description>Module staging directory</description>
+                </parameter>
+                <parameter>
+                    <name>buildDir</name>
+                    <type>java.io.File</type>
+                    <required>false</required>
+                    <editable>false</editable>
+                    <description>Build output directory</description>
+                </parameter>
+                <parameter>
+                    <name>classesDir</name>
+                    <type>java.io.File</type>
+                    <required>false</required>
+                    <editable>false</editable>
+                    <description>Compiled classes directory</description>
+                </parameter>
+                <parameter>
+                    <name>stripDebug</name>
+                    <type>boolean</type>
+                    <required>false</required>
+                    <editable>true</editable>
+                    <description>Strip debug info from modules</description>
+                </parameter>
+                <parameter>
+                    <name>compress</name>
+                    <type>java.lang.String</type>
+                    <required>false</required>
+                    <editable>true</editable>
+                    <description>jlink compress level (zip-0 to zip-9)</description>
+                </parameter>
+                <parameter>
+                    <name>includeResources</name>
+                    <type>java.util.List</type>
+                    <required>false</required>
+                    <editable>true</editable>
+                    <description>Non-modular resources to copy under dist/conf/</description>
+                </parameter>
+            </parameters>
+            <configuration>
+                <project implementation="org.apache.maven.project.MavenProject"
+                         default-value="${project}"/>
+                <mainModule implementation="java.lang.String">${vidocq.mainModule}</mainModule>
+                <mainClass implementation="java.lang.String">${vidocq.mainClass}</mainClass>
+                <launcher implementation="java.lang.String"
+                          default-value="${project.artifactId}">${vidocq.launcher}</launcher>
+                <distDir implementation="java.io.File"
+                         default-value="${project.build.directory}/dist">${vidocq.distDir}</distDir>
+                <modsDir implementation="java.io.File"
+                         default-value="${project.build.directory}/jlink-mods"/>
+                <buildDir implementation="java.io.File"
+                          default-value="${project.build.directory}"/>
+                <classesDir implementation="java.io.File"
+                            default-value="${project.build.outputDirectory}"/>
+                <stripDebug implementation="boolean"
+                            default-value="true">${vidocq.stripDebug}</stripDebug>
+                <compress implementation="java.lang.String"
+                          default-value="zip-6">${vidocq.compress}</compress>
+                <includeResources implementation="java.util.List"/>
+            </configuration>
+        </mojo>
     </mojos>
 </plugin>

@@ -77,6 +77,7 @@
                 <version>${project.version}</version>
                 <executions>
                     <execution>
+                        <id>generate</id>
                         <goals>
                             <goal>generate</goal>
                         </goals>
@@ -84,6 +85,17 @@
                             <scanDependencies>
                                 <scanDependency>io.vidocq.mpserver:vidocq-mps-external-rest-lib</scanDependency>
                             </scanDependencies>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>jlink</id>
+                        <goals>
+                            <goal>jlink</goal>
+                        </goals>
+                        <configuration>
+                            <mainModule>io.vidocq.mpserver.examples.rest</mainModule>
+                            <mainClass>io.vidocq.mpserver.examples.rest.RestExampleApp</mainClass>
+                            <launcher>todo-app</launcher>
                         </configuration>
                     </execution>
                 </executions>
