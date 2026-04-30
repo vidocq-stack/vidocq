@@ -16,12 +16,12 @@ import java.util.Set;
 
 /**
  * Extension Vidocq-MPS qui branche Cassini (Jakarta REST 4.0 standalone) sur le
- * moteur HTTP Chappe via {@link ChappeHttpAdapter}.
+ * moteur HTTP Chappe via {@link ChappeHttpAdapter} — voie auto-mount legacy.
  *
  * <p>Priorité 500 : tourne après {@code ChappeEngineExtension} et avant
  * {@code ChappeServerBootstrap}, afin de contribuer un handler JAX-RS au
  * {@link ChappeMountPoint}.
- *a)
+ *
  * <p>Le bootstrap passe par la SPI publique {@link CassiniStack#builder()} :
  * cassini-core fournit le {@code BuilderFactory} via ServiceLoader, et un
  * {@link VaubanBeanProvider} construit sur le {@code VaubanContainer} du
@@ -33,6 +33,10 @@ import java.util.Set;
  *   <li>{@code vidocq.rest.context-path} — préfixe de montage (défaut : {@code /})</li>
  *   <li>{@code vidocq.rest.listener} — listener Chappe cible (défaut : {@link ChappeListener#DEFAULT})</li>
  * </ul>
+ *
+ * <p><b>Désactivation :</b> dès qu'un mount déclaratif {@code vidocq.mount.<n>.type=cassini}
+ * est présent dans la config, cette extension cède la place à
+ * {@code ChappeMountConfigExtension} pour éviter un double mount.</p>
  */
 public final class CassiniExtension implements VidocqExtension {
 
@@ -63,6 +67,13 @@ public final class CassiniExtension implements VidocqExtension {
 
     @Override
     public void onStart(ExtensionContext context) {
+        if (hasDeclarativeCassiniMount(context)) {
+            LOG.log(System.Logger.Level.INFO,
+                    "A declarative vidocq.mount.<n>.type=cassini is configured — "
+                            + "skipping legacy auto-mount.");
+            return;
+        }
+
         BeanProvider beanProvider = new VaubanBeanProvider(context.container());
         Set<Class<?>> resourceClasses = beanProvider.getResourceClasses();
         if (resourceClasses.isEmpty()) {
@@ -90,5 +101,14 @@ public final class CassiniExtension implements VidocqExtension {
 
     @Override
     public void onStop() {
+    }
+
+    private static boolean hasDeclarativeCassiniMount(ExtensionContext context) {
+        var config = context.config();
+        for (String key : config.getPropertyNames()) {
+            if (!key.startsWith("vidocq.mount.") || !key.endsWith(".type")) continue;
+            if ("cassini".equals(config.getValue(key, String.class, ""))) return true;
+        }
+        return false;
     }
 }
