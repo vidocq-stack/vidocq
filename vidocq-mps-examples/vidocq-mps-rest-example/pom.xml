@@ -113,6 +113,19 @@
                             <type>app-image</type>
                         </configuration>
                     </execution>
+                    <execution>
+                        <id>docker</id>
+                        <goals>
+                            <goal>docker</goal>
+                        </goals>
+                        <configuration>
+                            <launcher>todo-app</launcher>
+                            <imageTag>vidocq/todo-app:0.1.0-SNAPSHOT</imageTag>
+                            <!-- build=false par défaut : on génère seulement le Dockerfile.
+                                 Mettre <build>true</build> ou -Dvidocq.docker.build=true
+                                 pour invoquer 'docker build' dans la foulée. -->
+                        </configuration>
+                    </execution>
                 </executions>
             </plugin>
         </plugins>
