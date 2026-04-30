@@ -21,7 +21,7 @@ import java.util.Set;
  * <p>Priorité 500 : tourne après {@code ChappeEngineExtension} et avant
  * {@code ChappeServerBootstrap}, afin de contribuer un handler JAX-RS au
  * {@link ChappeMountPoint}.
- *
+ *a)
  * <p>Le bootstrap passe par la SPI publique {@link CassiniStack#builder()} :
  * cassini-core fournit le {@code BuilderFactory} via ServiceLoader, et un
  * {@link VaubanBeanProvider} construit sur le {@code VaubanContainer} du

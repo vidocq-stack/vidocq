@@ -16,7 +16,6 @@
 
     <modules>
         <module>vidocq-mps-chappe-extension</module>
-        <module>vidocq-mps-servlet-chappe-extension</module>
         <module>vidocq-mps-rest-cassini-extension</module>
     </modules>
 
@@ -25,29 +24,13 @@
         remplacé par vidocq-rest-cassini-extension (runtime JAX-RS 4.0 natif
         sur Chappe).
 
-        Deux modules TCK runners sont volontairement EN DEHORS du reactor
-        (ShrinkWrap Maven Resolver 3.3 vs Model 4.1.0) :
-        - vidocq-servlet-chappe-tck-runner   (Servlet 6.1 TCK, ~99 %)
-        - vidocq-rest-cassini-tck-runner     (REST 4.0 TCK, scaffolding)
+        L'implémentation Servlet 6.1 a été extraite en avril 2026 vers le
+        projet standalone Foy : https://forge.vidocq.dev/vidocq/foy
+        (groupId io.vidocq.foy ; modules foy-api, foy-core, foy-cdi-vauban,
+        foy-chappe, foy-tck).
 
-        Lancement via les scripts dédiés à la racine du projet :
-          ./run-official-tck-servlet6.1.sh
+        Le module TCK runner Cassini est volontairement EN DEHORS du reactor
+        (ShrinkWrap Maven Resolver 3.3 vs Model 4.1.0). Lancement :
           ./run-official-tck-restful-4.0.sh
-    -->
-
-    <!--
-        vidocq-servlet-chappe-tck-runner est volontairement EN DEHORS du reactor :
-        ShrinkWrap Maven Resolver 3.3 (dép. transitive du TCK officiel Jakarta)
-        s'appuie sur maven-resolver 1.9 / maven-model 3.9 qui ne savent pas parser
-        le Model 4.1.0 des POMs du reactor Vidocq (version implicite via parent).
-        Son ClasspathWorkspaceReader crash avec "Bad artifact coordinates ... jar:".
-
-        Profil tck-official activé via :
-          ./run-official-tck-servlet6.1.sh                       : smoke test
-          ./run-official-tck-servlet6.1.sh all                   : suite complète (option double-tiret all)
-          ./run-official-tck-servlet6.1.sh -Dtest=ServletTests   : classe ciblée
-
-        Le module compile et teste indépendamment, ses artefacts restent
-        disponibles en SNAPSHOT local après un mvn install du reactor.
     -->
 </project>

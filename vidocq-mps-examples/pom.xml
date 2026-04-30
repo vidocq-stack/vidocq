@@ -17,6 +17,5 @@
     <modules>
         <module>vidocq-mps-external-rest-lib</module>
         <module>vidocq-mps-rest-example</module>
-        <module>vidocq-mps-servlet-example</module>
     </modules>
 </project>

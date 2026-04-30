@@ -84,7 +84,6 @@
         <chappe.version>0.1.0-SNAPSHOT</chappe.version>
         <cassini.version>0.1.0-SNAPSHOT</cassini.version>
         <jakarta.cdi.version>4.1.0</jakarta.cdi.version>
-        <jakarta.servlet.version>6.1.0</jakarta.servlet.version>
         <jakarta.annotation.version>3.0.0</jakarta.annotation.version>
         <junit.version>6.0.3</junit.version>
         <arquillian.version>1.8.0.Final</arquillian.version>
@@ -106,13 +105,6 @@
                 <groupId>jakarta.enterprise</groupId>
                 <artifactId>jakarta.enterprise.cdi-api</artifactId>
                 <version>${jakarta.cdi.version}</version>
-            </dependency>
-
-            <!-- Jakarta Servlet API 6.1 -->
-            <dependency>
-                <groupId>jakarta.servlet</groupId>
-                <artifactId>jakarta.servlet-api</artifactId>
-                <version>${jakarta.servlet.version}</version>
             </dependency>
 
             <!-- Jakarta Annotations -->
@@ -192,16 +184,6 @@
             <dependency>
                 <groupId>io.vidocq.mpserver</groupId>
                 <artifactId>vidocq-mps-chappe-extension</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>io.vidocq.mpserver</groupId>
-                <artifactId>vidocq-mps-servlet-chappe-extension</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>io.vidocq.mpserver</groupId>
-                <artifactId>vidocq-mps-servlet-chappe-tck-runner</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

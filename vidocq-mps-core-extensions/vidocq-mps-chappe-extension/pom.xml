@@ -22,6 +22,14 @@
             <groupId>io.vidocq.vauban</groupId>
             <artifactId>vauban-core</artifactId>
         </dependency>
+        <!-- vauban-core déclare vauban-classloader-spi optional dans son pom mais
+             requires non-static dans son module-info → indispensable au runtime
+             du module path, sinon "Module io.vidocq.vauban.classloader.spi not found". -->
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-classloader-spi</artifactId>
+            <scope>runtime</scope>
+        </dependency>
         <dependency>
             <groupId>io.vidocq.chappe</groupId>
             <artifactId>chappe-api</artifactId>
