@@ -34,7 +34,7 @@ import java.util.Set;
  *   <li>{@code vidocq.rest.listener} — listener Chappe cible (défaut : {@link ChappeListener#DEFAULT})</li>
  * </ul>
  *
- * <p><b>Désactivation :</b> dès qu'un mount déclaratif {@code vidocq.mount.<n>.type=cassini}
+ * <p><b>Désactivation :</b> dès qu'un mount déclaratif {@code vidocq.http.mount.<n>.type=restful}
  * est présent dans la config, cette extension cède la place à
  * {@code ChappeMountConfigExtension} pour éviter un double mount.</p>
  */
@@ -106,8 +106,8 @@ public final class CassiniExtension implements VidocqExtension {
     private static boolean hasDeclarativeCassiniMount(ExtensionContext context) {
         var config = context.config();
         for (String key : config.getPropertyNames()) {
-            if (!key.startsWith("vidocq.mount.") || !key.endsWith(".type")) continue;
-            if ("cassini".equals(config.getValue(key, String.class, ""))) return true;
+            if (!key.startsWith("vidocq.http.mount.") || !key.endsWith(".type")) continue;
+            if ("restful".equals(config.getValue(key, String.class, ""))) return true;
         }
         return false;
     }

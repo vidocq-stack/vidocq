@@ -10,14 +10,21 @@ import io.vidocq.mpserver.ext.chappe.spi.MountHandlerProvider;
 import io.vidocq.vauban.core.context.RequestContext;
 
 /**
- * Provider {@code MountHandlerProvider} de type {@code cassini} : monte un
- * runtime Jakarta REST 4.0 (Cassini) sur Chappe avec le {@link BeanProvider}
- * Vauban du runtime Vidocq-MPS.
+ * Provider {@code MountHandlerProvider} de type {@code restful} (Jakarta
+ * RESTful Web Services) — implémentation Cassini montée sur Chappe avec un
+ * {@link BeanProvider} Vauban issu du runtime Vidocq-MPS.
+ *
+ * <p>Le {@code type} décrit le <b>contrat standard</b> (JAX-RS / Jakarta
+ * RESTful Web Services), pas l'implémentation. Quand un autre provider Jakarta
+ * REST sera ajouté (ex. Jersey, RESTEasy), il déclarera également
+ * {@code type() = "restful"} ; la sélection se fera alors via la property
+ * optionnelle {@code vidocq.http.mount.<name>.impl=<id>} (à introduire le
+ * jour où plusieurs implémentations co-existeront).</p>
  *
  * <h3>Properties supportées</h3>
  * <pre>{@code
- * vidocq.mount.<name>.type = cassini
- * vidocq.mount.<name>.path = /api      # défaut : / via le reader
+ * vidocq.http.mount.<name>.type = restful
+ * vidocq.http.mount.<name>.path = /api      # défaut : / via le reader
  * # Aucune autre property : la découverte des @Path/@Provider se fait via Vauban.
  * }</pre>
  */
@@ -25,7 +32,7 @@ public final class CassiniMountHandlerProvider implements MountHandlerProvider {
 
     @Override
     public String type() {
-        return "cassini";
+        return "restful";
     }
 
     @Override

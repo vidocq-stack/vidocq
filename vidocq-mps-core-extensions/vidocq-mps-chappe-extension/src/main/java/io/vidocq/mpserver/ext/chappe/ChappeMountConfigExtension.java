@@ -17,7 +17,7 @@ import java.util.ServiceLoader;
 import java.util.Set;
 
 /**
- * Lit la config {@code vidocq.mount.<name>.*} et enregistre chaque mount
+ * Lit la config {@code vidocq.http.mount.<name>.*} et enregistre chaque mount
  * déclaré sur le {@link ChappeMountPoint} via le {@link MountHandlerProvider}
  * désigné par {@code .type}.
  *
@@ -27,29 +27,36 @@ import java.util.Set;
  *
  * <h3>Format de configuration</h3>
  * <pre>{@code
- * vidocq.mount.ui.path          = /
- * vidocq.mount.ui.type          = static
- * vidocq.mount.ui.classpath     = static
- * vidocq.mount.ui.cache-in-memory = true
+ * vidocq.http.mount.ui.path          = /
+ * vidocq.http.mount.ui.type          = static
+ * vidocq.http.mount.ui.classpath     = static
+ * vidocq.http.mount.ui.cache-in-memory = true
  *
- * vidocq.mount.api.path         = /api
- * vidocq.mount.api.type         = cassini
+ * vidocq.http.mount.api.path         = /api
+ * vidocq.http.mount.api.type         = restful    # standard Jakarta REST
  *
- * vidocq.mount.legacy.path      = /srv
- * vidocq.mount.legacy.type      = foy
- * vidocq.mount.legacy.priority  = 200       # défaut : 0
- * vidocq.mount.legacy.listener  = secured   # défaut : "default"
+ * vidocq.http.mount.legacy.path      = /srv
+ * vidocq.http.mount.legacy.type      = servlet      # standard Jakarta Servlet
+ * vidocq.http.mount.legacy.priority  = 200          # surcharge optionnelle
+ * vidocq.http.mount.legacy.listener  = secured      # défaut : "default"
  * }</pre>
+ *
+ * <p>Les valeurs de {@code .type} décrivent le <b>contrat standard</b>
+ * (ex. {@code restful}, {@code servlet}, {@code static}), pas une
+ * implémentation. Cela laisse la porte ouverte à plusieurs providers pour
+ * un même type ; un futur {@code .impl} pourra alors discriminer.</p>
  *
  * <p>Les mounts sont enregistrés par <b>priorité décroissante</b> : un mount
  * avec une priorité plus élevée gagne contre un autre qui partagerait un
- * préfixe plus court.</p>
+ * préfixe plus court. La <b>priorité par défaut</b> est la longueur du
+ * préfixe normalisé, ce qui assure naturellement que {@code /api} gagne
+ * contre {@code /} sans avoir à la spécifier.</p>
  */
 public final class ChappeMountConfigExtension implements VidocqExtension {
 
     private static final System.Logger LOG = System.getLogger(ChappeMountConfigExtension.class.getName());
 
-    private static final String PREFIX = "vidocq.mount.";
+    private static final String PREFIX = "vidocq.http.mount.";
     private static final String SUFFIX_PATH = ".path";
 
     @Override
@@ -76,8 +83,10 @@ public final class ChappeMountConfigExtension implements VidocqExtension {
         for (String name : mountNames) {
             String prefix = config.getValue(PREFIX + name + ".path", String.class, "/");
             String listener = config.getValue(PREFIX + name + ".listener", String.class, ChappeListener.DEFAULT);
-            int priority = config.getValue(PREFIX + name + ".priority", Integer.class, 0);
-            mounts.add(new MountConfig(name, normalizePrefix(prefix), listener, priority, config, context));
+            String normalizedPrefix = normalizePrefix(prefix);
+            int priority = config.getValue(PREFIX + name + ".priority", Integer.class,
+                    defaultPriority(normalizedPrefix));
+            mounts.add(new MountConfig(name, normalizedPrefix, listener, priority, config, context));
         }
         mounts.sort(Comparator.comparingInt(MountConfig::priority).reversed());
 
@@ -114,6 +123,17 @@ public final class ChappeMountConfigExtension implements VidocqExtension {
     private static String normalizePrefix(String raw) {
         if (raw == null || raw.isEmpty() || "/".equals(raw)) return "";
         return raw.endsWith("/") ? raw.substring(0, raw.length() - 1) : raw;
+    }
+
+    /**
+     * Priorité par défaut dérivée de la longueur du préfixe : un mount sur un
+     * préfixe plus long doit gagner contre un catch-all racine. Le mount {@code "/"}
+     * (préfixe normalisé {@code ""}) a donc priorité 0 ; {@code "/api"} a priorité
+     * 4 ; {@code "/api/v2"} a priorité 7. L'utilisateur peut surcharger via
+     * {@code vidocq.http.mount.<n>.priority=<int>}.
+     */
+    private static int defaultPriority(String normalizedPrefix) {
+        return normalizedPrefix.length();
     }
 
     private static Map<String, MountHandlerProvider> loadProviders() {
