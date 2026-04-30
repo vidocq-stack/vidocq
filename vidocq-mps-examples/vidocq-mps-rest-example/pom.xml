@@ -98,6 +98,21 @@
                             <launcher>todo-app</launcher>
                         </configuration>
                     </execution>
+                    <execution>
+                        <id>jpackage</id>
+                        <goals>
+                            <goal>jpackage</goal>
+                        </goals>
+                        <configuration>
+                            <mainModule>io.vidocq.mpserver.examples.rest</mainModule>
+                            <mainClass>io.vidocq.mpserver.examples.rest.RestExampleApp</mainClass>
+                            <appName>todo-app</appName>
+                            <!-- macOS app-image refuse 0.x.y → on fixe 1.0.0 ; à
+                                 incrémenter à chaque release de l'exemple. -->
+                            <appVersion>1.0.0</appVersion>
+                            <type>app-image</type>
+                        </configuration>
+                    </execution>
                 </executions>
             </plugin>
         </plugins>

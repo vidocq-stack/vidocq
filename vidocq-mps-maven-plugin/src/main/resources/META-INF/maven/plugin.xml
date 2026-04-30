@@ -245,5 +245,52 @@
                 <includeResources implementation="java.util.List"/>
             </configuration>
         </mojo>
+
+        <!-- vidocq:jpackage -->
+        <mojo>
+            <goal>jpackage</goal>
+            <description>Package a jlink runtime image as a native installer (.dmg/.deb/.msi/...) or app-image</description>
+            <requiresDependencyResolution>runtime</requiresDependencyResolution>
+            <requiresDirectInvocation>false</requiresDirectInvocation>
+            <requiresProject>true</requiresProject>
+            <requiresOnline>false</requiresOnline>
+            <aggregator>false</aggregator>
+            <phase>package</phase>
+            <implementation>io.vidocq.mpserver.maven.VidocqJpackageMojo</implementation>
+            <language>java</language>
+            <instantiationStrategy>per-lookup</instantiationStrategy>
+            <threadSafe>false</threadSafe>
+            <parameters>
+                <parameter>
+                    <name>project</name>
+                    <type>org.apache.maven.project.MavenProject</type>
+                    <required>true</required><editable>false</editable>
+                    <description>The Maven project</description>
+                </parameter>
+                <parameter><name>mainModule</name><type>java.lang.String</type><required>true</required><editable>true</editable><description>Java module containing the main class</description></parameter>
+                <parameter><name>mainClass</name><type>java.lang.String</type><required>true</required><editable>true</editable><description>Fully qualified main class</description></parameter>
+                <parameter><name>appName</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>Application name</description></parameter>
+                <parameter><name>appVersion</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>Application version</description></parameter>
+                <parameter><name>type</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>jpackage type: app-image, dmg, pkg, deb, rpm, msi, exe</description></parameter>
+                <parameter><name>runtimeImage</name><type>java.io.File</type><required>false</required><editable>true</editable><description>Existing jlink runtime image</description></parameter>
+                <parameter><name>installerDir</name><type>java.io.File</type><required>false</required><editable>true</editable><description>Output directory</description></parameter>
+                <parameter><name>icon</name><type>java.io.File</type><required>false</required><editable>true</editable><description>Optional icon (.icns/.ico/.png)</description></parameter>
+                <parameter><name>vendor</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>Vendor metadata</description></parameter>
+                <parameter><name>description</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>Short description</description></parameter>
+            </parameters>
+            <configuration>
+                <project implementation="org.apache.maven.project.MavenProject" default-value="${project}"/>
+                <mainModule implementation="java.lang.String">${vidocq.mainModule}</mainModule>
+                <mainClass implementation="java.lang.String">${vidocq.mainClass}</mainClass>
+                <appName implementation="java.lang.String" default-value="${project.artifactId}">${vidocq.appName}</appName>
+                <appVersion implementation="java.lang.String" default-value="${project.version}">${vidocq.appVersion}</appVersion>
+                <type implementation="java.lang.String" default-value="app-image">${vidocq.jpackageType}</type>
+                <runtimeImage implementation="java.io.File" default-value="${project.build.directory}/dist">${vidocq.runtimeImage}</runtimeImage>
+                <installerDir implementation="java.io.File" default-value="${project.build.directory}/installer">${vidocq.installerDir}</installerDir>
+                <icon implementation="java.io.File">${vidocq.icon}</icon>
+                <vendor implementation="java.lang.String" default-value="${project.groupId}">${vidocq.vendor}</vendor>
+                <description implementation="java.lang.String" default-value="${project.description}">${vidocq.appDescription}</description>
+            </configuration>
+        </mojo>
     </mojos>
 </plugin>
