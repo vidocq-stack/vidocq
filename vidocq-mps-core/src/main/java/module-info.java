@@ -11,5 +11,6 @@ module io.vidocq.mpserver.core {
     provides io.vidocq.mpserver.spi.config.ConfigSource with
             io.vidocq.mpserver.core.config.SystemPropertiesConfigSource,
             io.vidocq.mpserver.core.config.EnvConfigSource,
+            io.vidocq.mpserver.core.config.ExternalFileConfigSource,
             io.vidocq.mpserver.core.config.PropertiesFileConfigSource;
 }
