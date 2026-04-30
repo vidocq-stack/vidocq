@@ -6,21 +6,19 @@ import java.io.IOException;
 import java.util.logging.LogManager;
 
 /**
- * Point d'entrée de l'application REST d'exemple.
- * <p>
- * Démarre Vidocq avec l'extension REST qui expose
- * les ressources JAX-RS découvertes via CDI.
- * </p>
+ * Point d'entrée de l'application todo-list d'exemple — UI statique servie par
+ * Chappe + endpoints REST {@code /api/todos} fournis par Cassini avec stockage
+ * en mémoire dans un service CDI Vauban.
  *
  * <h3>Usage</h3>
  * <pre>{@code
  * java -m io.vidocq.mpserver.examples.rest/io.vidocq.mpserver.examples.rest.RestExampleApp
  * }</pre>
  *
- * <p>Endpoints disponibles :</p>
+ * <p>Une fois démarré :</p>
  * <ul>
- *   <li>{@code GET /hello} — message texte</li>
- *   <li>{@code GET /hello/json} — message JSON</li>
+ *   <li>UI  → {@code http://localhost:8080/}</li>
+ *   <li>API → {@code http://localhost:8080/api/todos}</li>
  * </ul>
  */
 public class RestExampleApp {
