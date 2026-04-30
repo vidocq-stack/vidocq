@@ -340,6 +340,25 @@ module com.example.myapp {
 }
 ```
 
+### 6.3.1 Custom `java.util.logging` Handler
+
+Si ton app déclare un handler logging custom (`StdoutHandler`,
+`CompactFormatter`, etc.) référencé dans `logging.properties` via
+`handlers = com.example.myapp.logging.StdoutHandler`, il faut **exporter**
+le package à `java.logging` — sinon `LogManager.createLoggerHandlers`
+échoue par `IllegalAccessException` au boot :
+
+```java
+module com.example.myapp {
+    requires java.logging;
+    // …
+    exports com.example.myapp.logging to java.logging;
+}
+```
+
+`exports … to java.logging` (ciblé) est suffisant — pas besoin d'`opens`,
+puisque `Class.newInstance()` n'utilise que le constructeur public no-arg.
+
 ### 6.4 macOS app-image et version
 
 `jpackage --type app-image` sur macOS exige `appVersion` commençant par `1`
