@@ -30,6 +30,7 @@
         <vauban.version>0.1.0-SNAPSHOT</vauban.version>
 
         <arquillian.version>1.9.1.Final</arquillian.version>
+        <shrinkwrap.version>1.2.6</shrinkwrap.version>
         <testng.version>7.10.2</testng.version>
         <h2.version>2.3.232</h2.version>
 
@@ -119,6 +120,36 @@
             <groupId>com.h2database</groupId>
             <artifactId>h2</artifactId>
             <version>${h2.version}</version>
+        </dependency>
+
+        <!-- Vauban indexer — used by the ported Arquillian connector to scan
+             ShrinkWrap deployments at runtime. -->
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-indexer</artifactId>
+            <version>${vauban.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Arquillian core + TestNG container + ShrinkWrap (always available
+             on Central; used by the M6.2 smoke harness). The official TCK suite
+             dependencies stay behind the `tck-run` profile below. -->
+        <dependency>
+            <groupId>org.jboss.arquillian.testng</groupId>
+            <artifactId>arquillian-testng-container</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.jboss.shrinkwrap</groupId>
+            <artifactId>shrinkwrap-api</artifactId>
+            <version>${shrinkwrap.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.jboss.shrinkwrap</groupId>
+            <artifactId>shrinkwrap-impl-base</artifactId>
+            <version>${shrinkwrap.version}</version>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 

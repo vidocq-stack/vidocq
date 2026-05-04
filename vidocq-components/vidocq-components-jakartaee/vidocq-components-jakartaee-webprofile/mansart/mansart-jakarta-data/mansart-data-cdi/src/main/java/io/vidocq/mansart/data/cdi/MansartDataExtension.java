@@ -33,8 +33,14 @@ public final class MansartDataExtension implements BuildCompatibleExtension {
 
     @Discovery
     public void readRepositoriesIndex(ScannedClasses scanned) {
-        // Always scan the default RepositoryRuntime producer.
-        scanned.add(MansartRuntimeProducer.class.getName());
+        // Default RepositoryRuntime producer — only declare the class to scan when it's not
+        // already part of the bean archive (otherwise some containers register it twice and
+        // lose the @Produces method on the second pass).
+        try {
+            Class.forName(MansartRuntimeProducer.class.getName(), false, currentClassLoader());
+        } catch (ClassNotFoundException e) {
+            scanned.add(MansartRuntimeProducer.class.getName());
+        }
 
         ClassLoader cl = currentClassLoader();
         Enumeration<URL> resources;

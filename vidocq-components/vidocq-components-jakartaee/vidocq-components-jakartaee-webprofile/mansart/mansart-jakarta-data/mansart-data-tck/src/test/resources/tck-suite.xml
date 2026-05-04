@@ -12,6 +12,7 @@
     <test name="mansart-smoke" verbose="2">
         <classes>
             <class name="io.vidocq.mansart.data.tck.MansartCdiBootstrapSmokeTest"/>
+            <class name="io.vidocq.mansart.data.tck.MansartArquillianSmokeTest"/>
         </classes>
     </test>
 
