@@ -20,6 +20,10 @@
             <artifactId>mansart-data-dialect-spi</artifactId>
         </dependency>
         <dependency>
+            <groupId>io.vidocq.mansart</groupId>
+            <artifactId>mansart-data-core</artifactId>
+        </dependency>
+        <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
             <scope>provided</scope>

@@ -68,8 +68,11 @@ public final class RepositoryRuntime {
     @SuppressWarnings("unchecked")
     private <E> E insert(EntityModel<E> model, E entity) {
         SqlFragment frag = dialect.insert(model, true);
+        // Use the explicit-column form so PostgreSQL returns only the id column (PG with the
+        // RETURN_GENERATED_KEYS flag returns RETURNING * which would expose every column).
+        String[] keyColumns = new String[]{ model.id().columnName() };
         return ConnectionScope.withConnection(dataSource, c -> {
-            try (PreparedStatement ps = c.prepareStatement(frag.sql(), Statement.RETURN_GENERATED_KEYS)) {
+            try (PreparedStatement ps = c.prepareStatement(frag.sql(), keyColumns)) {
                 bindWritableAttributes(ps, model, entity);
                 ps.executeUpdate();
                 try (ResultSet keys = ps.getGeneratedKeys()) {

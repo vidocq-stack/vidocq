@@ -18,6 +18,6 @@ public final class PostgresqlDialectFactory implements DialectFactory {
 
     @Override
     public Dialect create() {
-        throw new UnsupportedOperationException("PostgreSQL dialect implementation lands in M4.");
+        return new PostgresqlDialect();
     }
 }

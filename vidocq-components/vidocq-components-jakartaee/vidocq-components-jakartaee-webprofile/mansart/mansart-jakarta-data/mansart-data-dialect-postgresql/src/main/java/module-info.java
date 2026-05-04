@@ -3,6 +3,7 @@
  */
 module io.vidocq.mansart.data.dialect.postgresql {
     requires io.vidocq.mansart.data.dialect.spi;
+    requires io.vidocq.mansart.data.core;   // for MansartDataException in translate()
     requires java.sql;
 
     exports io.vidocq.mansart.data.dialect.postgresql;
