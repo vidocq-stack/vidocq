@@ -9,7 +9,7 @@
 -->
 <suite name="mansart-data-tck-1.0" verbose="1">
 
-    <test name="mansart-smoke">
+    <test name="mansart-smoke" verbose="2">
         <classes>
             <class name="io.vidocq.mansart.data.tck.MansartCdiBootstrapSmokeTest"/>
         </classes>

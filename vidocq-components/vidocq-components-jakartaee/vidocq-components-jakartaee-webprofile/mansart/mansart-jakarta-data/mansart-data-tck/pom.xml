@@ -27,14 +27,13 @@
         <jakarta.cdi.version>4.1.0</jakarta.cdi.version>
 
         <mansart.version>1.0.0-SNAPSHOT</mansart.version>
+        <vauban.version>0.1.0-SNAPSHOT</vauban.version>
 
         <arquillian.version>1.9.1.Final</arquillian.version>
-        <weld.version>5.1.5.Final</weld.version>
-        <arquillian.weld.version>4.0.1.Final</arquillian.weld.version>
         <testng.version>7.10.2</testng.version>
         <h2.version>2.3.232</h2.version>
 
-        <maven.compiler.plugin.version>3.13.0</maven.compiler.plugin.version>
+        <maven.compiler.plugin.version>4.0.0-beta-4</maven.compiler.plugin.version>
         <maven.surefire.plugin.version>3.5.2</maven.surefire.plugin.version>
     </properties>
 
@@ -90,6 +89,22 @@
             <groupId>jakarta.enterprise</groupId>
             <artifactId>jakarta.enterprise.cdi-api</artifactId>
             <version>${jakarta.cdi.version}</version>
+        </dependency>
+
+        <!-- Vauban CDI 4.1 Lite container — the Vidocq-ecosystem CDI runtime under which the
+             Mansart BCE wires repositories. -->
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-core</artifactId>
+            <version>${vauban.version}</version>
+        </dependency>
+
+        <!-- Pull in a tiny test entity + repository so the smoke harness has something to inject. -->
+        <dependency>
+            <groupId>io.vidocq.mansart</groupId>
+            <artifactId>mansart-data-tests</artifactId>
+            <version>${mansart.version}</version>
+            <scope>test</scope>
         </dependency>
 
         <!-- TestNG suite runner — used by the smoke harness too -->

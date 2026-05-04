@@ -6,6 +6,10 @@ module io.vidocq.mansart.data.cdi {
     requires transitive io.vidocq.mansart.data.core;
     requires jakarta.cdi;
     requires jakarta.inject;
+    requires java.sql;            // javax.sql.DataSource
 
     exports io.vidocq.mansart.data.cdi;
+
+    provides jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension
+            with io.vidocq.mansart.data.cdi.MansartDataExtension;
 }
