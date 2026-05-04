@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.1.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.1.0 https://maven.apache.org/xsd/maven-4.1.0.xsd">
+    <modelVersion>4.1.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.mansart</groupId>
+        <artifactId>mansart-jakarta-data</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>mansart-data-tests</artifactId>
+    <name>Mansart :: Data :: Integration tests</name>
+    <description>Compile-time + integration tests. Drives the APT processor against sample entities.</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.mansart</groupId>
+            <artifactId>mansart-data-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.mansart</groupId>
+            <artifactId>mansart-data-dialect-spi</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.mansart</groupId>
+            <artifactId>mansart-data-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.mansart</groupId>
+            <artifactId>mansart-data-processor</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.mansart</groupId>
+            <artifactId>mansart-data-dialect-h2</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>io.vidocq.mansart</groupId>
+                            <artifactId>mansart-data-processor</artifactId>
+                            <version>${project.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

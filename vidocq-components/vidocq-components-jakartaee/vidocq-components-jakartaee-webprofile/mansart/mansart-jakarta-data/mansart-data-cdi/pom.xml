@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.1.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.1.0 https://maven.apache.org/xsd/maven-4.1.0.xsd">
+    <modelVersion>4.1.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.mansart</groupId>
+        <artifactId>mansart-jakarta-data</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>mansart-data-cdi</artifactId>
+    <name>Mansart :: Data :: CDI bootstrap</name>
+    <description>CDI 4.1 BuildCompatibleExtension that exposes generated repositories as beans. Implementation in M3.</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.mansart</groupId>
+            <artifactId>mansart-data-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.inject</groupId>
+            <artifactId>jakarta.inject-api</artifactId>
+        </dependency>
+    </dependencies>
+</project>

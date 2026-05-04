@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.1.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.1.0 https://maven.apache.org/xsd/maven-4.1.0.xsd">
+    <modelVersion>4.1.0</modelVersion>
+
+    <groupId>io.vidocq.mansart</groupId>
+    <artifactId>mansart-jakarta-data</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <name>Mansart :: Jakarta Data 1.0</name>
+    <description>Jakarta Data 1.0 implementation for the Vidocq ecosystem.</description>
+
+    <properties>
+        <maven.compiler.release>25</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+        <jakarta.data.version>1.0.1</jakarta.data.version>
+        <jakarta.persistence.version>3.2.0</jakarta.persistence.version>
+        <jakarta.cdi.version>4.1.0</jakarta.cdi.version>
+        <jakarta.inject.version>2.0.1</jakarta.inject.version>
+        <jakarta.transaction.version>2.0.1</jakarta.transaction.version>
+
+        <junit.version>6.0.3</junit.version>
+        <assertj.version>3.27.0</assertj.version>
+        <h2.version>2.3.232</h2.version>
+        <postgresql.version>42.7.4</postgresql.version>
+
+        <maven.compiler.plugin.version>4.0.0-beta-4</maven.compiler.plugin.version>
+        <maven.surefire.plugin.version>3.5.2</maven.surefire.plugin.version>
+        <maven.jar.plugin.version>3.4.2</maven.jar.plugin.version>
+    </properties>
+
+    <subprojects>
+        <subproject>mansart-data-api</subproject>
+        <subproject>mansart-data-dialect-spi</subproject>
+        <subproject>mansart-data-core</subproject>
+        <subproject>mansart-data-processor</subproject>
+        <subproject>mansart-data-cdi</subproject>
+        <subproject>mansart-data-dialect-h2</subproject>
+        <subproject>mansart-data-dialect-postgresql</subproject>
+        <subproject>mansart-data-tests</subproject>
+    </subprojects>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>jakarta.data</groupId>
+                <artifactId>jakarta.data-api</artifactId>
+                <version>${jakarta.data.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>jakarta.persistence</groupId>
+                <artifactId>jakarta.persistence-api</artifactId>
+                <version>${jakarta.persistence.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>jakarta.enterprise</groupId>
+                <artifactId>jakarta.enterprise.cdi-api</artifactId>
+                <version>${jakarta.cdi.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>jakarta.inject</groupId>
+                <artifactId>jakarta.inject-api</artifactId>
+                <version>${jakarta.inject.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>jakarta.transaction</groupId>
+                <artifactId>jakarta.transaction-api</artifactId>
+                <version>${jakarta.transaction.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>io.vidocq.mansart</groupId>
+                <artifactId>mansart-data-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.mansart</groupId>
+                <artifactId>mansart-data-dialect-spi</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.mansart</groupId>
+                <artifactId>mansart-data-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.mansart</groupId>
+                <artifactId>mansart-data-processor</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.mansart</groupId>
+                <artifactId>mansart-data-cdi</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.mansart</groupId>
+                <artifactId>mansart-data-dialect-h2</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.mansart</groupId>
+                <artifactId>mansart-data-dialect-postgresql</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.junit</groupId>
+                <artifactId>junit-bom</artifactId>
+                <version>${junit.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.junit.jupiter</groupId>
+                <artifactId>junit-jupiter</artifactId>
+                <version>${junit.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.assertj</groupId>
+                <artifactId>assertj-core</artifactId>
+                <version>${assertj.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.h2database</groupId>
+                <artifactId>h2</artifactId>
+                <version>${h2.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.postgresql</groupId>
+                <artifactId>postgresql</artifactId>
+                <version>${postgresql.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>${maven.compiler.plugin.version}</version>
+                    <configuration>
+                        <release>25</release>
+                    </configuration>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <version>${maven.surefire.plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-jar-plugin</artifactId>
+                    <version>${maven.jar.plugin.version}</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
+</project>

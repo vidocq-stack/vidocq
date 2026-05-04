@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.1.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.1.0 https://maven.apache.org/xsd/maven-4.1.0.xsd">
+    <modelVersion>4.1.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.mansart</groupId>
+        <artifactId>mansart-jakarta-data</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>mansart-data-processor</artifactId>
+    <name>Mansart :: Data :: Annotation processor</name>
+    <description>APT generating the static metamodel (_Entity, optional Entity_) and the *RepositoryImpl classes.</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.mansart</groupId>
+            <artifactId>mansart-data-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.mansart</groupId>
+            <artifactId>mansart-data-dialect-spi</artifactId>
+        </dependency>
+        <!-- jakarta.persistence-api kept compile-only and optional: the processor only reads the
+             annotation type names through javax.lang.model, never loads JPA classes at runtime. -->
+        <dependency>
+            <groupId>jakarta.persistence</groupId>
+            <artifactId>jakarta.persistence-api</artifactId>
+            <optional>true</optional>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <!-- This module IS a processor, so disable processing on itself. -->
+                    <proc>none</proc>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

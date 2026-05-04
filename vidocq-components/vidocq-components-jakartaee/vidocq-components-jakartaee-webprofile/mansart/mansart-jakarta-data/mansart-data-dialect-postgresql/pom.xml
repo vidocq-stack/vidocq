@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.1.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.1.0 https://maven.apache.org/xsd/maven-4.1.0.xsd">
+    <modelVersion>4.1.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.mansart</groupId>
+        <artifactId>mansart-jakarta-data</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>mansart-data-dialect-postgresql</artifactId>
+    <name>Mansart :: Data :: Dialect PostgreSQL</name>
+    <description>PostgreSQL dialect implementation. Implementation in M4.</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.mansart</groupId>
+            <artifactId>mansart-data-dialect-spi</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>provided</scope>
+        </dependency>
+    </dependencies>
+</project>
