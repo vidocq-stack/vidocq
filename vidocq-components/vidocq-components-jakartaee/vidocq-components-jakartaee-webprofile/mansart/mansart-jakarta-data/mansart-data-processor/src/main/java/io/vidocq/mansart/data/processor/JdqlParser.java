@@ -160,19 +160,31 @@ final class JdqlParser {
         };
     }
 
-    /** Generates a body that builds Where + args dynamically when an IN takes a Collection. */
+    /**
+     * Generates a body that builds {@code Where} + args dynamically when any {@code IN} takes a
+     * {@code Collection}. Predeclares one {@code _colN} per In(collection); the Where is built as
+     * a single nested expression, with empty-In substituted by {@link io.vidocq.mansart.data.dialect.Where#ALWAYS_FALSE}.
+     */
     private static String emitDynamicInBody(Stmt stmt, ExecutableElement method, String metamodel,
                                             Map<String, Integer> nameToIdx, TypeMirror returnType,
                                             boolean trailingPageRequest, boolean isCursoredPageReturn) {
-        String pkg = "io.vidocq.mansart.data.dialect.Where";
         StringBuilder sb = new StringBuilder();
-        sb.append("java.util.List<").append(pkg).append("> _parts = new java.util.ArrayList<>(); ");
+        DynCtx ctx = new DynCtx();
+
+        // 1) Pre-declare one local Collection variable per In(collection) node.
+        declareInCollections(sb, stmt.where, nameToIdx, method, ctx);
+
+        // 2) Build args at runtime in the Where AST traversal order. Emit an empty list first.
         sb.append("java.util.List<java.lang.Object> _args = new java.util.ArrayList<>(); ");
 
-        emitPredicateDynamic(sb, stmt.where, metamodel, nameToIdx, method, "_parts", "_args");
+        // 3) Build the Where as a single Java expression; emitArgs side-effect appends to _args.
+        sb.append("io.vidocq.mansart.data.dialect.Where _w = ");
+        sb.append(buildWhereExpr(stmt.where, metamodel, nameToIdx, method, ctx));
+        sb.append("; ");
 
-        sb.append(pkg).append(" _w = _parts.size() == 1 ? _parts.get(0) : ").append(pkg)
-          .append(".and(_parts.toArray(new ").append(pkg).append("[0])); ");
+        // 4) Append args in the order the AST traversal will render bind sites.
+        emitArgs(sb, stmt.where, nameToIdx, method, ctx);
+
         sb.append("Object[] _xs = _args.toArray(); ");
 
         sb.append("io.vidocq.mansart.data.dialect.OrderBy _ob = ");
@@ -187,21 +199,34 @@ final class JdqlParser {
         return sb.toString();
     }
 
-    /** Walks the Where AST emitting code that appends to _parts and _args. */
-    private static void emitPredicateDynamic(StringBuilder sb, Pred p, String metamodel,
+    private static final class DynCtx { final Map<In, String> colVar = new java.util.IdentityHashMap<>(); int counter = 0; }
+
+    private static void declareInCollections(StringBuilder sb, Pred p,
                                              Map<String, Integer> nameToIdx, ExecutableElement m,
-                                             String partsVar, String argsVar) {
-        String pkg = "io.vidocq.mansart.data.dialect.Where";
+                                             DynCtx ctx) {
         if (p == null) return;
         switch (p) {
             case In in -> {
-                String collectionRef = resolveArg(in.arg, nameToIdx, m);
-                sb.append("{ java.util.Collection<?> _col = (java.util.Collection<?>) ").append(collectionRef).append("; ");
-                sb.append("if (_col.isEmpty()) ").append(emptyInGuard(p)).append(' ');
-                sb.append(partsVar).append(".add(new ").append(pkg).append(".In(")
-                  .append(metamodel).append('.').append(in.attr).append(", _col.size())); ");
-                sb.append("for (Object _v : _col) ").append(argsVar).append(".add(_v); }");
+                if (in.collection) {
+                    String var = "_col" + ctx.counter++;
+                    ctx.colVar.put(in, var);
+                    sb.append("java.util.Collection<?> ").append(var)
+                      .append(" = (java.util.Collection<?>) ").append(resolveArg(in.args.get(0), nameToIdx, m)).append("; ");
+                }
             }
+            case And a -> { for (Pred c : a.children) declareInCollections(sb, c, nameToIdx, m, ctx); }
+            case Or  o -> { for (Pred c : o.children) declareInCollections(sb, c, nameToIdx, m, ctx); }
+            case Not n -> declareInCollections(sb, n.child, nameToIdx, m, ctx);
+            default    -> {}
+        }
+    }
+
+    private static String buildWhereExpr(Pred p, String metamodel,
+                                         Map<String, Integer> nameToIdx, ExecutableElement m,
+                                         DynCtx ctx) {
+        String pkg = "io.vidocq.mansart.data.dialect.Where";
+        if (p == null) return pkg + ".ALWAYS_TRUE";
+        return switch (p) {
             case Cmp c -> {
                 String cls = switch (c.op) {
                     case EQ -> "Eq"; case NE -> "NotEq";
@@ -209,41 +234,55 @@ final class JdqlParser {
                     case GT -> "Gt"; case GTE -> "Gte";
                     case LIKE -> "Like";
                 };
-                sb.append(partsVar).append(".add(new ").append(pkg).append('.').append(cls).append('(')
-                  .append(metamodel).append('.').append(c.attr).append(")); ");
-                sb.append(argsVar).append(".add(").append(resolveArg(c.arg, nameToIdx, m)).append("); ");
+                yield "new " + pkg + "." + cls + "(" + metamodel + "." + c.attr + ")";
             }
-            case IsNull n -> sb.append(partsVar).append(".add(new ").append(pkg).append('.')
-                  .append(n.negated ? "IsNotNull" : "IsNull").append('(')
-                  .append(metamodel).append('.').append(n.attr).append(")); ");
-            case Between b -> {
-                sb.append(partsVar).append(".add(new ").append(pkg).append(".Between(")
-                  .append(metamodel).append('.').append(b.attr).append(")); ");
-                sb.append(argsVar).append(".add(").append(resolveArg(b.lo, nameToIdx, m)).append("); ");
-                sb.append(argsVar).append(".add(").append(resolveArg(b.hi, nameToIdx, m)).append("); ");
+            case IsNull n  -> "new " + pkg + "." + (n.negated ? "IsNotNull" : "IsNull")
+                              + "(" + metamodel + "." + n.attr + ")";
+            case Between b -> "new " + pkg + ".Between(" + metamodel + "." + b.attr + ")";
+            case In in -> {
+                if (in.collection) {
+                    String col = ctx.colVar.get(in);
+                    yield col + ".isEmpty() ? " + pkg + ".ALWAYS_FALSE : new " + pkg + ".In("
+                            + metamodel + "." + in.attr + ", " + col + ".size())";
+                }
+                yield "new " + pkg + ".In(" + metamodel + "." + in.attr + ", " + in.args.size() + ")";
             }
-            case And a -> { for (Pred c : a.children) emitPredicateDynamic(sb, c, metamodel, nameToIdx, m, partsVar, argsVar); }
-            case Or  o -> {
-                // OR with mixed In is M5-3 — for now reject to avoid silent miswiring.
-                throw new ParseException("OR combined with IN(:list) is not yet supported (M5-3).");
-            }
-            case Not n -> {
-                throw new ParseException("NOT combined with IN(:list) is not yet supported (M5-3).");
-            }
-            default -> throw new IllegalStateException("Unhandled predicate: " + p);
-        }
+            case And a -> pkg + ".and(" + a.children.stream()
+                    .map(c -> buildWhereExpr(c, metamodel, nameToIdx, m, ctx))
+                    .reduce((x, y) -> x + ", " + y).orElse("") + ")";
+            case Or  o -> pkg + ".or("  + o.children.stream()
+                    .map(c -> buildWhereExpr(c, metamodel, nameToIdx, m, ctx))
+                    .reduce((x, y) -> x + ", " + y).orElse("") + ")";
+            case Not n -> "new " + pkg + ".Not(" + buildWhereExpr(n.child, metamodel, nameToIdx, m, ctx) + ")";
+        };
     }
 
-    private static String emptyInGuard(Pred p) {
-        // For SELECT/DELETE the natural empty result varies by return type; we conservatively
-        // return List.of() / void / 0 — caller-side dispatch is responsible. For dynamic In
-        // bodies generated from JDQL SELECTs we return List.of() (caller wraps as needed).
-        return "return java.util.Collections.emptyList();";
+    private static void emitArgs(StringBuilder sb, Pred p,
+                                 Map<String, Integer> nameToIdx, ExecutableElement m, DynCtx ctx) {
+        if (p == null) return;
+        switch (p) {
+            case Cmp c     -> sb.append("_args.add(").append(resolveArg(c.arg, nameToIdx, m)).append("); ");
+            case IsNull n  -> {}
+            case Between b -> {
+                sb.append("_args.add(").append(resolveArg(b.lo, nameToIdx, m)).append("); ");
+                sb.append("_args.add(").append(resolveArg(b.hi, nameToIdx, m)).append("); ");
+            }
+            case In in -> {
+                if (in.collection) {
+                    sb.append("for (Object _v : ").append(ctx.colVar.get(in)).append(") _args.add(_v); ");
+                } else {
+                    for (ArgRef a : in.args) sb.append("_args.add(").append(resolveArg(a, nameToIdx, m)).append("); ");
+                }
+            }
+            case And a -> { for (Pred c : a.children) emitArgs(sb, c, nameToIdx, m, ctx); }
+            case Or  o -> { for (Pred c : o.children) emitArgs(sb, c, nameToIdx, m, ctx); }
+            case Not n -> emitArgs(sb, n.child, nameToIdx, m, ctx);
+        }
     }
 
     private static boolean containsInList(Pred p) {
         return switch (p) {
-            case In ignored  -> true;
+            case In in       -> in.collection;
             case And a       -> a.children.stream().anyMatch(JdqlParser::containsInList);
             case Or o        -> o.children.stream().anyMatch(JdqlParser::containsInList);
             case Not n       -> containsInList(n.child);
@@ -313,7 +352,9 @@ final class JdqlParser {
     record Cmp(String attr, Op op, ArgRef arg)              implements Pred {}
     record IsNull(String attr, boolean negated)             implements Pred {}
     record Between(String attr, ArgRef lo, ArgRef hi)       implements Pred {}
-    record In(String attr, ArgRef arg)                      implements Pred {}
+    /** {@code attr IN :collectionParam} (single ArgRef whose value is a Collection)
+     *  OR {@code attr IN (:p1, :p2, ?N …)} (multiple ArgRefs, each a scalar). */
+    record In(String attr, List<ArgRef> args, boolean collection) implements Pred {}
     record And(List<Pred> children)                         implements Pred {}
     record Or(List<Pred> children)                          implements Pred {}
     record Not(Pred child)                                  implements Pred {}
@@ -346,8 +387,13 @@ final class JdqlParser {
                 sb.append("new ").append(pkg).append(".Between(")
                   .append(metamodel).append('.').append(b.attr).append(')');
             }
-            case In ignored -> throw new IllegalStateException(
-                    "IN predicates are emitted via the dynamic-In path; emitPredicate should not see them.");
+            case In in -> {
+                if (in.collection) {
+                    throw new IllegalStateException("Collection-IN must go through the dynamic path");
+                }
+                sb.append("new ").append(pkg).append(".In(")
+                  .append(metamodel).append('.').append(in.attr).append(", ").append(in.args.size()).append(')');
+            }
             case And a -> emitCombinator(sb, "and", a.children, metamodel);
             case Or  o -> emitCombinator(sb, "or",  o.children, metamodel);
             case Not n -> {
@@ -385,7 +431,7 @@ final class JdqlParser {
             case Cmp c       -> out.add(c.arg);
             case Between b   -> { out.add(b.lo); out.add(b.hi); }
             case IsNull ign  -> {}
-            case In in       -> out.add(in.arg);   // single arg ref to the collection — dynamic path expands
+            case In in       -> out.addAll(in.args);   // works for non-collection literal IN
             case And a       -> { for (Pred c : a.children) collectArgs(c, out); }
             case Or  o       -> { for (Pred c : o.children) collectArgs(c, out); }
             case Not n       -> collectArgs(n.child, out);
@@ -634,13 +680,16 @@ final class JdqlParser {
             }
             if (peekKw("IN")) {
                 lex.consume();
-                // Accept either `attr IN :list` (single Collection arg) or `attr IN (:p1, :p2, …)`.
-                // M5-2 supports the single-collection form only; the multi-arg form lands in M5-3.
                 if (lex.peek().kind == Tk.LPAREN) {
-                    throw new ParseException("attr IN (a, b, …) — multi-element IN literal lands in M5-3; "
-                            + "use `attr IN :collectionParam` for now.");
+                    lex.consume();
+                    List<ArgRef> elems = new ArrayList<>();
+                    elems.add(parseArg());
+                    while (lex.peek().kind == Tk.COMMA) { lex.consume(); elems.add(parseArg()); }
+                    if (lex.peek().kind != Tk.RPAREN) throw new ParseException("Expected ')' to close IN(...)");
+                    lex.consume();
+                    return new In(attr, elems, false);
                 }
-                return new In(attr, parseArg());
+                return new In(attr, List.of(parseArg()), true);
             }
             Op op = switch (lex.peek().kind) {
                 case EQ  -> Op.EQ;

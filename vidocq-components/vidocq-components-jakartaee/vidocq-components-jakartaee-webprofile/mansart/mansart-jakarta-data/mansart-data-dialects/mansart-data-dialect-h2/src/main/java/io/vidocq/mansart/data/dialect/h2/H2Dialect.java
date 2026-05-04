@@ -229,7 +229,8 @@ public final class H2Dialect implements Dialect {
                 renderPredicate(sb, w.child());
                 sb.append(')');
             }
-            case Where.AlwaysTrue ignored -> sb.append("1=1");
+            case Where.AlwaysTrue ignored  -> sb.append("1=1");
+            case Where.AlwaysFalse ignored -> sb.append("1=0");
         }
     }
 

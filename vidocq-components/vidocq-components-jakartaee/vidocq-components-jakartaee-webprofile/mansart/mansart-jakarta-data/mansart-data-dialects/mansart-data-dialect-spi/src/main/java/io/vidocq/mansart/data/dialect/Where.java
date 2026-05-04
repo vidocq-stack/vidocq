@@ -7,7 +7,8 @@ import java.util.List;
  */
 public sealed interface Where {
 
-    Where ALWAYS_TRUE = new AlwaysTrue();
+    Where ALWAYS_TRUE  = new AlwaysTrue();
+    Where ALWAYS_FALSE = new AlwaysFalse();
 
     record Eq(Attribute<?, ?> attr) implements Where {}
     record NotEq(Attribute<?, ?> attr) implements Where {}
@@ -28,6 +29,7 @@ public sealed interface Where {
     }
     record Not(Where child) implements Where {}
     record AlwaysTrue() implements Where {}
+    record AlwaysFalse() implements Where {}
 
     static Where eq(Attribute<?, ?> a)        { return new Eq(a); }
     static Where between(Attribute<?, ?> a)   { return new Between(a); }

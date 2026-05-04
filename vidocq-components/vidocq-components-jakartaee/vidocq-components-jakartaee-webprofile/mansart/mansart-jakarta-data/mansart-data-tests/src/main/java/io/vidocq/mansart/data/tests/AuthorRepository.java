@@ -73,4 +73,15 @@ public interface AuthorRepository extends BasicRepository<Author, Long> {
 
     @jakarta.data.repository.Query("DELETE FROM Author WHERE name LIKE :pattern")
     long jdqlDeleteByNameLike(String pattern);
+
+    /* ---- M5-3 OR/NOT with IN, multi-element IN literal ---- */
+
+    @jakarta.data.repository.Query("FROM Author WHERE name = :name OR id IN :ids")
+    java.util.List<Author> jdqlNameOrIdIn(String name, java.util.List<Long> ids);
+
+    @jakarta.data.repository.Query("FROM Author WHERE NOT (id IN :ids)")
+    java.util.List<Author> jdqlNotIdIn(java.util.List<Long> ids);
+
+    @jakarta.data.repository.Query("FROM Author WHERE name IN (:a, :b, :c)")
+    java.util.List<Author> jdqlNameInLiteral(String a, String b, String c);
 }

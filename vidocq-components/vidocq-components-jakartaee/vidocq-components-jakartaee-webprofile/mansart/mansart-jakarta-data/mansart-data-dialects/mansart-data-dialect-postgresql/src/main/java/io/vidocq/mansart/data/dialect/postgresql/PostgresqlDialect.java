@@ -236,7 +236,8 @@ public final class PostgresqlDialect implements Dialect {
                 renderPredicate(sb, w.child());
                 sb.append(')');
             }
-            case Where.AlwaysTrue ignored -> sb.append("TRUE");
+            case Where.AlwaysTrue ignored  -> sb.append("TRUE");
+            case Where.AlwaysFalse ignored -> sb.append("FALSE");
         }
     }
 

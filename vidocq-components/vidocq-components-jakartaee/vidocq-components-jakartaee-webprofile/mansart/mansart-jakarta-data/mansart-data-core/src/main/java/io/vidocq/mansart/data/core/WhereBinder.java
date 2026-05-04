@@ -42,7 +42,8 @@ final class WhereBinder {
                 for (Where child : w.children()) psIdx = bind(dialect, ps, child, args, psIdx, argCursor);
             }
             case Where.Not w -> psIdx = bind(dialect, ps, w.child(), args, psIdx, argCursor);
-            case Where.AlwaysTrue ignored -> { /* no bind */ }
+            case Where.AlwaysTrue ignored3  -> { /* no bind */ }
+            case Where.AlwaysFalse ignored4 -> { /* no bind */ }
         }
         return psIdx;
     }
