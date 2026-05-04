@@ -155,7 +155,16 @@ public final class H2Dialect implements Dialect {
 
     @Override
     public RuntimeException translate(SQLException e) {
-        // M3a: shallow translation. Refined in M3b with the SqlState mapping table.
+        String state = e.getSQLState();
+        if ("23505".equals(state) || "23001".equals(state)) {
+            return new jakarta.data.exceptions.EntityExistsException(e.getMessage(), e);
+        }
+        if ("40001".equals(state)) {
+            return new jakarta.data.exceptions.OptimisticLockingFailureException(e.getMessage(), e);
+        }
+        if (state != null && state.startsWith("23")) {
+            return new jakarta.data.exceptions.MappingException(e.getMessage(), e);
+        }
         return new io.vidocq.mansart.data.core.MansartDataException("H2 SQL error", e);
     }
 

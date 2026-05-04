@@ -78,7 +78,7 @@ final class RepositoryWriter {
 
             DeclaredType repoType = (DeclaredType) repo.asType();
             for (ExecutableElement m : abstractMethods(repo)) {
-                writeMethod(w, m, repoType, metamodel, entityFqn, idFqn, attributeNames);
+                writeMethod(w, m, repo, repoType, metamodel, entityFqn, idFqn, attributeNames);
             }
 
             w.println("}");
@@ -86,7 +86,7 @@ final class RepositoryWriter {
         return true;
     }
 
-    private void writeMethod(PrintWriter w, ExecutableElement m, DeclaredType repoType,
+    private void writeMethod(PrintWriter w, ExecutableElement m, TypeElement repo, DeclaredType repoType,
                              String metamodel, String entityFqn, String idFqn,
                              java.util.Set<String> attributeNames) {
         ExecutableType resolved = (ExecutableType) types.asMemberOf(repoType, m);
@@ -125,12 +125,13 @@ final class RepositoryWriter {
         sig.append(" {");
         w.println(sig);
 
-        String body = bodyFor(name, paramTypes, returnType, metamodel, entityFqn);
+        String body = lifecycleBody(m, returnType, metamodel, entityFqn, repo);
+        if (body == null) body = bodyFor(name, paramTypes, returnType, metamodel, entityFqn);
         if (body == null) {
             // Try derived-query parsing (M3b).
             QueryMethodParser.QueryDescriptor desc = QueryMethodParser.parse(name, attributeNames);
             if (desc != null) {
-                body = derivedQueryBody(desc, returnType, metamodel, paramTypes.size());
+                body = derivedQueryBody(desc, returnType, metamodel, (List<? extends TypeMirror>) paramTypes);
             }
         }
         if (body == null) {
@@ -143,11 +144,61 @@ final class RepositoryWriter {
         w.println();
     }
 
+    private String lifecycleBody(ExecutableElement m, TypeMirror returnType,
+                                 String metamodel, String entityFqn, TypeElement repo) {
+        // Only fire for methods declared on the user's repo, not for inherited methods
+        // (BasicRepository.save / delete carry @Save / @Delete in the spec, but their
+        // semantics are upsert / silent-delete — handled by bodyFor by name).
+        if (!m.getEnclosingElement().equals(repo)) return null;
+        if (m.getParameters().size() != 1) return null;
+        boolean isVoid = returnType.getKind() == javax.lang.model.type.TypeKind.VOID;
+        if (hasJakartaAnnotation(m, "jakarta.data.repository.Insert")) {
+            return wrapReturn("runtime.insertStrict(" + metamodel + ".$MODEL, ("
+                    + entityFqn + ") " + p(0) + ")", isVoid);
+        }
+        if (hasJakartaAnnotation(m, "jakarta.data.repository.Update")) {
+            return wrapReturn("runtime.updateStrict(" + metamodel + ".$MODEL, ("
+                    + entityFqn + ") " + p(0) + ")", isVoid);
+        }
+        if (hasJakartaAnnotation(m, "jakarta.data.repository.Save")) {
+            return wrapReturn("runtime.save(" + metamodel + ".$MODEL, ("
+                    + entityFqn + ") " + p(0) + ")", isVoid);
+        }
+        if (hasJakartaAnnotation(m, "jakarta.data.repository.Delete")) {
+            // Delete annotation: parameter is the entity to delete (strict, with @Version check).
+            String call = "runtime.deleteStrict(" + metamodel + ".$MODEL, ("
+                    + entityFqn + ") " + p(0) + ")";
+            return isVoid ? call + ";" : call + "; return null;";
+        }
+        return null;
+    }
+
+    private String wrapReturn(String call, boolean isVoid) {
+        return isVoid ? call + ";" : "return " + call + ";";
+    }
+
+    private boolean hasJakartaAnnotation(ExecutableElement m, String fqn) {
+        for (var a : m.getAnnotationMirrors()) {
+            if (((TypeElement) a.getAnnotationType().asElement()).getQualifiedName().contentEquals(fqn)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private String derivedQueryBody(QueryMethodParser.QueryDescriptor d, TypeMirror returnType,
-                                    String metamodel, int paramArity) {
+                                    String metamodel, List<? extends TypeMirror> paramTypes) {
+        // Dynamic-arity In: when the sole predicate is `In` and the param is a Collection,
+        // build the Where with the runtime-known size and spread the args.
+        if (d.predicates().size() == 1
+                && d.predicates().get(0).comparator() == QueryMethodParser.Comparator.IN
+                && paramTypes.size() == 1
+                && isCollectionLike(paramTypes.get(0))) {
+            return inCollectionBody(d, returnType, metamodel);
+        }
         String where = renderWhere(d, metamodel);
         String orderBy = renderOrderBy(d, metamodel);
-        String args = "new java.lang.Object[]{" + argsList(paramArity) + "}";
+        String args = "new java.lang.Object[]{" + argsList(paramTypes.size()) + "}";
         return switch (d.op()) {
             case FIND     -> findBody(returnType, metamodel, where, orderBy, args);
             case FIND_ONE -> "return runtime.queryOne(" + metamodel + ".$MODEL, " + where + ", " + args + ");";
@@ -155,6 +206,30 @@ final class RepositoryWriter {
             case EXISTS   -> "return runtime.existsWhere(" + metamodel + ".$MODEL, " + where + ", " + args + ");";
             case DELETE   -> deleteBody(returnType, metamodel, where, args);
         };
+    }
+
+    private String inCollectionBody(QueryMethodParser.QueryDescriptor d, TypeMirror returnType, String metamodel) {
+        QueryMethodParser.Predicate pred = d.predicates().get(0);
+        String attr = metamodel + "." + pred.attribute();
+        StringBuilder sb = new StringBuilder();
+        sb.append("java.util.Collection<?> col = (java.util.Collection<?>) ").append(p(0)).append("; ");
+        sb.append("io.vidocq.mansart.data.dialect.Where w = new io.vidocq.mansart.data.dialect.Where.In(")
+          .append(attr).append(", col.size()); ");
+        sb.append("java.lang.Object[] xs = col.toArray(); ");
+        String orderBy = renderOrderBy(d, metamodel);
+        return switch (d.op()) {
+            case FIND     -> sb.append(findBody(returnType, metamodel, "w", orderBy, "xs")).toString();
+            case FIND_ONE -> sb.append("return runtime.queryOne(").append(metamodel).append(".$MODEL, w, xs);").toString();
+            case COUNT    -> sb.append("return runtime.countWhere(").append(metamodel).append(".$MODEL, w, xs);").toString();
+            case EXISTS   -> sb.append("return runtime.existsWhere(").append(metamodel).append(".$MODEL, w, xs);").toString();
+            case DELETE   -> sb.append(deleteBody(returnType, metamodel, "w", "xs")).toString();
+        };
+    }
+
+    private boolean isCollectionLike(TypeMirror t) {
+        String s = types.erasure(t).toString();
+        return s.equals("java.util.Collection") || s.equals("java.util.List") || s.equals("java.util.Set")
+                || s.equals("java.lang.Iterable");
     }
 
     private String findBody(TypeMirror returnType, String metamodel, String where, String orderBy, String args) {

@@ -9,6 +9,8 @@ import io.vidocq.mansart.data.dialect.SqlFragment;
 import io.vidocq.mansart.data.dialect.Where;
 import io.vidocq.mansart.data.dialect.attribute.IdAttribute;
 import io.vidocq.mansart.data.dialect.attribute.ReferenceAttribute;
+import io.vidocq.mansart.data.dialect.attribute.VersionAttribute;
+import jakarta.data.exceptions.OptimisticLockingFailureException;
 
 import javax.sql.DataSource;
 import java.sql.PreparedStatement;
@@ -75,6 +77,8 @@ public final class RepositoryRuntime {
                     }
                 }
                 return entity;
+            } catch (SQLException e) {
+                throw dialect.translate(e);
             }
         });
     }
@@ -199,6 +203,128 @@ public final class RepositoryRuntime {
                 return (long) ps.executeUpdate();
             }
         });
+    }
+
+    /* -------- lifecycle (M3b-2): @Insert, @Update, @Delete ---------- */
+
+    /** Strict insert (never an upsert). Translates SQLState 23505 → {@link jakarta.data.exceptions.EntityExistsException}. */
+    public <E> E insertStrict(EntityModel<E> model, E entity) {
+        return insert(model, entity);
+    }
+
+    /**
+     * Strict update by id (and version, if {@code @Version} is present). Increments the version
+     * field on success; throws {@link OptimisticLockingFailureException} if no row matched.
+     */
+    @SuppressWarnings("unchecked")
+    public <E> E updateStrict(EntityModel<E> model, E entity) {
+        Object id = readId(model, entity);
+        if (id == null) {
+            throw new OptimisticLockingFailureException("Cannot update entity without id");
+        }
+
+        Where where;
+        Object oldVersion = null;
+        if (model.version().isPresent()) {
+            VersionAttribute<E, ?> ver = (VersionAttribute<E, ?>) model.version().get();
+            oldVersion = readAttribute(ver, entity);
+            if (oldVersion == null) oldVersion = zero(ver.javaType());
+            Object newVersion = increment(oldVersion);
+            try { ((Attribute<E, Object>) ver).setter().invoke(entity, newVersion); }
+            catch (Throwable t) { throw new MansartDataException("Failed to bump @Version on " + model.entityClass(), t); }
+            where = Where.and(Where.eq(model.id()), Where.eq(ver));
+        } else {
+            where = Where.eq(model.id());
+        }
+
+        SqlFragment frag = dialect.update(model, where);
+        Object versionForBind = oldVersion;
+        return ConnectionScope.withConnection(dataSource, c -> {
+            try (PreparedStatement ps = c.prepareStatement(frag.sql())) {
+                int idx = 1;
+                for (Attribute<E, ?> a : model.attributes()) {
+                    if (a == model.id()) continue;
+                    Object v = readAttribute(a, entity);
+                    dialect.bind(ps, idx++, valueToBind(a, v), bindType(a));
+                }
+                dialect.bind(ps, idx++, id, model.id().javaType());
+                if (model.version().isPresent()) {
+                    VersionAttribute<E, ?> ver = (VersionAttribute<E, ?>) model.version().get();
+                    dialect.bind(ps, idx++, versionForBind, ver.javaType());
+                }
+                int updated = ps.executeUpdate();
+                if (updated == 0) {
+                    if (model.version().isPresent()) {
+                        try {
+                            ((Attribute<E, Object>) model.version().get()).setter().invoke(entity, versionForBind);
+                        } catch (Throwable ignored) {}
+                    }
+                    throw new OptimisticLockingFailureException(
+                            "No row matched id=" + id
+                            + (model.version().isPresent() ? " and version=" + versionForBind : "")
+                            + " for " + model.entityClass().getSimpleName());
+                }
+                return entity;
+            }
+        });
+    }
+
+    /**
+     * Strict delete by id (and version, if {@code @Version} is present). Throws
+     * {@link OptimisticLockingFailureException} if no row matched.
+     */
+    @SuppressWarnings("unchecked")
+    public <E> void deleteStrict(EntityModel<E> model, E entity) {
+        Object id = readId(model, entity);
+        if (id == null) {
+            throw new OptimisticLockingFailureException("Cannot delete entity without id");
+        }
+
+        Where where;
+        Object versionForBind = null;
+        if (model.version().isPresent()) {
+            VersionAttribute<E, ?> ver = (VersionAttribute<E, ?>) model.version().get();
+            versionForBind = readAttribute(ver, entity);
+            where = Where.and(Where.eq(model.id()), Where.eq(ver));
+        } else {
+            where = Where.eq(model.id());
+        }
+        SqlFragment frag = dialect.delete(model, where);
+        Object versionToBind = versionForBind;
+        int affected = ConnectionScope.withConnection(dataSource, c -> {
+            try (PreparedStatement ps = c.prepareStatement(frag.sql())) {
+                int idx = 1;
+                dialect.bind(ps, idx++, id, model.id().javaType());
+                if (model.version().isPresent()) {
+                    VersionAttribute<E, ?> ver = (VersionAttribute<E, ?>) model.version().get();
+                    dialect.bind(ps, idx++, versionToBind, ver.javaType());
+                }
+                return ps.executeUpdate();
+            }
+        });
+        if (affected == 0) {
+            throw new OptimisticLockingFailureException(
+                    "No row matched id=" + id
+                    + (model.version().isPresent() ? " and version=" + versionForBind : "")
+                    + " for " + model.entityClass().getSimpleName());
+        }
+    }
+
+    private static Object increment(Object v) {
+        return switch (v) {
+            case Integer i -> i + 1;
+            case Long l    -> l + 1L;
+            case Short s   -> (short) (s + 1);
+            case null      -> 1;
+            default        -> throw new MansartDataException("Unsupported @Version type: " + v.getClass());
+        };
+    }
+
+    private static Object zero(Class<?> type) {
+        if (type == Integer.class) return 0;
+        if (type == Long.class)    return 0L;
+        if (type == Short.class)   return (short) 0;
+        throw new MansartDataException("Unsupported @Version type: " + type);
     }
 
     /* -------- helpers ---------- */
