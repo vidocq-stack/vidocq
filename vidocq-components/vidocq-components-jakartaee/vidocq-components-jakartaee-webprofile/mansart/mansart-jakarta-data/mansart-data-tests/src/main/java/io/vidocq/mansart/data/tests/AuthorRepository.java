@@ -42,4 +42,21 @@ public interface AuthorRepository extends BasicRepository<Author, Long> {
             String pattern, jakarta.data.page.PageRequest pageRequest);
 
     java.util.List<Author> findByNameLikeAndIdIn(String pattern, java.util.List<Long> ids);
+
+    /* ---- M5 @Query JDQL ---- */
+
+    @jakarta.data.repository.Query("FROM Author WHERE name = :name")
+    java.util.List<Author> jdqlByName(String name);
+
+    @jakarta.data.repository.Query("FROM Author WHERE name LIKE :pattern ORDER BY name DESC")
+    java.util.List<Author> jdqlNameLikeDesc(String pattern);
+
+    @jakarta.data.repository.Query("FROM Author WHERE id = ?1")
+    java.util.Optional<Author> jdqlById(Long id);
+
+    @jakarta.data.repository.Query("FROM Author WHERE name LIKE :pattern AND id > :minId")
+    java.util.List<Author> jdqlNameLikeAndIdGt(String pattern, Long minId);
+
+    @jakarta.data.repository.Query("FROM Author WHERE name IS NOT NULL")
+    long jdqlCountNonNull();
 }

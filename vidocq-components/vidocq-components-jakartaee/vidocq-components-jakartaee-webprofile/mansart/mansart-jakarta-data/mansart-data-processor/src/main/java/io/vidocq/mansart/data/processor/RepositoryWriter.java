@@ -125,7 +125,8 @@ final class RepositoryWriter {
         sig.append(" {");
         w.println(sig);
 
-        String body = lifecycleBody(m, returnType, metamodel, entityFqn, repo);
+        String body = jdqlBody(m, returnType, metamodel, attributeNames, paramTypes);
+        if (body == null) body = lifecycleBody(m, returnType, metamodel, entityFqn, repo);
         if (body == null) body = bodyFor(name, paramTypes, returnType, metamodel, entityFqn);
         if (body == null) {
             // Try derived-query parsing (M3b).
@@ -142,6 +143,48 @@ final class RepositoryWriter {
         }
         w.println("    }");
         w.println();
+    }
+
+    /** Read {@code @jakarta.data.repository.Query("…")} from {@code m} and emit the body. */
+    private String jdqlBody(ExecutableElement m, TypeMirror returnType, String metamodel,
+                            java.util.Set<String> attributeNames, List<? extends TypeMirror> paramTypes) {
+        String jdql = readQueryAnnotation(m);
+        if (jdql == null) return null;
+
+        TypeElement entityType = entityForRepo(m);
+        String entitySimple = entityType == null ? "" : entityType.getSimpleName().toString();
+
+        boolean trailingPageRequest = !paramTypes.isEmpty()
+                && isPageRequest(paramTypes.get(paramTypes.size() - 1));
+        boolean cursoredPage = isCursoredPageReturn(returnType);
+
+        try {
+            return JdqlParser.generateBody(jdql, m, metamodel, entitySimple, attributeNames,
+                    returnType, trailingPageRequest, cursoredPage);
+        } catch (JdqlParser.ParseException e) {
+            throw new IllegalStateException("@Query parse error on " + m.getSimpleName()
+                    + ": " + e.getMessage() + " — JDQL: " + jdql, e);
+        }
+    }
+
+    private String readQueryAnnotation(ExecutableElement m) {
+        for (var a : m.getAnnotationMirrors()) {
+            String fqn = ((TypeElement) a.getAnnotationType().asElement()).getQualifiedName().toString();
+            if (!fqn.equals("jakarta.data.repository.Query")) continue;
+            for (var entry : elements.getElementValuesWithDefaults(a).entrySet()) {
+                if (entry.getKey().getSimpleName().contentEquals("value")) {
+                    return (String) entry.getValue().getValue();
+                }
+            }
+        }
+        return null;
+    }
+
+    /** Returns the entity {@link TypeElement} from the enclosing repo's parent {@code BasicRepository<E, K>}. */
+    private TypeElement entityForRepo(ExecutableElement m) {
+        TypeElement repo = (TypeElement) m.getEnclosingElement();
+        TypeArgs args = findEntityAndKey(repo);
+        return args == null ? null : (TypeElement) args.entity().asElement();
     }
 
     private String lifecycleBody(ExecutableElement m, TypeMirror returnType,
