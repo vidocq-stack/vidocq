@@ -6,13 +6,13 @@
 
     <parent>
         <groupId>io.vidocq.mansart</groupId>
-        <artifactId>mansart-jakarta-data</artifactId>
+        <artifactId>mansart-data-dialects</artifactId>
         <version>1.0.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>mansart-data-dialect-postgresql</artifactId>
     <name>Mansart :: Data :: Dialect PostgreSQL</name>
-    <description>PostgreSQL dialect implementation. Implementation in M4.</description>
+    <description>PostgreSQL dialect implementation.</description>
 
     <dependencies>
         <dependency>

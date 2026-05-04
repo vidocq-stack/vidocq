@@ -35,12 +35,10 @@
 
     <subprojects>
         <subproject>mansart-data-api</subproject>
-        <subproject>mansart-data-dialect-spi</subproject>
+        <subproject>mansart-data-dialects</subproject>
         <subproject>mansart-data-core</subproject>
         <subproject>mansart-data-processor</subproject>
         <subproject>mansart-data-cdi</subproject>
-        <subproject>mansart-data-dialect-h2</subproject>
-        <subproject>mansart-data-dialect-postgresql</subproject>
         <subproject>mansart-data-tests</subproject>
     </subprojects>
 
