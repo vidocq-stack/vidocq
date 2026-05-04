@@ -188,17 +188,28 @@ final class RepositoryWriter {
 
     private String derivedQueryBody(QueryMethodParser.QueryDescriptor d, TypeMirror returnType,
                                     String metamodel, List<? extends TypeMirror> paramTypes) {
+        // Trailing PageRequest: split it off and dispatch to queryPage.
+        boolean trailingPageRequest = !paramTypes.isEmpty()
+                && isPageRequest(paramTypes.get(paramTypes.size() - 1));
+        int predicateArity = trailingPageRequest ? paramTypes.size() - 1 : paramTypes.size();
+
         // Dynamic-arity In: when the sole predicate is `In` and the param is a Collection,
         // build the Where with the runtime-known size and spread the args.
         if (d.predicates().size() == 1
                 && d.predicates().get(0).comparator() == QueryMethodParser.Comparator.IN
-                && paramTypes.size() == 1
+                && predicateArity == 1
                 && isCollectionLike(paramTypes.get(0))) {
             return inCollectionBody(d, returnType, metamodel);
         }
         String where = renderWhere(d, metamodel);
         String orderBy = renderOrderBy(d, metamodel);
-        String args = "new java.lang.Object[]{" + argsList(paramTypes.size()) + "}";
+        String args = "new java.lang.Object[]{" + argsList(predicateArity) + "}";
+
+        if (trailingPageRequest && d.op() == QueryMethodParser.Operation.FIND) {
+            return "return runtime.queryPage(" + metamodel + ".$MODEL, " + where + ", " + orderBy
+                    + ", " + p(paramTypes.size() - 1) + ", " + args + ");";
+        }
+
         return switch (d.op()) {
             case FIND     -> findBody(returnType, metamodel, where, orderBy, args);
             case FIND_ONE -> "return runtime.queryOne(" + metamodel + ".$MODEL, " + where + ", " + args + ");";
@@ -230,6 +241,18 @@ final class RepositoryWriter {
         String s = types.erasure(t).toString();
         return s.equals("java.util.Collection") || s.equals("java.util.List") || s.equals("java.util.Set")
                 || s.equals("java.lang.Iterable");
+    }
+
+    private boolean isPageRequest(TypeMirror t) {
+        return types.erasure(t).toString().equals("jakarta.data.page.PageRequest");
+    }
+
+    private boolean isOrder(TypeMirror t) {
+        return types.erasure(t).toString().equals("jakarta.data.Order");
+    }
+
+    private boolean isPageReturn(TypeMirror t) {
+        return t.toString().startsWith("jakarta.data.page.Page");
     }
 
     private String findBody(TypeMirror returnType, String metamodel, String where, String orderBy, String args) {
@@ -334,7 +357,22 @@ final class RepositoryWriter {
             case "save"        -> arity == 1 ? saveBody(metamodel, entityFqn) : null;
             case "saveAll"     -> arity == 1 ? saveAllBody(metamodel, entityFqn) : null;
             case "findById"    -> arity == 1 ? "return runtime.findById(" + metamodel + ".$MODEL, " + p(0) + ");" : null;
-            case "findAll"     -> arity == 0 ? findAllBody(metamodel, returnsStream) : null;
+            case "findAll" -> {
+                if (arity == 0) yield findAllBody(metamodel, returnsStream);
+                if (arity == 2 && isPageRequest(paramTypes.get(0)) && isOrder(paramTypes.get(1))) {
+                    yield "return runtime.queryPage(" + metamodel + ".$MODEL, "
+                            + "io.vidocq.mansart.data.dialect.Where.ALWAYS_TRUE, "
+                            + "runtime.toOrderBy(" + metamodel + ".$MODEL, " + p(1) + "), "
+                            + p(0) + ", new java.lang.Object[0]);";
+                }
+                if (arity == 1 && isPageRequest(paramTypes.get(0))) {
+                    yield "return runtime.queryPage(" + metamodel + ".$MODEL, "
+                            + "io.vidocq.mansart.data.dialect.Where.ALWAYS_TRUE, "
+                            + "io.vidocq.mansart.data.dialect.OrderBy.NONE, "
+                            + p(0) + ", new java.lang.Object[0]);";
+                }
+                yield null;
+            }
             case "deleteById"  -> arity == 1 ? simpleVoidOrBool("deleteById", metamodel, isVoid) : null;
             case "delete"      -> arity == 1 ? deleteEntityBody(metamodel, entityFqn, isVoid) : null;
             case "deleteAll" -> {

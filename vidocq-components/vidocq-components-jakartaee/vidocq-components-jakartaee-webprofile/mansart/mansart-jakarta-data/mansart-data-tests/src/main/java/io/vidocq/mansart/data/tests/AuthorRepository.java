@@ -25,4 +25,8 @@ public interface AuthorRepository extends BasicRepository<Author, Long> {
     long deleteByName(String name);
 
     java.util.List<Author> findAllByOrderByNameAsc();
+
+    /* ---- M3c pagination ---- */
+
+    jakarta.data.page.Page<Author> findByNameLikeOrderByNameAsc(String pattern, jakarta.data.page.PageRequest pageRequest);
 }

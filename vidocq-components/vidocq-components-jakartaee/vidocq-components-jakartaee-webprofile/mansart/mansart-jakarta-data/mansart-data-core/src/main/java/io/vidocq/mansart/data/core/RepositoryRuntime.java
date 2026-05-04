@@ -10,7 +10,11 @@ import io.vidocq.mansart.data.dialect.Where;
 import io.vidocq.mansart.data.dialect.attribute.IdAttribute;
 import io.vidocq.mansart.data.dialect.attribute.ReferenceAttribute;
 import io.vidocq.mansart.data.dialect.attribute.VersionAttribute;
+import jakarta.data.Order;
+import jakarta.data.Sort;
 import jakarta.data.exceptions.OptimisticLockingFailureException;
+import jakarta.data.page.Page;
+import jakarta.data.page.PageRequest;
 
 import javax.sql.DataSource;
 import java.sql.PreparedStatement;
@@ -193,6 +197,41 @@ public final class RepositoryRuntime {
 
     public <E> boolean existsWhere(EntityModel<E> model, Where where, Object... args) {
         return countWhere(model, where, args) > 0;
+    }
+
+    /* -------- pagination (M3c) ---------- */
+
+    public <E> Page<E> queryPage(EntityModel<E> model, Where where, OrderBy orderBy,
+                                 PageRequest pageRequest, Object... args) {
+        Pagination.Offset pag = new Pagination.Offset(
+                (pageRequest.page() - 1) * pageRequest.size(),
+                pageRequest.size());
+        SqlFragment frag = dialect.select(model, where, orderBy, pag);
+        List<E> content = ConnectionScope.withConnection(dataSource, c -> {
+            try (PreparedStatement ps = c.prepareStatement(frag.sql())) {
+                WhereBinder.bind(dialect, ps, where, args, 1, new int[]{0});
+                try (ResultSet rs = ps.executeQuery()) {
+                    List<E> out = new ArrayList<>();
+                    while (rs.next()) out.add(RowMapper.map(model, dialect, rs));
+                    return out;
+                }
+            }
+        });
+        long total = pageRequest.requestTotal() ? countWhere(model, where, args) : -1L;
+        return new MansartPage<>(content, pageRequest, total);
+    }
+
+    /** Maps a {@code jakarta.data.Order<E>} to the dialect-neutral {@link OrderBy}. */
+    public <E> OrderBy toOrderBy(EntityModel<E> model, Order<E> order) {
+        if (order == null) return OrderBy.NONE;
+        List<OrderBy.Order> orders = new ArrayList<>();
+        for (Sort<? super E> sort : order.sorts()) {
+            Attribute<E, ?> attr = model.attribute(sort.property())
+                    .orElseThrow(() -> new MansartDataException(
+                            "Unknown attribute '" + sort.property() + "' on " + model.entityClass().getSimpleName()));
+            orders.add(sort.isAscending() ? OrderBy.Order.asc(attr) : OrderBy.Order.desc(attr));
+        }
+        return orders.isEmpty() ? OrderBy.NONE : new OrderBy(orders);
     }
 
     public <E> long deleteWhere(EntityModel<E> model, Where where, Object... args) {
