@@ -33,9 +33,28 @@ public final class MansartData {
 
     public Dialect dialect() { return runtime.dialect(); }
 
+    /**
+     * Resolves a {@code @Repository} via the compile-time-generated {@code *Impl} (preferred path).
+     * Throws if APT didn't run on the module that declares {@code repositoryInterface} — use
+     * {@link #runtimeRepository(Class)} for the M7 runtime fallback in that case.
+     */
     @SuppressWarnings("unchecked")
     public <R> R repository(Class<R> repositoryInterface) {
         return (R) repositories.computeIfAbsent(repositoryInterface, this::instantiate);
+    }
+
+    /**
+     * M7 runtime path — builds a {@link Proxy}-backed implementation that dispatches
+     * {@code BasicRepository}/{@code CrudRepository} methods to {@link RepositoryRuntime}, with
+     * the {@link io.vidocq.mansart.data.dialect.EntityModel} reconstructed at runtime from the
+     * entity's reflection metadata. Use when the compile-time {@code *Impl} doesn't exist (TCK
+     * jar, ad-hoc usage). Derived queries / {@code @Query} JDQL / lifecycle annotations land
+     * in M7-2 via {@code java.lang.classfile}.
+     */
+    @SuppressWarnings("unchecked")
+    public <R> R runtimeRepository(Class<R> repositoryInterface) {
+        return (R) repositories.computeIfAbsent(repositoryInterface,
+                itf -> RuntimeRepositoryProxy.create((Class) itf, runtime));
     }
 
     private <R> R instantiate(Class<R> itf) {
@@ -49,7 +68,9 @@ public final class MansartData {
             return instance;
         } catch (ClassNotFoundException e) {
             throw new MansartDataException("Repository implementation not found: " + implName
-                    + " — did mansart-data-processor run on the module declaring " + itf.getName() + "?", e);
+                    + " — did mansart-data-processor run on the module declaring " + itf.getName()
+                    + "? For environments where APT cannot run on the source (e.g. TCK), use "
+                    + "MansartData.runtimeRepository(Class) instead (M7 runtime path).", e);
         } catch (NoSuchMethodException e) {
             throw new MansartDataException("Generated repository " + implName
                     + " has no (RepositoryRuntime) constructor — regenerate sources.", e);
