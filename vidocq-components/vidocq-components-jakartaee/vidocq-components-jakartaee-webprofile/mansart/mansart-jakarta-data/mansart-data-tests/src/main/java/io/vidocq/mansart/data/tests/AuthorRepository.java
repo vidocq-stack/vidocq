@@ -59,4 +59,18 @@ public interface AuthorRepository extends BasicRepository<Author, Long> {
 
     @jakarta.data.repository.Query("FROM Author WHERE name IS NOT NULL")
     long jdqlCountNonNull();
+
+    /* ---- M5-2 JDQL extensions ---- */
+
+    @jakarta.data.repository.Query("FROM Author WHERE id IN :ids")
+    java.util.List<Author> jdqlByIdIn(java.util.List<Long> ids);
+
+    @jakarta.data.repository.Query("SELECT COUNT(*) FROM Author WHERE name LIKE :pattern")
+    long jdqlSelectCountByNameLike(String pattern);
+
+    @jakarta.data.repository.Query("UPDATE Author SET name = :newName WHERE name = :oldName")
+    long jdqlRename(String oldName, String newName);
+
+    @jakarta.data.repository.Query("DELETE FROM Author WHERE name LIKE :pattern")
+    long jdqlDeleteByNameLike(String pattern);
 }

@@ -354,6 +354,34 @@ public final class RepositoryRuntime {
         });
     }
 
+    /**
+     * Targeted UPDATE for JDQL {@code UPDATE … SET col = ?} statements (M5-2).
+     *
+     * <p>Args layout: SET values come first (in {@code attributes} order), then any args consumed
+     * by {@code where} (in render order). Returns the number of rows affected.
+     */
+    public <E> long executeUpdate(EntityModel<E> model, java.util.List<Attribute<?, ?>> attributes,
+                                  Where where, Object... args) {
+        SqlFragment frag = dialect.updateSet(model, attributes, where);
+        return ConnectionScope.withConnection(dataSource, c -> {
+            try (PreparedStatement ps = c.prepareStatement(frag.sql())) {
+                int idx = 1;
+                for (int i = 0; i < attributes.size(); i++) {
+                    dialect.bind(ps, idx++, args[i], attributes.get(i).javaType());
+                }
+                Object[] whereArgs;
+                if (args.length > attributes.size()) {
+                    whereArgs = new Object[args.length - attributes.size()];
+                    System.arraycopy(args, attributes.size(), whereArgs, 0, whereArgs.length);
+                } else {
+                    whereArgs = new Object[0];
+                }
+                WhereBinder.bind(dialect, ps, where, whereArgs, idx, new int[]{0});
+                return (long) ps.executeUpdate();
+            }
+        });
+    }
+
     /* -------- lifecycle (M3b-2): @Insert, @Update, @Delete ---------- */
 
     /** Strict insert (never an upsert). Translates SQLState 23505 → {@link jakarta.data.exceptions.EntityExistsException}. */
