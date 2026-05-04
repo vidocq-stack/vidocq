@@ -84,4 +84,21 @@ public interface AuthorRepository extends BasicRepository<Author, Long> {
 
     @jakarta.data.repository.Query("FROM Author WHERE name IN (:a, :b, :c)")
     java.util.List<Author> jdqlNameInLiteral(String a, String b, String c);
+
+    /* ---- M5-4 aggregates + projections ---- */
+
+    @jakarta.data.repository.Query("SELECT MAX(id) FROM Author")
+    Long jdqlMaxId();
+
+    @jakarta.data.repository.Query("SELECT MIN(id) FROM Author WHERE name LIKE :pattern")
+    long jdqlMinIdByPattern(String pattern);
+
+    @jakarta.data.repository.Query("SELECT SUM(id) FROM Author WHERE name LIKE :pattern")
+    Long jdqlSumIdByPattern(String pattern);
+
+    @jakarta.data.repository.Query("SELECT name FROM Author ORDER BY name ASC")
+    java.util.List<String> jdqlAllNames();
+
+    @jakarta.data.repository.Query("SELECT name FROM Author WHERE id = ?1")
+    java.util.Optional<String> jdqlNameById(Long id);
 }

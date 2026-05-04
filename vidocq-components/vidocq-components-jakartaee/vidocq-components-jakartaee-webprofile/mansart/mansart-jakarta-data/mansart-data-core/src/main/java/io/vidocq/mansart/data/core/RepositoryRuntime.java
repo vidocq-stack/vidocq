@@ -198,6 +198,65 @@ public final class RepositoryRuntime {
         });
     }
 
+    /* -------- aggregates + projections (M5-4) ---------- */
+
+    /**
+     * Runs {@code SELECT <op>("col") FROM table [WHERE …]} and extracts a single value of type
+     * {@code resultType}. Used by JDQL aggregates (SUM/AVG/MIN/MAX). Returns {@code null} if SQL
+     * returns NULL (e.g. SUM over an empty set).
+     */
+    public <E, T> T aggregate(EntityModel<E> model, String op, Attribute<?, ?> attr,
+                              Class<T> resultType, Where where, Object... args) {
+        String aggExpr = op + "(\"" + attr.columnName() + "\")";
+        return scalarSelect(model, aggExpr, resultType, where, args);
+    }
+
+    /** Returns the projected column values that match {@code where}, ordered by {@code orderBy}. */
+    public <E, T> java.util.List<T> projectColumn(EntityModel<E> model, Attribute<?, ?> attr,
+                                                  Class<T> resultType, Where where, OrderBy orderBy,
+                                                  Object... args) {
+        String columnExpr = "\"" + attr.columnName() + "\"";
+        String tail = whereOrderTail(model, where, orderBy);
+        String sql = "SELECT " + columnExpr + " FROM " + qualifiedTable(model) + tail;
+        return ConnectionScope.withConnection(dataSource, c -> {
+            try (PreparedStatement ps = c.prepareStatement(sql)) {
+                WhereBinder.bind(dialect, ps, where, args, 1, new int[]{0});
+                try (ResultSet rs = ps.executeQuery()) {
+                    java.util.List<T> out = new ArrayList<>();
+                    while (rs.next()) out.add(dialect.extract(rs, 1, resultType));
+                    return out;
+                }
+            }
+        });
+    }
+
+    private <E, T> T scalarSelect(EntityModel<E> model, String columnExpr, Class<T> resultType,
+                                  Where where, Object[] args) {
+        String tail = whereOrderTail(model, where, OrderBy.NONE);
+        String sql = "SELECT " + columnExpr + " FROM " + qualifiedTable(model) + tail;
+        return ConnectionScope.withConnection(dataSource, c -> {
+            try (PreparedStatement ps = c.prepareStatement(sql)) {
+                WhereBinder.bind(dialect, ps, where, args, 1, new int[]{0});
+                try (ResultSet rs = ps.executeQuery()) {
+                    return rs.next() ? dialect.extract(rs, 1, resultType) : null;
+                }
+            }
+        });
+    }
+
+    /** Extracts {@code WHERE …} (and optional ORDER BY) from a dialect-rendered SELECT, reused
+     *  to compose custom-projection SQL without re-implementing the predicate renderer here. */
+    private String whereOrderTail(EntityModel<?> model, Where where, OrderBy orderBy) {
+        SqlFragment selFrag = dialect.select(model, where, orderBy, Pagination.NONE);
+        String src = selFrag.sql();
+        int whereIdx = src.indexOf(" WHERE ");
+        int orderIdx = src.indexOf(" ORDER BY ");
+        int start = -1;
+        if (whereIdx >= 0 && (orderIdx < 0 || whereIdx < orderIdx)) start = whereIdx;
+        else if (orderIdx >= 0) start = orderIdx;
+        return start >= 0 ? src.substring(start) : "";
+    }
+
     public <E> boolean existsWhere(EntityModel<E> model, Where where, Object... args) {
         return countWhere(model, where, args) > 0;
     }

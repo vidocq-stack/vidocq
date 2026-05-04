@@ -50,8 +50,124 @@ final class JdqlParser {
         return switch (stmt.kind) {
             case SELECT, COUNT -> emitSelect(stmt, method, metamodel, nameToIdx, returnType,
                     trailingPageRequest, isCursoredPageReturn);
+            case AGGREGATE     -> emitAggregate(stmt, method, metamodel, nameToIdx, returnType);
+            case PROJECT       -> emitProject(stmt, method, metamodel, nameToIdx, returnType);
             case UPDATE        -> emitUpdate(stmt, method, metamodel, nameToIdx, returnType);
             case DELETE        -> emitDelete(stmt, method, metamodel, nameToIdx, returnType);
+        };
+    }
+
+    private static String emitAggregate(Stmt stmt, ExecutableElement method, String metamodel,
+                                        Map<String, Integer> nameToIdx, TypeMirror returnType) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("io.vidocq.mansart.data.dialect.Where _w = ");
+        emitPredicate(sb, stmt.where, metamodel);
+        sb.append("; ");
+
+        List<ArgRef> argsInOrder = new ArrayList<>();
+        if (stmt.where != null) collectArgs(stmt.where, argsInOrder);
+        sb.append("java.lang.Object[] _xs = new java.lang.Object[]{");
+        for (int i = 0; i < argsInOrder.size(); i++) {
+            if (i > 0) sb.append(", ");
+            sb.append(resolveArg(argsInOrder.get(i), nameToIdx, method));
+        }
+        sb.append("}; ");
+
+        String boxed = boxedReturnType(returnType);
+        boolean isPrimitive = returnType.getKind().isPrimitive();
+        sb.append(boxed).append(" _v = runtime.aggregate(").append(metamodel).append(".$MODEL, \"")
+          .append(stmt.aggregateOp).append("\", ").append(metamodel).append('.').append(stmt.scalarAttr)
+          .append(", ").append(boxed).append(".class, _w, _xs); ");
+        if (isPrimitive) {
+            // Primitive returns can't carry null — substitute a zero of the right type when SUM/MAX
+            // returns no rows.
+            sb.append("return _v == null ? ").append(zeroLiteralFor(returnType)).append(" : _v;");
+        } else {
+            sb.append("return _v;");
+        }
+        return sb.toString();
+    }
+
+    private static String emitProject(Stmt stmt, ExecutableElement method, String metamodel,
+                                      Map<String, Integer> nameToIdx, TypeMirror returnType) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("io.vidocq.mansart.data.dialect.Where _w = ");
+        emitPredicate(sb, stmt.where, metamodel);
+        sb.append("; io.vidocq.mansart.data.dialect.OrderBy _ob = ");
+        emitOrderBy(sb, stmt.orderBy, metamodel);
+        sb.append("; ");
+
+        List<ArgRef> argsInOrder = new ArrayList<>();
+        if (stmt.where != null) collectArgs(stmt.where, argsInOrder);
+        sb.append("java.lang.Object[] _xs = new java.lang.Object[]{");
+        for (int i = 0; i < argsInOrder.size(); i++) {
+            if (i > 0) sb.append(", ");
+            sb.append(resolveArg(argsInOrder.get(i), nameToIdx, method));
+        }
+        sb.append("}; ");
+
+        String rt = returnType.toString();
+        if (rt.startsWith("java.util.List")
+                || rt.startsWith("java.util.Collection")
+                || rt.startsWith("java.lang.Iterable")) {
+            String elem = projectionElementBoxed(rt);
+            sb.append("return runtime.projectColumn(").append(metamodel).append(".$MODEL, ")
+              .append(metamodel).append('.').append(stmt.scalarAttr)
+              .append(", ").append(elem).append(".class, _w, _ob, _xs);");
+        } else if (rt.startsWith("java.util.stream.Stream")) {
+            String elem = projectionElementBoxed(rt);
+            sb.append("return runtime.projectColumn(").append(metamodel).append(".$MODEL, ")
+              .append(metamodel).append('.').append(stmt.scalarAttr)
+              .append(", ").append(elem).append(".class, _w, _ob, _xs).stream();");
+        } else if (rt.startsWith("java.util.Optional")) {
+            String elem = projectionElementBoxed(rt);
+            sb.append("var _list = runtime.projectColumn(").append(metamodel).append(".$MODEL, ")
+              .append(metamodel).append('.').append(stmt.scalarAttr)
+              .append(", ").append(elem).append(".class, _w, _ob, _xs); ");
+            sb.append("return _list.isEmpty() ? java.util.Optional.empty() : java.util.Optional.ofNullable(_list.get(0));");
+        } else {
+            // Single scalar return — fetch first, throw if absent
+            String boxed = boxedReturnType(returnType);
+            sb.append("var _list = runtime.projectColumn(").append(metamodel).append(".$MODEL, ")
+              .append(metamodel).append('.').append(stmt.scalarAttr)
+              .append(", ").append(boxed).append(".class, _w, _ob, _xs); ");
+            sb.append("if (_list.isEmpty()) throw new io.vidocq.mansart.data.core.MansartDataException("
+                    + "\"Projection returned no result\"); return _list.get(0);");
+        }
+        return sb.toString();
+    }
+
+    private static String projectionElementBoxed(String genericRt) {
+        int lt = genericRt.indexOf('<');
+        int gt = genericRt.lastIndexOf('>');
+        if (lt < 0 || gt < 0) return "java.lang.Object";
+        String inner = genericRt.substring(lt + 1, gt).trim();
+        // Strip wildcard markers and bounds for simple reflection-friendly extraction
+        if (inner.startsWith("? extends ")) inner = inner.substring("? extends ".length());
+        if (inner.startsWith("? super "))   inner = inner.substring("? super ".length());
+        return inner;
+    }
+
+    private static String boxedReturnType(TypeMirror t) {
+        return switch (t.toString()) {
+            case "boolean" -> "java.lang.Boolean";
+            case "byte"    -> "java.lang.Byte";
+            case "short"   -> "java.lang.Short";
+            case "int"     -> "java.lang.Integer";
+            case "long"    -> "java.lang.Long";
+            case "float"   -> "java.lang.Float";
+            case "double"  -> "java.lang.Double";
+            case "char"    -> "java.lang.Character";
+            default        -> t.toString();
+        };
+    }
+
+    private static String zeroLiteralFor(TypeMirror t) {
+        return switch (t.toString()) {
+            case "long"   -> "0L";
+            case "double" -> "0.0";
+            case "float"  -> "0.0f";
+            default       -> "0";
         };
     }
 
@@ -341,11 +457,13 @@ final class JdqlParser {
     /* ---------- AST ---------- */
 
     static final class Stmt {
-        enum Kind { SELECT, COUNT, UPDATE, DELETE }
+        enum Kind { SELECT, COUNT, UPDATE, DELETE, AGGREGATE, PROJECT }
         Kind kind = Kind.SELECT;
         Pred where;
         List<Order> orderBy = new ArrayList<>();
         List<SetAssign> setAssignments = new ArrayList<>();
+        String aggregateOp;       // "SUM" | "AVG" | "MIN" | "MAX" when kind == AGGREGATE
+        String scalarAttr;        // attribute name for AGGREGATE / PROJECT
     }
     record SetAssign(String attr, ArgRef arg) {}
     sealed interface Pred permits Cmp, IsNull, Between, In, And, Or, Not {}
@@ -518,7 +636,8 @@ final class JdqlParser {
             return switch (w.toUpperCase()) {
                 case "FROM", "WHERE", "ORDER", "BY", "AND", "OR", "NOT",
                      "IS", "NULL", "BETWEEN", "LIKE", "ASC", "DESC",
-                     "SELECT", "UPDATE", "DELETE", "SET", "IN", "COUNT", "THIS" -> true;
+                     "SELECT", "UPDATE", "DELETE", "SET", "IN", "COUNT", "THIS",
+                     "SUM", "AVG", "MIN", "MAX" -> true;
                 default -> false;
             };
         }
@@ -554,8 +673,23 @@ final class JdqlParser {
                 } else if (peekKw("THIS")) {
                     lex.consume();
                     // SELECT this — same as default
+                } else if (peekAggregate()) {
+                    Token agg = lex.consume();
+                    if (lex.peek().kind != Tk.LPAREN) throw new ParseException("Expected '(' after " + agg.text);
+                    lex.consume();
+                    String attr = expectAttr();
+                    if (lex.peek().kind != Tk.RPAREN) throw new ParseException("Expected ')' after " + agg.text + "(...)");
+                    lex.consume();
+                    s.kind = Stmt.Kind.AGGREGATE;
+                    s.aggregateOp = agg.text;
+                    s.scalarAttr = attr;
+                } else if (lex.peek().kind == Tk.IDENT) {
+                    // Projection: SELECT <attr>
+                    String attr = expectAttr();
+                    s.kind = Stmt.Kind.PROJECT;
+                    s.scalarAttr = attr;
                 } else {
-                    throw new ParseException("Only SELECT this and SELECT COUNT(...) are supported in M5-2");
+                    throw new ParseException("Unexpected token after SELECT: " + lex.peek().text);
                 }
             }
             if (peekKw("UPDATE")) {
@@ -736,6 +870,11 @@ final class JdqlParser {
         private boolean peekKw(String kw) {
             Token t = lex.peek();
             return t.kind == Tk.KW && t.text.equals(kw);
+        }
+        private boolean peekAggregate() {
+            Token t = lex.peek();
+            if (t.kind != Tk.KW) return false;
+            return switch (t.text) { case "SUM", "AVG", "MIN", "MAX" -> true; default -> false; };
         }
     }
 
