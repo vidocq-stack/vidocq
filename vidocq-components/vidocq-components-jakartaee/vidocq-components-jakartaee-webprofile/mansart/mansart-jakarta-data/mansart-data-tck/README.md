@@ -10,10 +10,12 @@ Module en `modelVersion 4.0.0` standalone (sans `<parent>`). Raison documentée 
 
 | Brique | État |
 | --- | --- |
-| POM standalone Model 4.0.0 + dépendances Arquillian/TestNG/Weld + TCK officiel | ✅ |
+| POM standalone Model 4.0.0 + deps Arquillian/TestNG/JUnit5 + TCK officiel | ✅ |
 | Script `run-official-tck-data-1.0.sh` | ✅ |
-| Harness Arquillian (Weld embedded + Mansart wiring) | 🚧 dépend de `mansart-data-cdi` (BCE en placeholder) |
-| Suite TCK officielle 1.0.1 — exécution effective | 🚧 bloqué sur le BCE |
+| BCE Mansart (`mansart-data-cdi`) wire les `@Repository` dans Vauban | ✅ M6.1 |
+| Connecteur Arquillian Vauban (porté depuis `vauban-tck-runner`) | ✅ M6.2 |
+| Suite TCK officielle 1.0.1 — résolue depuis Maven Central + 73 EntityTests discovered | ✅ M6.3 |
+| Wiring TCK entities (`NaturalNumbers`, `AsciiCharacters`…) via `TCKArchiveProcessor` | 🚧 M6.4 |
 
 **Blocage actuel** : le module `mansart-data-cdi` ne contient encore que le squelette `MansartDataCdi`. Pour que le TCK puisse découvrir les `@Repository` et les exposer comme beans CDI, il faut implémenter la `BuildCompatibleExtension` qui :
 
@@ -23,34 +25,27 @@ Module en `modelVersion 4.0.0` standalone (sans `<parent>`). Raison documentée 
 
 ## Installation des artefacts TCK
 
-L'artefact `jakarta.data:jakarta-data-tck:1.0.1` n'est pas distribué sur Maven Central. Il faut l'installer manuellement dans le M2 local depuis la distribution officielle Eclipse Foundation :
+**Bonne nouvelle (M6.3)** : `jakarta.data:jakarta.data-tck:1.0.1` (note le **point**, pas le tiret, dans l'artifactId) **est sur Maven Central**. Aucun install manuel nécessaire — le profil `-Ptck-run` le télécharge automatiquement.
 
-```bash
-# 1. Télécharger jakarta-data-tck-1.0.1.zip depuis :
-#    https://download.eclipse.org/jakartaee/data/1.0/
-
-# 2. Décompresser et installer dans le M2 local
-unzip jakarta-data-tck-1.0.1.zip
-cd jakarta-data-tck-1.0.1
-mvn install:install-file \
-    -Dfile=artifacts/jakarta-data-tck-1.0.1.jar \
-    -DgroupId=jakarta.data \
-    -DartifactId=jakarta-data-tck \
-    -Dversion=1.0.1 \
-    -Dpackaging=jar
+```xml
+<dependency>
+    <groupId>jakarta.data</groupId>
+    <artifactId>jakarta.data-tck</artifactId>
+    <version>1.0.1</version>
+</dependency>
 ```
 
 ## Lancement
 
 ```bash
-# Smoke test (suite réduite)
+# Smoke harness (Vauban + Mansart, 5 tests, défaut)
+mvn test
+
+# Suite TCK officielle (subset EntityTests pour le moment, M6.3)
+mvn -Ptck-run test
+
+# (script wrapper équivalent, ajoute aussi quelques garde-fous)
 ./run-official-tck-data-1.0.sh
-
-# Suite complète
-./run-official-tck-data-1.0.sh --all
-
-# Test ciblé
-./run-official-tck-data-1.0.sh -Dtest=NomDuTest
 ```
 
 Prérequis :

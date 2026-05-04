@@ -16,29 +16,8 @@ if [ -n "${SDKMAN_DIR:-}" ] && [ -s "$SDKMAN_DIR/bin/sdkman-init.sh" ]; then
     (cd .. && sdk env > /dev/null 2>&1) || true
 fi
 
-# Verify the TCK is installed in the local M2.
-TCK_JAR="$HOME/.m2/repository/jakarta/data/jakarta-data-tck/1.0.1/jakarta-data-tck-1.0.1.jar"
-if [ ! -f "$TCK_JAR" ]; then
-    cat <<EOF >&2
-[ERROR] jakarta.data:jakarta-data-tck:1.0.1 is not installed in your local Maven repo.
-
-Expected at: $TCK_JAR
-
-Install procedure:
-  1. Download jakarta-data-tck-1.0.1.zip from
-     https://download.eclipse.org/jakartaee/data/1.0/
-  2. Unzip and run:
-       mvn install:install-file \\
-           -Dfile=artifacts/jakarta-data-tck-1.0.1.jar \\
-           -DgroupId=jakarta.data \\
-           -DartifactId=jakarta-data-tck \\
-           -Dversion=1.0.1 \\
-           -Dpackaging=jar
-
-See README.md > "Install the TCK artefacts" for full details.
-EOF
-    exit 2
-fi
+# jakarta.data:jakarta.data-tck:1.0.1 is on Maven Central since M6.3 — Maven will fetch it
+# automatically when the `tck-run` profile is active. No local install needed.
 
 # Verify the Mansart reactor is installed.
 if [ ! -f "$HOME/.m2/repository/io/vidocq/mansart/mansart-data-core/1.0.0-SNAPSHOT/mansart-data-core-1.0.0-SNAPSHOT.jar" ]; then
@@ -47,22 +26,19 @@ if [ ! -f "$HOME/.m2/repository/io/vidocq/mansart/mansart-data-core/1.0.0-SNAPSH
 fi
 
 case "${1:-}" in
-    --all|all)
-        # Full suite — every TCK class
-        shift || true
-        mvn -ntp test -DfailIfNoTests=false "$@"
-        ;;
-    -Dtest=*)
-        # Single test or pattern
-        mvn -ntp test "$@"
-        ;;
-    "")
-        # Default: smoke subset (when one is documented). For now runs the suite
-        # configured in src/test/resources/tck-suite.xml.
+    --smoke)
+        # Mansart-only smoke harness (Vauban + standalone + Arquillian smoke, no TCK suite)
         mvn -ntp test
         ;;
+    --all|all|"")
+        # Default M6.3: run the official Jakarta Data 1.0 TCK subset (currently EntityTests).
+        # M6.4 will widen this once TCKArchiveProcessor is wired into the deployment.
+        mvn -ntp -Ptck-run test -DfailIfNoTests=false
+        ;;
+    -Dtest=*)
+        mvn -ntp -Ptck-run test "$@"
+        ;;
     *)
-        # Forward any other args (e.g. -Pprofile=…) to Maven directly
-        mvn -ntp test "$@"
+        mvn -ntp -Ptck-run test "$@"
         ;;
 esac

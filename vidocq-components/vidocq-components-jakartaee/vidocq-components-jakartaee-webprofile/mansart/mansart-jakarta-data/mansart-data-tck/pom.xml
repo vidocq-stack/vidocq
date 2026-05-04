@@ -34,6 +34,10 @@
         <testng.version>7.10.2</testng.version>
         <h2.version>2.3.232</h2.version>
 
+        <!-- Removed in M6.3 — kept for documentation / older references:
+             weld.version (5.1.5.Final), arquillian.weld.version (4.0.1.Final).
+             We use Vauban as the CDI runtime and a ported Vauban Arquillian connector. -->
+
         <maven.compiler.plugin.version>4.0.0-beta-4</maven.compiler.plugin.version>
         <maven.surefire.plugin.version>3.5.2</maven.surefire.plugin.version>
     </properties>
@@ -155,36 +159,74 @@
 
     <profiles>
         <!--
-          Enable with `mvn -Ptck-run test` once the prerequisite artefacts are installed in
-          the local M2:
-            * jakarta.data:jakarta-data-tck:1.0.1 — see README.md "Install the TCK artefacts".
-            * org.jboss.weld.se:weld-se-shaded:5.x — usually on Central.
-            * org.jboss.arquillian.container:arquillian-weld-embedded:4.0.x — coordinates
-              evolved between Arquillian releases; install the right one for your environment.
+          Enable with `mvn -Ptck-run test` to pull in the official Jakarta Data 1.0 TCK suite
+          alongside the Mansart smoke harness. The TCK jar is on Maven Central as
+          `jakarta.data:jakarta.data-tck:1.0.1` (note the dot, not the dash, in the artifactId).
         -->
         <profile>
             <id>tck-run</id>
             <dependencies>
                 <dependency>
                     <groupId>jakarta.data</groupId>
-                    <artifactId>jakarta-data-tck</artifactId>
+                    <artifactId>jakarta.data-tck</artifactId>
                     <version>${jakarta.data.tck.version}</version>
+                    <scope>test</scope>
+                </dependency>
+                <!-- TCK uses JUnit 5 + Arquillian JUnit 5 -->
+                <dependency>
+                    <groupId>org.junit.jupiter</groupId>
+                    <artifactId>junit-jupiter</artifactId>
+                    <version>5.11.4</version>
+                    <scope>test</scope>
                 </dependency>
                 <dependency>
-                    <groupId>org.jboss.weld.se</groupId>
-                    <artifactId>weld-se-shaded</artifactId>
-                    <version>${weld.version}</version>
+                    <groupId>org.jboss.arquillian.junit5</groupId>
+                    <artifactId>arquillian-junit5-container</artifactId>
+                    <scope>test</scope>
                 </dependency>
+                <!-- Servlet API needed by the signature TCK harness even for standalone tests. -->
                 <dependency>
-                    <groupId>org.jboss.arquillian.testng</groupId>
-                    <artifactId>arquillian-testng-container</artifactId>
+                    <groupId>jakarta.servlet</groupId>
+                    <artifactId>jakarta.servlet-api</artifactId>
+                    <version>6.1.0</version>
+                    <scope>test</scope>
                 </dependency>
+                <!-- Ant — pulled in by the signature TCK runner (heritage from CTS). -->
                 <dependency>
-                    <groupId>org.jboss.arquillian.container</groupId>
-                    <artifactId>arquillian-weld-embedded</artifactId>
-                    <version>${arquillian.weld.version}</version>
+                    <groupId>org.apache.ant</groupId>
+                    <artifactId>ant</artifactId>
+                    <version>1.10.15</version>
+                    <scope>test</scope>
                 </dependency>
             </dependencies>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <!-- Drop the TestNG suite XML so surefire auto-discovers JUnit 5 tests
+                                 from the TCK jar via dependenciesToScan. The Mansart TestNG
+                                 smoke tests still get picked up because surefire detects both
+                                 providers when both are on the classpath. -->
+                            <suiteXmlFiles combine.self="override"/>
+                            <dependenciesToScan>
+                                <dependency>jakarta.data:jakarta.data-tck</dependency>
+                            </dependenciesToScan>
+                            <!-- M6.3 first attempt: run the standalone EntityTests subset
+                                 (real CRUD validation against Mansart). SignatureTests is
+                                 deferred — it requires jimage.dir + cts-tooling setup that
+                                 is heavier than necessary for an initial pass. -->
+                            <includes>
+                                <include>**/standalone/entity/EntityTests.class</include>
+                            </includes>
+                            <systemPropertyVariables>
+                                <jimage.dir>${java.home}/lib/modules</jimage.dir>
+                            </systemPropertyVariables>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
         </profile>
     </profiles>
 
