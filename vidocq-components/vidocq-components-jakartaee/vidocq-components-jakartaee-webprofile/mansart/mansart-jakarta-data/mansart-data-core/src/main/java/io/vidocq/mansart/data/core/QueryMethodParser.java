@@ -1,4 +1,4 @@
-package io.vidocq.mansart.data.processor;
+package io.vidocq.mansart.data.core;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -17,23 +17,23 @@ import java.util.Set;
  *   <li>Optional {@code OrderBy<Attr>[Asc|Desc]} suffix (multiple attributes allowed).</li>
  * </ul>
  */
-final class QueryMethodParser {
+public final class QueryMethodParser {
 
     private QueryMethodParser() {}
 
-    enum Operation { FIND, FIND_ONE, COUNT, EXISTS, DELETE }
-    enum Combinator { AND, OR }
-    enum Comparator { EQ, NOT_EQ, LIKE, BETWEEN, IN, GT, GTE, LT, LTE, IS_NULL, IS_NOT_NULL }
+    public enum Operation { FIND, FIND_ONE, COUNT, EXISTS, DELETE }
+    public enum Combinator { AND, OR }
+    public enum Comparator { EQ, NOT_EQ, LIKE, BETWEEN, IN, GT, GTE, LT, LTE, IS_NULL, IS_NOT_NULL }
 
-    record QueryDescriptor(
+    public record QueryDescriptor(
             Operation op,
             List<Predicate> predicates,
             Combinator combinator,
             List<Order> orderBy
     ) {}
 
-    record Predicate(String attribute, Comparator comparator) {
-        int boundParams() {
+    public record Predicate(String attribute, Comparator comparator) {
+        public int boundParams() {
             return switch (comparator) {
                 case BETWEEN          -> 2;
                 case IS_NULL, IS_NOT_NULL -> 0;
@@ -43,9 +43,9 @@ final class QueryMethodParser {
         }
     }
 
-    record Order(String attribute, boolean asc) {}
+    public record Order(String attribute, boolean asc) {}
 
-    static QueryDescriptor parse(String methodName, Set<String> attributeNames) {
+    public static QueryDescriptor parse(String methodName, Set<String> attributeNames) {
         Operation op;
         String rest;
         if      (startsWith(methodName, "findFirstBy")) { op = Operation.FIND_ONE; rest = methodName.substring("findFirstBy".length()); }

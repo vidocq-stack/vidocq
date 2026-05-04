@@ -1,5 +1,7 @@
 package io.vidocq.mansart.data.processor;
 
+import io.vidocq.mansart.data.core.QueryMethodParser;
+
 import javax.annotation.processing.Filer;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.TypeElement;

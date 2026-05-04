@@ -23,6 +23,12 @@
             <groupId>io.vidocq.mansart</groupId>
             <artifactId>mansart-data-dialect-spi</artifactId>
         </dependency>
+        <!-- M7-2: QueryMethodParser moved here so it is shared with the runtime path
+             (mansart-data-core). -->
+        <dependency>
+            <groupId>io.vidocq.mansart</groupId>
+            <artifactId>mansart-data-core</artifactId>
+        </dependency>
         <!-- jakarta.persistence-api kept compile-only and optional: the processor only reads the
              annotation type names through javax.lang.model, never loads JPA classes at runtime. -->
         <dependency>

@@ -33,6 +33,16 @@ class RuntimeRepositoryTest {
      */
     @Repository
     public interface RuntimeAuthorRepository extends BasicRepository<Author, Long> {
+
+        // M7-2 — derived queries on the runtime path
+        java.util.List<Author>     findByName(String name);
+        java.util.List<Author>     findByNameLike(String pattern);
+        java.util.Optional<Author> findOneByName(String name);
+        long                       countByName(String name);
+        boolean                    existsByName(String name);
+        long                       deleteByName(String name);
+        java.util.List<Author>     findByNameIn(java.util.List<String> names);
+        java.util.List<Author>     findAllByOrderByNameAsc();
     }
 
     private static DataSource dataSource;
@@ -98,6 +108,56 @@ class RuntimeRepositoryTest {
         Author saved = runtimeRepo.save(newAuthor("Delete by entity"));
         runtimeRepo.delete(saved);
         assertThat(runtimeRepo.findById(saved.getId())).isEmpty();
+    }
+
+    /* ---- M7-2 derived query dispatchers via runtime proxy ---- */
+
+    @Test
+    void derivedFindByName() {
+        runtimeRepo.save(newAuthor("Alpha"));
+        runtimeRepo.save(newAuthor("Beta"));
+        var hits = runtimeRepo.findByName("Beta");
+        assertThat(hits).extracting(Author::getName).containsExactly("Beta");
+    }
+
+    @Test
+    void derivedFindByNameLikeWithOrderBy() {
+        runtimeRepo.save(newAuthor("Carl"));
+        runtimeRepo.save(newAuthor("Charlie"));
+        runtimeRepo.save(newAuthor("Dan"));
+        var ordered = runtimeRepo.findAllByOrderByNameAsc();
+        assertThat(ordered).extracting(Author::getName).containsExactly("Carl", "Charlie", "Dan");
+    }
+
+    @Test
+    void derivedCountAndExistsAndDelete() {
+        runtimeRepo.save(newAuthor("Eve"));
+        runtimeRepo.save(newAuthor("Eve"));
+        assertThat(runtimeRepo.countByName("Eve")).isEqualTo(2L);
+        assertThat(runtimeRepo.existsByName("Eve")).isTrue();
+        long deleted = runtimeRepo.deleteByName("Eve");
+        assertThat(deleted).isEqualTo(2L);
+        assertThat(runtimeRepo.existsByName("Eve")).isFalse();
+    }
+
+    @Test
+    void derivedInWithCollectionAndEmpty() {
+        runtimeRepo.save(newAuthor("Fred"));
+        runtimeRepo.save(newAuthor("Greta"));
+        runtimeRepo.save(newAuthor("Helen"));
+        var hits = runtimeRepo.findByNameIn(java.util.List.of("Fred", "Helen"));
+        assertThat(hits).extracting(Author::getName).containsExactlyInAnyOrder("Fred", "Helen");
+
+        var empty = runtimeRepo.findByNameIn(java.util.List.of());
+        assertThat(empty).isEmpty();
+    }
+
+    @Test
+    void derivedFindOneOptional() {
+        runtimeRepo.save(newAuthor("Iris"));
+        assertThat(runtimeRepo.findOneByName("Iris"))
+                .isPresent().get().extracting(Author::getName).isEqualTo("Iris");
+        assertThat(runtimeRepo.findOneByName("Nope")).isEmpty();
     }
 
     private static Author newAuthor(String name) {
