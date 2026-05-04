@@ -221,6 +221,85 @@ public final class RepositoryRuntime {
         return new MansartPage<>(content, pageRequest, total);
     }
 
+    /**
+     * Cursor-based ("keyset") pagination — single-attribute OrderBy in M3c-2.
+     * Multi-attribute lexicographic cursors land in M3c-3.
+     */
+    public <E> jakarta.data.page.CursoredPage<E> queryCursored(
+            EntityModel<E> model, Where userWhere, OrderBy orderBy, PageRequest pr, Object... args) {
+        if (orderBy.isEmpty()) {
+            throw new MansartDataException("Cursor pagination requires a non-empty OrderBy");
+        }
+        if (orderBy.orders().size() != 1) {
+            throw new MansartDataException("M3c-2 supports single-attribute cursor only (got "
+                    + orderBy.orders().size() + ")");
+        }
+        OrderBy.Order ord = orderBy.orders().get(0);
+
+        Where combined = userWhere;
+        Object[] effectiveArgs = args;
+        OrderBy effectiveOrder = orderBy;
+
+        if (pr.cursor().isPresent()) {
+            PageRequest.Cursor cursor = pr.cursor().get();
+            if (cursor.size() != 1) {
+                throw new MansartDataException("Cursor element count must match OrderBy size (got "
+                        + cursor.size() + ", expected 1)");
+            }
+            boolean asc = ord.direction() == OrderBy.Order.Direction.ASC;
+            boolean isAfter = pr.mode() == PageRequest.Mode.CURSOR_NEXT;
+            Where cursorPred = (asc == isAfter)
+                    ? new Where.Gt(ord.attr())
+                    : new Where.Lt(ord.attr());
+            combined = (userWhere instanceof Where.AlwaysTrue)
+                    ? cursorPred
+                    : Where.and(userWhere, cursorPred);
+            // For CURSOR_PREVIOUS, reverse the order so the page is built backward; flip the
+            // resulting list afterwards so callers see natural order.
+            if (pr.mode() == PageRequest.Mode.CURSOR_PREVIOUS) {
+                effectiveOrder = new OrderBy(List.of(asc
+                        ? OrderBy.Order.desc(ord.attr())
+                        : OrderBy.Order.asc(ord.attr())));
+            }
+            Object[] expanded = new Object[args.length + 1];
+            System.arraycopy(args, 0, expanded, 0, args.length);
+            expanded[args.length] = cursor.get(0);
+            effectiveArgs = expanded;
+        }
+
+        Pagination.Offset pag = new Pagination.Offset(0, pr.size());
+        SqlFragment frag = dialect.select(model, combined, effectiveOrder, pag);
+
+        Where finalWhere = combined;
+        Object[] finalArgs = effectiveArgs;
+
+        List<E> queryResult = ConnectionScope.withConnection(dataSource, c -> {
+            try (PreparedStatement ps = c.prepareStatement(frag.sql())) {
+                WhereBinder.bind(dialect, ps, finalWhere, finalArgs, 1, new int[]{0});
+                try (ResultSet rs = ps.executeQuery()) {
+                    List<E> out = new ArrayList<>();
+                    while (rs.next()) out.add(RowMapper.map(model, dialect, rs));
+                    return out;
+                }
+            }
+        });
+
+        if (pr.mode() == PageRequest.Mode.CURSOR_PREVIOUS) {
+            java.util.Collections.reverse(queryResult);
+        }
+
+        @SuppressWarnings("unchecked")
+        Attribute<E, Object> cursorAttr = (Attribute<E, Object>) ord.attr();
+        List<List<Object>> cursors = new ArrayList<>(queryResult.size());
+        for (E e : queryResult) {
+            try { cursors.add(List.of(cursorAttr.getter().invoke(e))); }
+            catch (Throwable t) { throw new MansartDataException("Failed to read cursor attribute", t); }
+        }
+
+        long total = pr.requestTotal() ? countWhere(model, userWhere, args) : -1L;
+        return new MansartCursoredPage<>(queryResult, pr, total, cursors);
+    }
+
     /** Maps a {@code jakarta.data.Order<E>} to the dialect-neutral {@link OrderBy}. */
     public <E> OrderBy toOrderBy(EntityModel<E> model, Order<E> order) {
         if (order == null) return OrderBy.NONE;

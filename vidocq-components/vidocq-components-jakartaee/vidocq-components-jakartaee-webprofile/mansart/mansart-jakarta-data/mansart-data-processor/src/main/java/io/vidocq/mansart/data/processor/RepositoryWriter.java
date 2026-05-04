@@ -206,7 +206,8 @@ final class RepositoryWriter {
         String args = "new java.lang.Object[]{" + argsList(predicateArity) + "}";
 
         if (trailingPageRequest && d.op() == QueryMethodParser.Operation.FIND) {
-            return "return runtime.queryPage(" + metamodel + ".$MODEL, " + where + ", " + orderBy
+            String runtimeMethod = isCursoredPageReturn(returnType) ? "queryCursored" : "queryPage";
+            return "return runtime." + runtimeMethod + "(" + metamodel + ".$MODEL, " + where + ", " + orderBy
                     + ", " + p(paramTypes.size() - 1) + ", " + args + ");";
         }
 
@@ -224,6 +225,8 @@ final class RepositoryWriter {
         String attr = metamodel + "." + pred.attribute();
         StringBuilder sb = new StringBuilder();
         sb.append("java.util.Collection<?> col = (java.util.Collection<?>) ").append(p(0)).append("; ");
+        // Short-circuit empty In: SQL `IN ()` is invalid; return the natural empty result.
+        sb.append("if (col.isEmpty()) ").append(emptyInReturn(d.op(), returnType)).append(' ');
         sb.append("io.vidocq.mansart.data.dialect.Where w = new io.vidocq.mansart.data.dialect.Where.In(")
           .append(attr).append(", col.size()); ");
         sb.append("java.lang.Object[] xs = col.toArray(); ");
@@ -234,6 +237,25 @@ final class RepositoryWriter {
             case COUNT    -> sb.append("return runtime.countWhere(").append(metamodel).append(".$MODEL, w, xs);").toString();
             case EXISTS   -> sb.append("return runtime.existsWhere(").append(metamodel).append(".$MODEL, w, xs);").toString();
             case DELETE   -> sb.append(deleteBody(returnType, metamodel, "w", "xs")).toString();
+        };
+    }
+
+    private String emptyInReturn(QueryMethodParser.Operation op, TypeMirror rt) {
+        return switch (op) {
+            case FIND -> {
+                String s = rt.toString();
+                if (s.startsWith("java.util.Optional"))            yield "return java.util.Optional.empty();";
+                if (s.startsWith("java.util.stream.Stream"))       yield "return java.util.stream.Stream.empty();";
+                if (s.startsWith("java.util.List")
+                        || s.startsWith("java.util.Collection")
+                        || s.startsWith("java.lang.Iterable"))      yield "return java.util.List.of();";
+                yield "throw new io.vidocq.mansart.data.core.MansartDataException(\"empty In with single-entity return\");";
+            }
+            case FIND_ONE -> "return java.util.Optional.empty();";
+            case COUNT    -> "return 0L;";
+            case EXISTS   -> "return false;";
+            case DELETE   -> rt.getKind() == javax.lang.model.type.TypeKind.VOID ? "return;"
+                          : (rt.getKind() == javax.lang.model.type.TypeKind.INT ? "return 0;" : "return 0L;");
         };
     }
 
@@ -253,6 +275,10 @@ final class RepositoryWriter {
 
     private boolean isPageReturn(TypeMirror t) {
         return t.toString().startsWith("jakarta.data.page.Page");
+    }
+
+    private boolean isCursoredPageReturn(TypeMirror t) {
+        return t.toString().startsWith("jakarta.data.page.CursoredPage");
     }
 
     private String findBody(TypeMirror returnType, String metamodel, String where, String orderBy, String args) {

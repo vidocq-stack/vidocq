@@ -29,4 +29,10 @@ public interface AuthorRepository extends BasicRepository<Author, Long> {
     /* ---- M3c pagination ---- */
 
     jakarta.data.page.Page<Author> findByNameLikeOrderByNameAsc(String pattern, jakarta.data.page.PageRequest pageRequest);
+
+    jakarta.data.page.CursoredPage<Author> findByNameLikeOrderByIdAsc(String pattern, jakarta.data.page.PageRequest pageRequest);
+
+    /* ---- M3c-2 In(List) ---- */
+
+    java.util.List<Author> findByNameIn(java.util.List<String> names);
 }
