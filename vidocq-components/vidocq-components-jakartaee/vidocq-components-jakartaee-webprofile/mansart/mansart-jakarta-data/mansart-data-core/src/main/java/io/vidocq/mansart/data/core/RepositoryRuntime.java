@@ -136,6 +136,71 @@ public final class RepositoryRuntime {
         return findById(model, id).isPresent();
     }
 
+    /* -------- derived queries (M3b) ---------- */
+
+    public <E> List<E> queryList(EntityModel<E> model, Where where, OrderBy orderBy, Object... args) {
+        SqlFragment frag = dialect.select(model, where, orderBy, Pagination.NONE);
+        return ConnectionScope.withConnection(dataSource, c -> {
+            try (PreparedStatement ps = c.prepareStatement(frag.sql())) {
+                WhereBinder.bind(dialect, ps, where, args, 1, new int[]{0});
+                try (ResultSet rs = ps.executeQuery()) {
+                    List<E> out = new ArrayList<>();
+                    while (rs.next()) out.add(RowMapper.map(model, dialect, rs));
+                    return out;
+                }
+            }
+        });
+    }
+
+    public <E> Optional<E> queryOne(EntityModel<E> model, Where where, Object... args) {
+        SqlFragment frag = dialect.select(model, where, OrderBy.NONE, Pagination.NONE);
+        return ConnectionScope.withConnection(dataSource, c -> {
+            try (PreparedStatement ps = c.prepareStatement(frag.sql())) {
+                WhereBinder.bind(dialect, ps, where, args, 1, new int[]{0});
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next()) return Optional.<E>empty();
+                    E first = RowMapper.map(model, dialect, rs);
+                    if (rs.next()) {
+                        throw new MansartDataException("Query returned more than one result for "
+                                + model.entityClass().getSimpleName());
+                    }
+                    return Optional.of(first);
+                }
+            }
+        });
+    }
+
+    public <E> long countWhere(EntityModel<E> model, Where where, Object... args) {
+        StringBuilder sb = new StringBuilder("SELECT COUNT(*) FROM ").append(qualifiedTable(model));
+        SqlFragment selFrag = dialect.select(model, where, OrderBy.NONE, Pagination.NONE);
+        // Reuse the dialect's WHERE rendering by extracting from the SELECT fragment.
+        int whereIdx = selFrag.sql().indexOf(" WHERE ");
+        if (whereIdx >= 0) sb.append(selFrag.sql().substring(whereIdx));
+        String sql = sb.toString();
+        return ConnectionScope.withConnection(dataSource, c -> {
+            try (PreparedStatement ps = c.prepareStatement(sql)) {
+                WhereBinder.bind(dialect, ps, where, args, 1, new int[]{0});
+                try (ResultSet rs = ps.executeQuery()) {
+                    return rs.next() ? rs.getLong(1) : 0L;
+                }
+            }
+        });
+    }
+
+    public <E> boolean existsWhere(EntityModel<E> model, Where where, Object... args) {
+        return countWhere(model, where, args) > 0;
+    }
+
+    public <E> long deleteWhere(EntityModel<E> model, Where where, Object... args) {
+        SqlFragment frag = dialect.delete(model, where);
+        return ConnectionScope.withConnection(dataSource, c -> {
+            try (PreparedStatement ps = c.prepareStatement(frag.sql())) {
+                WhereBinder.bind(dialect, ps, where, args, 1, new int[]{0});
+                return (long) ps.executeUpdate();
+            }
+        });
+    }
+
     /* -------- helpers ---------- */
 
     @SuppressWarnings("unchecked")

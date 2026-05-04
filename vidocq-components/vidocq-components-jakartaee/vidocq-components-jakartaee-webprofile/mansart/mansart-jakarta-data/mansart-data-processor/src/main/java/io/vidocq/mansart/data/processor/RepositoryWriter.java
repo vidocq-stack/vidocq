@@ -46,11 +46,14 @@ final class RepositoryWriter {
         String simple    = repo.getSimpleName().toString();
         String implName  = simple + "Impl";
         String fqn       = pkg.isEmpty() ? implName : pkg + "." + implName;
-        String entitySimple = args.entity.asElement().getSimpleName().toString();
-        String entityPkg = elements.getPackageOf((TypeElement) args.entity.asElement()).getQualifiedName().toString();
+        TypeElement entityType = (TypeElement) args.entity.asElement();
+        String entitySimple = entityType.getSimpleName().toString();
+        String entityPkg = elements.getPackageOf(entityType).getQualifiedName().toString();
         String metamodel = entityPkg.isEmpty() ? "_" + entitySimple : entityPkg + "._" + entitySimple;
-        String entityFqn = ((TypeElement) args.entity.asElement()).getQualifiedName().toString();
+        String entityFqn = entityType.getQualifiedName().toString();
         String idFqn     = args.idBoxedFqn();
+
+        java.util.Set<String> attributeNames = collectAttributeNames(entityType);
 
         JavaFileObject file = filer.createSourceFile(fqn, repo);
         try (PrintWriter w = new PrintWriter(file.openWriter())) {
@@ -75,7 +78,7 @@ final class RepositoryWriter {
 
             DeclaredType repoType = (DeclaredType) repo.asType();
             for (ExecutableElement m : abstractMethods(repo)) {
-                writeMethod(w, m, repoType, metamodel, entityFqn, idFqn);
+                writeMethod(w, m, repoType, metamodel, entityFqn, idFqn, attributeNames);
             }
 
             w.println("}");
@@ -84,7 +87,8 @@ final class RepositoryWriter {
     }
 
     private void writeMethod(PrintWriter w, ExecutableElement m, DeclaredType repoType,
-                             String metamodel, String entityFqn, String idFqn) {
+                             String metamodel, String entityFqn, String idFqn,
+                             java.util.Set<String> attributeNames) {
         ExecutableType resolved = (ExecutableType) types.asMemberOf(repoType, m);
         String name = m.getSimpleName().toString();
         TypeMirror returnType = resolved.getReturnType();
@@ -123,13 +127,127 @@ final class RepositoryWriter {
 
         String body = bodyFor(name, paramTypes, returnType, metamodel, entityFqn);
         if (body == null) {
+            // Try derived-query parsing (M3b).
+            QueryMethodParser.QueryDescriptor desc = QueryMethodParser.parse(name, attributeNames);
+            if (desc != null) {
+                body = derivedQueryBody(desc, returnType, metamodel, paramTypes.size());
+            }
+        }
+        if (body == null) {
             w.println("        throw new UnsupportedOperationException(\""
-                    + name + ": derived/custom queries land in M3b.\");");
+                    + name + ": no matching CRUD or derived-query rule. Check method name and attribute spelling.\");");
         } else {
             w.println("        " + body);
         }
         w.println("    }");
         w.println();
+    }
+
+    private String derivedQueryBody(QueryMethodParser.QueryDescriptor d, TypeMirror returnType,
+                                    String metamodel, int paramArity) {
+        String where = renderWhere(d, metamodel);
+        String orderBy = renderOrderBy(d, metamodel);
+        String args = "new java.lang.Object[]{" + argsList(paramArity) + "}";
+        return switch (d.op()) {
+            case FIND     -> findBody(returnType, metamodel, where, orderBy, args);
+            case FIND_ONE -> "return runtime.queryOne(" + metamodel + ".$MODEL, " + where + ", " + args + ");";
+            case COUNT    -> "return runtime.countWhere(" + metamodel + ".$MODEL, " + where + ", " + args + ");";
+            case EXISTS   -> "return runtime.existsWhere(" + metamodel + ".$MODEL, " + where + ", " + args + ");";
+            case DELETE   -> deleteBody(returnType, metamodel, where, args);
+        };
+    }
+
+    private String findBody(TypeMirror returnType, String metamodel, String where, String orderBy, String args) {
+        String rt = returnType.toString();
+        String list = "runtime.queryList(" + metamodel + ".$MODEL, " + where + ", " + orderBy + ", " + args + ")";
+        if (rt.startsWith("java.util.Optional")) {
+            return "return runtime.queryOne(" + metamodel + ".$MODEL, " + where + ", " + args + ");";
+        }
+        if (rt.startsWith("java.util.stream.Stream"))    return "return " + list + ".stream();";
+        if (rt.startsWith("java.util.List"))             return "return " + list + ";";
+        if (rt.startsWith("java.util.Collection"))       return "return " + list + ";";
+        if (rt.startsWith("java.lang.Iterable"))         return "return " + list + ";";
+        // Single-entity return → use queryOne and unwrap (throws if missing per Jakarta Data semantics)
+        return "return runtime.queryOne(" + metamodel + ".$MODEL, " + where + ", " + args
+                + ").orElseThrow(() -> new io.vidocq.mansart.data.core.MansartDataException(\"No result\"));";
+    }
+
+    private String deleteBody(TypeMirror returnType, String metamodel, String where, String args) {
+        String call = "runtime.deleteWhere(" + metamodel + ".$MODEL, " + where + ", " + args + ")";
+        return switch (returnType.getKind()) {
+            case VOID -> call + ";";
+            case LONG -> "return " + call + ";";
+            case INT  -> "return (int) " + call + ";";
+            default   -> "return " + call + ";";
+        };
+    }
+
+    private String renderWhere(QueryMethodParser.QueryDescriptor d, String metamodel) {
+        if (d.predicates().isEmpty()) return "io.vidocq.mansart.data.dialect.Where.ALWAYS_TRUE";
+        if (d.predicates().size() == 1) return predicateExpr(d.predicates().get(0), metamodel);
+        StringBuilder sb = new StringBuilder();
+        sb.append("io.vidocq.mansart.data.dialect.Where.")
+          .append(d.combinator() == QueryMethodParser.Combinator.AND ? "and" : "or")
+          .append('(');
+        for (int i = 0; i < d.predicates().size(); i++) {
+            if (i > 0) sb.append(", ");
+            sb.append(predicateExpr(d.predicates().get(i), metamodel));
+        }
+        sb.append(')');
+        return sb.toString();
+    }
+
+    private String predicateExpr(QueryMethodParser.Predicate p, String metamodel) {
+        String attr = metamodel + "." + p.attribute();
+        String pkg = "io.vidocq.mansart.data.dialect.Where";
+        return switch (p.comparator()) {
+            case EQ        -> "new " + pkg + ".Eq(" + attr + ")";
+            case NOT_EQ    -> "new " + pkg + ".NotEq(" + attr + ")";
+            case LT        -> "new " + pkg + ".Lt(" + attr + ")";
+            case LTE       -> "new " + pkg + ".Lte(" + attr + ")";
+            case GT        -> "new " + pkg + ".Gt(" + attr + ")";
+            case GTE       -> "new " + pkg + ".Gte(" + attr + ")";
+            case LIKE      -> "new " + pkg + ".Like(" + attr + ")";
+            case BETWEEN   -> "new " + pkg + ".Between(" + attr + ")";
+            case IN        -> "new " + pkg + ".In(" + attr + ", 1)"; // arity refined when caller passes a List — M3c
+            case IS_NULL    -> "new " + pkg + ".IsNull(" + attr + ")";
+            case IS_NOT_NULL -> "new " + pkg + ".IsNotNull(" + attr + ")";
+        };
+    }
+
+    private String renderOrderBy(QueryMethodParser.QueryDescriptor d, String metamodel) {
+        if (d.orderBy().isEmpty()) return "io.vidocq.mansart.data.dialect.OrderBy.NONE";
+        StringBuilder sb = new StringBuilder("new io.vidocq.mansart.data.dialect.OrderBy(java.util.List.of(");
+        for (int i = 0; i < d.orderBy().size(); i++) {
+            if (i > 0) sb.append(", ");
+            QueryMethodParser.Order o = d.orderBy().get(i);
+            sb.append("io.vidocq.mansart.data.dialect.OrderBy.Order.")
+              .append(o.asc() ? "asc" : "desc")
+              .append('(').append(metamodel).append('.').append(o.attribute()).append(')');
+        }
+        sb.append("))");
+        return sb.toString();
+    }
+
+    private String argsList(int arity) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < arity; i++) {
+            if (i > 0) sb.append(", ");
+            sb.append(p(i));
+        }
+        return sb.toString();
+    }
+
+    private java.util.Set<String> collectAttributeNames(TypeElement entity) {
+        java.util.Set<String> names = new java.util.LinkedHashSet<>();
+        for (var member : entity.getEnclosedElements()) {
+            if (member.getKind() == javax.lang.model.element.ElementKind.FIELD
+                    && !member.getModifiers().contains(javax.lang.model.element.Modifier.STATIC)
+                    && !member.getModifiers().contains(javax.lang.model.element.Modifier.TRANSIENT)) {
+                names.add(member.getSimpleName().toString());
+            }
+        }
+        return names;
     }
 
     private String bodyFor(String name, List<? extends TypeMirror> paramTypes,
