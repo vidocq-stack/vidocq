@@ -193,14 +193,11 @@ final class RepositoryWriter {
                 && isPageRequest(paramTypes.get(paramTypes.size() - 1));
         int predicateArity = trailingPageRequest ? paramTypes.size() - 1 : paramTypes.size();
 
-        // Dynamic-arity In: when the sole predicate is `In` and the param is a Collection,
-        // build the Where with the runtime-known size and spread the args.
-        if (d.predicates().size() == 1
-                && d.predicates().get(0).comparator() == QueryMethodParser.Comparator.IN
-                && predicateArity == 1
-                && isCollectionLike(paramTypes.get(0))) {
-            return inCollectionBody(d, returnType, metamodel);
+        // Mixed predicates with at least one In(Collection): switch to runtime-built Where.
+        if (anyInWithCollection(d.predicates(), paramTypes, predicateArity)) {
+            return mixedInBody(d, returnType, metamodel, paramTypes, predicateArity, trailingPageRequest);
         }
+
         String where = renderWhere(d, metamodel);
         String orderBy = renderOrderBy(d, metamodel);
         String args = "new java.lang.Object[]{" + argsList(predicateArity) + "}";
@@ -217,6 +214,113 @@ final class RepositoryWriter {
             case COUNT    -> "return runtime.countWhere(" + metamodel + ".$MODEL, " + where + ", " + args + ");";
             case EXISTS   -> "return runtime.existsWhere(" + metamodel + ".$MODEL, " + where + ", " + args + ");";
             case DELETE   -> deleteBody(returnType, metamodel, where, args);
+        };
+    }
+
+    private boolean anyInWithCollection(List<QueryMethodParser.Predicate> preds,
+                                        List<? extends TypeMirror> paramTypes, int predicateArity) {
+        int idx = 0;
+        for (QueryMethodParser.Predicate p : preds) {
+            if (idx >= predicateArity) return false;
+            if (p.comparator() == QueryMethodParser.Comparator.IN
+                    && isCollectionLike(paramTypes.get(idx))) return true;
+            idx += paramConsumed(p);
+        }
+        return false;
+    }
+
+    private int paramConsumed(QueryMethodParser.Predicate p) {
+        return switch (p.comparator()) {
+            case BETWEEN              -> 2;
+            case IS_NULL, IS_NOT_NULL -> 0;
+            default                   -> 1;
+        };
+    }
+
+    /**
+     * Builds the {@code Where} AST and the args array at runtime so that {@code In(Collection)}
+     * predicates can use the actual collection size for arity. Used whenever the method has at
+     * least one {@code In} that takes a {@code Collection}.
+     */
+    private String mixedInBody(QueryMethodParser.QueryDescriptor d, TypeMirror returnType,
+                               String metamodel, List<? extends TypeMirror> paramTypes,
+                               int predicateArity, boolean trailingPageRequest) {
+        String pkg = "io.vidocq.mansart.data.dialect.Where";
+        StringBuilder sb = new StringBuilder();
+        sb.append("java.util.List<").append(pkg).append("> _parts = new java.util.ArrayList<>(); ");
+        sb.append("java.util.List<java.lang.Object> _args = new java.util.ArrayList<>(); ");
+
+        int idx = 0;
+        for (QueryMethodParser.Predicate p : d.predicates()) {
+            String attr = metamodel + "." + p.attribute();
+            String paramName = p(idx);
+            switch (p.comparator()) {
+                case IN -> {
+                    if (isCollectionLike(paramTypes.get(idx))) {
+                        sb.append("java.util.Collection<?> _col").append(idx)
+                          .append(" = (java.util.Collection<?>) ").append(paramName).append("; ");
+                        sb.append("if (_col").append(idx).append(".isEmpty()) ")
+                          .append(emptyInReturn(d.op(), returnType)).append(' ');
+                        sb.append("_parts.add(new ").append(pkg).append(".In(").append(attr)
+                          .append(", _col").append(idx).append(".size())); ");
+                        sb.append("for (Object _v : _col").append(idx).append(") _args.add(_v); ");
+                    } else {
+                        sb.append("_parts.add(new ").append(pkg).append(".In(").append(attr).append(", 1)); ");
+                        sb.append("_args.add(").append(paramName).append("); ");
+                    }
+                    idx += 1;
+                }
+                case BETWEEN -> {
+                    sb.append("_parts.add(new ").append(pkg).append(".Between(").append(attr).append(")); ");
+                    sb.append("_args.add(").append(p(idx)).append("); _args.add(").append(p(idx + 1)).append("); ");
+                    idx += 2;
+                }
+                case IS_NULL -> {
+                    sb.append("_parts.add(new ").append(pkg).append(".IsNull(").append(attr).append(")); ");
+                }
+                case IS_NOT_NULL -> {
+                    sb.append("_parts.add(new ").append(pkg).append(".IsNotNull(").append(attr).append(")); ");
+                }
+                default -> {
+                    sb.append("_parts.add(new ").append(pkg).append('.').append(comparatorClass(p.comparator()))
+                      .append('(').append(attr).append(")); ");
+                    sb.append("_args.add(").append(paramName).append("); ");
+                    idx += 1;
+                }
+            }
+        }
+
+        String combine = d.combinator() == QueryMethodParser.Combinator.AND ? "and" : "or";
+        sb.append(pkg).append(" _w = _parts.size() == 1 ? _parts.get(0) : ")
+          .append(pkg).append('.').append(combine).append("(_parts.toArray(new ").append(pkg).append("[0])); ");
+        sb.append("Object[] _xs = _args.toArray(); ");
+
+        String orderBy = renderOrderBy(d, metamodel);
+        if (trailingPageRequest && d.op() == QueryMethodParser.Operation.FIND) {
+            String rt = isCursoredPageReturn(returnType) ? "queryCursored" : "queryPage";
+            sb.append("return runtime.").append(rt).append('(').append(metamodel).append(".$MODEL, _w, ")
+              .append(orderBy).append(", ").append(p(paramTypes.size() - 1)).append(", _xs);");
+            return sb.toString();
+        }
+        return switch (d.op()) {
+            case FIND     -> sb.append(findBody(returnType, metamodel, "_w", orderBy, "_xs")).toString();
+            case FIND_ONE -> sb.append("return runtime.queryOne(").append(metamodel).append(".$MODEL, _w, _xs);").toString();
+            case COUNT    -> sb.append("return runtime.countWhere(").append(metamodel).append(".$MODEL, _w, _xs);").toString();
+            case EXISTS   -> sb.append("return runtime.existsWhere(").append(metamodel).append(".$MODEL, _w, _xs);").toString();
+            case DELETE   -> sb.append(deleteBody(returnType, metamodel, "_w", "_xs")).toString();
+        };
+    }
+
+    private String comparatorClass(QueryMethodParser.Comparator c) {
+        return switch (c) {
+            case EQ     -> "Eq";
+            case NOT_EQ -> "NotEq";
+            case LT     -> "Lt";
+            case LTE    -> "Lte";
+            case GT     -> "Gt";
+            case GTE    -> "Gte";
+            case LIKE   -> "Like";
+            default     -> throw new IllegalStateException("unsupported comparator " + c);
         };
     }
 

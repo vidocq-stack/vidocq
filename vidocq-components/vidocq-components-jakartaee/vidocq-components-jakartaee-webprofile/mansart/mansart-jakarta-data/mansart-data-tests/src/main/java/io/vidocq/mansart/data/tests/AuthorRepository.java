@@ -35,4 +35,11 @@ public interface AuthorRepository extends BasicRepository<Author, Long> {
     /* ---- M3c-2 In(List) ---- */
 
     java.util.List<Author> findByNameIn(java.util.List<String> names);
+
+    /* ---- M3c-3 multi-attribute cursor + mixed In ---- */
+
+    jakarta.data.page.CursoredPage<Author> findByNameLikeOrderByNameAscIdAsc(
+            String pattern, jakarta.data.page.PageRequest pageRequest);
+
+    java.util.List<Author> findByNameLikeAndIdIn(String pattern, java.util.List<Long> ids);
 }

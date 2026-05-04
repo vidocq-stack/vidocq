@@ -222,19 +222,19 @@ public final class RepositoryRuntime {
     }
 
     /**
-     * Cursor-based ("keyset") pagination — single-attribute OrderBy in M3c-2.
-     * Multi-attribute lexicographic cursors land in M3c-3.
+     * Cursor-based ("keyset") pagination with full multi-attribute lexicographic comparison
+     * (M3c-3). The cursor is the tuple of OrderBy attribute values from a previously seen row;
+     * the next page is the rows where {@code (a, b, c …) > (a0, b0, c0 …)} (or {@code <} for
+     * {@code CURSOR_PREVIOUS}). The lexicographic predicate is encoded as
+     * {@code (a > a0) OR (a = a0 AND b > b0) OR (a = a0 AND b = b0 AND c > c0)} so that any
+     * dialect with simple boolean operators can render it without a row-constructor extension.
      */
     public <E> jakarta.data.page.CursoredPage<E> queryCursored(
             EntityModel<E> model, Where userWhere, OrderBy orderBy, PageRequest pr, Object... args) {
         if (orderBy.isEmpty()) {
             throw new MansartDataException("Cursor pagination requires a non-empty OrderBy");
         }
-        if (orderBy.orders().size() != 1) {
-            throw new MansartDataException("M3c-2 supports single-attribute cursor only (got "
-                    + orderBy.orders().size() + ")");
-        }
-        OrderBy.Order ord = orderBy.orders().get(0);
+        int n = orderBy.orders().size();
 
         Where combined = userWhere;
         Object[] effectiveArgs = args;
@@ -242,28 +242,51 @@ public final class RepositoryRuntime {
 
         if (pr.cursor().isPresent()) {
             PageRequest.Cursor cursor = pr.cursor().get();
-            if (cursor.size() != 1) {
+            if (cursor.size() != n) {
                 throw new MansartDataException("Cursor element count must match OrderBy size (got "
-                        + cursor.size() + ", expected 1)");
+                        + cursor.size() + ", expected " + n + ")");
             }
-            boolean asc = ord.direction() == OrderBy.Order.Direction.ASC;
             boolean isAfter = pr.mode() == PageRequest.Mode.CURSOR_NEXT;
-            Where cursorPred = (asc == isAfter)
-                    ? new Where.Gt(ord.attr())
-                    : new Where.Lt(ord.attr());
+
+            // Lexicographic OR-AND chain.
+            List<Where> orParts = new ArrayList<>(n);
+            for (int i = 0; i < n; i++) {
+                List<Where> andParts = new ArrayList<>(i + 1);
+                for (int j = 0; j < i; j++) {
+                    andParts.add(Where.eq(orderBy.orders().get(j).attr()));
+                }
+                OrderBy.Order o = orderBy.orders().get(i);
+                boolean asc = o.direction() == OrderBy.Order.Direction.ASC;
+                boolean useGt = (asc == isAfter);
+                andParts.add(useGt ? new Where.Gt(o.attr()) : new Where.Lt(o.attr()));
+                orParts.add(andParts.size() == 1 ? andParts.get(0)
+                        : Where.and(andParts.toArray(new Where[0])));
+            }
+            Where cursorPred = orParts.size() == 1 ? orParts.get(0)
+                    : Where.or(orParts.toArray(new Where[0]));
             combined = (userWhere instanceof Where.AlwaysTrue)
                     ? cursorPred
                     : Where.and(userWhere, cursorPred);
-            // For CURSOR_PREVIOUS, reverse the order so the page is built backward; flip the
-            // resulting list afterwards so callers see natural order.
+
+            // For CURSOR_PREVIOUS, flip every direction so the page is built backward.
             if (pr.mode() == PageRequest.Mode.CURSOR_PREVIOUS) {
-                effectiveOrder = new OrderBy(List.of(asc
-                        ? OrderBy.Order.desc(ord.attr())
-                        : OrderBy.Order.asc(ord.attr())));
+                List<OrderBy.Order> reversed = new ArrayList<>(n);
+                for (OrderBy.Order o : orderBy.orders()) {
+                    boolean asc = o.direction() == OrderBy.Order.Direction.ASC;
+                    reversed.add(asc ? OrderBy.Order.desc(o.attr()) : OrderBy.Order.asc(o.attr()));
+                }
+                effectiveOrder = new OrderBy(reversed);
             }
-            Object[] expanded = new Object[args.length + 1];
+
+            // Expand args. For each OR clause i, append cursor[0..i-1] (for ==) then cursor[i] (for >).
+            int extraBindings = n * (n + 1) / 2;
+            Object[] expanded = new Object[args.length + extraBindings];
             System.arraycopy(args, 0, expanded, 0, args.length);
-            expanded[args.length] = cursor.get(0);
+            int idx = args.length;
+            for (int i = 0; i < n; i++) {
+                for (int j = 0; j < i; j++) expanded[idx++] = cursor.get(j);
+                expanded[idx++] = cursor.get(i);
+            }
             effectiveArgs = expanded;
         }
 
@@ -288,12 +311,17 @@ public final class RepositoryRuntime {
             java.util.Collections.reverse(queryResult);
         }
 
-        @SuppressWarnings("unchecked")
-        Attribute<E, Object> cursorAttr = (Attribute<E, Object>) ord.attr();
+        // Capture the cursor tuple for each materialized row.
         List<List<Object>> cursors = new ArrayList<>(queryResult.size());
         for (E e : queryResult) {
-            try { cursors.add(List.of(cursorAttr.getter().invoke(e))); }
-            catch (Throwable t) { throw new MansartDataException("Failed to read cursor attribute", t); }
+            List<Object> values = new ArrayList<>(n);
+            for (OrderBy.Order o : orderBy.orders()) {
+                @SuppressWarnings("unchecked")
+                Attribute<E, Object> a = (Attribute<E, Object>) o.attr();
+                try { values.add(a.getter().invoke(e)); }
+                catch (Throwable t) { throw new MansartDataException("Failed to read cursor attribute", t); }
+            }
+            cursors.add(values);
         }
 
         long total = pr.requestTotal() ? countWhere(model, userWhere, args) : -1L;
