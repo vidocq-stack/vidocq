@@ -271,13 +271,24 @@ public interface DialectFactory {
 - [ ] Lowering JDQL → AST `mansart-data-dialect-spi` → SQL dialecte.
 - [ ] Cache des plans par signature de méthode (`Map<Method, QueryPlan>` initialisé au `<clinit>` de `XxxRepositoryImpl`).
 
-### M6 — TCK Jakarta Data 1.0 (semaine 10-11)
+### M6 — TCK Jakarta Data 1.0
 
-- [ ] `mansart-data-tck` hors reactor (POM Model 4.0.0 standalone, pas de `<parent>`).
-- [ ] Script `run-official-tck-data-1.0.sh` (smoke + `--all` + `-Dtest=…`).
-- [ ] Harness Arquillian.
-- [ ] Cible initiale : 80% PASS sur le dialecte H2.
-- [ ] Documenter les tests `@Disabled` avec lien vers une entrée `BUG.md`.
+- [x] **M6** structure : `mansart-data-tck` hors reactor (POM Model 4.0.0 standalone), script `run-official-tck-data-1.0.sh`, README, smoke harness.
+- [x] **M6.1** : BCE Mansart (`mansart-data-cdi/MansartDataExtension`) + `MansartRuntimeProducer` + `MansartRepoCreator` ; `mansart-data-processor` génère `META-INF/mansart-repositories.list` ; smoke 3/3 PASS via `VaubanContainer.builder().addBeanClass(...)`.
+- [x] **M6.2** : connecteur Vauban Arquillian porté (`io.vidocq.vauban.tck.*`) + `MansartArquillianSmokeTest` : `@Deployment` ShrinkWrap, `@Inject` AuthorRepository/DataSource/RepositoryRuntime, 2/2 PASS.
+- [x] **M6.3** : `jakarta.data:jakarta.data-tck:1.0.1` résolu depuis Maven Central (artifactId avec un `.`, pas un `-`) ; profil `-Ptck-run` complet (JUnit 5, Arquillian Junit 5, jakarta.servlet-api, ant) ; surefire `dependenciesToScan` ; 73 EntityTests **discovered et tentés** sur la suite officielle.
+- [x] **M6.4** : analyse honnête — 73 erreurs EntityTests, gap d'architecture documenté dans `BUG.md` (BUG-20260505-01). Le harness Arquillian + `TCKLoadableExtension` + `TCKArchiveProcessor` fonctionne (entités TCK déployées). Le bloqueur est l'absence de **génération runtime** des `*RepositoryImpl` et des métamodèles `_<Entity>` pour les entités TCK pré-compilées.
+- [ ] **M7** : runtime impl generation (Class-File API) — voir bloc M7 ci-dessous. Cible TCK pass déplacée à M7.
+- [ ] **M6.5** : variante PostgreSQL via Testcontainers (après M7 pour avoir des tests qui passent à transcrire).
+
+### M7 — Runtime impl generation (Class-File API) — débloque le TCK pass
+
+- [ ] BCE `@Discovery`/`@Enhancement` : scanner les classes scannées pour `@jakarta.data.repository.Repository`, identifier l'entité (via `BasicRepository<T,K>` superinterface).
+- [ ] Construire `EntityModel` à runtime via `MethodHandles.privateLookupIn` sur la classe d'entité (lecture des annotations JPA/Mansart) — équivalent runtime de `EntityScanner`.
+- [ ] Générer le bytecode du `*RepositoryImpl` via `java.lang.classfile` (équivalent runtime de `RepositoryWriter`) — supporter au minimum les méthodes de `BasicRepository`/`CrudRepository` + dérivation par nom de méthode + `@Query` JDQL.
+- [ ] `defineClass` dans un `MethodHandles.Lookup` du package de l'entité (ou d'un module Mansart-créé).
+- [ ] Préférence à la génération compile-time si `META-INF/mansart-repositories.list` liste l'interface ; sinon fallback runtime.
+- [ ] Re-run TCK : cible 80%+ PASS sur le dialecte H2.
 
 ## Décisions verrouillées
 

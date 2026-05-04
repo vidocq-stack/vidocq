@@ -15,7 +15,8 @@ Module en `modelVersion 4.0.0` standalone (sans `<parent>`). Raison documentée 
 | BCE Mansart (`mansart-data-cdi`) wire les `@Repository` dans Vauban | ✅ M6.1 |
 | Connecteur Arquillian Vauban (porté depuis `vauban-tck-runner`) | ✅ M6.2 |
 | Suite TCK officielle 1.0.1 — résolue depuis Maven Central + 73 EntityTests discovered | ✅ M6.3 |
-| Wiring TCK entities (`NaturalNumbers`, `AsciiCharacters`…) via `TCKArchiveProcessor` | 🚧 M6.4 |
+| Wiring TCK entities (`NaturalNumbers`, `AsciiCharacters`…) via `TCKArchiveProcessor` | ✅ M6.2 (déjà actif via SPI auto-discovery du jar TCK) |
+| TCK 1.0 — pass effectif (73 EntityTests en erreur, gap documenté) | 🚧 M7 — voir `BUG.md` BUG-20260505-01 |
 
 **Blocage actuel** : le module `mansart-data-cdi` ne contient encore que le squelette `MansartDataCdi`. Pour que le TCK puisse découvrir les `@Repository` et les exposer comme beans CDI, il faut implémenter la `BuildCompatibleExtension` qui :
 
