@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
+<!--
+  Jakarta Data 1.0 TCK suite definition.
+
+  M6 placeholder: only the Mansart smoke test is wired in. Once the BCE
+  (mansart-data-cdi) is implemented, swap this for the official
+  jakarta-data-tck-suite.xml shipped with the TCK distribution.
+-->
+<suite name="mansart-data-tck-1.0" verbose="1">
+
+    <test name="mansart-smoke">
+        <classes>
+            <class name="io.vidocq.mansart.data.tck.MansartCdiBootstrapSmokeTest"/>
+        </classes>
+    </test>
+
+    <!--
+    <test name="jakarta-data-tck-1.0">
+        <packages>
+            <package name="ee.jakarta.tck.data.*"/>
+        </packages>
+    </test>
+    -->
+</suite>

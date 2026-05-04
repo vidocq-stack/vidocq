@@ -2,9 +2,8 @@
 <!--
   This module is intentionally OUT of the parent reactor (Model 4.0.0 standalone, no <parent>).
   Reason: ShrinkWrap Maven Resolver 3.3 (transitive of the official Jakarta TCK harness) cannot
-  parse Maven Model 4.1.0 POMs. See ../../CLAUDE.md (root) for the full rationale.
-
-  Implementation lands in M6.
+  parse Maven Model 4.1.0 POMs. See ../../CLAUDE.md (root) for the full rationale and the
+  official-TCK install procedure in this module's README.md.
 -->
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -17,10 +16,152 @@
     <packaging>jar</packaging>
 
     <name>Mansart :: Data :: Jakarta Data 1.0 TCK runner</name>
-    <description>Arquillian harness for the official Jakarta Data 1.0 TCK. Implementation in M6.</description>
+    <description>Arquillian harness for the official Jakarta Data 1.0 TCK.</description>
 
     <properties>
         <maven.compiler.release>25</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+        <jakarta.data.version>1.0.1</jakarta.data.version>
+        <jakarta.data.tck.version>1.0.1</jakarta.data.tck.version>
+        <jakarta.cdi.version>4.1.0</jakarta.cdi.version>
+
+        <mansart.version>1.0.0-SNAPSHOT</mansart.version>
+
+        <arquillian.version>1.9.1.Final</arquillian.version>
+        <weld.version>5.1.5.Final</weld.version>
+        <arquillian.weld.version>4.0.1.Final</arquillian.weld.version>
+        <testng.version>7.10.2</testng.version>
+        <h2.version>2.3.232</h2.version>
+
+        <maven.compiler.plugin.version>3.13.0</maven.compiler.plugin.version>
+        <maven.surefire.plugin.version>3.5.2</maven.surefire.plugin.version>
     </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.jboss.arquillian</groupId>
+                <artifactId>arquillian-bom</artifactId>
+                <version>${arquillian.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <dependencies>
+        <!-- Mansart implementation under test -->
+        <dependency>
+            <groupId>io.vidocq.mansart</groupId>
+            <artifactId>mansart-data-api</artifactId>
+            <version>${mansart.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.mansart</groupId>
+            <artifactId>mansart-data-core</artifactId>
+            <version>${mansart.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.mansart</groupId>
+            <artifactId>mansart-data-cdi</artifactId>
+            <version>${mansart.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.mansart</groupId>
+            <artifactId>mansart-data-dialect-h2</artifactId>
+            <version>${mansart.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.mansart</groupId>
+            <artifactId>mansart-data-processor</artifactId>
+            <version>${mansart.version}</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- Jakarta Data API + TCK -->
+        <dependency>
+            <groupId>jakarta.data</groupId>
+            <artifactId>jakarta.data-api</artifactId>
+            <version>${jakarta.data.version}</version>
+        </dependency>
+        <!-- CDI API (always resolvable from Central) -->
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+            <version>${jakarta.cdi.version}</version>
+        </dependency>
+
+        <!-- TestNG suite runner — used by the smoke harness too -->
+        <dependency>
+            <groupId>org.testng</groupId>
+            <artifactId>testng</artifactId>
+            <version>${testng.version}</version>
+        </dependency>
+
+        <!-- Backing database — H2 in-memory by default -->
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <version>${h2.version}</version>
+        </dependency>
+    </dependencies>
+
+    <profiles>
+        <!--
+          Enable with `mvn -Ptck-run test` once the prerequisite artefacts are installed in
+          the local M2:
+            * jakarta.data:jakarta-data-tck:1.0.1 — see README.md "Install the TCK artefacts".
+            * org.jboss.weld.se:weld-se-shaded:5.x — usually on Central.
+            * org.jboss.arquillian.container:arquillian-weld-embedded:4.0.x — coordinates
+              evolved between Arquillian releases; install the right one for your environment.
+        -->
+        <profile>
+            <id>tck-run</id>
+            <dependencies>
+                <dependency>
+                    <groupId>jakarta.data</groupId>
+                    <artifactId>jakarta-data-tck</artifactId>
+                    <version>${jakarta.data.tck.version}</version>
+                </dependency>
+                <dependency>
+                    <groupId>org.jboss.weld.se</groupId>
+                    <artifactId>weld-se-shaded</artifactId>
+                    <version>${weld.version}</version>
+                </dependency>
+                <dependency>
+                    <groupId>org.jboss.arquillian.testng</groupId>
+                    <artifactId>arquillian-testng-container</artifactId>
+                </dependency>
+                <dependency>
+                    <groupId>org.jboss.arquillian.container</groupId>
+                    <artifactId>arquillian-weld-embedded</artifactId>
+                    <version>${arquillian.weld.version}</version>
+                </dependency>
+            </dependencies>
+        </profile>
+    </profiles>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>${maven.compiler.plugin.version}</version>
+                <configuration>
+                    <release>25</release>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>${maven.surefire.plugin.version}</version>
+                <configuration>
+                    <suiteXmlFiles>
+                        <suiteXmlFile>src/test/resources/tck-suite.xml</suiteXmlFile>
+                    </suiteXmlFiles>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>
