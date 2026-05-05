@@ -143,7 +143,20 @@
       "Bash(rm -rf .idea vidocq-mps-examples .DS_Store)",
       "Bash(rtk git *)",
       "Bash(git merge --allow-unrelated-histories -X ours cassini-extract/main -m 'merge: import cassini sources from vidocq-mps via git filter-repo *)",
-      "Bash(git rm *)"
+      "Bash(git rm *)",
+      "Bash(cp /Users/yblazart/projects/perso/vidocq/cassini/LICENSE /Users/yblazart/projects/perso/vidocq/foy/LICENSE)",
+      "Bash(cp /Users/yblazart/projects/perso/vidocq/cassini/.sdkmanrc /Users/yblazart/projects/perso/vidocq/foy/.sdkmanrc)",
+      "Bash(cp /Users/yblazart/projects/perso/vidocq/cassini/.gitignore /Users/yblazart/projects/perso/vidocq/foy/.gitignore)",
+      "Bash(cp /Users/yblazart/projects/perso/vidocq/vidocq/vidocq-mps-core-extensions/vidocq-mps-servlet-chappe-extension/src/main/java/module-info.java /Users/yblazart/projects/perso/vidocq/foy/foy-core/src/main/java/module-info.java)",
+      "Read(//Users/yblazart/projects/perso/vidocq/foy/foy-core/src/main/java/io/vidocq/foy/internal/**)",
+      "Read(//Users/yblazart/projects/perso/vidocq/foy/foy-core/src/main/java/**)",
+      "Bash(chmod +x /Users/yblazart/projects/perso/vidocq/foy/run-official-tck-servlet6.1.sh)",
+      "Bash(git diff-tree *)",
+      "Bash(rtk proxy *)",
+      "Bash(rtk grep *)",
+      "Bash(jpackage --version)",
+      "Bash(jpackage --help)",
+      "Bash(/usr/bin/find *)"
     ]
   }
 }

@@ -66,7 +66,7 @@ public final class ChappeServerBootstrap implements VidocqExtension {
             servers.add(server);
             LOG.log(System.Logger.Level.INFO,
                     "Chappe listener '" + l.name() + "' started on http://"
-                            + l.host() + ":" + l.port() + "/");
+                            + displayHost(l.host()) + ":" + l.port() + "/");
         }
     }
 
@@ -112,6 +112,14 @@ public final class ChappeServerBootstrap implements VidocqExtension {
             out.add(ChappeListener.http(name, host, port));
         }
         return out;
+    }
+
+    private static String displayHost(String host) {
+        if (host == null) return "localhost";
+        return switch (host) {
+            case "0.0.0.0", "::", "::0", "0:0:0:0:0:0:0:0" -> "localhost";
+            default -> host;
+        };
     }
 
     private static void runHookSilently(Runnable r, String phase) {
