@@ -412,34 +412,59 @@ public final class RuntimeRepositoryProxy {
         Map<String, Attribute<?, ?>> attrIndex = new java.util.HashMap<>();
         for (Attribute<?, ?> a : model.attributes()) attrIndex.put(a.name(), a);
 
-        OrderBy orderBy = buildOrderBy(desc.orderBy(), attrIndex);
+        OrderBy baseOrderBy = buildOrderBy(desc.orderBy(), attrIndex);
         boolean returnsStream = m.getReturnType() == java.util.stream.Stream.class;
         boolean returnsOptional = m.getReturnType() == java.util.Optional.class;
         boolean returnsList = java.util.List.class.isAssignableFrom(m.getReturnType())
                 || java.util.Collection.class == m.getReturnType()
                 || Iterable.class == m.getReturnType();
+        boolean returnsArray = m.getReturnType().isArray();
         boolean isVoid = m.getReturnType() == void.class;
         boolean returnsLong = m.getReturnType() == long.class || m.getReturnType() == Long.class;
         boolean returnsInt  = m.getReturnType() == int.class || m.getReturnType() == Integer.class;
 
+        // M7-12 — pre-locate Jakarta Data control parameter positions by type so the dispatcher
+        // can read Limit/Sort/Order/PageRequest at call time and apply them to the query.
+        int[] ctrl = locateControlParams(m);
+
         return (rt, em, callArgs) -> {
-            // Build Where + args at call-time so In(Collection) takes the actual list size.
             BuiltWhere built = buildWhere(desc, attrIndex, callArgs);
             Where w = built.where;
             Object[] xs = built.args;
+
+            // Extend OrderBy with Sort/Order/Sort[] control args, then layer Limit / PageRequest.
+            OrderBy effOrder = applyControlOrder(baseOrderBy, callArgs, ctrl, attrIndex, (EntityModel) em, rt);
+            int[] limR = controlLimitRange(callArgs, ctrl, firstNLimit);
+            int limStart = limR[0];
+            int limCount = limR[1];
+            jakarta.data.page.PageRequest pageReq = controlPage(callArgs, ctrl);
 
             return switch (desc.op()) {
                 case FIND -> {
                     if (w == Where.ALWAYS_FALSE) {
                         yield emptyForReturn(returnsStream, returnsOptional, returnsList);
                     }
+                    if (pageReq != null) {
+                        var page = rt.queryPage((EntityModel) em, w, effOrder, pageReq, xs);
+                        if (jakarta.data.page.CursoredPage.class.isAssignableFrom(m.getReturnType())) {
+                            yield rt.queryCursored((EntityModel) em, w, effOrder, pageReq, xs);
+                        }
+                        yield page;
+                    }
                     if (returnsOptional) yield rt.queryOne((EntityModel) em, w, xs);
-                    List<Object> list = rt.queryList((EntityModel) em, w, orderBy, xs);
-                    if (firstNLimit > 0 && list.size() > firstNLimit) {
-                        list = new ArrayList<>(list.subList(0, firstNLimit));
+                    List<Object> list = rt.queryList((EntityModel) em, w, effOrder, xs);
+                    if (limCount > 0) {
+                        int from = Math.max(0, limStart);
+                        int to = Math.min(list.size(), from + limCount);
+                        list = (from >= list.size()) ? new ArrayList<>() : new ArrayList<>(list.subList(from, to));
                     }
                     if (returnsStream) yield list.stream();
                     if (returnsList)   yield list;
+                    if (returnsArray) {
+                        Object arr = java.lang.reflect.Array.newInstance(m.getReturnType().getComponentType(), list.size());
+                        for (int i = 0; i < list.size(); i++) java.lang.reflect.Array.set(arr, i, list.get(i));
+                        yield arr;
+                    }
                     java.util.Optional<?> oneOpt = rt.queryOne((EntityModel) em, w, xs);
                     if (oneOpt.isEmpty()) throw new MansartDataException("No result");
                     yield oneOpt.get();
@@ -456,6 +481,71 @@ public final class RuntimeRepositoryProxy {
                 }
             };
         };
+    }
+
+    /* ---- M7-12 — Jakarta Data control parameters ---- */
+
+    /**
+     * Returns indices of Limit / Sort / Sort[] / Order / PageRequest parameters in the given
+     * method signature, packed into a single int[] of fixed size 5 (entries are -1 if absent):
+     * {@code [limit, sort, sortArr, order, pageRequest]}.
+     */
+    private static int[] locateControlParams(Method m) {
+        int[] r = { -1, -1, -1, -1, -1 };
+        Class<?>[] pts = m.getParameterTypes();
+        for (int i = 0; i < pts.length; i++) {
+            Class<?> p = pts[i];
+            if (p.getName().equals("jakarta.data.Limit"))                  r[0] = i;
+            else if (p.isArray() && p.getComponentType().getName().equals("jakarta.data.Sort"))
+                                                                            r[2] = i;
+            else if (p.getName().equals("jakarta.data.Sort"))               r[1] = i;
+            else if (p.getName().equals("jakarta.data.Order"))              r[3] = i;
+            else if (p.getName().equals("jakarta.data.page.PageRequest"))   r[4] = i;
+        }
+        return r;
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static OrderBy applyControlOrder(OrderBy base, Object[] callArgs, int[] ctrl,
+                                             Map<String, Attribute<?, ?>> attrIndex,
+                                             EntityModel<?> model, RepositoryRuntime rt) {
+        List<OrderBy.Order> out = new ArrayList<>(base.orders());
+        if (ctrl[1] >= 0 && callArgs[ctrl[1]] instanceof jakarta.data.Sort<?> s) {
+            addSortToOrder(s, attrIndex, out);
+        }
+        if (ctrl[2] >= 0 && callArgs[ctrl[2]] instanceof jakarta.data.Sort[] arr) {
+            for (jakarta.data.Sort<?> s : arr) addSortToOrder(s, attrIndex, out);
+        }
+        if (ctrl[3] >= 0 && callArgs[ctrl[3]] instanceof jakarta.data.Order<?> o) {
+            for (jakarta.data.Sort<?> s : o.sorts()) addSortToOrder(s, attrIndex, out);
+        }
+        return out.isEmpty() ? OrderBy.NONE : new OrderBy(out);
+    }
+
+    private static void addSortToOrder(jakarta.data.Sort<?> s,
+                                       Map<String, Attribute<?, ?>> attrIndex,
+                                       List<OrderBy.Order> out) {
+        Attribute<?, ?> a = attrIndex.get(s.property());
+        if (a == null) {
+            throw new MansartDataException("Sort references unknown attribute: " + s.property());
+        }
+        out.add(s.isAscending() ? OrderBy.Order.asc(a) : OrderBy.Order.desc(a));
+    }
+
+    /** Returns {@code [startAtZeroBased, maxResults]}; both -1 if no limit is in effect. */
+    private static int[] controlLimitRange(Object[] callArgs, int[] ctrl, int findFirstN) {
+        if (ctrl[0] >= 0 && callArgs[ctrl[0]] instanceof jakarta.data.Limit l) {
+            return new int[] { (int) (l.startAt() - 1), (int) l.maxResults() };
+        }
+        if (findFirstN > 0) return new int[] { 0, findFirstN };
+        return new int[] { -1, -1 };
+    }
+
+    private static jakarta.data.page.PageRequest controlPage(Object[] callArgs, int[] ctrl) {
+        if (ctrl[4] >= 0 && callArgs[ctrl[4]] instanceof jakarta.data.page.PageRequest pr) {
+            return pr;
+        }
+        return null;
     }
 
     private static OrderBy buildOrderBy(List<QueryMethodParser.Order> orders,

@@ -112,10 +112,12 @@ Statuts : `OPEN` → `INVESTIGATING` → `FIXED` (commit hash) → `CLOSED`.
         pas convertir VARCHAR vers une classe enum via `getObject(idx, enumClass)`.
         Réduit `JdbcSQLFeatureNotSupportedException` (30 → 0). **Score TCK** :
         73 → 21 PASS / 14 FAIL / 38 ERR.
-      - **M7-12** *(à venir)* — Le dispatcher dérivé ignore les paramètres de
-        contrôle Jakarta Data (`Limit`, `Sort<E>`, `Sort<?>...`, `Order<E>`,
-        `PageRequest`). Conséquences observées : `findFirst5By...` retourne 60
-        lignes au lieu de 5, `Sort.desc()` produit un ordre ASC, etc.
+      - **M7-12** *(LIVRÉ 2026-05-05)* — Dispatcher dérivé honore
+        `jakarta.data.Limit` (avec offset via `startAt`),
+        `jakarta.data.Sort<E>`, `jakarta.data.Sort[]` (varargs),
+        `jakarta.data.Order<E>` et `jakarta.data.page.PageRequest`. Pour les
+        retours `Page<E>`, route vers `queryPage`; pour `CursoredPage<E>`, vers
+        `queryCursored`. **Score TCK** : 73 → 51 PASS / 8 FAIL / 14 ERR.
       - **M7-10** *(LIVRÉ 2026-05-05)* — `VaubanTestEnricher.invokeBeforeEachMethods`
         appelle manuellement les méthodes annotées `@org.junit.jupiter.api.BeforeEach`
         après l'enrichissement (parent → enfant). Bonus : `lifecycleDispatcher`
