@@ -33,6 +33,8 @@
         <shrinkwrap.version>1.2.6</shrinkwrap.version>
         <testng.version>7.10.2</testng.version>
         <h2.version>2.3.232</h2.version>
+        <postgresql.version>42.7.4</postgresql.version>
+        <testcontainers.version>1.20.4</testcontainers.version>
 
         <!-- Removed in M6.3 — kept for documentation / older references:
              weld.version (5.1.5.Final), arquillian.weld.version (4.0.1.Final).
@@ -124,6 +126,38 @@
             <groupId>com.h2database</groupId>
             <artifactId>h2</artifactId>
             <version>${h2.version}</version>
+        </dependency>
+
+        <!--
+          M6.5 — PostgreSQL backing for the TCK. Compiled in unconditionally so that
+          PostgresDataSourceProducer compiles even when the `tck-pg` profile is OFF.
+          The producer is only WIRED into the deployment when system property
+          `mansart.tck.dialect=pg` is set (positioned by the tck-pg profile below).
+          Cost: ~30 MB of test-scope deps on the classpath, no runtime impact when unused.
+        -->
+        <dependency>
+            <groupId>io.vidocq.mansart</groupId>
+            <artifactId>mansart-data-dialect-postgresql</artifactId>
+            <version>${mansart.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <version>${postgresql.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>postgresql</artifactId>
+            <version>${testcontainers.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.annotation</groupId>
+            <artifactId>jakarta.annotation-api</artifactId>
+            <version>3.0.0</version>
+            <scope>test</scope>
         </dependency>
 
         <!-- Vauban indexer — used by the ported Arquillian connector to scan
@@ -222,6 +256,30 @@
                             </includes>
                             <systemPropertyVariables>
                                 <jimage.dir>${java.home}/lib/modules</jimage.dir>
+                            </systemPropertyVariables>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <!--
+          M6.5 — Switch the TCK harness from H2 to PostgreSQL via Testcontainers.
+          Cumulative with `tck-run` (use `mvn -Ptck-run,tck-pg test`). Requires Docker on the host.
+          The PG deps are compiled unconditionally above (test scope); this profile only flips
+          the system property `mansart.tck.dialect=pg` read by MansartTckArchiveAppender, which
+          swaps the deployment's DataSource producer + DialectFactory ServiceLoader registration.
+        -->
+        <profile>
+            <id>tck-pg</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <systemPropertyVariables>
+                                <mansart.tck.dialect>pg</mansart.tck.dialect>
                             </systemPropertyVariables>
                         </configuration>
                     </plugin>

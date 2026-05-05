@@ -278,7 +278,7 @@ public interface DialectFactory {
 - [x] **M6.2** : connecteur Vauban Arquillian porté (`io.vidocq.vauban.tck.*`) + `MansartArquillianSmokeTest` : `@Deployment` ShrinkWrap, `@Inject` AuthorRepository/DataSource/RepositoryRuntime, 2/2 PASS.
 - [x] **M6.3** : `jakarta.data:jakarta.data-tck:1.0.1` résolu depuis Maven Central (artifactId avec un `.`, pas un `-`) ; profil `-Ptck-run` complet (JUnit 5, Arquillian Junit 5, jakarta.servlet-api, ant) ; surefire `dependenciesToScan` ; 73 EntityTests **discovered et tentés** sur la suite officielle.
 - [x] **M6.4** : analyse honnête — 73 erreurs EntityTests, gap d'architecture documenté dans `BUG.md` (BUG-20260505-01). Le harness Arquillian + `TCKLoadableExtension` + `TCKArchiveProcessor` fonctionne (entités TCK déployées). Le bloqueur identifié = absence de **génération runtime** des `*RepositoryImpl` et des métamodèles `_<Entity>` pour les entités TCK pré-compilées.
-- [ ] **M6.5** : variante PostgreSQL via Testcontainers (planifié — M6.x après stabilisation).
+- [x] **M6.5** ✅ DONE (2026-05-05) — variante PostgreSQL via Testcontainers (`postgres:17-alpine`). Profile Maven `tck-pg` cumulable avec `tck-run`. `MansartTckArchiveAppender` switch H2 ↔ PG via system property `mansart.tck.dialect`. Script `run-official-tck-data-1.0.sh --pg`. **Résultat : 73/73 EntityTests PASS sur PG** dès la première run réussie — aucun fix dialect-spécifique nécessaire.
 
 ### M7 — Runtime impl generation ✅ DONE (2026-05-05) — TCK 73/73 PASS
 
@@ -319,9 +319,8 @@ Sous-jalons livrés :
 - **79/79 unit tests** ✅
 - **6/6 smoke tests** Arquillian (incl. `RuntimeRepoArquillianTest`) ✅
 
-### Reste à faire (post-M7)
+### Reste à faire (post-M7 / post-M6.5)
 
-- [ ] **M6.5** — TCK PostgreSQL via Testcontainers + `mansart-data-dialect-postgresql` (transcrire les 73 EntityTests sur PG).
 - [ ] **TCK SignatureTests** — actuellement filtrés via `<includes>**/standalone/entity/EntityTests.class</include>` dans `tck-suite-official.xml`.
 - [ ] **TCK PersistenceTests / NoSQLTests** — autres sub-suites (NoSQL hors scope v1 ; PersistenceTests dépend de `mansart-persistence`).
 - [ ] **JDQL feature gaps** : subqueries, joins explicites, agrégations multi-attributs.

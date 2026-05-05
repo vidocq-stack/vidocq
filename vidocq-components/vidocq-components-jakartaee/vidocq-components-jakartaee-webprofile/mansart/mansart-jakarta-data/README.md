@@ -25,9 +25,9 @@
 
 ## État
 
-- **Jakarta Data 1.0 EntityTests TCK : 73/73 PASS** (100%) — `mansart-data-tck` voir `mansart-data-tck/README.md`.
+- **Jakarta Data 1.0 EntityTests TCK : 73/73 PASS** sur **H2** ✅ et **73/73 PASS** sur **PostgreSQL 17** ✅ (Testcontainers).
 - **Tests internes : 79/79 unit + 6/6 smoke Arquillian** — voir `mansart-data-tests/`.
-- Dialecte H2 : couvert. Dialecte PostgreSQL : couvert (JDBC + tests Testcontainers en option).
+- Dialectes livrés : `H2`, `PostgreSQL`.
 - Mode bootstrap **standalone** (`MansartData.builder()`) ou **CDI 4.1 Lite** (BCE — Vauban / Weld / OpenWebBeans).
 
 Voir `PLAN.md` pour la roadmap complète et `BUG.md` pour les bugs ouverts/clos.
@@ -311,7 +311,8 @@ module shop {
 
 # TCK officiel Jakarta Data 1.0 (hors reactor — script dédié)
 cd mansart-data-tck
-./run-official-tck-data-1.0.sh
+./run-official-tck-data-1.0.sh         # 73/73 EntityTests sur H2 in-memory
+./run-official-tck-data-1.0.sh --pg    # 73/73 EntityTests sur PostgreSQL 17 (Docker requis)
 ```
 
 Le runner TCK est en `modelVersion 4.0.0` standalone, **volontairement détaché** du reactor parent (Maven Model 4.1.0 incompatible avec ShrinkWrap Maven Resolver 3.3 utilisé par le TCK). Voir `mansart-data-tck/README.md`.

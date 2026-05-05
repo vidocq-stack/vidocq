@@ -30,9 +30,14 @@ case "${1:-}" in
         # Mansart-only smoke harness (Vauban + standalone + Arquillian smoke, no TCK suite)
         mvn -ntp test
         ;;
+    --pg|--postgres|--postgresql)
+        # M6.5 — Run the TCK against PostgreSQL via Testcontainers. Requires Docker on the host.
+        # Pulls postgres:17-alpine on first run.
+        shift || true
+        mvn -ntp -Ptck-run,tck-pg test -DfailIfNoTests=false "$@"
+        ;;
     --all|all|"")
-        # Default M6.3: run the official Jakarta Data 1.0 TCK subset (currently EntityTests).
-        # M6.4 will widen this once TCKArchiveProcessor is wired into the deployment.
+        # Default: run the official Jakarta Data 1.0 TCK subset (EntityTests) on H2 in-memory.
         mvn -ntp -Ptck-run test -DfailIfNoTests=false
         ;;
     -Dtest=*)

@@ -1,7 +1,6 @@
 package io.vidocq.mansart.data.tck;
 
 import io.vidocq.mansart.data.cdi.MansartDataExtension;
-import io.vidocq.mansart.data.dialect.h2.H2DialectFactory;
 import jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension;
 import org.jboss.arquillian.container.test.spi.client.deployment.ApplicationArchiveProcessor;
 import org.jboss.arquillian.test.spi.TestClass;
@@ -31,19 +30,37 @@ import org.jboss.shrinkwrap.api.container.ResourceContainer;
  */
 public class MansartTckArchiveAppender implements ApplicationArchiveProcessor {
 
+    /**
+     * M6.5 — Switches the deployment between H2 (default) and PostgreSQL (Testcontainers)
+     * based on the system property {@code mansart.tck.dialect}. Set to {@code pg}
+     * (typically via Maven profile {@code -Ptck-pg}) to wire the
+     * {@link PostgresDataSourceProducer} and the
+     * {@code io.vidocq.mansart.data.dialect.postgresql.PostgresqlDialectFactory}.
+     */
+    private static final String DIALECT_PROP = System.getProperty("mansart.tck.dialect", "h2")
+            .toLowerCase();
+    private static final boolean USE_PG = "pg".equals(DIALECT_PROP)
+            || "postgres".equals(DIALECT_PROP)
+            || "postgresql".equals(DIALECT_PROP);
+
     @Override
     public void process(Archive<?> archive, TestClass testClass) {
         if (!(archive instanceof ClassContainer<?> cc)) return;
         if (!(archive instanceof ResourceContainer<?> rc)) return;
 
+        // M6.5 — `io.vidocq.mansart.data` (the api annotations package) added non-recursively;
+        // the recursive sweep would otherwise pull `io.vidocq.mansart.data.tck.*` and land BOTH
+        // H2DataSourceProducer and PostgresDataSourceProducer in the deployment, making the
+        // `@Inject DataSource` resolution ambiguous.
+        cc.addPackages(false, "io.vidocq.mansart.data");
         cc.addPackages(true,
-                "io.vidocq.mansart.data",
                 "io.vidocq.mansart.data.dialect",
                 "io.vidocq.mansart.data.core",
                 "io.vidocq.mansart.data.cdi",
-                "io.vidocq.mansart.data.dialect.h2");
+                USE_PG ? "io.vidocq.mansart.data.dialect.postgresql"
+                       : "io.vidocq.mansart.data.dialect.h2");
 
-        cc.addClass(H2DataSourceProducer.class);
+        cc.addClass(USE_PG ? PostgresDataSourceProducer.class : H2DataSourceProducer.class);
 
         // M7-22 — EntityTests.createDeployment() in the TCK jar only ships EntityTests + Box
         // + Boxes; MultipleEntityRepo and Coordinate stay in the TCK jar but are missing from
@@ -64,7 +81,10 @@ public class MansartTckArchiveAppender implements ApplicationArchiveProcessor {
 
         rc.addAsResource(new StringAsset(MansartDataExtension.class.getName() + "\n"),
                 "META-INF/services/" + BuildCompatibleExtension.class.getName());
-        rc.addAsResource(new StringAsset(H2DialectFactory.class.getName() + "\n"),
+        String dialectFactory = USE_PG
+                ? "io.vidocq.mansart.data.dialect.postgresql.PostgresqlDialectFactory"
+                : "io.vidocq.mansart.data.dialect.h2.H2DialectFactory";
+        rc.addAsResource(new StringAsset(dialectFactory + "\n"),
                 "META-INF/services/io.vidocq.mansart.data.dialect.DialectFactory");
     }
 }
