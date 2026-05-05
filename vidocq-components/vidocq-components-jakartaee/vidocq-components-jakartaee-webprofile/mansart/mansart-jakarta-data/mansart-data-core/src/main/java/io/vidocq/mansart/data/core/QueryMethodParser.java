@@ -23,7 +23,8 @@ public final class QueryMethodParser {
 
     public enum Operation { FIND, FIND_ONE, COUNT, EXISTS, DELETE }
     public enum Combinator { AND, OR }
-    public enum Comparator { EQ, NOT_EQ, LIKE, BETWEEN, IN, GT, GTE, LT, LTE, IS_NULL, IS_NOT_NULL }
+    public enum Comparator { EQ, NOT_EQ, LIKE, BETWEEN, IN, GT, GTE, LT, LTE, IS_NULL, IS_NOT_NULL,
+                              CONTAINS, STARTS_WITH, ENDS_WITH, TRUE, FALSE, EMPTY, NOT_EMPTY }
 
     public record QueryDescriptor(
             Operation op,
@@ -32,13 +33,17 @@ public final class QueryMethodParser {
             List<Order> orderBy
     ) {}
 
-    public record Predicate(String attribute, Comparator comparator) {
+    public record Predicate(String attribute, Comparator comparator, boolean ignoreCase, boolean negated) {
+        public Predicate(String attribute, Comparator comparator) {
+            this(attribute, comparator, false, false);
+        }
         public int boundParams() {
             return switch (comparator) {
-                case BETWEEN          -> 2;
-                case IS_NULL, IS_NOT_NULL -> 0;
-                case IN               -> -1; // dynamic, depends on the parameter (List/Iterable)
-                default               -> 1;
+                case BETWEEN                                -> 2;
+                case IS_NULL, IS_NOT_NULL,
+                     TRUE, FALSE, EMPTY, NOT_EMPTY         -> 0;
+                case IN                                     -> -1;
+                default                                     -> 1;
             };
         }
     }
@@ -56,6 +61,11 @@ public final class QueryMethodParser {
         else if (startsWith(methodName, "existsBy"))    { op = Operation.EXISTS;   rest = methodName.substring("existsBy".length()); }
         else if (startsWith(methodName, "deleteBy"))    { op = Operation.DELETE;   rest = methodName.substring("deleteBy".length()); }
         else if (startsWith(methodName, "removeBy"))    { op = Operation.DELETE;   rest = methodName.substring("removeBy".length()); }
+        // Jakarta Data 1.0 — methods with no By clause: countAll, deleteAll, findAll
+        // (find/delete/count/exists with empty predicate set, optional OrderBy / FirstN suffix)
+        else if (methodName.equals("countAll"))         { op = Operation.COUNT;  rest = ""; }
+        else if (methodName.equals("deleteAll"))        { op = Operation.DELETE; rest = ""; }
+        else if (methodName.equals("removeAll"))        { op = Operation.DELETE; rest = ""; }
         else                                            return null;
 
         // Split off OrderBy clause
@@ -97,17 +107,33 @@ public final class QueryMethodParser {
 
     /** {@code parsePredicate("AgeBetween")} → {@code (age, BETWEEN)}. */
     private static Predicate parsePredicate(String token, Set<String> attributeNames) {
+        // M7-8 — strip "IgnoreCase" suffix first, then "Not" infix before the comparator.
+        boolean ignoreCase = false;
+        if (token.endsWith("IgnoreCase")) {
+            ignoreCase = true;
+            token = token.substring(0, token.length() - "IgnoreCase".length());
+        }
         // Try comparator suffixes longest first
         for (Suffix s : Suffix.byLengthDesc()) {
             if (token.endsWith(s.suffix)) {
                 String attrPart = token.substring(0, token.length() - s.suffix.length());
+                // Allow "<attr>Not<Suffix>" — e.g. NameNotLike, AgeNotBetween, IdNotIn.
+                boolean negated = false;
+                if (attrPart.endsWith("Not")) {
+                    String maybeAttr = attrPart.substring(0, attrPart.length() - 3);
+                    String matched = matchAttribute(maybeAttr, attributeNames);
+                    if (matched != null) {
+                        negated = true;
+                        attrPart = maybeAttr;
+                    }
+                }
                 String attr = matchAttribute(attrPart, attributeNames);
-                if (attr != null) return new Predicate(attr, s.comparator);
+                if (attr != null) return new Predicate(attr, s.comparator, ignoreCase, negated);
             }
         }
         // No suffix — implicit EQ
         String attr = matchAttribute(token, attributeNames);
-        return attr == null ? null : new Predicate(attr, Comparator.EQ);
+        return attr == null ? null : new Predicate(attr, Comparator.EQ, ignoreCase, false);
     }
 
     /** Convert {@code "Name"} → {@code "name"} if "name" is in {@code attributeNames}. */
@@ -175,16 +201,23 @@ public final class QueryMethodParser {
     }
 
     private enum Suffix {
-        IS_NOT_NULL("IsNotNull",        Comparator.IS_NOT_NULL),
-        IS_NULL    ("IsNull",           Comparator.IS_NULL),
-        GTE        ("GreaterThanEqual", Comparator.GTE),
-        LTE        ("LessThanEqual",    Comparator.LTE),
-        GT         ("GreaterThan",      Comparator.GT),
-        LT         ("LessThan",         Comparator.LT),
-        BETWEEN    ("Between",          Comparator.BETWEEN),
-        LIKE       ("Like",             Comparator.LIKE),
-        IN         ("In",               Comparator.IN),
-        NOT_EQ     ("Not",              Comparator.NOT_EQ);
+        IS_NOT_NULL ("IsNotNull",        Comparator.IS_NOT_NULL),
+        IS_NULL     ("IsNull",           Comparator.IS_NULL),
+        GTE         ("GreaterThanEqual", Comparator.GTE),
+        LTE         ("LessThanEqual",    Comparator.LTE),
+        GT          ("GreaterThan",      Comparator.GT),
+        LT          ("LessThan",         Comparator.LT),
+        BETWEEN     ("Between",          Comparator.BETWEEN),
+        LIKE        ("Like",             Comparator.LIKE),
+        STARTS_WITH ("StartsWith",       Comparator.STARTS_WITH),
+        ENDS_WITH   ("EndsWith",         Comparator.ENDS_WITH),
+        CONTAINS    ("Contains",         Comparator.CONTAINS),
+        NOT_EMPTY   ("NotEmpty",         Comparator.NOT_EMPTY),
+        EMPTY       ("Empty",            Comparator.EMPTY),
+        TRUE        ("True",             Comparator.TRUE),
+        FALSE       ("False",            Comparator.FALSE),
+        IN          ("In",               Comparator.IN),
+        NOT_EQ      ("Not",              Comparator.NOT_EQ);
 
         final String suffix;
         final Comparator comparator;

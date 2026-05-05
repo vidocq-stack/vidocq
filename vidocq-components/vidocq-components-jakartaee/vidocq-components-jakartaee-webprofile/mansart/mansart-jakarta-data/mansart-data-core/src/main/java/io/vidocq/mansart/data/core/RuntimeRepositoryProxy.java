@@ -60,6 +60,11 @@ public final class RuntimeRepositoryProxy {
     public static <R> R create(Class<R> repoInterface, EntityModel<?> model, RepositoryRuntime runtime) {
         Map<Method, Dispatcher> dispatchers = buildDispatchers(repoInterface, model);
         InvocationHandler handler = (proxy, method, args) -> {
+            // M7-8 — interface default methods: route through the standard JDK shim so
+            // user-supplied helpers compose with the runtime-generated dispatchers.
+            if (method.isDefault()) {
+                return InvocationHandler.invokeDefault(proxy, method, args);
+            }
             Dispatcher d = dispatchers.get(method);
             if (d == null) {
                 throw unsupported(method, "no Mansart dispatcher built for this method");
@@ -393,6 +398,22 @@ public final class RuntimeRepositoryProxy {
                 }
                 case IS_NULL    -> parts.add(new Where.IsNull(a));
                 case IS_NOT_NULL -> parts.add(new Where.IsNotNull(a));
+                case CONTAINS    -> {
+                    parts.add(new Where.Like(a));
+                    args.add("%" + callArgs[paramIdx++] + "%");
+                }
+                case STARTS_WITH -> {
+                    parts.add(new Where.Like(a));
+                    args.add(callArgs[paramIdx++] + "%");
+                }
+                case ENDS_WITH   -> {
+                    parts.add(new Where.Like(a));
+                    args.add("%" + callArgs[paramIdx++]);
+                }
+                case TRUE  -> { parts.add(new Where.Eq(a)); args.add(Boolean.TRUE); }
+                case FALSE -> { parts.add(new Where.Eq(a)); args.add(Boolean.FALSE); }
+                case EMPTY     -> parts.add(new Where.IsNull(a));
+                case NOT_EMPTY -> parts.add(new Where.IsNotNull(a));
                 case IN -> {
                     Object v = callArgs[paramIdx++];
                     if (v instanceof Collection<?> col) {
@@ -407,6 +428,10 @@ public final class RuntimeRepositoryProxy {
                         args.add(v);
                     }
                 }
+            }
+            if (p.negated()) {
+                Where last = parts.remove(parts.size() - 1);
+                parts.add(new Where.Not(last));
             }
         }
         Where w;

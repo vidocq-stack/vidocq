@@ -485,6 +485,12 @@ final class RepositoryWriter {
             case IN        -> "new " + pkg + ".In(" + attr + ", 1)"; // arity refined when caller passes a List — M3c
             case IS_NULL    -> "new " + pkg + ".IsNull(" + attr + ")";
             case IS_NOT_NULL -> "new " + pkg + ".IsNotNull(" + attr + ")";
+            // M7-8 — comparators handled only on the runtime path for now. Compile-time emit
+            // falls back to a Like predicate (caller still needs to materialise the wildcard).
+            case CONTAINS, STARTS_WITH, ENDS_WITH -> "new " + pkg + ".Like(" + attr + ")";
+            case TRUE, FALSE                      -> "new " + pkg + ".Eq(" + attr + ")";
+            case EMPTY                             -> "new " + pkg + ".IsNull(" + attr + ")";
+            case NOT_EMPTY                         -> "new " + pkg + ".IsNotNull(" + attr + ")";
         };
     }
 

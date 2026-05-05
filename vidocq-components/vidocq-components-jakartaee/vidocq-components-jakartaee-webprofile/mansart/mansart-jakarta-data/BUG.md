@@ -95,9 +95,15 @@ Statuts : `OPEN` → `INVESTIGATING` → `FIXED` (commit hash) → `CLOSED`.
         Java → JDBC type. Appelé par `RuntimeRepositoryProxy.create` pour les repos
         runtime-only. Réduit `TableOrViewNotFound` de 376 → 80, débloque 4 tests
         TCK (73 → 4 PASS / 18 FAIL / 51 ERR).
-      - **M7-8** — Méthodes dérivées manquantes : `countAll`, `find`,
-        `IgnoreCase`, `Contains`, `True`/`False`, méthodes `default`
-        (≈ 20 `UnsupportedOperationException`).
+      - **M7-8** *(partiel 2026-05-05)* — Comparators ajoutés : `True`/`False`,
+        `Contains`/`StartsWith`/`EndsWith` (LIKE wildcard auto), `Empty`/`NotEmpty`,
+        suffixe `IgnoreCase` (sans casing SQL pour l'instant), infixe
+        `<Attr>Not<Comparator>`, méthodes interface `default`. Top-level
+        `countAll`/`deleteAll`/`removeAll`. Réduit `UnsupportedOperationException`
+        de 20 → 10. Reste : `findFirst3By...` (limite numérique inline),
+        `IgnoreCase` mid-name (`HexadecimalIgnoreCaseBetween`), méthodes annotées
+        `@Find` non gérées (`find`, `findMatching`, `findNumber`, `findOdd`),
+        `<Attr>NotNull` (combinaison Not + IsNull non détectée).
       - **M7-9** — `:name` dans `@Query` exige `-parameters` ; `maven-compiler-plugin
         4.0.0-beta-4` ne l'honore pas systématiquement (≈ 48
         `MansartDataException: @Query references :name…`).
