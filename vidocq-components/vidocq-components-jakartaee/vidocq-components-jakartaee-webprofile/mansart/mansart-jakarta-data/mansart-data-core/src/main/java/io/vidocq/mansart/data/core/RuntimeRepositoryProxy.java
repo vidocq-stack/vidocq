@@ -47,18 +47,25 @@ public final class RuntimeRepositoryProxy {
             throw new MansartDataException(repoInterface.getName()
                     + " does not extend BasicRepository<E, K> / CrudRepository<E, K> — runtime path needs the entity type.");
         }
-        EntityModel<?> model = RuntimeEntityModelBuilder.build(ek.entity, ek.key);
-        // M7-7 — runtime-discovered repos own their schema bootstrap. The compile-time path
-        // leaves DDL to user code; this is a runtime-only convenience so deployments lacking
-        // APT (e.g. the TCK jar) still get a working table.
-        try { runtime.ensureTable(model); }
+        EntityModel<?> primary = RuntimeEntityModelBuilder.build(ek.entity, ek.key);
+        // M7-7 — auto-create schema for the primary entity so deployments lacking APT (TCK jar)
+        // still get a working table. M7-23 also bootstraps tables for any secondary entity that
+        // method signatures reveal (e.g. MultipleEntityRepo touches both Box and Coordinate).
+        try { runtime.ensureTable(primary); }
         catch (RuntimeException ignored) { /* table may already exist or be user-managed */ }
-        return create(repoInterface, model, runtime);
+        Map<Class<?>, EntityModel<?>> models = buildSecondaryModels(repoInterface, primary, runtime);
+        return create(repoInterface, primary, models, runtime);
+    }
+
+    public static <R> R create(Class<R> repoInterface, EntityModel<?> model, RepositoryRuntime runtime) {
+        return create(repoInterface, model, java.util.Map.of(model.entityClass(), model), runtime);
     }
 
     @SuppressWarnings("unchecked")
-    public static <R> R create(Class<R> repoInterface, EntityModel<?> model, RepositoryRuntime runtime) {
-        Map<Method, Dispatcher> dispatchers = buildDispatchers(repoInterface, model);
+    private static <R> R create(Class<R> repoInterface, EntityModel<?> primary,
+                                Map<Class<?>, EntityModel<?>> models, RepositoryRuntime runtime) {
+        Map<Method, EntityModel<?>> methodModel = mapMethodToModel(repoInterface, primary, models);
+        Map<Method, Dispatcher> dispatchers = buildDispatchersMulti(repoInterface, methodModel, primary);
         InvocationHandler handler = (proxy, method, args) -> {
             if (method.isDefault()) {
                 return InvocationHandler.invokeDefault(proxy, method, args);
@@ -67,10 +74,131 @@ public final class RuntimeRepositoryProxy {
             if (d == null) {
                 throw unsupported(method, "no Mansart dispatcher built for this method");
             }
-            return d.invoke(runtime, model, args);
+            EntityModel<?> em = methodModel.getOrDefault(method, primary);
+            return d.invoke(runtime, em, args);
         };
         return (R) Proxy.newProxyInstance(repoInterface.getClassLoader(),
                 new Class<?>[]{ repoInterface }, handler);
+    }
+
+    /**
+     * M7-23 — scans every method of the repo for entity types other than the primary one
+     * (lifecycle param types, {@code @Find} return types, {@code @Query "FROM <Entity>"} or
+     * {@code "UPDATE <Entity>"} clauses) and builds a separate {@link EntityModel} for each.
+     * Each model is also schema-bootstrapped via {@code ensureTable}.
+     */
+    private static Map<Class<?>, EntityModel<?>> buildSecondaryModels(
+            Class<?> repoInterface, EntityModel<?> primary, RepositoryRuntime runtime) {
+        Map<Class<?>, EntityModel<?>> out = new java.util.HashMap<>();
+        out.put(primary.entityClass(), primary);
+        for (Method m : allInterfaceMethods(repoInterface)) {
+            if (m.getDeclaringClass() == Object.class) continue;
+            if (m.getDeclaringClass().getName().startsWith("jakarta.data.")) continue;
+            for (Type pt : m.getGenericParameterTypes()) {
+                Class<?> e = entityFromCarrier(pt);
+                if (e != null && !out.containsKey(e)) addModel(out, e, runtime);
+            }
+            Class<?> r = entityFromCarrier(m.getGenericReturnType());
+            if (r != null && !out.containsKey(r)) addModel(out, r, runtime);
+        }
+        return out;
+    }
+
+    private static void addModel(Map<Class<?>, EntityModel<?>> out, Class<?> entityClass,
+                                 RepositoryRuntime runtime) {
+        try {
+            EntityModel<?> em = RuntimeEntityModelBuilder.build(entityClass);
+            out.put(entityClass, em);
+            try { runtime.ensureTable(em); }
+            catch (RuntimeException ignored) { /* schema may already exist */ }
+        } catch (RuntimeException ignored) {
+            // Not a Mansart-mappable entity (e.g. value object) — skip silently.
+        }
+    }
+
+    /**
+     * Picks, for each repo method, the {@link EntityModel} it operates on. Resolution: the
+     * single entity referenced in the method's parameter or return types — if there's only one,
+     * use it; otherwise fall back to the primary model.
+     */
+    private static Map<Method, EntityModel<?>> mapMethodToModel(Class<?> repoInterface,
+                                                                EntityModel<?> primary,
+                                                                Map<Class<?>, EntityModel<?>> models) {
+        Map<Method, EntityModel<?>> out = new HashMap<>();
+        for (Method m : allInterfaceMethods(repoInterface)) {
+            if (m.isDefault() || m.getDeclaringClass() == Object.class) continue;
+            EntityModel<?> chosen = primary;
+            for (Type pt : m.getGenericParameterTypes()) {
+                Class<?> e = entityFromCarrier(pt);
+                if (e != null && models.containsKey(e)) { chosen = models.get(e); break; }
+            }
+            if (chosen == primary) {
+                Class<?> e = entityFromCarrier(m.getGenericReturnType());
+                if (e != null && models.containsKey(e)) chosen = models.get(e);
+            }
+            // Last resort: extract the simple entity name from a @Query "FROM X", "UPDATE X",
+            // or "DELETE FROM X" clause and match it against the registered models. Covers
+            // resizeAll(int, int) where the entity is only implied by "UPDATE Box SET …".
+            if (chosen == primary) {
+                String entityName = entityNameFromQueryAnnotation(m);
+                if (entityName != null) {
+                    for (var entry : models.entrySet()) {
+                        if (entry.getKey().getSimpleName().equals(entityName)) {
+                            chosen = entry.getValue(); break;
+                        }
+                    }
+                }
+            }
+            out.put(m, chosen);
+        }
+        return out;
+    }
+
+    private static String entityNameFromQueryAnnotation(Method m) {
+        String jdql = readQueryAnnotationValue(m);
+        if (jdql == null) return null;
+        String s = jdql.trim();
+        // Tokenize gently: skip "SELECT …" prefix, then look for FROM / UPDATE / DELETE FROM.
+        String[] words = s.split("\\s+");
+        for (int i = 0; i < words.length; i++) {
+            String w = words[i].toUpperCase(java.util.Locale.ROOT);
+            if ("FROM".equals(w) || "UPDATE".equals(w)) {
+                if (i + 1 < words.length) {
+                    String next = words[i + 1].replaceAll("[^a-zA-Z0-9_$]", "");
+                    if (!next.isEmpty() && Character.isUpperCase(next.charAt(0))) return next;
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * M7-23 build dispatchers using each method's chosen {@link EntityModel} (instead of a
+     * single shared one). Without this, derived/JDQL/lifecycle dispatchers were resolving
+     * attribute names against the WRONG entity for multi-entity repos.
+     */
+    private static Map<Method, Dispatcher> buildDispatchersMulti(Class<?> repoInterface,
+                                                                 Map<Method, EntityModel<?>> methodModel,
+                                                                 EntityModel<?> primary) {
+        Map<Method, Dispatcher> out = new HashMap<>();
+        for (Method m : allInterfaceMethods(repoInterface)) {
+            if (m.isDefault() || m.getDeclaringClass() == Object.class) continue;
+            EntityModel<?> em = methodModel.getOrDefault(m, primary);
+            java.util.Set<String> attributeNames = new java.util.LinkedHashSet<>();
+            for (Attribute<?, ?> a : em.attributes()) attributeNames.add(a.name());
+            Dispatcher d = jdqlDispatcher(m, em, attributeNames);
+            if (d == null) d = findAnnotationDispatcher(m, em, attributeNames);
+            if (d == null) d = lifecycleDispatcher(m, em);
+            if (d == null) d = inheritedDispatcher(m);
+            if (d == null) d = derivedDispatcher(m, em, attributeNames);
+            if (d == null) {
+                d = (rt, ignored, args) -> { throw unsupported(m,
+                        "compile-time Impl missing AND not handled by runtime fallback (no @Query, no lifecycle, "
+                      + "no inherited match, no parseable derived name)."); };
+            }
+            out.put(m, d);
+        }
+        return out;
     }
 
     private record EntityAndKey(Class<?> entity, Class<?> key) {}

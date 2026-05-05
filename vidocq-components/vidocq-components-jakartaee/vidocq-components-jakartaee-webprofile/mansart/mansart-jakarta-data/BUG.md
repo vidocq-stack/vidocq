@@ -112,6 +112,17 @@ Statuts : `OPEN` → `INVESTIGATING` → `FIXED` (commit hash) → `CLOSED`.
         pas convertir VARCHAR vers une classe enum via `getObject(idx, enumClass)`.
         Réduit `JdbcSQLFeatureNotSupportedException` (30 → 0). **Score TCK** :
         73 → 21 PASS / 14 FAIL / 38 ERR.
+      - **M7-23** *(LIVRÉ 2026-05-05)* — `RuntimeRepositoryProxy` accepte les
+        repos multi-entité. `buildSecondaryModels` scanne tous les paramètres
+        et types de retour des méthodes, construit un `EntityModel` séparé pour
+        chaque entité (avec `ensureTable`), et `mapMethodToModel` route chaque
+        méthode vers son model — y compris via inférence à partir du nom
+        `FROM/UPDATE <Entity>` dans le `@Query`. `RuntimeEntityModelBuilder`
+        accepte `<entityName>Identifier` / `<entityName>Key` comme alias d'id
+        implicite. Score TCK inchangé : **71 PASS / 0 FAIL / 2 ERR**. Les 2
+        erreurs restantes butent maintenant sur **JDQL arithmétique** dans les
+        SET (`UPDATE Box SET length = length + ?1, ...`) — feature non
+        supportée par le parser. Documenté M7-24+.
       - **M7-22** *(partiel 2026-05-05)* — `MansartTckArchiveAppender` side-load
         `MultipleEntityRepo` et `Coordinate` depuis le jar TCK (classes présentes
         mais omises de `EntityTests.createDeployment()`). Lexer JDQL accepte les

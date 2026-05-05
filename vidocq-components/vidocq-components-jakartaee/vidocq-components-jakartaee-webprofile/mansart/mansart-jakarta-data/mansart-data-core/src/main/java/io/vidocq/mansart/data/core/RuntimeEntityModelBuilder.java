@@ -136,6 +136,16 @@ public final class RuntimeEntityModelBuilder {
                 if (suffix.equals(f.getName())
                         && (idTypeHint == null || matchesType(f, idTypeHint))) return f;
             }
+            // Also accept "<entityName>Identifier" / "<entityName>Key" — the TCK uses
+            // boxIdentifier on Box.
+            for (String alt : new String[] {
+                    Character.toLowerCase(entityName.charAt(0)) + entityName.substring(1) + "Identifier",
+                    Character.toLowerCase(entityName.charAt(0)) + entityName.substring(1) + "Key" }) {
+                for (Field f : persisted) {
+                    if (alt.equals(f.getName())
+                            && (idTypeHint == null || matchesType(f, idTypeHint))) return f;
+                }
+            }
         }
         return null;
     }
