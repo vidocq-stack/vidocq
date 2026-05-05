@@ -893,18 +893,18 @@ public final class RuntimeRepositoryProxy {
                     }
                 }
             }
+            // M7-27 — IgnoreCase now wraps the predicate so the dialect emits
+            // LOWER(col) <op> LOWER(?). Done BEFORE the Not wrapping so the SQL renders as
+            // NOT (LOWER(col) <op> LOWER(?)) which is the expected semantics. Wraps any
+            // single-attribute comparator on a String column (Eq, NotEq, Lt, Lte, Gt, Gte,
+            // Like, Between, In) — the dialect rejects the unsupported ones.
+            if (p.ignoreCase()) {
+                Where last = parts.remove(parts.size() - 1);
+                parts.add(new Where.IgnoreCase(last));
+            }
             if (p.negated()) {
                 Where last = parts.remove(parts.size() - 1);
                 parts.add(new Where.Not(last));
-            }
-            // M7-18 — minimal IgnoreCase: lowercase the freshly-bound String args. Works for the
-            // TCK because the read-only data is already stored in lowercase. A full SQL LOWER()
-            // wrapping would need dialect changes; deferred.
-            if (p.ignoreCase()) {
-                for (int i = argsBefore; i < args.size(); i++) {
-                    Object v = args.get(i);
-                    if (v instanceof String s) args.set(i, s.toLowerCase(java.util.Locale.ROOT));
-                }
             }
         }
         Where w;

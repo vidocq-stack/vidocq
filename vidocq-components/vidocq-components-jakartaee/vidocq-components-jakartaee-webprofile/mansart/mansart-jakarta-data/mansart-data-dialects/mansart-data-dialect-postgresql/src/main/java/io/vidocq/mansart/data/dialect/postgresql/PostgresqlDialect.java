@@ -259,8 +259,36 @@ public final class PostgresqlDialect implements Dialect {
                 renderPredicate(sb, w.child());
                 sb.append(')');
             }
+            // M7-27 — case-insensitive comparator wrapper. PG's LOWER() is locale-aware (uses
+            // the column collation by default), index-friendly via CREATE INDEX ON … (LOWER(col)).
+            case Where.IgnoreCase w -> renderIgnoreCase(sb, w.inner());
             case Where.AlwaysTrue _  -> sb.append("TRUE");
             case Where.AlwaysFalse _ -> sb.append("FALSE");
+        }
+    }
+
+    private void renderIgnoreCase(StringBuilder sb, Where inner) {
+        switch (inner) {
+            case Where.Eq w      -> sb.append("LOWER(\"").append(w.attr().columnName()).append("\") = LOWER(?)");
+            case Where.NotEq w   -> sb.append("LOWER(\"").append(w.attr().columnName()).append("\") <> LOWER(?)");
+            case Where.Like w    -> sb.append("LOWER(\"").append(w.attr().columnName()).append("\") LIKE LOWER(?)");
+            case Where.Lt w      -> sb.append("LOWER(\"").append(w.attr().columnName()).append("\") < LOWER(?)");
+            case Where.Lte w     -> sb.append("LOWER(\"").append(w.attr().columnName()).append("\") <= LOWER(?)");
+            case Where.Gt w      -> sb.append("LOWER(\"").append(w.attr().columnName()).append("\") > LOWER(?)");
+            case Where.Gte w     -> sb.append("LOWER(\"").append(w.attr().columnName()).append("\") >= LOWER(?)");
+            case Where.Between w -> sb.append("LOWER(\"").append(w.attr().columnName()).append("\") BETWEEN LOWER(?) AND LOWER(?)");
+            case Where.In w -> {
+                sb.append("LOWER(\"").append(w.attr().columnName()).append("\") IN (");
+                for (int i = 0; i < w.arity(); i++) { if (i > 0) sb.append(", "); sb.append("LOWER(?)"); }
+                sb.append(')');
+            }
+            case Where.Not w -> {
+                sb.append("NOT (");
+                renderIgnoreCase(sb, w.child());
+                sb.append(')');
+            }
+            default -> throw new IllegalArgumentException(
+                    "IgnoreCase wraps Eq/NotEq/Lt/Lte/Gt/Gte/Like/Between/In/Not only, got: " + inner);
         }
     }
 

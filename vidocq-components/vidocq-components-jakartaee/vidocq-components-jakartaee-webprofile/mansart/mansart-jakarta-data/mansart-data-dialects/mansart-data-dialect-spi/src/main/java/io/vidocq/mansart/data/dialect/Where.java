@@ -28,6 +28,13 @@ public sealed interface Where {
         public Or { children = List.copyOf(children); }
     }
     record Not(Where child) implements Where {}
+    /**
+     * M7-27 — wraps a text comparator (Eq, NotEq, Like) so the dialect emits
+     * {@code LOWER(col) <op> LOWER(?)} instead of relying on the caller to
+     * lowercase the bound argument. Honors database collation/locale and lets
+     * functional indexes on {@code LOWER(col)} kick in.
+     */
+    record IgnoreCase(Where inner) implements Where {}
     record AlwaysTrue() implements Where {}
     record AlwaysFalse() implements Where {}
 

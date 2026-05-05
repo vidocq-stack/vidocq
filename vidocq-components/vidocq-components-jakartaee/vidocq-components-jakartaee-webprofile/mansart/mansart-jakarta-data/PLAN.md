@@ -329,7 +329,21 @@ Sous-jalons livrés :
 
 **Résultat** : **74/74 PASS** (73 EntityTests + 1 SignatureTests) sur H2 ✅ ET sur PostgreSQL ✅.
 
-### Reste à faire (post-M7-26)
+### M7-27 — JDQL `IgnoreCase` via SQL `LOWER()` ✅ DONE (2026-05-05)
+
+- [x] Ajout du wrapper `Where.IgnoreCase(Where inner)` au SPI dialect (record sealed).
+- [x] `H2Dialect` et `PostgresqlDialect` rendent `LOWER(col) <op> LOWER(?)` pour `Eq`, `NotEq`, `Lt`, `Lte`, `Gt`, `Gte`, `Like`, `Between`, `In` et `Not(...)` imbriqué (negation transparente).
+- [x] `WhereBinder.bind` étendu avec une branche `Where.IgnoreCase` qui descend dans `inner` (le bind reste sur les valeurs originales — c'est SQL qui case-fold).
+- [x] `RuntimeRepositoryProxy.buildWhere` remplace l'ancien hack `String.toLowerCase(ROOT)` côté arg par un wrap propre `Where.IgnoreCase(...)`. L'ordre est : comparator → IgnoreCase → Not → AND/OR.
+- [x] Test interne `IgnoreCaseTest` (5 tests) : seed mixed-case (`Victor Hugo` / `VICTOR HUGO` / `victor hugo`) que l'ancien hack ne pouvait PAS matcher (lowercase côté Java seulement). Couvre Eq, Like, Not, Count, Delete sur `IgnoreCase`.
+- [x] Régression : 84/84 tests internes ✅, 73/73 EntityTests TCK H2 ✅, 73/73 EntityTests TCK PG ✅, 1/1 SignatureTests ✅. Le TCK exerce `findByHexadecimalIgnoreCaseBetweenAndHexadecimalNotIn` (IgnoreCase sur `Between`) et `findByHexadecimalIgnoreCase` (sur `Eq`).
+
+**Bénéfices vs ancien comportement** :
+- Database collation/locale-aware (ICU sur PG, Unicode sur H2) au lieu de `String.toLowerCase(ROOT)`.
+- Index fonctionnels `CREATE INDEX ON … (LOWER(col))` exploitables.
+- Correct sur datasets mixed-case (l'ancien hack n'aurait jamais matché `"Victor Hugo"` avec arg `"victor hugo"`).
+
+### Reste à faire (post-M7-27)
 - [ ] **TCK PersistenceTests / NoSQLTests** — autres sub-suites (NoSQL hors scope v1 ; PersistenceTests dépend de `mansart-persistence`).
 - [ ] **JDQL feature gaps** : subqueries, joins explicites, agrégations multi-attributs.
 - [ ] **`IgnoreCase` via SQL `LOWER()`** au lieu du value-lowercasing actuel (fragile sur les datasets non-ASCII).

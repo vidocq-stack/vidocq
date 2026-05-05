@@ -42,6 +42,9 @@ final class WhereBinder {
                 for (Where child : w.children()) psIdx = bind(dialect, ps, child, args, psIdx, argCursor);
             }
             case Where.Not w -> psIdx = bind(dialect, ps, w.child(), args, psIdx, argCursor);
+            // M7-27 — IgnoreCase wraps a single text comparator that consumes exactly one arg.
+            // The dialect renders LOWER(col) <op> LOWER(?), so we still bind one parameter.
+            case Where.IgnoreCase w -> psIdx = bind(dialect, ps, w.inner(), args, psIdx, argCursor);
             case Where.AlwaysTrue ignored3  -> { /* no bind */ }
             case Where.AlwaysFalse ignored4 -> { /* no bind */ }
         }
