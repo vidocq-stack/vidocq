@@ -107,6 +107,15 @@ Statuts : `OPEN` → `INVESTIGATING` → `FIXED` (commit hash) → `CLOSED`.
         Légère régression de tests passants (4 → 2) — les nouveaux comparators
         et IgnoreCase mid-name peuvent produire des prédicats sémantiquement
         incorrects pour certains cas (ex. IgnoreCase sur colonne non-String).
+      - **M7-11** *(LIVRÉ 2026-05-05)* — `H2Dialect.extract` / `PostgresqlDialect.extract`
+        gèrent `javaType.isEnum()` via `getString` + `Enum.valueOf` ; H2 ne sait
+        pas convertir VARCHAR vers une classe enum via `getObject(idx, enumClass)`.
+        Réduit `JdbcSQLFeatureNotSupportedException` (30 → 0). **Score TCK** :
+        73 → 21 PASS / 14 FAIL / 38 ERR.
+      - **M7-12** *(à venir)* — Le dispatcher dérivé ignore les paramètres de
+        contrôle Jakarta Data (`Limit`, `Sort<E>`, `Sort<?>...`, `Order<E>`,
+        `PageRequest`). Conséquences observées : `findFirst5By...` retourne 60
+        lignes au lieu de 5, `Sort.desc()` produit un ordre ASC, etc.
       - **M7-10** *(LIVRÉ 2026-05-05)* — `VaubanTestEnricher.invokeBeforeEachMethods`
         appelle manuellement les méthodes annotées `@org.junit.jupiter.api.BeforeEach`
         après l'enrichissement (parent → enfant). Bonus : `lifecycleDispatcher`

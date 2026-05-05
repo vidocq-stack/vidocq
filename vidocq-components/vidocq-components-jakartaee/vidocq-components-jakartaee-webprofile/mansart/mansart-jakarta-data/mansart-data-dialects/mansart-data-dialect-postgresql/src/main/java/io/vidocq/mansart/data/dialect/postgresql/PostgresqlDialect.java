@@ -156,6 +156,13 @@ public final class PostgresqlDialect implements Dialect {
             return odt == null ? null : (T) odt.toInstant();
         }
         if (javaType == UUID.class)           return (T) rs.getObject(idx, UUID.class);
+        if (javaType.isEnum()) {
+            String s = rs.getString(idx);
+            if (s == null) return null;
+            @SuppressWarnings({"rawtypes", "unchecked"})
+            T v = (T) Enum.valueOf((Class) javaType, s);
+            return v;
+        }
         return rs.getObject(idx, javaType);
     }
 
