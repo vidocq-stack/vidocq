@@ -107,6 +107,22 @@ Statuts : `OPEN` → `INVESTIGATING` → `FIXED` (commit hash) → `CLOSED`.
         Légère régression de tests passants (4 → 2) — les nouveaux comparators
         et IgnoreCase mid-name peuvent produire des prédicats sémantiquement
         incorrects pour certains cas (ex. IgnoreCase sur colonne non-String).
+      - **M7-10** *(découvert 2026-05-05, à fixer)* — Le harness Arquillian Junit5
+        en mode standalone (`StandaloneExtension extends ArquillianExtension`)
+        ne déclenche **PAS** les méthodes `@BeforeEach` du test. Conséquence :
+        `EntityTests.setup()` qui appelle `NaturalNumbersPopulator.populate(numbers)`
+        et `AsciiCharactersPopulator.populate(characters)` ne s'exécute jamais →
+        toutes les tables read-only restent vides → ~50 tests qui interrogent
+        ces données échouent avec `expected: <[…]> but was: <[]>`.
+        Vérifié indirectement : sur 73 tests le pattern `mansart-saveAll` ne
+        se déclenche que sur l'entité `Box` (les tests qui créent eux-mêmes
+        leurs données). Les tests TestNG (`@BeforeMethod` dans
+        `MansartArquillianSmokeTest`) fonctionnent correctement, donc le bug
+        est strictement côté Arquillian Junit5. Stratégie envisagée :
+        - patcher `VaubanTestEnricher` pour invoquer manuellement les méthodes
+          `@BeforeEach` après l'enrichissement, OU
+        - écrire un wrapper `InvocationInterceptor` qui appelle
+          `invocation.proceed()` proprement et laisse JUnit faire son cycle.
       - **M7-9** *(2026-05-05)* — `nameToIndexFor` lit `@jakarta.data.repository.Param`
         sur les paramètres en plus de `Parameter.getName()` ; le binding `:name`
         fonctionne donc même si `-parameters` n'est pas honoré (cas du jar TCK
