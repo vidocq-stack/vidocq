@@ -121,6 +121,12 @@ public final class H2Dialect implements Dialect {
             ps.setNull(idx, sqlType(javaType));
             return;
         }
+        // M7-9 — H2 refuses JAVA_OBJECT → CHARACTER VARYING; coerce enums to their name() string
+        // so the VARCHAR column declared by ensureTable accepts the value.
+        if (value instanceof Enum<?> e) {
+            ps.setString(idx, e.name());
+            return;
+        }
         ps.setObject(idx, value, sqlType(javaType));
     }
 

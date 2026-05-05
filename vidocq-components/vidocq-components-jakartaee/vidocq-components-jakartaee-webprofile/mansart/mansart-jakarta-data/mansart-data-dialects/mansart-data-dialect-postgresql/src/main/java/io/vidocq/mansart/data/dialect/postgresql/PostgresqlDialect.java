@@ -128,6 +128,10 @@ public final class PostgresqlDialect implements Dialect {
             ps.setNull(idx, sqlType(javaType));
             return;
         }
+        if (value instanceof Enum<?> e) {
+            ps.setString(idx, e.name());
+            return;
+        }
         ps.setObject(idx, value, sqlType(javaType));
     }
 

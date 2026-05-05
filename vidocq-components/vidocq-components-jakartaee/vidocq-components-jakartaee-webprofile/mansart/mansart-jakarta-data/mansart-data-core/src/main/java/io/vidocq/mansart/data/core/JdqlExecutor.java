@@ -263,10 +263,35 @@ final class JdqlExecutor {
 
     /* ---- helpers ---- */
 
+    /**
+     * Maps named parameters to method-arg indices. Resolution order:
+     * <ol>
+     *   <li>{@code @jakarta.data.repository.Param("name")} on the parameter (authoritative).</li>
+     *   <li>{@code Parameter.getName()} when {@code -parameters} is honoured by javac.</li>
+     * </ol>
+     * Both are read so deployments compiled without {@code -parameters} (e.g. the official
+     * Jakarta Data TCK jar built with maven-compiler-plugin 4.0.0-beta-4 — see BUG-20260505-01,
+     * M7-9) still resolve {@code @Query} {@code :name} bindings via {@code @Param}.
+     */
     static Map<String, Integer> nameToIndexFor(Method m) {
         Map<String, Integer> map = new HashMap<>();
         java.lang.reflect.Parameter[] params = m.getParameters();
-        for (int i = 0; i < params.length; i++) map.put(params[i].getName(), i);
+        for (int i = 0; i < params.length; i++) {
+            for (var ann : params[i].getDeclaredAnnotations()) {
+                if (ann.annotationType().getName().equals("jakarta.data.repository.Param")) {
+                    try {
+                        var v = ann.annotationType().getMethod("value").invoke(ann);
+                        if (v instanceof String s && !s.isEmpty()) {
+                            map.put(s, i);
+                        }
+                    } catch (ReflectiveOperationException ignored) { /* fall through */ }
+                }
+            }
+            // Also register the reflective name (arg0/arg1 when -parameters absent — harmless,
+            // a well-named @Param always wins because it's set first).
+            String n = params[i].getName();
+            map.putIfAbsent(n, i);
+        }
         return map;
     }
 

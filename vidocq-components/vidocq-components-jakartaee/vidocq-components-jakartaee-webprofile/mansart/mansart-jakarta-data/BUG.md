@@ -107,8 +107,13 @@ Statuts : `OPEN` → `INVESTIGATING` → `FIXED` (commit hash) → `CLOSED`.
         Légère régression de tests passants (4 → 2) — les nouveaux comparators
         et IgnoreCase mid-name peuvent produire des prédicats sémantiquement
         incorrects pour certains cas (ex. IgnoreCase sur colonne non-String).
-      - **M7-9** — `:name` dans `@Query` exige `-parameters` ; `maven-compiler-plugin
-        4.0.0-beta-4` ne l'honore pas systématiquement (≈ 48
-        `MansartDataException: @Query references :name…`).
+      - **M7-9** *(2026-05-05)* — `nameToIndexFor` lit `@jakarta.data.repository.Param`
+        sur les paramètres en plus de `Parameter.getName()` ; le binding `:name`
+        fonctionne donc même si `-parameters` n'est pas honoré (cas du jar TCK
+        précompilé). Bonus : `H2Dialect.bind` / `PostgresqlDialect.bind` coercent
+        les enums en `name()` String pour éviter l'erreur H2 « JAVA_OBJECT to
+        CHARACTER VARYING ». **Score TCK** : 73 → 2 PASS / 29 FAIL / 42 ERR
+        (errors 45 → 42, plusieurs tests passent maintenant en mode "wrong
+        result" au lieu de crash SQL).
 
 ---
