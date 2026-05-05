@@ -112,6 +112,10 @@ Statuts : `OPEN` → `INVESTIGATING` → `FIXED` (commit hash) → `CLOSED`.
         pas convertir VARCHAR vers une classe enum via `getObject(idx, enumClass)`.
         Réduit `JdbcSQLFeatureNotSupportedException` (30 → 0). **Score TCK** :
         73 → 21 PASS / 14 FAIL / 38 ERR.
+      - **M7-17** *(LIVRÉ 2026-05-05)* — `JdqlExecutor` SELECT entité honore
+        `Limit` (slicing offset+count). Débloque `alphabetic`/`reverseAlphabetic`
+        et leurs tests (`testEmptyQuery`, `testPartialQueryOrderBy`).
+        **Score TCK** : 73 → 62 PASS / 5 FAIL / 6 ERR.
       - **M7-16** *(LIVRÉ 2026-05-05)* — `H2Dialect` / `PostgresqlDialect.bind`
         coercent les `Character` et les `String` en `setString` quand la colonne
         est mappée à un `Character` (sinon H2 refuse JAVA_OBJECT → CHARACTER VARYING).

@@ -68,6 +68,13 @@ final class JdqlExecutor {
                 }
                 if (optional) yield runtime.queryOne((EntityModel) model, bw.where, bw.args);
                 List<Object> data = runtime.queryList((EntityModel) model, bw.where, orderBy, bw.args);
+                jakarta.data.Limit lim2 = findLimit(args);
+                if (lim2 != null) {
+                    int from = Math.max(0, (int) (lim2.startAt() - 1));
+                    int to = Math.min(data.size(), from + (int) lim2.maxResults());
+                    data = (from >= data.size()) ? new ArrayList<>()
+                                                  : new ArrayList<>(data.subList(from, to));
+                }
                 if (stream) yield data.stream();
                 if (list)   yield data;
                 if (array)  {
