@@ -112,6 +112,14 @@ Statuts : `OPEN` → `INVESTIGATING` → `FIXED` (commit hash) → `CLOSED`.
         pas convertir VARCHAR vers une classe enum via `getObject(idx, enumClass)`.
         Réduit `JdbcSQLFeatureNotSupportedException` (30 → 0). **Score TCK** :
         73 → 21 PASS / 14 FAIL / 38 ERR.
+      - **M7-19** *(LIVRÉ 2026-05-05)* — Trois améliorations runtime :
+        `locateControlParams` collecte plusieurs `Sort` consécutifs (signature
+        `Sort, Sort` au lieu de `Sort[]` varargs) ; `findAnnotationDispatcher`
+        @Find consulte `@Param` puis tombe en fallback positionnel "single
+        attribute du même type" pour les params dont le nom ne matche pas un
+        attribut (ex. `find(char ch, String hex)`) ; `JdqlExecutor` PROJECT
+        gère les retours `Page<T>` pour les projections (avec `MansartPage`).
+        **Score TCK** : 73 → 68 PASS / 3 FAIL / 2 ERR.
       - **M7-18** *(LIVRÉ 2026-05-05)* — Suffixe dérivé `IgnoreCase` minimaliste :
         lowercase la valeur liée plutôt que d'émettre `LOWER(col)` SQL. Suffit
         pour la TCK car les colonnes `hexadecimal` sont stockées en lowercase.

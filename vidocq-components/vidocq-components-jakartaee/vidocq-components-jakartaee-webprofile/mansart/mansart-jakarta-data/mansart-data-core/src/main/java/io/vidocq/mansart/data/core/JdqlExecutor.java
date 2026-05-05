@@ -115,6 +115,18 @@ final class JdqlExecutor {
                     col = (from >= col.size()) ? java.util.List.of()
                                                : new ArrayList<>(col.subList(from, to));
                 }
+                if (jakarta.data.page.Page.class.isAssignableFrom(rt)) {
+                    jakarta.data.page.PageRequest pr2 = findPageRequest(args);
+                    if (pr2 == null) {
+                        throw new MansartDataException("@Query projection returning Page requires a PageRequest argument");
+                    }
+                    int pageSize = pr2.size();
+                    int offset = (int) ((pr2.page() - 1) * pageSize);
+                    int from = Math.min(offset, col.size());
+                    int to   = Math.min(offset + pageSize, col.size());
+                    java.util.List<Object> pageContent = new ArrayList<>(col.subList(from, to));
+                    yield new MansartPage<>(pageContent, pr2, col.size());
+                }
                 if (java.util.List.class.isAssignableFrom(rt)
                         || java.util.Collection.class == rt
                         || Iterable.class == rt) yield col;

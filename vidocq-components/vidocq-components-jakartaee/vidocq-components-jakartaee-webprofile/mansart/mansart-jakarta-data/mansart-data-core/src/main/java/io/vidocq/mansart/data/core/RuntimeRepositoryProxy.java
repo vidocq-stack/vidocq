@@ -366,13 +366,28 @@ public final class RuntimeRepositoryProxy {
         for (Attribute<?, ?> a : model.attributes()) attrIndex.put(a.name(), a);
 
         var params = m.getParameters();
+        Class<?>[] paramTypes = m.getParameterTypes();
         // Pre-resolve which parameters bind to attributes (others are control args).
+        // Resolution order per Jakarta Data: @Param("attr") > parameter name match > positional
+        // (single field of matching type) for the remaining non-control parameters.
         List<Integer> attrParamIdx = new ArrayList<>();
         List<Attribute<?, ?>> attrForParam = new ArrayList<>();
+        java.util.Set<Integer> consumed = new java.util.HashSet<>();
         for (int i = 0; i < params.length; i++) {
-            String pname = params[i].getName();
-            Attribute<?, ?> a = attrIndex.get(pname);
-            if (a != null) { attrParamIdx.add(i); attrForParam.add(a); }
+            if (isControlParamType(paramTypes[i])) { consumed.add(i); continue; }
+            String paramHint = readParamAnnotation(params[i]);
+            if (paramHint == null) paramHint = params[i].getName();
+            Attribute<?, ?> a = attrIndex.get(paramHint);
+            if (a != null) { attrParamIdx.add(i); attrForParam.add(a); consumed.add(i); }
+        }
+        // Positional fallback: any remaining non-control param is matched against the entity
+        // attribute whose Java type is assignable from the parameter type (single-candidate only,
+        // first-fit). Covers @Find(char ch, String hex) where the param names ch/hex don't
+        // match thisCharacter/hexadecimal.
+        for (int i = 0; i < params.length; i++) {
+            if (consumed.contains(i)) continue;
+            Attribute<?, ?> match = singleAttributeOfType(model, paramTypes[i], attrForParam);
+            if (match != null) { attrParamIdx.add(i); attrForParam.add(match); }
         }
         boolean returnsOptional = m.getReturnType() == java.util.Optional.class;
         boolean returnsStream   = m.getReturnType() == java.util.stream.Stream.class;
@@ -515,25 +530,79 @@ public final class RuntimeRepositoryProxy {
         };
     }
 
+    private static boolean isControlParamType(Class<?> p) {
+        if (p.getName().equals("jakarta.data.Limit")) return true;
+        if (p.getName().equals("jakarta.data.Sort")) return true;
+        if (p.getName().equals("jakarta.data.Order")) return true;
+        if (p.getName().equals("jakarta.data.page.PageRequest")) return true;
+        return p.isArray() && p.getComponentType().getName().equals("jakarta.data.Sort");
+    }
+
+    private static String readParamAnnotation(java.lang.reflect.Parameter param) {
+        for (var ann : param.getDeclaredAnnotations()) {
+            if (ann.annotationType().getName().equals("jakarta.data.repository.Param")) {
+                try {
+                    Object v = ann.annotationType().getMethod("value").invoke(ann);
+                    if (v instanceof String s && !s.isEmpty()) return s;
+                } catch (ReflectiveOperationException ignored) { /* fall through */ }
+            }
+        }
+        return null;
+    }
+
+    private static Attribute<?, ?> singleAttributeOfType(EntityModel<?> model, Class<?> paramType,
+                                                         List<Attribute<?, ?>> alreadyMatched) {
+        Class<?> wanted = boxedClass(paramType);
+        Attribute<?, ?> only = null;
+        int hits = 0;
+        for (Attribute<?, ?> a : model.attributes()) {
+            if (alreadyMatched.contains(a)) continue;
+            Class<?> t = boxedClass(a.javaType());
+            if (t == wanted) { only = a; hits++; }
+        }
+        return hits == 1 ? only : null;
+    }
+
+    private static Class<?> boxedClass(Class<?> c) {
+        if (c == boolean.class) return Boolean.class;
+        if (c == byte.class)    return Byte.class;
+        if (c == short.class)   return Short.class;
+        if (c == int.class)     return Integer.class;
+        if (c == long.class)    return Long.class;
+        if (c == float.class)   return Float.class;
+        if (c == double.class)  return Double.class;
+        if (c == char.class)    return Character.class;
+        return c;
+    }
+
     /* ---- M7-12 — Jakarta Data control parameters ---- */
 
     /**
      * Returns indices of Limit / Sort / Sort[] / Order / PageRequest parameters in the given
-     * method signature, packed into a single int[] of fixed size 5 (entries are -1 if absent):
-     * {@code [limit, sort, sortArr, order, pageRequest]}.
+     * method signature, packed into a single int[]: index 0..4 are
+     * {@code limit, firstSort, sortArr, order, pageRequest}; index 5+ holds any additional
+     * {@code jakarta.data.Sort} parameter positions (a method can declare {@code Sort, Sort}
+     * for multi-key ordering instead of {@code Sort[]} varargs).
      */
     private static int[] locateControlParams(Method m) {
-        int[] r = { -1, -1, -1, -1, -1 };
+        int[] base = { -1, -1, -1, -1, -1 };
+        java.util.List<Integer> extraSorts = new ArrayList<>();
         Class<?>[] pts = m.getParameterTypes();
         for (int i = 0; i < pts.length; i++) {
             Class<?> p = pts[i];
-            if (p.getName().equals("jakarta.data.Limit"))                  r[0] = i;
+            if (p.getName().equals("jakarta.data.Limit"))                  base[0] = i;
             else if (p.isArray() && p.getComponentType().getName().equals("jakarta.data.Sort"))
-                                                                            r[2] = i;
-            else if (p.getName().equals("jakarta.data.Sort"))               r[1] = i;
-            else if (p.getName().equals("jakarta.data.Order"))              r[3] = i;
-            else if (p.getName().equals("jakarta.data.page.PageRequest"))   r[4] = i;
+                                                                            base[2] = i;
+            else if (p.getName().equals("jakarta.data.Sort")) {
+                if (base[1] < 0) base[1] = i;
+                else extraSorts.add(i);
+            }
+            else if (p.getName().equals("jakarta.data.Order"))              base[3] = i;
+            else if (p.getName().equals("jakarta.data.page.PageRequest"))   base[4] = i;
         }
+        int[] r = new int[5 + extraSorts.size()];
+        System.arraycopy(base, 0, r, 0, 5);
+        for (int k = 0; k < extraSorts.size(); k++) r[5 + k] = extraSorts.get(k);
         return r;
     }
 
@@ -550,6 +619,13 @@ public final class RuntimeRepositoryProxy {
         }
         if (ctrl[3] >= 0 && callArgs[ctrl[3]] instanceof jakarta.data.Order<?> o) {
             for (jakarta.data.Sort<?> s : o.sorts()) addSortToOrder(s, attrIndex, out);
+        }
+        // Extra Sort parameters (positions packed in ctrl[5..]) — happens when a method
+        // declares Sort, Sort, Sort... explicitly instead of Sort[] varargs.
+        for (int k = 5; k < ctrl.length; k++) {
+            if (ctrl[k] >= 0 && callArgs[ctrl[k]] instanceof jakarta.data.Sort<?> s) {
+                addSortToOrder(s, attrIndex, out);
+            }
         }
         return out.isEmpty() ? OrderBy.NONE : new OrderBy(out);
     }
