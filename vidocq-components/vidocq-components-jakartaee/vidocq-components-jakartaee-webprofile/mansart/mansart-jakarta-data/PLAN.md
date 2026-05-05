@@ -271,24 +271,65 @@ public interface DialectFactory {
 - [ ] Lowering JDQL → AST `mansart-data-dialect-spi` → SQL dialecte.
 - [ ] Cache des plans par signature de méthode (`Map<Method, QueryPlan>` initialisé au `<clinit>` de `XxxRepositoryImpl`).
 
-### M6 — TCK Jakarta Data 1.0
+### M6 — TCK Jakarta Data 1.0 ✅ DONE (2026-05-05)
 
 - [x] **M6** structure : `mansart-data-tck` hors reactor (POM Model 4.0.0 standalone), script `run-official-tck-data-1.0.sh`, README, smoke harness.
 - [x] **M6.1** : BCE Mansart (`mansart-data-cdi/MansartDataExtension`) + `MansartRuntimeProducer` + `MansartRepoCreator` ; `mansart-data-processor` génère `META-INF/mansart-repositories.list` ; smoke 3/3 PASS via `VaubanContainer.builder().addBeanClass(...)`.
 - [x] **M6.2** : connecteur Vauban Arquillian porté (`io.vidocq.vauban.tck.*`) + `MansartArquillianSmokeTest` : `@Deployment` ShrinkWrap, `@Inject` AuthorRepository/DataSource/RepositoryRuntime, 2/2 PASS.
 - [x] **M6.3** : `jakarta.data:jakarta.data-tck:1.0.1` résolu depuis Maven Central (artifactId avec un `.`, pas un `-`) ; profil `-Ptck-run` complet (JUnit 5, Arquillian Junit 5, jakarta.servlet-api, ant) ; surefire `dependenciesToScan` ; 73 EntityTests **discovered et tentés** sur la suite officielle.
-- [x] **M6.4** : analyse honnête — 73 erreurs EntityTests, gap d'architecture documenté dans `BUG.md` (BUG-20260505-01). Le harness Arquillian + `TCKLoadableExtension` + `TCKArchiveProcessor` fonctionne (entités TCK déployées). Le bloqueur est l'absence de **génération runtime** des `*RepositoryImpl` et des métamodèles `_<Entity>` pour les entités TCK pré-compilées.
-- [ ] **M7** : runtime impl generation (Class-File API) — voir bloc M7 ci-dessous. Cible TCK pass déplacée à M7.
-- [ ] **M6.5** : variante PostgreSQL via Testcontainers (après M7 pour avoir des tests qui passent à transcrire).
+- [x] **M6.4** : analyse honnête — 73 erreurs EntityTests, gap d'architecture documenté dans `BUG.md` (BUG-20260505-01). Le harness Arquillian + `TCKLoadableExtension` + `TCKArchiveProcessor` fonctionne (entités TCK déployées). Le bloqueur identifié = absence de **génération runtime** des `*RepositoryImpl` et des métamodèles `_<Entity>` pour les entités TCK pré-compilées.
+- [ ] **M6.5** : variante PostgreSQL via Testcontainers (planifié — M6.x après stabilisation).
 
-### M7 — Runtime impl generation (Class-File API) — débloque le TCK pass
+### M7 — Runtime impl generation ✅ DONE (2026-05-05) — TCK 73/73 PASS
 
-- [ ] BCE `@Discovery`/`@Enhancement` : scanner les classes scannées pour `@jakarta.data.repository.Repository`, identifier l'entité (via `BasicRepository<T,K>` superinterface).
-- [ ] Construire `EntityModel` à runtime via `MethodHandles.privateLookupIn` sur la classe d'entité (lecture des annotations JPA/Mansart) — équivalent runtime de `EntityScanner`.
-- [ ] Générer le bytecode du `*RepositoryImpl` via `java.lang.classfile` (équivalent runtime de `RepositoryWriter`) — supporter au minimum les méthodes de `BasicRepository`/`CrudRepository` + dérivation par nom de méthode + `@Query` JDQL.
-- [ ] `defineClass` dans un `MethodHandles.Lookup` du package de l'entité (ou d'un module Mansart-créé).
-- [ ] Préférence à la génération compile-time si `META-INF/mansart-repositories.list` liste l'interface ; sinon fallback runtime.
-- [ ] Re-run TCK : cible 80%+ PASS sur le dialecte H2.
+Architecture livrée :
+
+```
+@Repository interface (TCK ou user code, sans APT)
+   → BCE (MansartDataExtension) — découvre l'interface
+   → @Synthesis — enregistre un bean synthétique @Singleton
+   → MansartRuntimeRepoCreator.create() — appelé par Vauban à l'injection
+   → RuntimeRepositoryProxy.create() — bâtit Dispatcher[] + EntityModel[]
+   → RuntimeRepositoryClassGenerator.generate() — Class-File API (JEP 484)
+   → hidden class <Repo>$$MansartImpl/0xNNNN
+   → MansartCallback.dispatch(idx, args)
+   → Dispatcher (jdql / find / lifecycle / inherited / derived) → RepositoryRuntime
+   → Dialect (H2 / PostgreSQL) → JDBC → DataSource
+```
+
+Sous-jalons livrés :
+
+- [x] **M7-1** : RuntimeEntityModelBuilder — construit `EntityModel<T>` à partir des annotations Mansart **et** JPA (`@Entity`/`@Table`/`@Id`/`@GeneratedValue`/`@Column`/`@Version`/`@ManyToOne`/`@JoinColumn`/`@Enumerated`/`@Embedded`) sur la classe d'entité TCK pré-compilée. `MethodHandles.privateLookupIn` (pas de `setAccessible`).
+- [x] **M7-2** : QueryMethodParser — parser dérivation par nom de méthode (`findBy*`, `existsBy*`, `countBy*`, `deleteBy*`, opérateurs `Equals`, `Between`, `In`, `LessThan`, `GreaterThan`, `GreaterThanEqual`, `LessThanEqual`, `Like`, `IgnoreCase`, `Not`, `True`, `False`, `Null`, `NotNull`, `Empty`, `NotEmpty`, `Contains`, `StartsWith`, `EndsWith`, `OrderBy<Attr>Asc/Desc`).
+- [x] **M7-3** : RuntimeRepositoryProxy première version — construction de `Dispatcher[]` typé par méthode (jdql / find / lifecycle / inherited / derived).
+- [x] **M7-4** : BCE `@Discovery`/`@Enhancement`/`@Synthesis` — découvre toutes les interfaces `@Repository` du déploiement TCK + bean synthétique `@Singleton` typé sur l'interface.
+- [x] **M7-5 → M7-7** : EmptyResultException / NonUniqueResultException, `Optional<T>`, `Stream<T>`, `Page<T>`, `CursoredPage<T>`, `PageRequest`, `Limit`, `Sort`, `Order` au runtime.
+- [x] **M7-8** : Implicit ID — résolution conventionnelle (champ `id`, ou unique champ de type `K`, ou `<entity>Id`/Identifier/Key) quand l'entité n'a pas de `@Id` JPA explicite.
+- [x] **M7-9** : Lifecycle annotations runtime (`@Insert`, `@Update`, `@Delete`, `@Save`) — entité unique, collection, varargs ; retour `void` / `T` / `Iterable<T>` / `int` / `long` / `boolean`.
+- [x] **M7-10 → M7-15** : JDQL parser — literals (numériques avec suffixes `l/L/f/F/d/D`, strings, booléens, enum FQN), arithmétique (`+ - * /`), `FROM` optionnel, infix `NOT`, `IN (…)`, `BETWEEN`, `LIKE`, `IS [NOT] NULL`, `IS [NOT] EMPTY`, `UPPER`/`LOWER`, position parameters (`?1`).
+- [x] **M7-16 → M7-20** : JDQL exécuteur — `SELECT` projeté, agrégats (`COUNT`, `SUM`, `AVG`, `MIN`, `MAX`), `GROUP BY`, `HAVING`, `ORDER BY`, `UPDATE` set, `DELETE`, mapping retours (Long → boolean si la méthode l'attend).
+- [x] **M7-21** : runtime `Sort` args appliqués (réparation `appendRuntimeSorts`).
+- [x] **M7-22** : suffixes Java numériques (`0.0d`, `0.0f`, `42L`).
+- [x] **M7-23** : multi-entités — par-méthode `EntityModel` (param/return/JDQL `FROM`/`UPDATE`).
+- [x] **M7-24** : arithmétique `SET` (AST `Expr/ExprBin`), wrap `Long → Boolean` selon type retour.
+- [x] **M7-25** : remplacement de `java.lang.reflect.Proxy` par classe hidden générée via **Class-File API** (`java.lang.classfile`, JEP 484). `MansartCallback` (dispatch holder) + `RuntimeRepositoryClassGenerator` (≈220 lignes, zéro-dep). Loaded via `MethodHandles.Lookup#defineHiddenClass(bytes, true)`. **Aucun proxy dynamique ; AOT-friendly (GraalVM/Leyden compatible)**.
+
+**Résultats finaux** :
+- **73/73 TCK Jakarta Data 1.0 EntityTests** ✅ (100%)
+- **79/79 unit tests** ✅
+- **6/6 smoke tests** Arquillian (incl. `RuntimeRepoArquillianTest`) ✅
+
+### Reste à faire (post-M7)
+
+- [ ] **M6.5** — TCK PostgreSQL via Testcontainers + `mansart-data-dialect-postgresql` (transcrire les 73 EntityTests sur PG).
+- [ ] **TCK SignatureTests** — actuellement filtrés via `<includes>**/standalone/entity/EntityTests.class</include>` dans `tck-suite-official.xml`.
+- [ ] **TCK PersistenceTests / NoSQLTests** — autres sub-suites (NoSQL hors scope v1 ; PersistenceTests dépend de `mansart-persistence`).
+- [ ] **JDQL feature gaps** : subqueries, joins explicites, agrégations multi-attributs.
+- [ ] **`IgnoreCase` via SQL `LOWER()`** au lieu du value-lowercasing actuel (fragile sur les datasets non-ASCII).
+- [ ] **Compile-time RepositoryWriter** — émettre les nouveaux comparators ajoutés au runtime (`CONTAINS`/`STARTS_WITH`/`ENDS_WITH`/`TRUE`/`FALSE`/`EMPTY`) — runtime-only actuellement, écart compile/runtime.
+- [ ] **mansart-persistence** — Jakarta Persistence 3.2 (JPA classique), encore placeholder.
+- [ ] **mansart-pool** — pool JDBC virtual-thread-native, sous-roadmap MP1-MP4 (peer indépendant).
+- [ ] **vidocq orchestrator** — SPI extensions style Quarkus, packaging, bootstrap.
 
 ## Décisions verrouillées
 
