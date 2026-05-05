@@ -165,6 +165,7 @@ public final class RuntimeRepositoryProxy {
         for (Method m : allInterfaceMethods(repoInterface)) {
             if (m.isDefault() || m.getDeclaringClass() == Object.class) continue;
             Dispatcher d = jdqlDispatcher(m, model, attributeNames);
+            if (d == null) d = findAnnotationDispatcher(m, model, attributeNames);
             if (d == null) d = lifecycleDispatcher(m, model);
             if (d == null) d = inheritedDispatcher(m);
             if (d == null) d = derivedDispatcher(m, model, attributeNames);
@@ -305,13 +306,67 @@ public final class RuntimeRepositoryProxy {
         };
     }
 
+    /* ---- @Find dispatcher (M7-8 push) ----
+     * Jakarta Data {@code @jakarta.data.repository.Find}: every method parameter whose name
+     * matches an entity attribute name is folded into a WHERE clause as {@code attr = ?}. The
+     * usual control parameters (Limit, Sort, Order, PageRequest, Sort[]) are passed through to
+     * the underlying queryList/queryPage call.
+     */
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static Dispatcher findAnnotationDispatcher(Method m, EntityModel<?> model,
+                                                       java.util.Set<String> attributeNames) {
+        boolean hasFind = false;
+        for (var ann : m.getDeclaredAnnotations()) {
+            if (ann.annotationType().getName().equals("jakarta.data.repository.Find")) {
+                hasFind = true; break;
+            }
+        }
+        if (!hasFind) return null;
+        Map<String, Attribute<?, ?>> attrIndex = new java.util.HashMap<>();
+        for (Attribute<?, ?> a : model.attributes()) attrIndex.put(a.name(), a);
+
+        var params = m.getParameters();
+        // Pre-resolve which parameters bind to attributes (others are control args).
+        List<Integer> attrParamIdx = new ArrayList<>();
+        List<Attribute<?, ?>> attrForParam = new ArrayList<>();
+        for (int i = 0; i < params.length; i++) {
+            String pname = params[i].getName();
+            Attribute<?, ?> a = attrIndex.get(pname);
+            if (a != null) { attrParamIdx.add(i); attrForParam.add(a); }
+        }
+        boolean returnsOptional = m.getReturnType() == java.util.Optional.class;
+        boolean returnsStream   = m.getReturnType() == java.util.stream.Stream.class;
+        boolean returnsList     = java.util.List.class.isAssignableFrom(m.getReturnType());
+
+        return (rt, em, callArgs) -> {
+            List<Where> parts = new ArrayList<>(attrForParam.size());
+            List<Object> bound = new ArrayList<>(attrForParam.size());
+            for (int k = 0; k < attrForParam.size(); k++) {
+                Attribute<?, ?> a = attrForParam.get(k);
+                Object v = callArgs[attrParamIdx.get(k)];
+                parts.add(new Where.Eq(a));
+                bound.add(v);
+            }
+            Where w = parts.isEmpty() ? Where.ALWAYS_TRUE
+                    : (parts.size() == 1 ? parts.get(0) : new Where.And(parts));
+            Object[] xs = bound.toArray();
+            if (returnsOptional) return rt.queryOne((EntityModel) em, w, xs);
+            List<Object> list = rt.queryList((EntityModel) em, w, OrderBy.NONE, xs);
+            if (returnsStream) return list.stream();
+            if (returnsList)   return list;
+            return list.isEmpty() ? null : list.get(0);
+        };
+    }
+
     /* ---- Derived queries (findByX, countByX, deleteByX, existsByX, …) ---- */
 
     @SuppressWarnings({"rawtypes", "unchecked"})
     private static Dispatcher derivedDispatcher(Method m, EntityModel<?> model,
                                                 java.util.Set<String> attributeNames) {
-        QueryMethodParser.QueryDescriptor desc = QueryMethodParser.parse(m.getName(), attributeNames);
+        int[] limitOut = new int[]{0};
+        QueryMethodParser.QueryDescriptor desc = QueryMethodParser.parse(m.getName(), attributeNames, limitOut);
         if (desc == null) return null;
+        int firstNLimit = limitOut[0];
 
         // Map predicate-attribute names to Attribute<?, ?> instances at proxy-build time.
         Map<String, Attribute<?, ?>> attrIndex = new java.util.HashMap<>();
@@ -340,6 +395,9 @@ public final class RuntimeRepositoryProxy {
                     }
                     if (returnsOptional) yield rt.queryOne((EntityModel) em, w, xs);
                     List<Object> list = rt.queryList((EntityModel) em, w, orderBy, xs);
+                    if (firstNLimit > 0 && list.size() > firstNLimit) {
+                        list = new ArrayList<>(list.subList(0, firstNLimit));
+                    }
                     if (returnsStream) yield list.stream();
                     if (returnsList)   yield list;
                     java.util.Optional<?> oneOpt = rt.queryOne((EntityModel) em, w, xs);

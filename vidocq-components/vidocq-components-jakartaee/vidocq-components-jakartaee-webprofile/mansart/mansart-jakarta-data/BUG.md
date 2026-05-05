@@ -95,15 +95,18 @@ Statuts : `OPEN` → `INVESTIGATING` → `FIXED` (commit hash) → `CLOSED`.
         Java → JDBC type. Appelé par `RuntimeRepositoryProxy.create` pour les repos
         runtime-only. Réduit `TableOrViewNotFound` de 376 → 80, débloque 4 tests
         TCK (73 → 4 PASS / 18 FAIL / 51 ERR).
-      - **M7-8** *(partiel 2026-05-05)* — Comparators ajoutés : `True`/`False`,
+      - **M7-8** *(2026-05-05)* — Comparators ajoutés : `True`/`False`,
         `Contains`/`StartsWith`/`EndsWith` (LIKE wildcard auto), `Empty`/`NotEmpty`,
         suffixe `IgnoreCase` (sans casing SQL pour l'instant), infixe
         `<Attr>Not<Comparator>`, méthodes interface `default`. Top-level
-        `countAll`/`deleteAll`/`removeAll`. Réduit `UnsupportedOperationException`
-        de 20 → 10. Reste : `findFirst3By...` (limite numérique inline),
-        `IgnoreCase` mid-name (`HexadecimalIgnoreCaseBetween`), méthodes annotées
-        `@Find` non gérées (`find`, `findMatching`, `findNumber`, `findOdd`),
-        `<Attr>NotNull` (combinaison Not + IsNull non détectée).
+        `countAll`/`deleteAll`/`removeAll`. `findFirst<N>By...` (limite numérique
+        inline appliquée par slicing post-query). `IgnoreCase` mid-name accepté.
+        `<Attr>NotNull` détecté comme IS_NOT_NULL. Dispatcher `@Find` qui mappe
+        chaque paramètre au nom d'attribut correspondant. **Score TCK** : 73 →
+        2 PASS / 26 FAIL / 45 ERR (`UnsupportedOperationException` à zéro).
+        Légère régression de tests passants (4 → 2) — les nouveaux comparators
+        et IgnoreCase mid-name peuvent produire des prédicats sémantiquement
+        incorrects pour certains cas (ex. IgnoreCase sur colonne non-String).
       - **M7-9** — `:name` dans `@Query` exige `-parameters` ; `maven-compiler-plugin
         4.0.0-beta-4` ne l'honore pas systématiquement (≈ 48
         `MansartDataException: @Query references :name…`).

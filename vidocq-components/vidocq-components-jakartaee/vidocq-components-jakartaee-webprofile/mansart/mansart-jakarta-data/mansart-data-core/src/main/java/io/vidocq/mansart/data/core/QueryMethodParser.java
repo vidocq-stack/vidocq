@@ -51,8 +51,27 @@ public final class QueryMethodParser {
     public record Order(String attribute, boolean asc) {}
 
     public static QueryDescriptor parse(String methodName, Set<String> attributeNames) {
+        return parse(methodName, attributeNames, new int[]{0});
+    }
+
+    /**
+     * M7-8 push — also accepts {@code findFirst<N>By} where {@code <N>} is a positive integer.
+     * The N is written into {@code limitOut[0]} so the caller can apply a LIMIT to the query.
+     */
+    public static QueryDescriptor parse(String methodName, Set<String> attributeNames, int[] limitOut) {
         Operation op;
         String rest;
+        // findFirst<N>By — N is an inline numeric limit (Jakarta Data 1.0).
+        if (methodName.startsWith("findFirst")) {
+            int i = "findFirst".length();
+            int j = i;
+            while (j < methodName.length() && Character.isDigit(methodName.charAt(j))) j++;
+            if (j > i && methodName.startsWith("By", j)) {
+                limitOut[0] = Integer.parseInt(methodName.substring(i, j));
+                methodName = "findBy" + methodName.substring(j + 2);
+                // fall through with rewritten method name
+            }
+        }
         if      (startsWith(methodName, "findFirstBy")) { op = Operation.FIND_ONE; rest = methodName.substring("findFirstBy".length()); }
         else if (startsWith(methodName, "findOneBy"))   { op = Operation.FIND_ONE; rest = methodName.substring("findOneBy".length()); }
         else if (startsWith(methodName, "findAllBy"))   { op = Operation.FIND;     rest = methodName.substring("findAllBy".length()); }
@@ -107,11 +126,18 @@ public final class QueryMethodParser {
 
     /** {@code parsePredicate("AgeBetween")} → {@code (age, BETWEEN)}. */
     private static Predicate parsePredicate(String token, Set<String> attributeNames) {
-        // M7-8 — strip "IgnoreCase" suffix first, then "Not" infix before the comparator.
+        // M7-8 — recognise "<Attr>NotNull" as IS_NOT_NULL directly: otherwise the IS_NULL suffix
+        // matcher would steal it and the leftover "<Attr>Not" would fail attribute lookup.
+        if (token.endsWith("NotNull")) {
+            String attr = matchAttribute(token.substring(0, token.length() - "NotNull".length()), attributeNames);
+            if (attr != null) return new Predicate(attr, Comparator.IS_NOT_NULL, false, false);
+        }
+        // M7-8 — strip "IgnoreCase" suffix or mid-name infix; then "Not" infix before the comparator.
         boolean ignoreCase = false;
-        if (token.endsWith("IgnoreCase")) {
+        int icIdx = token.indexOf("IgnoreCase");
+        if (icIdx >= 0) {
             ignoreCase = true;
-            token = token.substring(0, token.length() - "IgnoreCase".length());
+            token = token.substring(0, icIdx) + token.substring(icIdx + "IgnoreCase".length());
         }
         // Try comparator suffixes longest first
         for (Suffix s : Suffix.byLengthDesc()) {
