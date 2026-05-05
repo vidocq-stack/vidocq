@@ -19,13 +19,15 @@ public final class JdqlAst {
     /* ---------- AST ---------- */
 
     public static final class Stmt {
-        public enum Kind { SELECT, COUNT, UPDATE, DELETE, AGGREGATE, PROJECT }
+        public enum Kind { SELECT, COUNT, UPDATE, DELETE, AGGREGATE, PROJECT, PROJECT_MULTI }
         public Kind kind = Kind.SELECT;
         public Pred where;
         public List<Order> orderBy = new ArrayList<>();
         public List<SetAssign> setAssignments = new ArrayList<>();
         public String aggregateOp;
         public String scalarAttr;
+        /** M8-2 — for {@link Kind#PROJECT_MULTI}: list of attribute names selected. */
+        public List<String> projectAttrs = new ArrayList<>();
     }
 
     public record SetAssign(String attr, Expr value) {
@@ -240,9 +242,19 @@ public final class JdqlAst {
                     s.aggregateOp = agg.text;
                     s.scalarAttr = attr;
                 } else if (lex.peek().kind == Tk.IDENT) {
-                    String attr = expectAttr();
-                    s.kind = Stmt.Kind.PROJECT;
-                    s.scalarAttr = attr;
+                    // M8-2 — SELECT a [, b, c, …] : single attr → PROJECT, multiple → PROJECT_MULTI.
+                    String first = expectAttr();
+                    if (lex.peek().kind == Tk.COMMA) {
+                        s.kind = Stmt.Kind.PROJECT_MULTI;
+                        s.projectAttrs.add(first);
+                        while (lex.peek().kind == Tk.COMMA) {
+                            lex.consume();
+                            s.projectAttrs.add(expectAttr());
+                        }
+                    } else {
+                        s.kind = Stmt.Kind.PROJECT;
+                        s.scalarAttr = first;
+                    }
                 } else {
                     throw new ParseException("Unexpected token after SELECT: " + lex.peek().text);
                 }

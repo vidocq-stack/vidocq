@@ -280,6 +280,39 @@ public final class RepositoryRuntime {
         });
     }
 
+    /**
+     * M8-2 — multi-column projection. Returns one {@code Object[]} per row, each array's length
+     * equal to {@code attrs.size()}. Components are extracted using the dialect's {@code extract}
+     * keyed by each attribute's declared Java type.
+     */
+    public <E> java.util.List<Object[]> projectColumns(EntityModel<E> model,
+                                                       java.util.List<Attribute<?, ?>> attrs,
+                                                       Where where, OrderBy orderBy, Object... args) {
+        StringBuilder cols = new StringBuilder();
+        for (int i = 0; i < attrs.size(); i++) {
+            if (i > 0) cols.append(", ");
+            cols.append('"').append(attrs.get(i).columnName()).append('"');
+        }
+        String tail = whereOrderTail(model, where, orderBy);
+        String sql = "SELECT " + cols + " FROM " + qualifiedTable(model) + tail;
+        return ConnectionScope.withConnection(dataSource, c -> {
+            try (PreparedStatement ps = c.prepareStatement(sql)) {
+                WhereBinder.bind(dialect, ps, where, args, 1, new int[]{0});
+                try (ResultSet rs = ps.executeQuery()) {
+                    java.util.List<Object[]> out = new ArrayList<>();
+                    while (rs.next()) {
+                        Object[] row = new Object[attrs.size()];
+                        for (int i = 0; i < attrs.size(); i++) {
+                            row[i] = dialect.extract(rs, i + 1, attrs.get(i).javaType());
+                        }
+                        out.add(row);
+                    }
+                    return out;
+                }
+            }
+        });
+    }
+
     private <E, T> T scalarSelect(EntityModel<E> model, String columnExpr, Class<T> resultType,
                                   Where where, Object[] args) {
         String tail = whereOrderTail(model, where, OrderBy.NONE);

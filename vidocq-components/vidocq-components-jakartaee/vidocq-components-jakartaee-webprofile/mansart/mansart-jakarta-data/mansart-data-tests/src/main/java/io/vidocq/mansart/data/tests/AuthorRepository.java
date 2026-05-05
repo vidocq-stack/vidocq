@@ -136,4 +136,23 @@ public interface AuthorRepository extends BasicRepository<Author, Long> {
 
     @jakarta.data.repository.Query("FROM Author WHERE UPPER(name) IS NOT NULL")
     long jdqlUpperIsNotNullCount();
+
+    /* ---- M8-2 multi-projection (SELECT a, b, …) ---- */
+
+    @jakarta.data.repository.Query("SELECT id, name FROM Author ORDER BY name ASC")
+    java.util.List<Object[]> jdqlIdNamePairs();
+
+    @jakarta.data.repository.Query("SELECT id, name FROM Author WHERE name LIKE :pattern ORDER BY name ASC")
+    java.util.stream.Stream<Object[]> jdqlIdNameStream(String pattern);
+
+    @jakarta.data.repository.Query("SELECT id, name FROM Author WHERE name = :name")
+    java.util.Optional<Object[]> jdqlIdNameOptional(String name);
+
+    @jakarta.data.repository.Query("SELECT id, name FROM Author ORDER BY id ASC")
+    java.util.List<AuthorView> jdqlAuthorViews();
+
+    @jakarta.data.repository.Query("SELECT id, name FROM Author WHERE id = :id")
+    AuthorView jdqlAuthorViewById(long id);
+
+    record AuthorView(Long id, String name) {}
 }

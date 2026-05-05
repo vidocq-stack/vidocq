@@ -52,6 +52,7 @@ final class JdqlParser {
                     trailingPageRequest, isCursoredPageReturn);
             case AGGREGATE     -> emitAggregate(stmt, method, metamodel, nameToIdx, returnType);
             case PROJECT       -> emitProject(stmt, method, metamodel, nameToIdx, returnType);
+            case PROJECT_MULTI -> emitProjectMulti(stmt, method, metamodel, nameToIdx, returnType);
             case UPDATE        -> emitUpdate(stmt, method, metamodel, nameToIdx, returnType);
             case DELETE        -> emitDelete(stmt, method, metamodel, nameToIdx, returnType);
         };
@@ -135,6 +136,67 @@ final class JdqlParser {
                     + "\"Projection returned no result\"); return _list.get(0);");
         }
         return sb.toString();
+    }
+
+    /**
+     * M8-2 — emit a multi-column projection. Builds the {@code List<Attribute>} from the JDQL
+     * SELECT list, calls {@code runtime.projectColumns}, and dispatches via the shared
+     * {@code JdqlExecutor.dispatchMultiProjection(rt, elem, rows, attrs)} helper.
+     */
+    private static String emitProjectMulti(Stmt stmt, ExecutableElement method, String metamodel,
+                                           Map<String, Integer> nameToIdx, TypeMirror returnType) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("io.vidocq.mansart.data.dialect.Where _w = ");
+        emitPredicate(sb, stmt.where, metamodel);
+        sb.append("; io.vidocq.mansart.data.dialect.OrderBy _ob = ");
+        emitOrderBy(sb, stmt.orderBy, metamodel);
+        sb.append("; ");
+
+        sb.append("java.util.List<io.vidocq.mansart.data.dialect.Attribute<?, ?>> _attrs = java.util.List.of(");
+        for (int i = 0; i < stmt.projectAttrs.size(); i++) {
+            if (i > 0) sb.append(", ");
+            sb.append(metamodel).append('.').append(stmt.projectAttrs.get(i));
+        }
+        sb.append("); ");
+
+        List<ArgRef> argsInOrder = new ArrayList<>();
+        if (stmt.where != null) collectArgs(stmt.where, argsInOrder);
+        sb.append("java.lang.Object[] _xs = new java.lang.Object[]{");
+        for (int i = 0; i < argsInOrder.size(); i++) {
+            if (i > 0) sb.append(", ");
+            sb.append(resolveArg(argsInOrder.get(i), nameToIdx, method));
+        }
+        sb.append("}; ");
+
+        sb.append("var _rows = runtime.projectColumns(").append(metamodel).append(".$MODEL, _attrs, _w, _ob, _xs); ");
+        String rt = returnType.toString();
+        String elem = projectionElementMulti(rt);
+        sb.append("return (").append(rawType(rt)).append(") ")
+          .append("io.vidocq.mansart.data.core.JdqlExecutor.dispatchMultiProjection(")
+          .append(rawType(rt)).append(".class, ").append(elem).append(".class, _rows, _attrs);");
+        return sb.toString();
+    }
+
+    /** M8-2 — extract the parameterised element type for multi-projection. Defaults to Object[]. */
+    private static String projectionElementMulti(String rt) {
+        if (rt.startsWith("java.util.Optional<") || rt.startsWith("java.util.List<")
+         || rt.startsWith("java.util.Collection<") || rt.startsWith("java.lang.Iterable<")
+         || rt.startsWith("java.util.stream.Stream<")) {
+            int lt = rt.indexOf('<');
+            int gt = rt.lastIndexOf('>');
+            String inner = rt.substring(lt + 1, gt).trim();
+            if (inner.startsWith("? extends ")) inner = inner.substring("? extends ".length());
+            if (inner.startsWith("? super "))   inner = inner.substring("? super ".length());
+            return inner.equals("java.lang.Object[]") ? "java.lang.Object[]" : inner;
+        }
+        if (rt.endsWith("[][]")) return "java.lang.Object[]";
+        if (rt.endsWith("[]"))   return rt.substring(0, rt.length() - 2);
+        return rt;
+    }
+
+    private static String rawType(String rt) {
+        int lt = rt.indexOf('<');
+        return lt < 0 ? rt : rt.substring(0, lt);
     }
 
     private static String projectionElementBoxed(String genericRt) {
@@ -507,13 +569,15 @@ final class JdqlParser {
     /* ---------- AST ---------- */
 
     static final class Stmt {
-        enum Kind { SELECT, COUNT, UPDATE, DELETE, AGGREGATE, PROJECT }
+        enum Kind { SELECT, COUNT, UPDATE, DELETE, AGGREGATE, PROJECT, PROJECT_MULTI }
         Kind kind = Kind.SELECT;
         Pred where;
         List<Order> orderBy = new ArrayList<>();
         List<SetAssign> setAssignments = new ArrayList<>();
         String aggregateOp;       // "SUM" | "AVG" | "MIN" | "MAX" when kind == AGGREGATE
         String scalarAttr;        // attribute name for AGGREGATE / PROJECT
+        /** M8-2 — for {@link Kind#PROJECT_MULTI}: list of attribute names selected. */
+        List<String> projectAttrs = new ArrayList<>();
     }
     record SetAssign(String attr, ArgRef arg) {}
     sealed interface Pred permits Cmp, FnCmp, IsNull, FnIsNull, Between, FnBetween,
@@ -779,10 +843,19 @@ final class JdqlParser {
                     s.aggregateOp = agg.text;
                     s.scalarAttr = attr;
                 } else if (lex.peek().kind == Tk.IDENT) {
-                    // Projection: SELECT <attr>
-                    String attr = expectAttr();
-                    s.kind = Stmt.Kind.PROJECT;
-                    s.scalarAttr = attr;
+                    // M8-2 — SELECT a [, b, c, …] : single attr → PROJECT, multi → PROJECT_MULTI.
+                    String first = expectAttr();
+                    if (lex.peek().kind == Tk.COMMA) {
+                        s.kind = Stmt.Kind.PROJECT_MULTI;
+                        s.projectAttrs.add(first);
+                        while (lex.peek().kind == Tk.COMMA) {
+                            lex.consume();
+                            s.projectAttrs.add(expectAttr());
+                        }
+                    } else {
+                        s.kind = Stmt.Kind.PROJECT;
+                        s.scalarAttr = first;
+                    }
                 } else {
                     throw new ParseException("Unexpected token after SELECT: " + lex.peek().text);
                 }

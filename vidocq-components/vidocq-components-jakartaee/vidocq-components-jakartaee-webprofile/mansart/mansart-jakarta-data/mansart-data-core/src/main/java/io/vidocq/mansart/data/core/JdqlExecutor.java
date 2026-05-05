@@ -20,7 +20,10 @@ import java.util.Map;
  * {@link Where}, same Order resolution, same dispatch by return type, same dynamic In(Collection)
  * with empty short-circuit. Aggregate / projection / UPDATE / DELETE statements are honoured.
  */
-final class JdqlExecutor {
+// M8-2 — promoted from package-private to public so generated repository impls in user packages
+// can call the shared dispatchMultiProjection helper. The other static methods remain
+// package-private (visibility narrowed where possible).
+public final class JdqlExecutor {
 
     private JdqlExecutor() {}
 
@@ -101,6 +104,26 @@ final class JdqlExecutor {
                 Object v = runtime.aggregate((EntityModel) model, stmt.aggregateOp, attr, boxed, bw.where, bw.args);
                 if (v == null && rt.isPrimitive()) yield zeroFor(rt);
                 yield v;
+            }
+            case PROJECT_MULTI -> {
+                BuiltWhere bw = buildWhere(stmt.where, attrIndex, args, nameToIdx);
+                java.util.List<Attribute<?, ?>> attrs = new ArrayList<>(stmt.projectAttrs.size());
+                for (String name : stmt.projectAttrs) {
+                    Attribute<?, ?> a = attrIndex.get(name);
+                    if (a == null) throw new MansartDataException("Unknown attribute: " + name);
+                    attrs.add(a);
+                }
+                Class<?> rt = method.getReturnType();
+                List<Object[]> rows = runtime.projectColumns((EntityModel) model, attrs,
+                        bw.where, orderBy, bw.args);
+                jakarta.data.Limit lim = findLimit(args);
+                if (lim != null) {
+                    int from = Math.max(0, (int) (lim.startAt() - 1));
+                    int to = Math.min(rows.size(), from + (int) lim.maxResults());
+                    rows = (from >= rows.size()) ? java.util.List.of()
+                                                  : new ArrayList<>(rows.subList(from, to));
+                }
+                yield dispatchMultiProjection(rt, method, rows, attrs, args);
             }
             case PROJECT -> {
                 BuiltWhere bw = buildWhere(stmt.where, attrIndex, args, nameToIdx);
@@ -495,6 +518,94 @@ final class JdqlExecutor {
         if (c == double.class) return 0.0;
         if (c == float.class)  return 0.0f;
         return 0;
+    }
+
+    /**
+     * M8-2 — dispatch the result of a multi-column projection (one {@code Object[]} per row)
+     * to the method's declared return type. See {@link #dispatchMultiProjection(Class, Class, List, java.util.List)}
+     * for shape semantics.
+     */
+    private static Object dispatchMultiProjection(Class<?> rt, Method method, List<Object[]> rows,
+                                                  java.util.List<Attribute<?, ?>> attrs, Object[] args) {
+        return dispatchMultiProjection(rt, projectionElement(method), rows, attrs);
+    }
+
+    /**
+     * M8-2 — dispatch the result of a multi-column projection (one {@code Object[]} per row)
+     * to the requested return type:
+     * <ul>
+     *   <li>{@code List<Object[]>}/{@code Collection}/{@code Iterable} → the rows directly</li>
+     *   <li>{@code Stream<Object[]>} → {@code rows.stream()}</li>
+     *   <li>{@code Object[][]} → 2-D array</li>
+     *   <li>{@code Optional<Object[]>} → first row or empty</li>
+     *   <li>Record types ({@code List<R>}, {@code Stream<R>}, {@code R[]}, {@code Optional<R>}, {@code R})
+     *       — each row is mapped to a canonical record constructor whose component count matches
+     *       the projected attribute count. Components are passed in JDQL declaration order.</li>
+     * </ul>
+     */
+    public static Object dispatchMultiProjection(Class<?> rt, Class<?> elem, List<Object[]> rows,
+                                                  java.util.List<Attribute<?, ?>> attrs) {
+        boolean isRecordTarget = elem != null && elem != Object[].class && elem.isRecord();
+
+        // Object[]-shaped returns
+        if (java.util.List.class.isAssignableFrom(rt) || java.util.Collection.class == rt || Iterable.class == rt) {
+            if (!isRecordTarget) return rows;
+            return mapRowsToRecords(rows, elem, attrs);
+        }
+        if (rt == java.util.stream.Stream.class) {
+            return isRecordTarget ? mapRowsToRecords(rows, elem, attrs).stream() : rows.stream();
+        }
+        if (rt.isArray()) {
+            Class<?> comp = rt.getComponentType();
+            if (comp == Object[].class) {
+                Object[][] arr = new Object[rows.size()][];
+                for (int i = 0; i < rows.size(); i++) arr[i] = rows.get(i);
+                return arr;
+            }
+            if (comp.isRecord()) {
+                java.util.List<Object> recs = mapRowsToRecords(rows, comp, attrs);
+                Object arr = java.lang.reflect.Array.newInstance(comp, recs.size());
+                for (int i = 0; i < recs.size(); i++) java.lang.reflect.Array.set(arr, i, recs.get(i));
+                return arr;
+            }
+            throw new MansartDataException("Multi-projection array return must be Object[][] or RecordType[], got: " + rt);
+        }
+        if (rt == java.util.Optional.class) {
+            if (rows.isEmpty()) return java.util.Optional.empty();
+            return isRecordTarget ? java.util.Optional.of(mapRowToRecord(rows.get(0), elem, attrs))
+                                  : java.util.Optional.of(rows.get(0));
+        }
+        if (rt.isRecord()) {
+            if (rows.isEmpty()) {
+                throw new jakarta.data.exceptions.EmptyResultException(
+                        "Multi-projection returned no result for " + rt.getSimpleName());
+            }
+            return mapRowToRecord(rows.get(0), rt, attrs);
+        }
+        throw new MansartDataException("Unsupported multi-projection return type: " + rt);
+    }
+
+    private static java.util.List<Object> mapRowsToRecords(List<Object[]> rows, Class<?> recordType,
+                                                            java.util.List<Attribute<?, ?>> attrs) {
+        java.util.List<Object> out = new ArrayList<>(rows.size());
+        for (Object[] row : rows) out.add(mapRowToRecord(row, recordType, attrs));
+        return out;
+    }
+
+    private static Object mapRowToRecord(Object[] row, Class<?> recordType,
+                                         java.util.List<Attribute<?, ?>> attrs) {
+        java.lang.reflect.RecordComponent[] comps = recordType.getRecordComponents();
+        if (comps.length != attrs.size()) {
+            throw new MansartDataException("Record " + recordType.getSimpleName()
+                    + " has " + comps.length + " components but projection selected " + attrs.size() + " attributes");
+        }
+        Class<?>[] paramTypes = new Class<?>[comps.length];
+        for (int i = 0; i < comps.length; i++) paramTypes[i] = comps[i].getType();
+        try {
+            return recordType.getDeclaredConstructor(paramTypes).newInstance(row);
+        } catch (ReflectiveOperationException e) {
+            throw new MansartDataException("Failed to construct " + recordType.getName() + " from projection row", e);
+        }
     }
 
     private static Class<?> projectionElement(Method m) {
