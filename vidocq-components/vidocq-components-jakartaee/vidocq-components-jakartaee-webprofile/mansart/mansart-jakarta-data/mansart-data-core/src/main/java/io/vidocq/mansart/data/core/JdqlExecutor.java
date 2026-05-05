@@ -115,6 +115,11 @@ final class JdqlExecutor {
                 if (rt == java.util.Optional.class) yield col.isEmpty()
                         ? java.util.Optional.empty()
                         : java.util.Optional.ofNullable(col.get(0));
+                if (rt.isArray()) {
+                    Object arr = java.lang.reflect.Array.newInstance(rt.getComponentType(), col.size());
+                    for (int i = 0; i < col.size(); i++) java.lang.reflect.Array.set(arr, i, col.get(i));
+                    yield arr;
+                }
                 if (col.isEmpty()) {
                     throw new jakarta.data.exceptions.EmptyResultException(
                             "Projection of " + stmt.scalarAttr + " returned no result");
@@ -361,11 +366,13 @@ final class JdqlExecutor {
     }
 
     private static Class<?> projectionElement(Method m) {
+        Class<?> rt = m.getReturnType();
+        if (rt.isArray()) return rt.getComponentType();
         java.lang.reflect.Type genericRt = m.getGenericReturnType();
         if (genericRt instanceof java.lang.reflect.ParameterizedType pt) {
             java.lang.reflect.Type[] args = pt.getActualTypeArguments();
             if (args.length == 1 && args[0] instanceof Class<?> c) return c;
         }
-        return Object.class;
+        return rt;
     }
 }

@@ -127,6 +127,17 @@ public final class H2Dialect implements Dialect {
             ps.setString(idx, e.name());
             return;
         }
+        // Character columns are stored as VARCHAR(255); coerce both Character values and
+        // single-char String literals to setString so the JDBC driver doesn't have to bridge
+        // CHARACTER VARYING ↔ JAVA_OBJECT (which H2 refuses).
+        if (javaType == Character.class) {
+            ps.setString(idx, value.toString());
+            return;
+        }
+        if (value instanceof Character ch) {
+            ps.setString(idx, String.valueOf(ch));
+            return;
+        }
         ps.setObject(idx, value, sqlType(javaType));
     }
 

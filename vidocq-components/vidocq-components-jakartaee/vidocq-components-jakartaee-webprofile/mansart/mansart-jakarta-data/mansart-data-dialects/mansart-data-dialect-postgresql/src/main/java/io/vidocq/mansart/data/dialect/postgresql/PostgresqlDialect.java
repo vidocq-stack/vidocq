@@ -132,6 +132,14 @@ public final class PostgresqlDialect implements Dialect {
             ps.setString(idx, e.name());
             return;
         }
+        if (javaType == Character.class) {
+            ps.setString(idx, value.toString());
+            return;
+        }
+        if (value instanceof Character ch) {
+            ps.setString(idx, String.valueOf(ch));
+            return;
+        }
         ps.setObject(idx, value, sqlType(javaType));
     }
 
