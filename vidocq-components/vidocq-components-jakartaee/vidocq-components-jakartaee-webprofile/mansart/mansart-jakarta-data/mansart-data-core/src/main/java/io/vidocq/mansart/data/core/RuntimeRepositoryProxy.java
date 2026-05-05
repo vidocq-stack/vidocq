@@ -48,6 +48,11 @@ public final class RuntimeRepositoryProxy {
                     + " does not extend BasicRepository<E, K> / CrudRepository<E, K> — runtime path needs the entity type.");
         }
         EntityModel<?> model = RuntimeEntityModelBuilder.build(ek.entity, ek.key);
+        // M7-7 — runtime-discovered repos own their schema bootstrap. The compile-time path
+        // leaves DDL to user code; this is a runtime-only convenience so deployments lacking
+        // APT (e.g. the TCK jar) still get a working table.
+        try { runtime.ensureTable(model); }
+        catch (RuntimeException ignored) { /* table may already exist or be user-managed */ }
         return create(repoInterface, model, runtime);
     }
 

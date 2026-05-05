@@ -46,6 +46,55 @@ public final class RepositoryRuntime {
 
     public Dialect dialect() { return dialect; }
 
+    /* -------- M7-7 schema bootstrap ---------- */
+
+    /**
+     * Emits {@code CREATE TABLE IF NOT EXISTS} for the given entity model, mapping each Mansart
+     * attribute to a portable JDBC type accepted by H2 and PostgreSQL. Used by the runtime
+     * fallback path (M7) so deployments that skip APT (e.g. the official Jakarta Data TCK jar)
+     * still get a usable schema. The compile-time path is unchanged — user code keeps owning
+     * its schema there.
+     *
+     * <p>Idempotent. Failures are wrapped as {@link MansartDataException}.
+     */
+    public <E> void ensureTable(EntityModel<E> model) {
+        StringBuilder sb = new StringBuilder("CREATE TABLE IF NOT EXISTS ")
+                .append(qualifiedTable(model)).append(" (");
+        boolean first = true;
+        for (Attribute<E, ?> a : model.attributes()) {
+            if (!first) sb.append(", ");
+            sb.append('"').append(a.columnName()).append("\" ")
+              .append(sqlDdlType(a.javaType()));
+            if (a == model.id()) sb.append(" PRIMARY KEY");
+            first = false;
+        }
+        sb.append(')');
+        String sql = sb.toString();
+        ConnectionScope.withConnection(dataSource, c -> {
+            try (Statement s = c.createStatement()) { s.execute(sql); return null; }
+        });
+    }
+
+    private static String sqlDdlType(Class<?> t) {
+        if (t == Long.class || t == long.class)         return "BIGINT";
+        if (t == Integer.class || t == int.class)       return "INTEGER";
+        if (t == Short.class || t == short.class)       return "SMALLINT";
+        if (t == Byte.class || t == byte.class)         return "SMALLINT";
+        if (t == Boolean.class || t == boolean.class)   return "BOOLEAN";
+        if (t == Double.class || t == double.class)     return "DOUBLE PRECISION";
+        if (t == Float.class || t == float.class)       return "REAL";
+        if (t == java.math.BigDecimal.class
+                || t == java.math.BigInteger.class)     return "NUMERIC(38, 10)";
+        if (t == java.time.LocalDate.class)             return "DATE";
+        if (t == java.time.LocalTime.class)             return "TIME";
+        if (t == java.time.LocalDateTime.class)         return "TIMESTAMP";
+        if (t == java.time.OffsetDateTime.class
+                || t == java.time.Instant.class)        return "TIMESTAMP WITH TIME ZONE";
+        if (t == java.util.UUID.class)                  return "UUID";
+        if (t.isEnum())                                 return "VARCHAR(255)";
+        return "VARCHAR(255)";
+    }
+
     /* -------- CRUD ---------- */
 
     @SuppressWarnings("unchecked")

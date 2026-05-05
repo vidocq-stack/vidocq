@@ -90,9 +90,11 @@ Statuts : `OPEN` → `INVESTIGATING` → `FIXED` (commit hash) → `CLOSED`.
   - **Score TCK** : 71 / 73 NPE encore, mais la nature des erreurs a basculé
     (6 / 6 repos TCK construisent maintenant — y compris `Boxes` qui utilise
     `String boxIdentifier` comme id implicite). Les nouveaux blockers sont :
-      - **M7-7** — Auto-création de schéma pour les entités TCK. La TCK suppose
-        que le provider crée les tables au déploiement (376 erreurs
-        `getTableOrViewNotFoundDbException`).
+      - **M7-7** *(LIVRÉ 2026-05-05)* — `RepositoryRuntime.ensureTable(EntityModel)`
+        émet `CREATE TABLE IF NOT EXISTS` portable (H2 + PostgreSQL) avec mapping
+        Java → JDBC type. Appelé par `RuntimeRepositoryProxy.create` pour les repos
+        runtime-only. Réduit `TableOrViewNotFound` de 376 → 80, débloque 4 tests
+        TCK (73 → 4 PASS / 18 FAIL / 51 ERR).
       - **M7-8** — Méthodes dérivées manquantes : `countAll`, `find`,
         `IgnoreCase`, `Contains`, `True`/`False`, méthodes `default`
         (≈ 20 `UnsupportedOperationException`).
