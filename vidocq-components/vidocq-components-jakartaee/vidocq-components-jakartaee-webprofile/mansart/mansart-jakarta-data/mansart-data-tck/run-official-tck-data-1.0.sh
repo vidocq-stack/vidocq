@@ -36,6 +36,22 @@ case "${1:-}" in
         shift || true
         mvn -ntp -Ptck-run,tck-pg test -DfailIfNoTests=false "$@"
         ;;
+    --sig|--signature)
+        # M7-26 — Add the SignatureTests subset on top of the entity TCK (H2 by default).
+        # Cumulative with --pg via direct mvn invocation: mvn -Ptck-run,tck-pg,tck-sig test
+        shift || true
+        mvn -ntp -Ptck-run,tck-sig test -DfailIfNoTests=false "$@"
+        ;;
+    --full|--all-suites)
+        # M7-26 — Entity + Signature TCK. Choose H2 (default) or PG via env var:
+        # PG=1 ./run-official-tck-data-1.0.sh --full
+        shift || true
+        if [ "${PG:-0}" = "1" ]; then
+            mvn -ntp -Ptck-run,tck-pg,tck-sig test -DfailIfNoTests=false "$@"
+        else
+            mvn -ntp -Ptck-run,tck-sig test -DfailIfNoTests=false "$@"
+        fi
+        ;;
     --all|all|"")
         # Default: run the official Jakarta Data 1.0 TCK subset (EntityTests) on H2 in-memory.
         mvn -ntp -Ptck-run test -DfailIfNoTests=false

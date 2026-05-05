@@ -319,9 +319,17 @@ Sous-jalons livrés :
 - **79/79 unit tests** ✅
 - **6/6 smoke tests** Arquillian (incl. `RuntimeRepoArquillianTest`) ✅
 
-### Reste à faire (post-M7 / post-M6.5)
+### M7-26 — TCK SignatureTests ✅ DONE (2026-05-05)
 
-- [ ] **TCK SignatureTests** — actuellement filtrés via `<includes>**/standalone/entity/EntityTests.class</include>` dans `tck-suite-official.xml`.
+- [x] Profile Maven `tck-sig` (cumulable avec `tck-run` et `tck-pg`).
+- [x] `jimage.dir` redirigé vers `target/jimage-cache` (writable).
+- [x] `argLine` ajoute `--add-exports java.base/jdk.internal.vm.annotation=ALL-UNNAMED --add-opens java.base/jdk.internal.vm.annotation=ALL-UNNAMED` (sigtest fait `setAccessible` sur `@Stable`, refusé Java 25 par défaut).
+- [x] System property `java.specification.version=21` (TCK 1.0.1 ne ship que `_17` et `_21` ; sur Java 25 le lookup `jakarta.data.sig_25` est `null` → NPE). Jakarta Data 1.0 figé sous Java 21, comparaison reste correcte.
+- [x] Script `run-official-tck-data-1.0.sh --sig` et `--full` (cumul EntityTests + SignatureTests, switch `PG=1` pour PostgreSQL).
+
+**Résultat** : **74/74 PASS** (73 EntityTests + 1 SignatureTests) sur H2 ✅ ET sur PostgreSQL ✅.
+
+### Reste à faire (post-M7-26)
 - [ ] **TCK PersistenceTests / NoSQLTests** — autres sub-suites (NoSQL hors scope v1 ; PersistenceTests dépend de `mansart-persistence`).
 - [ ] **JDQL feature gaps** : subqueries, joins explicites, agrégations multi-attributs.
 - [ ] **`IgnoreCase` via SQL `LOWER()`** au lieu du value-lowercasing actuel (fragile sur les datasets non-ASCII).

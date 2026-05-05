@@ -255,7 +255,11 @@
                                 <include>**/standalone/entity/EntityTests.class</include>
                             </includes>
                             <systemPropertyVariables>
-                                <jimage.dir>${java.home}/lib/modules</jimage.dir>
+                                <!-- M7-26: jimage.dir must be a WRITABLE directory the
+                                     signature runner can extract module classes into.
+                                     Placeholder when SignatureTests is not in `<includes>`;
+                                     the `tck-sig` profile overrides this to the actual cache. -->
+                                <jimage.dir>${project.build.directory}/jimage-cache</jimage.dir>
                             </systemPropertyVariables>
                         </configuration>
                     </plugin>
@@ -281,6 +285,55 @@
                             <systemPropertyVariables>
                                 <mansart.tck.dialect>pg</mansart.tck.dialect>
                             </systemPropertyVariables>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <!--
+          M7-26 — Activate the official Jakarta Data 1.0 SignatureTests subset.
+          Cumulative with `tck-run` (use `mvn -Ptck-run,tck-sig test`).
+
+          The signature TCK runner uses the legacy CTS sigtest tool (Ant-based), which
+          cross-checks the binary signatures of all jakarta.data.* packages on the deployment
+          classpath against the canonical signature file `jakarta.data.sig_21` (or `_17`)
+          shipped in the TCK jar. It needs:
+            - `jimage.dir` — a writable directory where it can extract Java SE module classes.
+            - All of jakarta.data + sub-packages reachable on the test classpath.
+
+          The signature file ships only `_17` and `_21`. On Java 25 the runner picks `_21`
+          (closest available; jakarta.data 1.0 didn't add new API after Java 21).
+        -->
+        <profile>
+            <id>tck-sig</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <includes combine.children="append">
+                                <include>**/standalone/signature/SignatureTests.class</include>
+                            </includes>
+                            <systemPropertyVariables>
+                                <jimage.dir>${project.build.directory}/jimage-cache</jimage.dir>
+                                <!-- The runner builds the signature resource name from
+                                     `java.specification.version`. The TCK 1.0.1 jar only
+                                     ships `jakarta.data.sig_17` and `jakarta.data.sig_21` —
+                                     Jakarta Data 1.0 was finalized under Java 21. On Java 25
+                                     the lookup `jakarta.data.sig_25` would be null → NPE in
+                                     writeStreamToSigFile. We force the version to 21; jakarta.data
+                                     1.0 added no new API after that, so the signature comparison
+                                     is still correct. -->
+                                <java.specification.version>21</java.specification.version>
+                            </systemPropertyVariables>
+                            <!-- The sigtest-maven-plugin (CTS heritage) reads JDK-internal
+                                 annotations (e.g. jdk.internal.vm.annotation.Stable) via
+                                 setAccessible(true) on JDK 17+. Java 25 strongly enforces module
+                                 boundaries and refuses without these flags. The error message
+                                 emitted by the runner names the exact required exports/opens. -->
+                            <argLine>--add-exports java.base/jdk.internal.vm.annotation=ALL-UNNAMED --add-opens java.base/jdk.internal.vm.annotation=ALL-UNNAMED</argLine>
                         </configuration>
                     </plugin>
                 </plugins>
