@@ -114,6 +114,20 @@ Statuts : `OPEN` → `INVESTIGATING` → `FIXED` (commit hash) → `CLOSED`.
         pas convertir VARCHAR vers une classe enum via `getObject(idx, enumClass)`.
         Réduit `JdbcSQLFeatureNotSupportedException` (30 → 0). **Score TCK** :
         73 → 21 PASS / 14 FAIL / 38 ERR.
+      - **M7-25** *(LIVRÉ 2026-05-05)* — Le runtime path n'utilise plus
+        `java.lang.reflect.Proxy` mais un `RuntimeRepositoryClassGenerator`
+        qui émet une classe hidden via Class-File API (JEP 484). Chaque
+        méthode abstraite devient un stub minimal qui pack ses args en
+        `Object[]`, appelle `MansartCallback.dispatch(int, Object[])` et
+        unbox le résultat. La classe est définie via
+        `MethodHandles.Lookup.defineHiddenClass`, sans entry classloader
+        global. Méthodes `default` non émises (le JVM les dispatche via
+        l'interface). Conforme à la philosophie Vidocq « pas de proxy
+        dynamique, AOT-friendly » (compatible GraalVM/Leyden). `Proxy`
+        reste comme filet de sécurité si la génération échoue (ne devrait
+        jamais arriver pour les shapes Jakarta Data 1.0).
+        **Score TCK** : 73 / 73 inchangé, mais la voie d'exécution est
+        maintenant 100% bytecode généré.
       - **M7-24** *(LIVRÉ 2026-05-05)* — JDQL arithmétique : `JdqlAst` ajoute
         un type `Expr` (sealed: `ExprAttr` / `ExprArg` / `ExprBin`) pour le RHS
         des SET assignments. Lexer reconnaît `+ - * /`. Parser `parseValueExpr`

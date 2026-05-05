@@ -66,6 +66,18 @@ public final class RuntimeRepositoryProxy {
                                 Map<Class<?>, EntityModel<?>> models, RepositoryRuntime runtime) {
         Map<Method, EntityModel<?>> methodModel = mapMethodToModel(repoInterface, primary, models);
         Map<Method, Dispatcher> dispatchers = buildDispatchersMulti(repoInterface, methodModel, primary);
+
+        // M7-25 — try a generated hidden class first (Class-File API). Falls back to
+        // java.lang.reflect.Proxy if generation throws — keeps the runtime path resilient
+        // while we ship and validate the bytecode emitter.
+        try {
+            return (R) createGenerated(repoInterface, methodModel, dispatchers, primary, runtime);
+        } catch (Throwable generationFailure) {
+            // Swallow and fall through to the Proxy path. The generator is the canonical
+            // runtime impl; java.lang.reflect.Proxy stays as a safety net for shapes not yet
+            // supported by RuntimeRepositoryClassGenerator.
+        }
+
         InvocationHandler handler = (proxy, method, args) -> {
             if (method.isDefault()) {
                 return InvocationHandler.invokeDefault(proxy, method, args);
@@ -79,6 +91,31 @@ public final class RuntimeRepositoryProxy {
         };
         return (R) Proxy.newProxyInstance(repoInterface.getClassLoader(),
                 new Class<?>[]{ repoInterface }, handler);
+    }
+
+    private static Object createGenerated(Class<?> repoInterface,
+                                          Map<Method, EntityModel<?>> methodModel,
+                                          Map<Method, Dispatcher> dispatchers,
+                                          EntityModel<?> primary,
+                                          RepositoryRuntime runtime) throws ReflectiveOperationException {
+        var gen = RuntimeRepositoryClassGenerator.generate(repoInterface);
+        List<Method> ordered = gen.methodsByIndex();
+        MansartCallback.Dispatcher[] dispArr = new MansartCallback.Dispatcher[ordered.size()];
+        EntityModel<?>[] modelArr = new EntityModel<?>[ordered.size()];
+        for (int i = 0; i < ordered.size(); i++) {
+            Method m = ordered.get(i);
+            Dispatcher inner = dispatchers.get(m);
+            if (inner == null) {
+                throw new MansartDataException("Generator referenced method without dispatcher: " + m);
+            }
+            // Adapt the local Dispatcher functional interface to MansartCallback.Dispatcher
+            // (same signature; just two distinct type names so they don't collide with the
+            // existing compile-time *Impl path).
+            dispArr[i] = (rt, em, args) -> inner.invoke(rt, em, args);
+            modelArr[i] = methodModel.getOrDefault(m, primary);
+        }
+        MansartCallback callback = new MansartCallback(dispArr, modelArr, runtime);
+        return gen.implClass().getConstructor(MansartCallback.class).newInstance(callback);
     }
 
     /**
