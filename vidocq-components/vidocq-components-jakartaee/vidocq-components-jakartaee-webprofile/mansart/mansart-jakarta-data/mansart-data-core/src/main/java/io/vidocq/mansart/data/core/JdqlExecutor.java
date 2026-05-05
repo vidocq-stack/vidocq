@@ -29,6 +29,9 @@ final class JdqlExecutor {
                           Map<String, Attribute<?, ?>> attrIndex,
                           RepositoryRuntime runtime, Object[] args, Map<String, Integer> nameToIdx) {
         OrderBy orderBy = buildOrderBy(stmt.orderBy, attrIndex);
+        // M7-21 — fold any Sort/Order control args into the OrderBy. The query's own ORDER BY
+        // (from JDQL) takes precedence (declared first); runtime Sort args extend it.
+        orderBy = appendRuntimeSorts(orderBy, args, attrIndex);
 
         return switch (stmt.kind) {
             case SELECT, COUNT -> {
@@ -334,6 +337,32 @@ final class JdqlExecutor {
             if (a instanceof jakarta.data.page.PageRequest pr) return pr;
         }
         return null;
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static OrderBy appendRuntimeSorts(OrderBy base, Object[] args,
+                                              Map<String, Attribute<?, ?>> attrIndex) {
+        if (args == null) return base;
+        java.util.List<OrderBy.Order> out = new ArrayList<>(base.orders());
+        for (Object a : args) {
+            if (a instanceof jakarta.data.Sort<?> s) {
+                addSort(s, attrIndex, out);
+            } else if (a instanceof jakarta.data.Sort[] arr) {
+                for (jakarta.data.Sort<?> s : arr) addSort(s, attrIndex, out);
+            } else if (a instanceof jakarta.data.Order<?> o) {
+                for (jakarta.data.Sort<?> s : o.sorts()) addSort(s, attrIndex, out);
+            }
+        }
+        return out.isEmpty() ? OrderBy.NONE : new OrderBy(out);
+    }
+
+    private static void addSort(jakarta.data.Sort<?> s, Map<String, Attribute<?, ?>> attrIndex,
+                                java.util.List<OrderBy.Order> out) {
+        Attribute<?, ?> a = attrIndex.get(s.property());
+        if (a == null) {
+            throw new MansartDataException("Sort references unknown attribute: " + s.property());
+        }
+        out.add(s.isAscending() ? OrderBy.Order.asc(a) : OrderBy.Order.desc(a));
     }
 
     private static jakarta.data.Limit findLimit(Object[] args) {

@@ -112,6 +112,15 @@ Statuts : `OPEN` → `INVESTIGATING` → `FIXED` (commit hash) → `CLOSED`.
         pas convertir VARCHAR vers une classe enum via `getObject(idx, enumClass)`.
         Réduit `JdbcSQLFeatureNotSupportedException` (30 → 0). **Score TCK** :
         73 → 21 PASS / 14 FAIL / 38 ERR.
+      - **M7-21** *(LIVRÉ 2026-05-05)* — `JdqlExecutor.execute` étend l'OrderBy
+        de la clause `ORDER BY` JDQL avec les paramètres `Sort<E>` / `Sort[]` /
+        `Order<E>` runtime. Sans ça, une `@Query` sans `ORDER BY` ignorait les
+        Sort args (testQueryWithOr passait `Sort.desc("numBitsRequired"),
+        Sort.asc("id")` → tri DESC perdu, résultat `[4, 6, 8, 9]` au lieu de
+        `[16, 18, 8, 9]`). **Score TCK** : 73 → **71 PASS / 0 FAIL / 2 ERR**.
+        Les 2 erreurs restantes (`testUpdateQueryWith[out]WhereClause`) viennent
+        de `MultipleEntityRepo` non inclus dans le deployment archive TCK
+        (`EntityTests.createDeployment()` n'ajoute que Box/Boxes/EntityTests).
       - **M7-20** *(LIVRÉ 2026-05-05)* — `findAnnotationDispatcher` ignore les
         méthodes déclarées sur `jakarta.data.*` (BasicRepository.findById carry
         `@Find` dans le spec mais sa sémantique appartient à
