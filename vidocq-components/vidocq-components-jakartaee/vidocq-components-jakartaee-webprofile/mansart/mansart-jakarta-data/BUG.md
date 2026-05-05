@@ -112,6 +112,14 @@ Statuts : `OPEN` → `INVESTIGATING` → `FIXED` (commit hash) → `CLOSED`.
         pas convertir VARCHAR vers une classe enum via `getObject(idx, enumClass)`.
         Réduit `JdbcSQLFeatureNotSupportedException` (30 → 0). **Score TCK** :
         73 → 21 PASS / 14 FAIL / 38 ERR.
+      - **M7-14** *(LIVRÉ 2026-05-05)* — Exceptions Jakarta Data correctes :
+        `EmptyResultException` (au lieu de `MansartDataException("No result")`)
+        sur les FIND single-entity sans résultat, `NonUniqueResultException`
+        (au lieu de `MansartDataException("Query returned more than one…")`)
+        sur les `queryOne` multi-result. `queryCursored` accepte un `OrderBy`
+        vide en fallback `id ASC`. Bug de switch arrow-form dans
+        `JdqlExecutor.build` corrigé (la branche `Not` ne retournait pas son
+        expression). **Score TCK** : 73 → 56 PASS / 8 FAIL / 9 ERR.
       - **M7-13** *(LIVRÉ 2026-05-05)* — Routes `Page<E>` / `CursoredPage<E>` dans
         le dispatcher `@Query` (JdqlExecutor) ET `@Find` (findAnnotationDispatcher) :
         détecte un `PageRequest` dans les args, route vers `queryPage` / `queryCursored`.

@@ -485,7 +485,10 @@ public final class RuntimeRepositoryProxy {
                         yield arr;
                     }
                     java.util.Optional<?> oneOpt = rt.queryOne((EntityModel) em, w, xs);
-                    if (oneOpt.isEmpty()) throw new MansartDataException("No result");
+                    if (oneOpt.isEmpty()) {
+                        throw new jakarta.data.exceptions.EmptyResultException(
+                                "No result for " + em.entityClass().getSimpleName());
+                    }
                     yield oneOpt.get();
                 }
                 case FIND_ONE -> rt.queryOne((EntityModel) em, w, xs);

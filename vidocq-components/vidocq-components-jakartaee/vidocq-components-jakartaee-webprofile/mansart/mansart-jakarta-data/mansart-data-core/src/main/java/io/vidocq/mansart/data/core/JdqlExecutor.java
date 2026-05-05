@@ -76,7 +76,10 @@ final class JdqlExecutor {
                     yield arr;
                 }
                 java.util.Optional<?> one = runtime.queryOne((EntityModel) model, bw.where, bw.args);
-                if (one.isEmpty()) throw new MansartDataException("@Query returned no result");
+                if (one.isEmpty()) {
+                    throw new jakarta.data.exceptions.EmptyResultException(
+                            "@Query returned no result for " + model.entityClass().getSimpleName());
+                }
                 yield one.get();
             }
             case AGGREGATE -> {
@@ -217,9 +220,10 @@ final class JdqlExecutor {
                 for (JdqlAst.Pred c : or.children()) cs.add(build(c, attrIndex, callArgs, nameToIdx, argsOut, alwaysFalse));
                 return new Where.Or(cs);
             }
-            case JdqlAst.Not n -> new Where.Not(build(n.child(), attrIndex, callArgs, nameToIdx, argsOut, alwaysFalse));
+            case JdqlAst.Not n -> {
+                return new Where.Not(build(n.child(), attrIndex, callArgs, nameToIdx, argsOut, alwaysFalse));
+            }
         }
-        throw new IllegalStateException();
     }
 
     private static Attribute<?, ?> lookup(Map<String, Attribute<?, ?>> idx, String name) {

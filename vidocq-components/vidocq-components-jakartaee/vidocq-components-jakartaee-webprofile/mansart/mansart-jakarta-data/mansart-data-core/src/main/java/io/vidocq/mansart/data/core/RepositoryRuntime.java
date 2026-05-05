@@ -221,7 +221,8 @@ public final class RepositoryRuntime {
                     if (!rs.next()) return Optional.<E>empty();
                     E first = RowMapper.map(model, dialect, rs);
                     if (rs.next()) {
-                        throw new MansartDataException("Query returned more than one result for "
+                        throw new jakarta.data.exceptions.NonUniqueResultException(
+                                "Query returned more than one result for "
                                 + model.entityClass().getSimpleName());
                     }
                     return Optional.of(first);
@@ -343,7 +344,9 @@ public final class RepositoryRuntime {
     public <E> jakarta.data.page.CursoredPage<E> queryCursored(
             EntityModel<E> model, Where userWhere, OrderBy orderBy, PageRequest pr, Object... args) {
         if (orderBy.isEmpty()) {
-            throw new MansartDataException("Cursor pagination requires a non-empty OrderBy");
+            // Default cursor key = id ascending so callers don't have to thread an OrderBy
+            // through every Page-returning method (Jakarta Data permits this).
+            orderBy = new OrderBy(java.util.List.of(OrderBy.Order.asc(model.id())));
         }
         int n = orderBy.orders().size();
 
