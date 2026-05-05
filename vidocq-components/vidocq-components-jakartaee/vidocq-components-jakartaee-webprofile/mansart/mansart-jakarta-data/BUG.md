@@ -107,7 +107,16 @@ Statuts : `OPEN` → `INVESTIGATING` → `FIXED` (commit hash) → `CLOSED`.
         Légère régression de tests passants (4 → 2) — les nouveaux comparators
         et IgnoreCase mid-name peuvent produire des prédicats sémantiquement
         incorrects pour certains cas (ex. IgnoreCase sur colonne non-String).
-      - **M7-10** *(découvert 2026-05-05, à fixer)* — Le harness Arquillian Junit5
+      - **M7-10** *(LIVRÉ 2026-05-05)* — `VaubanTestEnricher.invokeBeforeEachMethods`
+        appelle manuellement les méthodes annotées `@org.junit.jupiter.api.BeforeEach`
+        après l'enrichissement (parent → enfant). Bonus : `lifecycleDispatcher`
+        détecte les méthodes `@Save`/`@Insert`/`@Update`/`@Delete` à signature
+        batch (`List<E>`/`Iterable<E>`/`E[]`) et itère au lieu de tenter de
+        sauver le carrier comme une seule entité (sinon `ReadOnlyRepository.saveAll`
+        envoie une `ArrayList` à `readId`). **Score TCK : 73 → 14 PASS / 6 FAIL /
+        53 ERR** (le populator s'exécute, les tables sont peuplées, plus de
+        308 `TableOrViewNotFound` côté DB).
+      - **M7-10 historique** *(découvert 2026-05-05, à fixer)* — Le harness Arquillian Junit5
         en mode standalone (`StandaloneExtension extends ArquillianExtension`)
         ne déclenche **PAS** les méthodes `@BeforeEach` du test. Conséquence :
         `EntityTests.setup()` qui appelle `NaturalNumbersPopulator.populate(numbers)`

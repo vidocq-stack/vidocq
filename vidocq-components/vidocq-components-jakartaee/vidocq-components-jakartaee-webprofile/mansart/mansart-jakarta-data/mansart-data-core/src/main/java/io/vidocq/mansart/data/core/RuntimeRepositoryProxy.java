@@ -235,28 +235,68 @@ public final class RuntimeRepositoryProxy {
         String declFqn = m.getDeclaringClass().getName();
         if (declFqn.startsWith("jakarta.data.")) return null;
         boolean isVoid = m.getReturnType() == void.class;
+        // M7-10 — lifecycle methods can be batch-shaped: List<E> / Iterable<E> / E[] / varargs.
+        // Detect this from the parameter type so the dispatcher iterates and calls the
+        // single-entity runtime method per element instead of treating the carrier as one entity.
+        boolean batch = isBatchShape(m.getParameterTypes()[0]);
         if (hasJakartaAnnotation(m, "jakarta.data.repository.Insert")) {
             return (rt, em, args) -> {
+                if (batch) return batchApply(args[0], e -> rt.insertStrict((EntityModel) em, e), isVoid, m.getReturnType());
                 Object out = rt.insertStrict((EntityModel) em, args[0]);
                 return isVoid ? null : out;
             };
         }
         if (hasJakartaAnnotation(m, "jakarta.data.repository.Update")) {
             return (rt, em, args) -> {
+                if (batch) return batchApply(args[0], e -> rt.updateStrict((EntityModel) em, e), isVoid, m.getReturnType());
                 Object out = rt.updateStrict((EntityModel) em, args[0]);
                 return isVoid ? null : out;
             };
         }
         if (hasJakartaAnnotation(m, "jakarta.data.repository.Save")) {
             return (rt, em, args) -> {
+                if (batch) return batchApply(args[0], e -> rt.save((EntityModel) em, e), isVoid, m.getReturnType());
                 Object out = rt.save((EntityModel) em, args[0]);
                 return isVoid ? null : out;
             };
         }
         if (hasJakartaAnnotation(m, "jakarta.data.repository.Delete")) {
-            return (rt, em, args) -> { rt.deleteStrict((EntityModel) em, args[0]); return null; };
+            return (rt, em, args) -> {
+                if (batch) {
+                    return batchApply(args[0], e -> { rt.deleteStrict((EntityModel) em, e); return null; }, true, m.getReturnType());
+                }
+                rt.deleteStrict((EntityModel) em, args[0]);
+                return null;
+            };
         }
         return null;
+    }
+
+    private static boolean isBatchShape(Class<?> paramType) {
+        if (paramType.isArray()) return true;
+        return Iterable.class.isAssignableFrom(paramType);
+    }
+
+    private static Object batchApply(Object batch,
+                                     java.util.function.Function<Object, Object> op,
+                                     boolean isVoid, Class<?> returnType) {
+        List<Object> out = new ArrayList<>();
+        if (batch == null) return isVoid ? null : out;
+        if (batch instanceof Iterable<?> it) {
+            for (Object e : it) out.add(op.apply(e));
+        } else if (batch.getClass().isArray()) {
+            int n = java.lang.reflect.Array.getLength(batch);
+            for (int i = 0; i < n; i++) out.add(op.apply(java.lang.reflect.Array.get(batch, i)));
+        } else {
+            out.add(op.apply(batch));
+        }
+        if (isVoid) return null;
+        if (returnType.isArray()) {
+            Object arr = java.lang.reflect.Array.newInstance(returnType.getComponentType(), out.size());
+            for (int i = 0; i < out.size(); i++) java.lang.reflect.Array.set(arr, i, out.get(i));
+            return arr;
+        }
+        return out;
     }
 
     private static boolean hasJakartaAnnotation(Method m, String fqn) {

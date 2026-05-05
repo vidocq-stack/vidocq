@@ -44,6 +44,53 @@ public class VaubanTestEnricher implements TestEnricher {
             }
             clazz = clazz.getSuperclass();
         }
+
+        // M7-10 — Arquillian Junit5 in standalone mode (StandaloneExtension extending
+        // ArquillianExtension) bypasses JUnit's @BeforeEach lifecycle: the test method gets
+        // invoked via Arquillian's TestMethodExecutor without JUnit re-running the per-method
+        // setup callbacks. The official Jakarta Data TCK relies on a setup() @BeforeEach to
+        // call NaturalNumbersPopulator/AsciiCharactersPopulator, so without this hook every
+        // read-only test sees an empty database. We invoke @BeforeEach methods from the
+        // class hierarchy (parent first, child last — JUnit semantics) right after enrichment.
+        // Has no effect on TestNG tests because enrich() runs before TestNG's @BeforeMethod
+        // there too, but TestNG dispatches its own setup methods natively.
+        invokeBeforeEachMethods(testCase);
+    }
+
+    /**
+     * Invokes every {@code @org.junit.jupiter.api.BeforeEach}-annotated method on {@code testCase},
+     * walking the class hierarchy from the most-derived superclass down to the test class, so
+     * parent setup runs before child setup (JUnit 5 semantics).
+     */
+    private static void invokeBeforeEachMethods(Object testCase) {
+        java.util.List<Class<?>> chain = new java.util.ArrayList<>();
+        for (Class<?> c = testCase.getClass(); c != null && c != Object.class; c = c.getSuperclass()) {
+            chain.add(c);
+        }
+        java.util.Collections.reverse(chain);
+        for (Class<?> c : chain) {
+            for (Method m : c.getDeclaredMethods()) {
+                if (m.getParameterCount() != 0) continue;
+                boolean isBeforeEach = false;
+                for (var ann : m.getDeclaredAnnotations()) {
+                    if ("org.junit.jupiter.api.BeforeEach".equals(ann.annotationType().getName())) {
+                        isBeforeEach = true; break;
+                    }
+                }
+                if (!isBeforeEach) continue;
+                try {
+                    m.setAccessible(true);
+                    m.invoke(testCase);
+                } catch (java.lang.reflect.InvocationTargetException ite) {
+                    Throwable cause = ite.getTargetException();
+                    if (cause instanceof RuntimeException re) throw re;
+                    throw new RuntimeException("@BeforeEach " + c.getSimpleName() + "."
+                            + m.getName() + " failed", cause);
+                } catch (IllegalAccessException iae) {
+                    throw new RuntimeException("Cannot invoke @BeforeEach " + m.getName(), iae);
+                }
+            }
+        }
     }
 
     private Object resolveField(Field field, io.vidocq.vauban.core.container.VaubanContainer container) {
