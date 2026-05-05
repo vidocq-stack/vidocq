@@ -42,8 +42,14 @@ public final class JdqlAst {
     public static final class ArgRef {
         public String named;
         public int positional;
+        public Object literal;          // M7-5c — boolean / number / String / enum FQN literal
+        public boolean isLiteral;
         public ArgRef(String n) { named = n; }
         public ArgRef(int p) { positional = p; }
+        private ArgRef() {}
+        public static ArgRef ofLiteral(Object value) {
+            ArgRef r = new ArgRef(); r.literal = value; r.isLiteral = true; return r;
+        }
         public boolean isNamed() { return named != null; }
     }
     public enum Op { EQ, NE, LT, LTE, GT, GTE, LIKE }
@@ -60,7 +66,8 @@ public final class JdqlAst {
 
     /* ---------- Lexer ---------- */
 
-    private enum Tk { IDENT, KW, EQ, NE, LT, LTE, GT, GTE, LPAREN, RPAREN, COMMA, NAMED, POS, STAR, EOF }
+    private enum Tk { IDENT, KW, EQ, NE, LT, LTE, GT, GTE, LPAREN, RPAREN, COMMA, NAMED, POS, STAR,
+                       NUM_LIT, STR_LIT, BOOL_LIT, EOF }
     private record Token(Tk kind, String text) {}
 
     private static final class Lexer {
@@ -109,12 +116,40 @@ public final class JdqlAst {
                     return new Token(Tk.POS, src.substring(s, pos));
                 }
                 default:
+                    if (Character.isDigit(c) || (c == '-' && pos + 1 < src.length() && Character.isDigit(src.charAt(pos + 1)))) {
+                        int s = pos;
+                        if (c == '-') pos++;
+                        while (pos < src.length() && (Character.isDigit(src.charAt(pos)) || src.charAt(pos) == '.')) pos++;
+                        return new Token(Tk.NUM_LIT, src.substring(s, pos));
+                    }
+                    if (c == '\'') {
+                        pos++;
+                        StringBuilder text = new StringBuilder();
+                        while (pos < src.length()) {
+                            char ch = src.charAt(pos);
+                            if (ch == '\'') {
+                                // SQL-style escape: '' inside a string literal stands for one '
+                                if (pos + 1 < src.length() && src.charAt(pos + 1) == '\'') {
+                                    text.append('\''); pos += 2; continue;
+                                }
+                                pos++;
+                                return new Token(Tk.STR_LIT, text.toString());
+                            }
+                            text.append(ch); pos++;
+                        }
+                        throw new ParseException("Unterminated string literal");
+                    }
                     if (Character.isLetter(c) || c == '_') {
                         int s = pos;
-                        while (pos < src.length() && (Character.isLetterOrDigit(src.charAt(pos)) || src.charAt(pos) == '_'))
+                        while (pos < src.length() && (Character.isLetterOrDigit(src.charAt(pos))
+                                || src.charAt(pos) == '_' || src.charAt(pos) == '.'))
                             pos++;
                         String w = src.substring(s, pos);
-                        return isKeyword(w) ? new Token(Tk.KW, w.toUpperCase()) : new Token(Tk.IDENT, w);
+                        if (w.equalsIgnoreCase("true") || w.equalsIgnoreCase("false")) {
+                            return new Token(Tk.BOOL_LIT, w.toLowerCase());
+                        }
+                        if (isKeyword(w) && w.indexOf('.') < 0) return new Token(Tk.KW, w.toUpperCase());
+                        return new Token(Tk.IDENT, w);
                     }
                     throw new ParseException("Unexpected '" + c + "' at " + pos);
             }
@@ -175,8 +210,10 @@ public final class JdqlAst {
             }
             if (peekKw("UPDATE")) {
                 lex.consume();
-                String t = expectIdent();
-                if (!t.equals(entityName)) throw new ParseException("UPDATE " + t + " ≠ " + entityName);
+                if (lex.peek().kind == Tk.IDENT) {
+                    String t = expectIdent();
+                    if (!t.equals(entityName)) throw new ParseException("UPDATE " + t + " ≠ " + entityName);
+                }
                 expectKw("SET");
                 s.kind = Stmt.Kind.UPDATE;
                 s.setAssignments.add(parseSetAssign());
@@ -187,17 +224,26 @@ public final class JdqlAst {
             }
             if (peekKw("DELETE")) {
                 lex.consume();
-                expectKw("FROM");
-                String t = expectIdent();
-                if (!t.equals(entityName)) throw new ParseException("DELETE FROM " + t + " ≠ " + entityName);
+                if (peekKw("FROM")) {
+                    lex.consume();
+                    if (lex.peek().kind == Tk.IDENT) {
+                        String t = expectIdent();
+                        if (!t.equals(entityName)) throw new ParseException("DELETE FROM " + t + " ≠ " + entityName);
+                    }
+                }
                 s.kind = Stmt.Kind.DELETE;
                 if (peekKw("WHERE")) { lex.consume(); s.where = parseExpr(); }
                 expectEof();
                 return s;
             }
-            expectKw("FROM");
-            String from = expectIdent();
-            if (!from.equals(entityName)) throw new ParseException("FROM " + from + " ≠ " + entityName);
+            // Jakarta Data 1.0 — FROM is optional. The implicit entity is the one bound to the
+            // repository.  If the query starts with WHERE / ORDER BY (or is just "WHERE …" after
+            // a SELECT prefix) the entity is inferred.
+            if (peekKw("FROM")) {
+                lex.consume();
+                String from = expectIdent();
+                if (!from.equals(entityName)) throw new ParseException("FROM " + from + " ≠ " + entityName);
+            }
             if (peekKw("WHERE")) { lex.consume(); s.where = parseExpr(); }
             if (peekKw("ORDER")) {
                 lex.consume(); expectKw("BY");
@@ -270,19 +316,37 @@ public final class JdqlAst {
                 expectKw("NULL");
                 return new IsNull(attr, negated);
             }
+            // M7-5d — infix NOT before BETWEEN/LIKE/IN: "attr NOT LIKE x", "attr NOT IN (...)".
+            boolean infixNot = false;
+            if (peekKw("NOT")) {
+                Token saved = lex.peek();
+                lex.consume();
+                if (peekKw("BETWEEN") || peekKw("LIKE") || peekKw("IN")) {
+                    infixNot = true;
+                } else {
+                    // Not followed by one of those — restore (parser doesn't have a real
+                    // backtrack so we wrap the rest as Not(...) further up). Emulate by
+                    // treating this as parse error since attr-then-NOT-then-anything-else
+                    // isn't a JDQL form we recognise.
+                    throw new ParseException("Unexpected NOT after '" + attr + "': " + saved.text);
+                }
+            }
             if (peekKw("BETWEEN")) {
                 lex.consume();
                 ArgRef lo = parseArg();
                 expectKw("AND");
                 ArgRef hi = parseArg();
-                return new Between(attr, lo, hi);
+                Pred p = new Between(attr, lo, hi);
+                return infixNot ? new Not(p) : p;
             }
             if (peekKw("LIKE")) {
                 lex.consume();
-                return new Cmp(attr, Op.LIKE, parseArg());
+                Pred p = new Cmp(attr, Op.LIKE, parseArg());
+                return infixNot ? new Not(p) : p;
             }
             if (peekKw("IN")) {
                 lex.consume();
+                Pred p;
                 if (lex.peek().kind == Tk.LPAREN) {
                     lex.consume();
                     List<ArgRef> elems = new ArrayList<>();
@@ -290,9 +354,11 @@ public final class JdqlAst {
                     while (lex.peek().kind == Tk.COMMA) { lex.consume(); elems.add(parseArg()); }
                     if (lex.peek().kind != Tk.RPAREN) throw new ParseException("Expected ')'");
                     lex.consume();
-                    return new In(attr, elems, false);
+                    p = new In(attr, elems, false);
+                } else {
+                    p = new In(attr, List.of(parseArg()), true);
                 }
-                return new In(attr, List.of(parseArg()), true);
+                return infixNot ? new Not(p) : p;
             }
             Op op = switch (lex.peek().kind) {
                 case EQ -> Op.EQ; case NE -> Op.NE;
@@ -307,10 +373,20 @@ public final class JdqlAst {
         ArgRef parseArg() {
             Token t = lex.consume();
             return switch (t.kind) {
-                case NAMED -> new ArgRef(t.text);
-                case POS   -> new ArgRef(Integer.parseInt(t.text));
-                default    -> throw new ParseException("Expected :name or ?N: " + t.text);
+                case NAMED    -> new ArgRef(t.text);
+                case POS      -> new ArgRef(Integer.parseInt(t.text));
+                case NUM_LIT  -> ArgRef.ofLiteral(parseNumber(t.text));
+                case STR_LIT  -> ArgRef.ofLiteral(t.text);
+                case BOOL_LIT -> ArgRef.ofLiteral(Boolean.parseBoolean(t.text));
+                case IDENT    -> ArgRef.ofLiteral(t.text);   // enum FQN like pkg.Enum.VAL
+                default       -> throw new ParseException("Expected literal, :name, or ?N: " + t.text);
             };
+        }
+
+        private static Object parseNumber(String s) {
+            if (s.contains(".")) return Double.parseDouble(s);
+            try { return Integer.parseInt(s); }
+            catch (NumberFormatException e) { return Long.parseLong(s); }
         }
 
         private boolean peekKw(String kw)    { Token t = lex.peek(); return t.kind == Tk.KW && t.text.equals(kw); }

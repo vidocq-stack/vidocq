@@ -40,8 +40,18 @@ public final class RuntimeEntityModelBuilder {
 
     private RuntimeEntityModelBuilder() {}
 
-    @SuppressWarnings({"unchecked", "rawtypes"})
     public static <E> EntityModel<E> build(Class<E> entityClass) {
+        return build(entityClass, null);
+    }
+
+    /**
+     * M7-5 — Jakarta Data 1.0 supports entities with no explicit {@code @Id} annotation: the
+     * field named {@code id} (or matching the K type from {@code BasicRepository<E, K>}) is the
+     * primary key by convention. If {@code idTypeHint} is non-null and no annotated id is found,
+     * a field named {@code id} (or the single field of that type) is used as the implicit id.
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public static <E> EntityModel<E> build(Class<E> entityClass, Class<?> idTypeHint) {
         try {
             MethodHandles.Lookup lookup = MethodHandles.privateLookupIn(
                     entityClass, MethodHandles.lookup());
@@ -50,24 +60,36 @@ public final class RuntimeEntityModelBuilder {
             String tableName = readTableName(entityClass);
             String schema    = readSchema(entityClass);
 
-            List<Attribute<E, ?>> attrs = new ArrayList<>();
-            IdAttribute<E, ?> id = null;
-            VersionAttribute<E, ?> version = null;
-
+            List<Field> persistedFields = new ArrayList<>();
             for (Field field : entityClass.getDeclaredFields()) {
                 int mods = field.getModifiers();
                 if (Modifier.isStatic(mods) || Modifier.isTransient(mods)) continue;
                 if (hasAnnotation(field, "jakarta.persistence.Transient")) continue;
                 if (hasAnnotation(field, "io.vidocq.mansart.data.Transient")) continue;
+                persistedFields.add(field);
+            }
 
-                Attribute<E, ?> a = describeField(entityClass, field, lookup);
+            // M7-5 — pick the implicit id field BEFORE iterating attributes so describeField
+            // sees a stable choice. Order: explicit annotation > field named "id" > single
+            // field whose type matches the K hint > field named "<entitySimple>Id".
+            Field implicitIdField = pickImplicitIdField(entityClass, persistedFields, idTypeHint);
+
+            List<Attribute<E, ?>> attrs = new ArrayList<>();
+            IdAttribute<E, ?> id = null;
+            VersionAttribute<E, ?> version = null;
+
+            for (Field field : persistedFields) {
+                boolean implicitId = field == implicitIdField;
+                Attribute<E, ?> a = describeField(entityClass, field, lookup, implicitId);
                 attrs.add(a);
                 if (a instanceof IdAttribute<?, ?>      ida) id      = (IdAttribute<E, ?>) ida;
                 if (a instanceof VersionAttribute<?, ?> v)   version = (VersionAttribute<E, ?>) v;
             }
 
             if (id == null) {
-                throw new MansartDataException("Entity " + entityClass.getName() + " has no @Id field");
+                throw new MansartDataException("Entity " + entityClass.getName()
+                        + " has no @Id field (and no implicit id field matched idTypeHint="
+                        + (idTypeHint == null ? "<none>" : idTypeHint.getName()) + ")");
             }
 
             return new EntityModel<>(entityClass, tableName, schema, id,
@@ -81,15 +103,60 @@ public final class RuntimeEntityModelBuilder {
         }
     }
 
+    private static boolean isExplicitId(Field field) {
+        return hasAnnotation(field, "jakarta.persistence.Id")
+            || hasAnnotation(field, "io.vidocq.mansart.data.Id");
+    }
+
+    /**
+     * Jakarta Data 1.0 implicit-id resolution. Returns the field that should be treated as the
+     * id when no field carries an explicit {@code @Id}. Otherwise null (an explicit one will be
+     * picked up by {@code describeField}).
+     */
+    private static Field pickImplicitIdField(Class<?> entityClass, List<Field> persisted, Class<?> idTypeHint) {
+        for (Field f : persisted) if (isExplicitId(f)) return null;
+
+        for (Field f : persisted) {
+            if ("id".equals(f.getName()) && (idTypeHint == null || matchesType(f, idTypeHint))) return f;
+        }
+
+        if (idTypeHint != null) {
+            Field unique = null;
+            int matchCount = 0;
+            for (Field f : persisted) {
+                if (matchesType(f, idTypeHint)) { unique = f; matchCount++; }
+            }
+            if (matchCount == 1) return unique;
+        }
+
+        String entityName = entityClass.getSimpleName();
+        if (!entityName.isEmpty()) {
+            String suffix = Character.toLowerCase(entityName.charAt(0)) + entityName.substring(1) + "Id";
+            for (Field f : persisted) {
+                if (suffix.equals(f.getName())
+                        && (idTypeHint == null || matchesType(f, idTypeHint))) return f;
+            }
+        }
+        return null;
+    }
+
+    private static boolean matchesType(Field f, Class<?> hint) {
+        Class<?> ft = boxed(f.getType());
+        Class<?> hb = boxed(hint);
+        return hb.isAssignableFrom(ft) || ft.isAssignableFrom(hb);
+    }
+
     /* ---- field → Attribute mapping ---- */
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     private static <E> Attribute<E, ?> describeField(Class<E> entityClass, Field field,
-                                                     MethodHandles.Lookup lookup) {
+                                                     MethodHandles.Lookup lookup,
+                                                     boolean implicitId) {
         String name = field.getName();
         Class<?> type = boxed(field.getType());
 
-        boolean isId       = hasAnnotation(field, "jakarta.persistence.Id")
+        boolean isId       = implicitId
+                          || hasAnnotation(field, "jakarta.persistence.Id")
                           || hasAnnotation(field, "io.vidocq.mansart.data.Id");
         boolean isVersion  = hasAnnotation(field, "jakarta.persistence.Version")
                           || hasAnnotation(field, "io.vidocq.mansart.data.Version");

@@ -213,6 +213,7 @@ final class JdqlExecutor {
     }
 
     private static Object resolveArg(JdqlAst.ArgRef ref, Object[] args, Map<String, Integer> nameToIdx) {
+        if (ref.isLiteral) return resolveLiteral(ref.literal);
         if (ref.isNamed()) {
             Integer i = nameToIdx.get(ref.named);
             if (i == null) throw new MansartDataException("@Query references :" + ref.named
@@ -220,6 +221,44 @@ final class JdqlExecutor {
             return args[i];
         }
         return args[ref.positional - 1];
+    }
+
+    /**
+     * Lift a JDQL literal token to a runtime value. Strings whose form is
+     * {@code pkg.Class.MEMBER} (≥ 2 dots, last segment uppercase) are loaded as enum constants;
+     * strings without dots are returned verbatim; numbers/booleans pass through.
+     */
+    private static Object resolveLiteral(Object lit) {
+        if (lit instanceof String s && s.indexOf('.') > 0) {
+            int last = s.lastIndexOf('.');
+            String member = s.substring(last + 1);
+            if (!member.isEmpty() && Character.isUpperCase(member.charAt(0))) {
+                String enumFqn = s.substring(0, last);
+                try {
+                    Class<?> raw = loadClassForEnum(enumFqn);
+                    if (raw != null && raw.isEnum()) {
+                        @SuppressWarnings({"rawtypes", "unchecked"})
+                        Enum<?> v = Enum.valueOf((Class) raw, member);
+                        return v;
+                    }
+                } catch (Exception ignored) { /* fall through — treat as plain string */ }
+            }
+        }
+        return lit;
+    }
+
+    private static Class<?> loadClassForEnum(String fqn) {
+        ClassLoader cl = Thread.currentThread().getContextClassLoader();
+        if (cl == null) cl = JdqlExecutor.class.getClassLoader();
+        // Try as-is, then progressively replace inner-class dot separators with '$'
+        try { return Class.forName(fqn, false, cl); } catch (ClassNotFoundException ignored) {}
+        StringBuilder sb = new StringBuilder(fqn);
+        for (int i = sb.length() - 1; i > 0; i--) {
+            if (sb.charAt(i) != '.') continue;
+            sb.setCharAt(i, '$');
+            try { return Class.forName(sb.toString(), false, cl); } catch (ClassNotFoundException ignored) {}
+        }
+        return null;
     }
 
     /* ---- helpers ---- */

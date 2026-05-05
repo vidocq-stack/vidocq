@@ -42,12 +42,12 @@ public final class RuntimeRepositoryProxy {
     private RuntimeRepositoryProxy() {}
 
     public static <R> R create(Class<R> repoInterface, RepositoryRuntime runtime) {
-        Class<?> entityClass = resolveEntityClass(repoInterface);
-        if (entityClass == null) {
+        EntityAndKey ek = resolveEntityAndKey(repoInterface);
+        if (ek == null) {
             throw new MansartDataException(repoInterface.getName()
                     + " does not extend BasicRepository<E, K> / CrudRepository<E, K> — runtime path needs the entity type.");
         }
-        EntityModel<?> model = RuntimeEntityModelBuilder.build(entityClass);
+        EntityModel<?> model = RuntimeEntityModelBuilder.build(ek.entity, ek.key);
         return create(repoInterface, model, runtime);
     }
 
@@ -65,19 +65,63 @@ public final class RuntimeRepositoryProxy {
                 new Class<?>[]{ repoInterface }, handler);
     }
 
-    private static Class<?> resolveEntityClass(Class<?> repoInterface) {
+    private record EntityAndKey(Class<?> entity, Class<?> key) {}
+
+    private static EntityAndKey resolveEntityAndKey(Class<?> repoInterface) {
         for (Type t : repoInterface.getGenericInterfaces()) {
-            Class<?> e = entityFromGenericInterface(t);
-            if (e != null) return e;
+            EntityAndKey ek = fromGenericInterface(t);
+            if (ek != null) return ek;
         }
         for (Class<?> parent : repoInterface.getInterfaces()) {
-            Class<?> e = resolveEntityClass(parent);
-            if (e != null) return e;
+            EntityAndKey ek = resolveEntityAndKey(parent);
+            if (ek != null) return ek;
+        }
+        return inferFromMethods(repoInterface);
+    }
+
+    /**
+     * M7-6 — when the repo extends no parameterised {@code BasicRepository<E,K>}, infer the
+     * entity from method signatures: the parameter of an {@code @Insert}/{@code @Update}/
+     * {@code @Delete}/{@code @Save} method (singular or {@code List<E>}/{@code E[]}/varargs),
+     * or the return type of a {@code findBy*} / {@code @Find} method.
+     */
+    private static EntityAndKey inferFromMethods(Class<?> repoInterface) {
+        for (Method m : allInterfaceMethods(repoInterface)) {
+            if (m.getDeclaringClass() == Object.class) continue;
+            for (Type pt : m.getGenericParameterTypes()) {
+                Class<?> e = entityFromCarrier(pt);
+                if (e != null) return new EntityAndKey(e, null);
+            }
+            Class<?> r = entityFromCarrier(m.getGenericReturnType());
+            if (r != null) return new EntityAndKey(r, null);
         }
         return null;
     }
 
-    private static Class<?> entityFromGenericInterface(Type t) {
+    private static Class<?> entityFromCarrier(Type t) {
+        if (t instanceof Class<?> c) {
+            if (c.isArray()) return entityCandidate(c.getComponentType());
+            return entityCandidate(c);
+        }
+        if (t instanceof ParameterizedType pt) {
+            Type[] args = pt.getActualTypeArguments();
+            if (args.length == 1 && args[0] instanceof Class<?> arg) {
+                return entityCandidate(arg);
+            }
+        }
+        return null;
+    }
+
+    private static Class<?> entityCandidate(Class<?> c) {
+        if (c == null || c.isPrimitive() || c.isInterface() || c.isEnum() || c.isAnnotation()) return null;
+        if (c == Object.class || c == String.class) return null;
+        if (Number.class.isAssignableFrom(c) || Boolean.class == c || Character.class == c) return null;
+        if (c.getName().startsWith("java.")) return null;
+        if (c.getName().startsWith("jakarta.data.")) return null;
+        return c;
+    }
+
+    private static EntityAndKey fromGenericInterface(Type t) {
         if (!(t instanceof ParameterizedType pt)) return null;
         Type raw = pt.getRawType();
         if (!(raw instanceof Class<?> rawClass)) return null;
@@ -86,7 +130,10 @@ public final class RuntimeRepositoryProxy {
                 || fqn.equals("jakarta.data.repository.CrudRepository")
                 || fqn.equals("jakarta.data.repository.DataRepository")) {
             Type[] args = pt.getActualTypeArguments();
-            if (args.length >= 2 && args[0] instanceof Class<?> entity) return entity;
+            if (args.length >= 2 && args[0] instanceof Class<?> entity) {
+                Class<?> key = (args[1] instanceof Class<?> k) ? k : null;
+                return new EntityAndKey(entity, key);
+            }
         }
         return null;
     }

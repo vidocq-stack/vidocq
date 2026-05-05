@@ -77,5 +77,27 @@ Statuts : `OPEN` → `INVESTIGATING` → `FIXED` (commit hash) → `CLOSED`.
       - **M7-6** : inférer le type d'entité depuis les méthodes du repo (return
          type de `findBy*`, paramètre de `@Save`, etc.). Couvre `CustomRepository`
          et `MultipleEntityRepo`.
+- **Investigation 2026-05-05 (M7-5 / M7-6 livrés)** :
+  - `pickImplicitIdField` détecte 3 conventions Jakarta Data 1.0 (champ nommé
+    `id`, champ unique du type `K`, champ `<entitySimple>Id`).
+  - `JdqlAst` accepte la clause `FROM` optionnelle, les littéraux numériques /
+    chaînes (avec escape `''`) / booléens / FQN d'enum, l'opérateur `NOT` infixe
+    devant `LIKE`/`IN`/`BETWEEN`. `JdqlExecutor` résout les FQN d'enum via
+    `Class.forName` + `Enum.valueOf` (avec fallback `.` → `$` pour les enums
+    inner-class).
+  - `RuntimeRepositoryProxy.inferFromMethods` couvre les repos qui n'étendent
+    pas `BasicRepository<E,K>` (ex. `CustomRepository`).
+  - **Score TCK** : 71 / 73 NPE encore, mais la nature des erreurs a basculé
+    (6 / 6 repos TCK construisent maintenant — y compris `Boxes` qui utilise
+    `String boxIdentifier` comme id implicite). Les nouveaux blockers sont :
+      - **M7-7** — Auto-création de schéma pour les entités TCK. La TCK suppose
+        que le provider crée les tables au déploiement (376 erreurs
+        `getTableOrViewNotFoundDbException`).
+      - **M7-8** — Méthodes dérivées manquantes : `countAll`, `find`,
+        `IgnoreCase`, `Contains`, `True`/`False`, méthodes `default`
+        (≈ 20 `UnsupportedOperationException`).
+      - **M7-9** — `:name` dans `@Query` exige `-parameters` ; `maven-compiler-plugin
+        4.0.0-beta-4` ne l'honore pas systématiquement (≈ 48
+        `MansartDataException: @Query references :name…`).
 
 ---
