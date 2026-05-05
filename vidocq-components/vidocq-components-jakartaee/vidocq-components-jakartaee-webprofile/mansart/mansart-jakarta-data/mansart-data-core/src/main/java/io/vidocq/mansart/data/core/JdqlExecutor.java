@@ -213,19 +213,20 @@ final class JdqlExecutor {
             case JdqlAst.Cmp c -> {
                 a = lookup(attrIndex, c.attr());
                 argsOut.add(resolveArg(c.arg(), callArgs, nameToIdx));
-                return switch (c.op()) {
-                    case EQ -> new Where.Eq(a);
-                    case NE -> new Where.NotEq(a);
-                    case LT -> new Where.Lt(a);
-                    case LTE -> new Where.Lte(a);
-                    case GT -> new Where.Gt(a);
-                    case GTE -> new Where.Gte(a);
-                    case LIKE -> new Where.Like(a);
-                };
+                return cmpOf(a, c.op());
+            }
+            case JdqlAst.FnCmp c -> {
+                a = lookup(attrIndex, c.attr());
+                argsOut.add(resolveArg(c.arg(), callArgs, nameToIdx));
+                return new Where.Func(c.fn(), cmpOf(a, c.op()));
             }
             case JdqlAst.IsNull n -> {
                 a = lookup(attrIndex, n.attr());
                 return n.negated() ? new Where.IsNotNull(a) : new Where.IsNull(a);
+            }
+            case JdqlAst.FnIsNull n -> {
+                a = lookup(attrIndex, n.attr());
+                return new Where.Func(n.fn(), n.negated() ? new Where.IsNotNull(a) : new Where.IsNull(a));
             }
             case JdqlAst.Between b -> {
                 a = lookup(attrIndex, b.attr());
@@ -233,23 +234,19 @@ final class JdqlExecutor {
                 argsOut.add(resolveArg(b.hi(), callArgs, nameToIdx));
                 return new Where.Between(a);
             }
+            case JdqlAst.FnBetween b -> {
+                a = lookup(attrIndex, b.attr());
+                argsOut.add(resolveArg(b.lo(), callArgs, nameToIdx));
+                argsOut.add(resolveArg(b.hi(), callArgs, nameToIdx));
+                return new Where.Func(b.fn(), new Where.Between(a));
+            }
             case JdqlAst.In in -> {
                 a = lookup(attrIndex, in.attr());
-                if (in.collection()) {
-                    Object v = resolveArg(in.args().get(0), callArgs, nameToIdx);
-                    if (v instanceof Collection<?> col) {
-                        if (col.isEmpty()) {
-                            alwaysFalse[0] = true;
-                            return Where.ALWAYS_FALSE;
-                        }
-                        for (Object e : col) argsOut.add(e);
-                        return new Where.In(a, col.size());
-                    }
-                    argsOut.add(v);
-                    return new Where.In(a, 1);
-                }
-                for (JdqlAst.ArgRef r : in.args()) argsOut.add(resolveArg(r, callArgs, nameToIdx));
-                return new Where.In(a, in.args().size());
+                return buildIn(a, in.args(), in.collection(), callArgs, nameToIdx, argsOut, alwaysFalse, null);
+            }
+            case JdqlAst.FnIn in -> {
+                a = lookup(attrIndex, in.attr());
+                return buildIn(a, in.args(), in.collection(), callArgs, nameToIdx, argsOut, alwaysFalse, in.fn());
             }
             case JdqlAst.And and -> {
                 List<Where> cs = new ArrayList<>(and.children().size());
@@ -265,6 +262,42 @@ final class JdqlExecutor {
                 return new Where.Not(build(n.child(), attrIndex, callArgs, nameToIdx, argsOut, alwaysFalse));
             }
         }
+    }
+
+    private static Where cmpOf(Attribute<?, ?> a, JdqlAst.Op op) {
+        return switch (op) {
+            case EQ -> new Where.Eq(a);
+            case NE -> new Where.NotEq(a);
+            case LT -> new Where.Lt(a);
+            case LTE -> new Where.Lte(a);
+            case GT -> new Where.Gt(a);
+            case GTE -> new Where.Gte(a);
+            case LIKE -> new Where.Like(a);
+        };
+    }
+
+    private static Where buildIn(Attribute<?, ?> a, List<JdqlAst.ArgRef> argRefs, boolean collection,
+                                 Object[] callArgs, Map<String, Integer> nameToIdx,
+                                 List<Object> argsOut, boolean[] alwaysFalse, String wrapFn) {
+        Where inner;
+        if (collection) {
+            Object v = resolveArg(argRefs.get(0), callArgs, nameToIdx);
+            if (v instanceof Collection<?> col) {
+                if (col.isEmpty()) {
+                    alwaysFalse[0] = true;
+                    return Where.ALWAYS_FALSE;
+                }
+                for (Object e : col) argsOut.add(e);
+                inner = new Where.In(a, col.size());
+            } else {
+                argsOut.add(v);
+                inner = new Where.In(a, 1);
+            }
+        } else {
+            for (JdqlAst.ArgRef r : argRefs) argsOut.add(resolveArg(r, callArgs, nameToIdx));
+            inner = new Where.In(a, argRefs.size());
+        }
+        return wrapFn == null ? inner : new Where.Func(wrapFn, inner);
     }
 
     private static Attribute<?, ?> lookup(Map<String, Attribute<?, ?>> idx, String name) {
@@ -362,6 +395,21 @@ final class JdqlExecutor {
                 renderExpr(sb, bin.left(), attrIndex, callArgs, nameToIdx, outVals, outTypes, targetType);
                 sb.append(' ').append(bin.op()).append(' ');
                 renderExpr(sb, bin.right(), attrIndex, callArgs, nameToIdx, outVals, outTypes, targetType);
+                sb.append(')');
+            }
+            // M8-1 — render scalar functions in SET RHS. LENGTH → CHAR_LENGTH (SQL-portable).
+            // CONCAT renders as fn(arg1, arg2, ...) per SQL standard (works on H2 and PG).
+            // Bound parameters in fn args inherit the SET column's targetType — sufficient for
+            // the common case where all CONCAT pieces are strings.
+            case JdqlAst.ExprFunc fn -> {
+                String sqlFn = "LENGTH".equals(fn.name()) ? "CHAR_LENGTH" : fn.name();
+                Class<?> innerType = "LENGTH".equals(fn.name()) ? Integer.class : targetType;
+                sb.append(sqlFn).append('(');
+                List<JdqlAst.Expr> args = fn.args();
+                for (int i = 0; i < args.size(); i++) {
+                    if (i > 0) sb.append(", ");
+                    renderExpr(sb, args.get(i), attrIndex, callArgs, nameToIdx, outVals, outTypes, innerType);
+                }
                 sb.append(')');
             }
         }

@@ -261,6 +261,8 @@ public final class H2Dialect implements Dialect {
             // and the bound parameter with LOWER(?). The driver still binds the original String;
             // the database does the case-folding (locale-aware, index-friendly).
             case Where.IgnoreCase w -> renderIgnoreCase(sb, w.inner());
+            // M8-1 — unary scalar function on the column (UPPER/LOWER/LENGTH/ABS).
+            case Where.Func w -> renderFunc(sb, w.fn(), w.inner());
             case Where.AlwaysTrue ignored  -> sb.append("1=1");
             case Where.AlwaysFalse ignored -> sb.append("1=0");
         }
@@ -290,6 +292,44 @@ public final class H2Dialect implements Dialect {
             default -> throw new IllegalArgumentException(
                     "IgnoreCase wraps Eq/NotEq/Lt/Lte/Gt/Gte/Like/Between/In/Not only, got: " + inner);
         }
+    }
+
+    /**
+     * M8-1 — render {@code fn(col) <op> ?} for unary scalar JDQL functions. {@code LENGTH} is
+     * mapped to the SQL-portable {@code CHAR_LENGTH(...)}; the others ({@code UPPER},
+     * {@code LOWER}, {@code ABS}) translate verbatim. The bound parameter type is overridden
+     * by {@link io.vidocq.mansart.data.core.WhereBinder#bindFunc} when needed.
+     */
+    private void renderFunc(StringBuilder sb, String fn, Where inner) {
+        String sqlFn = "LENGTH".equals(fn) ? "CHAR_LENGTH" : fn;
+        switch (inner) {
+            case Where.Eq w      -> appendFnLhs(sb, sqlFn, w.attr().columnName(), " = ?");
+            case Where.NotEq w   -> appendFnLhs(sb, sqlFn, w.attr().columnName(), " <> ?");
+            case Where.Like w    -> appendFnLhs(sb, sqlFn, w.attr().columnName(), " LIKE ?");
+            case Where.Lt w      -> appendFnLhs(sb, sqlFn, w.attr().columnName(), " < ?");
+            case Where.Lte w     -> appendFnLhs(sb, sqlFn, w.attr().columnName(), " <= ?");
+            case Where.Gt w      -> appendFnLhs(sb, sqlFn, w.attr().columnName(), " > ?");
+            case Where.Gte w     -> appendFnLhs(sb, sqlFn, w.attr().columnName(), " >= ?");
+            case Where.Between w -> appendFnLhs(sb, sqlFn, w.attr().columnName(), " BETWEEN ? AND ?");
+            case Where.IsNull w    -> appendFnLhs(sb, sqlFn, w.attr().columnName(), " IS NULL");
+            case Where.IsNotNull w -> appendFnLhs(sb, sqlFn, w.attr().columnName(), " IS NOT NULL");
+            case Where.In w -> {
+                appendFnLhs(sb, sqlFn, w.attr().columnName(), " IN (");
+                for (int i = 0; i < w.arity(); i++) { if (i > 0) sb.append(", "); sb.append('?'); }
+                sb.append(')');
+            }
+            case Where.Not w -> {
+                sb.append("NOT (");
+                renderFunc(sb, fn, w.child());
+                sb.append(')');
+            }
+            default -> throw new IllegalArgumentException(
+                    "Func wraps Eq/NotEq/Lt/Lte/Gt/Gte/Like/Between/In/IsNull/IsNotNull/Not only, got: " + inner);
+        }
+    }
+
+    private void appendFnLhs(StringBuilder sb, String sqlFn, String column, String tail) {
+        sb.append(sqlFn).append("(\"").append(column).append("\")").append(tail);
     }
 
     private void appendOrderBy(StringBuilder sb, OrderBy orderBy) {

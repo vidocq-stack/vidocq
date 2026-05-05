@@ -32,13 +32,28 @@ public final class JdqlAst {
         public SetAssign(String attr, ArgRef arg) { this(attr, new ExprArg(arg)); }
     }
     /** M7-24 — RHS of a SET assignment can now be an arithmetic expression
-     *  ({@code length + ?1}, {@code y / :yDivisor}, …). */
-    public sealed interface Expr permits ExprArg, ExprAttr, ExprBin {}
+     *  ({@code length + ?1}, {@code y / :yDivisor}, …).
+     *  <p>M8-1 — also supports unary scalar functions ({@code UPPER}, {@code LOWER},
+     *  {@code LENGTH}, {@code ABS}) and n-ary {@code CONCAT}. */
+    public sealed interface Expr permits ExprArg, ExprAttr, ExprBin, ExprFunc {}
     public record ExprArg(ArgRef arg) implements Expr {}
     public record ExprAttr(String attr) implements Expr {}
     public record ExprBin(Expr left, char op, Expr right) implements Expr {}
-    public sealed interface Pred permits Cmp, IsNull, Between, In, And, Or, Not {}
+    /** M8-1 — scalar function call: {@code UPPER(name)}, {@code LENGTH(title)}, {@code CONCAT(a, ', ', b)}. */
+    public record ExprFunc(String name, List<Expr> args) implements Expr {
+        public ExprFunc { args = List.copyOf(args); }
+    }
+    public sealed interface Pred permits Cmp, FnCmp, IsNull, Between, FnBetween, In, FnIn,
+                                          FnIsNull, And, Or, Not {}
     public record Cmp(String attr, Op op, ArgRef arg)              implements Pred {}
+    /** M8-1 — comparator with a unary scalar function on the LHS: {@code UPPER(attr) op ?}. */
+    public record FnCmp(String fn, String attr, Op op, ArgRef arg) implements Pred {}
+    /** M8-1 — {@code fn(attr) BETWEEN ? AND ?}. */
+    public record FnBetween(String fn, String attr, ArgRef lo, ArgRef hi) implements Pred {}
+    /** M8-1 — {@code fn(attr) IN (...)}. */
+    public record FnIn(String fn, String attr, List<ArgRef> args, boolean collection) implements Pred {}
+    /** M8-1 — {@code fn(attr) IS [NOT] NULL}. */
+    public record FnIsNull(String fn, String attr, boolean negated) implements Pred {}
     public record IsNull(String attr, boolean negated)             implements Pred {}
     public record Between(String attr, ArgRef lo, ArgRef hi)       implements Pred {}
     public record In(String attr, List<ArgRef> args, boolean collection) implements Pred {}
@@ -175,6 +190,10 @@ public final class JdqlAst {
             }
         }
         private static boolean isKeyword(String w) {
+            // M8-1 — scalar function names (UPPER/LOWER/LENGTH/ABS/CONCAT) are NOT registered
+            // as keywords here. Doing so would shadow homonym attribute names (notably the
+            // TCK uses an entity attribute called {@code length}). The parser detects them
+            // contextually as IDENT followed by '('.
             return switch (w.toUpperCase()) {
                 case "FROM", "WHERE", "ORDER", "BY", "AND", "OR", "NOT",
                      "IS", "NULL", "BETWEEN", "LIKE", "ASC", "DESC",
@@ -327,7 +346,22 @@ public final class JdqlAst {
                 return e;
             }
             if (t.kind == Tk.IDENT) {
+                // M8-1 — IDENT followed by '(' is a scalar function call (UPPER/LOWER/LENGTH/ABS/CONCAT).
+                // Otherwise it's an attribute reference. We detect contextually rather than
+                // promoting these names to keywords, because TCK entities use them as attribute
+                // names too (e.g. Box.length).
                 String name = lex.consume().text;
+                String upper = name.toUpperCase();
+                if (lex.peek().kind == Tk.LPAREN && isScalarFn(upper)) {
+                    lex.consume();
+                    List<Expr> args = new ArrayList<>();
+                    args.add(parseValueExpr());
+                    while (lex.peek().kind == Tk.COMMA) { lex.consume(); args.add(parseValueExpr()); }
+                    if (lex.peek().kind != Tk.RPAREN) throw new ParseException("Expected ')' after " + upper + "(...)");
+                    lex.consume();
+                    checkFnArity(upper, args.size());
+                    return new ExprFunc(upper, args);
+                }
                 if (!attrNames.contains(name)) {
                     throw new ParseException("Unknown attribute '" + name + "' in SET expression");
                 }
@@ -335,6 +369,26 @@ public final class JdqlAst {
             }
             // Otherwise it's an ArgRef (named/positional/literal/string/bool/number)
             return new ExprArg(parseArg());
+        }
+
+        private static boolean isScalarFn(String upper) {
+            return switch (upper) { case "UPPER", "LOWER", "LENGTH", "ABS", "CONCAT" -> true; default -> false; };
+        }
+
+        private static boolean isUnaryFn(String upper) {
+            return switch (upper) { case "UPPER", "LOWER", "LENGTH", "ABS" -> true; default -> false; };
+        }
+
+        private static void checkFnArity(String fn, int n) {
+            switch (fn) {
+                case "UPPER", "LOWER", "LENGTH", "ABS" -> {
+                    if (n != 1) throw new ParseException(fn + " expects 1 argument, got " + n);
+                }
+                case "CONCAT" -> {
+                    if (n < 2) throw new ParseException("CONCAT expects 2+ arguments, got " + n);
+                }
+                default -> throw new ParseException("Unknown scalar function: " + fn);
+            }
         }
 
         Pred parseExpr() { return parseOr(); }
@@ -376,7 +430,36 @@ public final class JdqlAst {
                 lex.consume();
                 return p;
             }
+            // M8-1 — LHS may be a unary scalar function on an attribute: UPPER(name) = ?, …
+            // We detect this contextually: an IDENT whose name matches a scalar function and
+            // is immediately followed by '(' — this avoids shadowing entity attributes that
+            // happen to be named "length" etc.
+            if (lex.peek().kind == Tk.IDENT) {
+                Token saved = lex.peek();
+                String upper = saved.text.toUpperCase();
+                if (isUnaryFn(upper)) {
+                    // We need to look one further — but the lexer is single-token lookahead. Use a
+                    // throw-away consume sequence guarded by attribute fallback.
+                    lex.consume();
+                    if (lex.peek().kind == Tk.LPAREN) {
+                        lex.consume();
+                        String attr = expectAttr();
+                        if (lex.peek().kind != Tk.RPAREN) throw new ParseException("Expected ')' after " + upper + "(attr)");
+                        lex.consume();
+                        return parseFnRhs(upper, attr);
+                    }
+                    // Not a function call — must be an attribute named "length" / "upper" etc.
+                    if (!attrNames.contains(saved.text)) {
+                        throw new ParseException("Unknown attribute '" + saved.text + "' on " + entityName);
+                    }
+                    return parseRhs(saved.text);
+                }
+            }
             String attr = expectAttr();
+            return parseRhs(attr);
+        }
+
+        private Pred parseRhs(String attr) {
             if (peekKw("IS")) {
                 lex.consume();
                 boolean negated = false;
@@ -384,21 +467,7 @@ public final class JdqlAst {
                 expectKw("NULL");
                 return new IsNull(attr, negated);
             }
-            // M7-5d — infix NOT before BETWEEN/LIKE/IN: "attr NOT LIKE x", "attr NOT IN (...)".
-            boolean infixNot = false;
-            if (peekKw("NOT")) {
-                Token saved = lex.peek();
-                lex.consume();
-                if (peekKw("BETWEEN") || peekKw("LIKE") || peekKw("IN")) {
-                    infixNot = true;
-                } else {
-                    // Not followed by one of those — restore (parser doesn't have a real
-                    // backtrack so we wrap the rest as Not(...) further up). Emulate by
-                    // treating this as parse error since attr-then-NOT-then-anything-else
-                    // isn't a JDQL form we recognise.
-                    throw new ParseException("Unexpected NOT after '" + attr + "': " + saved.text);
-                }
-            }
+            boolean infixNot = consumeInfixNot(attr);
             if (peekKw("BETWEEN")) {
                 lex.consume();
                 ArgRef lo = parseArg();
@@ -414,28 +483,78 @@ public final class JdqlAst {
             }
             if (peekKw("IN")) {
                 lex.consume();
-                Pred p;
-                if (lex.peek().kind == Tk.LPAREN) {
-                    lex.consume();
-                    List<ArgRef> elems = new ArrayList<>();
-                    elems.add(parseArg());
-                    while (lex.peek().kind == Tk.COMMA) { lex.consume(); elems.add(parseArg()); }
-                    if (lex.peek().kind != Tk.RPAREN) throw new ParseException("Expected ')'");
-                    lex.consume();
-                    p = new In(attr, elems, false);
-                } else {
-                    p = new In(attr, List.of(parseArg()), true);
-                }
+                return wrapNot(parseInTail(false, attr, null), infixNot);
+            }
+            Op op = expectCmpOp(attr);
+            return new Cmp(attr, op, parseArg());
+        }
+
+        /** M8-1 — RHS parser for {@code fn(attr) ...}. Mirrors {@link #parseRhs} but emits Fn* preds. */
+        private Pred parseFnRhs(String fn, String attr) {
+            if (peekKw("IS")) {
+                lex.consume();
+                boolean negated = false;
+                if (peekKw("NOT")) { lex.consume(); negated = true; }
+                expectKw("NULL");
+                return new FnIsNull(fn, attr, negated);
+            }
+            boolean infixNot = consumeInfixNot(fn + "(" + attr + ")");
+            if (peekKw("BETWEEN")) {
+                lex.consume();
+                ArgRef lo = parseArg();
+                expectKw("AND");
+                ArgRef hi = parseArg();
+                Pred p = new FnBetween(fn, attr, lo, hi);
                 return infixNot ? new Not(p) : p;
             }
+            if (peekKw("LIKE")) {
+                lex.consume();
+                Pred p = new FnCmp(fn, attr, Op.LIKE, parseArg());
+                return infixNot ? new Not(p) : p;
+            }
+            if (peekKw("IN")) {
+                lex.consume();
+                return wrapNot(parseInTail(true, attr, fn), infixNot);
+            }
+            Op op = expectCmpOp(fn + "(" + attr + ")");
+            return new FnCmp(fn, attr, op, parseArg());
+        }
+
+        private boolean consumeInfixNot(String label) {
+            if (!peekKw("NOT")) return false;
+            Token saved = lex.peek();
+            lex.consume();
+            if (peekKw("BETWEEN") || peekKw("LIKE") || peekKw("IN")) return true;
+            throw new ParseException("Unexpected NOT after '" + label + "': " + saved.text);
+        }
+
+        private Pred parseInTail(boolean withFn, String attr, String fn) {
+            if (lex.peek().kind == Tk.LPAREN) {
+                lex.consume();
+                List<ArgRef> elems = new ArrayList<>();
+                elems.add(parseArg());
+                while (lex.peek().kind == Tk.COMMA) { lex.consume(); elems.add(parseArg()); }
+                if (lex.peek().kind != Tk.RPAREN) throw new ParseException("Expected ')'");
+                lex.consume();
+                return withFn ? new FnIn(fn, attr, elems, false) : new In(attr, elems, false);
+            }
+            ArgRef one = parseArg();
+            return withFn ? new FnIn(fn, attr, List.of(one), true) : new In(attr, List.of(one), true);
+        }
+
+        private Op expectCmpOp(String label) {
             Op op = switch (lex.peek().kind) {
                 case EQ -> Op.EQ; case NE -> Op.NE;
                 case LT -> Op.LT; case LTE -> Op.LTE;
                 case GT -> Op.GT; case GTE -> Op.GTE;
-                default -> throw new ParseException("Expected operator after '" + attr + "': " + lex.peek().text);
+                default -> throw new ParseException("Expected operator after '" + label + "': " + lex.peek().text);
             };
             lex.consume();
-            return new Cmp(attr, op, parseArg());
+            return op;
+        }
+
+        private static Pred wrapNot(Pred p, boolean infixNot) {
+            return infixNot ? new Not(p) : p;
         }
 
         ArgRef parseArg() {

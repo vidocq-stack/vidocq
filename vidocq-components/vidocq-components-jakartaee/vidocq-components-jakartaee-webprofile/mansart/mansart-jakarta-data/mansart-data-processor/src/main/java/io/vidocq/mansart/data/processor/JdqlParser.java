@@ -315,7 +315,7 @@ final class JdqlParser {
         return sb.toString();
     }
 
-    private static final class DynCtx { final Map<In, String> colVar = new java.util.IdentityHashMap<>(); int counter = 0; }
+    private static final class DynCtx { final Map<Object, String> colVar = new java.util.IdentityHashMap<>(); int counter = 0; }
 
     private static void declareInCollections(StringBuilder sb, Pred p,
                                              Map<String, Integer> nameToIdx, ExecutableElement m,
@@ -323,6 +323,14 @@ final class JdqlParser {
         if (p == null) return;
         switch (p) {
             case In in -> {
+                if (in.collection) {
+                    String var = "_col" + ctx.counter++;
+                    ctx.colVar.put(in, var);
+                    sb.append("java.util.Collection<?> ").append(var)
+                      .append(" = (java.util.Collection<?>) ").append(resolveArg(in.args.get(0), nameToIdx, m)).append("; ");
+                }
+            }
+            case FnIn in -> {
                 if (in.collection) {
                     String var = "_col" + ctx.counter++;
                     ctx.colVar.put(in, var);
@@ -343,26 +351,14 @@ final class JdqlParser {
         String pkg = "io.vidocq.mansart.data.dialect.Where";
         if (p == null) return pkg + ".ALWAYS_TRUE";
         return switch (p) {
-            case Cmp c -> {
-                String cls = switch (c.op) {
-                    case EQ -> "Eq"; case NE -> "NotEq";
-                    case LT -> "Lt"; case LTE -> "Lte";
-                    case GT -> "Gt"; case GTE -> "Gte";
-                    case LIKE -> "Like";
-                };
-                yield "new " + pkg + "." + cls + "(" + metamodel + "." + c.attr + ")";
-            }
-            case IsNull n  -> "new " + pkg + "." + (n.negated ? "IsNotNull" : "IsNull")
-                              + "(" + metamodel + "." + n.attr + ")";
-            case Between b -> "new " + pkg + ".Between(" + metamodel + "." + b.attr + ")";
-            case In in -> {
-                if (in.collection) {
-                    String col = ctx.colVar.get(in);
-                    yield col + ".isEmpty() ? " + pkg + ".ALWAYS_FALSE : new " + pkg + ".In("
-                            + metamodel + "." + in.attr + ", " + col + ".size())";
-                }
-                yield "new " + pkg + ".In(" + metamodel + "." + in.attr + ", " + in.args.size() + ")";
-            }
+            case Cmp c        -> cmpExpr(pkg, metamodel, c.op, c.attr);
+            case FnCmp c      -> wrapFunc(pkg, c.fn, cmpExpr(pkg, metamodel, c.op, c.attr));
+            case IsNull n     -> isNullExpr(pkg, metamodel, n.negated, n.attr);
+            case FnIsNull n   -> wrapFunc(pkg, n.fn, isNullExpr(pkg, metamodel, n.negated, n.attr));
+            case Between b    -> betweenExpr(pkg, metamodel, b.attr);
+            case FnBetween b  -> wrapFunc(pkg, b.fn, betweenExpr(pkg, metamodel, b.attr));
+            case In in        -> inExpr(pkg, metamodel, in, ctx);
+            case FnIn in      -> wrapFunc(pkg, in.fn, fnInExpr(pkg, metamodel, in, ctx));
             case And a -> pkg + ".and(" + a.children.stream()
                     .map(c -> buildWhereExpr(c, metamodel, nameToIdx, m, ctx))
                     .reduce((x, y) -> x + ", " + y).orElse("") + ")";
@@ -373,17 +369,70 @@ final class JdqlParser {
         };
     }
 
+    private static String cmpExpr(String pkg, String metamodel, Op op, String attr) {
+        String cls = switch (op) {
+            case EQ -> "Eq"; case NE -> "NotEq";
+            case LT -> "Lt"; case LTE -> "Lte";
+            case GT -> "Gt"; case GTE -> "Gte";
+            case LIKE -> "Like";
+        };
+        return "new " + pkg + "." + cls + "(" + metamodel + "." + attr + ")";
+    }
+
+    private static String isNullExpr(String pkg, String metamodel, boolean neg, String attr) {
+        return "new " + pkg + "." + (neg ? "IsNotNull" : "IsNull") + "(" + metamodel + "." + attr + ")";
+    }
+
+    private static String betweenExpr(String pkg, String metamodel, String attr) {
+        return "new " + pkg + ".Between(" + metamodel + "." + attr + ")";
+    }
+
+    private static String inExpr(String pkg, String metamodel, In in, DynCtx ctx) {
+        if (in.collection) {
+            String col = ctx.colVar.get(in);
+            return col + ".isEmpty() ? " + pkg + ".ALWAYS_FALSE : new " + pkg + ".In("
+                    + metamodel + "." + in.attr + ", " + col + ".size())";
+        }
+        return "new " + pkg + ".In(" + metamodel + "." + in.attr + ", " + in.args.size() + ")";
+    }
+
+    private static String fnInExpr(String pkg, String metamodel, FnIn in, DynCtx ctx) {
+        if (in.collection) {
+            String col = ctx.colVar.get(in);
+            return col + ".isEmpty() ? " + pkg + ".ALWAYS_FALSE : new " + pkg + ".In("
+                    + metamodel + "." + in.attr + ", " + col + ".size())";
+        }
+        return "new " + pkg + ".In(" + metamodel + "." + in.attr + ", " + in.args.size() + ")";
+    }
+
+    private static String wrapFunc(String pkg, String fn, String inner) {
+        return "new " + pkg + ".Func(\"" + fn + "\", " + inner + ")";
+    }
+
     private static void emitArgs(StringBuilder sb, Pred p,
                                  Map<String, Integer> nameToIdx, ExecutableElement m, DynCtx ctx) {
         if (p == null) return;
         switch (p) {
-            case Cmp c     -> sb.append("_args.add(").append(resolveArg(c.arg, nameToIdx, m)).append("); ");
-            case IsNull n  -> {}
-            case Between b -> {
+            case Cmp c       -> sb.append("_args.add(").append(resolveArg(c.arg, nameToIdx, m)).append("); ");
+            case FnCmp c     -> sb.append("_args.add(").append(resolveArg(c.arg, nameToIdx, m)).append("); ");
+            case IsNull n    -> {}
+            case FnIsNull n  -> {}
+            case Between b   -> {
+                sb.append("_args.add(").append(resolveArg(b.lo, nameToIdx, m)).append("); ");
+                sb.append("_args.add(").append(resolveArg(b.hi, nameToIdx, m)).append("); ");
+            }
+            case FnBetween b -> {
                 sb.append("_args.add(").append(resolveArg(b.lo, nameToIdx, m)).append("); ");
                 sb.append("_args.add(").append(resolveArg(b.hi, nameToIdx, m)).append("); ");
             }
             case In in -> {
+                if (in.collection) {
+                    sb.append("for (Object _v : ").append(ctx.colVar.get(in)).append(") _args.add(_v); ");
+                } else {
+                    for (ArgRef a : in.args) sb.append("_args.add(").append(resolveArg(a, nameToIdx, m)).append("); ");
+                }
+            }
+            case FnIn in -> {
                 if (in.collection) {
                     sb.append("for (Object _v : ").append(ctx.colVar.get(in)).append(") _args.add(_v); ");
                 } else {
@@ -399,6 +448,7 @@ final class JdqlParser {
     private static boolean containsInList(Pred p) {
         return switch (p) {
             case In in       -> in.collection;
+            case FnIn in     -> in.collection;
             case And a       -> a.children.stream().anyMatch(JdqlParser::containsInList);
             case Or o        -> o.children.stream().anyMatch(JdqlParser::containsInList);
             case Not n       -> containsInList(n.child);
@@ -466,13 +516,22 @@ final class JdqlParser {
         String scalarAttr;        // attribute name for AGGREGATE / PROJECT
     }
     record SetAssign(String attr, ArgRef arg) {}
-    sealed interface Pred permits Cmp, IsNull, Between, In, And, Or, Not {}
+    sealed interface Pred permits Cmp, FnCmp, IsNull, FnIsNull, Between, FnBetween,
+                                  In, FnIn, And, Or, Not {}
     record Cmp(String attr, Op op, ArgRef arg)              implements Pred {}
+    /** M8-1 — comparator with a unary scalar function on the LHS: {@code UPPER(attr) op ?}. */
+    record FnCmp(String fn, String attr, Op op, ArgRef arg)  implements Pred {}
     record IsNull(String attr, boolean negated)             implements Pred {}
+    /** M8-1 — {@code fn(attr) IS [NOT] NULL}. */
+    record FnIsNull(String fn, String attr, boolean negated) implements Pred {}
     record Between(String attr, ArgRef lo, ArgRef hi)       implements Pred {}
+    /** M8-1 — {@code fn(attr) BETWEEN ? AND ?}. */
+    record FnBetween(String fn, String attr, ArgRef lo, ArgRef hi) implements Pred {}
     /** {@code attr IN :collectionParam} (single ArgRef whose value is a Collection)
      *  OR {@code attr IN (:p1, :p2, ?N …)} (multiple ArgRefs, each a scalar). */
     record In(String attr, List<ArgRef> args, boolean collection) implements Pred {}
+    /** M8-1 — {@code fn(attr) IN (...)}. */
+    record FnIn(String fn, String attr, List<ArgRef> args, boolean collection) implements Pred {}
     record And(List<Pred> children)                         implements Pred {}
     record Or(List<Pred> children)                          implements Pred {}
     record Not(Pred child)                                  implements Pred {}
@@ -487,30 +546,33 @@ final class JdqlParser {
         String pkg = "io.vidocq.mansart.data.dialect.Where";
         if (p == null) { sb.append(pkg).append(".ALWAYS_TRUE"); return; }
         switch (p) {
-            case Cmp c -> {
-                String cls = switch (c.op) {
-                    case EQ -> "Eq"; case NE -> "NotEq";
-                    case LT -> "Lt"; case LTE -> "Lte";
-                    case GT -> "Gt"; case GTE -> "Gte";
-                    case LIKE -> "Like";
-                };
-                sb.append("new ").append(pkg).append('.').append(cls).append('(')
-                  .append(metamodel).append('.').append(c.attr).append(')');
+            case Cmp c -> emitCmpExpr(sb, pkg, metamodel, c.op, c.attr);
+            case FnCmp c -> {
+                sb.append("new ").append(pkg).append(".Func(\"").append(c.fn).append("\", ");
+                emitCmpExpr(sb, pkg, metamodel, c.op, c.attr);
+                sb.append(')');
             }
-            case IsNull n -> {
-                sb.append("new ").append(pkg).append('.').append(n.negated ? "IsNotNull" : "IsNull")
-                  .append('(').append(metamodel).append('.').append(n.attr).append(')');
+            case IsNull n -> emitIsNullExpr(sb, pkg, metamodel, n.negated, n.attr);
+            case FnIsNull n -> {
+                sb.append("new ").append(pkg).append(".Func(\"").append(n.fn).append("\", ");
+                emitIsNullExpr(sb, pkg, metamodel, n.negated, n.attr);
+                sb.append(')');
             }
-            case Between b -> {
-                sb.append("new ").append(pkg).append(".Between(")
-                  .append(metamodel).append('.').append(b.attr).append(')');
+            case Between b -> emitBetweenExpr(sb, pkg, metamodel, b.attr);
+            case FnBetween b -> {
+                sb.append("new ").append(pkg).append(".Func(\"").append(b.fn).append("\", ");
+                emitBetweenExpr(sb, pkg, metamodel, b.attr);
+                sb.append(')');
             }
             case In in -> {
-                if (in.collection) {
-                    throw new IllegalStateException("Collection-IN must go through the dynamic path");
-                }
-                sb.append("new ").append(pkg).append(".In(")
-                  .append(metamodel).append('.').append(in.attr).append(", ").append(in.args.size()).append(')');
+                if (in.collection) throw new IllegalStateException("Collection-IN must go through the dynamic path");
+                emitInExpr(sb, pkg, metamodel, in.attr, in.args.size());
+            }
+            case FnIn in -> {
+                if (in.collection) throw new IllegalStateException("Collection-IN must go through the dynamic path");
+                sb.append("new ").append(pkg).append(".Func(\"").append(in.fn).append("\", ");
+                emitInExpr(sb, pkg, metamodel, in.attr, in.args.size());
+                sb.append(')');
             }
             case And a -> emitCombinator(sb, "and", a.children, metamodel);
             case Or  o -> emitCombinator(sb, "or",  o.children, metamodel);
@@ -520,6 +582,32 @@ final class JdqlParser {
                 sb.append(')');
             }
         }
+    }
+
+    private static void emitCmpExpr(StringBuilder sb, String pkg, String metamodel, Op op, String attr) {
+        String cls = switch (op) {
+            case EQ -> "Eq"; case NE -> "NotEq";
+            case LT -> "Lt"; case LTE -> "Lte";
+            case GT -> "Gt"; case GTE -> "Gte";
+            case LIKE -> "Like";
+        };
+        sb.append("new ").append(pkg).append('.').append(cls).append('(')
+          .append(metamodel).append('.').append(attr).append(')');
+    }
+
+    private static void emitIsNullExpr(StringBuilder sb, String pkg, String metamodel, boolean neg, String attr) {
+        sb.append("new ").append(pkg).append('.').append(neg ? "IsNotNull" : "IsNull")
+          .append('(').append(metamodel).append('.').append(attr).append(')');
+    }
+
+    private static void emitBetweenExpr(StringBuilder sb, String pkg, String metamodel, String attr) {
+        sb.append("new ").append(pkg).append(".Between(")
+          .append(metamodel).append('.').append(attr).append(')');
+    }
+
+    private static void emitInExpr(StringBuilder sb, String pkg, String metamodel, String attr, int n) {
+        sb.append("new ").append(pkg).append(".In(")
+          .append(metamodel).append('.').append(attr).append(", ").append(n).append(')');
     }
 
     private static void emitCombinator(StringBuilder sb, String op, List<Pred> children, String metamodel) {
@@ -546,13 +634,17 @@ final class JdqlParser {
 
     private static void collectArgs(Pred p, List<ArgRef> out) {
         switch (p) {
-            case Cmp c       -> out.add(c.arg);
-            case Between b   -> { out.add(b.lo); out.add(b.hi); }
-            case IsNull ign  -> {}
-            case In in       -> out.addAll(in.args);   // works for non-collection literal IN
-            case And a       -> { for (Pred c : a.children) collectArgs(c, out); }
-            case Or  o       -> { for (Pred c : o.children) collectArgs(c, out); }
-            case Not n       -> collectArgs(n.child, out);
+            case Cmp c        -> out.add(c.arg);
+            case FnCmp c      -> out.add(c.arg);
+            case Between b    -> { out.add(b.lo); out.add(b.hi); }
+            case FnBetween b  -> { out.add(b.lo); out.add(b.hi); }
+            case IsNull ign   -> {}
+            case FnIsNull ign -> {}
+            case In in        -> out.addAll(in.args);   // works for non-collection literal IN
+            case FnIn in      -> out.addAll(in.args);
+            case And a        -> { for (Pred c : a.children) collectArgs(c, out); }
+            case Or  o        -> { for (Pred c : o.children) collectArgs(c, out); }
+            case Not n        -> collectArgs(n.child, out);
         }
     }
 
@@ -633,6 +725,9 @@ final class JdqlParser {
             }
         }
         private static boolean isKeyword(String w) {
+            // M8-1 — scalar function names (UPPER/LOWER/LENGTH/ABS/CONCAT) are NOT registered
+            // as keywords here — they would shadow homonym attribute names (e.g. TCK Box.length).
+            // The parser detects them contextually as IDENT followed by '('.
             return switch (w.toUpperCase()) {
                 case "FROM", "WHERE", "ORDER", "BY", "AND", "OR", "NOT",
                      "IS", "NULL", "BETWEEN", "LIKE", "ASC", "DESC",
@@ -793,7 +888,32 @@ final class JdqlParser {
                 lex.consume();
                 return p;
             }
+            // M8-1 — LHS may be a unary scalar function on an attribute: UPPER(name) = ?, …
+            // Detected contextually (IDENT immediately followed by '(') so that attribute
+            // names like Box.length are not shadowed by the LENGTH function name.
+            if (lex.peek().kind == Tk.IDENT) {
+                Token saved = lex.peek();
+                String upper = saved.text.toUpperCase();
+                if (isUnaryFn(upper)) {
+                    lex.consume();
+                    if (lex.peek().kind == Tk.LPAREN) {
+                        lex.consume();
+                        String attr = expectAttr();
+                        if (lex.peek().kind != Tk.RPAREN) throw new ParseException("Expected ')' after " + upper + "(attr)");
+                        lex.consume();
+                        return parseFnRhs(upper, attr);
+                    }
+                    if (!attrNames.contains(saved.text)) {
+                        throw new ParseException("Unknown attribute '" + saved.text + "' on entity " + entityName);
+                    }
+                    return parseRhs(saved.text);
+                }
+            }
             String attr = expectAttr();
+            return parseRhs(attr);
+        }
+
+        private Pred parseRhs(String attr) {
             if (peekKw("IS")) {
                 lex.consume();
                 boolean negated = false;
@@ -825,6 +945,48 @@ final class JdqlParser {
                 }
                 return new In(attr, List.of(parseArg()), true);
             }
+            Op op = expectCmpOp(attr);
+            return new Cmp(attr, op, parseArg());
+        }
+
+        /** M8-1 — RHS parser for {@code fn(attr) ...}. Mirrors {@link #parseRhs} but emits Fn* preds. */
+        private Pred parseFnRhs(String fn, String attr) {
+            if (peekKw("IS")) {
+                lex.consume();
+                boolean negated = false;
+                if (peekKw("NOT")) { lex.consume(); negated = true; }
+                expectKw("NULL");
+                return new FnIsNull(fn, attr, negated);
+            }
+            if (peekKw("BETWEEN")) {
+                lex.consume();
+                ArgRef lo = parseArg();
+                expectKw("AND");
+                ArgRef hi = parseArg();
+                return new FnBetween(fn, attr, lo, hi);
+            }
+            if (peekKw("LIKE")) {
+                lex.consume();
+                return new FnCmp(fn, attr, Op.LIKE, parseArg());
+            }
+            if (peekKw("IN")) {
+                lex.consume();
+                if (lex.peek().kind == Tk.LPAREN) {
+                    lex.consume();
+                    List<ArgRef> elems = new ArrayList<>();
+                    elems.add(parseArg());
+                    while (lex.peek().kind == Tk.COMMA) { lex.consume(); elems.add(parseArg()); }
+                    if (lex.peek().kind != Tk.RPAREN) throw new ParseException("Expected ')' to close IN(...)");
+                    lex.consume();
+                    return new FnIn(fn, attr, elems, false);
+                }
+                return new FnIn(fn, attr, List.of(parseArg()), true);
+            }
+            Op op = expectCmpOp(fn + "(" + attr + ")");
+            return new FnCmp(fn, attr, op, parseArg());
+        }
+
+        private Op expectCmpOp(String label) {
             Op op = switch (lex.peek().kind) {
                 case EQ  -> Op.EQ;
                 case NE  -> Op.NE;
@@ -833,10 +995,14 @@ final class JdqlParser {
                 case GT  -> Op.GT;
                 case GTE -> Op.GTE;
                 default  -> throw new ParseException(
-                        "Expected comparison operator after attribute '" + attr + "', got: " + lex.peek().text);
+                        "Expected comparison operator after '" + label + "', got: " + lex.peek().text);
             };
             lex.consume();
-            return new Cmp(attr, op, parseArg());
+            return op;
+        }
+
+        private static boolean isUnaryFn(String kw) {
+            return switch (kw) { case "UPPER", "LOWER", "LENGTH", "ABS" -> true; default -> false; };
         }
 
         ArgRef parseArg() {

@@ -45,6 +45,11 @@ final class WhereBinder {
             // M7-27 — IgnoreCase wraps a single text comparator that consumes exactly one arg.
             // The dialect renders LOWER(col) <op> LOWER(?), so we still bind one parameter.
             case Where.IgnoreCase w -> psIdx = bind(dialect, ps, w.inner(), args, psIdx, argCursor);
+            // M8-1 — Func(fn, inner) wraps a comparator with a unary scalar function on the
+            // column. UPPER/LOWER/ABS preserve the bound parameter type. LENGTH returns the
+            // character count, so the bound parameter must be Integer instead of the column's
+            // declared Java type.
+            case Where.Func w -> psIdx = bindFunc(dialect, ps, w, args, psIdx, argCursor);
             case Where.AlwaysTrue ignored3  -> { /* no bind */ }
             case Where.AlwaysFalse ignored4 -> { /* no bind */ }
         }
@@ -56,5 +61,48 @@ final class WhereBinder {
         Object value = args[cursor[0]++];
         dialect.bind(ps, psIdx, value, type);
         return psIdx + 1;
+    }
+
+    /**
+     * M8-1 — bind for {@link Where.Func}. {@code LENGTH} forces Integer typing on bound
+     * parameters because the SQL function returns a character count regardless of the column
+     * type. Other unary functions ({@code UPPER}/{@code LOWER}/{@code ABS}) preserve the
+     * column's Java type.
+     */
+    private static int bindFunc(Dialect dialect, PreparedStatement ps, Where.Func func,
+                                Object[] args, int psIdx, int[] argCursor) throws SQLException {
+        if (!"LENGTH".equals(func.fn())) {
+            return bind(dialect, ps, func.inner(), args, psIdx, argCursor);
+        }
+        return bindFuncWithType(dialect, ps, func.inner(), args, psIdx, argCursor, Integer.class);
+    }
+
+    private static int bindFuncWithType(Dialect dialect, PreparedStatement ps, Where inner,
+                                        Object[] args, int psIdx, int[] argCursor,
+                                        Class<?> overrideType) throws SQLException {
+        return switch (inner) {
+            case Where.Eq ignored      -> bindOne(dialect, ps, psIdx, args, argCursor, overrideType);
+            case Where.NotEq ignored   -> bindOne(dialect, ps, psIdx, args, argCursor, overrideType);
+            case Where.Lt ignored      -> bindOne(dialect, ps, psIdx, args, argCursor, overrideType);
+            case Where.Lte ignored     -> bindOne(dialect, ps, psIdx, args, argCursor, overrideType);
+            case Where.Gt ignored      -> bindOne(dialect, ps, psIdx, args, argCursor, overrideType);
+            case Where.Gte ignored     -> bindOne(dialect, ps, psIdx, args, argCursor, overrideType);
+            case Where.Like ignored    -> bindOne(dialect, ps, psIdx, args, argCursor, overrideType);
+            case Where.Between ignored -> bindOne(dialect, ps,
+                    bindOne(dialect, ps, psIdx, args, argCursor, overrideType),
+                    args, argCursor, overrideType);
+            case Where.In w            -> {
+                int p = psIdx;
+                for (int i = 0; i < w.arity(); i++) {
+                    p = bindOne(dialect, ps, p, args, argCursor, overrideType);
+                }
+                yield p;
+            }
+            case Where.IsNull ignored    -> psIdx;
+            case Where.IsNotNull ignored -> psIdx;
+            case Where.Not w             -> bindFuncWithType(dialect, ps, w.child(), args, psIdx, argCursor, overrideType);
+            default -> throw new IllegalArgumentException(
+                    "Func wraps Eq/NotEq/Lt/Lte/Gt/Gte/Like/Between/In/IsNull/IsNotNull/Not only, got: " + inner);
+        };
     }
 }

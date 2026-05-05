@@ -35,6 +35,16 @@ public sealed interface Where {
      * functional indexes on {@code LOWER(col)} kick in.
      */
     record IgnoreCase(Where inner) implements Where {}
+    /**
+     * M8-1 — wraps a comparator with a unary scalar function applied to the column.
+     * {@code fn} is one of {@code "UPPER"}, {@code "LOWER"}, {@code "LENGTH"}, {@code "ABS"}.
+     *
+     * <p>For {@code UPPER}/{@code LOWER}/{@code ABS}, the bound parameter type matches the
+     * column's Java type. For {@code LENGTH}, the bound parameter is forced to {@link Integer}
+     * (returns the character count of a String). Dialects map {@code LENGTH} to the SQL
+     * portable {@code CHAR_LENGTH(...)}.
+     */
+    record Func(String fn, Where inner) implements Where {}
     record AlwaysTrue() implements Where {}
     record AlwaysFalse() implements Where {}
 

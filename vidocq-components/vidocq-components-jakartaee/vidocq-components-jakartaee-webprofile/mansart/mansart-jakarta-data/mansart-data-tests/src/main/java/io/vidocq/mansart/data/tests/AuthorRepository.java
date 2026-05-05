@@ -113,4 +113,27 @@ public interface AuthorRepository extends BasicRepository<Author, Long> {
     long countByNameIgnoreCase(String name);
     long deleteByNameIgnoreCase(String name);
     java.util.List<Author> findByNameContainsIgnoreCase(String fragment);
+
+    /* ---- M8-1 JDQL scalar functions: UPPER / LOWER / LENGTH / ABS / CONCAT ---- */
+
+    @jakarta.data.repository.Query("FROM Author WHERE UPPER(name) = :n")
+    java.util.List<Author> jdqlUpperEq(String n);
+
+    @jakarta.data.repository.Query("FROM Author WHERE LOWER(name) LIKE :p")
+    java.util.List<Author> jdqlLowerLike(String p);
+
+    @jakarta.data.repository.Query("FROM Author WHERE LENGTH(name) > :min")
+    java.util.List<Author> jdqlLengthGt(int min);
+
+    @jakarta.data.repository.Query("FROM Author WHERE LENGTH(name) BETWEEN :lo AND :hi")
+    java.util.List<Author> jdqlLengthBetween(int lo, int hi);
+
+    @jakarta.data.repository.Query("FROM Author WHERE ABS(id) <= :max")
+    java.util.List<Author> jdqlAbsIdLte(long max);
+
+    @jakarta.data.repository.Query("FROM Author WHERE LOWER(name) IN (:a, :b)")
+    java.util.List<Author> jdqlLowerIn(String a, String b);
+
+    @jakarta.data.repository.Query("FROM Author WHERE UPPER(name) IS NOT NULL")
+    long jdqlUpperIsNotNullCount();
 }
