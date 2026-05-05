@@ -245,7 +245,7 @@ final class RepositoryWriter {
 
         String where = renderWhere(d, metamodel);
         String orderBy = renderOrderBy(d, metamodel);
-        String args = "new java.lang.Object[]{" + argsList(predicateArity) + "}";
+        String args = "new java.lang.Object[]{" + renderArgsForPredicates(d.predicates()) + "}";
 
         if (trailingPageRequest && d.op() == QueryMethodParser.Operation.FIND) {
             String runtimeMethod = isCursoredPageReturn(returnType) ? "queryCursored" : "queryPage";
@@ -299,6 +299,8 @@ final class RepositoryWriter {
         for (QueryMethodParser.Predicate p : d.predicates()) {
             String attr = metamodel + "." + p.attribute();
             String paramName = p(idx);
+            // M7-28 — same wrapping logic as predicateExpr: comparator → IgnoreCase → Not.
+            String partExpr;
             switch (p.comparator()) {
                 case IN -> {
                     if (isCollectionLike(paramTypes.get(idx))) {
@@ -306,29 +308,64 @@ final class RepositoryWriter {
                           .append(" = (java.util.Collection<?>) ").append(paramName).append("; ");
                         sb.append("if (_col").append(idx).append(".isEmpty()) ")
                           .append(emptyInReturn(d.op(), returnType)).append(' ');
-                        sb.append("_parts.add(new ").append(pkg).append(".In(").append(attr)
-                          .append(", _col").append(idx).append(".size())); ");
+                        partExpr = "new " + pkg + ".In(" + attr + ", _col" + idx + ".size())";
+                        partExpr = wrapIgnoreCaseAndNot(partExpr, p, pkg);
+                        sb.append("_parts.add(").append(partExpr).append("); ");
                         sb.append("for (Object _v : _col").append(idx).append(") _args.add(_v); ");
                     } else {
-                        sb.append("_parts.add(new ").append(pkg).append(".In(").append(attr).append(", 1)); ");
+                        partExpr = wrapIgnoreCaseAndNot("new " + pkg + ".In(" + attr + ", 1)", p, pkg);
+                        sb.append("_parts.add(").append(partExpr).append("); ");
                         sb.append("_args.add(").append(paramName).append("); ");
                     }
                     idx += 1;
                 }
                 case BETWEEN -> {
-                    sb.append("_parts.add(new ").append(pkg).append(".Between(").append(attr).append(")); ");
+                    partExpr = wrapIgnoreCaseAndNot("new " + pkg + ".Between(" + attr + ")", p, pkg);
+                    sb.append("_parts.add(").append(partExpr).append("); ");
                     sb.append("_args.add(").append(p(idx)).append("); _args.add(").append(p(idx + 1)).append("); ");
                     idx += 2;
                 }
-                case IS_NULL -> {
-                    sb.append("_parts.add(new ").append(pkg).append(".IsNull(").append(attr).append(")); ");
+                case IS_NULL, EMPTY -> {
+                    partExpr = wrapIgnoreCaseAndNot("new " + pkg + ".IsNull(" + attr + ")", p, pkg);
+                    sb.append("_parts.add(").append(partExpr).append("); ");
                 }
-                case IS_NOT_NULL -> {
-                    sb.append("_parts.add(new ").append(pkg).append(".IsNotNull(").append(attr).append(")); ");
+                case IS_NOT_NULL, NOT_EMPTY -> {
+                    partExpr = wrapIgnoreCaseAndNot("new " + pkg + ".IsNotNull(" + attr + ")", p, pkg);
+                    sb.append("_parts.add(").append(partExpr).append("); ");
+                }
+                case TRUE -> {
+                    partExpr = wrapIgnoreCaseAndNot("new " + pkg + ".Eq(" + attr + ")", p, pkg);
+                    sb.append("_parts.add(").append(partExpr).append("); ");
+                    sb.append("_args.add(java.lang.Boolean.TRUE); ");
+                }
+                case FALSE -> {
+                    partExpr = wrapIgnoreCaseAndNot("new " + pkg + ".Eq(" + attr + ")", p, pkg);
+                    sb.append("_parts.add(").append(partExpr).append("); ");
+                    sb.append("_args.add(java.lang.Boolean.FALSE); ");
+                }
+                case CONTAINS -> {
+                    partExpr = wrapIgnoreCaseAndNot("new " + pkg + ".Like(" + attr + ")", p, pkg);
+                    sb.append("_parts.add(").append(partExpr).append("); ");
+                    sb.append("_args.add(\"%\" + ").append(paramName).append(" + \"%\"); ");
+                    idx += 1;
+                }
+                case STARTS_WITH -> {
+                    partExpr = wrapIgnoreCaseAndNot("new " + pkg + ".Like(" + attr + ")", p, pkg);
+                    sb.append("_parts.add(").append(partExpr).append("); ");
+                    sb.append("_args.add(").append(paramName).append(" + \"%\"); ");
+                    idx += 1;
+                }
+                case ENDS_WITH -> {
+                    partExpr = wrapIgnoreCaseAndNot("new " + pkg + ".Like(" + attr + ")", p, pkg);
+                    sb.append("_parts.add(").append(partExpr).append("); ");
+                    sb.append("_args.add(\"%\" + ").append(paramName).append("); ");
+                    idx += 1;
                 }
                 default -> {
-                    sb.append("_parts.add(new ").append(pkg).append('.').append(comparatorClass(p.comparator()))
-                      .append('(').append(attr).append(")); ");
+                    partExpr = wrapIgnoreCaseAndNot(
+                            "new " + pkg + '.' + comparatorClass(p.comparator()) + '(' + attr + ')',
+                            p, pkg);
+                    sb.append("_parts.add(").append(partExpr).append("); ");
                     sb.append("_args.add(").append(paramName).append("); ");
                     idx += 1;
                 }
@@ -354,6 +391,14 @@ final class RepositoryWriter {
             case EXISTS   -> sb.append("return runtime.existsWhere(").append(metamodel).append(".$MODEL, _w, _xs);").toString();
             case DELETE   -> sb.append(deleteBody(returnType, metamodel, "_w", "_xs")).toString();
         };
+    }
+
+    /** M7-28 — wraps a Where expression with IgnoreCase and/or Not according to predicate flags. */
+    private String wrapIgnoreCaseAndNot(String inner, QueryMethodParser.Predicate p, String pkg) {
+        String e = inner;
+        if (p.ignoreCase()) e = "new " + pkg + ".IgnoreCase(" + e + ")";
+        if (p.negated())    e = "new " + pkg + ".Not(" + e + ")";
+        return e;
     }
 
     private String comparatorClass(QueryMethodParser.Comparator c) {
@@ -473,7 +518,7 @@ final class RepositoryWriter {
     private String predicateExpr(QueryMethodParser.Predicate p, String metamodel) {
         String attr = metamodel + "." + p.attribute();
         String pkg = "io.vidocq.mansart.data.dialect.Where";
-        return switch (p.comparator()) {
+        String inner = switch (p.comparator()) {
             case EQ        -> "new " + pkg + ".Eq(" + attr + ")";
             case NOT_EQ    -> "new " + pkg + ".NotEq(" + attr + ")";
             case LT        -> "new " + pkg + ".Lt(" + attr + ")";
@@ -485,13 +530,23 @@ final class RepositoryWriter {
             case IN        -> "new " + pkg + ".In(" + attr + ", 1)"; // arity refined when caller passes a List — M3c
             case IS_NULL    -> "new " + pkg + ".IsNull(" + attr + ")";
             case IS_NOT_NULL -> "new " + pkg + ".IsNotNull(" + attr + ")";
-            // M7-8 — comparators handled only on the runtime path for now. Compile-time emit
-            // falls back to a Like predicate (caller still needs to materialise the wildcard).
+            // M7-28 — wildcards materialised in renderArgsForPredicates; the predicate
+            // itself is a plain Like.
             case CONTAINS, STARTS_WITH, ENDS_WITH -> "new " + pkg + ".Like(" + attr + ")";
+            // M7-28 — TRUE/FALSE: same Eq predicate, args populated with Boolean literal.
             case TRUE, FALSE                      -> "new " + pkg + ".Eq(" + attr + ")";
             case EMPTY                             -> "new " + pkg + ".IsNull(" + attr + ")";
             case NOT_EMPTY                         -> "new " + pkg + ".IsNotNull(" + attr + ")";
         };
+        // M7-28 — IgnoreCase wraps the inner predicate so the dialect emits LOWER(col) <op> LOWER(?).
+        // Done BEFORE Not so the SQL renders as NOT (LOWER(col) <op> LOWER(?)).
+        if (p.ignoreCase()) {
+            inner = "new " + pkg + ".IgnoreCase(" + inner + ")";
+        }
+        if (p.negated()) {
+            inner = "new " + pkg + ".Not(" + inner + ")";
+        }
+        return inner;
     }
 
     private String renderOrderBy(QueryMethodParser.QueryDescriptor d, String metamodel) {
@@ -513,6 +568,68 @@ final class RepositoryWriter {
         for (int i = 0; i < arity; i++) {
             if (i > 0) sb.append(", ");
             sb.append(p(i));
+        }
+        return sb.toString();
+    }
+
+    /**
+     * M7-28 — emits the bound-args list expression for a sequence of predicates, materialising:
+     * <ul>
+     *   <li>{@code CONTAINS} → {@code "%" + p<i> + "%"}</li>
+     *   <li>{@code STARTS_WITH} → {@code p<i> + "%"}</li>
+     *   <li>{@code ENDS_WITH} → {@code "%" + p<i>}</li>
+     *   <li>{@code TRUE} / {@code FALSE} → {@code Boolean.TRUE} / {@code Boolean.FALSE} (no method param)</li>
+     *   <li>{@code IS_NULL} / {@code IS_NOT_NULL} / {@code EMPTY} / {@code NOT_EMPTY} → no arg</li>
+     *   <li>{@code BETWEEN} → two parameter refs</li>
+     *   <li>everything else → one parameter ref</li>
+     * </ul>
+     * The parameter index advances only when a real method parameter is consumed.
+     */
+    private String renderArgsForPredicates(List<QueryMethodParser.Predicate> preds) {
+        StringBuilder sb = new StringBuilder();
+        int paramIdx = 0;
+        boolean first = true;
+        for (QueryMethodParser.Predicate pr : preds) {
+            switch (pr.comparator()) {
+                case CONTAINS -> {
+                    if (!first) sb.append(", ");
+                    sb.append("\"%\" + ").append(p(paramIdx++)).append(" + \"%\"");
+                    first = false;
+                }
+                case STARTS_WITH -> {
+                    if (!first) sb.append(", ");
+                    sb.append(p(paramIdx++)).append(" + \"%\"");
+                    first = false;
+                }
+                case ENDS_WITH -> {
+                    if (!first) sb.append(", ");
+                    sb.append("\"%\" + ").append(p(paramIdx++));
+                    first = false;
+                }
+                case TRUE -> {
+                    if (!first) sb.append(", ");
+                    sb.append("java.lang.Boolean.TRUE");
+                    first = false;
+                }
+                case FALSE -> {
+                    if (!first) sb.append(", ");
+                    sb.append("java.lang.Boolean.FALSE");
+                    first = false;
+                }
+                case BETWEEN -> {
+                    if (!first) sb.append(", ");
+                    sb.append(p(paramIdx++)).append(", ").append(p(paramIdx++));
+                    first = false;
+                }
+                case IS_NULL, IS_NOT_NULL, EMPTY, NOT_EMPTY -> {
+                    /* no argument */
+                }
+                default -> {
+                    if (!first) sb.append(", ");
+                    sb.append(p(paramIdx++));
+                    first = false;
+                }
+            }
         }
         return sb.toString();
     }

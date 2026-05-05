@@ -343,11 +343,40 @@ Sous-jalons livrés :
 - Index fonctionnels `CREATE INDEX ON … (LOWER(col))` exploitables.
 - Correct sur datasets mixed-case (l'ancien hack n'aurait jamais matché `"Victor Hugo"` avec arg `"victor hugo"`).
 
-### Reste à faire (post-M7-27)
+### M7-28 — Compile-time RepositoryWriter : parité avec runtime ✅ DONE (2026-05-05)
+
+Le compile-time `RepositoryWriter` ne supportait correctement que `EQ`/`NOT_EQ`/`LT`/`LTE`/`GT`/`GTE`/`LIKE`/`BETWEEN`/`IN`/`IS_NULL`/`IS_NOT_NULL`. Pour les comparators ajoutés au runtime (M7-8 et M7-27), il y avait des bugs latents :
+
+- `CONTAINS`/`STARTS_WITH`/`ENDS_WITH` → mappés sur `Where.Like` mais SANS materialisation des `%` autour de l'arg → l'arg était passé brut au PreparedStatement → résultats vides systématiques.
+- `TRUE`/`FALSE` → mappés sur `Where.Eq` mais aucun arg `Boolean.TRUE`/`Boolean.FALSE` n'était ajouté à `Object[]` → erreur runtime de comptage de bind.
+- `EMPTY`/`NOT_EMPTY` → corrects (pas de bind), mais le mixed-In path n'avait pas la branche.
+- `IgnoreCase` flag → ignoré complètement.
+- `Not` (`negated`) flag → ignoré complètement.
+
+Implémentation :
+- [x] `predicateExpr` : ajoute le wrapping `IgnoreCase(...)` puis `Not(...)` autour du predicate inner.
+- [x] Nouveau `renderArgsForPredicates(List<Predicate>)` qui materialise :
+  - `CONTAINS` → `"%" + p<i> + "%"`
+  - `STARTS_WITH` → `p<i> + "%"`
+  - `ENDS_WITH` → `"%" + p<i>`
+  - `TRUE` → `Boolean.TRUE`, `FALSE` → `Boolean.FALSE`
+  - `IS_NULL`/`IS_NOT_NULL`/`EMPTY`/`NOT_EMPTY` → no arg
+  - `BETWEEN` → 2 refs, default → 1 ref
+- [x] Nouveau helper `wrapIgnoreCaseAndNot(inner, p, pkg)` partagé par predicateExpr et mixedInBody.
+- [x] mixedInBody (cas In(Collection)) propage la même logique pour tous les cas.
+- [x] Fixture entité étendue dans `AuthorRepository` (compile-time) : `findByNameContains`, `findByNameStartsWith`, `findByNameEndsWith`, `findByNameIgnoreCase`, `findByNameLikeIgnoreCase`, `findByNameNotIgnoreCase`, `countByNameIgnoreCase`, `deleteByNameIgnoreCase`, `findByNameContainsIgnoreCase`.
+- [x] Nouveau test `CompiletimeComparatorsTest` (9 tests) — passe par `MansartData.repository(...)` (compile-time path) avec dataset mixed-case (Victor Hugo / VICTOR HUGO / victor hugo / Émile Zola / Honoré de Balzac).
+
+**Régression** :
+- 93/93 tests internes ✅ (84 + 9 nouveaux CompiletimeComparators)
+- 74/74 TCK H2 ✅ (73 EntityTests + 1 SignatureTests)
+- 74/74 TCK PG ✅
+
+Le compile-time path est désormais en **parité fonctionnelle complète** avec le runtime path pour tous les comparators de Jakarta Data 1.0 standalone.
+
+### Reste à faire (post-M7-28)
 - [ ] **TCK PersistenceTests / NoSQLTests** — autres sub-suites (NoSQL hors scope v1 ; PersistenceTests dépend de `mansart-persistence`).
 - [ ] **JDQL feature gaps** : subqueries, joins explicites, agrégations multi-attributs.
-- [ ] **`IgnoreCase` via SQL `LOWER()`** au lieu du value-lowercasing actuel (fragile sur les datasets non-ASCII).
-- [ ] **Compile-time RepositoryWriter** — émettre les nouveaux comparators ajoutés au runtime (`CONTAINS`/`STARTS_WITH`/`ENDS_WITH`/`TRUE`/`FALSE`/`EMPTY`) — runtime-only actuellement, écart compile/runtime.
 - [ ] **mansart-persistence** — Jakarta Persistence 3.2 (JPA classique), encore placeholder.
 - [ ] **mansart-pool** — pool JDBC virtual-thread-native, sous-roadmap MP1-MP4 (peer indépendant).
 - [ ] **vidocq orchestrator** — SPI extensions style Quarkus, packaging, bootstrap.

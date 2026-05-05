@@ -26,7 +26,7 @@
 ## État
 
 - **Jakarta Data 1.0 TCK : 74/74 PASS** sur **H2** ✅ et **74/74 PASS** sur **PostgreSQL 17** ✅ (73 EntityTests + 1 SignatureTests, Testcontainers).
-- **Tests internes : 79/79 unit + 6/6 smoke Arquillian** — voir `mansart-data-tests/`.
+- **Tests internes : 93/93 unit + 6/6 smoke Arquillian** — voir `mansart-data-tests/`.
 - Dialectes livrés : `H2`, `PostgreSQL`.
 - Mode bootstrap **standalone** (`MansartData.builder()`) ou **CDI 4.1 Lite** (BCE — Vauban / Weld / OpenWebBeans).
 

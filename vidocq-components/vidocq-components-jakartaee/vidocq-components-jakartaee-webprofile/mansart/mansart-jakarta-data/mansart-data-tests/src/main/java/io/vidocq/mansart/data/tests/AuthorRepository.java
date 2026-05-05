@@ -101,4 +101,16 @@ public interface AuthorRepository extends BasicRepository<Author, Long> {
 
     @jakarta.data.repository.Query("SELECT name FROM Author WHERE id = ?1")
     java.util.Optional<String> jdqlNameById(Long id);
+
+    /* ---- M7-28 compile-time: comparators emitted by RepositoryWriter ---- */
+
+    java.util.List<Author> findByNameContains(String fragment);
+    java.util.List<Author> findByNameStartsWith(String prefix);
+    java.util.List<Author> findByNameEndsWith(String suffix);
+    java.util.List<Author> findByNameIgnoreCase(String name);
+    java.util.List<Author> findByNameLikeIgnoreCase(String pattern);
+    java.util.List<Author> findByNameNotIgnoreCase(String name);
+    long countByNameIgnoreCase(String name);
+    long deleteByNameIgnoreCase(String name);
+    java.util.List<Author> findByNameContainsIgnoreCase(String fragment);
 }
