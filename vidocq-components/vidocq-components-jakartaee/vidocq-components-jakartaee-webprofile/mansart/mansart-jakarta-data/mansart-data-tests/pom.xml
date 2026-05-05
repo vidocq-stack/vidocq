@@ -16,8 +16,8 @@
 
     <dependencies>
         <dependency>
-            <groupId>io.vidocq.mansart</groupId>
-            <artifactId>mansart-data-api</artifactId>
+            <groupId>jakarta.persistence</groupId>
+            <artifactId>jakarta.persistence-api</artifactId>
         </dependency>
         <dependency>
             <groupId>io.vidocq.mansart</groupId>

@@ -83,15 +83,15 @@ Voir `PLAN.md` pour la roadmap complète et `BUG.md` pour les bugs ouverts/clos.
 
 ### 1. Une entité
 
-Annotations Mansart (zéro-dep) **ou** annotations JPA (`jakarta.persistence`) — Mansart reconnaît les deux. Si les deux sont présentes sur la même classe, l'APT échoue avec un message clair.
+Annotations standard `jakarta.persistence.*` (Jakarta Persistence 3.2) — c'est une API spec, pas une implémentation, donc compatible avec la philosophie zéro-dep.
 
 ```java
 package shop;
 
-import io.vidocq.mansart.data.Entity;
-import io.vidocq.mansart.data.Id;
-import io.vidocq.mansart.data.GeneratedValue;
-import io.vidocq.mansart.data.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.Column;
 
 @Entity
 public class Author {
@@ -208,23 +208,25 @@ Le BCE est standard CDI 4.1 Lite — compatible Vauban (Vidocq), Weld embedded, 
 
 ## Annotations entité
 
-`mansart-data-api` expose un set minimal zéro-dep, miroir des annotations JPA :
+Mansart utilise les annotations standard **`jakarta.persistence.*`** (Jakarta Persistence 3.2). C'est une **API spec**, pas une implémentation — l'engagement « zéro-dep externe » de Vidocq porte sur les implémentations, et la spec Jakarta est le standard officiel sur lequel s'aligner.
 
-| Annotation Mansart | Équivalent JPA |
+| Annotation utilisée | Rôle |
 | --- | --- |
-| `@Entity` | `@jakarta.persistence.Entity` |
-| `@Table(name, schema)` | idem |
-| `@Id` | idem |
-| `@GeneratedValue(strategy)` | idem (`AUTO`, `IDENTITY`, `SEQUENCE`) |
-| `@Column(name, nullable, unique, length)` | idem |
-| `@Version` | idem (optimistic locking) |
-| `@Enumerated(STRING\|ORDINAL)` | idem |
-| `@Transient` | idem |
-| `@ManyToOne(fetch)` | idem |
-| `@OneToOne(fetch)` | idem |
-| `@JoinColumn(name)` | idem |
-| `@Embedded` / `@Embeddable` | idem |
-| `@MansartDataSource("name")` | (extension Mansart — sélection de DataSource) |
+| `@jakarta.persistence.Entity` | Marque une classe persistante. |
+| `@jakarta.persistence.Table(name, schema)` | Surcharge la convention pluriel snake_case. |
+| `@jakarta.persistence.Id` | Identifiant. |
+| `@jakarta.persistence.GeneratedValue(strategy)` | `AUTO`, `IDENTITY`, `SEQUENCE`. |
+| `@jakarta.persistence.Column(name, nullable, unique, length)` | Surcharge nom de colonne. |
+| `@jakarta.persistence.Version` | Optimistic locking. |
+| `@jakarta.persistence.Enumerated(STRING\|ORDINAL)` | Persistance enum. |
+| `@jakarta.persistence.Transient` | Exclu du mapping. |
+| `@jakarta.persistence.ManyToOne(fetch)` | Relation propriétaire many-to-one. |
+| `@jakarta.persistence.OneToOne(fetch)` | Relation propriétaire one-to-one. |
+| `@jakarta.persistence.JoinColumn(name)` | Nom de la colonne FK (défaut `<attr>_id`). |
+| `@jakarta.persistence.Embedded` / `@Embeddable` | Mapping inline. |
+| `@io.vidocq.mansart.data.core.MansartDataSource("name")` | **Extension Mansart** — sélection de DataSource côté repository quand plusieurs sont injectables. |
+
+Bénéfice secondaire : interop totale avec Hibernate, EclipseLink, Spring Data, et le futur `mansart-persistence` (JPA 3.2). Static metamodel JPA standard (`Author_.id`, `Author_.name`) généré en parallèle du métamodèle Mansart riche (`_Author.$MODEL`).
 
 Conventions par défaut (sans `@Table` / `@Column`) :
 - Table = pluriel snake_case (`Book` → `books`, `OrderLine` → `order_lines`).
@@ -324,7 +326,6 @@ Le runner TCK est en `modelVersion 4.0.0` standalone, **volontairement détaché
 
 | Module | Description |
 | --- | --- |
-| [`mansart-data-api`](mansart-data-api/) | Annotations Mansart zéro-dep (miroir de JPA) + extension `@MansartDataSource`. |
 | [`mansart-data-dialects/mansart-data-dialect-spi`](mansart-data-dialects/mansart-data-dialect-spi/) | SPI : `Dialect`, `DialectFactory`, `EntityModel`, `Attribute` (sealed), `Where`, `OrderBy`, `Pagination`, `SqlFragment`. |
 | [`mansart-data-dialects/mansart-data-dialect-h2`](mansart-data-dialects/mansart-data-dialect-h2/) | Dialecte H2 (`provides DialectFactory`). |
 | [`mansart-data-dialects/mansart-data-dialect-postgresql`](mansart-data-dialects/mansart-data-dialect-postgresql/) | Dialecte PostgreSQL (`provides DialectFactory`). |

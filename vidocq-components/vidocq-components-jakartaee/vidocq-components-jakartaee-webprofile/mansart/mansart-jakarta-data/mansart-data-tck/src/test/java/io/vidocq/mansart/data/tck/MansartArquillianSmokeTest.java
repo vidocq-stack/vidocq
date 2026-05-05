@@ -37,7 +37,7 @@ public class MansartArquillianSmokeTest extends Arquillian {
     public static Archive<?> deployment() {
         return ShrinkWrap.create(JavaArchive.class, "mansart-arquillian-smoke.jar")
                 // Mansart implementation modules (impl + dialect + CDI BCE wiring)
-                .addPackages(true, "io.vidocq.mansart.data.api")
+                // M7-29: mansart-data-api retired — no longer added.
                 .addPackages(true, "io.vidocq.mansart.data.dialect")
                 .addPackages(true, "io.vidocq.mansart.data.core")
                 .addPackages(true, "io.vidocq.mansart.data.cdi")

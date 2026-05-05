@@ -1,6 +1,5 @@
 module io.vidocq.mansart.data.processor {
     requires java.compiler;
-    requires io.vidocq.mansart.data.api;
     requires io.vidocq.mansart.data.dialect.spi;
     requires io.vidocq.mansart.data.core;
 

@@ -34,7 +34,6 @@
     </properties>
 
     <subprojects>
-        <subproject>mansart-data-api</subproject>
         <subproject>mansart-data-dialects</subproject>
         <subproject>mansart-data-core</subproject>
         <subproject>mansart-data-processor</subproject>
@@ -70,11 +69,6 @@
                 <version>${jakarta.transaction.version}</version>
             </dependency>
 
-            <dependency>
-                <groupId>io.vidocq.mansart</groupId>
-                <artifactId>mansart-data-api</artifactId>
-                <version>${project.version}</version>
-            </dependency>
             <dependency>
                 <groupId>io.vidocq.mansart</groupId>
                 <artifactId>mansart-data-dialect-spi</artifactId>

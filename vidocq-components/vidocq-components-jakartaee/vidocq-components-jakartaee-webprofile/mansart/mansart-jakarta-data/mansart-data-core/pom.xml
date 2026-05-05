@@ -19,6 +19,13 @@
             <groupId>io.vidocq.mansart</groupId>
             <artifactId>mansart-data-dialect-spi</artifactId>
         </dependency>
+        <!-- M7-29 — jakarta.data-api is the spec consumed by RepositoryRuntime, MansartPage,
+             MansartCursoredPage, etc. Brought in compile-direct since mansart-data-api
+             (which used to expose it transitively) was retired. -->
+        <dependency>
+            <groupId>jakarta.data</groupId>
+            <artifactId>jakarta.data-api</artifactId>
+        </dependency>
         <!-- jakarta.transaction-api will be re-added in M3 when the runtime uses UserTransaction. -->
     </dependencies>
 </project>

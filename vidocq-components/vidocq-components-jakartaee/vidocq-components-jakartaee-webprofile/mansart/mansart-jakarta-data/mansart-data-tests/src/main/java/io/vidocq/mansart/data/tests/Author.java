@@ -1,9 +1,9 @@
 package io.vidocq.mansart.data.tests;
 
-import io.vidocq.mansart.data.Column;
-import io.vidocq.mansart.data.Entity;
-import io.vidocq.mansart.data.GeneratedValue;
-import io.vidocq.mansart.data.Id;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.Id;
 
 @Entity
 public class Author {

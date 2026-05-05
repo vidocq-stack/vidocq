@@ -1,9 +1,9 @@
 package io.vidocq.mansart.data.tck;
 
-import io.vidocq.mansart.data.Entity;
-import io.vidocq.mansart.data.GeneratedValue;
-import io.vidocq.mansart.data.Id;
 import io.vidocq.mansart.data.cdi.MansartDataExtension;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.Id;
 import io.vidocq.mansart.data.dialect.h2.H2DialectFactory;
 import jakarta.data.repository.BasicRepository;
 import jakarta.data.repository.Repository;
@@ -32,7 +32,8 @@ import static org.testng.Assert.assertNotNull;
  */
 public class RuntimeRepoArquillianTest extends Arquillian {
 
-    @Entity(name = "widgets")
+    @Entity
+    @jakarta.persistence.Table(name = "widgets")
     public static class Widget {
         @Id @GeneratedValue private Long id;
         private String label;
@@ -50,7 +51,7 @@ public class RuntimeRepoArquillianTest extends Arquillian {
         // NO mansart-repositories.list — the BCE @Enhancement must be the only path that
         // makes WidgetRepository injectable.
         return ShrinkWrap.create(JavaArchive.class, "runtime-repo-arquillian.jar")
-                .addPackages(true, "io.vidocq.mansart.data.api")
+                // M7-29: mansart-data-api retired — no longer added.
                 .addPackages(true, "io.vidocq.mansart.data.dialect")
                 .addPackages(true, "io.vidocq.mansart.data.core")
                 .addPackages(true, "io.vidocq.mansart.data.cdi")

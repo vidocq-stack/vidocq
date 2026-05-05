@@ -374,7 +374,44 @@ Implémentation :
 
 Le compile-time path est désormais en **parité fonctionnelle complète** avec le runtime path pour tous les comparators de Jakarta Data 1.0 standalone.
 
-### Reste à faire (post-M7-28)
+### M7-29 — Suppression de `mansart-data-api` ✅ DONE (2026-05-05)
+
+`mansart-data-api` exposait 17 annotations (`@Entity`, `@Id`, `@Column`, `@Table`, `@GeneratedValue`, `@Version`, `@Transient`, `@ManyToOne`, `@OneToOne`, `@JoinColumn`, `@Embedded`, `@Embeddable`, `@Enumerated`, `@EnumType`, `@FetchType`, `@GenerationType`, `@MansartDataSource`) — **16 mirrors strict de `jakarta.persistence.*`** + 1 extension propre (`@MansartDataSource`).
+
+**Pourquoi c'était redondant** : `jakarta.persistence-api:3.2.0` est une **API spec** sous l'ombrelle Eclipse Foundation, exactement au même titre que `jakarta.data-api:1.0.1` qu'on tire déjà. La philosophie « zéro-dep externe » de Vidocq porte sur les **implémentations** (Hibernate, EclipseLink, …), pas sur les spec API. Donc miroirer JPA était de la sur-modularisation sans bénéfice réel.
+
+Changements :
+- [x] Module `mansart-data-api` **entièrement supprimé** (subproject + 17 annotations + module-info + pom + README + dependencyManagement parent).
+- [x] `@MansartDataSource` (la seule annotation propre) déplacée dans `mansart-data-core` (package `io.vidocq.mansart.data.core`).
+- [x] `EnumType` (énumération de stockage `STRING`/`ORDINAL`) remplacée par `EnumStorage` local au dialect-spi (garde le SPI dialecte pur JDK).
+- [x] `EntityScanner` (compile-time) : retirée la branche `MANSART` du `AnnotationDialect`, supprimée la conflict rule « both Mansart and JPA », ne lit plus que `jakarta.persistence.*`.
+- [x] `RuntimeEntityModelBuilder` (runtime) : supprimées toutes les recherches d'annotations Mansart (Id, Version, ManyToOne, OneToOne, GeneratedValue, Transient, Table, Column, JoinColumn).
+- [x] `MansartProcessor` : `@SupportedAnnotationTypes` ne déclare plus `io.vidocq.mansart.data.Entity` ; init utilise directement la présence de `jakarta.persistence-api`.
+- [x] `MansartMetamodelWriter` : génération `EnumAttribute` utilise `EnumStorage.ORDINAL` au lieu de `io.vidocq.mansart.data.EnumType.ORDINAL`.
+- [x] Entités tests (`Author`, `Book`, `Article`) + entité Arquillian (`Widget`) migrées vers `jakarta.persistence.*`.
+- [x] `mansart-data-core/pom.xml` : ajout dep directe `jakarta.data-api` (apportée auparavant transitivement via `mansart-data-api`).
+- [x] `mansart-data-dialect-spi/pom.xml` + `module-info.java` : `requires transitive jakarta.data` (les exceptions Jakarta + types Page sont sur le SPI).
+- [x] `module-info.java` × 3 (dialect-spi, core, processor) nettoyés des `requires io.vidocq.mansart.data.api`.
+- [x] `mansart-data-tck/pom.xml` : remplace `mansart-data-api` par `jakarta.persistence-api` (les Widget entities du smoke utilisent JPA).
+- [x] Smoke harness Arquillian : `addPackages("io.vidocq.mansart.data.api")` retiré (le package n'existe plus).
+
+**Bénéfices** :
+- Suppression d'un module entier (17 classes + module-info + pom + README).
+- Plus de duplication conceptuelle entre Mansart et JPA.
+- Plus de règle « si les deux jeux d'annotations sont posés → erreur compile » à maintenir.
+- Interop totale avec Hibernate, EclipseLink, Spring Data, et le futur `mansart-persistence` (JPA 3.2 standard).
+- Static metamodel JPA standard (`Author_.id`, `Author_.name`) utilisable en parallèle du Mansart riche (`_Author.$MODEL`).
+- Cohérence : `jakarta.data-api` + `jakarta.persistence-api` côté API, Mansart ne ré-expose que ses extensions propres (`@MansartDataSource`).
+
+**Régression** :
+- 93/93 tests internes ✅
+- 6/6 smoke Arquillian ✅
+- 73/73 + 1/1 = **74/74 TCK H2** ✅
+- 73/73 + 1/1 = **74/74 TCK PG** ✅
+
+**Décision verrouillée n°3 révisée** : `~~hybride Mansart/JPA~~` → **JPA-only** (M7-29). Mansart ne ré-expose que `@MansartDataSource`.
+
+### Reste à faire (post-M7-29)
 - [ ] **TCK PersistenceTests / NoSQLTests** — autres sub-suites (NoSQL hors scope v1 ; PersistenceTests dépend de `mansart-persistence`).
 - [ ] **JDQL feature gaps** : subqueries, joins explicites, agrégations multi-attributs.
 - [ ] **mansart-persistence** — Jakarta Persistence 3.2 (JPA classique), encore placeholder.

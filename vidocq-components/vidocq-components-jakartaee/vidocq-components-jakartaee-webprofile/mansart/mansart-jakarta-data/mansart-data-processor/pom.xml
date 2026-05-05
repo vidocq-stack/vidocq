@@ -17,10 +17,6 @@
     <dependencies>
         <dependency>
             <groupId>io.vidocq.mansart</groupId>
-            <artifactId>mansart-data-api</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.vidocq.mansart</groupId>
             <artifactId>mansart-data-dialect-spi</artifactId>
         </dependency>
         <!-- M7-2: QueryMethodParser moved here so it is shared with the runtime path
@@ -29,8 +25,9 @@
             <groupId>io.vidocq.mansart</groupId>
             <artifactId>mansart-data-core</artifactId>
         </dependency>
-        <!-- jakarta.persistence-api kept compile-only and optional: the processor only reads the
-             annotation type names through javax.lang.model, never loads JPA classes at runtime. -->
+        <!-- M7-29: jakarta.persistence-api is the sole entity-mapping API surface (no more
+             Mansart mirror annotations). The processor only reads annotation FQNs through
+             javax.lang.model, never loads JPA classes at runtime, so it stays optional. -->
         <dependency>
             <groupId>jakarta.persistence</groupId>
             <artifactId>jakarta.persistence-api</artifactId>

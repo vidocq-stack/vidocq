@@ -5,8 +5,10 @@
 module io.vidocq.mansart.data.core {
     requires transitive io.vidocq.mansart.data.dialect.spi;
     requires java.sql;
-    // jakarta.transaction will be re-added in M3b once the runtime uses UserTransaction
-    // (its module-info has `requires static jakarta.cdi`, which drags jakarta.cdi at compile time).
+    requires jakarta.data;
+    // M7-29: JPA mapping annotations are read by name via reflection
+    // (RuntimeEntityModelBuilder.hasAnnotation), so jakarta.persistence is not strictly required
+    // at runtime. We don't `requires` it here to keep mansart-data-core dep-free.
 
     exports io.vidocq.mansart.data.core;
 

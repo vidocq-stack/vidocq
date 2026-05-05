@@ -1,6 +1,5 @@
 package io.vidocq.mansart.data.dialect.attribute;
 
-import io.vidocq.mansart.data.EnumType;
 import io.vidocq.mansart.data.dialect.Attribute;
 
 import java.lang.invoke.MethodHandle;
@@ -12,7 +11,7 @@ public record EnumAttribute<E, V extends Enum<V>>(
         Class<E> entityType,
         boolean nullable,
         boolean unique,
-        EnumType storage,
+        EnumStorage storage,
         MethodHandle getter,
         MethodHandle setter
 ) implements Attribute<E, V> {

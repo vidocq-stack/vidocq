@@ -59,9 +59,9 @@
     <dependencies>
         <!-- Mansart implementation under test -->
         <dependency>
-            <groupId>io.vidocq.mansart</groupId>
-            <artifactId>mansart-data-api</artifactId>
-            <version>${mansart.version}</version>
+            <groupId>jakarta.persistence</groupId>
+            <artifactId>jakarta.persistence-api</artifactId>
+            <version>3.2.0</version>
         </dependency>
         <dependency>
             <groupId>io.vidocq.mansart</groupId>

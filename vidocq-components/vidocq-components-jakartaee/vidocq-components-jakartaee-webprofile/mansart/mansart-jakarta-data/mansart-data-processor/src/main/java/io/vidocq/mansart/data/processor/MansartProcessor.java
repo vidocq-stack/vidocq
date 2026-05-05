@@ -15,7 +15,6 @@ import java.util.Set;
 
 @SupportedSourceVersion(SourceVersion.RELEASE_25)
 @SupportedAnnotationTypes({
-        "io.vidocq.mansart.data.Entity",
         "jakarta.persistence.Entity",
         "jakarta.data.repository.Repository"
 })
@@ -25,16 +24,19 @@ public final class MansartProcessor extends AbstractProcessor {
     private MansartMetamodelWriter    mansartWriter;
     private JpaMetamodelWriter        jpaWriter;
     private RepositoryWriter          repositoryWriter;
-    private boolean                   jpaPresent;
     private final java.util.List<String> repoEntries = new java.util.ArrayList<>();
 
     @Override
     public synchronized void init(ProcessingEnvironment env) {
         super.init(env);
-        this.jpaPresent       = EntityScanner.isJpaPresent(env);
-        this.scanner          = new EntityScanner(env, jpaPresent);
+        this.scanner          = new EntityScanner(env);
         this.mansartWriter    = new MansartMetamodelWriter(env.getFiler());
-        this.jpaWriter        = jpaPresent ? new JpaMetamodelWriter(env.getFiler()) : null;
+        // M7-29 — JPA static metamodel emission only when the SingularAttribute SPI is present
+        // on the user's classpath (jakarta.persistence-api 3.2 ships it). Always-on otherwise
+        // would force the dep on every consumer.
+        this.jpaWriter        = env.getElementUtils()
+                .getTypeElement("jakarta.persistence.metamodel.SingularAttribute") != null
+                ? new JpaMetamodelWriter(env.getFiler()) : null;
         this.repositoryWriter = new RepositoryWriter(env.getFiler(),
                 env.getElementUtils(), env.getTypeUtils());
     }
@@ -54,7 +56,7 @@ public final class MansartProcessor extends AbstractProcessor {
             for (Element e : round.getElementsAnnotatedWith(annotation)) {
                 if (!(e instanceof TypeElement t)) continue;
                 if (fqn.equals("jakarta.data.repository.Repository")) repositories.add(t);
-                else                                                  entities.add(t);
+                else if (fqn.equals("jakarta.persistence.Entity"))    entities.add(t);
             }
         }
 

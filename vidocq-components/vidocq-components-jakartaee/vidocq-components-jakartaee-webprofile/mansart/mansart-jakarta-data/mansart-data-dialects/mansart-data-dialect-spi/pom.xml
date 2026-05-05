@@ -14,10 +14,14 @@
     <name>Mansart :: Data :: Dialect SPI</name>
     <description>Pluggable SQL dialect SPI shared between Mansart Data and Mansart Persistence.</description>
 
+    <!-- M7-29: EnumStorage replaces the previous io.vidocq.mansart.data.EnumType import
+         (mansart-data-api retired). jakarta.data-api is part of the SPI surface
+         (jakarta.data.exceptions thrown by Dialect.translate, jakarta.data.page used by
+         dialects to lower Pagination). -->
     <dependencies>
         <dependency>
-            <groupId>io.vidocq.mansart</groupId>
-            <artifactId>mansart-data-api</artifactId>
+            <groupId>jakarta.data</groupId>
+            <artifactId>jakarta.data-api</artifactId>
         </dependency>
     </dependencies>
 </project>

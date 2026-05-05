@@ -32,9 +32,14 @@ import java.util.Optional;
 /**
  * Runtime equivalent of {@code mansart-data-processor.EntityScanner} +
  * {@code MansartMetamodelWriter}: builds an {@link EntityModel} for an entity class via
- * reflection, supporting both Mansart and JPA mapping annotations. Used by the M7 runtime
- * fallback path when a {@code @Repository} interface is discovered for which no compile-time
- * {@code _Entity} metamodel exists (typically: TCK entities, ad-hoc usages without APT).
+ * reflection, reading the standard JPA mapping annotations ({@code @jakarta.persistence.*}).
+ * Used by the M7 runtime path when a {@code @Repository} interface is discovered for which
+ * no compile-time {@code _Entity} metamodel exists (typically: TCK entities, ad-hoc usages
+ * without APT).
+ *
+ * <p>M7-29: dropped the parallel {@code io.vidocq.mansart.data.*} mirror annotations —
+ * {@code jakarta.persistence-api} is a spec API jar, not an implementation, so the
+ * « zero external impl » philosophy holds with the standard names.
  */
 public final class RuntimeEntityModelBuilder {
 
@@ -65,7 +70,6 @@ public final class RuntimeEntityModelBuilder {
                 int mods = field.getModifiers();
                 if (Modifier.isStatic(mods) || Modifier.isTransient(mods)) continue;
                 if (hasAnnotation(field, "jakarta.persistence.Transient")) continue;
-                if (hasAnnotation(field, "io.vidocq.mansart.data.Transient")) continue;
                 persistedFields.add(field);
             }
 
@@ -104,8 +108,7 @@ public final class RuntimeEntityModelBuilder {
     }
 
     private static boolean isExplicitId(Field field) {
-        return hasAnnotation(field, "jakarta.persistence.Id")
-            || hasAnnotation(field, "io.vidocq.mansart.data.Id");
+        return hasAnnotation(field, "jakarta.persistence.Id");
     }
 
     /**
@@ -165,18 +168,12 @@ public final class RuntimeEntityModelBuilder {
         String name = field.getName();
         Class<?> type = boxed(field.getType());
 
-        boolean isId       = implicitId
-                          || hasAnnotation(field, "jakarta.persistence.Id")
-                          || hasAnnotation(field, "io.vidocq.mansart.data.Id");
-        boolean isVersion  = hasAnnotation(field, "jakarta.persistence.Version")
-                          || hasAnnotation(field, "io.vidocq.mansart.data.Version");
-        boolean isManyToOne = hasAnnotation(field, "jakarta.persistence.ManyToOne")
-                          || hasAnnotation(field, "io.vidocq.mansart.data.ManyToOne");
-        boolean isOneToOne  = hasAnnotation(field, "jakarta.persistence.OneToOne")
-                          || hasAnnotation(field, "io.vidocq.mansart.data.OneToOne");
+        boolean isId        = implicitId || hasAnnotation(field, "jakarta.persistence.Id");
+        boolean isVersion   = hasAnnotation(field, "jakarta.persistence.Version");
+        boolean isManyToOne = hasAnnotation(field, "jakarta.persistence.ManyToOne");
+        boolean isOneToOne  = hasAnnotation(field, "jakarta.persistence.OneToOne");
         boolean isReference = isManyToOne || isOneToOne;
-        boolean generated  = hasAnnotation(field, "jakarta.persistence.GeneratedValue")
-                          || hasAnnotation(field, "io.vidocq.mansart.data.GeneratedValue");
+        boolean generated   = hasAnnotation(field, "jakarta.persistence.GeneratedValue");
 
         String columnName = readColumnName(field, isReference);
         boolean nullable  = readBooleanColumnAttr(field, "nullable", true);
@@ -204,7 +201,9 @@ public final class RuntimeEntityModelBuilder {
         }
         if (type.isEnum()) {
             return new EnumAttribute(name, columnName, type, entityClass,
-                    nullable, unique, io.vidocq.mansart.data.EnumType.ORDINAL, getter, setter);
+                    nullable, unique,
+                    io.vidocq.mansart.data.dialect.attribute.EnumStorage.ORDINAL,
+                    getter, setter);
         }
         if (type == String.class) {
             return new TextAttribute<>(name, columnName, entityClass, nullable, unique, length, getter, setter);
@@ -250,29 +249,18 @@ public final class RuntimeEntityModelBuilder {
     private static String readTableName(Class<?> entityClass) {
         String name = readAnnoMember(entityClass, "jakarta.persistence.Table",
                 "name", String.class, "");
-        if (name.isEmpty()) {
-            name = readAnnoMember(entityClass, "io.vidocq.mansart.data.Table",
-                    "name", String.class, "");
-        }
         if (name.isEmpty()) name = SqlNames.tableName(entityClass.getSimpleName());
         return name;
     }
 
     private static String readSchema(Class<?> entityClass) {
-        String s = readAnnoMember(entityClass, "jakarta.persistence.Table",
+        return readAnnoMember(entityClass, "jakarta.persistence.Table",
                 "schema", String.class, "");
-        if (s.isEmpty()) {
-            s = readAnnoMember(entityClass, "io.vidocq.mansart.data.Table",
-                    "schema", String.class, "");
-        }
-        return s;
     }
 
     private static String readColumnName(Field field, boolean isReference) {
         String n = readAnnoMember(field, "jakarta.persistence.Column", "name", String.class, "");
-        if (n.isEmpty()) n = readAnnoMember(field, "io.vidocq.mansart.data.Column", "name", String.class, "");
         if (n.isEmpty()) n = readAnnoMember(field, "jakarta.persistence.JoinColumn", "name", String.class, "");
-        if (n.isEmpty()) n = readAnnoMember(field, "io.vidocq.mansart.data.JoinColumn", "name", String.class, "");
         if (n.isEmpty()) {
             n = isReference
                     ? SqlNames.foreignKeyColumn(field.getName())
@@ -283,15 +271,11 @@ public final class RuntimeEntityModelBuilder {
 
     private static boolean readBooleanColumnAttr(Field field, String member, boolean def) {
         Boolean b = readAnnoMember(field, "jakarta.persistence.Column", member, Boolean.class, null);
-        if (b != null) return b;
-        b = readAnnoMember(field, "io.vidocq.mansart.data.Column", member, Boolean.class, def);
         return b == null ? def : b;
     }
 
     private static long readIntColumnAttr(Field field, String member, long def) {
         Integer i = readAnnoMember(field, "jakarta.persistence.Column", member, Integer.class, null);
-        if (i != null) return i.longValue();
-        i = readAnnoMember(field, "io.vidocq.mansart.data.Column", member, Integer.class, (int) def);
         return i == null ? def : i.longValue();
     }
 

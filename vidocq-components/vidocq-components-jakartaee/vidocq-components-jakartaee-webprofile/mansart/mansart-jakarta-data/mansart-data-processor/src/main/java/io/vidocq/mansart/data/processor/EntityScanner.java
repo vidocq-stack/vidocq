@@ -18,42 +18,29 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Walks an {@code @Entity}-annotated {@link TypeElement} and produces a {@link EntityDescriptor}
- * by reading either the Mansart annotations or the JPA annotations (whichever set is present).
+ * Walks an {@code @jakarta.persistence.Entity}-annotated {@link TypeElement} and produces a
+ * {@link EntityDescriptor} by reading the standard JPA mapping annotations
+ * ({@code @Id}, {@code @Column}, {@code @Table}, {@code @Version}, {@code @ManyToOne},
+ * {@code @JoinColumn}, …).
  *
- * <p>Conflict rule: a class carrying both {@code @io.vidocq.mansart.data.Entity} and
- * {@code @jakarta.persistence.Entity} fails compilation with a clear error.
+ * <p>Mansart used to ship its own mirror annotations ({@code @io.vidocq.mansart.data.Entity},
+ * etc.) for « zero-dep » purity; that was retired in M7-29 — {@code jakarta.persistence-api}
+ * is a spec API jar with no implementation, so the philosophy holds with the standard names.
  */
 final class EntityScanner {
 
     private final ProcessingEnvironment env;
-    private final boolean jpaPresent;
 
-    EntityScanner(ProcessingEnvironment env, boolean jpaPresent) {
+    EntityScanner(ProcessingEnvironment env) {
         this.env = env;
-        this.jpaPresent = jpaPresent;
     }
 
     EntityDescriptor scan(TypeElement type) {
-        boolean mansartEntity = hasAnnotation(type, "io.vidocq.mansart.data.Entity");
-        boolean jpaEntity     = hasAnnotation(type, "jakarta.persistence.Entity");
-
-        if (mansartEntity && jpaEntity) {
-            error(type, "Choose one annotation set: either @io.vidocq.mansart.data.Entity "
-                    + "or @jakarta.persistence.Entity, not both.");
-            return null;
-        }
-        if (!mansartEntity && !jpaEntity) {
-            return null; // not an entity
-        }
-
-        AnnotationDialect dialect = jpaEntity ? AnnotationDialect.JPA : AnnotationDialect.MANSART;
-        if (jpaEntity && !jpaPresent) {
-            error(type, "@jakarta.persistence.Entity used but jakarta.persistence-api is not on "
-                    + "the compile classpath of this module.");
+        if (!hasAnnotation(type, "jakarta.persistence.Entity")) {
             return null;
         }
 
+        AnnotationDialect dialect = AnnotationDialect.JPA;
         String tableName = readEntityTable(type, dialect);
         String schema    = readEntitySchema(type, dialect);
 
@@ -141,7 +128,7 @@ final class EntityScanner {
     /* ----- helpers ---- */
 
     static boolean isJpaPresent(ProcessingEnvironment env) {
-        return env.getElementUtils().getTypeElement("jakarta.persistence.metamodel.SingularAttribute") != null;
+        return env.getElementUtils().getTypeElement("jakarta.persistence.Entity") != null;
     }
 
     private boolean hasAnnotation(Element e, String fqn) {
@@ -251,16 +238,6 @@ final class EntityScanner {
     ) {}
 
     private enum AnnotationDialect {
-        MANSART(
-                "io.vidocq.mansart.data.Id",
-                "io.vidocq.mansart.data.Version",
-                "io.vidocq.mansart.data.Column",
-                "io.vidocq.mansart.data.Table",
-                "io.vidocq.mansart.data.Transient",
-                "io.vidocq.mansart.data.GeneratedValue",
-                "io.vidocq.mansart.data.ManyToOne",
-                "io.vidocq.mansart.data.OneToOne",
-                "io.vidocq.mansart.data.JoinColumn"),
         JPA(
                 "jakarta.persistence.Id",
                 "jakarta.persistence.Version",
@@ -281,12 +258,5 @@ final class EntityScanner {
             this.tableAnno = table; this.transientAnno = tr; this.generatedValueAnno = gv;
             this.manyToOneAnno = m2o; this.oneToOneAnno = o2o; this.joinColumnAnno = join;
         }
-
-        // Used when scanning the entity itself — the @Entity annotation FQN is the same name "Entity"
-        // but in different packages; only used for table lookups, so we don't track it here.
-    }
-
-    static {
-        // Keep AnnotationDialect referenced for the compiler (the field is package-private).
     }
 }
