@@ -152,6 +152,12 @@
                     <version>${maven.compiler.plugin.version}</version>
                     <configuration>
                         <release>25</release>
+                        <!-- Keep parameter names in the .class files so APT and the runtime
+                             proxy (M7-3 @Query :name resolution) can read them. -->
+                        <parameters>true</parameters>
+                        <compilerArgs>
+                            <arg>-parameters</arg>
+                        </compilerArgs>
                     </configuration>
                 </plugin>
                 <plugin>

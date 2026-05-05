@@ -34,6 +34,9 @@ class RuntimeRepositoryTest {
     @Repository
     public interface RuntimeAuthorRepository extends BasicRepository<Author, Long> {
 
+        long count();
+        boolean existsById(Long id);
+
         // M7-2 — derived queries on the runtime path
         java.util.List<Author>     findByName(String name);
         java.util.List<Author>     findByNameLike(String pattern);
@@ -43,6 +46,20 @@ class RuntimeRepositoryTest {
         long                       deleteByName(String name);
         java.util.List<Author>     findByNameIn(java.util.List<String> names);
         java.util.List<Author>     findAllByOrderByNameAsc();
+
+        // M7-3 — @Query JDQL on the runtime path. Uses ?N positional params because the
+        // -parameters flag isn't reliably honoured by maven-compiler-plugin 4.0.0-beta-4 yet.
+        @jakarta.data.repository.Query("FROM Author WHERE name = ?1")
+        java.util.List<Author> jdqlByName(String name);
+
+        @jakarta.data.repository.Query("SELECT COUNT(*) FROM Author WHERE name LIKE ?1")
+        long jdqlCountLike(String pattern);
+
+        @jakarta.data.repository.Query("UPDATE Author SET name = ?2 WHERE name = ?1")
+        long jdqlRename(String oldName, String newName);
+
+        @jakarta.data.repository.Query("DELETE FROM Author WHERE name LIKE ?1")
+        long jdqlDeleteLike(String pattern);
     }
 
     private static DataSource dataSource;
@@ -158,6 +175,35 @@ class RuntimeRepositoryTest {
         assertThat(runtimeRepo.findOneByName("Iris"))
                 .isPresent().get().extracting(Author::getName).isEqualTo("Iris");
         assertThat(runtimeRepo.findOneByName("Nope")).isEmpty();
+    }
+
+    /* ---- M7-3 @Query JDQL via runtime proxy ---- */
+
+    @Test
+    void jdqlSelectByName() {
+        runtimeRepo.save(newAuthor("Jules"));
+        runtimeRepo.save(newAuthor("Karl"));
+        var hits = runtimeRepo.jdqlByName("Jules");
+        assertThat(hits).extracting(Author::getName).containsExactly("Jules");
+    }
+
+    @Test
+    void jdqlSelectCountLike() {
+        runtimeRepo.save(newAuthor("L1"));
+        runtimeRepo.save(newAuthor("L2"));
+        runtimeRepo.save(newAuthor("M1"));
+        assertThat(runtimeRepo.jdqlCountLike("L%")).isEqualTo(2L);
+    }
+
+    @Test
+    void jdqlUpdateAndDelete() {
+        runtimeRepo.save(newAuthor("Pre"));
+        runtimeRepo.save(newAuthor("Pre"));
+        long renamed = runtimeRepo.jdqlRename("Pre", "Post");
+        assertThat(renamed).isEqualTo(2L);
+        long deleted = runtimeRepo.jdqlDeleteLike("Pos%");
+        assertThat(deleted).isEqualTo(2L);
+        assertThat(runtimeRepo.count()).isZero();
     }
 
     private static Author newAuthor(String name) {

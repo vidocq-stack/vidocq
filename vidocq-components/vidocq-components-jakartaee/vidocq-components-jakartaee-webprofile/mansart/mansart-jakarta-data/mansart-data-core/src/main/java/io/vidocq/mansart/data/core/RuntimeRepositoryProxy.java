@@ -107,12 +107,14 @@ public final class RuntimeRepositoryProxy {
 
         for (Method m : allInterfaceMethods(repoInterface)) {
             if (m.isDefault() || m.getDeclaringClass() == Object.class) continue;
-            Dispatcher d = inheritedDispatcher(m);
+            Dispatcher d = jdqlDispatcher(m, model, attributeNames);
+            if (d == null) d = lifecycleDispatcher(m, model);
+            if (d == null) d = inheritedDispatcher(m);
             if (d == null) d = derivedDispatcher(m, model, attributeNames);
             if (d == null) {
                 d = (rt, em, args) -> { throw unsupported(m,
-                        "compile-time Impl missing AND not parseable as a derived query — "
-                      + "use mansart-data-processor at compile time, or wait for M7-3 (@Query / lifecycle support)."); };
+                        "compile-time Impl missing AND not handled by runtime fallback (no @Query, no lifecycle, "
+                      + "no inherited match, no parseable derived name)."); };
             }
             out.put(m, d);
         }
@@ -128,6 +130,82 @@ public final class RuntimeRepositoryProxy {
     private static void collectMethods(Class<?> itf, List<Method> out) {
         for (Method m : itf.getDeclaredMethods()) out.add(m);
         for (Class<?> parent : itf.getInterfaces()) collectMethods(parent, out);
+    }
+
+    /* ---- @Query dispatcher (M7-3) ---- */
+
+    private static Dispatcher jdqlDispatcher(Method m, EntityModel<?> model,
+                                             java.util.Set<String> attributeNames) {
+        String jdql = readQueryAnnotationValue(m);
+        if (jdql == null) return null;
+        String entitySimple = model.entityClass().getSimpleName();
+        JdqlAst.Stmt stmt;
+        try {
+            stmt = JdqlAst.parse(jdql, attributeNames, entitySimple);
+        } catch (JdqlAst.ParseException e) {
+            throw new MansartDataException("@Query parse error on " + m.getName() + ": "
+                    + e.getMessage() + " — " + jdql, e);
+        }
+        Map<String, Attribute<?, ?>> attrIdx = new java.util.HashMap<>();
+        for (Attribute<?, ?> a : model.attributes()) attrIdx.put(a.name(), a);
+        Map<String, Integer> nameToIdx = JdqlExecutor.nameToIndexFor(m);
+        return (rt, em, args) -> JdqlExecutor.execute(stmt, m, em, attrIdx, rt,
+                args == null ? new Object[0] : args, nameToIdx);
+    }
+
+    private static String readQueryAnnotationValue(Method m) {
+        for (java.lang.annotation.Annotation a : m.getDeclaredAnnotations()) {
+            if (a.annotationType().getName().equals("jakarta.data.repository.Query")) {
+                try {
+                    return (String) a.annotationType().getMethod("value").invoke(a);
+                } catch (ReflectiveOperationException ignored) {
+                    return null;
+                }
+            }
+        }
+        return null;
+    }
+
+    /* ---- Lifecycle dispatchers (@Insert/@Update/@Delete/@Save) — M7-3 ---- */
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static Dispatcher lifecycleDispatcher(Method m, EntityModel<?> model) {
+        if (m.getParameterCount() != 1) return null;
+        // Only fire for methods declared on the user's repository — Jakarta Data's BasicRepository
+        // .save / .delete carry @Save / @Delete in the spec but with upsert / silent-delete
+        // semantics, handled by inheritedDispatcher.
+        String declFqn = m.getDeclaringClass().getName();
+        if (declFqn.startsWith("jakarta.data.")) return null;
+        boolean isVoid = m.getReturnType() == void.class;
+        if (hasJakartaAnnotation(m, "jakarta.data.repository.Insert")) {
+            return (rt, em, args) -> {
+                Object out = rt.insertStrict((EntityModel) em, args[0]);
+                return isVoid ? null : out;
+            };
+        }
+        if (hasJakartaAnnotation(m, "jakarta.data.repository.Update")) {
+            return (rt, em, args) -> {
+                Object out = rt.updateStrict((EntityModel) em, args[0]);
+                return isVoid ? null : out;
+            };
+        }
+        if (hasJakartaAnnotation(m, "jakarta.data.repository.Save")) {
+            return (rt, em, args) -> {
+                Object out = rt.save((EntityModel) em, args[0]);
+                return isVoid ? null : out;
+            };
+        }
+        if (hasJakartaAnnotation(m, "jakarta.data.repository.Delete")) {
+            return (rt, em, args) -> { rt.deleteStrict((EntityModel) em, args[0]); return null; };
+        }
+        return null;
+    }
+
+    private static boolean hasJakartaAnnotation(Method m, String fqn) {
+        for (java.lang.annotation.Annotation a : m.getDeclaredAnnotations()) {
+            if (a.annotationType().getName().equals(fqn)) return true;
+        }
+        return false;
     }
 
     /* ---- Inherited BasicRepository/CrudRepository methods ---- */
