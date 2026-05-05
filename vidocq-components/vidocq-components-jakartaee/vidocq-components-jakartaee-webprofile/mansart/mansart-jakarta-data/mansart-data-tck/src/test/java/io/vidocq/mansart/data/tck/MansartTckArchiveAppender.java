@@ -45,6 +45,23 @@ public class MansartTckArchiveAppender implements ApplicationArchiveProcessor {
 
         cc.addClass(H2DataSourceProducer.class);
 
+        // M7-22 — EntityTests.createDeployment() in the TCK jar only ships EntityTests + Box
+        // + Boxes; MultipleEntityRepo and Coordinate stay in the TCK jar but are missing from
+        // the deployment archive, leaving @Inject MultipleEntityRepo shared null and breaking
+        // testUpdateQueryWith[out]WhereClause. We side-load them by FQN so the archive's
+        // ByteArrayClassLoader can find them and the BCE @Enhancement scan can register them.
+        for (String fqn : new String[]{
+                "ee.jakarta.tck.data.standalone.entity.MultipleEntityRepo",
+                "ee.jakarta.tck.data.standalone.entity.Coordinate"
+        }) {
+            try {
+                cc.addClass(Thread.currentThread().getContextClassLoader().loadClass(fqn));
+            } catch (ClassNotFoundException ignored) {
+                // Test class isn't on the classpath — non-EntityTests deployments will hit
+                // this path and that's fine; they just don't need these classes.
+            }
+        }
+
         rc.addAsResource(new StringAsset(MansartDataExtension.class.getName() + "\n"),
                 "META-INF/services/" + BuildCompatibleExtension.class.getName());
         rc.addAsResource(new StringAsset(H2DialectFactory.class.getName() + "\n"),

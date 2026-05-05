@@ -112,6 +112,14 @@ Statuts : `OPEN` → `INVESTIGATING` → `FIXED` (commit hash) → `CLOSED`.
         pas convertir VARCHAR vers une classe enum via `getObject(idx, enumClass)`.
         Réduit `JdbcSQLFeatureNotSupportedException` (30 → 0). **Score TCK** :
         73 → 21 PASS / 14 FAIL / 38 ERR.
+      - **M7-22** *(partiel 2026-05-05)* — `MansartTckArchiveAppender` side-load
+        `MultipleEntityRepo` et `Coordinate` depuis le jar TCK (classes présentes
+        mais omises de `EntityTests.createDeployment()`). Lexer JDQL accepte les
+        suffixes Java `0.0d`/`0.0f`/`123L` (sinon parse error sur `DELETE FROM
+        Coordinate WHERE x > 0.0d`). Score TCK inchangé : 71 PASS / 0 FAIL /
+        2 ERR — les 2 erreurs résiduelles restent car `MultipleEntityRepo` est
+        un repo MULTI-entité (Box ET Coordinate) que mon proxy runtime ne
+        supporte pas (un proxy = une `EntityModel`). M7-23+ pour étendre.
       - **M7-21** *(LIVRÉ 2026-05-05)* — `JdqlExecutor.execute` étend l'OrderBy
         de la clause `ORDER BY` JDQL avec les paramètres `Sort<E>` / `Sort[]` /
         `Order<E>` runtime. Sans ça, une `@Query` sans `ORDER BY` ignorait les

@@ -120,7 +120,14 @@ public final class JdqlAst {
                         int s = pos;
                         if (c == '-') pos++;
                         while (pos < src.length() && (Character.isDigit(src.charAt(pos)) || src.charAt(pos) == '.')) pos++;
-                        return new Token(Tk.NUM_LIT, src.substring(s, pos));
+                        // JDQL accepts the Java numeric suffixes l/L (long), f/F (float), d/D (double).
+                        // Strip them for parsing — the AST stores Long / Double values.
+                        int end = pos;
+                        if (pos < src.length()) {
+                            char sfx = src.charAt(pos);
+                            if (sfx == 'l' || sfx == 'L' || sfx == 'f' || sfx == 'F' || sfx == 'd' || sfx == 'D') pos++;
+                        }
+                        return new Token(Tk.NUM_LIT, src.substring(s, end));
                     }
                     if (c == '\'') {
                         pos++;
