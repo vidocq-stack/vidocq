@@ -3,6 +3,7 @@ package io.vidocq.mansart.data.dialect.h2;
 import io.vidocq.mansart.data.dialect.Attribute;
 import io.vidocq.mansart.data.dialect.Dialect;
 import io.vidocq.mansart.data.dialect.EntityModel;
+import io.vidocq.mansart.data.dialect.Joins;
 import io.vidocq.mansart.data.dialect.OrderBy;
 import io.vidocq.mansart.data.dialect.Pagination;
 import io.vidocq.mansart.data.dialect.SqlFragment;
@@ -30,11 +31,44 @@ public final class H2Dialect implements Dialect {
 
     @Override
     public SqlFragment select(EntityModel<?> model, Where where, OrderBy orderBy, Pagination pagination) {
+        // M8-3 — collect joins from the predicate / orderBy. Empty plan ⇒ classic single-table SQL.
+        Joins.Plan plan = Joins.collect(where, orderBy);
         StringBuilder sb = new StringBuilder("SELECT ");
-        appendColumnList(sb, model);
+        if (plan.isEmpty()) {
+            appendColumnList(sb, model);
+            sb.append(" FROM ").append(qualified(model));
+            appendWhere(sb, where, plan);
+            appendOrderBy(sb, orderBy, plan);
+        } else {
+            appendAliasedColumnList(sb, model, Joins.ROOT_ALIAS);
+            sb.append(" FROM ").append(qualified(model)).append(' ').append(Joins.ROOT_ALIAS);
+            appendJoins(sb, plan);
+            appendWhere(sb, where, plan);
+            appendOrderBy(sb, orderBy, plan);
+        }
+        appendPagination(sb, pagination);
+        return new SqlFragment(sb.toString(), java.util.List.of());
+    }
+
+    @Override
+    public SqlFragment selectColumns(EntityModel<?> model, java.util.List<ProjectedColumn> columns,
+                                     Where where, OrderBy orderBy, Pagination pagination) {
+        Joins.Plan plan = Joins.collect(where, orderBy);
+        StringBuilder sb = new StringBuilder("SELECT ");
+        for (int i = 0; i < columns.size(); i++) {
+            if (i > 0) sb.append(", ");
+            switch (columns.get(i)) {
+                case ProjectedColumn.Leaf leaf -> sb.append(col(leaf.attr(), plan));
+                case ProjectedColumn.Expr exp  -> sb.append(exp.sqlFragment());
+            }
+        }
         sb.append(" FROM ").append(qualified(model));
-        appendWhere(sb, where);
-        appendOrderBy(sb, orderBy);
+        if (!plan.isEmpty()) {
+            sb.append(' ').append(Joins.ROOT_ALIAS);
+            appendJoins(sb, plan);
+        }
+        appendWhere(sb, where, plan);
+        appendOrderBy(sb, orderBy, plan);
         appendPagination(sb, pagination);
         return new SqlFragment(sb.toString(), java.util.List.of());
     }
@@ -57,6 +91,12 @@ public final class H2Dialect implements Dialect {
 
     @Override
     public SqlFragment update(EntityModel<?> model, Where where) {
+        // M8-3 — UPDATE/DELETE statements with joined predicates fall back to a subquery rewrite
+        // because ANSI SQL doesn't allow JOIN in UPDATE/DELETE on every backend. For now, throw
+        // if a path expression is detected. Single-table predicates work as before.
+        Joins.Plan plan = Joins.collect(where, OrderBy.NONE);
+        if (!plan.isEmpty()) throw new IllegalStateException(
+                "UPDATE with joined predicate is not yet supported (path: " + plan.aliasByPath().keySet() + ")");
         StringBuilder sb = new StringBuilder("UPDATE ").append(qualified(model)).append(" SET ");
         boolean first = true;
         for (Attribute<?, ?> a : model.attributes()) {
@@ -65,14 +105,17 @@ public final class H2Dialect implements Dialect {
             sb.append('"').append(a.columnName()).append("\" = ?");
             first = false;
         }
-        appendWhere(sb, where);
+        appendWhere(sb, where, plan);
         return new SqlFragment(sb.toString(), java.util.List.of());
     }
 
     @Override
     public SqlFragment delete(EntityModel<?> model, Where where) {
+        Joins.Plan plan = Joins.collect(where, OrderBy.NONE);
+        if (!plan.isEmpty()) throw new IllegalStateException(
+                "DELETE with joined predicate is not yet supported (path: " + plan.aliasByPath().keySet() + ")");
         StringBuilder sb = new StringBuilder("DELETE FROM ").append(qualified(model));
-        appendWhere(sb, where);
+        appendWhere(sb, where, plan);
         return new SqlFragment(sb.toString(), java.util.List.of());
     }
 
@@ -213,26 +256,61 @@ public final class H2Dialect implements Dialect {
         }
     }
 
-    private void appendWhere(StringBuilder sb, Where where) {
-        if (where instanceof Where.AlwaysTrue) return;
-        sb.append(" WHERE ");
-        renderPredicate(sb, where);
+    /** M8-3 — column list aliased on {@code rootAlias} for joined queries. */
+    private void appendAliasedColumnList(StringBuilder sb, EntityModel<?> model, String rootAlias) {
+        boolean first = true;
+        for (Attribute<?, ?> a : model.attributes()) {
+            if (!first) sb.append(", ");
+            sb.append(rootAlias).append(".\"").append(a.columnName()).append('"');
+            first = false;
+        }
     }
 
-    private void renderPredicate(StringBuilder sb, Where where) {
+    /** M8-3 — emit one {@code INNER JOIN target tN ON parentAlias."fk" = tN."pk"} per step. */
+    private void appendJoins(StringBuilder sb, Joins.Plan plan) {
+        for (var entry : plan.entriesInOrder()) {
+            var path = entry.path();
+            String alias = entry.alias();
+            // The parent of a multi-step path is the prefix without its last hop. For a single
+            // hop the parent is the root alias.
+            String parentAlias = path.steps().size() == 1
+                    ? Joins.ROOT_ALIAS
+                    : plan.aliasByPath().get(path.prefix(path.steps().size() - 1));
+            var step = path.steps().get(path.steps().size() - 1);
+            sb.append(" INNER JOIN ");
+            if (!step.targetSchemaName().isEmpty()) sb.append('"').append(step.targetSchemaName()).append("\".");
+            sb.append('"').append(step.targetTableName()).append("\" ").append(alias)
+              .append(" ON ").append(parentAlias).append(".\"").append(step.foreignKeyColumn()).append('"')
+              .append(" = ").append(alias).append(".\"").append(step.referencedColumn()).append('"');
+        }
+    }
+
+    /** M8-3 — qualify a column with its owning table alias (root if plain attr, joined alias if joined). */
+    private String col(Attribute<?, ?> a, Joins.Plan plan) {
+        if (plan.isEmpty()) return "\"" + a.columnName() + "\"";
+        return plan.tableAliasFor(a) + ".\"" + a.columnName() + "\"";
+    }
+
+    private void appendWhere(StringBuilder sb, Where where, Joins.Plan plan) {
+        if (where instanceof Where.AlwaysTrue) return;
+        sb.append(" WHERE ");
+        renderPredicate(sb, where, plan);
+    }
+
+    private void renderPredicate(StringBuilder sb, Where where, Joins.Plan plan) {
         switch (where) {
-            case Where.Eq w        -> sb.append('"').append(w.attr().columnName()).append("\" = ?");
-            case Where.NotEq w     -> sb.append('"').append(w.attr().columnName()).append("\" <> ?");
-            case Where.Lt w        -> sb.append('"').append(w.attr().columnName()).append("\" < ?");
-            case Where.Lte w       -> sb.append('"').append(w.attr().columnName()).append("\" <= ?");
-            case Where.Gt w        -> sb.append('"').append(w.attr().columnName()).append("\" > ?");
-            case Where.Gte w       -> sb.append('"').append(w.attr().columnName()).append("\" >= ?");
-            case Where.Like w      -> sb.append('"').append(w.attr().columnName()).append("\" LIKE ?");
-            case Where.IsNull w    -> sb.append('"').append(w.attr().columnName()).append("\" IS NULL");
-            case Where.IsNotNull w -> sb.append('"').append(w.attr().columnName()).append("\" IS NOT NULL");
-            case Where.Between w   -> sb.append('"').append(w.attr().columnName()).append("\" BETWEEN ? AND ?");
+            case Where.Eq w        -> sb.append(col(w.attr(), plan)).append(" = ?");
+            case Where.NotEq w     -> sb.append(col(w.attr(), plan)).append(" <> ?");
+            case Where.Lt w        -> sb.append(col(w.attr(), plan)).append(" < ?");
+            case Where.Lte w       -> sb.append(col(w.attr(), plan)).append(" <= ?");
+            case Where.Gt w        -> sb.append(col(w.attr(), plan)).append(" > ?");
+            case Where.Gte w       -> sb.append(col(w.attr(), plan)).append(" >= ?");
+            case Where.Like w      -> sb.append(col(w.attr(), plan)).append(" LIKE ?");
+            case Where.IsNull w    -> sb.append(col(w.attr(), plan)).append(" IS NULL");
+            case Where.IsNotNull w -> sb.append(col(w.attr(), plan)).append(" IS NOT NULL");
+            case Where.Between w   -> sb.append(col(w.attr(), plan)).append(" BETWEEN ? AND ?");
             case Where.In w -> {
-                sb.append('"').append(w.attr().columnName()).append("\" IN (");
+                sb.append(col(w.attr(), plan)).append(" IN (");
                 for (int i = 0; i < w.arity(); i++) { if (i > 0) sb.append(", "); sb.append('?'); }
                 sb.append(')');
             }
@@ -240,7 +318,7 @@ public final class H2Dialect implements Dialect {
                 sb.append('(');
                 for (int i = 0; i < w.children().size(); i++) {
                     if (i > 0) sb.append(" AND ");
-                    renderPredicate(sb, w.children().get(i));
+                    renderPredicate(sb, w.children().get(i), plan);
                 }
                 sb.append(')');
             }
@@ -248,45 +326,42 @@ public final class H2Dialect implements Dialect {
                 sb.append('(');
                 for (int i = 0; i < w.children().size(); i++) {
                     if (i > 0) sb.append(" OR ");
-                    renderPredicate(sb, w.children().get(i));
+                    renderPredicate(sb, w.children().get(i), plan);
                 }
                 sb.append(')');
             }
             case Where.Not w -> {
                 sb.append("NOT (");
-                renderPredicate(sb, w.child());
+                renderPredicate(sb, w.child(), plan);
                 sb.append(')');
             }
-            // M7-27 — case-insensitive comparator wrapper. We wrap the column with LOWER(...)
-            // and the bound parameter with LOWER(?). The driver still binds the original String;
-            // the database does the case-folding (locale-aware, index-friendly).
-            case Where.IgnoreCase w -> renderIgnoreCase(sb, w.inner());
+            // M7-27 — case-insensitive comparator wrapper.
+            case Where.IgnoreCase w -> renderIgnoreCase(sb, w.inner(), plan);
             // M8-1 — unary scalar function on the column (UPPER/LOWER/LENGTH/ABS).
-            case Where.Func w -> renderFunc(sb, w.fn(), w.inner());
+            case Where.Func w -> renderFunc(sb, w.fn(), w.inner(), plan);
             case Where.AlwaysTrue ignored  -> sb.append("1=1");
             case Where.AlwaysFalse ignored -> sb.append("1=0");
         }
     }
 
-    private void renderIgnoreCase(StringBuilder sb, Where inner) {
+    private void renderIgnoreCase(StringBuilder sb, Where inner, Joins.Plan plan) {
         switch (inner) {
-            case Where.Eq w      -> sb.append("LOWER(\"").append(w.attr().columnName()).append("\") = LOWER(?)");
-            case Where.NotEq w   -> sb.append("LOWER(\"").append(w.attr().columnName()).append("\") <> LOWER(?)");
-            case Where.Like w    -> sb.append("LOWER(\"").append(w.attr().columnName()).append("\") LIKE LOWER(?)");
-            case Where.Lt w      -> sb.append("LOWER(\"").append(w.attr().columnName()).append("\") < LOWER(?)");
-            case Where.Lte w     -> sb.append("LOWER(\"").append(w.attr().columnName()).append("\") <= LOWER(?)");
-            case Where.Gt w      -> sb.append("LOWER(\"").append(w.attr().columnName()).append("\") > LOWER(?)");
-            case Where.Gte w     -> sb.append("LOWER(\"").append(w.attr().columnName()).append("\") >= LOWER(?)");
-            case Where.Between w -> sb.append("LOWER(\"").append(w.attr().columnName()).append("\") BETWEEN LOWER(?) AND LOWER(?)");
+            case Where.Eq w      -> sb.append("LOWER(").append(col(w.attr(), plan)).append(") = LOWER(?)");
+            case Where.NotEq w   -> sb.append("LOWER(").append(col(w.attr(), plan)).append(") <> LOWER(?)");
+            case Where.Like w    -> sb.append("LOWER(").append(col(w.attr(), plan)).append(") LIKE LOWER(?)");
+            case Where.Lt w      -> sb.append("LOWER(").append(col(w.attr(), plan)).append(") < LOWER(?)");
+            case Where.Lte w     -> sb.append("LOWER(").append(col(w.attr(), plan)).append(") <= LOWER(?)");
+            case Where.Gt w      -> sb.append("LOWER(").append(col(w.attr(), plan)).append(") > LOWER(?)");
+            case Where.Gte w     -> sb.append("LOWER(").append(col(w.attr(), plan)).append(") >= LOWER(?)");
+            case Where.Between w -> sb.append("LOWER(").append(col(w.attr(), plan)).append(") BETWEEN LOWER(?) AND LOWER(?)");
             case Where.In w -> {
-                sb.append("LOWER(\"").append(w.attr().columnName()).append("\") IN (");
+                sb.append("LOWER(").append(col(w.attr(), plan)).append(") IN (");
                 for (int i = 0; i < w.arity(); i++) { if (i > 0) sb.append(", "); sb.append("LOWER(?)"); }
                 sb.append(')');
             }
-            // Negation wraps the inner; recurse so NOT (LOWER(col) <op> LOWER(?)) renders correctly.
             case Where.Not w -> {
                 sb.append("NOT (");
-                renderIgnoreCase(sb, w.child());
+                renderIgnoreCase(sb, w.child(), plan);
                 sb.append(')');
             }
             default -> throw new IllegalArgumentException(
@@ -296,31 +371,29 @@ public final class H2Dialect implements Dialect {
 
     /**
      * M8-1 — render {@code fn(col) <op> ?} for unary scalar JDQL functions. {@code LENGTH} is
-     * mapped to the SQL-portable {@code CHAR_LENGTH(...)}; the others ({@code UPPER},
-     * {@code LOWER}, {@code ABS}) translate verbatim. The bound parameter type is overridden
-     * by {@link io.vidocq.mansart.data.core.WhereBinder#bindFunc} when needed.
+     * mapped to the SQL-portable {@code CHAR_LENGTH(...)}.
      */
-    private void renderFunc(StringBuilder sb, String fn, Where inner) {
+    private void renderFunc(StringBuilder sb, String fn, Where inner, Joins.Plan plan) {
         String sqlFn = "LENGTH".equals(fn) ? "CHAR_LENGTH" : fn;
         switch (inner) {
-            case Where.Eq w      -> appendFnLhs(sb, sqlFn, w.attr().columnName(), " = ?");
-            case Where.NotEq w   -> appendFnLhs(sb, sqlFn, w.attr().columnName(), " <> ?");
-            case Where.Like w    -> appendFnLhs(sb, sqlFn, w.attr().columnName(), " LIKE ?");
-            case Where.Lt w      -> appendFnLhs(sb, sqlFn, w.attr().columnName(), " < ?");
-            case Where.Lte w     -> appendFnLhs(sb, sqlFn, w.attr().columnName(), " <= ?");
-            case Where.Gt w      -> appendFnLhs(sb, sqlFn, w.attr().columnName(), " > ?");
-            case Where.Gte w     -> appendFnLhs(sb, sqlFn, w.attr().columnName(), " >= ?");
-            case Where.Between w -> appendFnLhs(sb, sqlFn, w.attr().columnName(), " BETWEEN ? AND ?");
-            case Where.IsNull w    -> appendFnLhs(sb, sqlFn, w.attr().columnName(), " IS NULL");
-            case Where.IsNotNull w -> appendFnLhs(sb, sqlFn, w.attr().columnName(), " IS NOT NULL");
+            case Where.Eq w      -> appendFnLhs(sb, sqlFn, col(w.attr(), plan), " = ?");
+            case Where.NotEq w   -> appendFnLhs(sb, sqlFn, col(w.attr(), plan), " <> ?");
+            case Where.Like w    -> appendFnLhs(sb, sqlFn, col(w.attr(), plan), " LIKE ?");
+            case Where.Lt w      -> appendFnLhs(sb, sqlFn, col(w.attr(), plan), " < ?");
+            case Where.Lte w     -> appendFnLhs(sb, sqlFn, col(w.attr(), plan), " <= ?");
+            case Where.Gt w      -> appendFnLhs(sb, sqlFn, col(w.attr(), plan), " > ?");
+            case Where.Gte w     -> appendFnLhs(sb, sqlFn, col(w.attr(), plan), " >= ?");
+            case Where.Between w -> appendFnLhs(sb, sqlFn, col(w.attr(), plan), " BETWEEN ? AND ?");
+            case Where.IsNull w    -> appendFnLhs(sb, sqlFn, col(w.attr(), plan), " IS NULL");
+            case Where.IsNotNull w -> appendFnLhs(sb, sqlFn, col(w.attr(), plan), " IS NOT NULL");
             case Where.In w -> {
-                appendFnLhs(sb, sqlFn, w.attr().columnName(), " IN (");
+                appendFnLhs(sb, sqlFn, col(w.attr(), plan), " IN (");
                 for (int i = 0; i < w.arity(); i++) { if (i > 0) sb.append(", "); sb.append('?'); }
                 sb.append(')');
             }
             case Where.Not w -> {
                 sb.append("NOT (");
-                renderFunc(sb, fn, w.child());
+                renderFunc(sb, fn, w.child(), plan);
                 sb.append(')');
             }
             default -> throw new IllegalArgumentException(
@@ -328,17 +401,17 @@ public final class H2Dialect implements Dialect {
         }
     }
 
-    private void appendFnLhs(StringBuilder sb, String sqlFn, String column, String tail) {
-        sb.append(sqlFn).append("(\"").append(column).append("\")").append(tail);
+    private void appendFnLhs(StringBuilder sb, String sqlFn, String qualifiedColumn, String tail) {
+        sb.append(sqlFn).append('(').append(qualifiedColumn).append(')').append(tail);
     }
 
-    private void appendOrderBy(StringBuilder sb, OrderBy orderBy) {
+    private void appendOrderBy(StringBuilder sb, OrderBy orderBy, Joins.Plan plan) {
         if (orderBy.isEmpty()) return;
         sb.append(" ORDER BY ");
         for (int i = 0; i < orderBy.orders().size(); i++) {
             var o = orderBy.orders().get(i);
             if (i > 0) sb.append(", ");
-            sb.append('"').append(o.attr().columnName()).append("\" ").append(o.direction());
+            sb.append(col(o.attr(), plan)).append(' ').append(o.direction());
         }
     }
 

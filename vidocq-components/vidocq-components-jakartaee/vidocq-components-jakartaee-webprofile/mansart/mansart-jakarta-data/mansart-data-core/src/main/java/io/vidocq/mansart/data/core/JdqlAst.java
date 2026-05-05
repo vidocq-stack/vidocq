@@ -596,7 +596,12 @@ public final class JdqlAst {
         private String expectAttr() {
             Token t = lex.consume();
             if (t.kind != Tk.IDENT) throw new ParseException("Expected attribute: " + t.text);
-            if (!attrNames.contains(t.text)) throw new ParseException("Unknown attribute '" + t.text + "' on " + entityName);
+            // M8-3 — accept dotted paths (e.g. book.author.name). Only validate the head against
+            // the entity's attribute set; downstream resolution via {@link PathResolver} validates
+            // the rest of the chain by walking target metamodels at execution time.
+            int dot = t.text.indexOf('.');
+            String head = dot < 0 ? t.text : t.text.substring(0, dot);
+            if (!attrNames.contains(head)) throw new ParseException("Unknown attribute '" + head + "' on " + entityName);
             return t.text;
         }
         private String expectIdent() {

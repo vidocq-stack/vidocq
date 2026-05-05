@@ -31,14 +31,14 @@ public final class JdqlExecutor {
     static Object execute(JdqlAst.Stmt stmt, Method method, EntityModel<?> model,
                           Map<String, Attribute<?, ?>> attrIndex,
                           RepositoryRuntime runtime, Object[] args, Map<String, Integer> nameToIdx) {
-        OrderBy orderBy = buildOrderBy(stmt.orderBy, attrIndex);
+        OrderBy orderBy = buildOrderBy(stmt.orderBy, model, attrIndex);
         // M7-21 — fold any Sort/Order control args into the OrderBy. The query's own ORDER BY
         // (from JDQL) takes precedence (declared first); runtime Sort args extend it.
         orderBy = appendRuntimeSorts(orderBy, args, attrIndex);
 
         return switch (stmt.kind) {
             case SELECT, COUNT -> {
-                BuiltWhere bw = buildWhere(stmt.where, attrIndex, args, nameToIdx);
+                BuiltWhere bw = buildWhere(stmt.where, model, attrIndex, args, nameToIdx);
                 if (stmt.kind == JdqlAst.Stmt.Kind.COUNT) {
                     yield bw.where == Where.ALWAYS_FALSE ? 0L
                             : runtime.countWhere((EntityModel) model, bw.where, bw.args);
@@ -96,9 +96,8 @@ public final class JdqlExecutor {
                 yield one.get();
             }
             case AGGREGATE -> {
-                BuiltWhere bw = buildWhere(stmt.where, attrIndex, args, nameToIdx);
-                Attribute<?, ?> attr = attrIndex.get(stmt.scalarAttr);
-                if (attr == null) throw new MansartDataException("Unknown attribute: " + stmt.scalarAttr);
+                BuiltWhere bw = buildWhere(stmt.where, model, attrIndex, args, nameToIdx);
+                Attribute<?, ?> attr = lookup(model, attrIndex, stmt.scalarAttr);
                 Class<?> rt = method.getReturnType();
                 Class<?> boxed = boxed(rt);
                 Object v = runtime.aggregate((EntityModel) model, stmt.aggregateOp, attr, boxed, bw.where, bw.args);
@@ -106,12 +105,10 @@ public final class JdqlExecutor {
                 yield v;
             }
             case PROJECT_MULTI -> {
-                BuiltWhere bw = buildWhere(stmt.where, attrIndex, args, nameToIdx);
+                BuiltWhere bw = buildWhere(stmt.where, model, attrIndex, args, nameToIdx);
                 java.util.List<Attribute<?, ?>> attrs = new ArrayList<>(stmt.projectAttrs.size());
                 for (String name : stmt.projectAttrs) {
-                    Attribute<?, ?> a = attrIndex.get(name);
-                    if (a == null) throw new MansartDataException("Unknown attribute: " + name);
-                    attrs.add(a);
+                    attrs.add(lookup(model, attrIndex, name));
                 }
                 Class<?> rt = method.getReturnType();
                 List<Object[]> rows = runtime.projectColumns((EntityModel) model, attrs,
@@ -126,9 +123,8 @@ public final class JdqlExecutor {
                 yield dispatchMultiProjection(rt, method, rows, attrs, args);
             }
             case PROJECT -> {
-                BuiltWhere bw = buildWhere(stmt.where, attrIndex, args, nameToIdx);
-                Attribute<?, ?> attr = attrIndex.get(stmt.scalarAttr);
-                if (attr == null) throw new MansartDataException("Unknown attribute: " + stmt.scalarAttr);
+                BuiltWhere bw = buildWhere(stmt.where, model, attrIndex, args, nameToIdx);
+                Attribute<?, ?> attr = lookup(model, attrIndex, stmt.scalarAttr);
                 Class<?> rt = method.getReturnType();
                 Class<?> elem = projectionElement(method);
                 List<Object> col = runtime.projectColumn((EntityModel) model, attr,
@@ -177,6 +173,11 @@ public final class JdqlExecutor {
                 List<Class<?>> setTypes = new ArrayList<>();
                 boolean firstSet = true;
                 for (JdqlAst.SetAssign sa : stmt.setAssignments) {
+                    // SET LHS doesn't allow path expressions (cannot UPDATE through a join). Stay
+                    // on the flat attrIndex and reject paths explicitly.
+                    if (sa.attr().indexOf('.') >= 0) {
+                        throw new MansartDataException("UPDATE SET LHS cannot be a path expression: " + sa.attr());
+                    }
                     Attribute<?, ?> a = attrIndex.get(sa.attr());
                     if (a == null) throw new MansartDataException("Unknown attribute: " + sa.attr());
                     if (!firstSet) setSql.append(", ");
@@ -184,13 +185,13 @@ public final class JdqlExecutor {
                     renderExpr(setSql, sa.value(), attrIndex, args, nameToIdx, setVals, setTypes, a.javaType());
                     firstSet = false;
                 }
-                BuiltWhere bw = buildWhere(stmt.where, attrIndex, args, nameToIdx);
+                BuiltWhere bw = buildWhere(stmt.where, model, attrIndex, args, nameToIdx);
                 long n = runtime.executeUpdateRaw((EntityModel) model, setSql.toString(),
                         setVals, setTypes, bw.where, bw.args);
                 yield wrapLongResult(method, n);
             }
             case DELETE -> {
-                BuiltWhere bw = buildWhere(stmt.where, attrIndex, args, nameToIdx);
+                BuiltWhere bw = buildWhere(stmt.where, model, attrIndex, args, nameToIdx);
                 long n = runtime.deleteWhere((EntityModel) model, bw.where, bw.args);
                 yield wrapLongResult(method, n);
             }
@@ -205,12 +206,12 @@ public final class JdqlExecutor {
         return n;
     }
 
-    private static OrderBy buildOrderBy(List<JdqlAst.Order> orders, Map<String, Attribute<?, ?>> attrIndex) {
+    private static OrderBy buildOrderBy(List<JdqlAst.Order> orders, EntityModel<?> model,
+                                        Map<String, Attribute<?, ?>> attrIndex) {
         if (orders == null || orders.isEmpty()) return OrderBy.NONE;
         List<OrderBy.Order> out = new ArrayList<>(orders.size());
         for (JdqlAst.Order o : orders) {
-            Attribute<?, ?> a = attrIndex.get(o.attr());
-            if (a == null) throw new MansartDataException("Unknown OrderBy attribute: " + o.attr());
+            Attribute<?, ?> a = lookup(model, attrIndex, o.attr());
             out.add(o.asc() ? OrderBy.Order.asc(a) : OrderBy.Order.desc(a));
         }
         return new OrderBy(out);
@@ -218,71 +219,73 @@ public final class JdqlExecutor {
 
     private record BuiltWhere(Where where, Object[] args) {}
 
-    private static BuiltWhere buildWhere(JdqlAst.Pred p, Map<String, Attribute<?, ?>> attrIndex,
+    private static BuiltWhere buildWhere(JdqlAst.Pred p, EntityModel<?> model,
+                                         Map<String, Attribute<?, ?>> attrIndex,
                                          Object[] callArgs, Map<String, Integer> nameToIdx) {
         if (p == null) return new BuiltWhere(Where.ALWAYS_TRUE, new Object[0]);
         List<Object> argsOut = new ArrayList<>();
         boolean[] alwaysFalse = { false };
-        Where w = build(p, attrIndex, callArgs, nameToIdx, argsOut, alwaysFalse);
+        Where w = build(p, model, attrIndex, callArgs, nameToIdx, argsOut, alwaysFalse);
         if (alwaysFalse[0]) return new BuiltWhere(Where.ALWAYS_FALSE, new Object[0]);
         return new BuiltWhere(w, argsOut.toArray());
     }
 
-    private static Where build(JdqlAst.Pred p, Map<String, Attribute<?, ?>> attrIndex,
+    private static Where build(JdqlAst.Pred p, EntityModel<?> model,
+                               Map<String, Attribute<?, ?>> attrIndex,
                                Object[] callArgs, Map<String, Integer> nameToIdx,
                                List<Object> argsOut, boolean[] alwaysFalse) {
         Attribute<?, ?> a;
         switch (p) {
             case JdqlAst.Cmp c -> {
-                a = lookup(attrIndex, c.attr());
+                a = lookup(model, attrIndex, c.attr());
                 argsOut.add(resolveArg(c.arg(), callArgs, nameToIdx));
                 return cmpOf(a, c.op());
             }
             case JdqlAst.FnCmp c -> {
-                a = lookup(attrIndex, c.attr());
+                a = lookup(model, attrIndex, c.attr());
                 argsOut.add(resolveArg(c.arg(), callArgs, nameToIdx));
                 return new Where.Func(c.fn(), cmpOf(a, c.op()));
             }
             case JdqlAst.IsNull n -> {
-                a = lookup(attrIndex, n.attr());
+                a = lookup(model, attrIndex, n.attr());
                 return n.negated() ? new Where.IsNotNull(a) : new Where.IsNull(a);
             }
             case JdqlAst.FnIsNull n -> {
-                a = lookup(attrIndex, n.attr());
+                a = lookup(model, attrIndex, n.attr());
                 return new Where.Func(n.fn(), n.negated() ? new Where.IsNotNull(a) : new Where.IsNull(a));
             }
             case JdqlAst.Between b -> {
-                a = lookup(attrIndex, b.attr());
+                a = lookup(model, attrIndex, b.attr());
                 argsOut.add(resolveArg(b.lo(), callArgs, nameToIdx));
                 argsOut.add(resolveArg(b.hi(), callArgs, nameToIdx));
                 return new Where.Between(a);
             }
             case JdqlAst.FnBetween b -> {
-                a = lookup(attrIndex, b.attr());
+                a = lookup(model, attrIndex, b.attr());
                 argsOut.add(resolveArg(b.lo(), callArgs, nameToIdx));
                 argsOut.add(resolveArg(b.hi(), callArgs, nameToIdx));
                 return new Where.Func(b.fn(), new Where.Between(a));
             }
             case JdqlAst.In in -> {
-                a = lookup(attrIndex, in.attr());
+                a = lookup(model, attrIndex, in.attr());
                 return buildIn(a, in.args(), in.collection(), callArgs, nameToIdx, argsOut, alwaysFalse, null);
             }
             case JdqlAst.FnIn in -> {
-                a = lookup(attrIndex, in.attr());
+                a = lookup(model, attrIndex, in.attr());
                 return buildIn(a, in.args(), in.collection(), callArgs, nameToIdx, argsOut, alwaysFalse, in.fn());
             }
             case JdqlAst.And and -> {
                 List<Where> cs = new ArrayList<>(and.children().size());
-                for (JdqlAst.Pred c : and.children()) cs.add(build(c, attrIndex, callArgs, nameToIdx, argsOut, alwaysFalse));
+                for (JdqlAst.Pred c : and.children()) cs.add(build(c, model, attrIndex, callArgs, nameToIdx, argsOut, alwaysFalse));
                 return new Where.And(cs);
             }
             case JdqlAst.Or or -> {
                 List<Where> cs = new ArrayList<>(or.children().size());
-                for (JdqlAst.Pred c : or.children()) cs.add(build(c, attrIndex, callArgs, nameToIdx, argsOut, alwaysFalse));
+                for (JdqlAst.Pred c : or.children()) cs.add(build(c, model, attrIndex, callArgs, nameToIdx, argsOut, alwaysFalse));
                 return new Where.Or(cs);
             }
             case JdqlAst.Not n -> {
-                return new Where.Not(build(n.child(), attrIndex, callArgs, nameToIdx, argsOut, alwaysFalse));
+                return new Where.Not(build(n.child(), model, attrIndex, callArgs, nameToIdx, argsOut, alwaysFalse));
             }
         }
     }
@@ -323,10 +326,18 @@ public final class JdqlExecutor {
         return wrapFn == null ? inner : new Where.Func(wrapFn, inner);
     }
 
-    private static Attribute<?, ?> lookup(Map<String, Attribute<?, ?>> idx, String name) {
-        Attribute<?, ?> a = idx.get(name);
-        if (a == null) throw new MansartDataException("Unknown attribute: " + name);
-        return a;
+    /**
+     * M8-3 — flat name fast path for {@code attr}; dotted names ({@code book.author.name}) are
+     * resolved via {@link PathResolver} which walks target metamodels and produces a
+     * {@link io.vidocq.mansart.data.dialect.attribute.JoinedAttribute}.
+     */
+    private static Attribute<?, ?> lookup(EntityModel<?> model, Map<String, Attribute<?, ?>> idx, String name) {
+        if (name.indexOf('.') < 0) {
+            Attribute<?, ?> a = idx.get(name);
+            if (a == null) throw new MansartDataException("Unknown attribute: " + name);
+            return a;
+        }
+        return PathResolver.resolve(model, name);
     }
 
     private static Object resolveArg(JdqlAst.ArgRef ref, Object[] args, Map<String, Integer> nameToIdx) {

@@ -19,7 +19,12 @@ public sealed interface Attribute<E, V>
                 io.vidocq.mansart.data.dialect.attribute.TemporalAttribute,
                 io.vidocq.mansart.data.dialect.attribute.ReferenceAttribute,
                 io.vidocq.mansart.data.dialect.attribute.EnumAttribute,
-                io.vidocq.mansart.data.dialect.attribute.VersionAttribute {
+                io.vidocq.mansart.data.dialect.attribute.VersionAttribute,
+                // M8-3 — wraps a leaf attribute reachable via a chain of @ManyToOne/@OneToOne
+                // relations (e.g. book.author.name resolves to JoinedAttribute(leaf=Author.name,
+                // path=[Book.author])). The dialect detects this subtype and emits aliased SQL
+                // with the appropriate INNER JOIN clauses.
+                io.vidocq.mansart.data.dialect.attribute.JoinedAttribute {
 
     String name();
     String columnName();

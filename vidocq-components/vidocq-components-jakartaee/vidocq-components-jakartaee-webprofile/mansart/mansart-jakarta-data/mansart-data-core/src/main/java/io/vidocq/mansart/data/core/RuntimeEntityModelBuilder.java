@@ -196,8 +196,12 @@ public final class RuntimeEntityModelBuilder {
             return new VersionAttribute(name, columnName, type, entityClass, getter, setter);
         }
         if (isReference) {
+            // M8-3 — referencedColumnName from @JoinColumn(referencedColumnName = ...) defaults to "id".
+            String referencedCol = readAnnoMember(field, "jakarta.persistence.JoinColumn",
+                    "referencedColumnName", String.class, "");
+            if (referencedCol.isEmpty()) referencedCol = "id";
             return new ReferenceAttribute<>(name, columnName, type, entityClass,
-                    nullable, unique, false, getter, setter);
+                    nullable, unique, false, referencedCol, getter, setter);
         }
         if (type.isEnum()) {
             return new EnumAttribute(name, columnName, type, entityClass,

@@ -77,7 +77,7 @@ final class JdqlParser {
         String boxed = boxedReturnType(returnType);
         boolean isPrimitive = returnType.getKind().isPrimitive();
         sb.append(boxed).append(" _v = runtime.aggregate(").append(metamodel).append(".$MODEL, \"")
-          .append(stmt.aggregateOp).append("\", ").append(metamodel).append('.').append(stmt.scalarAttr)
+          .append(stmt.aggregateOp).append("\", ").append(attrRef(metamodel, stmt.scalarAttr))
           .append(", ").append(boxed).append(".class, _w, _xs); ");
         if (isPrimitive) {
             // Primitive returns can't carry null — substitute a zero of the right type when SUM/MAX
@@ -113,24 +113,24 @@ final class JdqlParser {
                 || rt.startsWith("java.lang.Iterable")) {
             String elem = projectionElementBoxed(rt);
             sb.append("return runtime.projectColumn(").append(metamodel).append(".$MODEL, ")
-              .append(metamodel).append('.').append(stmt.scalarAttr)
+              .append(attrRef(metamodel, stmt.scalarAttr))
               .append(", ").append(elem).append(".class, _w, _ob, _xs);");
         } else if (rt.startsWith("java.util.stream.Stream")) {
             String elem = projectionElementBoxed(rt);
             sb.append("return runtime.projectColumn(").append(metamodel).append(".$MODEL, ")
-              .append(metamodel).append('.').append(stmt.scalarAttr)
+              .append(attrRef(metamodel, stmt.scalarAttr))
               .append(", ").append(elem).append(".class, _w, _ob, _xs).stream();");
         } else if (rt.startsWith("java.util.Optional")) {
             String elem = projectionElementBoxed(rt);
             sb.append("var _list = runtime.projectColumn(").append(metamodel).append(".$MODEL, ")
-              .append(metamodel).append('.').append(stmt.scalarAttr)
+              .append(attrRef(metamodel, stmt.scalarAttr))
               .append(", ").append(elem).append(".class, _w, _ob, _xs); ");
             sb.append("return _list.isEmpty() ? java.util.Optional.empty() : java.util.Optional.ofNullable(_list.get(0));");
         } else {
             // Single scalar return — fetch first, throw if absent
             String boxed = boxedReturnType(returnType);
             sb.append("var _list = runtime.projectColumn(").append(metamodel).append(".$MODEL, ")
-              .append(metamodel).append('.').append(stmt.scalarAttr)
+              .append(attrRef(metamodel, stmt.scalarAttr))
               .append(", ").append(boxed).append(".class, _w, _ob, _xs); ");
             sb.append("if (_list.isEmpty()) throw new io.vidocq.mansart.data.core.MansartDataException("
                     + "\"Projection returned no result\"); return _list.get(0);");
@@ -155,7 +155,7 @@ final class JdqlParser {
         sb.append("java.util.List<io.vidocq.mansart.data.dialect.Attribute<?, ?>> _attrs = java.util.List.of(");
         for (int i = 0; i < stmt.projectAttrs.size(); i++) {
             if (i > 0) sb.append(", ");
-            sb.append(metamodel).append('.').append(stmt.projectAttrs.get(i));
+            sb.append(attrRef(metamodel, stmt.projectAttrs.get(i)));
         }
         sb.append("); ");
 
@@ -438,37 +438,47 @@ final class JdqlParser {
             case GT -> "Gt"; case GTE -> "Gte";
             case LIKE -> "Like";
         };
-        return "new " + pkg + "." + cls + "(" + metamodel + "." + attr + ")";
+        return "new " + pkg + "." + cls + "(" + attrRef(metamodel, attr) + ")";
     }
 
     private static String isNullExpr(String pkg, String metamodel, boolean neg, String attr) {
-        return "new " + pkg + "." + (neg ? "IsNotNull" : "IsNull") + "(" + metamodel + "." + attr + ")";
+        return "new " + pkg + "." + (neg ? "IsNotNull" : "IsNull") + "(" + attrRef(metamodel, attr) + ")";
     }
 
     private static String betweenExpr(String pkg, String metamodel, String attr) {
-        return "new " + pkg + ".Between(" + metamodel + "." + attr + ")";
+        return "new " + pkg + ".Between(" + attrRef(metamodel, attr) + ")";
     }
 
     private static String inExpr(String pkg, String metamodel, In in, DynCtx ctx) {
         if (in.collection) {
             String col = ctx.colVar.get(in);
             return col + ".isEmpty() ? " + pkg + ".ALWAYS_FALSE : new " + pkg + ".In("
-                    + metamodel + "." + in.attr + ", " + col + ".size())";
+                    + attrRef(metamodel, in.attr) + ", " + col + ".size())";
         }
-        return "new " + pkg + ".In(" + metamodel + "." + in.attr + ", " + in.args.size() + ")";
+        return "new " + pkg + ".In(" + attrRef(metamodel, in.attr) + ", " + in.args.size() + ")";
     }
 
     private static String fnInExpr(String pkg, String metamodel, FnIn in, DynCtx ctx) {
         if (in.collection) {
             String col = ctx.colVar.get(in);
             return col + ".isEmpty() ? " + pkg + ".ALWAYS_FALSE : new " + pkg + ".In("
-                    + metamodel + "." + in.attr + ", " + col + ".size())";
+                    + attrRef(metamodel, in.attr) + ", " + col + ".size())";
         }
-        return "new " + pkg + ".In(" + metamodel + "." + in.attr + ", " + in.args.size() + ")";
+        return "new " + pkg + ".In(" + attrRef(metamodel, in.attr) + ", " + in.args.size() + ")";
     }
 
     private static String wrapFunc(String pkg, String fn, String inner) {
         return "new " + pkg + ".Func(\"" + fn + "\", " + inner + ")";
+    }
+
+    /**
+     * M8-3 — emit an Attribute reference. Flat names map to {@code metamodel.attr} (compile-time
+     * static field), dotted paths route through {@code PathResolver.resolve(model, "a.b.c")}
+     * which returns a {@code JoinedAttribute} for the dialect to interpret as joined column.
+     */
+    private static String attrRef(String metamodel, String attr) {
+        if (attr.indexOf('.') < 0) return metamodel + "." + attr;
+        return "io.vidocq.mansart.data.core.PathResolver.resolve(" + metamodel + ".$MODEL, \"" + attr + "\")";
     }
 
     private static void emitArgs(StringBuilder sb, Pred p,
@@ -656,22 +666,22 @@ final class JdqlParser {
             case LIKE -> "Like";
         };
         sb.append("new ").append(pkg).append('.').append(cls).append('(')
-          .append(metamodel).append('.').append(attr).append(')');
+          .append(attrRef(metamodel, attr)).append(')');
     }
 
     private static void emitIsNullExpr(StringBuilder sb, String pkg, String metamodel, boolean neg, String attr) {
         sb.append("new ").append(pkg).append('.').append(neg ? "IsNotNull" : "IsNull")
-          .append('(').append(metamodel).append('.').append(attr).append(')');
+          .append('(').append(attrRef(metamodel, attr)).append(')');
     }
 
     private static void emitBetweenExpr(StringBuilder sb, String pkg, String metamodel, String attr) {
         sb.append("new ").append(pkg).append(".Between(")
-          .append(metamodel).append('.').append(attr).append(')');
+          .append(attrRef(metamodel, attr)).append(')');
     }
 
     private static void emitInExpr(StringBuilder sb, String pkg, String metamodel, String attr, int n) {
         sb.append("new ").append(pkg).append(".In(")
-          .append(metamodel).append('.').append(attr).append(", ").append(n).append(')');
+          .append(attrRef(metamodel, attr)).append(", ").append(n).append(')');
     }
 
     private static void emitCombinator(StringBuilder sb, String op, List<Pred> children, String metamodel) {
@@ -691,7 +701,7 @@ final class JdqlParser {
             Order o = orders.get(i);
             sb.append("io.vidocq.mansart.data.dialect.OrderBy.Order.")
               .append(o.asc ? "asc" : "desc")
-              .append('(').append(metamodel).append('.').append(o.attr).append(')');
+              .append('(').append(attrRef(metamodel, o.attr)).append(')');
         }
         sb.append("))");
     }
@@ -778,11 +788,15 @@ final class JdqlParser {
                 default: {
                     if (Character.isLetter(c) || c == '_') {
                         int s = pos;
-                        while (pos < src.length() && (Character.isLetterOrDigit(src.charAt(pos)) || src.charAt(pos) == '_'))
+                        // M8-3 — allow dotted paths (book.author.name) inside an IDENT.
+                        while (pos < src.length() && (Character.isLetterOrDigit(src.charAt(pos))
+                                || src.charAt(pos) == '_' || src.charAt(pos) == '.'))
                             pos++;
                         String w = src.substring(s, pos);
-                        return isKeyword(w) ? new Token(Tk.KW, w.toUpperCase())
-                                            : new Token(Tk.IDENT, w);
+                        // Keywords are matched on the *full* token but only when they don't contain
+                        // a dot — a dotted token is necessarily an attribute path.
+                        if (isKeyword(w) && w.indexOf('.') < 0) return new Token(Tk.KW, w.toUpperCase());
+                        return new Token(Tk.IDENT, w);
                     }
                     throw new ParseException("Unexpected character '" + c + "' at position " + pos);
                 }
@@ -1090,8 +1104,12 @@ final class JdqlParser {
         private String expectAttr() {
             Token t = lex.consume();
             if (t.kind != Tk.IDENT) throw new ParseException("Expected attribute name, got: " + t.text);
-            if (!attrNames.contains(t.text)) {
-                throw new ParseException("Unknown attribute '" + t.text + "' on entity " + entityName);
+            // M8-3 — accept dotted paths (book.author.name). Validate only the head; downstream
+            // resolution in JdqlExecutor walks the chain via target metamodels.
+            int dot = t.text.indexOf('.');
+            String head = dot < 0 ? t.text : t.text.substring(0, dot);
+            if (!attrNames.contains(head)) {
+                throw new ParseException("Unknown attribute '" + head + "' on entity " + entityName);
             }
             return t.text;
         }

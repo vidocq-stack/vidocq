@@ -121,8 +121,16 @@ final class EntityScanner {
         int     length   = (int) readNumber(column, "length", 255L);
         boolean generated = hasAnnotation(field, dialect.generatedValueAnno);
 
+        // M8-3 — referencedColumnName from @JoinColumn — only meaningful when REFERENCE.
+        String referencedColumn = "id";
+        if (kind == AttributeKind.REFERENCE && joinColumn != null
+                && joinColumn.containsKey("referencedColumnName")) {
+            String rc = joinColumn.get("referencedColumnName").getValue().toString();
+            if (!rc.isEmpty()) referencedColumn = rc;
+        }
+
         return new AttributeDescriptor(field, name, columnName, javaTypeFqn, kind,
-                nullable, unique, length, generated);
+                nullable, unique, length, generated, referencedColumn);
     }
 
     /* ----- helpers ---- */
@@ -225,7 +233,9 @@ final class EntityScanner {
             boolean nullable,
             boolean unique,
             int length,
-            boolean generated
+            boolean generated,
+            // M8-3 — for REFERENCE attributes only: PK column on the target entity (defaults "id").
+            String referencedColumn
     ) {}
 
     record EntityDescriptor(

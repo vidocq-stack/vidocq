@@ -32,10 +32,14 @@ final class RowMapper {
         }
         int idx = 1;
         for (Attribute<E, ?> a : model.attributes()) {
-            Object value = dialect.extract(rs, idx++, a.javaType());
+            // M8-3 — ReferenceAttribute columns hold the FK id, not the target entity. Read as
+            // Long (most common id type) — fully materialising the related entity would require
+            // an eager fetch (out of scope here; stays a M3a stub).
+            Class<?> readType = (a instanceof ReferenceAttribute<?, ?>) ? Long.class : a.javaType();
+            Object value = dialect.extract(rs, idx++, readType);
             if (value == null) continue;
             if (a instanceof ReferenceAttribute<?, ?>) {
-                // M3a skip — the FK id is in `value` but we do not materialize a stub yet.
+                // The FK id is in `value` but we do not materialize a stub yet.
                 continue;
             }
             try {

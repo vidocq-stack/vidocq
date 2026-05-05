@@ -232,14 +232,13 @@ public final class RepositoryRuntime {
     }
 
     public <E> long countWhere(EntityModel<E> model, Where where, Object... args) {
-        StringBuilder sb = new StringBuilder("SELECT COUNT(*) FROM ").append(qualifiedTable(model));
-        SqlFragment selFrag = dialect.select(model, where, OrderBy.NONE, Pagination.NONE);
-        // Reuse the dialect's WHERE rendering by extracting from the SELECT fragment.
-        int whereIdx = selFrag.sql().indexOf(" WHERE ");
-        if (whereIdx >= 0) sb.append(selFrag.sql().substring(whereIdx));
-        String sql = sb.toString();
+        // M8-3 — route through dialect.selectColumns so any path-based predicate gets its joins
+        // and aliasing applied uniformly. Project COUNT(*) as a literal expression entry.
+        SqlFragment frag = dialect.selectColumns(model,
+                java.util.List.of(new io.vidocq.mansart.data.dialect.Dialect.ProjectedColumn.Expr("COUNT(*)")),
+                where, OrderBy.NONE, Pagination.NONE);
         return ConnectionScope.withConnection(dataSource, c -> {
-            try (PreparedStatement ps = c.prepareStatement(sql)) {
+            try (PreparedStatement ps = c.prepareStatement(frag.sql())) {
                 WhereBinder.bind(dialect, ps, where, args, 1, new int[]{0});
                 try (ResultSet rs = ps.executeQuery()) {
                     return rs.next() ? rs.getLong(1) : 0L;
@@ -257,19 +256,22 @@ public final class RepositoryRuntime {
      */
     public <E, T> T aggregate(EntityModel<E> model, String op, Attribute<?, ?> attr,
                               Class<T> resultType, Where where, Object... args) {
+        // M8-3 — go through dialect.selectColumns so joined predicates lower correctly. The
+        // aggregate column itself stays unjoined (M8-1 scope: aggregate over a flat attribute).
         String aggExpr = op + "(\"" + attr.columnName() + "\")";
-        return scalarSelect(model, aggExpr, resultType, where, args);
+        return scalarSelect(model, new io.vidocq.mansart.data.dialect.Dialect.ProjectedColumn.Expr(aggExpr),
+                resultType, where, args);
     }
 
     /** Returns the projected column values that match {@code where}, ordered by {@code orderBy}. */
     public <E, T> java.util.List<T> projectColumn(EntityModel<E> model, Attribute<?, ?> attr,
                                                   Class<T> resultType, Where where, OrderBy orderBy,
                                                   Object... args) {
-        String columnExpr = "\"" + attr.columnName() + "\"";
-        String tail = whereOrderTail(model, where, orderBy);
-        String sql = "SELECT " + columnExpr + " FROM " + qualifiedTable(model) + tail;
+        SqlFragment frag = dialect.selectColumns(model,
+                java.util.List.of(new io.vidocq.mansart.data.dialect.Dialect.ProjectedColumn.Leaf(attr)),
+                where, orderBy, Pagination.NONE);
         return ConnectionScope.withConnection(dataSource, c -> {
-            try (PreparedStatement ps = c.prepareStatement(sql)) {
+            try (PreparedStatement ps = c.prepareStatement(frag.sql())) {
                 WhereBinder.bind(dialect, ps, where, args, 1, new int[]{0});
                 try (ResultSet rs = ps.executeQuery()) {
                     java.util.List<T> out = new ArrayList<>();
@@ -283,20 +285,20 @@ public final class RepositoryRuntime {
     /**
      * M8-2 — multi-column projection. Returns one {@code Object[]} per row, each array's length
      * equal to {@code attrs.size()}. Components are extracted using the dialect's {@code extract}
-     * keyed by each attribute's declared Java type.
+     * keyed by each attribute's declared Java type. M8-3 — supports {@link io.vidocq.mansart.data.dialect.attribute.JoinedAttribute}
+     * leaves through the dialect's {@code selectColumns} (joins materialised in the FROM clause).
      */
     public <E> java.util.List<Object[]> projectColumns(EntityModel<E> model,
                                                        java.util.List<Attribute<?, ?>> attrs,
                                                        Where where, OrderBy orderBy, Object... args) {
-        StringBuilder cols = new StringBuilder();
-        for (int i = 0; i < attrs.size(); i++) {
-            if (i > 0) cols.append(", ");
-            cols.append('"').append(attrs.get(i).columnName()).append('"');
+        java.util.List<io.vidocq.mansart.data.dialect.Dialect.ProjectedColumn> cols =
+                new ArrayList<>(attrs.size());
+        for (Attribute<?, ?> a : attrs) {
+            cols.add(new io.vidocq.mansart.data.dialect.Dialect.ProjectedColumn.Leaf(a));
         }
-        String tail = whereOrderTail(model, where, orderBy);
-        String sql = "SELECT " + cols + " FROM " + qualifiedTable(model) + tail;
+        SqlFragment frag = dialect.selectColumns(model, cols, where, orderBy, Pagination.NONE);
         return ConnectionScope.withConnection(dataSource, c -> {
-            try (PreparedStatement ps = c.prepareStatement(sql)) {
+            try (PreparedStatement ps = c.prepareStatement(frag.sql())) {
                 WhereBinder.bind(dialect, ps, where, args, 1, new int[]{0});
                 try (ResultSet rs = ps.executeQuery()) {
                     java.util.List<Object[]> out = new ArrayList<>();
@@ -313,12 +315,12 @@ public final class RepositoryRuntime {
         });
     }
 
-    private <E, T> T scalarSelect(EntityModel<E> model, String columnExpr, Class<T> resultType,
-                                  Where where, Object[] args) {
-        String tail = whereOrderTail(model, where, OrderBy.NONE);
-        String sql = "SELECT " + columnExpr + " FROM " + qualifiedTable(model) + tail;
+    private <E, T> T scalarSelect(EntityModel<E> model,
+                                  io.vidocq.mansart.data.dialect.Dialect.ProjectedColumn col,
+                                  Class<T> resultType, Where where, Object[] args) {
+        SqlFragment frag = dialect.selectColumns(model, java.util.List.of(col), where, OrderBy.NONE, Pagination.NONE);
         return ConnectionScope.withConnection(dataSource, c -> {
-            try (PreparedStatement ps = c.prepareStatement(sql)) {
+            try (PreparedStatement ps = c.prepareStatement(frag.sql())) {
                 WhereBinder.bind(dialect, ps, where, args, 1, new int[]{0});
                 try (ResultSet rs = ps.executeQuery()) {
                     return rs.next() ? dialect.extract(rs, 1, resultType) : null;
