@@ -377,6 +377,10 @@ public final class RuntimeRepositoryProxy {
         boolean returnsOptional = m.getReturnType() == java.util.Optional.class;
         boolean returnsStream   = m.getReturnType() == java.util.stream.Stream.class;
         boolean returnsList     = java.util.List.class.isAssignableFrom(m.getReturnType());
+        boolean returnsArray    = m.getReturnType().isArray();
+        boolean returnsPage     = jakarta.data.page.Page.class.isAssignableFrom(m.getReturnType());
+        boolean returnsCursored = jakarta.data.page.CursoredPage.class.isAssignableFrom(m.getReturnType());
+        int[] ctrl = locateControlParams(m);
 
         return (rt, em, callArgs) -> {
             List<Where> parts = new ArrayList<>(attrForParam.size());
@@ -390,10 +394,25 @@ public final class RuntimeRepositoryProxy {
             Where w = parts.isEmpty() ? Where.ALWAYS_TRUE
                     : (parts.size() == 1 ? parts.get(0) : new Where.And(parts));
             Object[] xs = bound.toArray();
+            OrderBy order = applyControlOrder(OrderBy.NONE, callArgs, ctrl, attrIndex, (EntityModel) em, rt);
+            jakarta.data.page.PageRequest pr = controlPage(callArgs, ctrl);
+            if (returnsCursored && pr != null) return rt.queryCursored((EntityModel) em, w, order, pr, xs);
+            if (returnsPage && pr != null)     return rt.queryPage((EntityModel) em, w, order, pr, xs);
             if (returnsOptional) return rt.queryOne((EntityModel) em, w, xs);
-            List<Object> list = rt.queryList((EntityModel) em, w, OrderBy.NONE, xs);
+            List<Object> list = rt.queryList((EntityModel) em, w, order, xs);
+            int[] limR = controlLimitRange(callArgs, ctrl, 0);
+            if (limR[1] > 0) {
+                int from = Math.max(0, limR[0]);
+                int to = Math.min(list.size(), from + limR[1]);
+                list = (from >= list.size()) ? new ArrayList<>() : new ArrayList<>(list.subList(from, to));
+            }
             if (returnsStream) return list.stream();
             if (returnsList)   return list;
+            if (returnsArray) {
+                Object arr = java.lang.reflect.Array.newInstance(m.getReturnType().getComponentType(), list.size());
+                for (int i = 0; i < list.size(); i++) java.lang.reflect.Array.set(arr, i, list.get(i));
+                return arr;
+            }
             return list.isEmpty() ? null : list.get(0);
         };
     }

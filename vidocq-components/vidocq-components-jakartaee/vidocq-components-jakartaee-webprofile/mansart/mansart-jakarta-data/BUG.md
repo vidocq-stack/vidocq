@@ -112,6 +112,12 @@ Statuts : `OPEN` → `INVESTIGATING` → `FIXED` (commit hash) → `CLOSED`.
         pas convertir VARCHAR vers une classe enum via `getObject(idx, enumClass)`.
         Réduit `JdbcSQLFeatureNotSupportedException` (30 → 0). **Score TCK** :
         73 → 21 PASS / 14 FAIL / 38 ERR.
+      - **M7-13** *(LIVRÉ 2026-05-05)* — Routes `Page<E>` / `CursoredPage<E>` dans
+        le dispatcher `@Query` (JdqlExecutor) ET `@Find` (findAnnotationDispatcher) :
+        détecte un `PageRequest` dans les args, route vers `queryPage` / `queryCursored`.
+        Tableaux `E[]` reconstitués dans le bon component-type. `@Find` honore
+        désormais aussi `Sort/Order/Limit/PageRequest` (via `applyControlOrder` +
+        `controlLimitRange` partagés). **Score TCK** : 73 → 54 PASS / 7 FAIL / 12 ERR.
       - **M7-12** *(LIVRÉ 2026-05-05)* — Dispatcher dérivé honore
         `jakarta.data.Limit` (avec offset via `startAt`),
         `jakarta.data.Sort<E>`, `jakarta.data.Sort[]` (varargs),

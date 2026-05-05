@@ -43,8 +43,11 @@ final class JdqlExecutor {
                 boolean list     = java.util.List.class.isAssignableFrom(rt)
                                  || java.util.Collection.class == rt
                                  || Iterable.class == rt;
+                boolean array    = rt.isArray();
                 boolean longRet  = rt == long.class || rt == Long.class;
                 boolean boolRet  = rt == boolean.class || rt == Boolean.class;
+                boolean pageRet  = jakarta.data.page.Page.class.isAssignableFrom(rt);
+                boolean cursorRet = jakarta.data.page.CursoredPage.class.isAssignableFrom(rt);
                 if (bw.where == Where.ALWAYS_FALSE) {
                     if (optional) yield java.util.Optional.empty();
                     if (stream)   yield java.util.stream.Stream.empty();
@@ -55,10 +58,23 @@ final class JdqlExecutor {
                 }
                 if (longRet)  yield runtime.countWhere((EntityModel) model, bw.where, bw.args);
                 if (boolRet)  yield runtime.existsWhere((EntityModel) model, bw.where, bw.args);
+                if (cursorRet || pageRet) {
+                    jakarta.data.page.PageRequest pr = findPageRequest(args);
+                    if (pr == null) {
+                        throw new MansartDataException("@Query returning Page/CursoredPage requires a PageRequest argument");
+                    }
+                    if (cursorRet) yield runtime.queryCursored((EntityModel) model, bw.where, orderBy, pr, bw.args);
+                    yield runtime.queryPage((EntityModel) model, bw.where, orderBy, pr, bw.args);
+                }
                 if (optional) yield runtime.queryOne((EntityModel) model, bw.where, bw.args);
                 List<Object> data = runtime.queryList((EntityModel) model, bw.where, orderBy, bw.args);
                 if (stream) yield data.stream();
                 if (list)   yield data;
+                if (array)  {
+                    Object arr = java.lang.reflect.Array.newInstance(rt.getComponentType(), data.size());
+                    for (int i = 0; i < data.size(); i++) java.lang.reflect.Array.set(arr, i, data.get(i));
+                    yield arr;
+                }
                 java.util.Optional<?> one = runtime.queryOne((EntityModel) model, bw.where, bw.args);
                 if (one.isEmpty()) throw new MansartDataException("@Query returned no result");
                 yield one.get();
@@ -273,6 +289,14 @@ final class JdqlExecutor {
      * Jakarta Data TCK jar built with maven-compiler-plugin 4.0.0-beta-4 — see BUG-20260505-01,
      * M7-9) still resolve {@code @Query} {@code :name} bindings via {@code @Param}.
      */
+    private static jakarta.data.page.PageRequest findPageRequest(Object[] args) {
+        if (args == null) return null;
+        for (Object a : args) {
+            if (a instanceof jakarta.data.page.PageRequest pr) return pr;
+        }
+        return null;
+    }
+
     static Map<String, Integer> nameToIndexFor(Method m) {
         Map<String, Integer> map = new HashMap<>();
         java.lang.reflect.Parameter[] params = m.getParameters();
