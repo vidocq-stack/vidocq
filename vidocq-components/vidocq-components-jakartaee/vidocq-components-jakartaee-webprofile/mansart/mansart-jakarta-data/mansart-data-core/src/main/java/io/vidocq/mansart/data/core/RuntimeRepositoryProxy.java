@@ -60,8 +60,6 @@ public final class RuntimeRepositoryProxy {
     public static <R> R create(Class<R> repoInterface, EntityModel<?> model, RepositoryRuntime runtime) {
         Map<Method, Dispatcher> dispatchers = buildDispatchers(repoInterface, model);
         InvocationHandler handler = (proxy, method, args) -> {
-            // M7-8 — interface default methods: route through the standard JDK shim so
-            // user-supplied helpers compose with the runtime-generated dispatchers.
             if (method.isDefault()) {
                 return InvocationHandler.invokeDefault(proxy, method, args);
             }
@@ -355,6 +353,10 @@ public final class RuntimeRepositoryProxy {
     @SuppressWarnings({"rawtypes", "unchecked"})
     private static Dispatcher findAnnotationDispatcher(Method m, EntityModel<?> model,
                                                        java.util.Set<String> attributeNames) {
+        // BasicRepository / CrudRepository / DataRepository methods carry @Find / @Save / etc. in
+        // the spec, but their semantics are owned by the inheritedDispatcher (built-in K-keyed
+        // ops). Skip those here so we don't route findById through the user-method @Find path.
+        if (m.getDeclaringClass().getName().startsWith("jakarta.data.")) return null;
         boolean hasFind = false;
         for (var ann : m.getDeclaredAnnotations()) {
             if (ann.annotationType().getName().equals("jakarta.data.repository.Find")) {

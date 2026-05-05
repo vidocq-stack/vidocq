@@ -112,6 +112,13 @@ Statuts : `OPEN` → `INVESTIGATING` → `FIXED` (commit hash) → `CLOSED`.
         pas convertir VARCHAR vers une classe enum via `getObject(idx, enumClass)`.
         Réduit `JdbcSQLFeatureNotSupportedException` (30 → 0). **Score TCK** :
         73 → 21 PASS / 14 FAIL / 38 ERR.
+      - **M7-20** *(LIVRÉ 2026-05-05)* — `findAnnotationDispatcher` ignore les
+        méthodes déclarées sur `jakarta.data.*` (BasicRepository.findById carry
+        `@Find` dans le spec mais sa sémantique appartient à
+        `inheritedDispatcher`). Sans ce filtre, le @Find dispatcher détournait
+        `findById` vers un fallback positionnel qui retournait toujours la
+        première ligne, masquant les `deleteById` précédents.
+        **Score TCK** : 73 → **70 PASS / 1 FAIL / 2 ERR**.
       - **M7-19** *(LIVRÉ 2026-05-05)* — Trois améliorations runtime :
         `locateControlParams` collecte plusieurs `Sort` consécutifs (signature
         `Sort, Sort` au lieu de `Sort[]` varargs) ; `findAnnotationDispatcher`
