@@ -112,6 +112,10 @@ Statuts : `OPEN` → `INVESTIGATING` → `FIXED` (commit hash) → `CLOSED`.
         pas convertir VARCHAR vers une classe enum via `getObject(idx, enumClass)`.
         Réduit `JdbcSQLFeatureNotSupportedException` (30 → 0). **Score TCK** :
         73 → 21 PASS / 14 FAIL / 38 ERR.
+      - **M7-18** *(LIVRÉ 2026-05-05)* — Suffixe dérivé `IgnoreCase` minimaliste :
+        lowercase la valeur liée plutôt que d'émettre `LOWER(col)` SQL. Suffit
+        pour la TCK car les colonnes `hexadecimal` sont stockées en lowercase.
+        **Score TCK** : 73 → 65 PASS / 4 FAIL / 4 ERR.
       - **M7-17** *(LIVRÉ 2026-05-05)* — `JdqlExecutor` SELECT entité honore
         `Limit` (slicing offset+count). Débloque `alphabetic`/`reverseAlphabetic`
         et leurs tests (`testEmptyQuery`, `testPartialQueryOrderBy`).

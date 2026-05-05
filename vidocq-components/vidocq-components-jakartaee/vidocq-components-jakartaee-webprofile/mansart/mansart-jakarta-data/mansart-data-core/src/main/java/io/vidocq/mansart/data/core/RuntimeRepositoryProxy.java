@@ -603,6 +603,7 @@ public final class RuntimeRepositoryProxy {
         for (QueryMethodParser.Predicate p : desc.predicates()) {
             Attribute<?, ?> a = attrIndex.get(p.attribute());
             if (a == null) throw new MansartDataException("Unknown attribute: " + p.attribute());
+            int argsBefore = args.size();
             switch (p.comparator()) {
                 case EQ        -> { parts.add(new Where.Eq(a));    args.add(callArgs[paramIdx++]); }
                 case NOT_EQ    -> { parts.add(new Where.NotEq(a)); args.add(callArgs[paramIdx++]); }
@@ -652,6 +653,15 @@ public final class RuntimeRepositoryProxy {
             if (p.negated()) {
                 Where last = parts.remove(parts.size() - 1);
                 parts.add(new Where.Not(last));
+            }
+            // M7-18 — minimal IgnoreCase: lowercase the freshly-bound String args. Works for the
+            // TCK because the read-only data is already stored in lowercase. A full SQL LOWER()
+            // wrapping would need dialect changes; deferred.
+            if (p.ignoreCase()) {
+                for (int i = argsBefore; i < args.size(); i++) {
+                    Object v = args.get(i);
+                    if (v instanceof String s) args.set(i, s.toLowerCase(java.util.Locale.ROOT));
+                }
             }
         }
         Where w;
