@@ -236,8 +236,8 @@ public final class PostgresqlDialect implements Dialect {
                 renderPredicate(sb, w.child());
                 sb.append(')');
             }
-            case Where.AlwaysTrue ignored  -> sb.append("TRUE");
-            case Where.AlwaysFalse ignored -> sb.append("FALSE");
+            case Where.AlwaysTrue _  -> sb.append("TRUE");
+            case Where.AlwaysFalse _ -> sb.append("FALSE");
         }
     }
 
@@ -253,7 +253,7 @@ public final class PostgresqlDialect implements Dialect {
 
     private void appendPagination(StringBuilder sb, Pagination p) {
         switch (p) {
-            case Pagination.None ignored -> {}
+            case Pagination.None _ -> { /* NOOP */ }
             case Pagination.Offset o     -> sb.append(" LIMIT ").append(o.limit()).append(" OFFSET ").append(o.offset());
             case Pagination.Keyset k     -> sb.append(" LIMIT ").append(k.limit());
         }
