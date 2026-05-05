@@ -100,6 +100,14 @@ final class JdqlExecutor {
                 Class<?> elem = projectionElement(method);
                 List<Object> col = runtime.projectColumn((EntityModel) model, attr,
                         (Class) elem, bw.where, orderBy, bw.args);
+                // Apply a Limit argument (Jakarta Data control parameter) by slicing.
+                jakarta.data.Limit lim = findLimit(args);
+                if (lim != null) {
+                    int from = Math.max(0, (int) (lim.startAt() - 1));
+                    int to = Math.min(col.size(), from + (int) lim.maxResults());
+                    col = (from >= col.size()) ? java.util.List.of()
+                                               : new ArrayList<>(col.subList(from, to));
+                }
                 if (java.util.List.class.isAssignableFrom(rt)
                         || java.util.Collection.class == rt
                         || Iterable.class == rt) yield col;
@@ -107,7 +115,10 @@ final class JdqlExecutor {
                 if (rt == java.util.Optional.class) yield col.isEmpty()
                         ? java.util.Optional.empty()
                         : java.util.Optional.ofNullable(col.get(0));
-                if (col.isEmpty()) throw new MansartDataException("Projection returned no result");
+                if (col.isEmpty()) {
+                    throw new jakarta.data.exceptions.EmptyResultException(
+                            "Projection of " + stmt.scalarAttr + " returned no result");
+                }
                 yield col.get(0);
             }
             case UPDATE -> {
@@ -297,6 +308,14 @@ final class JdqlExecutor {
         if (args == null) return null;
         for (Object a : args) {
             if (a instanceof jakarta.data.page.PageRequest pr) return pr;
+        }
+        return null;
+    }
+
+    private static jakarta.data.Limit findLimit(Object[] args) {
+        if (args == null) return null;
+        for (Object a : args) {
+            if (a instanceof jakarta.data.Limit l) return l;
         }
         return null;
     }

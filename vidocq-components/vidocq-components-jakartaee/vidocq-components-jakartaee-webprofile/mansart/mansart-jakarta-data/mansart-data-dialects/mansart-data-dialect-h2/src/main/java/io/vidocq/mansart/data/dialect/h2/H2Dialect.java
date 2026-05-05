@@ -158,6 +158,10 @@ public final class H2Dialect implements Dialect {
             T v = (T) Enum.valueOf((Class) javaType, s);
             return v;
         }
+        if (javaType == Character.class) {
+            String s = rs.getString(idx);
+            return (s == null || s.isEmpty()) ? null : (T) Character.valueOf(s.charAt(0));
+        }
         return rs.getObject(idx, javaType);
     }
 

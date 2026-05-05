@@ -112,6 +112,13 @@ Statuts : `OPEN` → `INVESTIGATING` → `FIXED` (commit hash) → `CLOSED`.
         pas convertir VARCHAR vers une classe enum via `getObject(idx, enumClass)`.
         Réduit `JdbcSQLFeatureNotSupportedException` (30 → 0). **Score TCK** :
         73 → 21 PASS / 14 FAIL / 38 ERR.
+      - **M7-15** *(LIVRÉ 2026-05-05)* — `findFirstBy*` / `findOneBy*` ne lèvent
+        plus `NonUniqueResultException` quand il y a plusieurs lignes : ils
+        renvoient la première (sémantique réelle de `findFirst`). Projections
+        JDQL honorent `Limit` (slicing offset+count). `H2Dialect` /
+        `PostgresqlDialect.extract` gèrent `Character` via `getString().charAt(0)`
+        (sinon le projection sur `char` retourne des chaînes vides).
+        **Score TCK** : 73 → 58 PASS / 7 FAIL / 8 ERR.
       - **M7-14** *(LIVRÉ 2026-05-05)* — Exceptions Jakarta Data correctes :
         `EmptyResultException` (au lieu de `MansartDataException("No result")`)
         sur les FIND single-entity sans résultat, `NonUniqueResultException`

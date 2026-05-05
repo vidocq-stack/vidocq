@@ -491,7 +491,17 @@ public final class RuntimeRepositoryProxy {
                     }
                     yield oneOpt.get();
                 }
-                case FIND_ONE -> rt.queryOne((EntityModel) em, w, xs);
+                case FIND_ONE -> {
+                    // findFirstBy / findOneBy semantics: take the FIRST match (LIMIT 1), don't
+                    // throw NonUniqueResultException on multiple hits — the explicit "First/One"
+                    // is itself a single-result selector.
+                    List<Object> firstOne = rt.queryList((EntityModel) em, w, effOrder, xs);
+                    if (firstOne.isEmpty()) {
+                        yield returnsOptional ? java.util.Optional.empty() : null;
+                    }
+                    Object pick = firstOne.get(0);
+                    yield returnsOptional ? java.util.Optional.of(pick) : pick;
+                }
                 case COUNT    -> rt.countWhere((EntityModel) em, w, xs);
                 case EXISTS   -> rt.existsWhere((EntityModel) em, w, xs);
                 case DELETE -> {
