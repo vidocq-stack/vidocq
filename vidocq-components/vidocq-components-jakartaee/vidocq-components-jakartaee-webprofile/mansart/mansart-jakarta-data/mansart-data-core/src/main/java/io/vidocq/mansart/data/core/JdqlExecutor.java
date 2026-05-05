@@ -27,6 +27,28 @@ public final class JdqlExecutor {
 
     private JdqlExecutor() {}
 
+    /**
+     * M8-1f — public entry point used by compile-time generated repository impls when the JDQL
+     * grammar requires features not yet emitted as static Java by {@link io.vidocq.mansart.data.processor.JdqlParser}
+     * (currently: UPDATE with arithmetic/scalar-function SET RHS). Re-parses the JDQL string at
+     * each call — acceptable cost since the alternative is a few hundred LOC of static emitter
+     * code duplicating the runtime AST walker. Caching of the parsed {@link JdqlAst.Stmt} per
+     * (jdql, entity) pair is a future optimisation.
+     *
+     * <p>The compile-time emitter passes everything the executor needs to wire up: the raw JDQL
+     * source, the call-site {@code Method} (for return-type dispatch and {@code @Param}/parameter-name
+     * resolution), and the entity model.
+     */
+    public static Object executeJdql(String jdql, Method method, EntityModel<?> model,
+                                     RepositoryRuntime runtime, Object[] args) {
+        Map<String, Attribute<?, ?>> attrIndex = new HashMap<>();
+        for (Attribute<?, ?> a : model.attributes()) attrIndex.put(a.name(), a);
+        java.util.Set<String> attrNames = attrIndex.keySet();
+        JdqlAst.Stmt stmt = JdqlAst.parse(jdql, attrNames, model.entityClass().getSimpleName());
+        Map<String, Integer> nameToIdx = nameToIndexFor(method);
+        return execute(stmt, method, model, attrIndex, runtime, args, nameToIdx);
+    }
+
     @SuppressWarnings({"rawtypes", "unchecked"})
     static Object execute(JdqlAst.Stmt stmt, Method method, EntityModel<?> model,
                           Map<String, Attribute<?, ?>> attrIndex,

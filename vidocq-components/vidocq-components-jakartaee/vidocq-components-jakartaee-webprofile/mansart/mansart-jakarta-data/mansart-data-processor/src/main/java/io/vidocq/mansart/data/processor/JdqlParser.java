@@ -44,6 +44,22 @@ final class JdqlParser {
             nameToIdx.put(method.getParameters().get(i).getSimpleName().toString(), i);
         }
 
+        // M8-1f — pre-validate via the runtime AST parser, which supports the full grammar
+        // (Expr/ExprFunc/ExprBin in SET RHS). If parsing succeeds and the statement is an UPDATE
+        // with any non-trivial SET RHS (anything other than a plain ArgRef), route the body
+        // through the runtime fallback {@code JdqlExecutor.executeJdql} that re-parses the JDQL
+        // string at call time. This avoids reimplementing the SET-Expr emitter at compile time.
+        try {
+            io.vidocq.mansart.data.core.JdqlAst.Stmt runtimeStmt =
+                    io.vidocq.mansart.data.core.JdqlAst.parse(jdql, attributeNames, entitySimpleName);
+            if (runtimeStmt.kind == io.vidocq.mansart.data.core.JdqlAst.Stmt.Kind.UPDATE
+                    && hasComplexSet(runtimeStmt)) {
+                return emitRuntimeFallback(jdql, method, metamodel, returnType);
+            }
+        } catch (RuntimeException ignored) {
+            // Fall through — let the local parser produce the precise compile-time error message.
+        }
+
         Lexer lex = new Lexer(jdql);
         Stmt stmt = new Parser(lex, attributeNames, entitySimpleName).parseStmt();
 
@@ -481,6 +497,77 @@ final class JdqlParser {
         return "io.vidocq.mansart.data.core.PathResolver.resolve(" + metamodel + ".$MODEL, \"" + attr + "\")";
     }
 
+    /** M8-1f — at least one SET assignment whose RHS is not a plain ArgRef (i.e. arithmetic or
+     *  scalar function call). The runtime fallback handles those without compile-time emit code. */
+    private static boolean hasComplexSet(io.vidocq.mansart.data.core.JdqlAst.Stmt stmt) {
+        for (var sa : stmt.setAssignments) {
+            if (!(sa.value() instanceof io.vidocq.mansart.data.core.JdqlAst.ExprArg)) return true;
+        }
+        return false;
+    }
+
+    /**
+     * M8-1f — emit a method body that defers JDQL execution to the runtime. The generated code
+     * forwards the raw JDQL string and the call-site arguments; {@code JdqlExecutor.executeJdql}
+     * re-parses, builds the model, and dispatches the statement.
+     */
+    private static String emitRuntimeFallback(String jdql, ExecutableElement method, String metamodel,
+                                              TypeMirror returnType) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Object[] _xs = new java.lang.Object[]{");
+        for (int i = 0; i < method.getParameters().size(); i++) {
+            if (i > 0) sb.append(", ");
+            sb.append("arg").append(i);
+        }
+        sb.append("}; ");
+        sb.append("java.lang.reflect.Method _m;");
+        sb.append("try { _m = ").append(repoCallSiteAccessor(method)).append("; }");
+        sb.append("catch (NoSuchMethodException _e) { throw new io.vidocq.mansart.data.core.MansartDataException(\"missing method handle\", _e); }");
+        sb.append("Object _r = io.vidocq.mansart.data.core.JdqlExecutor.executeJdql(")
+          .append(quote(jdql)).append(", _m, ").append(metamodel).append(".$MODEL, runtime, _xs); ");
+        return sb.append(returnFromRuntimeFallback(returnType)).toString();
+    }
+
+    private static String repoCallSiteAccessor(ExecutableElement method) {
+        // The generated impl is in the same package as the interface; we don't have the interface
+        // FQN here at call time, so we resolve via the impl's own enclosing class lookup. The
+        // interface is the impl's first declared interface — getInterfaces()[0] of `this.getClass()`.
+        StringBuilder sb = new StringBuilder();
+        sb.append("this.getClass().getInterfaces()[0].getMethod(\"")
+          .append(method.getSimpleName()).append("\"");
+        for (var p : method.getParameters()) {
+            sb.append(", ").append(p.asType().toString()).append(".class");
+        }
+        sb.append(")");
+        return sb.toString();
+    }
+
+    private static String returnFromRuntimeFallback(TypeMirror returnType) {
+        return switch (returnType.getKind()) {
+            case VOID    -> "";
+            case INT     -> "return ((Number) _r).intValue();";
+            case LONG    -> "return ((Number) _r).longValue();";
+            case BOOLEAN -> "return (Boolean) _r;";
+            default      -> "return (" + returnType + ") _r;";
+        };
+    }
+
+    private static String quote(String s) {
+        StringBuilder sb = new StringBuilder("\"");
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            switch (c) {
+                case '\\' -> sb.append("\\\\");
+                case '"'  -> sb.append("\\\"");
+                case '\n' -> sb.append("\\n");
+                case '\r' -> sb.append("\\r");
+                case '\t' -> sb.append("\\t");
+                default   -> sb.append(c);
+            }
+        }
+        return sb.append('"').toString();
+    }
+
     private static void emitArgs(StringBuilder sb, Pred p,
                                  Map<String, Integer> nameToIdx, ExecutableElement m, DynCtx ctx) {
         if (p == null) return;
@@ -589,7 +676,13 @@ final class JdqlParser {
         /** M8-2 — for {@link Kind#PROJECT_MULTI}: list of attribute names selected. */
         List<String> projectAttrs = new ArrayList<>();
     }
-    record SetAssign(String attr, ArgRef arg) {}
+    /** M8-1f — value can be a plain ArgRef (simple form) or a complex Expr (scalar fn / arithmetic).
+     *  When complex, the emitter routes the UPDATE through {@code JdqlExecutor.executeJdql} which
+     *  re-parses the JDQL at runtime and shares the AST walker with the runtime path. */
+    record SetAssign(String attr, ArgRef arg, boolean complex) {
+        SetAssign(String attr, ArgRef arg) { this(attr, arg, false); }
+        static SetAssign complex(String attr) { return new SetAssign(attr, null, true); }
+    }
     sealed interface Pred permits Cmp, FnCmp, IsNull, FnIsNull, Between, FnBetween,
                                   In, FnIn, And, Or, Not {}
     record Cmp(String attr, Op op, ArgRef arg)              implements Pred {}

@@ -137,6 +137,14 @@ public interface AuthorRepository extends BasicRepository<Author, Long> {
     @jakarta.data.repository.Query("FROM Author WHERE UPPER(name) IS NOT NULL")
     long jdqlUpperIsNotNullCount();
 
+    /* ---- M8-1f UPDATE SET with scalar fn / arithmetic via runtime fallback ---- */
+
+    @jakarta.data.repository.Query("UPDATE Author SET name = UPPER(name) WHERE id = :id")
+    long jdqlSetUpper(long id);
+
+    @jakarta.data.repository.Query("UPDATE Author SET name = CONCAT(name, :suffix) WHERE id = :id")
+    long jdqlSetConcatSuffix(long id, String suffix);
+
     /* ---- M8-2 multi-projection (SELECT a, b, …) ---- */
 
     @jakarta.data.repository.Query("SELECT id, name FROM Author ORDER BY name ASC")

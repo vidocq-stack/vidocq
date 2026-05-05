@@ -94,6 +94,23 @@ class JdqlScalarFunctionsTest {
         assertThat(n).isEqualTo(4L);
     }
 
+    @Test
+    void setUpperUppercasesTheRow() {
+        Author stendhal = repo.findOneByName("Stendhal").orElseThrow();
+        long affected = repo.jdqlSetUpper(stendhal.getId());
+        assertThat(affected).isEqualTo(1L);
+        assertThat(repo.findOneByName("STENDHAL")).isPresent();
+        assertThat(repo.findOneByName("Stendhal")).isEmpty();
+    }
+
+    @Test
+    void setConcatSuffixAppendsString() {
+        Author stendhal = repo.findOneByName("Stendhal").orElseThrow();
+        long affected = repo.jdqlSetConcatSuffix(stendhal.getId(), " (1783)");
+        assertThat(affected).isEqualTo(1L);
+        assertThat(repo.findOneByName("Stendhal (1783)")).isPresent();
+    }
+
     private static Author named(String name) {
         Author a = new Author();
         a.setName(name);
