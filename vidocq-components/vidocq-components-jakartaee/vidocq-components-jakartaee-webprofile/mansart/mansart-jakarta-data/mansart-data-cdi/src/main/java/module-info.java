@@ -6,6 +6,7 @@ module io.vidocq.mansart.data.cdi {
     requires transitive io.vidocq.mansart.data.core;
     requires jakarta.cdi;
     requires jakarta.inject;
+    requires jakarta.data;        // M7-4 — @Enhancement uses Repository.class in the typed BCE API
     requires java.sql;            // javax.sql.DataSource
 
     exports io.vidocq.mansart.data.cdi;

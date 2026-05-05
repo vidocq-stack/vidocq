@@ -2,9 +2,12 @@ package io.vidocq.mansart.data.cdi;
 
 import jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension;
 import jakarta.enterprise.inject.build.compatible.spi.Discovery;
+import jakarta.enterprise.inject.build.compatible.spi.Enhancement;
 import jakarta.enterprise.inject.build.compatible.spi.ScannedClasses;
 import jakarta.enterprise.inject.build.compatible.spi.Synthesis;
 import jakarta.enterprise.inject.build.compatible.spi.SyntheticComponents;
+import jakarta.data.repository.Repository;
+import jakarta.enterprise.lang.model.declarations.ClassInfo;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -14,13 +17,24 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Enumeration;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * CDI 4.1 {@link BuildCompatibleExtension} that wires Mansart {@code @Repository} interfaces into
- * the bean container. Reads {@code META-INF/mansart-repositories.list} (produced by
- * {@code mansart-data-processor}) and registers one synthetic bean per entry, scoped
- * {@code @ApplicationScoped}, instantiated via {@link MansartRepoCreator}.
+ * the bean container. Two paths:
+ *
+ * <ol>
+ *   <li><b>Compile-time</b> — reads {@code META-INF/mansart-repositories.list} (produced by
+ *       {@code mansart-data-processor}) and registers one synthetic bean per entry, scoped
+ *       {@code @Singleton}, instantiated via {@link MansartRepoCreator} from the generated
+ *       {@code *RepositoryImpl} class.</li>
+ *   <li><b>Runtime</b> (M7-4) — the {@code @Enhancement} phase scans for any {@code @Repository}
+ *       interface that did NOT come from APT, and registers it via {@link MansartRuntimeRepoCreator}
+ *       which uses {@link io.vidocq.mansart.data.core.RuntimeRepositoryProxy}. This is the path TCK
+ *       deployments take, where pre-compiled jakarta.data jars do not contain APT artifacts.</li>
+ * </ol>
  *
  * <p>Also makes sure {@link MansartRuntimeProducer} is scanned so the shared
  * {@link io.vidocq.mansart.data.core.RepositoryRuntime} is available for injection.
@@ -28,6 +42,7 @@ import java.util.List;
 public final class MansartDataExtension implements BuildCompatibleExtension {
 
     private final List<RepoEntry> entries = new ArrayList<>();
+    private final Set<String> runtimeRepoFqns = new LinkedHashSet<>();
 
     record RepoEntry(String itfFqn, String implFqn) {}
 
@@ -67,9 +82,33 @@ public final class MansartDataExtension implements BuildCompatibleExtension {
         }
     }
 
+    /**
+     * M7-4 — auto-discover {@code @Repository} interfaces that were not registered through the
+     * compile-time META-INF list. Such interfaces are routed to the runtime Proxy path.
+     *
+     * <p>Uses the wildcard {@code types = Object.class} + {@code withSubtypes = true} which is the
+     * BCE idiom for "every class in the bean archive" — interfaces are then filtered by the body
+     * of the method via {@link ClassInfo#isInterface()} and the annotation predicate.
+     */
+    @Enhancement(types = Object.class, withSubtypes = true)
+    public void discoverRuntimeRepositories(ClassInfo info) {
+        if (!info.isInterface()) return;
+        // Use the typed hasAnnotation(Class) — implementations are required to resolve this
+        // as a name match against the index, without forcing the annotation type itself to
+        // be loadable through the bean archive index (unlike iterating annotations()).
+        if (!info.hasAnnotation(Repository.class)) return;
+        String fqn = info.name();
+        for (RepoEntry e : entries) {
+            if (e.itfFqn().equals(fqn)) return;     // already covered by compile-time entry
+        }
+        runtimeRepoFqns.add(fqn);
+    }
+
     @Synthesis
     public void registerRepositories(SyntheticComponents components) {
         ClassLoader cl = currentClassLoader();
+
+        // Compile-time path
         for (RepoEntry e : entries) {
             Class<?> itf;
             Class<?> impl;
@@ -80,17 +119,38 @@ public final class MansartDataExtension implements BuildCompatibleExtension {
                 throw new IllegalStateException(
                         "mansart-repositories.list references unknown class: " + ex.getMessage(), ex);
             }
-            registerOne(components, itf, impl);
+            registerCompileTime(components, itf, impl);
+        }
+
+        // Runtime path (M7-4)
+        for (String fqn : runtimeRepoFqns) {
+            Class<?> itf;
+            try {
+                itf = cl.loadClass(fqn);
+            } catch (ClassNotFoundException ex) {
+                throw new IllegalStateException(
+                        "Runtime-discovered @Repository interface not loadable: " + fqn, ex);
+            }
+            registerRuntime(components, itf);
         }
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
-    private static void registerOne(SyntheticComponents components, Class<?> itf, Class<?> impl) {
+    private static void registerCompileTime(SyntheticComponents components, Class<?> itf, Class<?> impl) {
         components.<Object>addBean((Class) itf)
                 .type(itf)
                 .scope(jakarta.inject.Singleton.class)
                 .withParam("implClass", impl)
                 .createWith(MansartRepoCreator.class);
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static void registerRuntime(SyntheticComponents components, Class<?> itf) {
+        components.<Object>addBean((Class) itf)
+                .type(itf)
+                .scope(jakarta.inject.Singleton.class)
+                .withParam("itfClass", itf)
+                .createWith(MansartRuntimeRepoCreator.class);
     }
 
     private static ClassLoader currentClassLoader() {

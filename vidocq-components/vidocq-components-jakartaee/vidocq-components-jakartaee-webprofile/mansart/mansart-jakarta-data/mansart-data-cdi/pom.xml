@@ -27,5 +27,12 @@
             <groupId>jakarta.inject</groupId>
             <artifactId>jakarta.inject-api</artifactId>
         </dependency>
+        <!-- M7-4: needed at compile time so the BCE @Enhancement filter can call
+             ClassInfo.hasAnnotation(Repository.class) without scanning every annotation
+             through the Vauban index (which doesn't include JDK / jakarta.data jars). -->
+        <dependency>
+            <groupId>jakarta.data</groupId>
+            <artifactId>jakarta.data-api</artifactId>
+        </dependency>
     </dependencies>
 </project>

@@ -9,7 +9,7 @@ Statuts : `OPEN` → `INVESTIGATING` → `FIXED` (commit hash) → `CLOSED`.
 ## BUG-20260505-01 — Jakarta Data 1.0 TCK : 73 erreurs sur EntityTests (entités TCK non métamodélisées)
 
 - **Date** : 2026-05-05
-- **Statut** : OPEN — bloqué sur M7 (génération runtime Class-File API)
+- **Statut** : INVESTIGATING — M7-4 réduit le périmètre. Reste M7-5 (entités sans annotations Mansart).
 - **Module touché** : `mansart-data-cdi`, `mansart-data-processor` (gap d'architecture)
 - **Symptôme** : `mvn -Ptck-run test` → 73 / 73 EntityTests en erreur. La trace typique :
   ```
@@ -49,5 +49,33 @@ Statuts : `OPEN` → `INVESTIGATING` → `FIXED` (commit hash) → `CLOSED`.
   - **Décision** : la voie 1 est la bonne. Programmée pour M7, après livraison
     des 3 sous-projets (`mansart-jakarta-data`, `mansart-pool`,
     `mansart-persistence`) en mode "compile-time only".
+- **Investigation 2026-05-05 (M7-4)** :
+  - M7-4 livre l'auto-discovery BCE `@Enhancement` → les 5 interfaces TCK
+    (`Boxes`, `NaturalNumbers`, `PositiveIntegers`, `CustomRepository`,
+    `AsciiCharacters`, `MultipleEntityRepo`) sont bien détectées et enregistrées
+    comme beans synthétiques `@Singleton`. Vauban résout les beans, l'enricher
+    appelle `MansartRuntimeRepoCreator.create(itf, runtime)`.
+  - Validation indépendante via `RuntimeRepoArquillianTest` : un repo runtime-only
+    (sans `META-INF/mansart-repositories.list`) est correctement injecté et CRUD
+    round-trip OK à travers Vauban + Arquillian.
+  - Reste 2 gaps qui causent les 71 NPE résiduels (Score TCK identique : 71 / 73,
+    mais les causes sont maintenant côté entity-model, pas côté BCE) :
+      a. **Entités sans `@Entity`/`@Id` Mansart** — TCK utilise la convention
+         Jakarta Data implicite (pas d'annotation, le champ `id` est l'Id par
+         convention, le type Id provient du `BasicRepository<E, K>` générique).
+         `RuntimeEntityModelBuilder` crashe avec
+         `Entity NaturalNumber has no @Id field`.
+      b. **`CustomRepository` sans `BasicRepository<E, K>`** — interface
+         Jakarta Data autonome. `resolveEntityClass` ne trouve pas l'entité ;
+         il faut l'inférer depuis les paramètres/return-types des méthodes
+         lifecycle ou `@Find`/`@Query`.
+  - Sous-jalons proposés pour fermer ce bug :
+      - **M7-5** : `RuntimeEntityModelBuilder` infère l'`@Id` implicite (champ
+         `id`, type pris du paramètre générique `K` du repo). Détecte `@Entity`
+         absent → traite la classe comme entité POJO si elle est référencée par
+         un repo. Couvre 4 / 5 repos TCK.
+      - **M7-6** : inférer le type d'entité depuis les méthodes du repo (return
+         type de `findBy*`, paramètre de `@Save`, etc.). Couvre `CustomRepository`
+         et `MultipleEntityRepo`.
 
 ---
