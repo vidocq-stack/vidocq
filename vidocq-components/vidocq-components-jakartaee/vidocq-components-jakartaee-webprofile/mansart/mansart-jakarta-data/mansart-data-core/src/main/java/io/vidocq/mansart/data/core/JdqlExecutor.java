@@ -149,19 +149,21 @@ final class JdqlExecutor {
                 yield col.get(0);
             }
             case UPDATE -> {
-                List<Attribute<?, ?>> setAttrs = new ArrayList<>(stmt.setAssignments.size());
-                List<Object> setVals = new ArrayList<>(stmt.setAssignments.size());
+                StringBuilder setSql = new StringBuilder();
+                List<Object> setVals = new ArrayList<>();
+                List<Class<?>> setTypes = new ArrayList<>();
+                boolean firstSet = true;
                 for (JdqlAst.SetAssign sa : stmt.setAssignments) {
                     Attribute<?, ?> a = attrIndex.get(sa.attr());
                     if (a == null) throw new MansartDataException("Unknown attribute: " + sa.attr());
-                    setAttrs.add(a);
-                    setVals.add(resolveArg(sa.arg(), args, nameToIdx));
+                    if (!firstSet) setSql.append(", ");
+                    setSql.append('"').append(a.columnName()).append("\" = ");
+                    renderExpr(setSql, sa.value(), attrIndex, args, nameToIdx, setVals, setTypes, a.javaType());
+                    firstSet = false;
                 }
                 BuiltWhere bw = buildWhere(stmt.where, attrIndex, args, nameToIdx);
-                Object[] all = new Object[setVals.size() + bw.args.length];
-                for (int i = 0; i < setVals.size(); i++) all[i] = setVals.get(i);
-                System.arraycopy(bw.args, 0, all, setVals.size(), bw.args.length);
-                long n = runtime.executeUpdate((EntityModel) model, setAttrs, bw.where, all);
+                long n = runtime.executeUpdateRaw((EntityModel) model, setSql.toString(),
+                        setVals, setTypes, bw.where, bw.args);
                 yield wrapLongResult(method, n);
             }
             case DELETE -> {
@@ -175,6 +177,7 @@ final class JdqlExecutor {
     private static Object wrapLongResult(Method m, long n) {
         Class<?> rt = m.getReturnType();
         if (rt == void.class) return null;
+        if (rt == boolean.class || rt == Boolean.class) return n > 0;
         if (rt == int.class || rt == Integer.class) return (int) n;
         return n;
     }
@@ -331,6 +334,39 @@ final class JdqlExecutor {
      * Jakarta Data TCK jar built with maven-compiler-plugin 4.0.0-beta-4 — see BUG-20260505-01,
      * M7-9) still resolve {@code @Query} {@code :name} bindings via {@code @Param}.
      */
+    /**
+     * M7-24 — render a JDQL value expression (supports + - * /, attribute references, and arg
+     * references) into a SQL fragment. Bindings flow into {@code outVals} / {@code outTypes}
+     * in the order the placeholders appear, paired with {@code targetType} for the dialect to
+     * coerce against (the SET column's Java type).
+     */
+    @SuppressWarnings("unchecked")
+    private static void renderExpr(StringBuilder sb, JdqlAst.Expr expr,
+                                   Map<String, Attribute<?, ?>> attrIndex,
+                                   Object[] callArgs, Map<String, Integer> nameToIdx,
+                                   List<Object> outVals, List<Class<?>> outTypes,
+                                   Class<?> targetType) {
+        switch (expr) {
+            case JdqlAst.ExprAttr a -> {
+                Attribute<?, ?> attr = attrIndex.get(a.attr());
+                if (attr == null) throw new MansartDataException("Unknown attribute in SET: " + a.attr());
+                sb.append('"').append(attr.columnName()).append('"');
+            }
+            case JdqlAst.ExprArg ar -> {
+                outVals.add(resolveArg(ar.arg(), callArgs, nameToIdx));
+                outTypes.add(targetType);
+                sb.append('?');
+            }
+            case JdqlAst.ExprBin bin -> {
+                sb.append('(');
+                renderExpr(sb, bin.left(), attrIndex, callArgs, nameToIdx, outVals, outTypes, targetType);
+                sb.append(' ').append(bin.op()).append(' ');
+                renderExpr(sb, bin.right(), attrIndex, callArgs, nameToIdx, outVals, outTypes, targetType);
+                sb.append(')');
+            }
+        }
+    }
+
     private static jakarta.data.page.PageRequest findPageRequest(Object[] args) {
         if (args == null) return null;
         for (Object a : args) {

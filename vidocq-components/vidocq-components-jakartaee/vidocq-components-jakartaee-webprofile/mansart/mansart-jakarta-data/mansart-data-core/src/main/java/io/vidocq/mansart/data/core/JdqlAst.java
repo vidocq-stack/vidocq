@@ -28,7 +28,15 @@ public final class JdqlAst {
         public String scalarAttr;
     }
 
-    public record SetAssign(String attr, ArgRef arg) {}
+    public record SetAssign(String attr, Expr value) {
+        public SetAssign(String attr, ArgRef arg) { this(attr, new ExprArg(arg)); }
+    }
+    /** M7-24 — RHS of a SET assignment can now be an arithmetic expression
+     *  ({@code length + ?1}, {@code y / :yDivisor}, …). */
+    public sealed interface Expr permits ExprArg, ExprAttr, ExprBin {}
+    public record ExprArg(ArgRef arg) implements Expr {}
+    public record ExprAttr(String attr) implements Expr {}
+    public record ExprBin(Expr left, char op, Expr right) implements Expr {}
     public sealed interface Pred permits Cmp, IsNull, Between, In, And, Or, Not {}
     public record Cmp(String attr, Op op, ArgRef arg)              implements Pred {}
     public record IsNull(String attr, boolean negated)             implements Pred {}
@@ -67,6 +75,7 @@ public final class JdqlAst {
     /* ---------- Lexer ---------- */
 
     private enum Tk { IDENT, KW, EQ, NE, LT, LTE, GT, GTE, LPAREN, RPAREN, COMMA, NAMED, POS, STAR,
+                       PLUS, MINUS, SLASH,
                        NUM_LIT, STR_LIT, BOOL_LIT, EOF }
     private record Token(Tk kind, String text) {}
 
@@ -87,6 +96,11 @@ public final class JdqlAst {
                 case ')': pos++; return new Token(Tk.RPAREN, ")");
                 case ',': pos++; return new Token(Tk.COMMA, ",");
                 case '*': pos++; return new Token(Tk.STAR, "*");
+                case '+': pos++; return new Token(Tk.PLUS, "+");
+                case '/': pos++; return new Token(Tk.SLASH, "/");
+                case '-':
+                    pos++;
+                    return new Token(Tk.MINUS, "-");
                 case '=': pos++; return new Token(Tk.EQ, "=");
                 case '<':
                     pos++;
@@ -116,9 +130,8 @@ public final class JdqlAst {
                     return new Token(Tk.POS, src.substring(s, pos));
                 }
                 default:
-                    if (Character.isDigit(c) || (c == '-' && pos + 1 < src.length() && Character.isDigit(src.charAt(pos + 1)))) {
+                    if (Character.isDigit(c)) {
                         int s = pos;
-                        if (c == '-') pos++;
                         while (pos < src.length() && (Character.isDigit(src.charAt(pos)) || src.charAt(pos) == '.')) pos++;
                         // JDQL accepts the Java numeric suffixes l/L (long), f/F (float), d/D (double).
                         // Strip them for parsing — the AST stores Long / Double values.
@@ -273,7 +286,55 @@ public final class JdqlAst {
             String attr = expectAttr();
             if (lex.peek().kind != Tk.EQ) throw new ParseException("Expected '=' in SET");
             lex.consume();
-            return new SetAssign(attr, parseArg());
+            return new SetAssign(attr, parseValueExpr());
+        }
+
+        /**
+         * M7-24 — RHS of a SET assignment. Supports binary +, -, *, / over attribute references
+         * and {@link ArgRef}s (named/positional/literal). Left-associative; + and - bind looser
+         * than * and /. Sufficient for the TCK queries
+         * {@code length = length + ?1, width = width - ?1, height = height * ?2}.
+         */
+        Expr parseValueExpr() { return parseAddSub(); }
+
+        Expr parseAddSub() {
+            Expr l = parseMulDiv();
+            while (lex.peek().kind == Tk.PLUS || lex.peek().kind == Tk.MINUS) {
+                char op = lex.consume().text.charAt(0);
+                Expr r = parseMulDiv();
+                l = new ExprBin(l, op, r);
+            }
+            return l;
+        }
+
+        Expr parseMulDiv() {
+            Expr l = parseValueAtom();
+            while (lex.peek().kind == Tk.STAR || lex.peek().kind == Tk.SLASH) {
+                char op = lex.consume().text.charAt(0);
+                Expr r = parseValueAtom();
+                l = new ExprBin(l, op, r);
+            }
+            return l;
+        }
+
+        Expr parseValueAtom() {
+            Token t = lex.peek();
+            if (t.kind == Tk.LPAREN) {
+                lex.consume();
+                Expr e = parseValueExpr();
+                if (lex.peek().kind != Tk.RPAREN) throw new ParseException("Expected ')'");
+                lex.consume();
+                return e;
+            }
+            if (t.kind == Tk.IDENT) {
+                String name = lex.consume().text;
+                if (!attrNames.contains(name)) {
+                    throw new ParseException("Unknown attribute '" + name + "' in SET expression");
+                }
+                return new ExprAttr(name);
+            }
+            // Otherwise it's an ArgRef (named/positional/literal/string/bool/number)
+            return new ExprArg(parseArg());
         }
 
         Pred parseExpr() { return parseOr(); }

@@ -9,7 +9,9 @@ Statuts : `OPEN` → `INVESTIGATING` → `FIXED` (commit hash) → `CLOSED`.
 ## BUG-20260505-01 — Jakarta Data 1.0 TCK : 73 erreurs sur EntityTests (entités TCK non métamodélisées)
 
 - **Date** : 2026-05-05
-- **Statut** : INVESTIGATING — M7-4 réduit le périmètre. Reste M7-5 (entités sans annotations Mansart).
+- **Statut** : **CLOSED** *(2026-05-05, M7-24)* — 73 / 73 EntityTests TCK officielle
+  passent en mode standalone via Vauban + Arquillian. Reste à activer
+  SignatureTests (séparé, voir M6.5+).
 - **Module touché** : `mansart-data-cdi`, `mansart-data-processor` (gap d'architecture)
 - **Symptôme** : `mvn -Ptck-run test` → 73 / 73 EntityTests en erreur. La trace typique :
   ```
@@ -112,6 +114,15 @@ Statuts : `OPEN` → `INVESTIGATING` → `FIXED` (commit hash) → `CLOSED`.
         pas convertir VARCHAR vers une classe enum via `getObject(idx, enumClass)`.
         Réduit `JdbcSQLFeatureNotSupportedException` (30 → 0). **Score TCK** :
         73 → 21 PASS / 14 FAIL / 38 ERR.
+      - **M7-24** *(LIVRÉ 2026-05-05)* — JDQL arithmétique : `JdqlAst` ajoute
+        un type `Expr` (sealed: `ExprAttr` / `ExprArg` / `ExprBin`) pour le RHS
+        des SET assignments. Lexer reconnaît `+ - * /`. Parser `parseValueExpr`
+        avec précédence `+/- < */`. `JdqlExecutor.renderExpr` émet le SQL et
+        bind les valeurs. `RepositoryRuntime.executeUpdateRaw` accepte un SET
+        clause string + bindings. `wrapLongResult` mappe vers `Boolean` quand
+        la méthode retourne boolean (`move(...)` returns true if rows affected).
+        **Score TCK : 73 → 73 PASS / 0 FAIL / 0 ERR (100%)**. Bug-20260505-01
+        peut maintenant être marqué CLOSED.
       - **M7-23** *(LIVRÉ 2026-05-05)* — `RuntimeRepositoryProxy` accepte les
         repos multi-entité. `buildSecondaryModels` scanne tous les paramètres
         et types de retour des méthodes, construit un `EntityModel` séparé pour

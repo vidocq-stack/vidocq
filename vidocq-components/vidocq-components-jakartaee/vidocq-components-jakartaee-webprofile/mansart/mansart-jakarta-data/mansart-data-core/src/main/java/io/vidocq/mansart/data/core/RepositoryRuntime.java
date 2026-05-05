@@ -471,6 +471,35 @@ public final class RepositoryRuntime {
      * <p>Args layout: SET values come first (in {@code attributes} order), then any args consumed
      * by {@code where} (in render order). Returns the number of rows affected.
      */
+    /**
+     * M7-24 — generic UPDATE for JDQL queries with arithmetic SET expressions
+     * (e.g. {@code SET length = length + ?1}). The caller supplies the fully-rendered
+     * {@code SET …} clause string (without the leading "SET ") together with the bindings
+     * those expressions consume; the WHERE bindings follow as usual.
+     */
+    public <E> long executeUpdateRaw(EntityModel<E> model, String setClause,
+                                     java.util.List<Object> setArgs,
+                                     java.util.List<Class<?>> setArgTypes,
+                                     Where where, Object... whereArgs) {
+        StringBuilder sb = new StringBuilder("UPDATE ").append(qualifiedTable(model))
+                .append(" SET ").append(setClause);
+        SqlFragment selFrag = dialect.select(model, where, OrderBy.NONE, Pagination.NONE);
+        int whereIdx = selFrag.sql().indexOf(" WHERE ");
+        if (whereIdx >= 0) sb.append(selFrag.sql().substring(whereIdx));
+        String sql = sb.toString();
+        return ConnectionScope.withConnection(dataSource, c -> {
+            try (PreparedStatement ps = c.prepareStatement(sql)) {
+                int idx = 1;
+                for (int i = 0; i < setArgs.size(); i++) {
+                    dialect.bind(ps, idx++, setArgs.get(i), setArgTypes.get(i));
+                }
+                WhereBinder.bind(dialect, ps, where, whereArgs == null ? new Object[0] : whereArgs,
+                        idx, new int[]{0});
+                return (long) ps.executeUpdate();
+            }
+        });
+    }
+
     public <E> long executeUpdate(EntityModel<E> model, java.util.List<Attribute<?, ?>> attributes,
                                   Where where, Object... args) {
         SqlFragment frag = dialect.updateSet(model, attributes, where);
