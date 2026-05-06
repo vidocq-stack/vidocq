@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Projet Maven STANDALONE en Model Version 4.0.0, volontairement EN DEHORS
+    du reactor Ravel.
+
+    Pourquoi : ShrinkWrap Maven Resolver 3.3 (dép. transitive Arquillian) utilise
+    maven-resolver 1.9 / maven-model 3.9 qui ne savent pas parser les POMs
+    Model 4.1.0 du reactor. Son ClasspathWorkspaceReader crash avec
+    "Bad artifact coordinates ... jar:".
+
+    Dépendances internes (ravel-core, ravel-cdi-vauban) sont gelées sur la
+    version 0.1.0-SNAPSHOT installée dans le repo M2 local.
+
+    Le lancement passe par le script :
+        ./run-official-tck-mp-config-3.1.sh                      (smoke test)
+        ./run-official-tck-mp-config-3.1.sh all                  (suite complète)
+        ./run-official-tck-mp-config-3.1.sh -Dtest=SomeTests     (classe ciblée)
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>io.vidocq.ravel</groupId>
+    <artifactId>ravel-tck</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+    <packaging>jar</packaging>
+
+    <name>Ravel :: TCK Runner</name>
+    <description>Harness de conformance MicroProfile Config 3.1 — point d'entrée pour le TCK officiel</description>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.release>25</maven.compiler.release>
+        <ravel.version>0.1.0-SNAPSHOT</ravel.version>
+        <microprofile.config.version>3.1.1</microprofile.config.version>
+    </properties>
+
+    <repositories>
+        <repository>
+            <id>vidocq-snapshots</id>
+            <url>https://repo.vidocq.dev/snapshots</url>
+            <releases><enabled>false</enabled></releases>
+            <snapshots><enabled>true</enabled></snapshots>
+        </repository>
+    </repositories>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.ravel</groupId>
+            <artifactId>ravel-core</artifactId>
+            <version>${ravel.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.ravel</groupId>
+            <artifactId>ravel-cdi-vauban</artifactId>
+            <version>${ravel.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.eclipse.microprofile.config</groupId>
+            <artifactId>microprofile-config-api</artifactId>
+            <version>${microprofile.config.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>5.11.4</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>4.0.0-beta-4</version>
+                    <configuration>
+                        <release>25</release>
+                    </configuration>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <version>3.5.5</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-resources-plugin</artifactId>
+                    <version>3.3.1</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
+
+    <profiles>
+        <profile>
+            <id>tck-official</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <useModulePath>false</useModulePath>
+                            <dependenciesToScan>
+                                <dependency>org.eclipse.microprofile.config:microprofile-config-tck</dependency>
+                            </dependenciesToScan>
+                            <includes>
+                                <include>**/*Test.class</include>
+                                <include>**/*Tests.class</include>
+                                <include>**/*IT.class</include>
+                            </includes>
+                            <trimStackTrace>false</trimStackTrace>
+                            <redirectTestOutputToFile>false</redirectTestOutputToFile>
+                            <useFile>false</useFile>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+            <dependencies>
+                <dependency>
+                    <groupId>org.eclipse.microprofile.config</groupId>
+                    <artifactId>microprofile-config-tck</artifactId>
+                    <version>${microprofile.config.version}</version>
+                    <scope>test</scope>
+                </dependency>
+                <!-- Arquillian core : harness officiel TCK MicroProfile -->
+                <dependency>
+                    <groupId>org.jboss.arquillian.junit5</groupId>
+                    <artifactId>arquillian-junit5-container</artifactId>
+                    <version>1.9.4.Final</version>
+                    <scope>test</scope>
+                </dependency>
+                <dependency>
+                    <groupId>org.jboss.arquillian.container</groupId>
+                    <artifactId>arquillian-container-spi</artifactId>
+                    <version>1.9.4.Final</version>
+                    <scope>test</scope>
+                </dependency>
+                <dependency>
+                    <groupId>org.jboss.shrinkwrap</groupId>
+                    <artifactId>shrinkwrap-api</artifactId>
+                    <version>1.2.6</version>
+                    <scope>test</scope>
+                </dependency>
+                <dependency>
+                    <groupId>org.jboss.shrinkwrap</groupId>
+                    <artifactId>shrinkwrap-impl-base</artifactId>
+                    <version>1.2.6</version>
+                    <scope>test</scope>
+                </dependency>
+                <dependency>
+                    <groupId>org.testng</groupId>
+                    <artifactId>testng</artifactId>
+                    <version>7.10.2</version>
+                    <scope>test</scope>
+                </dependency>
+            </dependencies>
+        </profile>
+    </profiles>
+</project>
