@@ -10,6 +10,11 @@ import jakarta.transaction.SystemException;
 import jakarta.transaction.Transaction;
 import jakarta.transaction.TransactionManager;
 
+import javax.transaction.xa.XAException;
+import javax.transaction.xa.XAResource;
+import javax.transaction.xa.Xid;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 
 /**
@@ -155,7 +160,7 @@ public class MansartTransactionManager implements TransactionManager {
      * results.
      */
     public List<RecoveryLog.Record> recover() throws java.io.IOException {
-        var lastByXid = new java.util.LinkedHashMap<XidKey, RecoveryLog.Record>();
+        var lastByXid = new LinkedHashMap<XidKey, RecoveryLog.Record>();
         for (var rec : recoveryLog.scan()) {
             var key = XidKey.of(rec.xid());
             if (rec.type() == RecoveryLog.Type.COMPLETED) {
@@ -165,6 +170,77 @@ public class MansartTransactionManager implements TransactionManager {
             }
         }
         return List.copyOf(lastByXid.values());
+    }
+
+    /**
+     * Drives the actual replay against {@link XAResource} drivers — M5b.
+     *
+     * <p>For every record returned by {@link #recover()} :
+     * <ul>
+     *   <li>look up the matching Xid in each driver's {@link XAResource#recover(int)} list ;</li>
+     *   <li>if found AND the journal type is {@link RecoveryLog.Type#COMMITTING} → call
+     *       {@link XAResource#commit(Xid, boolean) commit(xid, false)} (the durable decision is
+     *       commit, the driver still holds the prepared branch — finish the job) ;</li>
+     *   <li>if found AND the journal type is {@link RecoveryLog.Type#PREPARED} → call
+     *       {@link XAResource#rollback(Xid) rollback(xid)} (no durable commit decision exists, so
+     *       rolling back is the safe choice) ;</li>
+     *   <li>if not found in any driver → leave the record in the {@link RecoveryReport#stillInDoubt}
+     *       list so the operator can inspect it (driver may be offline / recycled / on another
+     *       machine).</li>
+     * </ul>
+     *
+     * <p>Idempotent : calling this twice with the same drivers re-resolves anything that the first
+     * call left in doubt (driver-side state may have changed in the meantime).
+     */
+    public RecoveryReport recover(XAResource... resources) throws java.io.IOException {
+        List<RecoveryLog.Record> inDoubt = recover();
+
+        // Pre-compute every driver's in-doubt branches — one scan call per resource.
+        var driverIndex = new LinkedHashMap<XAResource, java.util.Map<XidKey, Xid>>();
+        for (XAResource r : resources) {
+            var index = new LinkedHashMap<XidKey, Xid>();
+            try {
+                Xid[] xids = r.recover(XAResource.TMSTARTRSCAN | XAResource.TMENDRSCAN);
+                if (xids != null) {
+                    for (Xid x : xids) index.put(XidKey.of(x), x);
+                }
+            } catch (XAException ignored) {
+                // Driver scan failed — treat as empty ; affected records stay in doubt.
+            }
+            driverIndex.put(r, index);
+        }
+
+        var committed   = new ArrayList<Xid>();
+        var rolledBack  = new ArrayList<Xid>();
+        var unresolved  = new ArrayList<RecoveryLog.Record>();
+
+        for (RecoveryLog.Record rec : inDoubt) {
+            var key = XidKey.of(rec.xid());
+            XAResource match = null;
+            Xid driverXid = null;
+            for (var entry : driverIndex.entrySet()) {
+                Xid x = entry.getValue().get(key);
+                if (x != null) { match = entry.getKey(); driverXid = x; break; }
+            }
+            if (match == null) {
+                unresolved.add(rec);
+                continue;
+            }
+            try {
+                if (rec.type() == RecoveryLog.Type.COMMITTING) {
+                    match.commit(driverXid, false);
+                    committed.add(driverXid);
+                } else {
+                    // PREPARED — no durable commit decision was made.
+                    match.rollback(driverXid);
+                    rolledBack.add(driverXid);
+                }
+            } catch (XAException ex) {
+                // Driver rejected our resolution attempt — surface as still-in-doubt for now.
+                unresolved.add(rec);
+            }
+        }
+        return new RecoveryReport(committed, rolledBack, unresolved);
     }
 
     /** Equality wrapper for {@link javax.transaction.xa.Xid} — by-content hash/equals on

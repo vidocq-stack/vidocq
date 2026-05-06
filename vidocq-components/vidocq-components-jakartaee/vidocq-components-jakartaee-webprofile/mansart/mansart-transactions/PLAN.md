@@ -61,6 +61,19 @@ Journal append-only sur disque (`tx-recovery.log`). À chaque prepare, on persis
 Au démarrage, scan + replay : commit ou rollback selon l'état du journal.
 Tests TDD : `RecoveryAfterCrashIT` (kill -9 entre prepare et commit).
 
+### M5b — Auto-recovery driver-side *(livré)*
+
+- ✅ `MansartTransactionManager.recover(XAResource...)` — croise les in-doubt records du
+  journal Mansart avec les Xid remontés par `XAResource.recover(TMSTARTRSCAN|TMENDRSCAN)`
+  de chaque driver fourni.
+- ✅ COMMITTING + Xid présent côté driver → `commit(xid, false)` (replay du commit durable).
+- ✅ PREPARED + Xid présent côté driver → `rollback(xid)` (pas de décision durable).
+- ✅ Xid absent côté driver → reste dans `RecoveryReport.stillInDoubt` pour inspection humaine.
+- ✅ Tolère `XAException` (driver scan ou commit/rollback) — surface comme still-in-doubt.
+- ✅ Idempotent : un second appel résout ce que le premier n'avait pas pu (drivers reconnectés).
+- ✅ 6 tests TDD : COMMITTING→commit, PREPARED→rollback, Xid orphelin, multi-drivers
+  dispatch, COMPLETED ignoré, no-resources fallback.
+
 ### M6 — TCK officiel Jakarta Transactions 2.0 *(infra livrée)*
 
 - ✅ `install-tck.sh` : auto-récupération depuis Eclipse Foundation, idempotent (verify/force/install).
