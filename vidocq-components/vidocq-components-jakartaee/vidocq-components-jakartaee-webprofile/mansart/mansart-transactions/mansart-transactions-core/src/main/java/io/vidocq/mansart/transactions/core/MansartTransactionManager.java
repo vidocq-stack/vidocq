@@ -10,6 +10,8 @@ import jakarta.transaction.SystemException;
 import jakarta.transaction.Transaction;
 import jakarta.transaction.TransactionManager;
 
+import java.util.List;
+
 /**
  * Local-only Jakarta Transactions 2.0 {@link TransactionManager}.
  *
@@ -27,10 +29,22 @@ import jakarta.transaction.TransactionManager;
 public class MansartTransactionManager implements TransactionManager {
 
     private final ThreadLocal<MansartTransaction> active = new ThreadLocal<>();
+    private final RecoveryLog recoveryLog;
 
     /** Default timeout in seconds applied to new transactions. {@code 0} = no timeout. M1 stores
      *  the value but does not enforce it yet — enforcement lands with M2's reaper task. */
     private volatile int defaultTimeoutSeconds;
+
+    /** Volatile TM (no recovery log) — the most common case for embedded apps and tests. */
+    public MansartTransactionManager() {
+        this(NoOpRecoveryLog.INSTANCE);
+    }
+
+    /** Durable TM — pass a {@link FileRecoveryLog} (or any custom impl) to enable in-doubt
+     *  transaction detection on restart. */
+    public MansartTransactionManager(RecoveryLog recoveryLog) {
+        this.recoveryLog = recoveryLog;
+    }
 
     @Override
     public void begin() throws NotSupportedException {
@@ -39,7 +53,7 @@ public class MansartTransactionManager implements TransactionManager {
                     "A transaction is already active on this thread — nested transactions "
                             + "are not supported (use suspend()/resume() in M3+)");
         }
-        active.set(new MansartTransaction());
+        active.set(new MansartTransaction(recoveryLog));
     }
 
     @Override
@@ -122,5 +136,48 @@ public class MansartTransactionManager implements TransactionManager {
             throw new IllegalStateException("No transaction active on this thread");
         }
         return tx;
+    }
+
+    /**
+     * Replays the {@link RecoveryLog} and returns the records that are in-doubt — i.e. whose
+     * most recent record for a given Xid is not {@code COMPLETED}.
+     *
+     * <p>Caller-side handling :
+     * <ul>
+     *   <li>{@link RecoveryLog.Type#PREPARED} → the resource voted yes but no commit decision
+     *       was ever durably written ; safe to roll back the branch via the driver.</li>
+     *   <li>{@link RecoveryLog.Type#COMMITTING} → point of no return was crossed ; the branch
+     *       must be committed via the driver to restore consistency.</li>
+     * </ul>
+     *
+     * <p>For M5 we surface the records and let the caller decide ; M5b will add a high-level
+     * {@code recover(XAResource[])} that auto-resolves against driver-side {@code XAResource.recover()}
+     * results.
+     */
+    public List<RecoveryLog.Record> recover() throws java.io.IOException {
+        var lastByXid = new java.util.LinkedHashMap<XidKey, RecoveryLog.Record>();
+        for (var rec : recoveryLog.scan()) {
+            var key = XidKey.of(rec.xid());
+            if (rec.type() == RecoveryLog.Type.COMPLETED) {
+                lastByXid.remove(key);
+            } else {
+                lastByXid.put(key, rec);
+            }
+        }
+        return List.copyOf(lastByXid.values());
+    }
+
+    /** Equality wrapper for {@link javax.transaction.xa.Xid} — by-content hash/equals on
+     *  format/gtrid/bqual. Required because Xid is an interface with no contract for equals. */
+    private record XidKey(int format, java.util.List<Byte> gtrid, java.util.List<Byte> bqual) {
+        static XidKey of(javax.transaction.xa.Xid x) {
+            var g = x.getGlobalTransactionId();
+            var b = x.getBranchQualifier();
+            var gl = new java.util.ArrayList<Byte>(g.length);
+            for (byte v : g) gl.add(v);
+            var bl = new java.util.ArrayList<Byte>(b.length);
+            for (byte v : b) bl.add(v);
+            return new XidKey(x.getFormatId(), gl, bl);
+        }
     }
 }

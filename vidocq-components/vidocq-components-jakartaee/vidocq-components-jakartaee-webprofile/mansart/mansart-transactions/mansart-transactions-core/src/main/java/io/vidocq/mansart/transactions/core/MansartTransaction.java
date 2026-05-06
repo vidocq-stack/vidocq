@@ -57,6 +57,15 @@ final class MansartTransaction implements Transaction {
     private final Set<XAResource> alreadyEnded =
             java.util.Collections.newSetFromMap(new IdentityHashMap<>());
     private final Xid xid = new MansartXid(longToBytes(XID_COUNTER.incrementAndGet()), new byte[]{0});
+    private final RecoveryLog recoveryLog;
+
+    MansartTransaction() {
+        this(NoOpRecoveryLog.INSTANCE);
+    }
+
+    MansartTransaction(RecoveryLog recoveryLog) {
+        this.recoveryLog = recoveryLog;
+    }
 
     @Override
     public int getStatus() {
@@ -135,20 +144,41 @@ final class MansartTransaction implements Transaction {
             throw new RollbackException("At least one resource voted rollback during prepare");
         }
         status = Status.STATUS_PREPARED;
+
+        // Durable record : every yes-voter is now in-doubt until COMPLETED is appended.
+        // If we crash between here and the matching COMPLETED line, recover() will surface
+        // these branches with type=PREPARED/COMMITTING and the operator can replay.
+        appendOrFailSystem(RecoveryLog.Type.PREPARED);
+
         status = Status.STATUS_COMMITTING;
+        // Crossing the point of no return — write before any resource.commit() call so that a
+        // crash during the loop still allows on-restart recovery to commit the rest.
+        appendOrFailSystem(RecoveryLog.Type.COMMITTING);
         for (XAResource r : prepared) {
             try {
                 r.commit(xid, false);
             } catch (XAException ex) {
-                // Heuristic territory — for M4 we surface as SystemException ; M5 will add a
-                // recovery log so we can re-attempt the failing branch on restart.
+                // Heuristic territory — for M5 we surface as SystemException ; the on-disk
+                // COMMITTING record means recovery can complete this commit on restart.
                 status = Status.STATUS_UNKNOWN;
                 invokeAfterCompletion(Status.STATUS_UNKNOWN);
                 throw new SystemException("XA two-phase commit failed: " + ex.errorCode);
             }
         }
         status = Status.STATUS_COMMITTED;
+        appendOrFailSystem(RecoveryLog.Type.COMPLETED);
         invokeAfterCompletion(Status.STATUS_COMMITTED);
+    }
+
+    private void appendOrFailSystem(RecoveryLog.Type type) throws SystemException {
+        try {
+            recoveryLog.append(new RecoveryLog.Record(type, xid));
+        } catch (java.io.IOException ex) {
+            // A failed write means the on-disk view is now inconsistent with reality — escalate.
+            // The volatile NoOpRecoveryLog never throws, so this only fires for FileRecoveryLog.
+            status = Status.STATUS_UNKNOWN;
+            throw new SystemException("Failed to append " + type + " to recovery log: " + ex);
+        }
     }
 
     @Override
