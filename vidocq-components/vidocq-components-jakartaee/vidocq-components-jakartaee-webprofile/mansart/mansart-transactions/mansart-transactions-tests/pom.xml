@@ -12,12 +12,50 @@
 
     <artifactId>mansart-transactions-tests</artifactId>
     <name>Mansart :: Transactions :: Integration tests</name>
-    <description>Integration tests against H2 (single-resource) and mansart-pool (resource enrolment) — runs the TDD scenarios that the unit modules cannot cover alone.</description>
+    <description>Integration tests cross-module — Vauban + @Transactional + @TransactionScoped + XAResource enrolment. JDBC end-to-end attendra mansart-pool XA-aware (M8).</description>
+
+    <properties>
+        <vauban.version>0.1.0-SNAPSHOT</vauban.version>
+    </properties>
 
     <dependencies>
         <dependency>
             <groupId>io.vidocq.mansart</groupId>
             <artifactId>mansart-transactions-core</artifactId>
+        </dependency>
+
+        <!-- Test scope : CDI bootstrap + Vauban + JDBC -->
+        <dependency>
+            <groupId>io.vidocq.mansart</groupId>
+            <artifactId>mansart-transactions-cdi</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.transaction</groupId>
+            <artifactId>jakarta.transaction-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.inject</groupId>
+            <artifactId>jakarta.inject-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-core</artifactId>
+            <version>${vauban.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-junit</artifactId>
+            <version>${vauban.version}</version>
+            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>io.vidocq.mansart</groupId>
