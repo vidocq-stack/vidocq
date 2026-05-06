@@ -1,5 +1,6 @@
 package io.vidocq.mansart.data.tests;
 
+import io.vidocq.mansart.data.core.ConnectionScope;
 import io.vidocq.mansart.data.core.MansartData;
 import io.vidocq.mansart.pool.PoolConfig;
 import io.vidocq.mansart.pool.PoolMetrics;
@@ -15,6 +16,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * MP-C-2 — proves {@link MansartDataSource} is a drop-in {@link javax.sql.DataSource} for the
@@ -101,6 +103,31 @@ class MansartPoolInteropTest {
         PoolMetrics after = pool.snapshot();
         assertThat(after.totalBorrows()).isGreaterThan(before);
         assertThat(after.totalLeaks()).isZero();
+    }
+
+    @Test
+    void inTransactionWithPooledDataSourceCommitsAndRollsBack() {
+        // Commit path : two saves in one tx, one borrow from the pool, both persisted.
+        long borrowsBefore = pool.snapshot().totalBorrows();
+        ConnectionScope.inTransaction(pool, () -> {
+            save("Camus");
+            save("Sartre");
+        });
+        long afterCommit = authors.count();
+        assertThat(afterCommit).isEqualTo(2L);
+        // Net new borrows : tx itself (1) + count() outside tx (1) = 2.
+        assertThat(pool.snapshot().totalBorrows() - borrowsBefore).isEqualTo(2L);
+
+        // Rollback path : a save followed by a throw inside the tx must NOT persist.
+        assertThatThrownBy(() -> ConnectionScope.inTransaction(pool, () -> {
+            save("Beauvoir");
+            throw new IllegalStateException("rollback me");
+        })).isInstanceOf(IllegalStateException.class);
+        assertThat(authors.count()).isEqualTo(2L); // Beauvoir not persisted
+
+        // Crucial : connections returned to the pool, no leaks.
+        assertThat(pool.snapshot().totalLeaks()).isZero();
+        assertThat(pool.snapshot().active()).isZero();
     }
 
     private static Author save(String name) {
