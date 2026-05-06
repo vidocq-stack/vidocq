@@ -60,8 +60,12 @@ final class MansartMetamodelWriter {
     private void writeAttribute(PrintWriter w, String entitySimple, AttributeDescriptor a,
                                 boolean isId, boolean isVersion) {
         String boxed = box(a.javaTypeFqn());
-        String getterMh = "getterMh(\"" + a.name() + "\", " + boxed + ".class)";
-        String setterMh = "setterMh(\"" + a.name() + "\", " + boxed + ".class)";
+        // For findGetter/findSetter we MUST use the raw declared type — passing Double.class
+        // for a `double` field fails with NoSuchFieldException because MethodHandles.Lookup
+        // does not auto-box. The boxed type stays in use for the typed Attribute<E, T> generics.
+        String fieldType = a.javaTypeFqn();
+        String getterMh = "getterMh(\"" + a.name() + "\", " + fieldType + ".class)";
+        String setterMh = "setterMh(\"" + a.name() + "\", " + fieldType + ".class)";
 
         switch (a.kind()) {
             case ID -> w.println("    public static final IdAttribute<" + entitySimple + ", " + boxed + "> "
