@@ -1,5 +1,7 @@
 target/
-.mvn/
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+!.mvn/wrapper/maven-wrapper.properties
 .idea/
 *.iml
 .DS_Store

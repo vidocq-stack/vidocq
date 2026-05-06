@@ -12,6 +12,47 @@
     <name>Mansart :: Pool</name>
     <description>JDBC connection pool, virtual-thread-native, zero-dep — peer of mansart-jakarta-data and mansart-persistence.</description>
 
+    <distributionManagement>
+        <snapshotRepository>
+            <id>vidocq-snapshots</id>
+            <url>https://repo.vidocq.dev/snapshots</url>
+        </snapshotRepository>
+        <repository>
+            <id>vidocq-releases</id>
+            <url>https://repo.vidocq.dev/releases</url>
+        </repository>
+    </distributionManagement>
+
+    <repositories>
+        <repository>
+            <id>vidocq-snapshots</id>
+            <url>https://repo.vidocq.dev/snapshots</url>
+            <releases><enabled>false</enabled></releases>
+            <snapshots><enabled>true</enabled></snapshots>
+        </repository>
+        <repository>
+            <id>vidocq-releases</id>
+            <url>https://repo.vidocq.dev/releases</url>
+            <releases><enabled>true</enabled></releases>
+            <snapshots><enabled>false</enabled></snapshots>
+        </repository>
+    </repositories>
+
+    <pluginRepositories>
+        <pluginRepository>
+            <id>vidocq-snapshots</id>
+            <url>https://repo.vidocq.dev/snapshots</url>
+            <releases><enabled>false</enabled></releases>
+            <snapshots><enabled>true</enabled></snapshots>
+        </pluginRepository>
+        <pluginRepository>
+            <id>vidocq-releases</id>
+            <url>https://repo.vidocq.dev/releases</url>
+            <releases><enabled>true</enabled></releases>
+            <snapshots><enabled>false</enabled></snapshots>
+        </pluginRepository>
+    </pluginRepositories>
+
     <properties>
         <maven.compiler.release>25</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
