@@ -15,7 +15,7 @@
     <description>CDI 4.1 bootstrap — @Transactional interceptor (REQUIRED, REQUIRES_NEW, MANDATORY, NEVER, NOT_SUPPORTED, SUPPORTS) + @TransactionScoped scope, plugged via BuildCompatibleExtension + portable Extension.</description>
 
     <properties>
-        <weld.se.version>5.1.5.Final</weld.se.version>
+        <vauban.version>0.1.0-SNAPSHOT</vauban.version>
     </properties>
 
     <dependencies>
@@ -56,14 +56,20 @@
             <scope>test</scope>
         </dependency>
         <!--
-            Weld SE — CDI 4.x reference implementation, used in tests to bootstrap a real CDI
-            container in-process. Test scope only ; runtime CDI provider is left to the application
-            (Vauban for Vidocq apps, any CDI 4.x container otherwise).
+            Vauban — CDI 4.1 Lite container natif Vidocq. Utilisé pour valider que l'interceptor
+            @Transactional et le contexte @TransactionScoped fonctionnent dans le container ciblé
+            par les apps Vidocq. Test scope uniquement.
         -->
         <dependency>
-            <groupId>org.jboss.weld.se</groupId>
-            <artifactId>weld-se-core</artifactId>
-            <version>${weld.se.version}</version>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-core</artifactId>
+            <version>${vauban.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-junit</artifactId>
+            <version>${vauban.version}</version>
             <scope>test</scope>
         </dependency>
     </dependencies>

@@ -82,11 +82,12 @@ Tests TDD : `RecoveryAfterCrashIT` (kill -9 entre prepare et commit).
   Couvre `rollbackOn` / `dontRollbackOn` (spec §3.7.1).
 - ✅ `TransactionScopedContext` (`AlterableContext`) — instance par TX, destruction via
   `Synchronization.afterCompletion()`. Lance `ContextNotActiveException` hors TX.
-- ✅ `MansartTransactionsPortableExtension` (legacy `Extension`) — enregistre le scope et le
-  contexte (BCE CDI 4.1 ne couvre pas l'enregistrement de Context custom — voir M7b).
-- ✅ Tests Weld SE — 18 tests interceptor + 4 tests contexte = 22/22 verts.
-- ⏳ **M7b** : intégration Vauban du `TransactionScopedContext` quand Vauban supportera les
-  contextes custom (CDI Lite ne couvre que les pseudo-scopes).
+- ✅ `MansartTransactionsExtension` (BCE) — enregistre `@TransactionScoped` via
+  `MetaAnnotations.addContext(scope, isNormal, contextClass)` (API CDI 4.1 standard).
+  Vauban honore nativement cette API (`VaubanMetaAnnotations` ligne 51), pas besoin
+  d'`Extension` portable legacy ni de Weld.
+- ✅ Tests Vauban (CDI 4.1 Lite, container natif Vidocq) via `vauban-junit` :
+  14 tests interceptor + 4 tests scope = 18/18 verts.
 
 ## Hors scope (pour le moment)
 

@@ -1,28 +1,30 @@
 package io.vidocq.mansart.transactions.cdi;
 
 import jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension;
+import jakarta.enterprise.inject.build.compatible.spi.Discovery;
+import jakarta.enterprise.inject.build.compatible.spi.MetaAnnotations;
+import jakarta.transaction.TransactionScoped;
 
 /**
- * CDI 4.1 BuildCompatibleExtension that wires Mansart Transactions into the bean container.
+ * CDI 4.1 BuildCompatibleExtension that wires the {@link TransactionScoped} scope into the bean
+ * container.
  *
- * <p>Pending implementation (in order):
- * <ol>
- *   <li>{@code @Synthesis} — register synthetic beans for
- *       {@link jakarta.transaction.TransactionManager},
- *       {@link jakarta.transaction.UserTransaction},
- *       {@link jakarta.transaction.TransactionSynchronizationRegistry},
- *       all backed by a single {@link io.vidocq.mansart.transactions.core.MansartTransactionManager}.</li>
- *   <li>Register the {@link jakarta.transaction.Transactional} interceptor implementation
- *       ({@code TransactionalInterceptor}) with the proper {@code @Priority} so it sits ahead
- *       of business interceptors. Cover the six TxType values.</li>
- *   <li>Register the {@link jakarta.transaction.TransactionScoped} scope (custom {@code Context}
- *       implementation) so {@code @TransactionScoped} beans are created and destroyed in lockstep
- *       with the active transaction.</li>
- * </ol>
+ * <p>The {@link TransactionScopedContext} is instantiated by the container via its public no-arg
+ * constructor and is then queried for every {@code @TransactionScoped} bean lookup. The context
+ * resolves the {@link jakarta.transaction.TransactionManager} lazily through the static accessor
+ * on {@link MansartTransactionsProducer} — no injection chicken-and-egg problem.
  *
- * <p>Listed in {@code META-INF/services/jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension}
- * (CDI 4.1 standard ServiceLoader contract — Vauban now honours it since 0.1.0-SNAPSHOT).
+ * <p>Listed in {@code META-INF/services/jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension}.
+ * Picked up by Vauban (and any other CDI 4.1-compliant container) on startup.
+ *
+ * <p>The interceptor classes themselves ({@link TransactionalInterceptor} + 5 subclasses) are
+ * regular CDI beans annotated {@code @Interceptor + @Priority} — discovered automatically by the
+ * standard bean archive scanning, no BCE wiring required.
  */
 public final class MansartTransactionsExtension implements BuildCompatibleExtension {
-    // Empty for now — phases will be added one at a time, TDD-driven.
+
+    @Discovery
+    public void registerTransactionScope(MetaAnnotations meta) {
+        meta.addContext(TransactionScoped.class, true /* normal scope */, TransactionScopedContext.class);
+    }
 }

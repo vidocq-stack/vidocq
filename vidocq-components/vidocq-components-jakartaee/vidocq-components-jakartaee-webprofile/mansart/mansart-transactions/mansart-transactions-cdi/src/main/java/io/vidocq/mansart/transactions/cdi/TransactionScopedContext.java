@@ -29,14 +29,22 @@ import java.util.concurrent.ConcurrentMap;
  * — TSR exposes the resources publicly, while CDI scope state must stay opaque to user code.
  * Keeping a private map is also faster (no boxing of Contextual into an arbitrary key).
  */
-final class TransactionScopedContext implements AlterableContext {
+public final class TransactionScopedContext implements AlterableContext {
 
-    private final TransactionManager tm;
     private final ConcurrentMap<Transaction, ConcurrentMap<Contextual<?>, Holder<?>>> store =
             new ConcurrentHashMap<>();
 
-    TransactionScopedContext(TransactionManager tm) {
-        this.tm = tm;
+    /**
+     * Public no-arg constructor — required by the CDI 4.1 BCE
+     * {@code MetaAnnotations.addContext(scope, isNormal, contextClass)} API which instantiates the
+     * context via reflection. The {@link TransactionManager} is resolved lazily via
+     * {@link MansartTransactionsProducer#tm()} (the same singleton the CDI producer publishes).
+     */
+    public TransactionScopedContext() {
+    }
+
+    private TransactionManager tm() {
+        return MansartTransactionsProducer.tm();
     }
 
     @Override
@@ -47,7 +55,7 @@ final class TransactionScopedContext implements AlterableContext {
     @Override
     public boolean isActive() {
         try {
-            int s = tm.getStatus();
+            int s = tm().getStatus();
             return s == Status.STATUS_ACTIVE || s == Status.STATUS_MARKED_ROLLBACK;
         } catch (SystemException e) {
             return false;
@@ -115,7 +123,7 @@ final class TransactionScopedContext implements AlterableContext {
 
     private Transaction requireActiveTx() {
         try {
-            Transaction tx = tm.getTransaction();
+            Transaction tx = tm().getTransaction();
             if (tx == null) {
                 throw new ContextNotActiveException(
                         "@TransactionScoped accessed outside an active transaction");

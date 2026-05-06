@@ -1,10 +1,13 @@
 package io.vidocq.mansart.transactions.cdi;
 
+import io.vidocq.vauban.junit.AddBeans;
+import io.vidocq.vauban.junit.VaubanTest;
 import jakarta.enterprise.context.ContextNotActiveException;
+import jakarta.enterprise.inject.spi.CDI;
+import jakarta.inject.Inject;
+import jakarta.transaction.TransactionManager;
 import jakarta.transaction.TransactionScoped;
 import jakarta.transaction.UserTransaction;
-import org.jboss.weld.environment.se.Weld;
-import org.jboss.weld.environment.se.WeldContainer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -16,58 +19,62 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Verifies that {@link TransactionScopedContext} keeps a per-transaction instance and
- * destroys it at completion.
+ * Verifies that {@link TransactionScopedContext} keeps a per-transaction instance and destroys
+ * it at completion — bootstrapped through Vauban (CDI 4.1 Lite) and the BCE
+ * {@link MansartTransactionsExtension} which registers the scope via
+ * {@code MetaAnnotations.addContext}.
  */
+@VaubanTest
+@AddBeans({
+        MansartTransactionsProducer.class,
+        MansartTransactionsExtension.class,
+        TransactionScopedContextTest.TxBean.class
+})
 class TransactionScopedContextTest {
 
     static final AtomicInteger CREATED = new AtomicInteger();
     static final AtomicInteger DESTROYED = new AtomicInteger();
 
-    private WeldContainer container;
+    @Inject UserTransaction ut;
+    @Inject TransactionManager tm;
+
+    private TxBean lookup() {
+        // VaubanExtension.injectFields() doesn't yet resolve Instance<T> generics, so we go
+        // through the standard CDI lookup which Vauban implements correctly.
+        return CDI.current().select(TxBean.class).get();
+    }
 
     @BeforeEach
-    void setUp() {
+    void resetCounters() {
         CREATED.set(0);
         DESTROYED.set(0);
-        container = new Weld()
-                .disableDiscovery()
-                .addExtensions(MansartTransactionsPortableExtension.class)
-                .addBeanClasses(MansartTransactionsProducer.class, TxBean.class)
-                .initialize();
     }
 
     @AfterEach
-    void tearDown() {
+    void cleanup() {
         try {
-            if (container != null) {
-                var tm = container.select(jakarta.transaction.TransactionManager.class).get();
-                if (tm.getStatus() != jakarta.transaction.Status.STATUS_NO_TRANSACTION) {
-                    tm.rollback();
-                }
+            if (tm != null && tm.getStatus() != jakarta.transaction.Status.STATUS_NO_TRANSACTION) {
+                tm.rollback();
             }
         } catch (Exception ignored) { /* best effort */ }
-        if (container != null) container.shutdown();
     }
 
     @Test
     void scopeIsInactiveOutsideTx() {
-        // No active TX → the context's get() must refuse to resolve the bean.
-        assertThatThrownBy(() -> container.select(TxBean.class).get().bump())
+        assertThatThrownBy(() -> lookup().bump())
                 .isInstanceOf(ContextNotActiveException.class);
     }
 
     @Test
     void sameInstanceWithinSingleTx() throws Exception {
-        UserTransaction ut = container.select(UserTransaction.class).get();
         ut.begin();
         try {
-            TxBean a = container.select(TxBean.class).get();
-            TxBean b = container.select(TxBean.class).get();
+            TxBean a = lookup();
+            TxBean b = lookup();
             a.bump();
             b.bump();
             assertThat(a.value()).isEqualTo(2);
-            assertThat(b.value()).isEqualTo(2);  // same proxy => same backing instance
+            assertThat(b.value()).isEqualTo(2);
             assertThat(CREATED.get()).isEqualTo(1);
         } finally {
             ut.commit();
@@ -77,15 +84,13 @@ class TransactionScopedContextTest {
 
     @Test
     void distinctInstanceAcrossTxs() throws Exception {
-        UserTransaction ut = container.select(UserTransaction.class).get();
         ut.begin();
-        TxBean first = container.select(TxBean.class).get();
+        TxBean first = lookup();
         first.bump();
         ut.commit();
 
         ut.begin();
-        TxBean second = container.select(TxBean.class).get();
-        // value() reads through the proxy → resolves to the SECOND tx's instance, value should be 0
+        TxBean second = lookup();
         assertThat(second.value()).isEqualTo(0);
         ut.commit();
         assertThat(CREATED.get()).isEqualTo(2);
@@ -94,9 +99,8 @@ class TransactionScopedContextTest {
 
     @Test
     void destroyOnRollback() throws Exception {
-        UserTransaction ut = container.select(UserTransaction.class).get();
         ut.begin();
-        TxBean b = container.select(TxBean.class).get();
+        TxBean b = lookup();
         b.bump();
         ut.rollback();
         assertThat(DESTROYED.get()).isEqualTo(1);
