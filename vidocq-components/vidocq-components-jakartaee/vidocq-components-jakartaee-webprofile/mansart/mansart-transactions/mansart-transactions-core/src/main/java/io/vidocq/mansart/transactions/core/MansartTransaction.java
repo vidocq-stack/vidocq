@@ -10,6 +10,9 @@ import jakarta.transaction.Transaction;
 // kept it as-is because the JTA TCK references it at the JDK level.
 import javax.transaction.xa.XAResource;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * Single-thread, in-memory {@link Transaction}. Holds nothing but a status word for M1 — resource
  * enlistment, synchronisations and prepare/commit will land in M2/M4.
@@ -35,6 +38,7 @@ import javax.transaction.xa.XAResource;
 final class MansartTransaction implements Transaction {
 
     private volatile int status = Status.STATUS_ACTIVE;
+    private final List<Synchronization> syncs = new ArrayList<>();
 
     @Override
     public int getStatus() {
@@ -51,11 +55,21 @@ final class MansartTransaction implements Transaction {
             throw new IllegalStateException(
                     "commit() requires STATUS_ACTIVE, was " + statusName(status));
         }
+        // beforeCompletion runs while we are still STATUS_ACTIVE so write-flushes can use the
+        // resource as if user code were still executing. Any thrown exception triggers rollback.
+        try {
+            invokeBeforeCompletion();
+        } catch (RuntimeException ex) {
+            doRollback();
+            RollbackException rex = new RollbackException(
+                    "Synchronization.beforeCompletion failed — transaction rolled back");
+            rex.initCause(ex);
+            throw rex;
+        }
         status = Status.STATUS_COMMITTING;
-        // M2 : beforeCompletion(s) on synchronisations
         // M4 : prepare + commit phases on enlisted XAResources
         status = Status.STATUS_COMMITTED;
-        // M2 : afterCompletion(STATUS_COMMITTED) on synchronisations
+        invokeAfterCompletion(Status.STATUS_COMMITTED);
     }
 
     @Override
@@ -72,7 +86,28 @@ final class MansartTransaction implements Transaction {
         status = Status.STATUS_ROLLING_BACK;
         // M4 : rollback on enlisted XAResources
         status = Status.STATUS_ROLLEDBACK;
-        // M2 : afterCompletion(STATUS_ROLLEDBACK) on synchronisations
+        invokeAfterCompletion(Status.STATUS_ROLLEDBACK);
+    }
+
+    private void invokeBeforeCompletion() {
+        for (Synchronization s : syncs) {
+            s.beforeCompletion();
+        }
+    }
+
+    /**
+     * After-completion callbacks run when the transaction is finalised — by spec they should
+     * never propagate an exception. We swallow each one so that one failing sync can't stop the
+     * others from observing the outcome.
+     */
+    private void invokeAfterCompletion(int finalStatus) {
+        for (Synchronization s : syncs) {
+            try {
+                s.afterCompletion(finalStatus);
+            } catch (RuntimeException ignored) {
+                // spec §3.3.5 — afterCompletion exceptions are swallowed
+            }
+        }
     }
 
     @Override
@@ -96,7 +131,11 @@ final class MansartTransaction implements Transaction {
 
     @Override
     public void registerSynchronization(Synchronization sync) {
-        throw new UnsupportedOperationException("M2 not implemented");
+        if (status != Status.STATUS_ACTIVE) {
+            throw new IllegalStateException(
+                    "registerSynchronization() requires STATUS_ACTIVE, was " + statusName(status));
+        }
+        syncs.add(sync);
     }
 
     private static String statusName(int s) {
