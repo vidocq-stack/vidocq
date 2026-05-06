@@ -1,7 +1,6 @@
 package io.vidocq.mansart.pool.core;
 
 import io.vidocq.mansart.pool.PoolConfig;
-import io.vidocq.mansart.pool.PoolException;
 import io.vidocq.mansart.pool.PoolMetrics;
 
 import javax.sql.DataSource;
@@ -20,11 +19,12 @@ import java.util.logging.Logger;
  */
 public final class MansartDataSource implements DataSource, AutoCloseable {
 
-    private final PoolConfig config;
-    private volatile boolean closed;
+    private final PoolConfig     config;
+    private final ConnectionPool pool;
 
     private MansartDataSource(PoolConfig config) {
         this.config = Objects.requireNonNull(config, "config");
+        this.pool   = new ConnectionPool(config);
     }
 
     public static MansartDataSource of(PoolConfig config) {
@@ -36,16 +36,14 @@ public final class MansartDataSource implements DataSource, AutoCloseable {
         return config;
     }
 
-    /** Live snapshot of pool counters. MP-A returns a zeroed snapshot; MP-C wires real counters. */
+    /** Live snapshot of pool counters. */
     public PoolMetrics snapshot() {
-        return new PoolMetrics.Snapshot(0, 0, 0, 0L, 0L, java.time.Duration.ZERO);
+        return pool.snapshot();
     }
 
     @Override
     public Connection getConnection() throws SQLException {
-        if (closed) throw new PoolException(PoolException.Reason.POOL_CLOSED, "MansartDataSource is closed");
-        // MP-A: skeleton only. MP-B wires the semaphore + idle deque + DriverManager.
-        throw new UnsupportedOperationException("MP-B: borrow path not implemented yet");
+        return pool.acquire();
     }
 
     @Override
@@ -58,8 +56,7 @@ public final class MansartDataSource implements DataSource, AutoCloseable {
 
     @Override
     public void close() {
-        closed = true;
-        // MP-B: drain the idle deque, close inUse leakers, stop the housekeeper.
+        pool.close();
     }
 
     /* ---- DataSource boilerplate ---- */
