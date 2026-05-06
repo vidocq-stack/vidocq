@@ -90,12 +90,30 @@ public class MansartTransactionManager implements TransactionManager {
     @Override
     public void resume(Transaction tobj)
             throws InvalidTransactionException, IllegalStateException, SystemException {
-        throw new UnsupportedOperationException("M3 not implemented");
+        if (tobj == null) {
+            // Spec is permissive — we treat null as "do nothing", symmetric with suspend()
+            // returning null when no TX is bound.
+            return;
+        }
+        if (active.get() != null) {
+            throw new IllegalStateException(
+                    "Cannot resume — a transaction is already active on this thread");
+        }
+        if (!(tobj instanceof MansartTransaction mtx)) {
+            throw new InvalidTransactionException(
+                    "Foreign Transaction implementation: " + tobj.getClass().getName());
+        }
+        active.set(mtx);
     }
 
     @Override
     public Transaction suspend() throws SystemException {
-        throw new UnsupportedOperationException("M3 not implemented");
+        MansartTransaction tx = active.get();
+        if (tx == null) {
+            return null;
+        }
+        active.remove();
+        return tx;
     }
 
     private MansartTransaction currentRequired() {
