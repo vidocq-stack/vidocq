@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <title>Vidocq · Mansart Data + H2 demo</title>
+    <style>
+        :root { color-scheme: light dark; }
+        body { font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+               margin: 0; padding: 2rem; max-width: 1100px; margin-inline: auto;
+               line-height: 1.45; }
+        h1 { margin-top: 0; }
+        h2 { margin-top: 2rem; font-size: 1.1rem; opacity: .85; }
+        p.lede { opacity: .75; max-width: 60ch; }
+        .panes { display: grid; gap: 1.5rem; grid-template-columns: 1fr 1fr; margin-top: 1rem; }
+        @media (max-width: 720px) { .panes { grid-template-columns: 1fr; } }
+        .pane { border: 1px solid color-mix(in oklab, currentColor 20%, transparent);
+                border-radius: 8px; padding: 1rem; }
+        .pane h3 { margin-top: 0; display: flex; justify-content: space-between; align-items: center; }
+        .pane h3 .src { font-size: .75rem; opacity: .6; font-weight: normal;
+                        font-family: ui-monospace, monospace; }
+        table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+        th, td { padding: .35rem .5rem; text-align: left;
+                 border-bottom: 1px solid color-mix(in oklab, currentColor 12%, transparent); }
+        th { font-size: .8rem; opacity: .65; font-weight: 500; }
+        td.num { text-align: right; }
+        .actions { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center;
+                   margin: 1rem 0; }
+        button { font: inherit; padding: .4rem .9rem; border-radius: 6px;
+                 border: 1px solid color-mix(in oklab, currentColor 25%, transparent);
+                 background: color-mix(in oklab, currentColor 6%, transparent);
+                 cursor: pointer; }
+        button:hover { background: color-mix(in oklab, currentColor 12%, transparent); }
+        button.primary { border-color: #3b82f6; background: #3b82f6; color: white; }
+        button.danger  { border-color: #ef4444; color: #ef4444; }
+        button.danger:hover { background: #ef4444; color: white; }
+        input { font: inherit; padding: .35rem .5rem; border-radius: 6px;
+                border: 1px solid color-mix(in oklab, currentColor 25%, transparent);
+                background: transparent; color: inherit; }
+        input[type=number] { width: 6rem; }
+        .status { font-size: .85rem; opacity: .7; margin-left: auto; }
+        .status.ok    { color: #10b981; }
+        .status.err   { color: #ef4444; }
+        .empty { opacity: .5; text-align: center; padding: 1rem 0; font-style: italic; }
+        code { background: color-mix(in oklab, currentColor 8%, transparent);
+               padding: .1rem .35rem; border-radius: 3px;
+               font-family: ui-monospace, monospace; font-size: .9em; }
+    </style>
+</head>
+<body>
+    <h1>Vidocq · Mansart Data + H2</h1>
+    <p class="lede">
+        Démo bout-en-bout : à gauche, la liste retournée par
+        <code>ProductRepository</code> (Jakarta Data 1.0 via Mansart). À droite,
+        un <code>SELECT *</code> JDBC brut sur la même base H2 — pour prouver que Mansart
+        écrit réellement dans la table, pas dans un cache mémoire en rouge à lèvres.
+    </p>
+
+    <form id="addForm" class="actions" onsubmit="addProduct(event)">
+        <input id="name"  type="text"   placeholder="Nom"   required>
+        <input id="price" type="number" placeholder="Prix" step="0.01" min="0" required>
+        <button class="primary" type="submit">Ajouter</button>
+        <button type="button" onclick="refresh()">↻ Refresh</button>
+        <span id="status" class="status"></span>
+    </form>
+
+    <div class="panes">
+        <div class="pane">
+            <h3>Mansart Data <span class="src">GET /api/products</span></h3>
+            <table>
+                <thead><tr><th>id</th><th>nom</th><th class="num">prix</th><th></th></tr></thead>
+                <tbody id="repo-tbody"><tr><td colspan="4" class="empty">…</td></tr></tbody>
+            </table>
+        </div>
+        <div class="pane">
+            <h3>Raw JDBC <span class="src">GET /api/db/products</span></h3>
+            <table>
+                <thead><tr><th>id</th><th>nom</th><th class="num">prix</th></tr></thead>
+                <tbody id="raw-tbody"><tr><td colspan="3" class="empty">…</td></tr></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        const $ = (id) => document.getElementById(id);
+        const status = $('status');
+
+        function flash(msg, kind) {
+            status.textContent = msg;
+            status.className = 'status ' + kind;
+            setTimeout(() => { status.textContent = ''; status.className = 'status'; }, 2500);
+        }
+
+        function fmtMoney(p) {
+            return Number(p).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        async function fetchJson(url, options) {
+            const r = await fetch(url, options);
+            if (!r.ok && r.status !== 204) {
+                throw new Error('HTTP ' + r.status + ' on ' + url);
+            }
+            if (r.status === 204) return null;
+            const ct = r.headers.get('content-type') || '';
+            return ct.includes('json') ? r.json() : r.text();
+        }
+
+        function renderRepo(rows) {
+            const tbody = $('repo-tbody');
+            if (!rows || rows.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" class="empty">Aucun produit</td></tr>';
+                return;
+            }
+            tbody.innerHTML = rows.map(p => `
+                <tr>
+                    <td>${p.id}</td>
+                    <td>${p.name}</td>
+                    <td class="num">${fmtMoney(p.price)} €</td>
+                    <td><button class="danger" onclick="del(${p.id})">×</button></td>
+                </tr>`).join('');
+        }
+
+        function renderRaw(rows) {
+            const tbody = $('raw-tbody');
+            if (!rows || rows.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3" class="empty">Table vide</td></tr>';
+                return;
+            }
+            tbody.innerHTML = rows.map(p => `
+                <tr>
+                    <td>${p.id}</td>
+                    <td>${p.name}</td>
+                    <td class="num">${fmtMoney(p.price)} €</td>
+                </tr>`).join('');
+        }
+
+        async function refresh() {
+            try {
+                const [repo, raw] = await Promise.all([
+                    fetchJson('/api/products'),
+                    fetchJson('/api/db/products'),
+                ]);
+                renderRepo(repo);
+                renderRaw(raw);
+                flash('Rafraîchi', 'ok');
+            } catch (e) {
+                flash(e.message, 'err');
+            }
+        }
+
+        async function addProduct(evt) {
+            evt.preventDefault();
+            const name  = $('name').value.trim();
+            const price = parseFloat($('price').value);
+            try {
+                await fetchJson('/api/products', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, price }),
+                });
+                $('name').value = '';
+                $('price').value = '';
+                flash('Ajouté', 'ok');
+                refresh();
+            } catch (e) {
+                flash(e.message, 'err');
+            }
+        }
+
+        async function del(id) {
+            try {
+                await fetchJson('/api/products/' + id, { method: 'DELETE' });
+                flash('Supprimé', 'ok');
+                refresh();
+            } catch (e) {
+                flash(e.message, 'err');
+            }
+        }
+
+        refresh();
+    </script>
+</body>
+</html>
