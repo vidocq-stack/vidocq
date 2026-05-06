@@ -79,10 +79,14 @@ Tests TDD : `RecoveryAfterCrashIT` (kill -9 entre prepare et commit).
 - ✅ `install-tck.sh` : auto-récupération depuis Eclipse Foundation, idempotent (verify/force/install).
 - ✅ Adaptateur Java (`MansartTckProvider`, `MansartUserTransaction`).
 - ✅ Smoke wiring 5/5 : `./run-official-tck-transactions-2.0.sh smoke` (lancé en CI).
-- ⏳ **M6b** : suite tsharness officielle pilotée par `tsant`. Le TCK Jakarta Transactions 2.0
-  Eclipse n'est pas Maven-Surefire-scannable (format Sun historique : `bin/build.xml` Ant +
-  `bin/ts.jte` 80 propriétés + sources sous `src/com/sun/ts/tests/jta/ee/`). M6b ajoutera
-  un templating `ts.jte` + wrapper Maven antrun pour reproductibilité. Voir `TCK.md`.
+- ✅ **M6b** : wrapper Maven antrun pour la suite tsharness (profile `full-tck`). Templating
+  `ts.jte` Mansart-friendly (impl.vi=none, jta.classes pointant sur le M2), exec
+  `ant build.all.tests` qui compile toutes les fixtures TCK contre le classpath Mansart.
+  `BUILD SUCCESSFUL` validé sur les ~7 répertoires JTA EE + signature tests.
+- ⏳ **M6c** : pilotage de chaque `ant runclient` leaf-par-leaf (~40 tests JTA EE) +
+  parsing du rapport tsharness HTML pour résumer pass/fail dans
+  `target/tck-report-transactions.txt`. La cdi en M7 + jdbc en M8 fournissent déjà tout
+  le harness côté SUT — reste juste à itérer sur ts.jte par leaf et collecter.
 
 ### M7 — CDI interceptor + TransactionScoped *(livré)*
 

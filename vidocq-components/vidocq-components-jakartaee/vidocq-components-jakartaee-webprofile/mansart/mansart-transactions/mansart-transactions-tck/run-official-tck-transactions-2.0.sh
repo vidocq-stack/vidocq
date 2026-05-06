@@ -56,41 +56,21 @@ run_smoke() {
 run_tsharness() {
     ensure_tck_extracted
 
-    local abs_tck_dir
-    abs_tck_dir="$(cd "$TCK_DIR" && pwd)"
+    if ! command -v ant >/dev/null 2>&1; then
+        cat <<EOF | tee -a "$LOG"
 
-    cat <<EOF | tee -a "$LOG"
-
-═══════════════════════════════════════════════════════════════════
-  Suite TCK Jakarta Transactions 2.0 — procédure tsharness manuelle
-  (harness Sun-style, format historique non automatisable simplement).
-
-  Le TCK est dépaqueté ici :
-      $abs_tck_dir
-
-  Étapes (résumé — la doc officielle est dans :
-      $abs_tck_dir/docs/html-usersguide/) :
-
-    1. Installer Apache Ant si manquant (sdk install ant 1.10.14).
-
-    2. Éditer $abs_tck_dir/bin/ts.jte :
-         - JAVA_HOME=…/java25
-         - jta.classes pointing à mansart-transactions-core (jar dans $HOME/.m2/...)
-         - Provider Mansart : positionner la classe MansartTckProvider
-
-    3. Build des fixtures :
-         cd $abs_tck_dir/bin && ant build
-
-    4. Run :
-         cd $abs_tck_dir/bin && ant runclient
-
-    5. Le rapport tsharness HTML est généré sous $abs_tck_dir/dist/.
-
-  Cette procédure manuelle restera tant que l'écosystème Eclipse n'aura
-  pas migré le TCK Transactions vers un format Maven Surefire (suivi
-  upstream : https://github.com/jakartaee/transactions-tck/issues).
-═══════════════════════════════════════════════════════════════════
+  Apache Ant n'est pas dans le PATH — requis par le harness tsharness.
+  Installer via SDKMAN :  sdk install ant 1.10.14
+                via brew :  brew install ant
 EOF
+        return 78
+    fi
+
+    echo ">>> Build mansart-transactions reactor (skipTests, install dans M2)"
+    (cd .. && mvn -q -B -ntp install -DskipTests)
+
+    echo ">>> Invoke profile full-tck (maven-antrun → tsharness build)"
+    mvn -B -ntp -Pfull-tck antrun:run@tsharness-build 2>&1 | tee "$LOG"
 }
 
 case "$MODE" in

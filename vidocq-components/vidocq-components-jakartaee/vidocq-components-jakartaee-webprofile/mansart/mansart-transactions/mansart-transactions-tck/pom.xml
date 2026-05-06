@@ -77,4 +77,113 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <!--
+            Activate with `mvn -Pfull-tck antrun:run` (or via run-official-tck-transactions-2.0.sh tsharness).
+            Requires that ../install-tck.sh has been run first — the TCK is expected under
+            ../.tck-cache/transactions-tck/. Apache Ant must be on PATH.
+
+            What this does :
+              1. Renders mansart-ts-overrides.properties into a self-contained ts.jte fragment with
+                 the absolute paths of the Mansart artefacts in ~/.m2 substituted in.
+              2. Appends the rendered fragment to a copy of the original ts.jte (kept under target/)
+                 so the original TCK distribution is not mutated.
+              3. Invokes `ant -f bin/build.xml build.all.tests` against the TCK with our ts.jte —
+                 this compiles every test class shipped by the TCK against the Mansart classpath.
+              4. Prints a pointer to TCK.md for the per-leaf `ant runclient` cycle (M6c — that part
+                 is intentionally NOT automated yet because each test directory needs its own
+                 ts.jte tweak and parsing the tsharness HTML report is non-trivial).
+        -->
+        <profile>
+            <id>full-tck</id>
+            <properties>
+                <tck.home>${project.basedir}/../.tck-cache/transactions-tck</tck.home>
+                <tck.target>${project.build.directory}/tck</tck.target>
+                <tck.jte>${tck.target}/ts.jte</tck.jte>
+
+                <mansart.m2.base>${user.home}/.m2/repository/io/vidocq/mansart</mansart.m2.base>
+                <jakarta.m2.base>${user.home}/.m2/repository/jakarta</jakarta.m2.base>
+
+                <mansart.tx.core.jar>${mansart.m2.base}/mansart-transactions-core/${project.version}/mansart-transactions-core-${project.version}.jar</mansart.tx.core.jar>
+                <mansart.tx.api.jar>${mansart.m2.base}/mansart-transactions-api/${project.version}/mansart-transactions-api-${project.version}.jar</mansart.tx.api.jar>
+
+                <jakarta.transaction.api>${jakarta.m2.base}/transaction/jakarta.transaction-api/${jakarta.transaction.version}/jakarta.transaction-api-${jakarta.transaction.version}.jar</jakarta.transaction.api>
+                <jakarta.cdi.api>${jakarta.m2.base}/enterprise/jakarta.enterprise.cdi-api/4.1.0/jakarta.enterprise.cdi-api-4.1.0.jar</jakarta.cdi.api>
+                <jakarta.interceptor.api>${jakarta.m2.base}/interceptor/jakarta.interceptor-api/2.2.0/jakarta.interceptor-api-2.2.0.jar</jakarta.interceptor.api>
+                <jakarta.annotation.api>${jakarta.m2.base}/annotation/jakarta.annotation-api/3.0.0/jakarta.annotation-api-3.0.0.jar</jakarta.annotation.api>
+            </properties>
+            <build>
+                <plugins>
+                    <plugin>
+                        <artifactId>maven-antrun-plugin</artifactId>
+                        <version>3.1.0</version>
+                        <executions>
+                            <execution>
+                                <id>tsharness-build</id>
+                                <phase>none</phase> <!-- run on demand via `mvn -Pfull-tck antrun:run` -->
+                                <goals><goal>run</goal></goals>
+                                <configuration>
+                                    <target name="tsharness-build">
+                                        <fail message="TCK not extracted — run ../install-tck.sh first">
+                                            <condition>
+                                                <not><available file="${tck.home}/bin/ts.jte"/></not>
+                                            </condition>
+                                        </fail>
+
+                                        <mkdir dir="${tck.target}"/>
+
+                                        <!-- 1. Render overrides : substitute ${...} variables. -->
+                                        <copy file="${project.basedir}/src/main/resources/mansart-ts-overrides.properties"
+                                              tofile="${tck.target}/mansart-overrides.rendered" overwrite="true">
+                                            <filterset>
+                                                <filter token="jakarta.transaction.api" value="${jakarta.transaction.api}"/>
+                                                <filter token="jakarta.cdi.api" value="${jakarta.cdi.api}"/>
+                                                <filter token="jakarta.interceptor.api" value="${jakarta.interceptor.api}"/>
+                                                <filter token="jakarta.annotation.api" value="${jakarta.annotation.api}"/>
+                                                <filter token="mansart.tx.core.jar" value="${mansart.tx.core.jar}"/>
+                                                <filter token="mansart.tx.api.jar" value="${mansart.tx.api.jar}"/>
+                                            </filterset>
+                                        </copy>
+
+                                        <!-- 2. Concatenate original ts.jte + our overrides (appended last → wins). -->
+                                        <concat destfile="${tck.jte}" force="yes">
+                                            <fileset file="${tck.home}/bin/ts.jte"/>
+                                            <fileset file="${tck.target}/mansart-overrides.rendered"/>
+                                        </concat>
+                                        <echo message="Rendered TCK ts.jte: ${tck.jte}"/>
+
+                                        <!-- 3. Compile every TCK test class against our classpath. -->
+                                        <exec executable="ant" dir="${tck.home}/bin"
+                                              failonerror="false" resultproperty="ant.exit"
+                                              output="${tck.target}/build.all.tests.log">
+                                            <arg value="-Dts.home=${tck.home}"/>
+                                            <arg value="-Dbin.dir=${tck.home}/bin"/>
+                                            <arg value="-Dts.jte=${tck.jte}"/>
+                                            <arg value="-f"/>
+                                            <arg value="${tck.home}/bin/build.xml"/>
+                                            <arg value="build.all.tests"/>
+                                        </exec>
+                                        <echo message="ant build.all.tests exit=${ant.exit} (log: ${tck.target}/build.all.tests.log)"/>
+
+                                        <echo>
+─────────────────────────────────────────────────────────────────────────
+  TCK build complete (or failed — see ${tck.target}/build.all.tests.log).
+
+  To run an individual test (M6c — not automated yet) :
+      cd ${tck.home}/src/com/sun/ts/tests/jta/ee/usertransaction/begin
+      ant -Dts.home=${tck.home} -Dts.jte=${tck.jte} runclient
+
+  See mansart-transactions/TCK.md for the per-leaf protocol.
+─────────────────────────────────────────────────────────────────────────
+                                        </echo>
+                                    </target>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

@@ -8,8 +8,9 @@
 | Installation M2 (`jakarta.transaction:jakarta.transaction-tck:2.0.1`) | ✅ | `ls $HOME/.m2/repository/jakarta/transaction/jakarta.transaction-tck/2.0.1/` |
 | Adaptateur Java (`MansartTckProvider`, `MansartUserTransaction`) | ✅ | `mansart-transactions-tck/src/main/java/` |
 | Smoke wiring 5 tests JUnit | ✅ 5/5 | `./run-official-tck-transactions-2.0.sh smoke` |
-| Suite TCK officielle (tsharness `tsant`) | ⏳ M6b — manuelle | Procédure dans `mansart-transactions-tck/README.md` |
-| Sigtest Jakarta Transactions API | ⏳ M6b | Inclus dans tsharness |
+| Build TCK fixtures via tsant | ✅ M6b | `./run-official-tck-transactions-2.0.sh tsharness` (auto-template ts.jte + ant build.all.tests) |
+| Run de chaque leaf (`ant runclient`) | ⏳ M6c | Procédure manuelle ci-dessous, automatisation à venir |
+| Sigtest Jakarta Transactions API | ⏳ M6c | Lancé en même temps que le runclient correspondant |
 
 ## Pourquoi pas d'auto-runner pour la suite complète ?
 
