@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.1.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.1.0 http://maven.apache.org/xsd/maven-4.1.0.xsd">
+    <modelVersion>4.1.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.mpserver</groupId>
+        <artifactId>vidocq-mps-examples</artifactId>
+    </parent>
+
+    <artifactId>vidocq-mps-mansart-h2-example</artifactId>
+    <name>Vidocq :: Examples :: Mansart Data + H2</name>
+    <description>End-to-end demo: Vidocq + Cassini REST + Mansart Data 1.0 + Mansart Pool on H2 in-memory.</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.mpserver</groupId>
+            <artifactId>vidocq-mps-core</artifactId>
+        </dependency>
+
+        <!-- HTTP transport + JAX-RS -->
+        <dependency>
+            <groupId>io.vidocq.mpserver</groupId>
+            <artifactId>vidocq-mps-rest-cassini-extension</artifactId>
+        </dependency>
+
+        <!-- Mansart pool + Jakarta Data extensions -->
+        <dependency>
+            <groupId>io.vidocq.mpserver</groupId>
+            <artifactId>vidocq-mps-mansart-pool-extension</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.mpserver</groupId>
+            <artifactId>vidocq-mps-mansart-data-extension</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- User picks the dialect — H2 here. -->
+        <dependency>
+            <groupId>io.vidocq.mansart</groupId>
+            <artifactId>mansart-data-dialect-h2</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- JDBC driver (runtime only) -->
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <version>2.3.232</version>
+            <scope>runtime</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>io.vidocq.chappe</groupId>
+            <artifactId>chappe-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.chappe</groupId>
+            <artifactId>chappe-core</artifactId>
+        </dependency>
+
+        <!-- JAX-RS + JSON-B (Yasson runtime) -->
+        <dependency>
+            <groupId>jakarta.ws.rs</groupId>
+            <artifactId>jakarta.ws.rs-api</artifactId>
+            <version>4.0.0</version>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.json.bind</groupId>
+            <artifactId>jakarta.json.bind-api</artifactId>
+            <version>3.0.1</version>
+        </dependency>
+        <dependency>
+            <groupId>org.eclipse</groupId>
+            <artifactId>yasson</artifactId>
+            <version>3.0.4</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.eclipse.parsson</groupId>
+            <artifactId>parsson</artifactId>
+            <version>1.1.7</version>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- jakarta.persistence-api : @Entity, @Id, etc. (no JPA runtime, just the annotations) -->
+        <dependency>
+            <groupId>jakarta.persistence</groupId>
+            <artifactId>jakarta.persistence-api</artifactId>
+            <version>3.2.0</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-indexer</artifactId>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <annotationProcessorPaths>
+                        <!-- Vauban indexer : produit META-INF/vauban-beans.list listant les classes
+                             CDI (@Singleton / @ApplicationScoped / @Dependent / @Produces). Sans
+                             cet APT, Vauban ne trouve pas les beans utilisateurs et JAX-RS n'a
+                             aucune ressource à monter. -->
+                        <path>
+                            <groupId>io.vidocq.vauban</groupId>
+                            <artifactId>vauban-processor</artifactId>
+                            <version>0.1.0-SNAPSHOT</version>
+                        </path>
+                        <!-- Mansart APT : _Entity metamodel + *RepositoryImpl
+                             + META-INF/mansart-repositories.list (lu par le BCE mansart-data-cdi). -->
+                        <path>
+                            <groupId>io.vidocq.mansart</groupId>
+                            <artifactId>mansart-data-processor</artifactId>
+                            <version>1.0.0-SNAPSHOT</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>io.vidocq.mpserver</groupId>
+                <artifactId>vidocq-mps-maven-plugin</artifactId>
+                <version>${project.version}</version>
+                <executions>
+                    <execution>
+                        <id>generate</id>
+                        <goals>
+                            <goal>generate</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

@@ -17,5 +17,6 @@
     <modules>
         <module>vidocq-mps-external-rest-lib</module>
         <module>vidocq-mps-rest-example</module>
+        <module>vidocq-mps-mansart-h2-example</module>
     </modules>
 </project>

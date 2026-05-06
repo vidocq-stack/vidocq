@@ -17,6 +17,8 @@
     <modules>
         <module>vidocq-mps-chappe-extension</module>
         <module>vidocq-mps-rest-cassini-extension</module>
+        <module>vidocq-mps-mansart-pool-extension</module>
+        <module>vidocq-mps-mansart-data-extension</module>
     </modules>
 
     <!--
