@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    HORS reactor — modelVersion 4.0.0 standalone (pas de <parent>) pour rester compatible avec
+    le ShrinkWrap Maven Resolver 3.3 du TCK officiel (qui ne sait pas parser les POMs Maven
+    Model 4.1.0). Cf. CLAUDE.md racine du workspace : « tant qu'upstream ShrinkWrap ne supporte
+    pas Model 4.1, ces modules doivent rester détachés ».
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>io.vidocq.mansart</groupId>
+    <artifactId>mansart-transactions-tck</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <packaging>jar</packaging>
+
+    <name>Mansart :: Transactions :: TCK runner</name>
+    <description>
+        Runner for the official Jakarta Transactions 2.0 TCK against the Mansart implementation.
+        Standalone — invoked via run-official-tck-transactions-2.0.sh, never via the parent reactor.
+    </description>
+
+    <properties>
+        <maven.compiler.release>25</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+        <jakarta.transaction.version>2.0.1</jakarta.transaction.version>
+        <jakarta.transaction.tck.version>2.0.1</jakarta.transaction.tck.version>
+
+        <junit.version>6.0.3</junit.version>
+        <assertj.version>3.27.0</assertj.version>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.mansart</groupId>
+            <artifactId>mansart-transactions-core</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.transaction</groupId>
+            <artifactId>jakarta.transaction-api</artifactId>
+            <version>${jakarta.transaction.version}</version>
+        </dependency>
+        <!--
+            jakarta.transaction:jakarta.transaction-tck — fetched from Maven Central if available,
+            otherwise installed manually into the local M2 (procedure documented in README.md).
+            Activated via the `tck-run` profile so the default `mvn test` doesn't drag the TCK on
+            every commit.
+        -->
+        <dependency>
+            <groupId>jakarta.transaction</groupId>
+            <artifactId>jakarta.transaction-tck</artifactId>
+            <version>${jakarta.transaction.tck.version}</version>
+            <scope>test</scope>
+            <optional>true</optional>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>${junit.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <version>${assertj.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <profiles>
+        <profile>
+            <id>tck-run</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <version>3.5.2</version>
+                        <configuration>
+                            <!-- Override here once the TCK runner is wired (Arquillian or
+                                 standalone harness selon ce que ships le TCK 2.0). -->
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+</project>

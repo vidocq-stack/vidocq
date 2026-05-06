@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.1.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.1.0 https://maven.apache.org/xsd/maven-4.1.0.xsd">
+    <modelVersion>4.1.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.mansart</groupId>
+        <artifactId>mansart-transactions</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>mansart-transactions-api</artifactId>
+    <name>Mansart :: Transactions :: API</name>
+    <description>Re-exposure of jakarta.transaction-api 2.0 + Mansart helper SPI (XAResource enrolment hooks, transactional callbacks).</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>jakarta.transaction</groupId>
+            <artifactId>jakarta.transaction-api</artifactId>
+        </dependency>
+        <!-- jakarta.transaction-api 2.0 module-info requires jakarta.cdi + jakarta.interceptor
+             (à cause de @TransactionScoped et @Transactional). Sans ces deux deps en compile,
+             tout module qui requires jakarta.transaction casse à la compilation. -->
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.interceptor</groupId>
+            <artifactId>jakarta.interceptor-api</artifactId>
+        </dependency>
+    </dependencies>
+</project>

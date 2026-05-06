@@ -62,8 +62,8 @@ jobs:
           </settings>
           EOF
 
-      # Pool d'abord — mansart-jakarta-data le consomme en <scope>test</scope>
-      # via mansart-pool-core (test d'interop M9).
+      # Pool d'abord — mansart-jakarta-data et mansart-transactions le consomment en
+      # <scope>test</scope> via mansart-pool-core.
       - name: Build & test — mansart-pool
         working-directory: mansart-pool
         run: mvn -B -ntp verify
@@ -79,6 +79,16 @@ jobs:
         working-directory: mansart-jakarta-data
         run: mvn -B -ntp verify
 
+      - name: Install — mansart-jakarta-data
+        working-directory: mansart-jakarta-data
+        run: mvn -B -ntp install -DskipTests
+
+      # mansart-transactions : Jakarta Transactions 2.0 (1PC d'abord). mansart-transactions-tck
+      # est HORS reactor (model 4.0.0), lancé via run-official-tck-transactions-2.0.sh.
+      - name: Build & test — mansart-transactions
+        working-directory: mansart-transactions
+        run: mvn -B -ntp verify
+
       # mansart-persistence : encore en spec uniquement (PLAN.md), pas de pom.
 
       - name: Deploy — mansart-pool
@@ -87,4 +97,8 @@ jobs:
 
       - name: Deploy — mansart-jakarta-data
         working-directory: mansart-jakarta-data
+        run: mvn -B -ntp deploy -DskipTests
+
+      - name: Deploy — mansart-transactions
+        working-directory: mansart-transactions
         run: mvn -B -ntp deploy -DskipTests
