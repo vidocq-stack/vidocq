@@ -37,15 +37,20 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 final class ConnectionPool implements AutoCloseable {
 
+    private static final System.Logger LOG = System.getLogger("io.vidocq.mansart.pool");
+
     private final PoolConfig                       config;
     private final Properties                       driverProps;
     private final Semaphore                        permits;
     private final ConcurrentLinkedDeque<PooledEntry> idle  = new ConcurrentLinkedDeque<>();
     private final Set<PooledEntry>                 inUse = ConcurrentHashMap.newKeySet();
     private final Housekeeper                      housekeeper;
+    private final boolean                          leakDetectionEnabled;
+    private final long                             leakDetectionThresholdNanos;
 
     private final AtomicLong totalBorrows           = new AtomicLong();
     private final AtomicLong totalTimeouts          = new AtomicLong();
+    private final AtomicLong totalLeaks             = new AtomicLong();
     private final AtomicLong sumBorrowDurationNanos = new AtomicLong();
 
     private volatile boolean closed;
@@ -54,6 +59,8 @@ final class ConnectionPool implements AutoCloseable {
         this.config       = config;
         this.permits      = new Semaphore(config.maxSize(), false);
         this.driverProps  = buildDriverProps(config);
+        this.leakDetectionEnabled = !config.leakDetectionThreshold().isZero();
+        this.leakDetectionThresholdNanos = config.leakDetectionThreshold().toNanos();
         this.housekeeper  = new Housekeeper(this, config);
 
         // Pre-fill minIdle. Best-effort — if the driver is briefly unavailable, the pool still
@@ -116,6 +123,7 @@ final class ConnectionPool implements AutoCloseable {
             keep = false;        // reset failed → discard
         }
         inUse.remove(entry);
+        entry.markIdle();
         if (keep) {
             idle.offerFirst(entry);
         } else {
@@ -127,10 +135,36 @@ final class ConnectionPool implements AutoCloseable {
     /* ---- helpers ---- */
 
     private PooledConnection takeOut(PooledEntry entry, long startNanos) {
+        long now = System.nanoTime();
         inUse.add(entry);
+        entry.markBorrowed(now, leakDetectionEnabled);
         totalBorrows.incrementAndGet();
-        sumBorrowDurationNanos.addAndGet(System.nanoTime() - startNanos);
+        sumBorrowDurationNanos.addAndGet(now - startNanos);
         return new PooledConnection(entry, this);
+    }
+
+    /**
+     * Called by the {@link Housekeeper} when leak detection is enabled. Walks {@code inUse} and
+     * logs a single WARNING per leaked entry (gated by {@link PooledEntry#leakWarned}) — repeated
+     * sweeps over the same leaker do not multiply log lines.
+     */
+    void detectLeaks(long nowNanos) {
+        if (!leakDetectionEnabled) return;
+        for (PooledEntry e : inUse) {
+            if (e.leakWarned)                                                continue;
+            if (!e.leaked(leakDetectionThresholdNanos, nowNanos))             continue;
+            e.leakWarned = true;
+            totalLeaks.incrementAndGet();
+            LOG.log(System.Logger.Level.WARNING,
+                    "Pool connection leak suspected: held for over "
+                            + config.leakDetectionThreshold()
+                            + ". Borrow stack:",
+                    e.borrowStack);
+        }
+    }
+
+    boolean leakDetectionEnabled() {
+        return leakDetectionEnabled;
     }
 
     private boolean acceptForBorrow(PooledEntry entry) {
@@ -179,7 +213,7 @@ final class ConnectionPool implements AutoCloseable {
                 : Duration.ofNanos(sumBorrowDurationNanos.get() / borrows);
         return new PoolMetrics.Snapshot(
                 inUse.size(), idle.size(), permits.getQueueLength(),
-                borrows, totalTimeouts.get(), mean);
+                borrows, totalTimeouts.get(), totalLeaks.get(), mean);
     }
 
     @Override

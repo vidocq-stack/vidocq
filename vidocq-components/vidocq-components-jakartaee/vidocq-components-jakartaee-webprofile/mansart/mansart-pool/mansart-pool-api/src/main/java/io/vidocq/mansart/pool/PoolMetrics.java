@@ -31,11 +31,17 @@ public sealed interface PoolMetrics permits PoolMetrics.Snapshot {
     Duration meanBorrowDuration();
 
     /**
+     * Total number of leak warnings emitted (one per leaked connection, not per sweep). Always
+     * zero when {@link PoolConfig#leakDetectionThreshold()} is disabled.
+     */
+    long totalLeaks();
+
+    /**
      * Plain-record snapshot. The pool produces fresh instances on each {@code snapshot()} call —
      * never mutate the returned values. {@code permits} this single shape for v1; richer variants
      * (per-tenant, time-windowed) can be added as further {@code permits} subtypes.
      */
     record Snapshot(int active, int idle, int waiting,
-                    long totalBorrows, long totalTimeouts,
+                    long totalBorrows, long totalTimeouts, long totalLeaks,
                     Duration meanBorrowDuration) implements PoolMetrics {}
 }

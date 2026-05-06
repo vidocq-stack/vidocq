@@ -31,11 +31,18 @@ final class Housekeeper {
         this.pool = pool;
         // idleTimeout / 4 is a deliberate compromise: tight enough that expired connections
         // are reclaimed within roughly their own idle window, loose enough that we don't burn
-        // CPU on a 1ms loop when idleTimeout is in minutes. Floor at 1s so a misconfigured
-        // sub-second idleTimeout doesn't spin.
-        this.sweepIntervalNanos = Math.max(
-                java.time.Duration.ofSeconds(1).toNanos(),
-                config.idleTimeout().toNanos() / 4);
+        // CPU on a 1ms loop when idleTimeout is in minutes. When leak detection is enabled,
+        // tighten the sweep to leakDetectionThreshold/4 so a leak surfaces in roughly its own
+        // grace window. Floor at 50ms so a misconfigured sub-100ms threshold (mainly tests)
+        // doesn't spin too hot.
+        long base = config.idleTimeout().toNanos() / 4;
+        long leak = config.leakDetectionThreshold().isZero()
+                ? Long.MAX_VALUE
+                : config.leakDetectionThreshold().toNanos() / 4;
+        long minFloor = pool.leakDetectionEnabled()
+                ? java.time.Duration.ofMillis(50).toNanos()
+                : java.time.Duration.ofSeconds(1).toNanos();
+        this.sweepIntervalNanos = Math.max(minFloor, Math.min(base, leak));
         this.thread = Thread.ofVirtual()
                 .name("mansart-pool-housekeeper")
                 .unstarted(this::loop);
@@ -54,8 +61,10 @@ final class Housekeeper {
         while (!stopped) {
             LockSupport.parkNanos(sweepIntervalNanos);
             if (stopped) return;
+            long now = System.nanoTime();
             try {
-                pool.sweep(System.nanoTime());
+                pool.sweep(now);
+                pool.detectLeaks(now);
             } catch (Throwable t) {
                 LOG.log(Level.WARNING, "housekeeper sweep failed", t);
                 // intentional: do not propagate, keep the loop alive

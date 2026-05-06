@@ -19,6 +19,10 @@
         <junit.version>6.0.3</junit.version>
         <assertj.version>3.27.0</assertj.version>
         <h2.version>2.3.232</h2.version>
+        <hikaricp.version>6.2.1</hikaricp.version>
+        <jmh.version>1.37</jmh.version>
+        <exec.plugin.version>3.5.0</exec.plugin.version>
+        <shade.plugin.version>3.6.0</shade.plugin.version>
 
         <maven.compiler.plugin.version>4.0.0-beta-4</maven.compiler.plugin.version>
         <maven.surefire.plugin.version>3.5.2</maven.surefire.plugin.version>
@@ -29,6 +33,7 @@
         <subproject>mansart-pool-api</subproject>
         <subproject>mansart-pool-core</subproject>
         <subproject>mansart-pool-tests</subproject>
+        <subproject>mansart-pool-bench</subproject>
     </subprojects>
 
     <dependencyManagement>
