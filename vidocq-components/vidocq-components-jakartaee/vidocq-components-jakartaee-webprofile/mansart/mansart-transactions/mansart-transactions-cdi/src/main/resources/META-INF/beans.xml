@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    bean-discovery-mode="annotated" (CDI 4.x default) — only types annotated with a CDI bean
+    defining annotation become beans. Our Producer is @ApplicationScoped, the interceptor is
+    @Interceptor — both are picked up automatically.
+
+    The interceptor is also enabled per spec via @Priority, so we don't need an explicit
+    <interceptors><class>…</class></interceptors> block here. Listing it explicitly would also
+    work but the @Priority route is portable across CDI 4.0/4.1 and survives BCE renaming.
+-->
+<beans xmlns="https://jakarta.ee/xml/ns/jakartaee"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="https://jakarta.ee/xml/ns/jakartaee
+                           https://jakarta.ee/xml/ns/jakartaee/beans_4_0.xsd"
+       version="4.0"
+       bean-discovery-mode="annotated">
+</beans>

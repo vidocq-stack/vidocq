@@ -12,12 +12,20 @@
 
     <artifactId>mansart-transactions-cdi</artifactId>
     <name>Mansart :: Transactions :: CDI bootstrap</name>
-    <description>CDI 4.1 bootstrap — @Transactional interceptor (REQUIRED, REQUIRES_NEW, MANDATORY, NEVER, NOT_SUPPORTED, SUPPORTS) + @TransactionScoped scope, plugged via BuildCompatibleExtension.</description>
+    <description>CDI 4.1 bootstrap — @Transactional interceptor (REQUIRED, REQUIRES_NEW, MANDATORY, NEVER, NOT_SUPPORTED, SUPPORTS) + @TransactionScoped scope, plugged via BuildCompatibleExtension + portable Extension.</description>
+
+    <properties>
+        <weld.se.version>5.1.5.Final</weld.se.version>
+    </properties>
 
     <dependencies>
         <dependency>
             <groupId>io.vidocq.mansart</groupId>
             <artifactId>mansart-transactions-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.transaction</groupId>
+            <artifactId>jakarta.transaction-api</artifactId>
         </dependency>
         <dependency>
             <groupId>jakarta.enterprise</groupId>
@@ -34,6 +42,29 @@
         <dependency>
             <groupId>jakarta.annotation</groupId>
             <artifactId>jakarta.annotation-api</artifactId>
+        </dependency>
+
+        <!-- ====== Test dependencies ====== -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!--
+            Weld SE — CDI 4.x reference implementation, used in tests to bootstrap a real CDI
+            container in-process. Test scope only ; runtime CDI provider is left to the application
+            (Vauban for Vidocq apps, any CDI 4.x container otherwise).
+        -->
+        <dependency>
+            <groupId>org.jboss.weld.se</groupId>
+            <artifactId>weld-se-core</artifactId>
+            <version>${weld.se.version}</version>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 </project>

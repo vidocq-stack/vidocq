@@ -70,15 +70,23 @@ Tests TDD : `RecoveryAfterCrashIT` (kill -9 entre prepare et commit).
   `bin/ts.jte` 80 propriétés + sources sous `src/com/sun/ts/tests/jta/ee/`). M6b ajoutera
   un templating `ts.jte` + wrapper Maven antrun pour reproductibilité. Voir `TCK.md`.
 
-### M7 — CDI interceptor + TransactionScoped
+### M7 — CDI interceptor + TransactionScoped *(livré)*
 
-- `MansartTransactionsExtension` (BCE) déclare le bean `TransactionManager` synthétique.
-- `TransactionalInterceptor` intercepte `@Transactional` sur les méthodes/classes managed.
-  Six TxTypes : REQUIRED (par défaut), REQUIRES_NEW, MANDATORY, NEVER, NOT_SUPPORTED, SUPPORTS.
-  `rollbackOn` / `dontRollbackOn` honorés.
-- `TransactionScopedContext` (Context CDI) — beans créés au `begin`, détruits à
-  `afterCompletion`.
-Tests TDD côté `mansart-transactions-cdi` + intégration via Vauban dans `mansart-transactions-tests`.
+- ✅ `MansartTransactionsProducer` (@ApplicationScoped) — produit `TransactionManager`,
+  `UserTransaction`, `TransactionSynchronizationRegistry` à partir d'un singleton TM partagé
+  avec l'extension portable.
+- ✅ `TransactionalInterceptor` + 5 sous-classes (`Required`/`RequiresNew`/`Mandatory`/`Never`/
+  `NotSupported`/`Supports`) — six bindings distincts requis car
+  `Transactional.value()` n'est PAS `@Nonbinding` dans jakarta.transaction-api 2.0.x. La logique
+  reste dans le parent ; les sous-classes ne portent que le binding + `@Priority`.
+  Couvre `rollbackOn` / `dontRollbackOn` (spec §3.7.1).
+- ✅ `TransactionScopedContext` (`AlterableContext`) — instance par TX, destruction via
+  `Synchronization.afterCompletion()`. Lance `ContextNotActiveException` hors TX.
+- ✅ `MansartTransactionsPortableExtension` (legacy `Extension`) — enregistre le scope et le
+  contexte (BCE CDI 4.1 ne couvre pas l'enregistrement de Context custom — voir M7b).
+- ✅ Tests Weld SE — 18 tests interceptor + 4 tests contexte = 22/22 verts.
+- ⏳ **M7b** : intégration Vauban du `TransactionScopedContext` quand Vauban supportera les
+  contextes custom (CDI Lite ne couvre que les pseudo-scopes).
 
 ## Hors scope (pour le moment)
 
