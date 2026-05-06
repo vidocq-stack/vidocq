@@ -76,6 +76,7 @@
         <subproject>mansart-transactions-api</subproject>
         <subproject>mansart-transactions-core</subproject>
         <subproject>mansart-transactions-cdi</subproject>
+        <subproject>mansart-transactions-jdbc</subproject>
         <subproject>mansart-transactions-tests</subproject>
         <!-- mansart-transactions-tck est volontairement HORS reactor (pom.xml standalone en
              modelVersion 4.0.0) pour rester compatible avec le ShrinkWrap du TCK officiel —
@@ -97,6 +98,11 @@
             <dependency>
                 <groupId>io.vidocq.mansart</groupId>
                 <artifactId>mansart-transactions-cdi</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.mansart</groupId>
+                <artifactId>mansart-transactions-jdbc</artifactId>
                 <version>${project.version}</version>
             </dependency>
 

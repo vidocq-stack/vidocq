@@ -20,9 +20,10 @@ la première ligne. Réutilise `mansart-pool` pour les tests d'intégration JDBC
 ```
 mansart-transactions/
 ├── mansart-transactions-api/        ← re-exposition jakarta.transaction-api
-├── mansart-transactions-core/       ← TM/UT/TSR + ScopedValue context
-├── mansart-transactions-cdi/        ← @Transactional + @TransactionScoped (BCE)
-├── mansart-transactions-tests/      ← intégration H2 + mansart-pool
+├── mansart-transactions-core/       ← TM/UT/TSR + 2PC + recovery log
+├── mansart-transactions-cdi/        ← @Transactional + @TransactionScoped (BCE Vauban)
+├── mansart-transactions-jdbc/       ← ConnectionXAResource — adapte une Connection en XAResource (1PC)
+├── mansart-transactions-tests/      ← intégration cross-module + H2 réel
 └── mansart-transactions-tck/        ← TCK officiel — HORS reactor
 ```
 
@@ -88,6 +89,18 @@ Tests TDD : `RecoveryAfterCrashIT` (kill -9 entre prepare et commit).
   d'`Extension` portable legacy ni de Weld.
 - ✅ Tests Vauban (CDI 4.1 Lite, container natif Vidocq) via `vauban-junit` :
   14 tests interceptor + 4 tests scope = 18/18 verts.
+
+### M8 — JDBC adapter `ConnectionXAResource` *(livré)*
+
+- ✅ `mansart-transactions-jdbc/ConnectionXAResource` — wrappe une `java.sql.Connection`
+  en `XAResource` (1PC only). Permet à `@Transactional` de fonctionner avec n'importe
+  quel `DataSource` simple (pas besoin de `XADataSource`).
+- ✅ `start()` flippe `autoCommit=false`, `commit()/rollback()` délèguent à JDBC,
+  `autoCommit` original restauré au cleanup.
+- ✅ Tests H2 in-memory : COMMIT persiste, ROLLBACK annule, autoCommit pre-existant honoré.
+- ✅ `H2SingleResourceCommitTest` — débloqué (était `@Disabled` depuis M2).
+- ⏳ Pour vrai 2PC multi-resources : nécessite un driver `XADataSource` (out of scope
+  pour ce module ; le TM gère déjà le protocole).
 
 ## Hors scope (pour le moment)
 
