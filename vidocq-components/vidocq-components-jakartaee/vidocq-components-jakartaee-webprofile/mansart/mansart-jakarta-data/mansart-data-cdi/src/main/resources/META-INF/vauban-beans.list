@@ -1,0 +1,6 @@
+# Vauban discovers BCEs and beans only via this list — the standard CDI 4.1
+# META-INF/services/jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension
+# is NOT read by Vauban (gap to fix upstream — see vauban-issue tracker).
+io.vidocq.mansart.data.cdi.MansartDataExtension
+# @Singleton + @Produces RepositoryRuntime — backs the @Default repositories.
+io.vidocq.mansart.data.cdi.MansartRuntimeProducer
