@@ -16,9 +16,10 @@ import java.util.Set;
 /**
  * Glue between Vidocq lifecycle and the Mansart Jakarta Data 1.0 stack.
  *
- * <p>This extension does <b>not</b> register the {@code mansart-data-cdi} BCE — Vauban already
- * picks it up via the standard CDI 4.1 ServiceLoader contract
- * ({@code META-INF/services/jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension}).
+ * <p>This extension does <b>not</b> register the {@code mansart-data-cdi} BCE — Vauban picks it
+ * up via {@code META-INF/vauban-beans.list} shipped in {@code mansart-data-cdi.jar}. (Note:
+ * Vauban does not yet honor the standard CDI 4.1 ServiceLoader contract for BCEs — the
+ * {@code vauban-beans.list} indirection is the workaround until that gap is closed upstream.)
  * Instead, it does two things at {@code onStart}:
  *
  * <ol>

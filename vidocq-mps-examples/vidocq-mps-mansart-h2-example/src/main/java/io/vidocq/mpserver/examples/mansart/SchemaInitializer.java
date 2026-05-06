@@ -1,7 +1,8 @@
 package io.vidocq.mpserver.examples.mansart;
 
-import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.context.Initialized;
+import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
@@ -11,10 +12,13 @@ import java.sql.SQLException;
 import java.sql.Statement;
 
 /**
- * Demo-only schema bootstrap. {@code @ApplicationScoped} + {@code @PostConstruct} runs once at
- * Vauban container start, after the {@link DataSource} bean published by the mansart-pool extension
- * is available. In a real application you would use Flyway / Liquibase or your DB migration tool
- * of choice — this is intentionally minimal so the example stays runnable without extra deps.
+ * Demo-only schema bootstrap. The {@code @Observes @Initialized(ApplicationScoped.class)}
+ * trigger fires when the Vauban CDI container is fully started, after the {@link DataSource}
+ * bean published by the mansart-pool extension is available. {@code @ApplicationScoped} beans
+ * are otherwise lazy in Vauban — without the observer, this bean would never be instantiated.
+ *
+ * <p>In a real application you would use Flyway / Liquibase or your DB migration tool of
+ * choice — this is intentionally minimal so the example stays runnable without extra deps.
  */
 @ApplicationScoped
 public class SchemaInitializer {
@@ -25,7 +29,10 @@ public class SchemaInitializer {
     @Inject
     Instance<DataSource> dataSourceInstance;
 
-    @PostConstruct
+    void onStart(@Observes @Initialized(ApplicationScoped.class) Object event) {
+        initSchema();
+    }
+
     void initSchema() {
         DataSource dataSource = dataSourceInstance.get();
         try (Connection c = dataSource.getConnection(); Statement s = c.createStatement()) {
