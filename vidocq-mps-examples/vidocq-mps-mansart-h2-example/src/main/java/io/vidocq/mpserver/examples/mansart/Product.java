@@ -18,11 +18,11 @@ public class Product {
     private String name;
 
     @Column(nullable = false)
-    private Double price;
+    private double price;
 
     public Product() {}
 
-    public Product(String name, Double price) {
+    public Product(String name, double price) {
         this.name  = name;
         this.price = price;
     }
@@ -31,6 +31,6 @@ public class Product {
     public void   setId(Long id)          { this.id = id;  }
     public String getName()               { return name;   }
     public void   setName(String n)       { this.name = n; }
-    public Double getPrice()              { return price;  }
-    public void   setPrice(Double p)      { this.price = p; }
+    public double getPrice()              { return price;  }
+    public void   setPrice(double p)      { this.price = p; }
 }
