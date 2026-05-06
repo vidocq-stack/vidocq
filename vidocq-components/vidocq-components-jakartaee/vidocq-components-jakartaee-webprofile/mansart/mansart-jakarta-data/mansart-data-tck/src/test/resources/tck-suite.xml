@@ -14,6 +14,7 @@
             <class name="io.vidocq.mansart.data.tck.MansartCdiBootstrapSmokeTest"/>
             <class name="io.vidocq.mansart.data.tck.MansartArquillianSmokeTest"/>
             <class name="io.vidocq.mansart.data.tck.RuntimeRepoArquillianTest"/>
+            <class name="io.vidocq.mansart.data.tck.MultiDataStoreArquillianTest"/>
         </classes>
     </test>
 

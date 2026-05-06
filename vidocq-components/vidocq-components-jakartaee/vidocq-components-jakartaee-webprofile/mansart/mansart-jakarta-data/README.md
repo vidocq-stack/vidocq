@@ -224,7 +224,7 @@ Mansart utilise les annotations standard **`jakarta.persistence.*`** (Jakarta Pe
 | `@jakarta.persistence.OneToOne(fetch)` | Relation propriétaire one-to-one. |
 | `@jakarta.persistence.JoinColumn(name)` | Nom de la colonne FK (défaut `<attr>_id`). |
 | `@jakarta.persistence.Embedded` / `@Embeddable` | Mapping inline. |
-| `@io.vidocq.mansart.data.core.MansartDataSource("name")` | **Extension Mansart** — sélection de DataSource côté repository quand plusieurs sont injectables. |
+| `@jakarta.data.repository.Repository(dataStore = "name")` | Sélection multi-DataSource : Mansart résout la valeur comme un `@Named` CDI sur `DataSource` (préfixe `java:` → JNDI). Aucune annotation propriétaire. |
 
 Bénéfice secondaire : interop totale avec Hibernate, EclipseLink, Spring Data, et le futur `mansart-persistence` (JPA 3.2). Static metamodel JPA standard (`Author_.id`, `Author_.name`) généré en parallèle du métamodèle Mansart riche (`_Author.$MODEL`).
 

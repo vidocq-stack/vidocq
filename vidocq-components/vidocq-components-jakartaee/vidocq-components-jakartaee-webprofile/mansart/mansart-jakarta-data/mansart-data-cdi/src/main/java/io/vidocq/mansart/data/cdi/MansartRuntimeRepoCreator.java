@@ -25,7 +25,8 @@ public final class MansartRuntimeRepoCreator implements SyntheticBeanCreator<Obj
         if (itfClass == null) {
             throw new MansartDataException("MansartRuntimeRepoCreator: missing 'itfClass' parameter");
         }
-        RepositoryRuntime runtime = lookup.select(RepositoryRuntime.class).get();
+        // M9 — same dataStore resolution as the compile-time path.
+        RepositoryRuntime runtime = DataStoreResolver.resolve(lookup, itfClass);
         return RuntimeRepositoryProxy.create((Class) itfClass, runtime);
     }
 }

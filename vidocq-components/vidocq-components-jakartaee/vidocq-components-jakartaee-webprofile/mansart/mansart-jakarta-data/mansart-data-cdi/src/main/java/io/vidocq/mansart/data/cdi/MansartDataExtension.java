@@ -137,10 +137,13 @@ public final class MansartDataExtension implements BuildCompatibleExtension {
 
     @SuppressWarnings({"rawtypes", "unchecked"})
     private static void registerCompileTime(SyntheticComponents components, Class<?> itf, Class<?> impl) {
+        // M9 — itfClass is forwarded so the creator can read @Repository(dataStore) and pick
+        // the matching RepositoryRuntime (CDI @Named or JNDI lookup).
         components.<Object>addBean((Class) itf)
                 .type(itf)
                 .scope(jakarta.inject.Singleton.class)
                 .withParam("implClass", impl)
+                .withParam("itfClass", itf)
                 .createWith(MansartRepoCreator.class);
     }
 

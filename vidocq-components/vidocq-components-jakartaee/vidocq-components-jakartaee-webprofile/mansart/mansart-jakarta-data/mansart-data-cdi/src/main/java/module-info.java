@@ -7,7 +7,8 @@ module io.vidocq.mansart.data.cdi {
     requires jakarta.cdi;
     requires jakarta.inject;
     requires jakarta.data;        // M7-4 — @Enhancement uses Repository.class in the typed BCE API
-    requires java.sql;            // javax.sql.DataSource
+    requires java.sql;            // javax.sql.DataSource, javax.sql.XADataSource
+    requires java.naming;         // M9 — JNDI lookup for dataStore values starting with "java:"
 
     exports io.vidocq.mansart.data.cdi;
 

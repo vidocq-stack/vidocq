@@ -20,10 +20,13 @@ public final class MansartRepoCreator implements SyntheticBeanCreator<Object> {
     @Override
     public Object create(Instance<Object> lookup, Parameters params) {
         Class<?> implClass = params.get("implClass", Class.class);
+        Class<?> itfClass  = params.get("itfClass",  Class.class);
         if (implClass == null) {
             throw new MansartDataException("MansartRepoCreator: missing 'implClass' parameter");
         }
-        RepositoryRuntime runtime = lookup.select(RepositoryRuntime.class).get();
+        // M9 — pick the RepositoryRuntime keyed by the @Repository(dataStore) value.
+        // Falls back to the @Default RepositoryRuntime when dataStore is empty.
+        RepositoryRuntime runtime = DataStoreResolver.resolve(lookup, itfClass);
         try {
             var ctor = implClass.getDeclaredConstructor(RepositoryRuntime.class);
             ctor.setAccessible(true);
