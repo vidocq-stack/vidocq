@@ -8,10 +8,15 @@ import jakarta.transaction.Transaction;
 // XAResource was NOT migrated to the jakarta namespace by the Jakarta EE 9 rename — it stays
 // in the JDK's javax.transaction.xa package (module java.transaction.xa). Eclipse Foundation
 // kept it as-is because the JTA TCK references it at the JDK level.
+import javax.transaction.xa.XAException;
 import javax.transaction.xa.XAResource;
+import javax.transaction.xa.Xid;
 
 import java.util.ArrayList;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Single-thread, in-memory {@link Transaction}. Holds nothing but a status word for M1 — resource
@@ -37,8 +42,21 @@ import java.util.List;
  */
 final class MansartTransaction implements Transaction {
 
+    private static final AtomicLong XID_COUNTER = new AtomicLong();
+    private static byte[] longToBytes(long v) {
+        return new byte[] {
+                (byte)(v >>> 56), (byte)(v >>> 48), (byte)(v >>> 40), (byte)(v >>> 32),
+                (byte)(v >>> 24), (byte)(v >>> 16), (byte)(v >>> 8),  (byte) v };
+    }
+
     private volatile int status = Status.STATUS_ACTIVE;
     private final List<Synchronization> syncs = new ArrayList<>();
+    private final List<XAResource> resources = new ArrayList<>();
+    /** Resources whose {@code end()} has already been called by an explicit
+     *  {@link #delistResource(XAResource, int)} — they must not be re-ended at commit. */
+    private final Set<XAResource> alreadyEnded =
+            java.util.Collections.newSetFromMap(new IdentityHashMap<>());
+    private final Xid xid = new MansartXid(longToBytes(XID_COUNTER.incrementAndGet()), new byte[]{0});
 
     @Override
     public int getStatus() {
@@ -66,8 +84,69 @@ final class MansartTransaction implements Transaction {
             rex.initCause(ex);
             throw rex;
         }
+        // End every resource that wasn't explicitly delisted before commit.
+        endActiveResources(XAResource.TMSUCCESS);
+
+        if (resources.isEmpty()) {
+            status = Status.STATUS_COMMITTING;
+            status = Status.STATUS_COMMITTED;
+            invokeAfterCompletion(Status.STATUS_COMMITTED);
+            return;
+        }
+        if (resources.size() == 1) {
+            // 1PC degenerate path — skip prepare entirely.
+            status = Status.STATUS_COMMITTING;
+            try {
+                resources.get(0).commit(xid, true);
+            } catch (XAException ex) {
+                status = Status.STATUS_UNKNOWN;
+                invokeAfterCompletion(Status.STATUS_UNKNOWN);
+                throw new SystemException("XA single-resource commit failed: " + ex.errorCode);
+            }
+            status = Status.STATUS_COMMITTED;
+            invokeAfterCompletion(Status.STATUS_COMMITTED);
+            return;
+        }
+
+        // 2PC path : prepare every resource, abort if anyone votes rollback, then commit.
+        status = Status.STATUS_PREPARING;
+        var prepared = new ArrayList<XAResource>();
+        boolean rollback = false;
+        for (XAResource r : resources) {
+            try {
+                int vote = r.prepare(xid);
+                if (vote == XAResource.XA_OK) {
+                    prepared.add(r);
+                }
+                // XA_RDONLY : resource is read-only and can be forgotten — no commit needed.
+            } catch (XAException ex) {
+                rollback = true;
+                // The resource voted rollback — it has finalised its branch on its side.
+            }
+        }
+        if (rollback) {
+            // Roll back every resource that voted YES (they are still holding locks).
+            status = Status.STATUS_ROLLING_BACK;
+            for (XAResource r : prepared) {
+                try { r.rollback(xid); } catch (XAException ignored) { /* best effort */ }
+            }
+            status = Status.STATUS_ROLLEDBACK;
+            invokeAfterCompletion(Status.STATUS_ROLLEDBACK);
+            throw new RollbackException("At least one resource voted rollback during prepare");
+        }
+        status = Status.STATUS_PREPARED;
         status = Status.STATUS_COMMITTING;
-        // M4 : prepare + commit phases on enlisted XAResources
+        for (XAResource r : prepared) {
+            try {
+                r.commit(xid, false);
+            } catch (XAException ex) {
+                // Heuristic territory — for M4 we surface as SystemException ; M5 will add a
+                // recovery log so we can re-attempt the failing branch on restart.
+                status = Status.STATUS_UNKNOWN;
+                invokeAfterCompletion(Status.STATUS_UNKNOWN);
+                throw new SystemException("XA two-phase commit failed: " + ex.errorCode);
+            }
+        }
         status = Status.STATUS_COMMITTED;
         invokeAfterCompletion(Status.STATUS_COMMITTED);
     }
@@ -84,9 +163,24 @@ final class MansartTransaction implements Transaction {
 
     private void doRollback() {
         status = Status.STATUS_ROLLING_BACK;
-        // M4 : rollback on enlisted XAResources
+        endActiveResources(XAResource.TMFAIL);
+        for (XAResource r : resources) {
+            try { r.rollback(xid); } catch (XAException ignored) { /* best effort */ }
+        }
         status = Status.STATUS_ROLLEDBACK;
         invokeAfterCompletion(Status.STATUS_ROLLEDBACK);
+    }
+
+    private void endActiveResources(int flag) {
+        for (XAResource r : resources) {
+            if (alreadyEnded.contains(r)) continue;
+            try {
+                r.end(xid, flag);
+                alreadyEnded.add(r);
+            } catch (XAException ignored) {
+                // Best effort — proceed even if end() fails ; commit/rollback is what matters.
+            }
+        }
     }
 
     private void invokeBeforeCompletion() {
@@ -120,13 +214,38 @@ final class MansartTransaction implements Transaction {
     }
 
     @Override
-    public boolean enlistResource(XAResource xaRes) {
-        throw new UnsupportedOperationException("M4 not implemented");
+    public boolean enlistResource(XAResource xaRes) throws RollbackException, SystemException {
+        if (status == Status.STATUS_MARKED_ROLLBACK) {
+            throw new RollbackException("Cannot enlist on a marked-rollback transaction");
+        }
+        if (status != Status.STATUS_ACTIVE) {
+            throw new IllegalStateException(
+                    "enlistResource() requires STATUS_ACTIVE, was " + statusName(status));
+        }
+        try {
+            xaRes.start(xid, XAResource.TMNOFLAGS);
+        } catch (XAException ex) {
+            throw new SystemException("XAResource.start failed: " + ex.errorCode);
+        }
+        resources.add(xaRes);
+        return true;
     }
 
     @Override
-    public boolean delistResource(XAResource xaRes, int flag) {
-        throw new UnsupportedOperationException("M4 not implemented");
+    public boolean delistResource(XAResource xaRes, int flag) throws SystemException {
+        if (status != Status.STATUS_ACTIVE && status != Status.STATUS_MARKED_ROLLBACK) {
+            throw new IllegalStateException(
+                    "delistResource() requires STATUS_ACTIVE or STATUS_MARKED_ROLLBACK, was "
+                            + statusName(status));
+        }
+        if (!resources.contains(xaRes)) return false;
+        try {
+            xaRes.end(xid, flag);
+            alreadyEnded.add(xaRes);
+        } catch (XAException ex) {
+            throw new SystemException("XAResource.end failed: " + ex.errorCode);
+        }
+        return true;
     }
 
     @Override
