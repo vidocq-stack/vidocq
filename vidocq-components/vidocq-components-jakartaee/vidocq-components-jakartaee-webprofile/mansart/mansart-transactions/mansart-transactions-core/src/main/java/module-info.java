@@ -7,6 +7,8 @@
  */
 module io.vidocq.mansart.transactions.core {
     requires transitive io.vidocq.mansart.transactions.api;
+    // javax.transaction.xa.XAResource is on the Transaction interface — needed at compile time.
+    requires java.transaction.xa;
 
     exports io.vidocq.mansart.transactions.core;
 }

@@ -11,55 +11,80 @@ import jakarta.transaction.Transaction;
 import jakarta.transaction.TransactionManager;
 
 /**
- * Virtual-thread-native implementation of {@link TransactionManager} — single-resource (1PC) only
- * for now. Each thread sees a transaction context bound by {@link java.lang.ScopedValue} (set in
- * {@link #begin()}, cleared by {@link #commit()}/{@link #rollback()}).
+ * Local-only Jakarta Transactions 2.0 {@link TransactionManager}.
  *
- * <p>Roadmap, in order: M1 begin/commit/rollback + STATUS_ACTIVE / STATUS_NO_TRANSACTION,
- * M2 Synchronization callbacks (before/after), M3 suspend/resume,
- * M4 multi-resource enrolment with prepare/commit/rollback (2PC), M5 recovery log,
- * M6 official Jakarta Transactions 2.0 TCK.
+ * <p>M1 covers single-thread {@code begin/commit/rollback} only — synchronisations (M2),
+ * suspend/resume (M3), resource enrolment + 2PC (M4) and recovery (M5) come in subsequent commits.
  *
- * <p>This is currently a TDD skeleton — every method throws {@link UnsupportedOperationException}.
- * The first test {@code TransactionManagerSmokeTest} should be the next thing written.
+ * <h3>Why {@link ThreadLocal} and not {@link java.lang.ScopedValue}</h3>
+ * The Jakarta Transactions API is imperative : {@code begin()} returns and {@code commit()} comes
+ * later from arbitrary call sites. {@link java.lang.ScopedValue} requires an enclosing
+ * {@code run(...)} block, which would force every consumer to wrap its workload in a callback —
+ * incompatible with the spec. {@link ThreadLocal} is correct here ; virtual threads inherit it
+ * just like platform threads. M3 may add a {@code ScopedValue}-bound {@code runInTransaction(...)}
+ * convenience helper on top of this, but the core is and stays imperative.
  */
 public class MansartTransactionManager implements TransactionManager {
 
+    private final ThreadLocal<MansartTransaction> active = new ThreadLocal<>();
+
+    /** Default timeout in seconds applied to new transactions. {@code 0} = no timeout. M1 stores
+     *  the value but does not enforce it yet — enforcement lands with M2's reaper task. */
+    private volatile int defaultTimeoutSeconds;
+
     @Override
-    public void begin() throws NotSupportedException, SystemException {
-        throw new UnsupportedOperationException("M1 not implemented");
+    public void begin() throws NotSupportedException {
+        if (active.get() != null) {
+            throw new NotSupportedException(
+                    "A transaction is already active on this thread — nested transactions "
+                            + "are not supported (use suspend()/resume() in M3+)");
+        }
+        active.set(new MansartTransaction());
     }
 
     @Override
-    public void commit()
-            throws RollbackException, HeuristicMixedException, HeuristicRollbackException,
-            SecurityException, IllegalStateException, SystemException {
-        throw new UnsupportedOperationException("M1 not implemented");
+    public void commit() throws RollbackException, HeuristicMixedException,
+            HeuristicRollbackException, SecurityException, SystemException {
+        MansartTransaction tx = currentRequired();
+        try {
+            tx.commit();
+        } finally {
+            active.remove();
+        }
     }
 
     @Override
-    public void rollback() throws IllegalStateException, SecurityException, SystemException {
-        throw new UnsupportedOperationException("M1 not implemented");
+    public void rollback() throws SecurityException, SystemException {
+        MansartTransaction tx = currentRequired();
+        try {
+            tx.rollback();
+        } finally {
+            active.remove();
+        }
     }
 
     @Override
-    public int getStatus() throws SystemException {
-        return Status.STATUS_NO_TRANSACTION;
+    public int getStatus() {
+        MansartTransaction tx = active.get();
+        return tx == null ? Status.STATUS_NO_TRANSACTION : tx.getStatus();
     }
 
     @Override
-    public Transaction getTransaction() throws SystemException {
-        return null;
+    public Transaction getTransaction() {
+        return active.get();
     }
 
     @Override
-    public void setRollbackOnly() throws IllegalStateException, SystemException {
-        throw new UnsupportedOperationException("M1 not implemented");
+    public void setRollbackOnly() throws SystemException {
+        currentRequired().setRollbackOnly();
     }
 
     @Override
     public void setTransactionTimeout(int seconds) throws SystemException {
-        throw new UnsupportedOperationException("M1 not implemented");
+        if (seconds < 0) {
+            throw new SystemException("Negative transaction timeout: " + seconds);
+        }
+        this.defaultTimeoutSeconds = seconds;
     }
 
     @Override
@@ -71,5 +96,13 @@ public class MansartTransactionManager implements TransactionManager {
     @Override
     public Transaction suspend() throws SystemException {
         throw new UnsupportedOperationException("M3 not implemented");
+    }
+
+    private MansartTransaction currentRequired() {
+        MansartTransaction tx = active.get();
+        if (tx == null) {
+            throw new IllegalStateException("No transaction active on this thread");
+        }
+        return tx;
     }
 }
