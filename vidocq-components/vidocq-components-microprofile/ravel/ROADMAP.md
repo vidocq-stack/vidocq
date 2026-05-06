@@ -53,24 +53,26 @@ dans le manifest du JAR API — la 3.1 originale (publiée 2023) n'avait ni desc
 
 ---
 
-### M1 — Sources built-in + lookup de base
+### M1 — Sources built-in + lookup de base ✅
 
 **Scope spec :** §3 (ConfigSource), §4 (Built-in ConfigSources), §2.1 (Config lookup).
 
-| Tâche | Notes |
-|---|---|
-| `RavelConfig` implémente `org.eclipse.microprofile.config.Config` | `getValue`, `getOptionalValue`, `getValues`, `getOptionalValues`, `getPropertyNames`, `getConfigSources` |
-| `RavelConfigBuilder` implémente `ConfigBuilder` | `addDefaultSources`, `addDiscoveredSources`, `addDiscoveredConverters`, `withSources`, `forClassLoader` |
-| `RavelConfigProviderResolver` extends `ConfigProviderResolver` | Singleton via ServiceLoader, un `Config` par `ClassLoader`, `registerConfig`/`releaseConfig` thread-safe |
-| `META-INF/services/org.eclipse.microprofile.config.spi.ConfigProviderResolver` | Point d'entrée ServiceLoader |
-| `SystemPropertiesConfigSource` (ordinal 400) | Lecture `System.getProperties()` à chaque appel (mutable runtime) |
-| `EnvironmentVariablesConfigSource` (ordinal 300) | Mapping spec §7.6 : `MY_VAR` ↔ `my.var` ↔ `my-var`, les trois formes essayées |
-| `MicroprofilePropertiesConfigSource` (ordinal 100) | Charge tous les `META-INF/microprofile-config.properties` du `ClassLoader` (multi-fichiers possibles) |
-| `ConfigSourceProvider` SPI via ServiceLoader | Permet aux extensions tierces d'ajouter des sources |
-| `ConfigValue` impl avec metadata (source name, raw value, ordinal) | Section §2.1.5 spec |
-| Tests : cascade d'ordinals, sources mutables, propriété absente | Coverage des 3 sources + edge cases (clé null, valeur vide) |
+| Tâche | Notes | État |
+|---|---|---|
+| `RavelConfig` implémente `org.eclipse.microprofile.config.Config` | `getValue`, `getOptionalValue`, `getValues`, `getOptionalValues`, `getPropertyNames`, `getConfigSources`, `getConfigValue`, `getConverter`, `unwrap` | ✅ |
+| `RavelConfigBuilder` implémente `ConfigBuilder` | `addDefaultSources`, `addDiscoveredSources`, `addDiscoveredConverters`, `withSources`, `withConverter(s)`, `forClassLoader`, `build` | ✅ |
+| `RavelConfigProviderResolver` extends `ConfigProviderResolver` | Singleton via ServiceLoader, un `Config` par `ClassLoader`, `ConcurrentHashMap` + `computeIfAbsent` atomique (testé sous 100 virtual threads concurrents) | ✅ |
+| `META-INF/services/org.eclipse.microprofile.config.spi.ConfigProviderResolver` + `provides` JPMS | Double compatibilité classpath/module-path | ✅ |
+| `SystemPropertiesConfigSource` (ordinal 400) | Lecture `System.getProperty/getProperties` à chaque appel (mutable runtime, pas de cache local) | ✅ |
+| `EnvironmentVariablesConfigSource` (ordinal 300) | Mapping spec §7.6 : 3 formes essayées (exact / non-alphanum→`_` / +UPPER). Helper `toEnvFormat` extrait pour testabilité | ✅ |
+| `MicroprofilePropertiesConfigSource` (ordinal 100) | Une instance par URL `META-INF/microprofile-config.properties` du `ClassLoader`, snapshot figé | ✅ |
+| `ConfigSourceProvider` SPI via ServiceLoader | `addDiscoveredSources` charge sources directes + providers | ✅ |
+| `RavelConfigValue` record avec metadata | §2.1.5 — factory `absent(name)` pour clé manquante | ✅ |
+| Tests unitaires + intégration | **80 tests verts** sur 8 classes + 1 fixture `MapConfigSource` | ✅ |
 
-**Livrable :** `ConfigProvider.getConfig().getValue("key", String.class)` fonctionne avec les 3 sources canoniques. Tests unitaires verts.
+**Décisions M1 documentées** : converter `String` identity uniquement (M2 ajoutera primitives, types automatiques, implicit converters) ; pas de `synchronized`, pas de `ThreadLocal`, pas de `setAccessible` (audit clean) ; cascade ordinals stable avec tie-breaking sur l'ordre d'enregistrement.
+
+**Livrable :** `ConfigProvider.getConfig().getValue("key", String.class)` fonctionne avec les 3 sources canoniques. Reactor + tests unitaires verts.
 
 ---
 
