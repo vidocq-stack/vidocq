@@ -99,15 +99,27 @@ final class RepositoryWriter {
                 w.println();
             }
             w.println("import io.vidocq.mansart.data.core.RepositoryRuntime;");
+            w.println("import jakarta.inject.Inject;");
+            w.println("import jakarta.inject.Singleton;");
             w.println("import javax.annotation.processing.Generated;");
             w.println("import java.util.List;");
             w.println("import java.util.Optional;");
             w.println();
+            w.println("/**");
+            w.println(" * APT-generated CDI bean implementing the {@code @Repository} interface.");
+            w.println(" * <p>{@code @Singleton} (pseudo-scope) is used because the class is {@code final}");
+            w.println(" * — a normal scope like {@code @ApplicationScoped} would require a non-final");
+            w.println(" * class so the container can subclass it for the client proxy. The repository");
+            w.println(" * is stateless (it forwards every call to {@link RepositoryRuntime}), so a single");
+            w.println(" * shared instance is correct.");
+            w.println(" */");
             w.println("@Generated(\"io.vidocq.mansart.data.processor.MansartProcessor\")");
+            w.println("@Singleton");
             w.println("public final class " + implName + " implements " + simple + " {");
             w.println();
             w.println("    private final RepositoryRuntime runtime;");
             w.println();
+            w.println("    @Inject");
             w.println("    public " + implName + "(RepositoryRuntime runtime) {");
             w.println("        this.runtime = runtime;");
             w.println("    }");

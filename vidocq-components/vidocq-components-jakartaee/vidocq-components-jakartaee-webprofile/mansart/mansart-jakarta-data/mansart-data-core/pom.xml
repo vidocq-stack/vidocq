@@ -26,6 +26,14 @@
             <groupId>jakarta.data</groupId>
             <artifactId>jakarta.data-api</artifactId>
         </dependency>
+        <!-- mansart-data-processor APT emits @Singleton + @Inject on every *RepositoryImpl, so any
+             user module driving the processor needs jakarta.inject on its compile classpath. We
+             expose it transitively from core to keep the user POM minimal — they declare
+             mansart-data-* and CDI annotations resolve out of the box. -->
+        <dependency>
+            <groupId>jakarta.inject</groupId>
+            <artifactId>jakarta.inject-api</artifactId>
+        </dependency>
         <!-- jakarta.transaction-api will be re-added in M3 when the runtime uses UserTransaction. -->
     </dependencies>
 </project>

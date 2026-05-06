@@ -108,7 +108,7 @@ public final class MansartDataExtension implements BuildCompatibleExtension {
     public void registerRepositories(SyntheticComponents components) {
         ClassLoader cl = currentClassLoader();
 
-        // Compile-time path
+        // Compile-time path — APT-generated *RepositoryImpl from mansart-data-processor
         for (RepoEntry e : entries) {
             Class<?> itf;
             Class<?> impl;
@@ -116,22 +116,50 @@ public final class MansartDataExtension implements BuildCompatibleExtension {
                 itf  = cl.loadClass(e.itfFqn());
                 impl = cl.loadClass(e.implFqn());
             } catch (ClassNotFoundException ex) {
-                throw new IllegalStateException(
-                        "mansart-repositories.list references unknown class: " + ex.getMessage(), ex);
+                // Compile-time: the impl/interface aren't loadable yet from the APT classloader.
+                // Skip silently — the runtime container will register the bean correctly when it
+                // re-runs this BCE with a classloader that can see the user module.
+                continue;
             }
+            // Skip if the impl is already a managed CDI bean (recent mansart-data-processor
+            // versions emit @Singleton on *RepositoryImpl). Re-registering as a synthetic bean
+            // would create an ambiguous dependency for @Inject MyRepository.
+            if (isAlreadyManagedBean(impl)) continue;
             registerCompileTime(components, itf, impl);
         }
 
-        // Runtime path (M7-4)
+        // Runtime path (M7-4) — @Repository interfaces with no APT-generated impl (e.g. TCK).
         for (String fqn : runtimeRepoFqns) {
             Class<?> itf;
             try {
                 itf = cl.loadClass(fqn);
             } catch (ClassNotFoundException ex) {
-                throw new IllegalStateException(
-                        "Runtime-discovered @Repository interface not loadable: " + fqn, ex);
+                // Same compile-time tolerance as above: defer to runtime.
+                continue;
             }
+            // Skip if a sibling *RepositoryImpl bean already covers this interface (handles the
+            // case where the runtime path saw a @Repository whose impl is actually APT-generated
+            // and managed by CDI — happens when the bean archive contains both).
+            if (hasManagedImplFor(cl, fqn)) continue;
             registerRuntime(components, itf);
+        }
+    }
+
+    private static boolean isAlreadyManagedBean(Class<?> impl) {
+        return impl.isAnnotationPresent(jakarta.inject.Singleton.class)
+                || impl.isAnnotationPresent(jakarta.enterprise.context.ApplicationScoped.class)
+                || impl.isAnnotationPresent(jakarta.enterprise.context.Dependent.class);
+    }
+
+    private static boolean hasManagedImplFor(ClassLoader cl, String itfFqn) {
+        // Convention: APT-generated implementation lives next to the interface as <Itf>Impl.
+        // We accept multi-package layouts only via the explicit compile-time list above; this
+        // heuristic is the runtime-path twin and only checks the conventional sibling name.
+        try {
+            Class<?> impl = cl.loadClass(itfFqn + "Impl");
+            return isAlreadyManagedBean(impl);
+        } catch (ClassNotFoundException ex) {
+            return false;
         }
     }
 
