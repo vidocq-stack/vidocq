@@ -12,6 +12,11 @@ module io.vidocq.mansart.data.cdi {
 
     exports io.vidocq.mansart.data.cdi;
 
+    // Vauban (or any compliant CDI Lite container) instantiates beans of this jar via
+    // MethodHandles.privateLookupIn. In module-path mode this requires opens-to. We open
+    // narrowly to vauban-core only — the package stays sealed for everyone else.
+    opens io.vidocq.mansart.data.cdi to io.vidocq.vauban.core;
+
     provides jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension
             with io.vidocq.mansart.data.cdi.MansartDataExtension;
 }
