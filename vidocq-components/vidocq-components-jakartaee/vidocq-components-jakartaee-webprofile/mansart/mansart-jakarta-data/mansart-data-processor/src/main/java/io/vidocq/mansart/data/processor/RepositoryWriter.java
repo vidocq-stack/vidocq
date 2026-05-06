@@ -32,11 +32,43 @@ final class RepositoryWriter {
     private final Filer    filer;
     private final Elements elements;
     private final Types    types;
+    private final EntityRegistry entityRegistry;
 
-    RepositoryWriter(Filer filer, Elements elements, Types types) {
+    RepositoryWriter(Filer filer, Elements elements, Types types, EntityRegistry entityRegistry) {
         this.filer = filer;
         this.elements = elements;
         this.types = types;
+        this.entityRegistry = entityRegistry;
+    }
+
+    /**
+     * M8-3i — builds a {@link QueryMethodParser.PathResolver} backed by the cross-entity
+     * {@link EntityRegistry}. Given a CamelCase chunk, tries the longest-prefix match against
+     * the current entity's attributes; if that prefix is a relation, recurses into the target
+     * entity for the suffix. Returns a dotted path like {@code "author.name"} when the entire
+     * chunk decomposes through known relations, or {@code null} otherwise.
+     */
+    private QueryMethodParser.PathResolver buildPathResolver(String rootEntityFqn) {
+        return (chunk, ignored) -> resolvePath(chunk, rootEntityFqn);
+    }
+
+    private String resolvePath(String camelChunk, String entityFqn) {
+        EntityRegistry.EntityFacet facet = entityRegistry == null ? null : entityRegistry.get(entityFqn);
+        if (facet == null || camelChunk.isEmpty()) return null;
+        String lcFirst = Character.toLowerCase(camelChunk.charAt(0)) + camelChunk.substring(1);
+        // Greedy from longest — favour the longer attribute match so "primaryAddress" beats "primary".
+        for (int len = lcFirst.length(); len > 0; len--) {
+            String head = lcFirst.substring(0, len);
+            if (!facet.attrs().contains(head)) continue;
+            // Full-chunk match → terminal attribute (no further descent).
+            if (len == camelChunk.length()) return head;
+            // Suffix exists → head must be a relation to descend.
+            String targetFqn = facet.relations().get(head);
+            if (targetFqn == null) continue;
+            String tail = resolvePath(camelChunk.substring(len), targetFqn);
+            if (tail != null) return head + "." + tail;
+        }
+        return null;
     }
 
     /** @return true if {@code repo} is a {@code @Repository} interface and an Impl was emitted. */
@@ -56,6 +88,9 @@ final class RepositoryWriter {
         String idFqn     = args.idBoxedFqn();
 
         java.util.Set<String> attributeNames = collectAttributeNames(entityType);
+        // M8-3i — path resolver: greedy split of CamelCase chunks against the cross-entity registry.
+        QueryMethodParser.PathResolver pathResolver =
+                buildPathResolver(entityType.getQualifiedName().toString());
 
         JavaFileObject file = filer.createSourceFile(fqn, repo);
         try (PrintWriter w = new PrintWriter(file.openWriter())) {
@@ -80,7 +115,7 @@ final class RepositoryWriter {
 
             DeclaredType repoType = (DeclaredType) repo.asType();
             for (ExecutableElement m : abstractMethods(repo)) {
-                writeMethod(w, m, repo, repoType, metamodel, entityFqn, idFqn, attributeNames);
+                writeMethod(w, m, repo, repoType, metamodel, entityFqn, idFqn, attributeNames, pathResolver);
             }
 
             w.println("}");
@@ -90,7 +125,8 @@ final class RepositoryWriter {
 
     private void writeMethod(PrintWriter w, ExecutableElement m, TypeElement repo, DeclaredType repoType,
                              String metamodel, String entityFqn, String idFqn,
-                             java.util.Set<String> attributeNames) {
+                             java.util.Set<String> attributeNames,
+                             QueryMethodParser.PathResolver pathResolver) {
         ExecutableType resolved = (ExecutableType) types.asMemberOf(repoType, m);
         String name = m.getSimpleName().toString();
         TypeMirror returnType = resolved.getReturnType();
@@ -132,7 +168,7 @@ final class RepositoryWriter {
         if (body == null) body = bodyFor(name, paramTypes, returnType, metamodel, entityFqn);
         if (body == null) {
             // Try derived-query parsing (M3b).
-            QueryMethodParser.QueryDescriptor desc = QueryMethodParser.parse(name, attributeNames);
+            QueryMethodParser.QueryDescriptor desc = QueryMethodParser.parse(name, attributeNames, pathResolver);
             if (desc != null) {
                 body = derivedQueryBody(desc, returnType, metamodel, (List<? extends TypeMirror>) paramTypes);
             }
@@ -297,7 +333,8 @@ final class RepositoryWriter {
 
         int idx = 0;
         for (QueryMethodParser.Predicate p : d.predicates()) {
-            String attr = metamodel + "." + p.attribute();
+            // M8-3i — paths route through PathResolver at runtime; flat attrs use static field.
+            String attr = attrRef(metamodel, p.attribute());
             String paramName = p(idx);
             // M7-28 — same wrapping logic as predicateExpr: comparator → IgnoreCase → Not.
             String partExpr;
@@ -416,7 +453,8 @@ final class RepositoryWriter {
 
     private String inCollectionBody(QueryMethodParser.QueryDescriptor d, TypeMirror returnType, String metamodel) {
         QueryMethodParser.Predicate pred = d.predicates().get(0);
-        String attr = metamodel + "." + pred.attribute();
+        // M8-3i — paths route through PathResolver at runtime; flat attrs use static field.
+        String attr = attrRef(metamodel, pred.attribute());
         StringBuilder sb = new StringBuilder();
         sb.append("java.util.Collection<?> col = (java.util.Collection<?>) ").append(p(0)).append("; ");
         // Short-circuit empty In: SQL `IN ()` is invalid; return the natural empty result.
@@ -515,8 +553,20 @@ final class RepositoryWriter {
         return sb.toString();
     }
 
+    /**
+     * M8-3i — emit an Attribute reference. Flat names map to {@code metamodel.attr} (compile-time
+     * static field); dotted paths route through {@code PathResolver.resolve(model, "a.b.c")}
+     * which returns a {@code JoinedAttribute} for the dialect to render with INNER JOIN aliasing.
+     */
+    private static String attrRef(String metamodel, String attr) {
+        if (attr.indexOf('.') < 0) return metamodel + "." + attr;
+        return "io.vidocq.mansart.data.core.PathResolver.resolve(" + metamodel + ".$MODEL, \"" + attr + "\")";
+    }
+
     private String predicateExpr(QueryMethodParser.Predicate p, String metamodel) {
-        String attr = metamodel + "." + p.attribute();
+        // M8-3i — paths (a.b.c) route through PathResolver at runtime; flat attrs use the
+        // compile-time static field reference.
+        String attr = attrRef(metamodel, p.attribute());
         String pkg = "io.vidocq.mansart.data.dialect.Where";
         String inner = switch (p.comparator()) {
             case EQ        -> "new " + pkg + ".Eq(" + attr + ")";
@@ -557,7 +607,7 @@ final class RepositoryWriter {
             QueryMethodParser.Order o = d.orderBy().get(i);
             sb.append("io.vidocq.mansart.data.dialect.OrderBy.Order.")
               .append(o.asc() ? "asc" : "desc")
-              .append('(').append(metamodel).append('.').append(o.attribute()).append(')');
+              .append('(').append(attrRef(metamodel, o.attribute())).append(')');
         }
         sb.append("))");
         return sb.toString();

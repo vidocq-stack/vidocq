@@ -50,4 +50,22 @@ public interface BookRepository extends BasicRepository<Book, Long> {
 
     @Query("FROM Book WHERE author.name = :name")
     Optional<Book> jdqlOneByAuthorName(String name);
+
+    /* ---- M8-3i query-by-method-name path navigation ---- */
+
+    List<Book> findByAuthorName(String name);
+
+    List<Book> findByAuthorNameLike(String pattern);
+
+    List<Book> findByAuthorNameIgnoreCase(String name);
+
+    List<Book> findByTitleAndAuthorName(String title, String authorName);
+
+    List<Book> findByAuthorNameOrderByTitleAsc(String name);
+
+    long countByAuthorName(String name);
+
+    boolean existsByAuthorName(String name);
+
+    Optional<Book> findOneByAuthorNameAndTitle(String authorName, String title);
 }

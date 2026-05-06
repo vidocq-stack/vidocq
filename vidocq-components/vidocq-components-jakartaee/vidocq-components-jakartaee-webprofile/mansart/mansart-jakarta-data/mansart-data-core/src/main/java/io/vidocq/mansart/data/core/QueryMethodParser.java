@@ -55,10 +55,35 @@ public final class QueryMethodParser {
     }
 
     /**
+     * M8-3i — extension point: callers can plug a path resolver to recognise relation traversal
+     * in method names. Given a CamelCase chunk and the current attribute set, the resolver may
+     * return a dotted path (e.g. {@code "author.name"}) when the chunk decomposes through known
+     * relations. Returning {@code null} falls back to flat resolution. The default implementation
+     * is flat-only — used by the runtime path which has no cross-entity registry.
+     */
+    @FunctionalInterface
+    public interface PathResolver {
+        /** @param camelChunk the raw method-name chunk (e.g. "AuthorName"); {@code null}/empty allowed */
+        String resolve(String camelChunk, Set<String> rootAttrs);
+    }
+
+    public static final PathResolver FLAT_ONLY = (chunk, attrs) -> null;
+
+    public static QueryDescriptor parse(String methodName, Set<String> attributeNames,
+                                        PathResolver pathResolver) {
+        return parse(methodName, attributeNames, new int[]{0}, pathResolver);
+    }
+
+    /**
      * M7-8 push — also accepts {@code findFirst<N>By} where {@code <N>} is a positive integer.
      * The N is written into {@code limitOut[0]} so the caller can apply a LIMIT to the query.
      */
     public static QueryDescriptor parse(String methodName, Set<String> attributeNames, int[] limitOut) {
+        return parse(methodName, attributeNames, limitOut, FLAT_ONLY);
+    }
+
+    public static QueryDescriptor parse(String methodName, Set<String> attributeNames, int[] limitOut,
+                                        PathResolver pathResolver) {
         Operation op;
         String rest;
         // findFirst<N>By — N is an inline numeric limit (Jakarta Data 1.0).
@@ -93,7 +118,7 @@ public final class QueryMethodParser {
         if (orderIdx >= 0) {
             String orderClause = rest.substring(orderIdx + "OrderBy".length());
             rest = rest.substring(0, orderIdx);
-            orders = parseOrders(orderClause, attributeNames);
+            orders = parseOrders(orderClause, attributeNames, pathResolver);
         }
 
         // Determine combinator (And vs Or). If both present, And wins for splitting; documented limitation.
@@ -103,12 +128,12 @@ public final class QueryMethodParser {
             // findAllByOrderBy… or findAllBy with only an ORDER BY clause — no predicates.
             return new QueryDescriptor(op, List.of(), Combinator.AND, orders);
         }
-        if (containsToken(rest, "And", attributeNames)) {
+        if (containsToken(rest, "And", attributeNames, pathResolver)) {
             combinator = Combinator.AND;
-            parts = splitOnToken(rest, "And", attributeNames);
-        } else if (containsToken(rest, "Or", attributeNames)) {
+            parts = splitOnToken(rest, "And", attributeNames, pathResolver);
+        } else if (containsToken(rest, "Or", attributeNames, pathResolver)) {
             combinator = Combinator.OR;
-            parts = splitOnToken(rest, "Or", attributeNames);
+            parts = splitOnToken(rest, "Or", attributeNames, pathResolver);
         } else {
             combinator = Combinator.AND;
             parts = new String[] { rest };
@@ -116,7 +141,7 @@ public final class QueryMethodParser {
 
         List<Predicate> preds = new ArrayList<>(parts.length);
         for (String part : parts) {
-            Predicate p = parsePredicate(part, attributeNames);
+            Predicate p = parsePredicate(part, attributeNames, pathResolver);
             if (p == null) return null; // invalid attribute → caller emits compile error
             preds.add(p);
         }
@@ -125,11 +150,12 @@ public final class QueryMethodParser {
     }
 
     /** {@code parsePredicate("AgeBetween")} → {@code (age, BETWEEN)}. */
-    private static Predicate parsePredicate(String token, Set<String> attributeNames) {
+    private static Predicate parsePredicate(String token, Set<String> attributeNames, PathResolver pathResolver) {
         // M7-8 — recognise "<Attr>NotNull" as IS_NOT_NULL directly: otherwise the IS_NULL suffix
         // matcher would steal it and the leftover "<Attr>Not" would fail attribute lookup.
         if (token.endsWith("NotNull")) {
-            String attr = matchAttribute(token.substring(0, token.length() - "NotNull".length()), attributeNames);
+            String attr = matchAttributeOrPath(token.substring(0, token.length() - "NotNull".length()),
+                    attributeNames, pathResolver);
             if (attr != null) return new Predicate(attr, Comparator.IS_NOT_NULL, false, false);
         }
         // M7-8 — strip "IgnoreCase" suffix or mid-name infix; then "Not" infix before the comparator.
@@ -147,29 +173,36 @@ public final class QueryMethodParser {
                 boolean negated = false;
                 if (attrPart.endsWith("Not")) {
                     String maybeAttr = attrPart.substring(0, attrPart.length() - 3);
-                    String matched = matchAttribute(maybeAttr, attributeNames);
+                    String matched = matchAttributeOrPath(maybeAttr, attributeNames, pathResolver);
                     if (matched != null) {
                         negated = true;
                         attrPart = maybeAttr;
                     }
                 }
-                String attr = matchAttribute(attrPart, attributeNames);
+                String attr = matchAttributeOrPath(attrPart, attributeNames, pathResolver);
                 if (attr != null) return new Predicate(attr, s.comparator, ignoreCase, negated);
             }
         }
         // No suffix — implicit EQ
-        String attr = matchAttribute(token, attributeNames);
+        String attr = matchAttributeOrPath(token, attributeNames, pathResolver);
         return attr == null ? null : new Predicate(attr, Comparator.EQ, ignoreCase, false);
     }
 
-    /** Convert {@code "Name"} → {@code "name"} if "name" is in {@code attributeNames}. */
-    private static String matchAttribute(String camelChunk, Set<String> attributeNames) {
+    /** M8-3i — flat match first, then defer to the {@link PathResolver} for cross-relation paths. */
+    private static String matchAttributeOrPath(String camelChunk, Set<String> attributeNames,
+                                               PathResolver pathResolver) {
         if (camelChunk.isEmpty()) return null;
         String lcFirst = Character.toLowerCase(camelChunk.charAt(0)) + camelChunk.substring(1);
-        return attributeNames.contains(lcFirst) ? lcFirst : null;
+        if (attributeNames.contains(lcFirst)) return lcFirst;
+        return pathResolver.resolve(camelChunk, attributeNames);
     }
 
-    private static List<Order> parseOrders(String clause, Set<String> attributeNames) {
+    /** Convert {@code "Name"} → {@code "name"} if "name" is in {@code attributeNames}. Flat-only. */
+    private static String matchAttribute(String camelChunk, Set<String> attributeNames) {
+        return matchAttributeOrPath(camelChunk, attributeNames, FLAT_ONLY);
+    }
+
+    private static List<Order> parseOrders(String clause, Set<String> attributeNames, PathResolver pathResolver) {
         // OrderBy clause: NameAsc, AgeDesc, NameAscAgeDesc, … (or just Name with implicit Asc).
         // Eat one attribute at a time from the LEFT, greedy on the largest matching prefix,
         // then consume optional Asc/Desc.
@@ -179,7 +212,7 @@ public final class QueryMethodParser {
             String matchedAttr = null;
             int matchedEnd = -1;
             for (int end = s.length(); end > 0; end--) {
-                String attr = matchAttribute(s.substring(0, end), attributeNames);
+                String attr = matchAttributeOrPath(s.substring(0, end), attributeNames, pathResolver);
                 if (attr != null) { matchedAttr = attr; matchedEnd = end; break; }
             }
             if (matchedAttr == null) break;
@@ -193,33 +226,35 @@ public final class QueryMethodParser {
         return orders;
     }
 
-    private static boolean containsToken(String s, String token, Set<String> attributeNames) {
-        // Find a position where `token` separates two valid attribute chunks
+    private static boolean containsToken(String s, String token, Set<String> attributeNames,
+                                         PathResolver pathResolver) {
         int i = -1;
         while ((i = s.indexOf(token, i + 1)) >= 0) {
             String left  = s.substring(0, i);
             String right = s.substring(i + token.length());
-            if (chunkLooksValid(left, attributeNames) && chunkLooksValid(right, attributeNames)) return true;
+            if (chunkLooksValid(left, attributeNames, pathResolver)
+                    && chunkLooksValid(right, attributeNames, pathResolver)) return true;
         }
         return false;
     }
 
-    private static String[] splitOnToken(String s, String token, Set<String> attributeNames) {
-        // First valid split position
+    private static String[] splitOnToken(String s, String token, Set<String> attributeNames,
+                                         PathResolver pathResolver) {
         int i = -1;
         while ((i = s.indexOf(token, i + 1)) >= 0) {
             String left  = s.substring(0, i);
             String right = s.substring(i + token.length());
-            if (chunkLooksValid(left, attributeNames) && chunkLooksValid(right, attributeNames)) {
+            if (chunkLooksValid(left, attributeNames, pathResolver)
+                    && chunkLooksValid(right, attributeNames, pathResolver)) {
                 return new String[] { left, right };
             }
         }
         return new String[] { s };
     }
 
-    private static boolean chunkLooksValid(String chunk, Set<String> attributeNames) {
+    private static boolean chunkLooksValid(String chunk, Set<String> attributeNames, PathResolver pathResolver) {
         if (chunk.isEmpty()) return false;
-        return parsePredicate(chunk, attributeNames) != null;
+        return parsePredicate(chunk, attributeNames, pathResolver) != null;
     }
 
     private static boolean startsWith(String s, String prefix) {

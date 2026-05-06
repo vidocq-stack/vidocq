@@ -24,6 +24,7 @@ public final class MansartProcessor extends AbstractProcessor {
     private MansartMetamodelWriter    mansartWriter;
     private JpaMetamodelWriter        jpaWriter;
     private RepositoryWriter          repositoryWriter;
+    private EntityRegistry            entityRegistry;
     private final java.util.List<String> repoEntries = new java.util.ArrayList<>();
 
     @Override
@@ -37,8 +38,9 @@ public final class MansartProcessor extends AbstractProcessor {
         this.jpaWriter        = env.getElementUtils()
                 .getTypeElement("jakarta.persistence.metamodel.SingularAttribute") != null
                 ? new JpaMetamodelWriter(env.getFiler()) : null;
+        this.entityRegistry   = new EntityRegistry();
         this.repositoryWriter = new RepositoryWriter(env.getFiler(),
-                env.getElementUtils(), env.getTypeUtils());
+                env.getElementUtils(), env.getTypeUtils(), entityRegistry);
     }
 
     @Override
@@ -63,6 +65,9 @@ public final class MansartProcessor extends AbstractProcessor {
         for (TypeElement type : entities) {
             EntityScanner.EntityDescriptor descriptor = scanner.scan(type);
             if (descriptor == null) continue;
+            // M8-3i — register the entity facet so RepositoryWriter can resolve
+            // method-name path expressions (findByAuthorName) in the same round.
+            entityRegistry.register(type.getQualifiedName().toString(), descriptor);
             try {
                 mansartWriter.write(descriptor);
                 if (jpaWriter != null) jpaWriter.write(descriptor);
