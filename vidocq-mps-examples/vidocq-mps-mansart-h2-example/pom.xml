@@ -121,6 +121,15 @@
                             <artifactId>mansart-data-processor</artifactId>
                             <version>1.0.0-SNAPSHOT</version>
                         </path>
+                        <!-- mansart-data-cdi héberge la BuildCompatibleExtension et le @Produces
+                             RepositoryRuntime. Sans la déclarer ici, le APT classloader (isolé par
+                             Maven) ne voit pas le BCE ni le producer, et le DeploymentValidator
+                             rejette les @Inject d'un repository (ou de RepositoryRuntime). -->
+                        <path>
+                            <groupId>io.vidocq.mansart</groupId>
+                            <artifactId>mansart-data-cdi</artifactId>
+                            <version>1.0.0-SNAPSHOT</version>
+                        </path>
                     </annotationProcessorPaths>
                 </configuration>
             </plugin>
