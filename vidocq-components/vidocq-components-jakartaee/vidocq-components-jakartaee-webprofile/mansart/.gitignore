@@ -6,3 +6,5 @@ target/
 *.iml
 .DS_Store
 dependency-reduced-pom.xml
+# TCK Jakarta Transactions 2.0 — TCK déballé localement par install-tck.sh
+mansart-transactions/.tck-cache/

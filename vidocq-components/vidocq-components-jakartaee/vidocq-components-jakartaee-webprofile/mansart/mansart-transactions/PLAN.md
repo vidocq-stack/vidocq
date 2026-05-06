@@ -60,9 +60,15 @@ Journal append-only sur disque (`tx-recovery.log`). À chaque prepare, on persis
 Au démarrage, scan + replay : commit ou rollback selon l'état du journal.
 Tests TDD : `RecoveryAfterCrashIT` (kill -9 entre prepare et commit).
 
-### M6 — TCK officiel Jakarta Transactions 2.0
+### M6 — TCK officiel Jakarta Transactions 2.0 *(infra livrée)*
 
-Câble le harness, premier run smoke, fix-jusqu'à-passer. Cible : 100% PASS sur le profil "core".
+- ✅ `install-tck.sh` : auto-récupération depuis Eclipse Foundation, idempotent (verify/force/install).
+- ✅ Adaptateur Java (`MansartTckProvider`, `MansartUserTransaction`).
+- ✅ Smoke wiring 5/5 : `./run-official-tck-transactions-2.0.sh smoke` (lancé en CI).
+- ⏳ **M6b** : suite tsharness officielle pilotée par `tsant`. Le TCK Jakarta Transactions 2.0
+  Eclipse n'est pas Maven-Surefire-scannable (format Sun historique : `bin/build.xml` Ant +
+  `bin/ts.jte` 80 propriétés + sources sous `src/com/sun/ts/tests/jta/ee/`). M6b ajoutera
+  un templating `ts.jte` + wrapper Maven antrun pour reproductibilité. Voir `TCK.md`.
 
 ### M7 — CDI interceptor + TransactionScoped
 
