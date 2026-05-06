@@ -8,6 +8,7 @@ import io.vidocq.mpserver.spi.VidocqConfiguration;
 import io.vidocq.mpserver.spi.VidocqExtension;
 import io.vidocq.mpserver.spi.config.VidocqConfig;
 
+import java.lang.management.ManagementFactory;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -40,7 +41,12 @@ public final class VidocqBootstrap {
     private List<VidocqExtension> extensions = List.of();
     private List<String> additionalBeanClassNames;
     private VaubanContainer container;
-    private long startTime;
+    /**
+     * Top-chrono pris à la construction du bootstrap (= juste après l'entrée
+     * de {@code Vidocq.main()} via {@link #create()}). Comparable au {@code
+     * StopWatch} démarré par {@code SpringApplication.run()} de Spring Boot.
+     */
+    private final long startTime = System.nanoTime();
 
     private VidocqBootstrap() {}
 
@@ -55,7 +61,6 @@ public final class VidocqBootstrap {
      * Phase 1 : charge la configuration et découvre les extensions.
      */
     public VidocqBootstrap configure() {
-        this.startTime = System.nanoTime();
         LOG.log(System.Logger.Level.INFO, "Vidocq - Configuration phase");
 
         this.config = new VidocqConfigImpl();
@@ -120,7 +125,10 @@ public final class VidocqBootstrap {
         long elapsed = System.nanoTime() - startTime;
         long ms = elapsed / 1_000_000;
         long us = (elapsed / 1_000) % 1_000;
-        LOG.log(System.Logger.Level.INFO, "Vidocq - Started in " + ms + "." + String.format("%03d", us) + " ms");
+        long jvmUptime = ManagementFactory.getRuntimeMXBean().getUptime();
+        LOG.log(System.Logger.Level.INFO,
+                "Vidocq - Started in " + ms + "." + String.format("%03d", us)
+                        + " ms (process running for " + jvmUptime + " ms)");
         return this;
     }
 

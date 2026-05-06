@@ -1,6 +1,7 @@
 module io.vidocq.mpserver.core {
     requires transitive io.vidocq.mpserver.spi;
     requires io.vidocq.vauban.core;
+    requires java.management;
 
     exports io.vidocq.mpserver.core;
     exports io.vidocq.mpserver.core.config;
