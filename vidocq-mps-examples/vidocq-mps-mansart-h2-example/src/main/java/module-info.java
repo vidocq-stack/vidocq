@@ -12,12 +12,14 @@ module io.vidocq.mpserver.examples.mansart {
     requires jakarta.json.bind;
     requires jakarta.persistence;
     requires jakarta.data;
+    requires jakarta.transaction;
 
     requires io.vidocq.mpserver.core;
     requires io.vidocq.mpserver.spi;
     requires io.vidocq.mpserver.ext.rest.cassini;
     requires io.vidocq.mpserver.ext.mansart.pool;
     requires io.vidocq.mpserver.ext.mansart.data;
+    requires io.vidocq.mpserver.ext.mansart.transactions;
 
     requires io.vidocq.chappe.api;
     requires io.vidocq.vauban.core;

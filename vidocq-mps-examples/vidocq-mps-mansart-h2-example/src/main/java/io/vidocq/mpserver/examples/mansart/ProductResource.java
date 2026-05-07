@@ -2,6 +2,7 @@ package io.vidocq.mpserver.examples.mansart;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import jakarta.transaction.Transactional;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
@@ -21,8 +22,13 @@ import java.util.List;
 @Consumes(MediaType.APPLICATION_JSON)
 public class ProductResource {
 
+    private static final System.Logger LOG = System.getLogger(ProductResource.class.getName());
+
     @Inject
     ProductRepository products;
+
+    @Inject
+    OperationAudit audit;
 
     @GET
     public List<Product> list(@QueryParam("name") String namePattern) {
@@ -41,18 +47,24 @@ public class ProductResource {
     }
 
     @POST
+    @Transactional
     public Response create(Product input) {
         Product saved = products.save(new Product(input.getName(), input.getPrice()));
+        audit.record("created product id=" + saved.getId());
+        LOG.log(System.Logger.Level.INFO, () -> "TX audit: " + audit.entries());
         return Response.status(Response.Status.CREATED).entity(saved).build();
     }
 
     @DELETE
     @Path("/{id}")
+    @Transactional
     public Response delete(@PathParam("id") long id) {
         if (products.findById(id).isEmpty()) {
             return Response.status(Response.Status.NOT_FOUND).build();
         }
         products.deleteById(id);
+        audit.record("deleted product id=" + id);
+        LOG.log(System.Logger.Level.INFO, () -> "TX audit: " + audit.entries());
         return Response.noContent().build();
     }
 

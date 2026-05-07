@@ -19,6 +19,7 @@
         <module>vidocq-mps-rest-cassini-extension</module>
         <module>vidocq-mps-mansart-pool-extension</module>
         <module>vidocq-mps-mansart-data-extension</module>
+        <module>vidocq-mps-mansart-transactions-extension</module>
     </modules>
 
     <!--

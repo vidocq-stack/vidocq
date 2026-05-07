@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.1.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.1.0 http://maven.apache.org/xsd/maven-4.1.0.xsd">
+    <modelVersion>4.1.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.mpserver</groupId>
+        <artifactId>vidocq-mps-core-extensions</artifactId>
+    </parent>
+
+    <artifactId>vidocq-mps-mansart-transactions-extension</artifactId>
+    <name>Vidocq :: Core Extensions :: Mansart Transactions</name>
+    <description>Wires Jakarta Transactions 2.0 (mansart-transactions) into the Vidocq lifecycle. The mansart-transactions-cdi BuildCompatibleExtension is auto-discovered by Vauban; this extension fails fast on boot if the TransactionManager bean is missing.</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.mpserver</groupId>
+            <artifactId>vidocq-mps-spi</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-classloader-spi</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- Mansart Transactions stack — pulled transitively so the application only needs to
+             declare ONE dep (this extension) to get @Transactional + @TransactionScoped wired. -->
+        <dependency>
+            <groupId>io.vidocq.mansart</groupId>
+            <artifactId>mansart-transactions-cdi</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

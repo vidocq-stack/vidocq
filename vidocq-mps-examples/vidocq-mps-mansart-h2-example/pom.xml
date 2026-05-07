@@ -36,6 +36,11 @@
             <artifactId>vidocq-mps-mansart-data-extension</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <dependency>
+            <groupId>io.vidocq.mpserver</groupId>
+            <artifactId>vidocq-mps-mansart-transactions-extension</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <!-- User picks the dialect — H2 here. -->
         <dependency>
             <groupId>io.vidocq.mansart</groupId>
@@ -128,6 +133,15 @@
                         <path>
                             <groupId>io.vidocq.mansart</groupId>
                             <artifactId>mansart-data-cdi</artifactId>
+                            <version>1.0.0-SNAPSHOT</version>
+                        </path>
+                        <!-- mansart-transactions-cdi héberge la BuildCompatibleExtension qui
+                             enregistre @TransactionScoped + déclare @Enhancement(TransactionScoped)
+                             pour que Vauban inclue les beans utilisateurs annotés @TransactionScoped
+                             dans son index APT. Sans cette entrée, OperationAudit serait invisible. -->
+                        <path>
+                            <groupId>io.vidocq.mansart</groupId>
+                            <artifactId>mansart-transactions-cdi</artifactId>
                             <version>1.0.0-SNAPSHOT</version>
                         </path>
                     </annotationProcessorPaths>
