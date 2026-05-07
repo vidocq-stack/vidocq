@@ -99,8 +99,8 @@ final class RepositoryWriter {
                 w.println();
             }
             w.println("import io.vidocq.mansart.data.core.RepositoryRuntime;");
-            w.println("import jakarta.enterprise.context.ApplicationScoped;");
             w.println("import jakarta.inject.Inject;");
+            w.println("import jakarta.inject.Singleton;");
             w.println("import javax.annotation.processing.Generated;");
             w.println("import java.util.List;");
             w.println("import java.util.Optional;");
@@ -114,13 +114,16 @@ final class RepositoryWriter {
             w.println();
             w.println("/**");
             w.println(" * APT-generated CDI bean implementing the {@code @Repository} interface.");
-            w.println(" * <p>The class is {@code @ApplicationScoped} (normal CDI scope) so the container");
-            w.println(" * can subclass it for the client proxy, enabling CDI interceptors such as");
-            w.println(" * {@code @Transactional} inherited from the {@code @Repository} interface.");
-            w.println(" * The repository is stateless (it forwards every call to {@link RepositoryRuntime}).");
+            w.println(" * <p>The class is {@code @Singleton} (CDI pseudo-scope, no client proxy required)");
+            w.println(" * and intentionally non-{@code final} so the container can subclass it to apply");
+            w.println(" * Jakarta Interceptors — notably {@code @Transactional} inherited from the");
+            w.println(" * {@code @Repository} interface (Jakarta Data 1.0 §X). Interception on a");
+            w.println(" * pseudo-scoped bean works via direct subclassing of the implementation,");
+            w.println(" * avoiding the normal-scope client-proxy validation pass.");
+            w.println(" * <p>The repository is stateless — every call forwards to {@link RepositoryRuntime}.");
             w.println(" */");
             w.println("@Generated(\"io.vidocq.mansart.data.processor.MansartProcessor\")");
-            w.println("@ApplicationScoped");
+            w.println("@Singleton");
             if (classTransactional) {
                 emitTransactionalAnnotation(w, repo, "");
             }
