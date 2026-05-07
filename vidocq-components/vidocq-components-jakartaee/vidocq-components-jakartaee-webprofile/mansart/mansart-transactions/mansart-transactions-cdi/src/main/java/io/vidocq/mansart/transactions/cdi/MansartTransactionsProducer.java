@@ -1,59 +1,55 @@
 package io.vidocq.mansart.transactions.cdi;
 
 import io.vidocq.mansart.transactions.core.MansartTransactionManager;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Produces;
+import jakarta.inject.Singleton;
 import jakarta.transaction.TransactionManager;
 import jakarta.transaction.TransactionSynchronizationRegistry;
 import jakarta.transaction.UserTransaction;
 
 /**
- * Static holder for the three Jakarta Transactions singletons backed by a single
+ * CDI producer publishing the three Jakarta Transactions singletons backed by a single
  * {@link MansartTransactionManager} instance per JVM.
  *
  * <p>Singleton-per-JVM is the right granularity: the TM holds per-thread state via
  * {@link ThreadLocal}, so sharing one TM across all consumers is correct AND required
  * (otherwise {@code @Transactional} on bean A and bean B see two independent thread-locals).
  *
- * <p>Why a holder rather than a {@code @Produces} CDI bean: a real producer class shipped
- * inside this jar would force compile-time bean processors (Vauban) running on the user
- * module to either add it via {@code ScannedClasses.add(...)} (which generates a
- * {@code *_Factory.class} in this package within the user module's output, causing a
- * JPMS split-package) or skip the scan entirely (leaving {@code @Inject TransactionManager}
- * unsatisfied at build time). The synthetic-bean route exposed by {@link MansartTransactionsExtension}
- * delegates to the static accessors below, which keeps the runtime instances unique without
- * any class-on-disk in the user module.
- *
- * <p>The {@code tm()} accessor is also used by {@link TransactionScopedContext}, which needs
- * the TM <i>before</i> CDI injection is online to resolve the {@code @TransactionScoped} scope.
+ * <p>Discovered by {@link MansartTransactionsExtension} via
+ * {@code ScannedClasses.add(...)} at {@code @Discovery}. Vauban-processor indexes the class
+ * for validation but does not emit a {@code *_Factory.class} in the user module's output —
+ * the class lives in this jar and Vauban-runtime falls back to a reflective factory. The
+ * {@code @Produces} methods on this class are then scanned normally and the three transactions
+ * beans become available for {@code @Inject}.
  */
-public final class MansartTransactionsProducer {
+@ApplicationScoped
+public class MansartTransactionsProducer {
 
     private static final MansartTransactionManager TM = new MansartTransactionManager();
 
-    private MansartTransactionsProducer() {
-        // Utility class — instances must not exist.
-    }
-
-    /**
-     * The single {@link MansartTransactionManager} for the current JVM.
-     * <p>Used by {@link TransactionScopedContext} (resolves the scope before CDI is online),
-     * by {@link DefaultTransactionManagerCreator} (synthetic-bean producer), and by tests.
-     */
-    public static MansartTransactionManager tm() {
+    /** Same instance the producer publishes — used by {@link TransactionScopedContext} which
+     *  needs the TM <i>before</i> CDI injection is online to resolve the
+     *  {@code @TransactionScoped} scope. */
+    static MansartTransactionManager tm() {
         return TM;
     }
 
-    /** Default {@link TransactionManager} bean handed out by the synthetic-bean creator. */
-    public static TransactionManager transactionManager() {
+    @Produces
+    @Singleton
+    public TransactionManager transactionManager() {
         return TM;
     }
 
-    /** Default {@link UserTransaction} bean handed out by the synthetic-bean creator. */
-    public static UserTransaction userTransaction() {
+    @Produces
+    @Singleton
+    public UserTransaction userTransaction() {
         return new MansartUserTransactionFacade(TM);
     }
 
-    /** Default {@link TransactionSynchronizationRegistry} bean handed out by the synthetic-bean creator. */
-    public static TransactionSynchronizationRegistry transactionSynchronizationRegistry() {
+    @Produces
+    @Singleton
+    public TransactionSynchronizationRegistry transactionSynchronizationRegistry() {
         return new MansartTSR(TM);
     }
 }

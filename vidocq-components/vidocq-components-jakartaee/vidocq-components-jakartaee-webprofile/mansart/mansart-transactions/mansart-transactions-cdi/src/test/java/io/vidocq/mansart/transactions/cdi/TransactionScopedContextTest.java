@@ -26,6 +26,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 @VaubanTest
 @AddBeans({
+        MansartTransactionsProducer.class,
         MansartTransactionsExtension.class,
         TransactionScopedContextTest.TxBean.class
 })

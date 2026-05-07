@@ -1,51 +1,54 @@
 package io.vidocq.mansart.transactions.cdi;
 
-import jakarta.enterprise.inject.build.compatible.spi.BeanInfo;
 import jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension;
 import jakarta.enterprise.inject.build.compatible.spi.ClassConfig;
 import jakarta.enterprise.inject.build.compatible.spi.Discovery;
 import jakarta.enterprise.inject.build.compatible.spi.Enhancement;
 import jakarta.enterprise.inject.build.compatible.spi.MetaAnnotations;
-import jakarta.enterprise.inject.build.compatible.spi.Registration;
-import jakarta.enterprise.inject.build.compatible.spi.Synthesis;
-import jakarta.enterprise.inject.build.compatible.spi.SyntheticComponents;
-import jakarta.transaction.TransactionManager;
+import jakarta.enterprise.inject.build.compatible.spi.ScannedClasses;
 import jakarta.transaction.TransactionScoped;
-import jakarta.transaction.TransactionSynchronizationRegistry;
-import jakarta.transaction.UserTransaction;
 
 /**
  * CDI 4.1 BuildCompatibleExtension that wires the {@link TransactionScoped} scope into the bean
- * container and exposes the three Jakarta Transactions singletons ({@link TransactionManager},
- * {@link UserTransaction}, {@link TransactionSynchronizationRegistry}) as synthetic beans.
+ * container and exposes the {@link MansartTransactionsProducer} (which publishes
+ * {@link jakarta.transaction.TransactionManager} / {@link jakarta.transaction.UserTransaction} /
+ * {@link jakarta.transaction.TransactionSynchronizationRegistry}) plus the six {@code @Transactional}
+ * interceptor classes through {@code ScannedClasses.add(...)}.
+ *
+ * <p>All these classes ship in this jar — they are not in the user application's APT round
+ * (Vauban-processor only scans the module being compiled). Without explicit registration the
+ * runtime container would not see them, leaving {@code @Inject TransactionManager} unsatisfied
+ * and the {@code @Transactional} interceptor silently inactive.
+ *
+ * <p>Vauban-processor honours {@code ScannedClasses.add(...)} by indexing the classes for the
+ * deployment validator, but skips emitting {@code *_Factory.class} in the user module — those
+ * factory classes would clash JPMS with the package exported by this jar (split-package). At
+ * runtime Vauban falls back to a reflective factory for these classes, so no on-disk artefact
+ * is needed.
  *
  * <p>The {@link TransactionScopedContext} is instantiated by the container via its public no-arg
  * constructor and is then queried for every {@code @TransactionScoped} bean lookup. The context
- * resolves the {@link TransactionManager} lazily through the static accessor on
- * {@link MansartTransactionsProducer} — no injection chicken-and-egg problem.
- *
- * <p>The three transactions singletons are exposed via {@code @Synthesis} synthetic beans rather
- * than through a real {@code @Produces} class shipped with this jar: a real producer class would
- * either need to be scanned via {@code ScannedClasses.add(...)} (which makes Vauban-processor
- * generate a {@code *_Factory.class} in the producer's package within the user module's output,
- * triggering a JPMS split-package between the user module and {@code io.vidocq.mansart.transactions.cdi})
- * or be discovered through bean-archive scanning (which never reaches dependency JARs in
- * APT-driven containers like Vauban). The synthetic-bean route lives only in the bean index.
+ * resolves the {@link jakarta.transaction.TransactionManager} lazily through the static accessor
+ * on {@link MansartTransactionsProducer} — no injection chicken-and-egg problem.
  *
  * <p>Listed in {@code META-INF/services/jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension}.
- * Picked up by Vauban (and any other CDI 4.1-compliant container) on startup.
- *
- * <p>The interceptor classes themselves ({@link TransactionalInterceptor} + 5 subclasses) are
- * regular CDI beans annotated {@code @Interceptor + @Priority} — discovered automatically by the
- * standard bean archive scanning, no BCE wiring required.
  */
 public final class MansartTransactionsExtension implements BuildCompatibleExtension {
 
-    private boolean transactionManagerAlreadyDeclared;
-
     @Discovery
-    public void registerTransactionScope(MetaAnnotations meta) {
+    public void registerTransactionScopeAndScannedClasses(MetaAnnotations meta, ScannedClasses scanned) {
         meta.addContext(TransactionScoped.class, true /* normal scope */, TransactionScopedContext.class);
+
+        // Producer for TM / UT / TSR — must be in the index so its @Produces methods are visible.
+        scanned.add("io.vidocq.mansart.transactions.cdi.MansartTransactionsProducer");
+
+        // The six @Transactional interceptor classes ship in this jar.
+        scanned.add("io.vidocq.mansart.transactions.cdi.TransactionalInterceptor");
+        scanned.add("io.vidocq.mansart.transactions.cdi.TransactionalInterceptorRequiresNew");
+        scanned.add("io.vidocq.mansart.transactions.cdi.TransactionalInterceptorMandatory");
+        scanned.add("io.vidocq.mansart.transactions.cdi.TransactionalInterceptorNever");
+        scanned.add("io.vidocq.mansart.transactions.cdi.TransactionalInterceptorNotSupported");
+        scanned.add("io.vidocq.mansart.transactions.cdi.TransactionalInterceptorSupports");
     }
 
     /**
@@ -58,47 +61,5 @@ public final class MansartTransactionsExtension implements BuildCompatibleExtens
     public void registerTransactionScopedTrigger(ClassConfig clazz) {
         // No-op: the sole purpose is to advertise @TransactionScoped via the BCE
         // @Enhancement(withAnnotations=...) contract so the APT round picks up annotated classes.
-    }
-
-    /**
-     * Detects whether a {@link TransactionManager} bean is already declared in the deployment.
-     * <p>This guards against double-registration when the BCE is replayed at runtime by Vauban:
-     * the {@code @Synthesis} pass at compile time already serialised a synthetic
-     * {@code TransactionManager} into the bean index, and the runtime pass would otherwise add
-     * a second one — surfacing as
-     * {@code Ambiguous dependency: ... of type TransactionManager}. The {@code @Registration}
-     * phase runs before {@code @Synthesis} and exposes every bean already in the deployment,
-     * including those serialised from a prior compile-time pass. We only need to track
-     * {@link TransactionManager} — if it has already been added, we skip all three synthetic
-     * beans (they are added together).
-     */
-    @Registration(types = TransactionManager.class)
-    public void detectExistingTransactionManager(BeanInfo bean) {
-        transactionManagerAlreadyDeclared = true;
-    }
-
-    /**
-     * Registers default {@link TransactionManager} / {@link UserTransaction} /
-     * {@link TransactionSynchronizationRegistry} synthetic beans, all backed by the same
-     * {@link MansartTransactionsProducer#tm()} singleton. Skipped when the BCE is replayed on a
-     * deployment whose compile-time pass already declared them (cf. {@link #detectExistingTransactionManager}).
-     */
-    @Synthesis
-    public void registerTransactionsBeans(SyntheticComponents components) {
-        if (transactionManagerAlreadyDeclared) {
-            return;
-        }
-        components.<TransactionManager>addBean(TransactionManager.class)
-                .type(TransactionManager.class)
-                .scope(jakarta.inject.Singleton.class)
-                .createWith(DefaultTransactionManagerCreator.class);
-        components.<UserTransaction>addBean(UserTransaction.class)
-                .type(UserTransaction.class)
-                .scope(jakarta.inject.Singleton.class)
-                .createWith(DefaultUserTransactionCreator.class);
-        components.<TransactionSynchronizationRegistry>addBean(TransactionSynchronizationRegistry.class)
-                .type(TransactionSynchronizationRegistry.class)
-                .scope(jakarta.inject.Singleton.class)
-                .createWith(DefaultTransactionSynchronizationRegistryCreator.class);
     }
 }

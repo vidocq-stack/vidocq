@@ -1,6 +1,7 @@
 package io.vidocq.mansart.data.tck;
 
 import io.vidocq.mansart.data.cdi.MansartDataExtension;
+import io.vidocq.mansart.data.cdi.MansartRuntimeProducer;
 import io.vidocq.mansart.data.core.RepositoryRuntime;
 import io.vidocq.mansart.data.tests.Author;
 import io.vidocq.mansart.data.tests.AuthorRepository;
@@ -34,6 +35,7 @@ public class MansartCdiBootstrapSmokeTest {
     public void boot() {
         container = VaubanContainer.builder()
                 .addBeanClass(MansartDataExtension.class)   // Mansart BCE — registered explicitly
+                .addBeanClass(MansartRuntimeProducer.class) // CDI producer for RepositoryRuntime
                 .addBeanClass(H2DataSourceProducer.class)   // user-supplied DataSource bean
                 .build();
         authors    = container.select(AuthorRepository.class);
