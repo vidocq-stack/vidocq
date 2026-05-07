@@ -1,7 +1,6 @@
 package io.vidocq.mansart.transactions.it;
 
 import io.vidocq.mansart.transactions.cdi.MansartTransactionsExtension;
-import io.vidocq.mansart.transactions.cdi.MansartTransactionsProducer;
 import io.vidocq.mansart.transactions.cdi.TransactionalInterceptor;
 import io.vidocq.mansart.transactions.cdi.TransactionalInterceptorMandatory;
 import io.vidocq.mansart.transactions.cdi.TransactionalInterceptorNever;
@@ -45,7 +44,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 @VaubanTest
 @AddBeans({
-        MansartTransactionsProducer.class,
         MansartTransactionsExtension.class,
         TransactionalInterceptor.class,
         TransactionalInterceptorRequiresNew.class,
