@@ -8,6 +8,11 @@
 ## Prérequis
 
 - **Java 25** + **Maven 4.0.0-rc-5** (`.sdkmanrc` fourni — utiliser `sdk env`)
+- **JUnit 6 minimum** (`org.junit:junit-bom` ≥ 6.0.3) — la version est pinnée dans
+  `pom.xml` parent via `<junit.version>` et dans `ravel-tck/pom.xml` (POM standalone).
+  Pas de retour à JUnit 5 : tout nouveau test cible `org.junit.jupiter.api.*` /
+  JUnit Platform 2.x. La JVM cible (Java 25) couvre largement le minimum
+  requis par JUnit 6 (Java 17+).
 - Le TCK MicroProfile Config 3.1 est un artefact **public Maven Central** :
   `org.eclipse.microprofile.config:microprofile-config-tck:3.1.1`
   (contrairement aux TCK Jakarta, pas besoin de l'installer manuellement).
@@ -99,6 +104,9 @@ ravel-tck          ← Runner TCK officiel MicroProfile Config 3.1 (HORS reactor
 - **Records** pour les objets immuables (`ConfigValue`, `ConfigEntry`) ;
   **sealed interfaces** pour les hiérarchies fermées (types d'expressions, résultats de lookup).
 - **Pattern matching** exhaustif sur switch — pas de chaîne `if/else if`.
+- **JUnit 6** uniquement pour les tests (BOM `org.junit:junit-bom` 6.x). Ne pas
+  réintroduire JUnit 5 ; ne pas mixer Vintage. Bumper la propriété
+  `<junit.version>` dans le parent `pom.xml` pour toute mise à jour.
 
 ## Roadmap
 

@@ -22,6 +22,7 @@
 - Pas de `synchronized`, pas de `ThreadLocal`; pour les contextes propagés (ex. cycles d'expressions en M3), utiliser `ScopedValue`.
 - Pas de `setAccessible(true)` — les implicit converters ne ciblent que des méthodes/ctor `public`.
 - La lecture de `@Priority` est faite par nom qualifié (réflexion sur `Annotation.annotationType().getName()`), jamais par `import jakarta.annotation.Priority` côté production.
+- **JUnit 6 minimum** (`org.junit:junit-bom` ≥ 6.0.3) pour tous les tests. Pas de retour à JUnit 5 : la version est pinnée dans `pom.xml` parent (`<junit.version>`) et dans le POM standalone `ravel-tck/pom.xml`. Les tests ciblent `org.junit.jupiter.api.*`, JUnit Platform 2.x.
 
 ## Workflows utiles
 ```bash
