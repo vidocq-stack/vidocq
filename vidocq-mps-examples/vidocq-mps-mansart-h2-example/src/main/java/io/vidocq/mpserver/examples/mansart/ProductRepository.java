@@ -2,6 +2,7 @@ package io.vidocq.mpserver.examples.mansart;
 
 import jakarta.data.repository.BasicRepository;
 import jakarta.data.repository.Repository;
+import jakarta.transaction.Transactional;
 
 import java.util.List;
 
@@ -10,6 +11,7 @@ import java.util.List;
  * and the {@code mansart-data-cdi} BCE wires it into Vauban as a singleton bean. The
  * {@link ProductResource} simply {@code @Inject}s this interface.
  */
+@Transactional
 @Repository
 public interface ProductRepository extends BasicRepository<Product, Long> {
 
