@@ -1,8 +1,11 @@
 package io.vidocq.mansart.data.cdi;
 
+import io.vidocq.mansart.data.core.RepositoryRuntime;
+import jakarta.enterprise.inject.build.compatible.spi.BeanInfo;
 import jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension;
 import jakarta.enterprise.inject.build.compatible.spi.Discovery;
 import jakarta.enterprise.inject.build.compatible.spi.Enhancement;
+import jakarta.enterprise.inject.build.compatible.spi.Registration;
 import jakarta.enterprise.inject.build.compatible.spi.ScannedClasses;
 import jakarta.enterprise.inject.build.compatible.spi.Synthesis;
 import jakarta.enterprise.inject.build.compatible.spi.SyntheticComponents;
@@ -36,33 +39,25 @@ import java.util.Set;
  *       deployments take, where pre-compiled jakarta.data jars do not contain APT artifacts.</li>
  * </ol>
  *
- * <p>Also makes sure {@link MansartRuntimeProducer} is scanned so the shared
- * {@link io.vidocq.mansart.data.core.RepositoryRuntime} is available for injection.
+ * <p>Also exposes the default {@link io.vidocq.mansart.data.core.RepositoryRuntime} as a synthetic
+ * bean (created via {@link DefaultRepositoryRuntimeCreator}) so applications get repositories
+ * injectable out of the box, without having to declare any producer themselves.
  */
 public final class MansartDataExtension implements BuildCompatibleExtension {
 
     private final List<RepoEntry> entries = new ArrayList<>();
     private final Set<String> runtimeRepoFqns = new LinkedHashSet<>();
+    private boolean repositoryRuntimeAlreadyDeclared;
 
     record RepoEntry(String itfFqn, String implFqn) {}
 
     @Discovery
     public void readRepositoriesIndex(ScannedClasses scanned) {
-        // Force MansartRuntimeProducer into the scan. The producer ships in mansart-data-cdi.jar
-        // (this BCE's own jar), which is NOT the user's bean archive — containers that scan
-        // bean archives natively (Weld, OpenWebBeans) will discover the @Produces anyway, and
-        // Vauban-processor in APT only scans the module being compiled, so without this
-        // explicit registration `@Inject RepositoryRuntime` is reported as unsatisfied at build
-        // time.
-        //
-        // An earlier guard tried to skip scanned.add() when Class.forName() succeeded on the
-        // producer, but that check was inverted in APT contexts: the producer class IS loadable
-        // from the APT classloader (mansart-data-cdi.jar is on the annotation-processor path),
-        // yet Vauban refuses to index it without the explicit add. The check therefore made
-        // scanned.add() a no-op in IntelliJ APT mode while it correctly fired in Maven (whose
-        // TCCL doesn't include the BCE's own jar). The unconditional call below matches the
-        // CDI 4.1 contract — ScannedClasses.add() is idempotent.
-        scanned.add(MansartRuntimeProducer.class.getName());
+        // RepositoryRuntime is exposed via a synthetic bean during @Synthesis (see
+        // registerRepositories below) — the previous design that scanned a real
+        // MansartRuntimeProducer class via ScannedClasses.add(...) caused JPMS split-package
+        // errors because Vauban-processor would emit a generated MansartRuntimeProducer_Factory
+        // inside the user module's output, in a package already exported by mansart-data-cdi.
 
         ClassLoader cl = currentClassLoader();
         Enumeration<URL> resources;
@@ -111,9 +106,41 @@ public final class MansartDataExtension implements BuildCompatibleExtension {
         runtimeRepoFqns.add(fqn);
     }
 
+    /**
+     * Detects whether a {@link RepositoryRuntime} bean is already declared in the deployment.
+     * <p>This guards against double-registration when the BCE is replayed at runtime by
+     * Vauban: the {@code @Synthesis} pass at compile time already serialised a synthetic
+     * {@code RepositoryRuntime} into the bean index, and the runtime pass would otherwise
+     * add a second one — surfacing as
+     * {@code Ambiguous dependency: parameter 0 of *RepositoryImpl() of type RepositoryRuntime}.
+     * The {@code @Registration} phase runs before {@code @Synthesis} and exposes every bean
+     * present in the deployment, including those serialised from a prior compile-time pass.
+     */
+    @Registration(types = RepositoryRuntime.class)
+    public void detectExistingRepositoryRuntime(BeanInfo bean) {
+        repositoryRuntimeAlreadyDeclared = true;
+    }
+
     @Synthesis
     public void registerRepositories(SyntheticComponents components) {
         ClassLoader cl = currentClassLoader();
+
+        // Default RepositoryRuntime bean — exposed via a synthetic bean rather than via a real
+        // @Produces class in this jar. A real producer would need to be scanned through
+        // ScannedClasses.add() in @Discovery, which forces Vauban-processor to emit a generated
+        // *_Factory.class in the producer's package within the user module's output, creating a
+        // JPMS split-package between the user module and io.vidocq.mansart.data.cdi. The
+        // synthetic bean lives only in the container's bean index, never on disk.
+        // Users override this default by declaring their own @Produces RepositoryRuntime method.
+        // Skip when the bean is already declared (the @Registration phase saw it) — happens at
+        // runtime when Vauban replays the BCE on a deployment whose compile-time @Synthesis pass
+        // already serialised the same synthetic bean.
+        if (!repositoryRuntimeAlreadyDeclared) {
+            components.<RepositoryRuntime>addBean(RepositoryRuntime.class)
+                    .type(RepositoryRuntime.class)
+                    .scope(jakarta.inject.Singleton.class)
+                    .createWith(DefaultRepositoryRuntimeCreator.class);
+        }
 
         // Compile-time path — APT-generated *RepositoryImpl from mansart-data-processor
         for (RepoEntry e : entries) {

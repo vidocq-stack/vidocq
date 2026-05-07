@@ -1,7 +1,6 @@
 package io.vidocq.mansart.data.tck;
 
 import io.vidocq.mansart.data.cdi.MansartDataExtension;
-import io.vidocq.mansart.data.cdi.MansartRuntimeProducer;
 import io.vidocq.mansart.data.core.RepositoryRuntime;
 import io.vidocq.mansart.data.tests.Author;
 import io.vidocq.mansart.data.tests.AuthorRepository;
@@ -23,7 +22,7 @@ import static org.testng.Assert.assertTrue;
  * M6.1 smoke — bootstraps Vauban with the Mansart CDI BCE on the classpath, then verifies that
  * an {@code AuthorRepository} (declared in {@code mansart-data-tests}) is injectable through the
  * container and that CRUD round-trips through {@link RepositoryRuntime} (which is itself a
- * synthetic bean produced by {@code MansartRuntimeProducer}).
+ * synthetic bean wired by {@code MansartDataExtension} via {@code DefaultRepositoryRuntimeCreator}).
  */
 public class MansartCdiBootstrapSmokeTest {
 
@@ -35,7 +34,6 @@ public class MansartCdiBootstrapSmokeTest {
     public void boot() {
         container = VaubanContainer.builder()
                 .addBeanClass(MansartDataExtension.class)   // Mansart BCE — registered explicitly
-                .addBeanClass(MansartRuntimeProducer.class) // CDI producer for RepositoryRuntime
                 .addBeanClass(H2DataSourceProducer.class)   // user-supplied DataSource bean
                 .build();
         authors    = container.select(AuthorRepository.class);
@@ -61,7 +59,7 @@ public class MansartCdiBootstrapSmokeTest {
     @Test
     public void runtimeIsResolved() {
         RepositoryRuntime rt = container.select(RepositoryRuntime.class);
-        assertNotNull(rt, "RepositoryRuntime should be a CDI bean produced by MansartRuntimeProducer");
+        assertNotNull(rt, "RepositoryRuntime should be a synthetic bean wired by MansartDataExtension");
         assertEquals(rt.dialect().name(), "H2");
     }
 

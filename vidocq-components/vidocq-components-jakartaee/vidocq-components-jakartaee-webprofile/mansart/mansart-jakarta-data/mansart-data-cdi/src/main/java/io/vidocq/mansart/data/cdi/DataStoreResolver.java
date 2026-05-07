@@ -25,7 +25,8 @@ import java.util.concurrent.ConcurrentMap;
  * <p>Resolution order, highest priority first:
  * <ol>
  *   <li>Empty value ({@link Repository#DEFAULT_DATA_STORE}) — fall back to the {@link RepositoryRuntime}
- *       {@code @Default} bean produced by {@link MansartRuntimeProducer}.</li>
+ *       {@code @Default} synthetic bean wired by {@link MansartDataExtension} via
+ *       {@link DefaultRepositoryRuntimeCreator}.</li>
  *   <li>Value starts with {@code "java:"} — JNDI lookup, must yield a {@link DataSource}. Spec-mandated
  *       behaviour for EE deployments.</li>
  *   <li>Otherwise — CDI lookup of {@code DataSource @Named(value)}.</li>
