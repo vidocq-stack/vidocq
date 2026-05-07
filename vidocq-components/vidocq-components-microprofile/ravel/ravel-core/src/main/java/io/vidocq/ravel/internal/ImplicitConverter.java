@@ -25,7 +25,7 @@ import java.lang.reflect.Modifier;
  * </ol>
  *
  * <p>Tout est <b>strictement public</b> ; pas de {@code setAccessible(true)} —
- * conforme aux contraintes de Ravel (cf. ROADMAP §M2 / CLAUDE.md).</p>
+ * conforme aux contraintes d'architecture du projet.</p>
  */
 final class ImplicitConverter {
 

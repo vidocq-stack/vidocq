@@ -17,7 +17,7 @@ import java.util.concurrent.ConcurrentMap;
  *
  * <p>Découvert via {@link java.util.ServiceLoader} grâce au descripteur
  * {@code META-INF/services/org.eclipse.microprofile.config.spi.ConfigProviderResolver}
- * et au {@code provides ... with} dans {@code module-info.java} (étape (i) du plan M1).</p>
+ * et au {@code provides ... with} dans {@code module-info.java}.</p>
  *
  * <p><b>Thread-safety</b> : registre {@link ConcurrentHashMap}, build atomique via
  * {@code computeIfAbsent}. Aucun {@code synchronized}, aucun {@code ThreadLocal} —

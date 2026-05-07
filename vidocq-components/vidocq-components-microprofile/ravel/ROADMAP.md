@@ -104,24 +104,29 @@ dans le manifest du JAR API — la 3.1 originale (publiée 2023) n'avait ni desc
 
 ---
 
-### M3 — Config Profiles + Property Expressions
+### M3 — Config Profiles + Property Expressions ✅
 
 **Scope spec :** §7.5 (Configuration profile), §7.2 (Configuration property expression).
 
-| Tâche | Notes |
-|---|---|
-| Lecture `mp.config.profile` au démarrage du `Config` | Une seule valeur ; mode "actif" stocké dans `RavelConfig` immutable |
-| Préfixe `%<profile>.` sur toute source | Wrapping `ProfiledConfigSource` qui réécrit les clés et hérite ordinal + 1 |
-| Activation des profils en cascade | `mp.config.profile=dev` → `%dev.app.url` masque `app.url` (ordinal +1) |
-| Expression `${key}` (§7.2) | Resolver récursif sur le raw value lu depuis le `ConfigSource` |
-| Expression `${key:default}` | Default value si la clé n'est pas trouvée |
-| Imbrication `${${env}.url}` | Resolver récursif, profondeur testée |
-| Échappement `\$` | Pas d'interpolation |
-| Détection de cycle | Via `ScopedValue<Set<String>>` (pas `ThreadLocal`), `IllegalArgumentException` levée |
-| Désactivation possible via `mp.config.property.expressions.enabled=false` | Section §7.2 spec |
-| Tests : profil absent / présent / multiple, cycle direct, cycle indirect, échappement | Couverture exhaustive |
+| Tâche | Notes | État |
+|---|---|---|
+| Lecture `mp.config.profile` au démarrage du `Config` | Valeur résolue avant build final ; profil appliqué via sources enveloppées | ✅ |
+| Préfixe `%<profile>.` sur toute source | Wrapping `ProfiledConfigSource` qui réécrit les clés et hérite ordinal + 1 | ✅ |
+| Activation des profils en cascade | `mp.config.profile=dev` → `%dev.app.url` masque `app.url` (ordinal +1) | ✅ |
+| Expression `${key}` (§7.2) | Resolver récursif sur le raw value lu depuis le `ConfigSource` | ✅ |
+| Expression `${key:default}` | Default value si la clé n'est pas trouvée | ✅ |
+| Imbrication `${${env}.url}` | Resolver récursif, profondeur testée | ✅ |
+| Échappement `\$` | Pas d'interpolation | ✅ |
+| Détection de cycle | Via `ScopedValue<Set<String>>` (pas `ThreadLocal`), `IllegalArgumentException` levée | ✅ |
+| Désactivation possible via `mp.config.property.expressions.enabled=false` | Section §7.2 spec | ✅ |
+| Tests : profil absent / présent / multiple, cycle direct, cycle indirect, échappement | Couverture exhaustive sur tests dédiés + intégration | ✅ |
 
-**Livrable :** `config.getValue("%dev.database.url", String.class)` activé via `mp.config.profile=dev`. Expressions résolues, cycles détectés.
+**Décisions M3 documentées** :
+- La résolution des expressions se fait sur la valeur brute avant conversion typée.
+- `ConfigValue` conserve `rawValue` (chaîne d'origine) et expose `value` résolue.
+- Le profil actif est sélectionné via la cascade d'ordinals au moment du build, puis appliqué à toutes les sources via wrapping.
+
+**Livrable :** `config.getValue("database.url", String.class)` bascule vers `%dev.database.url` avec `mp.config.profile=dev` ; expressions `${key}` / `${key:default}` / `${${env}.url}` résolues ; cycles détectés. **155 tests verts** sur `ravel-core`.
 
 ---
 

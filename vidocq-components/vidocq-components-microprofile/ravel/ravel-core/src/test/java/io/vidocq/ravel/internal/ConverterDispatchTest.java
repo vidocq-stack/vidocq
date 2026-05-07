@@ -19,10 +19,10 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
- * Tests M2 d'intégration : converter dispatch via {@link RavelConfig}, priorités,
+ * Tests d'intégration : converter dispatch via {@link RavelConfig}, priorités,
  * arrays, implicit converters découverts dynamiquement.
  */
-@DisplayName("M2 — converters dispatch (built-in, priorité, arrays, implicit)")
+@DisplayName("Converters dispatch (built-in, priorité, arrays, implicit)")
 class ConverterDispatchTest {
 
     // ---------- built-in via getValue ----------

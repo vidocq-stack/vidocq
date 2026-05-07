@@ -19,10 +19,10 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Test d'intégration M1 — vérifie que les 3 sources canoniques cascadent correctement
+ * Test d'intégration — vérifie que les 3 sources canoniques cascadent correctement
  * avec un {@code Config} obtenu via {@link ConfigProvider#getConfig()}.
  */
-@DisplayName("Ravel — intégration end-to-end M1 (3 sources canoniques)")
+@DisplayName("Ravel — intégration end-to-end (3 sources canoniques)")
 class RavelConfigIntegrationTest {
 
     private static final String IT_KEY = "ravel.it.k";

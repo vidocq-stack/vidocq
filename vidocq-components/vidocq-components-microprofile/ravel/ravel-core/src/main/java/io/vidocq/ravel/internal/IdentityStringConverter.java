@@ -10,9 +10,8 @@ import java.io.Serial;
 /**
  * Converter trivial pour {@code String} — retourne la valeur telle quelle.
  *
- * <p>Seul converter supporté en M1 (cf. ROADMAP.md) ; M2 ajoutera les built-in
- * pour les primitives et les types {@code java.time}/{@code java.net}, ainsi
- * que les implicit converters via {@code valueOf}/{@code parse}/{@code (String)}.</p>
+ * <p>Converter de base pour {@code String}. Les autres types sont couverts par
+ * les converters built-in et implicites du noyau config.</p>
  */
 final class IdentityStringConverter implements Converter<String> {
 

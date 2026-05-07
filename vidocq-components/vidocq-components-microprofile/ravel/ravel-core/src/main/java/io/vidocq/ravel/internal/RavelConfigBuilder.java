@@ -22,7 +22,7 @@ import java.util.ServiceLoader;
 /**
  * Implémentation MP Config 3.1 §3 — builder fluent pour produire un {@link RavelConfig}.
  *
- * <p>Comportement par défaut depuis M2 : tous les converters built-in (§5.1, §5.2 types
+ * <p>Comportement par défaut : tous les converters built-in (§5.1, §5.2 types
  * automatiques scalaires) sont pré-enregistrés à la <b>priorité 1</b> ; tout converter
  * applicatif (priorité par défaut 100, §5.3) les écrase automatiquement.</p>
  *
@@ -115,7 +115,30 @@ public final class RavelConfigBuilder implements ConfigBuilder {
         for (var e : converters.entrySet()) {
             resolved.put(e.getKey(), e.getValue().converter());
         }
-        return new RavelConfig(List.copyOf(sources), Map.copyOf(resolved), resolveClassLoader());
+
+        List<ConfigSource> effectiveSources = List.copyOf(sources);
+        String profile = trimToNull(lookupRaw(effectiveSources, "mp.config.profile"));
+        if (profile != null) {
+            // §7.5 — wrapper profiled en ordinal +1 pour masquer la clé non profilée.
+            var profiled = new ArrayList<ConfigSource>(effectiveSources.size() * 2);
+            for (ConfigSource s : effectiveSources) {
+                profiled.add(new ProfiledConfigSource(s, profile));
+                profiled.add(s);
+            }
+            effectiveSources = List.copyOf(profiled);
+        }
+
+        boolean expressionsEnabled = true;
+        String expressionFlag = trimToNull(lookupRaw(effectiveSources, "mp.config.property.expressions.enabled"));
+        if (expressionFlag != null && expressionFlag.equalsIgnoreCase("false")) {
+            expressionsEnabled = false;
+        }
+
+        return new RavelConfig(
+                List.copyOf(effectiveSources),
+                Map.copyOf(resolved),
+                resolveClassLoader(),
+                expressionsEnabled);
     }
 
     // -------- internals --------
@@ -158,5 +181,25 @@ public final class RavelConfigBuilder implements ConfigBuilder {
             return inferConverterTargetType(superClass);
         }
         return null;
+    }
+
+    private static String lookupRaw(List<ConfigSource> sourceList, String key) {
+        var sorted = new ArrayList<>(sourceList);
+        sorted.sort(java.util.Comparator.comparingInt(ConfigSource::getOrdinal).reversed());
+        for (ConfigSource s : sorted) {
+            String value = s.getValue(key);
+            if (value != null) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    private static String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 }

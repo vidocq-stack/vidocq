@@ -13,9 +13,9 @@ package io.vidocq.ravel.spi;
  * Métadonnées statiques de l'implémentation Ravel — utilisé par {@code ConfigSource}
  * pour le tracing et par les benchmarks.
  *
- * <p>Le contenu de la SPI sera étoffé au fil des phases M1..M6 (cf. ROADMAP.md) :
+ * <p>Le contenu de la SPI sera étoffé au fil des versions :
  * sources de configuration, converters tiers, hooks d'observabilité. Cette classe
- * est volontairement minimaliste pour M0.</p>
+ * reste volontairement minimaliste à ce stade.</p>
  */
 public final class Ravel {
 

@@ -54,9 +54,8 @@ class RavelConfigValueTest {
 
     @Test
     void rawValue_can_differ_from_resolved_value() {
-        // En M3 le rawValue contiendra les expressions ${...} non résolues,
-        // tandis que value contiendra la valeur après expansion. M1 valide
-        // simplement que les deux champs sont distincts.
+        // rawValue peut contenir la valeur d'origine (ex. expression non résolue),
+        // tandis que value contient la valeur finale exposée par Config.
         var v = new RavelConfigValue("greeting", "Hello World", "Hello ${name}", "MPProps", 100);
 
         assertEquals("Hello World", v.getValue());
