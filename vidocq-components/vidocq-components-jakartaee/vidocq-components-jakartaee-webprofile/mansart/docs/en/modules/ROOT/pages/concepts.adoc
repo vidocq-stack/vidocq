@@ -1,0 +1,61 @@
+= Concepts
+:description: Repositories, dialects, JDBC pool, transactions, metamodel.
+
+[CAUTION]
+Mansart is in design. This page describes the target API and architecture. Sections marked `[TODO]` are not yet delivered.
+
+== Jakarta Data 1.0 repositories
+
+Three standard variants:
+
+* `BasicRepository<T, K>` — minimal CRUD (`save`, `delete`, `findById`).
+* `CrudRepository<T, K>` — extends `BasicRepository` with batch and named queries.
+* `DataRepository<T, K>` — "free-form" repository to compose.
+
+Plus **query methods**:
+
+* derived from the name (`findByAuthor`, `countByYearGreaterThan`)
+* explicit via `@Query("SELECT b FROM Book b WHERE b.author = ?1")`
+
+== JDBC dialects
+
+`mansart-jakarta-data` speaks SQL through a **dialect** SPI:
+
+* `MansartDialect` — single interface: JDQL → SQL translation, JDBC types, pagination syntax, upsert syntax.
+* `H2Dialect` — reference for in-memory tests.
+* `PostgresDialect` — production target.
+
+[TODO]
+====
+List per-dialect functions (LIMIT/OFFSET vs FETCH FIRST, RETURNING, ON CONFLICT, etc.). See `mansart/PLAN.md`.
+====
+
+== JDBC pool
+
+`mansart-pool` exposes a minimal pool `DataSource`: virtual threads, no JNDI, configurable via MicroProfile Config.
+
+== Transactions
+
+`mansart-transactions` exposes:
+
+* Jakarta Transactions `UserTransaction`;
+* `@Transactional` (CDI interceptor provided by the module);
+* `REQUIRED`, `REQUIRES_NEW`, `MANDATORY`, `SUPPORTS` propagation.
+
+Vidocq integration goes through the `vidocq-mps-mansart-transactions-extension` extension (already shipped — see the `vidocq` repo).
+
+== Metamodel (JPA 3.2, planned)
+
+[TODO]
+====
+`mansart-persistence` will generate at compile time, via APT:
+
+* the standard static metamodel (`Book_.title`, `Book_.author`)
+* `EntityFactory<T>` that materializes a JDBC `ResultSet` into an entity, without reflection.
+====
+
+== Design choices
+
+* **No implicit auto-flush** — the user calls `flush()` explicitly or ends the transaction.
+* **No `EntityManager` proxy** — the API is consumed directly.
+* **No runtime entity scan** — the APT registers entities at compile time.

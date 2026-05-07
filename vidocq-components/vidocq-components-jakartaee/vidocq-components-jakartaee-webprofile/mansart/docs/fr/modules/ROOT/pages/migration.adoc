@@ -1,0 +1,66 @@
+= Migration
+:description: Depuis Hibernate, EclipseLink, Spring Data ou OpenJPA.
+
+[CAUTION]
+Mansart est en conception. La migration ne sera réaliste qu'une fois Jakarta Data 1.0 et Jakarta Persistence 3.2 stabilisées dans Mansart. Cette page documente les correspondances cibles.
+
+== Depuis Hibernate (ORM 7+)
+
+[cols="1,1,2"]
+|===
+| Hibernate | Mansart | Note
+
+| `SessionFactory` / `EntityManagerFactory`
+| `MansartManagerFactory` *(en plan)*
+| API standard JPA 3.2 dès que livré
+
+| HQL
+| JPQL standard JPA 3.2
+| Mansart cible la spec, pas les extensions HQL propriétaires
+
+| `@Entity`, `@Id`, `@GeneratedValue`
+| Identiques
+| Annotations standard JPA 3.2
+
+| Hibernate Reactive
+| `mansart-jakarta-data` + virtual threads
+| JDBC + Loom, pas de Vert.x
+
+| Native query / Criteria
+| `[TODO]` planifié
+| `mansart-persistence`
+|===
+
+== Depuis Spring Data JPA
+
+[cols="1,1,2"]
+|===
+| Spring Data | Mansart Jakarta Data | Note
+
+| `org.springframework.data.repository.CrudRepository`
+| `jakarta.data.repository.CrudRepository`
+| API standardisée par Jakarta Data 1.0 — l'inspiration vient de Spring Data, signatures très proches
+
+| `@Repository`
+| `@Repository` (Jakarta Data)
+| Sémantique légèrement différente (Jakarta Data scope = bean repository, pas exception translator)
+
+| Méthodes nommées (`findByXxx`)
+| Identiques
+| Convention standard Jakarta Data
+|===
+
+[TIP]
+====
+Migrer depuis Spring Data est probablement le chemin le plus court — la spec Jakarta Data a explicitement repris les conventions Spring Data.
+====
+
+== Depuis EclipseLink, OpenJPA
+
+[TODO] : à documenter dès qu'un cas réel se présente.
+
+== Pièges connus
+
+* **Pas de proxy d'entité** — Mansart matérialise les entités directement. Le lazy loading reste à concevoir (probable approche : `Optional<Reference<T>>` explicite plutôt que magique).
+* **Pas d'auto-flush** — `EntityManager#flush()` reste explicite.
+* **Schema generation** — `[TODO]` à documenter quand livré.

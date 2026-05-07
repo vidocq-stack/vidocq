@@ -1,0 +1,106 @@
+= Getting started
+:description: First Jakarta Data 1.0 `@Repository` served by Mansart on H2.
+
+[CAUTION]
+====
+Mansart is in design. The API documented below is **the target**; some parts (notably `mansart-persistence`/JPA) are still on the drawing board. See `PLAN.md` at the repo root for milestones.
+====
+
+== Prerequisites
+
+* **Java 25**, **Maven 4.0.0-rc-5** — `.sdkmanrc` at the repo root.
+
+== Maven coordinates
+
+[source,xml]
+----
+<dependencies>
+    <dependency>
+        <groupId>jakarta.data</groupId>
+        <artifactId>jakarta.data-api</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>io.vidocq.mansart</groupId>
+        <artifactId>mansart-jakarta-data</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </dependency>
+    <dependency>
+        <groupId>io.vidocq.mansart</groupId>
+        <artifactId>mansart-pool</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+        <scope>runtime</scope>
+    </dependency>
+    <!-- JDBC driver -->
+    <dependency>
+        <groupId>com.h2database</groupId>
+        <artifactId>h2</artifactId>
+        <scope>runtime</scope>
+    </dependency>
+</dependencies>
+----
+
+== Hello world
+
+A simple entity:
+
+[source,java]
+----
+package io.example;
+
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+
+@Entity
+public class Book {
+    @Id long id;
+    String title;
+    String author;
+}
+----
+
+A Jakarta Data repository:
+
+[source,java]
+----
+import jakarta.data.repository.CrudRepository;
+import jakarta.data.repository.Repository;
+import java.util.List;
+
+@Repository
+public interface BookRepository extends CrudRepository<Book, Long> {
+    List<Book> findByAuthor(String author);
+}
+----
+
+Usage:
+
+[source,java]
+----
+@Inject BookRepository books;
+
+void run() {
+    books.save(new Book(1L, "Le Vicomte de Bragelonne", "Dumas"));
+    var dumasBooks = books.findByAuthor("Dumas");
+    System.out.println(dumasBooks);
+}
+----
+
+== Build and run
+
+[source,bash]
+----
+sdk env
+./mvnw -ntp install -DskipTests
+----
+
+[NOTE]
+====
+An example integrated with the Vidocq runtime already exists: `vidocq-mps-mansart-h2-example` (see the `vidocq` repo). It shows the chain Vauban (CDI) → Mansart (data) → H2 with `@Transactional`.
+====
+
+[TODO]
+====
+- Document `@Query("SELECT b FROM Book b WHERE …")` once the JDQL grammar is stable.
+- Document `Page<T>` and `PageRequest` (Jakarta Data 1.0 standard).
+- Document the `mansart-persistence` module (JPA 3.2) once delivered.
+====

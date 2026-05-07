@@ -1,0 +1,27 @@
+= Mansart
+:description: Jakarta Data 1.0 + Jakarta Persistence 3.2, dialectes JDBC, virtual threads.
+
+[.lead]
+Mansart est l'implémentation Jakarta Data 1.0 et Jakarta Persistence 3.2 de l'écosystème Vidocq — repositories, pagination, query methods, dialectes JDBC pluggables, sans ORM lourd. Construire la couche persistance comme on bâtit Versailles : modules durables, soigneusement assemblés.
+
+[CAUTION]
+====
+Mansart est en conception. La SPI Jakarta Data 1.0 (`mansart-jakarta-data`) est en cours de stabilisation ; `mansart-persistence` (JPA 3.2) est encore en plan (voir `mansart/PLAN.md` à la racine du repo). Cette documentation décrit l'API cible — les `[TODO]` signalent ce qui n'est pas encore livré.
+====
+
+== Pourquoi ?
+
+Jules Hardouin-Mansart (1646-1708), Premier architecte du Roi, auteur de la galerie des Glaces de Versailles, du dôme des Invalides, de la place Vendôme. Il dirigeait l'Académie royale d'architecture, codifiait les ordres, négociait avec les maçons et les sculpteurs. L'œuvre tient debout depuis trois siècles parce que chaque pièce a été conçue pour s'imbriquer dans la suivante, et parce qu'on ne confondait pas le décor avec la structure.
+
+Mansart, la couche persistance, applique le même découpage. `mansart-jakarta-data` est l'API publique (repositories, query methods, pagination). `mansart-persistence` implémente JPA 3.2 et est consommée par `mansart-jakarta-data` côté backend SQL. `mansart-pool` gère le pool de connexions JDBC. `mansart-transactions` expose `UserTransaction` et `@Transactional`. Quatre modules, chacun avec un contrat clair.
+
+== En bref
+
+* **Jakarta Data 1.0** — `@Repository`, `Page`, `PageRequest`, `Sort`, query methods (`findByXxx`, `@Query`), CRUD générique.
+* **Jakarta Persistence 3.2** *(en plan)* — `EntityManager`, JPQL, Criteria, métamodèle statique généré par APT.
+* **Dialectes JDBC pluggables** — H2 (référence tests), PostgreSQL (cible production), suivants au backlog.
+* **Virtual Threads** pour l'exécution des requêtes — pas de pool plateforme.
+* **TDD + Arquillian** pour le harness TCK (Jakarta Data 1.0 TCK quand disponible).
+* **Pas d'auto-commit caché**, pas de proxy `EntityManager`, pas de scan d'entités runtime.
+
+xref:getting-started.adoc[Démarrer →]

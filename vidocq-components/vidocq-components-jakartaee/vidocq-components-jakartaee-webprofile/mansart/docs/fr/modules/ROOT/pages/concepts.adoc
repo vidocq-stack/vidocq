@@ -1,0 +1,61 @@
+= Concepts
+:description: Repositories, dialectes, pool JDBC, transactions, métamodèle.
+
+[CAUTION]
+Mansart est en conception. Cette page décrit l'API et l'architecture cibles. Les sections marquées `[TODO]` ne sont pas encore livrées.
+
+== Repositories Jakarta Data 1.0
+
+Trois variantes standards :
+
+* `BasicRepository<T, K>` — CRUD minimal (`save`, `delete`, `findById`).
+* `CrudRepository<T, K>` — étend `BasicRepository` avec batch et requêtes nommées.
+* `DataRepository<T, K>` — repository « libre » à composer.
+
+Plus les **query methods** :
+
+* déduites du nom (`findByAuthor`, `countByYearGreaterThan`)
+* explicites via `@Query("SELECT b FROM Book b WHERE b.author = ?1")`
+
+== Dialectes JDBC
+
+`mansart-jakarta-data` parle SQL via une SPI **dialecte** :
+
+* `MansartDialect` — interface unique : translation JDQL → SQL, types JDBC, syntaxe pagination, syntaxe upsert.
+* `H2Dialect` — référence pour tests in-memory.
+* `PostgresDialect` — cible production.
+
+[TODO]
+====
+Lister les fonctions par dialecte (LIMIT/OFFSET vs FETCH FIRST, RETURNING, ON CONFLICT, etc.). Cf. `mansart/PLAN.md`.
+====
+
+== Pool JDBC
+
+`mansart-pool` expose un `DataSource` pool minimal : virtual threads, pas de JNDI, configurable via MicroProfile Config.
+
+== Transactions
+
+`mansart-transactions` expose :
+
+* `UserTransaction` Jakarta Transactions ;
+* `@Transactional` (intercepteur CDI fourni par le module) ;
+* propagation `REQUIRED`, `REQUIRES_NEW`, `MANDATORY`, `SUPPORTS`.
+
+L'intégration Vidocq passe par l'extension `vidocq-mps-mansart-transactions-extension` (déjà livrée — voir le repo `vidocq`).
+
+== Métamodèle (JPA 3.2, en plan)
+
+[TODO]
+====
+`mansart-persistence` générera à la compilation, via APT :
+
+* le métamodèle statique standard (`Book_.title`, `Book_.author`)
+* les `EntityFactory<T>` qui matérialisent une `ResultSet` JDBC en entité, sans réflexion.
+====
+
+== Choix de design
+
+* **Pas d'auto-flush implicite** — l'utilisateur appelle explicitement `flush()` ou termine la transaction.
+* **Pas de proxy `EntityManager`** — l'API est consommée directement.
+* **Pas de scan d'entités runtime** — l'APT enregistre les entités à la compilation.

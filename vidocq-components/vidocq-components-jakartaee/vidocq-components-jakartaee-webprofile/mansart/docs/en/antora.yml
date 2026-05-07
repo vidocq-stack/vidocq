@@ -1,0 +1,8 @@
+name: mansart
+title: Mansart
+version: ~
+nav:
+  - modules/ROOT/nav.adoc
+asciidoc:
+  attributes:
+    lang: en
