@@ -48,14 +48,21 @@ public final class MansartDataExtension implements BuildCompatibleExtension {
 
     @Discovery
     public void readRepositoriesIndex(ScannedClasses scanned) {
-        // Default RepositoryRuntime producer — only declare the class to scan when it's not
-        // already part of the bean archive (otherwise some containers register it twice and
-        // lose the @Produces method on the second pass).
-        try {
-            Class.forName(MansartRuntimeProducer.class.getName(), false, currentClassLoader());
-        } catch (ClassNotFoundException e) {
-            scanned.add(MansartRuntimeProducer.class.getName());
-        }
+        // Force MansartRuntimeProducer into the scan. The producer ships in mansart-data-cdi.jar
+        // (this BCE's own jar), which is NOT the user's bean archive — containers that scan
+        // bean archives natively (Weld, OpenWebBeans) will discover the @Produces anyway, and
+        // Vauban-processor in APT only scans the module being compiled, so without this
+        // explicit registration `@Inject RepositoryRuntime` is reported as unsatisfied at build
+        // time.
+        //
+        // An earlier guard tried to skip scanned.add() when Class.forName() succeeded on the
+        // producer, but that check was inverted in APT contexts: the producer class IS loadable
+        // from the APT classloader (mansart-data-cdi.jar is on the annotation-processor path),
+        // yet Vauban refuses to index it without the explicit add. The check therefore made
+        // scanned.add() a no-op in IntelliJ APT mode while it correctly fired in Maven (whose
+        // TCCL doesn't include the BCE's own jar). The unconditional call below matches the
+        // CDI 4.1 contract — ScannedClasses.add() is idempotent.
+        scanned.add(MansartRuntimeProducer.class.getName());
 
         ClassLoader cl = currentClassLoader();
         Enumeration<URL> resources;
