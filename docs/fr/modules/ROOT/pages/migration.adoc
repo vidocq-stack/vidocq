@@ -1,0 +1,72 @@
+= Migration
+:description: Depuis Quarkus, Helidon, Open Liberty ou WildFly.
+
+[CAUTION]
+====
+Vidocq est en version **0.1.0-SNAPSHOT**. Toute migration concrète est prématurée — cette page documente les correspondances pour anticiper.
+====
+
+== Depuis Quarkus
+
+Vidocq emprunte explicitement le pattern d'extensions Quarkus.
+
+[cols="1,1,2"]
+|===
+| Quarkus | Vidocq | Note
+
+| `io.quarkus.deployment.annotations.BuildStep`
+| `io.vidocq.mpserver.spi.BuildStep`
+| API directement transposable
+
+| Recorder Gizmo (ASM)
+| Recorder Class-File API (JEP 484)
+| Pas d'ASM — bytecode standard JDK
+
+| ArC (CDI runtime)
+| xref:vauban::index.adoc[Vauban]
+| Build-time dans les deux cas
+
+| RESTEasy Reactive
+| xref:cassini::index.adoc[Cassini] sur xref:chappe::index.adoc[Chappe]
+| Pas de Vert.x — virtual threads
+
+| Hibernate Reactive / ORM
+| xref:mansart::index.adoc[Mansart] *(en plan)*
+| JDBC + virtual threads, pas de Vert.x SQL Client
+|===
+
+[TODO] : exemple de migration d'une extension Quarkus simple vers Vidocq.
+
+== Depuis Helidon (SE / MP)
+
+[TODO]
+====
+* Helidon SE (Web) → Chappe + Cassini.
+* Helidon MP → Vidocq.
+* Convertir `application.yaml` en MicroProfile Config.
+====
+
+== Depuis Open Liberty / WildFly
+
+[TODO]
+====
+Patterns à documenter :
+
+* `server.xml` → MicroProfile Config + Vidocq extensions.
+* EAR → JAR + Vidocq.
+* JNDI → CDI lookup via `Vauban.bootstrap()`.
+====
+
+== Tableau de correspondance MicroProfile
+
+[TODO]
+====
+* MP Config → couvert (jalon `[TODO]`)
+* MP Health → `[TODO]`
+* MP Metrics → `[TODO]`
+* MP OpenAPI → `[TODO]`
+* MP REST Client → `[TODO]`
+* MP JWT → `[TODO]`
+* MP Telemetry → `[TODO]`
+* MP Fault Tolerance → `[TODO]`
+====

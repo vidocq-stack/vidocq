@@ -1,0 +1,95 @@
+= Démarrage rapide
+:description: Premier service MicroProfile démarré par Vidocq.
+
+== Pré-requis
+
+* **Java 25**, **Maven 4.0.0-rc-5** — `.sdkmanrc` à la racine du repo.
+* Connaissance basique de MicroProfile (Config, Health, Metrics, OpenAPI).
+
+== Coordonnées Maven
+
+[source,xml]
+----
+<dependencies>
+    <dependency>
+        <groupId>io.vidocq.mpserver</groupId>
+        <artifactId>vidocq-mps-core</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </dependency>
+    <dependency>
+        <groupId>io.vidocq.mpserver</groupId>
+        <artifactId>vidocq-mps-spi</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </dependency>
+</dependencies>
+
+<build>
+  <plugins>
+    <plugin>
+      <groupId>io.vidocq.mpserver</groupId>
+      <artifactId>vidocq-mps-maven-plugin</artifactId>
+      <version>0.1.0-SNAPSHOT</version>
+      <executions>
+        <execution>
+          <goals>
+            <goal>build</goal>
+          </goals>
+        </execution>
+      </executions>
+    </plugin>
+  </plugins>
+</build>
+----
+
+== Hello world
+
+Une ressource JAX-RS — Vidocq enrôle automatiquement Cassini, Vauban et Champollion :
+
+[source,java]
+----
+package io.example;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.core.MediaType;
+
+@Path("/api")
+@ApplicationScoped
+public class HelloResource {
+
+    @GET
+    @Path("/hello")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Greeting hello() {
+        return new Greeting("vidocq", "Hello, World!");
+    }
+
+    public record Greeting(String from, String message) {}
+}
+----
+
+Démarrage :
+
+[source,bash]
+----
+sdk env
+./mvnw -ntp package
+java -jar target/myapp-runner.jar
+----
+
+== Mécanisme d'extensions
+
+Vidocq applique le pattern Quarkus : chaque extension contribue au bootstrap **à la compilation**, pas au démarrage. Une extension est un module Maven qui :
+
+* déclare un `@BuildStep` consommant des `BuildItem` ;
+* peut générer du bytecode via `vidocq-mps-spi` (Class-File API) ;
+* contribue des classes au runtime à instancier au démarrage.
+
+Voir `vidocq-mps-core-extensions/` pour les extensions livrées et `vidocq-mps-examples/` pour des cas concrets, dont `vidocq-mps-mansart-h2-example` qui combine REST + CDI + JDBC.
+
+[TIP]
+====
+Pour la liste exhaustive des `BuildItem` exposés au moment du build, voir xref:reference.adoc[Référence].
+====

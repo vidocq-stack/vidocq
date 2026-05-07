@@ -1,0 +1,95 @@
+= Getting started
+:description: First MicroProfile service booted by Vidocq.
+
+== Prerequisites
+
+* **Java 25**, **Maven 4.0.0-rc-5** — `.sdkmanrc` at the repo root.
+* Basic knowledge of MicroProfile (Config, Health, Metrics, OpenAPI).
+
+== Maven coordinates
+
+[source,xml]
+----
+<dependencies>
+    <dependency>
+        <groupId>io.vidocq.mpserver</groupId>
+        <artifactId>vidocq-mps-core</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </dependency>
+    <dependency>
+        <groupId>io.vidocq.mpserver</groupId>
+        <artifactId>vidocq-mps-spi</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </dependency>
+</dependencies>
+
+<build>
+  <plugins>
+    <plugin>
+      <groupId>io.vidocq.mpserver</groupId>
+      <artifactId>vidocq-mps-maven-plugin</artifactId>
+      <version>0.1.0-SNAPSHOT</version>
+      <executions>
+        <execution>
+          <goals>
+            <goal>build</goal>
+          </goals>
+        </execution>
+      </executions>
+    </plugin>
+  </plugins>
+</build>
+----
+
+== Hello world
+
+A JAX-RS resource — Vidocq automatically enrolls Cassini, Vauban and Champollion:
+
+[source,java]
+----
+package io.example;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.core.MediaType;
+
+@Path("/api")
+@ApplicationScoped
+public class HelloResource {
+
+    @GET
+    @Path("/hello")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Greeting hello() {
+        return new Greeting("vidocq", "Hello, World!");
+    }
+
+    public record Greeting(String from, String message) {}
+}
+----
+
+Run:
+
+[source,bash]
+----
+sdk env
+./mvnw -ntp package
+java -jar target/myapp-runner.jar
+----
+
+== Extension mechanism
+
+Vidocq follows the Quarkus pattern: every extension contributes to the bootstrap **at compile time**, not at startup. An extension is a Maven module that:
+
+* declares a `@BuildStep` consuming `BuildItem` instances;
+* may emit bytecode via `vidocq-mps-spi` (Class-File API);
+* contributes runtime classes to be instantiated at startup.
+
+See `vidocq-mps-core-extensions/` for shipped extensions and `vidocq-mps-examples/` for concrete cases, including `vidocq-mps-mansart-h2-example` which combines REST + CDI + JDBC.
+
+[TIP]
+====
+For the full list of `BuildItem` exposed during the build, see xref:reference.adoc[Reference].
+====

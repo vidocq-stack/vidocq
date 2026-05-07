@@ -1,0 +1,8 @@
+name: vidocq-fr
+title: Vidocq
+version: ~
+nav:
+  - modules/ROOT/nav.adoc
+asciidoc:
+  attributes:
+    lang: fr

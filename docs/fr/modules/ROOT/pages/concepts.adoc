@@ -1,0 +1,54 @@
+= Concepts
+:description: Build steps, build items, extensions, mécanismes runtime de Vidocq.
+
+== Build steps
+
+Une extension Vidocq déclare des _build steps_ — méthodes annotées qui s'exécutent à la compilation, consomment et produisent des `BuildItem`. Modèle calqué sur Quarkus, mais le moteur est Vauban + Class-File API (pas ArC + Gizmo).
+
+[TODO]
+====
+Documenter le cycle de vie complet d'un `@BuildStep` une fois la SPI stabilisée :
+
+* phases : `INDEX`, `BUILD`, `RUNTIME_INIT`, `STATIC_INIT`
+* injection de `BuildContext`, `IndexView`, `RecorderContext`
+* règles de pureté (déterminisme, idempotence)
+====
+
+== Build items
+
+Les `BuildItem` sont les unités d'échange entre extensions. Catégories prévues :
+
+* **`SimpleBuildItem`** — un seul producer autorisé (ex. `JaxRsApplicationBuildItem`).
+* **`MultiBuildItem`** — N producers (ex. `BeanBuildItem`, `ResourceBuildItem`).
+* **`SymbolicBuildItem`** — phase markers (ex. `ApplicationStartBuildItem`).
+
+[TODO] : énumérer les `BuildItem` livrés dans `vidocq-mps-spi/src/main/java/io/vidocq/mpserver/spi/`.
+
+== Extensions livrées
+
+Modules sous `vidocq-mps-core-extensions/` :
+
+* **CDI** — branche Vauban comme moteur d'injection.
+* **JAX-RS** — branche Cassini, génère le routage statique.
+* **JSON-B** — branche Champollion, déclenche la génération APT au build.
+* **Servlet** — branche Foy.
+* **Mansart** — initialise le pool JDBC, scanne les `@Repository`.
+* **Mansart-transactions** — `@Transactional` géré par `mansart-transactions`.
+
+== Runtime init vs static init
+
+Vidocq distingue :
+
+* **`STATIC_INIT`** — exécuté à la compilation (build time). Tout ce qui est constant ou pré-calculable.
+* **`RUNTIME_INIT`** — exécuté au démarrage de la JVM. Lecture de configuration externe, ouverture de pools, dialogues réseau.
+
+Les recorders Class-File API encodent les actions `STATIC_INIT` en bytecode et permettent à `RUNTIME_INIT` de les rejouer trivialement.
+
+== Génération bytecode
+
+Les recorders s'appuient sur la **Class-File API (JEP 484, finalisée Java 24)**. Pas d'ASM, pas de Byte Buddy. Le bytecode généré est versionné Java 25 et compatible CDS Leyden.
+
+[NOTE]
+====
+Pour un panorama des annotations standards et SPI publiques, voir xref:reference.adoc[Référence].
+====

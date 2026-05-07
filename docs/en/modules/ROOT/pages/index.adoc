@@ -1,0 +1,36 @@
+= Vidocq
+:description: MicroProfile application server on Vauban CDI 4.1, Java 25, JPMS-native, minimal dependencies.
+
+[.lead]
+Vidocq is a MicroProfile application server built on Vauban, written in Java 25, JPMS-native, with no superfluous dependencies — a lean orchestrator that composes the building blocks of the ecosystem.
+
+== Why?
+
+Eugène-François Vidocq (1775-1857) — thief, convict, informer, then founder of France's first National Security force in 1812 — created the first plain-clothes detective brigade. He turned field experience into method and structure, refusing the cumbersome inheritance of the Ancien Régime.
+
+The Vidocq runtime takes the same stance. Rather than stack yet another layer of abstractions, it leans on the bricks of the ecosystem:
+
+* xref:chappe::index.adoc[Chappe] for HTTP/1.1 + HTTP/2 transport
+* xref:vauban::index.adoc[Vauban] for the CDI 4.1 engine
+* xref:champollion::index.adoc[Champollion] for JSON-B / JSON-P serialization
+* xref:cassini::index.adoc[Cassini] for the REST layer
+* xref:foy::index.adoc[Foy] for Servlet 6.1 compatibility
+* xref:mansart::index.adoc[Mansart] for Jakarta Data 1.0 persistence
+
+Each piece stays self-contained. Vidocq composes them through a Quarkus-inspired extension SPI — no dynamic proxies, no runtime reflection.
+
+== At a glance
+
+* **Java 25, Maven 4.0.0-rc-5** — no compromise on modern tooling.
+* **Strict JPMS** — every module has its `module-info.java`, minimal `exports`.
+* **Static codegen** — Class-File API (JEP 484) + APT at compile time, no dynamic proxies.
+* **Virtual Threads** everywhere for I/O — no platform thread pools by default.
+* **AOT-ready** — GraalVM native-image, Project Leyden CDS.
+* **Minimal dependencies** — only the relevant Jakarta / MicroProfile specs.
+
+[NOTE]
+====
+This site documents the entire Vidocq suite. The `vidocq` module itself is the orchestrator; each component has its own section in the side nav.
+====
+
+xref:getting-started.adoc[Get started →]

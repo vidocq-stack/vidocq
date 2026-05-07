@@ -1,0 +1,36 @@
+= Vidocq
+:description: Serveur d'application MicroProfile sur Vauban CDI 4.1, Java 25, JPMS-natif, peu de dépendances.
+
+[.lead]
+Vidocq est un serveur d'application MicroProfile bâti sur Vauban, écrit en Java 25, JPMS-natif, sans dépendances superflues — un orchestrateur léger qui compose les briques de l'écosystème.
+
+== Pourquoi ?
+
+Eugène-François Vidocq (1775-1857), voleur, bagnard, indicateur, puis fondateur de la Sûreté nationale en 1812 — créateur de la première brigade de police en civil. Il transformait l'expérience du terrain en méthode et en organisation, refusant les héritages encombrants de l'Ancien Régime.
+
+Vidocq, le runtime, prend ce parti-pris. Plutôt que d'empiler une nouvelle couche d'abstractions, il s'appuie sur les briques de l'écosystème :
+
+* xref:chappe::index.adoc[Chappe] pour le transport HTTP/1.1 + HTTP/2
+* xref:vauban::index.adoc[Vauban] pour le moteur CDI 4.1
+* xref:champollion::index.adoc[Champollion] pour la sérialisation JSON-B / JSON-P
+* xref:cassini::index.adoc[Cassini] pour la couche REST
+* xref:foy::index.adoc[Foy] pour la compatibilité Servlet 6.1
+* xref:mansart::index.adoc[Mansart] pour la persistance Jakarta Data 1.0
+
+Chaque pièce reste autonome. Vidocq les compose via une SPI d'extensions inspirée de Quarkus, sans proxy dynamique ni réflexion runtime.
+
+== En bref
+
+* **Java 25, Maven 4.0.0-rc-5** — pas de compromis sur l'outillage moderne.
+* **JPMS strict** — chaque module a son `module-info.java`, `exports` minimaux.
+* **Génération statique** — Class-File API (JEP 484) + APT à la compilation, pas de proxy dynamique.
+* **Virtual Threads** partout pour l'I/O — pas de pool de threads plateforme par défaut.
+* **Compatible AOT** — GraalVM native-image, Project Leyden CDS.
+* **Très peu de dépendances** — uniquement les specs Jakarta / MicroProfile concernées.
+
+[NOTE]
+====
+Ce site documente la suite Vidocq dans son ensemble. Le module `vidocq` lui-même est l'orchestrateur ; chaque composant a sa propre section dans la nav latérale.
+====
+
+xref:getting-started.adoc[Démarrer →]

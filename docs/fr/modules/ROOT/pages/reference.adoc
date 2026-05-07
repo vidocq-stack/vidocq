@@ -1,0 +1,63 @@
+= Référence
+:description: Artefacts Maven, SPI, BuildItem, scripts.
+
+== Artefacts Maven
+
+[cols="1,3"]
+|===
+| Artefact | Rôle
+
+| `io.vidocq.mpserver:vidocq-mps-parent:0.1.0-SNAPSHOT`
+| POM parent (Model 4.1.0)
+
+| `io.vidocq.mpserver:vidocq-mps-spi:0.1.0-SNAPSHOT`
+| SPI publique (BuildStep, BuildItem, Recorder)
+
+| `io.vidocq.mpserver:vidocq-mps-core:0.1.0-SNAPSHOT`
+| Moteur d'exécution (Vauban + plombing)
+
+| `io.vidocq.mpserver:vidocq-mps-core-extensions:0.1.0-SNAPSHOT`
+| Pack d'extensions livrées
+
+| `io.vidocq.mpserver:vidocq-mps-maven-plugin:0.1.0-SNAPSHOT`
+| Plugin Maven pour build l'application
+
+| `io.vidocq.mpserver:vidocq-mps-examples:0.1.0-SNAPSHOT`
+| Exemples (REST, CDI, JDBC, transactions)
+
+| `io.vidocq.mpserver:vidocq-mps-integration-tests:0.1.0-SNAPSHOT`
+| Tests d'intégration multi-extensions
+|===
+
+== SPI publique (`vidocq-mps-spi`)
+
+[TODO]
+====
+Lister les annotations et interfaces publiques :
+
+* `@BuildStep`, `@Record`, `@Recorder`
+* `BuildItem`, `SimpleBuildItem`, `MultiBuildItem`
+* `IndexView`, `BeanRegistrationContext`, `RecorderContext`
+* `RuntimeValue<T>`, `BytecodeRecorderImpl`
+
+Source : `vidocq-mps-spi/src/main/java/io/vidocq/mpserver/spi/`.
+====
+
+== BuildItem livrés
+
+[TODO] : énumérer les BuildItem standard exposés par le core.
+
+== Bugs et benchmarks
+
+* Bugs reproductibles : `vidocq/BUG.md`.
+* Benchmarks : `vidocq/BENCH.md`.
+
+== Scripts
+
+[TODO] : lister les scripts shell présents à la racine du repo `vidocq` (build, package, run, etc.).
+
+== Compatibilité
+
+* Java 25 minimum
+* Maven 4.0.0-rc-5 minimum
+* JPMS strict — un `module-info.java` par sous-module
