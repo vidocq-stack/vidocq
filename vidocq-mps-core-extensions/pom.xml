@@ -14,13 +14,13 @@
     <name>Vidocq :: Core Extensions</name>
     <description>MicroProfile 7.1 core extensions for Vidocq</description>
 
-    <modules>
-        <module>vidocq-mps-chappe-extension</module>
-        <module>vidocq-mps-rest-cassini-extension</module>
-        <module>vidocq-mps-mansart-pool-extension</module>
-        <module>vidocq-mps-mansart-data-extension</module>
-        <module>vidocq-mps-mansart-transactions-extension</module>
-    </modules>
+    <subprojects>
+        <subproject>vidocq-mps-chappe-extension</subproject>
+        <subproject>vidocq-mps-rest-cassini-extension</subproject>
+        <subproject>vidocq-mps-mansart-pool-extension</subproject>
+        <subproject>vidocq-mps-mansart-data-extension</subproject>
+        <subproject>vidocq-mps-mansart-transactions-extension</subproject>
+    </subprojects>
 
     <!--
         vidocq-rest-extension (Jersey 4 + Jetty 12) est décommissionné,

@@ -14,9 +14,9 @@
     <name>Vidocq :: Integration Tests</name>
     <description>Integration tests for Vidocq extensions (Arquillian)</description>
 
-    <modules>
-        <module>vidocq-mps-arquillian</module>
-    </modules>
+    <subprojects>
+        <subproject>vidocq-mps-arquillian</subproject>
+    </subprojects>
 
     <!--
         vidocq-it-rest-extension sort du reactor pendant la migration

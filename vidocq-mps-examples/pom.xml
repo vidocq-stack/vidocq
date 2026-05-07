@@ -14,9 +14,9 @@
     <name>Vidocq :: Examples</name>
     <description>Example applications for Vidocq</description>
 
-    <modules>
-        <module>vidocq-mps-external-rest-lib</module>
-        <module>vidocq-mps-rest-example</module>
-        <module>vidocq-mps-mansart-h2-example</module>
-    </modules>
+    <subprojects>
+        <subproject>vidocq-mps-external-rest-lib</subproject>
+        <subproject>vidocq-mps-rest-example</subproject>
+        <subproject>vidocq-mps-mansart-h2-example</subproject>
+    </subprojects>
 </project>
