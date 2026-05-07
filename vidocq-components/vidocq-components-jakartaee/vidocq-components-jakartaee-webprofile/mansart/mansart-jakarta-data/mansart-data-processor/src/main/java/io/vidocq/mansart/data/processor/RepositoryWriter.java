@@ -99,23 +99,32 @@ final class RepositoryWriter {
                 w.println();
             }
             w.println("import io.vidocq.mansart.data.core.RepositoryRuntime;");
+            w.println("import jakarta.enterprise.context.ApplicationScoped;");
             w.println("import jakarta.inject.Inject;");
-            w.println("import jakarta.inject.Singleton;");
             w.println("import javax.annotation.processing.Generated;");
             w.println("import java.util.List;");
             w.println("import java.util.Optional;");
+            // Conditional import for @Transactional when needed
+            boolean classTransactional = hasAnnotation(repo, "jakarta.transaction.Transactional");
+            boolean anyMethodTransactional = abstractMethods(repo).stream()
+                    .anyMatch(m -> hasAnnotation(m, "jakarta.transaction.Transactional"));
+            if (classTransactional || anyMethodTransactional) {
+                w.println("import jakarta.transaction.Transactional;");
+            }
             w.println();
             w.println("/**");
             w.println(" * APT-generated CDI bean implementing the {@code @Repository} interface.");
-            w.println(" * <p>{@code @Singleton} (pseudo-scope) is used because the class is {@code final}");
-            w.println(" * — a normal scope like {@code @ApplicationScoped} would require a non-final");
-            w.println(" * class so the container can subclass it for the client proxy. The repository");
-            w.println(" * is stateless (it forwards every call to {@link RepositoryRuntime}), so a single");
-            w.println(" * shared instance is correct.");
+            w.println(" * <p>The class is {@code @ApplicationScoped} (normal CDI scope) so the container");
+            w.println(" * can subclass it for the client proxy, enabling CDI interceptors such as");
+            w.println(" * {@code @Transactional} inherited from the {@code @Repository} interface.");
+            w.println(" * The repository is stateless (it forwards every call to {@link RepositoryRuntime}).");
             w.println(" */");
             w.println("@Generated(\"io.vidocq.mansart.data.processor.MansartProcessor\")");
-            w.println("@Singleton");
-            w.println("public final class " + implName + " implements " + simple + " {");
+            w.println("@ApplicationScoped");
+            if (classTransactional) {
+                emitTransactionalAnnotation(w, repo, "");
+            }
+            w.println("public class " + implName + " implements " + simple + " {");
             w.println();
             w.println("    private final RepositoryRuntime runtime;");
             w.println();
@@ -144,6 +153,13 @@ final class RepositoryWriter {
         TypeMirror returnType = resolved.getReturnType();
         List<? extends TypeMirror> paramTypes = resolved.getParameterTypes();
 
+        // Emit @Transactional on the method override whenever the interface method carries it.
+        // Even if the class already has a class-level @Transactional, the method-level annotation
+        // may specify a different TxType (e.g. REQUIRES_NEW) — CDI interceptor binding uses the
+        // most specific (method-level) annotation, so we must always reproduce it faithfully.
+        if (hasAnnotation(m, "jakarta.transaction.Transactional")) {
+            emitTransactionalAnnotation(w, m, "    ");
+        }
         StringBuilder sig = new StringBuilder("    @Override public ");
         var typeVars = resolved.getTypeVariables();
         if (!typeVars.isEmpty()) {
@@ -775,6 +791,112 @@ final class RepositoryWriter {
     private String deleteEntityBody(String metamodel, String entityFqn, boolean isVoid) {
         String call = "runtime.delete(" + metamodel + ".$MODEL, (" + entityFqn + ") " + p(0) + ")";
         return isVoid ? call + ";" : "return " + call + ";";
+    }
+
+    /* ---------- @Transactional propagation helpers ---------- */
+
+    /**
+     * Returns true if {@code element} (a {@link TypeElement} or {@link ExecutableElement}) carries
+     * the annotation identified by {@code annotationFqn}.
+     */
+    private boolean hasAnnotation(javax.lang.model.element.Element element, String annotationFqn) {
+        for (var mirror : element.getAnnotationMirrors()) {
+            if (((TypeElement) mirror.getAnnotationType().asElement())
+                    .getQualifiedName().contentEquals(annotationFqn)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Emits the {@code @Transactional} annotation found on {@code element}, preserving its
+     * {@code value()}, {@code rollbackOn()}, and {@code dontRollbackOn()} attributes if present.
+     * {@code indent} is prepended to the emitted line (e.g. {@code ""} for class-level,
+     * {@code "    "} for method-level).
+     *
+     * <p>Only explicitly set attributes (not defaults) are reproduced, so {@code @Transactional}
+     * without attributes emits as {@code @Transactional} and one with {@code REQUIRES_NEW} emits
+     * as {@code @Transactional(value = Transactional.TxType.REQUIRES_NEW)}.
+     */
+    private void emitTransactionalAnnotation(PrintWriter w,
+                                             javax.lang.model.element.Element element,
+                                             String indent) {
+        for (var mirror : element.getAnnotationMirrors()) {
+            TypeElement annType = (TypeElement) mirror.getAnnotationType().asElement();
+            if (!annType.getQualifiedName().contentEquals("jakarta.transaction.Transactional")) continue;
+
+            // Only iterate over explicitly set values (mirror.getElementValues() excludes defaults).
+            java.util.List<String> parts = new java.util.ArrayList<>();
+            for (var entry : mirror.getElementValues().entrySet()) {
+                String attrName = entry.getKey().getSimpleName().toString();
+                javax.lang.model.element.AnnotationValue av = entry.getValue();
+                switch (attrName) {
+                    case "value" -> parts.add("value = " + renderAnnotationValue(av));
+                    case "rollbackOn" -> parts.add("rollbackOn = " + renderAnnotationValue(av));
+                    case "dontRollbackOn" -> parts.add("dontRollbackOn = " + renderAnnotationValue(av));
+                }
+            }
+            String attrs = parts.isEmpty() ? "" : "(" + String.join(", ", parts) + ")";
+            w.println(indent + "@Transactional" + attrs);
+            return;
+        }
+    }
+
+    /**
+     * Renders an {@link javax.lang.model.element.AnnotationValue} as a Java source string
+     * that is safe to embed in generated code.
+     *
+     * <ul>
+     *   <li>Enum constant → {@code TypeSimpleName.CONSTANT} (e.g. {@code Transactional.TxType.REQUIRES_NEW})</li>
+     *   <li>Class literal → {@code Fqn.class}</li>
+     *   <li>Array → {@code {elem1, elem2, …}}</li>
+     *   <li>String, primitive, annotation → delegated to {@code av.toString()}</li>
+     * </ul>
+     */
+    @SuppressWarnings("unchecked")
+    private String renderAnnotationValue(javax.lang.model.element.AnnotationValue av) {
+        Object value = av.getValue();
+        if (value instanceof javax.lang.model.element.VariableElement ve) {
+            // Enum constant — emit as EnclosingType.CONSTANT using the enclosing type's simple name
+            // so the generated import statement (e.g. `import jakarta.transaction.Transactional;`)
+            // resolves it correctly without a separate import for the nested TxType enum.
+            TypeElement enclosing = (TypeElement) ve.getEnclosingElement();
+            // Walk up to find the top-level enclosing type name (e.g. Transactional for TxType).
+            String typePath = buildRelativeTypePath(enclosing);
+            return typePath + "." + ve.getSimpleName();
+        }
+        if (value instanceof TypeMirror tm) {
+            return tm + ".class";
+        }
+        if (value instanceof java.util.List<?> list) {
+            var items = (java.util.List<? extends javax.lang.model.element.AnnotationValue>) list;
+            if (items.isEmpty()) return "{}";
+            if (items.size() == 1) return renderAnnotationValue(items.get(0));
+            StringBuilder sb = new StringBuilder("{");
+            for (int i = 0; i < items.size(); i++) {
+                if (i > 0) sb.append(", ");
+                sb.append(renderAnnotationValue(items.get(i)));
+            }
+            return sb.append("}").toString();
+        }
+        // String, primitives, nested annotations: toString() is correct source syntax.
+        return av.toString();
+    }
+
+    /**
+     * Builds a relative type path for a {@link TypeElement} using only the simple names of the
+     * enclosing type chain, stopping at the top-level (package-level) class.
+     * Example: {@code jakarta.transaction.Transactional.TxType} → {@code "Transactional.TxType"}.
+     */
+    private static String buildRelativeTypePath(TypeElement te) {
+        java.util.Deque<String> parts = new java.util.ArrayDeque<>();
+        javax.lang.model.element.Element current = te;
+        while (current instanceof TypeElement t) {
+            parts.addFirst(t.getSimpleName().toString());
+            current = t.getEnclosingElement();
+        }
+        return String.join(".", parts);
     }
 
     /* ---------- helpers ---------- */

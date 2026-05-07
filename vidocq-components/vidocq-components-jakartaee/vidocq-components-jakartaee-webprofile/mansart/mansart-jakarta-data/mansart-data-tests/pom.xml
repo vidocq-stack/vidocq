@@ -20,6 +20,14 @@
             <artifactId>jakarta.persistence-api</artifactId>
         </dependency>
         <dependency>
+            <groupId>jakarta.transaction</groupId>
+            <artifactId>jakarta.transaction-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+        </dependency>
+        <dependency>
             <groupId>io.vidocq.mansart</groupId>
             <artifactId>mansart-data-dialect-spi</artifactId>
         </dependency>
