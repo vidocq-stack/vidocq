@@ -17,23 +17,35 @@ import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 /**
  * Implémentation MP Config 3.1 §2.1 — cascade des {@link ConfigSource} par ordinal
  * décroissant, premier match gagne. Tie-breaking sur l'ordre d'enregistrement.
  *
- * <p>M1 : converter {@link String} uniquement (cf. {@link IdentityStringConverter}).
- * Tout autre type lève {@link IllegalArgumentException} jusqu'à M2.</p>
+ * <p>Résolution des converters (§5) :</p>
+ * <ol>
+ *   <li>lookup direct dans la table {@code type → Converter<?>} (built-in + applicatifs)</li>
+ *   <li>type tableau {@code T[]} → {@link ArrayConverter} construit dynamiquement
+ *       à partir du converter pour {@code T}</li>
+ *   <li>type {@code enum} ou classe avec {@code of/valueOf/parse/(String)} →
+ *       {@link ImplicitConverter} (§5.2)</li>
+ *   <li>sinon → {@link IllegalArgumentException}</li>
+ * </ol>
  *
- * <p><b>Thread-safety</b> : immutable après construction. Les sources mutables
- * (System properties / env vars) sont relues à chaque appel via leur propre
- * implémentation, sans cache local.</p>
+ * <p><b>Thread-safety</b> : immutable après construction ; cache des converters
+ * dérivés (arrays, implicits) en {@link ConcurrentHashMap}. Pas de
+ * {@code synchronized}, pas de {@code ThreadLocal} — virtual-thread-friendly.</p>
  */
 public final class RavelConfig implements Config {
 
     private final List<ConfigSource> sources;
     private final Map<Class<?>, Converter<?>> converters;
     private final ClassLoader classLoader;
+
+    /** Cache des converters dérivés (arrays, implicits) — résolus à la première lookup. */
+    private final ConcurrentMap<Class<?>, Converter<?>> derivedConverters = new ConcurrentHashMap<>();
 
     public RavelConfig(List<ConfigSource> sources,
                        Map<Class<?>, Converter<?>> converters,
@@ -100,7 +112,13 @@ public final class RavelConfig implements Config {
     @SuppressWarnings("unchecked")
     public <T> Optional<Converter<T>> getConverter(Class<T> forType) {
         Objects.requireNonNull(forType, "forType");
-        return Optional.ofNullable((Converter<T>) converters.get(forType));
+        Converter<?> direct = converters.get(forType);
+        if (direct != null) return Optional.of((Converter<T>) direct);
+        Converter<?> derived = derivedConverters.get(forType);
+        if (derived != null) return Optional.of((Converter<T>) derived);
+        // Tente une résolution dynamique sans la stocker en cache : lookup pur.
+        Converter<T> resolved = resolveConverter(forType);
+        return Optional.ofNullable(resolved);
     }
 
     @Override
@@ -133,12 +151,40 @@ public final class RavelConfig implements Config {
     @SuppressWarnings("unchecked")
     private <T> Converter<T> findConverter(Class<T> type) {
         Converter<?> conv = converters.get(type);
-        if (conv == null) {
+        if (conv != null) return (Converter<T>) conv;
+        Converter<?> cached = derivedConverters.get(type);
+        if (cached != null) return (Converter<T>) cached;
+        Converter<T> resolved = resolveConverter(type);
+        if (resolved == null) {
             throw new IllegalArgumentException(
-                    "No Converter registered for " + type.getName()
-                            + " — Ravel M1 only supports String. M2 will add built-in"
-                            + " and implicit converters.");
+                    "No Converter found for " + type.getName()
+                            + " — register one via ConfigBuilder.withConverter(...) or"
+                            + " expose a public static of/valueOf/parse method or a"
+                            + " (String) constructor (MP Config 3.1 §5.2).");
         }
-        return (Converter<T>) conv;
+        derivedConverters.put(type, resolved);
+        return resolved;
+    }
+
+    /**
+     * Résout dynamiquement un converter pour un type non pré-enregistré :
+     * tableaux (§5.4) → {@link ArrayConverter}, enums + types automatiques (§5.2)
+     * → {@link ImplicitConverter}.
+     *
+     * @return le converter résolu, ou {@code null} si aucune stratégie ne s'applique.
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private <T> Converter<T> resolveConverter(Class<T> type) {
+        if (type.isArray()) {
+            Class<?> component = type.getComponentType();
+            Converter<?> elem;
+            try {
+                elem = findConverter(component);
+            } catch (IllegalArgumentException e) {
+                return null;
+            }
+            return (Converter<T>) new ArrayConverter(component, elem);
+        }
+        return ImplicitConverter.create(type);
     }
 }

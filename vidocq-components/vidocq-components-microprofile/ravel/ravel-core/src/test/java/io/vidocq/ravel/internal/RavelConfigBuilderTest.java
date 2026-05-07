@@ -113,10 +113,12 @@ class RavelConfigBuilderTest {
 
     @Test
     void without_converter_unsupported_type_throws() {
+        // Object n'a ni built-in (§5.1) ni pattern §5.2 (of/valueOf/parse/(String))
+        // → IllegalArgumentException attendu.
         Config cfg = new RavelConfigBuilder()
                 .withSources(MapConfigSource.of("s", 100, Map.of("k", "42")))
                 .build();
-        assertThrows(IllegalArgumentException.class, () -> cfg.getValue("k", Integer.class));
+        assertThrows(IllegalArgumentException.class, () -> cfg.getValue("k", Object.class));
     }
 
     // -------- forClassLoader --------

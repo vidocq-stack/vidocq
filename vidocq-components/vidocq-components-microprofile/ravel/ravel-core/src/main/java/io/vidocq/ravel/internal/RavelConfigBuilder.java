@@ -13,6 +13,7 @@ import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -21,24 +22,28 @@ import java.util.ServiceLoader;
 /**
  * Implémentation MP Config 3.1 §3 — builder fluent pour produire un {@link RavelConfig}.
  *
- * <p>Comportement par défaut : aucun source enregistré, mais le converter built-in
- * {@code String → identity} est pré-installé. Appeler {@link #addDefaultSources()},
- * {@link #addDiscoveredSources()}, {@link #addDiscoveredConverters()} active les
- * options canoniques.</p>
+ * <p>Comportement par défaut depuis M2 : tous les converters built-in (§5.1, §5.2 types
+ * automatiques scalaires) sont pré-enregistrés à la <b>priorité 1</b> ; tout converter
+ * applicatif (priorité par défaut 100, §5.3) les écrase automatiquement.</p>
  *
- * <p><b>Note M1</b> : la priorité des converters n'est pas honorée — un converter
- * écrase simplement le précédent enregistré pour le même type. M2 implémentera
- * la priorité {@code @Priority} et les built-in pour les types primitifs / temporels.</p>
+ * <p>Ordre de précédence des converters (§5.3) :</p>
+ * <ol>
+ *   <li>celui avec la <b>plus haute</b> priorité {@code @jakarta.annotation.Priority}</li>
+ *   <li>en cas d'égalité, le dernier enregistré gagne (LIFO d'écriture).</li>
+ * </ol>
  */
 public final class RavelConfigBuilder implements ConfigBuilder {
 
     private final List<ConfigSource> sources = new ArrayList<>();
-    private final Map<Class<?>, Converter<?>> converters = new HashMap<>();
+    private final Map<Class<?>, PrioritizedConverter> converters = new LinkedHashMap<>();
     private ClassLoader classLoader;
 
     public RavelConfigBuilder() {
-        // §5.1 — String built-in converter (identité). M2 ajoutera les autres built-in.
-        converters.put(String.class, IdentityStringConverter.INSTANCE);
+        // §5.1 / §5.2 — pré-enregistrement des built-in à la priorité 1.
+        for (Map.Entry<Class<?>, Converter<?>> e : BuiltInConverters.all().entrySet()) {
+            converters.put(e.getKey(),
+                    new PrioritizedConverter(BuiltInConverters.BUILT_IN_PRIORITY, e.getValue()));
+        }
         this.classLoader = Thread.currentThread().getContextClassLoader();
     }
 
@@ -63,10 +68,9 @@ public final class RavelConfigBuilder implements ConfigBuilder {
 
     @Override
     public ConfigBuilder addDiscoveredConverters() {
-        // §5.3 — ServiceLoader sur Converter. M1 : on charge mais l'inférence du
-        // type cible nécessite l'introspection du type paramétrique générique.
+        // §5.3 — ServiceLoader sur Converter + lecture @Priority (def. 100).
         ServiceLoader.load(Converter.class, resolveClassLoader())
-                .forEach(this::registerConverterByGenericType);
+                .forEach(c -> registerConverter(c, PrioritizedConverter.readPriority(c)));
         return this;
     }
 
@@ -89,7 +93,8 @@ public final class RavelConfigBuilder implements ConfigBuilder {
     public ConfigBuilder withConverters(Converter<?>... converters) {
         Objects.requireNonNull(converters, "converters");
         for (Converter<?> c : converters) {
-            registerConverterByGenericType(Objects.requireNonNull(c, "converter"));
+            Objects.requireNonNull(c, "converter");
+            registerConverter(c, PrioritizedConverter.readPriority(c));
         }
         return this;
     }
@@ -98,15 +103,19 @@ public final class RavelConfigBuilder implements ConfigBuilder {
     public <T> ConfigBuilder withConverter(Class<T> type, int priority, Converter<T> converter) {
         Objects.requireNonNull(type, "type");
         Objects.requireNonNull(converter, "converter");
-        // M1 : priority ignorée — le dernier converter enregistré gagne.
-        // M2 implémentera @Priority + comparaison.
-        converters.put(type, converter);
+        // La priorité est explicite : on l'utilise telle quelle.
+        registerConverter(type, priority, converter);
         return this;
     }
 
     @Override
     public Config build() {
-        return new RavelConfig(List.copyOf(sources), Map.copyOf(converters), resolveClassLoader());
+        // Aplatir Map<Class<?>, PrioritizedConverter> → Map<Class<?>, Converter<?>>
+        Map<Class<?>, Converter<?>> resolved = new HashMap<>(converters.size());
+        for (var e : converters.entrySet()) {
+            resolved.put(e.getKey(), e.getValue().converter());
+        }
+        return new RavelConfig(List.copyOf(sources), Map.copyOf(resolved), resolveClassLoader());
     }
 
     // -------- internals --------
@@ -117,15 +126,18 @@ public final class RavelConfigBuilder implements ConfigBuilder {
                 : Thread.currentThread().getContextClassLoader();
     }
 
-    /**
-     * Enregistre un converter en inférant son type cible via le paramètre générique
-     * de l'interface {@code Converter<T>}. Best effort — si l'inférence échoue
-     * (converter générique brut), le converter est ignoré silencieusement.
-     */
-    private void registerConverterByGenericType(Converter<?> converter) {
+    private void registerConverter(Converter<?> converter, int priority) {
         Class<?> target = inferConverterTargetType(converter.getClass());
         if (target != null) {
-            converters.put(target, converter);
+            registerConverter(target, priority, converter);
+        }
+        // Si l'inférence échoue (converter générique brut), on ignore silencieusement.
+    }
+
+    private <T> void registerConverter(Class<T> type, int priority, Converter<?> converter) {
+        PrioritizedConverter existing = converters.get(type);
+        if (existing == null || priority >= existing.priority()) {
+            converters.put(type, new PrioritizedConverter(priority, converter));
         }
     }
 

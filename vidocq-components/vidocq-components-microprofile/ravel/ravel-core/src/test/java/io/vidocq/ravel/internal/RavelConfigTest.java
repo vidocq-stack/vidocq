@@ -85,11 +85,11 @@ class RavelConfigTest {
     }
 
     @Test
-    void unsupported_type_throws_until_M2() {
-        // M1 = String only ; tout autre type → IllegalArgumentException
-        // (M2 ajoutera built-in et implicit converters).
+    void unconvertible_type_throws() {
+        // §5 — un type sans built-in et sans pattern §5.2 (of/valueOf/parse/(String))
+        // doit lever IllegalArgumentException. {@link Object} n'a aucun de ces patterns.
         Config cfg = newConfig(List.of(MapConfigSource.of("s", 100, Map.of("k", "42"))));
-        assertThrows(IllegalArgumentException.class, () -> cfg.getValue("k", Integer.class));
+        assertThrows(IllegalArgumentException.class, () -> cfg.getValue("k", Object.class));
     }
 
     // --------- getConfigValue (jamais null) -----------
@@ -167,7 +167,8 @@ class RavelConfigTest {
     void getConverter_returns_registered_converter_only() {
         Config cfg = newConfig(List.of());
         assertTrue(cfg.getConverter(String.class).isPresent());
-        assertTrue(cfg.getConverter(Integer.class).isEmpty());
+        // Object n'a ni built-in ni pattern §5.2 → Optional.empty()
+        assertTrue(cfg.getConverter(Object.class).isEmpty());
     }
 
     @Test

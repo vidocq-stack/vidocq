@@ -76,22 +76,31 @@ dans le manifest du JAR API — la 3.1 originale (publiée 2023) n'avait ni desc
 
 ---
 
-### M2 — Converters de types
+### M2 — Converters de types ✅
 
-**Scope spec :** §5 (Converter), §5.1 (Built-in converters), §5.2 (Automatic converters / Implicit converters), §5.3 (Custom converters).
+**Scope spec :** §5 (Converter), §5.1 (Built-in converters), §5.1.1 (Boolean), §5.2 (Automatic / Implicit converters), §5.3 (Custom converters), §5.4 (Arrays).
 
-| Tâche | Notes |
-|---|---|
-| Built-in stricts (§5.1) | `boolean`/`Boolean`, `int`/`Integer`, `long`/`Long`, `float`/`Float`, `double`/`Double`, `String`, `Class<?>` |
-| Built-in étendus | `OptionalInt`, `OptionalLong`, `OptionalDouble`, `Character`, `URI`, `URL`, `InetAddress`, `Duration`, `Period`, `LocalDate`, `LocalTime`, `LocalDateTime`, `Instant`, énumérations |
-| Convertisseurs `Boolean` (§5.1.1) | `true` / `1` / `yes` / `y` / `on` (case-insensitive) → `true`, sinon `false` |
-| Conversion tableaux et `List`/`Set` (§5.4) | Séparateur virgule, escape `\,`, valeurs vides ignorées |
-| `Converter<T>` SPI via ServiceLoader (`META-INF/services/org.eclipse.microprofile.config.spi.Converter`) | Priorité via `@Priority`, défaut 100 |
-| Implicit converters (§5.2) | Détection par réflexion d'un seul de : `static T of(String)`, `static T valueOf(String)`, `static T parse(CharSequence)`, constructeur `(String)` |
-| `ConfigBuilder.withConverter(Class<T>, int priority, Converter<T>)` | Programmatic registration |
-| Tests par converter, cas limites | Virgule seule, backslash final, valeur null, type incompatible → `IllegalArgumentException` |
+| Tâche | Notes | État |
+|---|---|---|
+| Built-in stricts (§5.1) | `boolean`/`Boolean`, `int`/`Integer`, `long`/`Long`, `float`/`Float`, `double`/`Double`, `short`/`Short`, `byte`/`Byte`, `char`/`Character`, `String`, `Class<?>` — tous au même converter pour boxed/primitive | ✅ |
+| Built-in étendus | `OptionalInt`, `OptionalLong`, `OptionalDouble`, `URI`, `URL`, `InetAddress`, `Duration`, `Period`, `LocalDate`, `LocalTime`, `LocalDateTime`, `OffsetTime`, `OffsetDateTime`, `ZonedDateTime`, `Instant` | ✅ |
+| Énumérations | Via `ImplicitConverter` (pattern `valueOf` traité comme cas dédié pour la sécurité de typage) | ✅ |
+| Convertisseur `Boolean` §5.1.1 | `true`/`1`/`yes`/`y`/`on` (case-insensitive, après `trim()`) → `true` ; tout le reste → `false` | ✅ |
+| Conversion tableaux §5.4 | `ArraySplitter` + `ArrayConverter<T>` — séparateur `,`, échappement `\,`, segments vides ignorés ; `getValue(name, T[].class)` et `getValues(name, T.class)` (via default Config) | ✅ |
+| `Converter<T>` SPI via ServiceLoader | `addDiscoveredConverters` charge + lit `@jakarta.annotation.Priority` (défaut **100**) | ✅ |
+| Implicit converters §5.2 | Détection ordonnée : `static of(String)` > `valueOf(String)` > `parse(CharSequence)` > ctor `(String)`. **Strictement public**, pas de `setAccessible(true)` | ✅ |
+| `ConfigBuilder.withConverter(Class<T>, int priority, Converter<T>)` | Priorité explicite respectée ; un converter de priorité plus basse n'écrase pas un plus haut | ✅ |
+| `ConfigBuilder.withConverters(Converter<?>...)` | Lit `@Priority` (défaut 100) via réflexion FQN — pas de dépendance compile sur `jakarta.annotation` | ✅ |
+| Cache thread-safe des converters dérivés | `ConcurrentHashMap` sur `RavelConfig.derivedConverters` ; pas de `synchronized`, virtual-thread-friendly | ✅ |
+| Tests par converter + cas limites | Boolean truthy/falsy, numériques avec espaces, char.length≠1, URL/URI invalides, enum unknown, array escape `\,`, segments vides, type incompatible → `IllegalArgumentException` | ✅ |
 
-**Livrable :** `config.getValue("timeout", Duration.class)` fonctionne pour tous les types built-in et automatiques. Custom converter découvert via ServiceLoader.
+**Décisions M2 documentées** :
+- Le contrat MP §5.3 « priorité par défaut 100 » est lu **par nom qualifié** (`jakarta.annotation.Priority` ou `javax.annotation.Priority`) en évitant toute dépendance compile sur `jakarta.annotation` dans `ravel-core` (test scope uniquement, conforme à la règle « zéro tierce »).
+- Les built-in sont enregistrés à **priorité 1** ; tout converter applicatif (priorité 100 par défaut) les écrase automatiquement.
+- Les patterns `§5.2` n'utilisent **que** des méthodes/constructeurs `public` — aucun `setAccessible(true)`, conformément aux contraintes JPMS / AOT-friendly.
+- `getOptionalValue(name, X[].class)` traite la chaîne vide comme « absent » (§2.1.4), `,,` ou `\\` non suivi de `,` sont normalisés selon `ArraySplitter`.
+
+**Livrable :** `config.getValue("timeout", Duration.class)`, `config.getValue("hosts", String[].class)`, `config.getValues("colors", Status.class)` et un `Converter<UUID>` custom annoté `@Priority(500)` fonctionnent. **131 tests verts** (80 M1 + 51 M2) sur 12 classes.
 
 ---
 
