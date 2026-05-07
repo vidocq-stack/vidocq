@@ -1,7 +1,9 @@
 package io.vidocq.mansart.transactions.cdi;
 
 import jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension;
+import jakarta.enterprise.inject.build.compatible.spi.ClassConfig;
 import jakarta.enterprise.inject.build.compatible.spi.Discovery;
+import jakarta.enterprise.inject.build.compatible.spi.Enhancement;
 import jakarta.enterprise.inject.build.compatible.spi.MetaAnnotations;
 import jakarta.transaction.TransactionScoped;
 
@@ -26,5 +28,17 @@ public final class MansartTransactionsExtension implements BuildCompatibleExtens
     @Discovery
     public void registerTransactionScope(MetaAnnotations meta) {
         meta.addContext(TransactionScoped.class, true /* normal scope */, TransactionScopedContext.class);
+    }
+
+    /**
+     * Declares {@link TransactionScoped} as a trigger annotation so compile-time bean discovery
+     * (Vauban's APT) includes user beans annotated {@code @TransactionScoped} in its bean index.
+     * Without this, classes annotated only with {@code @TransactionScoped} would be invisible to
+     * the build-time scan because the processor only watches a fixed list of standard CDI scopes.
+     */
+    @Enhancement(types = Object.class, withAnnotations = TransactionScoped.class, withSubtypes = true)
+    public void registerTransactionScopedTrigger(ClassConfig clazz) {
+        // No-op: the sole purpose is to advertise @TransactionScoped via the BCE
+        // @Enhancement(withAnnotations=...) contract so the APT round picks up annotated classes.
     }
 }
