@@ -1,106 +1,161 @@
 = Getting started
-:description: First Jakarta Data 1.0 `@Repository` served by Mansart on H2.
+:description: First Jakarta Data repository on H2, DataSource configuration via mansart-pool, declarative transaction.
 
-[CAUTION]
-====
-Mansart is in design. The API documented below is **the target**; some parts (notably `mansart-persistence`/JPA) are still on the drawing board. See `PLAN.md` at the repo root for milestones.
-====
+[.lead]
+This page shows how to lay the first stone: an entity, a Jakarta Data repository, a Mansart `DataSource`, and a transaction. Targets H2 in-memory for speed; switching to PostgreSQL only changes the configuration.
 
 == Prerequisites
 
-* **Java 25**, **Maven 4.0.0-rc-5** — `.sdkmanrc` at the repo root.
+* Java 25 (Temurin) + Maven 4.0.0-rc-5.
+* JDBC driver provided by the application (`com.h2database:h2` or `org.postgresql:postgresql`).
+* `cd mansart && sdk env` (or equivalent `.sdkmanrc`) to pin the JVM and Maven.
 
-== Maven coordinates
+== Maven dependencies
 
 [source,xml]
 ----
 <dependencies>
-    <dependency>
-        <groupId>jakarta.data</groupId>
-        <artifactId>jakarta.data-api</artifactId>
-    </dependency>
-    <dependency>
-        <groupId>io.vidocq.mansart</groupId>
-        <artifactId>mansart-jakarta-data</artifactId>
-        <version>0.1.0-SNAPSHOT</version>
-    </dependency>
-    <dependency>
-        <groupId>io.vidocq.mansart</groupId>
-        <artifactId>mansart-pool</artifactId>
-        <version>0.1.0-SNAPSHOT</version>
-        <scope>runtime</scope>
-    </dependency>
-    <!-- JDBC driver -->
-    <dependency>
-        <groupId>com.h2database</groupId>
-        <artifactId>h2</artifactId>
-        <scope>runtime</scope>
-    </dependency>
+  <dependency>
+    <groupId>io.vidocq.mansart</groupId>
+    <artifactId>mansart-data-api</artifactId>
+    <version>${mansart.version}</version>
+  </dependency>
+  <dependency>
+    <groupId>io.vidocq.mansart</groupId>
+    <artifactId>mansart-data-core</artifactId>
+    <version>${mansart.version}</version>
+  </dependency>
+  <dependency>
+    <groupId>io.vidocq.mansart</groupId>
+    <artifactId>mansart-data-dialect-h2</artifactId>
+    <version>${mansart.version}</version>
+  </dependency>
+  <dependency>
+    <groupId>io.vidocq.mansart</groupId>
+    <artifactId>mansart-pool</artifactId>
+    <version>${mansart.version}</version>
+  </dependency>
+  <dependency>
+    <groupId>io.vidocq.mansart</groupId>
+    <artifactId>mansart-transactions</artifactId>
+    <version>${mansart.version}</version>
+  </dependency>
+  <dependency>
+    <groupId>com.h2database</groupId>
+    <artifactId>h2</artifactId>
+    <scope>runtime</scope>
+  </dependency>
 </dependencies>
+
+<build>
+  <plugins>
+    <plugin>
+      <artifactId>maven-compiler-plugin</artifactId>
+      <configuration>
+        <annotationProcessorPaths>
+          <path>
+            <groupId>io.vidocq.mansart</groupId>
+            <artifactId>mansart-data-processor</artifactId>
+            <version>${mansart.version}</version>
+          </path>
+        </annotationProcessorPaths>
+      </configuration>
+    </plugin>
+  </plugins>
+</build>
 ----
 
-== Hello world
+The `mansart-data-processor` APT generates, at `compile` time, the metamodel (`_Author`) and the `AuthorRepositoryImpl` implementation. No runtime generation.
 
-A simple entity:
+== An entity
 
 [source,java]
 ----
-package io.example;
+package shop;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
+import jakarta.persistence.*;
 
 @Entity
-public class Book {
-    @Id long id;
-    String title;
-    String author;
+@Table(name = "authors")
+public class Author {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(nullable = false, unique = true)
+    private String name;
+
+    // getters / setters / no-arg constructor
 }
 ----
 
-A Jakarta Data repository:
+Mansart also accepts its zero-dep annotation set `io.vidocq.mansart.data.@Entity` when you want to avoid `jakarta.persistence-api` at the business module's compile time. See xref:reference.adoc[Reference].
+
+== A repository
 
 [source,java]
 ----
-import jakarta.data.repository.CrudRepository;
+package shop;
+
+import jakarta.data.repository.BasicRepository;
 import jakarta.data.repository.Repository;
+
 import java.util.List;
+import java.util.Optional;
 
 @Repository
-public interface BookRepository extends CrudRepository<Book, Long> {
-    List<Book> findByAuthor(String author);
+public interface AuthorRepository extends BasicRepository<Author, Long> {
+
+    long count();
+    boolean existsById(Long id);
+
+    List<Author> findByName(String name);
+    Optional<Author> findOneByName(String name);
+    long deleteByName(String name);
 }
 ----
 
-Usage:
+The APT generates `shop.AuthorRepositoryImpl` next to it, plus an entry in `META-INF/mansart-repositories.list`.
+
+== Standalone bootstrap
 
 [source,java]
 ----
-@Inject BookRepository books;
+import io.vidocq.mansart.pool.MansartDataSource;
+import io.vidocq.mansart.pool.PoolConfig;
+import io.vidocq.mansart.data.MansartData;
 
-void run() {
-    books.save(new Book(1L, "Le Vicomte de Bragelonne", "Dumas"));
-    var dumasBooks = books.findByAuthor("Dumas");
-    System.out.println(dumasBooks);
+var dataSource = MansartDataSource.create(PoolConfig.builder()
+    .jdbcUrl("jdbc:h2:mem:shop;DB_CLOSE_DELAY=-1")
+    .username("sa").password("")
+    .minSize(2).maxSize(10)
+    .build());
+
+var authors = MansartData.repository(AuthorRepository.class, dataSource);
+
+authors.save(new Author("Sylvie Germain"));
+authors.findByName("Sylvie Germain").forEach(System.out::println);
+----
+
+== CDI bootstrap (Vauban)
+
+[source,java]
+----
+@Inject AuthorRepository authors;
+
+@Transactional
+public Author register(String name) {
+    return authors.save(new Author(name));
 }
 ----
 
-== Build and run
+The `mansart-data-cdi` BCE reads `META-INF/mansart-repositories.list` and declares an `@ApplicationScoped` bean for each `@Repository` interface detected. The `mansart-transactions` interceptor materializes `@Transactional`. See xref:vauban::index.adoc[Vauban] for the CDI container details.
 
-[source,bash]
-----
-sdk env
-./mvnw -ntp install -DskipTests
-----
+== Full example in Vidocq-MPS
 
-[NOTE]
-====
-An example integrated with the Vidocq runtime already exists: `vidocq-mps-mansart-h2-example` (see the `vidocq` repo). It shows the chain Vauban (CDI) → Mansart (data) → H2 with `@Transactional`.
-====
+The `vidocq-mps-mansart-h2-example` example (in the Vidocq-MPS repo) shows end-to-end wiring: `MansartDataSource` + `mansart-jakarta-data` + `@Transactional` + Cassini REST endpoint. It is the reference sandbox to validate an integration.
 
-[TODO]
-====
-- Document `@Query("SELECT b FROM Book b WHERE …")` once the JDQL grammar is stable.
-- Document `Page<T>` and `PageRequest` (Jakarta Data 1.0 standard).
-- Document the `mansart-persistence` module (JPA 3.2) once delivered.
-====
+== Next step
+
+* xref:usage.adoc[Usage]: pagination, JDQL, nested transactions.
+* xref:concepts.adoc[Concepts]: Repository, EntityManager, Transaction, Pool.

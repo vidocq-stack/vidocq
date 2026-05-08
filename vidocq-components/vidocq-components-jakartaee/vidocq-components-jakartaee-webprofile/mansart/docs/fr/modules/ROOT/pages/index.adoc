@@ -1,27 +1,106 @@
 = Mansart
-:description: Jakarta Data 1.0 + Jakarta Persistence 3.2, dialectes JDBC, virtual threads.
+:description: Persistance Jakarta Data 1.0 + Jakarta Persistence 3.2 + transactions + pool JDBC, virtual threads, codegen statique, zéro réflexion.
 
 [.lead]
-Mansart est l'implémentation Jakarta Data 1.0 et Jakarta Persistence 3.2 de l'écosystème Vidocq — repositories, pagination, query methods, dialectes JDBC pluggables, sans ORM lourd. Construire la couche persistance comme on bâtit Versailles : modules durables, soigneusement assemblés.
+Mansart est la couche persistance de l'écosystème Vidocq. Elle implémente {spec-data-1}[Jakarta Data 1.0] (repositories déclaratifs) et {spec-jpa-3-2}[Jakarta Persistence 3.2] (JPA), aux côtés d'un gestionnaire de transactions Jakarta Transactions 2.0 et d'un pool de connexions JDBC virtual-thread-natif. Quatre briques découplées, une seule SPI dialecte SQL, génération statique APT + Class-File API — pas de réflexion à chaud, pas de proxy dynamique.
 
-[CAUTION]
-====
-Mansart est en conception. La SPI Jakarta Data 1.0 (`mansart-jakarta-data`) est en cours de stabilisation ; `mansart-persistence` (JPA 3.2) est encore en plan (voir `mansart/PLAN.md` à la racine du repo). Cette documentation décrit l'API cible — les `[TODO]` signalent ce qui n'est pas encore livré.
-====
+== Origine du nom
 
-== Pourquoi ?
+**Jules Hardouin-Mansart** (1646-1708), Premier architecte du Roi sous Louis XIV. On lui doit la galerie des Glaces de Versailles, le dôme des Invalides, la place Vendôme, le Grand Trianon. Il dirigeait l'Académie royale d'architecture, codifiait les ordres, négociait avec maçons et sculpteurs. L'œuvre tient debout depuis trois siècles parce que chaque pièce a été conçue pour s'imbriquer dans la suivante, et parce qu'on ne confondait pas le décor avec la structure.
 
-Jules Hardouin-Mansart (1646-1708), Premier architecte du Roi, auteur de la galerie des Glaces de Versailles, du dôme des Invalides, de la place Vendôme. Il dirigeait l'Académie royale d'architecture, codifiait les ordres, négociait avec les maçons et les sculpteurs. L'œuvre tient debout depuis trois siècles parce que chaque pièce a été conçue pour s'imbriquer dans la suivante, et parce qu'on ne confondait pas le décor avec la structure.
+Mansart, la couche persistance, applique le même découpage : la base d'un système d'information ne se voit pas, mais elle porte tout le reste. Voir https://fr.wikipedia.org/wiki/Jules_Hardouin-Mansart[la fiche Wikipédia].
 
-Mansart, la couche persistance, applique le même découpage. `mansart-jakarta-data` est l'API publique (repositories, query methods, pagination). `mansart-persistence` implémente JPA 3.2 et est consommée par `mansart-jakarta-data` côté backend SQL. `mansart-pool` gère le pool de connexions JDBC. `mansart-transactions` expose `UserTransaction` et `@Transactional`. Quatre modules, chacun avec un contrat clair.
+== En un coup d'œil
 
-== En bref
+[cols="1,3"]
+|===
+| Specs implémentées
+| {spec-data-1}[Jakarta Data 1.0] + {spec-jpa-3-2}[Jakarta Persistence 3.2] *(M7 en attente)* + Jakarta Transactions 2.0
 
-* **Jakarta Data 1.0** — `@Repository`, `Page`, `PageRequest`, `Sort`, query methods (`findByXxx`, `@Query`), CRUD générique.
-* **Jakarta Persistence 3.2** *(en plan)* — `EntityManager`, JPQL, Criteria, métamodèle statique généré par APT.
-* **Dialectes JDBC pluggables** — H2 (référence tests), PostgreSQL (cible production), suivants au backlog.
-* **Virtual Threads** pour l'exécution des requêtes — pas de pool plateforme.
-* **TDD + Arquillian** pour le harness TCK (Jakarta Data 1.0 TCK quand disponible).
-* **Pas d'auto-commit caché**, pas de proxy `EntityManager`, pas de scan d'entités runtime.
+| Repo
+| {repo-mansart}[forge.vidocq.dev/vidocq/mansart]
 
-xref:getting-started.adoc[Démarrer →]
+| Java
+| 25 (LTS)
+
+| Modules JPMS
+| `io.vidocq.mansart.data`, `io.vidocq.mansart.pool`, `io.vidocq.mansart.transactions`, `io.vidocq.mansart.persistence`
+
+| Dépendances runtime
+| Specs Jakarta uniquement (`jakarta.data-api`, `jakarta.persistence-api`, `jakarta.transaction-api`, `jakarta.inject-api`, `jakarta.cdi-api`). JDBC dans le JDK. Drivers en `provided`.
+
+| Threading
+| Virtual Threads partout — pas de pool plateforme, propagation transactionnelle via `ScopedValue`.
+
+| Codegen
+| APT (métamodèle, `*RepositoryImpl`) + Class-File API (proxy `Connection`). Zéro réflexion à l'usage, zéro ASM/Byte Buddy.
+
+| TCK
+| ✅ Jakarta Data 1.0 73/73 (M7) — voir xref:tck.adoc[état détaillé]. Jakarta Transactions 2.0 — smoke 5/5 ; suite complète en M6c.
+|===
+
+== Sous-modules
+
+Mansart se décompose en quatre sous-projets indépendants en runtime, organisés en couches :
+
+[cols="1,3,1"]
+|===
+| Sous-module | Rôle | Page dédiée
+
+| `mansart-pool`
+| Pool JDBC virtual-thread-natif, zéro-dep, alternative à HikariCP.
+| xref:sub-modules/mansart-pool.adoc[mansart-pool]
+
+| `mansart-transactions`
+| Gestionnaire de transactions Jakarta Transactions 2.0 (`TransactionManager`, `UserTransaction`, `@Transactional`).
+| xref:sub-modules/mansart-transactions.adoc[mansart-transactions]
+
+| `mansart-jakarta-data`
+| Implémentation Jakarta Data 1.0 — repositories, query methods, JDQL, dialectes JDBC (H2, PostgreSQL).
+| xref:sub-modules/mansart-jakarta-data.adoc[mansart-jakarta-data]
+
+| `mansart-persistence` *(M7 en attente)*
+| Implémentation Jakarta Persistence 3.2 (JPA classique). En conception — `mansart-jakarta-data` couvre déjà les besoins courants dans Vidocq.
+| xref:sub-modules/mansart-persistence.adoc[mansart-persistence]
+|===
+
+== Architecture en couches
+
+[mermaid]
+....
+flowchart TB
+    APP[Application Vidocq] --> DATA[mansart-jakarta-data<br/>Repositories]
+    APP --> JPA[mansart-persistence<br/>EntityManager M7]
+    DATA --> TX[mansart-transactions<br/>TransactionManager]
+    JPA --> TX
+    TX --> POOL[mansart-pool<br/>MansartDataSource]
+    POOL --> JDBC[(JDBC Driver<br/>H2 / PostgreSQL)]
+
+    classDef wait fill:#fffae6,stroke:#b58105,stroke-dasharray: 4 2;
+    class JPA wait;
+....
+
+Chaque couche s'utilise indépendamment : `mansart-pool` est un `DataSource` autonome, `mansart-transactions` ne connaît pas Jakarta Data, et `mansart-jakarta-data` peut tourner sans pool Mansart si l'application apporte le sien.
+
+== Positionnement dans l'écosystème
+
+[mermaid]
+....
+flowchart LR
+    VIDOCQ[xref:vidocq::index.adoc[Vidocq-MPS]] --> MANSART[Mansart]
+    VAUBAN[xref:vauban::index.adoc[Vauban CDI]] -.@Repository.-> MANSART
+    VAUBAN -.@Transactional.-> MANSART
+    MANSART --> JDK[Java 25 JDBC]
+....
+
+Vauban fournit le bootstrap CDI (BCE) qui découvre les `@Repository` et les transforme en beans `@ApplicationScoped`, et l'intercepteur `@Transactional`. Vidocq-MPS orchestre le packaging et le démarrage.
+
+== Ressources rapides
+
+* xref:getting-started.adoc[Démarrage rapide]
+* xref:usage.adoc[Cas d'usage]
+* xref:concepts.adoc[Concepts]
+* xref:internals.adoc[Fonctionnement interne]
+* xref:tck.adoc[État TCK]
+* xref:reference.adoc[Référence]
+* xref:migration.adoc[Migration depuis Hibernate / EclipseLink / Spring Data]

@@ -1,0 +1,146 @@
+= Internals
+:description: Repository call lifecycle, APT + Class-File API codegen, virtual-thread threading.
+
+[.lead]
+This page describes what happens when the application calls `authors.findByName("Sylvie Germain")`: from the CDI proxy down to the pool, through JDQL → SQL translation and ResultSet → entity materialization. It is also the right place to understand **why** Mansart favors static codegen.
+
+== Overview — repository method call
+
+[mermaid]
+....
+sequenceDiagram
+    participant App
+    participant Bean as @Repository bean
+    participant Impl as XxxRepositoryImpl<br/>(APT-generated)
+    participant Runtime as RepositoryRuntime
+    participant Dialect as Dialect SPI
+    participant TX as TransactionManager
+    participant Pool as MansartDataSource
+    participant DB as JDBC Driver
+
+    App->>Bean: authors.findByName("...")
+    Bean->>Impl: delegate (CDI synthetic bean)
+    Impl->>Runtime: queryList(FIND_BY_NAME, args)
+    Runtime->>Dialect: render(QueryPlan, args)
+    Dialect-->>Runtime: SQL + typed parameters
+    Runtime->>TX: getCurrentConnection() ?
+    alt enlisted connection
+        TX-->>Runtime: Connection (ScopedValue)
+    else new connection
+        Runtime->>Pool: getConnection()
+        Pool-->>Runtime: PooledConnection
+    end
+    Runtime->>DB: PreparedStatement.executeQuery()
+    DB-->>Runtime: ResultSet
+    Runtime->>Runtime: row → Author<br/>(MethodHandle setters)
+    Runtime-->>Impl: List<Author>
+    Impl-->>Bean: List<Author>
+    Bean-->>App: List<Author>
+....
+
+The whole hot path is reflection-free: `QueryPlan` instances are static constants prepared at `<clinit>`, parameter/attribute binding goes through `MethodHandle` cached once.
+
+== Codegen — APT (compile time)
+
+`mansart-data-processor` is a `javax.annotation.processing.Processor` that scans compiled CUs:
+
+. For each class annotated `@Entity` (Mansart or JPA) → generates `_Book.java` (rich metamodel) and `Book_.java` (JPA standard metamodel).
+. For each interface annotated `@Repository` → generates `BookRepositoryImpl.java` (final public implementation class) + an entry in `META-INF/mansart-repositories.list`.
+
+Source code generated under `target/generated-sources/annotations/`, marked `@Generated("io.vidocq.mansart.data.processor")`. The processor has no runtime dependency — it lives only in the consuming module's APT classpath.
+
+[plantuml]
+....
+@startuml
+package "mansart-data-processor (APT)" {
+  [DataProcessor] --> [EntityModelWriter]
+  [DataProcessor] --> [RepositoryWriter]
+  [EntityModelWriter] --> [_Book.java]
+  [EntityModelWriter] --> [Book_.java]
+  [RepositoryWriter] --> [BookRepositoryImpl.java]
+  [RepositoryWriter] --> [META-INF/mansart-repositories.list]
+}
+package "Application" {
+  [Book.java] -[#blue]-> [DataProcessor] : @Entity
+  [BookRepository.java] -[#blue]-> [DataProcessor] : @Repository
+}
+@enduml
+....
+
+=== Why APT and not runtime codegen?
+
+. **AOT-friendly** — GraalVM native-image, Leyden CDS: no proxy to register, everything is in the bytecode at build time.
+. **Diagnosable** — generated code is readable, debuggable, visible in stack traces.
+. **Zero warmup** — no dynamic classloading on first call.
+. **JPMS-strict-friendly** — generated classes are in the same package as sources, no need for `opens`.
+
+== Codegen — Class-File API (build time)
+
+`mansart-pool` generates `PooledConnectionProxy` at build via {url-jep}/484[JEP 484 Class-File API]. The proxy implements `java.sql.Connection`, delegates every method to the physical connection, and intercepts `close()` to return the connection to the pool instead of closing it.
+
+Why Class-File API rather than `java.lang.reflect.Proxy`:
+
+* `Connection` has 50+ methods — a reflective proxy costs an `invoke` per call.
+* The Class-File API produces standard bytecode, JIT-friendly from the first call.
+* No ASM / Byte Buddy dependency — matches the ecosystem's "zero external dependency" rule.
+
+== Pool acquire / release
+
+[mermaid]
+....
+flowchart LR
+    subgraph Acquire
+      A1[permits.acquire] --> A2{idle deque<br/>empty ?}
+      A2 -- no --> A3[idle.poll]
+      A3 --> A4{valid<br/>isValid ?}
+      A4 -- yes --> A5[inUse.add]
+      A4 -- no --> A6[realClose<br/>+ create new]
+      A2 -- yes --> A6
+      A6 --> A5
+    end
+    subgraph Release
+      R1[Connection.close on proxy] --> R2[reset state]
+      R2 --> R3[inUse.remove]
+      R3 --> R4{aliveAndYoung ?}
+      R4 -- yes --> R5[idle.offerFirst]
+      R4 -- no --> R6[realClose]
+      R5 --> R7[permits.release]
+      R6 --> R7
+    end
+....
+
+* **`Semaphore permits`** — hard pool bound, fair=false (perf).
+* **`ConcurrentLinkedDeque idle`** — lock-free stack, push/pop at the head (hot LIFO).
+* **`ConcurrentHashMap.newKeySet inUse`** — set of borrowed connections, for metrics and leak detection.
+* **Housekeeper virtual thread** — periodic wake-up, evicts connections that are too old or idle, pre-warms up to `minSize`.
+
+Details and numbers: see lien:{repo-mansart}/src/branch/main/mansart-pool/BENCH.md[mansart-pool BENCH.md].
+
+== Threading — virtual threads
+
+* All blocking JDBC executions (`PreparedStatement.execute*`, `ResultSet.next`) run on virtual threads. No platform pool.
+* The JDBC connection is **never** held across a `synchronized` block that wraps a blocking operation (anti-pattern: thread pinning).
+* The transactional connection is carried by `ScopedValue<Connection> CURRENT` — automatic propagation into `StructuredTaskScope.fork(...)` with no application code.
+* `mansart-pool` validates in CI with `-Djdk.tracePinnedThreads=full` that no pinning appears under 1000 parallel borrows.
+
+== ResultSet → entity mapping
+
+No reflection. The `_Book` metamodel captures, in `<clinit>`, one `MethodHandle setter` per attribute, obtained via `MethodHandles.privateLookupIn(Book.class, lookup)`. For each row:
+
+[source,java]
+----
+Book row = constructor.invoke();           // MethodHandle constructor
+_Book.title.setter.invokeExact(row, rs.getString(1));
+_Book.author.setter.invokeExact(row, refLoader.get(rs.getLong(2)));
+// ...
+----
+
+`invokeExact` on a `MethodHandle` is inlined by C2 — perf equivalent to direct field access after warmup.
+
+== Transactions — propagation and XA
+
+* **Single-resource** (the dominant case) — the `@Transactional` interceptor opens/closes the transaction. The JDBC connection is enlisted as a degenerate `XAResource` (`onePhase=true`).
+* **Multi-resource (M4)** — true 2PC: `prepare` then `commit` on each enlisted `XAResource`. Recovery log (M5) records `PREPARED` transactions that did not complete, for recovery on reboot.
+* **Suspend / resume** — `TransactionManager.suspend()` removes the context from the current `ScopedValue` and returns it; `resume(t)` reinstates it. Typical batch case: a worker job suspending the caller's TX to issue a clean INSERT/COMMIT.
+
+See lien:{repo-mansart}/src/branch/main/mansart-transactions/PLAN.md[mansart-transactions PLAN.md] for the M1-M8 roadmap.

@@ -1,61 +1,95 @@
 = Concepts
-:description: Repositories, dialectes, pool JDBC, transactions, métamodèle.
+:description: Vocabulaire Mansart — Entity, Repository, EntityManager, Transaction, ConnectionPool, Dialecte, Métamodèle.
 
-[CAUTION]
-Mansart est en conception. Cette page décrit l'API et l'architecture cibles. Les sections marquées `[TODO]` ne sont pas encore livrées.
+[.lead]
+Lexique technique de Mansart. Pose les définitions communes aux quatre sous-modules pour éviter l'ambiguïté quand on lit `internals.adoc` ou `reference.adoc`.
 
-== Repositories Jakarta Data 1.0
+== Entity
 
-Trois variantes standards :
+Classe Java annotée `@jakarta.persistence.Entity` (ou son équivalent Mansart `@io.vidocq.mansart.data.Entity` zéro-dep). Elle représente une ligne d'une table SQL. Mansart lit ses annotations à la **compilation** via APT et génère un métamodèle statique (`_Book` ou `Book_`), pas de scan classpath au démarrage.
 
-* `BasicRepository<T, K>` — CRUD minimal (`save`, `delete`, `findById`).
-* `CrudRepository<T, K>` — étend `BasicRepository` avec batch et requêtes nommées.
-* `DataRepository<T, K>` — repository « libre » à composer.
+Attributs reconnus : `@Id`, `@GeneratedValue`, `@Column`, `@Table`, `@Version`, `@Enumerated`, `@Embedded`/`@Embeddable`, `@ManyToOne`, `@OneToOne`, `@JoinColumn`, `@Transient`. Les collections (`@OneToMany`, `@ManyToMany`) et l'héritage sont reportés à `mansart-persistence` (M7).
 
-Plus les **query methods** :
+== Repository
 
-* déduites du nom (`findByAuthor`, `countByYearGreaterThan`)
-* explicites via `@Query("SELECT b FROM Book b WHERE b.author = ?1")`
+Interface annotée `@jakarta.data.repository.Repository`. Spécifie ce que l'application veut faire de l'entité, sans préjuger du SQL exact. Mansart matérialise l'interface en classe `XxxRepositoryImpl` à la compilation (APT). Aucune réflexion à l'exécution, aucun proxy dynamique.
 
-== Dialectes JDBC
+Trois racines standards :
 
-`mansart-jakarta-data` parle SQL via une SPI **dialecte** :
+* `BasicRepository<T, K>` — CRUD minimal (`save`, `delete`, `findById`, `findAll`, `count`, `existsById`).
+* `CrudRepository<T, K>` — étend `BasicRepository` avec variantes batch.
+* `DataRepository<T, K>` — repository « libre » à composer entièrement par méthodes nommées et `@Query`.
 
-* `MansartDialect` — interface unique : translation JDQL → SQL, types JDBC, syntaxe pagination, syntaxe upsert.
-* `H2Dialect` — référence pour tests in-memory.
-* `PostgresDialect` — cible production.
+== EntityManager
 
-[TODO]
-====
-Lister les fonctions par dialecte (LIMIT/OFFSET vs FETCH FIRST, RETURNING, ON CONFLICT, etc.). Cf. `mansart/PLAN.md`.
-====
+Concept Jakarta Persistence 3.2 — gestionnaire de cycle de vie des entités (managed/detached), file de modifications, propagation `flush`/`commit`. Hors périmètre de `mansart-jakarta-data` ; sera fourni par `mansart-persistence` (M7 en attente — voir xref:sub-modules/mansart-persistence.adoc[mansart-persistence]).
 
-== Pool JDBC
+Dans Vidocq, le besoin courant (CRUD + queries typées) est déjà couvert par les repositories Jakarta Data, qui contournent l'`EntityManager` au profit d'un mapping ResultSet direct via `MethodHandle`.
 
-`mansart-pool` expose un `DataSource` pool minimal : virtual threads, pas de JNDI, configurable via MicroProfile Config.
+== Transaction
 
-== Transactions
+Démarcation atomique d'un ensemble d'opérations sur une ou plusieurs ressources. Mansart implémente Jakarta Transactions 2.0 :
 
-`mansart-transactions` expose :
+* **TransactionManager** — API SPI, gérée par le conteneur. `begin/commit/rollback`, `suspend/resume`, `enlistResource`/`delistResource`.
+* **UserTransaction** — API utilisateur, programmatique.
+* **`@Transactional`** — intercepteur CDI déclaratif, supporte les six TxType standards.
+* **TransactionScoped** — scope CDI dont la durée de vie épouse la transaction.
 
-* `UserTransaction` Jakarta Transactions ;
-* `@Transactional` (intercepteur CDI fourni par le module) ;
-* propagation `REQUIRED`, `REQUIRES_NEW`, `MANDATORY`, `SUPPORTS`.
+Le contexte transactionnel est porté par un `ScopedValue<TransactionContext>` — propagation transparente à travers les virtual threads créés via `StructuredTaskScope`.
 
-L'intégration Vidocq passe par l'extension `vidocq-mps-mansart-transactions-extension` (déjà livrée — voir le repo `vidocq`).
+== ConnectionPool
 
-== Métamodèle (JPA 3.2, en plan)
+Cache borné de `java.sql.Connection` physiques. Évite le coût `connect`/`disconnect` à chaque requête. `mansart-pool` fournit `MansartDataSource implements javax.sql.DataSource` :
 
-[TODO]
-====
-`mansart-persistence` générera à la compilation, via APT :
+* `Deque<PooledConnection> idle` — pile lock-free des connexions disponibles.
+* `Set<PooledConnection> inUse` — empruntées en cours.
+* `Semaphore permits` — taille = `maxSize`, bloque l'acquisition au-delà.
+* `ScopedValue<Connection> CURRENT` — connexion liée à la transaction courante.
+* Housekeeper virtual thread — eviction `idleTimeout` / `maxLifetime`, validation `isValid`.
 
-* le métamodèle statique standard (`Book_.title`, `Book_.author`)
-* les `EntityFactory<T>` qui matérialisent une `ResultSet` JDBC en entité, sans réflexion.
-====
+== Dialecte SQL
 
-== Choix de design
+`MansartDialect` — SPI qui isole les différences SQL entre bases : pagination (`LIMIT/OFFSET` vs `FETCH FIRST`), upsert (`ON CONFLICT` vs `MERGE`), retour d'identifiant (`RETURNING` vs `getGeneratedKeys`), types (`UUID`, `JSONB`, `BOOLEAN`).
 
-* **Pas d'auto-flush implicite** — l'utilisateur appelle explicitement `flush()` ou termine la transaction.
-* **Pas de proxy `EntityManager`** — l'API est consommée directement.
-* **Pas de scan d'entités runtime** — l'APT enregistre les entités à la compilation.
+Découverte par `ServiceLoader` (`provides DialectFactory with H2DialectFactory`). Dialectes livrés : `H2`, `PostgreSQL`. D'autres au backlog (MariaDB, SQL Server).
+
+== Métamodèle statique
+
+Classes générées par APT à côté des entités. Deux formats :
+
+* **Format Mansart riche** (`_Book`) — `_Book.title` est une `TextAttribute<Book>` avec `columnName()`, `MethodHandle getter()`, etc. Permet au dialecte de générer du SQL spécialisé sans `instanceof` en chaîne.
+* **Format JPA standard** (`Book_`) — `Book_.title` est une `SingularAttribute<Book, String>`. Interop pour Criteria API future.
+
+Les `MethodHandle` sont obtenus une seule fois au `<clinit>` via `MethodHandles.privateLookupIn(...)` — jamais de réflexion à l'usage.
+
+== JDQL vs JPQL
+
+* **JDQL** (Jakarta Data Query Language) — sous-ensemble simplifié défini par {spec-data-1}[Jakarta Data 1.0]. SELECT/UPDATE/DELETE sur entités, `LIKE`, `BETWEEN`, `ORDER BY`, paramètres nommés. Mansart le supporte via `@Query` dans `mansart-jakarta-data`.
+* **JPQL** (Jakarta Persistence Query Language) — surensemble plus riche (joins explicites, sous-requêtes, agrégats), traité par `mansart-persistence` (M7). Pour l'instant, les besoins JPQL sont couverts par JDQL ou par requête SQL native.
+
+== Différences Jakarta Data vs JPA
+
+[cols="2,2,2"]
+|===
+| Aspect | Jakarta Data 1.0 (`mansart-jakarta-data`) | Jakarta Persistence 3.2 (`mansart-persistence`)
+
+| API
+| Repositories déclaratifs typés
+| `EntityManager` impératif
+
+| Cycle de vie entités
+| Stateless — pas de managed/detached
+| Persistence context (managed)
+
+| Cache L1
+| Aucun
+| Persistence context
+
+| Requêtes
+| Method names + JDQL + lifecycle annotations
+| JPQL + Criteria API
+
+| État Mansart
+| ✅ Livré (TCK 73/73)
+| ⏳ M7 en attente
+|===

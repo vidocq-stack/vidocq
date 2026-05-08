@@ -1,0 +1,151 @@
+= Usage
+:description: Repository patterns, derived queries, JDQL, transactions, pool sizing.
+
+[.lead]
+Common recipes for `mansart-jakarta-data`, `mansart-transactions`, and `mansart-pool`. The exhaustive reference (all annotations, all configuration options) lives in xref:reference.adoc[Reference].
+
+== Jakarta Data repositories
+
+=== `BasicRepository<T, K>` and `CrudRepository<T, K>`
+
+`BasicRepository` covers `save`, `delete`, `findById`, `findAll`. `CrudRepository` adds typed batch variants. To go further, declare specialized methods on the interface; the APT turns them into static query plans.
+
+[source,java]
+----
+@Repository
+public interface AuthorRepository extends CrudRepository<Author, Long> {
+    long count();
+    boolean existsById(Long id);
+}
+----
+
+=== Derived queries (by method name)
+
+Mansart parses the name into a neutral AST, then produces SQL via the target dialect. Supported keywords: `findBy`, `existsBy`, `countBy`, `deleteBy`, operators `And`, `Or`, `Like`, `Between`, `LessThan`, `GreaterThan`, `LessThanEqual`, `GreaterThanEqual`, `IgnoreCase`, `OrderBy<Asc|Desc>`.
+
+[source,java]
+----
+List<Author> findByName(String name);
+Optional<Author> findOneByName(String name);
+List<Author> findByNameLike(String pattern);
+List<Author> findByNameIgnoreCase(String name);
+List<Author> findAllByOrderByNameAsc();
+long deleteByName(String name);
+----
+
+=== `@Find` (typed parameter matching)
+
+[source,java]
+----
+@Find
+List<Book> findByAuthorAndPublishedOnBetween(Author author,
+                                             LocalDate from,
+                                             LocalDate to);
+----
+
+The Java parameter name must match the entity attribute (compile with `-parameters`).
+
+=== `@Query` JDQL
+
+JDQL is the query dialect defined by {spec-data-1}[Jakarta Data 1.0]. Simpler than JPQL, sufficient for typed SELECT/UPDATE/DELETE.
+
+[source,java]
+----
+@Query("FROM Author WHERE name LIKE :pattern AND id > :minId")
+List<Author> search(String pattern, Long minId);
+
+@Query("UPDATE Author SET name = :newName WHERE name = :oldName")
+long rename(String oldName, String newName);
+----
+
+=== Pagination — offset and keyset
+
+[source,java]
+----
+Page<Author> findByNameLikeOrderByNameAsc(String pattern, PageRequest page);
+
+// Call
+var page = authors.findByNameLikeOrderByNameAsc("S%", PageRequest.ofPage(1).size(20));
+----
+
+Keyset cursors (`PageRequest.afterKey(...)`) avoid drift on long pagination.
+
+=== Lifecycle annotations
+
+`@Insert`, `@Update`, `@Delete`, `@Save` typed: parameter = entity, collection or varargs; return `void`/`T`/`Iterable<T>`/`int`/`long`/`boolean`. See xref:reference.adoc[Reference].
+
+== Transactions
+
+=== `@Transactional` (CDI)
+
+The `mansart-transactions` interceptor materializes `@jakarta.transaction.Transactional` (TxType `REQUIRED`, `REQUIRES_NEW`, `MANDATORY`, `SUPPORTS`, `NEVER`, `NOT_SUPPORTED`).
+
+[source,java]
+----
+@ApplicationScoped
+public class AuthorService {
+
+    @Inject AuthorRepository authors;
+
+    @Transactional
+    public Author register(String name) {
+        return authors.save(new Author(name));
+    }
+
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public void audit(String message) { /* ... */ }
+}
+----
+
+=== `UserTransaction` (programmatic)
+
+[source,java]
+----
+@Inject UserTransaction tx;
+
+void run() throws Exception {
+    tx.begin();
+    try {
+        authors.save(new Author("Marguerite Yourcenar"));
+        tx.commit();
+    } catch (Exception e) {
+        tx.rollback();
+        throw e;
+    }
+}
+----
+
+=== Suspend / resume
+
+`TransactionManager.suspend()` and `resume(Transaction)` cover batch / scheduler cases. The transactional context is carried by a `ScopedValue<TransactionContext>`, so it propagates transparently across virtual threads created by `StructuredTaskScope`.
+
+== Connection pool
+
+=== Minimal configuration
+
+[source,java]
+----
+var ds = MansartDataSource.create(PoolConfig.builder()
+    .jdbcUrl("jdbc:postgresql://db.local:5432/shop")
+    .username("shop").password("...")
+    .minSize(4).maxSize(32)
+    .acquireTimeout(Duration.ofSeconds(5))
+    .idleTimeout(Duration.ofMinutes(10))
+    .maxLifetime(Duration.ofMinutes(30))
+    .validationMode(ValidationMode.IS_VALID)
+    .build());
+----
+
+=== Sizing
+
+With virtual threads, the classic "threads = connections" sizing disappears: dimension on real DB concurrency, not application concurrency. Rule of thumb: `maxSize ≈ DB vCPUs × 2..4`. Beyond that, the DB becomes the bottleneck — see lien:{repo-mansart}/src/branch/main/mansart-pool/BENCH.md[mansart-pool BENCH.md].
+
+=== Leak detection
+
+`leakDetectionThreshold(Duration)` logs a warning + acquisition stack trace when a connection stays borrowed longer than the threshold. Enable in staging, disable in production if the overhead is measured.
+
+== Composition with other modules
+
+* xref:vauban::index.adoc[Vauban CDI] — produces `@Repository` beans, runs the `@Transactional` interceptor.
+* xref:cassini::index.adoc[Cassini REST] — REST endpoints calling transactional services.
+* xref:vidocq::index.adoc[Vidocq-MPS] — orchestrator that assembles pool + tx + data + REST into an AOT-friendly fat jar.

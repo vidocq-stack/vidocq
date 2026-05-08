@@ -1,0 +1,128 @@
+= mansart-pool
+:description: Virtual-thread-native JDBC pool, zero-dep, alternative to HikariCP.
+
+[.lead]
+`mansart-pool` is a JDBC connection pool implemented in pure Java 25, with no external dependency, with a lock-free `Semaphore + ConcurrentLinkedDeque` and a housekeeper on a virtual thread. It is fully decoupled from the rest of Mansart: its only contract is `javax.sql.DataSource`.
+
+== Mission
+
+* Provide a performant, simple, configurable `DataSource`.
+* Be virtual-thread-native — no `synchronized` contention on the hot path.
+* Stay optional — the user can plug `mansart-jakarta-data` onto any `DataSource` (Hikari, Tomcat-JDBC, c3p0).
+
+== Position in the workspace
+
+`mansart-pool` is a **standalone peer** of the other Mansart modules. It depends neither on `mansart-data-api` nor on `mansart-transactions`. Conversely, `mansart-jakarta-data` and `mansart-transactions` may use it but do not depend on it at compile time.
+
+[mermaid]
+....
+flowchart LR
+    APP[Application] --> POOL[mansart-pool<br/>MansartDataSource]
+    DATA[mansart-jakarta-data] -.may consume.-> POOL
+    TX[mansart-transactions] -.may enlist.-> POOL
+    POOL --> JDBC[(JDBC driver)]
+....
+
+== Modules
+
+[cols="2,3"]
+|===
+| Sub-module | Role
+
+| `mansart-pool-api`
+| `PoolConfig`, `PoolConfig.Builder`, `PoolMetrics`, `PoolException`, `ValidationMode`. Zero dependency.
+
+| `mansart-pool-core`
+| `MansartDataSource` (impl `DataSource`), `PooledConnection`, housekeeper. Generates `PooledConnectionProxy` at build via Class-File API.
+|===
+
+== Public API
+
+[source,java]
+----
+PoolConfig config = PoolConfig.builder()
+    .jdbcUrl("jdbc:postgresql://db.local:5432/shop")
+    .username("shop").password("...")
+    .minSize(4).maxSize(32)
+    .acquireTimeout(Duration.ofSeconds(5))
+    .idleTimeout(Duration.ofMinutes(10))
+    .maxLifetime(Duration.ofMinutes(30))
+    .validationMode(ValidationMode.IS_VALID)
+    .leakDetectionThreshold(Duration.ofSeconds(30))
+    .build();
+
+DataSource ds = MansartDataSource.create(config);
+PoolMetrics metrics = ((MansartDataSource) ds).metrics();
+----
+
+See xref:reference.adoc[Reference] for the full property table.
+
+== Runtime architecture
+
+[source,text]
+----
+MansartDataSource (impl DataSource)
+    │
+    ├── Deque<PooledConnection> idle    (ConcurrentLinkedDeque, lock-free)
+    ├── Set<PooledConnection>   inUse   (ConcurrentHashMap.newKeySet)
+    ├── Semaphore               permits (size = maxSize, fair=false)
+    ├── ScopedValue<Connection> CURRENT (transaction propagation)
+    └── ScheduledTask           housekeeper (virtual thread)
+----
+
+Acquire (`getConnection()`):
+
+. `permits.acquire(acquireTimeout)` — hard bound.
+. `idle.poll()` — hot LIFO.
+. If valid (`isValid` or `validationQuery`) → `inUse.add`; otherwise → `realClose` + create new.
+. Return: `PooledConnectionProxy` that intercepts `close()`.
+
+Release (`Connection.close()` on the proxy):
+
+. `pc.reset()` — rollback if dirty, `autoCommit=true`, default isolation.
+. `inUse.remove(pc)`.
+. If `aliveAndYoung()` → `idle.offerFirst(pc)`; otherwise → `realClose`.
+. `permits.release()`.
+
+The `PooledConnectionProxy` is generated at build via {url-jep}/484[Class-File API JEP 484] — not via `java.lang.reflect.Proxy`. A single class implementing every `Connection` method, intercepting `close()`. See xref:internals.adoc[Internals].
+
+== `ScopedValue` integration for transactions
+
+The connection enlisted by `mansart-transactions` is carried by `ScopedValue<Connection> CURRENT` instead of a `ThreadLocal`. Benefits:
+
+* Automatic propagation into `StructuredTaskScope.fork(...)`.
+* No ThreadLocal memory leaks on short-lived virtual threads.
+* Clear semantics: the value is only visible inside the lexical scope of `ScopedValue.where(...)`.
+
+== Metrics
+
+`PoolMetrics` (lock-free snapshot):
+
+* `idleSize()`, `inUseSize()`, `totalSize()`.
+* `acquireCount()`, `acquireWaitNanos()` (cumulative + percentiles).
+* `creationCount()`, `evictionCount()`.
+* `leakCount()`.
+
+Micrometer / Prometheus bridge on the backlog (MP3).
+
+== Leak detection
+
+`leakDetectionThreshold(Duration)` records, on acquire, a stack trace inside the `PooledConnection`. If the connection stays borrowed longer than the threshold, the housekeeper logs a `WARNING` with the stack — immediate diagnosis of the offending code path. Enable in staging, disable in production if the overhead is measured.
+
+== Comparison vs HikariCP
+
+* **Threading** — Mansart virtual-thread-native, no pinning under Loom load. HikariCP uses `synchronized` blocks that pin.
+* **Dependencies** — Mansart zero-dep. HikariCP depends on SLF4J + javassist (transitively via micrometer).
+* **AOT** — Mansart compatible with GraalVM native-image and Leyden CDS without configuration. HikariCP needs `--initialize-at-build-time` for javassist.
+* **API** — very close (`HikariConfig` → `PoolConfig`). See xref:migration.adoc[Migration].
+
+Numbers: see lien:{repo-mansart}/src/branch/main/mansart-pool/BENCH.md[mansart-pool BENCH.md] (2026-05-06 baseline vs HikariCP).
+
+== Roadmap
+
+* ✅ MP1 — API + skeleton.
+* ⏳ MP2 — Core implementation (`MansartDataSource`, semaphore, deque, validation).
+* ⏳ MP3 — Metrics + leak detection.
+* ⏳ MP4 — `mansart-jakarta-data` integration (transparent for the user).
+
+See lien:{repo-mansart}/src/branch/main/mansart-pool/PLAN.md[mansart-pool PLAN.md].

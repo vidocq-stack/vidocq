@@ -1,0 +1,98 @@
+= mansart-transactions
+:description: Jakarta Transactions 2.0 transaction manager — TM, UT, @Transactional, suspend/resume, XA.
+
+[.lead]
+`mansart-transactions` provides the ecosystem's Jakarta Transactions 2.0 implementation: `TransactionManager`, `UserTransaction`, `@Transactional` interceptor, `@TransactionScoped`, multi-resource (XA) support, recovery log. Designed for single-resource JDBC first, extended to true 2PC in M4.
+
+== Mission
+
+* `MansartTransactionManager` conformant to Jakarta Transactions 2.0.
+* Native virtual-thread support — TX propagation via `ScopedValue<TransactionContext>`.
+* `@Transactional` CDI interceptor (six TxTypes) integrated with xref:vauban::index.adoc[Vauban].
+* `ConnectionXAResource` adapter to enlist a JDBC connection as a resource.
+* Jakarta Transactions 2.0 TCK — smoke 5/5 delivered, full suite in progress.
+
+== Why a new project
+
+Available open-source TMs (Atomikos, Narayana) are designed for classic Java EE: platform thread pool, XML configuration, heavy dependencies. Mansart targets virtual threads + zero-dep + JPMS-strict — a fit that did not exist.
+
+== Modules
+
+[cols="2,3"]
+|===
+| Sub-module | Role
+
+| `mansart-transactions-spi`
+| Public API: `TransactionManager`, `UserTransaction`, `Transaction`, `Synchronization`, `Status`. Re-export of `jakarta.transaction-api` + minor additions.
+
+| `mansart-transactions-core`
+| Implementation: `MansartTransactionManager`, `MansartTransaction`, journal, recovery.
+
+| `mansart-transactions-cdi`
+| `@Transactional` interceptor, `@TransactionScoped`, Vauban-compatible BCE.
+
+| `mansart-transactions-jdbc`
+| `ConnectionXAResource` — adapter from JDBC `Connection` to `XAResource`.
+
+| `mansart-transactions-tck`
+| Official TCK runner (out of reactor, POM Model 4.0.0).
+|===
+
+== Quick architecture
+
+* Transactional context stored in `ScopedValue<TransactionContext>`.
+* `begin/commit/rollback` mutates the current context; `suspend` returns the context and removes it; `resume(t)` reinstates it.
+* `enlistResource(XAResource)` adds a resource to the context; on `commit`, the TM calls `prepare` then `commit` (or `commit(onePhase=true)` if single-resource).
+* Recovery log — append-only file journaling `PREPARED` TXs. On reboot, recovery scans known XAResources and finishes orphan TXs.
+
+[mermaid]
+....
+sequenceDiagram
+    participant App
+    participant Interceptor as @Transactional<br/>interceptor
+    participant TM as MansartTransactionManager
+    participant Conn as JDBC Connection
+    participant DB
+
+    App->>Interceptor: methodCall()
+    Interceptor->>TM: begin()
+    TM->>TM: ScopedValue.where(CTX, new tx)
+    Interceptor->>App: invoke method body
+    App->>Conn: getConnection()<br/>(enlist via ConnectionXAResource)
+    App->>DB: SQL
+    App-->>Interceptor: returnValue
+    Interceptor->>TM: commit()
+    TM->>Conn: XAResource.commit(onePhase=true)
+    Conn->>DB: COMMIT
+    TM-->>Interceptor: ok
+    Interceptor-->>App: returnValue
+....
+
+== Roadmap
+
+* ✅ **M1** — Local single-thread (TM, UT, status).
+* ✅ **M2** — `Synchronization` (`beforeCompletion`, `afterCompletion`).
+* ✅ **M3** — `suspend` / `resume` (TX inheritance via virtual threads).
+* ⏳ **M4** — Multi-resource (true 2PC).
+* ⏳ **M5** — Recovery log + crash tests.
+* ✅ **M5b** — Driver-side auto-recovery.
+* ⚠️ **M6** — Official Jakarta Transactions 2.0 TCK — smoke 5/5 ✅, `full-tck` build SUCCESSFUL ✅, report parsing in M6c.
+* ✅ **M7** — `@Transactional` CDI interceptor + `@TransactionScoped` + Vauban BCE.
+* ✅ **M8** — `ConnectionXAResource` JDBC adapter.
+
+See lien:{repo-mansart}/src/branch/main/mansart-transactions/PLAN.md[PLAN.md].
+
+== TCK
+
+Detailed status: xref:tck.adoc[Mansart TCK status] and lien:{repo-mansart}/src/branch/main/mansart-transactions/TCK.md[TCK.md].
+
+The Jakarta Transactions 2.0 TCK is a historical Sun tsharness harness (Apache Ant + `ts.jte` + ~80 properties). No Surefire-scannable jar. Mansart ships `MansartTckProvider` + `MansartUserTransaction` that plug into the harness; smoke wiring 5/5 validated in CI.
+
+== Bugs / Bench
+
+* Bugs: see lien:{repo-mansart}/src/branch/main/mansart-transactions/BUG.md[BUG.md].
+* Benchmarks: see lien:{repo-mansart}/src/branch/main/mansart-transactions/BENCH.md[BENCH.md].
+
+== Vidocq integration
+
+Vidocq-MPS ships `vidocq-mps-mansart-transactions-extension` which starts `MansartTransactionManager` at boot and registers it in the Vauban CDI context. The application only has to `@Inject UserTransaction` or use `@Transactional` on its methods.

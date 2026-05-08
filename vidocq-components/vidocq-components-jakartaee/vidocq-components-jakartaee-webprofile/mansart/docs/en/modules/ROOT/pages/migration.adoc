@@ -1,66 +1,146 @@
 = Migration
-:description: From Hibernate, EclipseLink, Spring Data or OpenJPA.
+:description: From Hibernate, EclipseLink, Spring Data, HikariCP — transition paths to Mansart.
 
-[CAUTION]
-Mansart is in design. Real migration will only be realistic once Jakarta Data 1.0 and Jakarta Persistence 3.2 are stable inside Mansart. This page documents the target mappings.
-
-== From Hibernate (ORM 7+)
-
-[cols="1,1,2"]
-|===
-| Hibernate | Mansart | Note
-
-| `SessionFactory` / `EntityManagerFactory`
-| `MansartManagerFactory` *(planned)*
-| Standard JPA 3.2 API once shipped
-
-| HQL
-| Standard JPA 3.2 JPQL
-| Mansart targets the spec, not proprietary HQL extensions
-
-| `@Entity`, `@Id`, `@GeneratedValue`
-| Identical
-| Standard JPA 3.2 annotations
-
-| Hibernate Reactive
-| `mansart-jakarta-data` + virtual threads
-| JDBC + Loom, no Vert.x
-
-| Native query / Criteria
-| `[TODO]` planned
-| `mansart-persistence`
-|===
+[.lead]
+Mansart targets the standard ({spec-data-1}[Jakarta Data 1.0] + {spec-jpa-3-2}[Jakarta Persistence 3.2]), not proprietary extensions. Migrating from Spring Data is trivial — the Jakarta Data spec explicitly took Spring Data conventions on board. Hibernate / EclipseLink takes more effort if the application uses out-of-spec features (custom dialects, listeners, events).
 
 == From Spring Data JPA
 
-[cols="1,1,2"]
+[cols="2,2,3"]
 |===
 | Spring Data | Mansart Jakarta Data | Note
 
 | `org.springframework.data.repository.CrudRepository`
 | `jakarta.data.repository.CrudRepository`
-| API standardized by Jakarta Data 1.0 — inspired by Spring Data, signatures very close
+| Standardized API — very close signatures.
 
-| `@Repository`
-| `@Repository` (Jakarta Data)
-| Slightly different semantics (Jakarta Data scope = bean repository, not exception translator)
+| `@org.springframework.stereotype.Repository`
+| `@jakarta.data.repository.Repository`
+| Different semantics: Jakarta Data scope = bean repository, not exception translator.
 
-| Named methods (`findByXxx`)
+| Derived methods (`findByXxx`)
 | Identical
-| Standard Jakarta Data convention
+| Convention adopted by Jakarta Data.
+
+| `@Query("SELECT b FROM Book b WHERE ...")`
+| `@Query("FROM Book WHERE ...")` (JDQL)
+| JDQL is simpler than JPQL — the leading SELECT is implicit.
+
+| `Pageable` / `Page<T>`
+| `PageRequest` / `Page<T>`
+| Identical semantics. `PageRequest.afterKey(...)` for keyset.
+
+| `@Transactional` (Spring)
+| `@jakarta.transaction.Transactional`
+| Six standard TxType values. No `propagation = NESTED` (savepoints) in v1.
+
+| `JpaRepository<T, ID>`
+| `BasicRepository<T, K>` or `CrudRepository<T, K>`
+| No `findAll(Sort)` — use `@OrderBy` or a `findAllByOrderByXxxAsc`.
 |===
 
 [TIP]
 ====
-Migrating from Spring Data is probably the shortest path — the Jakarta Data spec explicitly took Spring Data conventions on board.
+Migrating from Spring Data is the shortest path. Derived method names and `@Query` JDQL transpose line-by-line in most cases.
 ====
 
-== From EclipseLink, OpenJPA
+== From Hibernate ORM 6/7
 
-[TODO]: to document once a real-world case shows up.
+[cols="2,2,3"]
+|===
+| Hibernate | Mansart | Note
+
+| `SessionFactory` / `EntityManagerFactory`
+| `MansartManagerFactory` *(M7 pending)*
+| For everyday needs, switch to `mansart-jakarta-data` directly.
+
+| HQL
+| JPQL (M7) or JDQL (delivered)
+| Mansart targets the spec, not proprietary HQL extensions.
+
+| `@Entity`, `@Id`, `@GeneratedValue`, `@Column`
+| Identical
+| Standard JPA annotations recognized as-is.
+
+| `@OneToMany`, `@ManyToMany`, inheritance
+| Out of scope v1
+| Deferred to `mansart-persistence` (M7).
+
+| Hibernate Reactive
+| `mansart-jakarta-data` + virtual threads
+| Blocking JDBC under Loom — no Vert.x, no callback.
+
+| JPA listeners (`@PrePersist`, `@PostLoad`)
+| Out of scope v1
+| Covered by M7.
+
+| Criteria API
+| Out of scope v1
+| Covered by M7.
+
+| Schema generation (`hibernate.hbm2ddl`)
+| External (Flyway / Liquibase recommended)
+| Mansart does not handle DDL migrations.
+|===
+
+== From EclipseLink / OpenJPA
+
+Less common case; transposition similar to Hibernate. Standard JPA 3.2 annotations are recognized as-is; proprietary extensions (`@CustomConverter`, `@Cache(...)`) must be rewritten as standard equivalents or deferred to `mansart-persistence` (M7).
+
+// TODO@user: document an EclipseLink → Mansart real-world experience once a case shows up.
+
+== From HikariCP (pool)
+
+[cols="2,2,3"]
+|===
+| HikariCP | mansart-pool | Note
+
+| `HikariDataSource`
+| `MansartDataSource`
+| Implements standard `javax.sql.DataSource`.
+
+| `HikariConfig`
+| `PoolConfig` builder
+| Similar API — `jdbcUrl`, `username`, `password`, `maximumPoolSize` → `maxSize`.
+
+| `minimumIdle`
+| `minSize`
+| Same.
+
+| `connectionTimeout`
+| `acquireTimeout`
+| Same.
+
+| `idleTimeout`
+| `idleTimeout`
+| Same.
+
+| `maxLifetime`
+| `maxLifetime`
+| Same.
+
+| `leakDetectionThreshold`
+| `leakDetectionThreshold`
+| Same.
+
+| `connectionTestQuery`
+| `validationQuery` + `validationMode=QUERY`
+| Mansart prefers `Connection.isValid()` (`validationMode=IS_VALID`) — JDBC standard, no custom SQL.
+
+| Micrometer / Prometheus metrics
+| `PoolMetrics` (snapshot)
+| Micrometer bridge on the `mansart-pool` backlog.
+|===
+
+Performance comparison: see lien:{repo-mansart}/src/branch/main/mansart-pool/BENCH.md[mansart-pool BENCH.md]. mansart-pool is virtual-thread-native and avoids the pinning cost under Loom load.
 
 == Known pitfalls
 
-* **No entity proxy** — Mansart materializes entities directly. Lazy loading is still to be designed (likely approach: explicit `Optional<Reference<T>>` rather than magical).
-* **No auto-flush** — `EntityManager#flush()` stays explicit.
-* **Schema generation** — `[TODO]` to document once shipped.
+* **No entity proxy** — Mansart materializes entities directly. Lazy loading is not magical: `@ManyToOne(fetch=LAZY)` loads the attribute on next access through a getter intercepted by APT-generated bytecode (M5).
+* **No implicit auto-flush** — the user calls `flush()` explicitly or ends the transaction. Different from Hibernate which flushes on query.
+* **No runtime entity scan** — the APT registers entities at compile time. Adding an `@Entity` without recompiling is a classic mistake when migrating from Hibernate.
+* **No `@OneToMany` in v1** — model explicitly via the owning `@ManyToOne` and a `findByOwner(...)` in the target's repository.
+
+== No migration needed
+
+Vidocq-MPS ships `vidocq-mps-mansart-h2-example` which shows a clean end-to-end integration. For a new project, starting from this example is often simpler than migrating a legacy.

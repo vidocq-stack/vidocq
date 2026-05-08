@@ -1,0 +1,98 @@
+= mansart-transactions
+:description: Gestionnaire de transactions Jakarta Transactions 2.0 — TM, UT, @Transactional, suspend/resume, XA.
+
+[.lead]
+`mansart-transactions` fournit l'implémentation Jakarta Transactions 2.0 de l'écosystème : `TransactionManager`, `UserTransaction`, intercepteur `@Transactional`, scope `@TransactionScoped`, support multi-resource (XA), recovery log. Conçu pour single-resource JDBC d'abord, étendu au 2PC vrai en M4.
+
+== Mission
+
+* `MansartTransactionManager` conforme Jakarta Transactions 2.0.
+* Support virtual threads natif — propagation TX via `ScopedValue<TransactionContext>`.
+* Intercepteur CDI `@Transactional` (six TxType) intégré à xref:vauban::index.adoc[Vauban].
+* Adaptateur `ConnectionXAResource` pour enlister une connexion JDBC comme ressource.
+* TCK Jakarta Transactions 2.0 — smoke 5/5 livré, suite complète en cours.
+
+== Pourquoi un nouveau projet
+
+Les TM open source disponibles (Atomikos, Narayana) sont conçus pour Java EE classique : pool de threads plateforme, configuration XML, dépendances lourdes. Mansart vise virtual threads + zéro-dep + JPMS strict — un fit qui n'existait pas.
+
+== Modules
+
+[cols="2,3"]
+|===
+| Sous-module | Rôle
+
+| `mansart-transactions-spi`
+| API publique : `TransactionManager`, `UserTransaction`, `Transaction`, `Synchronization`, `Status`. Re-exposition `jakarta.transaction-api` + ajouts mineurs.
+
+| `mansart-transactions-core`
+| Implémentation : `MansartTransactionManager`, `MansartTransaction`, journal, recovery.
+
+| `mansart-transactions-cdi`
+| Intercepteur `@Transactional`, scope `@TransactionScoped`, BCE Vauban-compatible.
+
+| `mansart-transactions-jdbc`
+| `ConnectionXAResource` — adapter JDBC `Connection` vers `XAResource`.
+
+| `mansart-transactions-tck`
+| Runner TCK officiel (hors reactor, POM Model 4.0.0).
+|===
+
+== Architecture rapide
+
+* Contexte transactionnel stocké dans `ScopedValue<TransactionContext>`.
+* `begin/commit/rollback` mute le contexte courant ; `suspend` retourne le contexte et le retire ; `resume(t)` le réinstalle.
+* `enlistResource(XAResource)` ajoute une ressource au contexte ; à `commit`, le TM appelle `prepare` puis `commit` (ou `commit(onePhase=true)` si single-resource).
+* Recovery log — fichier append-only journalisant les TX en `PREPARED`. Au reboot, recovery scanne les XAResources connus et termine les TX orphelines.
+
+[mermaid]
+....
+sequenceDiagram
+    participant App
+    participant Interceptor as @Transactional<br/>interceptor
+    participant TM as MansartTransactionManager
+    participant Conn as JDBC Connection
+    participant DB
+
+    App->>Interceptor: methodCall()
+    Interceptor->>TM: begin()
+    TM->>TM: ScopedValue.where(CTX, new tx)
+    Interceptor->>App: invoke method body
+    App->>Conn: getConnection()<br/>(enlist via ConnectionXAResource)
+    App->>DB: SQL
+    App-->>Interceptor: returnValue
+    Interceptor->>TM: commit()
+    TM->>Conn: XAResource.commit(onePhase=true)
+    Conn->>DB: COMMIT
+    TM-->>Interceptor: ok
+    Interceptor-->>App: returnValue
+....
+
+== Roadmap
+
+* ✅ **M1** — Local single-thread (TM, UT, status).
+* ✅ **M2** — `Synchronization` (`beforeCompletion`, `afterCompletion`).
+* ✅ **M3** — `suspend` / `resume` (TX inheritance via virtual threads).
+* ⏳ **M4** — Multi-resource (2PC vrai).
+* ⏳ **M5** — Recovery log + tests de crash.
+* ✅ **M5b** — Auto-recovery driver-side.
+* ⚠️ **M6** — TCK officiel Jakarta Transactions 2.0 — smoke 5/5 ✅, suite `full-tck` build SUCCESSFUL ✅, parsing rapport en M6c.
+* ✅ **M7** — CDI interceptor `@Transactional` + `@TransactionScoped` + BCE Vauban.
+* ✅ **M8** — JDBC adapter `ConnectionXAResource`.
+
+Voir lien:{repo-mansart}/src/branch/main/mansart-transactions/PLAN.md[PLAN.md].
+
+== TCK
+
+État détaillé : xref:tck.adoc[État TCK Mansart] et lien:{repo-mansart}/src/branch/main/mansart-transactions/TCK.md[TCK.md].
+
+Le TCK Jakarta Transactions 2.0 est un harness Sun tsharness historique (Apache Ant + `ts.jte` + ~80 propriétés). Pas de jar Surefire-scannable. Mansart livre `MansartTckProvider` + `MansartUserTransaction` qui s'intègrent dans le harness ; smoke wiring 5/5 validé en CI.
+
+== Bugs / Bench
+
+* Bugs : voir lien:{repo-mansart}/src/branch/main/mansart-transactions/BUG.md[BUG.md].
+* Benchmarks : voir lien:{repo-mansart}/src/branch/main/mansart-transactions/BENCH.md[BENCH.md].
+
+== Intégration Vidocq
+
+Vidocq-MPS livre `vidocq-mps-mansart-transactions-extension` qui démarre `MansartTransactionManager` au boot et l'enregistre dans le contexte CDI Vauban. L'application n'a qu'à `@Inject UserTransaction` ou utiliser `@Transactional` sur ses méthodes.

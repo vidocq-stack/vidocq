@@ -1,0 +1,161 @@
+= mansart-jakarta-data
+:description: Jakarta Data 1.0 implementation — repositories, JDQL, JDBC dialects, APT codegen.
+
+[.lead]
+`mansart-jakarta-data` implements {spec-data-1}[Jakarta Data 1.0] — `@Repository` annotations, query methods, pagination, JDQL — on top of JDBC, with no heavy ORM, no runtime reflection. Every user-defined repository is materialized at compile time by APT. Official TCK: 73/73 PASS (M7, May 2026).
+
+== Mission
+
+* Cover the common persistence needs (CRUD, typed queries, pagination) without forcing an `EntityManager`.
+* Zero runtime reflection — static metamodel + cached `MethodHandle`.
+* Pluggable JDBC dialects (H2, PostgreSQL delivered; MariaDB / SQL Server on the backlog).
+* AOT-compatible (GraalVM native-image, Leyden CDS).
+
+== Modules
+
+[cols="2,3"]
+|===
+| Sub-module | Role
+
+| `mansart-data-api`
+| `@Entity`, `@Repository`, `@Find`, `@Query`, `@Insert`, `@Update`, `@Delete`, `@Save`, `@Dialect`, `@JdbcRepository`, `@MansartDataSource` annotations.
+
+| `mansart-data-core`
+| Runtime: `RepositoryRuntime`, `QueryPlan` execution, ResultSet ↔ entity mapping, connection management.
+
+| `mansart-data-processor`
+| APT — static metamodel (`_Book`, `Book_`) + `*RepositoryImpl` + `META-INF/mansart-repositories.list`.
+
+| `mansart-data-dialect-spi`
+| SPI: `Dialect`, `DialectFactory`, neutral query AST.
+
+| `mansart-data-dialect-h2`
+| H2 dialect (test reference + embedded).
+
+| `mansart-data-dialect-postgresql`
+| PostgreSQL dialect (production target).
+
+| `mansart-data-cdi`
+| CDI 4.1 bootstrap — BCE that reads `META-INF/mansart-repositories.list` and declares `@ApplicationScoped` beans.
+
+| `mansart-data-tests`
+| H2 in-memory unit tests.
+
+| `mansart-data-tck`
+| Jakarta Data 1.0 TCK runner — **out of reactor** (standalone POM Model 4.0.0).
+|===
+
+== Quickstart
+
+See xref:getting-started.adoc[Getting started]. Summary:
+
+[source,java]
+----
+@Entity
+public class Author {
+    @Id @GeneratedValue Long id;
+    String name;
+}
+
+@Repository
+public interface AuthorRepository extends BasicRepository<Author, Long> {
+    List<Author> findByName(String name);
+    @Query("FROM Author WHERE name LIKE :pattern")
+    List<Author> search(String pattern);
+}
+
+// APT generates AuthorRepositoryImpl + _Author + META-INF/mansart-repositories.list
+----
+
+== Functional scope (delivered)
+
+* `BasicRepository`, `CrudRepository`, `DataRepository`.
+* Inherited methods: `save`, `delete`, `findById`, `findAll`, `count`, `existsById`.
+* Lifecycle: `@Insert`, `@Update`, `@Delete`, `@Save`.
+* `@Find` (parameter-name binding).
+* Derived queries: `findBy`, `existsBy`, `countBy`, `deleteBy` + `And`, `Or`, `Like`, `Between`, `LessThan`, `GreaterThan`, `LessThanEqual`, `GreaterThanEqual`, `IgnoreCase`, `OrderBy<Asc|Desc>`.
+* `@Query` JDQL (SELECT/UPDATE/DELETE).
+* Offset pagination (`PageRequest.ofPage(n).size(s)`) and keyset (`PageRequest.afterKey(...)`).
+* `Sort`, `Order`, `Limit`.
+* SQLState → Jakarta Data exception mapping (`OptimisticLockingFailureException`, `EntityExistsException`, etc.).
+
+== Out of scope v1
+
+* Explicit JDQL subqueries.
+* Multi-level explicit joins.
+* Multi-attribute aggregations.
+* `@OneToMany`, `@ManyToMany`, `@MappedSuperclass`, `@Inheritance`.
+* `@Convert` / `AttributeConverter`.
+* NoSQL (Jakarta Data NoSQL is an extension out of scope for Mansart v1).
+
+Deferred to `mansart-persistence` (M7) or v1.1.
+
+== Runtime architecture
+
+[mermaid]
+....
+flowchart TB
+    REPO[Repository Impl<br/>APT-generated] --> PLAN[QueryPlan<br/>static const]
+    PLAN --> RT[RepositoryRuntime]
+    RT --> DIAL[Dialect SPI]
+    DIAL --> SQL[SQL + parameters]
+    RT --> CONN[Connection<br/>via DataSource]
+    CONN --> JDBC[(JDBC driver)]
+    RT --> MM[_Book metamodel<br/>MethodHandle setters]
+    MM --> ROW[Author instance]
+....
+
+* Query plans prepared at `<clinit>` (static constants).
+* `MethodHandle` cached once via `MethodHandles.privateLookupIn(...)`.
+* Connection: borrowed from the injected `DataSource`; released at the end of the method (unless a TX is active → the TX connection).
+
+See xref:internals.adoc[Internals] for codegen and mapping details.
+
+== Dialects
+
+[cols="2,1,3"]
+|===
+| Dialect | Status | Key notes
+
+| H2 | ✅ Delivered | `MERGE INTO`, `LIMIT/OFFSET`, `IDENTITY`.
+| PostgreSQL | ⏳ M4 | `ON CONFLICT`, `RETURNING`, `UUID`/`JSONB` types.
+| MariaDB | ❌ Backlog | —
+| SQL Server | ❌ Backlog | —
+|===
+
+Key differences isolated in the dialect: pagination, upsert, identifier return, native types (`UUID`, `JSONB`, `BOOLEAN`), snake_case schema.
+
+== JPMS
+
+[source,java]
+----
+module io.vidocq.mansart.data {
+    requires jakarta.data;
+    requires jakarta.persistence;
+    requires java.sql;
+    exports io.vidocq.mansart.data;
+    exports io.vidocq.mansart.data.runtime;
+    exports io.vidocq.mansart.data.dialect.spi;
+    uses io.vidocq.mansart.data.dialect.spi.DialectFactory;
+}
+----
+
+== Bench
+
+First smoke: see lien:{repo-mansart}/src/branch/main/mansart-jakarta-data/BENCH.md[mansart-jakarta-data BENCH.md] (BENCH-20260504-01: `findById` H2 in-memory).
+
+== Bugs
+
+See lien:{repo-mansart}/src/branch/main/mansart-jakarta-data/BUG.md[BUG.md]. Major historical bug: `BUG-20260505-01` (TCK entities not metamodelled) — resolved via the M7 runtime repo creator.
+
+== Roadmap
+
+* ✅ M2 — Skeleton + APT metamodel.
+* ✅ M3a — H2 dialect + BasicRepository CRUD.
+* ⏳ M3b — Keyset pagination, lifecycle, derived queries (extras).
+* ⏳ M4 — PostgreSQL dialect.
+* ⏳ M5 — `@Query` JDQL (extras — base delivered in M7-27).
+* ✅ M6 — Jakarta Data 1.0 TCK.
+* ✅ M7 — Runtime impl generation — TCK 73/73 PASS.
+
+See lien:{repo-mansart}/src/branch/main/mansart-jakarta-data/PLAN.md[PLAN.md] for sub-milestone details (M7-26 to M7-29).
