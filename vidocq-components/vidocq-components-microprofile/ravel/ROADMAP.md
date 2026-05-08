@@ -146,7 +146,7 @@ dans le manifest du JAR API — la 3.1 originale (publiée 2023) n'avait ni desc
 | Tests d'intégration avec container Vauban | Smoke test de bootstrap CDI SE Vauban + injection `Config` dans un conteneur réel (`SeContainerInitializer`) | ✅ |
 | Pas d'opens JPMS sur les beans utilisateurs | BCE + producers sans réflexion sur classes applicatives | ✅ |
 
-**Livrable (incrément actuel) :** `@Inject @ConfigProperty(name="app.name", defaultValue="vidocq") String name;` + `Optional<T>`/`Provider<T>`/`Supplier<T>` validés par tests de module. **19 tests verts** sur `ravel-cdi-vauban`.
+**Livrable (incrément actuel) :** `@Inject @ConfigProperty(name="app.name", defaultValue="vidocq") String name;` + `Optional<T>`/`Provider<T>`/`Supplier<T>` validés par tests de module. **20 tests verts** sur `ravel-cdi-vauban` (165 au total avec `ravel-core`).
 
 ---
 

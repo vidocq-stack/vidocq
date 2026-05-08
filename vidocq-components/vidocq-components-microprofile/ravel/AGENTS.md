@@ -13,7 +13,7 @@
 - Converters built-in (priorité 1) : primitifs/boxes, `String`, `Class<?>`, `Optional{Int,Long,Double}`, `URI`, `URL`, `InetAddress`, `Duration`, `Period`, `LocalDate/Time/DateTime`, `OffsetTime/DateTime`, `ZonedDateTime`, `Instant`. Boolean §5.1.1 truthy : `true|1|yes|y|on` (case-insensitive).
 - Arrays §5.4 résolus à la lookup via `ArraySplitter` + `ArrayConverter` (cache `ConcurrentHashMap` dans `RavelConfig.derivedConverters`). Implicit converters §5.2 détectés sur méthodes/ctor **publics** uniquement (pas de `setAccessible`).
 - `module-info.java` de `ravel-core` fournit déjà `ConfigProviderResolver` et déclare `uses` pour `ConfigSource`, `ConfigSourceProvider`, `Converter` : privilégier `ServiceLoader`, pas des hooks maison.
-- Priorité actuelle : **M3 = profils + property expressions** ; opérer sur le raw value avant conversion, détection de cycle via `ScopedValue` (jamais `ThreadLocal`).
+- Priorité actuelle : **M5 = TCK MicroProfile Config 3.1 (100 % PASS) + bench JMH `ravel-bench`** vs Smallrye Config sur la même JVM. M4 peut être complété au fil de l'eau (durcissement validation BCE, couverture CDI étendue) mais le focus est désormais sur le TCK.
 
 ## Frontières à ne pas casser
 - Ne jamais remettre `ravel-tck` dans le reactor : le parent `pom.xml` l'exclut volontairement à cause de ShrinkWrap Maven Resolver / Model 4.0.0 vs 4.1.0.
@@ -48,5 +48,5 @@ java -jar ravel-bench/target/benchmarks.jar
 - `M3` doit s'insérer **avant** la conversion : profils via `ProfiledConfigSource` (ordinal +1 sur la source enveloppée) et expressions `${key}` / `${key:default}` résolues sur la raw value retournée par la cascade. Détection de cycle = `ScopedValue<Set<String>>` + `IllegalArgumentException`.
 - `M4` reste un adaptateur CDI Vauban (Build Compatible Extension), pas une extension du core. Validation au déploiement → `DeploymentException`, pas `NoSuchElementException` à runtime.
 - Avant toute modification structurelle de `ravel-core` ou `ravel-cdi-vauban`, raisonner avec le contrat final : **TCK MicroProfile Config 3.1 à 100 % + comparaison JMH reproductible vs Smallrye Config**.
-- Suite de tests actuelle : **131 tests verts** sur `ravel-core` ; toute régression doit être expliquée et corrigée avant merge.
+- Suite de tests actuelle : **145 tests verts** sur `ravel-core` + **20 tests verts** sur `ravel-cdi-vauban` (M1=80, M2=+51, M3=+14, M4=20) ; toute régression doit être expliquée et corrigée avant merge.
 

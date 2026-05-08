@@ -58,6 +58,12 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
+                    <!--
+                      Test scope only: Vauban inspecte par réflexion les classes producer
+                      du module pour résoudre les beans CDI 4.x. L'opens cible explicitement
+                      le module Vauban (pas un bean utilisateur), conformément à la règle
+                      "pas d'opens JPMS sur les beans applicatifs" (cf. AGENTS.md).
+                    -->
                     <argLine>--add-opens io.vidocq.ravel.cdi.vauban/io.vidocq.ravel.cdi=io.vidocq.vauban.core</argLine>
                 </configuration>
             </plugin>

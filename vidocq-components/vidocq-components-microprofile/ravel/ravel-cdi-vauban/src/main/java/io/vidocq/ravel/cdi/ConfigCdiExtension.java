@@ -37,7 +37,7 @@ public class ConfigCdiExtension implements BuildCompatibleExtension {
                 continue;
             }
 
-            boolean optional = isOptionalType(injectionPoint.type());
+            boolean optional = isDeferredOrOptionalWrapper(injectionPoint.type());
             String key = resolvePropertyName(cfg, declaration);
             boolean hasDefault = hasConfiguredDefault(cfg);
 
@@ -60,18 +60,14 @@ public class ConfigCdiExtension implements BuildCompatibleExtension {
     }
 
     static boolean isSupportedType(Type type) {
-        if (type instanceof ClassType classType) {
+        if (type instanceof ClassType) {
             return true;
         }
         if (type instanceof ParameterizedType pt) {
-            Type raw = pt.genericClass();
-            if (!(raw instanceof ClassType classType)) {
+            if (!(pt.genericClass() instanceof ClassType classType)) {
                 return false;
             }
-            String rawName = classType.declaration().name();
-            if (!rawName.equals("java.util.Optional")
-                    && !rawName.equals("jakarta.inject.Provider")
-                    && !rawName.equals("java.util.function.Supplier")) {
+            if (!isDeferredOrOptionalWrapperName(classType.declaration().name())) {
                 return false;
             }
             return pt.typeArguments().size() == 1 && pt.typeArguments().get(0) instanceof ClassType;
@@ -79,14 +75,21 @@ public class ConfigCdiExtension implements BuildCompatibleExtension {
         return false;
     }
 
-    static boolean isOptionalType(Type type) {
-        if (type instanceof ParameterizedType pt && pt.genericClass() instanceof ClassType classType) {
-            String rawName = classType.declaration().name();
-            return rawName.equals("java.util.Optional")
-                    || rawName.equals("jakarta.inject.Provider")
-                    || rawName.equals("java.util.function.Supplier");
-        }
-        return false;
+    /**
+     * Vrai si le type est un "wrapper" qui rend la propriété sous-jacente
+     * non requise au déploiement : {@link java.util.Optional}, {@code jakarta.inject.Provider}
+     * (lookup paresseux), {@code java.util.function.Supplier} (lookup paresseux).
+     */
+    static boolean isDeferredOrOptionalWrapper(Type type) {
+        return type instanceof ParameterizedType pt
+                && pt.genericClass() instanceof ClassType classType
+                && isDeferredOrOptionalWrapperName(classType.declaration().name());
+    }
+
+    private static boolean isDeferredOrOptionalWrapperName(String fqn) {
+        return "java.util.Optional".equals(fqn)
+                || "jakarta.inject.Provider".equals(fqn)
+                || "java.util.function.Supplier".equals(fqn);
     }
 
     static String resolvePropertyName(AnnotationInfo cfg, DeclarationInfo declaration) {
