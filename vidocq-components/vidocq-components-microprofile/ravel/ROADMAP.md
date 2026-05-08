@@ -134,19 +134,19 @@ dans le manifest du JAR API — la 3.1 originale (publiée 2023) n'avait ni desc
 
 **Scope spec :** §6 (CDI integration), §6.1 (`@ConfigProperty`), §6.2 (`Config` injection), §6.3 (Optional injection).
 
-| Tâche | Notes |
-|---|---|
-| `ConfigCdiExtension` (Build Compatible Extension Vauban) | Détecte les points d'injection `@ConfigProperty` à la compilation |
-| Génération de producers `@Produces @ConfigProperty` par type | Un par couple (type, defaultValue) — déduplication |
-| Support `Optional<T>` (§6.3) | Si la propriété est absente → `Optional.empty()`, pas de `NoSuchElementException` |
-| Support `Provider<T>` / `Supplier<T>` | Lookup à chaque `get()` (dynamic injection) |
-| `@Inject Config config` | Injection du `Config` complet via producer dédié |
-| `@ConfigProperty(defaultValue=…)` | Respecté ; valeur par défaut convertie comme une valeur normale |
-| Validation au déploiement (§6.4) | Propriété manquante sans `defaultValue` et type non-`Optional` → `DeploymentException` (pas `NoSuchElementException` à runtime) |
-| Tests d'intégration avec Vauban embedded | Vérification BCE, scope `@Dependent` par défaut |
-| Pas d'opens JPMS sur les beans utilisateurs | Le BCE génère du code, pas de réflexion runtime sur les classes utilisateur |
+| Tâche | Notes | État |
+|---|---|---|
+| `ConfigCdiExtension` (Build Compatible Extension Vauban) | BCE ajoutée + validation des points `@ConfigProperty` (type supporté, propriété requise manquante) | ✅ |
+| Génération de producers `@Produces @ConfigProperty` par type | Producer unique paramétrique via `InjectionPoint` (déduplication par design) | ✅ |
+| Support `Optional<T>` (§6.3) | Si la propriété est absente → `Optional.empty()` | ✅ |
+| Support `Provider<T>` / `Supplier<T>` | Lookup à chaque `get()` (dynamic injection) | ✅ |
+| `@Inject Config config` | Injection du `Config` complet via producer dédié | ✅ |
+| `@ConfigProperty(defaultValue=…)` | Valeur par défaut convertie avec le converter cible | ✅ |
+| Validation au déploiement (§6.4) | BCE signale les injections requises manquantes (sans `defaultValue`) | ✅ |
+| Tests d'intégration avec container Vauban | Smoke test de bootstrap CDI SE Vauban + injection `Config` dans un conteneur réel (`SeContainerInitializer`) | ✅ |
+| Pas d'opens JPMS sur les beans utilisateurs | BCE + producers sans réflexion sur classes applicatives | ✅ |
 
-**Livrable :** `@Inject @ConfigProperty(name="app.name", defaultValue="vidocq") String name;` fonctionne dans Vauban. Tests d'intégration verts.
+**Livrable (incrément actuel) :** `@Inject @ConfigProperty(name="app.name", defaultValue="vidocq") String name;` + `Optional<T>`/`Provider<T>`/`Supplier<T>` validés par tests de module. **19 tests verts** sur `ravel-cdi-vauban`.
 
 ---
 

@@ -12,5 +12,8 @@ module io.vidocq.ravel.cdi.vauban {
     requires static jakarta.inject;
     requires static jakarta.annotation;
 
-    // exports io.vidocq.ravel.cdi; — activé en M4 quand le BCE sera implémenté
+    provides jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension
+            with io.vidocq.ravel.cdi.ConfigCdiExtension;
+
+    exports io.vidocq.ravel.cdi;
 }

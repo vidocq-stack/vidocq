@@ -38,5 +38,29 @@
             <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-core</artifactId>
+            <version>0.1.0-SNAPSHOT</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-classloader-spi</artifactId>
+            <version>0.1.0-SNAPSHOT</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <argLine>--add-opens io.vidocq.ravel.cdi.vauban/io.vidocq.ravel.cdi=io.vidocq.vauban.core</argLine>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>
