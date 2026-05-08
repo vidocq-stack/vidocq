@@ -1,54 +1,108 @@
 = Concepts
-:description: Build steps, build items, extensions, mécanismes runtime de Vidocq.
+:description: Vocabulaire Vidocq-MPS — extension, build step, recorder, lifecycle phase.
 
-== Build steps
+[.lead]
+Vidocq-MPS adopte le vocabulaire d'extensions popularisé par Quarkus, mais l'implémente sur un socle 100 % JDK (CDI Lite via xref:vauban::index.adoc[Vauban] + Class-File API standard, JEP 484). Cette page définit les termes utilisés dans le reste de la documentation.
 
-Une extension Vidocq déclare des _build steps_ — méthodes annotées qui s'exécutent à la compilation, consomment et produisent des `BuildItem`. Modèle calqué sur Quarkus, mais le moteur est Vauban + Class-File API (pas ArC + Gizmo).
+== Extension
 
-[TODO]
-====
-Documenter le cycle de vie complet d'un `@BuildStep` une fois la SPI stabilisée :
+Une **extension** est un module Maven qui contribue au runtime via la SPI `vidocq-mps-spi`. Elle se présente comme :
 
-* phases : `INDEX`, `BUILD`, `RUNTIME_INIT`, `STATIC_INIT`
-* injection de `BuildContext`, `IndexView`, `RecorderContext`
-* règles de pureté (déterminisme, idempotence)
-====
+* un fragment de bytecode et de configuration injecté dans la séquence de boot ;
+* une ou plusieurs classes annotées `@BuildStep` qui s'exécutent à la compilation ;
+* éventuellement un ou plusieurs `@Recorder` qui produisent du bytecode rejoué au démarrage.
 
-== Build items
+Une extension est **statique** : elle ne charge rien dynamiquement à l'exécution. Tout ce qu'elle apporte est résolu à `mvn package`.
 
-Les `BuildItem` sont les unités d'échange entre extensions. Catégories prévues :
+== Build step
 
-* **`SimpleBuildItem`** — un seul producer autorisé (ex. `JaxRsApplicationBuildItem`).
-* **`MultiBuildItem`** — N producers (ex. `BeanBuildItem`, `ResourceBuildItem`).
-* **`SymbolicBuildItem`** — phase markers (ex. `ApplicationStartBuildItem`).
+Une **build step** est une méthode annotée `@BuildStep` dans une extension. Elle :
 
-[TODO] : énumérer les `BuildItem` livrés dans `vidocq-mps-spi/src/main/java/io/vidocq/mpserver/spi/`.
+* consomme zéro, un ou plusieurs `BuildItem` en paramètres ;
+* produit un ou plusieurs `BuildItem` en valeur de retour ou via `BuildProducer<T>` ;
+* s'exécute à la compilation, dans un graphe topologique calculé par `vidocq-mps-core`.
 
-== Extensions livrées
+Le moteur d'orchestration garantit qu'une build step ne tourne qu'après la production de ses entrées et avant la consommation de ses sorties. Les paires producteur/consommateur définissent les arêtes du graphe.
 
-Modules sous `vidocq-mps-core-extensions/` :
+== BuildItem
 
-* **CDI** — branche Vauban comme moteur d'injection.
-* **JAX-RS** — branche Cassini, génère le routage statique.
-* **JSON-B** — branche Champollion, déclenche la génération APT au build.
-* **Servlet** — branche Foy.
-* **Mansart** — initialise le pool JDBC, scanne les `@Repository`.
-* **Mansart-transactions** — `@Transactional` géré par `mansart-transactions`.
+Un **BuildItem** est l'unité d'échange entre build steps. Trois familles :
 
-== Runtime init vs static init
-
-Vidocq distingue :
-
-* **`STATIC_INIT`** — exécuté à la compilation (build time). Tout ce qui est constant ou pré-calculable.
-* **`RUNTIME_INIT`** — exécuté au démarrage de la JVM. Lecture de configuration externe, ouverture de pools, dialogues réseau.
-
-Les recorders Class-File API encodent les actions `STATIC_INIT` en bytecode et permettent à `RUNTIME_INIT` de les rejouer trivialement.
-
-== Génération bytecode
-
-Les recorders s'appuient sur la **Class-File API (JEP 484, finalisée Java 24)**. Pas d'ASM, pas de Byte Buddy. Le bytecode généré est versionné Java 25 et compatible CDS Leyden.
+* `SimpleBuildItem` — un seul producer autorisé (ex. `JaxRsApplicationBuildItem`) ;
+* `MultiBuildItem` — N producers possibles (ex. `BeanBuildItem`, `ResourceBuildItem`) ;
+* `SymbolicBuildItem` — marqueur de phase sans payload (ex. `ApplicationStartBuildItem`).
 
 [NOTE]
 ====
-Pour un panorama des annotations standards et SPI publiques, voir xref:reference.adoc[Référence].
+// TODO@user: la liste exhaustive des `BuildItem` standard est en cours de stabilisation. Voir `vidocq-mps-spi/src/main/java/io/vidocq/mpserver/spi/`.
 ====
+
+== Recorder
+
+Un **recorder** est une classe annotée `@Recorder` dont les invocations sont **enregistrées** plutôt qu'exécutées. À la compilation, chaque appel de méthode sur un recorder est sérialisé sous forme de bytecode `invokevirtual` dans une classe générée par Class-File API. Au démarrage, ce bytecode est rejoué — sans réflexion, sans proxy.
+
+Les recorders distinguent deux phases :
+
+* `@Record(STATIC_INIT)` — exécuté tôt, dans le bloc statique de la classe générée ;
+* `@Record(RUNTIME_INIT)` — exécuté au démarrage, après la lecture de la configuration externe.
+
+== Lifecycle phase
+
+La séquence de boot Vidocq-MPS comporte cinq **phases** ordonnancées :
+
+1. **Config** — résolution des sources MicroProfile Config, surcharge externe.
+2. **Extensions init** — chaque extension reçoit `ExtensionContext` et publie ses `BuildItem` runtime.
+3. **CDI start** — Vauban démarre le `BeanManager` (les beans ont déjà été indexés au build).
+4. **Transport bind** — Chappe ouvre les listeners HTTP/1.1, H2, H3 selon la config.
+5. **Routes register** — Cassini et Foy enregistrent ressources REST et servlets ; Mansart ouvre le pool JDBC.
+
+== Différences notables avec Quarkus
+
+[cols="1,1,2"]
+|===
+| Aspect | Quarkus | Vidocq-MPS
+
+| CDI runtime
+| ArC (custom)
+| xref:vauban::index.adoc[Vauban] (CDI 4.1 Lite, TCK 774/774)
+
+| Génération bytecode
+| Gizmo (ASM)
+| Class-File API JDK (JEP 484)
+
+| Transport HTTP
+| Vert.x
+| xref:chappe::index.adoc[Chappe] sur virtual threads
+
+| JSON
+| Jackson
+| xref:champollion::index.adoc[Champollion] (JSON-B 3.0)
+
+| Persistence
+| Hibernate ORM/Reactive
+| xref:mansart::index.adoc[Mansart] (Jakarta Data 1.0 + JDBC)
+
+| JDK minimum
+| 17
+| 25 (LTS)
+
+| JPMS natif
+| Non
+| Oui — `module-info.java` partout
+|===
+
+== Composition des six briques
+
+Vidocq-MPS n'invente aucun runtime ; il **compose** les six briques fondatrices. Une extension `vidocq-mps-rest-cassini-extension` enregistre par exemple un build step qui :
+
+* consomme `CdiBeanIndexBuildItem` produit par `vidocq-mps-vauban-extension` ;
+* déclenche la génération du routage statique de xref:cassini::index.adoc[Cassini] ;
+* produit `HttpRouteBuildItem` consommé par `vidocq-mps-chappe-extension`.
+
+C'est cette grammaire de `BuildItem` qui rend l'écosystème homogène alors que chaque brique reste autonome dans son propre repo.
+
+== Pour aller plus loin
+
+* xref:internals.adoc[Fonctionnement interne] — la séquence de boot pas-à-pas
+* xref:modules/vidocq-mps-spi.adoc[SPI] — comment écrire une extension
+* xref:reference.adoc[Référence] — annotations et BuildItem standard

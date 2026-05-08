@@ -1,36 +1,103 @@
-= Vidocq
-:description: MicroProfile application server on Vauban CDI 4.1, Java 25, JPMS-native, minimal dependencies.
+= Vidocq-MPS
+:description: Java 25 MicroProfile application server — umbrella orchestrator of the Vidocq ecosystem.
 
 [.lead]
-Vidocq is a MicroProfile application server built on Vauban, written in Java 25, JPMS-native, with no superfluous dependencies — a lean orchestrator that composes the building blocks of the ecosystem.
+Vidocq-MPS is the **MicroProfile Server** that assembles the six foundational bricks of the ecosystem — xref:chappe::index.adoc[Chappe] (HTTP transport), xref:vauban::index.adoc[Vauban] (CDI), xref:champollion::index.adoc[Champollion] (JSON), xref:foy::index.adoc[Foy] (Servlet), xref:cassini::index.adoc[Cassini] (REST), xref:mansart::index.adoc[Mansart] (persistence) — into a coherent runtime inspired by the Quarkus extension model, but with no ASM, no runtime reflection, and no Vert.x.
 
-== Why?
+== Origin of the name
 
-Eugène-François Vidocq (1775-1857) — thief, convict, informer, then founder of France's first National Security force in 1812 — created the first plain-clothes detective brigade. He turned field experience into method and structure, refusing the cumbersome inheritance of the Ancien Régime.
+**Eugène-François Vidocq** (1775-1857), an escaped convict turned founder and first head of France's _Sûreté nationale_ (Brigade de la Sûreté, 1812). A precursor of forensic science, he also founded the first private detective agency. See https://fr.wikipedia.org/wiki/Eug%C3%A8ne-Fran%C3%A7ois_Vidocq[Wikipedia].
 
-The Vidocq runtime takes the same stance. Rather than stack yet another layer of abstractions, it leans on the bricks of the ecosystem:
-
-* xref:chappe::index.adoc[Chappe] for HTTP/1.1 + HTTP/2 transport
-* xref:vauban::index.adoc[Vauban] for the CDI 4.1 engine
-* xref:champollion::index.adoc[Champollion] for JSON-B / JSON-P serialization
-* xref:cassini::index.adoc[Cassini] for the REST layer
-* xref:foy::index.adoc[Foy] for Servlet 6.1 compatibility
-* xref:mansart::index.adoc[Mansart] for Jakarta Data 1.0 persistence
-
-Each piece stays self-contained. Vidocq composes them through a Quarkus-inspired extension SPI — no dynamic proxies, no runtime reflection.
+The metaphor faithfully reflects the role of the module. Vidocq fused heterogeneous informants into a modern police organisation. Vidocq-MPS fuses six disparate technical bricks — each named after another historical figure — into a coherent system. The umbrella project also lends its name to the entire ecosystem.
 
 == At a glance
 
-* **Java 25, Maven 4.0.0-rc-5** — no compromise on modern tooling.
-* **Strict JPMS** — every module has its `module-info.java`, minimal `exports`.
-* **Static codegen** — Class-File API (JEP 484) + APT at compile time, no dynamic proxies.
-* **Virtual Threads** everywhere for I/O — no platform thread pools by default.
-* **AOT-ready** — GraalVM native-image, Project Leyden CDS.
-* **Minimal dependencies** — only the relevant Jakarta / MicroProfile specs.
+[cols="1,3"]
+|===
+| Targeted MicroProfile specs
+| {spec-mp-config}, {spec-mp-health}, {spec-mp-metrics}, {spec-mp-openapi} (current milestone: Config, Health, Metrics, OpenAPI)
 
-[NOTE]
-====
-This site documents the entire Vidocq suite. The `vidocq` module itself is the orchestrator; each component has its own section in the side nav.
-====
+| Repo
+| {repo-vidocq}
 
-xref:getting-started.adoc[Get started →]
+| Java
+| 25 (LTS)
+
+| Build
+| Maven 4.0.0-rc-5
+
+| JPMS modules
+| `io.vidocq.mpserver`, `io.vidocq.mpserver.spi`, `io.vidocq.mpserver.core`, `io.vidocq.mpserver.maven`
+
+| Runtime dependencies
+| Jakarta + MicroProfile specs only — no third-party framework
+
+| TCK
+| See xref:tck.adoc[detailed status] — JAX-RS via xref:cassini::tck.adoc[Cassini], Servlet via xref:foy::tck.adoc[Foy], MicroProfile in progress
+|===
+
+== Position in the ecosystem
+
+[mermaid]
+....
+graph TB
+    subgraph "Vidocq-MPS — orchestrator"
+        MPS[vidocq-mps-core<br/>Bootstrap + lifecycle]
+        SPI[vidocq-mps-spi<br/>BuildStep + BuildItem]
+        EXT[vidocq-mps-core-extensions<br/>Built-in extensions]
+        PLUGIN[vidocq-mps-maven-plugin<br/>jlink / jpackage / docker]
+    end
+
+    subgraph "Jakarta / MicroProfile bricks"
+        CHAPPE[Chappe<br/>HTTP/1.1 + H2 + H3]
+        FOY[Foy<br/>Jakarta Servlet 6.1]
+        CASSINI[Cassini<br/>Jakarta REST 4.0]
+        VAUBAN[Vauban<br/>CDI 4.1 Lite]
+        CHAMPOLLION[Champollion<br/>JSON-P 2.1 + JSON-B 3.0]
+        MANSART[Mansart<br/>Jakarta Data 1.0]
+    end
+
+    APP[User application<br/>main + REST resources]
+
+    APP --> MPS
+    MPS --> SPI
+    EXT --> SPI
+    PLUGIN --> SPI
+
+    EXT --> CHAPPE
+    EXT --> VAUBAN
+    EXT --> CHAMPOLLION
+    EXT --> FOY
+    EXT --> CASSINI
+    EXT --> MANSART
+
+    FOY --> CHAPPE
+    CASSINI --> CHAPPE
+    CASSINI --> VAUBAN
+    CASSINI --> CHAMPOLLION
+    MANSART --> VAUBAN
+
+    style MPS fill:#e1f5fe,stroke:#0288d1,stroke-width:3px
+    style SPI fill:#e1f5fe,stroke:#0288d1
+    style EXT fill:#fff3e0,stroke:#f57c00
+    style PLUGIN fill:#fff3e0,stroke:#f57c00
+....
+
+== Differentiators
+
+* **Java 25 + virtual threads** — `Executors.newVirtualThreadPerTaskExecutor()` everywhere, no platform thread pools.
+* **Strict JPMS** — every artefact is a named module, minimal `exports`, no hidden classpath.
+* **Static codegen** — Class-File API (JEP 484) + APT at compile time, no dynamic proxies, no ASM, no Byte Buddy.
+* **Zero runtime reflection** — anything that can be is resolved at build, AOT-ready (GraalVM, Leyden CDS).
+* **Build-time first** — like Quarkus, but on a CDI Lite + Class-File API standard JDK foundation.
+
+== Quick links
+
+* xref:getting-started.adoc[Getting started] — REST + DI + H2 persistence hello world
+* xref:usage.adoc[Usage] — jlink/jpackage/Docker packaging, MicroProfile Config, Health, Metrics, OpenAPI
+* xref:concepts.adoc[Concepts] — extension, build step, recorder, lifecycle phase
+* xref:internals.adoc[Internals] — boot sequence, extension mechanism, threading
+* xref:tck.adoc[TCK status] — MicroProfile Config, Health, Metrics, OpenAPI
+* xref:reference.adoc[Reference] — configuration keys, Maven CLI, properties
+* xref:migration.adoc[Migration] — from Quarkus, Helidon, Spring Boot, Open Liberty, Payara Micro
+* xref:modules/vidocq-mps-core.adoc[Reactor sub-modules]

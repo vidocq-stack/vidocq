@@ -1,18 +1,94 @@
 = Migration
-:description: From Quarkus, Helidon, Open Liberty or WildFly.
+:description: From Quarkus, Helidon, Spring Boot, Open Liberty, Payara Micro.
 
 [CAUTION]
 ====
-Vidocq is at **0.1.0-SNAPSHOT**. Any real-world migration is premature — this page documents the mappings ahead of time.
+Vidocq-MPS is at **0.1.0-SNAPSHOT**. Any real-world migration is premature — this page documents the mappings ahead of time.
+====
+
+== Side-by-side comparison
+
+[cols="2,1,1,1,1,1,1"]
+|===
+| Aspect | Vidocq-MPS | Quarkus | Helidon MP | Spring Boot | Open Liberty | Payara Micro
+
+| Minimum JDK
+| 25
+| 17
+| 21
+| 17
+| 17
+| 17
+
+| I/O threading model
+| Virtual threads
+| Vert.x event loop
+| Helidon Níma (VT)
+| Tomcat / Netty
+| Platform threads
+| Platform threads
+
+| Build-time vs runtime
+| Build-time (Class-File API)
+| Build-time (Gizmo / ASM)
+| Runtime
+| Runtime
+| Runtime
+| Runtime
+
+| Strict JPMS
+| Yes
+| No
+| No
+| No
+| No
+| No
+
+| Native AOT
+| GraalVM + Leyden CDS
+| GraalVM
+| GraalVM
+| GraalVM
+| Partial
+| Partial
+
+| Typical cold start (jlink/CDS)
+| ~1 s
+| ~0.5 s (native)
+| ~1 s
+| ~3 s
+| ~5 s
+| ~3 s
+
+| Standalone image size
+| ~40 MB (jlink)
+| ~80 MB (native)
+| ~50 MB
+| ~70 MB
+| ~150 MB
+| ~80 MB
+
+| ASM / Byte Buddy dependency
+| None
+| ASM (Gizmo)
+| ASM
+| ByteBuddy + ASM
+| ASM
+| ASM
+|===
+
+[NOTE]
+====
+The numbers above are indicative and will be updated as `BENCH.md` runs land. See the workspace root `BENCH.md` for exact measurements.
 ====
 
 == From Quarkus
 
-Vidocq explicitly borrows the Quarkus extension pattern.
+Vidocq-MPS explicitly borrows the Quarkus extension pattern.
 
 [cols="1,1,2"]
 |===
-| Quarkus | Vidocq | Note
+| Quarkus | Vidocq-MPS | Note
 
 | `io.quarkus.deployment.annotations.BuildStep`
 | `io.vidocq.mpserver.spi.BuildStep`
@@ -31,42 +107,131 @@ Vidocq explicitly borrows the Quarkus extension pattern.
 | No Vert.x — virtual threads
 
 | Hibernate Reactive / ORM
-| xref:mansart::index.adoc[Mansart] *(planned)*
+| xref:mansart::index.adoc[Mansart]
 | JDBC + virtual threads, no Vert.x SQL Client
+
+| Jackson
+| xref:champollion::index.adoc[Champollion]
+| JSON-B 3.0 / JSON-P 2.1 implementation
 |===
 
-[TODO]: example of migrating a simple Quarkus extension to Vidocq.
+The forthcoming `compare-to/` workspace examples will illustrate migrating a simple extension.
 
-== From Helidon (SE / MP)
+== From Helidon MP
 
-[TODO]
+* Helidon SE (Web) → xref:chappe::index.adoc[Chappe] + xref:cassini::index.adoc[Cassini].
+* Helidon MP → Vidocq-MPS directly.
+* `application.yaml` → MicroProfile Config (`vidocq.properties` or env).
+* Helidon Níma already uses virtual threads — the transition is conceptually transparent.
+
+[NOTE]
 ====
-* Helidon SE (Web) → Chappe + Cassini.
-* Helidon MP → Vidocq.
-* Convert `application.yaml` to MicroProfile Config.
+// TODO@user: produce a `helidon-mp-quickstart` migration sample to Vidocq-MPS.
 ====
+
+== From Spring Boot
+
+Spring Boot does not naturally align with the MicroProfile model, and migration touches the programming model.
+
+[cols="1,1,2"]
+|===
+| Spring Boot | Vidocq-MPS | Note
+
+| `@SpringBootApplication`
+| `Vidocq.main(args)` + any class
+| No application class required
+
+| `@RestController`
+| `@Path` + `@GET/@POST`
+| Standard Jakarta REST
+
+| `@Service`, `@Component`
+| `@ApplicationScoped`
+| CDI Lite
+
+| `@Autowired`
+| `@Inject`
+| Constructor injection preferred
+
+| `@ConfigurationProperties`
+| `@VidocqConfig` + interface
+| MicroProfile Config
+
+| `application.yml`
+| `vidocq.properties` + MP profiles
+| `%<profile>.` prefix
+
+| Spring Data JPA
+| xref:mansart::index.adoc[Mansart] (Jakarta Data 1.0)
+| APT-generated repositories
+|===
 
 == From Open Liberty / WildFly
 
-[TODO]
-====
-Patterns to document:
-
-* `server.xml` → MicroProfile Config + Vidocq extensions.
-* EAR → JAR + Vidocq.
+* `server.xml` → MicroProfile Config + Vidocq-MPS extensions.
+* EAR → standalone JAR + Maven plugin.
 * JNDI → CDI lookup via `Vauban.bootstrap()`.
+* Jakarta annotations — directly compatible, the programming model stays identical.
+
+[NOTE]
+====
+// TODO@user: document the `feature` → extension mapping on the Open Liberty side (mpHealth-4.0 → vidocq-mps-health-extension, etc.).
 ====
 
-== MicroProfile mapping
+== From Payara Micro
 
-[TODO]
+Payara Micro and Vidocq-MPS share the MicroProfile target. The main difference is the build-time approach: Payara Micro embeds GlassFish; Vidocq-MPS produces a minimal jlink binary without a classical application server.
+
+* `payara-micro --deploy app.war` → `java -jar app-runner.jar`.
+* `payara-micro.jar` (~80 MB) → jlink image (~40 MB).
+* Every enabled MicroProfile `feature.xml` is replaced by the matching Vidocq-MPS extension.
+
+== MicroProfile table
+
+[cols="2,1,2"]
+|===
+| MicroProfile spec | Vidocq-MPS status | Extension
+
+| MP Config 3.x
+| Planned
+| `vidocq-mps-config-extension`
+
+| MP Health 4.x
+| Planned
+| `vidocq-mps-health-extension`
+
+| MP Metrics 5.x
+| Planned
+| `vidocq-mps-metrics-extension`
+
+| MP OpenAPI 4.x
+| Planned
+| `vidocq-mps-openapi-extension`
+
+| MP REST Client 4.x
+| Planned
+| `vidocq-mps-rest-client-extension`
+
+| MP JWT Auth 2.x
+| Planned
+| `vidocq-mps-jwt-extension`
+
+| MP Telemetry 2.x
+| Planned
+| `vidocq-mps-telemetry-extension`
+
+| MP Fault Tolerance 4.x
+| Planned
+| `vidocq-mps-fault-tolerance-extension`
+|===
+
+[NOTE]
 ====
-* MP Config → covered (`[TODO]` milestone)
-* MP Health → `[TODO]`
-* MP Metrics → `[TODO]`
-* MP OpenAPI → `[TODO]`
-* MP REST Client → `[TODO]`
-* MP JWT → `[TODO]`
-* MP Telemetry → `[TODO]`
-* MP Fault Tolerance → `[TODO]`
+// TODO@user: freeze the target MicroProfile version matrix when `vidocq-mps-platform-bom` ships.
 ====
+
+== Next steps
+
+* xref:getting-started.adoc[Getting started]
+* xref:concepts.adoc[Concepts] — fundamental differences from Quarkus
+* xref:tck.adoc[TCK status] — conformance coverage

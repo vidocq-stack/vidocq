@@ -1,0 +1,71 @@
+= vidocq-mps-core
+:description: Boot orchestrator et lifecycle de Vidocq-MPS.
+
+[.lead]
+`vidocq-mps-core` est le moteur d'exécution de Vidocq-MPS. Il orchestre la séquence de boot, lit l'index des extensions produit au build, instancie le bootstrap généré par Class-File API et coordonne les phases de démarrage.
+
+== Coordonnées
+
+[cols="1,3"]
+|===
+| Artefact | `io.vidocq.mpserver:vidocq-mps-core:0.1.0-SNAPSHOT`
+| Module JPMS | `io.vidocq.mpserver.core`
+| Source | `vidocq-mps-core/src/main/java/io/vidocq/mpserver/core/`
+|===
+
+== Responsabilités
+
+* Lire `META-INF/vidocq-mps/extensions.list` produit par l'APT processor.
+* Charger la classe `RuntimeBootstrap` synthétisée par le plugin Maven.
+* Exécuter les phases de boot dans l'ordre :
+
+. **Config** — résolution MicroProfile Config.
+. **Extensions init** — invocation des `RUNTIME_INIT` recorders.
+. **CDI start** — délégation à xref:vauban::index.adoc[Vauban] (`Vauban.bootstrap()`).
+. **Transport bind** — délégation à xref:chappe::index.adoc[Chappe] via l'extension `vidocq-mps-chappe-extension`.
+. **Routes register** — délégation à xref:cassini::index.adoc[Cassini], xref:foy::index.adoc[Foy] et xref:mansart::index.adoc[Mansart] selon les extensions actives.
+
+* Gérer le cycle d'arrêt — `SIGTERM` propage dans l'ordre inverse, drainage propre des virtual threads.
+
+== Point d'entrée
+
+[source,java]
+----
+package io.example;
+
+public class App {
+    public static void main(String[] args) {
+        io.vidocq.mpserver.Vidocq.main(args);
+    }
+}
+----
+
+`Vidocq.main` est une simple façade. Le code utilisateur n'a pas besoin de `@SpringBootApplication` ni de classe d'application — la séquence de boot est entièrement pilotée par l'index APT.
+
+== Lifecycle hooks
+
+Une extension peut s'abonner aux phases via la SPI :
+
+[source,java]
+----
+@BuildStep
+ApplicationStartBuildItem onStart(SomeExtensionContext ctx) {
+    // contribuer un build step déclenché à RUNTIME_INIT
+    return new ApplicationStartBuildItem();
+}
+----
+
+`ApplicationStartBuildItem` et `ApplicationStopBuildItem` sont des `SymbolicBuildItem` — ils n'ont pas de payload, seulement une sémantique de marqueur.
+
+== Threading
+
+Le boot lui-même est volontairement séquentiel sur un thread plateforme (diagnostic plus simple, traces de pile lisibles). Les seuls virtual threads créés pendant le boot sont :
+
+* le pool I/O HTTP de xref:chappe::index.adoc[Chappe] (un VT par connexion entrante) ;
+* le pool de housekeeping JDBC de xref:mansart::index.adoc[Mansart] ;
+* les `StructuredTaskScope` ouverts par les extensions qui en ont besoin (typiquement `vidocq-mps-health-extension` pour les checks périodiques).
+
+== Pour aller plus loin
+
+* xref:internals.adoc[Fonctionnement interne] — séquence détaillée avec diagramme
+* xref:modules/vidocq-mps-spi.adoc[SPI] — interfaces consommées par le core

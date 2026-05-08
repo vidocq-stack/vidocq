@@ -1,0 +1,123 @@
+= vidocq-mps-maven-plugin
+:description: Plugin Maven Vidocq-MPS — build, jlink, jpackage, docker.
+
+[.lead]
+`vidocq-mps-maven-plugin` est le plugin Maven qui transforme une application en binaire déployable autonome. Il expose quatre goals : `build`, `jlink`, `jpackage`, `docker`. Voir aussi `vidocq/JLINK.md` pour le détail interne.
+
+== Coordonnées
+
+[cols="1,3"]
+|===
+| Artefact | `io.vidocq.mpserver:vidocq-mps-maven-plugin:0.1.0-SNAPSHOT`
+| Module JPMS | `io.vidocq.mpserver.maven`
+|===
+
+== Goals
+
+[cols="1,3"]
+|===
+| Goal | Rôle
+
+| `vidocq:build`
+| Exécute le graphe topologique des `@BuildStep`, génère les classes Class-File API, produit le JAR runner et l'index `extensions.list`.
+
+| `vidocq:jlink`
+| Image Java autonome (`target/dist/`) avec `bin/<launcher>` binaire — pas de `java` requis sur la cible.
+
+| `vidocq:jpackage`
+| Bundle natif OS (`.app` macOS, `.exe`/`.msi` Windows, `.deb`/`.rpm` Linux) ou app-image cross-platform.
+
+| `vidocq:docker`
+| Génère `target/Dockerfile` distroless basé sur `distroless/base-debian12:nonroot`. Build optionnel via `vidocq.docker.build=true`.
+|===
+
+== Goal `vidocq:jlink`
+
+[source,xml]
+----
+<plugin>
+    <groupId>io.vidocq.mpserver</groupId>
+    <artifactId>vidocq-mps-maven-plugin</artifactId>
+    <executions>
+        <execution>
+            <id>jlink</id>
+            <goals><goal>jlink</goal></goals>
+            <configuration>
+                <mainModule>com.example.myapp</mainModule>
+                <mainClass>com.example.myapp.MainApp</mainClass>
+                <launcher>my-app</launcher>
+                <distDir>${project.build.directory}/dist</distDir>
+                <stripDebug>true</stripDebug>
+                <compress>zip-6</compress>
+                <includeResources>
+                    <param>vidocq.properties</param>
+                    <param>logging.properties</param>
+                </includeResources>
+            </configuration>
+        </execution>
+    </executions>
+</plugin>
+----
+
+Sortie type :
+
+[source]
+----
+target/
+├── dist/
+│   ├── bin/my-app                  # launcher binaire
+│   ├── conf/                       # config surchargeable (ExternalFileConfigSource)
+│   │   ├── vidocq.properties
+│   │   └── logging.properties
+│   ├── lib/                        # modules JPMS app + JDK
+│   ├── legal/
+│   └── release
+├── installer/                      # si jpackage activé
+│   └── my-app.app/
+└── Dockerfile                      # si docker activé
+----
+
+== Goal `vidocq:jpackage`
+
+Réutilise l'image `jlink` produite. Type par défaut : `app-image` (cross-platform). Sur macOS, `.app`. Sur Windows, `.exe` ou `.msi`. Sur Linux, `.deb` ou `.rpm`.
+
+Voir `vidocq/JLINK.md` §3 pour la liste exhaustive des paramètres.
+
+== Goal `vidocq:docker`
+
+Génère un `Dockerfile` distroless. Pourquoi `distroless/base-debian12:nonroot` ?
+
+* pas de shell, pas de package manager — surface d'attaque minimale ;
+* utilisateur `nonroot` (UID 65532) imposé ;
+* compatible avec les politiques d'image les plus strictes.
+
+[source,bash]
+----
+./mvnw -ntp package -Dvidocq.docker.build=true
+docker run --rm -p 8080:8080 example/my-app:1.0.0
+
+# Avec config externe
+docker run --rm -p 8080:8080 \
+    -e VIDOCQ_CONFIG_DIR=/etc/myapp \
+    -v $(pwd)/conf:/etc/myapp:ro \
+    example/my-app:1.0.0
+----
+
+== Surcharge externe (`ExternalFileConfigSource`)
+
+`vidocq.properties` placé dans `${java.home}/conf/` (image jlink) ou pointé par `$VIDOCQ_CONFIG_DIR` est lu avec ordinal 250. Voir xref:reference.adoc[Référence] pour la hiérarchie complète.
+
+== Pré-requis et limitations
+
+* **JPMS strict** — toutes les dépendances doivent être des modules nommés. Un jar sans `module-info.class` ni `Automatic-Module-Name` casse `jlink`.
+* **Records sérialisés via REST** — Champollion les gère par génération APT, pas par réflexion. Si une dépendance externe expose des records non générés, déclarer un `Converter<T>` JSON-B.
+* **Custom `java.util.logging` Handler** — déclarer le module dans `logging.properties` pour que `jlink` l'embarque (`handlers=com.example.MyHandler`).
+* **macOS app-image** — le bundle nécessite `--app-version` valide ; le plugin défaute à la version Maven du projet.
+
+Voir `vidocq/JLINK.md` §6 et §8 pour la liste complète des limitations connues.
+
+== Pour aller plus loin
+
+* xref:usage.adoc[Usage] — workflows packaging
+* xref:reference.adoc[Référence] — clés de configuration
+* `vidocq/JLINK.md` — documentation interne packaging

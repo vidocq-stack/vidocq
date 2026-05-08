@@ -1,0 +1,147 @@
+= Fonctionnement interne
+:description: Séquence de boot, mécanisme d'extensions, modèle de threading.
+
+[.lead]
+Cette page décrit ce qui se passe entre `mvn package` et le premier `200 OK`. Elle suit le code à travers `vidocq-mps-maven-plugin`, `vidocq-mps-core` et la SPI, et détaille la grammaire d'extensions.
+
+== Vue d'ensemble — du code source au runtime
+
+[mermaid]
+....
+flowchart LR
+    SRC[Code source<br/>+ extensions<br/>déclarées en deps] --> APT[APT scan<br/>vauban-processor<br/>+ extensions APT]
+    APT --> PLUGIN[vidocq-mps-maven-plugin<br/>build]
+    PLUGIN --> BUILDSTEPS[Exécution des @BuildStep<br/>graphe topologique]
+    BUILDSTEPS --> RECORDERS[Recorders<br/>Class-File API JEP 484]
+    RECORDERS --> JAR[JAR runner<br/>+ classes générées]
+    JAR --> JAVA[java -jar / jlink launcher]
+    JAVA --> BOOT[Vidocq.main]
+    BOOT --> READY[HTTP listener prêt]
+
+    style PLUGIN fill:#fff3e0,stroke:#f57c00
+    style BUILDSTEPS fill:#fff3e0,stroke:#f57c00
+    style BOOT fill:#e1f5fe,stroke:#0288d1
+....
+
+== Diagramme de séquence — boot
+
+[mermaid]
+....
+sequenceDiagram
+    participant U as Utilisateur
+    participant J as JVM
+    participant V as Vidocq.main
+    participant CFG as Config (MicroProfile)
+    participant EXT as Extensions runtime
+    participant VAU as Vauban (CDI)
+    participant CHA as Chappe (transport)
+    participant CAS as Cassini (REST)
+    participant MAN as Mansart (JDBC)
+
+    U->>J: java -jar app-runner.jar
+    J->>V: invoke main()
+    V->>CFG: phase 1 — résolution config
+    CFG-->>V: MicroProfile Config prête
+    V->>EXT: phase 2 — init extensions
+    EXT->>EXT: rejouer recorders STATIC_INIT
+    EXT-->>V: ExtensionContext peuplé
+    V->>VAU: phase 3 — démarrer BeanManager
+    VAU-->>V: container CDI actif
+    V->>CHA: phase 4 — bind listeners HTTP
+    CHA-->>V: listeners 8080 / 8443 ouverts
+    V->>CAS: phase 5a — enregistrer routes REST
+    V->>MAN: phase 5b — ouvrir pool JDBC
+    V-->>U: ready (~1 s en CDS)
+....
+
+Les phases 4 et 5 s'exécutent dans des virtual threads distincts via `StructuredTaskScope`, ce qui permet à Cassini d'enregistrer ses routes pendant que Mansart valide la connexion à la base.
+
+== Mécanisme d'extensions
+
+=== SPI publique
+
+Le module `vidocq-mps-spi` expose les interfaces de contribution. Les classes principales aujourd'hui livrées :
+
+[cols="1,3"]
+|===
+| Type | Rôle
+
+| `io.vidocq.mpserver.spi.VidocqExtension`
+| Interface marqueur déclarée via `ServiceLoader` ou `META-INF/services`. Une extension implémente `configure(ExtensionContext)` pour s'enregistrer.
+
+| `io.vidocq.mpserver.spi.ExtensionContext`
+| API de contribution — accès au registre de `BuildItem`, à la config, à la phase courante.
+
+| `io.vidocq.mpserver.spi.VidocqConfiguration`
+| Interface lue au build pour résoudre les options de l'extension.
+
+| `io.vidocq.mpserver.spi.config.VidocqConfig`
+| Façade `MicroProfile Config` ré-exposée, avec `Converter<T>` et `ConfigSource`.
+|===
+
+Source : `vidocq-mps-spi/src/main/java/io/vidocq/mpserver/spi/`.
+
+=== APT processor
+
+Le `vidocq-mps-processor` (dérivé du `vauban-processor`) scanne les classes annotées `@BuildStep`, `@Recorder`, `@Path`, `@ApplicationScoped`, etc. Il produit :
+
+* un index `META-INF/vidocq-mps/extensions.list` (une ligne par classe d'extension) ;
+* un index `META-INF/vauban/beans.list` (réutilisé par xref:vauban::index.adoc[Vauban]) ;
+* le fichier d'options de configuration consommé par les recorders.
+
+Aucune réflexion runtime — l'index est lu au démarrage par un simple `getResourceAsStream`.
+
+=== Génération Class-File API
+
+Quand un build step appelle une méthode sur un `@Recorder`, le moteur n'exécute pas l'appel : il l'enregistre. À la fin du graphe, `vidocq-mps-core` synthétise une classe `RuntimeBootstrap` via la Class-File API (JEP 484). Cette classe contient une suite d'`invokevirtual` qui, rejouée au démarrage, reproduit l'effet désiré sans aucune réflexion.
+
+Concrètement :
+
+[source,java]
+----
+@Recorder
+public class HttpRecorder {
+    public RuntimeValue<Server> startServer(int port) { ... }
+}
+
+@BuildStep
+@Record(RUNTIME_INIT)
+public ServerStartedBuildItem boot(HttpRecorder rec, HttpConfig cfg) {
+    rec.startServer(cfg.port());                  // <-- enregistré
+    return new ServerStartedBuildItem();
+}
+----
+
+À la compilation, `vidocq-mps-core` émet :
+
+[source,java]
+----
+// classe générée — pseudo-code
+class RuntimeBootstrap_HttpRecorder {
+    static void __runtimeInit() {
+        new HttpRecorder().startServer(8080);     // <-- rejoué
+    }
+}
+----
+
+== Modèle de threading
+
+* **Bootstrap** — un seul thread plateforme, pas de pool. Le boot est volontairement séquentiel pour faciliter le diagnostic.
+* **I/O HTTP** — `Executors.newVirtualThreadPerTaskExecutor()` côté xref:chappe::index.adoc[Chappe]. Une connexion = un virtual thread. Pas de réacteur, pas de callback.
+* **Persistence** — pool JDBC xref:mansart::index.adoc[Mansart] avec `Semaphore` non-équitable. `ScopedValue<Connection>` propage la connexion courante dans une transaction sans `ThreadLocal`.
+* **Health checks périodiques** — virtual threads schédulés via `StructuredTaskScope`.
+
+Aucun pool de threads plateforme n'est créé par défaut. La règle est documentée dans le `CLAUDE.md` racine du workspace.
+
+== Lecture conseillée
+
+* Code source : `vidocq-mps-core/src/main/java/io/vidocq/mpserver/core/` (boot orchestrator)
+* SPI : `vidocq-mps-spi/src/main/java/io/vidocq/mpserver/spi/`
+* Plugin Maven : `vidocq-mps-maven-plugin/`
+* Exemples : `vidocq-mps-examples/vidocq-mps-rest-example/`, `vidocq-mps-mansart-h2-example/`
+
+== Pour aller plus loin
+
+* xref:concepts.adoc[Concepts] — vocabulaire formel
+* xref:tck.adoc[État TCK] — vérification de conformité
+* xref:modules/vidocq-mps-core.adoc[vidocq-mps-core] — boot, lifecycle

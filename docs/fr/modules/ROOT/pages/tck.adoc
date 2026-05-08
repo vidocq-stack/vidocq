@@ -1,0 +1,117 @@
+= TCK : MicroProfile et specs Jakarta couvertes
+:description: État de conformité Vidocq-MPS aux Technology Compatibility Kits.
+
+[.lead]
+Vidocq-MPS hérite directement des TCK passés par les briques fondatrices et expose ses propres runners pour les TCK MicroProfile. Cette page consolide l'état de conformité.
+
+== Vue d'ensemble
+
+[cols="2,1,3"]
+|===
+| TCK | État | Détails
+
+| Jakarta REST 4.0 (Core Profile)
+| Vert
+| via xref:cassini::tck.adoc[Cassini] — voir aussi `vidocq/TCK.md`
+
+| Jakarta Servlet 6.1
+| ~90 %
+| via xref:foy::tck.adoc[Foy] — runner `vidocq-servlet-chappe-tck-runner`
+
+| Jakarta JSON-P 2.1
+| Vert
+| via xref:champollion::tck.adoc[Champollion]
+
+| Jakarta JSON-B 3.0
+| Vert
+| via xref:champollion::tck.adoc[Champollion]
+
+| CDI 4.1 Lite
+| 774 / 774
+| via xref:vauban::tck.adoc[Vauban]
+
+| MicroProfile Config 3.x
+| Planifié
+| extension `vidocq-mps-config-extension` en cours
+
+| MicroProfile Health 4.x
+| Planifié
+| extension `vidocq-mps-health-extension` en cours
+
+| MicroProfile Metrics 5.x
+| Planifié
+| extension `vidocq-mps-metrics-extension` en cours
+
+| MicroProfile OpenAPI 4.x
+| Planifié
+| extension `vidocq-mps-openapi-extension` en cours
+
+| MicroProfile JWT Auth
+| Planifié
+| jalon ultérieur
+|===
+
+[NOTE]
+====
+// TODO@user: mettre à jour les ratios passés/total des TCK MicroProfile dès que les runners officiels seront branchés.
+====
+
+== TCK Jakarta hérités
+
+Vidocq-MPS ne ré-exécute pas les TCK Jakarta : ils sont validés par les briques sous-jacentes. Les runners suivants couvrent l'écosystème :
+
+* `cassini-tck` — Jakarta REST 4.0
+* `foy-tck` / `vidocq-servlet-chappe-tck-runner` — Jakarta Servlet 6.1
+* `champollion-tck` — JSON-P 2.1 + JSON-B 3.0
+* `vauban-tck-runner` — CDI 4.1 Lite (774/774)
+
+Tous sont **volontairement hors-reactor** (POM `modelVersion 4.0.0` standalone, sans `<parent>`). La raison est documentée dans le `CLAUDE.md` du workspace : le `ClasspathWorkspaceReader` de ShrinkWrap Resolver 3.3 (transitive du TCK officiel) repose sur `maven-resolver 1.9` et ne sait pas parser les POMs Maven Model 4.1.0 utilisés dans Vidocq.
+
+Conséquence opérationnelle : ces TCK se lancent toujours via leur script shell dédié, jamais via `mvn -pl`.
+
+[source,bash]
+----
+cd vidocq-mps-rest-cassini-tck-runner
+./run-official-tck-restful-4.0.sh
+
+cd vidocq-servlet-chappe-tck-runner
+./run-official-tck-servlet6.1.sh
+----
+
+== TCK MicroProfile
+
+Les TCK MicroProfile ciblés (Config, Health, Metrics, OpenAPI) seront branchés au fur et à mesure de la livraison des extensions correspondantes. L'architecture des runners suit le même principe : module hors-reactor avec sa propre dépendance ShrinkWrap, lancé via un script `run-official-tck-mp-<spec>.sh`.
+
+[NOTE]
+====
+// TODO@user: documenter le harness retenu (Arquillian + résolveur ShrinkWrap fork patché ou substitut maison) une fois la première extension MP livrée.
+====
+
+== Tests skippés justifiés
+
+Pour les TCK déjà actifs, les exclusions sont documentées dans le `TCK.md` du sous-projet hôte (par exemple `vidocq/TCK.md` côté Cassini). Aucun test n'est skippé pour cause d'implémentation incomplète sans entrée correspondante dans `BUG.md` du module concerné.
+
+Les exclusions standard pour la cible **Core Profile / SE-Bootstrap** sont :
+
+* tests dépendant de Jakarta XML Binding ;
+* tests dépendant de Jakarta Server Pages / Faces ;
+* tests dépendant de Jakarta Enterprise Beans ;
+* tests dépendant de Jakarta Authentication / Authorization (hors Core Profile).
+
+Voir `vidocq/TCK.md` pour la liste complète, les challenges officiels TCK Process 1.4.1 ouverts, et l'historique des sessions de fix.
+
+== Bugs ouverts
+
+Les bugs reproductibles découverts pendant les runs TCK sont consignés dans :
+
+* `vidocq/BUG.md` — bugs côté orchestrateur Vidocq-MPS ;
+* `vidocq/CHAPPE-BUGS.md` — bugs Chappe identifiés via TCK Servlet/REST ;
+* `vidocq/VAUBAN-BUGS.md` — bugs Vauban identifiés via TCK CDI ou Cassini.
+
+Chaque bug suit la convention du workspace : id court, date, repro minimal, hypothèse de cause, statut.
+
+== Pour aller plus loin
+
+* xref:internals.adoc[Fonctionnement interne] — séquence de boot et hooks d'extension
+* xref:reference.adoc[Référence] — clés de configuration MicroProfile
+* xref:cassini::tck.adoc[TCK Cassini], xref:foy::tck.adoc[TCK Foy], xref:champollion::tck.adoc[TCK Champollion], xref:vauban::tck.adoc[TCK Vauban]

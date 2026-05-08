@@ -1,0 +1,112 @@
+= vidocq-mps-spi
+:description: SPI publique d'extension Vidocq-MPS.
+
+[.lead]
+`vidocq-mps-spi` expose les interfaces et annotations qu'une extension consomme pour contribuer au runtime. C'est le seul module qu'une extension utilisateur doit déclarer en `requires` JPMS.
+
+== Coordonnées
+
+[cols="1,3"]
+|===
+| Artefact | `io.vidocq.mpserver:vidocq-mps-spi:0.1.0-SNAPSHOT`
+| Module JPMS | `io.vidocq.mpserver.spi`
+| Source | `vidocq-mps-spi/src/main/java/io/vidocq/mpserver/spi/`
+|===
+
+== Surface publique
+
+Liste indexée à partir des sources existantes :
+
+[cols="1,3"]
+|===
+| Type | Rôle
+
+| `VidocqExtension`
+| Interface marqueur pour `ServiceLoader`. Une extension implémente `configure(ExtensionContext)`.
+
+| `ExtensionContext`
+| API de contribution — registre de `BuildItem`, accès configuration, phase courante.
+
+| `VidocqConfiguration`
+| Interface lue au build pour résoudre les options propres à l'extension.
+
+| `config.VidocqConfig`
+| Façade MicroProfile Config — `getValue()`, `getOptionalValue()`, `Converter<T>`, `ConfigSource`.
+
+| `config.ConfigSource`
+| Source de configuration (analogue MicroProfile, ré-exposée).
+
+| `config.Converter<T>`
+| Conversion typée des valeurs de configuration.
+|===
+
+[NOTE]
+====
+// TODO@user: ajouter à cette table les `BuildItem` standard, les annotations `@BuildStep`, `@Record`, `@Recorder` une fois la SPI figée. Source à indexer : `vidocq-mps-spi/src/main/java/`.
+====
+
+== Écrire une extension — squelette
+
+[source,java]
+----
+package com.example.greeting;
+
+import io.vidocq.mpserver.spi.VidocqExtension;
+import io.vidocq.mpserver.spi.ExtensionContext;
+import io.vidocq.mpserver.spi.config.VidocqConfig;
+
+public class GreetingExtension implements VidocqExtension {
+
+    @Override
+    public void configure(ExtensionContext ctx) {
+        VidocqConfig cfg = ctx.config();
+        String prefix = cfg.getValue("greeting.prefix", String.class);
+
+        ctx.produce(new GreetingPrefixBuildItem(prefix));
+    }
+}
+----
+
+Déclaration JPMS dans `module-info.java` :
+
+[source,java]
+----
+module com.example.greeting {
+    requires io.vidocq.mpserver.spi;
+
+    provides io.vidocq.mpserver.spi.VidocqExtension
+        with com.example.greeting.GreetingExtension;
+}
+----
+
+C'est tout. Le `vidocq-mps-maven-plugin` détecte le `provides` JPMS, indexe l'extension et l'inclut dans le bootstrap généré.
+
+== Modèle de pureté des build steps
+
+Une `@BuildStep` doit être :
+
+* **déterministe** — pour deux entrées identiques, sortie identique ;
+* **pure** — aucun effet de bord en dehors des `BuildProducer` ;
+* **idempotente** — re-jouable sans conséquence.
+
+Cette discipline garantit que le bytecode généré est reproductible et compatible avec les caches Maven et les artefacts immuables.
+
+== Recorders
+
+Un recorder est une classe `@Recorder` dont les méthodes sont enregistrées plutôt qu'exécutées. Le moteur génère, pour chaque appel, un fragment de bytecode `invokevirtual` dans la classe `RuntimeBootstrap`. Voir xref:internals.adoc[Fonctionnement interne] pour la mécanique complète.
+
+[source,java]
+----
+@Recorder
+public class GreetingRecorder {
+    public RuntimeValue<Greeter> create(String prefix) {
+        return new RuntimeValue<>(new Greeter(prefix));
+    }
+}
+----
+
+== Pour aller plus loin
+
+* xref:concepts.adoc[Concepts] — vocabulaire formel
+* xref:reference.adoc[Référence] — table des SPI publiques
+* xref:modules/vidocq-mps-core-extensions.adoc[Extensions built-in] — exemples concrets de SPI consommée

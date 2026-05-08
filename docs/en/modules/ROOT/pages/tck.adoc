@@ -1,0 +1,117 @@
+= TCK: MicroProfile and covered Jakarta specs
+:description: Vidocq-MPS conformance status across Technology Compatibility Kits.
+
+[.lead]
+Vidocq-MPS inherits TCK passes from its foundational bricks and exposes its own runners for MicroProfile TCKs. This page consolidates conformance status.
+
+== Overview
+
+[cols="2,1,3"]
+|===
+| TCK | Status | Details
+
+| Jakarta REST 4.0 (Core Profile)
+| Green
+| via xref:cassini::tck.adoc[Cassini] — also see `vidocq/TCK.md`
+
+| Jakarta Servlet 6.1
+| ~90 %
+| via xref:foy::tck.adoc[Foy] — runner `vidocq-servlet-chappe-tck-runner`
+
+| Jakarta JSON-P 2.1
+| Green
+| via xref:champollion::tck.adoc[Champollion]
+
+| Jakarta JSON-B 3.0
+| Green
+| via xref:champollion::tck.adoc[Champollion]
+
+| CDI 4.1 Lite
+| 774 / 774
+| via xref:vauban::tck.adoc[Vauban]
+
+| MicroProfile Config 3.x
+| Planned
+| `vidocq-mps-config-extension` in progress
+
+| MicroProfile Health 4.x
+| Planned
+| `vidocq-mps-health-extension` in progress
+
+| MicroProfile Metrics 5.x
+| Planned
+| `vidocq-mps-metrics-extension` in progress
+
+| MicroProfile OpenAPI 4.x
+| Planned
+| `vidocq-mps-openapi-extension` in progress
+
+| MicroProfile JWT Auth
+| Planned
+| Later milestone
+|===
+
+[NOTE]
+====
+// TODO@user: update pass/total ratios for the MicroProfile TCKs once the official runners are wired in.
+====
+
+== Inherited Jakarta TCKs
+
+Vidocq-MPS does not re-run Jakarta TCKs: they are validated by the underlying bricks. The following runners cover the ecosystem:
+
+* `cassini-tck` — Jakarta REST 4.0
+* `foy-tck` / `vidocq-servlet-chappe-tck-runner` — Jakarta Servlet 6.1
+* `champollion-tck` — JSON-P 2.1 + JSON-B 3.0
+* `vauban-tck-runner` — CDI 4.1 Lite (774/774)
+
+All of them are **deliberately outside the reactor** (standalone POM `modelVersion 4.0.0`, no `<parent>`). The reason is documented in the workspace `CLAUDE.md`: ShrinkWrap Resolver 3.3's `ClasspathWorkspaceReader` (transitive of the official TCK) relies on `maven-resolver 1.9` and cannot parse Maven Model 4.1.0 POMs used in Vidocq.
+
+Operational consequence: these TCKs always launch via their dedicated shell script, never via `mvn -pl`.
+
+[source,bash]
+----
+cd vidocq-mps-rest-cassini-tck-runner
+./run-official-tck-restful-4.0.sh
+
+cd vidocq-servlet-chappe-tck-runner
+./run-official-tck-servlet6.1.sh
+----
+
+== MicroProfile TCKs
+
+The targeted MicroProfile TCKs (Config, Health, Metrics, OpenAPI) will be wired in progressively as the corresponding extensions ship. The runner architecture follows the same principle: an outside-reactor module with its own ShrinkWrap dependency, launched via a `run-official-tck-mp-<spec>.sh` script.
+
+[NOTE]
+====
+// TODO@user: document the chosen harness (Arquillian + patched ShrinkWrap fork or in-house substitute) once the first MP extension ships.
+====
+
+== Justified skipped tests
+
+For active TCKs, exclusions are documented in the host sub-project's `TCK.md` (e.g. `vidocq/TCK.md` for Cassini). No test is skipped due to incomplete implementation without a corresponding entry in the relevant module's `BUG.md`.
+
+The standard exclusions for the **Core Profile / SE-Bootstrap** target are:
+
+* tests depending on Jakarta XML Binding;
+* tests depending on Jakarta Server Pages / Faces;
+* tests depending on Jakarta Enterprise Beans;
+* tests depending on Jakarta Authentication / Authorization (outside Core Profile).
+
+See `vidocq/TCK.md` for the full list, open TCK Process 1.4.1 official challenges, and session-level fix history.
+
+== Open bugs
+
+Reproducible bugs found during TCK runs are tracked in:
+
+* `vidocq/BUG.md` — bugs on the Vidocq-MPS orchestrator side;
+* `vidocq/CHAPPE-BUGS.md` — Chappe bugs identified through Servlet/REST TCK;
+* `vidocq/VAUBAN-BUGS.md` — Vauban bugs identified through CDI or Cassini TCK.
+
+Every bug follows the workspace convention: short id, date, minimal repro, root-cause hypothesis, status.
+
+== Next steps
+
+* xref:internals.adoc[Internals] — boot sequence and extension hooks
+* xref:reference.adoc[Reference] — MicroProfile configuration keys
+* xref:cassini::tck.adoc[Cassini TCK], xref:foy::tck.adoc[Foy TCK], xref:champollion::tck.adoc[Champollion TCK], xref:vauban::tck.adoc[Vauban TCK]

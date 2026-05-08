@@ -1,10 +1,14 @@
 = Getting started
-:description: First MicroProfile service booted by Vidocq.
+:description: First Vidocq-MPS service — REST + CDI + H2 persistence in minutes.
+
+[.lead]
+This page boots a complete REST + DI + H2 persistence service with Vidocq-MPS, packages the application via the dedicated Maven plugin, and runs it with `java -jar`. The example mirrors `vidocq-mps-mansart-h2-example` from the reactor.
 
 == Prerequisites
 
-* **Java 25**, **Maven 4.0.0-rc-5** — `.sdkmanrc` at the repo root.
-* Basic knowledge of MicroProfile (Config, Health, Metrics, OpenAPI).
+* **Java 25** (Temurin recommended)
+* **Maven 4.0.0-rc-5** — pinned via `.sdkmanrc` (`sdk env`)
+* Basic knowledge of Jakarta REST, CDI Lite and MicroProfile Config
 
 == Maven coordinates
 
@@ -18,8 +22,18 @@
     </dependency>
     <dependency>
         <groupId>io.vidocq.mpserver</groupId>
-        <artifactId>vidocq-mps-spi</artifactId>
+        <artifactId>vidocq-mps-rest-cassini-extension</artifactId>
         <version>0.1.0-SNAPSHOT</version>
+    </dependency>
+    <dependency>
+        <groupId>io.vidocq.mpserver</groupId>
+        <artifactId>vidocq-mps-mansart-extension</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </dependency>
+    <dependency>
+        <groupId>com.h2database</groupId>
+        <artifactId>h2</artifactId>
+        <version>2.x</version>
     </dependency>
 </dependencies>
 
@@ -33,6 +47,7 @@
         <execution>
           <goals>
             <goal>build</goal>
+            <goal>jlink</goal>
           </goals>
         </execution>
       </executions>
@@ -41,55 +56,127 @@
 </build>
 ----
 
-== Hello world
-
-A JAX-RS resource — Vidocq automatically enrolls Cassini, Vauban and Champollion:
+== Step 1 — An entity and a repository
 
 [source,java]
 ----
-package io.example;
+package io.example.todo;
 
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.ws.rs.GET;
-import jakarta.ws.rs.Path;
-import jakarta.ws.rs.Produces;
-import jakarta.ws.rs.core.MediaType;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.Id;
 
-@Path("/api")
-@ApplicationScoped
-public class HelloResource {
-
-    @GET
-    @Path("/hello")
-    @Produces(MediaType.APPLICATION_JSON)
-    public Greeting hello() {
-        return new Greeting("vidocq", "Hello, World!");
-    }
-
-    public record Greeting(String from, String message) {}
+@Entity
+public class Todo {
+    @Id @GeneratedValue Long id;
+    String label;
+    boolean done;
+    // accessors
 }
 ----
 
-Run:
+[source,java]
+----
+package io.example.todo;
+
+import jakarta.data.repository.CrudRepository;
+import jakarta.data.repository.Repository;
+
+@Repository
+public interface TodoRepository extends CrudRepository<Todo, Long> {}
+----
+
+Mansart generates the implementation via APT at build time. No runtime class is reflectively instantiated.
+
+== Step 2 — A REST resource
+
+[source,java]
+----
+package io.example.todo;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import jakarta.ws.rs.*;
+import jakarta.ws.rs.core.MediaType;
+
+@Path("/api/todos")
+@ApplicationScoped
+@Produces(MediaType.APPLICATION_JSON)
+@Consumes(MediaType.APPLICATION_JSON)
+public class TodoResource {
+
+    @Inject TodoRepository repo;
+
+    @GET
+    public Iterable<Todo> list() {
+        return repo.findAll();
+    }
+
+    @POST
+    public Todo create(Todo input) {
+        return repo.save(input);
+    }
+}
+----
+
+The `@RequestScoped` scope is added automatically by the `RestScopeExtension` Build Compatible Extension on the Vauban side.
+
+== Step 3 — Entry point
+
+[source,java]
+----
+package io.example.todo;
+
+public class App {
+    public static void main(String[] args) {
+        io.vidocq.mpserver.Vidocq.main(args);
+    }
+}
+----
+
+`Vidocq.main(args)` orchestrates the full boot sequence. See xref:internals.adoc[Internals].
+
+== Step 4 — MicroProfile configuration
+
+`src/main/resources/vidocq.properties`:
+
+[source,properties]
+----
+# transport (Chappe)
+vidocq.http.host=0.0.0.0
+vidocq.http.port=8080
+
+# datasource (Mansart)
+vidocq.datasource.url=jdbc:h2:mem:todo
+vidocq.datasource.username=sa
+vidocq.datasource.password=
+----
+
+Any key is overridable via `-Dkey=value`, environment variables, or an external file (see xref:usage.adoc[Usage]).
+
+== Step 5 — Build and run
 
 [source,bash]
 ----
 sdk env
-./mvnw -ntp package
-java -jar target/myapp-runner.jar
+./mvnw -ntp package -DskipTests
+java -jar target/quickstart-runner.jar
+# or in jlink mode (standalone image — no java required):
+./target/dist/bin/quickstart
 ----
 
-== Extension mechanism
+[source,bash]
+----
+$ curl -X POST http://localhost:8080/api/todos \
+       -H 'Content-Type: application/json' \
+       -d '{"label":"write docs","done":false}'
 
-Vidocq follows the Quarkus pattern: every extension contributes to the bootstrap **at compile time**, not at startup. An extension is a Maven module that:
+$ curl http://localhost:8080/api/todos
+[{"id":1,"label":"write docs","done":false}]
+----
 
-* declares a `@BuildStep` consuming `BuildItem` instances;
-* may emit bytecode via `vidocq-mps-spi` (Class-File API);
-* contributes runtime classes to be instantiated at startup.
+== Next steps
 
-See `vidocq-mps-core-extensions/` for shipped extensions and `vidocq-mps-examples/` for concrete cases, including `vidocq-mps-mansart-h2-example` which combines REST + CDI + JDBC.
-
-[TIP]
-====
-For the full list of `BuildItem` exposed during the build, see xref:reference.adoc[Reference].
-====
+* xref:usage.adoc[Usage] — jlink/jpackage/Docker packaging, profiles, AOT
+* xref:concepts.adoc[Concepts] — extension, build step, recorder
+* xref:modules/vidocq-mps-examples.adoc[Reactor examples tour]

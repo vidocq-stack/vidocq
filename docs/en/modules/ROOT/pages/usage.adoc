@@ -1,0 +1,125 @@
+= Usage
+:description: Packaging, configuration, profiles, deployment, AOT.
+
+[.lead]
+This page covers Vidocq-MPS usage beyond the hello world: packaging via the `vidocq-mps-maven-plugin` (jlink, jpackage, Docker), configuration via {spec-mp-config}, observability ({spec-mp-health}, {spec-mp-metrics}, {spec-mp-openapi}), profiles, and AOT preparation.
+
+== Packaging with `vidocq-mps-maven-plugin`
+
+The Maven plugin exposes three packaging targets. See xref:modules/vidocq-mps-maven-plugin.adoc[the dedicated page] for the full inventory and the internal `JLINK.md` details.
+
+[cols="1,1,3"]
+|===
+| Goal | Output | Typical startup
+
+| `vidocq:jlink`
+| `target/dist/` (binary + embedded Java runtime, ~40 MB)
+| ~4 s
+
+| `vidocq:jpackage`
+| `target/installer/<name>.app` or `.exe`/`.msi`/`.deb`/`.rpm`
+| ~1 s (CDS)
+
+| `vidocq:docker`
+| `target/Dockerfile` distroless based on `distroless/base-debian12:nonroot`
+| ~50 MB image
+|===
+
+Quick start (from `vidocq-mps-rest-example`):
+
+[source,bash]
+----
+cd vidocq-mps-examples/vidocq-mps-rest-example
+./mvnw -ntp package -DskipTests
+./target/dist/bin/todo-app
+----
+
+== MicroProfile configuration
+
+Vidocq-MPS implements {spec-mp-config}. Source hierarchy, highest to lowest priority:
+
+[cols="1,2,3"]
+|===
+| Ordinal | Source | Description
+
+| 400 | `SystemPropertiesConfigSource` | `-Dkey=value`
+| 300 | `EnvConfigSource` | Environment variables (`KEY_NAME`)
+| 250 | `ExternalFileConfigSource` | `${java.home}/conf/vidocq.properties` (jlink image)
+| 100 | `PropertiesFileConfigSource` | classpath `vidocq.properties`
+|===
+
+`ExternalFileConfigSource` lets you override a deployed jlink/jpackage binary without rebuilding, simply by editing the `conf/vidocq.properties` file next to the launcher. A boot log line traces the effective load.
+
+== Health
+
+[source,java]
+----
+@Liveness
+@ApplicationScoped
+public class DatabaseHealth implements HealthCheck {
+    @Inject DataSource ds;
+
+    @Override
+    public HealthCheckResponse call() {
+        try (Connection c = ds.getConnection()) {
+            return HealthCheckResponse.up("database");
+        } catch (SQLException e) {
+            return HealthCheckResponse.down("database");
+        }
+    }
+}
+----
+
+Endpoints exposed: `/q/health`, `/q/health/live`, `/q/health/ready`, `/q/health/started` (current milestone, see xref:tck.adoc[TCK]).
+
+== Metrics
+
+{spec-mp-metrics} implementation in progress. Counters and histograms will be registered at build time by the `vidocq-mps-metrics-extension` extension. Prometheus endpoint `/q/metrics`.
+
+== OpenAPI
+
+The `vidocq-mps-openapi-extension` extension (current milestone) generates the OpenAPI document at compile time from Jakarta REST + MicroProfile OpenAPI annotations. Endpoint `/q/openapi`.
+
+== Profiles
+
+MicroProfile convention: prefix a key with `%<profile>.` to scope it.
+
+[source,properties]
+----
+vidocq.http.port=8080
+%dev.vidocq.http.port=8081
+%prod.vidocq.http.port=80
+----
+
+Activate via `-Dvidocq.profile=dev` or the `VIDOCQ_PROFILE` environment variable.
+
+== Docker deployment
+
+Minimal distroless image produced by `vidocq:docker`:
+
+[source,bash]
+----
+./mvnw -ntp package -Dvidocq.docker.build=true
+docker run --rm -p 8080:8080 \
+    -e VIDOCQ_CONFIG_DIR=/etc/myapp \
+    -v $(pwd)/conf:/etc/myapp:ro \
+    example/my-app:1.0.0
+----
+
+The `distroless/base-debian12:nonroot` base image has no shell, no package manager — minimal attack surface. The `nonroot` user (UID 65532) is enforced.
+
+== AOT — GraalVM and Leyden
+
+* **Leyden CDS** — supported out of the box. Static Class-File API codegen produces bytecode that archives perfectly.
+* **GraalVM native-image** — Vidocq-MPS's zero-reflection + zero-proxy strategy minimises `reachability-metadata`. See `vidocq/JLINK.md` for runtime prerequisites (logging.properties, named JPMS modules, serialised records).
+
+[NOTE]
+====
+// TODO@user: document the official GraalVM profile when the `vidocq-mps-native-extension` extension ships.
+====
+
+== Next steps
+
+* xref:reference.adoc[Reference] — exhaustive config keys, plugin properties
+* xref:internals.adoc[Internals] — boot sequence
+* xref:modules/vidocq-mps-maven-plugin.adoc[Maven plugin] — goal details

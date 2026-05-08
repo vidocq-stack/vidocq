@@ -1,7 +1,10 @@
 = Reference
-:description: Maven artefacts, SPI, BuildItems, scripts.
+:description: Maven coordinates, configuration, plugin CLI, public SPI, JPMS.
 
-== Maven artefacts
+[.lead]
+Operational reference for Vidocq-MPS — Maven coordinates, MicroProfile Config keys, `vidocq-mps-maven-plugin` goals, exported JPMS modules, public SPI.
+
+== Maven coordinates
 
 [cols="1,3"]
 |===
@@ -11,53 +14,177 @@
 | Parent POM (Model 4.1.0)
 
 | `io.vidocq.mpserver:vidocq-mps-spi:0.1.0-SNAPSHOT`
-| Public SPI (BuildStep, BuildItem, Recorder)
+| Public SPI (`@BuildStep`, `@Recorder`, `BuildItem`)
 
 | `io.vidocq.mpserver:vidocq-mps-core:0.1.0-SNAPSHOT`
-| Runtime engine (Vauban + plumbing)
+| Runtime engine (boot orchestrator, lifecycle)
 
 | `io.vidocq.mpserver:vidocq-mps-core-extensions:0.1.0-SNAPSHOT`
-| Shipped extension pack
+| Shipped extension pack (REST, CDI, Servlet, Mansart, Config…)
 
 | `io.vidocq.mpserver:vidocq-mps-maven-plugin:0.1.0-SNAPSHOT`
-| Maven plugin to build the app
+| Maven plugin — `build`, `jlink`, `jpackage`, `docker`
 
 | `io.vidocq.mpserver:vidocq-mps-examples:0.1.0-SNAPSHOT`
-| Examples (REST, CDI, JDBC, transactions)
+| Examples (`vidocq-mps-rest-example`, `vidocq-mps-mansart-h2-example`, `vidocq-mps-external-rest-lib`)
 
 | `io.vidocq.mpserver:vidocq-mps-integration-tests:0.1.0-SNAPSHOT`
 | Multi-extension integration tests
 |===
 
+== Exported JPMS modules
+
+[cols="1,3"]
+|===
+| Module | Contents
+
+| `io.vidocq.mpserver`
+| `Vidocq.main(String[])` facade, application entry point.
+
+| `io.vidocq.mpserver.spi`
+| Public annotations and interfaces. Must be declared `requires` in any extension.
+
+| `io.vidocq.mpserver.core`
+| Orchestration engine. Not intended for direct user consumption.
+
+| `io.vidocq.mpserver.maven`
+| Shared code of the Maven plugin (APT index reading, runner generation).
+|===
+
+The other `io.vidocq.mpserver.*.extension` modules each correspond to a built-in extension.
+
+== MicroProfile Config keys
+
+[cols="2,1,2"]
+|===
+| Key | Default | Description
+
+| `vidocq.http.host`
+| `0.0.0.0`
+| Chappe transport bind address.
+
+| `vidocq.http.port`
+| `8080`
+| HTTP/1.1 + H2c port.
+
+| `vidocq.https.port`
+| (disabled)
+| HTTPS/H2/H3 port if TLS is configured.
+
+| `vidocq.tls.cert`
+| —
+| Path to PEM certificate.
+
+| `vidocq.tls.key`
+| —
+| Path to PEM private key.
+
+| `vidocq.datasource.url`
+| —
+| JDBC URL for Mansart.
+
+| `vidocq.datasource.username` / `vidocq.datasource.password`
+| —
+| JDBC credentials.
+
+| `vidocq.datasource.pool.maxSize`
+| `20`
+| Mansart pool maximum size.
+
+| `vidocq.profile`
+| (empty)
+| Active profile (`dev`, `prod`, …) — `%<profile>.` prefix recognised.
+
+| `vidocq.config.dir`
+| (empty)
+| External override directory (`ExternalFileConfigSource`, ordinal 250).
+|===
+
+[NOTE]
+====
+// TODO@user: extract the exhaustive key list once `vidocq-mps-config-extension` is stabilised. Each key depends on the extension declaring it via `@VidocqConfig`.
+====
+
+`ConfigSource` hierarchy (descending ordinal):
+
+[cols="1,2,3"]
+|===
+| Ordinal | Source | Description
+
+| 400 | `SystemPropertiesConfigSource` | `-Dkey=value`
+| 300 | `EnvConfigSource` | Environment variables
+| 250 | `ExternalFileConfigSource` | `${java.home}/conf/vidocq.properties` or `$VIDOCQ_CONFIG_DIR/vidocq.properties`
+| 100 | `PropertiesFileConfigSource` | Classpath `vidocq.properties`
+|===
+
+== Maven plugin goals
+
+[cols="1,3"]
+|===
+| Goal | Role
+
+| `vidocq:build`
+| Runs `@BuildStep`, generates Class-File API classes, produces the runner JAR.
+
+| `vidocq:jlink`
+| Standalone Java image (`target/dist/`) with binary launcher.
+
+| `vidocq:jpackage`
+| Native bundle (`.app`, `.exe`, `.msi`, `.deb`, `.rpm`, or app-image).
+
+| `vidocq:docker`
+| Generates `target/Dockerfile` distroless; optional Docker build via `vidocq.docker.build=true`.
+|===
+
+See xref:modules/vidocq-mps-maven-plugin.adoc[the dedicated page] for the exhaustive parameter list.
+
 == Public SPI (`vidocq-mps-spi`)
 
-[TODO]
-====
-List the public annotations and interfaces:
-
-* `@BuildStep`, `@Record`, `@Recorder`
-* `BuildItem`, `SimpleBuildItem`, `MultiBuildItem`
-* `IndexView`, `BeanRegistrationContext`, `RecorderContext`
-* `RuntimeValue<T>`, `BytecodeRecorderImpl`
-
 Source: `vidocq-mps-spi/src/main/java/io/vidocq/mpserver/spi/`.
+
+[cols="1,3"]
+|===
+| Type | Role
+
+| `VidocqExtension`
+| Marker interface declared via `META-INF/services`.
+
+| `ExtensionContext`
+| Contribution API (`BuildItem` registry, config access).
+
+| `VidocqConfiguration`
+| Read at build to resolve extension options.
+
+| `config.VidocqConfig`
+| MicroProfile Config facade (with `Converter<T>` and `ConfigSource`).
+
+| `@BuildStep`, `@Record`, `@Recorder`
+| Build-time contribution annotations.
+
+| `BuildItem`, `SimpleBuildItem`, `MultiBuildItem`
+| Exchange units between build steps.
+|===
+
+[NOTE]
 ====
-
-== Shipped BuildItems
-
-[TODO]: enumerate the standard BuildItems exposed by core.
+// TODO@user: freeze the full list of standard `BuildItem` exposed by core and each built-in extension.
+====
 
 == Bugs and benchmarks
 
-* Reproducible bugs: `vidocq/BUG.md`.
-* Benchmarks: `vidocq/BENCH.md`.
-
-== Scripts
-
-[TODO]: list shell scripts present at the `vidocq` repo root (build, package, run, etc.).
+* Vidocq-MPS bugs: `vidocq/BUG.md`
+* Cross-cutting bugs: `vidocq/CHAPPE-BUGS.md`, `vidocq/VAUBAN-BUGS.md`
+* Benchmarks: `vidocq/BENCH.md`
 
 == Compatibility
 
-* Java 25 minimum
-* Maven 4.0.0-rc-5 minimum
-* Strict JPMS — one `module-info.java` per submodule
+* **Java 25** minimum (LTS)
+* **Maven 4.0.0-rc-5** minimum
+* **Strict JPMS** — one `module-info.java` per submodule
+* **No hidden classpath** — every dependency exposes a named module
+
+== Next steps
+
+* xref:usage.adoc[Usage] — packaging and profiles
+* xref:internals.adoc[Internals] — boot and threading
+* xref:modules/vidocq-mps-spi.adoc[SPI details] — how to write an extension

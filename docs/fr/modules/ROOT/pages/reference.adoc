@@ -1,7 +1,10 @@
 = Référence
-:description: Artefacts Maven, SPI, BuildItem, scripts.
+:description: Coordonnées Maven, configuration, CLI plugin, SPI publique, JPMS.
 
-== Artefacts Maven
+[.lead]
+Référence opérationnelle de Vidocq-MPS — coordonnées Maven, clés MicroProfile Config, goals du `vidocq-mps-maven-plugin`, modules JPMS exportés, SPI publique.
+
+== Coordonnées Maven
 
 [cols="1,3"]
 |===
@@ -11,53 +14,177 @@
 | POM parent (Model 4.1.0)
 
 | `io.vidocq.mpserver:vidocq-mps-spi:0.1.0-SNAPSHOT`
-| SPI publique (BuildStep, BuildItem, Recorder)
+| SPI publique (`@BuildStep`, `@Recorder`, `BuildItem`)
 
 | `io.vidocq.mpserver:vidocq-mps-core:0.1.0-SNAPSHOT`
-| Moteur d'exécution (Vauban + plombing)
+| Moteur d'exécution (boot orchestrator, lifecycle)
 
 | `io.vidocq.mpserver:vidocq-mps-core-extensions:0.1.0-SNAPSHOT`
-| Pack d'extensions livrées
+| Pack d'extensions livrées (REST, CDI, Servlet, Mansart, Config…)
 
 | `io.vidocq.mpserver:vidocq-mps-maven-plugin:0.1.0-SNAPSHOT`
-| Plugin Maven pour build l'application
+| Plugin Maven — `build`, `jlink`, `jpackage`, `docker`
 
 | `io.vidocq.mpserver:vidocq-mps-examples:0.1.0-SNAPSHOT`
-| Exemples (REST, CDI, JDBC, transactions)
+| Exemples (`vidocq-mps-rest-example`, `vidocq-mps-mansart-h2-example`, `vidocq-mps-external-rest-lib`)
 
 | `io.vidocq.mpserver:vidocq-mps-integration-tests:0.1.0-SNAPSHOT`
 | Tests d'intégration multi-extensions
 |===
 
+== Modules JPMS exportés
+
+[cols="1,3"]
+|===
+| Module | Contenu
+
+| `io.vidocq.mpserver`
+| Façade `Vidocq.main(String[])`, point d'entrée applicatif.
+
+| `io.vidocq.mpserver.spi`
+| Annotations et interfaces publiques. À déclarer en `requires` dans toute extension.
+
+| `io.vidocq.mpserver.core`
+| Moteur d'orchestration. Non destiné à être consommé directement par l'utilisateur.
+
+| `io.vidocq.mpserver.maven`
+| Code partagé du plugin Maven (lecture des index APT, génération du runner).
+|===
+
+Les autres modules `io.vidocq.mpserver.*.extension` correspondent chacun à une extension built-in.
+
+== Clés MicroProfile Config
+
+[cols="2,1,2"]
+|===
+| Clé | Défaut | Description
+
+| `vidocq.http.host`
+| `0.0.0.0`
+| Adresse de bind du transport Chappe.
+
+| `vidocq.http.port`
+| `8080`
+| Port HTTP/1.1 + H2c.
+
+| `vidocq.https.port`
+| (désactivé)
+| Port HTTPS/H2/H3 si TLS configuré.
+
+| `vidocq.tls.cert`
+| —
+| Chemin vers le certificat PEM.
+
+| `vidocq.tls.key`
+| —
+| Chemin vers la clé privée PEM.
+
+| `vidocq.datasource.url`
+| —
+| URL JDBC pour Mansart.
+
+| `vidocq.datasource.username` / `vidocq.datasource.password`
+| —
+| Credentials JDBC.
+
+| `vidocq.datasource.pool.maxSize`
+| `20`
+| Taille maximale du pool Mansart.
+
+| `vidocq.profile`
+| (vide)
+| Profil actif (`dev`, `prod`, …) — préfixage `%<profil>.` reconnu.
+
+| `vidocq.config.dir`
+| (vide)
+| Répertoire de surcharge externe (`ExternalFileConfigSource`, ordinal 250).
+|===
+
+[NOTE]
+====
+// TODO@user: extraire la liste exhaustive des clés une fois `vidocq-mps-config-extension` stabilisée. Toute clé dépend de l'extension qui la déclare via `@VidocqConfig`.
+====
+
+Hiérarchie des `ConfigSource` (ordinal décroissant) :
+
+[cols="1,2,3"]
+|===
+| Ordinal | Source | Description
+
+| 400 | `SystemPropertiesConfigSource` | `-Dkey=value`
+| 300 | `EnvConfigSource` | Variables d'environnement
+| 250 | `ExternalFileConfigSource` | `${java.home}/conf/vidocq.properties` ou `$VIDOCQ_CONFIG_DIR/vidocq.properties`
+| 100 | `PropertiesFileConfigSource` | `vidocq.properties` du classpath
+|===
+
+== Plugin Maven — goals
+
+[cols="1,3"]
+|===
+| Goal | Rôle
+
+| `vidocq:build`
+| Exécute les `@BuildStep`, génère les classes Class-File API, produit le JAR runner.
+
+| `vidocq:jlink`
+| Image Java autonome (`target/dist/`), avec launcher binaire.
+
+| `vidocq:jpackage`
+| Bundle natif (`.app`, `.exe`, `.msi`, `.deb`, `.rpm`, ou app-image).
+
+| `vidocq:docker`
+| Génère `target/Dockerfile` distroless ; build Docker optionnel via `vidocq.docker.build=true`.
+|===
+
+Voir xref:modules/vidocq-mps-maven-plugin.adoc[la fiche dédiée] pour la liste exhaustive des paramètres de configuration.
+
 == SPI publique (`vidocq-mps-spi`)
 
-[TODO]
-====
-Lister les annotations et interfaces publiques :
-
-* `@BuildStep`, `@Record`, `@Recorder`
-* `BuildItem`, `SimpleBuildItem`, `MultiBuildItem`
-* `IndexView`, `BeanRegistrationContext`, `RecorderContext`
-* `RuntimeValue<T>`, `BytecodeRecorderImpl`
-
 Source : `vidocq-mps-spi/src/main/java/io/vidocq/mpserver/spi/`.
+
+[cols="1,3"]
+|===
+| Type | Rôle
+
+| `VidocqExtension`
+| Interface marqueur déclarée via `META-INF/services`.
+
+| `ExtensionContext`
+| API de contribution (registre de `BuildItem`, accès config).
+
+| `VidocqConfiguration`
+| Lecture des options d'extension au build.
+
+| `config.VidocqConfig`
+| Façade MicroProfile Config (avec `Converter<T>` et `ConfigSource`).
+
+| `@BuildStep`, `@Record`, `@Recorder`
+| Annotations de contribution build-time.
+
+| `BuildItem`, `SimpleBuildItem`, `MultiBuildItem`
+| Unités d'échange entre build steps.
+|===
+
+[NOTE]
 ====
-
-== BuildItem livrés
-
-[TODO] : énumérer les BuildItem standard exposés par le core.
+// TODO@user: figer la liste complète des `BuildItem` standard exposés par le core et chaque extension built-in.
+====
 
 == Bugs et benchmarks
 
-* Bugs reproductibles : `vidocq/BUG.md`.
-* Benchmarks : `vidocq/BENCH.md`.
-
-== Scripts
-
-[TODO] : lister les scripts shell présents à la racine du repo `vidocq` (build, package, run, etc.).
+* Bugs Vidocq-MPS : `vidocq/BUG.md`
+* Bugs croisés : `vidocq/CHAPPE-BUGS.md`, `vidocq/VAUBAN-BUGS.md`
+* Benchmarks : `vidocq/BENCH.md`
 
 == Compatibilité
 
-* Java 25 minimum
-* Maven 4.0.0-rc-5 minimum
-* JPMS strict — un `module-info.java` par sous-module
+* **Java 25** minimum (LTS)
+* **Maven 4.0.0-rc-5** minimum
+* **JPMS strict** — un `module-info.java` par sous-module
+* **Aucun classpath caché** — toutes les dépendances exposent un module nommé
+
+== Pour aller plus loin
+
+* xref:usage.adoc[Usage] — packaging et profils
+* xref:internals.adoc[Fonctionnement interne] — boot et threading
+* xref:modules/vidocq-mps-spi.adoc[Détail SPI] — comment écrire une extension
