@@ -66,48 +66,87 @@ public interface org.jboss.arquillian.container.spi.Container<T extends Containe
 (Le BOM Arquillian seul ne suffit pas car Maven 4 applique « nearest wins »
 sur les transitives non managées par le BOM importé depuis le profil.)
 
-## Bug n°2 — `LITE-EXTENSION-TRANSLATOR-000002` 🔥 actif
+## Bug n°2 — `LITE-EXTENSION-TRANSLATOR-000002` ✅ résolu
 
-Une fois Arquillian débloqué, le TCK officiel détecte 403 tests et la majorité des
-classes échoue au `arquillianBeforeClass` avec :
+CDI Lite 4.1 (BCE spec §16.1) interdit `BeanInfo` comme paramètre d'une méthode
+`@Validation`. La méthode `ConfigCdiExtension.validateConfigPropertyInjectionPoints`
+a été migrée de `@Validation` vers `@Registration(types = Object.class)`. Cette
+phase est invoquée pour chaque `BeanInfo` (tous les beans héritent d'`Object`)
+et accepte légitimement `(BeanInfo, Messages)`.
+
+Effet immédiat : le TCK passe de **0 test exécuté effectivement** (toutes les
+classes failed at `arquillianBeforeClass`) à **391 tests run / 357 PASS**.
+
+## Bug n°3 — Synthetic beans manquants pour `@ConfigProperty` (15 fails restants en `arquillianBeforeClass`) 🔥 actif
+
+Symptôme :
 
 ```
-Caused by: org.jboss.weld.exceptions.DeploymentException:
-    LITE-EXTENSION-TRANSLATOR-000017: There was a problem executing
-    Build Compatible Extension method
-    public void io.vidocq.ravel.cdi.ConfigCdiExtension
-        .validateConfigPropertyInjectionPoints(BeanInfo, Messages)
-    during phase @Validation.
-Caused by: IllegalArgumentException: LITE-EXTENSION-TRANSLATOR-000002:
-    @Validation methods cant declare a parameter of type {1}
+WELD-001408: Unsatisfied dependencies for type OffsetDateTime[] with qualifiers @ConfigProperty
+  at injection point [BackedAnnotatedField] @Inject @ConfigProperty
+      private org.eclipse.microprofile.config.tck.ArrayConverterBean.myOffsetDateTimeArray
 ```
 
-### Cause racine (côté Ravel)
+### Cause racine
 
-CDI Lite 4.1 — spec §`Validation` — interdit `BeanInfo` comme paramètre des méthodes
-`@Validation`. Les paramètres autorisés sont `Messages` et `Types` (et certains
-contextes via `@Enhancement` / `@Registration` en amont).
+`RavelConfigProducer.produceConfigProperty` retourne `Object` — Weld n'utilise
+ce producer que pour les IP typés exactement `Object`. Pour résoudre les IP
+arbitraires (`OffsetDateTime[]`, `URL[]`, `LocalDate`, custom converters, etc.)
+il faut **enregistrer un `SyntheticBean<T>` par type rencontré** via le hook
+`@Synthesis` du BCE — comme le font Smallrye Config et Helidon Config.
 
-`ConfigCdiExtension` doit être réécrite pour :
-1. Collecter les injection points via `@Registration(types = …)` ou
-   `@Enhancement` qui peut recevoir `BeanInfo`.
-2. Reporter les erreurs durant `@Validation(MessagesT, Types)`.
+Plan d'implémentation :
+1. Phase `@Enhancement` ou `@Registration` : collecter dans un état BCE le set
+   des `Type` distincts utilisés par les IP `@ConfigProperty` (déclaration via
+   `InjectionPointInfo.type()`), incluant `ArrayType`, `ParameterizedType`
+   (Optional/Provider/Supplier/List/Set), `ClassType`.
+2. Phase `@Synthesis` : pour chaque type T collecté, déclarer un
+   `SyntheticBean<T>` qualifié `@ConfigProperty` (binding non-binding pour
+   `name`/`defaultValue`) avec un `SyntheticBeanCreator<T>` qui appelle
+   `ConfigProvider.getConfig().getValue(name, T)` ou délègue à un
+   `RavelConfigPropertyResolver` ré-utilisable.
+3. Migrer `RavelConfigProducer.produceConfigProperty(InjectionPoint)` vers ce
+   resolver pour partager la logique entre tests existants et synthetic beans.
 
-Plan ouvert dans la prochaine itération M5 : réécriture de la BCE pour
-respecter les contraintes de la signature CDI Lite, puis relance du TCK.
+### Classes TCK actuellement bloquées par ce gap
 
-### Échantillon des classes TCK affectées
+- `arquillianBeforeClass` (15) : `ArrayConverterTest`, `CDIPlainInjectionTest`,
+  `CDIPropertyExpressionsTest`, `CDIPropertyNameMatchingTest`,
+  `CdiOptionalInjectionTest`, `ClassConverterTest`, `ConfigValueTest`,
+  `ConverterTest`, `ImplicitConverterTest`, `ConvertedNullValueTest`,
+  `ConfigPropertiesMissingPropertyInjectionTest`, `*ConfigProfileTest` (6).
+- `arquillianBeforeTest` (3) : `ConfigProviderTest.testDynamicValueInPropertyConfigSource`,
+  `CustomConfigSourceTest.testConfigSourceProvider`, `CustomConverterTest.testBoolean`.
 
-`ClassConverterTest`, `ConfigPropertiesTest`, `ConfigProviderTest`,
-`ConfigValueTest`, `ConverterTest`, `CustomConfigSourceTest`,
-`CustomConverterTest`, `ImplicitConverterTest`, `PropertyExpressionsTest`,
-`WarPropertiesLocationTest`, `*ConfigProfileTest`, etc.
+## Bug n°4 — `@ConfigProperties` non supporté (6 fails)
+
+`ConfigPropertiesTest.testConfigPropertiesPlainInjection` et 5 autres :
+MP Config 3.1 §6 introduit l'annotation `@ConfigProperties` (préfixe sur un
+POJO entier, distinct de `@ConfigProperty`). Ravel ne l'implémente pas
+encore — gap connu, à traiter après le bug n°3 dans la même itération.
+
+## Bug n°5 — `PropertyExpressions` lookup raw (6 fails)
+
+`PropertyExpressionsTest.noExpression*` : la spec §7.2 exige que les
+`getOptionalValue(...)` / `getConfigValue(...)` retournent quelque chose
+(empty / raw value) quand l'expression `${missing.prop}` ne se résout pas
+plutôt que de lever une exception. Ravel lève `IllegalArgumentException`.
+Fix unitaire dans `RavelConfig.resolveExpression` pour distinguer les chemins
+"required" (exception, du bon type `NoSuchElementException`) et "optional"
+(retourner le raw / `Optional.empty()`).
+
+## Bug n°6 — divers (3 fails)
+
+- `DefaultConfigSourceOrdinalTest.checkSetup` — assertion sur l'ordinal
+  par défaut de `META-INF/microprofile-config.properties` (100, à vérifier
+  contre la valeur déclarée par notre `MicroprofilePropertiesConfigSource`).
+- `NullConvertersTest.nulls` — comportement converters face à valeur null /
+  empty string.
 
 ## Tests désactivés / challenges spec
 
-Aucun pour l'instant — toutes les défaillances actuelles sont causées par
-la BCE Ravel. Cette section sera enrichie quand le code Ravel passera la
-validation et que de vrais écarts spec/impl émergeront.
+Aucun pour l'instant. Cette section sera enrichie quand de vrais écarts
+spec/impl émergeront après les fix M5 successifs.
 
 ## Références
 

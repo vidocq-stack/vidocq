@@ -157,11 +157,15 @@ dans le manifest du JAR API — la 3.1 originale (publiée 2023) n'avait ni desc
 | Tâche | Notes | État |
 |---|---|---|
 | `ravel-tck/pom.xml` Model 4.0.0 standalone | Idem `cassini-tck`/`foy-tck`/`champollion-tck` — hors reactor | ✅ |
-| Runner Arquillian + harness officiel `microprofile-config-tck:3.1.1` | Arquillian 1.10.1 (BOM + dep mgmt sur `container-spi/impl-base/core-impl-base`) + Weld 6.0.2 + TestNG 7.10.2 ; bug `MalformedParameterizedTypeException` JDK 25 résolu ; 403 tests exécutés | ✅ scaffolding |
+| Runner Arquillian + harness officiel `microprofile-config-tck:3.1.1` | Arquillian 1.10.1 (BOM + dep mgmt sur `container-spi/impl-base/core-impl-base`) + Weld 6.0.2 + TestNG 7.10.2 ; bug `MalformedParameterizedTypeException` JDK 25 résolu | ✅ scaffolding |
 | Adapter Arquillian → Ravel embedded | Weld SE embedded ; `arquillian.xml` + `META-INF/beans.xml` (CDI 4.1) en place | ✅ |
 | `run-official-tck-mp-config-3.1.sh` | Modes : smoke (défaut, 2/2 PASS) / all / `-Dtest=NomTest` ; rapport `target/tck-report.txt` | ✅ |
-| `TCK.md` | Documente le bug Arquillian résolu + bug actif `LITE-EXTENSION-TRANSLATOR-000002` (cf. fichier) | ✅ |
-| Score contrat : 100 % PASS | ❌ bloqué sur la BCE Ravel : `@Validation` ne peut pas recevoir `BeanInfo` en CDI Lite 4.1 → réécriture nécessaire | ⏳ |
+| BCE `@Validation` → `@Registration(types=Object.class)` | CDI Lite 4.1 §16.1 interdit `BeanInfo` en `@Validation` ; commit `8d80958` | ✅ |
+| `TCK.md` | Documente bugs n°1 (Arquillian, résolu), n°2 (BCE Validation, résolu), n°3 synthetic beans (actif), n°4 `@ConfigProperties`, n°5 expressions raw, n°6 ordinal | ✅ |
+| Score contrat : 100 % PASS | **391 tests run / 357 PASS / 34 fails / 332 skipped** ; gap principal = synthetic beans `@ConfigProperty` pour types arbitraires (cf. `TCK.md` bug n°3) | ⏳ |
+| Synthetic beans `@ConfigProperty` via `@Synthesis` BCE | Enregistrer `SyntheticBean<T>` qualifié `@ConfigProperty` pour chaque type d'IP collecté ; débloque ~15 `arquillianBeforeClass` + tests Optional/Provider/Supplier/arrays/converters | ⏳ |
+| Support `@ConfigProperties` (MP Config 3.1 §6) | POJO préfixé via annotation distincte de `@ConfigProperty` ; ~6 tests TCK | ⏳ |
+| Expressions raw / lookup non-strict (§7.2) | `getOptionalValue` / `getConfigValue` ne doivent pas lever sur `${missing}` non résolu | ⏳ |
 | `ravel-bench` JMH | `LookupBenchmark` (cache hit/miss) + `ExpressionBenchmark` (literal/1/3 niveaux) + `ConversionBenchmark` (Integer/Long/Boolean/Duration/String[]) ; `@Param` Ravel/Smallrye | ✅ |
 | Comparatif JMH vs Smallrye Config | Premier smoke run : `LookupBenchmark.hit_String` Ravel ~22 ns/op, Smallrye ~15 ns/op (1 fork, 1 iter) | ✅ premier baseline |
 
