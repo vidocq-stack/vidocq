@@ -150,20 +150,20 @@ dans le manifest du JAR API — la 3.1 originale (publiée 2023) n'avait ni desc
 
 ---
 
-### M5 — TCK + Bench
+### M5 — TCK + Bench 🟡 en cours
 
 **Scope :** validation officielle MicroProfile Config 3.1 + benchmarks comparatifs.
 
-| Tâche | Notes |
-|---|---|
-| `ravel-tck/pom.xml` Model 4.0.0 standalone | Idem `cassini-tck`/`foy-tck`/`champollion-tck` — hors reactor |
-| Runner Arquillian + harness officiel `microprofile-config-tck:3.1.1` | Artefact public Maven Central (pas d'install local nécessaire) |
-| Adapter Arquillian → Ravel embedded | Soit standalone (sans CDI), soit via Vauban embedded selon le test |
-| `run-official-tck-mp-config-3.1.sh` | Modes : smoke (défaut) / all / `-Dtest=NomTest` |
-| `TCK.md` | Documente les éventuels challenges (tests désactivés avec citation spec + plan de réactivation) |
-| Score contrat : 100 % PASS | Régression bloquante sur `ravel-core`/`ravel-cdi-vauban` |
-| `ravel-bench` JMH | Lookup throughput (cache hit / cache miss), expression resolution overhead, conversion cost |
-| Comparatif JMH vs Smallrye Config | Même JVM, mêmes paramètres ; cible : ≥ Smallrye sur lookup simple |
+| Tâche | Notes | État |
+|---|---|---|
+| `ravel-tck/pom.xml` Model 4.0.0 standalone | Idem `cassini-tck`/`foy-tck`/`champollion-tck` — hors reactor | ✅ |
+| Runner Arquillian + harness officiel `microprofile-config-tck:3.1.1` | Arquillian 1.10.0 + Weld 6.0.2 + TestNG 7.10.2 ; Surefire `surefire-testng` provider forcé ; 450 tests détectés | ✅ scaffolding |
+| Adapter Arquillian → Ravel embedded | Weld SE embedded ; `arquillian.xml` + `META-INF/beans.xml` (CDI 4.1) en place | ✅ |
+| `run-official-tck-mp-config-3.1.sh` | Modes : smoke (défaut, 2/2 PASS) / all / `-Dtest=NomTest` ; rapport `target/tck-report.txt` | ✅ |
+| `TCK.md` | Documente le bug bloquant Arquillian `MalformedParameterizedTypeException` sous JDK 25 (cf. fichier) | ✅ |
+| Score contrat : 100 % PASS | ❌ en attente du fix upstream Arquillian (cf. `TCK.md`) | ⏳ |
+| `ravel-bench` JMH | `LookupBenchmark` (cache hit/miss) + `ExpressionBenchmark` (literal/1/3 niveaux) + `ConversionBenchmark` (Integer/Long/Boolean/Duration/String[]) ; `@Param` Ravel/Smallrye | ✅ |
+| Comparatif JMH vs Smallrye Config | Premier smoke run : `LookupBenchmark.hit_String` Ravel ~22 ns/op, Smallrye ~15 ns/op (1 fork, 1 iter) | ✅ premier baseline |
 
 **Livrable :** scripts shell + rapport TCK reproductible. Bench publié dans `BENCH.md`.
 

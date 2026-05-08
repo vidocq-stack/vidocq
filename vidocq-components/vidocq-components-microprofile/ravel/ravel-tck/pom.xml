@@ -96,6 +96,21 @@
     </build>
 
     <profiles>
+        <!--
+            Profil par défaut : smoke test sans Arquillian — vérifie que le ServiceLoader
+            charge bien RavelConfigProviderResolver, sans dépendance Weld/TestNG.
+        -->
+        <profile>
+            <id>smoke</id>
+            <activation>
+                <activeByDefault>true</activeByDefault>
+            </activation>
+        </profile>
+
+        <!--
+            Profil TCK officiel : Arquillian TestNG + Weld SE embedded, dépendances
+            scannées du JAR microprofile-config-tck. Cible : 100 % PASS (contrat M5).
+        -->
         <profile>
             <id>tck-official</id>
             <build>
@@ -113,10 +128,29 @@
                                 <include>**/*Tests.class</include>
                                 <include>**/*IT.class</include>
                             </includes>
+                            <excludes>
+                                <!-- Le smoke test JUnit est réservé au profil 'smoke'. -->
+                                <exclude>**/RavelTckSmokeTest.class</exclude>
+                            </excludes>
                             <trimStackTrace>false</trimStackTrace>
                             <redirectTestOutputToFile>false</redirectTestOutputToFile>
                             <useFile>false</useFile>
+                            <systemPropertyVariables>
+                                <arquillian.launch>weld-embedded</arquillian.launch>
+                            </systemPropertyVariables>
                         </configuration>
+                        <dependencies>
+                            <!--
+                                Force Surefire à utiliser le provider TestNG : le TCK MP Config
+                                est TestNG-driven, et junit-platform-engine est aussi présent
+                                en classpath via la dep racine du module (smoke test).
+                            -->
+                            <dependency>
+                                <groupId>org.apache.maven.surefire</groupId>
+                                <artifactId>surefire-testng</artifactId>
+                                <version>3.5.5</version>
+                            </dependency>
+                        </dependencies>
                     </plugin>
                 </plugins>
             </build>
@@ -127,31 +161,30 @@
                     <version>${microprofile.config.version}</version>
                     <scope>test</scope>
                 </dependency>
-                <!-- Arquillian core : harness officiel TCK MicroProfile -->
+
+                <!-- Arquillian TestNG container — version fournie par arquillian-bom -->
                 <dependency>
-                    <groupId>org.jboss.arquillian.junit5</groupId>
-                    <artifactId>arquillian-junit5-container</artifactId>
-                    <version>1.9.4.Final</version>
+                    <groupId>org.jboss.arquillian.testng</groupId>
+                    <artifactId>arquillian-testng-container</artifactId>
+                    <version>1.10.0.Final</version>
                     <scope>test</scope>
                 </dependency>
+
+                <!-- Container CDI : Weld SE embedded (CDI 4.1, BCE compatible avec ravel-cdi-vauban) -->
                 <dependency>
                     <groupId>org.jboss.arquillian.container</groupId>
-                    <artifactId>arquillian-container-spi</artifactId>
-                    <version>1.9.4.Final</version>
+                    <artifactId>arquillian-weld-embedded</artifactId>
+                    <version>4.0.0.Final</version>
                     <scope>test</scope>
                 </dependency>
                 <dependency>
-                    <groupId>org.jboss.shrinkwrap</groupId>
-                    <artifactId>shrinkwrap-api</artifactId>
-                    <version>1.2.6</version>
+                    <groupId>org.jboss.weld</groupId>
+                    <artifactId>weld-core-impl</artifactId>
+                    <version>6.0.2.Final</version>
                     <scope>test</scope>
                 </dependency>
-                <dependency>
-                    <groupId>org.jboss.shrinkwrap</groupId>
-                    <artifactId>shrinkwrap-impl-base</artifactId>
-                    <version>1.2.6</version>
-                    <scope>test</scope>
-                </dependency>
+
+                <!-- TestNG runtime -->
                 <dependency>
                     <groupId>org.testng</groupId>
                     <artifactId>testng</artifactId>
