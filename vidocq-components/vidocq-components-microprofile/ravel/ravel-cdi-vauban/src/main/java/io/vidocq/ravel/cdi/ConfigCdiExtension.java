@@ -7,7 +7,7 @@ import jakarta.enterprise.inject.build.compatible.spi.BeanInfo;
 import jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension;
 import jakarta.enterprise.inject.build.compatible.spi.InjectionPointInfo;
 import jakarta.enterprise.inject.build.compatible.spi.Messages;
-import jakarta.enterprise.inject.build.compatible.spi.Validation;
+import jakarta.enterprise.inject.build.compatible.spi.Registration;
 import jakarta.enterprise.lang.model.AnnotationInfo;
 import jakarta.enterprise.lang.model.AnnotationMember;
 import jakarta.enterprise.lang.model.declarations.DeclarationInfo;
@@ -21,10 +21,17 @@ import java.util.Map;
 
 /**
  * BCE CDI qui valide les points d'injection {@code @ConfigProperty} au déploiement.
+ *
+ * <p>Implémentée en {@code @Registration(types = Object.class)} (et non
+ * {@code @Validation}) car CDI Lite 4.1 (§Build Compatible Extensions) interdit
+ * {@code BeanInfo} comme paramètre des méthodes {@code @Validation} :
+ * {@code LITE-EXTENSION-TRANSLATOR-000002}. {@code @Registration(types=Object.class)}
+ * est invoqué une fois par {@link BeanInfo} (tous les beans héritent de
+ * {@code Object}) et accepte {@link Messages} pour reporter les erreurs.</p>
  */
 public class ConfigCdiExtension implements BuildCompatibleExtension {
 
-    @Validation
+    @Registration(types = Object.class)
     public void validateConfigPropertyInjectionPoints(BeanInfo beanInfo, Messages messages) {
         for (InjectionPointInfo injectionPoint : beanInfo.injectionPoints()) {
             AnnotationInfo cfg = findConfigPropertyQualifier(injectionPoint);
