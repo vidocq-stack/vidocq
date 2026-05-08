@@ -157,11 +157,11 @@ dans le manifest du JAR API — la 3.1 originale (publiée 2023) n'avait ni desc
 | Tâche | Notes | État |
 |---|---|---|
 | `ravel-tck/pom.xml` Model 4.0.0 standalone | Idem `cassini-tck`/`foy-tck`/`champollion-tck` — hors reactor | ✅ |
-| Runner Arquillian + harness officiel `microprofile-config-tck:3.1.1` | Arquillian 1.10.0 + Weld 6.0.2 + TestNG 7.10.2 ; Surefire `surefire-testng` provider forcé ; 450 tests détectés | ✅ scaffolding |
+| Runner Arquillian + harness officiel `microprofile-config-tck:3.1.1` | Arquillian 1.10.1 (BOM + dep mgmt sur `container-spi/impl-base/core-impl-base`) + Weld 6.0.2 + TestNG 7.10.2 ; bug `MalformedParameterizedTypeException` JDK 25 résolu ; 403 tests exécutés | ✅ scaffolding |
 | Adapter Arquillian → Ravel embedded | Weld SE embedded ; `arquillian.xml` + `META-INF/beans.xml` (CDI 4.1) en place | ✅ |
 | `run-official-tck-mp-config-3.1.sh` | Modes : smoke (défaut, 2/2 PASS) / all / `-Dtest=NomTest` ; rapport `target/tck-report.txt` | ✅ |
-| `TCK.md` | Documente le bug bloquant Arquillian `MalformedParameterizedTypeException` sous JDK 25 (cf. fichier) | ✅ |
-| Score contrat : 100 % PASS | ❌ en attente du fix upstream Arquillian (cf. `TCK.md`) | ⏳ |
+| `TCK.md` | Documente le bug Arquillian résolu + bug actif `LITE-EXTENSION-TRANSLATOR-000002` (cf. fichier) | ✅ |
+| Score contrat : 100 % PASS | ❌ bloqué sur la BCE Ravel : `@Validation` ne peut pas recevoir `BeanInfo` en CDI Lite 4.1 → réécriture nécessaire | ⏳ |
 | `ravel-bench` JMH | `LookupBenchmark` (cache hit/miss) + `ExpressionBenchmark` (literal/1/3 niveaux) + `ConversionBenchmark` (Integer/Long/Boolean/Duration/String[]) ; `@Param` Ravel/Smallrye | ✅ |
 | Comparatif JMH vs Smallrye Config | Premier smoke run : `LookupBenchmark.hit_String` Ravel ~22 ns/op, Smallrye ~15 ns/op (1 fork, 1 iter) | ✅ premier baseline |
 

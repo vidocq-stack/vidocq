@@ -45,6 +45,40 @@
         </repository>
     </repositories>
 
+    <dependencyManagement>
+        <dependencies>
+            <!--
+                arquillian-weld-embedded:4.0.0.Final tire transitivement
+                arquillian-container-spi:1.8.0.Final dans laquelle l'interface
+                Container N'EST PAS générique. Sous JDK 23+, la validation stricte de
+                ParameterizedTypeImpl déclenche alors :
+
+                    java.lang.reflect.MalformedParameterizedTypeException:
+                      Mismatch of count of formal and actual type arguments in
+                      constructor of org.jboss.arquillian.container.spi.Container
+
+                À partir de 1.10.1.Final, Container est déclarée
+                Container<T extends ContainerConfiguration> ; on force donc le trio
+                spi/impl-base/core-impl-base sur 1.10.1.
+            -->
+            <dependency>
+                <groupId>org.jboss.arquillian.container</groupId>
+                <artifactId>arquillian-container-spi</artifactId>
+                <version>1.10.1.Final</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jboss.arquillian.container</groupId>
+                <artifactId>arquillian-container-impl-base</artifactId>
+                <version>1.10.1.Final</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jboss.arquillian.core</groupId>
+                <artifactId>arquillian-core-impl-base</artifactId>
+                <version>1.10.1.Final</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
     <dependencies>
         <dependency>
             <groupId>io.vidocq.ravel</groupId>
@@ -162,11 +196,11 @@
                     <scope>test</scope>
                 </dependency>
 
-                <!-- Arquillian TestNG container — version fournie par arquillian-bom -->
+                <!-- Arquillian TestNG container — version explicite ; BOM aligne les transitives -->
                 <dependency>
                     <groupId>org.jboss.arquillian.testng</groupId>
                     <artifactId>arquillian-testng-container</artifactId>
-                    <version>1.10.0.Final</version>
+                    <version>1.10.1.Final</version>
                     <scope>test</scope>
                 </dependency>
 

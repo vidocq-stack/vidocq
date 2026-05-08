@@ -7,18 +7,19 @@
 | Module `ravel-tck` (POM Model 4.0.0 hors reactor) | ✅ |
 | Profil Maven `tck-official` avec `microprofile-config-tck:3.1.1` | ✅ |
 | Provider Surefire TestNG forcé via plugin dependency `surefire-testng:3.5.5` | ✅ |
-| Containerle Arquillian Weld embedded 4.0.0 + Weld 6.0.2 (CDI 4.1) | ✅ (configuré) |
+| Container Arquillian Weld embedded 4.0.0 + Weld 6.0.2 (CDI 4.1) | ✅ |
+| `arquillian-container-spi/impl-base/core-impl-base` épinglés à 1.10.1 (vs 1.8.0 transitive) | ✅ |
 | Smoke test `RavelTckSmokeTest` (JUnit 6, hors Arquillian) | ✅ 2/2 PASS |
 | Script `run-official-tck-mp-config-3.1.sh` (smoke / all / `-Dtest=...`) | ✅ |
-| Découverte du TCK officiel (`dependenciesToScan`) | ✅ — **450 tests** détectés |
-| Bootstrap Arquillian sous JDK 25 | ❌ **bloqué upstream** |
-| Score 100 % PASS | ⏳ en attente du fix Arquillian |
+| Bootstrap Arquillian sous JDK 25 | ✅ **résolu (bump 1.10.1 + dep mgmt)** |
+| Découverte du TCK officiel (`dependenciesToScan`) | ✅ — **403 tests exécutés, 25 fails, 371 skipped** |
+| Score 100 % PASS | ⏳ bloqué sur la BCE Ravel (cf. plus bas) |
 
 ## Comment lancer
 
 ```bash
 ./run-official-tck-mp-config-3.1.sh           # smoke (2 tests JUnit, vérifie le ServiceLoader)
-./run-official-tck-mp-config-3.1.sh all       # suite TCK officielle complète (TestNG + Arquillian + Weld)
+./run-official-tck-mp-config-3.1.sh all       # suite TCK officielle complète
 ./run-official-tck-mp-config-3.1.sh -Dtest=ConfigProviderTest
 ```
 
@@ -28,63 +29,92 @@ Le script :
    garantir Maven 4.0.0-rc-5) ;
 3. produit un rapport résumé dans `ravel-tck/target/tck-report.txt`.
 
-## Bug bloquant — `MalformedParameterizedTypeException`
+## Bug n°1 — `MalformedParameterizedTypeException` ✅ résolu
 
-À l'exécution du profil `tck-official`, **les 450 tests TCK sont correctement détectés** mais
-chaque classe échoue dans `Arquillian.arquillianBeforeClass` avec :
+Symptôme observé sous JDK 25 :
 
 ```
-java.lang.RuntimeException: Could not create new instance of class
-    org.jboss.arquillian.test.impl.EventTestRunnerAdaptor
-Caused by: org.jboss.arquillian.container.impl.ContainerCreationException:
-    Could not create Container weld-embedded
 Caused by: java.lang.reflect.MalformedParameterizedTypeException:
     Mismatch of count of formal and actual type arguments in constructor of
     org.jboss.arquillian.container.spi.Container:
     0 formal argument(s) 1 actual argument(s)
-   at java.base/sun.reflect.generics.reflectiveObjects.ParameterizedTypeImpl
-       .validateConstructorArguments(ParameterizedTypeImpl.java:56)
 ```
 
-### Analyse
+### Cause racine
 
-- La classe `org.jboss.arquillian.container.spi.Container` est **non générique**,
-  mais une signature `Generic<Container<X>>` existe dans `arquillian-container-impl-base`.
-- Sous JDK 23+ (et donc JDK 25), `ParameterizedTypeImpl.validateConstructorArguments`
-  est devenu strict : il refuse d'instancier un `ParameterizedType` quand la classe brute
-  ne déclare pas de type variable. Avant JDK 23 la validation était permissive.
-- Le bug est présent dans la **dernière** version Arquillian publique (`1.10.0.Final`,
-  cf. `https://search.maven.org/`).
+`arquillian-weld-embedded:4.0.0.Final` tire transitivement
+`arquillian-container-spi:1.8.0.Final` dans laquelle l'interface `Container`
+n'est **pas** générique. Sous JDK 23+ la validation stricte de `ParameterizedTypeImpl`
+refuse le mismatch et lève `MalformedParameterizedTypeException`.
 
-### Pistes de résolution
+À partir de `1.10.1.Final`, l'interface est correctement déclarée
+`Container<T extends ContainerConfiguration>` :
 
-| Piste | Effort | Risque | Notes |
-|---|---|---|---|
-| Attendre un fix upstream Arquillian (1.10.1+ ou 1.11) | 0 | dépend du calendrier amont | piste préférentielle |
-| Forker `arquillian-container-spi` et corriger la signature | élevé | maintenance perpétuelle | dernier recours |
-| Skip Arquillian et exécuter le TCK via un harness maison (parser des `@Test`, intercepter `@Deployment` ShrinkWrap, exécuter dans une JVM avec Weld bootstrap manuel) | très élevé | risque de divergence vs spec officielle | ❌ exclu — sortirait du contrat « TCK officiel » |
-| Lancer sur JDK 21 LTS (la stricteur n'est pas appliquée) | faible | violerait la contrainte « Java 25 » | ❌ exclu (CLAUDE.md) |
-| Patcher dynamiquement la classe via java agent au boot | moyen | invasif | possible workaround temporaire |
+```text
+$ javap -p arquillian-container-spi-1.10.1.Final.jar (Container.class)
+public interface org.jboss.arquillian.container.spi.Container<T extends ContainerConfiguration>
+```
 
-### Suivi
+### Correctif appliqué
 
-- Issue Arquillian de référence : à vérifier sur `https://issues.redhat.com/projects/ARQ`
-  (chercher "MalformedParameterizedTypeException JDK 23+").
-- Lorsque la version corrigée sortira, bumper `<arquillian.version>` dans
-  [`ravel-tck/pom.xml`](./ravel-tck/pom.xml) et relancer
-  `./run-official-tck-mp-config-3.1.sh all`.
+`<dependencyManagement>` dans `ravel-tck/pom.xml` épingle explicitement le trio :
+
+- `arquillian-container-spi:1.10.1.Final`
+- `arquillian-container-impl-base:1.10.1.Final`
+- `arquillian-core-impl-base:1.10.1.Final`
+
+(Le BOM Arquillian seul ne suffit pas car Maven 4 applique « nearest wins »
+sur les transitives non managées par le BOM importé depuis le profil.)
+
+## Bug n°2 — `LITE-EXTENSION-TRANSLATOR-000002` 🔥 actif
+
+Une fois Arquillian débloqué, le TCK officiel détecte 403 tests et la majorité des
+classes échoue au `arquillianBeforeClass` avec :
+
+```
+Caused by: org.jboss.weld.exceptions.DeploymentException:
+    LITE-EXTENSION-TRANSLATOR-000017: There was a problem executing
+    Build Compatible Extension method
+    public void io.vidocq.ravel.cdi.ConfigCdiExtension
+        .validateConfigPropertyInjectionPoints(BeanInfo, Messages)
+    during phase @Validation.
+Caused by: IllegalArgumentException: LITE-EXTENSION-TRANSLATOR-000002:
+    @Validation methods cant declare a parameter of type {1}
+```
+
+### Cause racine (côté Ravel)
+
+CDI Lite 4.1 — spec §`Validation` — interdit `BeanInfo` comme paramètre des méthodes
+`@Validation`. Les paramètres autorisés sont `Messages` et `Types` (et certains
+contextes via `@Enhancement` / `@Registration` en amont).
+
+`ConfigCdiExtension` doit être réécrite pour :
+1. Collecter les injection points via `@Registration(types = …)` ou
+   `@Enhancement` qui peut recevoir `BeanInfo`.
+2. Reporter les erreurs durant `@Validation(MessagesT, Types)`.
+
+Plan ouvert dans la prochaine itération M5 : réécriture de la BCE pour
+respecter les contraintes de la signature CDI Lite, puis relance du TCK.
+
+### Échantillon des classes TCK affectées
+
+`ClassConverterTest`, `ConfigPropertiesTest`, `ConfigProviderTest`,
+`ConfigValueTest`, `ConverterTest`, `CustomConfigSourceTest`,
+`CustomConverterTest`, `ImplicitConverterTest`, `PropertyExpressionsTest`,
+`WarPropertiesLocationTest`, `*ConfigProfileTest`, etc.
 
 ## Tests désactivés / challenges spec
 
-Aucun pour l'instant : aucune assertion TCK n'a pu s'exécuter en raison du bug bootstrap.
-Cette section sera enrichie dès que le harness sera fonctionnel, en respectant la discipline
-Vidocq (citation de la section spec, hash du test, plan de réactivation).
+Aucun pour l'instant — toutes les défaillances actuelles sont causées par
+la BCE Ravel. Cette section sera enrichie quand le code Ravel passera la
+validation et que de vrais écarts spec/impl émergeront.
 
 ## Références
 
 - MicroProfile Config 3.1 spec : `https://microprofile.io/specifications/microprofile-config/3.1/`
 - TCK artefact : `org.eclipse.microprofile.config:microprofile-config-tck:3.1.1`
-  (Maven Central, automatic module name, publié 2026-04-22)
 - Arquillian core : `https://github.com/arquillian/arquillian-core`
 - Weld SE : `https://docs.jboss.org/weld/reference/latest/en-US/html/environments.html#weld-se`
+- CDI Lite spec — Build Compatible Extensions : §`jakarta.enterprise.inject.build.compatible.spi`
+
 
