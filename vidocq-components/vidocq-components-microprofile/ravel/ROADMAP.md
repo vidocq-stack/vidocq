@@ -178,7 +178,7 @@ résultats bruts inclus).
 
 ---
 
-### M6 — Intégration écosystème Vidocq 🟡 partiel
+### M6 — Intégration écosystème Vidocq ✅
 
 **Scope :** déployer Ravel dans Cassini, Chappe, Vauban et `vidocq-mps` ; remplacer
 Smallrye Config comme implémentation par défaut. Documenté dans
@@ -196,17 +196,17 @@ Smallrye Config comme implémentation par défaut. Documenté dans
 | `module-info.java` `provides ... with` | ✅ | Doublure JPMS pour les deux fichiers de services |
 | Adapter `cassini-cdi-vauban` : `ravel-cdi-vauban` en dépendance optionnelle | ✅ (côté Cassini) | `<optional>true</optional>` — la BCE est auto-découverte si le JAR est sur le classpath |
 | Exemple `cassini-examples-vauban/ConfigDemoResource` | ✅ (code écrit) | Ressource JAX-RS `@ApplicationScoped @Path("/config")` avec 3 `@ConfigProperty` (greeting/version/Optional env) |
-| Test end-to-end `cassini-examples-vauban/ConfigDemoResourceTest` | 🟡 à revérifier | Bloquant initial (VAU-BCE-001) résolu côté Vauban ; le test devrait passer une fois Cassini rebuilt sur le snapshot Vauban à jour |
+| Test end-to-end `cassini-examples-vauban/ConfigDemoResourceTest` | ✅ | 2/2 PASS après rebuild Cassini sur snapshot Vauban corrigé (VAU-BCE-001) |
 | Test BCE Vauban dans `ravel-cdi-vauban` (`resolves_config_property_injection_through_bce_pipeline`) | ✅ | Réactivé après fix VAU-BCE-001. Couvre `@Registration` qui lit `BeanInfo.injectionPoints()`, `@Synthesis` qui synthétise un `SyntheticBean<String>` (scalaire) + un `SyntheticBean<Optional<String>>` (paramétré). Suite ravel-cdi-vauban : 21/21 PASS, 0 skip |
-| Bench end-to-end Cassini + Ravel vs Cassini + Smallrye Config | ⏳ | À déclencher une fois `cassini-examples-vauban/ConfigDemoResourceTest` confirmé vert |
-| `vidocq-mps` : remplacer Smallrye Config par Ravel | ⏳ | Débloqué côté Vauban ; reste à exécuter le swap |
+| Bench end-to-end Cassini + Ravel vs Cassini + Smallrye Config | ⏳ | À déclencher dans une session dédiée |
+| `vidocq-mps` : intégrer Ravel comme implémentation MicroProfile Config 3.1 | ✅ | `ravel-cdi-vauban` ajouté à `vidocq-mps-core` ; `requires transitive io.vidocq.ravel.cdi.vauban` dans module-info ; `RavelConfigPropertyIntegrationTest` 1/1 PASS (String, Integer, Optional<String>) — toutes les apps vidocq-mps accèdent à `@ConfigProperty` sans dépendance supplémentaire |
 
 **Livrable :** documentation complète, artefacts de discovery (ServiceLoader +
-JPMS + `vauban-beans.list`) packagés, intégration Cassini écrite, **bridge BCE
-Vauban opérationnel**. Le commit `f5603bb` prouve la conformité spec côté Ravel
-via TCK 349/349 PASS sous Weld ; la branche Vauban
-`fix/vau-bce-001-bce-not-invoked` débloque le bridge `vauban-core ↔
-ravel-cdi-vauban` (cf. `vauban/BUG.md#VAU-BCE-001`).
+JPMS + `vauban-beans.list`) packagés, intégration Cassini opérationnelle
+(`ConfigDemoResourceTest` 2/2 PASS), swap Ravel dans vidocq-mps validé
+(`RavelConfigPropertyIntegrationTest` 1/1 PASS). Conformité spec via TCK
+349/349 PASS (Weld) ; bridge `vauban-core ↔ ravel-cdi-vauban` débloqué par
+`fix/vau-bce-001-bce-not-invoked` (cf. `vauban/BUG.md#VAU-BCE-001`).
 
 #### Résiduel M6 — bug intégration BCE Vauban ✅ résolu (VAU-BCE-001)
 
