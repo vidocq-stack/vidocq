@@ -196,36 +196,37 @@ Smallrye Config comme implémentation par défaut. Documenté dans
 | `module-info.java` `provides ... with` | ✅ | Doublure JPMS pour les deux fichiers de services |
 | Adapter `cassini-cdi-vauban` : `ravel-cdi-vauban` en dépendance optionnelle | ✅ (côté Cassini) | `<optional>true</optional>` — la BCE est auto-découverte si le JAR est sur le classpath |
 | Exemple `cassini-examples-vauban/ConfigDemoResource` | ✅ (code écrit) | Ressource JAX-RS `@ApplicationScoped @Path("/config")` avec 3 `@ConfigProperty` (greeting/version/Optional env) |
-| Test end-to-end `cassini-examples-vauban/ConfigDemoResourceTest` | ❌ | Échec deployment : `Unsatisfied dependency` sur `String @ConfigProperty` — voir résiduel ci-dessous |
-| Test BCE Vauban dans `ravel-cdi-vauban` (`resolves_config_property_injection_through_bce_pipeline`) | 🟡 ajouté + `@Disabled` | Reproduit l'échec côté Ravel pour traçabilité ; à réactiver après fix Vauban |
-| Bench end-to-end Cassini + Ravel vs Cassini + Smallrye Config | ⏳ | Reporté tant que l'intégration end-to-end n'est pas fonctionnelle |
-| `vidocq-mps` : remplacer Smallrye Config par Ravel | ⏳ | Bloqué tant que l'intégration end-to-end n'est pas fonctionnelle |
+| Test end-to-end `cassini-examples-vauban/ConfigDemoResourceTest` | 🟡 à revérifier | Bloquant initial (VAU-BCE-001) résolu côté Vauban ; le test devrait passer une fois Cassini rebuilt sur le snapshot Vauban à jour |
+| Test BCE Vauban dans `ravel-cdi-vauban` (`resolves_config_property_injection_through_bce_pipeline`) | ✅ | Réactivé après fix VAU-BCE-001. Couvre `@Registration` qui lit `BeanInfo.injectionPoints()`, `@Synthesis` qui synthétise un `SyntheticBean<String>` (scalaire) + un `SyntheticBean<Optional<String>>` (paramétré). Suite ravel-cdi-vauban : 21/21 PASS, 0 skip |
+| Bench end-to-end Cassini + Ravel vs Cassini + Smallrye Config | ⏳ | À déclencher une fois `cassini-examples-vauban/ConfigDemoResourceTest` confirmé vert |
+| `vidocq-mps` : remplacer Smallrye Config par Ravel | ⏳ | Débloqué côté Vauban ; reste à exécuter le swap |
 
-**Livrable partiel :** documentation complète, artefacts de discovery (ServiceLoader +
-JPMS + `vauban-beans.list`) packagés, intégration Cassini écrite. Le commit `f5603bb`
-prouve la conformité spec côté Ravel via TCK 349/349 PASS sous Weld.
+**Livrable :** documentation complète, artefacts de discovery (ServiceLoader +
+JPMS + `vauban-beans.list`) packagés, intégration Cassini écrite, **bridge BCE
+Vauban opérationnel**. Le commit `f5603bb` prouve la conformité spec côté Ravel
+via TCK 349/349 PASS sous Weld ; la branche Vauban
+`fix/vau-bce-001-bce-not-invoked` débloque le bridge `vauban-core ↔
+ravel-cdi-vauban` (cf. `vauban/BUG.md#VAU-BCE-001`).
 
-#### Résiduel M6 — bug intégration BCE Vauban
+#### Résiduel M6 — bug intégration BCE Vauban ✅ résolu (VAU-BCE-001)
 
-`ConfigCdiExtension` n'est pas exécutée par le pipeline BCE de Vauban
-0.1.0-SNAPSHOT dans les configurations testées :
+Initialement diagnostiqué comme « les phases `@Registration` / `@Synthesis` ne
+sont pas invoquées » (preuve par instrumentation println muet). Investigation
+fine côté `vauban-core` (branche `fix/vau-bce-001-bce-not-invoked`) :
+**les phases étaient bien dispatchées par `BceProcessor`** ; six défauts cumulés
+sur le pipeline en aval dégradaient silencieusement le résultat — d'où la
+désertion apparente de l'extension :
 
-- `SeContainerInitializer.addBeanClasses(ConfigPropertyTestBean.class, ConfigCdiExtension.class).initialize()` — phases `@Registration` / `@Synthesis` non invoquées (vérifié par instrumentation println, jamais imprimée) ;
-- `VaubanContainer.builder().scanClasspath().build()` (cassini-examples-vauban) — même symptôme.
+1. `VaubanBceBeanInfo.injectionPoints()` retournait `List.of()` en dur ;
+2. `VaubanAnnotationInfo` n'overridait pas `name()` (default API → `declaration()` → crash sur classes hors-index, ex. `@ConfigProperty` qui vit dans `microprofile-config-api`) ;
+3. `VaubanClassType.declaration()` crashait sur tout type JDK / tiers absent du scan ;
+4. `VaubanSyntheticBeanBuilder.type(Type)` était un no-op (`return this; // simplified`) — `Optional<T>`, `List<T>`, `Provider<T>` silencieusement dropés ;
+5. `VaubanTypes.ofClass(String)` retournait `null` hors-index → NPE en aval dans `types.parameterized(...)` ;
+6. `BceProcessor.toBeanDescriptor` perdait les membres du qualifier (`Map.of()`) — `@Tagged("scalar")` ne matchait plus la même IP.
 
-Symptôme final : `jakarta.enterprise.inject.spi.DeploymentException: CDI deployment
-validation failed: Unsatisfied dependency: field X of type String with qualifiers
-@ConfigProperty(...)` — Vauban ne voit pas les `SyntheticBean` que `@Synthesis` doit
-enregistrer.
-
-Hypothèses à investiguer côté `vauban-core` :
-- `BceProcessor.process(...)` n'est-il pas appelé pour les BCE découvertes via `META-INF/services/...BuildCompatibleExtension` ?
-- La liste `bceClasses` filtrée par `ReflectionValidator.isBuildCompatibleExtension(c)` est-elle vide à ce stade ?
-- Les phases sont-elles exécutées mais les `SyntheticBean` ne sont-ils pas reliés à l'arbre de résolution ?
-
-Le code Ravel est conforme spec — la **même** `ConfigCdiExtension` passe **349/349
-PASS** au TCK MicroProfile Config 3.1 sous Weld 6.0.2 (cf. `TCK.md`). Le débogage
-doit porter sur le bridge BCE `vauban-core ↔ ravel-cdi-vauban`.
+Détails et test de régression dans `vauban/BUG.md#VAU-BCE-001`. Effet mesuré :
+- vauban-core : 269/269 PASS (266 baseline + 3 nouveaux ciblés sur les 6 défauts) ;
+- ravel-cdi-vauban : 21/21 PASS, 0 skip (vs 20/0/1 avant).
 
 ---
 
