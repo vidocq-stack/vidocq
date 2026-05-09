@@ -1,6 +1,10 @@
 = Vidocq-MPS
 :description: Java 25 MicroProfile application server — umbrella orchestrator of the Vidocq ecosystem.
 
+[.text-center]
+image::vidocq-logo.png[Vidocq-MPS,300,role=module-logo]
+
+
 [.lead]
 Vidocq-MPS is the **MicroProfile Server** that assembles the six foundational bricks of the ecosystem — xref:chappe::index.adoc[Chappe] (HTTP transport), xref:vauban::index.adoc[Vauban] (CDI), xref:champollion::index.adoc[Champollion] (JSON), xref:foy::index.adoc[Foy] (Servlet), xref:cassini::index.adoc[Cassini] (REST), xref:mansart::index.adoc[Mansart] (persistence) — into a coherent runtime inspired by the Quarkus extension model, but with no ASM, no runtime reflection, and no Vert.x.
 
