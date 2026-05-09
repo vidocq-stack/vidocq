@@ -39,7 +39,26 @@ import java.util.concurrent.ConcurrentMap;
  * dérivés (arrays, implicits) en {@link ConcurrentHashMap}. Pas de
  * {@code synchronized}, pas de {@code ThreadLocal} — virtual-thread-friendly.</p>
  */
-public final class RavelConfig implements Config {
+public final class RavelConfig implements Config, java.io.Serializable {
+
+    private static final long serialVersionUID = 1L;
+
+    /**
+     * Sérialisation : Config est marqué Serializable par la spec MP Config 3.1
+     * §6.1 (les beans CDI {@code @Dependent Config} doivent l'être). On
+     * sérialise un proxy léger qui re-lookup la {@code Config} courante au
+     * désérialiser.
+     */
+    private Object writeReplace() {
+        return new SerializedRavelConfig();
+    }
+
+    private static final class SerializedRavelConfig implements java.io.Serializable {
+        private static final long serialVersionUID = 1L;
+        private Object readResolve() {
+            return org.eclipse.microprofile.config.ConfigProvider.getConfig();
+        }
+    }
 
     private static final ScopedValue<Set<String>> EXPRESSION_STACK = ScopedValue.newInstance();
 
@@ -74,9 +93,29 @@ public final class RavelConfig implements Config {
 
     @Override
     public <T> T getValue(String propertyName, Class<T> propertyType) {
-        return getOptionalValue(propertyName, propertyType)
-                .orElseThrow(() -> new NoSuchElementException(
-                        "Property '" + propertyName + "' not found"));
+        Objects.requireNonNull(propertyName, "propertyName");
+        Objects.requireNonNull(propertyType, "propertyType");
+        String raw;
+        try {
+            raw = lookupRaw(propertyName);
+        } catch (UnresolvedExpressionException e) {
+            // §7.2 — expression non résolvable sans défaut : propriété absente.
+            throw new NoSuchElementException("Property '" + propertyName + "' not found");
+        }
+        if (raw == null || raw.isEmpty()) {
+            throw new NoSuchElementException("Property '" + propertyName + "' not found");
+        }
+        Converter<T> converter = findConverter(propertyType);
+        T value = converter.convert(raw);
+        if (value == null) {
+            // §5.3 — un Converter qui retourne null indique que la valeur ne peut
+            // pas être convertie : la propriété est traitée comme absente
+            // (NoSuchElementException côté getValue, Optional.empty côté getOptionalValue).
+            throw new NoSuchElementException(
+                    "Property '" + propertyName + "' converter returned null for type "
+                            + propertyType.getName());
+        }
+        return value;
     }
 
     @Override
@@ -84,7 +123,16 @@ public final class RavelConfig implements Config {
         Objects.requireNonNull(propertyName, "propertyName");
         RawLookup raw = lookupRawWithSource(propertyName);
         if (raw != null) {
-            String resolved = resolveRawValue(propertyName, raw.value());
+            String resolved;
+            try {
+                resolved = resolveRawValue(propertyName, raw.value());
+            } catch (UnresolvedExpressionException e) {
+                // §7.2 — expression non résolvable : la valeur est null mais on
+                // conserve le rawValue + métadonnées de la source d'origine
+                // (TCK PropertyExpressionsTest.noExpressionButConfigValue).
+                return new RavelConfigValue(
+                        propertyName, null, raw.value(), raw.sourceName(), raw.sourceOrdinal());
+            }
             return new RavelConfigValue(
                     propertyName, resolved, raw.value(), raw.sourceName(), raw.sourceOrdinal());
         }
@@ -95,7 +143,13 @@ public final class RavelConfig implements Config {
     public <T> Optional<T> getOptionalValue(String propertyName, Class<T> propertyType) {
         Objects.requireNonNull(propertyName, "propertyName");
         Objects.requireNonNull(propertyType, "propertyType");
-        String raw = lookupRaw(propertyName);
+        String raw;
+        try {
+            raw = lookupRaw(propertyName);
+        } catch (UnresolvedExpressionException e) {
+            // §7.2 — expression non résolvable sans défaut : propriété absente.
+            return Optional.empty();
+        }
         if (raw == null || raw.isEmpty()) {
             // §2.1.4 — empty string is considered as null.
             return Optional.empty();
@@ -240,7 +294,20 @@ public final class RavelConfig implements Config {
         if (defaultExpr != null) {
             return resolveTemplate(defaultExpr);
         }
-        throw new IllegalArgumentException("No config value found for expression ${" + expression + "}");
+        throw new UnresolvedExpressionException(expression);
+    }
+
+    /**
+     * Levée par {@link #resolveExpression(String)} lorsqu'une expression
+     * {@code ${key}} n'est pas résolvable et qu'aucune valeur par défaut n'a
+     * été fournie. Spec MicroProfile Config 3.1 §7.2 : la propriété est alors
+     * traitée comme absente. Capturée par {@link #getOptionalValue} et
+     * {@link #getConfigValue}.
+     */
+    static final class UnresolvedExpressionException extends RuntimeException {
+        UnresolvedExpressionException(String expression) {
+            super("No config value found for expression ${" + expression + "}");
+        }
     }
 
     private static int findTopLevelDefaultSeparator(String expression) {

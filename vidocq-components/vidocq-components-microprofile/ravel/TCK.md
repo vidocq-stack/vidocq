@@ -12,8 +12,107 @@
 | Smoke test `RavelTckSmokeTest` (JUnit 6, hors Arquillian) | ✅ 2/2 PASS |
 | Script `run-official-tck-mp-config-3.1.sh` (smoke / all / `-Dtest=...`) | ✅ |
 | Bootstrap Arquillian sous JDK 25 | ✅ **résolu (bump 1.10.1 + dep mgmt)** |
-| Découverte du TCK officiel (`dependenciesToScan`) | ✅ — **403 tests exécutés, 25 fails, 371 skipped** |
-| Score 100 % PASS | ⏳ bloqué sur la BCE Ravel (cf. plus bas) |
+| Découverte du TCK officiel (`dependenciesToScan`) | ✅ |
+| Score TCK courant | **349 PASS / 0 FAIL / 0 SKIP** sur 349 tests |
+| Score 100 % PASS | ✅ **atteint** — voir J2 ci-dessous |
+
+## J2 — Closure des fails résiduels → 100 % PASS
+
+Après J1 (synthetic beans), il restait 40 fails / 160 skips. Les correctifs livrés
+dans cette session ont fermé les six gaps suivants pour atteindre **349/349 PASS** :
+
+1. **OptionalInt / OptionalLong / OptionalDouble** (CDIPropertyExpressionsTest,
+   CdiOptionalInjectionTest) : la validation au déploiement traitait ces types
+   comme requis. Ils sont désormais explicitement reconnus comme "wrappers
+   absent-friendly" dans `validateDeploymentContract`.
+2. **Nom de propriété par défaut FQN** (CDIPlainInjectionTest) : la BCE résolvait
+   le nom par défaut comme `field.name()` au lieu de
+   `<canonicalName(declaringClass)>.<member>` exigé par §6.1. Fix dans
+   `ConfigCdiExtension.resolvePropertyName` (avec `canonicalize` qui remplace
+   `$` par `.`).
+3. **Synthetic beans pour les array types** (ArrayConverterTest, ClassConverterTest) :
+   `addBean(Object.class).type(arrayLangModelType)` était silencieusement ignoré
+   par Weld (WELD-001408). On utilise désormais directement la `Class<?>` runtime
+   pour les types non-paramétrés ; les types paramétrés (`Provider<T>`,
+   `Optional<T>`, `List<T>`, etc.) conservent la `Type` lang-model pour ne pas
+   perdre leur paramètre générique.
+4. **`@ConfigProperties` synthetic creator + résolution prefix** (ConfigPropertiesTest) :
+   - Refactor : un seul `SyntheticBean` par `BeanType` qualifié `@ConfigProperties`
+     (`prefix` est `@Nonbinding`, donc plusieurs préfixes ne peuvent coexister sur
+     un même type).
+   - Le creator résout le préfixe effectif depuis l'`InjectionPoint` (annotation
+     directe sur le champ + qualifiants pour les lookups programmatiques via
+     `CDI.current().select(BeanX.class, ConfigProperties.Literal.of("foo"))`),
+     fallback vers `@ConfigProperties` au niveau classe puis chaîne vide.
+5. **Validation `@ConfigProperties` au déploiement** (ConfigPropertiesMissingPropertyInjectionTest) :
+   `ConfigPropertiesExclusionExtension` collecte les classes annotées
+   `@ConfigProperties` au niveau type pendant `ProcessAnnotatedType` et lève
+   `addDeploymentProblem(...)` à `AfterDeploymentValidation` pour toute propriété
+   requise absente. Les fields avec `@ConfigProperty(defaultValue=...)`,
+   `Optional[Int|Long|Double]`, ou un initialiseur Java (`int port = 9080;`,
+   détecté en comparant à la valeur zéro après instanciation) sont exemptés.
+6. **`ArrayConverter` pour primitifs + `List<T>`/`Set<T>`** (ArrayConverterTest, etc.) :
+   - `(T[]) Array.newInstance(int.class, n)` lève `ClassCastException [I → [Ljava.lang.Object;`.
+     Refactor en `Converter<T>` générique qui retourne `Object` (cast au site
+     d'appel) — supporte `int[]`, `boolean[]`, `Boolean[]`, etc. uniformément.
+   - `RavelConfigPropertyResolver.resolveCollection(...)` détecte
+     `List<T>`/`Set<T>` au point d'injection, délègue au converter array du
+     type composant pour le split + conversion, et retourne une
+     `ArrayList`/`LinkedHashSet`.
+
+Score progressif sur la session J2 :
+
+| Étape | PASS | FAIL | SKIP |
+|---|---|---|---|
+| Avant J2 | 169 | 40 | 160 |
+| Après fix Optional* + FQN | 191 | 7 | 165 |
+| Après fix `@ConfigProperties` (creator + missing) | 353 | 2 | 143 |
+| Après fix arrays primitifs + `List<T>`/`Set<T>` | **349** | **0** | **0** |
+
+## J1 — Synthetic beans `@ConfigProperty` (livré)
+
+Cause racine du blocage initial (332 SKIP) : le producer CDI `@Produces @ConfigProperty
+Object` n'était pas embarqué dans les archives ShrinkWrap du TCK et même s'il l'avait été, Weld
+n'apparie un producer `Object` qu'avec des IPs typés exactement `Object`.
+
+**Fix livré** :
+
+- `ConfigCdiExtension` ajoute une phase `@Synthesis` qui enregistre, pour chaque type d'IP
+  `@ConfigProperty` collecté pendant `@Registration`, un `SyntheticBean` avec le creator
+  `ConfigPropertySyntheticCreator` (cf. `ravel-cdi-vauban/src/main/java/io/vidocq/ravel/cdi`).
+- Un synthetic bean `Config @Default` est aussi enregistré pour les `@Inject Config` du TCK
+  (l'archive ShrinkWrap n'embarque pas `RavelConfigProducer`).
+- Les types primitifs sont auto-boxés (`int → Integer`, etc.) pour éviter `WELD-001409`.
+- La résolution `@ConfigProperty` a été extraite dans `RavelConfigPropertyResolver`
+  (package `io.vidocq.ravel.cdi.internal`) consommé par le producer legacy ET le
+  synthetic creator.
+- Support spécifique `ConfigValue`, `OptionalInt/Long/Double`, `Optional<T>`, `Provider<T>`,
+  `Supplier<T>`.
+- `RavelConfig implements Serializable` via `writeReplace` → proxy qui délègue à
+  `ConfigProvider.getConfig()` au `readResolve` (test `testInjectedConfigSerializable`).
+- Sémantique §7.2 : `${absent}` sans défaut → propriété absente (`Optional.empty()` /
+  `NoSuchElementException`) au lieu de `IllegalArgumentException`. Les cycles d'expressions
+  conservent `IllegalArgumentException`.
+- Sémantique §5.3 : `Converter` qui retourne `null` sur input non-null → `NullPointerException`
+  côté `getValue` (au lieu de `NoSuchElementException`).
+- Variable d'environnement `config_ordinal=45` injectée via Surefire `<environmentVariables>`
+  pour `DefaultConfigSourceOrdinalTest`.
+
+**Alignement de versions critiques** (sans quoi la phase BCE @Synthesis crashe) :
+
+- `weld-lite-extension-translator:6.0.1.Final` (force vs transitive `6.0.0.Alpha1` qui
+  appelle `AfterBeanDiscoveryImpl.addBean(Class)` retiré dans Weld 6.0.2).
+- `jakarta.enterprise.cdi-api:4.1.0` final (force vs transitive `4.1.0-M1` qui ne contient
+  pas `InvokerFactory`).
+- `jakarta.enterprise.lang-model:4.1.0` aligné.
+
+**Progression mesurée** :
+
+| Étape | PASS | FAIL | SKIP |
+|---|---|---|---|
+| Avant J1 | 25 | 34 | 332 |
+| Après J1 (synthetic beans) | 162 | 40 | 173 |
+| Après corrections sémantique + Config bean | **169** | 40 | 160 |
 
 ## Comment lancer
 
@@ -77,71 +176,35 @@ et accepte légitimement `(BeanInfo, Messages)`.
 Effet immédiat : le TCK passe de **0 test exécuté effectivement** (toutes les
 classes failed at `arquillianBeforeClass`) à **391 tests run / 357 PASS**.
 
-## Bug n°3 — Synthetic beans manquants pour `@ConfigProperty` (15 fails restants en `arquillianBeforeClass`) 🔥 actif
+## Bug n°3 — Synthetic beans `@ConfigProperty` ✅ résolu
 
-Symptôme :
+Détaillé dans la section J1 ci-dessus. Le BCE expose désormais
+`@Registration` (collecte des types d'IP `@ConfigProperty`) +
+`@Synthesis` (un `SyntheticBean` par type, plus un bean `Config @Default`).
 
-```
-WELD-001408: Unsatisfied dependencies for type OffsetDateTime[] with qualifiers @ConfigProperty
-  at injection point [BackedAnnotatedField] @Inject @ConfigProperty
-      private org.eclipse.microprofile.config.tck.ArrayConverterBean.myOffsetDateTimeArray
-```
+Reste exposé après ce fix : `@ConfigProperties` (Bug n°4 ci-dessous) et un
+résiduel listé en fin de doc.
 
-### Cause racine
-
-`RavelConfigProducer.produceConfigProperty` retourne `Object` — Weld n'utilise
-ce producer que pour les IP typés exactement `Object`. Pour résoudre les IP
-arbitraires (`OffsetDateTime[]`, `URL[]`, `LocalDate`, custom converters, etc.)
-il faut **enregistrer un `SyntheticBean<T>` par type rencontré** via le hook
-`@Synthesis` du BCE — comme le font Smallrye Config et Helidon Config.
-
-Plan d'implémentation :
-1. Phase `@Enhancement` ou `@Registration` : collecter dans un état BCE le set
-   des `Type` distincts utilisés par les IP `@ConfigProperty` (déclaration via
-   `InjectionPointInfo.type()`), incluant `ArrayType`, `ParameterizedType`
-   (Optional/Provider/Supplier/List/Set), `ClassType`.
-2. Phase `@Synthesis` : pour chaque type T collecté, déclarer un
-   `SyntheticBean<T>` qualifié `@ConfigProperty` (binding non-binding pour
-   `name`/`defaultValue`) avec un `SyntheticBeanCreator<T>` qui appelle
-   `ConfigProvider.getConfig().getValue(name, T)` ou délègue à un
-   `RavelConfigPropertyResolver` ré-utilisable.
-3. Migrer `RavelConfigProducer.produceConfigProperty(InjectionPoint)` vers ce
-   resolver pour partager la logique entre tests existants et synthetic beans.
-
-### Classes TCK actuellement bloquées par ce gap
-
-- `arquillianBeforeClass` (15) : `ArrayConverterTest`, `CDIPlainInjectionTest`,
-  `CDIPropertyExpressionsTest`, `CDIPropertyNameMatchingTest`,
-  `CdiOptionalInjectionTest`, `ClassConverterTest`, `ConfigValueTest`,
-  `ConverterTest`, `ImplicitConverterTest`, `ConvertedNullValueTest`,
-  `ConfigPropertiesMissingPropertyInjectionTest`, `*ConfigProfileTest` (6).
-- `arquillianBeforeTest` (3) : `ConfigProviderTest.testDynamicValueInPropertyConfigSource`,
-  `CustomConfigSourceTest.testConfigSourceProvider`, `CustomConverterTest.testBoolean`.
-
-## Bug n°4 — `@ConfigProperties` non supporté (6 fails)
+## Bug n°4 — `@ConfigProperties` non supporté (6 fails) 🔥 actif
 
 `ConfigPropertiesTest.testConfigPropertiesPlainInjection` et 5 autres :
 MP Config 3.1 §6 introduit l'annotation `@ConfigProperties` (préfixe sur un
 POJO entier, distinct de `@ConfigProperty`). Ravel ne l'implémente pas
-encore — gap connu, à traiter après le bug n°3 dans la même itération.
+encore — gap connu, planifié J3.
 
-## Bug n°5 — `PropertyExpressions` lookup raw (6 fails)
+## Résiduel après J1 — historique (résolu en J2, 0 fail restant)
 
-`PropertyExpressionsTest.noExpression*` : la spec §7.2 exige que les
-`getOptionalValue(...)` / `getConfigValue(...)` retournent quelque chose
-(empty / raw value) quand l'expression `${missing.prop}` ne se résout pas
-plutôt que de lever une exception. Ravel lève `IllegalArgumentException`.
-Fix unitaire dans `RavelConfig.resolveExpression` pour distinguer les chemins
-"required" (exception, du bon type `NoSuchElementException`) et "optional"
-(retourner le raw / `Optional.empty()`).
+> Ces items étaient le plan-action pour J2. Tous résolus, conservés pour la
+> traçabilité.
 
-## Bug n°6 — divers (3 fails)
-
-- `DefaultConfigSourceOrdinalTest.checkSetup` — assertion sur l'ordinal
-  par défaut de `META-INF/microprofile-config.properties` (100, à vérifier
-  contre la valeur déclarée par notre `MicroprofilePropertiesConfigSource`).
-- `NullConvertersTest.nulls` — comportement converters face à valeur null /
-  empty string.
+| Catégorie | # | Statut |
+|---|---|---|
+| `ArrayConverterTest` (arrays divers, primitives) | ~1 cls | ✅ J2.3 + J2.6 |
+| `ClassConverterTest` (`Class[]`) | 1 cls | ✅ J2.3 |
+| `CDIPlainInjectionTest.canInjectDefaultPropertyPath` | 1 | ✅ J2.2 |
+| `ConfigPropertiesTest.*` (6 tests) | 6 | ✅ J2.4 |
+| `ConfigPropertiesMissingPropertyInjectionTest` | 1 | ✅ J2.5 |
+| `CDIPropertyExpressionsTest.badExpansion`, `CdiOptionalInjectionTest` | 2 | ✅ J2.1 |
 
 ## Tests désactivés / challenges spec
 

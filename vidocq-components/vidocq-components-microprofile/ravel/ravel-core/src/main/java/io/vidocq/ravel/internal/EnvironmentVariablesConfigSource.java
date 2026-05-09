@@ -56,6 +56,16 @@ public final class EnvironmentVariablesConfigSource implements ConfigSource {
 
     @Override
     public int getOrdinal() {
+        // §3.4 — la valeur de la propriété {@code config_ordinal} dans la source
+        // elle-même remplace l'ordinal par défaut.
+        String override = System.getenv("config_ordinal");
+        if (override != null) {
+            try {
+                return Integer.parseInt(override.trim());
+            } catch (NumberFormatException ignored) {
+                // valeur non parsable → ordinal par défaut
+            }
+        }
         return ORDINAL;
     }
 

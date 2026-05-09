@@ -85,12 +85,16 @@ class ConfigProfilesAndExpressionsTest {
     }
 
     @Test
-    void expression_spec_section_7_2_without_default_throws_when_missing() {
+    void expression_spec_section_7_2_without_default_treats_property_as_missing() {
+        // Spec §7.2 : si une expression ${key} n'a pas de valeur et pas de défaut,
+        // la propriété est considérée absente — getValue lève NoSuchElementException
+        // (pas IllegalArgumentException). Aligné sur TCK PropertyExpressionsTest.
         Config cfg = new RavelConfigBuilder()
                 .withSources(MapConfigSource.of("s", 100, Map.of("timeout", "${missing}")))
                 .build();
 
-        assertThrows(IllegalArgumentException.class, () -> cfg.getValue("timeout", String.class));
+        assertThrows(java.util.NoSuchElementException.class, () -> cfg.getValue("timeout", String.class));
+        assertEquals(java.util.Optional.empty(), cfg.getOptionalValue("timeout", String.class));
     }
 
     @Test

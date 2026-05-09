@@ -96,7 +96,7 @@ final class BuiltInConverters {
 
         @Override
         public Boolean convert(String value) {
-            if (value == null) return null;
+            if (value == null) throw new NullPointerException("value");
             String v = value.trim();
             if (v.isEmpty()) return null;
             return v.equalsIgnoreCase("true")
@@ -115,7 +115,7 @@ final class BuiltInConverters {
         @Serial private static final long serialVersionUID = 1L;
         static final IntegerConverter INSTANCE = new IntegerConverter();
         @Override public Integer convert(String value) {
-            if (value == null || value.isEmpty()) return null;
+            if (value == null) throw new NullPointerException("value"); if (value.isEmpty()) return null;
             try { return Integer.valueOf(value.trim()); }
             catch (NumberFormatException e) { throw new IllegalArgumentException("Cannot convert '" + value + "' to int", e); }
         }
@@ -125,7 +125,7 @@ final class BuiltInConverters {
         @Serial private static final long serialVersionUID = 1L;
         static final LongConverter INSTANCE = new LongConverter();
         @Override public Long convert(String value) {
-            if (value == null || value.isEmpty()) return null;
+            if (value == null) throw new NullPointerException("value"); if (value.isEmpty()) return null;
             try { return Long.valueOf(value.trim()); }
             catch (NumberFormatException e) { throw new IllegalArgumentException("Cannot convert '" + value + "' to long", e); }
         }
@@ -135,7 +135,7 @@ final class BuiltInConverters {
         @Serial private static final long serialVersionUID = 1L;
         static final FloatConverter INSTANCE = new FloatConverter();
         @Override public Float convert(String value) {
-            if (value == null || value.isEmpty()) return null;
+            if (value == null) throw new NullPointerException("value"); if (value.isEmpty()) return null;
             try { return Float.valueOf(value.trim()); }
             catch (NumberFormatException e) { throw new IllegalArgumentException("Cannot convert '" + value + "' to float", e); }
         }
@@ -145,7 +145,7 @@ final class BuiltInConverters {
         @Serial private static final long serialVersionUID = 1L;
         static final DoubleConverter INSTANCE = new DoubleConverter();
         @Override public Double convert(String value) {
-            if (value == null || value.isEmpty()) return null;
+            if (value == null) throw new NullPointerException("value"); if (value.isEmpty()) return null;
             try { return Double.valueOf(value.trim()); }
             catch (NumberFormatException e) { throw new IllegalArgumentException("Cannot convert '" + value + "' to double", e); }
         }
@@ -155,7 +155,7 @@ final class BuiltInConverters {
         @Serial private static final long serialVersionUID = 1L;
         static final ShortConverter INSTANCE = new ShortConverter();
         @Override public Short convert(String value) {
-            if (value == null || value.isEmpty()) return null;
+            if (value == null) throw new NullPointerException("value"); if (value.isEmpty()) return null;
             try { return Short.valueOf(value.trim()); }
             catch (NumberFormatException e) { throw new IllegalArgumentException("Cannot convert '" + value + "' to short", e); }
         }
@@ -165,7 +165,7 @@ final class BuiltInConverters {
         @Serial private static final long serialVersionUID = 1L;
         static final ByteConverter INSTANCE = new ByteConverter();
         @Override public Byte convert(String value) {
-            if (value == null || value.isEmpty()) return null;
+            if (value == null) throw new NullPointerException("value"); if (value.isEmpty()) return null;
             try { return Byte.valueOf(value.trim()); }
             catch (NumberFormatException e) { throw new IllegalArgumentException("Cannot convert '" + value + "' to byte", e); }
         }
@@ -175,7 +175,7 @@ final class BuiltInConverters {
         @Serial private static final long serialVersionUID = 1L;
         static final CharacterConverter INSTANCE = new CharacterConverter();
         @Override public Character convert(String value) {
-            if (value == null || value.isEmpty()) return null;
+            if (value == null) throw new NullPointerException("value"); if (value.isEmpty()) return null;
             if (value.length() != 1) {
                 throw new IllegalArgumentException("Cannot convert '" + value + "' to char (length != 1)");
             }
@@ -191,7 +191,7 @@ final class BuiltInConverters {
         @Serial private static final long serialVersionUID = 1L;
         static final ClassConverter INSTANCE = new ClassConverter();
         @Override public Class<?> convert(String value) {
-            if (value == null || value.isEmpty()) return null;
+            if (value == null) throw new NullPointerException("value"); if (value.isEmpty()) return null;
             try {
                 ClassLoader cl = Thread.currentThread().getContextClassLoader();
                 if (cl == null) cl = ClassConverter.class.getClassLoader();
@@ -210,7 +210,7 @@ final class BuiltInConverters {
         @Serial private static final long serialVersionUID = 1L;
         static final OptionalIntConverter INSTANCE = new OptionalIntConverter();
         @Override public OptionalInt convert(String value) {
-            if (value == null || value.isEmpty()) return OptionalInt.empty();
+            if (value == null) throw new NullPointerException("value"); if (value.isEmpty()) return OptionalInt.empty();
             try { return OptionalInt.of(Integer.parseInt(value.trim())); }
             catch (NumberFormatException e) { throw new IllegalArgumentException("Cannot convert '" + value + "' to OptionalInt", e); }
         }
@@ -220,7 +220,7 @@ final class BuiltInConverters {
         @Serial private static final long serialVersionUID = 1L;
         static final OptionalLongConverter INSTANCE = new OptionalLongConverter();
         @Override public OptionalLong convert(String value) {
-            if (value == null || value.isEmpty()) return OptionalLong.empty();
+            if (value == null) throw new NullPointerException("value"); if (value.isEmpty()) return OptionalLong.empty();
             try { return OptionalLong.of(Long.parseLong(value.trim())); }
             catch (NumberFormatException e) { throw new IllegalArgumentException("Cannot convert '" + value + "' to OptionalLong", e); }
         }
@@ -230,7 +230,7 @@ final class BuiltInConverters {
         @Serial private static final long serialVersionUID = 1L;
         static final OptionalDoubleConverter INSTANCE = new OptionalDoubleConverter();
         @Override public OptionalDouble convert(String value) {
-            if (value == null || value.isEmpty()) return OptionalDouble.empty();
+            if (value == null) throw new NullPointerException("value"); if (value.isEmpty()) return OptionalDouble.empty();
             try { return OptionalDouble.of(Double.parseDouble(value.trim())); }
             catch (NumberFormatException e) { throw new IllegalArgumentException("Cannot convert '" + value + "' to OptionalDouble", e); }
         }
@@ -244,7 +244,7 @@ final class BuiltInConverters {
         @Serial private static final long serialVersionUID = 1L;
         static final URIConverter INSTANCE = new URIConverter();
         @Override public URI convert(String value) {
-            if (value == null || value.isEmpty()) return null;
+            if (value == null) throw new NullPointerException("value"); if (value.isEmpty()) return null;
             try { return new URI(value); }
             catch (java.net.URISyntaxException e) { throw new IllegalArgumentException("Cannot convert '" + value + "' to URI", e); }
         }
@@ -254,7 +254,7 @@ final class BuiltInConverters {
         @Serial private static final long serialVersionUID = 1L;
         static final URLConverter INSTANCE = new URLConverter();
         @Override public URL convert(String value) {
-            if (value == null || value.isEmpty()) return null;
+            if (value == null) throw new NullPointerException("value"); if (value.isEmpty()) return null;
             try { return URI.create(value).toURL(); }
             catch (java.net.MalformedURLException | IllegalArgumentException e) {
                 throw new IllegalArgumentException("Cannot convert '" + value + "' to URL", e);
@@ -266,7 +266,7 @@ final class BuiltInConverters {
         @Serial private static final long serialVersionUID = 1L;
         static final InetAddressConverter INSTANCE = new InetAddressConverter();
         @Override public InetAddress convert(String value) {
-            if (value == null || value.isEmpty()) return null;
+            if (value == null) throw new NullPointerException("value"); if (value.isEmpty()) return null;
             try { return InetAddress.getByName(value.trim()); }
             catch (UnknownHostException e) { throw new IllegalArgumentException("Cannot resolve '" + value + "' to InetAddress", e); }
         }
@@ -280,7 +280,7 @@ final class BuiltInConverters {
         @Serial private static final long serialVersionUID = 1L;
         static final DurationConverter INSTANCE = new DurationConverter();
         @Override public Duration convert(String value) {
-            if (value == null || value.isEmpty()) return null;
+            if (value == null) throw new NullPointerException("value"); if (value.isEmpty()) return null;
             try { return Duration.parse(value); }
             catch (java.time.format.DateTimeParseException e) { throw new IllegalArgumentException("Cannot convert '" + value + "' to Duration", e); }
         }
@@ -290,7 +290,7 @@ final class BuiltInConverters {
         @Serial private static final long serialVersionUID = 1L;
         static final PeriodConverter INSTANCE = new PeriodConverter();
         @Override public Period convert(String value) {
-            if (value == null || value.isEmpty()) return null;
+            if (value == null) throw new NullPointerException("value"); if (value.isEmpty()) return null;
             try { return Period.parse(value); }
             catch (java.time.format.DateTimeParseException e) { throw new IllegalArgumentException("Cannot convert '" + value + "' to Period", e); }
         }
@@ -300,7 +300,7 @@ final class BuiltInConverters {
         @Serial private static final long serialVersionUID = 1L;
         static final LocalDateConverter INSTANCE = new LocalDateConverter();
         @Override public LocalDate convert(String value) {
-            if (value == null || value.isEmpty()) return null;
+            if (value == null) throw new NullPointerException("value"); if (value.isEmpty()) return null;
             try { return LocalDate.parse(value); }
             catch (java.time.format.DateTimeParseException e) { throw new IllegalArgumentException("Cannot convert '" + value + "' to LocalDate", e); }
         }
@@ -310,7 +310,7 @@ final class BuiltInConverters {
         @Serial private static final long serialVersionUID = 1L;
         static final LocalTimeConverter INSTANCE = new LocalTimeConverter();
         @Override public LocalTime convert(String value) {
-            if (value == null || value.isEmpty()) return null;
+            if (value == null) throw new NullPointerException("value"); if (value.isEmpty()) return null;
             try { return LocalTime.parse(value); }
             catch (java.time.format.DateTimeParseException e) { throw new IllegalArgumentException("Cannot convert '" + value + "' to LocalTime", e); }
         }
@@ -320,7 +320,7 @@ final class BuiltInConverters {
         @Serial private static final long serialVersionUID = 1L;
         static final LocalDateTimeConverter INSTANCE = new LocalDateTimeConverter();
         @Override public LocalDateTime convert(String value) {
-            if (value == null || value.isEmpty()) return null;
+            if (value == null) throw new NullPointerException("value"); if (value.isEmpty()) return null;
             try { return LocalDateTime.parse(value); }
             catch (java.time.format.DateTimeParseException e) { throw new IllegalArgumentException("Cannot convert '" + value + "' to LocalDateTime", e); }
         }
@@ -330,7 +330,7 @@ final class BuiltInConverters {
         @Serial private static final long serialVersionUID = 1L;
         static final OffsetTimeConverter INSTANCE = new OffsetTimeConverter();
         @Override public OffsetTime convert(String value) {
-            if (value == null || value.isEmpty()) return null;
+            if (value == null) throw new NullPointerException("value"); if (value.isEmpty()) return null;
             try { return OffsetTime.parse(value); }
             catch (java.time.format.DateTimeParseException e) { throw new IllegalArgumentException("Cannot convert '" + value + "' to OffsetTime", e); }
         }
@@ -340,7 +340,7 @@ final class BuiltInConverters {
         @Serial private static final long serialVersionUID = 1L;
         static final OffsetDateTimeConverter INSTANCE = new OffsetDateTimeConverter();
         @Override public OffsetDateTime convert(String value) {
-            if (value == null || value.isEmpty()) return null;
+            if (value == null) throw new NullPointerException("value"); if (value.isEmpty()) return null;
             try { return OffsetDateTime.parse(value); }
             catch (java.time.format.DateTimeParseException e) { throw new IllegalArgumentException("Cannot convert '" + value + "' to OffsetDateTime", e); }
         }
@@ -350,7 +350,7 @@ final class BuiltInConverters {
         @Serial private static final long serialVersionUID = 1L;
         static final ZonedDateTimeConverter INSTANCE = new ZonedDateTimeConverter();
         @Override public ZonedDateTime convert(String value) {
-            if (value == null || value.isEmpty()) return null;
+            if (value == null) throw new NullPointerException("value"); if (value.isEmpty()) return null;
             try { return ZonedDateTime.parse(value); }
             catch (java.time.format.DateTimeParseException e) { throw new IllegalArgumentException("Cannot convert '" + value + "' to ZonedDateTime", e); }
         }
@@ -360,7 +360,7 @@ final class BuiltInConverters {
         @Serial private static final long serialVersionUID = 1L;
         static final InstantConverter INSTANCE = new InstantConverter();
         @Override public Instant convert(String value) {
-            if (value == null || value.isEmpty()) return null;
+            if (value == null) throw new NullPointerException("value"); if (value.isEmpty()) return null;
             try { return Instant.parse(value); }
             catch (java.time.format.DateTimeParseException e) { throw new IllegalArgumentException("Cannot convert '" + value + "' to Instant", e); }
         }

@@ -50,6 +50,7 @@ class VaubanContainerIntegrationTest {
         }
     }
 
+
     private void registerConfig(Map<String, String> values) {
         ConfigProviderResolver resolver = ConfigProviderResolver.instance();
         Config custom = resolver.getBuilder()
@@ -64,6 +65,7 @@ class VaubanContainerIntegrationTest {
         @Inject
         Config config;
     }
+
 
     private static final class TestSource implements ConfigSource {
         private final Map<String, String> values;

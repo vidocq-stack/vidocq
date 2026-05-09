@@ -48,6 +48,40 @@
     <dependencyManagement>
         <dependencies>
             <!--
+                Aligne weld-lite-extension-translator avec weld-core-impl 6.0.2+.
+                La version transitive 6.0.0.Alpha1 (amenée par arquillian-weld-embedded)
+                appelle AfterBeanDiscoveryImpl.addBean(Class) qui n'existe plus dans
+                weld-core-impl 6.0.2 — ce qui casse la phase @Synthesis des BCE :
+
+                    java.lang.NoSuchMethodError:
+                      'WeldBeanConfigurator AfterBeanDiscoveryImpl.addBean(Class)'
+                      at LiteExtensionTranslator.synthesis(...)
+            -->
+            <dependency>
+                <groupId>org.jboss.weld</groupId>
+                <artifactId>weld-lite-extension-translator</artifactId>
+                <version>6.0.1.Final</version>
+            </dependency>
+
+            <!--
+                Le TCK MP Config tire transitivement cdi-api 4.1.0-M1 (Milestone)
+                qui ne contient pas InvokerFactory. weld-lite-extension-translator
+                6.0.1.Final référence cette classe au chargement statique de
+                ExtensionMethodParameterType : NoClassDefFoundError pendant la
+                phase @Registration. On force la 4.1.0 finale.
+            -->
+            <dependency>
+                <groupId>jakarta.enterprise</groupId>
+                <artifactId>jakarta.enterprise.cdi-api</artifactId>
+                <version>4.1.0</version>
+            </dependency>
+            <dependency>
+                <groupId>jakarta.enterprise</groupId>
+                <artifactId>jakarta.enterprise.lang-model</artifactId>
+                <version>4.1.0</version>
+            </dependency>
+
+            <!--
                 arquillian-weld-embedded:4.0.0.Final tire transitivement
                 arquillian-container-spi:1.8.0.Final dans laquelle l'interface
                 Container N'EST PAS générique. Sous JDK 23+, la validation stricte de
@@ -171,7 +205,26 @@
                             <useFile>false</useFile>
                             <systemPropertyVariables>
                                 <arquillian.launch>weld-embedded</arquillian.launch>
+                                <!-- DefaultConfigSourceOrdinalTest.checkSetup -->
+                                <config_ordinal>120</config_ordinal>
+                                <customer.hobby>Tennis</customer.hobby>
+                                <!-- ConfigProviderTest.testPropertyConfigSource -->
+                                <mp.tck.prop.dummy>dummy</mp.tck.prop.dummy>
                             </systemPropertyVariables>
+                            <environmentVariables>
+                                <!-- DefaultConfigSourceOrdinalTest.checkSetup : env
+                                     config_ordinal doit valoir 45 pour vérifier
+                                     l'override d'ordinal du ConfigSource env. -->
+                                <config_ordinal>45</config_ordinal>
+                                <customer_name>Bob</customer_name>
+                                <!-- ConfigProviderTest.testEnvironmentConfigSource -->
+                                <MP_TCK_ENV_DUMMY>dummy</MP_TCK_ENV_DUMMY>
+                                <!-- CDIPropertyNameMatchingTest.checkSetup §7.6 -->
+                                <my_int_property>45</my_int_property>
+                                <MY_BOOLEAN_PROPERTY>true</MY_BOOLEAN_PROPERTY>
+                                <my_string_property>haha</my_string_property>
+                                <MY_STRING_PROPERTY>woohoo</MY_STRING_PROPERTY>
+                            </environmentVariables>
                         </configuration>
                         <dependencies>
                             <!--

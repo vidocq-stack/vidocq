@@ -79,7 +79,8 @@ class RavelConfigProducerTest {
 
     @Test
     void produceConfigProperty_uses_member_name_when_annotation_name_unset() throws Exception {
-        registerConfig(Map.of("memberNamed", "ok"));
+        registerConfig(Map.of(
+                BeanFields.class.getCanonicalName() + ".memberNamed", "ok"));
         InjectionPoint ip = injectionPointFor(BeanFields.class.getDeclaredField("memberNamed"));
 
         Object value = producer.produceConfigProperty(ip);

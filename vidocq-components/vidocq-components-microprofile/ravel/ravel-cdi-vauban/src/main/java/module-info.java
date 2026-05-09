@@ -15,5 +15,9 @@ module io.vidocq.ravel.cdi.vauban {
     provides jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension
             with io.vidocq.ravel.cdi.ConfigCdiExtension;
 
+    provides jakarta.enterprise.inject.spi.Extension
+            with io.vidocq.ravel.cdi.ConfigPropertiesExclusionExtension;
+
     exports io.vidocq.ravel.cdi;
+    exports io.vidocq.ravel.cdi.internal;
 }

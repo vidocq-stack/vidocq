@@ -34,13 +34,17 @@ public final class MicroprofilePropertiesConfigSource implements ConfigSource {
     public static final String RESOURCE_PATH = "META-INF/microprofile-config.properties";
 
     private static final int ORDINAL = 100;
+    /** §7.5 — ordinal des fichiers profil-aware {@code microprofile-config-{profile}.properties}. */
+    private static final int PROFILED_ORDINAL = 110;
 
     private final String name;
     private final Map<String, String> data;
+    private final int defaultOrdinal;
 
-    private MicroprofilePropertiesConfigSource(String name, Map<String, String> data) {
+    private MicroprofilePropertiesConfigSource(String name, Map<String, String> data, int defaultOrdinal) {
         this.name = name;
         this.data = data;
+        this.defaultOrdinal = defaultOrdinal;
     }
 
     /**
@@ -50,22 +54,37 @@ public final class MicroprofilePropertiesConfigSource implements ConfigSource {
      * @return liste immuable, jamais {@code null}
      */
     public static List<MicroprofilePropertiesConfigSource> loadAll(ClassLoader classLoader) {
+        return loadFromPath(classLoader, RESOURCE_PATH, ORDINAL);
+    }
+
+    /**
+     * §7.5 — charge les fichiers profil-aware {@code META-INF/microprofile-config-{profile}.properties}
+     * (ordinal par défaut 110, écrasant le fichier non profilé).
+     */
+    public static List<MicroprofilePropertiesConfigSource> loadProfile(ClassLoader classLoader, String profile) {
+        Objects.requireNonNull(profile, "profile");
+        return loadFromPath(classLoader,
+                "META-INF/microprofile-config-" + profile + ".properties", PROFILED_ORDINAL);
+    }
+
+    private static List<MicroprofilePropertiesConfigSource> loadFromPath(
+            ClassLoader classLoader, String path, int defaultOrdinal) {
         Objects.requireNonNull(classLoader, "classLoader");
         var sources = new ArrayList<MicroprofilePropertiesConfigSource>();
         try {
-            var urls = classLoader.getResources(RESOURCE_PATH);
+            var urls = classLoader.getResources(path);
             while (urls.hasMoreElements()) {
                 URL url = urls.nextElement();
-                sources.add(loadOne(url));
+                sources.add(loadOne(url, defaultOrdinal));
             }
         } catch (IOException e) {
             throw new UncheckedIOException(
-                    "Failed to enumerate " + RESOURCE_PATH + " from ClassLoader", e);
+                    "Failed to enumerate " + path + " from ClassLoader", e);
         }
         return List.copyOf(sources);
     }
 
-    private static MicroprofilePropertiesConfigSource loadOne(URL url) {
+    private static MicroprofilePropertiesConfigSource loadOne(URL url, int defaultOrdinal) {
         var props = new Properties();
         try (InputStream in = url.openStream()) {
             props.load(in);
@@ -78,7 +97,8 @@ public final class MicroprofilePropertiesConfigSource implements ConfigSource {
         }
         return new MicroprofilePropertiesConfigSource(
                 "MicroprofilePropertiesConfigSource[" + url + "]",
-                Collections.unmodifiableMap(data));
+                Collections.unmodifiableMap(data),
+                defaultOrdinal);
     }
 
     @Override
@@ -103,6 +123,16 @@ public final class MicroprofilePropertiesConfigSource implements ConfigSource {
 
     @Override
     public int getOrdinal() {
-        return ORDINAL;
+        // §3.4 — un éventuel {@code config_ordinal} dans le fichier remplace
+        // l'ordinal par défaut.
+        String override = data.get("config_ordinal");
+        if (override != null) {
+            try {
+                return Integer.parseInt(override.trim());
+            } catch (NumberFormatException ignored) {
+                // valeur non parsable → ordinal par défaut
+            }
+        }
+        return defaultOrdinal;
     }
 }

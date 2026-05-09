@@ -119,9 +119,13 @@ public final class RavelConfigBuilder implements ConfigBuilder {
         List<ConfigSource> effectiveSources = List.copyOf(sources);
         String profile = trimToNull(lookupRaw(effectiveSources, "mp.config.profile"));
         if (profile != null) {
+            // §7.5 — charge en plus les fichiers profil-aware
+            // {@code META-INF/microprofile-config-{profile}.properties} (ordinal 110).
+            var withProfile = new ArrayList<>(effectiveSources);
+            withProfile.addAll(MicroprofilePropertiesConfigSource.loadProfile(resolveClassLoader(), profile));
             // §7.5 — wrapper profiled en ordinal +1 pour masquer la clé non profilée.
-            var profiled = new ArrayList<ConfigSource>(effectiveSources.size() * 2);
-            for (ConfigSource s : effectiveSources) {
+            var profiled = new ArrayList<ConfigSource>(withProfile.size() * 2);
+            for (ConfigSource s : withProfile) {
                 profiled.add(new ProfiledConfigSource(s, profile));
                 profiled.add(s);
             }
@@ -158,10 +162,41 @@ public final class RavelConfigBuilder implements ConfigBuilder {
     }
 
     private <T> void registerConverter(Class<T> type, int priority, Converter<?> converter) {
+        registerConverterEntry(type, priority, converter);
+        // §5.1 — un converter applicatif sur le type boxé (ex. Integer) doit
+        // également écraser le built-in primitif (int) afin que
+        // {@code config.getValue("k", int.class)} respecte la priorité utilisateur.
+        Class<?> twin = primitiveBoxingTwin(type);
+        if (twin != null) {
+            registerConverterEntry(twin, priority, converter);
+        }
+    }
+
+    private void registerConverterEntry(Class<?> type, int priority, Converter<?> converter) {
         PrioritizedConverter existing = converters.get(type);
         if (existing == null || priority >= existing.priority()) {
             converters.put(type, new PrioritizedConverter(priority, converter));
         }
+    }
+
+    private static Class<?> primitiveBoxingTwin(Class<?> type) {
+        if (type == Boolean.class) return boolean.class;
+        if (type == Byte.class) return byte.class;
+        if (type == Short.class) return short.class;
+        if (type == Integer.class) return int.class;
+        if (type == Long.class) return long.class;
+        if (type == Float.class) return float.class;
+        if (type == Double.class) return double.class;
+        if (type == Character.class) return char.class;
+        if (type == boolean.class) return Boolean.class;
+        if (type == byte.class) return Byte.class;
+        if (type == short.class) return Short.class;
+        if (type == int.class) return Integer.class;
+        if (type == long.class) return Long.class;
+        if (type == float.class) return Float.class;
+        if (type == double.class) return Double.class;
+        if (type == char.class) return Character.class;
+        return null;
     }
 
     private static Class<?> inferConverterTargetType(Class<?> converterClass) {

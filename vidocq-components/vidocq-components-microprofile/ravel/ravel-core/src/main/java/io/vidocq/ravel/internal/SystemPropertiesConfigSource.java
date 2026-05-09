@@ -58,6 +58,16 @@ public final class SystemPropertiesConfigSource implements ConfigSource {
 
     @Override
     public int getOrdinal() {
+        // §3.4 — la valeur du système {@code config_ordinal} (s'il y en a une)
+        // remplace l'ordinal par défaut.
+        String override = System.getProperty("config_ordinal");
+        if (override != null) {
+            try {
+                return Integer.parseInt(override.trim());
+            } catch (NumberFormatException ignored) {
+                // valeur non parsable → ordinal par défaut
+            }
+        }
         return ORDINAL;
     }
 }

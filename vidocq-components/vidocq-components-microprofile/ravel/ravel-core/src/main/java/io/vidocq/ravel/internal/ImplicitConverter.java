@@ -104,7 +104,8 @@ final class ImplicitConverter {
         @Override
         @SuppressWarnings("unchecked")
         public T convert(String value) {
-            if (value == null || value.isEmpty()) return null;
+            if (value == null) throw new NullPointerException("value");
+            if (value.isEmpty()) return null;
             try {
                 return (T) method.invoke(null, value);
             } catch (IllegalAccessException e) {
@@ -112,7 +113,8 @@ final class ImplicitConverter {
                         "Cannot invoke " + method + " on '" + value + "'", e);
             } catch (InvocationTargetException e) {
                 Throwable cause = e.getCause();
-                if (cause instanceof RuntimeException re) throw re;
+                if (cause instanceof IllegalArgumentException iae) throw iae;
+                if (cause instanceof NullPointerException npe) throw npe;
                 throw new IllegalArgumentException(
                         "Cannot convert '" + value + "' to " + type.getName(), cause);
             }
@@ -129,12 +131,14 @@ final class ImplicitConverter {
 
         @Override
         public T convert(String value) {
-            if (value == null || value.isEmpty()) return null;
+            if (value == null) throw new NullPointerException("value");
+            if (value.isEmpty()) return null;
             try {
                 return ctor.newInstance(value);
             } catch (ReflectiveOperationException e) {
                 Throwable cause = e instanceof InvocationTargetException ite ? ite.getCause() : e;
-                if (cause instanceof RuntimeException re) throw re;
+                if (cause instanceof IllegalArgumentException iae) throw iae;
+                if (cause instanceof NullPointerException npe) throw npe;
                 throw new IllegalArgumentException(
                         "Cannot convert '" + value + "' to " + ctor.getDeclaringClass().getName(), cause);
             }
@@ -151,7 +155,8 @@ final class ImplicitConverter {
 
         @Override
         public E convert(String value) {
-            if (value == null || value.isEmpty()) return null;
+            if (value == null) throw new NullPointerException("value");
+            if (value.isEmpty()) return null;
             try {
                 return Enum.valueOf(type, value);
             } catch (IllegalArgumentException e) {
