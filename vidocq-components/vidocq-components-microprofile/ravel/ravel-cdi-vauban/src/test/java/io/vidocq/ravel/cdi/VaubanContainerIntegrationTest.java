@@ -8,17 +8,21 @@ import jakarta.enterprise.inject.se.SeContainer;
 import jakarta.enterprise.inject.se.SeContainerInitializer;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.Config;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.config.spi.ConfigProviderResolver;
 import org.eclipse.microprofile.config.spi.ConfigSource;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @DisplayName("Vauban container integration — @ConfigProperty + Config")
 class VaubanContainerIntegrationTest {
@@ -50,6 +54,56 @@ class VaubanContainerIntegrationTest {
         }
     }
 
+    /**
+     * Couverture du chemin BCE complet sous Vauban — découverte de
+     * {@link ConfigCdiExtension} via ServiceLoader, phase {@code @Registration}
+     * qui collecte les IPs {@code @ConfigProperty}, phase {@code @Synthesis}
+     * qui enregistre les SyntheticBean correspondants. Cible la même surface
+     * d'API que {@code cassini-examples-vauban/ConfigDemoResource}.
+     *
+     * <p><b>Désactivé (M6 résiduel)</b> — le pipeline BCE de Vauban 0.1.0-SNAPSHOT
+     * n'invoque pas les phases {@code @Registration}/{@code @Synthesis} de notre
+     * extension dans cette configuration ({@link SeContainerInitializer} +
+     * {@code addBeanClasses}, ou {@link io.vidocq.vauban.core.container.VaubanContainer#builder()}
+     * + {@code scanClasspath()}). Les preuves :</p>
+     * <ul>
+     *   <li>aucun debug println depuis {@code ConfigCdiExtension.@Registration} /
+     *       {@code @Synthesis} n'est imprimé pendant le déploiement ;</li>
+     *   <li>la même {@link ConfigCdiExtension} passe **349/349** tests
+     *       MicroProfile Config 3.1 TCK sous Weld 6.0.2 (cf. {@code TCK.md}) —
+     *       donc le code Ravel est conforme spec ;</li>
+     *   <li>{@code cassini-examples-vauban/ConfigDemoResourceTest} échoue avec
+     *       le même symptôme ({@code WELD-001408 / Unsatisfied dependency}).</li>
+     * </ul>
+     * <p>À réactiver une fois le bug Vauban-side traité (à investiguer côté
+     * {@code vauban-core} : pourquoi {@code BceProcessor.process(...)} ne
+     * dispatche pas {@code @Registration} pour les beans découverts via
+     * {@code addBeanClasses}).</p>
+     */
+    @Test
+    @Disabled("M6 résiduel — pipeline BCE Vauban n'invoque pas @Registration/@Synthesis (voir Javadoc)")
+    void resolves_config_property_injection_through_bce_pipeline() {
+        registerConfig(Map.of(
+                "app.greeting", "Bonjour",
+                "app.version", "1.2.3"
+                // app.env volontairement absent pour le cas Optional
+        ));
+
+        // Note : sous Vauban, SeContainerInitializer.addBeanClasses(...) ne déclenche pas
+        // l'auto-scan des BCE via META-INF/services. On enregistre la BCE explicitement
+        // — équivalent au scan classpath qu'effectuent Cassini/Chappe via VaubanContainer.builder().scanClasspath().
+        SeContainerInitializer initializer = SeContainerInitializer.newInstance()
+                .addBeanClasses(ConfigPropertyTestBean.class, ConfigCdiExtension.class);
+
+        try (SeContainer container = initializer.initialize()) {
+            ConfigPropertyTestBean bean = container.select(ConfigPropertyTestBean.class).get();
+            assertNotNull(bean);
+            assertEquals("Bonjour", bean.greeting);
+            assertEquals("1.2.3", bean.version);
+            assertTrue(bean.environment.isEmpty(), "app.env absent → Optional.empty()");
+        }
+    }
+
 
     private void registerConfig(Map<String, String> values) {
         ConfigProviderResolver resolver = ConfigProviderResolver.instance();
@@ -64,6 +118,21 @@ class VaubanContainerIntegrationTest {
     static class TestBean {
         @Inject
         Config config;
+    }
+
+    @Dependent
+    public static class ConfigPropertyTestBean {
+        @Inject
+        @ConfigProperty(name = "app.greeting", defaultValue = "Hello")
+        public String greeting;
+
+        @Inject
+        @ConfigProperty(name = "app.version", defaultValue = "0.0.0")
+        public String version;
+
+        @Inject
+        @ConfigProperty(name = "app.env")
+        public Optional<String> environment;
     }
 
 

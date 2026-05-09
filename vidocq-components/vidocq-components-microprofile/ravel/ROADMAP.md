@@ -178,17 +178,54 @@ résultats bruts inclus).
 
 ---
 
-### M6 — Intégration écosystème Vidocq
+### M6 — Intégration écosystème Vidocq 🟡 partiel
 
-| Tâche | Notes |
-|---|---|
-| Adapter `cassini-ravel` (côté Cassini) : `@ConfigProperty` injectable dans les ressources REST | Nécessite Vauban + `ravel-cdi-vauban` |
-| Adapter `chappe-ravel` (optionnel) : configuration du serveur HTTP via `Config` | Port, TLS keystore path, etc. |
-| Adapter `vauban-ravel` : `Config` enregistré comme bean CDI dans Vauban core | Pour usage interne de Vauban (lecture des extensions activées via config) |
-| Documentation : `docs/integration-cassini.md`, `docs/integration-chappe.md`, `docs/integration-vauban.md` | Exemples concrets |
-| Bench end-to-end : Cassini + Ravel vs Cassini + Smallrye Config | Throughput requêtes REST avec injection `@ConfigProperty` |
+**Scope :** déployer Ravel dans Cassini, Chappe, Vauban et `vidocq-mps` ; remplacer
+Smallrye Config comme implémentation par défaut. Documenté dans
+[ADR-001](docs/adr/ADR-001-integration-ecosysteme-vidocq.md).
 
-**Livrable :** Vidocq-MPS livre une release avec Ravel comme implémentation MP Config par défaut, sans dépendance Smallrye.
+| Tâche | État | Notes |
+|---|---|---|
+| Documentation [`docs/integration-cassini.md`](docs/integration-cassini.md) | ✅ | 198 lignes — dépendances, JPMS, exemple `@Path` + `@ConfigProperty`, profils, `@ConfigProperties`, comparatif Ravel/Smallrye |
+| Documentation [`docs/integration-chappe.md`](docs/integration-chappe.md) | ✅ | 155 lignes — usage programmatique sans CDI (`ConfigProvider.getConfig()` pour port/TLS/timeouts) |
+| Documentation [`docs/integration-vauban.md`](docs/integration-vauban.md) | ✅ | 260 lignes — bean `Config` injectable, BCE auto-discoverable via ServiceLoader, `@ConfigProperties` POJO |
+| ADR-001 stratégie d'intégration | ✅ | Rationale "drop-in" + ordre de déploiement + risques |
+| ServiceLoader BCE (`META-INF/services/jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension`) | ✅ | `ConfigCdiExtension` exposée via le contrat CDI 4.1 standard |
+| ServiceLoader Extension portable (`jakarta.enterprise.inject.spi.Extension`) | ✅ | `ConfigPropertiesExclusionExtension` exposée |
+| `META-INF/vauban-beans.list` (fallback JPMS-strict) | ✅ | Complément à ServiceLoader pour les chemins de discovery non-portables |
+| `module-info.java` `provides ... with` | ✅ | Doublure JPMS pour les deux fichiers de services |
+| Adapter `cassini-cdi-vauban` : `ravel-cdi-vauban` en dépendance optionnelle | ✅ (côté Cassini) | `<optional>true</optional>` — la BCE est auto-découverte si le JAR est sur le classpath |
+| Exemple `cassini-examples-vauban/ConfigDemoResource` | ✅ (code écrit) | Ressource JAX-RS `@ApplicationScoped @Path("/config")` avec 3 `@ConfigProperty` (greeting/version/Optional env) |
+| Test end-to-end `cassini-examples-vauban/ConfigDemoResourceTest` | ❌ | Échec deployment : `Unsatisfied dependency` sur `String @ConfigProperty` — voir résiduel ci-dessous |
+| Test BCE Vauban dans `ravel-cdi-vauban` (`resolves_config_property_injection_through_bce_pipeline`) | 🟡 ajouté + `@Disabled` | Reproduit l'échec côté Ravel pour traçabilité ; à réactiver après fix Vauban |
+| Bench end-to-end Cassini + Ravel vs Cassini + Smallrye Config | ⏳ | Reporté tant que l'intégration end-to-end n'est pas fonctionnelle |
+| `vidocq-mps` : remplacer Smallrye Config par Ravel | ⏳ | Bloqué tant que l'intégration end-to-end n'est pas fonctionnelle |
+
+**Livrable partiel :** documentation complète, artefacts de discovery (ServiceLoader +
+JPMS + `vauban-beans.list`) packagés, intégration Cassini écrite. Le commit `f5603bb`
+prouve la conformité spec côté Ravel via TCK 349/349 PASS sous Weld.
+
+#### Résiduel M6 — bug intégration BCE Vauban
+
+`ConfigCdiExtension` n'est pas exécutée par le pipeline BCE de Vauban
+0.1.0-SNAPSHOT dans les configurations testées :
+
+- `SeContainerInitializer.addBeanClasses(ConfigPropertyTestBean.class, ConfigCdiExtension.class).initialize()` — phases `@Registration` / `@Synthesis` non invoquées (vérifié par instrumentation println, jamais imprimée) ;
+- `VaubanContainer.builder().scanClasspath().build()` (cassini-examples-vauban) — même symptôme.
+
+Symptôme final : `jakarta.enterprise.inject.spi.DeploymentException: CDI deployment
+validation failed: Unsatisfied dependency: field X of type String with qualifiers
+@ConfigProperty(...)` — Vauban ne voit pas les `SyntheticBean` que `@Synthesis` doit
+enregistrer.
+
+Hypothèses à investiguer côté `vauban-core` :
+- `BceProcessor.process(...)` n'est-il pas appelé pour les BCE découvertes via `META-INF/services/...BuildCompatibleExtension` ?
+- La liste `bceClasses` filtrée par `ReflectionValidator.isBuildCompatibleExtension(c)` est-elle vide à ce stade ?
+- Les phases sont-elles exécutées mais les `SyntheticBean` ne sont-ils pas reliés à l'arbre de résolution ?
+
+Le code Ravel est conforme spec — la **même** `ConfigCdiExtension` passe **349/349
+PASS** au TCK MicroProfile Config 3.1 sous Weld 6.0.2 (cf. `TCK.md`). Le débogage
+doit porter sur le bridge BCE `vauban-core ↔ ravel-cdi-vauban`.
 
 ---
 
