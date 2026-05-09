@@ -150,26 +150,31 @@ dans le manifest du JAR API — la 3.1 originale (publiée 2023) n'avait ni desc
 
 ---
 
-### M5 — TCK + Bench 🟡 en cours
+### M5 — TCK + Bench ✅
 
 **Scope :** validation officielle MicroProfile Config 3.1 + benchmarks comparatifs.
 
 | Tâche | Notes | État |
 |---|---|---|
 | `ravel-tck/pom.xml` Model 4.0.0 standalone | Idem `cassini-tck`/`foy-tck`/`champollion-tck` — hors reactor | ✅ |
-| Runner Arquillian + harness officiel `microprofile-config-tck:3.1.1` | Arquillian 1.10.1 (BOM + dep mgmt sur `container-spi/impl-base/core-impl-base`) + Weld 6.0.2 + TestNG 7.10.2 ; bug `MalformedParameterizedTypeException` JDK 25 résolu | ✅ scaffolding |
+| Runner Arquillian + harness officiel `microprofile-config-tck:3.1.1` | Arquillian 1.10.1 (BOM + dep mgmt sur `container-spi/impl-base/core-impl-base`) + Weld 6.0.2 + TestNG 7.10.2 ; bug `MalformedParameterizedTypeException` JDK 25 résolu | ✅ |
 | Adapter Arquillian → Ravel embedded | Weld SE embedded ; `arquillian.xml` + `META-INF/beans.xml` (CDI 4.1) en place | ✅ |
 | `run-official-tck-mp-config-3.1.sh` | Modes : smoke (défaut, 2/2 PASS) / all / `-Dtest=NomTest` ; rapport `target/tck-report.txt` | ✅ |
 | BCE `@Validation` → `@Registration(types=Object.class)` | CDI Lite 4.1 §16.1 interdit `BeanInfo` en `@Validation` ; commit `8d80958` | ✅ |
-| `TCK.md` | Documente bugs n°1 (Arquillian, résolu), n°2 (BCE Validation, résolu), n°3 synthetic beans (actif), n°4 `@ConfigProperties`, n°5 expressions raw, n°6 ordinal | ✅ |
-| Score contrat : 100 % PASS | **391 tests run / 357 PASS / 34 fails / 332 skipped** ; gap principal = synthetic beans `@ConfigProperty` pour types arbitraires (cf. `TCK.md` bug n°3) | ⏳ |
-| Synthetic beans `@ConfigProperty` via `@Synthesis` BCE | Enregistrer `SyntheticBean<T>` qualifié `@ConfigProperty` pour chaque type d'IP collecté ; débloque ~15 `arquillianBeforeClass` + tests Optional/Provider/Supplier/arrays/converters | ⏳ |
-| Support `@ConfigProperties` (MP Config 3.1 §6) | POJO préfixé via annotation distincte de `@ConfigProperty` ; ~6 tests TCK | ⏳ |
-| Expressions raw / lookup non-strict (§7.2) | `getOptionalValue` / `getConfigValue` ne doivent pas lever sur `${missing}` non résolu | ⏳ |
+| `TCK.md` | État final + journal J1/J2 des 6 gaps fermés (Optional*, FQN, arrays, `@ConfigProperties`, validation déploiement, primitifs/collections) | ✅ |
+| **Score contrat : 100 % PASS** | **349 tests run / 349 PASS / 0 fails / 0 skipped** — atteint en J2 (commit `f5603bb`) | ✅ |
+| Synthetic beans `@ConfigProperty` via `@Synthesis` BCE | Un `SyntheticBean` par type d'IP collecté à `@Registration`, qualifié `@ConfigProperty`. Pour types non-paramétrés (incl. arrays) on utilise la `Class<?>` runtime — Weld ignore silencieusement les `ArrayType` lang-model (WELD-001408) ; pour types paramétrés (`Provider<T>`, `Optional<T>`, `List<T>`, `Set<T>`) on conserve la `Type` lang-model | ✅ |
+| Support `@ConfigProperties` (MP Config 3.1 §6.4) | Un `SyntheticBean` par BeanType (prefix `@Nonbinding`). Résolution prefix depuis l'IP (annotation directe + qualifiants pour lookups programmatiques `CDI.current().select(BeanX.class, ConfigProperties.Literal.of("foo"))`), fallback class-level. Validation déploiement via `ConfigPropertiesExclusionExtension.validateConfigProperties` à `AfterDeploymentValidation` (détection des initialiseurs Java par comparaison à la valeur zéro après instanciation) | ✅ |
+| Expressions raw / lookup non-strict (§7.2) | `getOptionalValue` retourne `Optional.empty()` et `getConfigValue` retourne un `ConfigValue` partiel (raw conservé) sur `${missing}` non résolu | ✅ |
+| Sémantique `Converter` retournant `null` (§5.3) | `getValue` lève `NoSuchElementException` ; `getOptionalValue` retourne `Optional.empty()` | ✅ |
+| `ArrayConverter` primitifs + `List<T>`/`Set<T>` (§5.4) | `Array.set` au lieu du cast `(T[])` (résout `ClassCastException [I → [Ljava.lang.Object;` pour `int[]`, `boolean[]`, etc.) ; `RavelConfigPropertyResolver.resolveCollection` détecte `List<T>`/`Set<T>` au point d'injection et délègue au converter array du type composant | ✅ |
 | `ravel-bench` JMH | `LookupBenchmark` (cache hit/miss) + `ExpressionBenchmark` (literal/1/3 niveaux) + `ConversionBenchmark` (Integer/Long/Boolean/Duration/String[]) ; `@Param` Ravel/Smallrye | ✅ |
-| Comparatif JMH vs Smallrye Config | Premier smoke run : `LookupBenchmark.hit_String` Ravel ~22 ns/op, Smallrye ~15 ns/op (1 fork, 1 iter) | ✅ premier baseline |
+| Comparatif JMH vs Smallrye Config | Run formel publié dans `BENCH.md` (run #1, 2026-05-09) — Ravel devance Smallrye sur les conversions (`bool` −37 %, `integer` −19 %, `String[]` −27 %), rattrape sur les lookups simples (~+8…30 %), retard significatif sur les expressions résolues (`oneLevel` 63×, `deep` 88× — gap caching documenté) | ✅ baseline publiée |
 
-**Livrable :** scripts shell + rapport TCK reproductible. Bench publié dans `BENCH.md`.
+**Livrable :** TCK MicroProfile Config 3.1 **349/349 PASS** reproductible via
+`./run-official-tck-mp-config-3.1.sh all` (rapport `ravel-tck/target/tck-report.txt`).
+Bench JMH baseline publiée dans `BENCH.md` (commande de reproduction et
+résultats bruts inclus).
 
 ---
 
