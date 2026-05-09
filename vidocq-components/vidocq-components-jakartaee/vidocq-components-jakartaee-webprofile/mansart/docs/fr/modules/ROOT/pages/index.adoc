@@ -1,6 +1,9 @@
 = Mansart
 :description: Persistance Jakarta Data 1.0 + Jakarta Persistence 3.2 + transactions + pool JDBC, virtual threads, codegen statique, zéro réflexion.
 
+[.text-center]
+image::mansart-logo.png[Mansart,300,role=module-logo]
+
 [.lead]
 Mansart est la couche persistance de l'écosystème Vidocq. Elle implémente {spec-data-1}[Jakarta Data 1.0] (repositories déclaratifs) et {spec-jpa-3-2}[Jakarta Persistence 3.2] (JPA), aux côtés d'un gestionnaire de transactions Jakarta Transactions 2.0 et d'un pool de connexions JDBC virtual-thread-natif. Quatre briques découplées, une seule SPI dialecte SQL, génération statique APT + Class-File API — pas de réflexion à chaud, pas de proxy dynamique.
 

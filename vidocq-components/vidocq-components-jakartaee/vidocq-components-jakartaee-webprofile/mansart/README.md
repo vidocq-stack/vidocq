@@ -1,5 +1,9 @@
 # Mansart
 
+<p align="center">
+  <img src="mansart-logo.png" alt="Mansart" width="300">
+</p>
+
 Implémentation Jakarta Data 1.0 + Jakarta Persistence 3.2 pour l'écosystème Vidocq.
 
 Le nom rend hommage à **Jules Hardouin-Mansart**, architecte du XVIIᵉ siècle (Versailles, Invalides, place Vendôme) — l'idée de structures durables, modulaires et soigneusement assemblées colle au rôle de la couche persistance dans la stack.
