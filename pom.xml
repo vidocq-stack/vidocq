@@ -83,6 +83,8 @@
         <vauban.version>0.1.0-SNAPSHOT</vauban.version>
         <chappe.version>0.1.0-SNAPSHOT</chappe.version>
         <cassini.version>0.1.0-SNAPSHOT</cassini.version>
+        <ravel.version>0.1.0-SNAPSHOT</ravel.version>
+        <microprofile.config.version>3.1.1</microprofile.config.version>
         <jakarta.cdi.version>4.1.0</jakarta.cdi.version>
         <jakarta.annotation.version>3.0.0</jakarta.annotation.version>
         <junit.version>6.0.3</junit.version>
@@ -151,6 +153,28 @@
                 <groupId>io.vidocq.chappe</groupId>
                 <artifactId>chappe-http</artifactId>
                 <version>${chappe.version}</version>
+            </dependency>
+
+            <!-- Ravel — MicroProfile Config 3.1 implementation -->
+            <dependency>
+                <groupId>org.eclipse.microprofile.config</groupId>
+                <artifactId>microprofile-config-api</artifactId>
+                <version>${microprofile.config.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.ravel</groupId>
+                <artifactId>ravel-api</artifactId>
+                <version>${ravel.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.ravel</groupId>
+                <artifactId>ravel-core</artifactId>
+                <version>${ravel.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.ravel</groupId>
+                <artifactId>ravel-cdi-vauban</artifactId>
+                <version>${ravel.version}</version>
             </dependency>
 
             <!-- Cassini standalone (extrait de vidocq-mps en avril 2026) -->

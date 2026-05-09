@@ -2,6 +2,8 @@ module io.vidocq.mpserver.core {
     requires transitive io.vidocq.mpserver.spi;
     requires io.vidocq.vauban.core;
     requires java.management;
+    // Ravel MicroProfile Config 3.1 — auto-découverte BCE via ServiceLoader
+    requires transitive io.vidocq.ravel.cdi.vauban;
 
     exports io.vidocq.mpserver.core;
     exports io.vidocq.mpserver.core.config;
