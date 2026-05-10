@@ -11,7 +11,7 @@
 #   ./run-official-tck-mp-config-3.1.sh -Dtest=Foo      # test ciblé via le profil tck-official
 #
 # Comportement :
-#   1. Installe en local (./mvnw install -DskipTests) ravel-api/ravel-core/ravel-cdi-vauban
+#   1. Installe en local (mvn install -DskipTests) ravel-api/ravel-core/ravel-cdi-vauban
 #   2. Invoque mvn -f ravel-tck/pom.xml -P<profile> test [args...]
 #   3. Génère target/tck-report.txt avec le résumé PASS/FAIL/SKIP
 #
@@ -45,18 +45,18 @@ case "${mode}" in
         ;;
 esac
 
-echo "==> Étape 1/2 : install local des artefacts Ravel (./mvnw install -DskipTests)"
-( cd "${ROOT_DIR}" && ./mvnw -ntp -pl ravel-api,ravel-core,ravel-cdi-vauban -am install -DskipTests )
+echo "==> Étape 1/2 : install local des artefacts Ravel (mvn install -DskipTests)"
+( cd "${ROOT_DIR}" && mvn -ntp -pl ravel-api,ravel-core,ravel-cdi-vauban -am install -DskipTests )
 
 echo "==> Étape 2/2 : exécution Maven sur ravel-tck (profil=${profile})"
 mkdir -p "${TCK_DIR}/target"
 
-# Utilise le wrapper Maven 4.0.0-rc-5 du dépôt — pas le `mvn` système, qui peut être plus ancien.
-# Le wrapper sait gérer le POM Model 4.0.0 standalone hors reactor.
-MVN="${ROOT_DIR}/mvnw"
+# Le `mvn` système doit être Maven 4.0.0-rc-5 (cf. .sdkmanrc / sdk env, ou install Maven 4 dans la CI).
+# Maven 3.x ne sait pas parser le Model 4.1.0 du reactor parent ; le ravel-tck reste en Model 4.0.0
+# standalone (contrainte ShrinkWrap, cf. CLAUDE.md), donc compatible 3.x ou 4.x.
 
 set +e
-"${MVN}" -ntp -f "${TCK_DIR}/pom.xml" -P"${profile}" test "$@" \
+mvn -ntp -f "${TCK_DIR}/pom.xml" -P"${profile}" test "$@" \
     | tee "${REPORT_FILE}.raw"
 status=$?
 set -e
