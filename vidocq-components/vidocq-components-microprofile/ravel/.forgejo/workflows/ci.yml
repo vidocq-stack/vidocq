@@ -23,6 +23,42 @@ jobs:
           tar -xzf apache-maven-4.0.0-rc-5-bin.tar.gz -C /opt
           echo "/opt/apache-maven-4.0.0-rc-5/bin" >> "$GITHUB_PATH"
 
+      - name: Configure Maven credentials
+        run: |
+          mkdir -p ~/.m2
+          cat > ~/.m2/settings.xml <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <settings>
+            <servers>
+              <server>
+                <id>vidocq-snapshots</id>
+                <username>vidocq-ci-deploy</username>
+                <password>${{ secrets.MAVEN_DEPLOY_TOKEN }}</password>
+                <configuration>
+                  <httpConfiguration>
+                    <all>
+                      <usePreemptive>true</usePreemptive>
+                    </all>
+                  </httpConfiguration>
+                </configuration>
+              </server>
+              <server>
+                <id>vidocq-releases</id>
+                <username>vidocq-ci-deploy</username>
+                <password>${{ secrets.MAVEN_DEPLOY_TOKEN }}</password>
+                <configuration>
+                  <httpConfiguration>
+                    <all>
+                      <usePreemptive>true</usePreemptive>
+                    </all>
+                  </httpConfiguration>
+                </configuration>
+              </server>
+            </servers>
+          </settings>
+          EOF
+
+
       - name: Build & test
         run: mvn -B -ntp verify
 
