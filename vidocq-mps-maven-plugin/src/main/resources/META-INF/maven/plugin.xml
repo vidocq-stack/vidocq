@@ -222,6 +222,13 @@
                     <editable>true</editable>
                     <description>Non-modular resources to copy under dist/conf/</description>
                 </parameter>
+                <parameter>
+                    <name>skip</name>
+                    <type>boolean</type>
+                    <required>false</required>
+                    <editable>true</editable>
+                    <description>Skip jlink execution entirely (useful in CI to bypass automatic-modules issues)</description>
+                </parameter>
             </parameters>
             <configuration>
                 <project implementation="org.apache.maven.project.MavenProject"
@@ -243,6 +250,8 @@
                 <compress implementation="java.lang.String"
                           default-value="zip-6">${vidocq.compress}</compress>
                 <includeResources implementation="java.util.List"/>
+                <skip implementation="boolean"
+                      default-value="false">${vidocq.jlink.skip}</skip>
             </configuration>
         </mojo>
 
