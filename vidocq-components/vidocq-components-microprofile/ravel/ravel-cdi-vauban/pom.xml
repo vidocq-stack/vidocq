@@ -41,13 +41,13 @@
         <dependency>
             <groupId>io.vidocq.vauban</groupId>
             <artifactId>vauban-core</artifactId>
-            <version>0.1.0-SNAPSHOT</version>
+            <version>${vauban.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>io.vidocq.vauban</groupId>
             <artifactId>vauban-classloader-spi</artifactId>
-            <version>0.1.0-SNAPSHOT</version>
+            <version>${vauban.version}</version>
             <scope>test</scope>
         </dependency>
     </dependencies>

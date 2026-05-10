@@ -80,6 +80,9 @@
         <jakarta.inject.version>2.0.1</jakarta.inject.version>
         <jakarta.annotation.version>3.0.0</jakarta.annotation.version>
 
+        <!-- Vidocq upstream — utilisé par ravel-cdi-vauban -->
+        <vauban.version>0.1.0-SNAPSHOT</vauban.version>
+
         <!-- Outils internes — JUnit 6 minimum (réquiert Java 17+, on tourne en Java 25) -->
         <junit.version>6.0.3</junit.version>
         <jmh.version>1.37</jmh.version>
