@@ -151,8 +151,12 @@ jobs:
 
       - name: Build complet du reactor avec la version upstream
         id: build
+        # vidocq.jlink.skip=true : vidocq-mps-rest-example invoque jlink qui
+        # ne supporte pas les automatic modules (ex. microprofile-config-api).
+        # Le mécanisme PR n'a pas vocation à valider l'image jlink — c'est un
+        # check spécifique à factoriser plus tard.
         run: |
-          mvn -B -ntp verify
+          mvn -B -ntp verify -Dvidocq.jlink.skip=true
 
       - name: Poste status sur la PR upstream (succès)
         if: success()

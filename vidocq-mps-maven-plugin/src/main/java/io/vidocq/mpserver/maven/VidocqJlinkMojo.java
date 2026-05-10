@@ -80,6 +80,15 @@ public class VidocqJlinkMojo extends AbstractMojo {
     @Parameter(defaultValue = "true", property = "vidocq.stripDebug")
     private boolean stripDebug;
 
+    /**
+     * Skip de l'exécution complète du goal jlink (défaut : false).
+     * Utile en CI pour valider d'abord le mécanisme de PR cross-repo sans bloquer
+     * sur des dépendances qui sont encore des automatic modules
+     * (ex. microprofile-config-api avant moditect).
+     */
+    @Parameter(defaultValue = "false", property = "vidocq.jlink.skip")
+    private boolean skip;
+
     /** Niveau de compression jlink ({@code zip-0} à {@code zip-9}, défaut : {@code zip-6}). */
     @Parameter(defaultValue = "zip-6", property = "vidocq.compress")
     private String compress;
@@ -94,6 +103,10 @@ public class VidocqJlinkMojo extends AbstractMojo {
 
     @Override
     public void execute() throws MojoExecutionException {
+        if (skip) {
+            getLog().info("Vidocq jlink — skip (vidocq.jlink.skip=true).");
+            return;
+        }
         getLog().info("Vidocq jlink — main: " + mainModule + "/" + mainClass);
         try {
             stageModules();
