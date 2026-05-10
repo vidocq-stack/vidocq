@@ -141,7 +141,13 @@ jobs:
 
   deploy:
     runs-on: ubuntu-latest
-    needs: tck-mp-health
+    # ⚠ deploy dépend de `build` et non de `tck-mp-health` :
+    # knock-tck (hors reactor) requiert `cassini-tck:0.1.0-SNAPSHOT` qui
+    # n'est pas publié en snapshots (cassini-tck est lui-même hors reactor
+    # cassini, contrainte ShrinkWrap). Tant qu'on n'a pas un mécanisme pour
+    # publier cassini-tck, knock-tck plante mais on veut quand même que knock
+    # soit deployé pour que vidocq-mps puisse le consommer en snapshots.
+    needs: build
 
     permissions:
       packages: write
