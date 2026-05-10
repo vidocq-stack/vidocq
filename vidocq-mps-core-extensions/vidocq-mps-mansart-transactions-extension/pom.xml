@@ -33,7 +33,7 @@
         <dependency>
             <groupId>io.vidocq.mansart</groupId>
             <artifactId>mansart-transactions-cdi</artifactId>
-            <version>1.0.0-SNAPSHOT</version>
+            <version>${mansart.version}</version>
         </dependency>
 
         <dependency>

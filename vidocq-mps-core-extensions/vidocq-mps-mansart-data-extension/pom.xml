@@ -34,17 +34,17 @@
         <dependency>
             <groupId>io.vidocq.mansart</groupId>
             <artifactId>mansart-data-core</artifactId>
-            <version>1.0.0-SNAPSHOT</version>
+            <version>${mansart.version}</version>
         </dependency>
         <dependency>
             <groupId>io.vidocq.mansart</groupId>
             <artifactId>mansart-data-cdi</artifactId>
-            <version>1.0.0-SNAPSHOT</version>
+            <version>${mansart.version}</version>
         </dependency>
         <dependency>
             <groupId>io.vidocq.mansart</groupId>
             <artifactId>mansart-data-processor</artifactId>
-            <version>1.0.0-SNAPSHOT</version>
+            <version>${mansart.version}</version>
             <!-- APT-only: consumed by the user app's compiler at build time, never at runtime. -->
             <scope>provided</scope>
         </dependency>

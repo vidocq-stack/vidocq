@@ -84,6 +84,7 @@
         <chappe.version>0.1.0-SNAPSHOT</chappe.version>
         <cassini.version>0.1.0-SNAPSHOT</cassini.version>
         <ravel.version>0.1.0-SNAPSHOT</ravel.version>
+        <mansart.version>1.0.0-SNAPSHOT</mansart.version>
         <microprofile.config.version>3.1.1</microprofile.config.version>
         <jakarta.cdi.version>4.1.0</jakarta.cdi.version>
         <jakarta.annotation.version>3.0.0</jakarta.annotation.version>

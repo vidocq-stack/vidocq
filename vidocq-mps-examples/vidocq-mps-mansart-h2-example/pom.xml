@@ -45,7 +45,7 @@
         <dependency>
             <groupId>io.vidocq.mansart</groupId>
             <artifactId>mansart-data-dialect-h2</artifactId>
-            <version>1.0.0-SNAPSHOT</version>
+            <version>${mansart.version}</version>
             <scope>runtime</scope>
         </dependency>
 
@@ -117,14 +117,14 @@
                         <path>
                             <groupId>io.vidocq.vauban</groupId>
                             <artifactId>vauban-processor</artifactId>
-                            <version>0.1.0-SNAPSHOT</version>
+                            <version>${vauban.version}</version>
                         </path>
                         <!-- Mansart APT : _Entity metamodel + *RepositoryImpl
                              + META-INF/mansart-repositories.list (lu par le BCE mansart-data-cdi). -->
                         <path>
                             <groupId>io.vidocq.mansart</groupId>
                             <artifactId>mansart-data-processor</artifactId>
-                            <version>1.0.0-SNAPSHOT</version>
+                            <version>${mansart.version}</version>
                         </path>
                         <!-- mansart-data-cdi héberge la BuildCompatibleExtension et le @Produces
                              RepositoryRuntime. Sans la déclarer ici, le APT classloader (isolé par
@@ -133,7 +133,7 @@
                         <path>
                             <groupId>io.vidocq.mansart</groupId>
                             <artifactId>mansart-data-cdi</artifactId>
-                            <version>1.0.0-SNAPSHOT</version>
+                            <version>${mansart.version}</version>
                         </path>
                         <!-- mansart-transactions-cdi héberge la BuildCompatibleExtension qui
                              enregistre @TransactionScoped + déclare @Enhancement(TransactionScoped)
@@ -142,7 +142,7 @@
                         <path>
                             <groupId>io.vidocq.mansart</groupId>
                             <artifactId>mansart-transactions-cdi</artifactId>
-                            <version>1.0.0-SNAPSHOT</version>
+                            <version>${mansart.version}</version>
                         </path>
                     </annotationProcessorPaths>
                 </configuration>
