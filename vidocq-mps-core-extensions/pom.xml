@@ -20,6 +20,7 @@
         <subproject>vidocq-mps-mansart-pool-extension</subproject>
         <subproject>vidocq-mps-mansart-data-extension</subproject>
         <subproject>vidocq-mps-mansart-transactions-extension</subproject>
+        <subproject>vidocq-mps-knock-extension</subproject>
     </subprojects>
 
     <!--
