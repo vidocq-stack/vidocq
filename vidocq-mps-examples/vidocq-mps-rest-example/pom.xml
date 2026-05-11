@@ -95,14 +95,18 @@
     </build>
 
     <profiles>
-        <!-- Packaging final (jlink + jpackage + docker) — désactivé par défaut.
-             Activer avec `-Pdist` pour générer l'image native + image Docker.
-             Pourquoi ? jlink refuse les automatic modules (microprofile-config-api
-             3.1.1), donc tant que cette dépendance n'est pas patchée (moditect ou
-             remplacée par ravel-api), le packaging plante. Ces goals ne sont pas
-             nécessaires aux PR cross-repo qui valident juste compile + tests. -->
+        <!-- Packaging final (jlink + jpackage + docker) — actif par défaut.
+             Tous les jars de l'exemple (et ses dépendances transitives) sont
+             des modules JPMS nommés : `ravel-mp-config-api` fournit
+             `org.eclipse.microprofile.config` en module nommé, levant la
+             dernière limitation jlink historique.
+             Pour court-circuiter ces goals (CI rapide compile+tests uniquement),
+             utiliser `-P!dist` ou `-Dvidocq.jlink.skip=true`. -->
         <profile>
             <id>dist</id>
+            <activation>
+                <activeByDefault>true</activeByDefault>
+            </activation>
             <build>
                 <plugins>
                     <plugin>

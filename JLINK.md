@@ -432,7 +432,7 @@ ENTRYPOINT ["/opt/app/bin/<launcher>"]
 
 | # | Limitation | Workaround |
 |---|------------|------------|
-| 1 | Toute dépendance non-modulaire bloque `jlink` | Ajouter `module-info.java` ou utiliser `jdeps --generate-module-info` |
+| 1 | Toute dépendance non-modulaire bloque `jlink` | Ajouter `module-info.java` ou utiliser `jdeps --generate-module-info`. **Note** : l'API MicroProfile Config est livrée sous forme de module nommé `org.eclipse.microprofile.config` via `io.vidocq.ravel:ravel-mp-config-api` (substitut JPMS de `org.eclipse.microprofile.config:microprofile-config-api`, qui reste un automatic module en amont). |
 | 2 | Yasson + records → `title=null` round-trip POST/GET en module-path | Factory `@JsonbCreator` (cf. §6.2). Sera réglé par `cassini-jsonb` maison. |
 | 3 | macOS `app-image` refuse `appVersion=0.x.y` | Fixer `<appVersion>1.0.0</appVersion>` |
 | 4 | `--strip-debug` retire `LineNumberTable` (stack-traces moins lisibles) | `<stripDebug>false</stripDebug>` en dev, `true` en prod |
