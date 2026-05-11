@@ -95,6 +95,7 @@
         après installation locale du reactor.
     -->
     <subprojects>
+        <subproject>ravel-mp-config-api</subproject>
         <subproject>ravel-api</subproject>
         <subproject>ravel-core</subproject>
         <subproject>ravel-cdi-vauban</subproject>
@@ -112,11 +113,23 @@
                 <scope>import</scope>
             </dependency>
 
-            <!-- MicroProfile Config API -->
+            <!--
+                MicroProfile Config API — spec officielle Eclipse. N'est référencée
+                directement que par 'ravel-mp-config-api' qui la repackage avec un
+                module-info explicite (compatibilité jlink). Les autres modules Ravel
+                doivent dépendre de 'ravel-mp-config-api' à la place.
+            -->
             <dependency>
                 <groupId>org.eclipse.microprofile.config</groupId>
                 <artifactId>microprofile-config-api</artifactId>
                 <version>${microprofile.config.version}</version>
+            </dependency>
+
+            <!-- MicroProfile Config API repackagée avec module-info explicite (jlink-ready) -->
+            <dependency>
+                <groupId>io.vidocq.ravel</groupId>
+                <artifactId>ravel-mp-config-api</artifactId>
+                <version>${project.version}</version>
             </dependency>
 
             <!-- Jakarta APIs (utilisés par ravel-cdi-vauban uniquement) -->

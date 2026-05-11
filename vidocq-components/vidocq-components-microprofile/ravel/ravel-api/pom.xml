@@ -14,9 +14,14 @@
     <description>Re-exposition contrôlée de la spec MicroProfile Config 3.1 + SPI Ravel</description>
 
     <dependencies>
+        <!--
+            On référence le repackage modularisé (module-info explicite) au lieu de
+            la spec officielle, afin que ravel-api et ses consommateurs soient
+            compatibles jlink. Le nom de module reste 'org.eclipse.microprofile.config'.
+        -->
         <dependency>
-            <groupId>org.eclipse.microprofile.config</groupId>
-            <artifactId>microprofile-config-api</artifactId>
+            <groupId>io.vidocq.ravel</groupId>
+            <artifactId>ravel-mp-config-api</artifactId>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>

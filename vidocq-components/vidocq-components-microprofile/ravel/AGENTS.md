@@ -3,6 +3,7 @@
 ## Mission du dépôt
 - Ravel implémente **MicroProfile Config 3.1** en Java 25, avec **zéro librairie tierce d'implémentation** : seulement la spec MP Config dans `ravel-core`, Jakarta APIs uniquement côté CDI (`README.md`, `pom.xml`, `CLAUDE.md`).
 - Architecture JPMS stricte : `ravel-api` ré-exporte la spec, `ravel-core` reste standalone SE, `ravel-cdi-vauban` est un adaptateur optionnel, `ravel-tck` reste hors reactor.
+- **jlink-ready** : l'API MicroProfile Config d'origine n'ayant qu'un `Automatic-Module-Name`, le module `ravel-mp-config-api` la repackage avec un `module-info.class` explicite (nom de module conservé : `org.eclipse.microprofile.config`). Tous les autres modules dépendent de **ce repackage**, jamais directement de `org.eclipse.microprofile.config:microprofile-config-api` (sauf `ravel-tck` hors reactor).
 - Utiliser de préférence roadmap.md pour suivre l'avancement du projet plutot que de mettre à jour ce fichier, qui est destiné à être un guide de contribution pour les agents.
 - Si les règles de fichier doivent être mises à jour, penser à aligner claude.md de la même façon, pour que calude code puisse s'y référer facilement.
 

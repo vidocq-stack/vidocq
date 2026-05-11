@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.1.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.1.0 http://maven.apache.org/xsd/maven-4.1.0.xsd">
+    <modelVersion>4.1.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.ravel</groupId>
+        <artifactId>ravel-parent</artifactId>
+    </parent>
+
+    <artifactId>ravel-mp-config-api</artifactId>
+    <name>Ravel :: MicroProfile Config API (modularisé)</name>
+    <description>
+        Re-package de org.eclipse.microprofile.config:microprofile-config-api avec un
+        module-info.class explicite (nom : org.eclipse.microprofile.config). L'API officielle
+        ne fournit qu'un Automatic-Module-Name, ce qui empêche son utilisation directe avec
+        jlink. Cet artefact est l'unique source de la spec MP Config consommée par les
+        modules Ravel (ravel-api, ravel-core, ravel-bench) ; le TCK officiel (hors reactor)
+        continue d'utiliser l'API d'origine.
+    </description>
+
+    <dependencies>
+        <!--
+            La spec officielle est récupérée en 'provided' uniquement pour permettre
+            l'unpack de ses .class dans target/classes ; elle n'est pas exposée
+            transitivement aux consommateurs, qui reçoivent à la place le jar repackagé
+            avec son module-info explicite.
+        -->
+        <dependency>
+            <groupId>org.eclipse.microprofile.config</groupId>
+            <artifactId>microprofile-config-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- 1) Décompresse les .class de microprofile-config-api dans target/classes -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <version>3.8.1</version>
+                <executions>
+                    <execution>
+                        <id>unpack-microprofile-config-api</id>
+                        <phase>generate-resources</phase>
+                        <goals>
+                            <goal>unpack</goal>
+                        </goals>
+                        <configuration>
+                            <artifactItems>
+                                <artifactItem>
+                                    <groupId>org.eclipse.microprofile.config</groupId>
+                                    <artifactId>microprofile-config-api</artifactId>
+                                    <version>${microprofile.config.version}</version>
+                                    <outputDirectory>${project.build.outputDirectory}</outputDirectory>
+                                    <!--
+                                        On exclut le manifest et les méta Maven d'origine ;
+                                        maven-jar-plugin réécrira un manifest propre pour
+                                        notre artefact (sans Automatic-Module-Name, désormais
+                                        superflu : le module est explicite).
+                                    -->
+                                    <excludes>META-INF/MANIFEST.MF,META-INF/maven/**,META-INF/LICENSE,META-INF/NOTICE</excludes>
+                                </artifactItem>
+                            </artifactItems>
+                            <overWriteReleases>true</overWriteReleases>
+                            <overWriteSnapshots>true</overWriteSnapshots>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!--
+                2) Compile uniquement notre src/main/java/module-info.java en le patchant
+                   dans le module 'org.eclipse.microprofile.config' (les .class unpackés
+                   plus haut fournissent les packages exportés).
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <release>25</release>
+                    <compilerArgs combine.children="append">
+                        <arg>--patch-module</arg>
+                        <arg>org.eclipse.microprofile.config=${project.build.outputDirectory}</arg>
+                    </compilerArgs>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
+

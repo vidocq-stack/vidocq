@@ -24,8 +24,8 @@
             <artifactId>ravel-core</artifactId>
         </dependency>
         <dependency>
-            <groupId>org.eclipse.microprofile.config</groupId>
-            <artifactId>microprofile-config-api</artifactId>
+            <groupId>io.vidocq.ravel</groupId>
+            <artifactId>ravel-mp-config-api</artifactId>
         </dependency>
 
         <!-- Concurrent : Smallrye Config (référence MP Config) -->

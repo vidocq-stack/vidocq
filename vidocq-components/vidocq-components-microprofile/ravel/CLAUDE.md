@@ -93,6 +93,11 @@ ravel-tck          ← Runner TCK officiel MicroProfile Config 3.1 (HORS reactor
 6. **Détection de cycle dans les property expressions** : une expression qui se référence elle-même
    (directement ou indirectement) doit lever `IllegalArgumentException`, pas boucler infiniment.
 7. **TCK MicroProfile Config 3.1 PASS à 100 %** est un contrat avant tout merge structurel.
+8. **jlink-ready** : aucune dépendance Ravel (hors `ravel-tck`) ne référence directement
+   `org.eclipse.microprofile.config:microprofile-config-api`. Le repackage `ravel-mp-config-api`
+   est l'unique source modulaire de la spec — il fournit un `module-info.class` explicite
+   (nom `org.eclipse.microprofile.config`) que jlink sait intégrer dans un runtime image,
+   contrairement au jar d'origine qui n'a qu'un `Automatic-Module-Name`.
 
 ## Conventions
 
