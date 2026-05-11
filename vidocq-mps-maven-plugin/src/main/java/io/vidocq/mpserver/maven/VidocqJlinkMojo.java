@@ -82,9 +82,8 @@ public class VidocqJlinkMojo extends AbstractMojo {
 
     /**
      * Skip de l'exécution complète du goal jlink (défaut : false).
-     * Utile en CI pour valider d'abord le mécanisme de PR cross-repo sans bloquer
-     * sur des dépendances qui sont encore des automatic modules
-     * (ex. microprofile-config-api avant moditect).
+     * Utile en CI pour court-circuiter le packaging quand une dépendance reste
+     * temporairement un automatic module en attendant son passage à JPMS.
      */
     @Parameter(defaultValue = "false", property = "vidocq.jlink.skip")
     private boolean skip;
