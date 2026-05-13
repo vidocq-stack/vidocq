@@ -1,0 +1,162 @@
+= Property Expressions
+:description: Using property expressions to reference and compose configuration values.
+
+== Overview
+
+Property expressions allow you to reference other configuration properties within a value using the `${key}` syntax. This is evaluated **before** type conversion and provides composition and defaults.
+
+== Basic syntax
+
+=== Reference another property
+
+[source,properties]
+----
+app.name=MyApp
+app.full.name=${app.name} v2.0
+----
+
+[source,java]
+----
+String fullName = config.getValue("app.full.name", String.class);
+// Result: "MyApp v2.0"
+----
+
+=== With default value
+
+[source,properties]
+----
+app.name=MyApp
+app.full.name=${app.name} ${app.version:1.0.0}
+----
+
+[source,java]
+----
+String fullName = config.getValue("app.full.name", String.class);
+// If app.version is not defined, defaults to "1.0.0"
+// Result: "MyApp 1.0.0"
+----
+
+== Complex expressions
+
+Combine multiple references in a single value:
+
+[source,properties]
+----
+app.db.host=localhost
+app.db.port=5432
+app.db.name=mydb
+app.db.url=jdbc:postgresql://${app.db.host}:${app.db.port}/${app.db.name}
+----
+
+[source,java]
+----
+String dbUrl = config.getValue("app.db.url", String.class);
+// Result: "jdbc:postgresql://localhost:5432/mydb"
+----
+
+== Expressions with profiles
+
+Expressions are resolved after profile matching:
+
+[source,properties]
+----
+# Base configuration
+app.db.host=prod-db.example.com
+%dev.app.db.host=localhost
+
+# Expression uses the resolved value
+app.db.url=jdbc:postgresql://${app.db.host}:5432/mydb
+----
+
+[source,bash]
+----
+java -Dmp.config.profile=dev MyApplication
+----
+
+[source,java]
+----
+String dbUrl = config.getValue("app.db.url", String.class);
+// With dev profile active: resolved host is "localhost"
+// Result: "jdbc:postgresql://localhost:5432/mydb"
+----
+
+== Cycle detection
+
+If a property expression references itself (directly or indirectly), an `IllegalArgumentException` is thrown:
+
+[source,properties]
+----
+# Direct cycle
+app.value=${app.value}
+
+# Indirect cycle
+app.a=${app.b}
+app.b=${app.a}
+----
+
+[source,java]
+----
+try {
+    config.getValue("app.value", String.class);
+} catch (IllegalArgumentException e) {
+    System.err.println("Cycle detected: " + e.getMessage());
+}
+----
+
+Ravel detects cycles using a `ScopedValue<Set<String>>` to track currently-resolving keys.
+
+== Performance notes
+
+* **Lazy evaluation** — expressions are resolved only when the value is requested
+* **No repeated resolution** — the same expression within a single lookup is not re-evaluated
+* **Thread-safe** — `ScopedValue` is virtual-thread-friendly and supports structured concurrency
+
+== Examples
+
+=== Multi-level composition
+
+[source,properties]
+----
+company=Acme
+department=Engineering
+team.email=${company}-${department}@example.com
+----
+
+Result: `team.email` = `Acme-Engineering@example.com`
+
+=== Feature flags with defaults
+
+[source,properties]
+----
+app.features.cache=true
+app.cache.ttl=${app.cache.ttl:3600}
+app.cache.maxsize=${app.cache.maxsize:1000}
+----
+
+=== Environment-specific URLs
+
+[source,properties]
+----
+# Base
+app.api.scheme=https
+app.api.host=api.example.com
+app.api.port=443
+app.api.url=${app.api.scheme}://${app.api.host}:${app.api.port}/v1
+
+# Dev override
+%dev.app.api.scheme=http
+%dev.app.api.host=localhost
+%dev.app.api.port=8080
+----
+
+Result (dev profile):
+- `${app.api.scheme}` → `http`
+- `${app.api.host}` → `localhost`
+- `${app.api.port}` → `8080`
+- `app.api.url` → `http://localhost:8080/v1`
+
+== Next
+
+* xref:config-profiles.adoc[Config Profiles] — environment-specific configuration
+* xref:cdi-integration.adoc[CDI Integration] — inject resolved values
+

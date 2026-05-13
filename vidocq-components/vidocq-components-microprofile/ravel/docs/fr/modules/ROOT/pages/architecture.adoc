@@ -1,0 +1,180 @@
+= Architecture
+:description: Conception et architecture interne de Ravel.
+
+== Vue d'ensemble
+
+Ravel implémente MicroProfile Config 3.1 avec ces principes :
+
+* **Zéro dépendance externe** — seulement `org.eclipse.microprofile.config`
+* **JPMS strict** — tous les modules ont un `module-info` explicite, pas de module automatique
+* **Prête pour jlink** — peut être incluse dans des images JDK personnalisées via `jlink`
+* **Compatible virtual threads** — pas de `synchronized` ou `ThreadLocal`, utilise `ScopedValue` pour le contexte
+
+== Structure des modules
+
+[mermaid]
+....
+flowchart LR
+    A["ravel-api<br/>(org.eclipse.microprofile.config + SPI public)"]
+    C["ravel-core<br/>(ConfigProvider, Config, ConfigSources,<br/>Converters, Profils, Expressions)"]
+    V["ravel-cdi-vauban<br/>(@ConfigProperty, intégration CDI)"]
+    M["ravel-mp-config-api<br/>(API MicroProfile Config repackagée<br/>avec module-info)"]
+
+    A -->|ré-exporte| M
+    C -->|dépend de| A
+    V -->|dépend de| C
+    V -->|dépend de| CDI["jakarta.cdi"]
+....
+
+=== ravel-mp-config-api
+
+**Couche de repackaging intermédiaire.** Le JAR `microprofile-config-api` original ne possède qu'une entrée `Automatic-Module-Name` dans le manifest, pas de `module-info.class` approprié. Ce module :
+
+* Décompresse le JAR original
+* Compile un nouveau `module-info.java` avec le même nom de module (`org.eclipse.microprofile.config`)
+* Produit un JAR que `jlink` peut consommer directement
+
+Tous les autres modules Ravel dépendent de ce JAR repackagé, pas directement de la spec MicroProfile.
+
+=== ravel-api
+
+**Ré-export de l'API publique.** Expose les interfaces de la spec MicroProfile Config :
+
+* `ConfigProvider` — point d'entrée
+* `Config` — interface d'accès à la configuration
+* `ConfigSource`, `ConfigSourceProvider` — SPI pour les sources personnalisées
+* `Converter` — SPI de conversion de types
+* `ConfigBuilder` — configuration programmatique
+
+Déclare également :
+
+```java
+uses org.eclipse.microprofile.config.spi.ConfigSource;
+uses org.eclipse.microprofile.config.spi.ConfigSourceProvider;
+uses org.eclipse.microprofile.config.spi.Converter;
+```
+
+=== ravel-core
+
+**Cœur d'implémentation.** Contient toute la logique métier :
+
+* **`RavelConfigProviderResolver`** — résolveur basé sur `ServiceLoader` pour `ConfigProviderResolver`
+* **`RavelConfigBuilder`** — implémentation du builder
+* **`RavelConfig`** — objet config principal (immuable, thread-safe)
+* **Implémentations built-in de `ConfigSource`** — propriétés système, variables d'environnement, `microprofile-config.properties`
+* **Registre `Converter`** — convertisseurs built-in pour primitifs, collections, types temporels, etc.
+* **`ExpressionResolver`** — évaluation des expressions de propriété avec détection de cycle
+* **`ProfiledConfigSource`** — encapsulation de sources avec awareness des profils
+
+Pas de dépendances externes. Peut être utilisé standalone sans CDI.
+
+=== ravel-cdi-vauban
+
+**Intégration CDI.** Fournit :
+
+* **Traitement des annotations `@ConfigProperty`** — via l'extension Build-Compatible xref:vauban::index.adoc[Vauban]
+* **Injection de valeurs de configuration** — y compris le support de `Optional<T>`
+* **Validation au déploiement** — lancée en tant que `DeploymentException` si la config est manquante
+
+Dépend de `ravel-core` + `jakarta.cdi`. Optionnel ; s'il n'est pas sur le classpath, l'injection CDI ne fonctionnera simplement pas, mais `ravel-core` continue de fonctionner.
+
+== Flux de lookup
+
+[source]
+----
+ConfigProvider.getConfig()
+  └─> RavelConfigProviderResolver (ServiceLoader)
+      └─> RavelConfigBuilder.build()
+          └─> constructeur RavelConfig
+              ├─ Charger ConfigSources (ServiceLoader + built-in)
+              ├─ Trier par ordinal (décroissant)
+              └─ Initialiser paresseusement le cache des convertisseurs dérivés
+
+config.getValue("key", String.class)
+  └─> RavelConfig.getValue()
+      ├─ Cascade via ConfigSources par ordinal
+      │  ├─ SystemPropertiesConfigSource (ordinal 400)
+      │  ├─ EnvironmentVariablesConfigSource (ordinal 300)
+      │  ├─ MicroprofilePropertiesConfigSource (ordinal 100)
+      │  └─ ConfigSources personnalisés (SPI)
+      ├─ Résoudre les expressions de propriété (${key}, ${key:default})
+      │  └─ Détecter les cycles via ScopedValue<Set<String>>
+      ├─ Correspondance des profils de configuration (%dev., %prod., %test.)
+      ├─ Trouver le Converter<String> correspondant (priorité 1 : built-in)
+      └─ Retourner la valeur convertie ou lever NoSuchElementException
+----
+
+== Résolution des expressions de propriété
+
+La valeur brute d'une source de configuration peut contenir des expressions comme `${app.name}` ou `${app.version:1.0}`. Ces sont résolues **avant** la conversion de type :
+
+1. **Valeur brute** : `${app.name} v${app.version:1.0}`
+2. **Analyser les expressions** : trouver tous les motifs `${...}`
+3. **Résoudre récursivement chaque référence** avec détection de cycle
+4. **Remplacer** par les valeurs résolues
+5. **Résultat** : `MyApp v2.0` (puis convertir au type cible)
+
+La détection de cycle utilise `ScopedValue<Set<String>>` pour suivre les clés en cours de résolution. Si une clé apparaît deux fois dans la pile, une `IllegalArgumentException` est levée.
+
+== Correspondance des profils de configuration
+
+Les profils de configuration sont activés via la propriété système `mp.config.profile` :
+
+[source,bash]
+----
+java -Dmp.config.profile=dev MyApplication
+----
+
+Lorsqu'un profil est actif :
+
+1. **`ProfiledConfigSource` encapsule chaque source** avec ordinal +1
+2. **Les clés sont appairées en tant que `%{profile}.{clé-originale}`**
+3. **S'il ne la trouve pas, elle bascule à la clé originale**
+4. **Les profils sont résolus au moment de la lookup**, pas au moment de la compilation
+
+Exemple :
+
+[source,properties]
+----
+app.debug=false
+%dev.app.debug=true
+%prod.app.port=8443
+----
+
+Avec `mp.config.profile=dev` :
+- `app.debug` → vérifie d'abord `%dev.app.debug` (trouvé : `true`) → retourne `true`
+- `app.port` → vérifie `%dev.app.port` (non trouvé), bascule à `app.port` (non trouvé) → `NoSuchElementException`
+
+Avec `mp.config.profile=prod` :
+- `app.port` → vérifie `%prod.app.port` (trouvé : `8443`) → retourne `8443`
+- `app.debug` → vérifie `%prod.app.debug` (non trouvé), bascule à `app.debug` (trouvé : `false`) → retourne `false`
+
+== Conversion de types
+
+Ravel utilise une recherche de convertisseur à trois niveaux :
+
+. **Convertisseurs built-in** (priorité 1) — primitifs, collections, types temporels, types de la stdlib
+. **Convertisseurs implicites** (priorité 2) — types avec constructeur `String` public ou méthodes `valueOf(String)` / `parse(CharSequence)`
+. **Convertisseurs personnalisés** (priorité > 2) — enregistrés par l'utilisateur via `ConfigBuilder.withConverter()` ou ServiceLoader
+
+Si aucun convertisseur n'est trouvé, une `IllegalArgumentException` est levée.
+
+== Sécurité des threads
+
+* **`RavelConfig` est immuable et thread-safe** — peut être partagé en toute sécurité entre les threads
+* **`ConfigProvider.getConfig()` retourne une instance mise en cache** — même objet `Config` lors des appels répétés
+* **Pas de blocs `synchronized` ou `ThreadLocal`** — utilise `ScopedValue` pour le contexte (p. ex., pile de résolution d'expressions)
+* **`ConcurrentHashMap` pour le cache des convertisseurs dérivés** — accès concurrent sécurisé aux convertisseurs initialisés paresseusement
+
+== Considérations de performance
+
+* **Initialisation paresseuse** — les convertisseurs ne sont pas instanciés jusqu'à la première utilisation
+* **Découverte SPI via `ServiceLoader`** — une seule fois au démarrage, puis mise en cache
+* **Les sources de configuration sont ordonnées par ordinal** — la lookup court-circuite au premier résultat
+* **Conversion de tableaux et collections** — division et conversion à la demande, mises en cache dans `RavelConfig.derivedConverters`
+
+== Suivant
+
+* xref:config-sources.adoc[Sources de configuration] — comment implémenter des sources personnalisées
+* xref:type-converters.adoc[Convertisseurs de types] — comment implémenter des convertisseurs personnalisés
+

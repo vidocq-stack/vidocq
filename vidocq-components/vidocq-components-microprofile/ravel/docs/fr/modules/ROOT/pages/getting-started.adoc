@@ -1,0 +1,200 @@
+= Prise en main
+:description: Installation et première utilisation de Ravel.
+
+== Prérequis
+
+* Java 25+
+* Maven 4.0.0 ou plus récent (ou Gradle)
+
+== Installation
+
+Ajoutez Ravel à votre `pom.xml` :
+
+[source,xml]
+----
+<dependencies>
+    <dependency>
+        <groupId>io.vidocq.ravel</groupId>
+        <artifactId>ravel-api</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </dependency>
+</dependencies>
+----
+
+Pour l'intégration CDI (optionnel), ajoutez également :
+
+[source,xml]
+----
+<dependency>
+    <groupId>io.vidocq.ravel</groupId>
+    <artifactId>ravel-cdi-vauban</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+</dependency>
+----
+
+== Première lecture de configuration
+
+La façon la plus simple de commencer est d'utiliser `ConfigProvider` :
+
+[source,java]
+----
+import org.eclipse.microprofile.config.ConfigProvider;
+import org.eclipse.microprofile.config.Config;
+
+public class Main {
+    public static void main(String[] args) {
+        Config config = ConfigProvider.getConfig();
+
+        // Récupérer une valeur de chaîne requise
+        String appName = config.getValue("app.name", String.class);
+        System.out.println("App: " + appName);
+
+        // Récupérer une valeur optionnelle
+        Optional<String> appVersion = config.getOptionalValue("app.version", String.class);
+        System.out.println("Version: " + appVersion.orElse("1.0.0"));
+
+        // Récupérer un entier
+        int port = config.getValue("app.port", Integer.class);
+        System.out.println("Port: " + port);
+    }
+}
+----
+
+== Sources de configuration
+
+Ravel cherche la configuration dans cet ordre (ordinal décroissant) :
+
+1. **Propriétés système** (ordinal 400) — défini via `-Dkey=value`
+2. **Variables d'environnement** (ordinal 300) — `PATH`, `USER`, etc., automatiquement traduites en clés de config
+3. **`microprofile-config.properties`** (ordinal 100) — fichier dans `META-INF/` du classpath
+
+=== Propriétés système
+
+[source,bash]
+----
+java -Dapp.name="My App" -Dapp.port=8080 MyApplication
+----
+
+[source,java]
+----
+Config config = ConfigProvider.getConfig();
+String appName = config.getValue("app.name", String.class);
+// Résultat : "My App"
+----
+
+=== Variables d'environnement
+
+[source,bash]
+----
+export APP_NAME="My App"
+export APP_PORT=8080
+java MyApplication
+----
+
+Ravel mappe automatiquement :
+- `APP_NAME` → `app.name`
+- `APP_PORT` → `app.port`
+- `my_property` → `my.property`
+
+[source,java]
+----
+Config config = ConfigProvider.getConfig();
+String appName = config.getValue("app.name", String.class);
+// Résultat : "My App"
+----
+
+=== microprofile-config.properties
+
+Créez un fichier `src/main/resources/META-INF/microprofile-config.properties` :
+
+[source,properties]
+----
+app.name=My App
+app.port=8080
+app.debug=false
+----
+
+== Conversion de types
+
+Ravel supporte de nombreux types built-in :
+
+[source,java]
+----
+Config config = ConfigProvider.getConfig();
+
+// Primitifs et boxés
+int port = config.getValue("app.port", int.class);
+Integer portBox = config.getValue("app.port", Integer.class);
+
+// Collections
+List<String> items = config.getValue("app.items", List.class);
+Set<Integer> ids = config.getValue("app.ids", Set.class);
+
+// Types temporels
+Duration timeout = config.getValue("app.timeout", Duration.class);
+LocalDate startDate = config.getValue("app.start", LocalDate.class);
+
+// Types personnalisés
+MyCustomType value = config.getValue("app.custom", MyCustomType.class);
+----
+
+Voir xref:type-converters.adoc[Convertisseurs de types] pour la liste complète des convertisseurs built-in.
+
+== Expressions de propriété
+
+Utilisez `${key}` pour référencer d'autres propriétés :
+
+[source,properties]
+----
+app.name=MyApp
+app.full.name=${app.name} v2.0
+----
+
+[source,java]
+----
+String fullName = config.getValue("app.full.name", String.class);
+// Résultat : "MyApp v2.0"
+----
+
+Utilisez `${key:default}` pour fournir un repli :
+
+[source,properties]
+----
+app.full.name=${app.name} ${app.version:1.0.0}
+----
+
+Voir xref:property-expressions.adoc[Expressions de propriété] pour plus de détails.
+
+== Profils de configuration
+
+Utilisez des préfixes pour basculer la configuration par environnement :
+
+[source,properties]
+----
+app.name=MyApp
+app.debug=false
+
+# Surcharges de développement
+%dev.app.debug=true
+%dev.app.port=9000
+
+# Surcharges de production
+%prod.app.port=8443
+%prod.app.debug=false
+----
+
+Activez le profil `dev` :
+
+[source,bash]
+----
+java -Dmp.config.profile=dev MyApplication
+----
+
+Voir xref:config-profiles.adoc[Profils de configuration] pour plus de détails.
+
+== Étapes suivantes
+
+* xref:architecture.adoc[Architecture] — comprendre la conception
+* xref:config-sources.adoc[Sources de configuration] — sources personnalisées via SPI
+* xref:cdi-integration.adoc[Intégration CDI] — utiliser `@ConfigProperty`
+

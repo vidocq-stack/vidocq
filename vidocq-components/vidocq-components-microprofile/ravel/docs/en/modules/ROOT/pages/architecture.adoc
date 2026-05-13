@@ -1,0 +1,180 @@
+= Architecture
+:description: Design and internal architecture of Ravel.
+
+== Overview
+
+Ravel implements MicroProfile Config 3.1 with these principles:
+
+* **Zero external dependencies** — only `org.eclipse.microprofile.config`
+* **JPMS strict** — all modules have explicit `module-info`, no automatic modules
+* **jlink-ready** — can be included in custom JDK images via `jlink`
+* **Virtual thread–friendly** — no `synchronized` or `ThreadLocal`, uses `ScopedValue` for context
+
+== Module structure
+
+[mermaid]
+....
+flowchart LR
+    A["ravel-api<br/>(org.eclipse.microprofile.config + public SPI)"]
+    C["ravel-core<br/>(ConfigProvider, Config, ConfigSources,<br/>Converters, Profiles, Expressions)"]
+    V["ravel-cdi-vauban<br/>(@ConfigProperty, CDI integration)"]
+    M["ravel-mp-config-api<br/>(MicroProfile Config API repackaged<br/>with module-info)"]
+
+    A -->|re-exports| M
+    C -->|depends on| A
+    V -->|depends on| C
+    V -->|depends on| CDI["jakarta.cdi"]
+....
+
+=== ravel-mp-config-api
+
+**Intermediate repackaging layer.** The original `microprofile-config-api` JAR only has an `Automatic-Module-Name` manifest entry, not a proper `module-info.class`. This module:
+
+* Unpacks the original JAR
+* Compiles a new `module-info.java` with the same module name (`org.eclipse.microprofile.config`)
+* Produces a JAR that `jlink` can consume directly
+
+All other Ravel modules depend on this repackaged JAR, not directly on the MicroProfile spec.
+
+=== ravel-api
+
+**Public API re-export.** Exposes the MicroProfile Config spec interfaces:
+
+* `ConfigProvider` — entry point
+* `Config` — configuration access interface
+* `ConfigSource`, `ConfigSourceProvider` — SPI for custom sources
+* `Converter` — type conversion SPI
+* `ConfigBuilder` — programmatic configuration
+
+Also declares:
+
+```java
+uses org.eclipse.microprofile.config.spi.ConfigSource;
+uses org.eclipse.microprofile.config.spi.ConfigSourceProvider;
+uses org.eclipse.microprofile.config.spi.Converter;
+```
+
+=== ravel-core
+
+**Implementation core.** Contains all business logic:
+
+* **`RavelConfigProviderResolver`** — `ServiceLoader`-based resolver for `ConfigProviderResolver`
+* **`RavelConfigBuilder`** — builder implementation
+* **`RavelConfig`** — main config object (immutable, thread-safe)
+* **Built-in `ConfigSource` implementations** — system properties, environment variables, `microprofile-config.properties`
+* **`Converter` registry** — built-in converters for primitives, collections, temporal types, etc.
+* **`ExpressionResolver`** — property expression evaluation with cycle detection
+* **`ProfiledConfigSource`** — profile-aware wrapping of sources
+
+No external dependencies. Can be used standalone without CDI.
+
+=== ravel-cdi-vauban
+
+**CDI integration.** Provides:
+
+* **`@ConfigProperty` annotation processing** — via xref:vauban::index.adoc[Vauban] Build-Compatible Extension
+* **Injection of configuration values** — including `Optional<T>` support
+* **Deployment-time validation** — thrown as `DeploymentException` if config is missing
+
+Depends on `ravel-core` + `jakarta.cdi`. Optional; if not on classpath, CDI injection simply won't work, but `ravel-core` continues to function.
+
+== Lookup flow
+
+[source]
+----
+ConfigProvider.getConfig()
+  └─> RavelConfigProviderResolver (ServiceLoader)
+      └─> RavelConfigBuilder.build()
+          └─> RavelConfig constructor
+              ├─ Load ConfigSources (ServiceLoader + built-in)
+              ├─ Sort by ordinal (descending)
+              └─ Lazy-initialize derived converters cache
+
+config.getValue("key", String.class)
+  └─> RavelConfig.getValue()
+      ├─ Cascade through ConfigSources by ordinal
+      │  ├─ SystemPropertiesConfigSource (ordinal 400)
+      │  ├─ EnvironmentVariablesConfigSource (ordinal 300)
+      │  ├─ MicroprofilePropertiesConfigSource (ordinal 100)
+      │  └─ Custom ConfigSources (SPI)
+      ├─ Resolve property expressions (${key}, ${key:default})
+      │  └─ Detect cycles via ScopedValue<Set<String>>
+      ├─ Match config profiles (%dev., %prod., %test.)
+      ├─ Find matching Converter<String> (priority 1: built-in)
+      └─ Return converted value or throw NoSuchElementException
+----
+
+== Property expression resolution
+
+The raw value from a config source may contain expressions like `${app.name}` or `${app.version:1.0}`. These are resolved **before** type conversion:
+
+1. **Raw value**: `${app.name} v${app.version:1.0}`
+2. **Parse expressions**: find all `${...}` patterns
+3. **Recursively resolve each reference** with cycle detection
+4. **Replace** with resolved values
+5. **Result**: `MyApp v2.0` (then converted to target type)
+
+Cycle detection uses `ScopedValue<Set<String>>` to track currently-resolving keys. If a key appears twice in the stack, `IllegalArgumentException` is thrown.
+
+== Configuration profile matching
+
+Config profiles are activated via system property `mp.config.profile`:
+
+[source,bash]
+----
+java -Dmp.config.profile=dev MyApplication
+----
+
+When a profile is active:
+
+1. **`ProfiledConfigSource` wraps each source** with ordinal +1
+2. **Keys are matched as `%{profile}.{original-key}`**
+3. **If not found, falls back to original key**
+4. **Profiles are resolved at lookup time**, not build time
+
+Example:
+
+[source,properties]
+----
+app.debug=false
+%dev.app.debug=true
+%prod.app.port=8443
+----
+
+With `mp.config.profile=dev`:
+- `app.debug` → first checks `%dev.app.debug` (found: `true`) → returns `true`
+- `app.port` → checks `%dev.app.port` (not found), falls back to `app.port` (not found) → `NoSuchElementException`
+
+With `mp.config.profile=prod`:
+- `app.port` → checks `%prod.app.port` (found: `8443`) → returns `8443`
+- `app.debug` → checks `%prod.app.debug` (not found), falls back to `app.debug` (found: `false`) → returns `false`
+
+== Type conversion
+
+Ravel uses a three-tier converter lookup:
+
+. **Built-in converters** (priority 1) — primitives, collections, temporal types, standard library types
+. **Implicit converters** (priority 2) — types with public `String` constructor or `valueOf(String)` / `parse(CharSequence)` methods
+. **Custom converters** (priority > 2) — user-registered via `ConfigBuilder.withConverter()` or ServiceLoader
+
+If no converter matches, `IllegalArgumentException` is thrown.
+
+== Thread safety
+
+* **`RavelConfig` is immutable and thread-safe** — can be safely shared across threads
+* **`ConfigProvider.getConfig()` returns a cached instance** — same `Config` object on repeated calls
+* **No `synchronized` blocks or `ThreadLocal`** — uses `ScopedValue` for context (e.g., expression resolution stack)
+* **`ConcurrentHashMap` for derived converters cache** — safe concurrent access to lazy-initialized converters
+
+== Performance considerations
+
+* **Lazy initialization** — converters are not instantiated until first use
+* **SPI discovery via `ServiceLoader`** — once at startup, then cached
+* **Configuration sources are ordered by ordinal** — lookup short-circuits on first match
+* **Array and collection conversion** — split and convert on demand, cached in `RavelConfig.derivedConverters`
+
+== Next
+
+* xref:config-sources.adoc[Config Sources] — how to implement custom sources
+* xref:type-converters.adoc[Type Converters] — how to implement custom converters
+

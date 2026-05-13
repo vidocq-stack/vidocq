@@ -1,0 +1,219 @@
+= Convertisseurs de types
+:description: Convertisseurs de types built-in et comment implémenter des convertisseurs personnalisés.
+
+== Convertisseurs built-in
+
+Ravel fournit des convertisseurs (priorité 1) pour ces types, appliqués automatiquement pendant `config.getValue()` et `config.getOptionalValue()` :
+
+[cols="1,3"]
+|===
+| Type | Comportement
+
+| `String`, `CharSequence`
+| Pass-through (pas de conversion)
+
+| `boolean`, `Boolean`
+| Valeurs truthy : `true`, `1`, `yes`, `y`, `on` (insensible à la casse) → `true` ; tous les autres → `false`
+
+| `byte`, `short`, `int`, `long`, `Byte`, `Short`, `Integer`, `Long`
+| Via `Integer.parseInt()`, `Long.parseLong()`, etc.
+
+| `float`, `double`, `Float`, `Double`
+| Via `Float.parseFloat()`, `Double.parseDouble()`
+
+| `java.net.URL`
+| Via `new URL(string)`
+
+| `java.net.URI`
+| Via `URI.create(string)`
+
+| `java.net.InetAddress`
+| Via `InetAddress.getByName(string)`
+
+| `java.util.Optional<T>`, `OptionalInt`, `OptionalLong`, `OptionalDouble`
+| Convertit la valeur en `T`, puis l'enveloppe dans le type optionnel
+
+| `java.time.Duration`
+| Format ISO-8601 : `PT1H30M`, `PT45S`, `1800000ms`, etc.
+
+| `java.time.Period`
+| Format ISO-8601 : `P1Y2M3D`, `P30D`, etc.
+
+| `java.time.LocalDate`
+| Format ISO : `2024-05-13`
+
+| `java.time.LocalTime`
+| Format ISO : `14:30:00`
+
+| `java.time.LocalDateTime`
+| Format ISO : `2024-05-13T14:30:00`
+
+| `java.time.OffsetTime`
+| Format ISO : `14:30:00+02:00`
+
+| `java.time.OffsetDateTime`
+| Format ISO : `2024-05-13T14:30:00+02:00`
+
+| `java.time.ZonedDateTime`
+| Format ISO : `2024-05-13T14:30:00+02:00[Europe/Paris]`
+
+| `java.time.Instant`
+| Format ISO : `2024-05-13T12:30:00Z`
+
+| `java.lang.Class<?>`
+| Via `Class.forName(string)`
+
+| Types Enum
+| Correspondance par nom de constante d'énumération (sensible à la casse)
+
+| `List<T>`, `Set<T>`, `Iterable<T>`
+| CSV : valeurs séparées par des virgules, converties en liste de `T`
+|===
+
+== Tableaux
+
+[source,java]
+----
+// microprofile-config.properties
+app.items=foo,bar,baz
+app.ids=1,2,3,4
+
+// Code
+String[] items = config.getValue("app.items", String[].class);
+// Résultat : ["foo", "bar", "baz"]
+
+Integer[] ids = config.getValue("app.ids", Integer[].class);
+// Résultat : [1, 2, 3, 4]
+----
+
+== Collections
+
+[source,java]
+----
+List<String> items = config.getValue("app.items", List.class);
+Set<Integer> ids = config.getValue("app.ids", Set.class);
+Collection<Duration> timeouts = config.getValue("app.timeouts", Collection.class);
+----
+
+== Convertisseurs implicites
+
+Si un type ne dispose pas d'un convertisseur built-in, Ravel tente d'utiliser un **convertisseur implicite** (priorité 2) :
+
+1. **Constructeur public prenant `String`** : `new MyType(string)`
+2. **Méthode statique `valueOf(String)`** : `MyType.valueOf(string)`
+3. **Méthode statique `parse(CharSequence)`** : `MyType.parse(charseq)`
+
+[source,java]
+----
+public class MyDuration {
+    private final long millis;
+
+    // Ce constructeur public permet la conversion implicite
+    public MyDuration(String iso8601) {
+        this.millis = Duration.parse("PT" + iso8601).toMillis();
+    }
+}
+
+// microprofile-config.properties
+app.timeout=1H30M
+
+// Code
+MyDuration timeout = config.getValue("app.timeout", MyDuration.class);
+// Appelle en interne : new MyDuration("1H30M")
+----
+
+== Convertisseurs personnalisés
+
+Enregistrez un `Converter<T>` personnalisé pour les types non couverts par les convertisseurs built-in ou implicites :
+
+[source,java]
+----
+import org.eclipse.microprofile.config.spi.Converter;
+
+public class ColorConverter implements Converter<Color> {
+
+    @Override
+    public Color convert(String value) {
+        if (value == null || value.isEmpty()) {
+            throw new IllegalArgumentException("Color cannot be empty");
+        }
+
+        if (value.startsWith("#")) {
+            // Format hexadécimal : #RRGGBB
+            return Color.decode(value);
+        } else if (value.equalsIgnoreCase("red")) {
+            return Color.RED;
+        } else if (value.equalsIgnoreCase("green")) {
+            return Color.GREEN;
+        } else if (value.equalsIgnoreCase("blue")) {
+            return Color.BLUE;
+        }
+
+        throw new IllegalArgumentException("Unknown color: " + value);
+    }
+}
+----
+
+=== S'enregistrer via ServiceLoader
+
+Créez `META-INF/services/org.eclipse.microprofile.config.spi.Converter` :
+
+[source,text]
+----
+com.example.ColorConverter
+----
+
+=== S'enregistrer programmatiquement
+
+[source,java]
+----
+ConfigBuilder builder = new RavelConfigBuilder();
+builder.withConverter(Color.class, new ColorConverter());
+Config config = builder.build();
+----
+
+== Priorité des convertisseurs
+
+Lors de la résolution d'un type, Ravel applique les convertisseurs dans cet ordre :
+
+1. **Convertisseurs built-in** (priorité 1)
+2. **Convertisseurs implicites** (priorité 2)
+3. **Convertisseurs personnalisés via ServiceLoader** (priorité >= 3)
+4. **Convertisseurs de `ConfigBuilder.withConverter()`** (priorité la plus élevée)
+
+Le premier convertisseur qui déclare gérer le type est utilisé. Si aucun ne correspond, une `IllegalArgumentException` est levée.
+
+== Exemple : Convertisseur JSON
+
+[source,java]
+----
+public class JsonConverter<T> implements Converter<T> {
+
+    private final ObjectMapper mapper;
+    private final Class<T> targetType;
+
+    public JsonConverter(Class<T> type) {
+        this.targetType = type;
+        this.mapper = new ObjectMapper(); // ou votre bibliothèque de sérialisation
+    }
+
+    @Override
+    public T convert(String value) {
+        try {
+            return mapper.readValue(value, targetType);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Invalid JSON for " + targetType.getName(), e);
+        }
+    }
+}
+
+// Usage
+MyConfigClass config = configProvider.getConfig()
+    .getValue("app.config.json", MyConfigClass.class);
+----
+
+== Suivant
+
+* xref:property-expressions.adoc[Expressions de propriété] — référencer d'autres valeurs de configuration
+* xref:cdi-integration.adoc[Intégration CDI] — injecter les valeurs converties via `@ConfigProperty`
+

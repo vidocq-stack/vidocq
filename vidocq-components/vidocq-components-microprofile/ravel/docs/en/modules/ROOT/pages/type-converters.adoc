@@ -1,0 +1,219 @@
+= Type Converters
+:description: Built-in type converters and how to implement custom converters.
+
+== Built-in converters
+
+Ravel provides converters (priority 1) for these types, automatically applied during `config.getValue()` and `config.getOptionalValue()`:
+
+[cols="1,3"]
+|===
+| Type | Behavior
+
+| `String`, `CharSequence`
+| Pass-through (no conversion)
+
+| `boolean`, `Boolean`
+| Truthy values: `true`, `1`, `yes`, `y`, `on` (case-insensitive) → `true`; all others → `false`
+
+| `byte`, `short`, `int`, `long`, `Byte`, `Short`, `Integer`, `Long`
+| Via `Integer.parseInt()`, `Long.parseLong()`, etc.
+
+| `float`, `double`, `Float`, `Double`
+| Via `Float.parseFloat()`, `Double.parseDouble()`
+
+| `java.net.URL`
+| Via `new URL(string)`
+
+| `java.net.URI`
+| Via `URI.create(string)`
+
+| `java.net.InetAddress`
+| Via `InetAddress.getByName(string)`
+
+| `java.util.Optional<T>`, `OptionalInt`, `OptionalLong`, `OptionalDouble`
+| Converts the value to `T`, then wraps in the optional type
+
+| `java.time.Duration`
+| ISO-8601 format: `PT1H30M`, `PT45S`, `1800000ms`, etc.
+
+| `java.time.Period`
+| ISO-8601 format: `P1Y2M3D`, `P30D`, etc.
+
+| `java.time.LocalDate`
+| ISO format: `2024-05-13`
+
+| `java.time.LocalTime`
+| ISO format: `14:30:00`
+
+| `java.time.LocalDateTime`
+| ISO format: `2024-05-13T14:30:00`
+
+| `java.time.OffsetTime`
+| ISO format: `14:30:00+02:00`
+
+| `java.time.OffsetDateTime`
+| ISO format: `2024-05-13T14:30:00+02:00`
+
+| `java.time.ZonedDateTime`
+| ISO format: `2024-05-13T14:30:00+02:00[Europe/Paris]`
+
+| `java.time.Instant`
+| ISO format: `2024-05-13T12:30:00Z`
+
+| `java.lang.Class<?>`
+| Via `Class.forName(string)`
+
+| Enum types
+| Match by enum constant name (case-sensitive)
+
+| `List<T>`, `Set<T>`, `Iterable<T>`
+| CSV: comma-separated values, converted to list of `T`
+|===
+
+== Arrays
+
+[source,java]
+----
+// microprofile-config.properties
+app.items=foo,bar,baz
+app.ids=1,2,3,4
+
+// Code
+String[] items = config.getValue("app.items", String[].class);
+// Result: ["foo", "bar", "baz"]
+
+Integer[] ids = config.getValue("app.ids", Integer[].class);
+// Result: [1, 2, 3, 4]
+----
+
+== Collections
+
+[source,java]
+----
+List<String> items = config.getValue("app.items", List.class);
+Set<Integer> ids = config.getValue("app.ids", Set.class);
+Collection<Duration> timeouts = config.getValue("app.timeouts", Collection.class);
+----
+
+== Implicit converters
+
+If a type doesn't have a built-in converter, Ravel attempts to use an **implicit converter** (priority 2):
+
+1. **Public constructor taking `String`**: `new MyType(string)`
+2. **Static method `valueOf(String)`**: `MyType.valueOf(string)`
+3. **Static method `parse(CharSequence)`**: `MyType.parse(charseq)`
+
+[source,java]
+----
+public class MyDuration {
+    private final long millis;
+
+    // This public constructor enables implicit conversion
+    public MyDuration(String iso8601) {
+        this.millis = Duration.parse("PT" + iso8601).toMillis();
+    }
+}
+
+// microprofile-config.properties
+app.timeout=1H30M
+
+// Code
+MyDuration timeout = config.getValue("app.timeout", MyDuration.class);
+// Internally calls: new MyDuration("1H30M")
+----
+
+== Custom converters
+
+Register a custom `Converter<T>` for types not covered by built-in or implicit converters:
+
+[source,java]
+----
+import org.eclipse.microprofile.config.spi.Converter;
+
+public class ColorConverter implements Converter<Color> {
+
+    @Override
+    public Color convert(String value) {
+        if (value == null || value.isEmpty()) {
+            throw new IllegalArgumentException("Color cannot be empty");
+        }
+
+        if (value.startsWith("#")) {
+            // Hex format: #RRGGBB
+            return Color.decode(value);
+        } else if (value.equalsIgnoreCase("red")) {
+            return Color.RED;
+        } else if (value.equalsIgnoreCase("green")) {
+            return Color.GREEN;
+        } else if (value.equalsIgnoreCase("blue")) {
+            return Color.BLUE;
+        }
+
+        throw new IllegalArgumentException("Unknown color: " + value);
+    }
+}
+----
+
+=== Register via ServiceLoader
+
+Create `META-INF/services/org.eclipse.microprofile.config.spi.Converter`:
+
+[source,text]
+----
+com.example.ColorConverter
+----
+
+=== Register programmatically
+
+[source,java]
+----
+ConfigBuilder builder = new RavelConfigBuilder();
+builder.withConverter(Color.class, new ColorConverter());
+Config config = builder.build();
+----
+
+== Converter priority
+
+When resolving a type, Ravel applies converters in this order:
+
+1. **Built-in converters** (priority 1)
+2. **Implicit converters** (priority 2)
+3. **Custom converters via ServiceLoader** (priority >= 3)
+4. **Converters from `ConfigBuilder.withConverter()`** (highest priority)
+
+The first converter that claims to handle the type is used. If none match, `IllegalArgumentException` is thrown.
+
+== Example: JSON converter
+
+[source,java]
+----
+public class JsonConverter<T> implements Converter<T> {
+
+    private final ObjectMapper mapper;
+    private final Class<T> targetType;
+
+    public JsonConverter(Class<T> type) {
+        this.targetType = type;
+        this.mapper = new ObjectMapper(); // or your serialization library
+    }
+
+    @Override
+    public T convert(String value) {
+        try {
+            return mapper.readValue(value, targetType);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Invalid JSON for " + targetType.getName(), e);
+        }
+    }
+}
+
+// Usage
+MyConfigClass config = configProvider.getConfig()
+    .getValue("app.config.json", MyConfigClass.class);
+----
+
+== Next
+
+* xref:property-expressions.adoc[Property Expressions] — reference other configuration values
+* xref:cdi-integration.adoc[CDI Integration] — inject converted values via `@ConfigProperty`
+

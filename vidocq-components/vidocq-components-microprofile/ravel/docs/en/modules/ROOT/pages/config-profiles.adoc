@@ -1,0 +1,217 @@
+= Config Profiles
+:description: Using configuration profiles for environment-specific settings.
+
+== Overview
+
+Configuration profiles allow you to define environment-specific values without changing code. Profiles are prefixed keys in property files and activated via the `mp.config.profile` system property.
+
+== Basics
+
+In `microprofile-config.properties` or any config source, prefix a key with `%{profile}.` to make it profile-specific:
+
+[source,properties]
+----
+# Default (applies when no profile is active)
+app.name=MyApp
+app.debug=false
+app.port=8080
+
+# Development profile
+%dev.app.debug=true
+%dev.app.port=9000
+%dev.app.log.level=DEBUG
+
+# Production profile
+%prod.app.port=8443
+%prod.app.log.level=INFO
+%prod.app.https.enabled=true
+----
+
+Activate the `dev` profile:
+
+[source,bash]
+----
+java -Dmp.config.profile=dev MyApplication
+----
+
+Now:
+- `app.name` → still returns `MyApp` (no profile-specific override)
+- `app.debug` → returns `true` (from `%dev.app.debug`)
+- `app.port` → returns `9000` (from `%dev.app.port`)
+
+== Fallback behavior
+
+If a profile-specific key doesn't exist, Ravel falls back to the base key:
+
+[source,properties]
+----
+app.name=DefaultName
+%dev.app.name=DevName
+----
+
+With `mp.config.profile=dev`:
+- `app.name` → looks for `%dev.app.name` (found: `DevName`) → returns `DevName`
+
+Without a profile:
+- `app.name` → looks for base `app.name` (found: `DefaultName`) → returns `DefaultName`
+
+== Multiple profile values
+
+Only **one profile at a time** is active (set via `mp.config.profile`). You cannot combine multiple profiles with a single lookup.
+
+However, you can switch profiles dynamically:
+
+[source,java]
+----
+// Launch with dev profile
+System.setProperty("mp.config.profile", "dev");
+Config devConfig = ConfigProvider.getConfig();
+String debugDev = devConfig.getValue("app.debug", String.class); // "true"
+
+// Switch to prod
+System.setProperty("mp.config.profile", "prod");
+Config prodConfig = ConfigProvider.getConfig();
+String debugProd = prodConfig.getValue("app.debug", String.class); // "false"
+----
+
+== Common profiles
+
+While you can define any profile names, here are common conventions:
+
+[cols="1,3"]
+|===
+| Profile | Usage
+
+| `dev`
+| Development: verbose logging, localhost endpoints, disabled security
+
+| `test`
+| Testing: in-memory databases, mocked services
+
+| `prod`
+| Production: minimal logging, hardened endpoints, TLS/HTTPS
+
+| `staging`
+| Pre-production: similar to prod but with staging endpoints
+|===
+
+== Profile priority
+
+When multiple config sources define the same key, ordinal still applies:
+
+[source,properties]
+----
+# SystemPropertiesConfigSource (ordinal 400)
+-Dapp.name=CliOverride
+
+# EnvironmentVariablesConfigSource (ordinal 300)
+APP_NAME=EnvValue
+
+# microprofile-config.properties (ordinal 100)
+app.name=FileValue
+%dev.app.name=DevFileValue
+----
+
+With `mp.config.profile=dev`:
+
+1. Check system property `-Dapp.name` (ordinal 400) → found: `CliOverride` → **return**
+2. (env var and file checks skipped; already found)
+
+Without profile, same precedence applies:
+
+1. Check `-Dapp.name` → found: `CliOverride` → **return**
+
+Profile prefixes are **transparent** to ordinal logic — only ordinal matters for priority between sources.
+
+== With property expressions
+
+Expressions are resolved **after** profile matching:
+
+[source,properties]
+----
+# Base database config
+db.host=prod-db.example.com
+db.user=app_user
+db.jdbc.url=jdbc:postgresql://${db.host}:5432/appdb?user=${db.user}
+
+# Dev profile overrides host and user
+%dev.db.host=localhost
+%dev.db.user=dev_user
+# db.jdbc.url expression will use the resolved (profile-specific) values
+----
+
+With `mp.config.profile=dev`:
+- `db.jdbc.url` resolves to `jdbc:postgresql://localhost:5432/appdb?user=dev_user`
+
+== CDI integration
+
+With xref:cdi-integration.adoc[CDI integration], `@ConfigProperty` respects profiles:
+
+[source,java]
+----
+@ApplicationScoped
+public class AppConfig {
+    @Inject
+    @ConfigProperty("app.debug")
+    boolean debug;
+
+    @Inject
+    @ConfigProperty("app.port")
+    int port;
+}
+
+// With mp.config.profile=dev:
+// - debug = true (from %dev.app.debug)
+// - port = 9000 (from %dev.app.port)
+----
+
+== Example: Multi-stage deployment
+
+[source,properties]
+----
+# Common
+app.name=PaymentService
+app.version=2.1.0
+db.pool.size=10
+
+# Development
+%dev.app.log.level=DEBUG
+%dev.db.host=localhost
+%dev.db.port=5432
+%dev.api.endpoint=http://localhost:8080
+
+# Staging
+%staging.app.log.level=INFO
+%staging.db.host=staging-db.internal
+%staging.db.port=5432
+%staging.api.endpoint=https://staging-api.example.com
+%staging.db.pool.size=20
+
+# Production
+%prod.app.log.level=WARN
+%prod.db.host=prod-db.cluster.example.com
+%prod.db.port=5432
+%prod.api.endpoint=https://api.example.com
+%prod.db.pool.size=50
+%prod.tls.enabled=true
+----
+
+Deploy with:
+
+[source,bash]
+----
+# Development
+java -Dmp.config.profile=dev -jar app.jar
+
+# Staging
+java -Dmp.config.profile=staging -jar app.jar
+
+# Production
+java -Dmp.config.profile=prod -jar app.jar
+----
+
+== Next
+
+* xref:cdi-integration.adoc[CDI Integration] — use profiles with `@ConfigProperty`
+* xref:advanced-usage.adoc[Advanced Usage] — programmatic configuration
+

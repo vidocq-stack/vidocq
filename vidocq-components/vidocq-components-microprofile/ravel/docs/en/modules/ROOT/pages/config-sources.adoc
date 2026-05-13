@@ -1,0 +1,212 @@
+= Config Sources
+:description: Configuration sources and how to create custom sources.
+
+== Built-in sources
+
+Ravel provides three built-in configuration sources, loaded automatically in this order (by ordinal):
+
+[cols="1,1,3"]
+|===
+| Source | Ordinal | Description
+
+| System Properties
+| 400
+| Java system properties set via `-Dkey=value`. Example: `-Dapp.name=MyApp`
+
+| Environment Variables
+| 300
+| Operating system environment variables. Automatically mapped: `APP_NAME` → `app.name`, `my_property` → `my.property`
+
+| microprofile-config.properties
+| 100
+| Properties file at `META-INF/microprofile-config.properties` in the classpath. Standard Java properties format.
+|===
+
+== Custom config sources via SPI
+
+To implement a custom configuration source, create a class implementing `ConfigSource`:
+
+[source,java]
+----
+import org.eclipse.microprofile.config.spi.ConfigSource;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
+
+public class MyCustomConfigSource implements ConfigSource {
+
+    @Override
+    public Map<String, String> getProperties() {
+        Map<String, String> props = new HashMap<>();
+        props.put("my.custom.key", "my.custom.value");
+        return props;
+    }
+
+    @Override
+    public String getValue(String propertyName) {
+        if ("my.custom.key".equals(propertyName)) {
+            return "my.custom.value";
+        }
+        return null;
+    }
+
+    @Override
+    public String getName() {
+        return "MyCustomConfigSource";
+    }
+
+    @Override
+    public int getOrdinal() {
+        return 150; // Between microprofile-config.properties and env vars
+    }
+}
+----
+
+=== Register via ServiceLoader
+
+Create a file `META-INF/services/org.eclipse.microprofile.config.spi.ConfigSource`:
+
+[source,text]
+----
+com.example.MyCustomConfigSource
+----
+
+Now Ravel will automatically discover and use your custom source.
+
+=== Example: Database configuration source
+
+[source,java]
+----
+public class DatabaseConfigSource implements ConfigSource {
+
+    private final DataSource dataSource;
+    private final String tableName;
+
+    public DatabaseConfigSource(DataSource ds, String table) {
+        this.dataSource = ds;
+        this.tableName = table;
+    }
+
+    @Override
+    public Map<String, String> getProperties() {
+        Map<String, String> result = new HashMap<>();
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(
+                 "SELECT config_key, config_value FROM " + tableName)) {
+            ResultSet rs = stmt.executeQuery();
+            while (rs.next()) {
+                result.put(rs.getString("config_key"),
+                           rs.getString("config_value"));
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+        return result;
+    }
+
+    @Override
+    public String getValue(String propertyName) {
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(
+                 "SELECT config_value FROM " + tableName
+                 + " WHERE config_key = ?")) {
+            stmt.setString(1, propertyName);
+            ResultSet rs = stmt.executeQuery();
+            if (rs.next()) {
+                return rs.getString("config_value");
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+        return null;
+    }
+
+    @Override
+    public String getName() {
+        return "DatabaseConfigSource";
+    }
+
+    @Override
+    public int getOrdinal() {
+        return 250; // Higher priority than microprofile-config.properties
+    }
+}
+----
+
+== ConfigSourceProvider
+
+For dynamic configuration sources (e.g., to provide multiple sources based on runtime conditions), implement `ConfigSourceProvider`:
+
+[source,java]
+----
+import org.eclipse.microprofile.config.spi.ConfigSourceProvider;
+
+public class DirectoryConfigSourceProvider implements ConfigSourceProvider {
+
+    @Override
+    public Iterable<ConfigSource> getConfigSources(ClassLoader forClassLoader) {
+        List<ConfigSource> sources = new ArrayList<>();
+
+        // Scan a directory for .properties files
+        Path dir = Paths.get("/etc/myapp/config");
+        if (Files.exists(dir)) {
+            try (Stream<Path> files = Files.list(dir)) {
+                files.filter(p -> p.toString().endsWith(".properties"))
+                     .forEach(p -> sources.add(new PropertiesFileSource(p)));
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        return sources;
+    }
+}
+----
+
+Register via `META-INF/services/org.eclipse.microprofile.config.spi.ConfigSourceProvider`:
+
+[source,text]
+----
+com.example.DirectoryConfigSourceProvider
+----
+
+== Ordinal values
+
+When multiple sources define the same key, Ravel uses the **highest ordinal** first. Common values:
+
+[cols="1,3"]
+|===
+| Ordinal | Usage
+
+| 400
+| System properties (built-in)
+
+| 300
+| Environment variables (built-in)
+
+| 250
+| High-priority custom sources (e.g., database)
+
+| 100
+| microprofile-config.properties (built-in)
+
+| 50
+| Low-priority custom sources
+|===
+
+Higher ordinal = higher priority. If not specified, the default ordinal is `ConfigSource.CONFIG_ORDINAL_DEFAULT` (== 100).
+
+== Overriding sources
+
+Ravel respects source ordinals strictly. To **always** override a value from `microprofile-config.properties`:
+
+. Set system property: `java -Dmy.key=overridden MyApp`
+. Or set environment variable: `MY_KEY=overridden java MyApp`
+. Or implement a custom `ConfigSource` with ordinal > 300
+
+== Next
+
+* xref:type-converters.adoc[Type Converters] — convert string values to typed objects
+* xref:property-expressions.adoc[Property Expressions] — reference other properties
+

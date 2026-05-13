@@ -1,0 +1,110 @@
+= Ravel
+:description: MicroProfile Config 3.1 implementation, zero third-party libraries, JPMS strict, Java 25, jlink-ready.
+
+[.text-center]
+image::ravel-logo.png[Ravel,300,role=module-logo]
+
+[.lead]
+Ravel is the MicroProfile Config 3.1 implementation of the Vidocq ecosystem. It implements the full configuration abstraction layer for Jakarta EE / MicroProfile applications: aggregation of multiple sources (system properties, environment variables, `microprofile-config.properties`), type conversion, property expressions, configuration profiles, and CDI integration via xref:vauban::index.adoc[Vauban]. Goal: 100 % MicroProfile Config 3.1 TCK conformance, zero external dependencies, JPMS-strict, jlink-ready.
+
+== Origin of the name
+
+**Maurice Ravel** (1875–1937) was a master of orchestration — he knew how to weave disparate sources (strings, winds, percussion) into a coherent and hierarchical whole.
+This is exactly what a configuration system does: aggregate heterogeneous sources (files, environment variables, system properties) into a unified configuration.
+
+Reference: https://en.wikipedia.org/wiki/Maurice_Ravel[Ravel on Wikipedia].
+
+[cols="1,3"]
+|===
+| Ravel, the composer | Ravel, the configuration runtime
+| String section | System properties
+| Wind section | Environment variables
+| Percussion section | `microprofile-config.properties` and custom sources
+| Orchestration score | Config sources hierarchy (ordinal)
+| Harmonic resolution | Type converters and implicit converters
+| Thematic development | Property expressions (`$\{key\}`, `$\{key:default\}`)
+| Movement structure | Configuration profiles (`%dev.`, `%prod.`, `%test.`)
+|===
+
+Ravel orchestrates all these voices into a single, unified configuration accessible via `ConfigProvider.getConfig()` and optionally injected via CDI with `@ConfigProperty`.
+
+== At a glance
+
+[cols="1,3"]
+|===
+| Implemented spec | {spec-mp-config}
+| Repo | {repo-ravel}
+| Java | 25 (LTS)
+| JPMS modules | `org.eclipse.microprofile.config` (repackaged), `io.vidocq.ravel.api`, `io.vidocq.ravel.core`, `io.vidocq.ravel.cdi.vauban`
+| Runtime dependencies | MicroProfile Config spec only. CDI optional via xref:vauban::index.adoc[Vauban].
+| jlink-ready | ✅ — all dependencies have explicit `module-info`, no `Automatic-Module-Name` fallback.
+| TCK | ✅ Target: 100 % PASS (M5 — May 2026).
+|===
+
+== Position in the ecosystem
+
+[mermaid]
+....
+flowchart LR
+  App["Your application<br/>@ConfigProperty injection"]
+  App -->|ConfigProvider.getConfig| Ravel["Ravel<br/>MicroProfile Config"]
+  Ravel -->|cascading lookup| SysProp["System properties<br/>ordinal: 400"]
+  Ravel -->|cascading lookup| EnvVar["Environment variables<br/>ordinal: 300"]
+  Ravel -->|cascading lookup| Props["microprofile-config.properties<br/>ordinal: 100"]
+  Ravel -->|cascading lookup| Custom["Custom ConfigSource<br/>via SPI"]
+
+  Ravel -->|@Inject| Vauban["Vauban<br/>CDI Lite"]
+
+  Ravel -->|type conversion| Converters["Built-in converters<br/>primitives, collections, temporal, etc."]
+  Ravel -->|property resolution| Expressions["Property expressions<br/>\${key}, \${key:default}"]
+  Ravel -->|profile matching| Profiles["Config profiles<br/>%dev., %prod., %test."]
+....
+
+== Key features
+
+=== Zero external dependencies
+Only `org.eclipse.microprofile.config` as a compile dependency. The implementation is fully self-contained, with no Smallrye, Guava, or other third-party libs. Perfect for embedded and microservices.
+
+=== JPMS strict
+All modules have explicit `module-info.java`, no automatic module fallbacks. Internal packages are not exported. Compatible with `jlink` for custom JDK images.
+
+=== Built-in type converters
+Supports primitives, boxes, `String`, `URL`, `URI`, `InetAddress`, `Duration`, `Period`, temporal types, enumerations, arrays, and collections — with implicit converters for custom types via public constructors or `valueOf()` / `parse()` methods.
+
+=== Property expressions
+Support for property references with `${key}` and default values via `${key:default}`. Cycle detection prevents infinite loops.
+
+=== Configuration profiles
+Environment-specific configuration via `%dev.`, `%prod.`, `%test.` prefixes. Profiles are resolved at lookup time, not build time.
+
+=== CDI integration (optional)
+Inject configuration values directly into beans via `@ConfigProperty("key")` and `@ConfigProperty("key")` on `Optional<T>` fields. Powered by xref:vauban::index.adoc[Vauban] Build-Compatible Extension.
+
+== Try it out
+
+[source,java]
+----
+// Get the Config
+Config config = ConfigProvider.getConfig();
+String value = config.getValue("my.property", String.class);
+Optional<String> optValue = config.getOptionalValue("my.property", String.class);
+
+// With CDI
+@ApplicationScoped
+public class MyApplication {
+    @Inject
+    @ConfigProperty("app.name")
+    String appName;
+
+    @Inject
+    @ConfigProperty("app.port")
+    int port;
+
+    @Inject
+    @ConfigProperty("app.debug")
+    Optional<Boolean> debug;
+}
+----
+
+Next: xref:getting-started.adoc[Getting started].
+

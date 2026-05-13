@@ -1,0 +1,220 @@
+= Advanced Usage
+:description: Programmatic configuration, custom converters, and builder patterns.
+
+== ConfigBuilder API
+
+For programmatic configuration beyond property files, use `ConfigBuilder`:
+
+[source,java]
+----
+import org.eclipse.microprofile.config.Config;
+import org.eclipse.microprofile.config.spi.ConfigBuilder;
+
+ConfigBuilder builder = ConfigProvider.getConfigBuilder();
+
+// Add custom sources
+builder.withSources(new MyCustomConfigSource());
+
+// Add custom converters
+builder.withConverter(Color.class, new ColorConverter());
+
+// Build the config
+Config config = builder.build();
+----
+
+== Custom converters with builder
+
+Register converters per-Config instance:
+
+[source,java]
+----
+ConfigBuilder builder = ConfigProvider.getConfigBuilder();
+
+// Register a JSON converter
+builder.withConverter(MyConfigDto.class, new JsonConverter<>(MyConfigDto.class));
+
+// Register multiple converters
+builder.withConverters(
+    new DurationConverter(),
+    new ColorConverter(),
+    new UriConverter()
+);
+
+Config config = builder.build();
+
+// Now this works
+MyConfigDto dto = config.getValue("app.config", MyConfigDto.class);
+----
+
+== Multiple configs
+
+You can maintain multiple `Config` instances with different setups:
+
+[source,java]
+----
+// Production config (from standard sources + database)
+ConfigBuilder prodBuilder = ConfigProvider.getConfigBuilder();
+prodBuilder.withSources(new DatabaseConfigSource());
+Config prodConfig = prodBuilder.build();
+
+// Development config (from files only, no database)
+ConfigBuilder devBuilder = ConfigProvider.getConfigBuilder();
+devBuilder.withConverters(new DebugConverter());
+Config devConfig = devBuilder.build();
+
+// Use them independently
+String prodValue = prodConfig.getValue("key", String.class);
+String devValue = devConfig.getValue("key", String.class);
+----
+
+== Caching config
+
+`ConfigProvider.getConfig()` returns a **cached** Config instance. Subsequent calls return the same object:
+
+[source,java]
+----
+Config config1 = ConfigProvider.getConfig();
+Config config2 = ConfigProvider.getConfig();
+
+assert config1 == config2; // Same instance
+----
+
+To create a fresh config (useful in tests), use `ConfigBuilder` directly or reset via system properties.
+
+== Watching for changes
+
+While Ravel doesn't provide a built-in configuration reloading mechanism, you can implement polling:
+
+[source,java]
+----
+@ApplicationScoped
+@Startup
+public class ConfigWatcher {
+
+    @Inject
+    private Event<ConfigUpdated> configUpdated;
+
+    private long lastCheck = 0;
+    private String lastValue = null;
+
+    @Schedule(every = "60s")
+    void checkForChanges() {
+        Config config = ConfigProvider.getConfig();
+        String currentValue = config.getValue("monitored.key", String.class);
+
+        if (!currentValue.equals(lastValue)) {
+            lastValue = currentValue;
+            configUpdated.fire(new ConfigUpdated(lastValue));
+        }
+    }
+}
+----
+
+== Expression recursion depth
+
+Ravel detects cycles in property expressions, but doesn't limit recursion depth artificially. Deep (but acyclic) chains are resolved correctly:
+
+[source,properties]
+----
+a=${b}
+b=${c}
+c=${d}
+d=${e}
+e=${f}
+f=final
+----
+
+[source,java]
+----
+String value = config.getValue("a", String.class);
+// Result: "final" (all resolved recursively)
+----
+
+== Thread safety and virtual threads
+
+* **`RavelConfig` is immutable** — safe to share across threads
+* **`ScopedValue` for expression stacks** — compatible with virtual threads (structured concurrency)
+* **No `synchronized` blocks** — avoids pinning virtual threads
+* **`ConcurrentHashMap` for caches** — safe concurrent access
+
+Your application can safely use Ravel with high concurrency and virtual threads.
+
+== Performance tuning
+
+=== Minimize lookups in hot paths
+
+Cache frequently-accessed values:
+
+[source,java]
+----
+@ApplicationScoped
+public class PerformantConfig {
+
+    private final String dbHost;
+    private final int dbPort;
+
+    @PostConstruct
+    void init() {
+        Config config = ConfigProvider.getConfig();
+        this.dbHost = config.getValue("db.host", String.class);
+        this.dbPort = config.getValue("db.port", Integer.class);
+    }
+}
+----
+
+=== Use implicit converters carefully
+
+Implicit converters use reflection on public constructors/methods. Prefer built-in converters for hot paths:
+
+[source,java]
+----
+// Good: built-in converter
+Duration timeout = config.getValue("timeout", Duration.class);
+
+// Less efficient: implicit converter (reflection)
+MyDuration timeout = config.getValue("timeout", MyDuration.class);
+----
+
+=== Pre-compile converters
+
+For frequently-used custom converters, cache the converter instance:
+
+[source,java]
+----
+public class OptimizedConverterRegistry {
+
+    private static final Map<Class<?>, Converter<?>> CACHE = new ConcurrentHashMap<>();
+
+    static {
+        CACHE.put(Color.class, new ColorConverter());
+        CACHE.put(MyDuration.class, new MyDurationConverter());
+    }
+}
+----
+
+== Testing
+
+Use in-memory config sources for testing:
+
+[source,java]
+----
+@Test
+void testConfigProcessing() {
+    Map<String, String> properties = new HashMap<>();
+    properties.put("app.name", "TestApp");
+    properties.put("app.port", "9999");
+
+    ConfigBuilder builder = ConfigProvider.getConfigBuilder();
+    builder.withSources(new MapConfigSource(properties));
+    Config config = builder.build();
+
+    assertEquals("TestApp", config.getValue("app.name", String.class));
+    assertEquals(9999, config.getValue("app.port", Integer.class));
+}
+----
+
+## Next
+
+* xref:tck.adoc[TCK] — conformance testing
+* xref:reference.adoc[Reference] — API documentation
+
