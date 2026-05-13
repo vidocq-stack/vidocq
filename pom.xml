@@ -86,6 +86,7 @@
         <ravel.version>0.1.0-SNAPSHOT</ravel.version>
         <mansart.version>1.0.0-SNAPSHOT</mansart.version>
         <knock.version>0.1.0-SNAPSHOT</knock.version>
+        <cyrano.version>0.1.0-SNAPSHOT</cyrano.version>
         <champollion.version>0.1.0-SNAPSHOT</champollion.version>
         <microprofile.config.version>3.1.1</microprofile.config.version>
         <jakarta.cdi.version>4.1.0</jakarta.cdi.version>
@@ -226,6 +227,11 @@
             <dependency>
                 <groupId>io.vidocq.mpserver</groupId>
                 <artifactId>vidocq-mps-knock-extension</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.mpserver</groupId>
+                <artifactId>vidocq-mps-cyrano-extension</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
