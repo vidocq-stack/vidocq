@@ -1,0 +1,308 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.1.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.1.0 http://maven.apache.org/xsd/maven-4.1.0.xsd"
+         root="true">
+    <modelVersion>4.1.0</modelVersion>
+
+    <groupId>io.vidocq.heisenberg</groupId>
+    <artifactId>heisenberg-parent</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <name>Heisenberg</name>
+    <description>Implémentation MicroProfile Fault Tolerance 4.1 — zéro librairie tierce, virtual threads, JPMS strict, CDI via Vauban, config via Ravel</description>
+    <url>https://forge.vidocq.dev/vidocq/heisenberg</url>
+
+    <licenses>
+        <license>
+            <name>Apache License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+        </license>
+    </licenses>
+
+    <scm>
+        <url>https://forge.vidocq.dev/vidocq/heisenberg</url>
+        <connection>scm:git:https://forge.vidocq.dev/vidocq/heisenberg.git</connection>
+        <developerConnection>scm:git:git@forge.vidocq.dev:vidocq/heisenberg.git</developerConnection>
+    </scm>
+
+    <distributionManagement>
+        <repository>
+            <id>vidocq-releases</id>
+            <url>https://repo.vidocq.dev/releases</url>
+        </repository>
+        <snapshotRepository>
+            <id>vidocq-snapshots</id>
+            <url>https://repo.vidocq.dev/snapshots</url>
+        </snapshotRepository>
+    </distributionManagement>
+
+    <repositories>
+        <repository>
+            <id>vidocq-snapshots</id>
+            <url>https://repo.vidocq.dev/snapshots</url>
+            <releases><enabled>false</enabled></releases>
+            <snapshots><enabled>true</enabled></snapshots>
+        </repository>
+        <repository>
+            <id>vidocq-releases</id>
+            <url>https://repo.vidocq.dev/releases</url>
+            <releases><enabled>true</enabled></releases>
+            <snapshots><enabled>false</enabled></snapshots>
+        </repository>
+    </repositories>
+
+    <pluginRepositories>
+        <pluginRepository>
+            <id>vidocq-snapshots</id>
+            <url>https://repo.vidocq.dev/snapshots</url>
+            <releases><enabled>false</enabled></releases>
+            <snapshots><enabled>true</enabled></snapshots>
+        </pluginRepository>
+        <pluginRepository>
+            <id>vidocq-releases</id>
+            <url>https://repo.vidocq.dev/releases</url>
+            <releases><enabled>true</enabled></releases>
+            <snapshots><enabled>false</enabled></snapshots>
+        </pluginRepository>
+    </pluginRepositories>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.release>25</maven.compiler.release>
+
+        <!--
+            MicroProfile Fault Tolerance 4.1 API.
+            ATTENTION : microprofile-fault-tolerance-api:4.1 peut ne pas avoir d'Automatic-Module-Name
+            dans son MANIFEST.MF. Si c'est le cas, le nom JPMS dérivé du nom de fichier est
+            "microprofile.fault.tolerance.api" (strip version + remplacement '-' par '.').
+            Le maven-dependency-plugin copie les JARs compile-scope dans target/javamodules/
+            en phase initialize, et le maven-compiler-plugin reçoit l'argument module-path
+            pointant vers target/javamodules pour que javac dérive le nom depuis le nom de fichier.
+        -->
+        <microprofile.fault.tolerance.version>4.1</microprofile.fault.tolerance.version>
+
+        <!-- Jakarta CDI 4.1 (Jakarta EE 11) -->
+        <jakarta.cdi.version>4.1.0</jakarta.cdi.version>
+        <jakarta.inject.version>2.0.1</jakarta.inject.version>
+        <jakarta.annotation.version>3.0.0</jakarta.annotation.version>
+
+        <!-- Jakarta Interceptors 2.2 (Jakarta EE 11) -->
+        <jakarta.interceptor.version>2.2.0</jakarta.interceptor.version>
+
+        <!--
+            MicroProfile Config 3.1.1 — version avec Automatic-Module-Name:
+            "org.eclipse.microprofile.config" ajouté dans le manifest depuis 2026-04-22.
+        -->
+        <microprofile.config.version>3.1.1</microprofile.config.version>
+
+        <!-- Implémentations Vidocq upstream -->
+        <vauban.version>0.1.0-SNAPSHOT</vauban.version>
+        <ravel.version>0.1.0-SNAPSHOT</ravel.version>
+
+        <!-- JUnit 6 minimum -->
+        <junit.version>6.0.3</junit.version>
+
+        <!-- JMH pour heisenberg-bench -->
+        <jmh.version>1.37</jmh.version>
+    </properties>
+
+    <!--
+        heisenberg-tck est volontairement HORS reactor (POM Model 4.0.0 standalone)
+        pour contourner ShrinkWrap Maven Resolver 3.3 qui ne sait pas parser les POMs
+        Model 4.1.0. Il sera invoqué par run-official-tck-mp-fault-tolerance-4.1.sh
+        après installation locale du reactor.
+    -->
+    <subprojects>
+        <subproject>heisenberg-api</subproject>
+        <subproject>heisenberg-core</subproject>
+        <subproject>heisenberg-cdi-vauban</subproject>
+        <subproject>heisenberg-bench</subproject>
+        <subproject>heisenberg-examples</subproject>
+    </subprojects>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- JUnit BOM -->
+            <dependency>
+                <groupId>org.junit</groupId>
+                <artifactId>junit-bom</artifactId>
+                <version>${junit.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <!-- MicroProfile Fault Tolerance 4.1 API -->
+            <dependency>
+                <groupId>org.eclipse.microprofile.fault-tolerance</groupId>
+                <artifactId>microprofile-fault-tolerance-api</artifactId>
+                <version>${microprofile.fault.tolerance.version}</version>
+            </dependency>
+
+            <!-- Jakarta CDI -->
+            <dependency>
+                <groupId>jakarta.enterprise</groupId>
+                <artifactId>jakarta.enterprise.cdi-api</artifactId>
+                <version>${jakarta.cdi.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>jakarta.inject</groupId>
+                <artifactId>jakarta.inject-api</artifactId>
+                <version>${jakarta.inject.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>jakarta.annotation</groupId>
+                <artifactId>jakarta.annotation-api</artifactId>
+                <version>${jakarta.annotation.version}</version>
+            </dependency>
+
+            <!-- Jakarta Interceptors -->
+            <dependency>
+                <groupId>jakarta.interceptor</groupId>
+                <artifactId>jakarta.interceptor-api</artifactId>
+                <version>${jakarta.interceptor.version}</version>
+            </dependency>
+
+            <!-- MicroProfile Config (pour la surcharge de configuration externe) -->
+            <dependency>
+                <groupId>org.eclipse.microprofile.config</groupId>
+                <artifactId>microprofile-config-api</artifactId>
+                <version>${microprofile.config.version}</version>
+            </dependency>
+
+            <!-- Implémentations Vidocq (utilisées en test scope ou runtime) -->
+            <dependency>
+                <groupId>io.vidocq.vauban</groupId>
+                <artifactId>vauban-core</artifactId>
+                <version>${vauban.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.vauban</groupId>
+                <artifactId>vauban-classloader-spi</artifactId>
+                <version>${vauban.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.ravel</groupId>
+                <artifactId>ravel-core</artifactId>
+                <version>${ravel.version}</version>
+            </dependency>
+
+            <!-- JMH -->
+            <dependency>
+                <groupId>org.openjdk.jmh</groupId>
+                <artifactId>jmh-core</artifactId>
+                <version>${jmh.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.openjdk.jmh</groupId>
+                <artifactId>jmh-generator-annprocess</artifactId>
+                <version>${jmh.version}</version>
+            </dependency>
+
+            <!-- Modules internes Heisenberg -->
+            <dependency>
+                <groupId>io.vidocq.heisenberg</groupId>
+                <artifactId>heisenberg-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.heisenberg</groupId>
+                <artifactId>heisenberg-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.heisenberg</groupId>
+                <artifactId>heisenberg-cdi-vauban</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>4.0.0-beta-4</version>
+                    <configuration>
+                        <release>25</release>
+                    </configuration>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <version>3.5.5</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-jar-plugin</artifactId>
+                    <version>3.4.2</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-clean-plugin</artifactId>
+                    <version>3.4.0</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-resources-plugin</artifactId>
+                    <version>3.3.1</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-install-plugin</artifactId>
+                    <version>3.1.3</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-deploy-plugin</artifactId>
+                    <version>3.1.3</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+
+        <!--
+            JPMS workaround : microprofile-fault-tolerance-api:4.1 peut ne pas avoir
+            d'Automatic-Module-Name dans son MANIFEST.MF (à vérifier à l'install).
+
+            Solution : maven-dependency-plugin copie tous les JARs compile-scope dans
+            target/javamodules/ en phase initialize. Le maven-compiler-plugin reçoit
+            l'argument module-path pointant vers target/javamodules ; javac dérive alors
+            le nom du module depuis le nom de fichier.
+
+            Si une version avec Automatic-Module-Name est publiée, ce workaround peut être
+            supprimé (les JARs avec AMBN sont résolus normalement par Maven Compiler Plugin).
+        -->
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <version>3.8.1</version>
+                <executions>
+                    <execution>
+                        <id>copy-compile-deps-to-module-path</id>
+                        <phase>initialize</phase>
+                        <goals><goal>copy-dependencies</goal></goals>
+                        <configuration>
+                            <outputDirectory>${project.build.directory}/javamodules</outputDirectory>
+                            <includeScope>compile</includeScope>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <release>25</release>
+                    <compilerArgs>
+                        <arg>--module-path</arg>
+                        <arg>${project.build.directory}/javamodules</arg>
+                    </compilerArgs>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
