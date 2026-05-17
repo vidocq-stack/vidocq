@@ -142,7 +142,7 @@ Voir xref:type-converters.adoc[Convertisseurs de types] pour la liste complète 
 
 == Expressions de propriété
 
-Utilisez `${key}` pour référencer d'autres propriétés :
+Utilisez pass:[${key}] pour référencer d'autres propriétés :
 
 [source,properties]
 ----
@@ -156,7 +156,7 @@ String fullName = config.getValue("app.full.name", String.class);
 // Résultat : "MyApp v2.0"
 ----
 
-Utilisez `${key:default}` pour fournir un repli :
+Utilisez pass:[${key:default}] pour fournir un repli :
 
 [source,properties]
 ----

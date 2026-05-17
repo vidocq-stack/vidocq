@@ -7,7 +7,7 @@ Configuration profiles allow you to define environment-specific values without c
 
 == Basics
 
-In `microprofile-config.properties` or any config source, prefix a key with `%{profile}.` to make it profile-specific:
+In `microprofile-config.properties` or any config source, prefix a key with pass:[%{profile}.] to make it profile-specific:
 
 [source,properties]
 ----

@@ -128,7 +128,7 @@ java -Dmp.config.profile=dev MyApplication
 When a profile is active:
 
 1. **`ProfiledConfigSource` wraps each source** with ordinal +1
-2. **Keys are matched as `%{profile}.{original-key}`**
+2. **Keys are matched as pass:[%{profile}.{original-key}]**
 3. **If not found, falls back to original key**
 4. **Profiles are resolved at lookup time**, not build time
 

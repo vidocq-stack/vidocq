@@ -3,7 +3,7 @@
 
 == Overview
 
-Property expressions allow you to reference other configuration properties within a value using the `${key}` syntax. This is evaluated **before** type conversion and provides composition and defaults.
+Property expressions allow you to reference other configuration properties within a value using the pass:[${key}] syntax. This is evaluated **before** type conversion and provides composition and defaults.
 
 == Basic syntax
 
@@ -150,9 +150,9 @@ app.api.url=${app.api.scheme}://${app.api.host}:${app.api.port}/v1
 ----
 
 Result (dev profile):
-- `${app.api.scheme}` → `http`
-- `${app.api.host}` → `localhost`
-- `${app.api.port}` → `8080`
+- pass:[${app.api.scheme}] → `http`
+- pass:[${app.api.host}] → `localhost`
+- pass:[${app.api.port}] → `8080`
 - `app.api.url` → `http://localhost:8080/v1`
 
 == Next

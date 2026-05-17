@@ -142,7 +142,7 @@ See xref:type-converters.adoc[Type Converters] for the full list of built-in con
 
 == Property expressions
 
-Use `${key}` to reference other properties:
+Use pass:[${key}] to reference other properties:
 
 [source,properties]
 ----
@@ -156,7 +156,7 @@ String fullName = config.getValue("app.full.name", String.class);
 // Result: "MyApp v2.0"
 ----
 
-Use `${key:default}` to provide a fallback:
+Use pass:[${key:default}] to provide a fallback:
 
 [source,properties]
 ----

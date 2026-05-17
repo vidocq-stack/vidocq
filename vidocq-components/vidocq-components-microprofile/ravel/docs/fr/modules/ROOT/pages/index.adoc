@@ -22,7 +22,7 @@ Référence : https://fr.wikipedia.org/wiki/Maurice_Ravel[Ravel sur Wikipedia].
 | Pupitre des percussions | `microprofile-config.properties` et sources personnalisées
 | Partition d'orchestration | Hiérarchie des sources de configuration (ordinal)
 | Résolution harmonique | Convertisseurs et convertisseurs implicites
-| Développement thématique | Expressions de propriété (`$\{key\}`, `$\{key:default\}`)
+| Développement thématique | Expressions de propriété (pass:[${key}], pass:[${key:default}])
 | Structure des mouvements | Profils de configuration (`%dev.`, `%prod.`, `%test.`)
 |===
 
@@ -43,7 +43,7 @@ Ravel orchestre toutes ces voix en une configuration unique et unifiée, accessi
 
 == Position dans l'écosystème
 
-[mermaid]
+[mermaid,subs=-attributes]
 ....
 flowchart LR
   App["Votre application<br/>injection @ConfigProperty"]
@@ -56,7 +56,7 @@ flowchart LR
   Ravel -->|@Inject| Vauban["Vauban<br/>CDI Lite"]
 
   Ravel -->|conversion de types| Converters["Convertisseurs built-in<br/>primitifs, collections, temporels, etc."]
-  Ravel -->|résolution de propriétés| Expressions["Expressions de propriété<br/>\${key}, \${key:default}"]
+  Ravel -->|résolution de propriétés| Expressions["Expressions de propriété<br/>${key}, ${key:default}"]
   Ravel -->|matching de profils| Profiles["Profils de configuration<br/>%dev., %prod., %test."]
 ....
 
@@ -72,7 +72,7 @@ Tous les modules ont un `module-info.java` explicite, pas de fallback de module 
 Support des primitifs, boxés, `String`, `URL`, `URI`, `InetAddress`, `Duration`, `Period`, types temporels, énumérations, tableaux et collections — avec convertisseurs implicites pour les types personnalisés via constructeurs publics ou méthodes `valueOf()` / `parse()`.
 
 === Expressions de propriété
-Support des références de propriétés avec `${key}` et valeurs par défaut via `${key:default}`. Détection de cycles pour éviter les boucles infinies.
+Support des références de propriétés avec pass:[${key}] et valeurs par défaut via pass:[${key:default}]. Détection de cycles pour éviter les boucles infinies.
 
 === Profils de configuration
 Configuration spécifique à l'environnement via les préfixes `%dev.`, `%prod.`, `%test.`. Les profils sont résolus au moment de la lookup, pas au moment de la compilation.

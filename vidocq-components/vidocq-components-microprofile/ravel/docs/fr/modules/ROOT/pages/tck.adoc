@@ -65,7 +65,7 @@ Le TCK MicroProfile Config 3.1 valide :
 * **Sources de configuration** — propriétés système, variables d'environnement, `microprofile-config.properties`
 * **Conversion de types** — primitifs, collections, types temporels
 * **Profils de configuration** — valeurs spécifiques à l'environnement
-* **Expressions de propriété** — `${key}`, `${key:default}`
+* **Expressions de propriété** — pass:[${key}], pass:[${key:default}]
 * **Sources et convertisseurs personnalisés** — extensibilité SPI
 * **Intégration CDI** — injection `@ConfigProperty` (optionnel)
 

@@ -7,7 +7,7 @@ Les profils de configuration vous permettent de définir des valeurs spécifique
 
 == Bases
 
-Dans `microprofile-config.properties` ou toute source de configuration, préfixez une clé avec `%{profile}.` pour la rendre spécifique au profil :
+Dans `microprofile-config.properties` ou toute source de configuration, préfixez une clé avec pass:[%{profile}.] pour la rendre spécifique au profil :
 
 [source,properties]
 ----

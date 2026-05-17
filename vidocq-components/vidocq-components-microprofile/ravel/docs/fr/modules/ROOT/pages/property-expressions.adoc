@@ -3,7 +3,7 @@
 
 == Vue d'ensemble
 
-Les expressions de propriété vous permettent de référencer d'autres propriétés de configuration au sein d'une valeur en utilisant la syntaxe `${key}`. Celle-ci est évaluée **avant** la conversion de type et permet la composition et les valeurs par défaut.
+Les expressions de propriété vous permettent de référencer d'autres propriétés de configuration au sein d'une valeur en utilisant la syntaxe pass:[${key}]. Celle-ci est évaluée **avant** la conversion de type et permet la composition et les valeurs par défaut.
 
 == Syntaxe de base
 
@@ -150,9 +150,9 @@ app.api.url=${app.api.scheme}://${app.api.host}:${app.api.port}/v1
 ----
 
 Résultat (profil dev) :
-- `${app.api.scheme}` → `http`
-- `${app.api.host}` → `localhost`
-- `${app.api.port}` → `8080`
+- pass:[${app.api.scheme}] → `http`
+- pass:[${app.api.host}] → `localhost`
+- pass:[${app.api.port}] → `8080`
 - `app.api.url` → `http://localhost:8080/v1`
 
 == Suivant

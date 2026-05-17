@@ -128,7 +128,7 @@ java -Dmp.config.profile=dev MyApplication
 Lorsqu'un profil est actif :
 
 1. **`ProfiledConfigSource` encapsule chaque source** avec ordinal +1
-2. **Les clés sont appairées en tant que `%{profile}.{clé-originale}`**
+2. **Les clés sont appairées en tant que pass:[%{profile}.{clé-originale}]**
 3. **S'il ne la trouve pas, elle bascule à la clé originale**
 4. **Les profils sont résolus au moment de la lookup**, pas au moment de la compilation
 

@@ -9,7 +9,7 @@ Ravel is the MicroProfile Config 3.1 implementation of the Vidocq ecosystem. It 
 
 == Origin of the name
 
-**Maurice Ravel** (1875–1937) was a master of orchestration — he knew how to weave disparate sources (strings, winds, percussion) into a coherent and hierarchical whole.
+**Maurice Ravel** (1875-1937) was a master of orchestration - he knew how to weave disparate sources (strings, winds, percussion) into a coherent and hierarchical whole.
 This is exactly what a configuration system does: aggregate heterogeneous sources (files, environment variables, system properties) into a unified configuration.
 
 Reference: https://en.wikipedia.org/wiki/Maurice_Ravel[Ravel on Wikipedia].
@@ -22,7 +22,7 @@ Reference: https://en.wikipedia.org/wiki/Maurice_Ravel[Ravel on Wikipedia].
 | Percussion section | `microprofile-config.properties` and custom sources
 | Orchestration score | Config sources hierarchy (ordinal)
 | Harmonic resolution | Type converters and implicit converters
-| Thematic development | Property expressions (`$\{key\}`, `$\{key:default\}`)
+| Thematic development | Property expressions (pass:[${key}], pass:[${key:default}])
 | Movement structure | Configuration profiles (`%dev.`, `%prod.`, `%test.`)
 |===
 
@@ -37,13 +37,13 @@ Ravel orchestrates all these voices into a single, unified configuration accessi
 | Java | 25 (LTS)
 | JPMS modules | `org.eclipse.microprofile.config` (repackaged), `io.vidocq.ravel.api`, `io.vidocq.ravel.core`, `io.vidocq.ravel.cdi.vauban`
 | Runtime dependencies | MicroProfile Config spec only. CDI optional via xref:vauban::index.adoc[Vauban].
-| jlink-ready | ✅ — all dependencies have explicit `module-info`, no `Automatic-Module-Name` fallback.
-| TCK | ✅ Target: 100 % PASS (M5 — May 2026).
+| jlink-ready | ✅ - all dependencies have explicit `module-info`, no `Automatic-Module-Name` fallback.
+| TCK | ✅ Target: 100 % PASS (M5 - May 2026).
 |===
 
 == Position in the ecosystem
 
-[mermaid]
+[mermaid,subs=-attributes]
 ....
 flowchart LR
   App["Your application<br/>@ConfigProperty injection"]
@@ -56,7 +56,7 @@ flowchart LR
   Ravel -->|@Inject| Vauban["Vauban<br/>CDI Lite"]
 
   Ravel -->|type conversion| Converters["Built-in converters<br/>primitives, collections, temporal, etc."]
-  Ravel -->|property resolution| Expressions["Property expressions<br/>\${key}, \${key:default}"]
+  Ravel -->|property resolution| Expressions["Property expressions<br/>${key}, ${key:default}"]
   Ravel -->|profile matching| Profiles["Config profiles<br/>%dev., %prod., %test."]
 ....
 
@@ -69,10 +69,10 @@ Only `org.eclipse.microprofile.config` as a compile dependency. The implementati
 All modules have explicit `module-info.java`, no automatic module fallbacks. Internal packages are not exported. Compatible with `jlink` for custom JDK images.
 
 === Built-in type converters
-Supports primitives, boxes, `String`, `URL`, `URI`, `InetAddress`, `Duration`, `Period`, temporal types, enumerations, arrays, and collections — with implicit converters for custom types via public constructors or `valueOf()` / `parse()` methods.
+Supports primitives, boxes, `String`, `URL`, `URI`, `InetAddress`, `Duration`, `Period`, temporal types, enumerations, arrays, and collections - with implicit converters for custom types via public constructors or `valueOf()` / `parse()` methods.
 
 === Property expressions
-Support for property references with `${key}` and default values via `${key:default}`. Cycle detection prevents infinite loops.
+Support for property references with pass:[${key}] and default values via pass:[${key:default}]. Cycle detection prevents infinite loops.
 
 === Configuration profiles
 Environment-specific configuration via `%dev.`, `%prod.`, `%test.` prefixes. Profiles are resolved at lookup time, not build time.
@@ -107,4 +107,3 @@ public class MyApplication {
 ----
 
 Next: xref:getting-started.adoc[Getting started].
-
