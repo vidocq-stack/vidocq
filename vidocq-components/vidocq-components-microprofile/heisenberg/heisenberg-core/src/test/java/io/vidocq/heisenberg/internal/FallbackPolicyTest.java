@@ -23,7 +23,7 @@ class FallbackPolicyTest {
                     throw new IllegalStateException("boom");
                 },
                 fallback,
-                new FallbackConfig(fallback.applyOn(), fallback.skipOn()),
+                new FallbackConfig(fallback.applyOn(), fallback.skipOn(), fallback.fallbackMethod(), fallback.value()),
                 service,
                 guardedMethod,
                 new Object[0],
@@ -46,7 +46,7 @@ class FallbackPolicyTest {
                             throw new IllegalArgumentException("do not fallback");
                         },
                         fallback,
-                        new FallbackConfig(fallback.applyOn(), fallback.skipOn()),
+                        new FallbackConfig(fallback.applyOn(), fallback.skipOn(), fallback.fallbackMethod(), fallback.value()),
                         service,
                         guardedMethod,
                         new Object[0],

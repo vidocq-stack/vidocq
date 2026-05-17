@@ -178,7 +178,9 @@ class ConfigResolverOverrideTest {
     void fallbackShouldApplyHonorsSkipOnPrecedence() {
         FallbackConfig cfg = new FallbackConfig(
                 new Class[] {Throwable.class},
-                new Class[] {IllegalArgumentException.class}
+                new Class[] {IllegalArgumentException.class},
+                "recover",
+                org.eclipse.microprofile.faulttolerance.Fallback.DEFAULT.class
         );
         // skipOn match → pas de fallback même si applyOn match aussi
         assertFalse(cfg.shouldApplyFallback(new IllegalArgumentException()));

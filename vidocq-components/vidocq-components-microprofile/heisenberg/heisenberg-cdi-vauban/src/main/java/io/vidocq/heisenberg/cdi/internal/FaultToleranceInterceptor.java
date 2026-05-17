@@ -4,6 +4,7 @@ import io.vidocq.heisenberg.internal.BulkheadStateRegistry;
 import io.vidocq.heisenberg.internal.CircuitBreakerStateRegistry;
 import io.vidocq.heisenberg.internal.ConfigResolver;
 import io.vidocq.heisenberg.internal.PolicyComposer;
+import io.vidocq.heisenberg.internal.ReentryGuard;
 import java.lang.reflect.Method;
 import jakarta.annotation.Priority;
 import jakarta.inject.Inject;
@@ -47,9 +48,23 @@ public class FaultToleranceInterceptor {
             return context.proceed();
         }
 
+        // Anti-réentrée : Vauban ré-applique le pipeline d'intercepteurs quand on appelle
+        // context.proceed() sur une méthode $$Intercepted. ReentryGuard.ACTIVE indique
+        // qu'on est déjà dans la chaîne FT — bypass pour éviter la cascade.
+        if (ReentryGuard.isActive()) {
+            return context.proceed();
+        }
+
         Method resolvedMethod = resolveMethod(context);
-        return PolicyComposer.invoke(context::proceed, context.getTarget(), resolvedMethod,
-                context.getParameters(), stateRegistry, bulkheadRegistry);
+        try {
+            return ScopedValue.where(ReentryGuard.ACTIVE, Boolean.TRUE).call(
+                    () -> PolicyComposer.invoke(context::proceed, context.getTarget(), resolvedMethod,
+                            context.getParameters(), stateRegistry, bulkheadRegistry));
+        } catch (Exception e) {
+            throw e;
+        } catch (Throwable t) {
+            throw new RuntimeException(t);
+        }
     }
 
 

@@ -330,17 +330,40 @@ heisenberg-examples     io.vidocq.heisenberg.examples
 - Le `RequestContext` Vauban est activé au moment du déploiement de chaque archive TCK pour
   éviter les `ContextNotActiveException` sur les beans `@RequestScoped` du TCK.
 
-**État M9 (en cours) :**
+**État M9 (en cours, dernier rafraîchissement 2026-05-16T11:17Z) :**
 - ✅ Infrastructure Arquillian complète : container, bootstrap, test enricher, descripteurs.
 - ✅ TCK officiel téléchargé et exécutable contre Heisenberg.
-- ✅ Baseline historique : `527 run / 175 fail / 86 skip`.
-- ✅ Dernier run global : `527 run / 125 fail / 86 skip` (**+50 tests passés** vs baseline).
-- ✅ Run global courant : `501 run / 109 fail / 60 skip` (**+16 tests passés, -26 skips** vs run précédent).
+- ✅ Smoke TCK (`HeisenbergTckSmokeTest`) : `1/1 PASS` (run 2026-05-16T10:24Z).
+- ✅ Tests unitaires reactor (M0–M8) : `98/98` core + `42/42` cdi-vauban = **140/140 verts**.
+- ✅ Baseline historique : `527 run / 266 PASS / 175 fail / 86 skip`.
+- ✅ **Dernier run global (`all`) confirmé 2026-05-16T11:17Z** :
+  `424 run / 349 PASS / 61 fail / 14 skip` (**~82 % PASS**, +17 PASS et -48 fail vs run
+  précédent, exclusions metrics/telemetry actives).
 - ✅ `RetryTest` : `8/8 PASS`.
+- ✅ `FallbackMethodOutOfPackageTest` : `1/1 PASS` (validation négative au déploiement OK).
+- ✅ `InvalidRetryDelayTest` : `1/1 PASS`.
 - 🚧 `CircuitBreakerLifecycleTest` : `19/20 PASS` (1 scénario restant sur override class-level).
-- ✅ Validations négatives fallback au déploiement : `FallbackMethodOutOfPackageTest` PASS (FTDE bien remontée).
-- 🚧 Reste prioritaire : métriques/télémétrie TCK (`MetricRegistryProxy` non résolu, `InMemoryMetricReader` non enregistré).
-- 🚧 100 % PASS = itération par lots (Validation -> Metrics/Telemetry -> cas fonctionnels résiduels).
+- 🚧 Cluster dominant restant — **Bulkhead asynchrone** :
+  `BulkheadAsynchTest` (9 échecs) + `BulkheadAsynchRetryTest` (8 échecs) +
+  `BulkheadFutureTest` (4 échecs) ≈ **21 échecs** `Timed out while checking task is awaiting` /
+  `testBulkheadCompletionStage`. Symptôme aligné avec BUG-001 (cycle d'attente async vs
+  barrière de test) — prochain lot prioritaire.
+- 🚧 `TimeoutUninterruptableTest` : 4 échecs sur le timing d'interruption en mode async.
+- 🚧 `CircuitBreakerRetryTest` : 4 échecs résiduels sur la composition async CB+Retry.
+- 🚧 `DisableTest` : 4 échecs (interception de la propriété de désactivation globale +
+  fallback/timeout dans le sous-cas désactivé).
+- 🚧 Validations négatives de déploiement `Fallback*` (`FallbackMethodGenericTest`,
+  `FallbackMethodGenericDeepTest`, `FallbackMethodGenericArrayTest`,
+  `FallbackMethodPrivateTest`, `FallbackMethodWildcardNegativeTest`,
+  `IncompatibleFallbackTest`) : ≈6 échecs (résolution `MethodHandle` sur signatures
+  génériques / non-public à durcir dans `HeisenbergExtension`).
+- 🚧 `AsyncCancellationTest` (3) + `RetryConditionTest` (3) : à investiguer.
+- 🚧 `FaultToleranceInterceptorPriorityChangeAnnotationConfTest` : bootstrap KO sur
+  re-priorisation de l'intercepteur quand pilotée par annotation (vs propriété MP Config).
+- 🚧 Reste à instrumenter : métriques/télémétrie TCK (`MetricRegistryProxy`,
+  `InMemoryMetricReader`) — exclus actuellement (voir `TCK.md`).
+- 🚧 100 % PASS = itération par lots : Bulkhead async → CB+Retry async → Timeout interrupt →
+  Validations Fallback invalides → Disable/PriorityChange → Metrics/Telemetry.
 
 **Livrable :** score TCK mesurable/reproductible à chaque lot ; objectif final = 100 % PASS.
 

@@ -75,7 +75,8 @@ class ConfigResolverEnabledTest {
     @Test
     void retryDisabledAtClassLevel() throws Exception {
         // §9 : <class>/Retry/enabled=false → retry désactivé pour toutes les méthodes
-        Method method = RetryService.class.getDeclaredMethod("method");
+        // Note: la clé class-level n'est consultée que si l'annotation est sur la classe (héritée).
+        Method method = ClassLevelRetryService.class.getDeclaredMethod("method");
         String key = method.getDeclaringClass().getName() + "/Retry/enabled";
         Config config = new MockConfig().set(key, "false");
 
@@ -107,7 +108,25 @@ class ConfigResolverEnabledTest {
 
     @Test
     void classLevelOverridesGlobal() throws Exception {
+        // MP FT 4.1 §10 (interprétation SmallRye) : quand l'annotation est directement présente
+        // sur la méthode, la clé class-level (sans method) n'est PAS consultée — seules
+        // <class>/<method>/Retry/enabled et Retry/enabled sont prises en compte.
+        // Ici @Retry est sur method() → class-level config est ignorée, global "false" gagne.
         Method method = RetryService.class.getDeclaredMethod("method");
+        String classKey = method.getDeclaringClass().getName() + "/Retry/enabled";
+
+        Config config = new MockConfig()
+                .set("Retry/enabled", "false")
+                .set(classKey, "true");
+
+        assertFalse(ConfigResolver.isEnabled(method, "Retry", config));
+    }
+
+    @Test
+    void classLevelAppliesOnlyWhenAnnotationIsOnClass() throws Exception {
+        // Quand l'annotation est HÉRITÉE de la classe (et non directement sur la méthode),
+        // la clé class-level <class>/Retry/enabled est consultée.
+        Method method = ClassLevelRetryService.class.getDeclaredMethod("method");
         String classKey = method.getDeclaringClass().getName() + "/Retry/enabled";
 
         Config config = new MockConfig()
@@ -189,6 +208,11 @@ class ConfigResolverEnabledTest {
 
     static class RetryService {
         @Retry(maxRetries = 2)
+        void method() {}
+    }
+
+    @Retry(maxRetries = 2)
+    static class ClassLevelRetryService {
         void method() {}
     }
 

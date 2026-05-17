@@ -72,44 +72,45 @@ public final class PolicyComposer {
                 + System.identityHashCode(runtimeBeanClass.getClassLoader());
         String methodKey = method.toGenericString();
 
-        // Construction de la chaîne de l'intérieur vers l'extérieur :
-        // méthode → @Timeout → @Bulkhead → @CircuitBreaker → @Retry → @Fallback
+        // Construction de la chaîne de l'intérieur vers l'extérieur, conforme MP FT 4.1 §2.5 :
+        // Outer→inner : Fallback → Retry → CB → Timeout → Bulkhead → method.
+        // Note : Timeout enveloppe Bulkhead pour que le temps passé en file d'attente
+        // (mode async @Bulkhead waitingTaskQueue) soit compté dans la deadline du @Timeout.
+        // Spec §2.5 : « the Bulkhead queue counts towards the timeout duration ».
 
-        // Couche 1 : @Timeout — s'applique à chaque tentative individuelle (§4.1)
-        // M7 : vérifier le flag enabled via config
-        Timeout timeout = annotations.timeout();
-        Invocation base = effectiveInvocation;
-        if (timeout != null && ConfigResolver.isTimeoutEnabled(method)) {
-            TimeoutConfig timeoutConfig = ConfigResolver.timeoutConfig(method, timeout);
-            final Invocation untimedBase = effectiveInvocation;
-            base = () -> TimeoutEngine.execute(untimedBase, timeoutConfig);
-        }
-
-        // Couche 2 : @Bulkhead (M5) — limite la concurrence
-        // M7 : vérifier le flag enabled via config
+        // Couche 1 (la plus interne) : @Bulkhead — limite la concurrence
         Bulkhead bulkhead = annotations.bulkhead();
-        Invocation withBulkhead = base;
+        Invocation base = effectiveInvocation;
         if (bulkhead != null && ConfigResolver.isBulkheadEnabled(method) && bhRegistry != null) {
             BulkheadConfig bhConfig = ConfigResolver.bulkheadConfig(method, bulkhead);
-            final Invocation timedBase = base;
-            withBulkhead = () -> {
+            final Invocation rawBase = effectiveInvocation;
+            base = () -> {
                 BulkheadEngine engine = new BulkheadEngine(bhConfig, bhRegistry);
                 if (asyncActive) {
-                    return engine.executeAsync(timedBase, beanClassName, methodKey);
+                    return engine.executeAsync(rawBase, beanClassName, methodKey);
                 }
-                return engine.execute(timedBase, beanClassName, methodKey);
+                return engine.execute(rawBase, beanClassName, methodKey);
             };
         }
 
-        // Couche 3 : @CircuitBreaker (M4+) — wraps bulkhead+timeout
-        // M7 : vérifier le flag enabled via config
+        // Couche 2 : @Timeout — enveloppe Bulkhead pour comptabiliser le temps en queue
+        Timeout timeout = annotations.timeout();
+        Invocation withTimeout = base;
+        if (timeout != null && ConfigResolver.isTimeoutEnabled(method)) {
+            TimeoutConfig timeoutConfig = ConfigResolver.timeoutConfig(method, timeout);
+            final Invocation bulkheadBase = base;
+            final boolean asyncCall = asyncActive;
+            withTimeout = () -> TimeoutEngine.execute(bulkheadBase, timeoutConfig, asyncCall);
+        }
+
+        // Couche 3 : @CircuitBreaker — voit chaque tentative individuellement
         CircuitBreaker cb = annotations.circuitBreaker();
-        Invocation withCB = withBulkhead;
+        Invocation withCB = withTimeout;
         if (cb != null && ConfigResolver.isCircuitBreakerEnabled(method) && cbRegistry != null) {
             CircuitBreakerConfig cbConfig = ConfigResolver.circuitBreakerConfig(method, cb);
-            final Invocation withBulkheadBase = withBulkhead;
+            final Invocation timeoutBase = withTimeout;
             withCB = () -> new CircuitBreakerEngine(cbConfig, cbRegistry)
-                    .execute(withBulkheadBase, beanClassName, methodKey);
+                    .execute(timeoutBase, beanClassName, methodKey);
         }
 
         // Couche 4 : @Retry — plus externe pour rejouer CB/Bulkhead/Timeout selon retryOn/abortOn

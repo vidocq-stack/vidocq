@@ -35,14 +35,25 @@ public final class AsynchronousEngine {
     ) throws Exception {
         CompletableFuture<Object> future = new CompletableFuture<>();
 
+        // Capturer l'état du guard de ré-entrée avant de quitter le scope courant :
+        // ScopedValue n'est pas hérité par les threads créés via Thread.ofVirtual().start().
+        final boolean reentryActive = ReentryGuard.isActive();
+
         Thread.ofVirtual()
                 .name("heisenberg-async-" + threadName)
                 .start(() -> {
-                    try {
-                        Object result = invocation.proceed();
-                        future.complete(result);
-                    } catch (Exception e) {
-                        future.completeExceptionally(e);
+                    Runnable body = () -> {
+                        try {
+                            Object result = invocation.proceed();
+                            future.complete(result);
+                        } catch (Throwable e) {
+                            future.completeExceptionally(e);
+                        }
+                    };
+                    if (reentryActive) {
+                        ScopedValue.where(ReentryGuard.ACTIVE, Boolean.TRUE).run(body);
+                    } else {
+                        body.run();
                     }
                 });
 

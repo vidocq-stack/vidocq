@@ -4,6 +4,12 @@ import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.lang.reflect.Method;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
+import java.lang.reflect.TypeVariable;
+import java.lang.reflect.WildcardType;
+import java.lang.reflect.GenericArrayType;
+import java.util.Arrays;
 import org.eclipse.microprofile.faulttolerance.ExecutionContext;
 import org.eclipse.microprofile.faulttolerance.Fallback;
 import org.eclipse.microprofile.faulttolerance.FallbackHandler;
@@ -13,7 +19,8 @@ public final class FallbackResolver {
 
     public Object resolve(Fallback fallback, Object target, Method guardedMethod, Object[] parameters, Throwable failure)
             throws Exception {
-        validateDefinition(target.getClass(), guardedMethod, fallback);
+        Class<?> beanClass = resolveUserClass(target.getClass());
+        validateDefinition(beanClass, guardedMethod, fallback);
 
         String fallbackMethodName = fallback.fallbackMethod();
         if (!fallbackMethodName.isEmpty()) {
@@ -40,7 +47,45 @@ public final class FallbackResolver {
             resolveFallbackMethodHandle(beanClass, guardedMethod, fallback.fallbackMethod());
         } else {
             instantiateHandler(fallback.value());
+            validateHandlerReturnType(guardedMethod, fallback.value());
         }
+    }
+
+    public void validateDefinition(Class<?> beanClass, Method guardedMethod, FallbackConfig config) {
+        String fallbackMethod = config.fallbackMethod();
+        Class<? extends FallbackHandler<?>> fallbackHandler = config.fallbackHandlerClass();
+
+        boolean hasFallbackMethod = fallbackMethod != null && !fallbackMethod.isEmpty();
+        boolean hasFallbackHandler = fallbackHandler != null && fallbackHandler != Fallback.DEFAULT.class;
+
+        if (hasFallbackMethod == hasFallbackHandler) {
+            throw new FaultToleranceDefinitionException(
+                    "@Fallback must define exactly one strategy between fallbackMethod and value()"
+            );
+        }
+
+        if (hasFallbackMethod) {
+            resolveFallbackMethodHandle(beanClass, guardedMethod, fallbackMethod);
+        } else {
+            instantiateHandler(fallbackHandler);
+            validateHandlerReturnType(guardedMethod, fallbackHandler);
+        }
+    }
+
+    public Object resolve(FallbackConfig config, Object target, Method guardedMethod, Object[] parameters, Throwable failure)
+            throws Exception {
+        Class<?> beanClass = resolveUserClass(target.getClass());
+        validateDefinition(beanClass, guardedMethod, config);
+
+        String fallbackMethodName = config.fallbackMethod();
+        if (fallbackMethodName != null && !fallbackMethodName.isEmpty()) {
+            return invokeFallbackMethod(target, guardedMethod, fallbackMethodName, parameters);
+        }
+
+        FallbackHandler<?> handler = instantiateHandler(config.fallbackHandlerClass());
+        Object result = handler.handle(new DefaultExecutionContext(guardedMethod, parameters, failure));
+        ensureReturnTypeCompatible(guardedMethod, result);
+        return result;
     }
 
     private Object invokeFallbackMethod(Object target, Method guardedMethod, String fallbackMethodName, Object[] parameters)
@@ -61,16 +106,163 @@ public final class FallbackResolver {
     }
 
     private MethodHandle resolveFallbackMethodHandle(Class<?> beanClass, Method guardedMethod, String fallbackMethodName) {
-        MethodType fallbackSignature = MethodType.methodType(guardedMethod.getReturnType(), guardedMethod.getParameterTypes());
+        Method fallbackMethod = findCompatibleFallbackMethod(beanClass, guardedMethod, fallbackMethodName);
+        if (fallbackMethod == null) {
+            throw new FaultToleranceDefinitionException(
+                    "Invalid fallbackMethod '" + fallbackMethodName + "' for " + guardedMethod,
+                    new NoSuchMethodException(fallbackMethodName)
+            );
+        }
+
         try {
-            MethodHandles.Lookup privateLookup = MethodHandles.privateLookupIn(beanClass, MethodHandles.lookup());
-            return privateLookup.findVirtual(beanClass, fallbackMethodName, fallbackSignature);
+            Class<?> owner = fallbackMethod.getDeclaringClass();
+            MethodType methodType = MethodType.methodType(fallbackMethod.getReturnType(), fallbackMethod.getParameterTypes());
+            MethodHandles.Lookup privateLookup = MethodHandles.privateLookupIn(owner, MethodHandles.lookup());
+            if ((fallbackMethod.getModifiers() & java.lang.reflect.Modifier.PRIVATE) != 0) {
+                return privateLookup.findSpecial(owner, fallbackMethodName, methodType, owner);
+            }
+            return privateLookup.findVirtual(owner, fallbackMethodName, methodType);
         } catch (NoSuchMethodException | IllegalAccessException failure) {
             throw new FaultToleranceDefinitionException(
                     "Invalid fallbackMethod '" + fallbackMethodName + "' for " + guardedMethod,
                     failure
             );
         }
+    }
+
+    private Method findCompatibleFallbackMethod(Class<?> beanClass, Method guardedMethod, String fallbackMethodName) {
+        Class<?> current = beanClass;
+        while (current != null && current != Object.class) {
+            for (Method candidate : current.getDeclaredMethods()) {
+                if (!candidate.getName().equals(fallbackMethodName)) {
+                    continue;
+                }
+                if (!isMethodCompatible(guardedMethod, candidate)) {
+                    continue;
+                }
+                return candidate;
+            }
+            current = current.getSuperclass();
+        }
+        return null;
+    }
+
+    private boolean isMethodCompatible(Method guardedMethod, Method fallbackMethod) {
+        Class<?>[] guardedParams = guardedMethod.getParameterTypes();
+        Class<?>[] fallbackParams = fallbackMethod.getParameterTypes();
+        if (guardedParams.length != fallbackParams.length) {
+            return false;
+        }
+        for (int i = 0; i < guardedParams.length; i++) {
+            if (!fallbackParams[i].isAssignableFrom(guardedParams[i])) {
+                return false;
+            }
+        }
+        if (!guardedMethod.getReturnType().isAssignableFrom(fallbackMethod.getReturnType())) {
+            return false;
+        }
+
+        Type[] guardedGenericParams = guardedMethod.getGenericParameterTypes();
+        Type[] fallbackGenericParams = fallbackMethod.getGenericParameterTypes();
+        for (int i = 0; i < guardedGenericParams.length; i++) {
+            if (isConcreteGenericMismatch(guardedGenericParams[i], fallbackGenericParams[i])) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean isConcreteGenericMismatch(Type guarded, Type fallback) {
+        if (containsTypeVariable(guarded) || containsTypeVariable(fallback)) {
+            return false;
+        }
+        return !typeEquivalent(guarded, fallback);
+    }
+
+    private boolean containsTypeVariable(Type type) {
+        if (type instanceof TypeVariable<?>) {
+            return true;
+        }
+        if (type instanceof ParameterizedType p) {
+            for (Type arg : p.getActualTypeArguments()) {
+                if (containsTypeVariable(arg)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        if (type instanceof GenericArrayType g) {
+            return containsTypeVariable(g.getGenericComponentType());
+        }
+        if (type instanceof WildcardType w) {
+            for (Type bound : w.getUpperBounds()) {
+                if (containsTypeVariable(bound)) {
+                    return true;
+                }
+            }
+            for (Type bound : w.getLowerBounds()) {
+                if (containsTypeVariable(bound)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private boolean typeEquivalent(Type left, Type right) {
+        if (left.equals(right)) {
+            return true;
+        }
+        if (left instanceof ParameterizedType lpt && right instanceof ParameterizedType rpt) {
+            if (!typeEquivalent(lpt.getRawType(), rpt.getRawType())) {
+                return false;
+            }
+            Type[] la = lpt.getActualTypeArguments();
+            Type[] ra = rpt.getActualTypeArguments();
+            if (la.length != ra.length) {
+                return false;
+            }
+            for (int i = 0; i < la.length; i++) {
+                if (!typeEquivalent(la[i], ra[i])) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        if (left instanceof WildcardType lwt && right instanceof WildcardType rwt) {
+            return Arrays.equals(lwt.getUpperBounds(), rwt.getUpperBounds())
+                    && Arrays.equals(lwt.getLowerBounds(), rwt.getLowerBounds());
+        }
+        return false;
+    }
+
+    private void validateHandlerReturnType(Method guardedMethod, Class<? extends FallbackHandler<?>> handlerClass) {
+        Type[] interfaces = handlerClass.getGenericInterfaces();
+        for (Type itf : interfaces) {
+            if (!(itf instanceof ParameterizedType p)) {
+                continue;
+            }
+            if (!(p.getRawType() instanceof Class<?> raw) || raw != FallbackHandler.class) {
+                continue;
+            }
+            Type fallbackType = p.getActualTypeArguments()[0];
+            if (fallbackType instanceof Class<?> clazz) {
+                if (!boxed(guardedMethod.getReturnType()).isAssignableFrom(clazz)) {
+                    throw new FaultToleranceDefinitionException(
+                            "FallbackHandler return type mismatch for " + guardedMethod
+                    );
+                }
+            }
+            return;
+        }
+    }
+
+    private Class<?> resolveUserClass(Class<?> runtimeClass) {
+        Class<?> current = runtimeClass;
+        while (current.getName().contains("$$Intercepted") && current.getSuperclass() != null) {
+            current = current.getSuperclass();
+        }
+        return current;
     }
 
     private FallbackHandler<?> instantiateHandler(Class<? extends FallbackHandler<?>> handlerClass) {

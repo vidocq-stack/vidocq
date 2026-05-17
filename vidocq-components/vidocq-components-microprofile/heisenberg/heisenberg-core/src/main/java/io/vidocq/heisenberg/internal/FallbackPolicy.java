@@ -22,6 +22,9 @@ public final class FallbackPolicy {
             if (!config.shouldApplyFallback(failure)) {
                 throw failure;
             }
+            if (config.fallbackMethod() != null || config.fallbackHandlerClass() != null) {
+                return resolver.resolve(config, target, guardedMethod, parameters, failure);
+            }
             return resolver.resolve(fallback, target, guardedMethod, parameters, failure);
         }
     }

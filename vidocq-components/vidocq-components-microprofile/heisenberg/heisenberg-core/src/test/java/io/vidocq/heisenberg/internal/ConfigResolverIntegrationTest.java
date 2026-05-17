@@ -36,8 +36,9 @@ class ConfigResolverIntegrationTest {
     @Test
     void timeoutClassLevelOverrideFromPropertiesFile() throws Exception {
         // <FQCN>/Timeout/value=3000 dans microprofile-config.properties
+        // @Timeout est sur la classe DemoService → la clé class-level s'applique.
         Method method = DemoService.class.getDeclaredMethod("genericCall");
-        TimeoutConfig resolved = ConfigResolver.timeoutConfig(method, method.getAnnotation(Timeout.class));
+        TimeoutConfig resolved = ConfigResolver.timeoutConfig(method, DemoService.class.getAnnotation(Timeout.class));
         assertEquals(3000L, resolved.value(), "class-level override must apply");
     }
 
@@ -104,9 +105,11 @@ class ConfigResolverIntegrationTest {
 
     // --- Test service ---
 
+    // @Timeout au niveau classe → la clé <FQCN>/Timeout/value=3000 (class-level) s'applique.
+    @Timeout
     static class DemoService {
         @Retry void retryCall() {}
-        @Timeout void genericCall() {}
+        void genericCall() {} // hérite @Timeout de la classe
         @CircuitBreaker void criticalCall() {}
         @Bulkhead void bulkheadCall() {}
         @Fallback(fallbackMethod = "recover") void fallbackCall() {}

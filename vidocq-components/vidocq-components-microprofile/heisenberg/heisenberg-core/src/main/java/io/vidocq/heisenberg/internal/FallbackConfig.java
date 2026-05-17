@@ -1,5 +1,7 @@
 package io.vidocq.heisenberg.internal;
 
+import org.eclipse.microprofile.faulttolerance.FallbackHandler;
+
 /**
  * Configuration immuable pour la politique {@code @Fallback}.
  *
@@ -9,10 +11,14 @@ package io.vidocq.heisenberg.internal;
  *
  * @param applyOn types d'exception qui déclenchent le fallback (défaut spec : {@link Throwable})
  * @param skipOn  types d'exception qui contournent le fallback et sont propagées telles quelles
+ * @param fallbackMethod nom de fallbackMethod effectif (annotation ou override config)
+ * @param fallbackHandlerClass type de FallbackHandler effectif (annotation ou override config)
  */
 public record FallbackConfig(
         Class<? extends Throwable>[] applyOn,
-        Class<? extends Throwable>[] skipOn
+        Class<? extends Throwable>[] skipOn,
+        String fallbackMethod,
+        Class<? extends FallbackHandler<?>> fallbackHandlerClass
 ) {
 
     public FallbackConfig {

@@ -31,17 +31,44 @@ public final class TimeoutEngine {
      * @throws Exception        si l'invocation lève une exception avant la deadline
      */
     public static Object execute(PolicyComposer.Invocation invocation, TimeoutConfig config) throws Exception {
+        return execute(invocation, config, false);
+    }
+
+    /**
+     * Exécute l'invocation avec un timeout.
+     *
+     * @param invocation     l'invocation à protéger
+     * @param config         la configuration du timeout
+     * @param asyncCall      {@code true} si appelé depuis le wrapper async (le caller
+     *                       a déjà rendu la main, on ne doit pas le bloquer au-delà du
+     *                       deadline). {@code false} = sync : §4.1.2 impose d'attendre
+     *                       la fin réelle de la méthode (uninterruptable) avant de lever
+     *                       la {@link TimeoutException}.
+     */
+    public static Object execute(PolicyComposer.Invocation invocation, TimeoutConfig config, boolean asyncCall) throws Exception {
         Duration timeout = config.duration();
         AtomicReference<Object> resultRef = new AtomicReference<>();
         AtomicReference<Throwable> errorRef = new AtomicReference<>();
 
+        // ScopedValue (ReentryGuard) n'est pas hérité par les vthreads créés via .start().
+        // Sans ré-injection, invocation.proceed() ré-entre dans le proxy CDI puis dans
+        // FaultToleranceInterceptor, qui re-déroule toute la chaîne et explose en récursion.
+        final boolean reentryActive = ReentryGuard.isActive();
+
         Thread vThread = Thread.ofVirtual()
                 .name("heisenberg-timeout")
                 .start(() -> {
-                    try {
-                        resultRef.set(invocation.proceed());
-                    } catch (Throwable t) {
-                        errorRef.set(t);
+                    Runnable body = () -> {
+                        try {
+                            resultRef.set(invocation.proceed());
+                        } catch (Throwable t) {
+                            errorRef.set(t);
+                        }
+                    };
+                    if (reentryActive) {
+                        ScopedValue.where(ReentryGuard.ACTIVE, Boolean.TRUE).run(body);
+                    } else {
+                        body.run();
                     }
                 });
 
@@ -51,6 +78,15 @@ public final class TimeoutEngine {
             // La deadline est dépassée : interrompre le virtual thread (best-effort).
             // Les opérations bloquantes interruptibles (Thread.sleep, I/O NIO) seront annulées.
             vThread.interrupt();
+
+            // §4.1.2 (mode sync uniquement) : on attend la fin effective de la méthode avant
+            // de propager TimeoutException. Pour les méthodes uninterruptable, le caller reste
+            // bloqué jusqu'au retour réel. En mode async, on rend la main immédiatement (le
+            // virtual thread asynchrone porte déjà l'attente).
+            if (!asyncCall) {
+                vThread.join();
+            }
+
             throw new TimeoutException(
                     "Invocation timed out after " + timeout.toMillis() + " ms"
             );

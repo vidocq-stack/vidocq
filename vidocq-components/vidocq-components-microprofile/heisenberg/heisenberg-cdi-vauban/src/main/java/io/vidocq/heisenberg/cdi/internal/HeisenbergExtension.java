@@ -3,6 +3,8 @@ package io.vidocq.heisenberg.cdi.internal;
 import io.vidocq.heisenberg.internal.ConfigResolver;
 import io.vidocq.heisenberg.internal.FallbackResolver;
 import java.lang.reflect.Method;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Future;
 import jakarta.annotation.Priority;
@@ -34,6 +36,7 @@ import org.eclipse.microprofile.faulttolerance.exceptions.FaultToleranceDefiniti
 public class HeisenbergExtension implements BuildCompatibleExtension {
 
 	private final FallbackResolver fallbackResolver = new FallbackResolver();
+	private final Set<String> bindingEnhancedClasses = ConcurrentHashMap.newKeySet();
 
 	/**
 	 * M8 §9 : applique au démarrage la priorité configurée via MP Config
@@ -47,8 +50,7 @@ public class HeisenbergExtension implements BuildCompatibleExtension {
 		if (priority == ConfigResolver.DEFAULT_INTERCEPTOR_PRIORITY) {
 			return; // priorité par défaut déjà déclarée statiquement
 		}
-		classConfig.removeAnnotation(a ->
-				Priority.class.getName().equals(a.declaration().name()));
+		classConfig.removeAnnotation(a -> Priority.class.getName().equals(a.name()));
 		classConfig.addAnnotation(new PriorityLiteral(priority));
 	}
 
@@ -85,6 +87,10 @@ public class HeisenbergExtension implements BuildCompatibleExtension {
 			}
 	)
 	public void addFaultToleranceBinding(ClassConfig classConfig) {
+		String className = classConfig.info().name();
+		if (!bindingEnhancedClasses.add(className)) {
+			return;
+		}
 		validateClass(resolveClass(classConfig));
 		classConfig.addAnnotation(FaultToleranceBinding.class);
 	}
