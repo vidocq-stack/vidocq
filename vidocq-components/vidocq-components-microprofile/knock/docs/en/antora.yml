@@ -6,11 +6,3 @@ nav:
 asciidoc:
   attributes:
     lang: en
-name: knock
-title: Knock
-version: ~
-nav:
-  - modules/ROOT/nav.adoc
-asciidoc:
-  attributes:
-    lang: en
