@@ -1,0 +1,12 @@
+= TCK
+
+Knock passe le TCK officiel MicroProfile Health 4.0:
+
+* 28 / 28 PASS
+
+[source,bash]
+----
+./run-official-tck-mp-health-4.0.sh
+./run-official-tck-mp-health-4.0.sh all
+----
+
