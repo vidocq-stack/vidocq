@@ -21,22 +21,3 @@ Knock is the health subsystem in the Vidocq ecosystem.
 * `GET /health/live`
 * `GET /health/ready`
 * `GET /health/started`
-
-= Knock
-:description: MicroProfile Health 4.0 implementation for Vidocq.
-[.lead]
-Knock is the health subsystem in the Vidocq ecosystem.
-== At a glance
-[cols="1,3"]
-|===
-| Implemented spec | {spec-mp-health}
-| Repo | {repo-knock}
-| Java | 25
-| Modules | `knock-api`, `knock-core`, `knock-cdi-vauban`, `knock-cassini`
-| TCK | 28 / 28 PASS
-|===
-== Endpoints
-* `GET /health`
-* `GET /health/live`
-* `GET /health/ready`
-* `GET /health/started`
