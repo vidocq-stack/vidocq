@@ -1,0 +1,18 @@
+= Usage
+
+== Probe qualifiers
+
+Use one qualifier per check:
+
+* `@Liveness`
+* `@Readiness`
+* `@Startup`
+
+Checks without qualifier are ignored at runtime.
+
+== Aggregation
+
+* If one check is `DOWN`, global status is `DOWN`.
+* If no checks are present, global status is `UP`.
+* Exceptions are converted to `DOWN` checks.
+

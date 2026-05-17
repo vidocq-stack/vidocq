@@ -1,0 +1,8 @@
+= Concepts
+
+* `knock-core` reste standalone Java SE.
+* L integration CDI est isolee dans `knock-cdi-vauban`.
+* L integration JAX-RS est isolee dans `knock-cassini`.
+* Les packages internes restent non exportes.
+* Runtime compatible virtual threads: pas de `synchronized`, pas de `ThreadLocal`.
+

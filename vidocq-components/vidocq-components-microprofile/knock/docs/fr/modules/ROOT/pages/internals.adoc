@@ -1,0 +1,16 @@
+= Fonctionnement interne
+
+Flux runtime:
+
+. `HealthCheckRegistry.getChecks(ProbeType)`
+. Execution de `HealthCheck.call()`
+. Aggregation du statut
+. Construction du snapshot
+. Serialisation JSON via Jakarta JSON-P
+
+Points d entree de `knock-core`:
+
+* `io.vidocq.knock.runtime.HealthCheckRegistries`
+* `io.vidocq.knock.runtime.KnockHealthService`
+* `io.vidocq.knock.runtime.HealthReport`
+

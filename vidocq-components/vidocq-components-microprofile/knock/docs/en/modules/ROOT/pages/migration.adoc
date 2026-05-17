@@ -1,0 +1,8 @@
+= Migration
+
+From another health implementation:
+
+. Keep `HealthCheck` classes.
+. Add one qualifier (`@Liveness`, `@Readiness`, `@Startup`).
+. Keep MicroProfile Health JSON contract.
+

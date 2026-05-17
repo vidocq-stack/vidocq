@@ -1,0 +1,16 @@
+= Internals
+
+Runtime flow:
+
+. `HealthCheckRegistry.getChecks(ProbeType)`
+. `HealthCheck.call()` execution
+. Aggregate status
+. Build snapshot
+. Serialize JSON via Jakarta JSON-P
+
+Service entry points from `knock-core`:
+
+* `io.vidocq.knock.runtime.HealthCheckRegistries`
+* `io.vidocq.knock.runtime.KnockHealthService`
+* `io.vidocq.knock.runtime.HealthReport`
+
