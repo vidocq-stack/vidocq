@@ -8,7 +8,7 @@
 Implémentation **MicroProfile Fault Tolerance 4.1** dans l'écosystème Vidocq.
 
 - **Zéro librairie tierce** — seules les API specs Jakarta EE / MicroProfile sont compilées.
-- **Java 25** — virtual threads pour `@Asynchronous` et `@Timeout` (StructuredTaskScope).
+- **Java 25** — virtual threads pour `@Asynchronous` et `@Timeout` (`Thread.ofVirtual() + join(Duration)`).
 - **JPMS strict** — chaque module a son `module-info.java`, exports minimaux.
 - **CDI via Vauban** — `heisenberg-cdi-vauban` fournit l'intercepteur CDI et la BCE.
 - **Config via Ravel** — surcharge des paramètres via MicroProfile Config.
@@ -18,7 +18,7 @@ Implémentation **MicroProfile Fault Tolerance 4.1** dans l'écosystème Vidocq.
 | Annotation | Description |
 |---|---|
 | `@Retry` | Ré-essais automatiques avec délai, jitter, retryOn/abortOn |
-| `@Timeout` | Délai maximal d'exécution par tentative (StructuredTaskScope) |
+| `@Timeout` | Délai maximal d'exécution par tentative (virtual threads + `join(Duration)`) |
 | `@CircuitBreaker` | Disjoncteur (CLOSED/OPEN/HALF_OPEN), fenêtre glissante |
 | `@Bulkhead` | Isolation par sémaphore (sync) ou file (async) |
 | `@Fallback` | Alternative en cas d'échec (FallbackHandler ou méthode de la classe) |

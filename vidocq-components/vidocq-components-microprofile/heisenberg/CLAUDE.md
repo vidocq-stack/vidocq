@@ -98,8 +98,10 @@ des `CircuitBreaker` et `Bulkhead` identifiés par `(BeanClass, Method)` — les
 - **Records** : privilégier les records immuables pour les configurations de politiques
   (`RetryConfig`, `CircuitBreakerConfig`, `BulkheadConfig`, `TimeoutConfig`)
 - **Pattern matching** : utiliser `switch` sur types scellés dans le `PolicyComposer`
-- **StructuredTaskScope** (JEP 480, Java 25) pour `@Timeout` — garantit l'annulation des
-  threads enfants et évite les fuites de virtual threads
+- **Virtual threads + `join(Duration)`** (Java 21+, finalisé) pour `@Timeout` — gère les timeouts
+  avec annulation best-effort des virtual threads. `StructuredTaskScope` (JEP 505, finalisé Java 25)
+  est disponible mais l'implémentation actuelle utilise `Thread.join(Duration)` pour rester compatible
+  Java 21+.
 
 ## Méthodologie TDD
 
@@ -122,7 +124,7 @@ des `CircuitBreaker` et `Bulkhead` identifiés par `(BeanClass, Method)` — les
 ## Agents disponibles
 
 - `classfile-codegen` — si un fallback nécessite de la génération de bytecode (improbable)
-- `virtual-threads-reviewer` — pour `TimeoutEngine` (StructuredTaskScope), `BulkheadEngine`
+- `virtual-threads-reviewer` — pour `TimeoutEngine` (virtual threads + `join(Duration)`), `BulkheadEngine`
   (Semaphore sous virtual threads), toute modification du code concurrent
 - `jpms-guardian` — après modification de `module-info.java` ou ajout de package
 - `dependency-gatekeeper` — avant tout ajout de dépendance au `pom.xml`

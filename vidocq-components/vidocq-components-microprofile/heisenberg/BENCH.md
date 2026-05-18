@@ -41,7 +41,7 @@ java -jar heisenberg-bench/target/benchmarks.jar -prof gc
 
 ### Chemin d'amélioration (Java 26+)
 
-La migration vers `StructuredTaskScope` (JEP 505, sortie du preview en Java 26) permettra une **gestion plus efficace** des sous-threads via un mécanisme de scope centralisé. Cela réduira significativement l'overhead par invocation. **Implémentation future documentée dans `ROADMAP.md` M10.**
+La migration vers `StructuredTaskScope` (JEP 505, finalisé Java 25) reste une optimisation optionnelle à considérer si les benchmarks le justifient. Actuellement, l'implémentation via `Thread.join(Duration)` (Java 21+) offre une stabilité éprouvée et une meilleure compatibilité.
 
 ---
 

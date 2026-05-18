@@ -10,7 +10,7 @@
 |---|---|
 | Zéro librairie d'implémentation | Pas de SmallRye FT, Hystrix, Resilience4j dans `heisenberg-core`. Seules les API specs compilées. |
 | Séparation politiques / CDI | `heisenberg-core` contient les moteurs purs Java ; `heisenberg-cdi-vauban` contient l'unique intercepteur CDI. |
-| Virtual threads | `@Asynchronous` via `VirtualThreadPerTaskExecutor` ; `@Timeout` via `StructuredTaskScope`. Pas de `synchronized`, pas de `ThreadLocal`. |
+| Virtual threads | `@Asynchronous` via `VirtualThreadPerTaskExecutor` ; `@Timeout` via `Thread.ofVirtual() + join(Duration)` (Java 21+, finalisé). Pas de `synchronized`, pas de `ThreadLocal`. |
 | JPMS strict | `module-info.java` partout, `internal.*` non exporté, SPI via `provides/uses`. Pas d'`opens` non justifié. |
 | TDD strict | Red → Green → Refactor. Test avant le code. Citation §spec dans les tests. |
 | TCK PASS 100 % | Contrat dur avant tout merge structurel. Score déclaré dans `TCK.md`. |
@@ -159,11 +159,11 @@ heisenberg-examples     io.vidocq.heisenberg.examples
 
 **Décisions M3 :**
 - `TimeoutEngine` implémenté avec `Thread.ofVirtual() + join(Duration)` — **sans features preview**. Garantit la compatibilité dès Java 21+.
-- Future évolution (Java 26+) : migration vers `StructuredTaskScope` (JEP 505) quand sortie du preview, qui garantira l'annulation plus robuste des sous-threads.
+- Future évolution (Java 26+) : migration vers `StructuredTaskScope` (JEP 505, finalisé Java 25) optionnelle si la performance le justifie. Actuellement, `Thread.join(Duration)` suffit et garde la compatibilité Java 21+.
 - Ajout des premiers benchmarks JMH dans `heisenberg-bench` : comparatif overhead interception
   vs SmallRye FT (même méthode vide, même JVM, écart de latence p99 documenté dans `BENCH.md`).
 
-**Livrable :** `@Timeout` seul et combiné `@Timeout + @Retry + @Fallback`. Benchmarks baseline et chemin de migration vers `StructuredTaskScope` documentés.
+**Livrable :** `@Timeout` seul et combiné `@Timeout + @Retry + @Fallback`. Benchmarks baseline documentés. Migration vers `StructuredTaskScope` optionnelle pour futures optimisations.
 
 ---
 
@@ -373,7 +373,7 @@ heisenberg-examples     io.vidocq.heisenberg.examples
 
 | Risque | Impact | Mitigation |
 |---|---|---|
-| `StructuredTaskScope` (preview en Java 25) | API future pour remplacer implementation actuelle | M3 implémenté **sans** preview features avec `Thread.ofVirtual()` + `Thread.join(Duration)` (Java 21+, finalisé). Chemin de migration documenté pour Java 26+ quand `StructuredTaskScope` sort du preview. |
+| `StructuredTaskScope` (finalisé Java 25) | API alternative (non utilisée actuellement) | M3 implémenté avec `Thread.ofVirtual() + join(Duration)` (Java 21+). `StructuredTaskScope` pourrait offrir des avantages futurs mais `Thread.join(Duration)` est stable et plus compatible. |
 | Concurrence du `CircuitBreakerEngine` | Races sur les transitions d'état sous forte charge | Tests de concurrence avec 100+ virtual threads dès M4 ; `AtomicReference` + CAS |
 | TCK TestNG vs JUnit 6 | Framework de test différent pour le TCK | Modules de test séparés ; TCK hors reactor avec son propre BOM TestNG |
 | Artefact TCK non-public | Blocage si l'artefact n'est pas dans le M2 local | Documentation dans `heisenberg-tck/README.md` ; CI script d'installation |
@@ -384,7 +384,7 @@ heisenberg-examples     io.vidocq.heisenberg.examples
 
 - [x] Séparation `heisenberg-core` (moteurs purs) / `heisenberg-cdi-vauban` (intercepteur CDI)
 - [x] Ordre de composition : `@Fallback → @CB → @Bulkhead → @Timeout → @Retry → méthode` (§2.5)
-- [x] Virtual threads pour `@Asynchronous` et `@Timeout` : implémentation M3 via `Thread.ofVirtual() + join(Duration)` (Java 21+, non-preview). Chemin de migration vers `StructuredTaskScope` quand sortie du preview (Java 26+).
+- [x] Virtual threads pour `@Asynchronous` et `@Timeout` : implémentation M3 via `Thread.ofVirtual() + join(Duration)` (Java 21+, finalisé). `StructuredTaskScope` (JEP 505, finalisé Java 25) reste une alternative optionnelle pour futures optimisations de performance.
 - [x] `StateKey` = `beanClass.getName() + "#" + methodName`
 - [x] Fenêtre glissante count-based uniquement pour le CircuitBreaker (time-based = optionnel spec)
 - [x] Configuration via `ConfigProvider.getConfig()` (Ravel) — pas de dépendance directe à Ravel
@@ -407,7 +407,7 @@ heisenberg-examples     io.vidocq.heisenberg.examples
 
 ## Décisions ouvertes
 
-- **StructuredTaskScope migration (M10 futur)** : M3 implémenté sans preview features via `Thread.ofVirtual() + join(Duration)` pour maximiser la compatibilité (Java 21+). `StructuredTaskScope` (JEP 505) permettra une gestion plus efficace des subtasks une fois sortie du preview (Java 26+). Voir `BENCH.md` pour l'analyse du overhead actuel et le plan d'amélioration.
+- **Virtual threads implementation (M3)** : implémentation via `Thread.ofVirtual() + join(Duration)` (Java 21+, finalisé). Cette approche est stable, compatible Java 21+, et offre les mêmes garanties de timeout que `StructuredTaskScope` (finalisé Java 25). Une migration vers `StructuredTaskScope` pourrait être envisagée en M10 si les benchmarks montrent un gain significatif, mais n'est pas prioritaire.
 - **MicroProfile Metrics** : intégration des métriques FT (counters retry, CB state, bulkhead queue) — reporter à post-TCK ou implémenter un stub no-op ?
 - **Fenêtre glissante time-based** : la spec la mentionne mais ne l'impose pas. Inclure dès M4 ou exclure (possible exclusion TCK à documenter) ?
 - **`@CircuitBreaker` + delay** : utiliser un virtual thread dormant ou un `ScheduledExecutorService` (platform) pour la transition OPEN → HALF_OPEN ?

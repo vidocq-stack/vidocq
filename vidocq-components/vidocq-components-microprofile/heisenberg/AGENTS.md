@@ -14,8 +14,7 @@
   purs Java 25 sans CDI, `heisenberg-cdi-vauban` intercepteur CDI + BCE Vauban,
   `heisenberg-tck` hors reactor.
 - **Pas de SmallRye Fault Tolerance, Hystrix, Resilience4j** dans le code de production.
-- Virtual threads (Project Loom) pour `@Asynchronous` et `@Timeout` — `StructuredTaskScope`
-  (JEP 480, Java 25) pour la gestion des timeouts avec annulation garantie.
+- Virtual threads (Project Loom) pour `@Asynchronous` et `@Timeout` — `Thread.ofVirtual() + join(Duration)` (Java 21+, finalisé). `StructuredTaskScope` (JEP 505) est disponible depuis Java 25 mais n'est pas utilisé actuellement pour maximiser la compatibilité avec Java 21+.
 - Utiliser `ROADMAP.md` pour suivre l'avancement des milestones (M0..M9).
 - Si les règles de ce fichier doivent être mises à jour, aligner `CLAUDE.md` dans la même
   opération — les deux fichiers sont des miroirs destinés à des outils différents.

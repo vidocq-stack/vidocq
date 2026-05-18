@@ -4,7 +4,7 @@
  * <p>Composants prévus (cf. ROADMAP.md M1-M7) :</p>
  * <ul>
  *   <li>{@code RetryEngine} — automate de retry avec délai, jitter, maxDuration.</li>
- *   <li>{@code TimeoutEngine} — timeout via {@code StructuredTaskScope} (JEP 480, preview Java 25).</li>
+     *   <li>{@code TimeoutEngine} — timeout via {@code Thread.ofVirtual() + join(Duration)} (Java 21+, finalisé).</li>
  *   <li>{@code CircuitBreakerEngine} — disjoncteur CLOSED/OPEN/HALF_OPEN, fenêtre glissante.</li>
  *   <li>{@code BulkheadEngine} — isolation par {@code Semaphore} (sync) ou file (async).</li>
  *   <li>{@code FallbackResolver} — résolution {@code FallbackHandler} ou {@code fallbackMethod}
