@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.vidocq.heisenberg.internal.subpackage.FallbackVisibilityParent;
 import java.io.IOException;
 import java.lang.reflect.Method;
 import org.eclipse.microprofile.faulttolerance.ExecutionContext;
@@ -77,6 +78,47 @@ class FallbackResolverTest {
         );
     }
 
+    @Test
+    void resolvesFallbackMethodFromInterfaceDefaultMethod() throws Exception {
+        DefaultFallbackService service = new DefaultFallbackService();
+        Method guardedMethod = DefaultFallbackService.class.getDeclaredMethod("guarded", String.class);
+        Fallback fallback = guardedMethod.getAnnotation(Fallback.class);
+
+        Object result = resolver.resolve(
+                fallback,
+                service,
+                guardedMethod,
+                new Object[]{"gamma"},
+                new IOException("backend")
+        );
+
+        assertEquals("default:gamma", result);
+    }
+
+    @Test
+    void rejectsFallbackMethodFromSuperclassPrivateMethod() throws Exception {
+        PrivateSuperclassService service = new PrivateSuperclassService();
+        Method guardedMethod = PrivateSuperclassService.class.getDeclaredMethod("guarded", String.class);
+        Fallback fallback = guardedMethod.getAnnotation(Fallback.class);
+
+        assertThrows(
+                FaultToleranceDefinitionException.class,
+                () -> resolver.resolve(fallback, service, guardedMethod, new Object[]{"delta"}, new IOException("fail"))
+        );
+    }
+
+    @Test
+    void rejectsFallbackMethodWhenOnlyPackagePrivateInDifferentPackage() throws Exception {
+        OutOfPackageService service = new OutOfPackageService();
+        Method guardedMethod = OutOfPackageService.class.getDeclaredMethod("guarded", String.class);
+        Fallback fallback = guardedMethod.getAnnotation(Fallback.class);
+
+        assertThrows(
+                FaultToleranceDefinitionException.class,
+                () -> resolver.resolve(fallback, service, guardedMethod, new Object[]{"epsilon"}, new IOException("fail"))
+        );
+    }
+
     static class HandlerService {
         @Fallback(Handler.class)
         String guarded(String value) {
@@ -119,6 +161,40 @@ class FallbackResolverTest {
     static class MissingMethodService {
         @Fallback(fallbackMethod = "recover")
         String guarded() {
+            return "unreachable";
+        }
+    }
+
+    interface DefaultFallbackContract {
+        default String fallback(String value) {
+            return "default:" + value;
+        }
+    }
+
+    static class DefaultFallbackService implements DefaultFallbackContract {
+        @Fallback(fallbackMethod = "fallback")
+        String guarded(String value) {
+            return "unreachable";
+        }
+    }
+
+    static class PrivateFallbackParent {
+        @SuppressWarnings("unused")
+        private String fallback(String value) {
+            return "private:" + value;
+        }
+    }
+
+    static class PrivateSuperclassService extends PrivateFallbackParent {
+        @Fallback(fallbackMethod = "fallback")
+        String guarded(String value) {
+            return "unreachable";
+        }
+    }
+
+    static class OutOfPackageService extends FallbackVisibilityParent {
+        @Fallback(fallbackMethod = "fallback")
+        String guarded(String value) {
             return "unreachable";
         }
     }

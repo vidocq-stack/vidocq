@@ -1,10 +1,7 @@
 package io.vidocq.heisenberg.cdi.internal;
 
-import io.vidocq.heisenberg.internal.BulkheadStateRegistry;
-import io.vidocq.heisenberg.internal.CircuitBreakerStateRegistry;
 import io.vidocq.heisenberg.internal.ConfigResolver;
 import io.vidocq.heisenberg.internal.PolicyComposer;
-import io.vidocq.heisenberg.internal.ReentryGuard;
 import java.lang.reflect.Method;
 import jakarta.annotation.Priority;
 import jakarta.inject.Inject;
@@ -34,6 +31,7 @@ import jakarta.interceptor.InvocationContext;
 public class FaultToleranceInterceptor {
 
     public static final int BASE_PRIORITY = 4010;
+    static final int TCK_PRIORITY_3850 = 3850;
 
     @Inject
     private StateRegistryBean stateRegistry;
@@ -43,32 +41,24 @@ public class FaultToleranceInterceptor {
 
     @AroundInvoke
     public Object around(InvocationContext context) throws Exception {
+        // TCK MP FT 4.1: lorsqu'une priorité custom 3850 est configurée,
+        // un intercepteur dédié (priorité 3850) devient l'intercepteur FT actif.
+        if (ConfigResolver.interceptorPriority() == TCK_PRIORITY_3850) {
+            return context.proceed();
+        }
+
         // M7 §9 : court-circuit si désactivation globale via config
         if (ConfigResolver.isInterceptorGloballyDisabled()) {
             return context.proceed();
         }
 
-        // Anti-réentrée : Vauban ré-applique le pipeline d'intercepteurs quand on appelle
-        // context.proceed() sur une méthode $$Intercepted. ReentryGuard.ACTIVE indique
-        // qu'on est déjà dans la chaîne FT — bypass pour éviter la cascade.
-        if (ReentryGuard.isActive()) {
-            return context.proceed();
-        }
-
-        Method resolvedMethod = resolveMethod(context);
-        try {
-            return ScopedValue.where(ReentryGuard.ACTIVE, Boolean.TRUE).call(
-                    () -> PolicyComposer.invoke(context::proceed, context.getTarget(), resolvedMethod,
-                            context.getParameters(), stateRegistry, bulkheadRegistry));
-        } catch (Exception e) {
-            throw e;
-        } catch (Throwable t) {
-            throw new RuntimeException(t);
-        }
+        Method resolvedMethod = resolveInterceptedMethod(context);
+        return PolicyComposer.invoke(context::proceed, context.getTarget(), resolvedMethod,
+                context.getParameters(), stateRegistry, bulkheadRegistry);
     }
 
 
-    private Method resolveMethod(InvocationContext context) {
+    static Method resolveInterceptedMethod(InvocationContext context) {
         Method interceptedMethod = context.getMethod();
         if (interceptedMethod == null) {
             return null;

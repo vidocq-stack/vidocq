@@ -67,18 +67,17 @@ class AsynchronousEngineTest {
 
     @Test
     void returnsCompletableFutureForAsyncComposition() throws Exception {
-        // Arrange : invocation retourne un CompletableFuture
+        // §8 : si l'invocation retourne un CompletionStage<T>, le moteur unwrappe le stage
+        // imbriqué et le CompletionStage externe se complète avec la valeur T (pas le stage lui-même).
         CompletableFuture<String> innerFuture = CompletableFuture.completedFuture("inner-value");
         PolicyComposer.Invocation invocation = () -> innerFuture;
 
         // Act
         CompletionStage<Object> result = AsynchronousEngine.executeAsync(invocation, THREAD_NAME);
 
-        // Assert : result contient le CompletableFuture retourné par l'invocation
-        // (l'unwrapping du stage imbriqué se ferait à un niveau supérieur si désiré)
+        // Assert : unwrapping du Future imbriqué — la valeur finale est "inner-value"
         Object resultValue = result.toCompletableFuture().get();
-        assertInstanceOf(CompletableFuture.class, resultValue);
-        assertEquals("inner-value", ((CompletableFuture<?>) resultValue).get());
+        assertEquals("inner-value", resultValue);
     }
 
     @Test

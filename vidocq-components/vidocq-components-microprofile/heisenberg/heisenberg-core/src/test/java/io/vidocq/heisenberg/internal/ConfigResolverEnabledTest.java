@@ -108,10 +108,8 @@ class ConfigResolverEnabledTest {
 
     @Test
     void classLevelOverridesGlobal() throws Exception {
-        // MP FT 4.1 §10 (interprétation SmallRye) : quand l'annotation est directement présente
-        // sur la méthode, la clé class-level (sans method) n'est PAS consultée — seules
-        // <class>/<method>/Retry/enabled et Retry/enabled sont prises en compte.
-        // Ici @Retry est sur method() → class-level config est ignorée, global "false" gagne.
+        // MP FT 4.1 §9 : précédence method > class > global, indépendamment du placement
+        // effectif de l'annotation. Sans clé method-level, la clé class-level l'emporte.
         Method method = RetryService.class.getDeclaredMethod("method");
         String classKey = method.getDeclaringClass().getName() + "/Retry/enabled";
 
@@ -119,13 +117,12 @@ class ConfigResolverEnabledTest {
                 .set("Retry/enabled", "false")
                 .set(classKey, "true");
 
-        assertFalse(ConfigResolver.isEnabled(method, "Retry", config));
+        assertTrue(ConfigResolver.isEnabled(method, "Retry", config));
     }
 
     @Test
-    void classLevelAppliesOnlyWhenAnnotationIsOnClass() throws Exception {
-        // Quand l'annotation est HÉRITÉE de la classe (et non directement sur la méthode),
-        // la clé class-level <class>/Retry/enabled est consultée.
+    void classLevelAppliesWhenAnnotationIsOnClass() throws Exception {
+        // Cas annotation class-level : la clé class-level est consultée et prioritaire sur global.
         Method method = ClassLevelRetryService.class.getDeclaredMethod("method");
         String classKey = method.getDeclaringClass().getName() + "/Retry/enabled";
 
@@ -182,6 +179,36 @@ class ConfigResolverEnabledTest {
                 .set("mp.fault.tolerance.interceptor.priority", "100");
 
         assertFalse(ConfigResolver.isInterceptorGloballyDisabled(config));
+    }
+
+    @Test
+    void nonFallbackGlobalDisableDisablesRetryByDefault() throws Exception {
+        Method method = RetryService.class.getDeclaredMethod("method");
+        Config config = new MockConfig().set("MP_Fault_Tolerance_NonFallback_Enabled", "false");
+
+        assertFalse(ConfigResolver.isEnabled(method, "Retry", config));
+    }
+
+    @Test
+    void methodLevelEnableOverridesNonFallbackGlobalDisable() throws Exception {
+        Method method = RetryService.class.getDeclaredMethod("method");
+        String methodKey = method.getDeclaringClass().getName() + "/" + method.getName() + "/Retry/enabled";
+        Config config = new MockConfig()
+                .set("MP_Fault_Tolerance_NonFallback_Enabled", "false")
+                .set(methodKey, "true");
+
+        assertTrue(ConfigResolver.isEnabled(method, "Retry", config));
+    }
+
+    @Test
+    void classLevelEnableOverridesNonFallbackGlobalDisable() throws Exception {
+        Method method = RetryService.class.getDeclaredMethod("method");
+        String classKey = method.getDeclaringClass().getName() + "/Retry/enabled";
+        Config config = new MockConfig()
+                .set("mp.fault.tolerance.nonFallback.enabled", "false")
+                .set(classKey, "true");
+
+        assertTrue(ConfigResolver.isEnabled(method, "Retry", config));
     }
 
     @Test

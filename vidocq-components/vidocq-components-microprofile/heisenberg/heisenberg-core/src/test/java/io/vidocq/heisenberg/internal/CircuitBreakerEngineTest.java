@@ -76,6 +76,30 @@ class CircuitBreakerEngineTest {
                 () -> engine.execute(() -> "never", "TestClass", "thresholdMethod"));
     }
 
+    @Test
+    void slidingWindowIsIsolatedPerRegistryInstance() throws Exception {
+        var config = new CircuitBreakerConfig(4, 0.5, 5, ChronoUnit.SECONDS, 1,
+                new Class[]{RuntimeException.class}, new Class[0]);
+
+        var firstRegistry = new TestRegistry();
+        var firstEngine = new CircuitBreakerEngine(config, firstRegistry);
+        assertThrows(RuntimeException.class,
+                () -> firstEngine.execute(() -> { throw new RuntimeException("f1"); }, "SharedClass", "sharedMethod"));
+        firstEngine.execute(() -> "ok1", "SharedClass", "sharedMethod");
+        assertThrows(RuntimeException.class,
+                () -> firstEngine.execute(() -> { throw new RuntimeException("f2"); }, "SharedClass", "sharedMethod"));
+        firstEngine.execute(() -> "ok2", "SharedClass", "sharedMethod");
+        assertThrows(CircuitBreakerOpenException.class,
+                () -> firstEngine.execute(() -> "never", "SharedClass", "sharedMethod"));
+
+        var secondRegistry = new TestRegistry();
+        var secondEngine = new CircuitBreakerEngine(config, secondRegistry);
+        assertThrows(RuntimeException.class,
+                () -> secondEngine.execute(() -> { throw new RuntimeException("fresh"); }, "SharedClass", "sharedMethod"));
+        // A fresh registry must start with a fresh sliding window and therefore not be OPEN yet.
+        secondEngine.execute(() -> "ok", "SharedClass", "sharedMethod");
+    }
+
     // Minimal test registry
     static class TestRegistry implements CircuitBreakerStateRegistry {
         private CircuitBreakerState state = CircuitBreakerState.CLOSED;

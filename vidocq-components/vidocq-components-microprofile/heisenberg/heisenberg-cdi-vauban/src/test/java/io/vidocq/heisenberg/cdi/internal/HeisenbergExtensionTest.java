@@ -32,6 +32,12 @@ class HeisenbergExtensionTest {
     }
 
     @Test
+    void allowsAbstractBeanWhenFallbackMethodIsProvidedByConcreteSubtype() {
+        assertDoesNotThrow(() -> extension.validateClass(AbstractFallbackBase.class));
+        assertDoesNotThrow(() -> extension.validateClass(AbstractFallbackConcrete.class));
+    }
+
+    @Test
     void rejectsInvalidAsynchronousReturnType() {
         assertThrows(
                 FaultToleranceDefinitionException.class,
@@ -113,6 +119,19 @@ class HeisenbergExtensionTest {
 
         int recover() {
             return 1;
+        }
+    }
+
+    abstract static class AbstractFallbackBase {
+        @Fallback(fallbackMethod = "fallback")
+        String call(String value) {
+            return "base" + value;
+        }
+    }
+
+    static class AbstractFallbackConcrete extends AbstractFallbackBase {
+        String fallback(String value) {
+            return "fallback:" + value;
         }
     }
 

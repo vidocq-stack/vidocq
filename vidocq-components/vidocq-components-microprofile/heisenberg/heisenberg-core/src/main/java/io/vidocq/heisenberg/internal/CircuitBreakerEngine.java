@@ -172,7 +172,11 @@ public final class CircuitBreakerEngine {
     }
 
     private SlidingWindow window(String beanClass, String methodName) {
-        return WINDOWS.computeIfAbsent(beanClass + "#" + methodName, k -> new SlidingWindow());
+        return WINDOWS.computeIfAbsent(windowKey(beanClass, methodName), k -> new SlidingWindow());
+    }
+
+    private String windowKey(String beanClass, String methodName) {
+        return System.identityHashCode(registry) + ":" + beanClass + "#" + methodName;
     }
 
     private boolean shouldCountFailure(Throwable failure) {

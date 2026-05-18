@@ -50,25 +50,13 @@ public final class TimeoutEngine {
         AtomicReference<Object> resultRef = new AtomicReference<>();
         AtomicReference<Throwable> errorRef = new AtomicReference<>();
 
-        // ScopedValue (ReentryGuard) n'est pas hérité par les vthreads créés via .start().
-        // Sans ré-injection, invocation.proceed() ré-entre dans le proxy CDI puis dans
-        // FaultToleranceInterceptor, qui re-déroule toute la chaîne et explose en récursion.
-        final boolean reentryActive = ReentryGuard.isActive();
-
         Thread vThread = Thread.ofVirtual()
                 .name("heisenberg-timeout")
                 .start(() -> {
-                    Runnable body = () -> {
-                        try {
-                            resultRef.set(invocation.proceed());
-                        } catch (Throwable t) {
-                            errorRef.set(t);
-                        }
-                    };
-                    if (reentryActive) {
-                        ScopedValue.where(ReentryGuard.ACTIVE, Boolean.TRUE).run(body);
-                    } else {
-                        body.run();
+                    try {
+                        resultRef.set(invocation.proceed());
+                    } catch (Throwable t) {
+                        errorRef.set(t);
                     }
                 });
 

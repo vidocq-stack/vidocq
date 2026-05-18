@@ -1,10 +1,14 @@
 package io.vidocq.heisenberg.internal;
 
 import java.lang.annotation.Annotation;
+import java.io.InputStream;
 import java.lang.reflect.Method;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Enumeration;
 import java.util.List;
+import java.util.Optional;
+import java.util.Properties;
 import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.ConfigProvider;
 import org.eclipse.microprofile.faulttolerance.Asynchronous;
@@ -20,19 +24,27 @@ public final class ConfigResolver {
     private ConfigResolver() {}
 
     public static RetryConfig retryConfig(Method method, Retry retry) {
-        return retryConfig(method, retry, loadConfig());
+        return retryConfig(method, method.getDeclaringClass(), retry, loadConfig());
+    }
+
+    public static RetryConfig retryConfig(Method method, Class<?> beanClass, Retry retry) {
+        return retryConfig(method, beanClass, retry, loadConfig());
     }
 
     static RetryConfig retryConfig(Method method, Retry retry, Config config) {
-        int maxRetries = getInt(config, method, Retry.class, "maxRetries").orElse(retry.maxRetries());
-        long delay = getLong(config, method, Retry.class, "delay").orElse(retry.delay());
-        ChronoUnit delayUnit = getChronoUnit(config, method, Retry.class, "delayUnit").orElse(retry.delayUnit());
-        long maxDuration = getLong(config, method, Retry.class, "maxDuration").orElse(retry.maxDuration());
-        ChronoUnit durationUnit = getChronoUnit(config, method, Retry.class, "durationUnit").orElse(retry.durationUnit());
-        long jitter = getLong(config, method, Retry.class, "jitter").orElse(retry.jitter());
-        ChronoUnit jitterDelayUnit = getChronoUnit(config, method, Retry.class, "jitterDelayUnit").orElse(retry.jitterDelayUnit());
-        Class<? extends Throwable>[] retryOn = getThrowableArray(config, method, Retry.class, "retryOn").orElse(retry.retryOn());
-        Class<? extends Throwable>[] abortOn = getThrowableArray(config, method, Retry.class, "abortOn").orElse(retry.abortOn());
+        return retryConfig(method, method.getDeclaringClass(), retry, config);
+    }
+
+    static RetryConfig retryConfig(Method method, Class<?> beanClass, Retry retry, Config config) {
+        int maxRetries = getInt(config, method, beanClass, Retry.class, "maxRetries").orElse(retry.maxRetries());
+        long delay = getLong(config, method, beanClass, Retry.class, "delay").orElse(retry.delay());
+        ChronoUnit delayUnit = getChronoUnit(config, method, beanClass, Retry.class, "delayUnit").orElse(retry.delayUnit());
+        long maxDuration = getLong(config, method, beanClass, Retry.class, "maxDuration").orElse(retry.maxDuration());
+        ChronoUnit durationUnit = getChronoUnit(config, method, beanClass, Retry.class, "durationUnit").orElse(retry.durationUnit());
+        long jitter = getLong(config, method, beanClass, Retry.class, "jitter").orElse(retry.jitter());
+        ChronoUnit jitterDelayUnit = getChronoUnit(config, method, beanClass, Retry.class, "jitterDelayUnit").orElse(retry.jitterDelayUnit());
+        Class<? extends Throwable>[] retryOn = getThrowableArray(config, method, beanClass, Retry.class, "retryOn").orElse(retry.retryOn());
+        Class<? extends Throwable>[] abortOn = getThrowableArray(config, method, beanClass, Retry.class, "abortOn").orElse(retry.abortOn());
 
         return new RetryConfig(
                 maxRetries,
@@ -48,31 +60,47 @@ public final class ConfigResolver {
     }
 
     public static TimeoutConfig timeoutConfig(Method method, Timeout timeout) {
-        return timeoutConfig(method, timeout, loadConfig());
+        return timeoutConfig(method, method.getDeclaringClass(), timeout, loadConfig());
+    }
+
+    public static TimeoutConfig timeoutConfig(Method method, Class<?> beanClass, Timeout timeout) {
+        return timeoutConfig(method, beanClass, timeout, loadConfig());
     }
 
     static TimeoutConfig timeoutConfig(Method method, Timeout timeout, Config config) {
-        long value = getLong(config, method, Timeout.class, "value").orElse(timeout.value());
-        ChronoUnit unit = getChronoUnit(config, method, Timeout.class, "unit").orElse(timeout.unit());
+        return timeoutConfig(method, method.getDeclaringClass(), timeout, config);
+    }
+
+    static TimeoutConfig timeoutConfig(Method method, Class<?> beanClass, Timeout timeout, Config config) {
+        long value = getLong(config, method, beanClass, Timeout.class, "value").orElse(timeout.value());
+        ChronoUnit unit = getChronoUnit(config, method, beanClass, Timeout.class, "unit").orElse(timeout.unit());
         return new TimeoutConfig(value, unit);
     }
 
     public static CircuitBreakerConfig circuitBreakerConfig(Method method, CircuitBreaker cb) {
-        return circuitBreakerConfig(method, cb, loadConfig());
+        return circuitBreakerConfig(method, method.getDeclaringClass(), cb, loadConfig());
+    }
+
+    public static CircuitBreakerConfig circuitBreakerConfig(Method method, Class<?> beanClass, CircuitBreaker cb) {
+        return circuitBreakerConfig(method, beanClass, cb, loadConfig());
     }
 
     static CircuitBreakerConfig circuitBreakerConfig(Method method, CircuitBreaker cb, Config config) {
-        int requestVolumeThreshold = getInt(config, method, CircuitBreaker.class, "requestVolumeThreshold")
+        return circuitBreakerConfig(method, method.getDeclaringClass(), cb, config);
+    }
+
+    static CircuitBreakerConfig circuitBreakerConfig(Method method, Class<?> beanClass, CircuitBreaker cb, Config config) {
+        int requestVolumeThreshold = getInt(config, method, beanClass, CircuitBreaker.class, "requestVolumeThreshold")
                 .orElse(cb.requestVolumeThreshold());
-        double failureRatio = getDouble(config, method, CircuitBreaker.class, "failureRatio")
+        double failureRatio = getDouble(config, method, beanClass, CircuitBreaker.class, "failureRatio")
                 .orElse(cb.failureRatio());
-        long delay = getLong(config, method, CircuitBreaker.class, "delay").orElse(cb.delay());
-        ChronoUnit delayUnit = getChronoUnit(config, method, CircuitBreaker.class, "delayUnit").orElse(cb.delayUnit());
-        int successThreshold = getInt(config, method, CircuitBreaker.class, "successThreshold")
+        long delay = getLong(config, method, beanClass, CircuitBreaker.class, "delay").orElse(cb.delay());
+        ChronoUnit delayUnit = getChronoUnit(config, method, beanClass, CircuitBreaker.class, "delayUnit").orElse(cb.delayUnit());
+        int successThreshold = getInt(config, method, beanClass, CircuitBreaker.class, "successThreshold")
                 .orElse(cb.successThreshold());
-        Class<? extends Throwable>[] failOn = getThrowableArray(config, method, CircuitBreaker.class, "failOn")
+        Class<? extends Throwable>[] failOn = getThrowableArray(config, method, beanClass, CircuitBreaker.class, "failOn")
                 .orElse(cb.failOn());
-        Class<? extends Throwable>[] skipOn = getThrowableArray(config, method, CircuitBreaker.class, "skipOn")
+        Class<? extends Throwable>[] skipOn = getThrowableArray(config, method, beanClass, CircuitBreaker.class, "skipOn")
                 .orElse(cb.skipOn());
 
         return new CircuitBreakerConfig(
@@ -87,12 +115,20 @@ public final class ConfigResolver {
     }
 
     public static BulkheadConfig bulkheadConfig(Method method, Bulkhead bulkhead) {
-        return bulkheadConfig(method, bulkhead, loadConfig());
+        return bulkheadConfig(method, method.getDeclaringClass(), bulkhead, loadConfig());
+    }
+
+    public static BulkheadConfig bulkheadConfig(Method method, Class<?> beanClass, Bulkhead bulkhead) {
+        return bulkheadConfig(method, beanClass, bulkhead, loadConfig());
     }
 
     static BulkheadConfig bulkheadConfig(Method method, Bulkhead bulkhead, Config config) {
-        int value = getInt(config, method, Bulkhead.class, "value").orElse(bulkhead.value());
-        int waitingTaskQueue = getInt(config, method, Bulkhead.class, "waitingTaskQueue")
+        return bulkheadConfig(method, method.getDeclaringClass(), bulkhead, config);
+    }
+
+    static BulkheadConfig bulkheadConfig(Method method, Class<?> beanClass, Bulkhead bulkhead, Config config) {
+        int value = getInt(config, method, beanClass, Bulkhead.class, "value").orElse(bulkhead.value());
+        int waitingTaskQueue = getInt(config, method, beanClass, Bulkhead.class, "waitingTaskQueue")
                 .orElse(bulkhead.waitingTaskQueue());
 
         return new BulkheadConfig(value, waitingTaskQueue);
@@ -102,44 +138,76 @@ public final class ConfigResolver {
      * M8 §9.1 : configuration {@code @Fallback}.
      */
     public static FallbackConfig fallbackConfig(Method method, Fallback fallback) {
-        return fallbackConfig(method, fallback, loadConfig());
+        return fallbackConfig(method, method.getDeclaringClass(), fallback, loadConfig());
+    }
+
+    public static FallbackConfig fallbackConfig(Method method, Class<?> beanClass, Fallback fallback) {
+        return fallbackConfig(method, beanClass, fallback, loadConfig());
     }
 
     static FallbackConfig fallbackConfig(Method method, Fallback fallback, Config config) {
-        Class<? extends Throwable>[] applyOn = getThrowableArray(config, method, Fallback.class, "applyOn")
+        return fallbackConfig(method, method.getDeclaringClass(), fallback, config);
+    }
+
+    static FallbackConfig fallbackConfig(Method method, Class<?> beanClass, Fallback fallback, Config config) {
+        Class<? extends Throwable>[] applyOn = getThrowableArray(config, method, beanClass, Fallback.class, "applyOn")
                 .orElse(fallback.applyOn());
-        Class<? extends Throwable>[] skipOn = getThrowableArray(config, method, Fallback.class, "skipOn")
+        Class<? extends Throwable>[] skipOn = getThrowableArray(config, method, beanClass, Fallback.class, "skipOn")
                 .orElse(fallback.skipOn());
-        String fallbackMethod = getValue(config, method, Fallback.class, "fallbackMethod", String.class)
+        String fallbackMethod = getValue(config, method, beanClass, Fallback.class, "fallbackMethod", String.class)
                 .orElse(fallback.fallbackMethod());
-        Class<? extends FallbackHandler<?>> fallbackHandlerClass = getFallbackHandlerClass(config, method)
+        Class<? extends FallbackHandler<?>> fallbackHandlerClass = getFallbackHandlerClass(config, method, beanClass)
                 .orElse(fallback.value());
         return new FallbackConfig(applyOn, skipOn, fallbackMethod, fallbackHandlerClass);
     }
 
     // M7: Désactivation par politique via config externe
     public static boolean isRetryEnabled(Method method) {
-        return isEnabled(method, "Retry");
+        return isEnabled(method, method.getDeclaringClass(), "Retry");
+    }
+
+    public static boolean isRetryEnabled(Method method, Class<?> beanClass) {
+        return isEnabled(method, beanClass, "Retry");
     }
 
     public static boolean isTimeoutEnabled(Method method) {
-        return isEnabled(method, "Timeout");
+        return isEnabled(method, method.getDeclaringClass(), "Timeout");
+    }
+
+    public static boolean isTimeoutEnabled(Method method, Class<?> beanClass) {
+        return isEnabled(method, beanClass, "Timeout");
     }
 
     public static boolean isCircuitBreakerEnabled(Method method) {
-        return isEnabled(method, "CircuitBreaker");
+        return isEnabled(method, method.getDeclaringClass(), "CircuitBreaker");
+    }
+
+    public static boolean isCircuitBreakerEnabled(Method method, Class<?> beanClass) {
+        return isEnabled(method, beanClass, "CircuitBreaker");
     }
 
     public static boolean isBulkheadEnabled(Method method) {
-        return isEnabled(method, "Bulkhead");
+        return isEnabled(method, method.getDeclaringClass(), "Bulkhead");
+    }
+
+    public static boolean isBulkheadEnabled(Method method, Class<?> beanClass) {
+        return isEnabled(method, beanClass, "Bulkhead");
     }
 
     public static boolean isFallbackEnabled(Method method) {
-        return isEnabled(method, "Fallback");
+        return isEnabled(method, method.getDeclaringClass(), "Fallback");
+    }
+
+    public static boolean isFallbackEnabled(Method method, Class<?> beanClass) {
+        return isEnabled(method, beanClass, "Fallback");
     }
 
     public static boolean isAsynchronousEnabled(Method method) {
-        return isEnabled(method, "Asynchronous");
+        return isEnabled(method, method.getDeclaringClass(), "Asynchronous");
+    }
+
+    public static boolean isAsynchronousEnabled(Method method, Class<?> beanClass) {
+        return isEnabled(method, beanClass, "Asynchronous");
     }
 
     /**
@@ -164,9 +232,44 @@ public final class ConfigResolver {
     }
 
     static int interceptorPriority(Config config) {
-        if (config == null) return DEFAULT_INTERCEPTOR_PRIORITY;
-        return config.getOptionalValue("mp.fault.tolerance.interceptor.priority", Integer.class)
-                .orElse(DEFAULT_INTERCEPTOR_PRIORITY);
+        if (config != null) {
+            Optional<Integer> fromConfig = config.getOptionalValue("mp.fault.tolerance.interceptor.priority", Integer.class);
+            if (fromConfig.isPresent()) {
+                return fromConfig.get();
+            }
+        }
+        // Bootstrap fallback: pendant l'initialisation BCE, MP Config peut ne pas être
+        // complètement initialisé alors que le microprofile-config.properties est déjà sur le classpath.
+        return interceptorPriorityFromClasspath().orElse(DEFAULT_INTERCEPTOR_PRIORITY);
+    }
+
+    private static Optional<Integer> interceptorPriorityFromClasspath() {
+        ClassLoader cl = Thread.currentThread().getContextClassLoader();
+        if (cl == null) {
+            cl = ConfigResolver.class.getClassLoader();
+        }
+        if (cl == null) {
+            return Optional.empty();
+        }
+        try {
+            Enumeration<java.net.URL> resources = cl.getResources("META-INF/microprofile-config.properties");
+            while (resources.hasMoreElements()) {
+                java.net.URL resource = resources.nextElement();
+                try (InputStream in = resource.openStream()) {
+                    Properties props = new Properties();
+                    props.load(in);
+                    String raw = props.getProperty("mp.fault.tolerance.interceptor.priority");
+                    if (raw != null && !raw.trim().isEmpty()) {
+                        return Optional.of(Integer.parseInt(raw.trim()));
+                    }
+                } catch (Exception ignored) {
+                    // Ignore malformed resources and continue scanning the classpath.
+                }
+            }
+        } catch (Exception ignored) {
+            return Optional.empty();
+        }
+        return Optional.empty();
     }
 
     /** Défaut spec MP FT 4.1 : Platform.AFTER (4000) + 10. */
@@ -183,15 +286,27 @@ public final class ConfigResolver {
     }
 
     private static boolean isEnabled(Method method, String annotation) {
-        return isEnabled(method, annotation, loadConfig());
+        return isEnabled(method, method.getDeclaringClass(), annotation, loadConfig());
+    }
+
+    private static boolean isEnabled(Method method, Class<?> beanClass, String annotation) {
+        return isEnabled(method, beanClass, annotation, loadConfig());
     }
 
     static boolean isEnabled(Method method, String annotation, Config config) {
+        return isEnabled(method, method.getDeclaringClass(), annotation, config);
+    }
+
+    static boolean isEnabled(Method method, Class<?> beanClass, String annotation, Config config) {
+        Class<? extends Annotation> annotationType = annotationTypeFor(annotation);
+        java.util.Optional<Boolean> explicit = getBooleanByName(config, method, beanClass, annotationType, annotation, "enabled");
+        if (explicit.isPresent()) {
+            return explicit.get();
+        }
         if (isNonFallbackGloballyDisabled(config) && !"Fallback".equals(annotation)) {
             return false;
         }
-        Class<? extends Annotation> annotationType = annotationTypeFor(annotation);
-        return getBooleanByName(config, method, annotationType, annotation, "enabled").orElse(true);
+        return true;
     }
 
     private static Class<? extends Annotation> annotationTypeFor(String simpleName) {
@@ -216,8 +331,8 @@ public final class ConfigResolver {
     }
 
     private static java.util.Optional<Boolean> getBooleanByName(
-            Config config, Method method, Class<? extends Annotation> annotationType, String annotationName, String parameter) {
-        return getValueByName(config, method, annotationType, annotationName, parameter, String.class).map(value -> {
+            Config config, Method method, Class<?> beanClass, Class<? extends Annotation> annotationType, String annotationName, String parameter) {
+        return getValueByName(config, method, beanClass, annotationType, annotationName, parameter, String.class).map(value -> {
             String trimmed = value.trim().toLowerCase();
             return "true".equals(trimmed);
         });
@@ -232,19 +347,39 @@ public final class ConfigResolver {
     }
 
     private static <A extends Annotation> java.util.Optional<Integer> getInt(Config config, Method method, Class<A> annotationType, String parameter) {
-        return getValue(config, method, annotationType, parameter, Integer.class);
+        return getValue(config, method, method.getDeclaringClass(), annotationType, parameter, Integer.class);
+    }
+
+    private static <A extends Annotation> java.util.Optional<Integer> getInt(
+            Config config, Method method, Class<?> beanClass, Class<A> annotationType, String parameter) {
+        return getValue(config, method, beanClass, annotationType, parameter, Integer.class);
     }
 
     private static <A extends Annotation> java.util.Optional<Long> getLong(Config config, Method method, Class<A> annotationType, String parameter) {
-        return getValue(config, method, annotationType, parameter, Long.class);
+        return getValue(config, method, method.getDeclaringClass(), annotationType, parameter, Long.class);
+    }
+
+    private static <A extends Annotation> java.util.Optional<Long> getLong(
+            Config config, Method method, Class<?> beanClass, Class<A> annotationType, String parameter) {
+        return getValue(config, method, beanClass, annotationType, parameter, Long.class);
     }
 
     private static <A extends Annotation> java.util.Optional<Double> getDouble(Config config, Method method, Class<A> annotationType, String parameter) {
-        return getValue(config, method, annotationType, parameter, Double.class);
+        return getValue(config, method, method.getDeclaringClass(), annotationType, parameter, Double.class);
+    }
+
+    private static <A extends Annotation> java.util.Optional<Double> getDouble(
+            Config config, Method method, Class<?> beanClass, Class<A> annotationType, String parameter) {
+        return getValue(config, method, beanClass, annotationType, parameter, Double.class);
     }
 
     private static <A extends Annotation> java.util.Optional<ChronoUnit> getChronoUnit(Config config, Method method, Class<A> annotationType, String parameter) {
-        return getValue(config, method, annotationType, parameter, String.class).map(String::trim).map(ChronoUnit::valueOf);
+        return getValue(config, method, method.getDeclaringClass(), annotationType, parameter, String.class).map(String::trim).map(ChronoUnit::valueOf);
+    }
+
+    private static <A extends Annotation> java.util.Optional<ChronoUnit> getChronoUnit(
+            Config config, Method method, Class<?> beanClass, Class<A> annotationType, String parameter) {
+        return getValue(config, method, beanClass, annotationType, parameter, String.class).map(String::trim).map(ChronoUnit::valueOf);
     }
 
     @SuppressWarnings("unchecked")
@@ -254,7 +389,18 @@ public final class ConfigResolver {
             Class<A> annotationType,
             String parameter
     ) {
-        return getValue(config, method, annotationType, parameter, String.class).map(value -> {
+        return getThrowableArray(config, method, method.getDeclaringClass(), annotationType, parameter);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <A extends Annotation> java.util.Optional<Class<? extends Throwable>[]> getThrowableArray(
+            Config config,
+            Method method,
+            Class<?> beanClass,
+            Class<A> annotationType,
+            String parameter
+    ) {
+        return getValue(config, method, beanClass, annotationType, parameter, String.class).map(value -> {
             String[] classNames = value.split(",");
             List<Class<? extends Throwable>> resolved = new ArrayList<>();
             for (String className : classNames) {
@@ -277,16 +423,18 @@ public final class ConfigResolver {
     private static <A extends Annotation, T> java.util.Optional<T> getValue(
             Config config,
             Method method,
+            Class<?> beanClass,
             Class<A> annotationType,
             String parameter,
             Class<T> type
     ) {
-        return getValueByName(config, method, annotationType, annotationType.getSimpleName(), parameter, type);
+        return getValueByName(config, method, beanClass, annotationType, annotationType.getSimpleName(), parameter, type);
     }
 
     private static <T> java.util.Optional<T> getValueByName(
             Config config,
             Method method,
+            Class<?> beanClass,
             Class<? extends Annotation> annotationType,
             String annotationName,
             String parameter,
@@ -295,7 +443,8 @@ public final class ConfigResolver {
         if (config == null) {
             return java.util.Optional.empty();
         }
-        for (String key : keys(method, annotationType, annotationName, parameter)) {
+        boolean classLevelAppliesToAllMethods = "enabled".equals(parameter);
+        for (String key : keys(method, beanClass, annotationType, annotationName, parameter, classLevelAppliesToAllMethods)) {
             java.util.Optional<T> value = config.getOptionalValue(key, type);
             if (value.isPresent()) {
                 return value;
@@ -305,37 +454,49 @@ public final class ConfigResolver {
     }
 
     /**
-     * MP FT 4.1 §10 : la précédence dépend de l'<i>emplacement effectif</i> de l'annotation.
+     * MP FT 4.1 §9 : précédence de résolution des propriétés.
      * <ul>
-     *   <li>Si l'annotation est directement présente sur la méthode :
-     *       {@code <class>/<method>/<Annotation>/<param>} puis {@code <Annotation>/<param>}.</li>
-     *   <li>Sinon (annotation héritée de la classe) :
-     *       {@code <class>/<Annotation>/<param>} puis {@code <Annotation>/<param>}.</li>
+     *   <li>{@code <class>/<method>/<Annotation>/<param>}</li>
+     *   <li>{@code <class>/<Annotation>/<param>}</li>
+     *   <li>{@code <Annotation>/<param>}</li>
      * </ul>
-     * Référence : SmallRye {@code AutoConfigProcessor} —
-     * {@code configKey = onMethod ? class + "/" + method : class}.
      */
-    private static List<String> keys(Method method, Class<? extends Annotation> annotationType, String annotationName, String parameter) {
-        String className = method.getDeclaringClass().getName();
+    private static List<String> keys(
+            Method method,
+            Class<?> beanClass,
+            Class<? extends Annotation> annotationType,
+            String annotationName,
+            String parameter,
+            boolean classLevelAppliesToAllMethods
+    ) {
+        String className = beanClass.getName();
         String methodName = method.getName();
         String globalKey = annotationName + "/" + parameter;
+        List<String> keys = new ArrayList<>(3);
+        keys.add(className + "/" + methodName + "/" + annotationName + "/" + parameter);
 
-        boolean onMethod = annotationType != null && method.isAnnotationPresent(annotationType);
-        if (onMethod) {
-            return List.of(
-                    className + "/" + methodName + "/" + annotationName + "/" + parameter,
-                    globalKey
-            );
+        boolean hasMethodLevelAnnotation = annotationType != null && method.isAnnotationPresent(annotationType);
+        boolean hasClassLevelAnnotation = annotationType != null && beanClass.isAnnotationPresent(annotationType);
+        if (classLevelAppliesToAllMethods || (!hasMethodLevelAnnotation && hasClassLevelAnnotation)) {
+            keys.add(className + "/" + annotationName + "/" + parameter);
         }
-        return List.of(
-                className + "/" + annotationName + "/" + parameter,
-                globalKey
-        );
+
+        keys.add(globalKey);
+        return keys;
     }
 
     @SuppressWarnings("unchecked")
     private static java.util.Optional<Class<? extends FallbackHandler<?>>> getFallbackHandlerClass(Config config, Method method) {
-        return getValue(config, method, Fallback.class, "value", String.class).map(className -> {
+        return getFallbackHandlerClass(config, method, method.getDeclaringClass());
+    }
+
+    @SuppressWarnings("unchecked")
+    private static java.util.Optional<Class<? extends FallbackHandler<?>>> getFallbackHandlerClass(
+            Config config,
+            Method method,
+            Class<?> beanClass
+    ) {
+        return getValue(config, method, beanClass, Fallback.class, "value", String.class).map(className -> {
             try {
                 Class<?> clazz = Class.forName(className.trim());
                 if (!FallbackHandler.class.isAssignableFrom(clazz)) {

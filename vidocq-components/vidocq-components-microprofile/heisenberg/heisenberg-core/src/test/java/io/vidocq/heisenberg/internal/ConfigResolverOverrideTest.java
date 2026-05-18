@@ -67,6 +67,31 @@ class ConfigResolverOverrideTest {
         assertEquals(9, resolved.maxRetries());
     }
 
+    @Test
+    void classLevelPropertyDoesNotOverrideMethodLevelAnnotationParameters() throws Exception {
+        Method method = ClassLevelRetryService.class.getDeclaredMethod("serviceB");
+        String cls = method.getDeclaringClass().getName();
+        TestConfig config = new TestConfig()
+                .set(cls + "/Retry/maxRetries", "3");
+
+        RetryConfig resolved = ConfigResolver.retryConfig(method, method.getAnnotation(Retry.class), config);
+
+        assertEquals(1, resolved.maxRetries());
+    }
+
+    @Test
+    void globalPropertyWinsWhenMethodHasOwnAnnotationAndClassLevelPropertyExists() throws Exception {
+        Method method = ClassLevelRetryService.class.getDeclaredMethod("serviceB");
+        String cls = method.getDeclaringClass().getName();
+        TestConfig config = new TestConfig()
+                .set(cls + "/Retry/maxRetries", "5")
+                .set("Retry/maxRetries", "7");
+
+        RetryConfig resolved = ConfigResolver.retryConfig(method, method.getAnnotation(Retry.class), config);
+
+        assertEquals(7, resolved.maxRetries());
+    }
+
     // --- @Timeout ---
 
     @Test
@@ -196,6 +221,12 @@ class ConfigResolverOverrideTest {
         @Bulkhead void bulkheadMethod() {}
         @Fallback(fallbackMethod = "recover") void fallbackMethod() {}
         void recover() {}
+    }
+
+    @Retry(maxRetries = 5)
+    static class ClassLevelRetryService {
+        @Retry(maxRetries = 1)
+        void serviceB() {}
     }
 }
 

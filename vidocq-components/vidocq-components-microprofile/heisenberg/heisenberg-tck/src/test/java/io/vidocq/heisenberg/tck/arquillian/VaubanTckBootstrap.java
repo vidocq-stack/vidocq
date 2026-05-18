@@ -8,6 +8,7 @@ package io.vidocq.heisenberg.tck.arquillian;
 
 import io.vidocq.heisenberg.cdi.internal.BulkheadStateRegistryBean;
 import io.vidocq.heisenberg.cdi.internal.FaultToleranceInterceptor;
+import io.vidocq.heisenberg.cdi.internal.FaultTolerancePriority3850Interceptor;
 import io.vidocq.heisenberg.cdi.internal.HeisenbergExtension;
 import io.vidocq.heisenberg.cdi.internal.StateRegistryBean;
 import io.vidocq.vauban.core.container.VaubanContainer;
@@ -33,7 +34,8 @@ import java.util.Properties;
  *   <li>démarre un nouveau {@link VaubanContainer} avec :
  *     <ul>
  *       <li>l'extension BCE {@link HeisenbergExtension} ;</li>
- *       <li>l'intercepteur {@link FaultToleranceInterceptor} ;</li>
+ *       <li>les intercepteurs {@link FaultToleranceInterceptor} et
+ *           {@link FaultTolerancePriority3850Interceptor} ;</li>
  *       <li>les beans d'état {@link StateRegistryBean} et {@link BulkheadStateRegistryBean} ;</li>
  *       <li>toutes les classes de l'archive.</li>
  *     </ul>
@@ -60,6 +62,7 @@ final class VaubanTckBootstrap {
         var builder = VaubanContainer.builder()
                 .addBeanClass(HeisenbergExtension.class)
                 .addBeanClass(FaultToleranceInterceptor.class)
+                .addBeanClass(FaultTolerancePriority3850Interceptor.class)
                 .addBeanClass(StateRegistryBean.class)
                 .addBeanClass(BulkheadStateRegistryBean.class);
         for (Class<?> c : beanClasses) {

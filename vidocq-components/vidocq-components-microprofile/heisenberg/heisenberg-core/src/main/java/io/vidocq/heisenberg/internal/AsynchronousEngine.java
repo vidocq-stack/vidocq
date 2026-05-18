@@ -2,6 +2,9 @@ package io.vidocq.heisenberg.internal;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Moteur {@code @Asynchronous} — exécution en virtual thread.
@@ -18,6 +21,13 @@ public final class AsynchronousEngine {
 
     private AsynchronousEngine() {}
 
+    public static CompletionStage<Object> executeAsync(
+            PolicyComposer.Invocation invocation,
+            String threadName
+    ) throws Exception {
+        return executeAsync(invocation, threadName, null);
+    }
+
     /**
      * Exécute l'invocation dans un virtual thread et retourne un {@code CompletionStage<Object>}.
      *
@@ -31,33 +41,73 @@ public final class AsynchronousEngine {
      */
     public static CompletionStage<Object> executeAsync(
             PolicyComposer.Invocation invocation,
-            String threadName
+            String threadName,
+            java.util.concurrent.atomic.AtomicBoolean invocationStarted
     ) throws Exception {
-        CompletableFuture<Object> future = new CompletableFuture<>();
+        AtomicReference<Thread> workerRef = new AtomicReference<>();
+        CompletableFuture<Object> future = new CompletableFuture<>() {
+            @Override
+            public boolean cancel(boolean mayInterruptIfRunning) {
+                boolean cancelled = super.cancel(mayInterruptIfRunning);
+                boolean shouldInterrupt = mayInterruptIfRunning
+                        || (invocationStarted != null && !invocationStarted.get());
+                if (cancelled && shouldInterrupt) {
+                    Thread worker = workerRef.get();
+                    if (worker != null) {
+                        worker.interrupt();
+                    }
+                }
+                return cancelled;
+            }
+        };
 
-        // Capturer l'état du guard de ré-entrée avant de quitter le scope courant :
-        // ScopedValue n'est pas hérité par les threads créés via Thread.ofVirtual().start().
-        final boolean reentryActive = ReentryGuard.isActive();
-
-        Thread.ofVirtual()
+        Thread worker = Thread.ofVirtual()
                 .name("heisenberg-async-" + threadName)
                 .start(() -> {
-                    Runnable body = () -> {
-                        try {
-                            Object result = invocation.proceed();
+                    try {
+                        Object result = invocation.proceed();
+                        if (result instanceof Future<?> nestedFuture) {
+                            completeFromFuture(future, nestedFuture);
+                            return;
+                        }
+                        if (!future.isDone()) {
                             future.complete(result);
-                        } catch (Throwable e) {
+                        }
+                    } catch (Throwable e) {
+                        if (!future.isDone()) {
                             future.completeExceptionally(e);
                         }
-                    };
-                    if (reentryActive) {
-                        ScopedValue.where(ReentryGuard.ACTIVE, Boolean.TRUE).run(body);
-                    } else {
-                        body.run();
                     }
                 });
+        workerRef.set(worker);
+        if (future.isCancelled()) {
+            worker.interrupt();
+        }
 
         return future;
+    }
+
+    private static void completeFromFuture(CompletableFuture<Object> outer, Future<?> nested) {
+        try {
+            Object value = nested.get();
+            if (!outer.isDone()) {
+                outer.complete(value);
+            }
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            if (!outer.isDone()) {
+                outer.completeExceptionally(interrupted);
+            }
+        } catch (ExecutionException execution) {
+            Throwable cause = execution.getCause() == null ? execution : execution.getCause();
+            if (!outer.isDone()) {
+                outer.completeExceptionally(cause);
+            }
+        } catch (Throwable failure) {
+            if (!outer.isDone()) {
+                outer.completeExceptionally(failure);
+            }
+        }
     }
 }
 

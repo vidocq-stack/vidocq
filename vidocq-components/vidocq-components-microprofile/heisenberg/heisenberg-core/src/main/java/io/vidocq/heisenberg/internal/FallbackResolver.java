@@ -4,6 +4,7 @@ import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.lang.reflect.TypeVariable;
@@ -90,7 +91,7 @@ public final class FallbackResolver {
 
     private Object invokeFallbackMethod(Object target, Method guardedMethod, String fallbackMethodName, Object[] parameters)
             throws Exception {
-        MethodHandle methodHandle = resolveFallbackMethodHandle(target.getClass(), guardedMethod, fallbackMethodName);
+        MethodHandle methodHandle = resolveFallbackMethodHandle(resolveUserClass(target.getClass()), guardedMethod, fallbackMethodName);
         Object[] args = parameters == null ? new Object[0] : parameters;
         try {
             return methodHandle.bindTo(target).invokeWithArguments(args);
@@ -137,14 +138,69 @@ public final class FallbackResolver {
                 if (!candidate.getName().equals(fallbackMethodName)) {
                     continue;
                 }
+                if (!isFallbackMethodVisibleFrom(beanClass, candidate)) {
+                    continue;
+                }
                 if (!isMethodCompatible(guardedMethod, candidate)) {
                     continue;
                 }
                 return candidate;
             }
+            Method fromInterface = findCompatibleFallbackMethodOnInterfaces(current, beanClass, guardedMethod, fallbackMethodName);
+            if (fromInterface != null) {
+                return fromInterface;
+            }
             current = current.getSuperclass();
         }
         return null;
+    }
+
+    private Method findCompatibleFallbackMethodOnInterfaces(
+            Class<?> type,
+            Class<?> beanClass,
+            Method guardedMethod,
+            String fallbackMethodName
+    ) {
+        for (Class<?> itf : type.getInterfaces()) {
+            for (Method candidate : itf.getMethods()) {
+                if (!candidate.getName().equals(fallbackMethodName)) {
+                    continue;
+                }
+                if (!isFallbackMethodVisibleFrom(beanClass, candidate)) {
+                    continue;
+                }
+                if (!isMethodCompatible(guardedMethod, candidate)) {
+                    continue;
+                }
+                return candidate;
+            }
+            Method nested = findCompatibleFallbackMethodOnInterfaces(itf, beanClass, guardedMethod, fallbackMethodName);
+            if (nested != null) {
+                return nested;
+            }
+        }
+        return null;
+    }
+
+    private boolean isFallbackMethodVisibleFrom(Class<?> beanClass, Method fallbackMethod) {
+        int modifiers = fallbackMethod.getModifiers();
+        if (Modifier.isAbstract(modifiers)) {
+            return false;
+        }
+        Class<?> owner = fallbackMethod.getDeclaringClass();
+        if (Modifier.isPublic(modifiers)) {
+            return true;
+        }
+        if (Modifier.isPrivate(modifiers)) {
+            return owner == beanClass;
+        }
+        String beanPackage = beanClass.getPackageName();
+        String ownerPackage = owner.getPackageName();
+        if (Modifier.isProtected(modifiers)) {
+            return ownerPackage.equals(beanPackage) || owner.isAssignableFrom(beanClass);
+        }
+        // package-private
+        return ownerPackage.equals(beanPackage);
     }
 
     private boolean isMethodCompatible(Method guardedMethod, Method fallbackMethod) {
@@ -266,6 +322,10 @@ public final class FallbackResolver {
     }
 
     private FallbackHandler<?> instantiateHandler(Class<? extends FallbackHandler<?>> handlerClass) {
+        FallbackHandler<?> cdiManaged = instantiateHandlerFromCdi(handlerClass);
+        if (cdiManaged != null) {
+            return cdiManaged;
+        }
         try {
             return handlerClass.getDeclaredConstructor().newInstance();
         } catch (ReflectiveOperationException failure) {
@@ -274,6 +334,24 @@ public final class FallbackResolver {
                     failure
             );
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private FallbackHandler<?> instantiateHandlerFromCdi(Class<? extends FallbackHandler<?>> handlerClass) {
+        try {
+            Class<?> cdiClass = Class.forName("jakarta.enterprise.inject.spi.CDI");
+            Object cdi = cdiClass.getMethod("current").invoke(null);
+            Object instance = cdi.getClass()
+                    .getMethod("select", Class.class, java.lang.annotation.Annotation[].class)
+                    .invoke(cdi, handlerClass, new java.lang.annotation.Annotation[0]);
+            Object resolved = instance.getClass().getMethod("get").invoke(instance);
+            if (resolved instanceof FallbackHandler<?> handler) {
+                return handler;
+            }
+        } catch (Throwable ignored) {
+            // CDI absent/inactif: fallback sur instanciation réflexive locale.
+        }
+        return null;
     }
 
     private void ensureReturnTypeCompatible(Method guardedMethod, Object fallbackValue) {

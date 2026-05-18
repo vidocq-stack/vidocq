@@ -3,6 +3,7 @@ package io.vidocq.heisenberg.cdi.internal;
 import io.vidocq.heisenberg.internal.ConfigResolver;
 import io.vidocq.heisenberg.internal.FallbackResolver;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CompletionStage;
@@ -127,6 +128,11 @@ public class HeisenbergExtension implements BuildCompatibleExtension {
 	void validateFallback(Class<?> beanClass, Method method) {
 		Fallback fallback = annotationOn(method, Fallback.class);
 		if (fallback != null) {
+			if (Modifier.isAbstract(beanClass.getModifiers())
+					&& fallback.fallbackMethod() != null
+					&& !fallback.fallbackMethod().isEmpty()) {
+				return;
+			}
 			fallbackResolver.validateDefinition(beanClass, method, fallback);
 		}
 	}

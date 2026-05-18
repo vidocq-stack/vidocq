@@ -37,6 +37,13 @@ public final class RetryEngine {
     }
 
     static boolean shouldRetry(Throwable failure, RetryConfig config) {
+        if (failure instanceof InterruptedException) {
+            Thread.currentThread().interrupt();
+            return false;
+        }
+        if (failure instanceof java.util.concurrent.CancellationException) {
+            return false;
+        }
         if (matchesAny(failure, config.abortOn())) {
             return false;
         }

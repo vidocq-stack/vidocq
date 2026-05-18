@@ -53,6 +53,9 @@ sdk env   # Java 25-tem + Maven 4.0.0-rc-5
 ```bash
 ./run-official-tck-mp-fault-tolerance-4.1.sh        # smoke test
 ./run-official-tck-mp-fault-tolerance-4.1.sh all    # suite complète
+./run-tck-no-observability.sh                       # smoke test sans observabilité
+./run-tck-no-observability.sh all                   # suite complète sans observabilité
+./run-tck-no-observability.sh -Dtest=RetryTest      # test ciblé sans observabilité
 ```
 
 ## Licence

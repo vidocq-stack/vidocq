@@ -3,7 +3,7 @@ package io.vidocq.heisenberg.internal;
 import java.lang.reflect.Method;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.eclipse.microprofile.faulttolerance.Bulkhead;
 import org.eclipse.microprofile.faulttolerance.Asynchronous;
 import org.eclipse.microprofile.faulttolerance.CircuitBreaker;
@@ -54,7 +54,9 @@ public final class PolicyComposer {
         // as a synchronous method." → si désactivé via config, on ignore complètement la branche async
         // ET on n'unwrap pas le CompletionStage retourné par la méthode.
         Asynchronous asynchronous = annotations.asynchronous();
-        boolean asyncActive = asynchronous != null && ConfigResolver.isAsynchronousEnabled(method);
+        boolean asyncActive = asynchronous != null && ConfigResolver.isAsynchronousEnabled(method, runtimeBeanClass);
+        boolean completionStageSemantics = CompletionStage.class.isAssignableFrom(method.getReturnType());
+        AtomicBoolean asyncInvocationStarted = asyncActive ? new AtomicBoolean(false) : null;
 
         // M7 fix : en mode @Asynchronous, la méthode retourne un CompletionStage<T> et NON une exception.
         // Per MP FT 4.1 §8.2, un stage en erreur doit déclencher retry/fallback/CB.
@@ -62,7 +64,14 @@ public final class PolicyComposer {
         final Invocation effectiveInvocation;
         if (asyncActive) {
             final Invocation raw = invocation;
-            effectiveInvocation = () -> unwrapAsyncResult(raw.proceed());
+            final AtomicBoolean startedFlag = asyncInvocationStarted;
+            final Invocation markedRaw = () -> {
+                startedFlag.set(true);
+                return raw.proceed();
+            };
+            effectiveInvocation = completionStageSemantics
+                    ? () -> unwrapAsyncResult(markedRaw.proceed())
+                    : markedRaw;
         } else {
             effectiveInvocation = invocation;
         }
@@ -81,8 +90,8 @@ public final class PolicyComposer {
         // Couche 1 (la plus interne) : @Bulkhead — limite la concurrence
         Bulkhead bulkhead = annotations.bulkhead();
         Invocation base = effectiveInvocation;
-        if (bulkhead != null && ConfigResolver.isBulkheadEnabled(method) && bhRegistry != null) {
-            BulkheadConfig bhConfig = ConfigResolver.bulkheadConfig(method, bulkhead);
+        if (bulkhead != null && ConfigResolver.isBulkheadEnabled(method, runtimeBeanClass) && bhRegistry != null) {
+            BulkheadConfig bhConfig = ConfigResolver.bulkheadConfig(method, runtimeBeanClass, bulkhead);
             final Invocation rawBase = effectiveInvocation;
             base = () -> {
                 BulkheadEngine engine = new BulkheadEngine(bhConfig, bhRegistry);
@@ -96,8 +105,8 @@ public final class PolicyComposer {
         // Couche 2 : @Timeout — enveloppe Bulkhead pour comptabiliser le temps en queue
         Timeout timeout = annotations.timeout();
         Invocation withTimeout = base;
-        if (timeout != null && ConfigResolver.isTimeoutEnabled(method)) {
-            TimeoutConfig timeoutConfig = ConfigResolver.timeoutConfig(method, timeout);
+        if (timeout != null && ConfigResolver.isTimeoutEnabled(method, runtimeBeanClass)) {
+            TimeoutConfig timeoutConfig = ConfigResolver.timeoutConfig(method, runtimeBeanClass, timeout);
             final Invocation bulkheadBase = base;
             final boolean asyncCall = asyncActive;
             withTimeout = () -> TimeoutEngine.execute(bulkheadBase, timeoutConfig, asyncCall);
@@ -106,8 +115,8 @@ public final class PolicyComposer {
         // Couche 3 : @CircuitBreaker — voit chaque tentative individuellement
         CircuitBreaker cb = annotations.circuitBreaker();
         Invocation withCB = withTimeout;
-        if (cb != null && ConfigResolver.isCircuitBreakerEnabled(method) && cbRegistry != null) {
-            CircuitBreakerConfig cbConfig = ConfigResolver.circuitBreakerConfig(method, cb);
+        if (cb != null && ConfigResolver.isCircuitBreakerEnabled(method, runtimeBeanClass) && cbRegistry != null) {
+            CircuitBreakerConfig cbConfig = ConfigResolver.circuitBreakerConfig(method, runtimeBeanClass, cb);
             final Invocation timeoutBase = withTimeout;
             withCB = () -> new CircuitBreakerEngine(cbConfig, cbRegistry)
                     .execute(timeoutBase, beanClassName, methodKey);
@@ -116,8 +125,8 @@ public final class PolicyComposer {
         // Couche 4 : @Retry — plus externe pour rejouer CB/Bulkhead/Timeout selon retryOn/abortOn
         Retry retry = annotations.retry();
         Invocation withRetry = withCB;
-        if (retry != null && ConfigResolver.isRetryEnabled(method)) {
-            RetryConfig retryConfig = ConfigResolver.retryConfig(method, retry);
+        if (retry != null && ConfigResolver.isRetryEnabled(method, runtimeBeanClass)) {
+            RetryConfig retryConfig = ConfigResolver.retryConfig(method, runtimeBeanClass, retry);
             final Invocation withCBBase = withCB;
             withRetry = () -> RetryEngine.execute(withCBBase, retryConfig);
         }
@@ -127,9 +136,9 @@ public final class PolicyComposer {
         // M7 : vérifier le flag enabled via config
         // M8 §9.1 : applyOn/skipOn surchargeables via MicroProfile Config
         Fallback fallback = annotations.fallback();
-        final Fallback fallbackIfEnabled = (fallback != null && ConfigResolver.isFallbackEnabled(method)) ? fallback : null;
+        final Fallback fallbackIfEnabled = (fallback != null && ConfigResolver.isFallbackEnabled(method, runtimeBeanClass)) ? fallback : null;
         final FallbackConfig fallbackConfig = fallbackIfEnabled == null ? null
-                : ConfigResolver.fallbackConfig(method, fallbackIfEnabled);
+                : ConfigResolver.fallbackConfig(method, runtimeBeanClass, fallbackIfEnabled);
 
         // Couche 6 : @Asynchronous — si présent ET activé, tout s'exécute dans un virtual thread.
         if (asyncActive) {
@@ -140,10 +149,12 @@ public final class PolicyComposer {
             final Object[] parametersFinal = parameters;
             final Invocation withFallback = fallbackFinal == null
                     ? withRetryFinal
-                    : () -> unwrapAsyncResult(
-                            FallbackPolicy.execute(withRetryFinal, fallbackFinal, fallbackConfigFinal, targetFinal, methodFinal, parametersFinal, FALLBACK_RESOLVER));
+                    : completionStageSemantics
+                    ? () -> unwrapAsyncResult(
+                            FallbackPolicy.execute(withRetryFinal, fallbackFinal, fallbackConfigFinal, targetFinal, methodFinal, parametersFinal, FALLBACK_RESOLVER))
+                    : () -> FallbackPolicy.execute(withRetryFinal, fallbackFinal, fallbackConfigFinal, targetFinal, methodFinal, parametersFinal, FALLBACK_RESOLVER);
 
-            return AsynchronousEngine.executeAsync(withFallback, method.getName());
+            return AsynchronousEngine.executeAsync(withFallback, method.getName(), asyncInvocationStarted);
         }
 
         if (fallbackIfEnabled == null) {
@@ -174,19 +185,6 @@ public final class PolicyComposer {
         if (result instanceof CompletionStage<?> stage) {
             try {
                 return stage.toCompletableFuture().get();
-            } catch (ExecutionException ee) {
-                Throwable cause = ee.getCause();
-                if (cause instanceof Exception ex) throw ex;
-                if (cause instanceof Error err) throw err;
-                throw new RuntimeException(cause);
-            }
-        }
-        if (result instanceof Future<?> future) {
-            try {
-                return future.get();
-            } catch (InterruptedException ie) {
-                Thread.currentThread().interrupt();
-                throw ie;
             } catch (ExecutionException ee) {
                 Throwable cause = ee.getCause();
                 if (cause instanceof Exception ex) throw ex;
