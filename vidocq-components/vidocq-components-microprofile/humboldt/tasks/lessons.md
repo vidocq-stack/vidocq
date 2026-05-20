@@ -145,6 +145,42 @@ rétrocompat, on garde la méthode et on la fait déléguer à
 pas de modification des appelants externes (et le test E2E continue de
 fonctionner sans patch).
 
+## Refactor P1 — OtlpJsonCommon mutualisé (2026-05-21)
+
+### Bug latent révélé par le refactor
+
+Lors de l'audit de duplication entre les 3 encoders OTLP/JSON (spans M3,
+metrics M4, logs M5), constat : les versions de `writeAnyValue` dans
+OtlpJsonMetricEncoder et OtlpJsonLogEncoder ne supportaient PAS les
+attribute types array (STRING_ARRAY, LONG_ARRAY, BOOLEAN_ARRAY,
+DOUBLE_ARRAY). Bug latent : un metric ou log avec un attribute
+`tags=["a","b"]` aurait crashé avec une RuntimeException via le `default ->`.
+
+Cause : OtlpJsonEncoder (M3) avait été écrit en premier avec la version
+complète ; M4 et M5 ont copié-collé une version simplifiée par oubli.
+Le refactor en `OtlpJsonCommon.writeAnyValue` ne supportant qu'UNE seule
+version fixée — la plus complète — élimine le bug latent.
+
+Test de régression ajouté (`encodes_array_attributes_as_otlp_arrayValue`)
+qui prouve que STRING_ARRAY + LONG_ARRAY se sérialisent en
+`arrayValue.values` selon la spec OTLP/JSON.
+
+Pattern à retenir : **un refactor DRY révèle souvent des divergences**
+entre les copies — il faut les analyser une par une au lieu de prendre
+"la version la plus récente" par défaut.
+
+### Java unicode preprocessor mange les `\u00XX` même dans les commentaires
+
+Surprenant mais documenté : Java exécute le préprocesseur unicode AVANT
+le parser, sur tout le source (commentaires inclus). Donc une séquence
+`\u00XX` dans un commentaire `/** ... */` est interprétée comme un vrai
+caractère unicode. Si le résultat casse la syntaxe (ex. un `*/` accidentel
+qui ferme prématurément un block comment), erreur compile
+"illegal unicode escape" — vraiment cryptique.
+
+Solution Humboldt : éviter `\u` dans les commentaires (utiliser `u00XX`
+sans backslash, ou échapper le backslash en `\\u`).
+
 ### OTLP/JSON encoding manuel par StringBuilder
 
 Pour M3 MVP, l'encoder OTLP/JSON est écrit à la main via StringBuilder (pas

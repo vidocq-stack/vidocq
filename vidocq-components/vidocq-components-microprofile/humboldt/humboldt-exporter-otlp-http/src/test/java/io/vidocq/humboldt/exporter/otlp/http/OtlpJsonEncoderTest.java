@@ -121,4 +121,30 @@ class OtlpJsonEncoderTest {
         String json = OtlpJsonEncoder.encode(List.of());
         assertEquals("{\"resourceSpans\":[]}", json);
     }
+
+    @Test
+    void encodes_array_attributes_as_otlp_arrayValue() {
+        // Régression : avant le refactor OtlpJsonCommon, seul l'encoder spans gérait
+        // les arrays — metrics/logs avaient un bug latent. Maintenant les 3 partagent
+        // la même logique writeAnyValue qui couvre STRING_ARRAY/LONG_ARRAY/etc.
+        SpanData s = new SpanData(
+                CTX, null, "array-test", SpanKind.INTERNAL, 1L, 2L,
+                Attributes.builder()
+                        .put(AttributeKey.stringArrayKey("tags"), List.of("ci", "ops"))
+                        .put(AttributeKey.longArrayKey("retries"), List.of(1L, 2L, 3L))
+                        .build(),
+                List.of(), List.of(),
+                StatusData.unset(),
+                Resource.empty(), InstrumentationScope.of("x"));
+
+        String json = OtlpJsonEncoder.encode(List.of(s));
+
+        assertTrue(json.contains("\"arrayValue\":{\"values\":["),
+                "array attribute doit être encodé en arrayValue : " + json);
+        assertTrue(json.contains("\"stringValue\":\"ci\""));
+        assertTrue(json.contains("\"stringValue\":\"ops\""));
+        assertTrue(json.contains("\"intValue\":\"1\""));
+        assertTrue(json.contains("\"intValue\":\"2\""));
+        assertTrue(json.contains("\"intValue\":\"3\""));
+    }
 }
