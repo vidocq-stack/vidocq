@@ -13,11 +13,13 @@ Plan détaillé : [`PLAN.md`](PLAN.md) (§13 jalons). Cette page est la version 
 - [ ] `git init` + premier commit
 - [ ] Build de vérification `./mvnw -ntp install -DskipTests`
 
-## M1 — Common + Context (Virtual-Threads)
+## M1 — Common + Context (Virtual-Threads) _(en cours)_
 
-- [ ] `humboldt-sdk-common` : `Resource`, `Attributes`, `Clock`, `IdGenerator` (Random128)
-- [ ] `humboldt-context` : `ScopedValueContextStorageProvider` (ServiceLoader OTel), pas de pinning sur VT
-- [ ] Tests : injection / propagation cross-VT via `StructuredTaskScope`
+- [x] `humboldt-sdk-common` : `Clock` (system), `IdGenerator` (Random128 — traceId 32 hex, spanId 16 hex), `Resource` (immutable, merge sémantique OTel)
+- [x] `humboldt-context` : `HumboldtContextStorageProvider` + `HumboldtContextStorage` (ThreadLocal, conforme contrat OTel, log WARNING sur attach/detach désordonné)
+- [x] Binding ServiceLoader : `provides` JPMS + fallback `META-INF/services`
+- [x] Tests : attach/close, nested LIFO, isolation virtual thread, propagation via `Context.wrap()`
+- [ ] ADR M8 (différée) : éventuelle migration vers `ScopedValue` (JEP 506) si benchmark mémoire critique sur >100K VTs
 
 ## M2 — SDK Trace
 

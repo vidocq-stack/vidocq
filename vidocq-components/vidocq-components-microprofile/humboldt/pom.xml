@@ -98,6 +98,8 @@
 
     <subprojects>
         <subproject>humboldt-api</subproject>
+        <subproject>humboldt-sdk-common</subproject>
+        <subproject>humboldt-context</subproject>
     </subprojects>
 
     <dependencyManagement>
@@ -145,6 +147,16 @@
             <dependency>
                 <groupId>io.vidocq.humboldt</groupId>
                 <artifactId>humboldt-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.humboldt</groupId>
+                <artifactId>humboldt-sdk-common</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.humboldt</groupId>
+                <artifactId>humboldt-context</artifactId>
                 <version>${project.version}</version>
             </dependency>
         </dependencies>
