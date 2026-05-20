@@ -116,6 +116,35 @@ Fix dans `HumboldtServerRequestFilter` :
 l'attribut ET dans le span name. Sinon tests échouent avec
 `expected: </users/42> but was: <users/42>`.
 
+## Refactor — OtlpHttpJsonSender mutualisé (2026-05-21)
+
+### Pattern à 3 exemplaires = signal pour refactor
+
+Quand un pattern est dupliqué dans 3+ classes (M3 Span, M4 Metric, M5 Log
+exporters partageaient HttpClient + retry + headers + computeBackoffMillis
+quasi-identiques), c'est le bon moment pour extraire un utilitaire commun.
+
+Solution Humboldt : `OtlpHttpJsonSender` interne (package `.internal.`) qui
+encapsule HttpClient + endpoint + headers + timeouts + retry. Les 3 exporters
+deviennent ~85 lignes chacun (vs ~170 avant) et délèguent juste l'encoding.
+
+Bénéfice mesuré : -255 lignes de code (3 × -85), 1 seul endroit à modifier
+pour le retry/transport/protocol switch futur (M3b : passage à chappe-client,
+ajout de OTEL_EXPORTER_OTLP_TIMEOUT/PROTOCOL en M7).
+
+API publique inchangée — les builders `OtlpHttpXxxExporter.builder()`
+gardent exactement la même signature. Les tests E2E passent sans modification
+(109/109 toujours verts).
+
+### Rétro-compat avec wrapper static
+
+`OtlpHttpSpanExporter.computeBackoffMillis(int)` public static était utilisé
+par les 2 autres exporters ET par un test E2E. Au lieu de casser la
+rétrocompat, on garde la méthode et on la fait déléguer à
+`OtlpHttpJsonSender.computeBackoffMillis()`. Coût : 3 lignes. Bénéfice :
+pas de modification des appelants externes (et le test E2E continue de
+fonctionner sans patch).
+
 ### OTLP/JSON encoding manuel par StringBuilder
 
 Pour M3 MVP, l'encoder OTLP/JSON est écrit à la main via StringBuilder (pas
