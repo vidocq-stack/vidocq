@@ -83,6 +83,7 @@
         <microprofile.telemetry.version>2.1</microprofile.telemetry.version>
         <opentelemetry.version>1.39.0</opentelemetry.version>
         <opentelemetry.semconv.version>1.27.0-alpha</opentelemetry.semconv.version>
+        <opentelemetry.instrumentation.version>2.7.0</opentelemetry.instrumentation.version>
         <jakarta.annotation.version>3.0.0</jakarta.annotation.version>
         <jakarta.cdi.version>4.1.0</jakarta.cdi.version>
         <jakarta.ws.rs.version>4.0.0</jakarta.ws.rs.version>
@@ -133,6 +134,11 @@
                 <groupId>io.opentelemetry.semconv</groupId>
                 <artifactId>opentelemetry-semconv</artifactId>
                 <version>${opentelemetry.semconv.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.opentelemetry.instrumentation</groupId>
+                <artifactId>opentelemetry-instrumentation-annotations</artifactId>
+                <version>${opentelemetry.instrumentation.version}</version>
             </dependency>
 
             <dependency>

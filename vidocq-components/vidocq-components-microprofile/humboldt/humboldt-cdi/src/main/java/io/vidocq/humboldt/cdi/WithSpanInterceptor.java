@@ -4,8 +4,11 @@ import io.opentelemetry.api.GlobalOpenTelemetry;
 import io.opentelemetry.api.OpenTelemetry;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.SpanBuilder;
+import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.api.trace.Tracer;
 import io.opentelemetry.context.Scope;
+import io.opentelemetry.instrumentation.annotations.WithSpan;
 import jakarta.annotation.Priority;
 import jakarta.interceptor.AroundInvoke;
 import jakarta.interceptor.Interceptor;
@@ -14,30 +17,31 @@ import jakarta.interceptor.InvocationContext;
 import java.lang.reflect.Method;
 
 /**
- * Interceptor CDI qui enveloppe chaque méthode annotée {@link WithSpan} dans un span
- * OpenTelemetry.
+ * Interceptor CDI qui enveloppe chaque méthode portant
+ * {@link io.opentelemetry.instrumentation.annotations.WithSpan @WithSpan}
+ * (annotation API publique standard OpenTelemetry) dans un span OTel.
+ *
+ * <p>Bindée via {@link SpanBinding} (marker interne ajouté automatiquement
+ * par {@link HumboldtBuildCompatibleExtension} au build time CDI). L'utilisateur
+ * final n'écrit donc qu'une seule annotation : {@code @WithSpan} d'OTel.</p>
  *
  * <p>Cycle de vie d'une invocation :</p>
  * <ol>
- *   <li>Récupère ou dérive le nom du span ({@code Class.simpleName + "." + methodName})</li>
- *   <li>Crée un {@link SpanBuilder} via le {@link Tracer} (parent = {@code Context.current()})</li>
- *   <li>{@code try (Scope = span.makeCurrent()) {...}} — le span est current pendant la méthode</li>
- *   <li>Si exception : {@code span.recordException(t)} + statut ERROR, puis rethrow</li>
+ *   <li>Résout l'annotation OTel sur la méthode (puis sur la classe en fallback)</li>
+ *   <li>Dérive le nom du span — {@code @WithSpan.value()} si non vide,
+ *       sinon {@code Class.simpleName + "." + methodName}</li>
+ *   <li>Crée le span via {@link Tracer#spanBuilder(String)}</li>
+ *   <li>{@code try (Scope = span.makeCurrent()) { proceed(); }}</li>
+ *   <li>Si exception : {@code span.recordException(t)} + statut ERROR, rethrow</li>
  *   <li>{@code span.end()} en finally</li>
  * </ol>
  *
- * <p>Le {@link Tracer} est résolu via {@link #tracer()} qui pointe par défaut sur
- * {@link GlobalOpenTelemetry}. En M6b/M7, on le rendra configurable via CDI
- * (injection {@code @Inject Tracer}). Pour rester décorrélé de Weld/Vauban en
- * M6a, la méthode {@code tracer()} est protected pour permettre le subclassing
- * en test.</p>
- *
- * <p>Priorité : {@link Interceptor.Priority#APPLICATION} +1 — exécuté après les
- * interceptors plateforme (transaction, security) mais avant les interceptors
- * métier user-defined.</p>
+ * <p>Priorité : {@link Interceptor.Priority#APPLICATION} + 1 — exécuté après
+ * les interceptors plateforme (transaction, security) mais avant les
+ * interceptors métier user-defined.</p>
  */
 @Interceptor
-@WithSpan
+@SpanBinding
 @Priority(Interceptor.Priority.APPLICATION + 1)
 public class WithSpanInterceptor {
 
@@ -48,7 +52,7 @@ public class WithSpanInterceptor {
         String spanName = (annotation == null || annotation.value().isEmpty())
                 ? defaultName(method)
                 : annotation.value();
-        var kind = annotation == null ? io.opentelemetry.api.trace.SpanKind.INTERNAL : annotation.kind();
+        SpanKind kind = annotation == null ? SpanKind.INTERNAL : annotation.kind();
 
         Tracer t = tracer();
         SpanBuilder builder = t.spanBuilder(spanName).setSpanKind(kind);
@@ -57,7 +61,7 @@ public class WithSpanInterceptor {
             return ctx.proceed();
         } catch (Throwable th) {
             span.recordException(th);
-            span.setStatus(io.opentelemetry.api.trace.StatusCode.ERROR,
+            span.setStatus(StatusCode.ERROR,
                     th.getClass().getSimpleName() + ": " + (th.getMessage() != null ? th.getMessage() : ""));
             if (th instanceof Exception ex) throw ex;
             if (th instanceof Error er) throw er;
@@ -69,7 +73,7 @@ public class WithSpanInterceptor {
 
     /**
      * Surchargeable en sous-classe pour fournir un Tracer non global (typiquement
-     * via CDI {@code @Inject} dans une variante M6b).
+     * via CDI {@code @Inject} dans une variante M6d).
      */
     protected Tracer tracer() {
         return openTelemetry().getTracer("io.vidocq.humboldt.cdi");

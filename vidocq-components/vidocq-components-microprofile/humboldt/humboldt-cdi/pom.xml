@@ -11,7 +11,7 @@
 
     <artifactId>humboldt-cdi</artifactId>
     <name>Humboldt :: CDI</name>
-    <description>Interceptor CDI Lite @WithSpan. Compatible Vauban (validation runtime en M6b/M7). Pas de dep Weld.</description>
+    <description>Interceptor CDI Lite : auto-applique l'interception sur @WithSpan OpenTelemetry via BuildCompatibleExtension. Compatible Vauban CDI 4.1 Lite. Pas de dep Weld.</description>
 
     <dependencies>
         <dependency>
@@ -25,6 +25,15 @@
         <dependency>
             <groupId>io.opentelemetry</groupId>
             <artifactId>opentelemetry-api</artifactId>
+        </dependency>
+        <!--
+            Annotation @WithSpan publique standard OTel — c'est l'annotation
+            attendue par MicroProfile Telemetry 2.1 et son TCK. API/SPI only,
+            pas d'impl runtime (juste les annotations marqueurs).
+        -->
+        <dependency>
+            <groupId>io.opentelemetry.instrumentation</groupId>
+            <artifactId>opentelemetry-instrumentation-annotations</artifactId>
         </dependency>
         <dependency>
             <groupId>jakarta.annotation</groupId>

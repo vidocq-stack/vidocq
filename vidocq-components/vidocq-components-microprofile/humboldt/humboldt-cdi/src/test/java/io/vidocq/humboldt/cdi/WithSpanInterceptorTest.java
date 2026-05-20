@@ -9,6 +9,7 @@ import io.opentelemetry.api.trace.Tracer;
 import io.opentelemetry.api.trace.TracerProvider;
 import io.opentelemetry.context.Context;
 import io.opentelemetry.context.propagation.ContextPropagators;
+import io.opentelemetry.instrumentation.annotations.WithSpan;
 import io.vidocq.humboldt.sdk.trace.SdkTracerProvider;
 import io.vidocq.humboldt.sdk.trace.SimpleSpanProcessor;
 import io.vidocq.humboldt.sdk.trace.data.SpanData;
@@ -128,12 +129,18 @@ class WithSpanInterceptorTest {
     }
 
     @Test
-    void annotation_on_class_used_when_method_lacks_one() throws Exception {
-        Method m = ClassAnnotatedTarget.class.getMethod("noMethodAnnot");
+    void defaults_used_when_method_lacks_annotation() throws Exception {
+        // L'annotation @WithSpan OTel ne cible que METHOD et CONSTRUCTOR
+        // (pas TYPE — vérifié sur opentelemetry-instrumentation-annotations:2.7.0).
+        // L'interceptor garde un fallback class-level pour les BCE exotiques
+        // qui ajouteraient @WithSpan via metaprogramming, mais en pratique on
+        // retombe sur les défauts.
+        Method m = UnannotatedTarget.class.getMethod("plainMethod");
         interceptor.aroundInvoke(new TestInvocationContext(m, new Object[0], () -> "ok"));
         SpanData s = exporter.getFinishedSpans().getFirst();
-        assertEquals("ClassAnnotatedTarget.noMethodAnnot", s.name());
-        assertEquals(SpanKind.CLIENT, s.kind(), "kind doit venir de l'annotation classe");
+        assertEquals("UnannotatedTarget.plainMethod", s.name());
+        assertEquals(SpanKind.INTERNAL, s.kind(),
+                "défaut kind = INTERNAL en l'absence d'annotation");
     }
 
     // ----- helpers -----
@@ -164,9 +171,9 @@ class WithSpanInterceptorTest {
         public String alwaysFail() { return "ne sera jamais atteint"; }
     }
 
-    @WithSpan(kind = SpanKind.CLIENT)
-    static class ClassAnnotatedTarget {
-        public String noMethodAnnot() { return "ok"; }
+    /** Cible sans annotation @WithSpan — vérifie le fallback defaults. */
+    static class UnannotatedTarget {
+        public String plainMethod() { return "ok"; }
     }
 
     /** Interceptor instrumenté pour pointer notre SdkTracerProvider plutôt que GlobalOpenTelemetry. */

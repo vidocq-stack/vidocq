@@ -1,13 +1,17 @@
 /**
- * Humboldt CDI — interceptor {@code @WithSpan} pour instrumenter les méthodes
- * applicatives de tracing OpenTelemetry sans réécriture manuelle.
+ * Humboldt CDI — interception automatique de
+ * {@link io.opentelemetry.instrumentation.annotations.WithSpan @WithSpan}
+ * (annotation API publique OpenTelemetry, alignée TCK MicroProfile Telemetry 2.1).
  *
- * <p>M6a MVP : annotation {@code @WithSpan} Humboldt + {@code WithSpanInterceptor}
- * compatible CDI 4.1 Lite. Validation runtime avec Vauban prévue en M6b/M7.</p>
+ * <p>L'utilisateur écrit uniquement {@code @WithSpan}. La
+ * {@link io.vidocq.humboldt.cdi.HumboldtBuildCompatibleExtension} (CDI 4.x
+ * BuildCompatibleExtension) ajoute automatiquement le marker interne
+ * {@link io.vidocq.humboldt.cdi.SpanBinding} au build time, ce qui active
+ * {@link io.vidocq.humboldt.cdi.WithSpanInterceptor}.</p>
  *
- * <p>Future alignement (M7) : remap éventuel sur l'annotation officielle
- * {@code org.eclipse.microprofile.telemetry.tracing.WithSpan} selon les
- * exigences du TCK MicroProfile Telemetry 2.1.</p>
+ * <p>Compatible CDI 4.1 Lite (Vauban) et CDI 4.1 Full (Weld) — la
+ * BuildCompatibleExtension est le mécanisme standard CDI 4.x partagé entre
+ * Lite et Full.</p>
  */
 module io.vidocq.humboldt.cdi {
 
@@ -15,9 +19,15 @@ module io.vidocq.humboldt.cdi {
     requires transitive io.vidocq.humboldt.sdk.trace;
     requires transitive io.opentelemetry.api;
     requires io.opentelemetry.context;
+    // OpenTelemetry instrumentation-annotations : module automatique
+    // (Automatic-Module-Name avec underscore, pas point).
+    requires transitive io.opentelemetry.instrumentation_annotations;
     requires transitive jakarta.cdi;
     requires transitive jakarta.interceptor;
     requires java.logging;
 
     exports io.vidocq.humboldt.cdi;
+
+    provides jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension
+            with io.vidocq.humboldt.cdi.HumboldtBuildCompatibleExtension;
 }

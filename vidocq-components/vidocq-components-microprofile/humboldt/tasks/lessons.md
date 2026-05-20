@@ -145,6 +145,75 @@ rétrocompat, on garde la méthode et on la fait déléguer à
 pas de modification des appelants externes (et le test E2E continue de
 fonctionner sans patch).
 
+## Fix M6a — Adopter @WithSpan API publique OTel + BCE (2026-05-21)
+
+### Erreur de design M6a corrigée
+
+En M6a, j'ai créé `io.vidocq.humboldt.cdi.WithSpan` (annotation custom) en
+me trompant sur le périmètre du principe "zéro-dep". La règle correcte est :
+**API/SPI publiques OK, impl runtime non**.
+
+L'annotation `io.opentelemetry.instrumentation.annotations.WithSpan` est dans
+`opentelemetry-instrumentation-annotations` — un JAR qui ne contient QUE des
+annotations marqueurs (`@WithSpan`, `@SpanAttribute`, etc.), pas d'impl
+runtime. C'est exactement le type de dep qu'on accepte (comme
+`opentelemetry-api`, `opentelemetry-semconv`).
+
+Bonus immédiat : alignement automatique avec le TCK MicroProfile Telemetry
+2.1 qui attend cette annotation officielle.
+
+### BuildCompatibleExtension CDI 4.x pour activer l'interception
+
+Challenge : `@WithSpan` OTel **n'est pas** un `@InterceptorBinding` (et on
+ne peut pas modifier l'annotation tierce). Pour faire fonctionner l'interceptor
+CDI sans demander à l'utilisateur d'écrire 2 annotations, on utilise une
+`BuildCompatibleExtension` (CDI 4.x Lite + Full unifié) :
+
+```java
+@Enhancement(types = Object.class, withSubtypes = true,
+             withAnnotations = WithSpan.class)
+public void addSpanBinding(ClassConfig classConfig) {
+    if (classConfig.info().hasAnnotation(WithSpan.class)) {
+        classConfig.addAnnotation(SpanBinding.class);
+    }
+    for (MethodConfig m : classConfig.methods()) {
+        if (m.info().hasAnnotation(WithSpan.class)) {
+            m.addAnnotation(SpanBinding.class);
+        }
+    }
+}
+```
+
+Avantages BCE vs portable Extension :
+- Compatible CDI 4.1 **Lite** (Vauban) ET CDI 4.1 **Full** (Weld 5+) — un
+  seul mécanisme partagé
+- Build-time = pas de coût runtime
+- API standard CDI 4.x (vs Quarkus-spécifique)
+
+Découverte : `META-INF/services/jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension`
++ `provides` JPMS dans module-info.
+
+### Automatic-Module-Name avec underscore
+
+`opentelemetry-instrumentation-annotations:2.7.0` a `Automatic-Module-Name:
+io.opentelemetry.instrumentation_annotations` — **avec un underscore** au
+milieu, pas un point comme la convention habituelle. Erreur cryptique
+"module not found" si on écrit `io.opentelemetry.instrumentation.annotations`.
+
+Toujours `unzip -p .../foo.jar META-INF/MANIFEST.MF | grep Automatic-Module-Name`
+quand on importe un JAR non explicitement modulé.
+
+### @WithSpan OTel ne cible QUE METHOD et CONSTRUCTOR
+
+Contrairement à ce qu'on pourrait penser, `io.opentelemetry.instrumentation.annotations.WithSpan`
+**ne peut PAS être posée sur une classe** (TYPE absent du `@Target`).
+Conséquence : pas de "tracer toute la classe" en une annotation OTel — chaque
+méthode doit être annotée individuellement.
+
+Notre interceptor garde un fallback class-level défensif (pour les BCE
+exotiques qui ajouteraient @WithSpan via metaprogramming) mais c'est du
+code mort en pratique.
+
 ## Refactor P1 — OtlpJsonCommon mutualisé (2026-05-21)
 
 ### Bug latent révélé par le refactor
