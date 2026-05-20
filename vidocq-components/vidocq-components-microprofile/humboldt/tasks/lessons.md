@@ -169,6 +169,36 @@ Pattern à retenir : **un refactor DRY révèle souvent des divergences**
 entre les copies — il faut les analyser une par une au lieu de prendre
 "la version la plus récente" par défaut.
 
+### Mutualisation via héritage + callbacks fonctionnels (P2/P3)
+
+Pour les `InMemory{Span,Metric,LogRecord}Exporter` (P2) et les
+`Batch{Span,LogRecord}Processor` (P3), l'héritage classique fonctionne
+bien car les sous-classes implémentent des INTERFACES différentes
+(SpanExporter/MetricExporter/LogRecordExporter, SpanProcessor/LogRecordProcessor).
+
+Pattern Humboldt :
+- `InMemoryExporterBase<T>` abstract : storage `CopyOnWriteArrayList<T>` +
+  helpers `addAll/flushBase/shutdownBase`. Sous-classes (~30 lignes) :
+  appellent les helpers depuis leur impl d'interface.
+- `AbstractBatchProcessor<T>` abstract : worker VT + queue + flush/shutdown.
+  Constructeur prend `Consumer<List<T>> exportBatch + Supplier<CompletableResultCode>
+  flushExporter + Runnable shutdownExporter` (callbacks fonctionnels qui
+  encapsulent l'interface exporter spécifique). Sous-classes appellent
+  `offer(T)` depuis leur callback (`onEnd` / `onEmit`).
+
+Avantages des callbacks fonctionnels (vs abstract methods côté processor) :
+- Pas besoin de templater Base avec `<X extends Exporter>` (couplage en moins)
+- Construction explicite côté sous-classe (le constructeur de Builder passe
+  les lambdas) — IDE lisibilité conservée
+- Réutilisable au-delà du couple Span/Log si on ajoute un BatchMetricProcessor
+  à signature différente
+
+Mesures (refactor M-bloc P1+P2+P3) :
+- P1 : −74 lignes nettes (JSON encoders)
+- P2 : −90 lignes nettes (InMemory exporters)
+- P3 : −80 lignes nettes (Batch processors)
+- Total cleanup : **−244 lignes nettes** sur 12 modules, 0 régression
+
 ### Java unicode preprocessor mange les `\u00XX` même dans les commentaires
 
 Surprenant mais documenté : Java exécute le préprocesseur unicode AVANT
