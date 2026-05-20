@@ -79,11 +79,21 @@ Plan détaillé : [`PLAN.md`](PLAN.md) (§13 jalons). Cette page est la version 
 - [x] Tests : 6 sans container JAX-RS via `java.lang.reflect.Proxy` (route ~6 méthodes utilisées, defaults pour les ~40 autres méthodes abstraites JAX-RS 4.0 — robuste face aux changements d'API entre versions). Couvre : span method+path+scheme, extraction traceparent W3C, status 500 → ERROR, status 404 → UNSET, response filter idempotent sans property, cleanup property
 - [ ] **Tests E2E via cassini standalone** (chappe transport) reportés en M7 — nécessitent cassini-snapshot dans le M2 CI
 
-### M6c — humboldt-runtime + extension MPS _(à venir)_
+### M6c — humboldt-runtime autoconfig _(terminé 2026-05-21)_
 
-- [ ] `humboldt-runtime` autoconfig : lit env vars `OTEL_*` / `MP_TELEMETRY_*` (via ravel), assemble SdkTracerProvider/MeterProvider/LoggerProvider + OTLP HTTP exporters par défaut, installe propagators W3C
-- [ ] Extension `vidocq-mps-humboldt-extension` (hors-reactor humboldt, vit dans vidocq-mps)
-- [ ] **Validation Vauban runtime** : confirmer CDI 4.1 Lite suffit pour `@WithSpan` (risk PLAN §15.1) — sinon escape hatch documenté
+- [x] `EnvConfig` : lecture env vars (`SCREAMING_SNAKE_CASE`) avec fallback system properties (`lower.dot.case`). Helpers `getBoolean/getLong/getDouble` avec defaults. Constructeur `EnvConfig.of(envMap, propMap)` pour tests sans toucher au process global
+- [x] `HumboldtAutoConfigure.configure()` : assemble pipeline complet trace+metric+log depuis env vars (`OTEL_SERVICE_NAME`, `OTEL_RESOURCE_ATTRIBUTES` parsing comma-separated key=value, `OTEL_EXPORTER_OTLP_ENDPOINT` avec overrides per-signal `_TRACES/_METRICS/_LOGS_ENDPOINT`, `OTEL_TRACES/METRICS/LOGS_EXPORTER` ∈ `otlp|none|in-memory|logging`, `OTEL_TRACES_SAMPLER` ∈ `always_on/off|traceidratio|parentbased_*`, `OTEL_TRACES_SAMPLER_ARG`, `OTEL_EXPORTER_OTLP_HEADERS`)
+- [x] `AutoConfiguredHumboldt implements OpenTelemetry, AutoCloseable` : expose getTracerProvider/MeterProvider/LogsBridge/Propagators (interface OTel standard, peut être passé à `GlobalOpenTelemetry.set()` ou aux interceptors), inMemorySpanExporter()/MetricExporter()/LogRecordExporter() pour tests, flush() + shutdown() avec CompletableResultCode agrégé
+- [x] Pipeline auto : `in-memory` exporter → Simple processor + PeriodicMetricReader 60min ; `otlp` exporter → Batch processor + PeriodicMetricReader 60s ; `none` → aucun processor enregistré
+- [x] Propagators W3C composite (TraceContext + Baggage) installés par défaut
+- [x] Tests : 15 (8 EnvConfigTest + 7 HumboldtAutoConfigureTest) — service.name default+override, RESOURCE_ATTRIBUTES parsing 3 paires, pipeline E2E trace+metric+log via 1 seul `configure()`, sampler always_off, traceidratio ratio descriptio, exporter=none désactive, W3C propagators traceparent+baggage exposés
+- [ ] **Différé en M7** : `OTEL_EXPORTER_OTLP_TIMEOUT`, `OTEL_EXPORTER_OTLP_PROTOCOL` (json vs protobuf), `MP_TELEMETRY_SDK_DISABLED`, `MP_TELEMETRY_PROPAGATORS`, intégration Ravel pour MP Config
+
+### M6d — Extension MPS + validation Vauban runtime _(à venir)_
+
+- [ ] Extension `vidocq-mps-humboldt-extension` (hors-reactor humboldt, vit dans vidocq-mps repo)
+- [ ] **Validation Vauban runtime** : confirmer CDI 4.1 Lite suffit pour `@WithSpan` (risk PLAN §15.1) sur un app exemple — sinon escape hatch documenté
+- [ ] Test E2E REST via cassini + chappe + humboldt-runtime + humboldt-rest filters
 
 ## M7 — TCK officiel
 

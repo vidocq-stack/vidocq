@@ -108,6 +108,7 @@
         <subproject>humboldt-sdk-log</subproject>
         <subproject>humboldt-cdi</subproject>
         <subproject>humboldt-rest</subproject>
+        <subproject>humboldt-runtime</subproject>
     </subprojects>
 
     <dependencyManagement>
@@ -205,6 +206,11 @@
             <dependency>
                 <groupId>io.vidocq.humboldt</groupId>
                 <artifactId>humboldt-rest</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.humboldt</groupId>
+                <artifactId>humboldt-runtime</artifactId>
                 <version>${project.version}</version>
             </dependency>
         </dependencies>

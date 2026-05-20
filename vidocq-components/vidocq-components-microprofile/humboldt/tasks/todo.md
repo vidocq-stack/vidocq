@@ -84,9 +84,19 @@
 - [x] Build verify → **94/94 tests PASS** (88 M0-M6a + 6 M6b), 11 modules SUCCESS, 6.5s
 - [ ] Tests E2E via cassini reportés en M7
 
-## M6c — humboldt-runtime + extension MPS (prochain)
+## M6c — humboldt-runtime autoconfig _(terminé 2026-05-21)_
 
-À démarrer après M6b. Voir ROADMAP.md (autoconfig OTEL_*/MP_TELEMETRY_*, ServiceLoader, extension MPS hors-reactor humboldt, validation Vauban runtime).
+- [x] EnvConfig (env vars > system props, getBoolean/getLong/getDouble fallback safe)
+- [x] HumboldtAutoConfigure.configure() : OTEL_SERVICE_NAME / RESOURCE_ATTRIBUTES / EXPORTER_OTLP_ENDPOINT (+ per-signal) / TRACES_SAMPLER (+ ARG) / EXPORTER_OTLP_HEADERS / TRACES|METRICS|LOGS_EXPORTER ∈ otlp|none|in-memory|logging
+- [x] AutoConfiguredHumboldt implements OpenTelemetry (peut être set globalement) + AutoCloseable, expose providers SDK et exporters in-memory pour tests, flush()+shutdown() agrégés
+- [x] Pipeline auto : Simple processor + 60min PeriodicReader pour in-memory ; Batch processor + 60s PeriodicReader pour OTLP
+- [x] W3C propagators composite installés par défaut
+- [x] Tests : 15 (8 EnvConfig + 7 HumboldtAutoConfigure) → **total 109/109 PASS**, 12 modules SUCCESS, 7s
+- [x] Différé en M7 : OTEL_EXPORTER_OTLP_TIMEOUT/PROTOCOL, MP_TELEMETRY_SDK_DISABLED, intégration Ravel
+
+## M6d — Extension MPS + validation Vauban runtime (prochain)
+
+Voir ROADMAP.md (vidocq-mps-humboldt-extension hors-reactor humboldt, validation Vauban CDI Lite pour @WithSpan, E2E REST via cassini+chappe+humboldt).
 
 ## Leçons en cours de session
 
