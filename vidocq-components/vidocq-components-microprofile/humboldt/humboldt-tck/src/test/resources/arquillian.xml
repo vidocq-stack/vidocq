@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<arquillian xmlns="http://jboss.org/schema/arquillian"
+            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+            xsi:schemaLocation="http://jboss.org/schema/arquillian http://jboss.org/schema/arquillian/arquillian_1_0.xsd">
+
+    <!--
+        M7 SCAFFOLD : configuration Arquillian placeholder. Aucun container
+        adapter n'est encore enregistré — l'exécution des tests TCK ne
+        fonctionnera pas avant M7b qui livrera l'adapter
+        humboldt-arquillian (Vauban CDI Lite + Cassini JAX-RS + Chappe HTTP).
+
+        Voir TCK.md et humboldt-tck/README.md pour la roadmap M7b.
+    -->
+
+    <engine>
+        <property name="deploymentExportPath">target/arquillian-deployments</property>
+    </engine>
+
+</arquillian>

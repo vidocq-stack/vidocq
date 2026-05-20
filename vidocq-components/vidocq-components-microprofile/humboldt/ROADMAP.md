@@ -95,11 +95,30 @@ Plan détaillé : [`PLAN.md`](PLAN.md) (§13 jalons). Cette page est la version 
 - [ ] **Validation Vauban runtime** : confirmer CDI 4.1 Lite suffit pour `@WithSpan` (risk PLAN §15.1) sur un app exemple — sinon escape hatch documenté
 - [ ] Test E2E REST via cassini + chappe + humboldt-runtime + humboldt-rest filters
 
-## M7 — TCK officiel
+## M7 — TCK officiel MicroProfile Telemetry 2.1
 
-- [ ] `humboldt-tck` hors-reactor (POM Model 4.0.0 standalone)
-- [ ] Script `run-official-tck-telemetry-2.1.sh`
-- [ ] **Gate** : 100 % TCK conformité (ou challenges documentés dans TCK.md)
+### M7a — Audit + scaffold _(terminé 2026-05-21)_
+
+- [x] **Audit M7.1** : TCK split en 3 artifacts (tracing/metrics/logs) tous publics sur Maven Central — aucun install manuel requis. Stack **TestNG + Arquillian + ShrinkWrap**. Annotation officielle = `io.opentelemetry.instrumentation.annotations.WithSpan` (différente de notre `io.vidocq.humboldt.cdi.WithSpan` — aliasage en M7b)
+- [x] **Scaffold M7.2** : `humboldt-tck/` hors-reactor (pom Model 4.0.0 standalone, sans `<parent>`) avec import 3 TCK + arquillian-testng-container + shrinkwrap-resolver + humboldt-runtime/cdi/rest + opentelemetry-sdk (utilisé seulement par le TCK comme fixture, ne pollue pas l'applicatif Humboldt). Profiles `tck-smoke` (défaut) et `tck-official`
+- [x] `arquillian.xml` placeholder (M7b ajoutera le container adapter), `tck-suite.xml` TestNG agrégeant les 3 TCK packages
+- [x] `HumboldtTckSmokeTest` : 4 tests (classpath humboldt-runtime, GlobalOpenTelemetry settable + span créé via AutoConfiguredHumboldt, TCK tracing class présente, OTel @WithSpan officiel présent) — **4/4 PASS**
+- [x] `run-official-tck-telemetry-2.1.sh` à la racine : install reactor → smoke (default) ou `all` (M7c+)
+- [x] TCK.md mis à jour (coordonnées confirmées, roadmap M7b/M7c)
+
+### M7b — Adapter Arquillian Humboldt _(à venir)_
+
+- [ ] Composer Vauban (CDI Lite) + Cassini (JAX-RS via Chappe) + humboldt-runtime en container Arquillian "embedded" léger
+- [ ] **Aliaser `io.opentelemetry.instrumentation.annotations.WithSpan`** dans humboldt-cdi (en plus de notre `WithSpan`)
+- [ ] Implémenter `InMemorySpanExporterProvider` SPI attendu par le TCK
+- [ ] 1er test smoke TCK officiel (`OpenTelemetryBeanTest`) qui démarre
+
+### M7c — Run complet + challenges _(à venir)_
+
+- [ ] `./run-official-tck-telemetry-2.1.sh all` premier run
+- [ ] Identifier tests passed / failed / skipped
+- [ ] Documenter challenges dans `TCK.md`
+- [ ] **Gate qualité** : ≥95 % de tests applicables passent
 
 ## M8 — Perf & ADRs
 

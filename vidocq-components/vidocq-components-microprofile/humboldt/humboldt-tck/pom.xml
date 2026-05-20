@@ -1,0 +1,285 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Projet Maven STANDALONE en Model Version 4.0.0, volontairement EN DEHORS
+    du reactor Humboldt.
+
+    Pourquoi : ShrinkWrap Maven Resolver 3.3 (dépendance transitive du TCK
+    Jakarta/MicroProfile) utilise maven-resolver 1.9 / maven-model 3.9 qui ne
+    savent pas parser les POMs Model 4.1.0 du reactor Humboldt. Son
+    ClasspathWorkspaceReader crashe avec "Bad artifact coordinates ... jar:".
+
+    Voir cassini-tck, foy-tck, champollion-tck pour le même pattern dans
+    l'écosystème Vidocq.
+
+    Dépendances internes (humboldt-runtime, humboldt-sdk-*, humboldt-cdi, etc.)
+    sont gelées sur la version 0.1.0-SNAPSHOT installée dans le repo M2 local
+    (via 'mvn install' sur le reactor parent au préalable).
+
+    Lancement :
+        ../run-official-tck-telemetry-2.1.sh             # smoke
+        ../run-official-tck-telemetry-2.1.sh all         # suite complète
+        ../run-official-tck-telemetry-2.1.sh -Dtest=...  # ciblé
+
+    M7 SCAFFOLD (2026-05-21) : pom + arquillian.xml + test smoke. Aucun TCK
+    test ne passe encore — l'adapter Arquillian Humboldt (Vauban CDI Lite +
+    Cassini JAX-RS + Chappe HTTP) viendra en M7b. Voir TCK.md.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>io.vidocq.humboldt</groupId>
+    <artifactId>humboldt-tck</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+    <packaging>jar</packaging>
+
+    <name>Humboldt :: TCK Runner</name>
+    <description>Harness de conformance MicroProfile Telemetry 2.1 — TCK officiel Eclipse (Tracing + Metrics + Logs).</description>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.release>25</maven.compiler.release>
+
+        <humboldt.version>0.1.0-SNAPSHOT</humboldt.version>
+
+        <microprofile.telemetry.version>2.1</microprofile.telemetry.version>
+        <microprofile.config.version>3.1.1</microprofile.config.version>
+        <microprofile.rest.client.version>4.0</microprofile.rest.client.version>
+        <opentelemetry.version>1.39.0</opentelemetry.version>
+        <opentelemetry.instrumentation.version>2.7.0</opentelemetry.instrumentation.version>
+        <opentelemetry.semconv.version>1.27.0-alpha</opentelemetry.semconv.version>
+
+        <arquillian.version>1.8.0.Final</arquillian.version>
+        <shrinkwrap.resolver.version>3.3.0</shrinkwrap.resolver.version>
+        <testng.version>7.10.2</testng.version>
+        <jakarta.cdi.version>4.1.0</jakarta.cdi.version>
+        <jakarta.ws.rs.version>4.0.0</jakarta.ws.rs.version>
+        <jakarta.annotation.version>3.0.0</jakarta.annotation.version>
+
+        <maven.compiler.plugin.version>3.13.0</maven.compiler.plugin.version>
+        <maven.surefire.version>3.5.5</maven.surefire.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>io.opentelemetry</groupId>
+                <artifactId>opentelemetry-bom</artifactId>
+                <version>${opentelemetry.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.jboss.arquillian</groupId>
+                <artifactId>arquillian-bom</artifactId>
+                <version>${arquillian.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.jboss.shrinkwrap.resolver</groupId>
+                <artifactId>shrinkwrap-resolver-bom</artifactId>
+                <version>${shrinkwrap.resolver.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <dependencies>
+        <!-- ============================================================ -->
+        <!--  TCK officiels (publics sur Maven Central)                   -->
+        <!-- ============================================================ -->
+        <dependency>
+            <groupId>org.eclipse.microprofile.telemetry</groupId>
+            <artifactId>microprofile-telemetry-tracing-tck</artifactId>
+            <version>${microprofile.telemetry.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.eclipse.microprofile.telemetry</groupId>
+            <artifactId>microprofile-telemetry-metrics-tck</artifactId>
+            <version>${microprofile.telemetry.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.eclipse.microprofile.telemetry</groupId>
+            <artifactId>microprofile-telemetry-logs-tck</artifactId>
+            <version>${microprofile.telemetry.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- ============================================================ -->
+        <!--  Humboldt runtime + SDK (à tester contre le TCK)             -->
+        <!-- ============================================================ -->
+        <dependency>
+            <groupId>io.vidocq.humboldt</groupId>
+            <artifactId>humboldt-runtime</artifactId>
+            <version>${humboldt.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.humboldt</groupId>
+            <artifactId>humboldt-cdi</artifactId>
+            <version>${humboldt.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.humboldt</groupId>
+            <artifactId>humboldt-rest</artifactId>
+            <version>${humboldt.version}</version>
+        </dependency>
+
+        <!-- ============================================================ -->
+        <!--  Annotation @WithSpan OFFICIELLE attendue par le TCK         -->
+        <!--  (différente de notre humboldt-cdi WithSpan — voir TCK.md)   -->
+        <!-- ============================================================ -->
+        <dependency>
+            <groupId>io.opentelemetry.instrumentation</groupId>
+            <artifactId>opentelemetry-instrumentation-annotations</artifactId>
+            <version>${opentelemetry.instrumentation.version}</version>
+        </dependency>
+
+        <!-- ============================================================ -->
+        <!--  Specs Jakarta + MicroProfile requises par le TCK            -->
+        <!-- ============================================================ -->
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+            <version>${jakarta.cdi.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.ws.rs</groupId>
+            <artifactId>jakarta.ws.rs-api</artifactId>
+            <version>${jakarta.ws.rs.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.annotation</groupId>
+            <artifactId>jakarta.annotation-api</artifactId>
+            <version>${jakarta.annotation.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.eclipse.microprofile.config</groupId>
+            <artifactId>microprofile-config-api</artifactId>
+            <version>${microprofile.config.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.eclipse.microprofile.rest.client</groupId>
+            <artifactId>microprofile-rest-client-api</artifactId>
+            <version>${microprofile.rest.client.version}</version>
+        </dependency>
+
+        <!-- ============================================================ -->
+        <!--  OTel SDK officiel — utilisé par le TCK pour ses fixtures.   -->
+        <!--  Hors-Humboldt-prod : ne pollue pas le runtime applicatif.   -->
+        <!-- ============================================================ -->
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-sdk</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-sdk-extension-autoconfigure</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.opentelemetry.semconv</groupId>
+            <artifactId>opentelemetry-semconv</artifactId>
+            <version>${opentelemetry.semconv.version}</version>
+        </dependency>
+
+        <!-- ============================================================ -->
+        <!--  Test infrastructure : TestNG + Arquillian + ShrinkWrap      -->
+        <!-- ============================================================ -->
+        <dependency>
+            <groupId>org.testng</groupId>
+            <artifactId>testng</artifactId>
+            <version>${testng.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.jboss.arquillian.testng</groupId>
+            <artifactId>arquillian-testng-container</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.jboss.shrinkwrap</groupId>
+            <artifactId>shrinkwrap-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.jboss.shrinkwrap.resolver</groupId>
+            <artifactId>shrinkwrap-resolver-impl-maven</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.jboss.shrinkwrap.resolver</groupId>
+            <artifactId>shrinkwrap-resolver-api-maven</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>${maven.compiler.plugin.version}</version>
+                <configuration>
+                    <release>25</release>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>${maven.surefire.version}</version>
+                <configuration>
+                    <!-- TCK = TestNG, pas JUnit. Activé via le runtime testng -->
+                    <useSystemClassLoader>false</useSystemClassLoader>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+    <profiles>
+        <!-- Profile par défaut : smoke local (juste HumboldtTckSmokeTest). -->
+        <profile>
+            <id>tck-smoke</id>
+            <activation>
+                <activeByDefault>true</activeByDefault>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <test>HumboldtTckSmokeTest</test>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <!-- Profile complet : exécute toute la suite TCK officielle. -->
+        <profile>
+            <id>tck-official</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <suiteXmlFiles>
+                                <suiteXmlFile>src/test/resources/tck-suite.xml</suiteXmlFile>
+                            </suiteXmlFiles>
+                            <dependenciesToScan>
+                                <dependency>org.eclipse.microprofile.telemetry:microprofile-telemetry-tracing-tck</dependency>
+                                <dependency>org.eclipse.microprofile.telemetry:microprofile-telemetry-metrics-tck</dependency>
+                                <dependency>org.eclipse.microprofile.telemetry:microprofile-telemetry-logs-tck</dependency>
+                            </dependenciesToScan>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+</project>
