@@ -8,7 +8,7 @@ import io.opentelemetry.api.trace.Tracer;
 import io.vidocq.humboldt.sdk.common.Resource;
 import io.vidocq.humboldt.sdk.trace.SdkTracerProvider;
 import io.vidocq.humboldt.sdk.trace.SimpleSpanProcessor;
-import io.vidocq.humboldt.sdk.trace.export.CompletableResultCode;
+import io.vidocq.humboldt.sdk.common.CompletableResultCode;
 import io.vidocq.humboldt.sdk.trace.samplers.Sampler;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;

@@ -18,6 +18,10 @@
             <groupId>io.vidocq.humboldt</groupId>
             <artifactId>humboldt-sdk-trace</artifactId>
         </dependency>
+        <dependency>
+            <groupId>io.vidocq.humboldt</groupId>
+            <artifactId>humboldt-sdk-metric</artifactId>
+        </dependency>
 
         <dependency>
             <groupId>org.junit.jupiter</groupId>

@@ -1,5 +1,7 @@
 package io.vidocq.humboldt.sdk.trace.export;
 
+import io.vidocq.humboldt.sdk.common.CompletableResultCode;
+
 import io.vidocq.humboldt.sdk.trace.data.SpanData;
 
 import java.lang.System.Logger;

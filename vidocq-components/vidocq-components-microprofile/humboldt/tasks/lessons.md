@@ -49,6 +49,40 @@ sont des classes concrètes dans `opentelemetry-api` (pas que des interfaces).
 Donc `humboldt-propagator-w3c` ne réimplémente pas — il fournit juste la
 composition canonique `ContextPropagators.create(TextMapPropagator.composite(...))`.
 
+## M4 — SDK Metric (2026-05-20)
+
+### `mvn clean` obligatoire après déplacement de package
+
+Symptôme : `LayerInstantiationException: Package X in both module A and module B`
+au démarrage du test JVM. Cause : un `.class` orphelin reste dans `target/`
+après qu'on a déplacé le `.java` vers un autre module (ou changé son
+`package`). Le JAR construit contient à la fois la classe à la nouvelle
+position ET la classe résiduelle à l'ancienne — JPMS détecte le doublon
+de package et refuse de monter la layer.
+
+Toujours faire `mvn clean install` après un déplacement de classe entre
+modules ou un changement de package declaration.
+
+### Couplage cross-SDK à éviter — placer les briques partagées en sdk-common
+
+`SpanData`, `MetricData`, `LogRecordData` partagent les mêmes briques :
+`Resource`, `InstrumentationScope`, `CompletableResultCode`. Si on les laisse
+dans le premier SDK qui les crée (humboldt-sdk-trace), les autres SDK
+finissent par devoir `requires` ce module — ce qui couple inutilement
+metric/log à trace.
+
+Règle : tout type partagé entre 2+ SDK doit vivre dans `humboldt-sdk-common`.
+Migration appliquée en M4 pour InstrumentationScope (trace → common) et
+CompletableResultCode (trace → common).
+
+### OpenTelemetry API 1.39 — MeterBuilder.setInstrumentationAttributes absent
+
+Contrairement à ce qu'on pourrait croire, `MeterBuilder` dans OTel 1.39 n'a
+PAS `setInstrumentationAttributes(Attributes)`. Méthodes abstraites = juste
+`setInstrumentationVersion(String)`, `setSchemaUrl(String)` et `build()`.
+Toujours vérifier les overrides côté compilateur — chaque version OTel a
+des nuances dans ce qui est default vs abstract sur les builders.
+
 ### OTLP/JSON encoding manuel par StringBuilder
 
 Pour M3 MVP, l'encoder OTLP/JSON est écrit à la main via StringBuilder (pas

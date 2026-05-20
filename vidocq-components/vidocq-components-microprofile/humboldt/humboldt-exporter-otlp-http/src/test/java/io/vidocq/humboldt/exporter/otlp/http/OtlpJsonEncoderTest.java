@@ -9,7 +9,7 @@ import io.opentelemetry.api.trace.TraceState;
 import io.vidocq.humboldt.exporter.otlp.http.internal.OtlpJsonEncoder;
 import io.vidocq.humboldt.sdk.common.Resource;
 import io.vidocq.humboldt.sdk.trace.data.EventData;
-import io.vidocq.humboldt.sdk.trace.data.InstrumentationScope;
+import io.vidocq.humboldt.sdk.common.InstrumentationScope;
 import io.vidocq.humboldt.sdk.trace.data.LinkData;
 import io.vidocq.humboldt.sdk.trace.data.SpanData;
 import io.vidocq.humboldt.sdk.trace.data.StatusData;

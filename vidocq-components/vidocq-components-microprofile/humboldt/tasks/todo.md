@@ -47,9 +47,20 @@
 
 À démarrer quand chappe-client sera assez mature ET que la nécessité protobuf sera prouvée (TCK audit en M7). Voir `PLAN.md` §3.4 (decision A protobuf-java vs B hand-rolled).
 
-## M4 — SDK Metric (prochain)
+## M4 — SDK Metric (MVP synchrone) _(terminé 2026-05-20)_
 
-À démarrer après M3. Voir `PLAN.md` §13 et `ROADMAP.md`.
+- [x] Refactor préalable : CompletableResultCode + InstrumentationScope déplacés vers humboldt-sdk-common (évite couplage cross-SDK)
+- [x] `humboldt-sdk-metric` : SdkMeterProvider (builder, MeterBuilder anonymous, cache par scope), SdkMeter (counter+histogram builders fonctionnels, upDownCounter/gauge UOE), SdkLongCounter (refuse négatif), SdkDoubleHistogram (refuse NaN/négatif)
+- [x] Aggregators : SumAggregator (LongAdder per attribute-set), ExplicitBucketHistogramAggregator (15 bornes par défaut, synchronized record)
+- [x] PeriodicMetricReader (worker virtual thread, scheduleDelay/flush/shutdown drain)
+- [x] OtlpHttpMetricExporter + OtlpJsonMetricEncoder (sum/histogram/gauge avec temporality int et isMonotonic), InMemoryMetricExporter pour tests
+- [x] Tests : 6 SdkMeterProvider + 1 OtlpHttpMetric E2E = **17 tests M4** → **total 74/74 PASS**
+- [x] Décision M4b documentée : Observable instruments, double/long manquants, ExponentialHistogram, ViewRegistry, DELTA différés
+- [x] pom parent + module-info de l'exporter + commit M4
+
+## M5 — SDK Log (prochain)
+
+À démarrer après M4. Voir `PLAN.md` §13 et `ROADMAP.md`.
 
 ## Leçons en cours de session
 

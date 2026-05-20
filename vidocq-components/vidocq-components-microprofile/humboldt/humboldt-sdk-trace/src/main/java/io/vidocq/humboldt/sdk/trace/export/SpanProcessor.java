@@ -1,5 +1,7 @@
 package io.vidocq.humboldt.sdk.trace.export;
 
+import io.vidocq.humboldt.sdk.common.CompletableResultCode;
+
 import io.opentelemetry.context.Context;
 import io.vidocq.humboldt.sdk.trace.ReadableSpan;
 

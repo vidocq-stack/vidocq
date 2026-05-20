@@ -11,7 +11,7 @@ import io.vidocq.humboldt.sdk.common.Clock;
 import io.vidocq.humboldt.sdk.common.Resource;
 import io.vidocq.humboldt.sdk.trace.ReadableSpan;
 import io.vidocq.humboldt.sdk.trace.data.EventData;
-import io.vidocq.humboldt.sdk.trace.data.InstrumentationScope;
+import io.vidocq.humboldt.sdk.common.InstrumentationScope;
 import io.vidocq.humboldt.sdk.trace.data.LinkData;
 import io.vidocq.humboldt.sdk.trace.data.SpanData;
 import io.vidocq.humboldt.sdk.trace.data.StatusData;

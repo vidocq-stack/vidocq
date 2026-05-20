@@ -12,7 +12,7 @@ import io.opentelemetry.context.Context;
 import io.vidocq.humboldt.sdk.common.Clock;
 import io.vidocq.humboldt.sdk.common.IdGenerator;
 import io.vidocq.humboldt.sdk.common.Resource;
-import io.vidocq.humboldt.sdk.trace.data.InstrumentationScope;
+import io.vidocq.humboldt.sdk.common.InstrumentationScope;
 import io.vidocq.humboldt.sdk.trace.data.LinkData;
 import io.vidocq.humboldt.sdk.trace.export.SpanProcessor;
 import io.vidocq.humboldt.sdk.trace.samplers.Sampler;

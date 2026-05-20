@@ -1,4 +1,4 @@
-package io.vidocq.humboldt.sdk.trace.data;
+package io.vidocq.humboldt.sdk.common;
 
 import io.opentelemetry.api.common.Attributes;
 

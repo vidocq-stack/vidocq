@@ -1,4 +1,4 @@
-package io.vidocq.humboldt.sdk.trace.export;
+package io.vidocq.humboldt.sdk.common;
 
 import java.util.ArrayList;
 import java.util.List;

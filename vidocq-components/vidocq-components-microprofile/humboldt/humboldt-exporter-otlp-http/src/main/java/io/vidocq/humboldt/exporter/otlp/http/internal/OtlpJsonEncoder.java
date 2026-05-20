@@ -7,7 +7,7 @@ import io.opentelemetry.api.trace.SpanKind;
 import io.opentelemetry.api.trace.StatusCode;
 import io.vidocq.humboldt.sdk.common.Resource;
 import io.vidocq.humboldt.sdk.trace.data.EventData;
-import io.vidocq.humboldt.sdk.trace.data.InstrumentationScope;
+import io.vidocq.humboldt.sdk.common.InstrumentationScope;
 import io.vidocq.humboldt.sdk.trace.data.LinkData;
 import io.vidocq.humboldt.sdk.trace.data.SpanData;
 

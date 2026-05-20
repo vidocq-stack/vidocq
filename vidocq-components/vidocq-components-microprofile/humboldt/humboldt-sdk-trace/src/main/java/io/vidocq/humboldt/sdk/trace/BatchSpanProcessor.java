@@ -2,7 +2,7 @@ package io.vidocq.humboldt.sdk.trace;
 
 import io.opentelemetry.context.Context;
 import io.vidocq.humboldt.sdk.trace.data.SpanData;
-import io.vidocq.humboldt.sdk.trace.export.CompletableResultCode;
+import io.vidocq.humboldt.sdk.common.CompletableResultCode;
 import io.vidocq.humboldt.sdk.trace.export.SpanExporter;
 import io.vidocq.humboldt.sdk.trace.export.SpanProcessor;
 

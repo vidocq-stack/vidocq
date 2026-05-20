@@ -3,6 +3,7 @@ package io.vidocq.humboldt.sdk.trace.data;
 import io.opentelemetry.api.common.Attributes;
 import io.opentelemetry.api.trace.SpanContext;
 import io.opentelemetry.api.trace.SpanKind;
+import io.vidocq.humboldt.sdk.common.InstrumentationScope;
 import io.vidocq.humboldt.sdk.common.Resource;
 
 import java.util.List;

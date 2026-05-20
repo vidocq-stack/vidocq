@@ -40,13 +40,17 @@ Plan détaillé : [`PLAN.md`](PLAN.md) (§13 jalons). Cette page est la version 
 - [ ] **M3b** (différé) : OTLP/HTTP-protobuf, transport via chappe-client, tests E2E Jaeger via testcontainers — voir [`PLAN.md`](PLAN.md) §3.4
 - [ ] **Gate TCK tracing** : reporté en M7 (runner officiel hors-reactor)
 
-## M4 — SDK Metric
+## M4 — SDK Metric (MVP synchrone) _(terminé 2026-05-20)_
 
-- [ ] `humboldt-sdk-metric` : Counter, Histogram, UpDownCounter, async Gauge
-- [ ] SumAggregator, HistogramAggregator (explicit buckets), ExponentialHistogramAggregator
-- [ ] ViewRegistry, PeriodicMetricReader
-- [ ] OTLP metric exporter (extension de `humboldt-exporter-otlp-http`)
-- [ ] **Gate** : TCK metrics full PASS
+- [x] `humboldt-sdk-metric` MVP : `LongCounter` (monotonic, ignore négatif), `DoubleHistogram` (refuse négatif/NaN), `SdkMeterProvider` builder-based (Resource + N MetricReader), `SdkMeter` cache par scope. `upDownCounterBuilder`/`gaugeBuilder` lancent UOE explicite.
+- [x] Aggregators CUMULATIVE : `SumAggregator` (ConcurrentHashMap<Attributes, LongAdder>), `ExplicitBucketHistogramAggregator` (15 bornes par défaut OTel : 0/5/10/25/50/75/100/250/500/750/1000/2500/5000/7500/10000)
+- [x] `PeriodicMetricReader` sur virtual thread (scheduleDelay défaut 60s, flush() trigger immédiat, drain final on shutdown)
+- [x] `OtlpHttpMetricExporter` (POST `/v1/metrics`, encoder JSON manuel, retry exponentiel borné, executor virtual threads) + `OtlpJsonMetricEncoder` (sum + histogram + gauge, temporality int CUMULATIVE=2, isMonotonic, count string-encoded)
+- [x] `InMemoryMetricExporter` pour tests (ne purge pas sur shutdown)
+- [x] Refactor : `CompletableResultCode` et `InstrumentationScope` déplacés vers humboldt-sdk-common (briques partagées trace/metric/log, évite couplage cross-SDK)
+- [x] Tests : 17 nouveaux (6 SdkMeterProvider — counter/négatif/histogram/Resource/cache/UOE, 1 OtlpHttpMetric E2E end-to-end avec fake server) — **total 74/74 PASS**
+- [ ] **M4b** (différé) : Observable instruments (Gauge/Counter/UpDownCounter), variantes Long/Double manquantes (DoubleCounter, LongHistogram, LongUpDownCounter), ExponentialHistogramAggregator, ViewRegistry/advice, DELTA temporality
+- [ ] **Gate TCK metrics** : reporté en M7 (runner officiel hors-reactor)
 
 ## M5 — SDK Log
 

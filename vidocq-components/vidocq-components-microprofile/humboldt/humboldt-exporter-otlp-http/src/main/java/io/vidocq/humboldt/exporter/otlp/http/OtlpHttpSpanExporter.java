@@ -2,7 +2,7 @@ package io.vidocq.humboldt.exporter.otlp.http;
 
 import io.vidocq.humboldt.exporter.otlp.http.internal.OtlpJsonEncoder;
 import io.vidocq.humboldt.sdk.trace.data.SpanData;
-import io.vidocq.humboldt.sdk.trace.export.CompletableResultCode;
+import io.vidocq.humboldt.sdk.common.CompletableResultCode;
 import io.vidocq.humboldt.sdk.trace.export.SpanExporter;
 
 import java.lang.System.Logger;
