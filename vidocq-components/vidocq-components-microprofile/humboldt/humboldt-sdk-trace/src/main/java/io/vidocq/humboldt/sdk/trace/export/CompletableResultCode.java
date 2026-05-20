@@ -1,0 +1,112 @@
+package io.vidocq.humboldt.sdk.trace.export;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+
+/**
+ * Résultat asynchrone d'une opération d'export ou de flush — équivalent fonctionnel
+ * de {@code io.opentelemetry.sdk.common.CompletableResultCode} sans dépendance au
+ * SDK OTel tiers.
+ *
+ * <p>Trois états : en cours, succès, échec. Transitions atomiques, terminales.</p>
+ */
+public final class CompletableResultCode {
+
+    private static final CompletableResultCode SUCCESS = new CompletableResultCode().succeed();
+    private static final CompletableResultCode FAILURE = new CompletableResultCode().fail();
+
+    private final AtomicReference<Boolean> result = new AtomicReference<>(null);
+    private final CountDownLatch latch = new CountDownLatch(1);
+    private final AtomicBoolean callbacksFired = new AtomicBoolean(false);
+    private final List<Runnable> onSuccess = new ArrayList<>();
+    private final List<Runnable> onFailure = new ArrayList<>();
+
+    public static CompletableResultCode ofSuccess() {
+        return SUCCESS;
+    }
+
+    public static CompletableResultCode ofFailure() {
+        return FAILURE;
+    }
+
+    public static CompletableResultCode ofAll(List<CompletableResultCode> codes) {
+        if (codes.isEmpty()) return ofSuccess();
+        CompletableResultCode agg = new CompletableResultCode();
+        int total = codes.size();
+        AtomicReference<Integer> remaining = new AtomicReference<>(total);
+        AtomicBoolean anyFailed = new AtomicBoolean(false);
+        for (CompletableResultCode c : codes) {
+            c.whenComplete(() -> {
+                if (!c.isSuccess()) anyFailed.set(true);
+                int left = remaining.updateAndGet(i -> i - 1);
+                if (left == 0) {
+                    if (anyFailed.get()) agg.fail();
+                    else agg.succeed();
+                }
+            });
+        }
+        return agg;
+    }
+
+    public CompletableResultCode succeed() {
+        if (result.compareAndSet(null, Boolean.TRUE)) {
+            latch.countDown();
+            fireCallbacks(true);
+        }
+        return this;
+    }
+
+    public CompletableResultCode fail() {
+        if (result.compareAndSet(null, Boolean.FALSE)) {
+            latch.countDown();
+            fireCallbacks(false);
+        }
+        return this;
+    }
+
+    public boolean isDone() {
+        return result.get() != null;
+    }
+
+    public boolean isSuccess() {
+        return Boolean.TRUE.equals(result.get());
+    }
+
+    public CompletableResultCode whenComplete(Runnable action) {
+        synchronized (this) {
+            if (!isDone()) {
+                onSuccess.add(action);
+                onFailure.add(action);
+                return this;
+            }
+        }
+        action.run();
+        return this;
+    }
+
+    public CompletableResultCode join(long timeout, TimeUnit unit) {
+        try {
+            latch.await(timeout, unit);
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+        }
+        return this;
+    }
+
+    private void fireCallbacks(boolean success) {
+        if (!callbacksFired.compareAndSet(false, true)) return;
+        List<Runnable> toFire;
+        synchronized (this) {
+            toFire = success ? new ArrayList<>(onSuccess) : new ArrayList<>(onFailure);
+            onSuccess.clear();
+            onFailure.clear();
+        }
+        for (Runnable r : toFire) {
+            r.run();
+        }
+    }
+}

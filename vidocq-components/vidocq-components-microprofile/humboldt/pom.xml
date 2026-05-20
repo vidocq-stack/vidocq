@@ -100,6 +100,7 @@
         <subproject>humboldt-api</subproject>
         <subproject>humboldt-sdk-common</subproject>
         <subproject>humboldt-context</subproject>
+        <subproject>humboldt-sdk-trace</subproject>
     </subprojects>
 
     <dependencyManagement>
@@ -157,6 +158,11 @@
             <dependency>
                 <groupId>io.vidocq.humboldt</groupId>
                 <artifactId>humboldt-context</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.humboldt</groupId>
+                <artifactId>humboldt-sdk-trace</artifactId>
                 <version>${project.version}</version>
             </dependency>
         </dependencies>

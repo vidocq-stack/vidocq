@@ -21,12 +21,16 @@ Plan détaillé : [`PLAN.md`](PLAN.md) (§13 jalons). Cette page est la version 
 - [x] Tests : attach/close, nested LIFO, isolation virtual thread, propagation via `Context.wrap()`
 - [ ] ADR M8 (différée) : éventuelle migration vers `ScopedValue` (JEP 506) si benchmark mémoire critique sur >100K VTs
 
-## M2 — SDK Trace
+## M2 — SDK Trace _(terminé 2026-05-20)_
 
-- [ ] `humboldt-sdk-trace` : `SdkTracerProvider`, `SpanProcessor` (Simple + Batch), samplers (`always_on`, `always_off`, `parentbased`, `traceidratio`)
-- [ ] `BatchSpanProcessor` sur virtual thread + structured concurrency
-- [ ] Tests : in-memory exporter, parent/child spans, span links
-- [ ] Audit TCK : identifier les tests tracing-only que l'on peut déjà passer
+- [x] `humboldt-sdk-trace` : `SdkTracerProvider` (builder Resource + Sampler + IdGenerator + Clock + N processors, cache Tracer par scope name), `SdkTracer`, `SdkSpanBuilder`, `SdkSpan` (mutable jusqu'à end, synchronized, ignore mutations post-end)
+- [x] Modèle données immutable : `SpanData` (record 12-field), `EventData`, `LinkData`, `StatusData`, `InstrumentationScope`
+- [x] 4 Samplers : `AlwaysOn`, `AlwaysOff`, `ParentBased(root)`, `TraceIdRatioBased(ratio)` (consistance per-trace, seuil sur les 64 bits bas du traceId)
+- [x] `SpanProcessor` : `SimpleSpanProcessor` (synchrone, ignore non-samplés), `BatchSpanProcessor` (queue bornée, **virtual thread worker**, batch sur threshold/scheduleDelay/flush/shutdown)
+- [x] Exporters utilitaires : `InMemorySpanExporter` (tests), `LoggingSpanExporter` (System.getLogger)
+- [x] `CompletableResultCode` — équivalent SDK OTel sans dep (async result avec succeed/fail/whenComplete/join)
+- [x] Tests E2E : 8 samplers + 9 tracer/span (parent-child, links, kind/status, events, recordException, cache scope, Resource, noParent) + 3 processors (drop unsampled, batch threshold, drain on shutdown) = **20 tests**
+- [ ] Audit TCK : reporté à M7 (runner officiel hors-reactor)
 
 ## M3 — Propagator + Exporter OTLP HTTP
 

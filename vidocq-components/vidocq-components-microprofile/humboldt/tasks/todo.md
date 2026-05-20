@@ -21,11 +21,23 @@
 - [x] `HumboldtContextStorage` ThreadLocal-backed, conforme contrat OTel (attach/close/current/root), log WARNING sur attach/detach désordonné, close idempotent
 - [x] Tests : provider ServiceLoader, current()=root, attach/close, nested LIFO, isolation VT (sans wrap), propagation VT (avec `Context.wrap()`), close idempotent
 - [x] pom parent : ajout `<subprojects>` + dependencyManagement entries pour humboldt-sdk-common et humboldt-context
-- [ ] Build verify reactor complet, commit M1
+- [x] Build verify reactor complet → **23/23 tests PASS** (2 humboldt-api + 14 sdk-common + 7 context), commit `a7f0e86`
 
-## M2 — SDK Trace (prochain)
+## M2 — SDK Trace _(terminé 2026-05-20)_
 
-À démarrer après M1 verte. Voir `PLAN.md` §13 et `ROADMAP.md`.
+- [x] Modèle immutable : SpanData (12-field record), EventData, LinkData, StatusData, InstrumentationScope
+- [x] Interfaces : ReadableSpan, SpanExporter, SpanProcessor, CompletableResultCode (async result)
+- [x] 4 Samplers : AlwaysOn, AlwaysOff, ParentBased, TraceIdRatioBased (consistant per-trace via 64 bits bas du traceId)
+- [x] Exporters utilitaires : InMemorySpanExporter (tests), LoggingSpanExporter (System.getLogger)
+- [x] Core : SdkTracerProvider (builder), SdkTracer, SdkSpanBuilder (4 setAttribute primitives), SdkSpan (synchronized mutable jusqu'à end, all defaults Span/SpanBuilder OTel 1.39)
+- [x] Processors : SimpleSpanProcessor (sync, ignore non-samplés), BatchSpanProcessor (queue + **virtual thread worker** + threshold/scheduleDelay/flush/shutdown drain)
+- [x] Tests : 20/20 (8 Sampler + 9 SdkTracerProvider + 3 SpanProcessor) — parent/child traceId share, links, kind/status, events, recordException stack, drop unsampled, batch threshold, drain shutdown
+- [x] pom parent : ajout humboldt-sdk-trace au reactor + dependencyManagement
+- [x] Build verify → **43/43 tests PASS** (2 api + 14 common + 7 context + 20 trace), commit M2
+
+## M3 — Propagator W3C + Exporter OTLP HTTP (prochain)
+
+À démarrer après commit M2. Voir `PLAN.md` §13 (M3 — propagator + OTLP HTTP-protobuf via chappe-client) et `ROADMAP.md`.
 
 ## Leçons en cours de session
 
