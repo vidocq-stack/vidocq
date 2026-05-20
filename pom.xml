@@ -12,7 +12,13 @@
 
     <name>Vidocq MicroProfile Server</name>
     <description>MicroProfile application server built on Vauban CDI 4.1</description>
-    <url>https://github.com/VidocqMP/vidocq</url>
+    <url>https://forge.vidocq.dev/vidocq/vidocq-mps</url>
+
+    <scm>
+        <connection>scm:git:https://forge.vidocq.dev/vidocq/vidocq-mps.git</connection>
+        <developerConnection>scm:git:ssh://git@forge.vidocq.dev:55122/vidocq/vidocq-mps.git</developerConnection>
+        <url>https://forge.vidocq.dev/vidocq/vidocq-mps</url>
+    </scm>
 
     <developers>
         <developer>
