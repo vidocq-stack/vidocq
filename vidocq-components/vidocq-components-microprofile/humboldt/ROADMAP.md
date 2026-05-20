@@ -89,11 +89,18 @@ Plan détaillé : [`PLAN.md`](PLAN.md) (§13 jalons). Cette page est la version 
 - [x] Tests : 15 (8 EnvConfigTest + 7 HumboldtAutoConfigureTest) — service.name default+override, RESOURCE_ATTRIBUTES parsing 3 paires, pipeline E2E trace+metric+log via 1 seul `configure()`, sampler always_off, traceidratio ratio descriptio, exporter=none désactive, W3C propagators traceparent+baggage exposés
 - [ ] **Différé en M7** : `OTEL_EXPORTER_OTLP_TIMEOUT`, `OTEL_EXPORTER_OTLP_PROTOCOL` (json vs protobuf), `MP_TELEMETRY_SDK_DISABLED`, `MP_TELEMETRY_PROPAGATORS`, intégration Ravel pour MP Config
 
-### M6d — Extension MPS + validation Vauban runtime _(à venir)_
+### M6d — Extension MPS + validation Vauban runtime _(structure livrée 2026-05-21)_
 
-- [ ] Extension `vidocq-mps-humboldt-extension` (hors-reactor humboldt, vit dans vidocq-mps repo)
-- [ ] **Validation Vauban runtime** : confirmer CDI 4.1 Lite suffit pour `@WithSpan` (risk PLAN §15.1) sur un app exemple — sinon escape hatch documenté
-- [ ] Test E2E REST via cassini + chappe + humboldt-runtime + humboldt-rest filters
+- [x] Extension `vidocq-mps-humboldt-extension` créée dans `vidocq-mps` (commit `0274a62`) :
+  * Module Maven avec pom hérité de `vidocq-mps-core-extensions`, dep humboldt-runtime/cdi/rest + vauban-core + vidocq-mps-spi
+  * `HumboldtExtension implements VidocqExtension` priorité 100 — configure() lit env vars OTel via VidocqConfiguration bridge, beforeStart() = AutoConfiguredHumboldt.configure + GlobalOpenTelemetry.set, onStop() flush + shutdown 5s
+  * 13 clés OTel/MP_TELEMETRY_* bridgées (SCREAMING_SNAKE + lower.dot.case)
+  * Désactivation via `MP_TELEMETRY_SDK_DISABLED=true`
+  * ServiceLoader : `META-INF/services/io.vidocq.mpserver.spi.VidocqExtension` + `provides` JPMS
+  * README.md complet avec table des env vars + instrumentation auto activée (`@WithSpan` BCE, filters JAX-RS)
+  * Pom parent vidocq-mps : property `humboldt.version=0.1.0-SNAPSHOT` + 4 DM entries (3 humboldt + 1 extension)
+- [ ] **M6d.4** — Verify build : bloqué par un bug Maven 4 path pre-existant dans le reactor `vidocq-mps` (paths `vidocq/vidocq/...` au lieu de `vidocq-mps/...`). Confirmé indépendant de l'ajout via `git stash`. Structure de l'extension correcte (calque exact `vidocq-mps-rest-cassini-extension`), compilera dès que le bug Maven sera résolu.
+- [ ] **M6d.5 Validation Vauban runtime** : test E2E via `vidocq-mps-integration-tests` qui démarre une app, fait un appel HTTP, vérifie qu'un span SERVER apparaît dans `InMemorySpanExporter`. Confirme que Vauban applique bien la BCE humboldt-cdi sur les beans `@WithSpan` (risk PLAN §15.1).
 
 ## M7 — TCK officiel MicroProfile Telemetry 2.1
 
