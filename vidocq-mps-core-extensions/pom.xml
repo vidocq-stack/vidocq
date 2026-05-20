@@ -18,6 +18,7 @@
         <subproject>vidocq-mps-chappe-extension</subproject>
         <subproject>vidocq-mps-rest-cassini-extension</subproject>
         <subproject>vidocq-mps-cyrano-extension</subproject>
+        <subproject>vidocq-mps-humboldt-extension</subproject>
         <subproject>vidocq-mps-mansart-pool-extension</subproject>
         <subproject>vidocq-mps-mansart-data-extension</subproject>
         <subproject>vidocq-mps-mansart-transactions-extension</subproject>

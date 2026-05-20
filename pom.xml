@@ -93,6 +93,7 @@
         <mansart.version>1.0.0-SNAPSHOT</mansart.version>
         <knock.version>0.1.0-SNAPSHOT</knock.version>
         <cyrano.version>0.1.0-SNAPSHOT</cyrano.version>
+        <humboldt.version>0.1.0-SNAPSHOT</humboldt.version>
         <champollion.version>0.1.0-SNAPSHOT</champollion.version>
         <microprofile.config.version>3.1.1</microprofile.config.version>
         <jakarta.cdi.version>4.1.0</jakarta.cdi.version>
@@ -226,6 +227,23 @@
                 <version>${cyrano.version}</version>
             </dependency>
 
+            <!-- Humboldt — MicroProfile Telemetry 2.1 (tracing, metrics, logs) -->
+            <dependency>
+                <groupId>io.vidocq.humboldt</groupId>
+                <artifactId>humboldt-runtime</artifactId>
+                <version>${humboldt.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.humboldt</groupId>
+                <artifactId>humboldt-cdi</artifactId>
+                <version>${humboldt.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.humboldt</groupId>
+                <artifactId>humboldt-rest</artifactId>
+                <version>${humboldt.version}</version>
+            </dependency>
+
             <!-- Vidocq modules -->
             <dependency>
                 <groupId>io.vidocq.mpserver</groupId>
@@ -255,6 +273,11 @@
             <dependency>
                 <groupId>io.vidocq.mpserver</groupId>
                 <artifactId>vidocq-mps-cyrano-extension</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.mpserver</groupId>
+                <artifactId>vidocq-mps-humboldt-extension</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
