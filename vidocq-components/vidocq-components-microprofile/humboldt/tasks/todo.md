@@ -58,9 +58,18 @@
 - [x] Décision M4b documentée : Observable instruments, double/long manquants, ExponentialHistogram, ViewRegistry, DELTA différés
 - [x] pom parent + module-info de l'exporter + commit M4
 
-## M5 — SDK Log (prochain)
+## M5 — SDK Log (MVP) _(terminé 2026-05-20)_
 
-À démarrer après M4. Voir `PLAN.md` §13 et `ROADMAP.md`.
+- [x] humboldt-sdk-log skeleton + LogRecordData + interfaces (LogRecordProcessor + LogRecordExporter) + InMemoryLogRecordExporter
+- [x] Core impl : SdkLoggerProvider (builder + cache scope + LoggerBuilder anonymous), SdkLogger, SdkLogRecordBuilder (collect-then-emit, capture Span courant du Context si pas set), Simple/Batch processors (Batch sur worker VT)
+- [x] OtlpHttpLogExporter (POST /v1/logs) + OtlpJsonLogEncoder (severity number+text, body.stringValue, traceId/spanId/flags si span actif)
+- [x] Tests : 7 SdkLoggerProvider + 1 E2E exporter = 8 nouveaux → **total 82/82 PASS**
+- [x] Décision M5b documentée : bridges JUL/SLF4J différés
+- [x] pom parent + module-info exporter + commit M5
+
+## M6 — CDI + JAX-RS + Runtime (prochain)
+
+À démarrer après M5. Voir `PLAN.md` §13 (M6 — `@WithSpan` via vauban, filter JAX-RS via cassini, autoconfig, extension MPS) et `ROADMAP.md`.
 
 ## Leçons en cours de session
 

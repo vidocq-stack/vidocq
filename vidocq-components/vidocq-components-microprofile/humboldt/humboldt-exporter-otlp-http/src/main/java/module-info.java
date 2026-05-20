@@ -16,6 +16,7 @@ module io.vidocq.humboldt.exporter.otlp.http {
 
     requires transitive io.vidocq.humboldt.sdk.trace;
     requires transitive io.vidocq.humboldt.sdk.metric;
+    requires transitive io.vidocq.humboldt.sdk.log;
     requires java.net.http;
     requires java.logging;
 
