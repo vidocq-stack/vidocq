@@ -76,13 +76,17 @@
 - [x] Build verify → **88/88 tests PASS** (82 M0-M5 + 6 M6a), 10 modules SUCCESS, 6.2s
 - [x] Décision : intégration Vauban runtime validation en M6b
 
-## M6b — humboldt-rest (filter JAX-RS via Cassini) — prochain
+## M6b — humboldt-rest (filters JAX-RS) _(terminé 2026-05-21)_
 
-À démarrer après M6a. Voir ROADMAP.md.
+- [x] HumboldtServerRequestFilter (TextMapGetter MultivaluedMap, extract W3C traceparent, start SERVER span, attrs OTel http.request.method/url.path/url.scheme — url.path normalisé avec '/' initial)
+- [x] HumboldtServerResponseFilter (http.response.status_code long, status ERROR si ≥500, close Scope + span.end finally, cleanup propriétés)
+- [x] Tests : 6 sans container JAX-RS via java.lang.reflect.Proxy (route les 6 méthodes utilisées, defaults pour les ~40 abstract de l'API JAX-RS 4.0)
+- [x] Build verify → **94/94 tests PASS** (88 M0-M6a + 6 M6b), 11 modules SUCCESS, 6.5s
+- [ ] Tests E2E via cassini reportés en M7
 
-## M6c — humboldt-runtime + extension MPS
+## M6c — humboldt-runtime + extension MPS (prochain)
 
-À démarrer après M6b. Voir ROADMAP.md.
+À démarrer après M6b. Voir ROADMAP.md (autoconfig OTEL_*/MP_TELEMETRY_*, ServiceLoader, extension MPS hors-reactor humboldt, validation Vauban runtime).
 
 ## Leçons en cours de session
 

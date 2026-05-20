@@ -72,12 +72,12 @@ Plan détaillé : [`PLAN.md`](PLAN.md) (§13 jalons). Cette page est la version 
 - [x] 6 tests sans container CDI (InvocationContext synthétique) : default name = `Class.method`, explicit value+kind SERVER, exception → ERROR status + event "exception" avec stack, span current pendant méthode, parent/child traceId share avec span outer, annotation classe utilisée si méthode sans annotation
 - [x] **Décision** : intégration Vauban runtime à valider en M6b. M6a utilise jakarta.cdi-api + jakarta.interceptor-api standard, donc compatible avec n'importe quel container Lite ou Full.
 
-### M6b — humboldt-rest (filter JAX-RS via Cassini) _(à venir)_
+### M6b — humboldt-rest (filters JAX-RS) _(terminé 2026-05-21)_
 
-- [ ] `ContainerRequestFilter` extract W3C `traceparent` → start SERVER span (nom = HTTP method + route ou URI template)
-- [ ] `ContainerResponseFilter` → set `http.response.status_code`, `span.end()`
-- [ ] Conventions OTel : attrs `http.request.method`, `url.path`, `network.protocol.version`
-- [ ] Tests via cassini standalone (chappe transport) + assertions sur spans capturés
+- [x] `HumboldtServerRequestFilter` `@Provider` : `TextMapGetter<ContainerRequestContext>` qui adapte `getHeaders()`, extract via composite `W3CPropagators.textMap()`, start SERVER span avec parent extrait, attrs OTel `http.request.method` / `url.path` (normalisé '/' initial — convention OTel) / `url.scheme`. Span name = `{method} {path}`. Span + Scope stockés via `ContainerRequestContext.setProperty(SPAN_PROPERTY / SCOPE_PROPERTY)`
+- [x] `HumboldtServerResponseFilter` `@Provider` : récupère le span, set `http.response.status_code` long, status ERROR si ≥500 (4xx ignoré — OTel HTTP semantic), close Scope puis `span.end()` en finally, cleanup propriétés
+- [x] Tests : 6 sans container JAX-RS via `java.lang.reflect.Proxy` (route ~6 méthodes utilisées, defaults pour les ~40 autres méthodes abstraites JAX-RS 4.0 — robuste face aux changements d'API entre versions). Couvre : span method+path+scheme, extraction traceparent W3C, status 500 → ERROR, status 404 → UNSET, response filter idempotent sans property, cleanup property
+- [ ] **Tests E2E via cassini standalone** (chappe transport) reportés en M7 — nécessitent cassini-snapshot dans le M2 CI
 
 ### M6c — humboldt-runtime + extension MPS _(à venir)_
 

@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.1.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.1.0 http://maven.apache.org/xsd/maven-4.1.0.xsd">
+    <modelVersion>4.1.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.humboldt</groupId>
+        <artifactId>humboldt-parent</artifactId>
+    </parent>
+
+    <artifactId>humboldt-rest</artifactId>
+    <name>Humboldt :: REST</name>
+    <description>Filters JAX-RS pour instrumentation HTTP serveur : extract W3C TraceContext, span SERVER, conventions OTel HTTP semantic.</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.humboldt</groupId>
+            <artifactId>humboldt-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.humboldt</groupId>
+            <artifactId>humboldt-sdk-trace</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.humboldt</groupId>
+            <artifactId>humboldt-propagator-w3c</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-context</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.ws.rs</groupId>
+            <artifactId>jakarta.ws.rs-api</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

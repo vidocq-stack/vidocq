@@ -83,6 +83,39 @@ PAS `setInstrumentationAttributes(Attributes)`. Méthodes abstraites = juste
 Toujours vérifier les overrides côté compilateur — chaque version OTel a
 des nuances dans ce qui est default vs abstract sur les builders.
 
+## M6b — humboldt-rest (2026-05-21)
+
+### `java.lang.reflect.Proxy` pour mocker une API JAX-RS sans Mockito
+
+Les interfaces `ContainerRequestContext` et `UriInfo` de JAX-RS 4.0 ont
+chacune ~40-50 méthodes abstraites (et la surface change entre versions :
+`MatchedResource` ajouté en 4.0, `getMatchedResourceTemplate()` nouveau,
+etc.). Implémenter ces interfaces à la main dans un test = boilerplate
+énorme et fragile à chaque upgrade JAX-RS.
+
+Solution Humboldt : `java.lang.reflect.Proxy.newProxyInstance` + switch sur
+`method.getName()` pour router uniquement les ~6 méthodes effectivement
+consommées par le filter, avec `defaultForReturnType(m)` qui retourne des
+valeurs sûres (`null`, `false`, `0`, `List.of()`, `Map.of()`,
+`MultivaluedHashMap`) pour tout le reste.
+
+Avantage : robuste face aux ajouts d'abstract methods upstream — pas besoin
+de patcher le test à chaque release JAX-RS. Pas de dépendance Mockito.
+
+Pattern à réutiliser pour `ContainerResponseContext`, `SecurityContext`,
+`Application` etc. quand on testera M6c/M7.
+
+### `UriInfo.getPath()` ne contient PAS le '/' initial — normaliser
+
+Selon JAX-RS spec, `UriInfo.getPath()` retourne le path **relatif au base URI**,
+SANS '/' initial. Mais la convention OTel HTTP semantic conventions exige
+`url.path` AVEC '/' initial.
+
+Fix dans `HumboldtServerRequestFilter` :
+`path = raw.startsWith("/") ? raw : "/" + raw` **avant** de le poser dans
+l'attribut ET dans le span name. Sinon tests échouent avec
+`expected: </users/42> but was: <users/42>`.
+
 ### OTLP/JSON encoding manuel par StringBuilder
 
 Pour M3 MVP, l'encoder OTLP/JSON est écrit à la main via StringBuilder (pas
