@@ -62,12 +62,28 @@ Plan détaillé : [`PLAN.md`](PLAN.md) (§13 jalons). Cette page est la version 
 - [ ] **M5b** (différé) : bridges `java.util.logging` (Handler) + SLF4J (Appender) → OTel — pour capturer les logs existants sans modifier les appels code
 - [ ] **Gate TCK logs** : reporté en M7 (runner officiel hors-reactor)
 
-## M6 — CDI + JAX-RS + Runtime
+## M6 — CDI + JAX-RS + Runtime (découpé en M6a/b/c)
 
-- [ ] `humboldt-cdi` : interceptor `@WithSpan` via Vauban (CDI 4.1 Lite à valider)
-- [ ] `humboldt-rest` : filter JAX-RS via Cassini, propagation entrante/sortante
-- [ ] `humboldt-runtime` : autoconfig (`HumboldtAutoConfigure`), assemblage ServiceLoader
-- [ ] Extension MPS `vidocq-mps-humboldt-extension`
+### M6a — humboldt-cdi (interceptor `@WithSpan`) _(terminé 2026-05-21)_
+
+- [x] Annotation `@WithSpan(value, kind)` avec `@InterceptorBinding` Jakarta standard — applicable sur méthode OU type (héritée)
+- [x] `WithSpanInterceptor` `@AroundInvoke` : résout l'annotation (méthode > classe), crée le span via `Tracer.spanBuilder(name).setSpanKind(kind).startSpan()`, attache au Context (`try-with-resources Scope`), `recordException()` + status ERROR sur Throwable, `span.end()` en finally. Priorité `Interceptor.Priority.APPLICATION + 1`.
+- [x] Tracer résolu via `GlobalOpenTelemetry.get()` (hook `openTelemetry()` protected — surchargeable pour tests sans init globale, ou futur `@Inject` Tracer en M6b)
+- [x] 6 tests sans container CDI (InvocationContext synthétique) : default name = `Class.method`, explicit value+kind SERVER, exception → ERROR status + event "exception" avec stack, span current pendant méthode, parent/child traceId share avec span outer, annotation classe utilisée si méthode sans annotation
+- [x] **Décision** : intégration Vauban runtime à valider en M6b. M6a utilise jakarta.cdi-api + jakarta.interceptor-api standard, donc compatible avec n'importe quel container Lite ou Full.
+
+### M6b — humboldt-rest (filter JAX-RS via Cassini) _(à venir)_
+
+- [ ] `ContainerRequestFilter` extract W3C `traceparent` → start SERVER span (nom = HTTP method + route ou URI template)
+- [ ] `ContainerResponseFilter` → set `http.response.status_code`, `span.end()`
+- [ ] Conventions OTel : attrs `http.request.method`, `url.path`, `network.protocol.version`
+- [ ] Tests via cassini standalone (chappe transport) + assertions sur spans capturés
+
+### M6c — humboldt-runtime + extension MPS _(à venir)_
+
+- [ ] `humboldt-runtime` autoconfig : lit env vars `OTEL_*` / `MP_TELEMETRY_*` (via ravel), assemble SdkTracerProvider/MeterProvider/LoggerProvider + OTLP HTTP exporters par défaut, installe propagators W3C
+- [ ] Extension `vidocq-mps-humboldt-extension` (hors-reactor humboldt, vit dans vidocq-mps)
+- [ ] **Validation Vauban runtime** : confirmer CDI 4.1 Lite suffit pour `@WithSpan` (risk PLAN §15.1) — sinon escape hatch documenté
 
 ## M7 — TCK officiel
 

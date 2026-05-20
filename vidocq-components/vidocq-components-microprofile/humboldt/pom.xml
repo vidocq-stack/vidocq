@@ -105,6 +105,7 @@
         <subproject>humboldt-exporter-otlp-http</subproject>
         <subproject>humboldt-sdk-metric</subproject>
         <subproject>humboldt-sdk-log</subproject>
+        <subproject>humboldt-cdi</subproject>
     </subprojects>
 
     <dependencyManagement>
@@ -187,6 +188,11 @@
             <dependency>
                 <groupId>io.vidocq.humboldt</groupId>
                 <artifactId>humboldt-sdk-log</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.humboldt</groupId>
+                <artifactId>humboldt-cdi</artifactId>
                 <version>${project.version}</version>
             </dependency>
         </dependencies>

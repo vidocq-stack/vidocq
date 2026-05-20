@@ -67,9 +67,22 @@
 - [x] Décision M5b documentée : bridges JUL/SLF4J différés
 - [x] pom parent + module-info exporter + commit M5
 
-## M6 — CDI + JAX-RS + Runtime (prochain)
+## M6a — humboldt-cdi (interceptor @WithSpan) _(terminé 2026-05-21)_
 
-À démarrer après M5. Voir `PLAN.md` §13 (M6 — `@WithSpan` via vauban, filter JAX-RS via cassini, autoconfig, extension MPS) et `ROADMAP.md`.
+- [x] @WithSpan annotation (value + kind, méthode OU type, @InterceptorBinding Jakarta standard)
+- [x] WithSpanInterceptor (@AroundInvoke, résolution méthode>classe, recordException+ERROR status, span.end finally, priorité APPLICATION+1)
+- [x] Hook openTelemetry() protected pour test/futur @Inject
+- [x] 6 tests sans container CDI (InvocationContext synthétique, TestableInterceptor avec SdkTracerProvider local)
+- [x] Build verify → **88/88 tests PASS** (82 M0-M5 + 6 M6a), 10 modules SUCCESS, 6.2s
+- [x] Décision : intégration Vauban runtime validation en M6b
+
+## M6b — humboldt-rest (filter JAX-RS via Cassini) — prochain
+
+À démarrer après M6a. Voir ROADMAP.md.
+
+## M6c — humboldt-runtime + extension MPS
+
+À démarrer après M6b. Voir ROADMAP.md.
 
 ## Leçons en cours de session
 
