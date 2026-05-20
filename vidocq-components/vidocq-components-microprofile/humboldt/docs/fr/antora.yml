@@ -1,0 +1,8 @@
+name: humboldt-fr
+title: Humboldt
+version: ~
+nav:
+  - modules/ROOT/nav.adoc
+asciidoc:
+  attributes:
+    lang: fr

@@ -1,0 +1,77 @@
+= Humboldt
+:description: Implémentation MicroProfile Telemetry 2.1 — traces distribuées, metrics, logs — OpenTelemetry-native, JPMS strict, zéro SDK tiers, Java 25.
+
+[.text-center]
+image::humboldt-logo.png[Humboldt,300,role=module-logo]
+
+
+[.lead]
+Humboldt est l'implémentation MicroProfile Telemetry 2.1 de l'écosystème Vidocq. Elle implémente son propre SDK OpenTelemetry (traces, metrics, logs) directement sur la surface API OTel, et s'intègre avec xref:chappe::index.adoc[Chappe] pour le transport HTTP, xref:vauban::index.adoc[Vauban] pour le CDI, et xref:cassini::index.adoc[Cassini] pour l'instrumentation JAX-RS. Objectif : conformité TCK 100 %, sans dépendance `opentelemetry-sdk` / `opentelemetry-exporter-*`, sans Netty, sans pile gRPC.
+
+== Origine du nom
+
+**Alexander von Humboldt** (1769–1859), polymathe prussien, naturaliste, géographe, explorateur. L'homme qui a posé le geste fondamental de l'observabilité moderne : *observer simultanément, mesurer rigoureusement, corréler à travers les couches*. Sur le Chimborazo en 1802, il enregistre conjointement la pression barométrique, la température, le magnétisme terrestre, l'humidité, la faune, la flore — puis trace les premières cartes isothermes qui révèlent les invariants cachés de la planète. Il invente le *Naturgemälde*, première dataviz scientifique.
+
+Lien : https://fr.wikipedia.org/wiki/Alexander_von_Humboldt[Humboldt sur Wikipédia].
+
+[cols="1,3"]
+|===
+| Humboldt, l'explorateur | Humboldt, le runtime
+| Mesure simultanée pression + température + magnétisme | Traces + Metrics + Logs unifiés via le SDK OTel
+| Carnets de terrain horodatés, calibrés | Span attributes + timestamp monotone (`Clock`)
+| Isothermes — courbes d'invariants à travers continents | Span links + W3C TraceContext + Baggage
+| Naturgemälde — visualisation transverse aux altitudes | Corrélation cross-signal `trace_id` → metric → log
+| Instruments embarqués mobiles (seuls à exister à l'époque) | SDK embarqué in-process, pas de daemon, pas d'agent
+|===
+
+OpenTelemetry est le Naturgemälde des systèmes distribués. Humboldt l'embarque nativement en Java SE.
+
+== En un coup d'œil
+
+[cols="1,3"]
+|===
+| Spec implémentée | MicroProfile Telemetry 2.1
+| Repo | {repo-humboldt}
+| Java | 25 (LTS)
+| Modules JPMS | `io.vidocq.humboldt.api`, `io.vidocq.humboldt.sdk.trace`, `io.vidocq.humboldt.sdk.metric`, `io.vidocq.humboldt.sdk.log`, `io.vidocq.humboldt.exporter.otlp.http`, `io.vidocq.humboldt.cdi`, `io.vidocq.humboldt.rest`
+| Dépendances runtime | `opentelemetry-api`, `opentelemetry-context`, `opentelemetry-semconv` (specs seulement — SDK et exporters réimplémentés). CDI optionnel via xref:vauban::index.adoc[Vauban].
+| TCK | 🚧 En attente — jalon M7 (voir xref:tck.adoc[statut TCK])
+|===
+
+== Position dans l'écosystème
+
+[mermaid]
+....
+flowchart LR
+  App[Application utilisateur] -->|@WithSpan, MP API| HumboldtAPI[humboldt-api]
+  HumboldtAPI --> SDKTrace[humboldt-sdk-trace]
+  HumboldtAPI --> SDKMetric[humboldt-sdk-metric]
+  HumboldtAPI --> SDKLog[humboldt-sdk-log]
+  SDKTrace --> OTLP[humboldt-exporter-otlp-http]
+  SDKMetric --> OTLP
+  SDKLog --> OTLP
+  OTLP -->|HTTP/protobuf via chappe| Collector[OTel Collector]
+  Cassini[cassini-core] -->|filter| HumboldtREST[humboldt-rest]
+  HumboldtREST --> HumboldtAPI
+  Vauban[vauban-core] -->|@Inject Tracer/Meter| HumboldtCDI[humboldt-cdi]
+  HumboldtCDI --> HumboldtAPI
+....
+
+Humboldt partage son transport avec le reste de l'écosystème Vidocq (Chappe HTTP/1.1 + H2). Pas de Netty, pas de grpc-java, pas d'OkHttp, pas de pile HTTP tierce. Le futur exporter gRPC OTLP sera livré via un module natif `chappe-grpc` (cf. PLAN.md §3.5).
+
+== Liens rapides
+
+* xref:getting-started.adoc[Démarrage rapide]
+* xref:concepts.adoc[Concepts : signaux, contexte, baggage]
+* xref:tracing.adoc[Traces]
+* xref:metrics.adoc[Metrics]
+* xref:logs.adoc[Logs]
+* xref:exporters.adoc[Exporters]
+* xref:configuration.adoc[Configuration (`OTEL_*` / `MP_TELEMETRY_*`)]
+* xref:performance.adoc[Performance vs SmallRye Telemetry]
+* xref:internals.adoc[Fonctionnement interne (codegen Class-File API, APT)]
+* xref:tck.adoc[Statut TCK]
+* xref:reference.adoc[Référence API]
+* xref:migration.adoc[Migration depuis SmallRye Telemetry]
+
+Bugs et benchmarks consolidés : lien:{repo-humboldt}/src/branch/main/BUG.md[BUG.md], lien:{repo-humboldt}/src/branch/main/BENCH.md[BENCH.md].
