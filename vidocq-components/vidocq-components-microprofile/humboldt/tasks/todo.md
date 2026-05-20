@@ -35,9 +35,21 @@
 - [x] pom parent : ajout humboldt-sdk-trace au reactor + dependencyManagement
 - [x] Build verify → **43/43 tests PASS** (2 api + 14 common + 7 context + 20 trace), commit M2
 
-## M3 — Propagator W3C + Exporter OTLP HTTP (prochain)
+## M3 — Propagator W3C + Exporter OTLP HTTP-JSON _(terminé 2026-05-20)_
 
-À démarrer après commit M2. Voir `PLAN.md` §13 (M3 — propagator + OTLP HTTP-protobuf via chappe-client) et `ROADMAP.md`.
+- [x] `humboldt-propagator-w3c` : façade composite W3CPropagators (TraceContext + Baggage). 5 tests : composite fields, inject/extract traceparent, baggage roundtrip
+- [x] `humboldt-exporter-otlp-http` : encoder OTLP/JSON manuel via StringBuilder + transport java.net.http.HttpClient + retry exponentiel borné. 5 EncoderTest + 4 E2E avec fake HttpServer JDK in-process (POST valide, retry 503, headers custom, backoff capped)
+- [x] pom parent : ajout des 2 modules au reactor + dependencyManagement
+- [x] Build verify → **57/57 tests PASS** (M2 43 + M3 14), 7 modules SUCCESS, 4.1s, commit M3
+- [x] Décision documentée : **OTLP/HTTP-protobuf différé en M3b** (chappe-client transport + tests Jaeger testcontainers) — MVP M3 livre OTLP/JSON pour valider l'architecture pipeline E2E
+
+## M3b — OTLP/HTTP-protobuf + chappe-client (post-MVP, conditionnel)
+
+À démarrer quand chappe-client sera assez mature ET que la nécessité protobuf sera prouvée (TCK audit en M7). Voir `PLAN.md` §3.4 (decision A protobuf-java vs B hand-rolled).
+
+## M4 — SDK Metric (prochain)
+
+À démarrer après M3. Voir `PLAN.md` §13 et `ROADMAP.md`.
 
 ## Leçons en cours de session
 

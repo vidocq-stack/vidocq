@@ -32,12 +32,13 @@ Plan détaillé : [`PLAN.md`](PLAN.md) (§13 jalons). Cette page est la version 
 - [x] Tests E2E : 8 samplers + 9 tracer/span (parent-child, links, kind/status, events, recordException, cache scope, Resource, noParent) + 3 processors (drop unsampled, batch threshold, drain on shutdown) = **20 tests**
 - [ ] Audit TCK : reporté à M7 (runner officiel hors-reactor)
 
-## M3 — Propagator + Exporter OTLP HTTP
+## M3 — Propagator W3C + Exporter OTLP HTTP-JSON _(terminé 2026-05-20)_
 
-- [ ] `humboldt-propagator-w3c` : TraceContext + Baggage
-- [ ] `humboldt-exporter-otlp-http` : protobuf marshalling, HTTP/1.1 sender via chappe-client, retry, BatchSpanProcessor
-- [ ] Tests E2E vers Jaeger / OTel Collector via testcontainers
-- [ ] **Gate** : TCK tracing full PASS
+- [x] `humboldt-propagator-w3c` : façade `W3CPropagators.get()` composant W3CTraceContextPropagator + W3CBaggagePropagator de l'API OTel publique (aucune réimplémentation — les deux sont concrètes côté API). 5 tests : fields composite, inject traceparent W3C format, extract restore SpanContext remote, baggage roundtrip, singleton stable
+- [x] `humboldt-exporter-otlp-http` MVP : encoder OTLP/JSON manuel (`OtlpJsonEncoder` via StringBuilder, schéma resourceSpans/scopeSpans/spans/attributes, AnyValue stringValue/boolValue/intValue/doubleValue/arrayValue, JSON escape minimal), transport `java.net.http.HttpClient` avec executor virtual threads, builder (endpoint, headers, requestTimeout, connectTimeout, maxRetries), retry exponentiel borné (100ms × 2^attempt, plafond 5s) sur 5xx et erreurs réseau
+- [x] Tests E2E avec fake server JDK `com.sun.net.httpserver.HttpServer` in-process : POST OTLP/JSON valide, retry 503→503→200, header Authorization custom, backoff capped. 4 EncoderTest unitaires (single span, parentSpanId, events+links+status, escape JSON, empty collection)
+- [ ] **M3b** (différé) : OTLP/HTTP-protobuf, transport via chappe-client, tests E2E Jaeger via testcontainers — voir [`PLAN.md`](PLAN.md) §3.4
+- [ ] **Gate TCK tracing** : reporté en M7 (runner officiel hors-reactor)
 
 ## M4 — SDK Metric
 
