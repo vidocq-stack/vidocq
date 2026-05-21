@@ -63,8 +63,48 @@ jobs:
           </settings>
           EOF
 
+      - name: Wait for upstream Vidocq snapshots
+        # Anti race condition : vidocq-mps dépend de tous les briques Vidocq amont
+        # (cassini, chappe, cyrano, humboldt, ravel, vauban). Si l'une d'elles vient
+        # d'être push quasi-simultanément, son CI peut être encore en train de deploy.
+        env:
+          REPO_USER: vidocq-ci-deploy
+          REPO_PASS: ${{ secrets.MAVEN_DEPLOY_TOKEN }}
+        run: |
+          set -e
+          echo "⏳ Sleep 30s pour laisser les upstream builds quasi-simultanés se terminer..."
+          sleep 30
+          DEPS=(
+            "io/vidocq/vauban/vauban-core"
+            "io/vidocq/chappe/chappe-api"
+            "io/vidocq/champollion/champollion-api"
+            "io/vidocq/ravel/ravel-core"
+            "io/vidocq/cassini/cassini-core"
+            "io/vidocq/cyrano/cyrano-core"
+            "io/vidocq/humboldt/humboldt-api"
+          )
+          BASE="https://repo.vidocq.dev/snapshots"
+          VERSION="0.1.0-SNAPSHOT"
+          TIMEOUT=300
+          start=$(date +%s)
+          for dep in "${DEPS[@]}"; do
+            url="$BASE/$dep/$VERSION/maven-metadata.xml"
+            echo "🔎 Check $dep..."
+            while true; do
+              code=$(curl -s -o /dev/null -w "%{http_code}" -u "$REPO_USER:$REPO_PASS" "$url")
+              if [ "$code" = "200" ]; then echo "  ✅ $dep dispo"; break; fi
+              elapsed=$(( $(date +%s) - start ))
+              if [ $elapsed -gt $TIMEOUT ]; then echo "  ❌ Timeout ${TIMEOUT}s — $dep HTTP=$code" >&2; exit 1; fi
+              echo "  ⏳ $dep HTTP=$code, retry dans 10s (elapsed=${elapsed}s)..."
+              sleep 10
+            done
+          done
+          echo "✅ Tous les snapshots upstream sont disponibles"
+
       - name: Build & test
-        run: mvn --no-transfer-progress verify
+        # -U force Maven à re-pull les snapshots (sinon cache local peut servir une
+        # version périmée même si une plus récente est sur Reposilite).
+        run: mvn --no-transfer-progress -U verify
 
       - name: Deploy to Forgejo Maven registry
         run: mvn -B -ntp deploy -DskipTests
