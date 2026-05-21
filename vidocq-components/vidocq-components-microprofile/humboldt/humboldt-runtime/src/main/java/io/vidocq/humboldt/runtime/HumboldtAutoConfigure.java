@@ -31,6 +31,7 @@ import java.lang.System.Logger;
 import java.lang.System.Logger.Level;
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.List;
 
 import static io.opentelemetry.api.common.AttributeKey.stringKey;
 
@@ -61,10 +62,22 @@ public final class HumboldtAutoConfigure {
     private HumboldtAutoConfigure() {}
 
     public static AutoConfiguredHumboldt configure() {
-        return configure(EnvConfig.system());
+        return configure(EnvConfig.system(), List.of());
     }
 
     public static AutoConfiguredHumboldt configure(EnvConfig env) {
+        return configure(env, List.of());
+    }
+
+    /**
+     * Variante avec exporters de spans additionnels — point d'extension pour
+     * harness externes (TCK Arquillian) qui doivent injecter dynamiquement
+     * un {@link SpanExporter} dans le pipeline trace sans passer par les env
+     * vars. Chaque exporter additionnel est attaché via un
+     * {@link SimpleSpanProcessor} (export synchrone, requis par les TCK qui
+     * font des assertions immédiates après {@code span.end()}).
+     */
+    public static AutoConfiguredHumboldt configure(EnvConfig env, List<SpanExporter> extraSpanExporters) {
         Resource resource = buildResource(env);
 
         // --- Tracer ---
@@ -86,6 +99,9 @@ public final class HumboldtAutoConfigure {
                     ? SimpleSpanProcessor.create(spanExporter)
                     : BatchSpanProcessor.builder(spanExporter).build();
             tpBuilder.addSpanProcessor(sp);
+        }
+        for (SpanExporter extra : extraSpanExporters) {
+            tpBuilder.addSpanProcessor(SimpleSpanProcessor.create(extra));
         }
         SdkTracerProvider tracerProvider = tpBuilder.build();
 

@@ -125,12 +125,15 @@ Plan détaillé : [`PLAN.md`](PLAN.md) (§13 jalons). Cette page est la version 
 - [x] `run-official-tck-telemetry-2.1.sh` à la racine : install reactor → smoke (default) ou `all` (M7c+)
 - [x] TCK.md mis à jour (coordonnées confirmées, roadmap M7b/M7c)
 
-### M7b — Adapter Arquillian Humboldt _(à venir)_
+### M7b — Adapter Arquillian Humboldt _(en cours)_
 
-- [ ] Composer Vauban (CDI Lite) + Cassini (JAX-RS via Chappe) + humboldt-runtime en container Arquillian "embedded" léger
-- [ ] **Aliaser `io.opentelemetry.instrumentation.annotations.WithSpan`** dans humboldt-cdi (en plus de notre `WithSpan`)
-- [ ] Implémenter `InMemorySpanExporterProvider` SPI attendu par le TCK
-- [ ] 1er test smoke TCK officiel (`OpenTelemetryBeanTest`) qui démarre
+- [x] **M7b.1** Build baseline reactor (2026-05-21) — 12 modules SUCCESS
+- [x] **M7b.2** Audit TCK : SPI `InMemorySpanExporterProvider` (2026-05-21) — découverte du conflit OTel SDK autoconfigure vs philo Humboldt zéro-SDK. Décision Option C : bridge confiné au runner TCK hors-reactor (cf. `tasks/m7b-architecture-analysis.md`)
+- [x] **M7b.3** Hook `withExtraSpanExporter` dans `HumboldtAutoConfigure` (2026-05-21) — overload `configure(env, List<SpanExporter>)` qui attache un `SimpleSpanProcessor` par exporter extra. ~14 LOC + 1 test → **16/16 runtime PASS**
+- [x] **M7b.4a** Bridge OTel SDK ↔ Humboldt (2026-05-21) — `SpanDataMapper` (conversion humboldt.SpanData → otel.SpanData via `TestSpanData.builder()`) + `OtelSpanExporterBridge` (adapte un OTel `SpanExporter` en Humboldt `SpanExporter`). Dans `humboldt-tck/src/main/`. ~140 LOC + 11 tests → **15/15 humboldt-tck PASS** (4 smoke + 9 mapper + 2 bridge)
+- [x] **Aliasage `io.opentelemetry.instrumentation.annotations.WithSpan`** — fait dès M6a (l'interceptor utilise déjà l'annotation officielle, pas notre propre `io.vidocq.humboldt.cdi.WithSpan`)
+- [ ] **M7b.4b** Container Arquillian "embedded" `HumboldtDeployableContainer` — compose Vauban CDI Lite + Cassini JAX-RS + Chappe HTTP from-scratch pour chaque war ShrinkWrap (option simple validée par Yann, pas via vidocq-mps pour éviter cycle de dep)
+- [ ] **M7b.5** 1er test smoke TCK officiel (`OpenTelemetryBeanTest`) qui démarre
 
 ### M7c — Run complet + challenges _(à venir)_
 

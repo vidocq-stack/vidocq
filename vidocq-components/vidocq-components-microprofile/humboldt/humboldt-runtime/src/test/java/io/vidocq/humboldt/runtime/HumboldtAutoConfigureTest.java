@@ -5,8 +5,10 @@ import io.opentelemetry.api.logs.Logger;
 import io.opentelemetry.api.metrics.LongCounter;
 import io.opentelemetry.api.metrics.Meter;
 import io.opentelemetry.api.trace.Tracer;
+import io.vidocq.humboldt.sdk.trace.export.InMemorySpanExporter;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -141,6 +143,31 @@ class HumboldtAutoConfigureTest {
             assertNull(h.inMemoryLogRecordExporter());
             assertEquals(0, h.sdkTracerProvider().getSpanProcessors().size(),
                     "exporter=none → aucun span processor");
+        }
+    }
+
+    @Test
+    void extra_span_exporters_attached_via_simple_processor() {
+        // Point d'extension M7b.3 : harness externes (TCK Arquillian)
+        // peuvent injecter un SpanExporter additionnel sans toucher aux env vars.
+        InMemorySpanExporter extra = InMemorySpanExporter.create();
+        try (AutoConfiguredHumboldt h = HumboldtAutoConfigure.configure(EnvConfig.of(
+                Map.of("OTEL_TRACES_EXPORTER", "none",
+                        "OTEL_METRICS_EXPORTER", "none",
+                        "OTEL_LOGS_EXPORTER", "none",
+                        "OTEL_TRACES_SAMPLER", "always_on"),
+                Map.of()),
+                List.of(extra))) {
+
+            Tracer t = h.getTracerProvider().get("test.extra");
+            t.spanBuilder("via-extra-exporter").startSpan().end();
+            h.flush().join(2, TimeUnit.SECONDS);
+
+            assertEquals(1, extra.getFinishedSpans().size(),
+                    "L'exporter injecté via le hook doit recevoir les spans");
+            assertEquals("via-extra-exporter", extra.getFinishedSpans().getFirst().name());
+            assertNull(h.inMemorySpanExporter(),
+                    "OTEL_TRACES_EXPORTER=none → pas d'inMemory géré par l'autoconfig");
         }
     }
 

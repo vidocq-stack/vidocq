@@ -180,6 +180,13 @@
             <groupId>io.opentelemetry</groupId>
             <artifactId>opentelemetry-sdk-extension-autoconfigure</artifactId>
         </dependency>
+        <!-- TestSpanData.builder() — fournit l'impl concrète io.opentelemetry.sdk.trace.data.SpanData
+             utilisée par le bridge humboldt-tck pour convertir nos humboldt.SpanData vers le format
+             OTel SDK attendu par les exporters fournis par le TCK (InMemorySpanExporter, etc.). -->
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-sdk-testing</artifactId>
+        </dependency>
         <dependency>
             <groupId>io.opentelemetry.semconv</groupId>
             <artifactId>opentelemetry-semconv</artifactId>

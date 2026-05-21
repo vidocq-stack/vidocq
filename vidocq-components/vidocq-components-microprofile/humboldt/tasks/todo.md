@@ -94,9 +94,26 @@
 - [x] Tests : 15 (8 EnvConfig + 7 HumboldtAutoConfigure) → **total 109/109 PASS**, 12 modules SUCCESS, 7s
 - [x] Différé en M7 : OTEL_EXPORTER_OTLP_TIMEOUT/PROTOCOL, MP_TELEMETRY_SDK_DISABLED, intégration Ravel
 
-## M6d — Extension MPS + validation Vauban runtime (prochain)
+## M6d — Extension MPS + validation Vauban runtime _(terminé 2026-05-21)_
 
-Voir ROADMAP.md (vidocq-mps-humboldt-extension hors-reactor humboldt, validation Vauban CDI Lite pour @WithSpan, E2E REST via cassini+chappe+humboldt).
+Voir ROADMAP.md M6d.1 → M6d.7-bis (vidocq-mps-humboldt-extension hors-reactor humboldt, validation Vauban CDI Lite pour @WithSpan, E2E REST via cassini+chappe+humboldt, fix span SERVER sur exception, fix BCE Cassini `@Provider`/`@Path`).
+
+## M7 — TCK officiel MicroProfile Telemetry 2.1
+
+### M7a — Scaffold _(terminé 2026-05-21)_
+
+- [x] `humboldt-tck/` hors-reactor (pom Model 4.0.0) avec import 3 TCK + arquillian + shrinkwrap + humboldt-runtime/cdi/rest + opentelemetry-sdk
+- [x] `HumboldtTckSmokeTest` 4/4 PASS — classpath OK, AutoConfiguredHumboldt fonctionnel, TCK class présente, `@WithSpan` OTel officiel présent
+- [x] Script `run-official-tck-telemetry-2.1.sh` à la racine
+
+### M7b — Adapter Arquillian Humboldt _(en cours)_
+
+- [x] **M7b.1** Build baseline (12 modules SUCCESS)
+- [x] **M7b.2** Audit TCK — conflit Humboldt zéro-SDK vs TCK qui attend OTel SDK autoconfigure. Décision **Option C** (bridge confiné dans `humboldt-tck/` hors-reactor) — voir `tasks/m7b-architecture-analysis.md`
+- [x] **M7b.3** Hook `HumboldtAutoConfigure.configure(env, List<SpanExporter>)` (~14 LOC + 1 test, 16/16 runtime PASS)
+- [x] **M7b.4a** `SpanDataMapper` + `OtelSpanExporterBridge` dans `humboldt-tck/src/main/` (~140 LOC + 11 tests, 15/15 humboldt-tck PASS)
+- [ ] **M7b.4b** `HumboldtDeployableContainer` Arquillian (from-scratch, ~400-600 LOC : compose Vauban+Cassini+Chappe par déploiement war ShrinkWrap)
+- [ ] **M7b.5** 1er test TCK officiel `OpenTelemetryBeanTest` qui démarre
 
 ## Leçons en cours de session
 
