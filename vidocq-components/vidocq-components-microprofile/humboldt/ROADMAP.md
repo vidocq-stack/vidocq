@@ -99,7 +99,7 @@ Plan détaillé : [`PLAN.md`](PLAN.md) (§13 jalons). Cette page est la version 
   * ServiceLoader : `META-INF/services/io.vidocq.mpserver.spi.VidocqExtension` + `provides` JPMS
   * README.md complet avec table des env vars + instrumentation auto activée (`@WithSpan` BCE, filters JAX-RS)
   * Pom parent vidocq-mps : property `humboldt.version=0.1.0-SNAPSHOT` + 4 DM entries (3 humboldt + 1 extension)
-- [ ] **M6d.4** — Verify build : bloqué par un bug Maven 4 path pre-existant dans le reactor `vidocq-mps` (paths `vidocq/vidocq/...` au lieu de `vidocq-mps/...`). Confirmé indépendant de l'ajout via `git stash`. Structure de l'extension correcte (calque exact `vidocq-mps-rest-cassini-extension`), compilera dès que le bug Maven sera résolu.
+- [x] **M6d.4** — Verify build reactor vidocq-mps complet : SUCCESS, 19 modules ✅, `Vidocq :: Core Extensions :: Telemetry (Humboldt)` compile en 0.059s. Le bug Maven path rapporté hier était une fausse alerte (cwd mal calculé par un script shell externe utilisé pour contourner une redirection harness — non reproductible en session shell directe).
 - [ ] **M6d.5 Validation Vauban runtime** : test E2E via `vidocq-mps-integration-tests` qui démarre une app, fait un appel HTTP, vérifie qu'un span SERVER apparaît dans `InMemorySpanExporter`. Confirme que Vauban applique bien la BCE humboldt-cdi sur les beans `@WithSpan` (risk PLAN §15.1).
 
 ## M7 — TCK officiel MicroProfile Telemetry 2.1
