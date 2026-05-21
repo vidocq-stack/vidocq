@@ -5,7 +5,6 @@ import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.context.Scope;
 import jakarta.annotation.Priority;
-import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.ws.rs.container.ContainerRequestContext;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.Response;
@@ -47,7 +46,6 @@ import java.lang.System.Logger.Level;
  * juste une 500 générique.</p>
  */
 @Provider
-@ApplicationScoped
 @Priority(jakarta.ws.rs.Priorities.USER + 1000)
 public class HumboldtSpanFinalizer implements ExceptionMapper<Throwable> {
 

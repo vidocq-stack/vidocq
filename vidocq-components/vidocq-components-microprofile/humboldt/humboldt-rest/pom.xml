@@ -38,13 +38,6 @@
             <groupId>jakarta.ws.rs</groupId>
             <artifactId>jakarta.ws.rs-api</artifactId>
         </dependency>
-        <!-- jakarta.cdi-api pour @ApplicationScoped sur les filters @Provider :
-             Cassini scanne les beans CDI pour découvrir les @Provider JAX-RS. -->
-        <dependency>
-            <groupId>jakarta.enterprise</groupId>
-            <artifactId>jakarta.enterprise.cdi-api</artifactId>
-        </dependency>
-
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>

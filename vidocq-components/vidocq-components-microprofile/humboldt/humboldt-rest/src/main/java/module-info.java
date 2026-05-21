@@ -15,7 +15,6 @@ module io.vidocq.humboldt.rest {
     requires transitive io.opentelemetry.api;
     requires transitive io.opentelemetry.context;
     requires transitive jakarta.ws.rs;
-    requires transitive jakarta.cdi;  // @ApplicationScoped sur les filters @Provider
     requires java.logging;
 
     exports io.vidocq.humboldt.rest;

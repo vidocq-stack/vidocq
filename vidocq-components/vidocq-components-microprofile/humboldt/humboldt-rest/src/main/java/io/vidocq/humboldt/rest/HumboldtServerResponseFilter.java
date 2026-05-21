@@ -4,7 +4,6 @@ import io.opentelemetry.api.common.AttributeKey;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.context.Scope;
-import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.ws.rs.container.ContainerRequestContext;
 import jakarta.ws.rs.container.ContainerResponseContext;
 import jakarta.ws.rs.container.ContainerResponseFilter;
@@ -16,7 +15,6 @@ import jakarta.ws.rs.ext.Provider;
  * met le statut ERROR si le code est ≥ 500, ferme {@link Scope} et span.
  */
 @Provider
-@ApplicationScoped
 public class HumboldtServerResponseFilter implements ContainerResponseFilter {
 
     static final AttributeKey<Long> HTTP_RESPONSE_STATUS_CODE = AttributeKey.longKey("http.response.status_code");
