@@ -73,9 +73,11 @@ public class VidocqEmbeddedContainer implements DeployableContainer<VidocqContai
             // Extract bean classes from archive
             List<String> beanClassNames = extractClassNames(archive);
 
-            // Set system properties for REST extension
-            System.setProperty("vidocq.rest.host", config.getHost());
-            System.setProperty("vidocq.rest.port", String.valueOf(actualPort));
+            // Set system properties for the Chappe HTTP listener (consommé par
+            // ChappeServerBootstrap). Cassini (rest-cassini-extension) se monte
+            // sur ce listener via ChappeMountPoint.
+            System.setProperty("vidocq.chappe.listener.default.host", config.getHost());
+            System.setProperty("vidocq.chappe.listener.default.port", String.valueOf(actualPort));
 
             // Boot Vidocq with extracted classes
             bootstrap = VidocqBootstrap.create();
@@ -100,8 +102,8 @@ public class VidocqEmbeddedContainer implements DeployableContainer<VidocqContai
             bootstrap.shutdown();
             bootstrap = null;
         }
-        System.clearProperty("vidocq.rest.host");
-        System.clearProperty("vidocq.rest.port");
+        System.clearProperty("vidocq.chappe.listener.default.host");
+        System.clearProperty("vidocq.chappe.listener.default.port");
     }
 
     private List<String> extractClassNames(Archive<?> archive) {

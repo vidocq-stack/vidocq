@@ -16,10 +16,7 @@
 
     <subprojects>
         <subproject>vidocq-mps-arquillian</subproject>
+        <subproject>vidocq-mps-it-rest-cassini</subproject>
+        <subproject>vidocq-mps-it-humboldt-cassini</subproject>
     </subprojects>
-
-    <!--
-        vidocq-it-rest-extension sort du reactor pendant la migration
-        Jersey → Cassini. Sera réécrit en Phase 3 contre Cassini.
-    -->
 </project>

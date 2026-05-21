@@ -26,7 +26,7 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 @ExtendWith(ArquillianExtension.class)
 @RunAsClient
-class RestExtensionIT {
+class RestExtensionTest {
 
     @ArquillianResource
     private URL baseUrl;

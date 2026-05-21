@@ -9,14 +9,14 @@
         <artifactId>vidocq-mps-integration-tests</artifactId>
     </parent>
 
-    <artifactId>vidocq-mps-it-rest-extension</artifactId>
-    <name>Vidocq :: Integration Tests :: REST Extension</name>
-    <description>Arquillian integration tests for vidocq-rest-extension</description>
+    <artifactId>vidocq-mps-it-rest-cassini</artifactId>
+    <name>Vidocq :: Integration Tests :: REST (Cassini)</name>
+    <description>Arquillian integration tests for vidocq-mps-rest-cassini-extension</description>
 
     <!--
         Pas de module-info.java (unnamed module) pour eviter les contraintes
         JPMS dans les tests. Les resources @Path de test sont accessibles
-        par Jersey et HK2 sans opens explicites.
+        par cassini et vauban sans opens explicites.
     -->
 
     <dependencies>
@@ -27,7 +27,7 @@
         </dependency>
         <dependency>
             <groupId>io.vidocq.mpserver</groupId>
-            <artifactId>vidocq-rest-extension</artifactId>
+            <artifactId>vidocq-mps-rest-cassini-extension</artifactId>
         </dependency>
         <dependency>
             <groupId>io.vidocq.vauban</groupId>
