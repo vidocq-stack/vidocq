@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.1.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.1.0 http://maven.apache.org/xsd/maven-4.1.0.xsd">
+    <modelVersion>4.1.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.mpserver</groupId>
+        <artifactId>vidocq-mps-integration-tests</artifactId>
+    </parent>
+
+    <artifactId>vidocq-mps-it-humboldt-cassini</artifactId>
+    <name>Vidocq :: Integration Tests :: Humboldt (Cassini)</name>
+    <description>Arquillian E2E tests : valide BuildCompatibleExtension @WithSpan + filters JAX-RS humboldt-rest + propagation W3C entrante + status ERROR sur 500. Combinaison humboldt-runtime + humboldt-cdi + humboldt-rest + cassini + vauban.</description>
+
+    <!--
+        Pas de module-info.java (unnamed module) pour éviter les contraintes
+        JPMS dans les tests. Les resources @Path/beans CDI sont accessibles
+        par cassini et vauban sans opens explicites.
+
+        Valide en runtime le risk PLAN.md §15.1 : "CDI 4.1 Lite (Vauban) suffit-il
+        pour la BCE humboldt-cdi qui auto-applique @SpanBinding sur les méthodes
+        @WithSpan OTel ?" → ce module répond OUI si les 4 tests passent.
+    -->
+
+    <dependencies>
+        <!-- Vidocq runtime -->
+        <dependency>
+            <groupId>io.vidocq.mpserver</groupId>
+            <artifactId>vidocq-mps-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.mpserver</groupId>
+            <artifactId>vidocq-mps-rest-cassini-extension</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.mpserver</groupId>
+            <artifactId>vidocq-mps-humboldt-extension</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-core</artifactId>
+        </dependency>
+
+        <!-- Humboldt directs : nécessaires pour @WithSpan API + AutoConfiguredHumboldt -->
+        <dependency>
+            <groupId>io.vidocq.humboldt</groupId>
+            <artifactId>humboldt-runtime</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.humboldt</groupId>
+            <artifactId>humboldt-cdi</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.humboldt</groupId>
+            <artifactId>humboldt-rest</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.humboldt</groupId>
+            <artifactId>humboldt-sdk-trace</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.opentelemetry.instrumentation</groupId>
+            <artifactId>opentelemetry-instrumentation-annotations</artifactId>
+            <version>2.7.0</version>
+        </dependency>
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-api</artifactId>
+            <version>1.39.0</version>
+        </dependency>
+
+        <!-- Jakarta APIs -->
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.ws.rs</groupId>
+            <artifactId>jakarta.ws.rs-api</artifactId>
+            <version>4.0.0</version>
+        </dependency>
+
+        <!-- Test -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.mpserver</groupId>
+            <artifactId>vidocq-mps-arquillian</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.jboss.arquillian.junit5</groupId>
+            <artifactId>arquillian-junit5-container</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.jboss.shrinkwrap</groupId>
+            <artifactId>shrinkwrap-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!--
+                        Force Humboldt à utiliser des exporters in-memory pour
+                        permettre la lecture des spans via SpansResource. Ces
+                        properties DOIVENT être set AVANT que le surefire forke
+                        la JVM, sinon HumboldtExtension.configure() les manque.
+                    -->
+                    <systemPropertyVariables>
+                        <OTEL_TRACES_EXPORTER>in-memory</OTEL_TRACES_EXPORTER>
+                        <OTEL_METRICS_EXPORTER>none</OTEL_METRICS_EXPORTER>
+                        <OTEL_LOGS_EXPORTER>none</OTEL_LOGS_EXPORTER>
+                        <OTEL_TRACES_SAMPLER>always_on</OTEL_TRACES_SAMPLER>
+                        <OTEL_SERVICE_NAME>humboldt-it</OTEL_SERVICE_NAME>
+                    </systemPropertyVariables>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

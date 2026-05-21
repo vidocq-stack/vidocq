@@ -76,6 +76,12 @@ public final class HumboldtExtension implements VidocqExtension {
 
         EnvConfig env = bridgeFromVidocqConfig(cfg);
         humboldt = HumboldtAutoConfigure.configure(env);
+
+        // Publication du bean CDI avant addBeanClass — pattern MansartPoolHolder.
+        // Les apps/tests peuvent ensuite faire @Inject AutoConfiguredHumboldt.
+        HumboldtHolder.INSTANCE = humboldt;
+        builder.addBeanClass(HumboldtHolder.class);
+
         try {
             GlobalOpenTelemetry.set(humboldt);
             LOG.log(Level.INFO,
@@ -104,6 +110,7 @@ public final class HumboldtExtension implements VidocqExtension {
         LOG.log(Level.INFO, "Shutdown Humboldt — flush des spans/metrics/logs en cours");
         humboldt.flush().join(5, TimeUnit.SECONDS);
         humboldt.shutdown().join(5, TimeUnit.SECONDS);
+        HumboldtHolder.INSTANCE = null;
     }
 
     /**
@@ -111,7 +118,7 @@ public final class HumboldtExtension implements VidocqExtension {
      * {@link VidocqConfiguration} (qui consulte system properties + env vars +
      * vidocq.properties) plutôt que via {@code System.getenv()} direct.
      *
-     * <p>Implémentation : capture les clés OTEL_*/MP_TELEMETRY_* à la demande
+     * <p>Implémentation : capture les clés OTEL_MP_TELEMETRY_* à la demande
      * via une Map populée par les appels au constructor.</p>
      */
     private static EnvConfig bridgeFromVidocqConfig(VidocqConfiguration cfg) {

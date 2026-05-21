@@ -15,7 +15,12 @@ module io.vidocq.mpserver.ext.humboldt {
     requires io.vidocq.humboldt.api;
     requires io.vidocq.vauban.core;
     requires io.opentelemetry.api;
+    requires jakarta.cdi;
     requires java.logging;
+
+    // Export du package pour permettre @Inject AutoConfiguredHumboldt depuis les apps/tests
+    // (HumboldtHolder doit être accessible au container CDI Vauban).
+    exports io.vidocq.mpserver.ext.humboldt;
 
     provides io.vidocq.mpserver.spi.VidocqExtension
             with io.vidocq.mpserver.ext.humboldt.HumboldtExtension;

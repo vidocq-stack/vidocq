@@ -243,6 +243,11 @@
                 <artifactId>humboldt-rest</artifactId>
                 <version>${humboldt.version}</version>
             </dependency>
+            <dependency>
+                <groupId>io.vidocq.humboldt</groupId>
+                <artifactId>humboldt-sdk-trace</artifactId>
+                <version>${humboldt.version}</version>
+            </dependency>
 
             <!-- Vidocq modules -->
             <dependency>
