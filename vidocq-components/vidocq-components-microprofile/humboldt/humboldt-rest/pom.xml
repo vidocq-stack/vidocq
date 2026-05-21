@@ -38,6 +38,13 @@
             <groupId>jakarta.ws.rs</groupId>
             <artifactId>jakarta.ws.rs-api</artifactId>
         </dependency>
+        <!-- jakarta.annotation pour @Priority sur HumboldtSpanFinalizer.
+             Petite dep API standard, requise par la sémantique JAX-RS pour
+             les ExceptionMapper priorités. -->
+        <dependency>
+            <groupId>jakarta.annotation</groupId>
+            <artifactId>jakarta.annotation-api</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
