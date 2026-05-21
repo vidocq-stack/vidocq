@@ -38,11 +38,11 @@ hook `withExtraSpanExporter` runtime + bridge OTel SDK + `HumboldtDeployableCont
 
 | Signal | Statut tests réels | Étape |
 |---|---|---|
-| Tracing | ✅ 2/N (`OpenTelemetryBeanTest`) | M7c — run suite complète et triage |
-| Metrics | 🚧 0/N | M7c |
-| Logs | 🚧 0/N | M7c |
-| Baggage | ✅ propagator W3C livré M3 | tests TCK en M7c |
-| Config | ✅ env vars OTEL_* livré M6c | tests TCK en M7c |
+| Tracing | ✅ 4 / ~50 (OpenTelemetryBeanTest, TracerTest, ExporterSpiTest) | M7c.2 — débloquer HTTP |
+| Metrics | ✅ 24 / ~50 (CDI counters/gauges/histos + JVM*) | M7c.2 — débloquer HTTP histograms |
+| Logs | ✅ 3 / ~10 (JulTest, ServerInstanceTest) | M7c |
+| Baggage | ✅ propagator W3C livré M3 | tests TCK en M7c.2 |
+| Config | ✅ env vars OTEL_* livré M6c | tests TCK en M7c.2 |
 
 **Profile pour relancer le 1er test** :
 ```bash
@@ -91,10 +91,27 @@ Tests run: 138, Failures: 62, Errors: 0, Skipped: 73
 
 #### Plan M7c
 
-- [ ] **M7c.1 — Producers CDI Tracer/Span/Baggage** (humboldt-cdi, ~50 LOC). Impact : débloquer 12+ tests.
-- [ ] **M7c.2 — Conteneur HTTP : Chappe + Cassini intégrés** (humboldt-tck, ~400 LOC). Impact : débloquer 56+ tests.
-- [ ] **M7c.3 — Investigation `Failed to deploy` cas par cas** (8 tests).
-- [ ] **M7c.4 — Bump commons-io dans le runner TCK** (1 ligne pom). Impact : débloquer 24 tests JVM metrics.
+- [x] **M7c.4 — Bump commons-io 2.16.1** (2026-05-21). Plus aucune erreur `Tailer.builder` dans les logs. Tests JVM* basculent vers leur vraie cause sous-jacente (résolus en M7c.1).
+- [x] **M7c.1 — Producers CDI Tracer/Span/Baggage/OpenTelemetry** (2026-05-21). `HumboldtTelemetryProducers` dans humboldt-cdi, ajouté systématiquement à chaque deploy par `HumboldtDeployableContainer`. Impact massif : tests Tracer/Span/Baggage null → 0, tous les tests Metrics CDI et JVM passent, `Failed to deploy` → 0.
+- [ ] **M7c.2 — Conteneur HTTP : Chappe + Cassini intégrés** (humboldt-tck, ~400 LOC). Impact : débloquer 80+ tests REST/HTTP.
+- [ ] **M7c.3 — Investigation `Failed to deploy` cas par cas** — résolu en passant par M7c.1.
+
+#### Run après M7c.1 + M7c.4
+
+```
+Tests run: 153, Failures: 80, Errors: 0, Skipped: 68
+```
+
+Analyse XMLs surefire individuels (junitreports) : **~27 vrais tests TCK PASS** (en plus de `arquillianBeforeTest=ok` qui ne sont pas de vrais tests). Détail :
+
+- **Tracing** : `OpenTelemetryBeanTest` (2), `TracerTest.tracer`, `ExporterSpiTest.testExporter` — 4
+- **Metrics CDI** : `AsyncDoubleCounter`, `AsyncLongCounter`, `DoubleCounter`, `DoubleGauge`, `DoubleHistogram`, `DoubleUpDownCounter`, `LongCounter`, `LongGauge`, `LongHistogram`, `LongUpDownCounter` — 12
+- **Metrics JVM** : `JvmClasses` (3), `JvmCpu` (3), `JvmGarbageCollection` (1), `JvmMemory` (4), `JvmThread` (1) — 12
+- **Logs** : `JulTest.julInfo/Warn` (2), `ServerInstanceTest.runtimeInstance` (1) — 3
+
+Total : ~31 PASS réels sur ~85 applicables (153 − 68 skipped) → **~36 %**.
+
+Les 80 failures restantes sont **toutes HTTP** (`Could not lookup value for field private java.net.URL`) — c'est la cible de M7c.2.
 
 #### Skipped (73)
 

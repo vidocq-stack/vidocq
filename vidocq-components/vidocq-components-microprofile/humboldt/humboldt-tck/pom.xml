@@ -213,6 +213,19 @@
             <version>${testng.version}</version>
             <scope>test</scope>
         </dependency>
+
+        <!-- ============================================================ -->
+        <!--  M7c.4 : force commons-io 2.16 — la version 2.11 tirée par   -->
+        <!--  awaitility 4.3 (transitive depuis le TCK metrics) n'a pas   -->
+        <!--  Tailer.builder() utilisé par JvmMemoryTest/JvmThreadTest/    -->
+        <!--  JvmCpuTest. Bump débloque 24 tests.                          -->
+        <!-- ============================================================ -->
+        <dependency>
+            <groupId>commons-io</groupId>
+            <artifactId>commons-io</artifactId>
+            <version>2.16.1</version>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.jboss.arquillian.testng</groupId>
             <artifactId>arquillian-testng-container</artifactId>

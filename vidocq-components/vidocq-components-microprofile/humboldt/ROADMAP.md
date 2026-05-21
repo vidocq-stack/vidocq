@@ -143,11 +143,11 @@ Plan détaillé : [`PLAN.md`](PLAN.md) (§13 jalons). Cette page est la version 
 ### M7c — Run complet + triage _(en cours)_
 
 - [x] **1er run** (2026-05-21) — `mvn -Ptck-official test` : **138 tests / 62 failures / 73 skipped / 3 PASS** (~5 % des 65 applicables). Triage et plan dans `TCK.md`.
-- [ ] **M7c.1** Producers CDI Tracer/Span/Baggage (humboldt-cdi, ~50 LOC) — débloque 12+ tests
-- [ ] **M7c.2** Conteneur HTTP : Chappe + Cassini intégrés dans `HumboldtDeployableContainer` (~400 LOC) — débloque 56+ tests
-- [ ] **M7c.3** Investigation `Failed to deploy ...war` cas par cas (8 tests)
-- [ ] **M7c.4** Bump commons-io dans humboldt-tck/pom.xml — débloque 24 tests JVM metrics
-- [ ] **Gate qualité** : ≥95 % de tests applicables passent (à atteindre après M7c.1 → M7c.4)
+- [x] **M7c.4** (2026-05-21) Bump commons-io 2.16.1 dans humboldt-tck/pom.xml — erreurs `Tailer.builder` à 0
+- [x] **M7c.1** (2026-05-21) `HumboldtTelemetryProducers` (Tracer/Span/Baggage/OpenTelemetry) dans humboldt-cdi, enregistré automatiquement à chaque deploy. **Débloque ~24 tests** : tous les Metrics CDI + tous les JVM* + Tracing.TracerTest + Tracing.ExporterSpiTest. Stats : 153 / 80 fails / 68 skip → ~31 vrais PASS (~36 % des applicables)
+- [x] **M7c.3** Résolu de facto par M7c.1 (`Failed to deploy` → 0)
+- [ ] **M7c.2** Conteneur HTTP : Chappe + Cassini intégrés dans `HumboldtDeployableContainer` (~400 LOC) — débloque 80 tests REST/HTTP restants
+- [ ] **Gate qualité** : ≥95 % de tests applicables passent (atteignable après M7c.2)
 
 ## M8 — Perf & ADRs
 

@@ -99,6 +99,10 @@ public class HumboldtDeployableContainer implements DeployableContainer<Humboldt
             LOG.log(Level.INFO, "  → {0} bean class(es) extracted from archive", beanClasses.size());
 
             VaubanContainerBuilder builder = VaubanContainer.builder();
+            // Producers CDI standard MP Telemetry §"Required CDI beans" :
+            // @Inject Tracer / Span / Baggage / OpenTelemetry — fournis par
+            // humboldt-cdi, ajoutés systématiquement à chaque deploy.
+            builder.addBeanClass(io.vidocq.humboldt.cdi.HumboldtTelemetryProducers.class);
             for (Class<?> bean : beanClasses) {
                 builder.addBeanClass(bean);
             }
