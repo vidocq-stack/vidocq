@@ -66,11 +66,43 @@ cd humboldt-tck && mvn -ntp -f pom.xml -Ptck-cdi-bean test
 4. Vérifier qu'au moins un test smoke TCK officiel (ex. `OpenTelemetryBeanTest`)
    démarre sans erreur
 
-### M7c — Run + challenges (🚧 à venir)
-- `./run-official-tck-telemetry-2.1.sh all` premier run complet
-- Identifier les tests qui passent vs ceux qui plantent
-- Documenter les challenges (tests désactivés) dans la section ci-dessous
-- **Gate** : ≥95 % de tests applicables passent
+### M7c — Run + triage _(en cours)_
+
+#### Premier run (2026-05-21) — `mvn -Ptck-official test`
+
+Reproduire localement :
+```bash
+cd humboldt-tck && mvn -ntp -f pom.xml -Ptck-official test 2>&1 | tee /tmp/tck-official.log
+```
+
+```
+Tests run: 138, Failures: 62, Errors: 0, Skipped: 73
+→ PASS: 3 / Applicables (138 - 73 = 65) → ~5 %
+```
+
+| Catégorie | Échecs | Cause | Action requise |
+|---|---|---|---|
+| **A. `@ArquillianResource URL` non résolu** | 56 | Tests qui font HTTP : `@ArquillianResource private URL url;`. Notre container ne démarre pas de serveur HTTP, donc l'enricher `arquillian-test-resource-jakarta` n'a aucune URL à fournir. | Démarrer Chappe HTTP + Cassini JAX-RS dans `HumboldtDeployableContainer.deploy()`. Le port doit être exposé dans `ProtocolMetaData` → `HTTPContext`. |
+| **B. `Failed to deploy ...war`** | 8 | Erreur au deploy — sans doute classes/deps manquantes dans le war ShrinkWrap qui crashent `extractBeanClasses` ou `VaubanContainer.build()`. Voir traces individuelles. | Investiguer cas par cas (TracerTest, RestClientSpan*Test). |
+| **C. `injected{Span, Baggage, Tracer}` est null** | 12 | Spec MP Telemetry §"Required CDI beans" : l'impl doit fournir des producers `@Produces Tracer`, `@Produces Span` (Span.current()), `@Produces Baggage` (Baggage.current()). Notre `humboldt-cdi` n'a que `@WithSpan` — pas de producers. | Ajouter `HumboldtTelemetryProducers` dans humboldt-cdi avec les 3 `@Produces`. |
+| **D. `NoSuchMethod org.apache.commons.io.input.Tailer.builder()`** | 24 | Conflit de version commons-io entre les deps TCK metrics et notre classpath. Tests JvmMemoryTest, JvmThreadTest, JvmCpuTest, etc. | Forcer commons-io 2.16+ dans `humboldt-tck/pom.xml`. |
+
+> Les 4 catégories se chevauchent partiellement (un test JvmMemory échoue à la fois sur l'URL et sur Tailer). Adresser une catégorie peut débloquer plus de tests que le compteur ne le suggère.
+
+#### Plan M7c
+
+- [ ] **M7c.1 — Producers CDI Tracer/Span/Baggage** (humboldt-cdi, ~50 LOC). Impact : débloquer 12+ tests.
+- [ ] **M7c.2 — Conteneur HTTP : Chappe + Cassini intégrés** (humboldt-tck, ~400 LOC). Impact : débloquer 56+ tests.
+- [ ] **M7c.3 — Investigation `Failed to deploy` cas par cas** (8 tests).
+- [ ] **M7c.4 — Bump commons-io dans le runner TCK** (1 ligne pom). Impact : débloquer 24 tests JVM metrics.
+
+#### Skipped (73)
+
+À investiguer : sans doute des tests TestNG annotés `@Test(enabled=false)` côté TCK, ou des tests dont la `@BeforeMethod` échoue silencieusement avant la collecte. À tagger comme "indisponibles pour cause amont" si applicable.
+
+#### Gate qualité
+
+**Gate ≥95 % de tests applicables** non atteint au 1er run (5 %). Atteignable après M7c.1 → M7c.4.
 
 ## Contrainte d'architecture
 
