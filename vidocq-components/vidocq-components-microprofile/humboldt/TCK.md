@@ -32,17 +32,22 @@ pollue pas le code applicatif Humboldt en production.
 
 ## Statut courant
 
-**M7 SCAFFOLD (2026-05-21)** — pom + arquillian.xml + smoke test livrés.
-Aucun test TCK officiel ne passe encore (adapter Arquillian Humboldt à
-livrer en M7b).
+**M7b livré (2026-05-21)** — adapter Arquillian Humboldt complet :
+hook `withExtraSpanExporter` runtime + bridge OTel SDK + `HumboldtDeployableContainer`
++ `HumboldtCdiEnricher`. **Premier test TCK officiel `OpenTelemetryBeanTest` PASS (2/2)**.
 
 | Signal | Statut tests réels | Étape |
 |---|---|---|
-| Tracing | 🚧 0/N | M7b (adapter Arquillian) → M7c (premier run) |
-| Metrics | 🚧 0/N | M7b → M7c |
-| Logs | 🚧 0/N | M7b → M7c |
+| Tracing | ✅ 2/N (`OpenTelemetryBeanTest`) | M7c — run suite complète et triage |
+| Metrics | 🚧 0/N | M7c |
+| Logs | 🚧 0/N | M7c |
 | Baggage | ✅ propagator W3C livré M3 | tests TCK en M7c |
 | Config | ✅ env vars OTEL_* livré M6c | tests TCK en M7c |
+
+**Profile pour relancer le 1er test** :
+```bash
+cd humboldt-tck && mvn -ntp -f pom.xml -Ptck-cdi-bean test
+```
 
 ## Roadmap M7
 

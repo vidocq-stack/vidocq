@@ -42,6 +42,7 @@
         <maven.compiler.release>25</maven.compiler.release>
 
         <humboldt.version>0.1.0-SNAPSHOT</humboldt.version>
+        <vauban.version>0.1.0-SNAPSHOT</vauban.version>
 
         <microprofile.telemetry.version>2.1</microprofile.telemetry.version>
         <microprofile.config.version>3.1.1</microprofile.config.version>
@@ -127,6 +128,16 @@
             <groupId>io.vidocq.humboldt</groupId>
             <artifactId>humboldt-rest</artifactId>
             <version>${humboldt.version}</version>
+        </dependency>
+
+        <!-- ============================================================ -->
+        <!--  Vauban CDI Lite — container utilisé par le container        -->
+        <!--  Arquillian Humboldt pour booter les beans du war ShrinkWrap -->
+        <!-- ============================================================ -->
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-core</artifactId>
+            <version>${vauban.version}</version>
         </dependency>
 
         <!-- ============================================================ -->
@@ -247,19 +258,33 @@
     </build>
 
     <profiles>
-        <!-- Profile par défaut : smoke local (juste HumboldtTckSmokeTest). -->
+        <!-- Profile par défaut : tous les tests Humboldt-tck locaux
+             (HumboldtTckSmokeTest, bridge tests, Arquillian boot smoke, etc.)
+             sans exécuter les vraies suites TCK officielles (réservées au
+             profile tck-official). -->
         <profile>
             <id>tck-smoke</id>
             <activation>
                 <activeByDefault>true</activeByDefault>
             </activation>
+        </profile>
+
+        <!-- Profile ciblé : exécute UNIQUEMENT OpenTelemetryBeanTest du TCK tracing.
+             Utilisé en M7b.5 pour valider que la chaîne Arquillian → HumboldtContainer
+             → Vauban CDI → @Inject OpenTelemetry fonctionne sur un test TCK officiel,
+             sans encore viser le passage de la suite complète. -->
+        <profile>
+            <id>tck-cdi-bean</id>
             <build>
                 <plugins>
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-surefire-plugin</artifactId>
                         <configuration>
-                            <test>HumboldtTckSmokeTest</test>
+                            <dependenciesToScan>
+                                <dependency>org.eclipse.microprofile.telemetry:microprofile-telemetry-tracing-tck</dependency>
+                            </dependenciesToScan>
+                            <test>OpenTelemetryBeanTest</test>
                         </configuration>
                     </plugin>
                 </plugins>

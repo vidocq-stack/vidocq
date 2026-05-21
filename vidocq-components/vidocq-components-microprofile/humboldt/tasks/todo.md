@@ -112,8 +112,8 @@ Voir ROADMAP.md M6d.1 → M6d.7-bis (vidocq-mps-humboldt-extension hors-reactor 
 - [x] **M7b.2** Audit TCK — conflit Humboldt zéro-SDK vs TCK qui attend OTel SDK autoconfigure. Décision **Option C** (bridge confiné dans `humboldt-tck/` hors-reactor) — voir `tasks/m7b-architecture-analysis.md`
 - [x] **M7b.3** Hook `HumboldtAutoConfigure.configure(env, List<SpanExporter>)` (~14 LOC + 1 test, 16/16 runtime PASS)
 - [x] **M7b.4a** `SpanDataMapper` + `OtelSpanExporterBridge` dans `humboldt-tck/src/main/` (~140 LOC + 11 tests, 15/15 humboldt-tck PASS)
-- [ ] **M7b.4b** `HumboldtDeployableContainer` Arquillian (from-scratch, ~400-600 LOC : compose Vauban+Cassini+Chappe par déploiement war ShrinkWrap)
-- [ ] **M7b.5** 1er test TCK officiel `OpenTelemetryBeanTest` qui démarre
+- [x] **M7b.4b** `HumboldtDeployableContainer` Arquillian from-scratch (2026-05-21) — décliné en 4 sous-étapes M7b.4b.1→4 (squelette, boot Vauban, bridge OTel SDK autoconfigure, TestEnricher CDI). ~450 LOC + 21/21 tests humboldt-tck locaux
+- [x] **M7b.5** 1er test TCK officiel `OpenTelemetryBeanTest` (2026-05-21) — **2/2 PASS** via `mvn -Ptck-cdi-bean test`. Le profile cible uniquement `org.eclipse.microprofile.telemetry.tracing.tck.cdi.OpenTelemetryBeanTest`
 
 ## Leçons en cours de session
 

@@ -132,8 +132,13 @@ Plan détaillé : [`PLAN.md`](PLAN.md) (§13 jalons). Cette page est la version 
 - [x] **M7b.3** Hook `withExtraSpanExporter` dans `HumboldtAutoConfigure` (2026-05-21) — overload `configure(env, List<SpanExporter>)` qui attache un `SimpleSpanProcessor` par exporter extra. ~14 LOC + 1 test → **16/16 runtime PASS**
 - [x] **M7b.4a** Bridge OTel SDK ↔ Humboldt (2026-05-21) — `SpanDataMapper` (conversion humboldt.SpanData → otel.SpanData via `TestSpanData.builder()`) + `OtelSpanExporterBridge` (adapte un OTel `SpanExporter` en Humboldt `SpanExporter`). Dans `humboldt-tck/src/main/`. ~140 LOC + 11 tests → **15/15 humboldt-tck PASS** (4 smoke + 9 mapper + 2 bridge)
 - [x] **Aliasage `io.opentelemetry.instrumentation.annotations.WithSpan`** — fait dès M6a (l'interceptor utilise déjà l'annotation officielle, pas notre propre `io.vidocq.humboldt.cdi.WithSpan`)
-- [ ] **M7b.4b** Container Arquillian "embedded" `HumboldtDeployableContainer` — compose Vauban CDI Lite + Cassini JAX-RS + Chappe HTTP from-scratch pour chaque war ShrinkWrap (option simple validée par Yann, pas via vidocq-mps pour éviter cycle de dep)
-- [ ] **M7b.5** 1er test smoke TCK officiel (`OpenTelemetryBeanTest`) qui démarre
+- [x] **M7b.4b** Container Arquillian "embedded" `HumboldtDeployableContainer` from-scratch (2026-05-21) — décliné en 4 sous-étapes incrémentales :
+  - **M7b.4b.1** Squelette : lifecycle start/stop, `LoadableExtension`, `META-INF/services` (~150 LOC)
+  - **M7b.4b.2** Boot Vauban CDI : extract Class<?> du war ShrinkWrap, `VaubanContainer.builder().addBeanClass(...).build()` + `AutoConfiguredHumboldt` avec env hardcodée (~80 LOC)
+  - **M7b.4b.3** Bridge OTel SDK autoconfigure : parse `META-INF/microprofile-config.properties`, scan `META-INF/services/...ConfigurableSpanExporterProvider`, instancier le provider, wrapper via `OtelSpanExporterBridge`, injecter via le hook M7b.3 (~150 LOC + `MapConfigProperties`)
+  - **M7b.4b.4** `HumboldtCdiEnricher implements TestEnricher` : injection `@Inject` sur la classe de test (cas particulier `OpenTelemetry` → `GlobalOpenTelemetry.get()`, autres → `VaubanContainer.current().select(type)`) (~70 LOC)
+  - **Tests** : `HumboldtArquillianBootSmokeTest`, `HumboldtCdiBootTest`, `HumboldtOtelBridgeDeployTest`, `HumboldtCdiEnricherTest` → **21/21 PASS humboldt-tck locaux**
+- [x] **M7b.5** 1er test TCK officiel `OpenTelemetryBeanTest` (2026-05-21) — **2/2 PASS** ! `org.eclipse.microprofile.telemetry.tracing.tck.cdi.OpenTelemetryBeanTest` (`testOpenTelemetryBean` + `testSpanAndTracer`) passe via le profile `tck-cdi-bean` (`mvn -Ptck-cdi-bean test`). Premier test TCK officiel MP Telemetry 2.1 vert pour Humboldt
 
 ### M7c — Run complet + challenges _(à venir)_
 
