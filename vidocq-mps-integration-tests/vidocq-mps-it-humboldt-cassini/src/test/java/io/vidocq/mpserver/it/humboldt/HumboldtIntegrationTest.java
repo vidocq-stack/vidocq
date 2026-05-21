@@ -59,6 +59,7 @@ class HumboldtIntegrationTest {
                 // Arquillian Vidocq nécessite leur présence explicite).
                 .addClass(io.vidocq.humboldt.rest.HumboldtServerRequestFilter.class)
                 .addClass(io.vidocq.humboldt.rest.HumboldtServerResponseFilter.class)
+                .addClass(io.vidocq.humboldt.rest.HumboldtSpanFinalizer.class)
                 .addClass(io.vidocq.humboldt.cdi.WithSpanInterceptor.class)
                 .addClass(io.vidocq.humboldt.cdi.SpanBinding.class)
                 .addClass(io.vidocq.humboldt.cdi.HumboldtBuildCompatibleExtension.class);
@@ -143,19 +144,19 @@ class HumboldtIntegrationTest {
         // l'exception et set status=ERROR sur le span INTERNAL.
         assertTrue(spans.contains("\"name\":\"traced.boom\""),
                 "span INTERNAL @WithSpan(\"traced.boom\") attendu : " + spans);
-        assertTrue(spans.contains("\"status\":\"ERROR\""),
-                "l'interceptor sur traced.boom doit avoir set status=ERROR : " + spans);
         assertTrue(spans.contains("IllegalStateException: boom from traced.boom"),
                 "le message d'exception doit être dans status.description : " + spans);
 
-        // ⚠️ KNOWN ISSUE M6d.6 — le span SERVER pour /trace/boom n'apparaît PAS
-        // quand l'exception remonte. Probable : Cassini intercepte l'exception via
-        // un ExceptionMapper qui court-circuite le ContainerResponseFilter
-        // humboldt-rest, donc le span SERVER n'est jamais .end()'d et ne sort pas
-        // de InMemorySpanExporter.getFinishedSpans(). À investiguer dans
-        // humboldt-rest (response filter sur exception) ou cassini-core
-        // (ordre des filters vs exception mappers). Ne bloque pas M6d.5 — la
-        // validation principale (BCE + interceptor + exception recording) marche.
+        // M6d.6 — Le span SERVER pour /trace/boom doit maintenant être présent
+        // grâce à HumboldtSpanFinalizer (ExceptionMapper<Throwable> qui termine
+        // le span quand Cassini court-circuite le response filter — bug Cassini
+        // documenté dans HumboldtSpanFinalizer javadoc, workaround côté humboldt-rest).
+        assertTrue(spans.contains("\"name\":\"GET /trace/boom\""),
+                "span SERVER /trace/boom attendu (terminé par HumboldtSpanFinalizer) : " + spans);
+        assertTrue(spans.contains("\"httpStatus\":500"),
+                "http.response.status_code=500 attendu sur le span SERVER : " + spans);
+        assertTrue(spans.contains("\"status\":\"ERROR\""),
+                "au moins un span doit être ERROR (SERVER et/ou INTERNAL) : " + spans);
     }
 
     // ============================================================
