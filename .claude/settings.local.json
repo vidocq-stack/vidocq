@@ -156,7 +156,9 @@
       "Bash(rtk grep *)",
       "Bash(jpackage --version)",
       "Bash(jpackage --help)",
-      "Bash(/usr/bin/find *)"
+      "Bash(/usr/bin/find *)",
+      "Bash(rm -rf target)",
+      "Bash(../../mvnw -ntp -pl . test-compile)"
     ]
   }
 }
