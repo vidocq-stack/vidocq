@@ -106,8 +106,8 @@ Plan détaillé : [`PLAN.md`](PLAN.md) (§13 jalons). Cette page est la version 
   - ✅ **Propagation W3C entrante** : header `traceparent` → span SERVER hérite `traceId` + `parentSpanId`.
   - ✅ **Status ERROR + exception** : interceptor `@WithSpan` set `status=ERROR` + message exception sur Throwable.
   - 2 ajustements requis pour faire passer : `@ApplicationScoped` sur les filters humboldt-rest (Cassini scanne via CDI bean discovery — sans scope les `@Provider` ne sont pas découverts), publication `HumboldtHolder.INSTANCE` static dans l'extension MPS pour accès cross-ClassLoader depuis le Deployment Arquillian isolé.
-  - 1 known issue (M6d.6) : span SERVER absent quand l'endpoint throw — Cassini intercepte l'exception avant que le ContainerResponseFilter ne s'exécute. Le span INTERNAL `@WithSpan` continue de capturer correctement l'exception. À investiguer dans humboldt-rest ou cassini-core.
-- [ ] **M6d.6** — Fix span SERVER manquant sur exception remontée (ExceptionMapper Cassini court-circuite humboldt-rest response filter)
+  - 1 issue résolue en M6d.6 (cf. ci-dessous).
+- [x] **M6d.6** _(terminé 2026-05-21)_ — Fix span SERVER manquant sur exception remontée. Diagnostic : `Invoker.java:365` de Cassini fait `return fromJaxRs(mapped.get(), ...)` sans appeler les response filters, violant spec JAX-RS §10.2.7. Workaround dans humboldt-rest : nouveau `HumboldtSpanFinalizer @Provider implements ExceptionMapper<Throwable>` (priorité USER+1000, le plus générique → ne s'exécute que si AUCUN user mapper ne matche) qui termine le span lui-même (recordException + ERROR + span.end()). Test boom strict restauré : **4/4 tests PASS** incluant l'assertion sur span SERVER `/trace/boom` + httpStatus=500 + status=ERROR. Quand le bug Cassini sera corrigé upstream, le workaround devient redondant mais reste inoffensif (le span sera déjà terminé par le response filter, removeProperty rend l'opération idempotente).
 
 ## M7 — TCK officiel MicroProfile Telemetry 2.1
 
