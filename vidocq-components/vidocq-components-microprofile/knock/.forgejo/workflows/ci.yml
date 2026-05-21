@@ -154,8 +154,40 @@ jobs:
           </settings>
           EOF
 
+      - name: Wait for upstream Vidocq snapshots
+        # Le job build a son propre wait+check, mais ce job tck-mp-health pull
+        # à nouveau les snapshots upstream à l'install. Si un upstream a push
+        # entre les 2 jobs, on retombe dans la race. On ré-applique le check.
+        env:
+          REPO_USER: vidocq-ci-deploy
+          REPO_PASS: ${{ secrets.MAVEN_DEPLOY_TOKEN }}
+        run: |
+          set -e
+          DEPS=(
+            "io/vidocq/vauban/vauban-core"
+            "io/vidocq/champollion/champollion-api"
+            "io/vidocq/cassini/cassini-core"
+          )
+          BASE="https://repo.vidocq.dev/snapshots"
+          VERSION="0.1.0-SNAPSHOT"
+          TIMEOUT=300
+          start=$(date +%s)
+          for dep in "${DEPS[@]}"; do
+            url="$BASE/$dep/$VERSION/maven-metadata.xml"
+            echo "🔎 Check $dep..."
+            while true; do
+              code=$(curl -s -o /dev/null -w "%{http_code}" -u "$REPO_USER:$REPO_PASS" "$url")
+              if [ "$code" = "200" ]; then echo "  ✅ $dep dispo"; break; fi
+              elapsed=$(( $(date +%s) - start ))
+              if [ $elapsed -gt $TIMEOUT ]; then echo "  ❌ Timeout ${TIMEOUT}s — $dep HTTP=$code" >&2; exit 1; fi
+              echo "  ⏳ $dep HTTP=$code, retry dans 10s..."
+              sleep 10
+            done
+          done
+
       - name: Install reactor (skip tests)
-        run: mvn -B -ntp install -DskipTests
+        # -U pour forcer le refresh des SNAPSHOTs (cohérent avec le job build).
+        run: mvn -B -ntp -U install -DskipTests
 
       - name: MicroProfile Health 4.0 TCK
         run: |
