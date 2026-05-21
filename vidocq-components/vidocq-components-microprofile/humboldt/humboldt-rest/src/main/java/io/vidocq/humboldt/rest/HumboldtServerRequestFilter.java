@@ -12,6 +12,7 @@ import io.opentelemetry.context.Scope;
 import io.opentelemetry.context.propagation.TextMapGetter;
 import io.opentelemetry.context.propagation.TextMapPropagator;
 import io.vidocq.humboldt.propagator.w3c.W3CPropagators;
+import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.ws.rs.container.ContainerRequestContext;
 import jakarta.ws.rs.container.ContainerRequestFilter;
 import jakarta.ws.rs.ext.Provider;
@@ -35,6 +36,7 @@ import java.util.List;
  * dans {@link #SCOPE_PROPERTY} pour fermeture symétrique.</p>
  */
 @Provider
+@ApplicationScoped
 public class HumboldtServerRequestFilter implements ContainerRequestFilter {
 
     public static final String SPAN_PROPERTY = "io.vidocq.humboldt.rest.span";
