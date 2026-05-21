@@ -99,8 +99,15 @@ Plan détaillé : [`PLAN.md`](PLAN.md) (§13 jalons). Cette page est la version 
   * ServiceLoader : `META-INF/services/io.vidocq.mpserver.spi.VidocqExtension` + `provides` JPMS
   * README.md complet avec table des env vars + instrumentation auto activée (`@WithSpan` BCE, filters JAX-RS)
   * Pom parent vidocq-mps : property `humboldt.version=0.1.0-SNAPSHOT` + 4 DM entries (3 humboldt + 1 extension)
-- [x] **M6d.4** — Verify build reactor vidocq-mps complet : SUCCESS, 19 modules ✅, `Vidocq :: Core Extensions :: Telemetry (Humboldt)` compile en 0.059s. Le bug Maven path rapporté hier était une fausse alerte (cwd mal calculé par un script shell externe utilisé pour contourner une redirection harness — non reproductible en session shell directe).
-- [ ] **M6d.5 Validation Vauban runtime** : test E2E via `vidocq-mps-integration-tests` qui démarre une app, fait un appel HTTP, vérifie qu'un span SERVER apparaît dans `InMemorySpanExporter`. Confirme que Vauban applique bien la BCE humboldt-cdi sur les beans `@WithSpan` (risk PLAN §15.1).
+- [x] **M6d.4** — Verify build reactor vidocq-mps complet : SUCCESS, 19 modules ✅.
+- [x] **M6d.5 Validation Vauban runtime** _(terminé 2026-05-21)_ — test E2E via `vidocq-mps-it-humboldt-cassini` (nouveau module dans `vidocq-mps/vidocq-mps-integration-tests`, calque `it-rest-cassini`) : **4/4 tests PASS** sur le reactor vidocq-mps complet.
+  - ✅ **BCE @WithSpan** : Vauban CDI Lite exécute bien la `BuildCompatibleExtension HumboldtBuildCompatibleExtension`, l'interceptor s'active sur les beans `@WithSpan` OTel. **Risk PLAN.md §15.1 résolu**.
+  - ✅ **Filter SERVER span** : `humboldt-rest` capture les requêtes HTTP avec attrs OTel HTTP semantic (`url.path`, `http.response.status_code`, `kind=SERVER`).
+  - ✅ **Propagation W3C entrante** : header `traceparent` → span SERVER hérite `traceId` + `parentSpanId`.
+  - ✅ **Status ERROR + exception** : interceptor `@WithSpan` set `status=ERROR` + message exception sur Throwable.
+  - 2 ajustements requis pour faire passer : `@ApplicationScoped` sur les filters humboldt-rest (Cassini scanne via CDI bean discovery — sans scope les `@Provider` ne sont pas découverts), publication `HumboldtHolder.INSTANCE` static dans l'extension MPS pour accès cross-ClassLoader depuis le Deployment Arquillian isolé.
+  - 1 known issue (M6d.6) : span SERVER absent quand l'endpoint throw — Cassini intercepte l'exception avant que le ContainerResponseFilter ne s'exécute. Le span INTERNAL `@WithSpan` continue de capturer correctement l'exception. À investiguer dans humboldt-rest ou cassini-core.
+- [ ] **M6d.6** — Fix span SERVER manquant sur exception remontée (ExceptionMapper Cassini court-circuite humboldt-rest response filter)
 
 ## M7 — TCK officiel MicroProfile Telemetry 2.1
 
