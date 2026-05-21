@@ -3,6 +3,8 @@ package io.vidocq.humboldt.cdi;
 import io.opentelemetry.api.GlobalOpenTelemetry;
 import io.opentelemetry.api.OpenTelemetry;
 import io.opentelemetry.api.baggage.Baggage;
+import io.opentelemetry.api.logs.Logger;
+import io.opentelemetry.api.metrics.Meter;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.Tracer;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -67,5 +69,29 @@ public class HumboldtTelemetryProducers {
     @Produces
     public Baggage produceCurrentBaggage() {
         return Baggage.current();
+    }
+
+    /**
+     * Producer {@link Meter} — le nom du meter est dérivé du point d'injection :
+     * classe déclarante par défaut. Convention OTel : {@code getMeter(scope)}.
+     */
+    @Produces
+    public Meter produceMeter(InjectionPoint ip) {
+        String scope = ip != null && ip.getMember() != null
+                ? ip.getMember().getDeclaringClass().getName()
+                : "io.vidocq.humboldt.cdi";
+        return GlobalOpenTelemetry.get().getMeter(scope);
+    }
+
+    /**
+     * Producer {@link Logger} (logs OTel) — le nom du logger est dérivé du
+     * point d'injection.
+     */
+    @Produces
+    public Logger produceLogger(InjectionPoint ip) {
+        String scope = ip != null && ip.getMember() != null
+                ? ip.getMember().getDeclaringClass().getName()
+                : "io.vidocq.humboldt.cdi";
+        return GlobalOpenTelemetry.get().getLogsBridge().get(scope);
     }
 }

@@ -43,6 +43,8 @@
 
         <humboldt.version>0.1.0-SNAPSHOT</humboldt.version>
         <vauban.version>0.1.0-SNAPSHOT</vauban.version>
+        <cassini.version>0.1.0-SNAPSHOT</cassini.version>
+        <chappe.version>0.1.0-SNAPSHOT</chappe.version>
 
         <microprofile.telemetry.version>2.1</microprofile.telemetry.version>
         <microprofile.config.version>3.1.1</microprofile.config.version>
@@ -138,6 +140,46 @@
             <groupId>io.vidocq.vauban</groupId>
             <artifactId>vauban-core</artifactId>
             <version>${vauban.version}</version>
+        </dependency>
+
+        <!-- ============================================================ -->
+        <!--  M7c.2 : Chappe HTTP + Cassini JAX-RS — assemblés in-process -->
+        <!--  par le container Arquillian pour les tests TCK REST.        -->
+        <!-- ============================================================ -->
+        <dependency>
+            <groupId>io.vidocq.chappe</groupId>
+            <artifactId>chappe-api</artifactId>
+            <version>${chappe.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.chappe</groupId>
+            <artifactId>chappe-core</artifactId>
+            <version>${chappe.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.chappe</groupId>
+            <artifactId>chappe-http</artifactId>
+            <version>${chappe.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.cassini</groupId>
+            <artifactId>cassini-api</artifactId>
+            <version>${cassini.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.cassini</groupId>
+            <artifactId>cassini-core</artifactId>
+            <version>${cassini.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.cassini</groupId>
+            <artifactId>cassini-chappe</artifactId>
+            <version>${cassini.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.cassini</groupId>
+            <artifactId>cassini-cdi-vauban</artifactId>
+            <version>${cassini.version}</version>
         </dependency>
 
         <!-- ============================================================ -->

@@ -9,11 +9,18 @@ import io.vidocq.humboldt.sdk.trace.export.SpanExporter;
 import io.vidocq.humboldt.tck.bridge.OtelSpanExporterBridge;
 import io.vidocq.vauban.core.container.VaubanContainer;
 import io.vidocq.vauban.core.container.VaubanContainerBuilder;
+import io.vidocq.humboldt.rest.HumboldtServerRequestFilter;
+import io.vidocq.humboldt.rest.HumboldtServerResponseFilter;
+import io.vidocq.humboldt.rest.HumboldtSpanFinalizer;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.ext.Provider;
 import org.jboss.arquillian.container.spi.client.container.DeployableContainer;
 import org.jboss.arquillian.container.spi.client.container.DeploymentException;
 import org.jboss.arquillian.container.spi.client.container.LifecycleException;
 import org.jboss.arquillian.container.spi.client.protocol.ProtocolDescription;
+import org.jboss.arquillian.container.spi.client.protocol.metadata.HTTPContext;
 import org.jboss.arquillian.container.spi.client.protocol.metadata.ProtocolMetaData;
+import org.jboss.arquillian.container.spi.client.protocol.metadata.Servlet;
 import org.jboss.shrinkwrap.api.Archive;
 import org.jboss.shrinkwrap.api.ArchivePath;
 import org.jboss.shrinkwrap.api.Node;
@@ -65,6 +72,7 @@ public class HumboldtDeployableContainer implements DeployableContainer<Humboldt
 
     private VaubanContainer container;
     private AutoConfiguredHumboldt humboldt;
+    private CassiniHarness cassini;
 
     @Override
     public Class<HumboldtContainerConfig> getConfigurationClass() {
@@ -147,28 +155,77 @@ public class HumboldtDeployableContainer implements DeployableContainer<Humboldt
                     extraSpanExporters);
             GlobalOpenTelemetry.set(this.humboldt);
 
-            return new ProtocolMetaData();
+            // M7c.2 : si le war contient des resources JAX-RS, démarrer
+            // Cassini sur Chappe. Branche les filters humboldt-rest pour que
+            // les spans SERVER soient générés conformément au TCK.
+            ProtocolMetaData metaData = new ProtocolMetaData();
+            List<Class<?>> resourceClasses = beanClasses.stream()
+                    .filter(c -> c.isAnnotationPresent(Path.class))
+                    .toList();
+            List<Class<?>> providerClasses = beanClasses.stream()
+                    .filter(c -> c.isAnnotationPresent(Provider.class)
+                            && !c.isAnnotationPresent(Path.class))
+                    .toList();
+            if (!resourceClasses.isEmpty()) {
+                String ctxName = deriveContextName(archive);
+                String contextPath = ctxName.isEmpty() ? "/" : "/" + ctxName;
+                CassiniHarness.Builder hb = CassiniHarness.builder().contextPath(contextPath);
+                for (Class<?> r : resourceClasses) hb.resourceClass(r);
+                // Filters humboldt-rest pour générer les spans SERVER
+                hb.provider(new HumboldtServerRequestFilter());
+                hb.provider(new HumboldtServerResponseFilter());
+                hb.provider(new HumboldtSpanFinalizer());
+                for (Class<?> p : providerClasses) {
+                    try { hb.provider(p.getDeclaredConstructor().newInstance()); }
+                    catch (ReflectiveOperationException e) {
+                        LOG.log(Level.WARNING, "  ⚠ provider non-instanciable : {0}", p.getName());
+                    }
+                }
+                this.cassini = hb.start();
+                LOG.log(Level.INFO, "  → Cassini démarré sur {0} ({1} resources, {2} providers)",
+                        cassini.baseUrl(), resourceClasses.size(), providerClasses.size());
+
+                HTTPContext httpContext = new HTTPContext("127.0.0.1", cassini.port());
+                httpContext.add(new Servlet("ArquillianServletRunner", contextPath));
+                metaData.addContext(httpContext);
+            }
+            return metaData;
         } catch (Exception e) {
             throw new DeploymentException("Failed to deploy " + archive.getName(), e);
         }
+    }
+
+    private static String deriveContextName(Archive<?> archive) {
+        String name = archive.getName();
+        if (name == null) return "";
+        if (name.endsWith(".war")) name = name.substring(0, name.length() - 4);
+        if (name.endsWith(".jar")) name = name.substring(0, name.length() - 4);
+        return name;
     }
 
     @Override
     public void undeploy(Archive<?> archive) throws DeploymentException {
         LOG.log(Level.INFO, "Humboldt Arquillian container — undeploy {0}", archive.getName());
         try {
-            if (container != null) {
-                container.close();
-                container = null;
+            if (cassini != null) {
+                cassini.close();
+                cassini = null;
             }
         } finally {
             try {
-                if (humboldt != null) {
-                    humboldt.close();
-                    humboldt = null;
+                if (container != null) {
+                    container.close();
+                    container = null;
                 }
             } finally {
-                GlobalOpenTelemetry.resetForTest();
+                try {
+                    if (humboldt != null) {
+                        humboldt.close();
+                        humboldt = null;
+                    }
+                } finally {
+                    GlobalOpenTelemetry.resetForTest();
+                }
             }
         }
     }

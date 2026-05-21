@@ -2,6 +2,10 @@ package io.vidocq.humboldt.tck.arquillian;
 
 import io.opentelemetry.api.GlobalOpenTelemetry;
 import io.opentelemetry.api.OpenTelemetry;
+import io.opentelemetry.api.baggage.Baggage;
+import io.opentelemetry.api.metrics.Meter;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.Tracer;
 import io.vidocq.vauban.core.container.VaubanContainer;
 import jakarta.inject.Inject;
 import org.jboss.arquillian.test.spi.TestEnricher;
@@ -65,8 +69,25 @@ public class HumboldtCdiEnricher implements TestEnricher {
 
     private static Object resolveValue(Field f, VaubanContainer container) {
         Class<?> type = f.getType();
+        // Types OpenTelemetry résolus directement (cas où Vauban ne sait pas
+        // appeler les producers — limites CDI Lite + classpath isolation).
         if (OpenTelemetry.class.equals(type)) {
             return GlobalOpenTelemetry.get();
+        }
+        if (Tracer.class.equals(type)) {
+            return GlobalOpenTelemetry.get().getTracer(f.getDeclaringClass().getName());
+        }
+        if (Meter.class.equals(type)) {
+            return GlobalOpenTelemetry.get().getMeter(f.getDeclaringClass().getName());
+        }
+        if (Span.class.equals(type)) {
+            return Span.current();
+        }
+        if (Baggage.class.equals(type)) {
+            return Baggage.current();
+        }
+        if (io.opentelemetry.api.logs.Logger.class.equals(type)) {
+            return GlobalOpenTelemetry.get().getLogsBridge().get(f.getDeclaringClass().getName());
         }
         if (container == null) return null;
         try {

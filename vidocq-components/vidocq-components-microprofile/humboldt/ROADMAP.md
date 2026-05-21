@@ -146,8 +146,16 @@ Plan détaillé : [`PLAN.md`](PLAN.md) (§13 jalons). Cette page est la version 
 - [x] **M7c.4** (2026-05-21) Bump commons-io 2.16.1 dans humboldt-tck/pom.xml — erreurs `Tailer.builder` à 0
 - [x] **M7c.1** (2026-05-21) `HumboldtTelemetryProducers` (Tracer/Span/Baggage/OpenTelemetry) dans humboldt-cdi, enregistré automatiquement à chaque deploy. **Débloque ~24 tests** : tous les Metrics CDI + tous les JVM* + Tracing.TracerTest + Tracing.ExporterSpiTest. Stats : 153 / 80 fails / 68 skip → ~31 vrais PASS (~36 % des applicables)
 - [x] **M7c.3** Résolu de facto par M7c.1 (`Failed to deploy` → 0)
-- [ ] **M7c.2** Conteneur HTTP : Chappe + Cassini intégrés dans `HumboldtDeployableContainer` (~400 LOC) — débloque 80 tests REST/HTTP restants
-- [ ] **Gate qualité** : ≥95 % de tests applicables passent (atteignable après M7c.2)
+- [x] **M7c.2** (2026-05-21) Chappe + Cassini intégrés dans `HumboldtDeployableContainer` via `CassiniHarness` (~180 LOC). Filters humboldt-rest branchés. HTTPContext exposé via `ProtocolMetaData`. Erreurs URL → 0. Producers étendus (Meter, Logger) + fallback dans enricher pour ces types.
+- [ ] **M7c.5+** Items long-terme nécessaires pour gate ≥95 % :
+  - M4b SDK metric (Double/LongCounter, Histogram, Observable) → +24 tests
+  - M5b SDK log bridges (JulHandler) → +3 tests
+  - M7c.5 intégration Cyrano MP Rest Client → +6 tests
+  - M7c.6 JAX-RS Client (cassini-client ou Jersey test scope) → +3 tests
+  - M7c.7 humboldt-rest ClientFilter (CLIENT spans) → +6 tests
+  - M7c.8 extraction http.route via UriInfo.getMatchedTemplates() → +1
+  - M7c.9 Proxy CDI Span/Baggage → +2
+- [ ] **Gate qualité** : ≥95 % de tests applicables passent (atteignable après M4b + M5b + M7c.5→9)
 
 ## M8 — Perf & ADRs
 
