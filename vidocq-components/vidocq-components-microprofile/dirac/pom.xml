@@ -293,4 +293,36 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <profile>
+            <id>jlink-smoke</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>exec-maven-plugin</artifactId>
+                        <version>3.5.0</version>
+                        <inherited>false</inherited>
+                        <executions>
+                            <execution>
+                                <id>run-jlink-smoke-ci</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>exec</goal>
+                                </goals>
+                                <configuration>
+                                    <workingDirectory>${maven.multiModuleProjectDirectory}</workingDirectory>
+                                    <executable>bash</executable>
+                                    <arguments>
+                                        <argument>${maven.multiModuleProjectDirectory}/run-jlink-smoke-ci.sh</argument>
+                                    </arguments>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

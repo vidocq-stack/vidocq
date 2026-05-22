@@ -1,63 +1,50 @@
 # JLINK.md
 
-Ce document lance M9 avec un smoke check reproductible JPMS/jlink.
+Ce document decrit le smoke check M9 pour JPMS/jlink avec artefact modulaire.
 
 ## Etat actuel
 
-- `dirac-api`, `dirac-core`, `dirac-cdi-vauban` sont des modules explicites.
-- `microprofile-metrics-api:5.1.1` est un module automatique (`microprofile.metrics.api`).
-- Consequence: `jlink` echoue tant que ce module reste automatique.
+- `dirac-api`, `dirac-core`, `dirac-cdi-vauban`, `dirac-rest`, `dirac-examples` et `dirac-bench` sont des modules explicites.
+- Le blocker `jlink` est leve en generant un artefact local explicitement modulaire de `microprofile-metrics-api:5.1.1`.
+- Le JAR source en cache Maven n'est pas modifie; le JAR modulaire est cree sous `target/modular-mp-metrics-api/`.
 
-## Smoke check M9
+## Scripts
 
-Script fourni: `run-jlink-smoke.sh`
+- `build-modular-mp-metrics-api.sh`
+  - copie le JAR MP Metrics d'origine,
+  - genere `module-info.java` via `jdeps`,
+  - compile et injecte `module-info.class` dans la copie,
+  - retourne le chemin de l'artefact modulaire genere.
+- `run-jlink-smoke.sh`
+  - installe `dirac-api` + `dirac-core`,
+  - genere l'artefact MP Metrics modulaire,
+  - valide les modules,
+  - construit l'image `target/dirac-image-smoke`.
+- `run-jlink-smoke-ci.sh`
+  - wrapper CI bloquant (propage les erreurs).
 
-Il execute:
-1. build/installation locale minimale (`dirac-api`, `dirac-core`),
-2. validation JPMS (`java --validate-modules`),
-3. tentative de creation d'image `jlink`.
-
-## Execution
+## Execution locale
 
 ```bash
 ./run-jlink-smoke.sh
+./run-jlink-smoke-ci.sh
 ```
 
-## Resultats attendus
-
-- JPMS validation: OK
-- jlink: echec connu avec message du type:
-  `automatic module cannot be used with jlink: microprofile.metrics.api`
-
-Cet echec est le blocker principal M9.
-
-## Prochaine etape pour M9
-
-Lever le blocker du module automatique MicroProfile Metrics via:
-- soit un artefact explicitement modulaire compatible,
-- soit un bridge modulaire interne controle.
-
-## M9.2 prototype (Option A locale)
-
-Script fourni: `run-jlink-smoke-m92.sh`
-
-Ce script realise un POC local, sans changer les dependances de production:
-1. copie `microprofile-metrics-api-5.1.1.jar` dans `target/m92-jlink/`,
-2. genere un `module-info.java` avec `jdeps`,
-3. compile ce descripteur et l'injecte dans le jar copie,
-4. construit une image `jlink` avec `dirac-api` + `dirac-core`.
-
-Execution:
+## Profil Maven
 
 ```bash
-./run-jlink-smoke-m92.sh
+./mvnw -ntp -N -Pjlink-smoke verify
 ```
 
-Resultat attendu:
-- image `target/m92-jlink/image` creee,
-- modules visibles: `io.vidocq.dirac.api`, `io.vidocq.dirac.core`, `microprofile.metrics.api`.
+- Le profil appelle `run-jlink-smoke-ci.sh` en phase `verify`.
+- Le profil est bloquant: tout echec `jlink` fait echouer le build.
 
-Limite:
-- c'est un prototype local M9.2 (pas encore un pipeline de release).
+## Resultat attendu
 
+- `jlink` termine sans erreur,
+- image disponible dans `target/dirac-image-smoke`,
+- module `microprofile.metrics.api` visible dans `--list-modules`.
 
+## M9.2 historique
+
+Le script `run-jlink-smoke-m92.sh` reste un POC historique; le flux principal M9 repose maintenant sur `run-jlink-smoke.sh` + artefact modulaire genere.

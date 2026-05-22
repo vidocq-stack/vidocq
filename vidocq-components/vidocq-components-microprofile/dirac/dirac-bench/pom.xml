@@ -36,16 +36,36 @@
     <build>
         <plugins>
             <!--
-                dirac-bench n'a pas de module-info.java : pas de JPMS strict.
-                On efface les compilerArgs hérités du parent pour éviter tout conflit
-                de doublon sur le module-path.
+                JPMS workaround dirac-bench : module-info.java sous src/main/module-info,
+                tests en classpath, compilation du descripteur en prepare-package.
             -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-clean-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>remove-module-info-before-testcompile</id>
+                        <phase>generate-test-sources</phase>
+                        <goals><goal>clean</goal></goals>
+                        <configuration>
+                            <excludeDefaultDirectories>true</excludeDefaultDirectories>
+                            <filesets>
+                                <fileset>
+                                    <directory>${project.build.outputDirectory}</directory>
+                                    <includes>
+                                        <include>module-info.class</include>
+                                    </includes>
+                                </fileset>
+                            </filesets>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
                     <release>25</release>
-                    <compilerArgs combine.self="override"/>
                     <annotationProcessorPaths>
                         <path>
                             <groupId>org.openjdk.jmh</groupId>
@@ -54,6 +74,18 @@
                         </path>
                     </annotationProcessorPaths>
                 </configuration>
+                <executions>
+                    <execution>
+                        <id>compile-module-info</id>
+                        <phase>prepare-package</phase>
+                        <goals><goal>compile</goal></goals>
+                        <configuration>
+                            <compileSourceRoots>
+                                <compileSourceRoot>${project.basedir}/src/main/module-info</compileSourceRoot>
+                            </compileSourceRoots>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

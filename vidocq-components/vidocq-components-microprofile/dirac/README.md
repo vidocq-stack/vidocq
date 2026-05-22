@@ -43,11 +43,15 @@ Le runner TCK installe d'abord les artefacts Dirac requis dans le M2 local via
 
 ```bash
 ./run-jlink-smoke.sh
-./run-jlink-smoke-m92.sh
+./run-jlink-smoke-ci.sh
+./mvnw -ntp -N -Pjlink-smoke verify
 ```
 
 Le detail du smoke check et du blocker `jlink` actuel est documente dans
 [`JLINK.md`](JLINK.md).
+
+Le smoke M9 genere un artefact local explicitement modulaire de
+`microprofile-metrics-api:5.1.1` avant de lancer `jlink`.
 
 ## Modules
 

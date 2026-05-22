@@ -318,15 +318,15 @@ strictement modulaire (aucun module automatique dans le graphe final).
 | Tâche | Notes | État |
 |---|---|---|
 | Définir le périmètre `jlink` | Cible minimale : `dirac-api` + `dirac-core`; cible étendue : + `dirac-cdi-vauban` | ☐ |
-| Lever le blocker MP Metrics | `microprofile-metrics-api:5.1.1` est un module automatique (`microprofile.metrics.api`) et bloque `jlink` | ☐ |
+| Lever le blocker MP Metrics | Artefact modulaire local généré (`microprofile-metrics-api-5.1.1-mod.jar`) utilisé par le smoke `jlink` | ☑ |
 | Option A — module bridge interne | Introduire un bridge explicitement modulaire qui évite l'automatic module dans l'image | ☐ |
 | Option A (prototype local M9.2) | POC validé: modularisation locale de `microprofile-metrics-api` via `jdeps`/`javac`/`jar` + image `jlink` générée (`run-jlink-smoke-m92.sh`) | ☑ |
-| Option B — artefact API modulaire | Basculer vers un artefact MP Metrics équivalent avec `module-info.class` explicite (si compatible TCK) | ☐ |
+| Option B — artefact API modulaire | Artefact local avec `module-info.class` explicite généré par script (`build-modular-mp-metrics-api.sh`) | ☑ |
 | Inventaire module-path | Documenter les modules explicites/automatiques (Dirac + Jakarta + MP) | ☑ |
-| `module-info` manquants | Planifier/ajouter `module-info.java` pour `dirac-rest`, `dirac-bench`, `dirac-examples` | ☐ |
-| Profil Maven `jlink-smoke` | Construire `target/dirac-image` pour la cible minimale | ☐ |
+| `module-info` manquants | `dirac-rest`, `dirac-examples` et `dirac-bench` sont modularisés (workaround JPMS) | ☑ |
+| Profil Maven `jlink-smoke` | Profil parent `-Pjlink-smoke` ajouté (bloquant: échec si smoke `jlink` échoue) | ☑ |
 | Script `run-jlink-smoke.sh` | Smoke check M9 reproductible (JPMS OK + detection blocker `jlink`) | ☑ |
-| Smoke test image | Vérifier démarrage de l'image et chargement des modules Dirac | ☐ |
+| Smoke test image | Image `target/dirac-image-smoke` générée et validée (`--list-modules`) | ☑ |
 | CI gate `jlink` | Ajouter un job bloquant (`jlink-smoke`) | ☐ |
 | Documentation exploitation | Ajouter `JLINK.md` et lier depuis `README.md` | ☑ |
 
