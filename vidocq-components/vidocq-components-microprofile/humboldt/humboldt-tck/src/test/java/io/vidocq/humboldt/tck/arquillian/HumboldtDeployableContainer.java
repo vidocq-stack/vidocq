@@ -45,8 +45,8 @@ import java.util.Properties;
  * exécuter le TCK MicroProfile Telemetry 2.1.
  *
  * <p>Approche from-scratch (cf. {@code tasks/m7b-architecture-analysis.md}
- * Option C) — pas de réutilisation de vidocq-mps pour éviter le cycle de
- * dépendance humboldt-tck → vidocq-mps → humboldt.</p>
+ * Option C) — pas de réutilisation de vidocq pour éviter le cycle de
+ * dépendance humboldt-tck → vidocq → humboldt.</p>
  *
  * <p>Progression incrémentale :</p>
  * <ul>

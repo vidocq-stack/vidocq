@@ -96,7 +96,7 @@
 
 ## M6d — Extension MPS + validation Vauban runtime _(terminé 2026-05-21)_
 
-Voir ROADMAP.md M6d.1 → M6d.7-bis (vidocq-mps-humboldt-extension hors-reactor humboldt, validation Vauban CDI Lite pour @WithSpan, E2E REST via cassini+chappe+humboldt, fix span SERVER sur exception, fix BCE Cassini `@Provider`/`@Path`).
+Voir ROADMAP.md M6d.1 → M6d.7-bis (vidocq-runtime-humboldt-extension hors-reactor humboldt, validation Vauban CDI Lite pour @WithSpan, E2E REST via cassini+chappe+humboldt, fix span SERVER sur exception, fix BCE Cassini `@Provider`/`@Path`).
 
 ## M7 — TCK officiel MicroProfile Telemetry 2.1
 

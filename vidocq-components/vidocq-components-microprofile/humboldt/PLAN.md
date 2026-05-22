@@ -29,7 +29,7 @@ Métaphore à reprendre dans `docs/en/modules/ROOT/pages/index.adoc` (calque du 
 | Naturgemälde (cross-section panoramique) | Dashboards Grafana/Jaeger alimentés par OTLP |
 | Expédition à pied, sans télégraphe | Java SE pur, pas de Netty, pas d'agent bytecode |
 
-Position dans l'écosystème : Humboldt est le **système nerveux observationnel** qui s'enroule autour de chappe (HTTP), cassini (REST), foy (Servlet), vauban (CDI) sans jamais s'imposer comme dépendance dure — il s'auto-active via le module `vidocq-mps-humboldt-extension`.
+Position dans l'écosystème : Humboldt est le **système nerveux observationnel** qui s'enroule autour de chappe (HTTP), cassini (REST), foy (Servlet), vauban (CDI) sans jamais s'imposer comme dépendance dure — il s'auto-active via le module `vidocq-runtime-humboldt-extension`.
 
 ---
 
@@ -56,7 +56,7 @@ Conformes à `org.eclipse.microprofile.telemetry:microprofile-telemetry-api:2.1`
 - **`@WithSpan`** (interceptor) — création automatique de span autour d'une méthode CDI
 - **`@SpanAttribute`** — paramètres de méthode mappés en `Attribute`
 - **Auto-instrumentation REST** : `ContainerRequestFilter` + `ContainerResponseFilter` (server side), `ClientRequestFilter` + `ClientResponseFilter` (client side via cyrano)
-- **Auto-instrumentation Servlet** (via vidocq-mps-humboldt-extension hooking foy)
+- **Auto-instrumentation Servlet** (via vidocq-runtime-humboldt-extension hooking foy)
 - **Logs bridge** : `MDC` SLF4J → OTel Log attributes ; JUL → OTel via `Handler`
 - **Configuration** : variables `MP_TELEMETRY_*` (`MP_TELEMETRY_SDK_DISABLED`, etc.) + `OTEL_*` standard (`OTEL_SERVICE_NAME`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_RESOURCE_ATTRIBUTES`, `OTEL_TRACES_SAMPLER`, …)
 
@@ -89,7 +89,7 @@ Conformes à `org.eclipse.microprofile.telemetry:microprofile-telemetry-api:2.1`
 | `io.opentelemetry:opentelemetry-context:1.39.0` | `compile` | Idem — `Context` est un type d'API. On fournit notre `ContextStorageProvider` via ServiceLoader OTel. |
 | `io.opentelemetry.semconv:opentelemetry-semconv:1.27.0-alpha` | `compile` | Constantes des conventions sémantiques (`HTTP_REQUEST_METHOD`, `URL_PATH`, etc.). Pure-data, zéro logique. |
 | `org.eclipse.microprofile.telemetry:microprofile-telemetry-api:2.1` | `compile` | API MP Telemetry — annotations `@WithSpan`, ConfigSource bridge. |
-| `org.eclipse.microprofile.config:microprofile-config-api:3.1.1` | `compile` | Source de configuration cohérente avec `ravel` (déjà DM-managé dans vidocq-mps). |
+| `org.eclipse.microprofile.config:microprofile-config-api:3.1.1` | `compile` | Source de configuration cohérente avec `ravel` (déjà DM-managé dans vidocq). |
 | `jakarta.enterprise:jakarta.enterprise.cdi-api:4.1.0` | `compile` (humboldt-cdi seulement) | Pour l'interceptor `@WithSpan`. |
 | `jakarta.ws.rs:jakarta.ws.rs-api:4.0` | `provided` (humboldt-rest seulement) | Pour les filtres JAX-RS. |
 | `com.google.protobuf:protobuf-java:4.27.x` | `runtime` (humboldt-exporter-otlp seulement) | **Décision arbitrable** — voir §3.3. |
@@ -405,7 +405,7 @@ Item déposé dans `chappe/tasks/todo.md` en Phase 7 (préparation extensions Vi
 │   ├── pom.xml
 │   ├── humboldt-example-standalone/             # Java SE main, sans CDI
 │   ├── humboldt-example-cassini/                # REST + tracing auto
-│   └── humboldt-example-vidocq-mps/             # extension MPS complète
+│   └── humboldt-example-vidocq/             # extension MPS complète
 │
 ├── humboldt-bench/                              # JMH (dans le reactor)
 │   ├── pom.xml
@@ -479,7 +479,7 @@ flowchart TB
 
 ### 4.3 POM parent racine (`humboldt/pom.xml`)
 
-Calqué sur `vidocq-mps/pom.xml` (Model 4.1.0, `root="true"`), `<groupId>io.vidocq.humboldt</groupId>`, `<version>0.1.0-SNAPSHOT</version>`, `<packaging>pom</packaging>`, `<subprojects>` listant tous les modules **sauf** `humboldt-tck` et `humboldt-examples` (qui aura son propre `<subprojects>` interne mais hors agrégation par défaut).
+Calqué sur `vidocq/pom.xml` (Model 4.1.0, `root="true"`), `<groupId>io.vidocq.humboldt</groupId>`, `<version>0.1.0-SNAPSHOT</version>`, `<packaging>pom</packaging>`, `<subprojects>` listant tous les modules **sauf** `humboldt-tck` et `humboldt-examples` (qui aura son propre `<subprojects>` interne mais hors agrégation par défaut).
 
 Propriétés clés à exposer :
 
@@ -681,16 +681,16 @@ module io.vidocq.humboldt.processor {
 }
 ```
 
-### 6.9 vidocq-mps extension (dans `vidocq-mps/vidocq-mps-core-extensions/vidocq-mps-humboldt-extension/`)
+### 6.9 vidocq extension (dans `vidocq/vidocq-runtime-core-extensions/vidocq-runtime-humboldt-extension/`)
 
 ```java
-import io.vidocq.mpserver.ext.humboldt.HumboldtBootstrapExtension;
-import io.vidocq.mpserver.ext.humboldt.HumboldtRestFilterProvider;
+import io.vidocq.runtime.ext.humboldt.HumboldtBootstrapExtension;
+import io.vidocq.runtime.ext.humboldt.HumboldtRestFilterProvider;
 
-module io.vidocq.mpserver.ext.humboldt {
-    requires transitive io.vidocq.mpserver.spi;
-    requires io.vidocq.mpserver.ext.chappe;
-    requires io.vidocq.mpserver.ext.rest.cassini;
+module io.vidocq.runtime.ext.humboldt {
+    requires transitive io.vidocq.runtime.spi;
+    requires io.vidocq.runtime.ext.chappe;
+    requires io.vidocq.runtime.ext.rest.cassini;
     requires io.vidocq.vauban.core;
     requires io.vidocq.humboldt.api;
     requires io.vidocq.humboldt.sdk.trace;
@@ -701,8 +701,8 @@ module io.vidocq.mpserver.ext.humboldt {
     requires io.vidocq.humboldt.rest;
     requires io.vidocq.humboldt.chappe;
 
-    exports io.vidocq.mpserver.ext.humboldt;
-    provides io.vidocq.mpserver.spi.VidocqExtension with HumboldtBootstrapExtension;
+    exports io.vidocq.runtime.ext.humboldt;
+    provides io.vidocq.runtime.spi.VidocqExtension with HumboldtBootstrapExtension;
 }
 ```
 
@@ -761,7 +761,7 @@ Module `humboldt-chappe` :
 Module `humboldt-rest` :
 
 - `HumboldtServerRequestFilter implements ContainerRequestFilter` avec `@PreMatching` et priority `Priorities.AUTHENTICATION - 100` (avant tout) :
-  - Si un span "chappe" parent existe déjà (cas vidocq-mps), enfant `kind=INTERNAL` "@Path resolution"
+  - Si un span "chappe" parent existe déjà (cas vidocq), enfant `kind=INTERNAL` "@Path resolution"
   - Si standalone, extract + span SERVER comme chappe-filter
   - Ajoute `http.route` (template path) une fois la ressource matchée
 - `HumboldtServerResponseFilter implements ContainerResponseFilter` : termine le span
@@ -772,7 +772,7 @@ Module `humboldt-rest` :
 
 Module `humboldt-cdi` :
 
-- `HumboldtCdiExtension implements jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension` (CDI 4.1 Lite — exactement comme `RestScopeExtension` dans vidocq-mps)
+- `HumboldtCdiExtension implements jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension` (CDI 4.1 Lite — exactement comme `RestScopeExtension` dans vidocq)
 - Phases :
   - `@Enhancement` : ajoute `@WithSpan` à des classes annotées d'un meta-annotation (ex. `@Traced`) si demandé
   - `@Discovery` : enregistre les producers `TracerProducer`, `MeterProducer`, `LoggerProducer`
@@ -793,16 +793,16 @@ Module `humboldt-cdi` :
   ```
 - **Validation** : `humboldt-cdi` doit fonctionner identiquement sur Vauban et sur Weld (vérifié dans `humboldt-tck` via Arquillian, multi-container)
 
-### 8.4 vidocq-mps — extension `vidocq-mps-humboldt-extension`
+### 8.4 vidocq — extension `vidocq-runtime-humboldt-extension`
 
-Créé **dans le sous-projet `vidocq-mps/`**, sous `vidocq-mps-core-extensions/vidocq-mps-humboldt-extension/` :
+Créé **dans le sous-projet `vidocq/`**, sous `vidocq-runtime-core-extensions/vidocq-runtime-humboldt-extension/` :
 
 ```
-vidocq-mps-humboldt-extension/
+vidocq-runtime-humboldt-extension/
 ├── pom.xml
 └── src/main/java/
     ├── module-info.java                  # cf. §6.9
-    └── io/vidocq/mpserver/ext/humboldt/
+    └── io/vidocq/runtime/ext/humboldt/
         ├── HumboldtBootstrapExtension.java       # implements VidocqExtension
         ├── HumboldtConfigBridge.java             # MP Config → OTel Config
         ├── HumboldtTelemetryHealthCheck.java     # /q/telemetry (optionnel, MP Health)
@@ -1075,7 +1075,7 @@ Création obligatoire dès M0 — convention workspace.
 | **M4 — SDK Metrics** | `humboldt-sdk-metric` : Counter/Histogram/UpDownCounter/Gauge async, SumAggregator, HistogramAggregator (explicit buckets), ExponentialHistogramAggregator, ViewRegistry, PeriodicMetricReader. OTLP metric exporter (extension de `humboldt-exporter-otlp-http`). | TCK metrics : full PASS | 7-10 j |
 | **M5 — SDK Logs** | `humboldt-sdk-log` : SdkLoggerProvider, LogRecord, Batch/Simple processors. Bridges JUL (`Handler`) + SLF4J (opt-in `requires static`). OTLP log exporter. | TCK logs : full PASS | 5-7 j |
 | **M6 — CDI + JAX-RS + Chappe** | `humboldt-cdi` : Build Compatible Extension Vauban, `@WithSpan` interceptor, producers. `humboldt-rest` : filtres JAX-RS auto via `Feature`. `humboldt-chappe` : `TracingFilter`. Tests Arquillian multi-container (Vauban + Weld). | TCK MP Telemetry CDI : full PASS | 7-10 j |
-| **M7 — APT codegen + vidocq-mps extension** | `humboldt-processor` : `WithSpanProcessor` (Class-File API → `Foo$$HumboldtSpans`), `ExporterServiceProcessor`, `ResourceMetadataProcessor`. `vidocq-mps-humboldt-extension` (dans `vidocq-mps/`) avec lifecycle complet et endpoint `/q/telemetry` optionnel. Exemple `humboldt-example-vidocq-mps` end-to-end. | TCK 100 % en mode codegen statique | 7-10 j |
+| **M7 — APT codegen + vidocq extension** | `humboldt-processor` : `WithSpanProcessor` (Class-File API → `Foo$$HumboldtSpans`), `ExporterServiceProcessor`, `ResourceMetadataProcessor`. `vidocq-runtime-humboldt-extension` (dans `vidocq/`) avec lifecycle complet et endpoint `/q/telemetry` optionnel. Exemple `humboldt-example-vidocq` end-to-end. | TCK 100 % en mode codegen statique | 7-10 j |
 | **M8 — Performance** | `humboldt-bench` : JMH SpanCreation (target < 200 ns alloc-free), BatchExport throughput (target > 1 M spans/s sur un VT), Histogram record (target < 30 ns), Propagator inject/extract (target < 100 ns). Tableau comparatif vs SmallRye + OTel SDK officiel dans `BENCH.md` + `performance.adoc`. Optimisations zero-alloc (object pooling SpanData via `Cleaner` ou `Recyclable`). | — | 5-7 j |
 | **M9 — Documentation finale + Release 0.1.0** | Toutes les pages Antora EN/FR complètes (tracing/metrics/logs/exporters/configuration/internals/migration/performance/tck/reference). README finalisés. Tag `v0.1.0-RC1`. Annonce LinkedIn ViBot. | TCK release verified | 3-5 j |
 
@@ -1105,7 +1105,7 @@ Aucun tag `0.1.0-final` sans :
 | **Context storage** | ThreadLocal | **ScopedValue** (JEP 506) |
 | **Batch export thread** | Plateforme (`Executors.newScheduledThreadPool(1)`) | **Virtual Thread** |
 | **OTLP transport** | gRPC (par défaut, via Netty) ou HTTP/protobuf (alt) | **HTTP/protobuf** seul en v1. gRPC post-MVP via `chappe-grpc` natif zéro-dep (§3.5), pas via grpc-java/Netty |
-| **Cold start (Hello REST + 1 span)** | ~600 ms (mesuré JDK 21 + Quarkus 3.x équivalent) | **cible < 80 ms** (vidocq-mps + humboldt) |
+| **Cold start (Hello REST + 1 span)** | ~600 ms (mesuré JDK 21 + Quarkus 3.x équivalent) | **cible < 80 ms** (vidocq + humboldt) |
 | **Span allocation (steady state)** | ~350 ns + ~480 B/span (mesure OTel SDK 1.39) | **cible < 200 ns + 0 B/span** (object pooling) |
 | **AOT-ready (GraalVM native-image)** | Partiel (requires reflect-config manuel) | **Native** : zéro réflexion runtime grâce APT, pas de proxy dynamique, ServiceLoader uniquement |
 | **GraalVM friendliness** | Substitutions Quarkus nécessaires | **Hors-Quarkus, pur JDK** — substitutions Leyden CDS au M8+ |
@@ -1123,7 +1123,7 @@ Différenciation produit assumée : **moins de magie, plus de codegen, virtual-t
 | Risque | Probabilité | Impact | Mitigation |
 |---|---|---|---|
 | **TCK MP Telemetry 2.1 nécessite gRPC OTLP** | Moyenne | Élevé (re-scope ou planning) | Audit M0 du TCK — si gRPC requis : prioriser la livraison de `chappe-grpc` (§3.5) puis `humboldt-exporter-otlp-grpc`. Si seulement HTTP/protobuf requis (hypothèse principale, cf. §15.2 item 5), gRPC reste post-MVP. **Aucune dépendance grpc-java/Netty quelle que soit la voie.** |
-| **OTel API 1.39 contient des classes `final`/internes utilisées par TCK** | Moyenne | Moyen | Lecture bytecode TCK (méthodologie HOWTO-CLAUDE.md vidocq-mps) pour identifier les surfaces requises ; éventuellement embarquer un SPI shim. |
+| **OTel API 1.39 contient des classes `final`/internes utilisées par TCK** | Moyenne | Moyen | Lecture bytecode TCK (méthodologie HOWTO-CLAUDE.md vidocq) pour identifier les surfaces requises ; éventuellement embarquer un SPI shim. |
 | **ScopedValueContextStorage incompatible avec lib tierce qui fait `Context.current()` cross-thread sans wrap** | Moyenne | Moyen | Fournir compat mode `OTEL_JAVA_CONTEXT_STORAGE=threadlocal` qui retombe sur l'impl ThreadLocal de référence. |
 | **Protobuf 4.27 a un bug Maven module-name** | Faible | Faible | Tester très tôt en M3 ; fallback hand-rolled encoder déjà prévu (§3.4 option B). |
 | **chappe-client pour OTLP n'est pas assez mature (M3)** | Moyenne | Faible | Fallback `java.net.http.HttpClient` du JDK — moins optimal mais zero-risk. |
@@ -1161,7 +1161,7 @@ Différenciation produit assumée : **moins de magie, plus de codegen, virtual-t
 5. Créer arborescence `humboldt-api/` avec `pom.xml` + `src/main/java/module-info.java` minimal
 6. Créer `.forgejo/workflows/{ci.yml,pr.yml,notify-slack.yml,update-dep-graph.yml}` (copie cassini + adaptations groupId/artifactId)
 7. Créer `CLAUDE.md` (calque chappe/CLAUDE.md + section spécifique Telemetry)
-8. Créer `README.md` FR et `README_EN.md` (calque vidocq-mps)
+8. Créer `README.md` FR et `README_EN.md` (calque vidocq)
 9. Initialiser `BUG.md`, `BENCH.md`, `TCK.md`, `ROADMAP.md`, `LICENSE` Apache-2.0
 10. Créer `docs/{en,fr}/antora.yml` + `modules/ROOT/nav.adoc` + `pages/index.adoc` (nom & métaphore Humboldt)
 11. Créer `tasks/todo.md` et `tasks/lessons.md` vides
@@ -1183,7 +1183,7 @@ Les fichiers les plus critiques pour démarrer l'implémentation, par ordre d'im
 Fichiers du workspace existant qui doivent être lus avant chaque tâche d'implémentation :
 
 - `/Users/yblazart/projects/perso/vidocq/CLAUDE.md` — règles transverses
-- `/Users/yblazart/projects/perso/vidocq/vidocq-mps/vidocq-mps-core-extensions/vidocq-mps-chappe-extension/` — modèle d'extension MPS
+- `/Users/yblazart/projects/perso/vidocq/vidocq/vidocq-runtime-core-extensions/vidocq-runtime-chappe-extension/` — modèle d'extension MPS
 - `/Users/yblazart/projects/perso/vidocq/champollion/champollion-tck/pom.xml` — modèle TCK hors-reactor
 - `/Users/yblazart/projects/perso/vidocq/cassini/.forgejo/workflows/ci.yml` — modèle CI Forgejo
 

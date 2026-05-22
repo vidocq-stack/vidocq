@@ -91,16 +91,16 @@ Plan détaillé : [`PLAN.md`](PLAN.md) (§13 jalons). Cette page est la version 
 
 ### M6d — Extension MPS + validation Vauban runtime _(structure livrée 2026-05-21)_
 
-- [x] Extension `vidocq-mps-humboldt-extension` créée dans `vidocq-mps` (commit `0274a62`) :
-  * Module Maven avec pom hérité de `vidocq-mps-core-extensions`, dep humboldt-runtime/cdi/rest + vauban-core + vidocq-mps-spi
+- [x] Extension `vidocq-runtime-humboldt-extension` créée dans `vidocq` (commit `0274a62`) :
+  * Module Maven avec pom hérité de `vidocq-runtime-core-extensions`, dep humboldt-runtime/cdi/rest + vauban-core + vidocq-runtime-spi
   * `HumboldtExtension implements VidocqExtension` priorité 100 — configure() lit env vars OTel via VidocqConfiguration bridge, beforeStart() = AutoConfiguredHumboldt.configure + GlobalOpenTelemetry.set, onStop() flush + shutdown 5s
   * 13 clés OTel/MP_TELEMETRY_* bridgées (SCREAMING_SNAKE + lower.dot.case)
   * Désactivation via `MP_TELEMETRY_SDK_DISABLED=true`
-  * ServiceLoader : `META-INF/services/io.vidocq.mpserver.spi.VidocqExtension` + `provides` JPMS
+  * ServiceLoader : `META-INF/services/io.vidocq.runtime.spi.VidocqExtension` + `provides` JPMS
   * README.md complet avec table des env vars + instrumentation auto activée (`@WithSpan` BCE, filters JAX-RS)
-  * Pom parent vidocq-mps : property `humboldt.version=0.1.0-SNAPSHOT` + 4 DM entries (3 humboldt + 1 extension)
-- [x] **M6d.4** — Verify build reactor vidocq-mps complet : SUCCESS, 19 modules ✅.
-- [x] **M6d.5 Validation Vauban runtime** _(terminé 2026-05-21)_ — test E2E via `vidocq-mps-it-humboldt-cassini` (nouveau module dans `vidocq-mps/vidocq-mps-integration-tests`, calque `it-rest-cassini`) : **4/4 tests PASS** sur le reactor vidocq-mps complet.
+  * Pom parent vidocq : property `humboldt.version=0.1.0-SNAPSHOT` + 4 DM entries (3 humboldt + 1 extension)
+- [x] **M6d.4** — Verify build reactor vidocq complet : SUCCESS, 19 modules ✅.
+- [x] **M6d.5 Validation Vauban runtime** _(terminé 2026-05-21)_ — test E2E via `vidocq-runtime-it-humboldt-cassini` (nouveau module dans `vidocq/vidocq-runtime-integration-tests`, calque `it-rest-cassini`) : **4/4 tests PASS** sur le reactor vidocq complet.
   - ✅ **BCE @WithSpan** : Vauban CDI Lite exécute bien la `BuildCompatibleExtension HumboldtBuildCompatibleExtension`, l'interceptor s'active sur les beans `@WithSpan` OTel. **Risk PLAN.md §15.1 résolu**.
   - ✅ **Filter SERVER span** : `humboldt-rest` capture les requêtes HTTP avec attrs OTel HTTP semantic (`url.path`, `http.response.status_code`, `kind=SERVER`).
   - ✅ **Propagation W3C entrante** : header `traceparent` → span SERVER hérite `traceId` + `parentSpanId`.
