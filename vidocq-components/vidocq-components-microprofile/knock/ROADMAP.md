@@ -225,34 +225,34 @@ Intégration end-to-end avec Cassini embedded reportée à M5.
 
 ### M5 — Intégration écosystème Vidocq ✅
 
-**Scope :** déployer Knock dans Cassini, et `vidocq-mps` ; faire de Knock le système de
-health check par défaut de tout déploiement vidocq-mps.
+**Scope :** déployer Knock dans Cassini, et `vidocq` ; faire de Knock le système de
+health check par défaut de tout déploiement vidocq.
 
 | Tâche | Notes | État |
 |---|---|---|
 | Documentation `docs/integration-cassini.md` | Dépendances, JPMS, exemple ressource JAX-RS avec health check dédié | ✅ |
-| Documentation `docs/integration-vidocq-mps.md` | Configuration health check dans vidocq-mps, accès par défaut `/health` | ✅ |
-| ADR-002 stratégie d'intégration | Rationale, ordre de déploiement, risques (cf. `docs/adr/ADR-002-vidocq-mps-integration-strategy.md`) | ✅ |
+| Documentation `docs/integration-vidocq.md` | Configuration health check dans vidocq, accès par défaut `/health` | ✅ |
+| ADR-002 stratégie d'intégration | Rationale, ordre de déploiement, risques (cf. `docs/adr/ADR-002-vidocq-runtime-integration-strategy.md`) | ✅ |
 | ServiceLoader BCE (`META-INF/services/jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension`) | `HealthCheckCdiExtension` exposée via le contrat CDI 4.1 standard | ✅ |
 | `module-info.java` `provides ... with` | Doublure JPMS pour les fichiers de services (cf. `knock-cdi-vauban` et `knock-core`) | ✅ |
-| `vidocq-mps` : intégrer Knock comme système de health check | Module wrapper `vidocq-mps-knock-extension` (Maven/JPMS, sans code Java) ajouté dans `vidocq-mps-core-extensions/`. Active Knock via une seule dépendance, intégration zero-config (BCE + scanning JAX-RS Cassini). | ✅ |
+| `vidocq` : intégrer Knock comme système de health check | Module wrapper `vidocq-runtime-knock-extension` (Maven/JPMS, sans code Java) ajouté dans `vidocq-runtime-core-extensions/`. Active Knock via une seule dépendance, intégration zero-config (BCE + scanning JAX-RS Cassini). | ✅ |
 
 **Décisions M5 :**
 
 - **Wrapper Maven/JPMS plutôt que `VidocqExtension` dédiée** (ADR-002) : aucun code Java
-  côté vidocq-mps. Knock s'auto-déploie via deux SPI standards — BCE de `knock-cdi-vauban`
+  côté vidocq. Knock s'auto-déploie via deux SPI standards — BCE de `knock-cdi-vauban`
   pour découvrir `@Liveness/@Readiness/@Startup`, et scanning `@Path` de
   `CassiniExtension` pour mount `KnockHealthResource`. Bénéfice : Knock reste utilisable
-  hors vidocq-mps avec exactement les mêmes deps.
-- **`vidocq-mps-knock-extension` `requires transitive`** les 4 modules Knock + dépend de
-  `vidocq-mps-rest-cassini-extension`. champollion-jsonp est runtime-only.
+  hors vidocq avec exactement les mêmes deps.
+- **`vidocq-runtime-knock-extension` `requires transitive`** les 4 modules Knock + dépend de
+  `vidocq-runtime-cassini-rest-extension`. champollion-jsonp est runtime-only.
 - **Même workaround JPMS que `knock-core`** appliqué au wrapper (module-info hors
   `src/main/java/`, recompilation en `prepare-package`, `--module-path target/javamodules`)
   pour contourner `microprofile-health-api:4.0.1` sans Automatic-Module-Name.
 
-**Livrable :** documentation complète (intégration Cassini + intégration vidocq-mps + ADR-002),
-module wrapper `vidocq-mps-knock-extension` installé et compilable dans le reactor vidocq-mps,
-`/health*` disponible dans tout déploiement vidocq-mps via une seule dépendance.
+**Livrable :** documentation complète (intégration Cassini + intégration vidocq + ADR-002),
+module wrapper `vidocq-runtime-knock-extension` installé et compilable dans le reactor vidocq,
+`/health*` disponible dans tout déploiement vidocq via une seule dépendance.
 
 ---
 

@@ -1,27 +1,27 @@
-# Intégration Knock ↔ vidocq-mps
+# Intégration Knock ↔ vidocq
 
-> Knock est le système de health check par défaut de vidocq-mps. Cette page décrit
+> Knock est le système de health check par défaut de vidocq. Cette page décrit
 > comment l'activer, comment il interagit avec les autres extensions, et comment
 > l'étendre dans une application MPS.
 
 ## Activation : une seule dépendance
 
-L'agrégat `vidocq-mps-knock-extension` regroupe les modules `knock-cdi-vauban` +
+L'agrégat `vidocq-runtime-knock-extension` regroupe les modules `knock-cdi-vauban` +
 `knock-cassini` + l'implémentation Jakarta JSON-P (`champollion-jsonp`).
 Ajouter cette dépendance suffit à exposer `/health*` :
 
 ```xml
 <dependency>
-    <groupId>io.vidocq.mpserver</groupId>
-    <artifactId>vidocq-mps-knock-extension</artifactId>
+    <groupId>io.vidocq.runtime</groupId>
+    <artifactId>vidocq-runtime-knock-extension</artifactId>
 </dependency>
 ```
 
-(la version est gérée par le BOM `vidocq-mps-parent`.)
+(la version est gérée par le BOM `vidocq-runtime-parent`.)
 
 Cet agrégat dépend transitivement de :
 
-- `vidocq-mps-rest-cassini-extension` — l'extension qui scanne les `@Path` beans
+- `vidocq-runtime-cassini-rest-extension` — l'extension qui scanne les `@Path` beans
   via `BeanProvider` et construit le `CassiniStack` ;
 - `knock-cassini` — la ressource `KnockHealthResource` (`@ApplicationScoped`,
   `@Path("/health")`) ;
@@ -52,7 +52,7 @@ Au moment où `CassiniExtension.onStart()` interroge
    `KnockHealthResource`.
 
 `KnockHealthResource` est donc disponible immédiatement après le démarrage du
-serveur Chappe, sans extension Vidocq-MPS dédiée — `CassiniExtension` la mount
+serveur Chappe, sans extension Vidocq Runtime dédiée — `CassiniExtension` la mount
 automatiquement comme n'importe quel `@Path` bean.
 
 ## Endpoints exposés
@@ -124,7 +124,7 @@ cette propriété est sans effet (le TCK valide ce comportement via `ConfigTest`
 
 ## Désactivation
 
-Retirer la dépendance `vidocq-mps-knock-extension` suffit ; Knock n'expose aucun
+Retirer la dépendance `vidocq-runtime-knock-extension` suffit ; Knock n'expose aucun
 service `VidocqExtension` dédié, son intégration est purement passive (BCE CDI
 + ressource JAX-RS scannée par Cassini).
 
@@ -132,7 +132,7 @@ service `VidocqExtension` dédié, son intégration est purement passive (BCE CD
 
 ```bash
 # Démarrage de l'exemple
-cd vidocq-mps-examples/vidocq-mps-rest-example
+cd vidocq-runtime-examples/vidocq-runtime-cassini-rest-example
 mvn -ntp -DskipTests package
 java -p target/modules -m my.app/com.example.Main &
 
@@ -147,6 +147,6 @@ curl -i http://localhost:8080/health
 `./run-official-tck-mp-health-4.0.sh all` (depuis le repo `knock`) exécute le
 TCK officiel `microprofile-health-tck:4.0` contre la pile Knock complète :
 **28/28 PASS**. Le runner Arquillian (`KnockDeployableContainer`) reproduit le
-même chemin d'intégration que `vidocq-mps-knock-extension` : Cassini + Vauban
+même chemin d'intégration que `vidocq-runtime-knock-extension` : Cassini + Vauban
 embedded + `KnockHealthResource` montée sur un endpoint Chappe local.
 

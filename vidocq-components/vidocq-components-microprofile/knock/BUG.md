@@ -59,7 +59,7 @@ côté knock.
 
 `deploy needs: build` (et **non** `needs: tck-mp-health`) dans `ci.yml` de knock pour
 permettre la publication des snapshots knock malgré le TCK rouge — knock devait rester
-consommable par `vidocq-mps` même tant que le TCK plantait.
+consommable par `vidocq` même tant que le TCK plantait.
 
 ### Fix appliqué
 

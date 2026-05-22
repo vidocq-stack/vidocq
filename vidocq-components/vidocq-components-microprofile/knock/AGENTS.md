@@ -102,7 +102,7 @@ sdk env
   par `knock-core` via Jakarta JSON-P / champollion. **Livré** : `KnockHealthResource` +
   `KnockHealthService` (façade SPI runtime), 7/7 tests PASS.
 - `M4` = TCK MicroProfile Health 4.0 à 100 % PASS — contrat dur.
-- `M5` = intégration écosystème Vidocq (cassini, vidocq-mps). Knock devient la sonde
-  de santé par défaut de tout déploiement vidocq-mps.
+- `M5` = intégration écosystème Vidocq (cassini, vidocq). Knock devient la sonde
+  de santé par défaut de tout déploiement vidocq.
 - Avant toute modification structurelle de `knock-core` ou `knock-cdi-vauban`, raisonner
   avec le contrat final : **TCK MicroProfile Health 4.0 à 100 % PASS**.

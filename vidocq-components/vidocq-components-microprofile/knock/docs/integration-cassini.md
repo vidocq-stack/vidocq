@@ -128,15 +128,15 @@ au phase `Validation` du conteneur.
 Knock est *zero-config* : aucune propriété MP Config n'est requise. Si l'application
 veut isoler les endpoints derrière un préfixe, c'est l'hôte JAX-RS (Cassini ou autre)
 qui décide via son `ApplicationPath` ou le mount Chappe (`vidocq.rest.context-path`
-côté `vidocq-mps`).
+côté `vidocq`).
 
 ## Vérification
 
 Un smoke test de la ressource (sans container HTTP) est fourni dans
 `KnockHealthResourceTest` (7/7 PASS) — il utilise un `TestRuntimeDelegate` minimal
 local pour bypasser tout import interne Cassini. Pour une vérification end-to-end
-contre Cassini réel, voir l'extension `vidocq-mps-knock-extension`
-(`docs/integration-vidocq-mps.md`).
+contre Cassini réel, voir l'extension `vidocq-runtime-knock-extension`
+(`docs/integration-vidocq.md`).
 
 ## TCK MicroProfile Health 4.0
 
