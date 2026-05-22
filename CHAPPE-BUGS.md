@@ -1,7 +1,7 @@
 # Bugs Chappe identifiés
 
 > Même format que `VAUBAN-BUGS.md` : chaque entrée décrit un comportement
-> anormal observé depuis `vidocq-rest-cassini-extension` pendant le TCK
+> anormal observé depuis `vidocq-runtime-cassini-rest-extension` pendant le TCK
 > Jakarta REST 4.0. Les sources Chappe sont dans
 > `/Users/yblazart/projects/perso/vidocq/chappe/`.
 

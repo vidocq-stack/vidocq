@@ -1,8 +1,8 @@
 = TCK: MicroProfile and covered Jakarta specs
-:description: Vidocq-MPS conformance status across Technology Compatibility Kits.
+:description: Vidocq Runtime conformance status across Technology Compatibility Kits.
 
 [.lead]
-Vidocq-MPS inherits TCK passes from its foundational bricks and exposes its own runners for MicroProfile TCKs. This page consolidates conformance status.
+Vidocq Runtime inherits TCK passes from its foundational bricks and exposes its own runners for MicroProfile TCKs. This page consolidates conformance status.
 
 == Overview
 
@@ -32,19 +32,19 @@ Vidocq-MPS inherits TCK passes from its foundational bricks and exposes its own 
 
 | MicroProfile Config 3.x
 | Planned
-| `vidocq-mps-config-extension` in progress
+| `vidocq-runtime-config-extension` in progress
 
 | MicroProfile Health 4.x
 | Planned
-| `vidocq-mps-health-extension` in progress
+| `vidocq-runtime-health-extension` in progress
 
 | MicroProfile Metrics 5.x
 | Planned
-| `vidocq-mps-metrics-extension` in progress
+| `vidocq-runtime-metrics-extension` in progress
 
 | MicroProfile OpenAPI 4.x
 | Planned
-| `vidocq-mps-openapi-extension` in progress
+| `vidocq-runtime-openapi-extension` in progress
 
 | MicroProfile JWT Auth
 | Planned
@@ -58,7 +58,7 @@ Vidocq-MPS inherits TCK passes from its foundational bricks and exposes its own 
 
 == Inherited Jakarta TCKs
 
-Vidocq-MPS does not re-run Jakarta TCKs: they are validated by the underlying bricks. The following runners cover the ecosystem:
+Vidocq Runtime does not re-run Jakarta TCKs: they are validated by the underlying bricks. The following runners cover the ecosystem:
 
 * `cassini-tck` — Jakarta REST 4.0
 * `foy-tck` / `vidocq-servlet-chappe-tck-runner` — Jakarta Servlet 6.1
@@ -71,7 +71,7 @@ Operational consequence: these TCKs always launch via their dedicated shell scri
 
 [source,bash]
 ----
-cd vidocq-mps-rest-cassini-tck-runner
+cd vidocq-runtime-rest-cassini-tck-runner
 ./run-official-tck-restful-4.0.sh
 
 cd vidocq-servlet-chappe-tck-runner
@@ -104,7 +104,7 @@ See `vidocq/TCK.md` for the full list, open TCK Process 1.4.1 official challenge
 
 Reproducible bugs found during TCK runs are tracked in:
 
-* `vidocq/BUG.md` — bugs on the Vidocq-MPS orchestrator side;
+* `vidocq/BUG.md` — bugs on the Vidocq Runtime orchestrator side;
 * `vidocq/CHAPPE-BUGS.md` — Chappe bugs identified through Servlet/REST TCK;
 * `vidocq/VAUBAN-BUGS.md` — Vauban bugs identified through CDI or Cassini TCK.
 

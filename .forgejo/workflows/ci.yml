@@ -64,7 +64,7 @@ jobs:
           EOF
 
       - name: Wait for upstream Vidocq snapshots
-        # Anti race condition : vidocq-mps dépend de tous les briques Vidocq amont
+        # Anti race condition : vidocq dépend de tous les briques Vidocq amont
         # (cassini, chappe, cyrano, humboldt, ravel, vauban). Si l'une d'elles vient
         # d'être push quasi-simultanément, son CI peut être encore en train de deploy.
         env:

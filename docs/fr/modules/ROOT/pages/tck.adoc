@@ -1,8 +1,8 @@
 = TCK : MicroProfile et specs Jakarta couvertes
-:description: État de conformité Vidocq-MPS aux Technology Compatibility Kits.
+:description: État de conformité Vidocq Runtime aux Technology Compatibility Kits.
 
 [.lead]
-Vidocq-MPS hérite directement des TCK passés par les briques fondatrices et expose ses propres runners pour les TCK MicroProfile. Cette page consolide l'état de conformité.
+Vidocq Runtime hérite directement des TCK passés par les briques fondatrices et expose ses propres runners pour les TCK MicroProfile. Cette page consolide l'état de conformité.
 
 == Vue d'ensemble
 
@@ -32,19 +32,19 @@ Vidocq-MPS hérite directement des TCK passés par les briques fondatrices et ex
 
 | MicroProfile Config 3.x
 | Planifié
-| extension `vidocq-mps-config-extension` en cours
+| extension `vidocq-runtime-config-extension` en cours
 
 | MicroProfile Health 4.x
 | Planifié
-| extension `vidocq-mps-health-extension` en cours
+| extension `vidocq-runtime-health-extension` en cours
 
 | MicroProfile Metrics 5.x
 | Planifié
-| extension `vidocq-mps-metrics-extension` en cours
+| extension `vidocq-runtime-metrics-extension` en cours
 
 | MicroProfile OpenAPI 4.x
 | Planifié
-| extension `vidocq-mps-openapi-extension` en cours
+| extension `vidocq-runtime-openapi-extension` en cours
 
 | MicroProfile JWT Auth
 | Planifié
@@ -58,7 +58,7 @@ Vidocq-MPS hérite directement des TCK passés par les briques fondatrices et ex
 
 == TCK Jakarta hérités
 
-Vidocq-MPS ne ré-exécute pas les TCK Jakarta : ils sont validés par les briques sous-jacentes. Les runners suivants couvrent l'écosystème :
+Vidocq Runtime ne ré-exécute pas les TCK Jakarta : ils sont validés par les briques sous-jacentes. Les runners suivants couvrent l'écosystème :
 
 * `cassini-tck` — Jakarta REST 4.0
 * `foy-tck` / `vidocq-servlet-chappe-tck-runner` — Jakarta Servlet 6.1
@@ -71,7 +71,7 @@ Conséquence opérationnelle : ces TCK se lancent toujours via leur script shell
 
 [source,bash]
 ----
-cd vidocq-mps-rest-cassini-tck-runner
+cd vidocq-runtime-rest-cassini-tck-runner
 ./run-official-tck-restful-4.0.sh
 
 cd vidocq-servlet-chappe-tck-runner
@@ -104,7 +104,7 @@ Voir `vidocq/TCK.md` pour la liste complète, les challenges officiels TCK Proce
 
 Les bugs reproductibles découverts pendant les runs TCK sont consignés dans :
 
-* `vidocq/BUG.md` — bugs côté orchestrateur Vidocq-MPS ;
+* `vidocq/BUG.md` — bugs côté orchestrateur Vidocq Runtime ;
 * `vidocq/CHAPPE-BUGS.md` — bugs Chappe identifiés via TCK Servlet/REST ;
 * `vidocq/VAUBAN-BUGS.md` — bugs Vauban identifiés via TCK CDI ou Cassini.
 

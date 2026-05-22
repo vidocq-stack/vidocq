@@ -1,0 +1,66 @@
+= vidocq-runtime-examples
+:description: Tour of shipped examples.
+
+[.lead]
+`vidocq-runtime-examples` groups the demo applications used as living oracles for validation and documentation. Each example is an independent Maven module, packageable via the `vidocq-runtime-maven-plugin`.
+
+== Coordinates
+
+[cols="1,3"]
+|===
+| Reactor | `vidocq-runtime-examples/`
+| Build | `cd vidocq-runtime-examples/<example> && ./mvnw -ntp package`
+|===
+
+== Catalogue
+
+[cols="2,3"]
+|===
+| Example | Description
+
+| `vidocq-runtime-cassini-rest-example`
+| Minimal REST application — a single Jakarta REST resource, packageable in jlink/jpackage/docker. Serves as the canonical reference to test the Maven plugin and the extension mechanism on the Chappe + Vauban + Cassini triplet.
+
+| `vidocq-runtime-mansart-h2-example`
+| Complete REST + CDI + persistence application via xref:mansart::index.adoc[Mansart] on H2 in-memory. Demonstrates `@Transactional`, `Repository<T, ID>`, constructor `@Inject`. The recommended example in xref:getting-started.adoc[Getting started].
+
+| `vidocq-runtime-external-rest-lib`
+| External library consumed by the examples — illustrates the case where a JPMS-named dependency provides its own CDI beans. Useful for validating multi-module APT composition.
+|===
+
+== `vidocq-runtime-cassini-rest-example` — quick start
+
+[source,bash]
+----
+cd vidocq-runtime-examples/vidocq-runtime-cassini-rest-example
+./mvnw -ntp package -DskipTests
+
+# standalone jlink image
+./target/dist/bin/todo-app
+
+# UI on http://127.0.0.1:8080/
+# API on http://127.0.0.1:8080/api/todos
+----
+
+== `vidocq-runtime-mansart-h2-example` — quick start
+
+[source,bash]
+----
+cd vidocq-runtime-examples/vidocq-runtime-mansart-h2-example
+./mvnw -ntp package
+java -jar target/*-runner.jar
+
+curl -X POST http://localhost:8080/api/products \
+     -H 'Content-Type: application/json' \
+     -d '{"name":"cables","price":12.50}'
+
+curl http://localhost:8080/api/products
+----
+
+The example demonstrates the `@TransactionScoped` scope and the xref:mansart::index.adoc[Mansart] transactional bridge. It also served as the reproduction harness for bug VAU-INJ-001 (normal-scope proxy resolution) — see `vidocq/VAUBAN-BUGS.md`.
+
+== Next steps
+
+* xref:getting-started.adoc[Getting started] — tutorial based on these examples
+* xref:modules/vidocq-runtime-maven-plugin.adoc[Maven plugin] — to package the examples
+* xref:modules/vidocq-runtime-integration-tests.adoc[Integration tests] — how examples are verified in CI

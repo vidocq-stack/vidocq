@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.1.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.1.0 http://maven.apache.org/xsd/maven-4.1.0.xsd">
+    <modelVersion>4.1.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.runtime</groupId>
+        <artifactId>vidocq-runtime-examples</artifactId>
+    </parent>
+
+    <artifactId>vidocq-runtime-cassini-rest-example</artifactId>
+    <name>Vidocq :: Examples :: REST (Cassini)</name>
+    <description>REST service example using the Cassini JAX-RS runtime on Chappe</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-core</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-cassini-rest-extension</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>io.vidocq.chappe</groupId>
+            <artifactId>chappe-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.chappe</groupId>
+            <artifactId>chappe-core</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>jakarta.ws.rs</groupId>
+            <artifactId>jakarta.ws.rs-api</artifactId>
+            <version>4.0.0</version>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.json.bind</groupId>
+            <artifactId>jakarta.json.bind-api</artifactId>
+            <version>3.0.1</version>
+        </dependency>
+        <!-- Yasson + Parsson en runtime pour la sérialisation JSON-B des Todos. -->
+        <dependency>
+            <groupId>org.eclipse</groupId>
+            <artifactId>yasson</artifactId>
+            <version>3.0.4</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.eclipse.parsson</groupId>
+            <artifactId>parsson</artifactId>
+            <version>1.1.7</version>
+            <scope>runtime</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-indexer</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-external-rest-lib</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>io.vidocq.runtime</groupId>
+                <artifactId>vidocq-runtime-maven-plugin</artifactId>
+                <version>${project.version}</version>
+                <executions>
+                    <!-- `generate` reste actif sur chaque build : il produit
+                         les classes nécessaires à la compilation et aux tests. -->
+                    <execution>
+                        <id>generate</id>
+                        <goals>
+                            <goal>generate</goal>
+                        </goals>
+                        <configuration>
+                            <scanDependencies>
+                                <scanDependency>io.vidocq.runtime:vidocq-runtime-external-rest-lib</scanDependency>
+                            </scanDependencies>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+    <profiles>
+        <!-- Packaging final (jlink + jpackage + docker) — actif par défaut.
+             Tous les jars de l'exemple (et ses dépendances transitives) sont
+             des modules JPMS nommés : `ravel-mp-config-api` fournit
+             `org.eclipse.microprofile.config` en module nommé, levant la
+             dernière limitation jlink historique.
+             Pour court-circuiter ces goals (CI rapide compile+tests uniquement),
+             utiliser `-P!dist` ou `-Dvidocq.jlink.skip=true`. -->
+        <profile>
+            <id>dist</id>
+            <activation>
+                <activeByDefault>true</activeByDefault>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>io.vidocq.runtime</groupId>
+                        <artifactId>vidocq-runtime-maven-plugin</artifactId>
+                        <version>${project.version}</version>
+                        <executions>
+                            <execution>
+                                <id>jlink</id>
+                                <goals>
+                                    <goal>jlink</goal>
+                                </goals>
+                                <configuration>
+                                    <mainModule>io.vidocq.runtime.examples.rest</mainModule>
+                                    <mainClass>io.vidocq.runtime.examples.rest.RestExampleApp</mainClass>
+                                    <launcher>todo-app</launcher>
+                                </configuration>
+                            </execution>
+                            <execution>
+                                <id>jpackage</id>
+                                <goals>
+                                    <goal>jpackage</goal>
+                                </goals>
+                                <configuration>
+                                    <mainModule>io.vidocq.runtime.examples.rest</mainModule>
+                                    <mainClass>io.vidocq.runtime.examples.rest.RestExampleApp</mainClass>
+                                    <appName>todo-app</appName>
+                                    <!-- macOS app-image refuse 0.x.y → on fixe 1.0.0 ; à
+                                         incrémenter à chaque release de l'exemple. -->
+                                    <appVersion>1.0.0</appVersion>
+                                    <type>app-image</type>
+                                </configuration>
+                            </execution>
+                            <execution>
+                                <id>docker</id>
+                                <goals>
+                                    <goal>docker</goal>
+                                </goals>
+                                <configuration>
+                                    <launcher>todo-app</launcher>
+                                    <imageTag>vidocq/todo-app:0.1.0-SNAPSHOT</imageTag>
+                                    <!-- build=false par défaut : on génère seulement le Dockerfile.
+                                         Mettre <build>true</build> ou -Dvidocq.docker.build=true
+                                         pour invoquer 'docker build' dans la foulée. -->
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+</project>

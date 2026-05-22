@@ -1,7 +1,7 @@
 # Packaging Vidocq — jlink, jpackage, Docker
 
 Workflow complet pour packager une application Vidocq en artefact déployable
-autonome via le `vidocq-mps-maven-plugin`. Trois cibles de packaging
+autonome via le `vidocq-runtime-maven-plugin`. Trois cibles de packaging
 disponibles, plus un mécanisme de surcharge de config externe.
 
 | Cible | Goal | Output | Taille | Démarrage |
@@ -16,13 +16,13 @@ distroless minimal.
 
 ---
 
-## 1. Quick start sur `vidocq-mps-rest-example`
+## 1. Quick start sur `vidocq-runtime-cassini-rest-example`
 
-L'exemple `vidocq-mps-rest-example` est déjà câblé pour générer les trois
+L'exemple `vidocq-runtime-cassini-rest-example` est déjà câblé pour générer les trois
 artefacts en une commande.
 
 ```sh
-cd vidocq-mps-examples/vidocq-mps-rest-example
+cd vidocq-runtime-examples/vidocq-runtime-cassini-rest-example
 mvn package -DskipTests
 ```
 
@@ -78,8 +78,8 @@ cible.
 
 ```xml
 <plugin>
-    <groupId>io.vidocq.mpserver</groupId>
-    <artifactId>vidocq-mps-maven-plugin</artifactId>
+    <groupId>io.vidocq.runtime</groupId>
+    <artifactId>vidocq-runtime-maven-plugin</artifactId>
     <executions>
         <execution>
             <id>jlink</id>
@@ -333,8 +333,8 @@ Les ressources, providers, modèles de données doivent être dans un package
 module com.example.myapp {
     requires jakarta.ws.rs;
     requires jakarta.json.bind;
-    requires io.vidocq.mpserver.core;
-    requires io.vidocq.mpserver.ext.rest.cassini;
+    requires io.vidocq.runtime.core;
+    requires io.vidocq.runtime.ext.rest.cassini;
 
     opens com.example.myapp;       // JAX-RS + JSON-B reflection
 }

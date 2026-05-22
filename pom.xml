@@ -5,19 +5,19 @@
          root="true">
     <modelVersion>4.1.0</modelVersion>
 
-    <groupId>io.vidocq.mpserver</groupId>
-    <artifactId>vidocq-mps-parent</artifactId>
+    <groupId>io.vidocq.runtime</groupId>
+    <artifactId>vidocq-runtime-parent</artifactId>
     <version>0.1.0-SNAPSHOT</version>
     <packaging>pom</packaging>
 
-    <name>Vidocq MicroProfile Server</name>
-    <description>MicroProfile application server built on Vauban CDI 4.1</description>
-    <url>https://forge.vidocq.dev/vidocq/vidocq-mps</url>
+    <name>Vidocq Runtime</name>
+    <description>MicroProfile runtime built on Vauban CDI 4.1</description>
+    <url>https://forge.vidocq.dev/vidocq/vidocq</url>
 
     <scm>
-        <connection>scm:git:https://forge.vidocq.dev/vidocq/vidocq-mps.git</connection>
-        <developerConnection>scm:git:ssh://git@forge.vidocq.dev:55122/vidocq/vidocq-mps.git</developerConnection>
-        <url>https://forge.vidocq.dev/vidocq/vidocq-mps</url>
+        <connection>scm:git:https://forge.vidocq.dev/vidocq/vidocq.git</connection>
+        <developerConnection>scm:git:ssh://git@forge.vidocq.dev:55122/vidocq/vidocq.git</developerConnection>
+        <url>https://forge.vidocq.dev/vidocq/vidocq</url>
     </scm>
 
     <developers>
@@ -188,7 +188,7 @@
                 <version>${ravel.version}</version>
             </dependency>
 
-            <!-- Cassini standalone (extrait de vidocq-mps en avril 2026) -->
+            <!-- Cassini standalone (extrait de vidocq en avril 2026) -->
             <dependency>
                 <groupId>io.vidocq.cassini</groupId>
                 <artifactId>cassini-api</artifactId>
@@ -251,43 +251,43 @@
 
             <!-- Vidocq modules -->
             <dependency>
-                <groupId>io.vidocq.mpserver</groupId>
-                <artifactId>vidocq-mps-spi</artifactId>
+                <groupId>io.vidocq.runtime</groupId>
+                <artifactId>vidocq-runtime-spi</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>io.vidocq.mpserver</groupId>
-                <artifactId>vidocq-mps-chappe-extension</artifactId>
+                <groupId>io.vidocq.runtime</groupId>
+                <artifactId>vidocq-runtime-chappe-extension</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>io.vidocq.mpserver</groupId>
-                <artifactId>vidocq-mps-core</artifactId>
+                <groupId>io.vidocq.runtime</groupId>
+                <artifactId>vidocq-runtime-core</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>io.vidocq.mpserver</groupId>
-                <artifactId>vidocq-mps-rest-cassini-extension</artifactId>
+                <groupId>io.vidocq.runtime</groupId>
+                <artifactId>vidocq-runtime-cassini-rest-extension</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>io.vidocq.mpserver</groupId>
-                <artifactId>vidocq-mps-knock-extension</artifactId>
+                <groupId>io.vidocq.runtime</groupId>
+                <artifactId>vidocq-runtime-knock-extension</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>io.vidocq.mpserver</groupId>
-                <artifactId>vidocq-mps-cyrano-extension</artifactId>
+                <groupId>io.vidocq.runtime</groupId>
+                <artifactId>vidocq-runtime-cyrano-extension</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>io.vidocq.mpserver</groupId>
-                <artifactId>vidocq-mps-humboldt-extension</artifactId>
+                <groupId>io.vidocq.runtime</groupId>
+                <artifactId>vidocq-runtime-humboldt-extension</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>io.vidocq.mpserver</groupId>
-                <artifactId>vidocq-mps-arquillian</artifactId>
+                <groupId>io.vidocq.runtime</groupId>
+                <artifactId>vidocq-runtime-arquillian</artifactId>
                 <version>${project.version}</version>
             </dependency>
 

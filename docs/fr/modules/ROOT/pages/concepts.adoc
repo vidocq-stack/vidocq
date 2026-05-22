@@ -1,12 +1,12 @@
 = Concepts
-:description: Vocabulaire Vidocq-MPS — extension, build step, recorder, lifecycle phase.
+:description: Vocabulaire Vidocq Runtime — extension, build step, recorder, lifecycle phase.
 
 [.lead]
-Vidocq-MPS adopte le vocabulaire d'extensions popularisé par Quarkus, mais l'implémente sur un socle 100 % JDK (CDI Lite via xref:vauban::index.adoc[Vauban] + Class-File API standard, JEP 484). Cette page définit les termes utilisés dans le reste de la documentation.
+Vidocq Runtime adopte le vocabulaire d'extensions popularisé par Quarkus, mais l'implémente sur un socle 100 % JDK (CDI Lite via xref:vauban::index.adoc[Vauban] + Class-File API standard, JEP 484). Cette page définit les termes utilisés dans le reste de la documentation.
 
 == Extension
 
-Une **extension** est un module Maven qui contribue au runtime via la SPI `vidocq-mps-spi`. Elle se présente comme :
+Une **extension** est un module Maven qui contribue au runtime via la SPI `vidocq-runtime-spi`. Elle se présente comme :
 
 * un fragment de bytecode et de configuration injecté dans la séquence de boot ;
 * une ou plusieurs classes annotées `@BuildStep` qui s'exécutent à la compilation ;
@@ -20,7 +20,7 @@ Une **build step** est une méthode annotée `@BuildStep` dans une extension. El
 
 * consomme zéro, un ou plusieurs `BuildItem` en paramètres ;
 * produit un ou plusieurs `BuildItem` en valeur de retour ou via `BuildProducer<T>` ;
-* s'exécute à la compilation, dans un graphe topologique calculé par `vidocq-mps-core`.
+* s'exécute à la compilation, dans un graphe topologique calculé par `vidocq-runtime-core`.
 
 Le moteur d'orchestration garantit qu'une build step ne tourne qu'après la production de ses entrées et avant la consommation de ses sorties. Les paires producteur/consommateur définissent les arêtes du graphe.
 
@@ -34,7 +34,7 @@ Un **BuildItem** est l'unité d'échange entre build steps. Trois familles :
 
 [NOTE]
 ====
-// TODO@user: la liste exhaustive des `BuildItem` standard est en cours de stabilisation. Voir `vidocq-mps-spi/src/main/java/io/vidocq/mpserver/spi/`.
+// TODO@user: la liste exhaustive des `BuildItem` standard est en cours de stabilisation. Voir `vidocq-runtime-spi/src/main/java/io/vidocq/runtime/spi/`.
 ====
 
 == Recorder
@@ -48,7 +48,7 @@ Les recorders distinguent deux phases :
 
 == Lifecycle phase
 
-La séquence de boot Vidocq-MPS comporte cinq **phases** ordonnancées :
+La séquence de boot Vidocq Runtime comporte cinq **phases** ordonnancées :
 
 1. **Config** — résolution des sources MicroProfile Config, surcharge externe.
 2. **Extensions init** — chaque extension reçoit `ExtensionContext` et publie ses `BuildItem` runtime.
@@ -60,7 +60,7 @@ La séquence de boot Vidocq-MPS comporte cinq **phases** ordonnancées :
 
 [cols="1,1,2"]
 |===
-| Aspect | Quarkus | Vidocq-MPS
+| Aspect | Quarkus | Vidocq Runtime
 
 | CDI runtime
 | ArC (custom)
@@ -93,16 +93,16 @@ La séquence de boot Vidocq-MPS comporte cinq **phases** ordonnancées :
 
 == Composition des six briques
 
-Vidocq-MPS n'invente aucun runtime ; il **compose** les six briques fondatrices. Une extension `vidocq-mps-rest-cassini-extension` enregistre par exemple un build step qui :
+Vidocq Runtime n'invente aucun runtime ; il **compose** les six briques fondatrices. Une extension `vidocq-runtime-cassini-rest-extension` enregistre par exemple un build step qui :
 
-* consomme `CdiBeanIndexBuildItem` produit par `vidocq-mps-vauban-extension` ;
+* consomme `CdiBeanIndexBuildItem` produit par `vidocq-runtime-vauban-extension` ;
 * déclenche la génération du routage statique de xref:cassini::index.adoc[Cassini] ;
-* produit `HttpRouteBuildItem` consommé par `vidocq-mps-chappe-extension`.
+* produit `HttpRouteBuildItem` consommé par `vidocq-runtime-chappe-extension`.
 
 C'est cette grammaire de `BuildItem` qui rend l'écosystème homogène alors que chaque brique reste autonome dans son propre repo.
 
 == Pour aller plus loin
 
 * xref:internals.adoc[Fonctionnement interne] — la séquence de boot pas-à-pas
-* xref:modules/vidocq-mps-spi.adoc[SPI] — comment écrire une extension
+* xref:modules/vidocq-runtime-spi.adoc[SPI] — comment écrire une extension
 * xref:reference.adoc[Référence] — annotations et BuildItem standard

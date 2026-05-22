@@ -1,0 +1,4 @@
+io.vidocq.runtime.core.config.SystemPropertiesConfigSource
+io.vidocq.runtime.core.config.EnvConfigSource
+io.vidocq.runtime.core.config.ExternalFileConfigSource
+io.vidocq.runtime.core.config.PropertiesFileConfigSource

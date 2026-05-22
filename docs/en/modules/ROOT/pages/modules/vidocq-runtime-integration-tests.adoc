@@ -1,0 +1,57 @@
+= vidocq-runtime-integration-tests
+:description: Multi-extension integration tests.
+
+[.lead]
+`vidocq-runtime-integration-tests` is the module that exercises Vidocq Runtime in multi-extension scenarios. It verifies that the Chappe + Vauban + Champollion + Foy + Cassini + Mansart composition behaves correctly end-to-end, independently of the official TCKs.
+
+== Coordinates
+
+[cols="1,3"]
+|===
+| Artefact | `io.vidocq.runtime:vidocq-runtime-integration-tests:0.1.0-SNAPSHOT`
+| Source | `vidocq-runtime-integration-tests/src/test/java/`
+|===
+
+== Scope
+
+* Full runtime boot, validation of phase ordering.
+* REST + CDI + JDBC interaction in end-to-end cases (create, read, transaction, rollback).
+* Shutdown behaviour — virtual thread drain, pool close, HTTP listener release.
+* Regressions tracked by bugs documented in `vidocq/BUG.md`, `vidocq/CHAPPE-BUGS.md`, `vidocq/VAUBAN-BUGS.md`.
+
+[NOTE]
+====
+// TODO@user: enumerate the test classes precisely once the module is stabilised. Source to index: `vidocq-runtime-integration-tests/src/test/java/`.
+====
+
+== Run
+
+[source,bash]
+----
+cd vidocq-runtime-integration-tests
+./mvnw -ntp test
+----
+
+For a targeted test:
+
+[source,bash]
+----
+./mvnw -ntp test -Dtest=BootSequenceIT
+----
+
+== Difference from TCKs
+
+* **TCKs** (Cassini, Foy, Champollion, Vauban) verify conformance to Jakarta specifications — run via dedicated `run-official-tck-*.sh` scripts, outside the parent reactor.
+* **Integration tests** verify the orchestration internal to Vidocq Runtime — boot, lifecycle, inter-extension interaction, AOT readiness.
+
+The two are complementary and both required to release a version.
+
+== TDD convention
+
+Per the workspace philosophy, every new feature of the Vidocq Runtime engine arrives via a red test in this module before any production code. See the workspace root `CLAUDE.md` for the full rule.
+
+== Next steps
+
+* xref:tck.adoc[TCK status] — spec-conformance coverage
+* xref:internals.adoc[Internals] — what is tested at boot
+* xref:modules/vidocq-runtime-examples.adoc[Examples] — concrete applications used as oracles
