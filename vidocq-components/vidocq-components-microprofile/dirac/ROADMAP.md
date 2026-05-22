@@ -310,6 +310,58 @@ cohérents sur `dirac-api`, `dirac-core`, `dirac-cdi-vauban`, TCK non-reactor co
 
 ---
 
+### M9 — Compatibilité JPMS complète + jlink
+
+**Scope :** produire une image runtime custom via `jlink` pour un sous-ensemble Dirac
+strictement modulaire (aucun module automatique dans le graphe final).
+
+| Tâche | Notes | État |
+|---|---|---|
+| Définir le périmètre `jlink` | Cible minimale : `dirac-api` + `dirac-core`; cible étendue : + `dirac-cdi-vauban` | ☐ |
+| Lever le blocker MP Metrics | `microprofile-metrics-api:5.1.1` est un module automatique (`microprofile.metrics.api`) et bloque `jlink` | ☐ |
+| Option A — module bridge interne | Introduire un bridge explicitement modulaire qui évite l'automatic module dans l'image | ☐ |
+| Option A (prototype local M9.2) | POC validé: modularisation locale de `microprofile-metrics-api` via `jdeps`/`javac`/`jar` + image `jlink` générée (`run-jlink-smoke-m92.sh`) | ☑ |
+| Option B — artefact API modulaire | Basculer vers un artefact MP Metrics équivalent avec `module-info.class` explicite (si compatible TCK) | ☐ |
+| Inventaire module-path | Documenter les modules explicites/automatiques (Dirac + Jakarta + MP) | ☑ |
+| `module-info` manquants | Planifier/ajouter `module-info.java` pour `dirac-rest`, `dirac-bench`, `dirac-examples` | ☐ |
+| Profil Maven `jlink-smoke` | Construire `target/dirac-image` pour la cible minimale | ☐ |
+| Script `run-jlink-smoke.sh` | Smoke check M9 reproductible (JPMS OK + detection blocker `jlink`) | ☑ |
+| Smoke test image | Vérifier démarrage de l'image et chargement des modules Dirac | ☐ |
+| CI gate `jlink` | Ajouter un job bloquant (`jlink-smoke`) | ☐ |
+| Documentation exploitation | Ajouter `JLINK.md` et lier depuis `README.md` | ☑ |
+
+**Décisions M9 (proposées) :**
+- Prioriser une image `jlink` pour `dirac-api`/`dirac-core` avant la variante CDI.
+- Refuser tout module automatique dans le graphe final `jlink`.
+- Conserver `dirac-rest` optionnel et hors cible minimale.
+
+**Validation technique (cible M9) :**
+
+```bash
+# Vérifier le statut des modules (explicite vs automatique)
+jar --describe-module --file dirac-api/target/dirac-api-0.1.0-SNAPSHOT.jar
+jar --describe-module --file dirac-core/target/dirac-core-0.1.0-SNAPSHOT.jar
+
+# Vérifier la résolution JPMS
+java --module-path "<module-path>" --validate-modules
+
+# Construire l'image runtime (cible minimale)
+jlink --module-path "$JAVA_HOME/jmods:<module-path>" \
+  --add-modules io.vidocq.dirac.api,io.vidocq.dirac.core \
+  --output target/dirac-image
+
+# Smoke run
+target/dirac-image/bin/java --list-modules
+```
+
+**Critères d'acceptation M9 :**
+- `jlink` termine sans erreur sur la cible minimale.
+- L'image démarre et exécute un smoke test simple.
+- Le graphe de modules final ne contient aucun module automatique.
+- Le job CI `jlink-smoke` est vert.
+
+---
+
 ## Risques connus
 
 | Risque | Impact | Mitigation |

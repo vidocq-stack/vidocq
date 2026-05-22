@@ -39,6 +39,16 @@ sdk env          # Java 25-tem + Maven 4.0.0-rc-5
 Le runner TCK installe d'abord les artefacts Dirac requis dans le M2 local via
 `run-official-tck-mp-metrics-5.1.sh`.
 
+## JPMS / jlink (M9)
+
+```bash
+./run-jlink-smoke.sh
+./run-jlink-smoke-m92.sh
+```
+
+Le detail du smoke check et du blocker `jlink` actuel est documente dans
+[`JLINK.md`](JLINK.md).
+
 ## Modules
 
 | Module | Description |
