@@ -28,6 +28,7 @@ class TimedInterceptorTest {
         var interceptor = new TimedInterceptor(registries);
         var target = new SampleService();
         var method = SampleService.class.getDeclaredMethod("work");
+        interceptor.preRegisterTimers(SampleService.class);
 
         var result = interceptor.aroundInvoke(new FakeInvocationContext(target, method, new Object[0], () -> {
             Thread.sleep(2);
@@ -47,6 +48,7 @@ class TimedInterceptorTest {
         var interceptor = new TimedInterceptor(registries);
         var target = new AbsoluteService();
         var method = AbsoluteService.class.getDeclaredMethod("ping");
+        interceptor.preRegisterTimers(AbsoluteService.class);
 
         interceptor.aroundInvoke(new FakeInvocationContext(target, method, new Object[0], () -> null));
 
@@ -59,6 +61,7 @@ class TimedInterceptorTest {
         var interceptor = new TimedInterceptor(registries);
         var target = new VendorScopedService();
         var method = VendorScopedService.class.getDeclaredMethod("emit");
+        interceptor.preRegisterTimers(VendorScopedService.class);
 
         interceptor.aroundInvoke(new FakeInvocationContext(target, method, new Object[0], () -> null));
 

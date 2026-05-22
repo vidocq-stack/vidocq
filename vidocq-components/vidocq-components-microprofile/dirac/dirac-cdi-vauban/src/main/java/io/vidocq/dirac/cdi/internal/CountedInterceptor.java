@@ -69,7 +69,7 @@ public class CountedInterceptor {
         preRegisterCounters(actualClass);
     }
 
-    private void preRegisterCounters(Class<?> beanClass) {
+    void preRegisterCounters(Class<?> beanClass) {
         var classCounted = beanClass.getAnnotation(Counted.class);
         // Scan all methods including inherited ones (excluding Object methods)
         for (var method : getAllDeclaredMethods(beanClass)) {

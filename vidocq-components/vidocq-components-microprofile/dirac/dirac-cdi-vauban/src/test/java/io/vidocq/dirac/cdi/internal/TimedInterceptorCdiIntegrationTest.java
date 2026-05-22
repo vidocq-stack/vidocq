@@ -6,6 +6,7 @@ import jakarta.enterprise.inject.se.SeContainerInitializer;
 import org.eclipse.microprofile.metrics.MetricID;
 import org.eclipse.microprofile.metrics.Tag;
 import org.eclipse.microprofile.metrics.annotation.Timed;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -17,11 +18,19 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class TimedInterceptorCdiIntegrationTest {
 
+    @AfterEach
+    void cleanup() {
+        DiracExtension.clearDiscoveredTimers();
+    }
+
     @Test
     void timedInterceptorRecordsInvocationInContainer() {
+        DiracExtension.scanTimedMethods(TimedService.class);
+
         try (SeContainer container = SeContainerInitializer.newInstance()
                 .disableDiscovery()
-                .addBeanClasses(TimedInterceptor.class, MetricRegistryProducerBean.class, TimedService.class)
+                .addBeanClasses(TimedInterceptor.class, MetricRegistryProducerBean.class,
+                        GaugeRegistrationBean.class, TimedService.class)
                 .initialize()) {
 
             var service = container.select(TimedService.class).get();

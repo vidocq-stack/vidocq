@@ -27,6 +27,7 @@ class CountedInterceptorTest {
         var interceptor = new CountedInterceptor(registries);
         var target = new SampleService();
         var method = SampleService.class.getDeclaredMethod("work");
+        interceptor.preRegisterCounters(SampleService.class);
 
         var result = interceptor.aroundInvoke(new FakeInvocationContext(target, method, new Object[0], () -> "ok"));
 
@@ -41,6 +42,7 @@ class CountedInterceptorTest {
         var interceptor = new CountedInterceptor(registries);
         var target = new AbsoluteService();
         var method = AbsoluteService.class.getDeclaredMethod("ping");
+        interceptor.preRegisterCounters(AbsoluteService.class);
 
         interceptor.aroundInvoke(new FakeInvocationContext(target, method, new Object[0], () -> null));
 
@@ -53,6 +55,7 @@ class CountedInterceptorTest {
         var interceptor = new CountedInterceptor(registries);
         var target = new VendorScopedService();
         var method = VendorScopedService.class.getDeclaredMethod("emit");
+        interceptor.preRegisterCounters(VendorScopedService.class);
 
         interceptor.aroundInvoke(new FakeInvocationContext(target, method, new Object[0], () -> null));
 

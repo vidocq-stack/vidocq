@@ -60,18 +60,21 @@ public class MetricRegistryProducerBean {
     }
 
     // Deprecated @RegistryType support (MP Metrics < 5.0 compat)
+    @SuppressWarnings("deprecation")
     @Produces
     @RegistryType
     public MetricRegistry produceApplicationByType() {
         return registryMap.get(MetricRegistry.APPLICATION_SCOPE);
     }
 
+    @SuppressWarnings("deprecation")
     @Produces
     @RegistryType(type = MetricRegistry.Type.BASE)
     public MetricRegistry produceBaseByType() {
         return registryMap.get(MetricRegistry.BASE_SCOPE);
     }
 
+    @SuppressWarnings("deprecation")
     @Produces
     @RegistryType(type = MetricRegistry.Type.VENDOR)
     public MetricRegistry produceVendorByType() {

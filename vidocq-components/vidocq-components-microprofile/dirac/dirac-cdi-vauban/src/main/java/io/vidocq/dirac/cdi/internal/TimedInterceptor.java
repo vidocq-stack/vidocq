@@ -73,7 +73,7 @@ public class TimedInterceptor {
         preRegisterTimers(actualClass);
     }
 
-    private void preRegisterTimers(Class<?> beanClass) {
+    void preRegisterTimers(Class<?> beanClass) {
         var classTimed = beanClass.getAnnotation(Timed.class);
         // Scan all methods including inherited ones (excluding Object methods)
         for (var method : getAllDeclaredMethods(beanClass)) {
