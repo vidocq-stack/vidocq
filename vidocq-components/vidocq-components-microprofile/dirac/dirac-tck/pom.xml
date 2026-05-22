@@ -1,0 +1,284 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Projet Maven STANDALONE en Model Version 4.0.0, volontairement EN DEHORS
+    du reactor Dirac.
+
+    Pourquoi : ShrinkWrap Maven Resolver 3.3 (dépendance transitive Arquillian) utilise
+    maven-resolver 1.9 / maven-model 3.9 qui ne savent pas parser les POMs Model 4.1.0
+    du reactor. Son ClasspathWorkspaceReader crasherait sur tout POM Dirac
+    (version implicite via parent).
+
+    Dépendances internes (dirac-api/core/cdi-vauban) sont gelées sur la version
+    0.1.0-SNAPSHOT installée dans le repository Maven local.
+
+    Le lancement passe par le script :
+        ./run-official-tck-mp-metrics-5.1.sh              (smoke test)
+        ./run-official-tck-mp-metrics-5.1.sh all          (suite complète TestNG)
+        ./run-official-tck-mp-metrics-5.1.sh -Dtest=Foo   (classe ciblée)
+
+    TCK MicroProfile Metrics 5.1.1 :
+        org.eclipse.microprofile.metrics:microprofile-metrics-tck:5.1.1
+    Vérification de disponibilité sur Maven Central :
+        mvn dependency:get -Dartifact=org.eclipse.microprofile.metrics:microprofile-metrics-tck:5.1.1
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>io.vidocq.dirac</groupId>
+    <artifactId>dirac-tck</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+    <packaging>jar</packaging>
+
+    <name>Dirac :: TCK Runner</name>
+    <description>Harness de conformance MicroProfile Metrics 5.1.1 — TCK officiel TestNG/Arquillian</description>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.release>25</maven.compiler.release>
+        <dirac.version>0.1.0-SNAPSHOT</dirac.version>
+        <microprofile.metrics.version>5.1.1</microprofile.metrics.version>
+        <vauban.version>0.1.0-SNAPSHOT</vauban.version>
+    </properties>
+
+    <repositories>
+        <repository>
+            <id>vidocq-snapshots</id>
+            <url>https://repo.vidocq.dev/snapshots</url>
+            <releases><enabled>false</enabled></releases>
+            <snapshots><enabled>true</enabled></snapshots>
+        </repository>
+    </repositories>
+
+    <dependencyManagement>
+        <dependencies>
+            <!--
+                Aligner arquillian sur 1.10.1.Final pour éviter MalformedParameterizedTypeException
+                sous JDK 25 (même contournement que heisenberg-tck / cassini-tck).
+            -->
+            <dependency>
+                <groupId>org.jboss.arquillian.container</groupId>
+                <artifactId>arquillian-container-spi</artifactId>
+                <version>1.10.1.Final</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jboss.arquillian.container</groupId>
+                <artifactId>arquillian-container-impl-base</artifactId>
+                <version>1.10.1.Final</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jboss.arquillian.core</groupId>
+                <artifactId>arquillian-core-impl-base</artifactId>
+                <version>1.10.1.Final</version>
+            </dependency>
+            <!-- Force CDI API 4.1.0 finale -->
+            <dependency>
+                <groupId>jakarta.enterprise</groupId>
+                <artifactId>jakarta.enterprise.cdi-api</artifactId>
+                <version>4.1.0</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <dependencies>
+        <!-- Dirac (installé en local via le script TCK) -->
+        <dependency>
+            <groupId>io.vidocq.dirac</groupId>
+            <artifactId>dirac-api</artifactId>
+            <version>${dirac.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.dirac</groupId>
+            <artifactId>dirac-core</artifactId>
+            <version>${dirac.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.dirac</groupId>
+            <artifactId>dirac-cdi-vauban</artifactId>
+            <version>${dirac.version}</version>
+        </dependency>
+
+        <!-- MP Metrics API -->
+        <dependency>
+            <groupId>org.eclipse.microprofile.metrics</groupId>
+            <artifactId>microprofile-metrics-api</artifactId>
+            <version>${microprofile.metrics.version}</version>
+        </dependency>
+
+        <!-- Vauban CDI container -->
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-core</artifactId>
+            <version>${vauban.version}</version>
+        </dependency>
+
+        <!-- JUnit Jupiter pour smoke test -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>6.0.3</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>4.0.0-beta-4</version>
+                    <configuration>
+                        <release>25</release>
+                    </configuration>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <version>3.5.5</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-resources-plugin</artifactId>
+                    <version>3.3.1</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
+
+    <profiles>
+        <!--
+            Profil par défaut : smoke test JUnit — vérifie que les modules Dirac
+            se chargent correctement et que la spec MP Metrics 5.1.1 est sur le classpath.
+        -->
+        <profile>
+            <id>smoke</id>
+            <activation>
+                <activeByDefault>true</activeByDefault>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-compiler-plugin</artifactId>
+                        <configuration>
+                            <testExcludes>
+                                <exclude>io/vidocq/dirac/tck/arquillian/**</exclude>
+                            </testExcludes>
+                        </configuration>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <useModulePath>false</useModulePath>
+                            <excludes>
+                                <exclude>io/vidocq/dirac/tck/arquillian/**</exclude>
+                            </excludes>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <!--
+            Profil TCK officiel : Arquillian JUnit 4 + container Dirac custom
+            (DiracDeployableContainer démarrant Vauban embedded).
+            Le TCK MP Metrics 5.1.1 utilise @RunWith(Arquillian.class) et JUnit 4.
+            Cible : 100 % PASS.
+        -->
+        <profile>
+            <id>tck-official</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <useModulePath>false</useModulePath>
+                            <dependenciesToScan>
+                                <dependency>org.eclipse.microprofile.metrics:microprofile-metrics-api-tck</dependency>
+                            </dependenciesToScan>
+                            <includes>
+                                <include>**/*Test.class</include>
+                                <include>**/*Tests.class</include>
+                                <include>**/*IT.class</include>
+                            </includes>
+                            <excludes>
+                                <exclude>**/DiracTckSmokeTest.class</exclude>
+                            </excludes>
+                            <trimStackTrace>false</trimStackTrace>
+                            <redirectTestOutputToFile>false</redirectTestOutputToFile>
+                            <useFile>false</useFile>
+                            <forkedProcessExitTimeoutInSeconds>120</forkedProcessExitTimeoutInSeconds>
+                            <systemPropertyVariables>
+                                <arquillian.launch>dirac</arquillian.launch>
+                            </systemPropertyVariables>
+                        </configuration>
+                        <dependencies>
+                            <dependency>
+                                <groupId>org.apache.maven.surefire</groupId>
+                                <artifactId>surefire-junit4</artifactId>
+                                <version>3.5.5</version>
+                            </dependency>
+                        </dependencies>
+                    </plugin>
+                </plugins>
+            </build>
+            <dependencies>
+                <!-- TCK MicroProfile Metrics 5.1.1 — module CDI/annotations -->
+                <dependency>
+                    <groupId>org.eclipse.microprofile.metrics</groupId>
+                    <artifactId>microprofile-metrics-api-tck</artifactId>
+                    <version>${microprofile.metrics.version}</version>
+                    <scope>test</scope>
+                </dependency>
+
+                <!-- Arquillian JUnit 4 runner (le TCK utilise @RunWith(Arquillian.class)) -->
+                <dependency>
+                    <groupId>org.jboss.arquillian.junit</groupId>
+                    <artifactId>arquillian-junit-container</artifactId>
+                    <version>1.10.1.Final</version>
+                    <scope>test</scope>
+                </dependency>
+
+                <!-- JUnit 4 — annotations @Test, @RunWith utilisées par le TCK -->
+                <dependency>
+                    <groupId>junit</groupId>
+                    <artifactId>junit</artifactId>
+                    <version>4.13.2</version>
+                    <scope>test</scope>
+                </dependency>
+
+                <!-- Hamcrest — assertions utilisées dans les tests TCK -->
+                <dependency>
+                    <groupId>org.hamcrest</groupId>
+                    <artifactId>hamcrest-all</artifactId>
+                    <version>1.3</version>
+                    <scope>test</scope>
+                </dependency>
+
+                <!-- Jakarta CDI API 4.1 -->
+                <dependency>
+                    <groupId>jakarta.enterprise</groupId>
+                    <artifactId>jakarta.enterprise.cdi-api</artifactId>
+                    <version>4.1.0</version>
+                    <scope>test</scope>
+                </dependency>
+                <dependency>
+                    <groupId>jakarta.interceptor</groupId>
+                    <artifactId>jakarta.interceptor-api</artifactId>
+                    <version>2.2.0</version>
+                    <scope>test</scope>
+                </dependency>
+                <dependency>
+                    <groupId>jakarta.annotation</groupId>
+                    <artifactId>jakarta.annotation-api</artifactId>
+                    <version>3.0.0</version>
+                    <scope>test</scope>
+                </dependency>
+            </dependencies>
+        </profile>
+    </profiles>
+</project>

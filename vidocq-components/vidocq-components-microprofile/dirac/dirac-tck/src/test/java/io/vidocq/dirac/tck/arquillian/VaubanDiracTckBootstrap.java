@@ -1,0 +1,147 @@
+package io.vidocq.dirac.tck.arquillian;
+
+import io.vidocq.dirac.cdi.internal.CountedInterceptor;
+import io.vidocq.dirac.cdi.internal.DiracExtension;
+import io.vidocq.dirac.cdi.internal.GaugeRegistrationBean;
+import io.vidocq.dirac.cdi.internal.MetricRegistryProducerBean;
+import io.vidocq.dirac.cdi.internal.TimedInterceptor;
+import io.vidocq.vauban.core.container.VaubanContainer;
+import org.jboss.shrinkwrap.api.Archive;
+import org.jboss.shrinkwrap.api.asset.ArchiveAsset;
+import org.jboss.shrinkwrap.api.asset.Asset;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+
+/**
+ * Gère le cycle de vie du container Vauban CDI dans le runner TCK Arquillian Dirac.
+ *
+ * <p>Chaque déploiement Arquillian (une ShrinkWrap archive par classe de test TCK) :</p>
+ * <ol>
+ *   <li>arrête tout container existant ;</li>
+ *   <li>collecte les classes applicatives de l'archive ;</li>
+ *   <li>démarre un nouveau {@link VaubanContainer} avec les beans Dirac + les classes de l'archive.</li>
+ * </ol>
+ */
+final class VaubanDiracTckBootstrap {
+    private static final Map<String, String> PREVIOUS_CONFIG_VALUES = new HashMap<>();
+
+    private VaubanDiracTckBootstrap() {}
+
+    static void deploy(Archive<?> archive) {
+        VaubanContainer existing = VaubanContainer.current();
+        if (existing != null && existing.isRunning()) {
+            try { existing.close(); } catch (Exception ignored) {}
+        }
+
+        applyArchiveConfig(archive);
+
+        List<Class<?>> beanClasses = extractBeanClasses(archive);
+
+        var builder = VaubanContainer.builder()
+                .addBeanClass(DiracExtension.class)
+                .addBeanClass(CountedInterceptor.class)
+                .addBeanClass(TimedInterceptor.class)
+                .addBeanClass(MetricRegistryProducerBean.class)
+                .addBeanClass(GaugeRegistrationBean.class);
+        for (Class<?> c : beanClasses) {
+            builder.addBeanClass(c);
+        }
+        builder.build();
+
+        VaubanContainer container = VaubanContainer.current();
+        if (container != null) {
+            container.requestContext().activate();
+        }
+
+        System.err.println("[DiracTCK] Vauban CDI container started for archive '"
+                + archive.getName() + "' — " + beanClasses.size() + " class(es) registered");
+    }
+
+    static void undeploy() {
+        VaubanContainer existing = VaubanContainer.current();
+        if (existing != null && existing.isRunning()) {
+            try { existing.close(); } catch (Exception ignored) {}
+        }
+        restoreArchiveConfig();
+        System.err.println("[DiracTCK] Vauban CDI container stopped");
+    }
+
+    private static synchronized void applyArchiveConfig(Archive<?> archive) {
+        restoreArchiveConfig();
+        collectConfigPropertiesFromArchive(archive, false);
+    }
+
+    private static void collectConfigPropertiesFromArchive(Archive<?> archive, boolean insideLib) {
+        for (var entry : archive.getContent().entrySet()) {
+            String path = entry.getKey().get();
+            Asset asset = entry.getValue().getAsset();
+            if (asset instanceof ArchiveAsset archiveAsset
+                    && (path.startsWith("/WEB-INF/lib/") || insideLib)) {
+                collectConfigPropertiesFromArchive(archiveAsset.getArchive(), true);
+                continue;
+            }
+            if (!path.endsWith("microprofile-config.properties")) {
+                continue;
+            }
+            var properties = new Properties();
+            try (var stream = asset.openStream()) {
+                properties.load(stream);
+            } catch (Exception ignored) {
+                continue;
+            }
+            for (var key : properties.stringPropertyNames()) {
+                PREVIOUS_CONFIG_VALUES.putIfAbsent(key, System.getProperty(key));
+                System.setProperty(key, properties.getProperty(key));
+            }
+        }
+    }
+
+    private static synchronized void restoreArchiveConfig() {
+        for (var entry : PREVIOUS_CONFIG_VALUES.entrySet()) {
+            if (entry.getValue() == null) {
+                System.clearProperty(entry.getKey());
+            } else {
+                System.setProperty(entry.getKey(), entry.getValue());
+            }
+        }
+        PREVIOUS_CONFIG_VALUES.clear();
+    }
+
+    private static List<Class<?>> extractBeanClasses(Archive<?> archive) {
+        var classes = new ArrayList<Class<?>>();
+        ClassLoader cl = Thread.currentThread().getContextClassLoader();
+        collectClassesFromArchive(archive, cl, classes, false);
+        return classes;
+    }
+
+    private static void collectClassesFromArchive(Archive<?> archive, ClassLoader cl,
+                                                   List<Class<?>> classes, boolean insideLib) {
+        for (var entry : archive.getContent().entrySet()) {
+            String path = entry.getKey().get();
+            Asset asset = entry.getValue().getAsset();
+            if (asset instanceof ArchiveAsset archiveAsset
+                    && (path.startsWith("/WEB-INF/lib/") || insideLib)) {
+                collectClassesFromArchive(archiveAsset.getArchive(), cl, classes, true);
+                continue;
+            }
+            if (!path.endsWith(".class")) continue;
+            if (path.contains("module-info")) continue;
+            String stripped = path.startsWith("/") ? path.substring(1) : path;
+            if (stripped.startsWith("WEB-INF/classes/")) {
+                stripped = stripped.substring("WEB-INF/classes/".length());
+            }
+            String className = stripped.replace('/', '.').replace(".class", "");
+            if (className.isBlank()) continue;
+            try {
+                Class<?> clazz = Class.forName(className, false, cl);
+                classes.add(clazz);
+            } catch (ClassNotFoundException | NoClassDefFoundError ignored) {
+                // skip
+            }
+        }
+    }
+}
