@@ -1,12 +1,12 @@
 = Concepts
-:description: Vidocq-MPS vocabulary — extension, build step, recorder, lifecycle phase.
+:description: Vidocq Runtime vocabulary — extension, build step, recorder, lifecycle phase.
 
 [.lead]
-Vidocq-MPS adopts the extension vocabulary popularised by Quarkus, but implements it on a 100 % JDK foundation (CDI Lite via xref:vauban::index.adoc[Vauban] + standard Class-File API, JEP 484). This page defines the terms used throughout the documentation.
+Vidocq Runtime adopts the extension vocabulary popularised by Quarkus, but implements it on a 100 % JDK foundation (CDI Lite via xref:vauban::index.adoc[Vauban] + standard Class-File API, JEP 484). This page defines the terms used throughout the documentation.
 
 == Extension
 
-An **extension** is a Maven module that contributes to the runtime via the `vidocq-mps-spi` SPI. It manifests as:
+An **extension** is a Maven module that contributes to the runtime via the `vidocq-runtime-spi` SPI. It manifests as:
 
 * a fragment of bytecode and configuration injected into the boot sequence;
 * one or more classes annotated `@BuildStep` running at compile time;
@@ -20,7 +20,7 @@ A **build step** is a method annotated `@BuildStep` inside an extension. It:
 
 * consumes zero, one or more `BuildItem` parameters;
 * produces one or more `BuildItem` via return value or `BuildProducer<T>`;
-* runs at compile time, in a topological graph computed by `vidocq-mps-core`.
+* runs at compile time, in a topological graph computed by `vidocq-runtime-core`.
 
 The orchestration engine guarantees that a build step runs only after its inputs are produced and before its outputs are consumed. Producer/consumer pairs define the graph edges.
 
@@ -34,7 +34,7 @@ A **BuildItem** is the exchange unit between build steps. Three families:
 
 [NOTE]
 ====
-// TODO@user: the exhaustive list of standard `BuildItem` is being stabilised. See `vidocq-mps-spi/src/main/java/io/vidocq/mpserver/spi/`.
+// TODO@user: the exhaustive list of standard `BuildItem` is being stabilised. See `vidocq-runtime-spi/src/main/java/io/vidocq/runtime/spi/`.
 ====
 
 == Recorder
@@ -48,7 +48,7 @@ Recorders distinguish two phases:
 
 == Lifecycle phase
 
-The Vidocq-MPS boot sequence comprises five ordered **phases**:
+The Vidocq Runtime boot sequence comprises five ordered **phases**:
 
 1. **Config** — resolution of MicroProfile Config sources, external override.
 2. **Extensions init** — each extension receives `ExtensionContext` and publishes its runtime `BuildItem`.
@@ -60,7 +60,7 @@ The Vidocq-MPS boot sequence comprises five ordered **phases**:
 
 [cols="1,1,2"]
 |===
-| Aspect | Quarkus | Vidocq-MPS
+| Aspect | Quarkus | Vidocq Runtime
 
 | Runtime CDI
 | ArC (custom)
@@ -93,16 +93,16 @@ The Vidocq-MPS boot sequence comprises five ordered **phases**:
 
 == Composition of the six bricks
 
-Vidocq-MPS invents no runtime; it **composes** the six foundational bricks. The `vidocq-mps-rest-cassini-extension` extension, for example, registers a build step that:
+Vidocq Runtime invents no runtime; it **composes** the six foundational bricks. The `vidocq-runtime-cassini-rest-extension` extension, for example, registers a build step that:
 
-* consumes `CdiBeanIndexBuildItem` produced by `vidocq-mps-vauban-extension`;
+* consumes `CdiBeanIndexBuildItem` produced by `vidocq-runtime-vauban-extension`;
 * triggers static routing generation in xref:cassini::index.adoc[Cassini];
-* produces `HttpRouteBuildItem` consumed by `vidocq-mps-chappe-extension`.
+* produces `HttpRouteBuildItem` consumed by `vidocq-runtime-chappe-extension`.
 
 This `BuildItem` grammar makes the ecosystem homogeneous while every brick remains self-contained in its own repo.
 
 == Next steps
 
 * xref:internals.adoc[Internals] — boot sequence step by step
-* xref:modules/vidocq-mps-spi.adoc[SPI] — how to write an extension
+* xref:modules/vidocq-runtime-spi.adoc[SPI] — how to write an extension
 * xref:reference.adoc[Reference] — standard annotations and BuildItem

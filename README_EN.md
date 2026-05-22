@@ -1,15 +1,15 @@
 # Vidocq
 
-Modular Java SE application server built on [Vauban](https://github.com/VidocqMP/vauban) (CDI 4.1).
+Modular Java SE application runtime built on [Vauban](https://github.com/VidocqMP/vauban) (CDI 4.1).
 
 ## Architecture
 
-Vidocq is a lightweight server with a Quarkus-inspired extension mechanism, but simpler:
+Vidocq is a lightweight runtime with a Quarkus-inspired extension mechanism, but simpler:
 
 ```
-vidocq-spi          Extension interfaces (VidocqExtension, VidocqConfiguration)
-vidocq-core         Engine: bootstrap, extension discovery, lifecycle
-vidocq-maven-plugin Maven plugin: bean indexing + distribution ZIP packaging
+vidocq-runtime-spi          Extension interfaces (VidocqExtension, VidocqConfiguration)
+vidocq-runtime-core         Engine: bootstrap, extension discovery, lifecycle
+vidocq-runtime-maven-plugin Maven plugin: bean indexing + distribution ZIP packaging
 ```
 
 ### Extension mechanism
@@ -40,7 +40,7 @@ public class MyExtension implements VidocqExtension {
 }
 ```
 
-Registration via `META-INF/services/io.vidocq.mpserver.spi.VidocqExtension` or `module-info.java`:
+Registration via `META-INF/services/io.vidocq.runtime.spi.VidocqExtension` or `module-info.java`:
 
 ```java
 provides VidocqExtension with MyExtension;
@@ -70,8 +70,8 @@ With the Maven plugin:
 
 ```xml
 <plugin>
-    <groupId>io.vidocq.mpserver</groupId>
-    <artifactId>vidocq-maven-plugin</artifactId>
+    <groupId>io.vidocq.runtime</groupId>
+    <artifactId>vidocq-runtime-maven-plugin</artifactId>
     <version>0.1.0-SNAPSHOT</version>
     <executions>
         <execution>

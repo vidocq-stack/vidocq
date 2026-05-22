@@ -1,0 +1,346 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<plugin>
+    <name>Vidocq :: Maven Plugin</name>
+    <description>Build-time bean indexing and application packaging for Vidocq</description>
+    <groupId>io.vidocq.runtime</groupId>
+    <artifactId>vidocq-runtime-maven-plugin</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+    <goalPrefix>vidocq</goalPrefix>
+    <isolatedRealm>false</isolatedRealm>
+    <inheritedByDefault>true</inheritedByDefault>
+
+    <mojos>
+        <!-- vidocq:generate -->
+        <mojo>
+            <goal>generate</goal>
+            <description>Generate CDI bean index for Vidocq application</description>
+            <requiresDependencyResolution>compile</requiresDependencyResolution>
+            <requiresDirectInvocation>false</requiresDirectInvocation>
+            <requiresProject>true</requiresProject>
+            <requiresOnline>false</requiresOnline>
+            <aggregator>false</aggregator>
+            <phase>process-classes</phase>
+            <implementation>io.vidocq.runtime.maven.VidocqGenerateMojo</implementation>
+            <language>java</language>
+            <instantiationStrategy>per-lookup</instantiationStrategy>
+            <threadSafe>false</threadSafe>
+            <parameters>
+                <parameter>
+                    <name>project</name>
+                    <type>org.apache.maven.project.MavenProject</type>
+                    <required>true</required>
+                    <editable>false</editable>
+                    <description>The Maven project</description>
+                </parameter>
+                <parameter>
+                    <name>outputDirectory</name>
+                    <type>java.io.File</type>
+                    <required>false</required>
+                    <editable>false</editable>
+                    <description>Project build output directory</description>
+                </parameter>
+                <parameter>
+                    <name>scanDependencies</name>
+                    <type>java.util.List</type>
+                    <required>false</required>
+                    <editable>true</editable>
+                    <description>Liste de patterns groupId:artifactId à scanner (wildcard final * supporté)</description>
+                </parameter>
+            </parameters>
+            <configuration>
+                <project implementation="org.apache.maven.project.MavenProject"
+                         default-value="${project}"/>
+                <outputDirectory implementation="java.io.File"
+                                 default-value="${project.build.outputDirectory}"/>
+                <scanDependencies implementation="java.util.List"/>
+            </configuration>
+        </mojo>
+
+        <!-- vidocq:package -->
+        <mojo>
+            <goal>package</goal>
+            <description>Package Vidocq application as standalone distribution ZIP</description>
+            <requiresDependencyResolution>runtime</requiresDependencyResolution>
+            <requiresDirectInvocation>false</requiresDirectInvocation>
+            <requiresProject>true</requiresProject>
+            <requiresOnline>false</requiresOnline>
+            <aggregator>false</aggregator>
+            <phase>package</phase>
+            <implementation>io.vidocq.runtime.maven.VidocqPackageMojo</implementation>
+            <language>java</language>
+            <instantiationStrategy>per-lookup</instantiationStrategy>
+            <threadSafe>false</threadSafe>
+            <parameters>
+                <parameter>
+                    <name>project</name>
+                    <type>org.apache.maven.project.MavenProject</type>
+                    <required>true</required>
+                    <editable>false</editable>
+                    <description>The Maven project</description>
+                </parameter>
+                <parameter>
+                    <name>mainClass</name>
+                    <type>java.lang.String</type>
+                    <required>false</required>
+                    <editable>true</editable>
+                    <description>Main class to launch</description>
+                </parameter>
+                <parameter>
+                    <name>scriptName</name>
+                    <type>java.lang.String</type>
+                    <required>false</required>
+                    <editable>true</editable>
+                    <description>Launch script base name</description>
+                </parameter>
+                <parameter>
+                    <name>jvmArgs</name>
+                    <type>java.lang.String</type>
+                    <required>false</required>
+                    <editable>true</editable>
+                    <description>Additional JVM arguments</description>
+                </parameter>
+                <parameter>
+                    <name>distName</name>
+                    <type>java.lang.String</type>
+                    <required>false</required>
+                    <editable>true</editable>
+                    <description>Distribution directory name</description>
+                </parameter>
+                <parameter>
+                    <name>buildDir</name>
+                    <type>java.io.File</type>
+                    <required>false</required>
+                    <editable>false</editable>
+                    <description>Build output directory</description>
+                </parameter>
+            </parameters>
+            <configuration>
+                <project implementation="org.apache.maven.project.MavenProject"
+                         default-value="${project}"/>
+                <mainClass implementation="java.lang.String"
+                           default-value="io.vidocq.runtime.core.Vidocq">${vidocq.mainClass}</mainClass>
+                <scriptName implementation="java.lang.String"
+                            default-value="${project.artifactId}">${vidocq.scriptName}</scriptName>
+                <jvmArgs implementation="java.lang.String"
+                         default-value="">${vidocq.jvmArgs}</jvmArgs>
+                <distName implementation="java.lang.String"
+                          default-value="${project.artifactId}-${project.version}">${vidocq.distName}</distName>
+                <buildDir implementation="java.io.File"
+                          default-value="${project.build.directory}"/>
+            </configuration>
+        </mojo>
+
+        <!-- vidocq:jlink -->
+        <mojo>
+            <goal>jlink</goal>
+            <description>Package application as a self-contained jlink runtime image</description>
+            <requiresDependencyResolution>runtime</requiresDependencyResolution>
+            <requiresDirectInvocation>false</requiresDirectInvocation>
+            <requiresProject>true</requiresProject>
+            <requiresOnline>false</requiresOnline>
+            <aggregator>false</aggregator>
+            <phase>package</phase>
+            <implementation>io.vidocq.runtime.maven.VidocqJlinkMojo</implementation>
+            <language>java</language>
+            <instantiationStrategy>per-lookup</instantiationStrategy>
+            <threadSafe>false</threadSafe>
+            <parameters>
+                <parameter>
+                    <name>project</name>
+                    <type>org.apache.maven.project.MavenProject</type>
+                    <required>true</required>
+                    <editable>false</editable>
+                    <description>The Maven project</description>
+                </parameter>
+                <parameter>
+                    <name>mainModule</name>
+                    <type>java.lang.String</type>
+                    <required>true</required>
+                    <editable>true</editable>
+                    <description>Java module containing the main class</description>
+                </parameter>
+                <parameter>
+                    <name>mainClass</name>
+                    <type>java.lang.String</type>
+                    <required>true</required>
+                    <editable>true</editable>
+                    <description>Fully qualified main class</description>
+                </parameter>
+                <parameter>
+                    <name>launcher</name>
+                    <type>java.lang.String</type>
+                    <required>false</required>
+                    <editable>true</editable>
+                    <description>Launcher script base name</description>
+                </parameter>
+                <parameter>
+                    <name>distDir</name>
+                    <type>java.io.File</type>
+                    <required>false</required>
+                    <editable>true</editable>
+                    <description>jlink output directory</description>
+                </parameter>
+                <parameter>
+                    <name>modsDir</name>
+                    <type>java.io.File</type>
+                    <required>false</required>
+                    <editable>false</editable>
+                    <description>Module staging directory</description>
+                </parameter>
+                <parameter>
+                    <name>buildDir</name>
+                    <type>java.io.File</type>
+                    <required>false</required>
+                    <editable>false</editable>
+                    <description>Build output directory</description>
+                </parameter>
+                <parameter>
+                    <name>classesDir</name>
+                    <type>java.io.File</type>
+                    <required>false</required>
+                    <editable>false</editable>
+                    <description>Compiled classes directory</description>
+                </parameter>
+                <parameter>
+                    <name>stripDebug</name>
+                    <type>boolean</type>
+                    <required>false</required>
+                    <editable>true</editable>
+                    <description>Strip debug info from modules</description>
+                </parameter>
+                <parameter>
+                    <name>compress</name>
+                    <type>java.lang.String</type>
+                    <required>false</required>
+                    <editable>true</editable>
+                    <description>jlink compress level (zip-0 to zip-9)</description>
+                </parameter>
+                <parameter>
+                    <name>includeResources</name>
+                    <type>java.util.List</type>
+                    <required>false</required>
+                    <editable>true</editable>
+                    <description>Non-modular resources to copy under dist/conf/</description>
+                </parameter>
+                <parameter>
+                    <name>skip</name>
+                    <type>boolean</type>
+                    <required>false</required>
+                    <editable>true</editable>
+                    <description>Skip jlink execution entirely (useful in CI to bypass automatic-modules issues)</description>
+                </parameter>
+            </parameters>
+            <configuration>
+                <project implementation="org.apache.maven.project.MavenProject"
+                         default-value="${project}"/>
+                <mainModule implementation="java.lang.String">${vidocq.mainModule}</mainModule>
+                <mainClass implementation="java.lang.String">${vidocq.mainClass}</mainClass>
+                <launcher implementation="java.lang.String"
+                          default-value="${project.artifactId}">${vidocq.launcher}</launcher>
+                <distDir implementation="java.io.File"
+                         default-value="${project.build.directory}/dist">${vidocq.distDir}</distDir>
+                <modsDir implementation="java.io.File"
+                         default-value="${project.build.directory}/jlink-mods"/>
+                <buildDir implementation="java.io.File"
+                          default-value="${project.build.directory}"/>
+                <classesDir implementation="java.io.File"
+                            default-value="${project.build.outputDirectory}"/>
+                <stripDebug implementation="boolean"
+                            default-value="true">${vidocq.stripDebug}</stripDebug>
+                <compress implementation="java.lang.String"
+                          default-value="zip-6">${vidocq.compress}</compress>
+                <includeResources implementation="java.util.List"/>
+                <skip implementation="boolean"
+                      default-value="false">${vidocq.jlink.skip}</skip>
+            </configuration>
+        </mojo>
+
+        <!-- vidocq:jpackage -->
+        <mojo>
+            <goal>jpackage</goal>
+            <description>Package a jlink runtime image as a native installer (.dmg/.deb/.msi/...) or app-image</description>
+            <requiresDependencyResolution>runtime</requiresDependencyResolution>
+            <requiresDirectInvocation>false</requiresDirectInvocation>
+            <requiresProject>true</requiresProject>
+            <requiresOnline>false</requiresOnline>
+            <aggregator>false</aggregator>
+            <phase>package</phase>
+            <implementation>io.vidocq.runtime.maven.VidocqJpackageMojo</implementation>
+            <language>java</language>
+            <instantiationStrategy>per-lookup</instantiationStrategy>
+            <threadSafe>false</threadSafe>
+            <parameters>
+                <parameter>
+                    <name>project</name>
+                    <type>org.apache.maven.project.MavenProject</type>
+                    <required>true</required><editable>false</editable>
+                    <description>The Maven project</description>
+                </parameter>
+                <parameter><name>mainModule</name><type>java.lang.String</type><required>true</required><editable>true</editable><description>Java module containing the main class</description></parameter>
+                <parameter><name>mainClass</name><type>java.lang.String</type><required>true</required><editable>true</editable><description>Fully qualified main class</description></parameter>
+                <parameter><name>appName</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>Application name</description></parameter>
+                <parameter><name>appVersion</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>Application version</description></parameter>
+                <parameter><name>type</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>jpackage type: app-image, dmg, pkg, deb, rpm, msi, exe</description></parameter>
+                <parameter><name>runtimeImage</name><type>java.io.File</type><required>false</required><editable>true</editable><description>Existing jlink runtime image</description></parameter>
+                <parameter><name>installerDir</name><type>java.io.File</type><required>false</required><editable>true</editable><description>Output directory</description></parameter>
+                <parameter><name>icon</name><type>java.io.File</type><required>false</required><editable>true</editable><description>Optional icon (.icns/.ico/.png)</description></parameter>
+                <parameter><name>vendor</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>Vendor metadata</description></parameter>
+                <parameter><name>description</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>Short description</description></parameter>
+            </parameters>
+            <configuration>
+                <project implementation="org.apache.maven.project.MavenProject" default-value="${project}"/>
+                <mainModule implementation="java.lang.String">${vidocq.mainModule}</mainModule>
+                <mainClass implementation="java.lang.String">${vidocq.mainClass}</mainClass>
+                <appName implementation="java.lang.String" default-value="${project.artifactId}">${vidocq.appName}</appName>
+                <appVersion implementation="java.lang.String" default-value="${project.version}">${vidocq.appVersion}</appVersion>
+                <type implementation="java.lang.String" default-value="app-image">${vidocq.jpackageType}</type>
+                <runtimeImage implementation="java.io.File" default-value="${project.build.directory}/dist">${vidocq.runtimeImage}</runtimeImage>
+                <installerDir implementation="java.io.File" default-value="${project.build.directory}/installer">${vidocq.installerDir}</installerDir>
+                <icon implementation="java.io.File">${vidocq.icon}</icon>
+                <vendor implementation="java.lang.String" default-value="${project.groupId}">${vidocq.vendor}</vendor>
+                <description implementation="java.lang.String" default-value="${project.description}">${vidocq.appDescription}</description>
+            </configuration>
+        </mojo>
+
+        <!-- vidocq:docker -->
+        <mojo>
+            <goal>docker</goal>
+            <description>Generate a Dockerfile that wraps the jlink runtime image into a minimal container</description>
+            <requiresDependencyResolution>runtime</requiresDependencyResolution>
+            <requiresDirectInvocation>false</requiresDirectInvocation>
+            <requiresProject>true</requiresProject>
+            <requiresOnline>false</requiresOnline>
+            <aggregator>false</aggregator>
+            <phase>package</phase>
+            <implementation>io.vidocq.runtime.maven.VidocqDockerMojo</implementation>
+            <language>java</language>
+            <instantiationStrategy>per-lookup</instantiationStrategy>
+            <threadSafe>false</threadSafe>
+            <parameters>
+                <parameter>
+                    <name>project</name>
+                    <type>org.apache.maven.project.MavenProject</type>
+                    <required>true</required><editable>false</editable>
+                    <description>The Maven project</description>
+                </parameter>
+                <parameter><name>runtimeImage</name><type>java.io.File</type><required>false</required><editable>true</editable><description>Existing jlink runtime image</description></parameter>
+                <parameter><name>baseImage</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>Docker base image</description></parameter>
+                <parameter><name>imageTag</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>Generated image tag</description></parameter>
+                <parameter><name>exposedPort</name><type>int</type><required>false</required><editable>true</editable><description>Exposed HTTP port</description></parameter>
+                <parameter><name>launcher</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>Launcher script name in dist/bin/</description></parameter>
+                <parameter><name>build</name><type>boolean</type><required>false</required><editable>true</editable><description>Run docker build after generating Dockerfile</description></parameter>
+                <parameter><name>buildDir</name><type>java.io.File</type><required>false</required><editable>false</editable><description>Build output directory</description></parameter>
+            </parameters>
+            <configuration>
+                <project implementation="org.apache.maven.project.MavenProject" default-value="${project}"/>
+                <runtimeImage implementation="java.io.File" default-value="${project.build.directory}/dist">${vidocq.runtimeImage}</runtimeImage>
+                <baseImage implementation="java.lang.String" default-value="gcr.io/distroless/base-debian12:nonroot">${vidocq.docker.baseImage}</baseImage>
+                <imageTag implementation="java.lang.String" default-value="${project.artifactId}:${project.version}">${vidocq.docker.imageTag}</imageTag>
+                <exposedPort implementation="int" default-value="8080">${vidocq.docker.exposedPort}</exposedPort>
+                <launcher implementation="java.lang.String" default-value="${project.artifactId}">${vidocq.launcher}</launcher>
+                <build implementation="boolean" default-value="false">${vidocq.docker.build}</build>
+                <buildDir implementation="java.io.File" default-value="${project.build.directory}"/>
+            </configuration>
+        </mojo>
+    </mojos>
+</plugin>

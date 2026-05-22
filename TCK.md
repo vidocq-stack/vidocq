@@ -35,7 +35,7 @@ standalone (Type 1 + Type 3 du TCK Process 1.4.1).
 ### Tags exclus pour la cible Core Profile / SE-Bootstrap
 
 Configurés dans
-[`vidocq-mps-rest-cassini-tck-runner/pom.xml`](vidocq-mps-core-extensions/vidocq-mps-rest-cassini-tck-runner/pom.xml) :
+[`vidocq-runtime-rest-cassini-tck-runner/pom.xml`](vidocq-runtime-core-extensions/vidocq-runtime-rest-cassini-tck-runner/pom.xml) :
 
 ```xml
 <excludedGroups>servlet,xml_binding</excludedGroups>
@@ -52,7 +52,7 @@ SE-Bootstrap natif).
 ### Challenges officiels (TCK Process 1.4.1)
 
 Six tests sont désactivés via la classe
-[`TckChallengeExclusions`](vidocq-mps-core-extensions/vidocq-mps-rest-cassini-tck-runner/src/test/java/io/vidocq/mpserver/ext/rest/cassini/tck/TckChallengeExclusions.java)
+[`TckChallengeExclusions`](vidocq-runtime-core-extensions/vidocq-runtime-rest-cassini-tck-runner/src/test/java/io/vidocq/runtime/ext/rest/cassini/tck/TckChallengeExclusions.java)
 (JUnit 5 `ExecutionCondition` auto-discovered) avec justification documentée :
 
 | Test | Catégorie | Motif |
@@ -69,9 +69,9 @@ Six tests sont désactivés via la classe
 ### Modules livrés
 
 ```
-vidocq-mps-core-extensions/
-├── vidocq-mps-rest-cassini-extension/   ← l'implémentation Cassini
-└── vidocq-mps-rest-cassini-tck-runner/  ← harness Arquillian + TCK runner
+vidocq-runtime-core-extensions/
+├── vidocq-runtime-cassini-rest-extension/   ← l'implémentation Cassini
+└── vidocq-runtime-rest-cassini-tck-runner/  ← harness Arquillian + TCK runner
 ```
 
 ### Couverture spec Jakarta RESTful Web Services 4.0
@@ -185,8 +185,8 @@ Voir §2.2 ci-dessus.
 ```
 
 Ce script :
-1. Compile et installe `vidocq-mps-rest-cassini-extension`
-2. Active le profil `tck-official` du module `vidocq-mps-rest-cassini-tck-runner`
+1. Compile et installe `vidocq-runtime-cassini-rest-extension`
+2. Active le profil `tck-official` du module `vidocq-runtime-rest-cassini-tck-runner`
 3. Active `excludedGroups=servlet,xml_binding`
 4. Charge `TckChallengeExclusions` via JUnit 5 autodetection
 5. Lance la suite TCK 4.0.1 complète (2670 tests `@Test`)

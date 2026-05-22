@@ -1,18 +1,18 @@
-= Vidocq-MPS
+= Vidocq Runtime
 :description: Java 25 MicroProfile application server — umbrella orchestrator of the Vidocq ecosystem.
 
 [.text-center]
-image::vidocq-logo.png[Vidocq-MPS,300,role=module-logo]
+image::vidocq-logo.png[Vidocq Runtime,300,role=module-logo]
 
 
 [.lead]
-Vidocq-MPS is the **MicroProfile Server** that assembles the six foundational bricks of the ecosystem — xref:chappe::index.adoc[Chappe] (HTTP transport), xref:vauban::index.adoc[Vauban] (CDI), xref:champollion::index.adoc[Champollion] (JSON), xref:foy::index.adoc[Foy] (Servlet), xref:cassini::index.adoc[Cassini] (REST), xref:mansart::index.adoc[Mansart] (persistence) — into a coherent runtime inspired by the Quarkus extension model, but with no ASM, no runtime reflection, and no Vert.x.
+Vidocq Runtime is the **runtime MicroProfile** that assembles the six foundational bricks of the ecosystem — xref:chappe::index.adoc[Chappe] (HTTP transport), xref:vauban::index.adoc[Vauban] (CDI), xref:champollion::index.adoc[Champollion] (JSON), xref:foy::index.adoc[Foy] (Servlet), xref:cassini::index.adoc[Cassini] (REST), xref:mansart::index.adoc[Mansart] (persistence) — into a coherent runtime inspired by the Quarkus extension model, but with no ASM, no runtime reflection, and no Vert.x.
 
 == Origin of the name
 
 **Eugène-François Vidocq** (1775-1857), an escaped convict turned founder and first head of France's _Sûreté nationale_ (Brigade de la Sûreté, 1812). A precursor of forensic science, he also founded the first private detective agency. See https://fr.wikipedia.org/wiki/Eug%C3%A8ne-Fran%C3%A7ois_Vidocq[Wikipedia].
 
-The metaphor faithfully reflects the role of the module. Vidocq fused heterogeneous informants into a modern police organisation. Vidocq-MPS fuses six disparate technical bricks — each named after another historical figure — into a coherent system. The umbrella project also lends its name to the entire ecosystem.
+The metaphor faithfully reflects the role of the module. Vidocq fused heterogeneous informants into a modern police organisation. Vidocq Runtime fuses six disparate technical bricks — each named after another historical figure — into a coherent system. The umbrella project also lends its name to the entire ecosystem.
 
 == At a glance
 
@@ -31,7 +31,7 @@ The metaphor faithfully reflects the role of the module. Vidocq fused heterogene
 | Maven 4.0.0-rc-5
 
 | JPMS modules
-| `io.vidocq.mpserver`, `io.vidocq.mpserver.spi`, `io.vidocq.mpserver.core`, `io.vidocq.mpserver.maven`
+| `io.vidocq.runtime`, `io.vidocq.runtime.spi`, `io.vidocq.runtime.core`, `io.vidocq.runtime.maven`
 
 | Runtime dependencies
 | Jakarta + MicroProfile specs only — no third-party framework
@@ -45,11 +45,11 @@ The metaphor faithfully reflects the role of the module. Vidocq fused heterogene
 [mermaid]
 ....
 graph TB
-    subgraph "Vidocq-MPS — orchestrator"
-        MPS[vidocq-mps-core<br/>Bootstrap + lifecycle]
-        SPI[vidocq-mps-spi<br/>BuildStep + BuildItem]
-        EXT[vidocq-mps-core-extensions<br/>Built-in extensions]
-        PLUGIN[vidocq-mps-maven-plugin<br/>jlink / jpackage / docker]
+    subgraph "Vidocq Runtime — orchestrator"
+        MPS[vidocq-runtime-core<br/>Bootstrap + lifecycle]
+        SPI[vidocq-runtime-spi<br/>BuildStep + BuildItem]
+        EXT[vidocq-runtime-core-extensions<br/>Built-in extensions]
+        PLUGIN[vidocq-runtime-maven-plugin<br/>jlink / jpackage / docker]
     end
 
     subgraph "Jakarta / MicroProfile bricks"
@@ -104,4 +104,4 @@ graph TB
 * xref:tck.adoc[TCK status] — MicroProfile Config, Health, Metrics, OpenAPI
 * xref:reference.adoc[Reference] — configuration keys, Maven CLI, properties
 * xref:migration.adoc[Migration] — from Quarkus, Helidon, Spring Boot, Open Liberty, Payara Micro
-* xref:modules/vidocq-mps-core.adoc[Reactor sub-modules]
+* xref:modules/vidocq-runtime-core.adoc[Reactor sub-modules]

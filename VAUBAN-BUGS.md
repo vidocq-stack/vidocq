@@ -97,12 +97,12 @@ scope n'est présent. Au build-time :
 
 Au runtime cependant, Cassini's `ResourceScanner.discover` n'observe **que**
 les beans avec scope CDI *explicite* dans le source. L'exemple
-`vidocq-rest-example` :
+`vidocq-runtime-cassini-rest-example` :
 
 - `HelloCDIRequestScopedResource` (scope explicite) → OK, 4 endpoints visibles
 - `HelloCDIApplicationScopedResource` (scope explicite) → OK
 - `HelloSimpleJaxRSResource` (scope via BCE) → **invisible au runtime**
-- `io.vidocq.mpserver.examples.extlib.ExternalResource` (scope via BCE sur
+- `io.vidocq.runtime.examples.extlib.ExternalResource` (scope via BCE sur
   librairie externe) → **invisible au runtime**
 
 **Indice :** le marker `META-INF/vauban-bce-processed` (documenté dans le
@@ -176,8 +176,8 @@ l'APT doit produire de nouveaux artefacts, pas modifier ce que javac a écrit).
 
    ```
    # <BCE-FQN>;<target-class-FQN>
-   fr.vidocq.cassini.scope.CassiniScopeBCE;io.vidocq.mpserver.examples.rest.HelloSimpleJaxRSResource
-   fr.vidocq.cassini.scope.CassiniScopeBCE;io.vidocq.mpserver.examples.extlib.ExternalResource
+   fr.vidocq.cassini.scope.CassiniScopeBCE;io.vidocq.runtime.examples.rest.HelloSimpleJaxRSResource
+   fr.vidocq.cassini.scope.CassiniScopeBCE;io.vidocq.runtime.examples.extlib.ExternalResource
    ```
 
    Une classe est inscrite ssi son `VaubanClassConfig` contient au moins
@@ -229,7 +229,7 @@ l'APT doit produire de nouveaux artefacts, pas modifier ce que javac a écrit).
   - **fix bug latent** : `applyClassConfigs` filtre désormais les annotations
     de scope (ex. `@RequestScoped`) hors de la liste `bean.qualifiers()` —
     elles n'évincent plus `@Default`. C'est ce fix qui débloque le cas
-    vidocq-rest-example (JAR sans marker `vauban-bce-processed`)
+    vidocq-runtime-cassini-rest-example (JAR sans marker `vauban-bce-processed`)
 - `vauban-core/src/main/java/fr/vidocq/vauban/core/container/VaubanContainerBuilder.java` :
   - `loadRuntimeReplayList(ClassLoader)` lit `META-INF/vauban-bce-runtime.list`
     sur tout le classpath et résout les couples (bce, target) via `Class.forName`
@@ -254,7 +254,7 @@ l'APT doit produire de nouveaux artefacts, pas modifier ce que javac a écrit).
 
 ### Vérification end-to-end
 
-`vidocq-rest-example` (utilise `vidocq-maven-plugin:generate`, donc tombe dans
+`vidocq-runtime-cassini-rest-example` (utilise `vidocq-runtime-maven-plugin:generate`, donc tombe dans
 le cas "JAR brut" — fallback BCE full au runtime) :
 - `/hello-simple-jaxrs` (BCE `@RequestScoped` local) → HTTP 200 ✓
 - `/external` (BCE cross-JAR sur lib externe) → HTTP 200 ✓

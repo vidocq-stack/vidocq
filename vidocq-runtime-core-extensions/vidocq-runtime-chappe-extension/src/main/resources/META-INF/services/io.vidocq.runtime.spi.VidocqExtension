@@ -1,0 +1,3 @@
+io.vidocq.runtime.ext.chappe.ChappeEngineExtension
+io.vidocq.runtime.ext.chappe.ChappeMountConfigExtension
+io.vidocq.runtime.ext.chappe.ChappeServerBootstrap

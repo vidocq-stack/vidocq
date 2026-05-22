@@ -3,14 +3,14 @@
 
 [CAUTION]
 ====
-Vidocq-MPS is at **0.1.0-SNAPSHOT**. Any real-world migration is premature — this page documents the mappings ahead of time.
+Vidocq Runtime is at **0.1.0-SNAPSHOT**. Any real-world migration is premature — this page documents the mappings ahead of time.
 ====
 
 == Side-by-side comparison
 
 [cols="2,1,1,1,1,1,1"]
 |===
-| Aspect | Vidocq-MPS | Quarkus | Helidon MP | Spring Boot | Open Liberty | Payara Micro
+| Aspect | Vidocq Runtime | Quarkus | Helidon MP | Spring Boot | Open Liberty | Payara Micro
 
 | Minimum JDK
 | 25
@@ -84,14 +84,14 @@ The numbers above are indicative and will be updated as `BENCH.md` runs land. Se
 
 == From Quarkus
 
-Vidocq-MPS explicitly borrows the Quarkus extension pattern.
+Vidocq Runtime explicitly borrows the Quarkus extension pattern.
 
 [cols="1,1,2"]
 |===
-| Quarkus | Vidocq-MPS | Note
+| Quarkus | Vidocq Runtime | Note
 
 | `io.quarkus.deployment.annotations.BuildStep`
-| `io.vidocq.mpserver.spi.BuildStep`
+| `io.vidocq.runtime.spi.BuildStep`
 | API directly transposable
 
 | Gizmo recorder (ASM)
@@ -120,13 +120,13 @@ The forthcoming `compare-to/` workspace examples will illustrate migrating a sim
 == From Helidon MP
 
 * Helidon SE (Web) → xref:chappe::index.adoc[Chappe] + xref:cassini::index.adoc[Cassini].
-* Helidon MP → Vidocq-MPS directly.
+* Helidon MP → Vidocq Runtime directly.
 * `application.yaml` → MicroProfile Config (`vidocq.properties` or env).
 * Helidon Níma already uses virtual threads — the transition is conceptually transparent.
 
 [NOTE]
 ====
-// TODO@user: produce a `helidon-mp-quickstart` migration sample to Vidocq-MPS.
+// TODO@user: produce a `helidon-mp-quickstart` migration sample to Vidocq Runtime.
 ====
 
 == From Spring Boot
@@ -135,7 +135,7 @@ Spring Boot does not naturally align with the MicroProfile model, and migration 
 
 [cols="1,1,2"]
 |===
-| Spring Boot | Vidocq-MPS | Note
+| Spring Boot | Vidocq Runtime | Note
 
 | `@SpringBootApplication`
 | `Vidocq.main(args)` + any class
@@ -168,66 +168,66 @@ Spring Boot does not naturally align with the MicroProfile model, and migration 
 
 == From Open Liberty / WildFly
 
-* `server.xml` → MicroProfile Config + Vidocq-MPS extensions.
+* `server.xml` → MicroProfile Config + Vidocq Runtime extensions.
 * EAR → standalone JAR + Maven plugin.
 * JNDI → CDI lookup via `Vauban.bootstrap()`.
 * Jakarta annotations — directly compatible, the programming model stays identical.
 
 [NOTE]
 ====
-// TODO@user: document the `feature` → extension mapping on the Open Liberty side (mpHealth-4.0 → vidocq-mps-health-extension, etc.).
+// TODO@user: document the `feature` → extension mapping on the Open Liberty side (mpHealth-4.0 → vidocq-runtime-health-extension, etc.).
 ====
 
 == From Payara Micro
 
-Payara Micro and Vidocq-MPS share the MicroProfile target. The main difference is the build-time approach: Payara Micro embeds GlassFish; Vidocq-MPS produces a minimal jlink binary without a classical application server.
+Payara Micro and Vidocq Runtime share the MicroProfile target. The main difference is the build-time approach: Payara Micro embeds GlassFish; Vidocq Runtime produces a minimal jlink binary without a classical application server.
 
 * `payara-micro --deploy app.war` → `java -jar app-runner.jar`.
 * `payara-micro.jar` (~80 MB) → jlink image (~40 MB).
-* Every enabled MicroProfile `feature.xml` is replaced by the matching Vidocq-MPS extension.
+* Every enabled MicroProfile `feature.xml` is replaced by the matching Vidocq Runtime extension.
 
 == MicroProfile table
 
 [cols="2,1,2"]
 |===
-| MicroProfile spec | Vidocq-MPS status | Extension
+| MicroProfile spec | Vidocq Runtime status | Extension
 
 | MP Config 3.x
 | Planned
-| `vidocq-mps-config-extension`
+| `vidocq-runtime-config-extension`
 
 | MP Health 4.x
 | Planned
-| `vidocq-mps-health-extension`
+| `vidocq-runtime-health-extension`
 
 | MP Metrics 5.x
 | Planned
-| `vidocq-mps-metrics-extension`
+| `vidocq-runtime-metrics-extension`
 
 | MP OpenAPI 4.x
 | Planned
-| `vidocq-mps-openapi-extension`
+| `vidocq-runtime-openapi-extension`
 
 | MP REST Client 4.x
 | Planned
-| `vidocq-mps-rest-client-extension`
+| `vidocq-runtime-rest-client-extension`
 
 | MP JWT Auth 2.x
 | Planned
-| `vidocq-mps-jwt-extension`
+| `vidocq-runtime-jwt-extension`
 
 | MP Telemetry 2.x
 | Planned
-| `vidocq-mps-telemetry-extension`
+| `vidocq-runtime-telemetry-extension`
 
 | MP Fault Tolerance 4.x
 | Planned
-| `vidocq-mps-fault-tolerance-extension`
+| `vidocq-runtime-fault-tolerance-extension`
 |===
 
 [NOTE]
 ====
-// TODO@user: freeze the target MicroProfile version matrix when `vidocq-mps-platform-bom` ships.
+// TODO@user: freeze the target MicroProfile version matrix when `vidocq-runtime-platform-bom` ships.
 ====
 
 == Next steps

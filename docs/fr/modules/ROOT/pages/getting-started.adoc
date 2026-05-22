@@ -1,8 +1,8 @@
 = Démarrage rapide
-:description: Premier service Vidocq-MPS — REST + CDI + persistence H2 en quelques minutes.
+:description: Premier service Vidocq Runtime — REST + CDI + persistence H2 en quelques minutes.
 
 [.lead]
-Cette page boot un service complet REST + DI + persistence H2 avec Vidocq-MPS, package l'application via le plugin Maven dédié, et l'exécute en mode `java -jar`. L'exemple correspond à `vidocq-mps-mansart-h2-example` du reactor.
+Cette page boot un service complet REST + DI + persistence H2 avec Vidocq Runtime, package l'application via le plugin Maven dédié, et l'exécute en mode `java -jar`. L'exemple correspond à `vidocq-runtime-mansart-h2-example` du reactor.
 
 == Pré-requis
 
@@ -16,18 +16,18 @@ Cette page boot un service complet REST + DI + persistence H2 avec Vidocq-MPS, p
 ----
 <dependencies>
     <dependency>
-        <groupId>io.vidocq.mpserver</groupId>
-        <artifactId>vidocq-mps-core</artifactId>
+        <groupId>io.vidocq.runtime</groupId>
+        <artifactId>vidocq-runtime-core</artifactId>
         <version>0.1.0-SNAPSHOT</version>
     </dependency>
     <dependency>
-        <groupId>io.vidocq.mpserver</groupId>
-        <artifactId>vidocq-mps-rest-cassini-extension</artifactId>
+        <groupId>io.vidocq.runtime</groupId>
+        <artifactId>vidocq-runtime-cassini-rest-extension</artifactId>
         <version>0.1.0-SNAPSHOT</version>
     </dependency>
     <dependency>
-        <groupId>io.vidocq.mpserver</groupId>
-        <artifactId>vidocq-mps-mansart-extension</artifactId>
+        <groupId>io.vidocq.runtime</groupId>
+        <artifactId>vidocq-runtime-mansart-extension</artifactId>
         <version>0.1.0-SNAPSHOT</version>
     </dependency>
     <dependency>
@@ -40,8 +40,8 @@ Cette page boot un service complet REST + DI + persistence H2 avec Vidocq-MPS, p
 <build>
   <plugins>
     <plugin>
-      <groupId>io.vidocq.mpserver</groupId>
-      <artifactId>vidocq-mps-maven-plugin</artifactId>
+      <groupId>io.vidocq.runtime</groupId>
+      <artifactId>vidocq-runtime-maven-plugin</artifactId>
       <version>0.1.0-SNAPSHOT</version>
       <executions>
         <execution>
@@ -129,7 +129,7 @@ package io.example.todo;
 
 public class App {
     public static void main(String[] args) {
-        io.vidocq.mpserver.Vidocq.main(args);
+        io.vidocq.runtime.Vidocq.main(args);
     }
 }
 ----
@@ -179,4 +179,4 @@ $ curl http://localhost:8080/api/todos
 
 * xref:usage.adoc[Usage] — packaging jlink/jpackage/Docker, profils, AOT
 * xref:concepts.adoc[Concepts] — extension, build step, recorder
-* xref:modules/vidocq-mps-examples.adoc[Tour d'horizon des exemples du reactor]
+* xref:modules/vidocq-runtime-examples.adoc[Tour d'horizon des exemples du reactor]

@@ -2,7 +2,7 @@
 :description: Maven coordinates, configuration, plugin CLI, public SPI, JPMS.
 
 [.lead]
-Operational reference for Vidocq-MPS — Maven coordinates, MicroProfile Config keys, `vidocq-mps-maven-plugin` goals, exported JPMS modules, public SPI.
+Operational reference for Vidocq Runtime — Maven coordinates, MicroProfile Config keys, `vidocq-runtime-maven-plugin` goals, exported JPMS modules, public SPI.
 
 == Maven coordinates
 
@@ -10,25 +10,25 @@ Operational reference for Vidocq-MPS — Maven coordinates, MicroProfile Config 
 |===
 | Artefact | Role
 
-| `io.vidocq.mpserver:vidocq-mps-parent:0.1.0-SNAPSHOT`
+| `io.vidocq.runtime:vidocq-runtime-parent:0.1.0-SNAPSHOT`
 | Parent POM (Model 4.1.0)
 
-| `io.vidocq.mpserver:vidocq-mps-spi:0.1.0-SNAPSHOT`
+| `io.vidocq.runtime:vidocq-runtime-spi:0.1.0-SNAPSHOT`
 | Public SPI (`@BuildStep`, `@Recorder`, `BuildItem`)
 
-| `io.vidocq.mpserver:vidocq-mps-core:0.1.0-SNAPSHOT`
+| `io.vidocq.runtime:vidocq-runtime-core:0.1.0-SNAPSHOT`
 | Runtime engine (boot orchestrator, lifecycle)
 
-| `io.vidocq.mpserver:vidocq-mps-core-extensions:0.1.0-SNAPSHOT`
+| `io.vidocq.runtime:vidocq-runtime-core-extensions:0.1.0-SNAPSHOT`
 | Shipped extension pack (REST, CDI, Servlet, Mansart, Config…)
 
-| `io.vidocq.mpserver:vidocq-mps-maven-plugin:0.1.0-SNAPSHOT`
+| `io.vidocq.runtime:vidocq-runtime-maven-plugin:0.1.0-SNAPSHOT`
 | Maven plugin — `build`, `jlink`, `jpackage`, `docker`
 
-| `io.vidocq.mpserver:vidocq-mps-examples:0.1.0-SNAPSHOT`
-| Examples (`vidocq-mps-rest-example`, `vidocq-mps-mansart-h2-example`, `vidocq-mps-external-rest-lib`)
+| `io.vidocq.runtime:vidocq-runtime-examples:0.1.0-SNAPSHOT`
+| Examples (`vidocq-runtime-cassini-rest-example`, `vidocq-runtime-mansart-h2-example`, `vidocq-runtime-external-rest-lib`)
 
-| `io.vidocq.mpserver:vidocq-mps-integration-tests:0.1.0-SNAPSHOT`
+| `io.vidocq.runtime:vidocq-runtime-integration-tests:0.1.0-SNAPSHOT`
 | Multi-extension integration tests
 |===
 
@@ -38,20 +38,20 @@ Operational reference for Vidocq-MPS — Maven coordinates, MicroProfile Config 
 |===
 | Module | Contents
 
-| `io.vidocq.mpserver`
+| `io.vidocq.runtime`
 | `Vidocq.main(String[])` facade, application entry point.
 
-| `io.vidocq.mpserver.spi`
+| `io.vidocq.runtime.spi`
 | Public annotations and interfaces. Must be declared `requires` in any extension.
 
-| `io.vidocq.mpserver.core`
+| `io.vidocq.runtime.core`
 | Orchestration engine. Not intended for direct user consumption.
 
-| `io.vidocq.mpserver.maven`
+| `io.vidocq.runtime.maven`
 | Shared code of the Maven plugin (APT index reading, runner generation).
 |===
 
-The other `io.vidocq.mpserver.*.extension` modules each correspond to a built-in extension.
+The other `io.vidocq.runtime.*.extension` modules each correspond to a built-in extension.
 
 == MicroProfile Config keys
 
@@ -102,7 +102,7 @@ The other `io.vidocq.mpserver.*.extension` modules each correspond to a built-in
 
 [NOTE]
 ====
-// TODO@user: extract the exhaustive key list once `vidocq-mps-config-extension` is stabilised. Each key depends on the extension declaring it via `@VidocqConfig`.
+// TODO@user: extract the exhaustive key list once `vidocq-runtime-config-extension` is stabilised. Each key depends on the extension declaring it via `@VidocqConfig`.
 ====
 
 `ConfigSource` hierarchy (descending ordinal):
@@ -136,11 +136,11 @@ The other `io.vidocq.mpserver.*.extension` modules each correspond to a built-in
 | Generates `target/Dockerfile` distroless; optional Docker build via `vidocq.docker.build=true`.
 |===
 
-See xref:modules/vidocq-mps-maven-plugin.adoc[the dedicated page] for the exhaustive parameter list.
+See xref:modules/vidocq-runtime-maven-plugin.adoc[the dedicated page] for the exhaustive parameter list.
 
-== Public SPI (`vidocq-mps-spi`)
+== Public SPI (`vidocq-runtime-spi`)
 
-Source: `vidocq-mps-spi/src/main/java/io/vidocq/mpserver/spi/`.
+Source: `vidocq-runtime-spi/src/main/java/io/vidocq/runtime/spi/`.
 
 [cols="1,3"]
 |===
@@ -172,7 +172,7 @@ Source: `vidocq-mps-spi/src/main/java/io/vidocq/mpserver/spi/`.
 
 == Bugs and benchmarks
 
-* Vidocq-MPS bugs: `vidocq/BUG.md`
+* Vidocq Runtime bugs: `vidocq/BUG.md`
 * Cross-cutting bugs: `vidocq/CHAPPE-BUGS.md`, `vidocq/VAUBAN-BUGS.md`
 * Benchmarks: `vidocq/BENCH.md`
 
@@ -187,4 +187,4 @@ Source: `vidocq-mps-spi/src/main/java/io/vidocq/mpserver/spi/`.
 
 * xref:usage.adoc[Usage] — packaging and profiles
 * xref:internals.adoc[Internals] — boot and threading
-* xref:modules/vidocq-mps-spi.adoc[SPI details] — how to write an extension
+* xref:modules/vidocq-runtime-spi.adoc[SPI details] — how to write an extension

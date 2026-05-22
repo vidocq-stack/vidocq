@@ -1,18 +1,18 @@
-= Vidocq-MPS
+= Vidocq Runtime
 :description: Serveur d'application MicroProfile Java 25 — orchestrateur ombrelle de l'écosystème Vidocq.
 
 [.text-center]
-image::vidocq-logo.png[Vidocq-MPS,300,role=module-logo]
+image::vidocq-logo.png[Vidocq Runtime,300,role=module-logo]
 
 
 [.lead]
-Vidocq-MPS est le **MicroProfile Server** qui assemble les six briques fondatrices de l'écosystème — xref:chappe::index.adoc[Chappe] (transport HTTP), xref:vauban::index.adoc[Vauban] (CDI), xref:champollion::index.adoc[Champollion] (JSON), xref:foy::index.adoc[Foy] (Servlet), xref:cassini::index.adoc[Cassini] (REST), xref:mansart::index.adoc[Mansart] (persistence) — en un runtime cohérent inspiré du modèle d'extensions Quarkus, mais sans ASM, sans réflexion runtime et sans Vert.x.
+Vidocq Runtime est le **runtime MicroProfile** qui assemble les six briques fondatrices de l'écosystème — xref:chappe::index.adoc[Chappe] (transport HTTP), xref:vauban::index.adoc[Vauban] (CDI), xref:champollion::index.adoc[Champollion] (JSON), xref:foy::index.adoc[Foy] (Servlet), xref:cassini::index.adoc[Cassini] (REST), xref:mansart::index.adoc[Mansart] (persistence) — en un runtime cohérent inspiré du modèle d'extensions Quarkus, mais sans ASM, sans réflexion runtime et sans Vert.x.
 
 == Origine du nom
 
 **Eugène-François Vidocq** (1775-1857), forçat évadé devenu fondateur et premier chef de la _Sûreté nationale_ (Brigade de la Sûreté, 1812). Précurseur de la criminologie scientifique, il fonde aussi la première agence de détectives privés. Voir https://fr.wikipedia.org/wiki/Eug%C3%A8ne-Fran%C3%A7ois_Vidocq[Wikipédia].
 
-La métaphore est fidèle au rôle du module. Vidocq fédérait des indicateurs hétéroclites en une organisation policière moderne. Vidocq-MPS agrège six briques techniques disparates — chacune nommée d'après une autre figure historique — en un système cohérent. Le projet ombrelle prête son nom à l'écosystème entier.
+La métaphore est fidèle au rôle du module. Vidocq fédérait des indicateurs hétéroclites en une organisation policière moderne. Vidocq Runtime agrège six briques techniques disparates — chacune nommée d'après une autre figure historique — en un système cohérent. Le projet ombrelle prête son nom à l'écosystème entier.
 
 == En un coup d'œil
 
@@ -31,7 +31,7 @@ La métaphore est fidèle au rôle du module. Vidocq fédérait des indicateurs 
 | Maven 4.0.0-rc-5
 
 | Modules JPMS
-| `io.vidocq.mpserver`, `io.vidocq.mpserver.spi`, `io.vidocq.mpserver.core`, `io.vidocq.mpserver.maven`
+| `io.vidocq.runtime`, `io.vidocq.runtime.spi`, `io.vidocq.runtime.core`, `io.vidocq.runtime.maven`
 
 | Dépendances runtime
 | Spécifications Jakarta + MicroProfile uniquement — aucun framework tiers
@@ -45,11 +45,11 @@ La métaphore est fidèle au rôle du module. Vidocq fédérait des indicateurs 
 [mermaid]
 ....
 graph TB
-    subgraph "Vidocq-MPS — orchestrateur"
-        MPS[vidocq-mps-core<br/>Bootstrap + lifecycle]
-        SPI[vidocq-mps-spi<br/>BuildStep + BuildItem]
-        EXT[vidocq-mps-core-extensions<br/>Extensions built-in]
-        PLUGIN[vidocq-mps-maven-plugin<br/>jlink / jpackage / docker]
+    subgraph "Vidocq Runtime — orchestrateur"
+        MPS[vidocq-runtime-core<br/>Bootstrap + lifecycle]
+        SPI[vidocq-runtime-spi<br/>BuildStep + BuildItem]
+        EXT[vidocq-runtime-core-extensions<br/>Extensions built-in]
+        PLUGIN[vidocq-runtime-maven-plugin<br/>jlink / jpackage / docker]
     end
 
     subgraph "Specs Jakarta / MicroProfile"
@@ -104,4 +104,4 @@ graph TB
 * xref:tck.adoc[État TCK] — MicroProfile Config, Health, Metrics, OpenAPI
 * xref:reference.adoc[Référence] — clés de configuration, CLI Maven, propriétés
 * xref:migration.adoc[Migration] — depuis Quarkus, Helidon, Spring Boot, Open Liberty, Payara Micro
-* xref:modules/vidocq-mps-core.adoc[Sous-modules du reactor]
+* xref:modules/vidocq-runtime-core.adoc[Sous-modules du reactor]

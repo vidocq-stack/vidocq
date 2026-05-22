@@ -1,11 +1,11 @@
 <p align="center">
-  <img src="vidocq-mp-server-logo.png" alt="Vidocq" width="300">
+  <img src="vidocq-runtime-logo.png" alt="Vidocq" width="300">
 </p>
 
 <h1 align="center">Vidocq</h1>
 
 <p align="center">
-  <strong>Serveur MicroProfile Java SE modulaire</strong><br>
+  <strong>Runtime MicroProfile Java SE modulaire</strong><br>
   <a href="https://microprofile.io/">MicroProfile 7.1</a> | <a href="https://github.com/VidocqMP/vauban">Vauban CDI Lite</a> | JDK 25 | JPMS
 </p>
 
@@ -23,7 +23,7 @@
 
 ## Qu'est-ce que Vidocq ?
 
-Vidocq est un serveur d'applications Java SE modulaire construit sur [Vauban](https://github.com/VidocqMP/vauban) (CDI 4.1 Lite). Il implemente progressivement les specifications MicroProfile 7.1 via un systeme d'extensions leger inspire de Quarkus.
+Vidocq est un runtime d'applications Java SE modulaire construit sur [Vauban](https://github.com/VidocqMP/vauban) (CDI 4.1 Lite). Il implemente progressivement les specifications MicroProfile 7.1 via un systeme d'extensions leger inspire de Quarkus.
 
 ### Pourquoi Vidocq ?
 
@@ -99,18 +99,18 @@ Hello from Vidocq! ...
 
 ```mermaid
 graph TB
-    subgraph "vidocq-spi"
+    subgraph "vidocq-runtime-spi"
         SPI[VidocqExtension<br/>VidocqConfiguration<br/>ExtensionContext]
     end
-    subgraph "vidocq-core"
+    subgraph "vidocq-runtime-core"
         BOOT[VidocqBootstrap<br/><i>Lifecycle orchestrator</i>]
         LOADER[ExtensionLoader<br/><i>ServiceLoader</i>]
     end
-    subgraph "vidocq-core-extensions"
-        REST[vidocq-rest-extension<br/><i>JAX-RS 4.0 + Grizzly</i>]
+    subgraph "vidocq-runtime-core-extensions"
+        REST[vidocq-runtime-cassini-rest-extension<br/><i>JAX-RS 4.0 + Grizzly</i>]
     end
     subgraph "Build tools"
-        PLUGIN[vidocq-maven-plugin<br/><i>generate + package</i>]
+        PLUGIN[vidocq-runtime-maven-plugin<br/><i>generate + package</i>]
     end
 
     SPI --> BOOT
@@ -124,13 +124,13 @@ graph TB
 
 ```
 vidocq/
-├── vidocq-spi                   Interfaces d'extension (VidocqExtension, VidocqConfiguration)
-├── vidocq-core                  Bootstrap, decouverte d'extensions, cycle de vie
-├── vidocq-maven-plugin          Indexation des beans (vauban-beans.list) + packaging ZIP
-├── vidocq-core-extensions/      Extensions MicroProfile 7.1 core
-│   └── vidocq-rest-extension    JAX-RS 4.0 via Jersey 4 + Grizzly (bridge CDI/HK2)
-└── vidocq-examples/             Exemples
-    └── vidocq-rest-example      Application REST d'exemple
+├── vidocq-runtime-spi                   Interfaces d'extension (VidocqExtension, VidocqConfiguration)
+├── vidocq-runtime-core                  Bootstrap, decouverte d'extensions, cycle de vie
+├── vidocq-runtime-maven-plugin          Indexation des beans (vauban-beans.list) + packaging ZIP
+├── vidocq-runtime-core-extensions/      Extensions MicroProfile 7.1 core
+│   └── vidocq-runtime-cassini-rest-extension    JAX-RS 4.0 via Jersey 4 + Grizzly (bridge CDI/HK2)
+└── vidocq-runtime-examples/             Exemples
+    └── vidocq-runtime-cassini-rest-example      Application REST d'exemple
 ```
 
 ## Mecanisme d'extensions
@@ -160,7 +160,7 @@ public class MonExtension implements VidocqExtension {
 }
 ```
 
-Enregistrement via `META-INF/services/io.vidocq.mpserver.spi.VidocqExtension` ou `module-info.java` :
+Enregistrement via `META-INF/services/io.vidocq.runtime.spi.VidocqExtension` ou `module-info.java` :
 
 ```java
 provides VidocqExtension with MonExtension;
@@ -204,8 +204,8 @@ Les proprietes sont resolues dans l'ordre :
 
 ```xml
 <plugin>
-    <groupId>io.vidocq.mpserver</groupId>
-    <artifactId>vidocq-maven-plugin</artifactId>
+    <groupId>io.vidocq.runtime</groupId>
+    <artifactId>vidocq-runtime-maven-plugin</artifactId>
     <executions>
         <execution>
             <goals>
@@ -230,7 +230,7 @@ myapp-1.0/
 
 | Spec | Extension | Status |
 |------|-----------|--------|
-| JAX-RS 4.0 (REST) | `vidocq-rest-extension` | Done |
+| JAX-RS 4.0 (REST) | `vidocq-runtime-cassini-rest-extension` | Done |
 | Jakarta Servlet 6.1 | `vidocq-servlet-chappe-extension` | Done (~90% TCK) |
 | MicroProfile Config | - | Planned |
 | MicroProfile Health | - | Planned |
@@ -278,7 +278,7 @@ Depuis la racine du projet :
 Le script installe les modules Vidocq en M2 local, se place dans le
 module TCK (cwd compatible ShrinkWrap) puis lance le profil `tck-official`.
 
-Details dans [`vidocq-core-extensions/vidocq-servlet-chappe-tck-runner/README.md`](vidocq-core-extensions/vidocq-servlet-chappe-tck-runner/README.md).
+Details dans [`vidocq-runtime-core-extensions/vidocq-runtime-servlet-chappe-tck-runner/README.md`](vidocq-runtime-core-extensions/vidocq-runtime-servlet-chappe-tck-runner/README.md).
 
 ## Licence
 

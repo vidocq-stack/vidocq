@@ -2,11 +2,11 @@
 :description: Packaging, configuration, profiles, deployment, AOT.
 
 [.lead]
-This page covers Vidocq-MPS usage beyond the hello world: packaging via the `vidocq-mps-maven-plugin` (jlink, jpackage, Docker), configuration via {spec-mp-config}, observability ({spec-mp-health}, {spec-mp-metrics}, {spec-mp-openapi}), profiles, and AOT preparation.
+This page covers Vidocq Runtime usage beyond the hello world: packaging via the `vidocq-runtime-maven-plugin` (jlink, jpackage, Docker), configuration via {spec-mp-config}, observability ({spec-mp-health}, {spec-mp-metrics}, {spec-mp-openapi}), profiles, and AOT preparation.
 
-== Packaging with `vidocq-mps-maven-plugin`
+== Packaging with `vidocq-runtime-maven-plugin`
 
-The Maven plugin exposes three packaging targets. See xref:modules/vidocq-mps-maven-plugin.adoc[the dedicated page] for the full inventory and the internal `JLINK.md` details.
+The Maven plugin exposes three packaging targets. See xref:modules/vidocq-runtime-maven-plugin.adoc[the dedicated page] for the full inventory and the internal `JLINK.md` details.
 
 [cols="1,1,3"]
 |===
@@ -25,18 +25,18 @@ The Maven plugin exposes three packaging targets. See xref:modules/vidocq-mps-ma
 | ~50 MB image
 |===
 
-Quick start (from `vidocq-mps-rest-example`):
+Quick start (from `vidocq-runtime-cassini-rest-example`):
 
 [source,bash]
 ----
-cd vidocq-mps-examples/vidocq-mps-rest-example
+cd vidocq-runtime-examples/vidocq-runtime-cassini-rest-example
 ./mvnw -ntp package -DskipTests
 ./target/dist/bin/todo-app
 ----
 
 == MicroProfile configuration
 
-Vidocq-MPS implements {spec-mp-config}. Source hierarchy, highest to lowest priority:
+Vidocq Runtime implements {spec-mp-config}. Source hierarchy, highest to lowest priority:
 
 [cols="1,2,3"]
 |===
@@ -74,11 +74,11 @@ Endpoints exposed: `/q/health`, `/q/health/live`, `/q/health/ready`, `/q/health/
 
 == Metrics
 
-{spec-mp-metrics} implementation in progress. Counters and histograms will be registered at build time by the `vidocq-mps-metrics-extension` extension. Prometheus endpoint `/q/metrics`.
+{spec-mp-metrics} implementation in progress. Counters and histograms will be registered at build time by the `vidocq-runtime-metrics-extension` extension. Prometheus endpoint `/q/metrics`.
 
 == OpenAPI
 
-The `vidocq-mps-openapi-extension` extension (current milestone) generates the OpenAPI document at compile time from Jakarta REST + MicroProfile OpenAPI annotations. Endpoint `/q/openapi`.
+The `vidocq-runtime-openapi-extension` extension (current milestone) generates the OpenAPI document at compile time from Jakarta REST + MicroProfile OpenAPI annotations. Endpoint `/q/openapi`.
 
 == Profiles
 
@@ -111,15 +111,15 @@ The `distroless/base-debian12:nonroot` base image has no shell, no package manag
 == AOT — GraalVM and Leyden
 
 * **Leyden CDS** — supported out of the box. Static Class-File API codegen produces bytecode that archives perfectly.
-* **GraalVM native-image** — Vidocq-MPS's zero-reflection + zero-proxy strategy minimises `reachability-metadata`. See `vidocq/JLINK.md` for runtime prerequisites (logging.properties, named JPMS modules, serialised records).
+* **GraalVM native-image** — Vidocq Runtime's zero-reflection + zero-proxy strategy minimises `reachability-metadata`. See `vidocq/JLINK.md` for runtime prerequisites (logging.properties, named JPMS modules, serialised records).
 
 [NOTE]
 ====
-// TODO@user: document the official GraalVM profile when the `vidocq-mps-native-extension` extension ships.
+// TODO@user: document the official GraalVM profile when the `vidocq-runtime-native-extension` extension ships.
 ====
 
 == Next steps
 
 * xref:reference.adoc[Reference] — exhaustive config keys, plugin properties
 * xref:internals.adoc[Internals] — boot sequence
-* xref:modules/vidocq-mps-maven-plugin.adoc[Maven plugin] — goal details
+* xref:modules/vidocq-runtime-maven-plugin.adoc[Maven plugin] — goal details
