@@ -259,7 +259,7 @@ cohérents sur `dirac-api`, `dirac-core`, `dirac-cdi-vauban`, TCK non-reactor co
 | Négociation de contenu | `Accept: text/plain` → OpenMetrics ; `Accept: application/json` → JSON ; défaut → text/plain | ☑ |
 | `ContentNegotiationFilter` JAX-RS | Filtre `@Provider @PreMatching` — null/vide/`*/*` → `text/plain` | ☑ |
 | Intégration Cassini | `MetricsResource` est un bean `@ApplicationScoped` — découvert automatiquement par Cassini via CDI | ☑ |
-| Tests d'intégration REST | Différés à M8 (TCK) — tests unitaires directs (sans RuntimeDelegate) couvrent toute la logique de formatage | ☐ |
+| Tests d'intégration REST | Couverts par le TCK officiel M8 (deploy Arquillian + Chappe) ; tests unitaires directs couvrent la logique de formatage | ☑ |
 
 **Décisions M7 :**
 - `dirac-rest` dépend de `jakarta.ws.rs-api` en `provided` — Cassini fournit l'implémentation.
@@ -283,15 +283,15 @@ cohérents sur `dirac-api`, `dirac-core`, `dirac-cdi-vauban`, TCK non-reactor co
 
 | Tâche | Notes | État |
 |---|---|---|
-| `dirac-tck/pom.xml` (Model 4.0.0) | Dépendances : TCK, Arquillian, Vauban embedded, Chappe ; **hors reactor** | ☐ |
-| `DiracDeployableContainer` | `DeployableContainer` Arquillian Local démarrant Vauban + Dirac embedded + Chappe | ☐ |
-| `VaubanDiracTckBootstrap` | Extraction classes de l'archive, démarrage Vauban (DiracExtension + intercepteurs + producers), activation RequestContext | ☐ |
-| `DiracTestEnricher` | Injection `@Inject` sur les classes de test TCK via `BeanManager` Vauban | ☐ |
-| `DiracArquillianExtension` + `arquillian.xml` | Découverte du container par Arquillian | ☐ |
-| `tck-suite.xml` | Sélection des packages TCK MP Metrics 5.1.1 | ☐ |
-| `run-official-tck-mp-metrics-5.1.sh` | Script racine : install reactor → invoke TCK | ☐ |
-| Passage TCK smoke test | 1/1 PASS | ☐ |
-| Passage TCK complet | 100 % PASS sur l'ensemble du `tck-suite.xml` | ☐ |
+| `dirac-tck/pom.xml` (Model 4.0.0) | Dépendances : TCK, Arquillian, Vauban embedded, Chappe ; **hors reactor** | ☑ |
+| `DiracDeployableContainer` | `DeployableContainer` Arquillian Local démarrant Vauban + Dirac embedded + Chappe | ☑ |
+| `VaubanDiracTckBootstrap` | Extraction classes de l'archive, démarrage Vauban (DiracExtension + intercepteurs + producers), activation RequestContext | ☑ |
+| `DiracTestEnricher` | Injection `@Inject` sur les classes de test TCK via `BeanManager` Vauban | ☑ |
+| `DiracArquillianExtension` + `arquillian.xml` | Découverte du container par Arquillian | ☑ |
+| `tck-suite.xml` | Sélection des packages TCK MP Metrics 5.1.1 | ☑ |
+| `run-official-tck-mp-metrics-5.1.sh` | Script racine : install reactor → invoke TCK + génération `tck-report.txt` | ☑ |
+| Passage TCK smoke test | `DiracTckSmokeTest` 1/1 PASS | ☑ |
+| Passage TCK complet | **127/127 PASS** sur le `tck-suite.xml` officiel | ☑ |
 | `TCK.md` | Documentation des challenges et tests exclus | ☐ |
 | `dirac-tck/README.md` | Procédure d'installation TCK + architecture du runner | ☐ |
 
@@ -300,8 +300,13 @@ cohérents sur `dirac-api`, `dirac-core`, `dirac-cdi-vauban`, TCK non-reactor co
   l'endpoint `/metrics` via Chappe (port dynamique).
 - La propriété `mp.metrics.appName` est exposée dans le script pour les tests de scoping.
 - `RequestContext` Vauban activé au moment du déploiement de chaque archive TCK.
+- Contrat strict `aroundInvoke` requis par le TCK : sur métrique supprimée du registre,
+  `CountedInterceptor`/`TimedInterceptor` lèvent `IllegalStateException`
+  (test TCK `removeCounterFromRegistry` / `removeTimerFromRegistry` exigent ce comportement).
+  Les tests unitaires et d'intégration CDI Dirac pré-enregistrent donc les métriques
+  comme le fait `@AroundConstruct` en production.
 
-**Livrable :** score TCK mesurable/reproductible ; objectif final = 100 % PASS.
+**Livrable M8 ✅ :** TCK officiel MicroProfile Metrics 5.1.1 passé à 127/127 (0 failures, 0 errors, 0 skipped). Rapport reproductible via `./run-official-tck-mp-metrics-5.1.sh all` (cf. `dirac-tck/target/tck-report.txt`). Reste à produire `TCK.md` et `dirac-tck/README.md`.
 
 ---
 
