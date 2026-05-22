@@ -21,6 +21,13 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# Utilise Maven Wrapper (Maven 4) si présent, sinon fallback sur mvn système.
+if [[ -x "$SCRIPT_DIR/mvnw" ]]; then
+    MVN_CMD=("$SCRIPT_DIR/mvnw" "-ntp")
+else
+    MVN_CMD=("mvn")
+fi
+
 # Filtrage de l'argument "all" ou "--all"
 MVN_ARGS=()
 USE_ALL=false
@@ -35,7 +42,7 @@ done
 echo "============================================"
 echo " Étape 1 — Install reactor Humboldt en M2   "
 echo "============================================"
-mvn -q install -DskipTests
+"${MVN_CMD[@]}" install -DskipTests
 
 echo ""
 echo "============================================"
@@ -45,8 +52,8 @@ echo "============================================"
 cd humboldt-tck
 
 if $USE_ALL; then
-    mvn -Ptck-official verify "${MVN_ARGS[@]}"
+    "${MVN_CMD[@]}" -f pom.xml -Ptck-official verify "${MVN_ARGS[@]}"
 else
     # Smoke : juste le test scaffold maison (HumboldtTckSmokeTest)
-    mvn test "${MVN_ARGS[@]}"
+    "${MVN_CMD[@]}" -f pom.xml test "${MVN_ARGS[@]}"
 fi
