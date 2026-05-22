@@ -68,7 +68,7 @@ heisenberg-tck          (hors reactor — Model 4.0.0)
   → TestNG + Arquillian + Vauban embedded, runner TCK officiel MP FT 4.1
 
 heisenberg-examples     io.vidocq.heisenberg.examples
-  → Exemples standalone et avec vidocq-mps
+  → Exemples standalone et avec vidocq
 ```
 
 ## Phases
@@ -411,4 +411,4 @@ heisenberg-examples     io.vidocq.heisenberg.examples
 - **MicroProfile Metrics** : intégration des métriques FT (counters retry, CB state, bulkhead queue) — reporter à post-TCK ou implémenter un stub no-op ?
 - **Fenêtre glissante time-based** : la spec la mentionne mais ne l'impose pas. Inclure dès M4 ou exclure (possible exclusion TCK à documenter) ?
 - **`@CircuitBreaker` + delay** : utiliser un virtual thread dormant ou un `ScheduledExecutorService` (platform) pour la transition OPEN → HALF_OPEN ?
-- **intégration `vidocq-mps`** : définir l'extension MPS Heisenberg après que TCK soit vert.
+- **intégration `vidocq`** : définir l'extension MPS Heisenberg après que TCK soit vert.
