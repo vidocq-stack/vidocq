@@ -6,7 +6,7 @@
 
 [NOTE]
 ====
-Pour les besoins courants dans Vidocq (CRUD, queries typées, pagination, `@Transactional`), `mansart-jakarta-data` (livré) suffit largement. L'exemple `vidocq-mps-mansart-h2-example` montre une intégration complète sans `mansart-persistence`.
+Pour les besoins courants dans Vidocq (CRUD, queries typées, pagination, `@Transactional`), `mansart-jakarta-data` (livré) suffit largement. L'exemple `vidocq-runtime-mansart-h2-example` montre une intégration complète sans `mansart-persistence`.
 ====
 
 == Pourquoi un module séparé

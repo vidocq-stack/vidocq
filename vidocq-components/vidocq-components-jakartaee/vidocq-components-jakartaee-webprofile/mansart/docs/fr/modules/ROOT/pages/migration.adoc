@@ -143,4 +143,4 @@ Comparatif perf : voir lien:{repo-mansart}/src/branch/main/mansart-pool/BENCH.md
 
 == Pas de migration nécessaire
 
-Vidocq-MPS livre `vidocq-mps-mansart-h2-example` qui montre une intégration neuve de bout en bout. Pour un nouveau projet, partir directement de cet exemple est souvent plus simple que de migrer un legacy.
+Vidocq Runtime livre `vidocq-runtime-mansart-h2-example` qui montre une intégration neuve de bout en bout. Pour un nouveau projet, partir directement de cet exemple est souvent plus simple que de migrer un legacy.

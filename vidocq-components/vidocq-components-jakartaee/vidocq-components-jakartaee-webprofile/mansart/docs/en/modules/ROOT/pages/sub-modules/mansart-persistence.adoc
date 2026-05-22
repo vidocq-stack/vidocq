@@ -6,7 +6,7 @@
 
 [NOTE]
 ====
-For everyday needs in Vidocq (CRUD, typed queries, pagination, `@Transactional`), `mansart-jakarta-data` (delivered) is largely enough. The `vidocq-mps-mansart-h2-example` example shows a full integration without `mansart-persistence`.
+For everyday needs in Vidocq (CRUD, typed queries, pagination, `@Transactional`), `mansart-jakarta-data` (delivered) is largely enough. The `vidocq-runtime-mansart-h2-example` example shows a full integration without `mansart-persistence`.
 ====
 
 == Why a separate module

@@ -151,9 +151,9 @@ public Author register(String name) {
 
 The `mansart-data-cdi` BCE reads `META-INF/mansart-repositories.list` and declares an `@ApplicationScoped` bean for each `@Repository` interface detected. The `mansart-transactions` interceptor materializes `@Transactional`. See xref:vauban::index.adoc[Vauban] for the CDI container details.
 
-== Full example in Vidocq-MPS
+== Full example in Vidocq Runtime
 
-The `vidocq-mps-mansart-h2-example` example (in the Vidocq-MPS repo) shows end-to-end wiring: `MansartDataSource` + `mansart-jakarta-data` + `@Transactional` + Cassini REST endpoint. It is the reference sandbox to validate an integration.
+The `vidocq-runtime-mansart-h2-example` example (in the Vidocq Runtime repo) shows end-to-end wiring: `MansartDataSource` + `mansart-jakarta-data` + `@Transactional` + Cassini REST endpoint. It is the reference sandbox to validate an integration.
 
 == Next step
 

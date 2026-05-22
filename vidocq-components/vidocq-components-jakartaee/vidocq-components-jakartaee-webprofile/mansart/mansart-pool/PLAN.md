@@ -180,6 +180,6 @@ Connection c = MansartPool.CURRENT.orElseGet(() -> ds.getConnection());
 
 1. **Génération du proxy `Connection`** : Class-File API au build (clean mais lourd à mettre en place pour un seul proxy) **ou** classe écrite à la main qui implémente les ~50 méthodes de `java.sql.Connection` (verbeux mais simple, pas de Maven plugin) ? Proposition : à la main pour MP2, migrer vers Class-File API en MP3 si on en génère plusieurs (proxies pour `PreparedStatement`, `Statement`, `ResultSet`).
 2. **Driver loading** : `Driver.connect(url)` direct (passe par `DriverManager`) ou exiger un `XADataSource`/`ConnectionPoolDataSource` ? Proposition : `Driver.connect()` direct en v1, pas de XA.
-3. **Configuration via `vidocq.properties` ?** : si `vidocq` (le sous-projet d'orchestration) est présent, est-ce qu'on lit la config depuis ses properties ? Proposition : non, pas de couplage. `mansart-pool` reste utilisable hors Vidocq. Une extension `vidocq-mps-mansart-pool` pourra faire le pont plus tard.
+3. **Configuration via `vidocq.properties` ?** : si `vidocq` (le sous-projet d'orchestration) est présent, est-ce qu'on lit la config depuis ses properties ? Proposition : non, pas de couplage. `mansart-pool` reste utilisable hors Vidocq. Une extension `vidocq-runtime-mansart-pool` pourra faire le pont plus tard.
 
 → Ces décisions n'ont pas besoin d'être tranchées tout de suite — elles concernent la phase pool, qui démarre **après** M3 de `mansart-jakarta-data` (on a besoin du dialecte H2 pour tester sérieusement).

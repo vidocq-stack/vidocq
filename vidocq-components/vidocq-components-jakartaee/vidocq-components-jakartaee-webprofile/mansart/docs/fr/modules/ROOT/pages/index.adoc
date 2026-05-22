@@ -90,13 +90,13 @@ Chaque couche s'utilise indépendamment : `mansart-pool` est un `DataSource` aut
 [mermaid]
 ....
 flowchart LR
-    VIDOCQ[xref:vidocq::index.adoc[Vidocq-MPS]] --> MANSART[Mansart]
+    VIDOCQ[xref:vidocq::index.adoc[Vidocq Runtime]] --> MANSART[Mansart]
     VAUBAN[xref:vauban::index.adoc[Vauban CDI]] -.@Repository.-> MANSART
     VAUBAN -.@Transactional.-> MANSART
     MANSART --> JDK[Java 25 JDBC]
 ....
 
-Vauban fournit le bootstrap CDI (BCE) qui découvre les `@Repository` et les transforme en beans `@ApplicationScoped`, et l'intercepteur `@Transactional`. Vidocq-MPS orchestre le packaging et le démarrage.
+Vauban fournit le bootstrap CDI (BCE) qui découvre les `@Repository` et les transforme en beans `@ApplicationScoped`, et l'intercepteur `@Transactional`. Vidocq Runtime orchestre le packaging et le démarrage.
 
 == Ressources rapides
 

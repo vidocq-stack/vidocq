@@ -148,4 +148,4 @@ Avec virtual threads, le sizing classique « threads = connections » disparaît
 
 * xref:vauban::index.adoc[Vauban CDI] — produit les beans `@Repository`, gère l'intercepteur `@Transactional`.
 * xref:cassini::index.adoc[Cassini REST] — endpoints REST appelant les services transactionnels.
-* xref:vidocq::index.adoc[Vidocq-MPS] — orchestrateur qui assemble pool + tx + data + REST dans un fat-jar AOT-friendly.
+* xref:vidocq::index.adoc[Vidocq Runtime] — orchestrateur qui assemble pool + tx + data + REST dans un fat-jar AOT-friendly.

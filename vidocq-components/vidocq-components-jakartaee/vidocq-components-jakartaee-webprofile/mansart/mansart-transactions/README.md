@@ -52,13 +52,13 @@ il échoue actuellement (squelette) pour amorcer le cycle rouge → vert → ref
 
 ## Intégration Vidocq
 
-Côté Vidocq-MPS, l'activation se fait via une seule dépendance — l'extension
-[`vidocq-mps-mansart-transactions-extension`](https://forge.vidocq.dev/vidocq/vidocq/src/branch/main/vidocq-mps-core-extensions/vidocq-mps-mansart-transactions-extension)
+Côté Vidocq Runtime, l'activation se fait via une seule dépendance — l'extension
+[`vidocq-runtime-mansart-transactions-extension`](https://forge.vidocq.dev/vidocq/vidocq/src/branch/main/vidocq-runtime-core-extensions/vidocq-runtime-mansart-transactions-extension)
 qui tire `mansart-transactions-cdi` transitivement et fait un sanity-check
 `TransactionManager` au boot (priorité 250, entre `mansart-pool` et `mansart-data`).
 L'application n'a alors qu'à `requires jakarta.transaction;` dans son `module-info.java`
 pour utiliser `@Transactional` et `@TransactionScoped` — l'exemple de référence est
-`vidocq-mps-mansart-h2-example`.
+`vidocq-runtime-mansart-h2-example`.
 
 ## Bugs / Bench
 

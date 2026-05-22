@@ -90,13 +90,13 @@ Each layer can be used independently: `mansart-pool` is a standalone `DataSource
 [mermaid]
 ....
 flowchart LR
-    VIDOCQ[xref:vidocq::index.adoc[Vidocq-MPS]] --> MANSART[Mansart]
+    VIDOCQ[xref:vidocq::index.adoc[Vidocq Runtime]] --> MANSART[Mansart]
     VAUBAN[xref:vauban::index.adoc[Vauban CDI]] -.@Repository.-> MANSART
     VAUBAN -.@Transactional.-> MANSART
     MANSART --> JDK[Java 25 JDBC]
 ....
 
-Vauban provides the CDI bootstrap (BCE) that discovers `@Repository` interfaces and turns them into `@ApplicationScoped` beans, plus the `@Transactional` interceptor. Vidocq-MPS orchestrates packaging and startup.
+Vauban provides the CDI bootstrap (BCE) that discovers `@Repository` interfaces and turns them into `@ApplicationScoped` beans, plus the `@Transactional` interceptor. Vidocq Runtime orchestrates packaging and startup.
 
 == Quick links
 

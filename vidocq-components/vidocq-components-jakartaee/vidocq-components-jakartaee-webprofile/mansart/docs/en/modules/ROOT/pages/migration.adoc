@@ -143,4 +143,4 @@ Performance comparison: see lien:{repo-mansart}/src/branch/main/mansart-pool/BEN
 
 == No migration needed
 
-Vidocq-MPS ships `vidocq-mps-mansart-h2-example` which shows a clean end-to-end integration. For a new project, starting from this example is often simpler than migrating a legacy.
+Vidocq Runtime ships `vidocq-runtime-mansart-h2-example` which shows a clean end-to-end integration. For a new project, starting from this example is often simpler than migrating a legacy.

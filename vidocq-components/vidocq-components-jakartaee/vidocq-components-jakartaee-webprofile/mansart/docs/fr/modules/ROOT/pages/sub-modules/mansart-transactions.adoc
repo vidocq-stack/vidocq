@@ -95,4 +95,4 @@ Le TCK Jakarta Transactions 2.0 est un harness Sun tsharness historique (Apache 
 
 == Intégration Vidocq
 
-Vidocq-MPS livre `vidocq-mps-mansart-transactions-extension` qui démarre `MansartTransactionManager` au boot et l'enregistre dans le contexte CDI Vauban. L'application n'a qu'à `@Inject UserTransaction` ou utiliser `@Transactional` sur ses méthodes.
+Vidocq Runtime livre `vidocq-runtime-mansart-transactions-extension` qui démarre `MansartTransactionManager` au boot et l'enregistre dans le contexte CDI Vauban. L'application n'a qu'à `@Inject UserTransaction` ou utiliser `@Transactional` sur ses méthodes.
