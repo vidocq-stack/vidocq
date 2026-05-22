@@ -15,8 +15,8 @@
 
     <dependencies>
         <dependency>
-            <groupId>org.eclipse.microprofile.health</groupId>
-            <artifactId>microprofile-health-api</artifactId>
+            <groupId>io.vidocq.knock</groupId>
+            <artifactId>knock-mp-health-api</artifactId>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>

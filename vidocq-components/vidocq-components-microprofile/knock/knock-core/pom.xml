@@ -39,14 +39,13 @@
     <build>
         <plugins>
             <!--
-                JPMS workaround knock-core — microprofile-health-api:4.0.1 sans
-                Automatic-Module-Name (voir docs/adr/ADR-001-jpms-workaround-microprofile-health.md)
+                JPMS workaround knock-core — module-info isole pour eviter la detection JPMS
+                lors de testCompile (voir docs/adr/ADR-001-jpms-workaround-microprofile-health.md).
 
                 Probleme specifique a knock-core : Maven Compiler Plugin 4.0.0-beta-4 detecte
                 le mode JPMS des que module-info.class est present dans target/classes. En mode
-                JPMS pour testCompile, il reconstruit un module-path qui n'inclut pas
-                microprofile-health-api (pas d'Automatic-Module-Name), provoquant :
-                  error: module not found: microprofile.health.api
+                JPMS pour testCompile, il reconstruit un module-path qui ne contient pas les
+                dependances test-scope, ce qui casse la compilation des tests.
 
                 Solution en trois temps :
 
@@ -67,10 +66,8 @@
                 logique metier ; le cablage JPMS (ServiceLoader, module graph) est valide par
                 le smoke test TCK dans knock-tck.
 
-                Compatibilite jlink : le JAR produit contient module-info.class (step 3).
-                microprofile-health-api-*.jar dans target/javamodules/ est resolu par jlink
-                sous le nom microprofile.health.api par derivation de nom de fichier — meme
-                mecanisme que javac. Aucune configuration jlink supplementaire.
+                Compatibilite jlink : le fork io.vidocq.knock:knock-mp-health-api
+                embarque un module-info et ne requiert pas de module automatique.
             -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

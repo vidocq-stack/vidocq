@@ -73,14 +73,11 @@
         <maven.compiler.release>25</maven.compiler.release>
 
         <!--
-            MicroProfile Health 4.0.1 — ATTENTION : ce JAR n'a pas d'Automatic-Module-Name
-            dans son MANIFEST.MF. Le nom JPMS utilisé dans les module-info.java est
-            "microprofile.health.api" (dérivé du nom du JAR : microprofile-health-api → .→.).
-            Si une re-release avec Automatic-Module-Name est publiée (comme pour
-            microprofile-config-api:3.1.1), mettre à jour la version ici et les
-            module-info.java correspondants.
+            MicroProfile Health API 4.0.1 — fork Vidocq avec module-info
+            pour JPMS/jlink. La version upstream est gardee a titre indicatif.
         -->
-        <microprofile.health.version>4.0.1</microprofile.health.version>
+        <microprofile.health.api.version>${project.version}</microprofile.health.api.version>
+        <microprofile.health.upstream.version>4.0.1</microprofile.health.upstream.version>
 
         <!-- Jakarta JSON-P — implémentation fournie par champollion -->
         <jakarta.json.version>2.1.3</jakarta.json.version>
@@ -109,6 +106,7 @@
         après installation locale du reactor.
     -->
     <subprojects>
+        <subproject>knock-mp-health-api</subproject>
         <subproject>knock-api</subproject>
         <subproject>knock-core</subproject>
         <subproject>knock-cdi-vauban</subproject>
@@ -126,11 +124,11 @@
                 <scope>import</scope>
             </dependency>
 
-            <!-- MicroProfile Health API -->
+            <!-- MicroProfile Health API (fork Vidocq avec module-info) -->
             <dependency>
-                <groupId>org.eclipse.microprofile.health</groupId>
-                <artifactId>microprofile-health-api</artifactId>
-                <version>${microprofile.health.version}</version>
+                <groupId>io.vidocq.knock</groupId>
+                <artifactId>knock-mp-health-api</artifactId>
+                <version>${microprofile.health.api.version}</version>
             </dependency>
 
             <!-- Jakarta JSON-P (implémentation : champollion) -->
@@ -251,23 +249,30 @@
         </pluginManagement>
 
         <!--
-            JPMS workaround : microprofile-health-api:4.0.1 sans Automatic-Module-Name
-            (voir docs/adr/ADR-001-jpms-workaround-microprofile-health.md)
-
-            Probleme : Maven Compiler Plugin 4.0.0-beta-4 place sur le classpath (unnamed
-            module) tout JAR sans module-info.class ni Automatic-Module-Name, rendant
-            'requires microprofile.health.api' impossible dans les module-info.java.
-
-            Solution : maven-dependency-plugin copie tous les JARs compile-scope dans
-            target/javamodules/ en phase initialize. Le maven-compiler-plugin recoit
-            l'argument "-module-path target/javamodules" (compilerArg) ; javac derive
-            alors le nom microprofile.health.api depuis le nom de fichier.
-
-            Compatibilite jlink : ce meme repertoire target/javamodules/ passe en
-            option -module-path de jlink resout microprofile.health.api par le meme
-            mecanisme de derivation. Aucune configuration jlink supplementaire.
+            JPMS : le fork knock-mp-health-api embarque un module-info et peut
+            etre place sur le module-path. On conserve target/javamodules pour
+            aligner la resolution javac/jlink et les builds multi-modules.
         -->
         <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-clean-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>clean-javamodules-before-copy</id>
+                        <phase>initialize</phase>
+                        <goals><goal>clean</goal></goals>
+                        <configuration>
+                            <excludeDefaultDirectories>true</excludeDefaultDirectories>
+                            <filesets>
+                                <fileset>
+                                    <directory>${project.build.directory}/javamodules</directory>
+                                </fileset>
+                            </filesets>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-dependency-plugin</artifactId>
@@ -275,7 +280,7 @@
                 <executions>
                     <!--
                         Copie toutes les dependances compile et provided dans target/javamodules.
-                        Cela inclut microprofile-health-api (sans Automatic-Module-Name),
+                        Cela inclut knock-mp-health-api (fork avec module-info),
                         knock-api, jakarta.json, etc. Notre argument javac module-path prend
                         precedence car javac utilise le premier module-path rencontre.
                         includeScope=compile : compile et provided, pas test ni runtime.

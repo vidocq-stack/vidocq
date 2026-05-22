@@ -13,4 +13,3 @@ Service entry points from `knock-core`:
 * `io.vidocq.knock.runtime.HealthCheckRegistries`
 * `io.vidocq.knock.runtime.KnockHealthService`
 * `io.vidocq.knock.runtime.HealthReport`
-

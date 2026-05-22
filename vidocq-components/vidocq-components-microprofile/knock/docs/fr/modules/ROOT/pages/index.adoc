@@ -21,4 +21,3 @@ Knock est le sous-systeme health de l ecosysteme Vidocq.
 * `GET /health/live`
 * `GET /health/ready`
 * `GET /health/started`
-

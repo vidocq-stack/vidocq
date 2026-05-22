@@ -1,4 +1,4 @@
-# ADR-001 — Contournement JPMS pour `microprofile-health-api` (module automatique sans `Automatic-Module-Name`)
+# ADR-001 — Fork JPMS pour `knock-mp-health-api` (module explicite jlink)
 
 **Date :** 2026-05-10
 **Statut :** Accepté
@@ -8,73 +8,47 @@
 
 ## Contexte
 
-`microprofile-health-api:4.0.1` (Eclipse MicroProfile) est livré sans `module-info.class`
-et sans `Automatic-Module-Name` dans son `MANIFEST.MF`. Ce JAR est donc, au sens JPMS :
+`microprofile-health-api:4.0.1` (Eclipse MicroProfile) est livré sans `module-info.class`.
+Ce JAR est donc un **module automatique**, ce qui bloque `jlink` (qui refuse les modules
+automatiques). En plus, les `package-info.java` upstream utilisent
+`@org.osgi.annotation.versioning.Version`, ce qui introduit une dépendance OSGi
+elle aussi non modulaire.
 
-- **Hors module-path par défaut** — Maven Compiler Plugin (4.0.0-beta-4) place les JARs sans
-  `module-info` sur le **classpath** (unnamed module) lorsqu'il auto-détecte le mode JPMS
-  (présence de `module-info.class` dans `target/classes`).
-- **Inutilisable via `requires`** dans un `module-info.java` si Maven le met sur le classpath.
+Knock a besoin d'un module JPMS **explicite** pour `microprofile.health.api` afin que :
 
-Knock a besoin que `microprofile-health-api` soit un module JPMS nommé à la compilation
-(et dans les images jlink) pour que les `module-info.java` de `knock-api` et `knock-core`
-puissent écrire `requires microprofile.health.api`.
+- `requires microprofile.health.api` compile proprement ;
+- `jlink` puisse produire une image minimale sans modules automatiques ;
+- `knock-core` reste utilisable en SE pur (pas de dépendance CDI obligatoire).
 
 ---
 
-## Problème en trois facettes
+## Problèmes identifiés
 
-### Facette 1 — Compilation principale (phase `compile`)
-
-Maven Compiler Plugin 4.0.0-beta-4 en mode JPMS construit le module-path en retenant uniquement
-les JARs qui ont un `module-info.class` ou un `Automatic-Module-Name`. `microprofile-health-api`
-n'ayant ni l'un ni l'autre, il est absent du module-path généré, et `requires microprofile.health.api`
-échoue à la compilation avec : `module not found: microprofile.health.api`.
-
-### Facette 2 — Compilation des tests de `knock-core` (phase `testCompile`)
-
-Maven Compiler Plugin auto-détecte le mode JPMS si `module-info.class` est présent dans
-`target/classes`. En mode JPMS pour `testCompile`, il reconstruit un module-path pour les
-dépendances de test — mais `microprofile-health-api` y est également absent (même problème,
-aggravé par le fait que les dépendances transitives ne sont pas toutes disponibles dans
-`target/javamodules` au moment de `testCompile` pour les dépendances `test`-scoped).
-
-Il en résulte une erreur à la compilation des tests : `module not found: microprofile.health.api`.
-
-### Facette 3 — Déclaration `uses` impossible dans `knock-core/module-info.java`
-
-La directive `uses org.eclipse.microprofile.health.spi.HealthCheckResponseProvider` ne peut
-être déclarée que depuis le module qui "possède" le `ServiceLoader` appelant. Or
-`HealthCheckResponse.named()` est implémenté **dans** le module automatique
-`microprofile.health.api` qui n'a pas de `module-info.java`. Il est donc impossible d'écrire
-`uses ... HealthCheckResponseProvider` depuis `knock-core/module-info.java`.
-
-Le ServiceLoader invoqué dans `HealthCheckResponse.named()` utilise le
-`Thread.currentThread().getContextClassLoader()` — approche ClassLoader hors JPMS qui
-scanne `META-INF/services/`.
+1. **`jlink` refuse les modules automatiques** → `microprofile-health-api` upstream bloque
+   la création d'une image dédiée.
+2. **Dépendance OSGi non modulaire** via `@org.osgi.annotation.versioning.Version` dans les
+   `package-info.java` → seconde source de module automatique.
+3. **`knock-core`** reste soumis au workaround `module-info` pour éviter la détection JPMS
+   en `testCompile` (voir section « Build Maven en trois temps » ci-dessous).
 
 ---
 
 ## Solution retenue
 
-### Facette 1 — Forcer le JAR sur le module-path via `target/javamodules/`
+### Fork MicroProfile Health API
 
-Dans le POM parent, `maven-dependency-plugin:copy-dependencies` est exécuté en phase
-`initialize` : il copie tous les JARs de scope `compile` dans `target/javamodules/`. Le
-`maven-compiler-plugin` reçoit ensuite `--module-path ${project.build.directory}/javamodules`
-comme premier argument `compilerArg`.
+Créer un fork minimal **dans le repo** sous le module Maven
+`io.vidocq.knock:knock-mp-health-api` :
 
-javac dérive alors le nom du module depuis le nom du fichier :
+- Sources copiées depuis `microprofile-health-api:4.0.1` (JAR *sources*).
+- Ajout d'un `module-info.java` avec le nom **`microprofile.health.api`**.
+- Ajout de `uses org.eclipse.microprofile.health.spi.HealthCheckResponseProvider`.
+- Dépendances CDI déclarées en `requires static` pour conserver un usage SE pur.
+- Suppression des annotations `@org.osgi.annotation.versioning.Version` dans les
+  `package-info.java` pour éviter une dépendance OSGi non modulaire.
+- Inclusion de `META-INF/LICENSE` et `META-INF/NOTICE` upstream.
 
-```
-microprofile-health-api-4.0.1.jar
-  → strip version suffix    → microprofile-health-api
-  → replace [-_]+ by '.'   → microprofile.health.api
-```
-
-Ce nom correspond exactement aux `requires microprofile.health.api` dans les `module-info.java`.
-
-### Facette 2 — `module-info.java` de `knock-core` hors de `src/main/java`
+### `module-info.java` de `knock-core` hors de `src/main/java`
 
 `knock-core` place son `module-info.java` dans un source root séparé : `src/main/module-info/`.
 La solution procède en trois temps, configurée dans `knock-core/pom.xml` :
@@ -92,7 +66,7 @@ La solution procède en trois temps, configurée dans `knock-core/pom.xml` :
 s'exécutent sur le **classpath**. Ce choix est intentionnel — les tests unitaires valident
 la logique métier ; le câblage JPMS est validé par le smoke test TCK (`knock-tck`).
 
-### Facette 3 — Double registration SPI
+### Double registration SPI
 
 `KnockHealthCheckResponseProvider` est déclaré **deux fois** :
 
@@ -113,33 +87,10 @@ des modules nommés sur le module-path.
 
 **La solution retenue est compatible avec `jlink`.**
 
-### Principe
+Le fork `io.vidocq.knock:knock-mp-health-api` est un **module explicite**
+(`microprofile.health.api`). L'image jlink ne contient donc **aucun module automatique**.
 
-jlink accepte deux types de modules dans son `--module-path` :
-
-- **Modules explicites** — JAR avec `module-info.class` (ex. : `knock-api`, `knock-core`)
-- **Modules automatiques** — JAR sans `module-info.class`, nommé via `Automatic-Module-Name`
-  (MANIFEST.MF) **ou** dérivé du nom de fichier (même mécanisme que javac)
-
-`microprofile-health-api-4.0.1.jar` est résolu par jlink comme module automatique
-`microprofile.health.api` dès lors qu'il est présent dans le répertoire passé à
-`--module-path`. C'est exactement ce que fournit `target/javamodules/`.
-
-### Stabilité du nom de module entre versions
-
-Le nom est dérivé de la partie **nom d'artefact** Maven (sans version), ce qui garantit sa
-stabilité :
-
-```
-microprofile-health-api-4.0.1.jar → microprofile.health.api
-microprofile-health-api-4.0.2.jar → microprofile.health.api
-microprofile-health-api-5.0.jar   → microprofile.health.api
-```
-
-Le nom varie uniquement si l'artifact ID Eclipse MicroProfile change — ce qui n'a jamais
-eu lieu entre les versions majeures de la spec Health.
-
-### Commande jlink de référence
+Exemple de commande :
 
 ```bash
 jlink \
@@ -148,35 +99,18 @@ jlink \
   --output knock-runtime
 ```
 
-`microprofile-health-api-4.0.1.jar` dans `target/javamodules/` est résolu comme
-`microprofile.health.api`. Aucun flag supplémentaire n'est requis.
-
-### Avertissement JDK
-
-Le JDK émet ce warning lors de la création d'une image avec des modules automatiques sans
-`Automatic-Module-Name` :
-
-```
-WARNING: Using automatic module microprofile.health.api from: microprofile-health-api-4.0.1.jar
-```
-
-Ce warning est **bénin** dans notre cas : le nom est stable (voir ci-dessus) et l'artefact
-est officiel (Eclipse MicroProfile). Il disparaîtra si une future release de
-`microprofile-health-api` ajoute `Automatic-Module-Name: microprofile.health.api` à son
-`MANIFEST.MF`.
-
 ---
 
 ## Conditions de révision
 
 Ce contournement doit être réévalué si :
 
-1. `microprofile-health-api` publie un JAR avec `Automatic-Module-Name: microprofile.health.api`
-   → les workarounds Maven (facettes 1 et 2) peuvent être simplifiés ou supprimés.
-2. `microprofile-health-api` publie un JAR avec `module-info.class`
-   → supprimer l'ensemble du workaround ; mettre à jour les `requires` si le module name change.
-3. Maven Compiler Plugin corrige la détection JPMS pour les modules automatiques sans
-   `Automatic-Module-Name` → réévaluer la nécessité du workaround facette 2.
+1. `microprofile-health-api` upstream publie un JAR avec `module-info.class`
+   → supprimer le fork, revenir à l'artefact officiel, garder `requires microprofile.health.api`.
+2. Les annotations OSGi cessent d'être nécessaires upstream
+   → possibilité de restaurer les `package-info.java` originaux.
+3. Maven Compiler Plugin améliore la détection JPMS pour `testCompile`
+   → réévaluer la nécessité du workaround `module-info` dans `knock-core`.
 
 ---
 

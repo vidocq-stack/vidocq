@@ -39,7 +39,8 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.release>25</maven.compiler.release>
         <knock.version>0.1.0-SNAPSHOT</knock.version>
-        <microprofile.health.version>4.0.1</microprofile.health.version>
+        <microprofile.health.api.version>0.1.0-SNAPSHOT</microprofile.health.api.version>
+        <microprofile.health.tck.version>4.0.1</microprofile.health.tck.version>
         <cassini.version>0.1.0-SNAPSHOT</cassini.version>
         <chappe.version>0.1.0-SNAPSHOT</chappe.version>
     </properties>
@@ -112,9 +113,9 @@
             <version>${knock.version}</version>
         </dependency>
         <dependency>
-            <groupId>org.eclipse.microprofile.health</groupId>
-            <artifactId>microprofile-health-api</artifactId>
-            <version>${microprofile.health.version}</version>
+            <groupId>io.vidocq.knock</groupId>
+            <artifactId>knock-mp-health-api</artifactId>
+            <version>${microprofile.health.api.version}</version>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
@@ -241,8 +242,14 @@
                 <dependency>
                     <groupId>org.eclipse.microprofile.health</groupId>
                     <artifactId>microprofile-health-tck</artifactId>
-                    <version>${microprofile.health.version}</version>
+                    <version>${microprofile.health.tck.version}</version>
                     <scope>test</scope>
+                    <exclusions>
+                        <exclusion>
+                            <groupId>org.eclipse.microprofile.health</groupId>
+                            <artifactId>microprofile-health-api</artifactId>
+                        </exclusion>
+                    </exclusions>
                 </dependency>
 
                 <dependency>

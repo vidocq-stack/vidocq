@@ -9,4 +9,3 @@ Knock passe le TCK officiel MicroProfile Health 4.0:
 ./run-official-tck-mp-health-4.0.sh
 ./run-official-tck-mp-health-4.0.sh all
 ----
-

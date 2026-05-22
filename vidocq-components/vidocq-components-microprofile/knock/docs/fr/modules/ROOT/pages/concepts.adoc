@@ -5,4 +5,3 @@
 * L integration JAX-RS est isolee dans `knock-cassini`.
 * Les packages internes restent non exportes.
 * Runtime compatible virtual threads: pas de `synchronized`, pas de `ThreadLocal`.
-

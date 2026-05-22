@@ -15,4 +15,3 @@
 ./mvnw -ntp install -DskipTests
 ./mvnw test
 ----
-

@@ -8,8 +8,8 @@
 
 | Principe | Application concrète |
 |---|---|
-| Zéro librairie tierce | Pas de SmallRye Health, Vert.x Health, Jackson, Gson dans `knock-core`. Seules les API specs sont compilées : `microprofile-health-api` + `jakarta.json` (JSON-P spec, implémentée par champollion). |
-| Specs Jakarta / MicroProfile autorisées | `knock-cdi-vauban` peut dépendre de `jakarta.enterprise.cdi-api`, `jakarta.inject-api`, `jakarta.annotation-api`. `knock-cassini` peut dépendre de `jakarta.ws.rs` (Jakarta REST spec, implémentée par Cassini). Le cœur `knock-core` se limite à `microprofile-health-api` + `jakarta.json`. |
+| Zéro librairie tierce | Pas de SmallRye Health, Vert.x Health, Jackson, Gson dans `knock-core`. Seules les API specs sont compilées : `knock-mp-health-api` + `jakarta.json` (JSON-P spec, implémentée par champollion). |
+| Specs Jakarta / MicroProfile autorisées | `knock-cdi-vauban` peut dépendre de `jakarta.enterprise.cdi-api`, `jakarta.inject-api`, `jakarta.annotation-api`. `knock-cassini` peut dépendre de `jakarta.ws.rs` (Jakarta REST spec, implémentée par Cassini). Le cœur `knock-core` se limite à `knock-mp-health-api` + `jakarta.json`. |
 | Virtual threads | Pas de `synchronized`, pas de `ThreadLocal`. Le registry utilise des structures concurrentes (`ConcurrentHashMap`, `CopyOnWriteArrayList`). Les appels `HealthCheck.call()` peuvent être parallélisés sur un `VirtualThreadPerTaskExecutor`. |
 | JPMS strict | `module-info.java` partout, packages `internal.*` non exportés, SPI via `provides/uses`. Pas d'`opens` non justifié. |
 | TDD strict | Red → Green → Refactor. Tests écrits avant le code de prod. Citation systématique de la section spec MicroProfile Health 4.0 dans le JavaDoc des tests. |
@@ -91,14 +91,14 @@ public interface HealthCheck {
 - ✅ Validation `mvn -ntp install -DskipTests` réussit (reactor + knock-tck standalone)
 - ✅ Smoke test `KnockTckSmokeTest` : 3/3 PASS
 
-**Note JPMS :** `microprofile-health-api:4.0.1` n'a ni `Automatic-Module-Name` ni `module-info.class`.
-Contournement complet documenté dans `docs/adr/ADR-001-jpms-workaround-microprofile-health.md` — résumé :
-`maven-dependency-plugin:copy-dependencies` copie tous les artefacts compile dans `target/javamodules/` ;
-`--module-path target/javamodules` est injecté en premier `compilerArg` — javac dérive le nom
-`microprofile.health.api` depuis le nom de fichier. `knock-core` requiert en plus un source root séparé
-(`src/main/module-info/`) et un clean/recompile en `prepare-package` pour éviter la détection JPMS
-lors de `testCompile`. Ce même répertoire `target/javamodules/` sert de `--module-path` pour jlink —
-**la compatibilité jlink est garantie** (voir ADR-001, section « Compatibilité jlink »).
+**Note JPMS :** `microprofile-health-api:4.0.1` upstream n'a pas de `module-info.class`.
+Knock embarque un fork modulaire `io.vidocq.knock:knock-mp-health-api` documente
+dans `docs/adr/ADR-001-jpms-workaround-microprofile-health.md` — resume :
+`module-info.java` ajoute le module explicite `microprofile.health.api`, les annotations OSGi
+`@Version` ont ete retirees des `package-info.java` pour eviter un module automatique, et le
+workaround `src/main/module-info/` reste en place pour `knock-core` afin d'eviter la detection
+JPMS en `testCompile`. `target/javamodules/` continue d'etre utilise pour aligner javac et jlink —
+**la compatibilite jlink est garantie sans modules automatiques** (voir ADR-001).
 
 **Livrable :** `mvn -ntp install -DskipTests` réussit sur le reactor (knock-api, knock-core,
 knock-cdi-vauban, knock-cassini) et compile aussi le projet hors-reactor `knock-tck`
@@ -248,7 +248,7 @@ health check par défaut de tout déploiement vidocq.
   `vidocq-runtime-cassini-rest-extension`. champollion-jsonp est runtime-only.
 - **Même workaround JPMS que `knock-core`** appliqué au wrapper (module-info hors
   `src/main/java/`, recompilation en `prepare-package`, `--module-path target/javamodules`)
-  pour contourner `microprofile-health-api:4.0.1` sans Automatic-Module-Name.
+  pour aligner la compilation avec le fork modulaire `microprofile.health.api`.
 
 **Livrable :** documentation complète (intégration Cassini + intégration vidocq + ADR-002),
 module wrapper `vidocq-runtime-knock-extension` installé et compilable dans le reactor vidocq,
@@ -279,11 +279,11 @@ module wrapper `vidocq-runtime-knock-extension` installé et compilable dans le 
 | Disponibilité de champollion en runtime pour JSON-P | Valider dès M1 que `champollion` est bien sur le module-path comme implémentation Jakarta JSON-P ; c'est une dépendance runtime obligatoire de `knock-core` |
 | Interaction entre checks de types différents sur `/health` | Tester agrégation ALL avec mix LIVENESS/READINESS/STARTUP dont certains DOWN |
 | JPMS et discovery ServiceLoader dans `knock-cdi-vauban` | Vérifier que les `provides` CDI ne nécessitent pas d'`opens` sur les modules utilisateur |
-| Version du TCK MicroProfile Health 4.0 disponible sur Maven Central | Vérifier la disponibilité de `org.eclipse.microprofile.health:microprofile-health-tck:4.0` et l'Automatic-Module-Name du JAR API |
+| Version du TCK MicroProfile Health 4.0 disponible sur Maven Central | Vérifier la disponibilité de `org.eclipse.microprofile.health:microprofile-health-tck:4.0` |
 
 ## Décisions actées
 
-- ✅ **Specs Jakarta / MicroProfile autorisées** : `microprofile-health-api`, `jakarta.cdi-api`,
+- ✅ **Specs Jakarta / MicroProfile autorisées** : `knock-mp-health-api`, `jakarta.cdi-api`,
   `jakarta.inject-api`, `jakarta.annotation-api`. Pas de SmallRye / Vert.x / Quarkus Health.
 - ✅ **`knock-core` standalone SE** : utilisable sans CDI, sans Jakarta REST, sans container.
   Dépend de `jakarta.json` (JSON-P spec) avec champollion comme implémentation runtime.
