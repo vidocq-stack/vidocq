@@ -23,8 +23,12 @@
             <artifactId>humboldt-sdk-trace</artifactId>
         </dependency>
         <dependency>
-            <groupId>io.opentelemetry</groupId>
-            <artifactId>opentelemetry-api</artifactId>
+            <groupId>io.vidocq.humboldt</groupId>
+            <artifactId>humboldt-otel-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.humboldt</groupId>
+            <artifactId>humboldt-otel-context</artifactId>
         </dependency>
         <!--
             Annotation @WithSpan publique standard OTel — c'est l'annotation
@@ -32,8 +36,8 @@
             pas d'impl runtime (juste les annotations marqueurs).
         -->
         <dependency>
-            <groupId>io.opentelemetry.instrumentation</groupId>
-            <artifactId>opentelemetry-instrumentation-annotations</artifactId>
+            <groupId>io.vidocq.humboldt</groupId>
+            <artifactId>humboldt-otel-instrumentation-annotations</artifactId>
         </dependency>
         <dependency>
             <groupId>jakarta.annotation</groupId>
