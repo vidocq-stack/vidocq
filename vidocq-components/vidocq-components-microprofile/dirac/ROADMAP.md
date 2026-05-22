@@ -35,6 +35,9 @@ n'est écrite avant un test qui la justifie. Au-delà du cycle TDD interne :
 ## Architecture des modules
 
 ```
+dirac-mp-metrics-api io.vidocq.dirac.mp.metrics.api (artifact module: microprofile.metrics.api)
+  → Repackage local de microprofile-metrics-api avec module-info explicite
+
 dirac-api            io.vidocq.dirac.api
   exports io.vidocq.dirac.api
   requires microprofile.metrics.api
@@ -318,10 +321,10 @@ strictement modulaire (aucun module automatique dans le graphe final).
 | Tâche | Notes | État |
 |---|---|---|
 | Définir le périmètre `jlink` | Cible minimale : `dirac-api` + `dirac-core`; cible étendue : + `dirac-cdi-vauban` | ☐ |
-| Lever le blocker MP Metrics | Artefact modulaire local généré (`microprofile-metrics-api-5.1.1-mod.jar`) utilisé par le smoke `jlink` | ☑ |
+| Lever le blocker MP Metrics | Artefact reactor `dirac-mp-metrics-api` (repackage MP Metrics + `module-info.class`) utilisé par le smoke `jlink` | ☑ |
 | Option A — module bridge interne | Introduire un bridge explicitement modulaire qui évite l'automatic module dans l'image | ☐ |
 | Option A (prototype local M9.2) | POC validé: modularisation locale de `microprofile-metrics-api` via `jdeps`/`javac`/`jar` + image `jlink` générée (`run-jlink-smoke-m92.sh`) | ☑ |
-| Option B — artefact API modulaire | Artefact local avec `module-info.class` explicite généré par script (`build-modular-mp-metrics-api.sh`) | ☑ |
+| Option B — artefact API modulaire | Industrialisée via le module reactor `dirac-mp-metrics-api` | ☑ |
 | Inventaire module-path | Documenter les modules explicites/automatiques (Dirac + Jakarta + MP) | ☑ |
 | `module-info` manquants | `dirac-rest`, `dirac-examples` et `dirac-bench` sont modularisés (workaround JPMS) | ☑ |
 | Profil Maven `jlink-smoke` | Profil parent `-Pjlink-smoke` ajouté (bloquant: échec si smoke `jlink` échoue) | ☑ |

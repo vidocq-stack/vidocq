@@ -14,10 +14,10 @@
     <description>Re-exposition contrôlée de la spec MicroProfile Metrics 5.1.1 + SPI Dirac</description>
 
     <dependencies>
-        <!-- Spec MP Metrics 5.1.1 — re-exposée transitivement -->
+        <!-- API MP Metrics repackagée localement avec module-info explicite -->
         <dependency>
-            <groupId>org.eclipse.microprofile.metrics</groupId>
-            <artifactId>microprofile-metrics-api</artifactId>
+            <groupId>io.vidocq.dirac</groupId>
+            <artifactId>dirac-mp-metrics-api</artifactId>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>

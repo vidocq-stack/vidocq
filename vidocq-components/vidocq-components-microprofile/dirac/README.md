@@ -47,16 +47,17 @@ Le runner TCK installe d'abord les artefacts Dirac requis dans le M2 local via
 ./mvnw -ntp -N -Pjlink-smoke verify
 ```
 
-Le detail du smoke check et du blocker `jlink` actuel est documente dans
+Le detail du smoke check M9 est documente dans
 [`JLINK.md`](JLINK.md).
 
-Le smoke M9 genere un artefact local explicitement modulaire de
-`microprofile-metrics-api:5.1.1` avant de lancer `jlink`.
+Le smoke M9 utilise l'artefact reactor `dirac-mp-metrics-api`, qui repackage
+`microprofile-metrics-api:5.1.1` avec un `module-info.class` explicite.
 
 ## Modules
 
 | Module | Description |
 |---|---|
+| `dirac-mp-metrics-api` | Repackage local de MP Metrics API avec `module-info.class` explicite pour JPMS/jlink |
 | `dirac-api` | Re-exposition contrôlée MP Metrics 5.1.1 + SPI Dirac |
 | `dirac-core` | Implémentations pures Java 25 (Counter, Gauge, Histogram, Timer, registre, formatters) |
 | `dirac-cdi-vauban` | Intercepteurs CDI + BCE Vauban (DiracExtension) |

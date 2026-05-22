@@ -105,6 +105,7 @@
         après installation locale du reactor.
     -->
     <subprojects>
+        <subproject>dirac-mp-metrics-api</subproject>
         <subproject>dirac-api</subproject>
         <subproject>dirac-core</subproject>
         <subproject>dirac-cdi-vauban</subproject>
@@ -192,6 +193,11 @@
             </dependency>
 
             <!-- Modules internes Dirac -->
+            <dependency>
+                <groupId>io.vidocq.dirac</groupId>
+                <artifactId>dirac-mp-metrics-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
             <dependency>
                 <groupId>io.vidocq.dirac</groupId>
                 <artifactId>dirac-api</artifactId>
