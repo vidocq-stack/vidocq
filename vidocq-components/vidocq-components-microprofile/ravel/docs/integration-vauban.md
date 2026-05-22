@@ -248,9 +248,9 @@ private boolean featureXEnabled;
 private Optional<String> optionalFeature;
 ```
 
-## Intégration avec `vidocq-mps`
+## Intégration avec `vidocq`
 
-Pour remplacer Smallrye Config dans `vidocq-mps` :
+Pour remplacer Smallrye Config dans `vidocq` :
 
 1. Supprimer la dépendance `io.smallrye.config:smallrye-config`
 2. Ajouter `io.vidocq.ravel:ravel-cdi-vauban`

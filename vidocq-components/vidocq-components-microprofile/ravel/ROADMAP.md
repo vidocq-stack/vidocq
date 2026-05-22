@@ -180,7 +180,7 @@ résultats bruts inclus).
 
 ### M6 — Intégration écosystème Vidocq ✅
 
-**Scope :** déployer Ravel dans Cassini, Chappe, Vauban et `vidocq-mps` ; remplacer
+**Scope :** déployer Ravel dans Cassini, Chappe, Vauban et `vidocq` ; remplacer
 Smallrye Config comme implémentation par défaut. Documenté dans
 [ADR-001](docs/adr/ADR-001-integration-ecosysteme-vidocq.md).
 
@@ -199,11 +199,11 @@ Smallrye Config comme implémentation par défaut. Documenté dans
 | Test end-to-end `cassini-examples-vauban/ConfigDemoResourceTest` | ✅ | 2/2 PASS après rebuild Cassini sur snapshot Vauban corrigé (VAU-BCE-001) |
 | Test BCE Vauban dans `ravel-cdi-vauban` (`resolves_config_property_injection_through_bce_pipeline`) | ✅ | Réactivé après fix VAU-BCE-001. Couvre `@Registration` qui lit `BeanInfo.injectionPoints()`, `@Synthesis` qui synthétise un `SyntheticBean<String>` (scalaire) + un `SyntheticBean<Optional<String>>` (paramétré). Suite ravel-cdi-vauban : 21/21 PASS, 0 skip |
 | Bench end-to-end Cassini + Ravel vs Cassini + Smallrye Config | ⏳ | À déclencher dans une session dédiée |
-| `vidocq-mps` : intégrer Ravel comme implémentation MicroProfile Config 3.1 | ✅ | `ravel-cdi-vauban` ajouté à `vidocq-mps-core` ; `requires transitive io.vidocq.ravel.cdi.vauban` dans module-info ; `RavelConfigPropertyIntegrationTest` 1/1 PASS (String, Integer, Optional<String>) — toutes les apps vidocq-mps accèdent à `@ConfigProperty` sans dépendance supplémentaire |
+| `vidocq` : intégrer Ravel comme implémentation MicroProfile Config 3.1 | ✅ | `ravel-cdi-vauban` ajouté à `vidocq-runtime-core` ; `requires transitive io.vidocq.ravel.cdi.vauban` dans module-info ; `RavelConfigPropertyIntegrationTest` 1/1 PASS (String, Integer, Optional<String>) — toutes les apps vidocq accèdent à `@ConfigProperty` sans dépendance supplémentaire |
 
 **Livrable :** documentation complète, artefacts de discovery (ServiceLoader +
 JPMS + `vauban-beans.list`) packagés, intégration Cassini opérationnelle
-(`ConfigDemoResourceTest` 2/2 PASS), swap Ravel dans vidocq-mps validé
+(`ConfigDemoResourceTest` 2/2 PASS), swap Ravel dans vidocq validé
 (`RavelConfigPropertyIntegrationTest` 1/1 PASS). Conformité spec via TCK
 349/349 PASS (Weld) ; bridge `vauban-core ↔ ravel-cdi-vauban` débloqué par
 `fix/vau-bce-001-bce-not-invoked` (cf. `vauban/BUG.md#VAU-BCE-001`).

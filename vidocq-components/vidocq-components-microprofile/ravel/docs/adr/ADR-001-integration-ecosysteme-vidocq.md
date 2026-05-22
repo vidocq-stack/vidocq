@@ -8,7 +8,7 @@
 
 Ravel (implémentation MicroProfile Config 3.1) est maintenant complet et TCK-compliant
 (349/349 PASS). L'objectif M6 est de déployer Ravel dans les projets Vidocq existants
-(Cassini, Chappe, Vauban, vidocq-mps) pour remplacer Smallrye Config.
+(Cassini, Chappe, Vauban, vidocq) pour remplacer Smallrye Config.
 
 ## Décision
 
@@ -31,7 +31,7 @@ io.vidocq.ravel:ravel-core        # sans CDI (Chappe standalone)
 1. **Vauban** : enregistrement de `Config` comme bean CDI (via `ConfigCdiExtension` existant)
 2. **Cassini** : injection `@ConfigProperty` dans les ressources REST (via `cassini-cdi-vauban`)
 3. **Chappe** : lecture de configuration du serveur via API programmatique `ConfigProvider`
-4. **vidocq-mps** : mise à jour de l'assembly pour inclure `ravel-cdi-vauban`
+4. **vidocq** : mise à jour de l'assembly pour inclure `ravel-cdi-vauban`
 
 ### Ce qui N'EST PAS modifié
 
