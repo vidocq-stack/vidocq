@@ -111,6 +111,15 @@ public class HumboldtDeployableContainer implements DeployableContainer<Humboldt
             // @Inject Tracer / Span / Baggage / OpenTelemetry — fournis par
             // humboldt-cdi, ajoutés systématiquement à chaque deploy.
             builder.addBeanClass(io.vidocq.humboldt.cdi.HumboldtTelemetryProducers.class);
+            // HBT-1 — BCE Cassini @Path → @RequestScoped : Vauban applique les BCE
+            // @Enhancement aux classes "unprocessed" via BceProcessor.processEnhancementOnly()
+            // (cf. VaubanContainerBuilder.java:742), mais SEULEMENT si la BCE est dans le
+            // bean classes set. addBeanClass() ne scanne PAS le ServiceLoader. On ajoute donc
+            // manuellement la BCE Cassini ici pour que les ressources @Path du WAR (ex:
+            // BaggageResource, RestSpanTest$SpanResource) reçoivent un @RequestScoped
+            // synthétique et soient découvertes comme beans Vauban → @Inject Baggage/Tracer
+            // côté ressources reste non-null.
+            builder.addBeanClass(io.vidocq.cassini.cdi.vauban.CassiniScopeExtension.class);
             for (Class<?> bean : beanClasses) {
                 builder.addBeanClass(bean);
             }

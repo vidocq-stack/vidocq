@@ -18,11 +18,25 @@
 
 ---
 
+### [HBT-2] cassini-cdi-vauban n'active jamais le RequestContext autour d'un dispatch HTTP
+
+- **Date** : 2026-05-24
+- **Composant** : cassini-cdi-vauban
+- **Statut** : OPEN (workaround en place dans humboldt-tck/CassiniHarness, fix propre à faire côté Cassini)
+- **Affecté** : cassini-cdi-vauban 0.1.0-SNAPSHOT
+- **Symptôme** : toute resource `@RequestScoped` (= toute classe `@Path` après BCE Cassini) throws `ContextNotActiveException: RequestScope is not active` lors de l'invocation d'une méthode resource.
+- **Reproduction** : cf. HBT-1 — déclencher BaggageTest avant le workaround.
+- **Cause** : `cassini-cdi-vauban` ne contient aucun appel à `VaubanContainer.requestContext().activate()` autour des dispatches HTTP. Les beans `@RequestScoped` ne peuvent donc jamais être instanciés.
+- **Workaround actuel** : `RequestScopeActivatingHandler` dans `humboldt-tck/CassiniHarness` wrap le Handler Cassini pour activer/déactiver le RequestContext par requête. Local au runner TCK humboldt.
+- **Fix propre** : implémenter dans cassini-cdi-vauban un `@PreMatching ContainerRequestFilter` priorité MIN qui active, + un `ContainerResponseFilter` priorité MAX qui déactive. OU directement dans l'`HttpAdapter` cassini.
+
+---
+
 ### [HBT-1] BCE Cassini @Path → @RequestScoped non appliquée aux beans ajoutés runtime via Vauban addBeanClass
 
 - **Date** : 2026-05-24
 - **Composant** : humboldt-tck (interaction Vauban runtime + cassini-cdi-vauban BCE)
-- **Statut** : OPEN (bloqueur partiel pour ~3-5 tests TCK MP Telemetry 2.1)
+- **Statut** : FIXED (humboldt-tck commit `00:25 2026-05-24`)
 - **Affecté** : humboldt-tck 0.1.0-SNAPSHOT, vauban 0.1.0-SNAPSHOT, cassini-cdi-vauban 0.1.0-SNAPSHOT
 - **Symptôme** : `cdi.select(BaggageResource.class)` throws `UnsatisfiedResolutionException:
   No bean found for type: ...BaggageResource`. La classe a `@Path` mais pas de scope
@@ -45,14 +59,16 @@
 - **Tests impactés (FAIL HTTP 500)** : BaggageTest, baggageBeanChange, et
   probablement tout test qui POST/GET sur une resource TCK avec `@Inject` de type CDI
   (testIntegrationWithJaxRsClient*, testIntegrationWithMpRestClient*).
-- **Correction proposée (deux pistes)** :
-  - **Vauban** : appliquer les BCE `@Enhancement` aux classes ajoutées par
-    `addBeanClass()` runtime (équivalent CDI 4.1 "synthetic classes processing")
-  - **HumboldtDeployableContainer** : pré-traiter les classes du WAR — détecter les
-    `@Path` sans scope CDI, leur ajouter `@RequestScoped` synthétique avant
-    `addBeanClass()` (workaround spécifique TCK runner)
-- **Statut M7c.7** : le fix CassiniHarness (resolver `cdi.select(cls)` au lieu de
-  `new cls`) est en place et fonctionne pour toute classe Vauban-discoverable. Mais
-  la BCE manquante laisse les classes TCK hors discovery → fallback `new` → pas d'injection.
+- **Correction appliquée** : Vauban a déjà le mécanisme runtime pour appliquer les BCE
+  `@Enhancement` aux classes "unprocessed" (`BceProcessor.processEnhancementOnly` ligne 742
+  de `VaubanContainerBuilder`), mais SEULEMENT si la BCE est dans le bean classes set.
+  `addBeanClass()` ne scanne pas le ServiceLoader META-INF/services. Fix : ajout d'une
+  ligne dans `HumboldtDeployableContainer.deploy()` qui déclare explicitement
+  `CassiniScopeExtension.class` via `addBeanClass()`. La BCE devient discoverable et
+  applique son `@Enhancement` qui ajoute `@RequestScoped` synthétique aux classes `@Path`
+  du WAR.
+- **Validation** : `BaggageTest.baggage` PASS (vs FAIL avant). Run TCK passe de 16 → 19 PASS.
+- **Suivi** : un fix générique côté Vauban (scanner automatiquement les BCE via ServiceLoader
+  dans `build()` même si pas de `scanLocal()`) serait plus propre — chantier Vauban séparé.
 
 ---

@@ -150,9 +150,16 @@ public final class CassiniHarness implements AutoCloseable {
             DefaultCassiniHttpAdapter engine = new DefaultCassiniHttpAdapter(router, invoker);
             ChappeHttpAdapter bridge = new ChappeHttpAdapter(engine);
             final String prefix = "/".equals(contextPath) ? "" : contextPath;
-            Handler rootHandler = prefix.isEmpty()
+            Handler stripping = prefix.isEmpty()
                     ? bridge
                     : new ContextStrippingHandler(prefix, bridge);
+            // Workaround HBT-1 : active le RequestContext Vauban autour de chaque dispatch.
+            // cassini-cdi-vauban ne le fait pas encore (à corriger côté Cassini), donc sans
+            // ce wrapper toute resource @RequestScoped (= toute @Path après BCE Cassini)
+            // throw ContextNotActiveException.
+            Handler rootHandler = cdi != null
+                    ? new RequestScopeActivatingHandler(cdi, stripping)
+                    : stripping;
 
             RuntimeException last = null;
             for (int attempt = 0; attempt < 5; attempt++) {
@@ -170,6 +177,25 @@ public final class CassiniHarness implements AutoCloseable {
                 }
             }
             throw last;
+        }
+    }
+
+    /**
+     * Wrapper Handler qui active le {@link io.vidocq.vauban.core.context.RequestContext}
+     * autour de chaque dispatch HTTP — workaround pour HBT-1 (cassini-cdi-vauban ne fait
+     * pas encore d'activate/deactivate automatique du RequestScope par requête).
+     */
+    private record RequestScopeActivatingHandler(
+            io.vidocq.vauban.core.container.VaubanContainer cdi,
+            Handler delegate) implements Handler {
+        @Override public Response handle(Request request) throws Exception {
+            var rc = cdi.requestContext();
+            rc.activate();
+            try {
+                return delegate.handle(request);
+            } finally {
+                rc.deactivate();
+            }
         }
     }
 
