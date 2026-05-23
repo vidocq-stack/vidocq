@@ -42,7 +42,12 @@ done
 echo "============================================"
 echo " Étape 1 — Install reactor Humboldt en M2   "
 echo "============================================"
-"${MVN_CMD[@]}" install -DskipTests
+# maven.test.skip=true (au lieu de -DskipTests) : nécessaire depuis M7c.12 car le
+# compile-test de humboldt-rest échoue (microprofile.rest.client.api hors module-path
+# par défaut en mode JPMS strict — Maven 4 fait toujours default-testCompile même
+# avec -DskipTests). Les tests humboldt-rest restent exécutables manuellement via
+# `mvn test -pl humboldt-rest` après désactivation du compile main JPMS.
+"${MVN_CMD[@]}" install -Dmaven.test.skip=true
 
 echo ""
 echo "============================================"

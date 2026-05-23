@@ -38,6 +38,17 @@
             <groupId>jakarta.ws.rs</groupId>
             <artifactId>jakarta.ws.rs-api</artifactId>
         </dependency>
+        <!-- M7c.12 — MicroProfile Rest Client API : optionnel (scope provided).
+             Le HumboldtMpRestClientListener n'est invoqué que si MP Rest Client est
+             effectivement présent en runtime (typiquement via cyrano-core dans le
+             classpath de l'app). Permet l'auto-instrumentation des Rest Client
+             créés via @RegisterRestClient/RestClientBuilder. -->
+        <dependency>
+            <groupId>org.eclipse.microprofile.rest.client</groupId>
+            <artifactId>microprofile-rest-client-api</artifactId>
+            <version>4.0</version>
+            <optional>true</optional>
+        </dependency>
         <!-- jakarta.annotation pour @Priority sur HumboldtSpanFinalizer.
              Petite dep API standard, requise par la sémantique JAX-RS pour
              les ExceptionMapper priorités. -->
@@ -51,4 +62,45 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
+
+    <build>
+        <!--
+            JPMS workaround pour microprofile-rest-client-api:4.0 qui n'a pas
+            d'Automatic-Module-Name dans son MANIFEST.MF. Le nom JPMS dérivé du fichier
+            est microprofile.rest.client.api, mais Maven 4 + maven-compiler-plugin
+            4.0.0-beta-4 ne place pas ce JAR sur le module-path par défaut.
+
+            Solution alignée sur cyrano (cf. cyrano/pom.xml) : maven-dependency-plugin
+            copie tous les JARs compile-scope dans target/javamodules/ en phase initialize.
+            maven-compiler-plugin reçoit l'argument module-path = target/javamodules ;
+            javac dérive alors le nom microprofile.rest.client.api depuis le nom de fichier.
+        -->
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>copy-compile-deps-to-module-path</id>
+                        <phase>initialize</phase>
+                        <goals><goal>copy-dependencies</goal></goals>
+                        <configuration>
+                            <outputDirectory>${project.build.directory}/javamodules</outputDirectory>
+                            <includeScope>compile</includeScope>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <compilerArgs>
+                        <arg>-p</arg>
+                        <arg>${project.build.directory}/javamodules</arg>
+                    </compilerArgs>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>

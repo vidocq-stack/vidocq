@@ -17,6 +17,10 @@ module io.vidocq.humboldt.rest {
     requires transitive jakarta.ws.rs;
     requires jakarta.annotation;  // @Priority sur HumboldtSpanFinalizer + Client*Filter
     requires java.logging;
+    // M7c.12 — MicroProfile Rest Client : optionnel. Le HumboldtMpRestClientListener
+    // n'est invoqué que si MP Rest Client est en runtime classpath (typiquement
+    // via cyrano-core). `requires static` = compile-time only, pas une dep runtime.
+    requires static microprofile.rest.client.api;
 
     exports io.vidocq.humboldt.rest;
 
@@ -25,4 +29,10 @@ module io.vidocq.humboldt.rest {
     // requêtes sortantes avec un span kind=CLIENT (conforme MP Telemetry §3.2).
     provides jakarta.ws.rs.core.Feature
             with io.vidocq.humboldt.rest.HumboldtClientTracingFeature;
+
+    // M7c.12 — Auto-instrumentation des Rest Client MP via le SPI standard
+    // RestClientListener.onNewClient() (spec MP Rest Client 4.0 §10.2). Implémenté
+    // par Cyrano dans CyranoRestClientBuilder.build().
+    provides org.eclipse.microprofile.rest.client.spi.RestClientListener
+            with io.vidocq.humboldt.rest.HumboldtMpRestClientListener;
 }
