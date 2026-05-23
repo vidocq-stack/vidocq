@@ -22,7 +22,8 @@ class HumboldtAutoConfigureTest {
     @Test
     void service_name_default_and_override() {
         try (AutoConfiguredHumboldt def = HumboldtAutoConfigure.configure(EnvConfig.of(
-                Map.of("OTEL_TRACES_EXPORTER", "in-memory",
+                Map.of("OTEL_SDK_DISABLED", "false",
+                        "OTEL_TRACES_EXPORTER", "in-memory",
                         "OTEL_METRICS_EXPORTER", "none",
                         "OTEL_LOGS_EXPORTER", "none"),
                 Map.of()))) {
@@ -32,7 +33,8 @@ class HumboldtAutoConfigureTest {
         }
 
         try (AutoConfiguredHumboldt custom = HumboldtAutoConfigure.configure(EnvConfig.of(
-                Map.of("OTEL_SERVICE_NAME", "my-app",
+                Map.of("OTEL_SDK_DISABLED", "false",
+                        "OTEL_SERVICE_NAME", "my-app",
                         "OTEL_TRACES_EXPORTER", "in-memory",
                         "OTEL_METRICS_EXPORTER", "none",
                         "OTEL_LOGS_EXPORTER", "none"),
@@ -46,7 +48,8 @@ class HumboldtAutoConfigureTest {
     @Test
     void resource_attributes_parsed() {
         try (AutoConfiguredHumboldt h = HumboldtAutoConfigure.configure(EnvConfig.of(
-                Map.of("OTEL_SERVICE_NAME", "svc",
+                Map.of("OTEL_SDK_DISABLED", "false",
+                        "OTEL_SERVICE_NAME", "svc",
                         "OTEL_RESOURCE_ATTRIBUTES", "env=prod,team=platform,region=eu-west-1",
                         "OTEL_TRACES_EXPORTER", "in-memory",
                         "OTEL_METRICS_EXPORTER", "none",
@@ -63,7 +66,8 @@ class HumboldtAutoConfigureTest {
     @Test
     void in_memory_pipeline_exports_traces_metrics_logs_end_to_end() {
         try (AutoConfiguredHumboldt h = HumboldtAutoConfigure.configure(EnvConfig.of(
-                Map.of("OTEL_TRACES_EXPORTER", "in-memory",
+                Map.of("OTEL_SDK_DISABLED", "false",
+                        "OTEL_TRACES_EXPORTER", "in-memory",
                         "OTEL_METRICS_EXPORTER", "in-memory",
                         "OTEL_LOGS_EXPORTER", "in-memory",
                         "OTEL_TRACES_SAMPLER", "always_on"),
@@ -103,7 +107,8 @@ class HumboldtAutoConfigureTest {
     @Test
     void sampler_always_off_produces_no_spans() {
         try (AutoConfiguredHumboldt h = HumboldtAutoConfigure.configure(EnvConfig.of(
-                Map.of("OTEL_TRACES_EXPORTER", "in-memory",
+                Map.of("OTEL_SDK_DISABLED", "false",
+                        "OTEL_TRACES_EXPORTER", "in-memory",
                         "OTEL_METRICS_EXPORTER", "none",
                         "OTEL_LOGS_EXPORTER", "none",
                         "OTEL_TRACES_SAMPLER", "always_off"),
@@ -120,7 +125,8 @@ class HumboldtAutoConfigureTest {
     @Test
     void traceidratio_sampler_parsed_with_arg() {
         try (AutoConfiguredHumboldt h = HumboldtAutoConfigure.configure(EnvConfig.of(
-                Map.of("OTEL_TRACES_EXPORTER", "in-memory",
+                Map.of("OTEL_SDK_DISABLED", "false",
+                        "OTEL_TRACES_EXPORTER", "in-memory",
                         "OTEL_METRICS_EXPORTER", "none",
                         "OTEL_LOGS_EXPORTER", "none",
                         "OTEL_TRACES_SAMPLER", "traceidratio",
@@ -134,7 +140,8 @@ class HumboldtAutoConfigureTest {
     @Test
     void exporter_none_disables_pipelines() {
         try (AutoConfiguredHumboldt h = HumboldtAutoConfigure.configure(EnvConfig.of(
-                Map.of("OTEL_TRACES_EXPORTER", "none",
+                Map.of("OTEL_SDK_DISABLED", "false",
+                        "OTEL_TRACES_EXPORTER", "none",
                         "OTEL_METRICS_EXPORTER", "none",
                         "OTEL_LOGS_EXPORTER", "none"),
                 Map.of()))) {
@@ -152,7 +159,8 @@ class HumboldtAutoConfigureTest {
         // peuvent injecter un SpanExporter additionnel sans toucher aux env vars.
         InMemorySpanExporter extra = InMemorySpanExporter.create();
         try (AutoConfiguredHumboldt h = HumboldtAutoConfigure.configure(EnvConfig.of(
-                Map.of("OTEL_TRACES_EXPORTER", "none",
+                Map.of("OTEL_SDK_DISABLED", "false",
+                        "OTEL_TRACES_EXPORTER", "none",
                         "OTEL_METRICS_EXPORTER", "none",
                         "OTEL_LOGS_EXPORTER", "none",
                         "OTEL_TRACES_SAMPLER", "always_on"),
@@ -174,13 +182,43 @@ class HumboldtAutoConfigureTest {
     @Test
     void w3c_propagators_installed_by_default() {
         try (AutoConfiguredHumboldt h = HumboldtAutoConfigure.configure(EnvConfig.of(
-                Map.of("OTEL_TRACES_EXPORTER", "in-memory",
+                Map.of("OTEL_SDK_DISABLED", "false",
+                        "OTEL_TRACES_EXPORTER", "in-memory",
                         "OTEL_METRICS_EXPORTER", "none",
                         "OTEL_LOGS_EXPORTER", "none"),
                 Map.of()))) {
             var fields = h.getPropagators().getTextMapPropagator().fields();
             assertTrue(fields.contains("traceparent"));
             assertTrue(fields.contains("baggage"));
+        }
+    }
+
+    @Test
+    void sdk_disabled_by_default_per_mp_telemetry_spec() {
+        // MP Telemetry 2.1 §3.1 : OTEL_SDK_DISABLED par défaut = true.
+        // Sans config explicite, providers construits sans processors -> 0 export.
+        try (AutoConfiguredHumboldt h = HumboldtAutoConfigure.configure(EnvConfig.of(
+                Map.of("OTEL_TRACES_EXPORTER", "in-memory"),
+                Map.of()))) {
+            assertNull(h.inMemorySpanExporter(),
+                    "SDK disabled par défaut -> pas d'in-memory exporter installé");
+            h.getTracerProvider().get("x").spanBuilder("ignored").startSpan().end();
+            assertEquals(0, h.sdkTracerProvider().getSpanProcessors().size(),
+                    "SDK disabled -> aucun span processor");
+        }
+    }
+
+    @Test
+    void sdk_disabled_true_explicit_disables_all_pipelines() {
+        try (AutoConfiguredHumboldt h = HumboldtAutoConfigure.configure(EnvConfig.of(
+                Map.of("OTEL_SDK_DISABLED", "true",
+                        "OTEL_TRACES_EXPORTER", "in-memory",
+                        "OTEL_METRICS_EXPORTER", "in-memory",
+                        "OTEL_LOGS_EXPORTER", "in-memory"),
+                Map.of()))) {
+            assertNull(h.inMemorySpanExporter());
+            assertNull(h.inMemoryMetricExporter());
+            assertNull(h.inMemoryLogRecordExporter());
         }
     }
 }

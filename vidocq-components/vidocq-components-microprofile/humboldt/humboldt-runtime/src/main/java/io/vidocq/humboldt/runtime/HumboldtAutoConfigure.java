@@ -82,6 +82,25 @@ public final class HumboldtAutoConfigure {
     public static AutoConfiguredHumboldt configure(EnvConfig env, List<SpanExporter> extraSpanExporters) {
         Resource resource = buildResource(env);
 
+        // MP Telemetry 2.1 §3.1 : par défaut, le SDK OpenTelemetry est désactivé.
+        // L'application doit explicitement set OTEL_SDK_DISABLED=false pour activer
+        // l'export. Note : OTel SDK Java natif a le défaut inverse (enabled), mais
+        // pour conformité MP Telemetry et stabilité TCK on aligne sur la spec MP.
+        boolean sdkDisabled = env.getBoolean("OTEL_SDK_DISABLED", true);
+        if (sdkDisabled) {
+            LOG.log(Level.INFO,
+                    "Humboldt : SDK disabled (OTEL_SDK_DISABLED=true ou non-spécifié, défaut MP Telemetry 2.1)");
+            // Providers construits sans aucun SpanProcessor/MetricReader/LogRecordProcessor
+            // → l'API OTel reste pleinement utilisable (Span.current(), Tracer.spanBuilder())
+            //   mais rien n'est jamais exporté ni accumulé en mémoire.
+            return new AutoConfiguredHumboldt(
+                    SdkTracerProvider.builder().setResource(resource).build(),
+                    SdkMeterProvider.builder().setResource(resource).build(),
+                    SdkLoggerProvider.builder().setResource(resource).build(),
+                    W3CPropagators.get(),
+                    null, null, null);
+        }
+
         // --- Tracer ---
         String tracesExporter = env.getOrDefault("OTEL_TRACES_EXPORTER", "otlp");
         Sampler sampler = parseSampler(env);
