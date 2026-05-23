@@ -43,8 +43,8 @@
             <artifactId>humboldt-exporter-otlp-http</artifactId>
         </dependency>
         <dependency>
-            <groupId>io.opentelemetry</groupId>
-            <artifactId>opentelemetry-api</artifactId>
+            <groupId>io.vidocq.humboldt</groupId>
+            <artifactId>humboldt-otel-api</artifactId>
         </dependency>
 
         <dependency>

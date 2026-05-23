@@ -100,6 +100,9 @@
 
     <subprojects>
         <subproject>humboldt-api</subproject>
+        <subproject>humboldt-otel-context</subproject>
+        <subproject>humboldt-otel-api</subproject>
+        <subproject>humboldt-otel-instrumentation-annotations</subproject>
         <subproject>humboldt-sdk-common</subproject>
         <subproject>humboldt-context</subproject>
         <subproject>humboldt-sdk-trace</subproject>
@@ -167,6 +170,21 @@
             <dependency>
                 <groupId>io.vidocq.humboldt</groupId>
                 <artifactId>humboldt-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.humboldt</groupId>
+                <artifactId>humboldt-otel-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.humboldt</groupId>
+                <artifactId>humboldt-otel-context</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.humboldt</groupId>
+                <artifactId>humboldt-otel-instrumentation-annotations</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
