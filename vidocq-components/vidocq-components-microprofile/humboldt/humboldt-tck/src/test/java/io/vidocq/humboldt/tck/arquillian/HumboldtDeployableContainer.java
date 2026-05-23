@@ -184,6 +184,12 @@ public class HumboldtDeployableContainer implements DeployableContainer<Humboldt
                 hb.provider(new HumboldtServerRequestFilter());
                 hb.provider(new HumboldtServerResponseFilter());
                 hb.provider(new HumboldtSpanFinalizer());
+                // HBT-2 — active le RequestContext Vauban autour de chaque dispatch HTTP.
+                // CassiniHarness construit son pipeline sans passer par CassiniStackBuilder
+                // donc le filter auto-injecté par VaubanBeanProvider.getResourceClasses()
+                // n'est pas vu — on l'enregistre manuellement ici. Pour la production
+                // (CassiniStack normal), aucune action utilisateur n'est requise.
+                hb.provider(new io.vidocq.cassini.cdi.vauban.VaubanRequestScopeFilter(this.container));
                 for (Class<?> p : providerClasses) {
                     try { hb.provider(p.getDeclaredConstructor().newInstance()); }
                     catch (ReflectiveOperationException e) {

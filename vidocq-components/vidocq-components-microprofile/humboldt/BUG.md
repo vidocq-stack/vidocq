@@ -22,13 +22,20 @@
 
 - **Date** : 2026-05-24
 - **Composant** : cassini-cdi-vauban
-- **Statut** : OPEN (workaround en place dans humboldt-tck/CassiniHarness, fix propre à faire côté Cassini)
+- **Statut** : FIXED (cassini-cdi-vauban commit `00:53 2026-05-24`)
 - **Affecté** : cassini-cdi-vauban 0.1.0-SNAPSHOT
 - **Symptôme** : toute resource `@RequestScoped` (= toute classe `@Path` après BCE Cassini) throws `ContextNotActiveException: RequestScope is not active` lors de l'invocation d'une méthode resource.
 - **Reproduction** : cf. HBT-1 — déclencher BaggageTest avant le workaround.
 - **Cause** : `cassini-cdi-vauban` ne contient aucun appel à `VaubanContainer.requestContext().activate()` autour des dispatches HTTP. Les beans `@RequestScoped` ne peuvent donc jamais être instanciés.
-- **Workaround actuel** : `RequestScopeActivatingHandler` dans `humboldt-tck/CassiniHarness` wrap le Handler Cassini pour activer/déactiver le RequestContext par requête. Local au runner TCK humboldt.
-- **Fix propre** : implémenter dans cassini-cdi-vauban un `@PreMatching ContainerRequestFilter` priorité MIN qui active, + un `ContainerResponseFilter` priorité MAX qui déactive. OU directement dans l'`HttpAdapter` cassini.
+- **Correction appliquée** : nouveau `VaubanRequestScopeFilter` (`@Provider @PreMatching @Priority(Integer.MIN_VALUE)`)
+  qui implémente à la fois `ContainerRequestFilter` (activate) et `ContainerResponseFilter` (deactivate).
+  Auto-injecté côté production via `VaubanBeanProvider.getResourceClasses()` (singleton retourné
+  par `getBean()`). Pour les harness de test qui n'utilisent pas `CassiniStackBuilder.beanProvider(...)`
+  (cas de `humboldt-tck/CassiniHarness`), le constructor est public — enregistrer manuellement via
+  `.provider(new VaubanRequestScopeFilter(container))`.
+- **Validation** : TCK Cassini Jakarta REST 4.0 = 2535/2535 PASS (contrat respecté, 0 régression).
+  TCK humboldt MP Telemetry 2.1 = 19/43/23 (équivalent au fix workaround précédent, mais maintenant
+  l'activation est portée par cassini-cdi-vauban et non plus par un Handler ad-hoc humboldt-tck).
 
 ---
 
