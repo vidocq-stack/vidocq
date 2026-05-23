@@ -181,6 +181,17 @@
             <artifactId>cassini-cdi-vauban</artifactId>
             <version>${cassini.version}</version>
         </dependency>
+        <!-- ============================================================ -->
+        <!--  M7c.6 — Cassini JAX-RS Client (jakarta.ws.rs.client.*)      -->
+        <!--  Débloque BaggageTest, RestClientSpan*Test, etc. qui font    -->
+        <!--  ClientBuilder.newClient().target(...).request().get().      -->
+        <!--  Fournit aussi un RuntimeDelegate provider (autonome).       -->
+        <!-- ============================================================ -->
+        <dependency>
+            <groupId>io.vidocq.cassini</groupId>
+            <artifactId>cassini-client</artifactId>
+            <version>${cassini.version}</version>
+        </dependency>
 
         <!-- ============================================================ -->
         <!--  Annotation @WithSpan OFFICIELLE attendue par le TCK         -->
