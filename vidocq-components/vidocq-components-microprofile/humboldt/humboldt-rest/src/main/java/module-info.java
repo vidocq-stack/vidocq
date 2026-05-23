@@ -15,8 +15,14 @@ module io.vidocq.humboldt.rest {
     requires transitive io.opentelemetry.api;
     requires transitive io.opentelemetry.context;
     requires transitive jakarta.ws.rs;
-    requires jakarta.annotation;  // @Priority sur HumboldtSpanFinalizer
+    requires jakarta.annotation;  // @Priority sur HumboldtSpanFinalizer + Client*Filter
     requires java.logging;
 
     exports io.vidocq.humboldt.rest;
+
+    // M7c.7 — Auto-discovery par CassiniClientBuilder (et tout JAX-RS Client compatible)
+    // qui scanne ServiceLoader<Feature> au build() — instrumente automatiquement les
+    // requêtes sortantes avec un span kind=CLIENT (conforme MP Telemetry §3.2).
+    provides jakarta.ws.rs.core.Feature
+            with io.vidocq.humboldt.rest.HumboldtClientTracingFeature;
 }
