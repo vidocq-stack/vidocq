@@ -363,6 +363,13 @@
                                 <dependency>org.eclipse.microprofile.telemetry:microprofile-telemetry-metrics-tck</dependency>
                                 <dependency>org.eclipse.microprofile.telemetry:microprofile-telemetry-logs-tck</dependency>
                             </dependenciesToScan>
+                            <systemPropertyVariables>
+                                <!-- MP Telemetry Logs TCK (JulTest) lit cette property dans son
+                                     static{} pour ouvrir le fichier de log à vérifier. Le
+                                     LoggingLogRecordExporter Humboldt y écrit chaque LogRecord
+                                     quand OTEL_LOGS_EXPORTER=logging. -->
+                                <mptelemetry.tck.log.file.path>${project.build.directory}/humboldt-tck-logs.txt</mptelemetry.tck.log.file.path>
+                            </systemPropertyVariables>
                         </configuration>
                     </plugin>
                 </plugins>

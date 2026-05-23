@@ -11,9 +11,11 @@ import io.vidocq.humboldt.sdk.common.Resource;
 import io.vidocq.humboldt.sdk.log.BatchLogRecordProcessor;
 import io.vidocq.humboldt.sdk.log.SdkLoggerProvider;
 import io.vidocq.humboldt.sdk.log.SimpleLogRecordProcessor;
+import io.vidocq.humboldt.sdk.log.bridge.HumboldtJulHandler;
 import io.vidocq.humboldt.sdk.log.export.InMemoryLogRecordExporter;
 import io.vidocq.humboldt.sdk.log.export.LogRecordExporter;
 import io.vidocq.humboldt.sdk.log.export.LogRecordProcessor;
+import io.vidocq.humboldt.sdk.log.export.LoggingLogRecordExporter;
 import io.vidocq.humboldt.sdk.metric.PeriodicMetricReader;
 import io.vidocq.humboldt.sdk.metric.SdkMeterProvider;
 import io.vidocq.humboldt.sdk.metric.export.InMemoryMetricExporter;
@@ -132,15 +134,31 @@ public final class HumboldtAutoConfigure {
         LogRecordExporter logExporter = switch (logsExporter) {
             case "none" -> null;
             case "in-memory" -> inMemLog;
+            case "logging" -> LoggingLogRecordExporter.create();
             default -> buildOtlpLogExporter(env);
         };
         if (logExporter != null) {
-            LogRecordProcessor lp = "in-memory".equals(logsExporter)
+            // Simple processor pour in-memory ET logging : la sortie doit être synchrone
+            // pour que les tests (TCK JulTest notamment) puissent lire le fichier sans
+            // attendre un flush différé.
+            boolean useSimple = "in-memory".equals(logsExporter) || "logging".equals(logsExporter);
+            LogRecordProcessor lp = useSimple
                     ? SimpleLogRecordProcessor.create(logExporter)
                     : BatchLogRecordProcessor.builder(logExporter).build();
             lpBuilder.addLogRecordProcessor(lp);
         }
         SdkLoggerProvider loggerProvider = lpBuilder.build();
+
+        // Bridge JUL → OTel : auto-installé sur le root logger quand le pipeline logs
+        // est en mode production (otlp ou logging). Pas en in-memory pour éviter que
+        // les logs internes du runtime polluent les InMemoryLogRecordExporter des tests.
+        // Idempotent : ne réinstalle pas si un HumboldtJulHandler est déjà présent.
+        boolean installJulBridge = logExporter != null
+                && !"in-memory".equals(logsExporter)
+                && !"none".equals(logsExporter);
+        if (installJulBridge) {
+            installJulBridge(loggerProvider);
+        }
 
         ContextPropagators propagators = W3CPropagators.get();
 
@@ -168,6 +186,21 @@ public final class HumboldtAutoConfigure {
             }
         });
         return Resource.create(attrs.build());
+    }
+
+    /**
+     * Installe le {@link HumboldtJulHandler} sur le root JUL logger pour piper les
+     * {@code java.util.logging} vers le pipeline OTel humboldt. Idempotent : si un
+     * {@link HumboldtJulHandler} est déjà présent, ne rien faire.
+     */
+    private static void installJulBridge(SdkLoggerProvider loggerProvider) {
+        java.util.logging.Logger root = java.util.logging.Logger.getLogger("");
+        for (java.util.logging.Handler existing : root.getHandlers()) {
+            if (existing instanceof HumboldtJulHandler) return;
+        }
+        HumboldtJulHandler bridge = new HumboldtJulHandler(loggerProvider);
+        bridge.setLevel(java.util.logging.Level.ALL);
+        root.addHandler(bridge);
     }
 
     private static Sampler parseSampler(EnvConfig env) {

@@ -149,7 +149,7 @@ Plan détaillé : [`PLAN.md`](PLAN.md) (§13 jalons). Cette page est la version 
 - [x] **M7c.2** (2026-05-21) Chappe + Cassini intégrés dans `HumboldtDeployableContainer` via `CassiniHarness` (~180 LOC). Filters humboldt-rest branchés. HTTPContext exposé via `ProtocolMetaData`. Erreurs URL → 0. Producers étendus (Meter, Logger) + fallback dans enricher pour ces types.
 - [ ] **M7c.5+** Items long-terme nécessaires pour gate ≥95 % :
   - M4b SDK metric (Double/LongCounter, Histogram, Observable) → +24 tests
-  - M5b SDK log bridges (JulHandler) → +3 tests
+  - [x] **M5b** (2026-05-23) `HumboldtJulHandler` (bridge JUL → OTel Logger, mapping severity, cache par scope, idempotent) + `LoggingLogRecordExporter` (file-based, format `YYYY-MM-DD HH:MM:SS.SSS LEVEL <body> scopeInfo:<scope>:<v>` conforme TCK) + câblage `HumboldtAutoConfigure` (case `logging`, SimpleProcessor synchrone, auto-install JUL bridge sauf en mode `in-memory`). Test : **JulTest 2/2 PASS** (julInfoTest, julWarnTest). **Run TCK : 7→9 PASS, 50→48 FAIL.** Voir `tck-runs/2026-05-23-run-after-m5b.md`.
   - M7c.5 intégration Cyrano MP Rest Client → +6 tests
   - M7c.6 JAX-RS Client (cassini-client ou Jersey test scope) → +3 tests
   - M7c.7 humboldt-rest ClientFilter (CLIENT spans) → +6 tests

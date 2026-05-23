@@ -17,6 +17,7 @@ module io.vidocq.humboldt.sdk.log {
     requires java.logging;
 
     exports io.vidocq.humboldt.sdk.log;
+    exports io.vidocq.humboldt.sdk.log.bridge;
     exports io.vidocq.humboldt.sdk.log.data;
     exports io.vidocq.humboldt.sdk.log.export;
 }
