@@ -153,8 +153,9 @@ Plan détaillé : [`PLAN.md`](PLAN.md) (§13 jalons). Cette page est la version 
   - M7c.5 intégration Cyrano MP Rest Client → +6 tests
   - M7c.6 JAX-RS Client (cassini-client ou Jersey test scope) → +3 tests
   - M7c.7 humboldt-rest ClientFilter (CLIENT spans) → +6 tests
-  - M7c.8 extraction http.route via UriInfo.getMatchedTemplates() → +1
-  - M7c.9 Proxy CDI Span/Baggage → +2
+  - [x] **M7c.8** (2026-05-23) HumboldtServerRequestFilter pose 7 attributs OTel SemConv 1.27+ (http.request.method, http.route avec fallback URL_PATH, url.path/query/scheme reconstruits via baseUri, server.address/port). Span name = "METHOD route" templaté quand ResourceInfo non-null, sinon path complet. Reverse engineering bytecode TCK + introspection @Path. **Run TCK : 5→7 PASS, 60→50 FAIL.** Voir `tck-runs/2026-05-23-run-after-m7c8.md`.
+  - **M7c.9** (bloqueur identifié en M7c.8) Injection JAX-RS `@Context` dans providers Cassini in-process. `CassiniHarness.provider(instance)` n'invoque pas l'injection, `ResourceInfo` reste null, route templaté impossible. Fix : `CassiniHarness.providerClass(Class<?>)` qui instancie + injecte `@Context`. → +5-8 tests (RestSpanTest.spanName, RestSpanDefault/Disabled, etc.)
+  - M7c.10 (ex-M7c.9) Proxy CDI Span/Baggage → +2
 - [ ] **Gate qualité** : ≥95 % de tests applicables passent (atteignable après M4b + M5b + M7c.5→9)
 
 ## M8 — Perf & ADRs
