@@ -150,7 +150,10 @@ Plan détaillé : [`PLAN.md`](PLAN.md) (§13 jalons). Cette page est la version 
 - [ ] **M7c.5+** Items long-terme nécessaires pour gate ≥95 % :
   - M4b SDK metric (Double/LongCounter, Histogram, Observable) → +24 tests
   - [x] **M5b** (2026-05-23) `HumboldtJulHandler` (bridge JUL → OTel Logger, mapping severity, cache par scope, idempotent) + `LoggingLogRecordExporter` (file-based, format `YYYY-MM-DD HH:MM:SS.SSS LEVEL <body> scopeInfo:<scope>:<v>` conforme TCK) + câblage `HumboldtAutoConfigure` (case `logging`, SimpleProcessor synchrone, auto-install JUL bridge sauf en mode `in-memory`). Test : **JulTest 2/2 PASS** (julInfoTest, julWarnTest). **Run TCK : 7→9 PASS, 50→48 FAIL.** Voir `tck-runs/2026-05-23-run-after-m5b.md`.
-  - M7c.5 intégration Cyrano MP Rest Client → +6 tests
+  - [~] **M7c.5** (2026-05-23, partiel) Dep `io.vidocq.cyrano:cyrano-{api,core}` ajoutée à `humboldt-tck/pom.xml` → `RestClientBuilder.newBuilder()` résout désormais cyrano via `META-INF/services`. **En isolation : 3/7 PASS sur RestClientSpanDefaultTest** (vs 0/7 avant). **En suite globale : 0 gain net** (PASS 16/16) — les setUp passent mais les tests fail sur 2 bloqueurs orthogonaux : (a) `jakarta.ws.rs.client.ClientBuilder` absent = M7c.6, (b) lifecycle Arquillian partagé entre tests = M7c.13. Voir `tck-runs/2026-05-23-run-after-m7c5.md`.
+  - **M7c.6** cassini-client minimal (`jakarta.ws.rs.client.ClientBuilder` impl), distinct de MP Rest Client. Estimation +3-6 tests. Effort gros (~1-2j).
+  - **M7c.12** Filters cyrano (CLIENT spans MP Rest Client) — requiert M7c.5 OK. Estimation +5-12 tests.
+  - **M7c.13** Isolation tests Arquillian (reset container entre tests). Estimation +3-5 tests.
   - M7c.6 JAX-RS Client (cassini-client ou Jersey test scope) → +3 tests
   - M7c.7 humboldt-rest ClientFilter (CLIENT spans) → +6 tests
   - [x] **M7c.8** (2026-05-23) HumboldtServerRequestFilter pose 7 attributs OTel SemConv 1.27+ (http.request.method, http.route avec fallback URL_PATH, url.path/query/scheme reconstruits via baseUri, server.address/port). Span name = "METHOD route" templaté quand ResourceInfo non-null, sinon path complet. Reverse engineering bytecode TCK + introspection @Path. **Run TCK : 5→7 PASS, 60→50 FAIL.** Voir `tck-runs/2026-05-23-run-after-m7c8.md`.
