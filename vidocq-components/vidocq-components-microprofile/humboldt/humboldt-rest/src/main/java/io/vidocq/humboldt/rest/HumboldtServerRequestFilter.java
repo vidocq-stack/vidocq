@@ -119,7 +119,13 @@ public class HumboldtServerRequestFilter implements ContainerRequestFilter {
         }
 
         Span span = builder.startSpan();
-        Scope scope = span.makeCurrent();
+        // IMPORTANT : utiliser parent.with(span).makeCurrent() — pas span.makeCurrent() —
+        // pour propager le baggage extrait du header HTTP au Context courant. Sans cela,
+        // Baggage.current() côté resource method retournerait Baggage.empty() même si
+        // le client a envoyé un header `baggage:` (cf. BaggageTest qui POST sur l'endpoint
+        // /baggage avec header baggage=user=naruto et attend que la resource lise
+        // baggage.getEntryValue("user") == "naruto").
+        Scope scope = parent.with(span).makeCurrent();
         requestContext.setProperty(SPAN_PROPERTY, span);
         requestContext.setProperty(SCOPE_PROPERTY, scope);
     }

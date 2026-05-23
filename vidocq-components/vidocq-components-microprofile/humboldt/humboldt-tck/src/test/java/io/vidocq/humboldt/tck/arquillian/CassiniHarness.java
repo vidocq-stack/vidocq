@@ -112,9 +112,33 @@ public final class CassiniHarness implements AutoCloseable {
             List<ResourceMethod> routes = ResourceScanner.discover(allClasses.toArray(Class<?>[]::new));
             filters.applyDynamicFeatures(routes);
             UriRouter router = new UriRouter(routes);
+            // Récupère le container Vauban courant (initialisé par
+            // HumboldtDeployableContainer.deploy()) pour passer par CDI lors de la
+            // résolution des ressources/providers — assure que les @Inject sur les
+            // champs des ressources (Tracer, Span, Baggage, OpenTelemetry...) sont
+            // câblés quand la classe est un bean Vauban.
+            //
+            // Limitation actuelle : la BCE Cassini (cassini-cdi-vauban
+            // CassiniScopeExtension) qui ajoute @RequestScoped aux classes @Path sans
+            // scope explicite ne s'applique PAS aux classes ajoutées via addBeanClass()
+            // en runtime — uniquement aux beans découverts à compile-time via APT.
+            // Conséquence : les ressources TCK comme BaggageResource (classe inner sans
+            // scope) tombent dans le fallback `new` et leurs @Inject restent null.
+            // Fix complet : appliquer les BCE en runtime côté Vauban (chantier séparé)
+            // ou pré-traiter les classes @Path dans HumboldtDeployableContainer pour
+            // ajouter @RequestScoped synthétique avant addBeanClass().
+            io.vidocq.vauban.core.container.VaubanContainer cdi =
+                    io.vidocq.vauban.core.container.VaubanContainer.current();
             java.util.function.Function<Class<?>, Object> resolver = cls -> {
                 Object fixed = beans.get(cls);
                 if (fixed != null) return fixed;
+                if (cdi != null) {
+                    try {
+                        return cdi.select(cls);
+                    } catch (RuntimeException ignored) {
+                        // Fallback si la classe n'est pas connue de Vauban (BCE non appliquée).
+                    }
+                }
                 try {
                     return cls.getDeclaredConstructor().newInstance();
                 } catch (ReflectiveOperationException e) {
