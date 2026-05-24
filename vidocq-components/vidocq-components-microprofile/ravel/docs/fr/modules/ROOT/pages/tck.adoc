@@ -80,7 +80,7 @@ L'implémentation de Ravel cible ces jalons :
 | M2 | Convertisseurs avancés, tableaux, convertisseurs implicites | ✅ Fait |
 | M3 | Profils, expressions de propriété, détection de cycle | ✅ Fait (M4) |
 | M4 | Intégration CDI via Vauban BCE | ✅ Fait |
-| M5 | **TCK 100 % PASS + benchmark JMH** | 🔄 En cours |
+| M5 | **TCK 100 % PASS + benchmark JMH** |  En cours |
 
 == Problèmes connus et contournements
 

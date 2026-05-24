@@ -80,7 +80,7 @@ Ravel's implementation targets these milestones:
 | M2 | Advanced converters, arrays, implicit converters | ✅ Done |
 | M3 | Profiles, property expressions, cycle detection | ✅ Done (M4) |
 | M4 | CDI integration via Vauban BCE | ✅ Done |
-| M5 | **TCK 100 % PASS + JMH benchmark** | 🔄 In progress |
+| M5 | **TCK 100 % PASS + JMH benchmark** |  In progress |
 
 ## Known issues and workarounds
 
