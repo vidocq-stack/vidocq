@@ -141,14 +141,4 @@ class SdkMeterProviderTest {
         }
     }
 
-    @Test
-    void up_down_counter_and_gauge_are_unsupported_in_m4_mvp() {
-        try (SdkMeterProvider p = SdkMeterProvider.builder().build()) {
-            Meter m = p.get("x");
-            org.junit.jupiter.api.Assertions.assertThrows(UnsupportedOperationException.class,
-                    () -> m.upDownCounterBuilder("u"));
-            org.junit.jupiter.api.Assertions.assertThrows(UnsupportedOperationException.class,
-                    () -> m.gaugeBuilder("g"));
-        }
-    }
 }

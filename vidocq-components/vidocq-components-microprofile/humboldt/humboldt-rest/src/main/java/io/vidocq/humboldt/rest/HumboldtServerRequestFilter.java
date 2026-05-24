@@ -87,8 +87,13 @@ public class HumboldtServerRequestFilter implements ContainerRequestFilter {
     public void filter(ContainerRequestContext requestContext) {
         // Propagator du Humboldt global — permet l'utilisation de propagators custom
         // déclarés via SPI ConfigurablePropagatorProvider (MP Telemetry §3.3, cluster D).
-        // Fallback W3CPropagators si GlobalOpenTelemetry n'est pas initialisé.
-        TextMapPropagator propagator = GlobalOpenTelemetry.get().getPropagators().getTextMapPropagator();
+        // Fallback W3CPropagators si GlobalOpenTelemetry n'est pas initialisé (test unitaire
+        // sans bootstrap MP Telemetry, ou tooling qui ne configure pas le runtime).
+        OpenTelemetry otel = GlobalOpenTelemetry.get();
+        TextMapPropagator propagator = otel.getPropagators().getTextMapPropagator();
+        if (propagator == TextMapPropagator.noop()) {
+            propagator = W3CPropagators.textMap();
+        }
         Context parent = propagator.extract(Context.current(), requestContext, HEADER_GETTER);
 
         String method = requestContext.getMethod();
