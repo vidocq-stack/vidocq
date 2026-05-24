@@ -468,47 +468,54 @@ public class HumboldtDeployableContainer implements DeployableContainer<Humboldt
         }
         if (names.isEmpty()) return null;
 
+        // Scan optionnel des SPI providers déclarés dans le WAR (custom propagators
+        // type TestPropagator du TCK). Peut être absent si on n'utilise que des builtins
+        // (b3, jaeger, etc.) — le switch ci-dessous se débrouille.
         String service = "io.opentelemetry.sdk.autoconfigure.spi.ConfigurablePropagatorProvider";
         Node node = archive.get("/META-INF/services/" + service);
         if (node == null) {
             node = archive.get("/WEB-INF/classes/META-INF/services/" + service);
         }
-        if (node == null || node.getAsset() == null) return null;
-
         ClassLoader cl = Thread.currentThread().getContextClassLoader();
         MapConfigProperties configProps = new MapConfigProperties(mpProps);
         Map<String, io.opentelemetry.context.propagation.TextMapPropagator> byName = new LinkedHashMap<>();
-        try (InputStream in = node.getAsset().openStream();
-             BufferedReader r = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
-            String line;
-            while ((line = r.readLine()) != null) {
-                String fqn = line.trim();
-                if (fqn.isEmpty() || fqn.startsWith("#")) continue;
-                try {
-                    Class<?> cls = Class.forName(fqn, true, cl);
-                    var provider = cls.getDeclaredConstructor().newInstance();
-                    String name = (String) cls.getMethod("getName").invoke(provider);
-                    Object p = cls.getMethod("getPropagator",
-                            io.opentelemetry.sdk.autoconfigure.spi.ConfigProperties.class).invoke(provider, configProps);
-                    if (p instanceof io.opentelemetry.context.propagation.TextMapPropagator tmp) {
-                        byName.put(name, tmp);
-                        LOG.log(Level.INFO, "  → PropagatorProvider chargé : {0} (name={1})", fqn, name);
+        if (node != null && node.getAsset() != null) {
+            try (InputStream in = node.getAsset().openStream();
+                 BufferedReader r = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = r.readLine()) != null) {
+                    String fqn = line.trim();
+                    if (fqn.isEmpty() || fqn.startsWith("#")) continue;
+                    try {
+                        Class<?> cls = Class.forName(fqn, true, cl);
+                        var provider = cls.getDeclaredConstructor().newInstance();
+                        String name = (String) cls.getMethod("getName").invoke(provider);
+                        Object p = cls.getMethod("getPropagator",
+                                io.opentelemetry.sdk.autoconfigure.spi.ConfigProperties.class).invoke(provider, configProps);
+                        if (p instanceof io.opentelemetry.context.propagation.TextMapPropagator tmp) {
+                            byName.put(name, tmp);
+                            LOG.log(Level.INFO, "  → PropagatorProvider chargé : {0} (name={1})", fqn, name);
+                        }
+                    } catch (Exception e) {
+                        LOG.log(Level.WARNING, "  ⚠ PropagatorProvider ignoré ({0}) : {1}", fqn, e.getMessage());
                     }
-                } catch (Exception e) {
-                    LOG.log(Level.WARNING, "  ⚠ PropagatorProvider ignoré ({0}) : {1}", fqn, e.getMessage());
                 }
+            } catch (IOException e) {
+                LOG.log(Level.WARNING, "Erreur lecture services/{0} : {1}", service, e.getMessage());
             }
-        } catch (IOException e) {
-            LOG.log(Level.WARNING, "Erreur lecture services/{0} : {1}", service, e.getMessage());
         }
 
         // Composer la liste finale : pour chaque nom dans `otel.propagators`, utiliser
-        // le builtin si reconnu (tracecontext, baggage), sinon le custom SPI scanné.
+        // le builtin si reconnu (tracecontext, baggage, b3, b3multi, jaeger), sinon
+        // le custom SPI scanné dans le WAR.
         List<io.opentelemetry.context.propagation.TextMapPropagator> chosen = new ArrayList<>();
         for (String n : names) {
             switch (n) {
                 case "tracecontext" -> chosen.add(io.opentelemetry.api.trace.propagation.W3CTraceContextPropagator.getInstance());
                 case "baggage" -> chosen.add(io.opentelemetry.api.baggage.propagation.W3CBaggagePropagator.getInstance());
+                case "b3" -> chosen.add(io.opentelemetry.extension.trace.propagation.B3Propagator.injectingSingleHeader());
+                case "b3multi" -> chosen.add(io.opentelemetry.extension.trace.propagation.B3Propagator.injectingMultiHeaders());
+                case "jaeger" -> chosen.add(io.opentelemetry.extension.trace.propagation.JaegerPropagator.getInstance());
                 default -> {
                     var p = byName.get(n);
                     if (p != null) chosen.add(p);
