@@ -1,9 +1,6 @@
 = Ravel
 :description: Implémentation MicroProfile Config 3.1, zéro libraire tierce, JPMS strict, Java 25, prête pour jlink.
 
-[.text-center]
-image::ravel-logo.png[Ravel,300,role=module-logo]
-
 [.lead]
 Ravel est l'implémentation MicroProfile Config 3.1 de l'écosystème Vidocq. Elle implémente la couche d'abstraction de configuration pour les applications Jakarta EE / MicroProfile : agrégation de multiples sources (propriétés système, variables d'environnement, `microprofile-config.properties`), conversion de types, expressions de propriété, profils de configuration, et intégration CDI via xref:vauban::index.adoc[Vauban]. Objectif : conformance 100 % au TCK MicroProfile Config 3.1, zéro dépendance externe, JPMS strict, prête pour jlink.
 
@@ -107,4 +104,3 @@ public class MyApplication {
 ----
 
 Suivant : xref:getting-started.adoc[Prise en main].
-
