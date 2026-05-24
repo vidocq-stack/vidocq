@@ -99,9 +99,9 @@ Sur Cassini bootstrappé via `CassiniStack.builder().beanProvider(vaubanBeanProv
 ```java
 package com.example.app.health;
 
-import io.vidocq.knock.api.spi.HealthCheck;
-import io.vidocq.knock.api.spi.HealthCheckResponse;
 import jakarta.enterprise.context.ApplicationScoped;
+import org.eclipse.microprofile.health.HealthCheck;
+import org.eclipse.microprofile.health.HealthCheckResponse;
 import org.eclipse.microprofile.health.Liveness;
 
 @Liveness
@@ -136,7 +136,7 @@ Un smoke test de la ressource (sans container HTTP) est fourni dans
 `KnockHealthResourceTest` (7/7 PASS) — il utilise un `TestRuntimeDelegate` minimal
 local pour bypasser tout import interne Cassini. Pour une vérification end-to-end
 contre Cassini réel, voir l'extension `vidocq-runtime-knock-extension`
-(`docs/integration-vidocq.md`).
+(`docs/integration-vidocq-runtime.md`).
 
 ## TCK MicroProfile Health 4.0
 

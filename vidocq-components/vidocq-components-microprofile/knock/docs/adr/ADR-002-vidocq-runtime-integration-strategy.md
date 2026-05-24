@@ -2,7 +2,7 @@
 
 - Statut : **Accepté** (M5, mai 2026)
 - Décideur·euse·s : équipe Knock + équipe vidocq
-- Lié à : `ROADMAP.md` §M5, `docs/integration-cassini.md`, `docs/integration-vidocq.md`
+- Lié à : `ROADMAP.md` §M5, `docs/integration-cassini.md`, `docs/integration-vidocq-runtime.md`
 
 ## Contexte
 

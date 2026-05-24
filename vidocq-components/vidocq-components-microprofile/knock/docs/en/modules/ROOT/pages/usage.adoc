@@ -8,7 +8,7 @@ Use one qualifier per check:
 * `@Readiness`
 * `@Startup`
 
-Checks without qualifier are ignored at runtime.
+Checks without qualifier fail CDI validation at deployment time.
 
 == Aggregation
 

@@ -46,8 +46,8 @@ Au moment où `CassiniExtension.onStart()` interroge
 1. Instancié les beans `HealthCheck` qualifiés (le bean utilisateur
    `@Liveness DatabaseCheck` et la ressource `KnockHealthResource`) ;
 2. Validé le déploiement via `HealthCheckCdiExtension` (§4.2 spec MP Health 4.0) :
-   un bean qui implémente `HealthCheck` *sans* qualifier MP est ignoré (cf.
-   `EnforceQualifierTest` du TCK) ;
+   un bean qui implémente `HealthCheck` *sans* qualifier MP provoque une erreur
+   de validation (déploiement rejeté) ;
 3. Exposé `KnockCdiHealthCheckRegistry` (`@ApplicationScoped`) injectable dans
    `KnockHealthResource`.
 
@@ -90,10 +90,10 @@ enregistré pour une probe donnée, le statut est `UP` avec `checks: []` (cf.
 ```java
 package com.example.shop.health;
 
-import io.vidocq.knock.api.spi.HealthCheck;
-import io.vidocq.knock.api.spi.HealthCheckResponse;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import org.eclipse.microprofile.health.HealthCheck;
+import org.eclipse.microprofile.health.HealthCheckResponse;
 import org.eclipse.microprofile.health.Readiness;
 
 @Readiness

@@ -8,7 +8,7 @@ Un qualifier par check:
 * `@Readiness`
 * `@Startup`
 
-Les checks sans qualifier sont ignores au runtime.
+Un check sans qualifier fait echouer la validation CDI au deploiement.
 
 == Aggregation
 

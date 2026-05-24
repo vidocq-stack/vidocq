@@ -231,7 +231,7 @@ health check par défaut de tout déploiement vidocq.
 | Tâche | Notes | État |
 |---|---|---|
 | Documentation `docs/integration-cassini.md` | Dépendances, JPMS, exemple ressource JAX-RS avec health check dédié | ✅ |
-| Documentation `docs/integration-vidocq.md` | Configuration health check dans vidocq, accès par défaut `/health` | ✅ |
+| Documentation `docs/integration-vidocq-runtime.md` | Configuration health check dans vidocq, accès par défaut `/health` | ✅ |
 | ADR-002 stratégie d'intégration | Rationale, ordre de déploiement, risques (cf. `docs/adr/ADR-002-vidocq-runtime-integration-strategy.md`) | ✅ |
 | ServiceLoader BCE (`META-INF/services/jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension`) | `HealthCheckCdiExtension` exposée via le contrat CDI 4.1 standard | ✅ |
 | `module-info.java` `provides ... with` | Doublure JPMS pour les fichiers de services (cf. `knock-cdi-vauban` et `knock-core`) | ✅ |
