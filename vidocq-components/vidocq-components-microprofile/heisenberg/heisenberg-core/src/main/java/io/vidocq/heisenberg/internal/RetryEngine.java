@@ -1,5 +1,7 @@
 package io.vidocq.heisenberg.internal;
 
+import io.vidocq.heisenberg.api.FtMetricsRecorder;
+import java.lang.reflect.Method;
 import java.time.Duration;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -8,25 +10,35 @@ public final class RetryEngine {
     private RetryEngine() {}
 
     public static Object execute(PolicyComposer.Invocation invocation, RetryConfig config) throws Exception {
+        return execute(invocation, config, FtMetricsRecorder.NOOP, null, null);
+    }
+
+    public static Object execute(PolicyComposer.Invocation invocation, RetryConfig config,
+                                 FtMetricsRecorder recorder, Class<?> beanClass, Method method) throws Exception {
         long startedAt = System.nanoTime();
         int attempt = 0;
 
         while (true) {
             long attemptStartedAt = System.nanoTime();
             try {
-                return invocation.proceed();
+                Object result = invocation.proceed();
+                recorder.recordRetry(beanClass, method, attempt, FtMetricsRecorder.RetryResult.VALUE_RETURNED);
+                return result;
             } catch (Throwable failure) {
                 Duration attemptDuration = Duration.ofNanos(System.nanoTime() - attemptStartedAt);
                 if (!shouldRetry(failure, config)) {
+                    recorder.recordRetry(beanClass, method, attempt, FtMetricsRecorder.RetryResult.EXCEPTION_NOT_RETRYABLE);
                     throwAsException(failure);
                 }
 
                 if (attempt >= config.maxRetries()) {
+                    recorder.recordRetry(beanClass, method, attempt, FtMetricsRecorder.RetryResult.MAX_RETRIES_REACHED);
                     throwAsException(failure);
                 }
 
                 Duration sleepDuration = computeBackoff(config);
                 if (exceedsMaxDuration(startedAt, config.maxDurationValue(), sleepDuration, attemptDuration)) {
+                    recorder.recordRetry(beanClass, method, attempt, FtMetricsRecorder.RetryResult.MAX_DURATION_REACHED);
                     throwAsException(failure);
                 }
 

@@ -6,7 +6,12 @@
  */
 package io.vidocq.heisenberg.tck.arquillian;
 
+import io.vidocq.dirac.cdi.internal.CountedInterceptor;
+import io.vidocq.dirac.cdi.internal.GaugeRegistrationBean;
+import io.vidocq.dirac.cdi.internal.MetricRegistryProducerBean;
+import io.vidocq.dirac.cdi.internal.TimedInterceptor;
 import io.vidocq.heisenberg.cdi.internal.BulkheadStateRegistryBean;
+import io.vidocq.heisenberg.cdi.internal.DiracFtMetricsRecorder;
 import io.vidocq.heisenberg.cdi.internal.FaultToleranceInterceptor;
 import io.vidocq.heisenberg.cdi.internal.FaultTolerancePriority3850Interceptor;
 import io.vidocq.heisenberg.cdi.internal.HeisenbergExtension;
@@ -64,7 +69,13 @@ final class VaubanTckBootstrap {
                 .addBeanClass(FaultToleranceInterceptor.class)
                 .addBeanClass(FaultTolerancePriority3850Interceptor.class)
                 .addBeanClass(StateRegistryBean.class)
-                .addBeanClass(BulkheadStateRegistryBean.class);
+                .addBeanClass(BulkheadStateRegistryBean.class)
+                .addBeanClass(MetricRegistryProducerBean.class)
+                .addBeanClass(GaugeRegistrationBean.class)
+                .addBeanClass(CountedInterceptor.class)
+                .addBeanClass(TimedInterceptor.class)
+                .addBeanClass(MetricRegistryProxyProducerBean.class)
+                .addBeanClass(DiracFtMetricsRecorder.class);
         for (Class<?> c : beanClasses) {
             builder.addBeanClass(c);
         }

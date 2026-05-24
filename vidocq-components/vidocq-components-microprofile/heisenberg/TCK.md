@@ -2,7 +2,7 @@
 
 Score officiel du TCK `microprofile-fault-tolerance-tck:4.1` contre Heisenberg.
 
-## État courant (M9 — 2026-05-16T22:45Z)
+## État courant (M9 — 2026-05-22T09:15Z)
 
 L'infrastructure TCK est **opérationnelle** :
 
@@ -13,8 +13,10 @@ L'infrastructure TCK est **opérationnelle** :
 
 - ✅ Smoke run du 2026-05-16T10:24Z : `1/1 PASS` (`HeisenbergTckSmokeTest`).
 - ✅ Build reactor + tests unitaires : `140/140 verts` (98 core + 42 cdi-vauban).
-- 🚧 Dernier run `all` reproductible (2026-05-16T11:17Z) :
-   `424 run / 349 PASS / 61 fail / 14 skip` (~**82 % PASS**, exclusions metrics/telemetry actives).
+- 🚧 Dernier run `all` reproductible (2026-05-16T11:17Z, hors metrics) :
+   `424 run / 349 PASS / 61 fail / 14 skip` (~**82 % PASS**).
+- 🚧 Run metrics ciblé (2026-05-22T09:15Z, suite Dirac intégrée) :
+   `24 run / 1 PASS / 23 fail` — infra CDI opérationnelle, `MetricsDisabledTest` ✅, 23 tests attendent que `FaultToleranceInterceptor` publie ses métriques FT.
 - 🚧 M9 améliorations architecturales appliquées :
    - `BulkheadState` convertie d'un record à une interface extensible
    - Tracking des tâches attendantes via `activeWaiters` counter
@@ -28,6 +30,7 @@ L'infrastructure TCK est **opérationnelle** :
 | Global après correctifs Retry + CircuitBreaker | 527 | 316 | 125 | 86 | **-50 failures**.
 | Global après lot fallback+bootstrap | 501 | 332 | 109 | 60 | **-16 failures / -26 skips**.
 | **Run courant (2026-05-16T11:17Z)** | **424** | **349** | **61** | **14** | **+17 PASS / -48 failures** ; total réduit (exclusions metrics/telemetry élargies, validations invalides désormais comptées).
+| Metrics run (2026-05-22T09:15Z) | **24** | **1** | **23** | **0** | Intégration Dirac wired — `MetricsDisabledTest` ✅ ; 23 tests bloqués sur publishing FT metrics manquant.
 
 ### Vérifications ciblées récentes
 
@@ -139,9 +142,10 @@ L'infrastructure TCK est **opérationnelle** :
 
 Exclusions temporaires actives dans `heisenberg-tck/pom.xml` (profil `tck-official`) :
 
-- `**/metric/**`, `**/metrics/**`, `**/*Metric*Test.class`
 - `**/telemetry/**`, `**/*Telemetry*Test.class`
 
-Justification : implémentations MP Metrics / MP Telemetry non livrées à date.
-Réactivation prévue dès que ces implémentations seront disponibles dans Heisenberg.
+Justification : implémentation MP Telemetry non livrée à date.
+Réactivation prévue dès que l'implémentation MP Telemetry sera disponible.
+
+Les tests MP Metrics sont **actifs** depuis l'intégration de Dirac (`dirac-cdi-vauban:0.1.0-SNAPSHOT`).
 

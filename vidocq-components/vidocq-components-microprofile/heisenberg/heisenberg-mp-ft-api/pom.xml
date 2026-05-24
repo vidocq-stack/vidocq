@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.1.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.1.0 http://maven.apache.org/xsd/maven-4.1.0.xsd">
+    <modelVersion>4.1.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.heisenberg</groupId>
+        <artifactId>heisenberg-parent</artifactId>
+    </parent>
+
+    <artifactId>heisenberg-mp-ft-api</artifactId>
+    <name>Heisenberg :: MicroProfile Fault Tolerance API (modularisé)</name>
+    <description>
+        Re-package de org.eclipse.microprofile.fault-tolerance:microprofile-fault-tolerance-api avec un
+        module-info.class explicite (nom : microprofile.fault.tolerance.api). L'API officielle ne fournit
+        pas de module-info.class, ce qui empêche son utilisation directe avec jlink. Cet artefact est
+        l'unique source de la spec MP FT 4.1 consommée par les modules Heisenberg (heisenberg-api,
+        heisenberg-core, heisenberg-cdi-vauban) ; le TCK officiel (hors reactor) continue d'utiliser
+        l'API d'origine.
+    </description>
+
+    <dependencies>
+        <!--
+            La spec officielle est récupérée en 'provided' uniquement pour permettre l'unpack
+            de ses .class dans target/classes ; elle n'est pas exposée transitivement aux
+            consommateurs, qui reçoivent à la place le jar repackagé avec son module-info explicite.
+        -->
+        <dependency>
+            <groupId>org.eclipse.microprofile.fault-tolerance</groupId>
+            <artifactId>microprofile-fault-tolerance-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- 1) Décompresse les .class de microprofile-fault-tolerance-api dans target/classes -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <version>3.8.1</version>
+                <executions>
+                    <execution>
+                        <id>unpack-microprofile-ft-api</id>
+                        <phase>generate-resources</phase>
+                        <goals>
+                            <goal>unpack</goal>
+                        </goals>
+                        <configuration>
+                            <artifactItems>
+                                <artifactItem>
+                                    <groupId>org.eclipse.microprofile.fault-tolerance</groupId>
+                                    <artifactId>microprofile-fault-tolerance-api</artifactId>
+                                    <version>${microprofile.fault.tolerance.version}</version>
+                                    <outputDirectory>${project.build.outputDirectory}</outputDirectory>
+                                    <!--
+                                        On exclut le manifest et les méta Maven d'origine ;
+                                        maven-jar-plugin réécrira un manifest propre pour notre artefact
+                                        (sans Automatic-Module-Name, désormais superflu : le module
+                                        est explicite).
+                                    -->
+                                    <excludes>META-INF/MANIFEST.MF,META-INF/maven/**,META-INF/LICENSE,META-INF/NOTICE</excludes>
+                                </artifactItem>
+                            </artifactItems>
+                            <overWriteReleases>true</overWriteReleases>
+                            <overWriteSnapshots>true</overWriteSnapshots>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!--
+                2) Compile uniquement src/main/java/module-info.java en le patchant dans le module
+                   'microprofile.fault.tolerance.api' (les .class unpackés plus haut fournissent
+                   les packages exportés que javac valide).
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <release>25</release>
+                    <compilerArgs combine.children="append">
+                        <arg>--patch-module</arg>
+                        <arg>microprofile.fault.tolerance.api=${project.build.outputDirectory}</arg>
+                    </compilerArgs>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

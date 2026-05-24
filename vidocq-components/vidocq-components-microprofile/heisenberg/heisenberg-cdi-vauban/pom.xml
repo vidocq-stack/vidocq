@@ -38,6 +38,13 @@
             <artifactId>jakarta.interceptor-api</artifactId>
             <scope>provided</scope>
         </dependency>
+        <!-- MP Metrics API — version modularisée Dirac (named module, jlink-compatible), provided en runtime -->
+        <dependency>
+            <groupId>io.vidocq.dirac</groupId>
+            <artifactId>dirac-mp-metrics-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>

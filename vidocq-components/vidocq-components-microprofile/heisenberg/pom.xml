@@ -100,6 +100,7 @@
         <!-- Implémentations Vidocq upstream -->
         <vauban.version>0.1.0-SNAPSHOT</vauban.version>
         <ravel.version>0.1.0-SNAPSHOT</ravel.version>
+        <dirac.version>0.1.0-SNAPSHOT</dirac.version>
 
         <!-- JUnit 6 minimum -->
         <junit.version>6.0.3</junit.version>
@@ -115,6 +116,7 @@
         après installation locale du reactor.
     -->
     <subprojects>
+        <subproject>heisenberg-mp-ft-api</subproject>
         <subproject>heisenberg-api</subproject>
         <subproject>heisenberg-core</subproject>
         <subproject>heisenberg-cdi-vauban</subproject>
@@ -133,7 +135,13 @@
                 <scope>import</scope>
             </dependency>
 
-            <!-- MicroProfile Fault Tolerance 4.1 API -->
+            <!-- MicroProfile Fault Tolerance 4.1 API — version modularisée (named module, jlink-compatible) -->
+            <dependency>
+                <groupId>io.vidocq.heisenberg</groupId>
+                <artifactId>heisenberg-mp-ft-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <!-- API officielle conservée pour le TCK hors-reactor uniquement -->
             <dependency>
                 <groupId>org.eclipse.microprofile.fault-tolerance</groupId>
                 <artifactId>microprofile-fault-tolerance-api</artifactId>
@@ -164,7 +172,20 @@
                 <version>${jakarta.interceptor.version}</version>
             </dependency>
 
-            <!-- MicroProfile Config (pour la surcharge de configuration externe) -->
+            <!-- MicroProfile Config — version modularisée Ravel (named module, jlink-compatible) -->
+            <dependency>
+                <groupId>io.vidocq.ravel</groupId>
+                <artifactId>ravel-mp-config-api</artifactId>
+                <version>${ravel.version}</version>
+            </dependency>
+
+            <!-- MicroProfile Metrics API — version modularisée Dirac (named module, jlink-compatible) -->
+            <dependency>
+                <groupId>io.vidocq.dirac</groupId>
+                <artifactId>dirac-mp-metrics-api</artifactId>
+                <version>${dirac.version}</version>
+            </dependency>
+            <!-- API officielle conservée pour le TCK hors-reactor uniquement -->
             <dependency>
                 <groupId>org.eclipse.microprofile.config</groupId>
                 <artifactId>microprofile-config-api</artifactId>
@@ -288,6 +309,15 @@
                         <configuration>
                             <outputDirectory>${project.build.directory}/javamodules</outputDirectory>
                             <includeScope>compile</includeScope>
+                            <!--
+                                Exclure les APIs MicroProfile originales qui sont remplacées par
+                                leurs équivalents modularisés (heisenberg-mp-ft-api et
+                                ravel-mp-config-api). Les deux repackages sont des named modules
+                                que Maven Compiler Plugin 4.0 gère automatiquement sur le
+                                module-path ; copier les originaux provoquerait un conflit de
+                                noms de modules (duplicate module on module path).
+                            -->
+                            <excludeArtifactIds>microprofile-fault-tolerance-api,microprofile-config-api,microprofile-metrics-api</excludeArtifactIds>
                         </configuration>
                     </execution>
                 </executions>

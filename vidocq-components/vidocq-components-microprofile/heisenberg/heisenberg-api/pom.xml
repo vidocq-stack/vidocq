@@ -14,10 +14,10 @@
     <description>Re-exposition contrôlée de la spec MicroProfile Fault Tolerance 4.1 + SPI Heisenberg</description>
 
     <dependencies>
-        <!-- Spec MP FT 4.1 — re-exposée transitivement -->
+        <!-- Spec MP FT 4.1 — version modularisée, re-exposée transitivement -->
         <dependency>
-            <groupId>org.eclipse.microprofile.fault-tolerance</groupId>
-            <artifactId>microprofile-fault-tolerance-api</artifactId>
+            <groupId>io.vidocq.heisenberg</groupId>
+            <artifactId>heisenberg-mp-ft-api</artifactId>
         </dependency>
         <!-- Interceptors API : InvocationContext exposé dans la SPI publique PolicyContext -->
         <dependency>

@@ -214,10 +214,7 @@
                             </includes>
                             <excludes>
                                 <exclude>**/HeisenbergTckSmokeTest.class</exclude>
-                                <!-- Temporaire : réactiver après implémentations MP Metrics + MP Telemetry -->
-                                <exclude>**/metric/**</exclude>
-                                <exclude>**/metrics/**</exclude>
-                                <exclude>**/*Metric*Test.class</exclude>
+                                <!-- Temporaire : réactiver après implémentation MP Telemetry -->
                                 <exclude>**/telemetry/**</exclude>
                                 <exclude>**/*Telemetry*Test.class</exclude>
                             </excludes>
@@ -266,6 +263,13 @@
                     <groupId>org.eclipse.microprofile.metrics</groupId>
                     <artifactId>microprofile-metrics-api</artifactId>
                     <version>4.0</version>
+                    <scope>test</scope>
+                </dependency>
+
+                <dependency>
+                    <groupId>io.vidocq.dirac</groupId>
+                    <artifactId>dirac-cdi-vauban</artifactId>
+                    <version>0.1.0-SNAPSHOT</version>
                     <scope>test</scope>
                 </dependency>
 

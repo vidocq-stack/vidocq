@@ -1,9 +1,12 @@
 package io.vidocq.heisenberg.cdi.internal;
 
+import io.vidocq.heisenberg.api.FtMetricsRecorder;
 import io.vidocq.heisenberg.internal.ConfigResolver;
 import io.vidocq.heisenberg.internal.PolicyComposer;
 import java.lang.reflect.Method;
 import jakarta.annotation.Priority;
+import jakarta.enterprise.inject.Any;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 import jakarta.interceptor.AroundInvoke;
 import jakarta.interceptor.Interceptor;
@@ -39,6 +42,10 @@ public class FaultToleranceInterceptor {
     @Inject
     private BulkheadStateRegistryBean bulkheadRegistry;
 
+    @Inject
+    @Any
+    private Instance<FtMetricsRecorder> recorderInstance;
+
     @AroundInvoke
     public Object around(InvocationContext context) throws Exception {
         // TCK MP FT 4.1: lorsqu'une priorité custom 3850 est configurée,
@@ -52,9 +59,18 @@ public class FaultToleranceInterceptor {
             return context.proceed();
         }
 
+        FtMetricsRecorder recorder;
+        if (recorderInstance == null || recorderInstance.isUnsatisfied()) {
+            System.err.println("[HEISENBERG-DEBUG] recorderInstance=" + recorderInstance + " → using NOOP");
+            recorder = FtMetricsRecorder.NOOP;
+        } else {
+            recorder = recorderInstance.get();
+            System.err.println("[HEISENBERG-DEBUG] recorder=" + recorder.getClass().getSimpleName());
+        }
+
         Method resolvedMethod = resolveInterceptedMethod(context);
         return PolicyComposer.invoke(context::proceed, context.getTarget(), resolvedMethod,
-                context.getParameters(), stateRegistry, bulkheadRegistry);
+                context.getParameters(), stateRegistry, bulkheadRegistry, recorder);
     }
 
 

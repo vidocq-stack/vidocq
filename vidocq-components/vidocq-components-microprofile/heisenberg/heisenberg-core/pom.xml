@@ -18,10 +18,10 @@
             <groupId>io.vidocq.heisenberg</groupId>
             <artifactId>heisenberg-api</artifactId>
         </dependency>
-        <!-- Config externe via MicroProfile Config (Ravel en runtime, compile scope pour JPMS module-info) -->
+        <!-- Config externe via MicroProfile Config — version modularisée Ravel (named module, jlink-compatible) -->
         <dependency>
-            <groupId>org.eclipse.microprofile.config</groupId>
-            <artifactId>microprofile-config-api</artifactId>
+            <groupId>io.vidocq.ravel</groupId>
+            <artifactId>ravel-mp-config-api</artifactId>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>

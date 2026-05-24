@@ -1,5 +1,7 @@
 package io.vidocq.heisenberg.internal;
 
+import io.vidocq.heisenberg.api.FtMetricsRecorder;
+import java.lang.reflect.Method;
 import java.util.concurrent.Semaphore;
 import org.eclipse.microprofile.faulttolerance.exceptions.BulkheadException;
 
@@ -30,20 +32,30 @@ public final class BulkheadEngine {
      * @throws Exception         si l'invocation échoue
      */
     public Object execute(PolicyComposer.Invocation invocation, String beanClass, String methodName) throws Exception {
+        return execute(invocation, beanClass, methodName, FtMetricsRecorder.NOOP, null, null);
+    }
+
+    public Object execute(PolicyComposer.Invocation invocation, String beanClass, String methodName,
+                          FtMetricsRecorder recorder, Class<?> runtimeBeanClass, Method method) throws Exception {
         Semaphore semaphore = registry.getSemaphore(beanClass, methodName, config.value());
 
         // Mode synchrone : try-acquire immédiat (non-bloquant)
         if (!semaphore.tryAcquire()) {
+            recorder.recordBulkheadRejected(runtimeBeanClass, method);
             throw new BulkheadException(
                     "Bulkhead saturated for " + beanClass + "#" + methodName +
                             " (max concurrent: " + config.value() + ")"
             );
         }
 
+        recorder.bulkheadRunningDelta(runtimeBeanClass, method, +1);
+        long runStart = System.nanoTime();
         try {
             return invocation.proceed();
         } finally {
             semaphore.release();
+            recorder.bulkheadRunningDelta(runtimeBeanClass, method, -1);
+            recorder.recordBulkheadAccepted(runtimeBeanClass, method, 0, System.nanoTime() - runStart);
         }
     }
 
@@ -55,37 +67,55 @@ public final class BulkheadEngine {
      * par {@link PolicyComposer} quand {@code @Asynchronous} est présent.</p>
      */
     public Object executeAsync(PolicyComposer.Invocation invocation, String beanClass, String methodName) throws Exception {
+        return executeAsync(invocation, beanClass, methodName, FtMetricsRecorder.NOOP, null, null);
+    }
+
+    public Object executeAsync(PolicyComposer.Invocation invocation, String beanClass, String methodName,
+                               FtMetricsRecorder recorder, Class<?> runtimeBeanClass, Method method) throws Exception {
         BulkheadStateRegistry.BulkheadState state = registry.getAsyncState(beanClass, methodName, config.value(), config.waitingTaskQueue());
         Semaphore permits = state.permits();
 
         // Fast-path: execute immediately when a permit is available.
         if (permits.tryAcquire()) {
+            recorder.bulkheadRunningDelta(runtimeBeanClass, method, +1);
+            long runStart = System.nanoTime();
             try {
                 return invocation.proceed();
             } finally {
                 permits.release();
+                recorder.bulkheadRunningDelta(runtimeBeanClass, method, -1);
+                recorder.recordBulkheadAccepted(runtimeBeanClass, method, 0, System.nanoTime() - runStart);
             }
         }
 
         // No permit left: enqueue while waitingTaskQueue has capacity.
         if (config.waitingTaskQueue() <= 0 || !state.waitingQueue().tryAcquire()) {
+            recorder.recordBulkheadRejected(runtimeBeanClass, method);
             throw new BulkheadException(
                     "Bulkhead async queue saturated for " + beanClass + "#" + methodName +
                             " (waitingTaskQueue: " + config.waitingTaskQueue() + ")"
             );
         }
 
+        recorder.bulkheadWaitingDelta(runtimeBeanClass, method, +1);
+        long waitStart = System.nanoTime();
         try {
             permits.acquire();
         } finally {
             // Once we got a permit (or got interrupted), we are no longer in queue.
             state.waitingQueue().release();
+            recorder.bulkheadWaitingDelta(runtimeBeanClass, method, -1);
         }
+        long waitNanos = System.nanoTime() - waitStart;
 
+        recorder.bulkheadRunningDelta(runtimeBeanClass, method, +1);
+        long runStart = System.nanoTime();
         try {
             return invocation.proceed();
         } finally {
             permits.release();
+            recorder.bulkheadRunningDelta(runtimeBeanClass, method, -1);
+            recorder.recordBulkheadAccepted(runtimeBeanClass, method, waitNanos, System.nanoTime() - runStart);
         }
     }
 }
