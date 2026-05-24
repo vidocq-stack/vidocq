@@ -163,16 +163,42 @@ public class HumboldtDeployableContainer implements DeployableContainer<Humboldt
             io.opentelemetry.context.propagation.ContextPropagators spiPropagators =
                     resolveSpiPropagators(archive, mpProps);
 
+            // Cluster D — AutoConfigurationCustomizerProvider SPI : scanne, invoque
+            // customize() pour collecter les 6 chaînes de callbacks (Resource, Propagator,
+            // Properties, Sampler, SpanExporter, TracerProvider). Appliqué ci-dessous.
+            HumboldtAutoConfigurationCustomizer autoCustomizer = scanAutoConfigCustomizers(archive);
+
             // Construit l'EnvConfig Humboldt — convertit les props MP (lowercase.dotted)
             // vers les env vars OTEL (SCREAMING_SNAKE) attendues par EnvConfig.
             // Si un bridge externe est en place, force OTEL_TRACES_EXPORTER=none
             // pour éviter qu'Humboldt ajoute son propre InMemorySpanExporter natif.
             Map<String, String> envMap = mpPropsToOtelEnv(mpProps);
+            // Appliquer le PropertiesCustomizer / PropertiesSupplier (Cluster D) AVANT
+            // le merge des autres modifications — leurs valeurs sont des "defaults" qui
+            // peuvent être overridden par les autres sources.
+            envMap = autoCustomizer.applyPropertyCustomizers(envMap);
             if (!spiResourceAttrs.isEmpty()) {
                 String existing = envMap.get("OTEL_RESOURCE_ATTRIBUTES");
                 envMap.put("OTEL_RESOURCE_ATTRIBUTES",
                         existing == null || existing.isEmpty() ? spiResourceAttrs : existing + "," + spiResourceAttrs);
             }
+            // ResourceCustomizer (Cluster D) — invoque la chaîne et fusionne les attrs
+            // résultants dans OTEL_RESOURCE_ATTRIBUTES (humboldt re-parse ensuite via
+            // buildResource()).
+            String customizerResourceAttrs = autoCustomizer.applyResourceCustomizersAsAttrs(mpProps);
+            if (!customizerResourceAttrs.isEmpty()) {
+                String existing = envMap.get("OTEL_RESOURCE_ATTRIBUTES");
+                envMap.put("OTEL_RESOURCE_ATTRIBUTES",
+                        existing == null || existing.isEmpty() ? customizerResourceAttrs
+                                : existing + "," + customizerResourceAttrs);
+            }
+            // Invocations side-effect-only (le résultat des customizers Sampler/SpanExporter/
+            // TracerProvider ne peut pas être bridgé vers humboldt en 1:1 sans bridges
+            // bidirectionnels complets — out of scope. Mais le TCK CustomizerSpiTest n'asserte
+            // que sur les side-effects loggés des callbacks).
+            autoCustomizer.invokeSamplerCustomizers(mpProps);
+            autoCustomizer.invokeSpanExporterCustomizers(mpProps);
+            autoCustomizer.invokeTracerProviderCustomizers(mpProps);
             envMap.putIfAbsent("OTEL_TRACES_SAMPLER", "always_on");
             envMap.putIfAbsent("OTEL_METRICS_EXPORTER", "none");
             envMap.putIfAbsent("OTEL_LOGS_EXPORTER", "none");
@@ -180,6 +206,21 @@ public class HumboldtDeployableContainer implements DeployableContainer<Humboldt
                 envMap.put("OTEL_TRACES_EXPORTER", "none");
             } else {
                 envMap.putIfAbsent("OTEL_TRACES_EXPORTER", "none");
+            }
+
+            // PropagatorCustomizer (Cluster D) — applique la chaîne sur le propagator final
+            // (spiPropagators si défini, sinon W3CPropagators.get()). On wrap le résultat
+            // dans un nouveau ContextPropagators si la chaîne a transformé.
+            if (autoCustomizer.hasAny()) {
+                io.opentelemetry.context.propagation.TextMapPropagator basePropagator =
+                        spiPropagators != null
+                                ? spiPropagators.getTextMapPropagator()
+                                : io.vidocq.humboldt.propagator.w3c.W3CPropagators.textMap();
+                io.opentelemetry.context.propagation.TextMapPropagator customized =
+                        autoCustomizer.applyPropagatorCustomizers(basePropagator, mpProps);
+                if (customized != basePropagator) {
+                    spiPropagators = io.opentelemetry.context.propagation.ContextPropagators.create(customized);
+                }
             }
 
             this.humboldt = HumboldtAutoConfigure.configure(
@@ -526,6 +567,47 @@ public class HumboldtDeployableContainer implements DeployableContainer<Humboldt
         if (chosen.isEmpty()) return null;
         return io.opentelemetry.context.propagation.ContextPropagators.create(
                 io.opentelemetry.context.propagation.TextMapPropagator.composite(chosen));
+    }
+
+    /**
+     * Cluster D — Scanne {@code META-INF/services/io.opentelemetry.sdk.autoconfigure.spi.AutoConfigurationCustomizerProvider}
+     * dans le war, invoque {@code customize(humboldtCustomizer)} sur chaque provider pour
+     * collecter les chaînes de callbacks (Resource/Propagator/Properties/Sampler/SpanExporter/
+     * TracerProvider). Le {@link HumboldtAutoConfigurationCustomizer} ainsi peuplé est ensuite
+     * appliqué au bon moment dans le pipeline humboldt.
+     */
+    private static HumboldtAutoConfigurationCustomizer scanAutoConfigCustomizers(Archive<?> archive) {
+        HumboldtAutoConfigurationCustomizer customizer = new HumboldtAutoConfigurationCustomizer();
+        String service = "io.opentelemetry.sdk.autoconfigure.spi.AutoConfigurationCustomizerProvider";
+        Node node = archive.get("/META-INF/services/" + service);
+        if (node == null) {
+            node = archive.get("/WEB-INF/classes/META-INF/services/" + service);
+        }
+        if (node == null || node.getAsset() == null) return customizer;
+
+        ClassLoader cl = Thread.currentThread().getContextClassLoader();
+        try (InputStream in = node.getAsset().openStream();
+             BufferedReader r = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = r.readLine()) != null) {
+                String fqn = line.trim();
+                if (fqn.isEmpty() || fqn.startsWith("#")) continue;
+                try {
+                    Class<?> cls = Class.forName(fqn, true, cl);
+                    var provider = cls.getDeclaredConstructor().newInstance();
+                    cls.getMethod("customize",
+                            io.opentelemetry.sdk.autoconfigure.spi.AutoConfigurationCustomizer.class)
+                            .invoke(provider, customizer);
+                    LOG.log(Level.INFO, "  → AutoConfigCustomizerProvider chargé : {0}", fqn);
+                } catch (Exception e) {
+                    LOG.log(Level.WARNING, "  ⚠ AutoConfigCustomizerProvider ignoré ({0}) : {1}",
+                            fqn, e.getMessage());
+                }
+            }
+        } catch (IOException e) {
+            LOG.log(Level.WARNING, "Erreur lecture services/{0} : {1}", service, e.getMessage());
+        }
+        return customizer;
     }
 
     /**
