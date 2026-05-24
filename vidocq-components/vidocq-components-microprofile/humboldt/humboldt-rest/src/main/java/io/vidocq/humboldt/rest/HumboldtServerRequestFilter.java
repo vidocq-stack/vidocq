@@ -131,7 +131,18 @@ public class HumboldtServerRequestFilter implements ContainerRequestFilter {
         Scope scope = parent.with(span).makeCurrent();
         requestContext.setProperty(SPAN_PROPERTY, span);
         requestContext.setProperty(SCOPE_PROPERTY, scope);
+        requestContext.setProperty(START_NANOS_PROPERTY, System.nanoTime());
+        if (route != null) requestContext.setProperty(HTTP_ROUTE_PROPERTY, route);
+        if (scheme != null) requestContext.setProperty(URL_SCHEME_PROPERTY, scheme);
     }
+
+    /** Property route HTTP templaté — utilisée par {@link HumboldtServerResponseFilter} pour le Histogram. */
+    public static final String HTTP_ROUTE_PROPERTY = "io.vidocq.humboldt.rest.httpRoute";
+    /** Property url.scheme — utilisée par {@link HumboldtServerResponseFilter} pour le Histogram. */
+    public static final String URL_SCHEME_PROPERTY = "io.vidocq.humboldt.rest.urlScheme";
+
+    /** Propriété utilisée par {@link HumboldtServerResponseFilter} pour calculer la duration HTTP. */
+    public static final String START_NANOS_PROPERTY = "io.vidocq.humboldt.rest.startNanos";
 
     /**
      * Reconstruit le {@code http.route} à partir des annotations {@link Path} de la
@@ -171,8 +182,17 @@ public class HumboldtServerRequestFilter implements ContainerRequestFilter {
 
     private static void appendPathSegment(StringBuilder sb, String segment) {
         if (segment == null || segment.isEmpty()) return;
-        if (!segment.startsWith("/")) sb.append('/');
-        sb.append(segment);
+        // Normalisation pour éviter les doubles slashes : par exemple @Path("/")
+        // sur la classe + @Path("/span") sur la méthode → "/ctx/" + "/span" = "/ctx//span".
+        boolean sbEndsSlash = sb.length() > 0 && sb.charAt(sb.length() - 1) == '/';
+        boolean segStartsSlash = segment.startsWith("/");
+        if (sbEndsSlash && segStartsSlash) {
+            sb.append(segment, 1, segment.length());
+        } else if (!sbEndsSlash && !segStartsSlash) {
+            sb.append('/').append(segment);
+        } else {
+            sb.append(segment);
+        }
     }
 
     /**
