@@ -400,6 +400,14 @@
                                 <dependency>org.eclipse.microprofile.telemetry:microprofile-telemetry-logs-tck</dependency>
                             </dependenciesToScan>
                             <systemPropertyVariables>
+                                <!-- SPI de "porting" du TCK MP Telemetry 2.1 —
+                                     JaxRsServerAsyncTestEndpoint fait
+                                     `ConfigurationAccessor.get().getExecutor()` dans
+                                     son constructeur. Sans cette property,
+                                     l'instantiation échoue avec "Cannot find any
+                                     implementations of Executor, check that
+                                     telemetry.tck.executor is specified". -->
+                                <telemetry.tck.executor>io.vidocq.humboldt.tck.HumboldtTckExecutor</telemetry.tck.executor>
                                 <!-- MP Telemetry Logs TCK (JulTest) lit cette property dans son
                                      static{} pour ouvrir le fichier de log à vérifier. Le
                                      LoggingLogRecordExporter Humboldt y écrit chaque LogRecord
