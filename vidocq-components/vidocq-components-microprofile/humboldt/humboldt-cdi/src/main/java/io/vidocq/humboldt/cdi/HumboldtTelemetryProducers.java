@@ -11,6 +11,8 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Produces;
 import jakarta.enterprise.inject.spi.InjectionPoint;
 
+import java.lang.reflect.Proxy;
+
 /**
  * Producers CDI pour les types OpenTelemetry standard exigés par la spec
  * MicroProfile Telemetry 2.1 §"Required CDI beans".
@@ -52,23 +54,33 @@ public class HumboldtTelemetryProducers {
     }
 
     /**
-     * Producer {@link Span} — capture {@link Span#current()} au moment de
-     * la résolution. Pour les TCK MP Telemetry qui font
-     * {@code @Inject Span injectedSpan;} puis comparent à {@link Span#current()}
-     * dans la même méthode test.
+     * Producer {@link Span} — retourne un proxy dynamique qui délègue chaque
+     * appel de méthode à {@link Span#current()} au moment de l'invocation
+     * (pas au moment de l'injection). Spec MP Telemetry 2.1 §"Required CDI
+     * beans" : {@code SpanBeanTest.spanBeanChange} mute le Context après
+     * l'injection et attend que les accès subséquents à {@code injectedSpan}
+     * reflètent le nouveau span courant.
      */
     @Produces
     public Span produceCurrentSpan() {
-        return Span.current();
+        return (Span) Proxy.newProxyInstance(
+                Span.class.getClassLoader(),
+                new Class<?>[]{Span.class},
+                (proxy, method, args) -> method.invoke(Span.current(), args));
     }
 
     /**
-     * Producer {@link Baggage} — capture {@link Baggage#current()} au moment
-     * de la résolution.
+     * Producer {@link Baggage} — proxy dynamique qui delegate à
+     * {@link Baggage#current()} à chaque appel. Pour
+     * {@code BaggageBeanTest.baggageBeanChange} qui mute le Context après
+     * l'injection (cf. {@link #produceCurrentSpan()} pour la même approche).
      */
     @Produces
     public Baggage produceCurrentBaggage() {
-        return Baggage.current();
+        return (Baggage) Proxy.newProxyInstance(
+                Baggage.class.getClassLoader(),
+                new Class<?>[]{Baggage.class},
+                (proxy, method, args) -> method.invoke(Baggage.current(), args));
     }
 
     /**

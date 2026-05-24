@@ -80,11 +80,19 @@ public class HumboldtCdiEnricher implements TestEnricher {
         if (Meter.class.equals(type)) {
             return GlobalOpenTelemetry.get().getMeter(f.getDeclaringClass().getName());
         }
+        // Span / Baggage : proxy dynamique qui delegate à .current() à chaque appel.
+        // Capturer .current() ici figerait la valeur au moment de l'enrich, alors que
+        // les TCK SpanBeanTest/BaggageBeanTest mutent le Context après l'injection et
+        // attendent que injectedSpan/injectedBaggage reflètent la valeur courante.
         if (Span.class.equals(type)) {
-            return Span.current();
+            return java.lang.reflect.Proxy.newProxyInstance(
+                    Span.class.getClassLoader(), new Class<?>[]{Span.class},
+                    (p, m, a) -> m.invoke(Span.current(), a));
         }
         if (Baggage.class.equals(type)) {
-            return Baggage.current();
+            return java.lang.reflect.Proxy.newProxyInstance(
+                    Baggage.class.getClassLoader(), new Class<?>[]{Baggage.class},
+                    (p, m, a) -> m.invoke(Baggage.current(), a));
         }
         if (io.opentelemetry.api.logs.Logger.class.equals(type)) {
             return GlobalOpenTelemetry.get().getLogsBridge().get(f.getDeclaringClass().getName());
