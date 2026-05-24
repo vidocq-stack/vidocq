@@ -120,6 +120,14 @@ public class HumboldtDeployableContainer implements DeployableContainer<Humboldt
             // synthétique et soient découvertes comme beans Vauban → @Inject Baggage/Tracer
             // côté ressources reste non-null.
             builder.addBeanClass(io.vidocq.cassini.cdi.vauban.CassiniScopeExtension.class);
+            // Même problème pour la BCE Humboldt : HumboldtBuildCompatibleExtension scanne
+            // les classes annotées @WithSpan (OTel) et leur ajoute @SpanBinding pour activer
+            // WithSpanInterceptor. Sans cette BCE, les inner classes TCK comme
+            // RestClientSpanTest$SpanBean qui portent @WithSpan ne génèrent jamais le span
+            // INTERNAL attendu (chaîne SERVER → CLIENT → INTERNAL incomplete).
+            builder.addBeanClass(io.vidocq.humboldt.cdi.HumboldtBuildCompatibleExtension.class);
+            // Et l'interceptor lui-même, sinon @SpanBinding n'a aucun effet runtime.
+            builder.addBeanClass(io.vidocq.humboldt.cdi.WithSpanInterceptor.class);
             for (Class<?> bean : beanClasses) {
                 builder.addBeanClass(bean);
             }

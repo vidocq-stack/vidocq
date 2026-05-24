@@ -8,6 +8,7 @@ import io.opentelemetry.api.trace.SpanKind;
 import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.api.trace.Tracer;
 import io.opentelemetry.context.Scope;
+import io.opentelemetry.instrumentation.annotations.SpanAttribute;
 import io.opentelemetry.instrumentation.annotations.WithSpan;
 import jakarta.annotation.Priority;
 import jakarta.interceptor.AroundInvoke;
@@ -15,6 +16,7 @@ import jakarta.interceptor.Interceptor;
 import jakarta.interceptor.InvocationContext;
 
 import java.lang.reflect.Method;
+import java.lang.reflect.Parameter;
 
 /**
  * Interceptor CDI qui enveloppe chaque méthode portant
@@ -57,6 +59,7 @@ public class WithSpanInterceptor {
         Tracer t = tracer();
         SpanBuilder builder = t.spanBuilder(spanName).setSpanKind(kind);
         Span span = builder.startSpan();
+        applySpanAttributes(span, method, ctx.getParameters());
         try (Scope ignored = span.makeCurrent()) {
             return ctx.proceed();
         } catch (Throwable th) {
@@ -95,5 +98,25 @@ public class WithSpanInterceptor {
 
     private static String defaultName(Method method) {
         return method.getDeclaringClass().getSimpleName() + "." + method.getName();
+    }
+
+    /**
+     * Scan les paramètres de la méthode pour {@link SpanAttribute @SpanAttribute} et
+     * pose chaque valeur non-null sur le span. Si {@code @SpanAttribute.value()} est
+     * vide, utilise le nom du paramètre (nécessite compilation avec {@code -parameters}).
+     * Les valeurs sont converties via {@link String#valueOf(Object)} — conforme à la
+     * spec OTel instrumentation annotations qui requiert les attributs comme String.
+     */
+    private static void applySpanAttributes(Span span, Method method, Object[] args) {
+        if (args == null || args.length == 0) return;
+        Parameter[] params = method.getParameters();
+        for (int i = 0; i < params.length && i < args.length; i++) {
+            SpanAttribute attr = params[i].getAnnotation(SpanAttribute.class);
+            if (attr == null) continue;
+            Object value = args[i];
+            if (value == null) continue;
+            String key = attr.value().isEmpty() ? params[i].getName() : attr.value();
+            span.setAttribute(key, String.valueOf(value));
+        }
     }
 }
