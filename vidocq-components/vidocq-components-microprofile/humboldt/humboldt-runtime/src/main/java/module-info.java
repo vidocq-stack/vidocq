@@ -26,6 +26,10 @@ module io.vidocq.humboldt.runtime {
     requires transitive io.vidocq.humboldt.exporter.otlp.http;
     requires transitive io.opentelemetry.api;
     requires java.logging;
+    // JvmMetricsBinder utilise java.lang.management.* (MemoryMXBean, ThreadMXBean, etc.)
+    // + com.sun.management.OperatingSystemMXBean (cpu).
+    requires java.management;
+    requires jdk.management;
 
     exports io.vidocq.humboldt.runtime;
 }

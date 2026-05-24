@@ -180,13 +180,23 @@ public final class HumboldtAutoConfigure {
         MetricExporter metricExporter = switch (metricsExporter) {
             case "none" -> null;
             case "in-memory" -> inMemMetric;
+            case "logging" -> io.vidocq.humboldt.sdk.metric.export.LoggingMetricExporter.create();
             default -> buildOtlpMetricExporter(env);
         };
         if (metricExporter != null) {
+            // OTEL_METRIC_EXPORT_INTERVAL (en ms) — défaut 60s spec OTel ; 3s côté TCK
+            // MP Telemetry pour permettre les awaitility.until() en moins de 15s.
+            long intervalMs = env.getLong("OTEL_METRIC_EXPORT_INTERVAL", -1L);
+            Duration interval;
+            if ("in-memory".equals(metricsExporter)) {
+                interval = Duration.ofMinutes(60); // flush() explicite dans les tests
+            } else if (intervalMs > 0) {
+                interval = Duration.ofMillis(intervalMs);
+            } else {
+                interval = Duration.ofSeconds(60);
+            }
             mpBuilder.registerMetricReader(PeriodicMetricReader.builder(metricExporter)
-                    .setInterval("in-memory".equals(metricsExporter)
-                            ? Duration.ofMinutes(60)  // flush() explicite dans les tests
-                            : Duration.ofSeconds(60))
+                    .setInterval(interval)
                     .build());
         }
         // Extra MetricExporters (M4b — bridge OTel SDK via humboldt-tck) passés via le
@@ -198,6 +208,17 @@ public final class HumboldtAutoConfigure {
                     .build());
         }
         SdkMeterProvider meterProvider = mpBuilder.build();
+
+        // M4b — JVM metrics OTel SemConv 1.27+ : binde des Observable instruments
+        // (memory, cpu, class, thread, gc) sur le Meter humboldt-runtime. Conformité
+        // MP Telemetry 2.1 §"Required JVM metrics". Skip si pas d'exporter (none).
+        if (metricExporter != null || !EXTRA_METRIC_EXPORTERS.get().isEmpty()) {
+            try {
+                JvmMetricsBinder.bindAll(meterProvider.get("io.vidocq.humboldt.runtime.jvm"));
+            } catch (RuntimeException ignored) {
+                // Si MXBean indisponible (env spécifique), on continue sans crasher le boot.
+            }
+        }
 
         // --- Logger ---
         String logsExporter = env.getOrDefault("OTEL_LOGS_EXPORTER", "otlp");
