@@ -41,8 +41,10 @@ public final class SdkLongCounterBuilder implements LongCounterBuilder {
 
     @Override
     public DoubleCounterBuilder ofDoubles() {
-        throw new UnsupportedOperationException(
-                "M4 MVP : DoubleCounter pas encore supporté (différé en M4b)");
+        SdkDoubleCounterBuilder dcb = new SdkDoubleCounterBuilder(name, meter);
+        dcb.setDescription(description);
+        dcb.setUnit(unit);
+        return dcb;
     }
 
     @Override
@@ -58,13 +60,19 @@ public final class SdkLongCounterBuilder implements LongCounterBuilder {
 
     @Override
     public ObservableLongCounter buildWithCallback(Consumer<ObservableLongMeasurement> callback) {
-        throw new UnsupportedOperationException(
-                "M4 MVP : ObservableLongCounter pas encore supporté (différé en M4b)");
+        SumAggregator agg = new SumAggregator();
+        meter.register(new InstrumentEntry(name, description, unit,
+                InstrumentType.OBSERVABLE_COUNTER, AggregationTemporality.CUMULATIVE, true, agg));
+        var measurement = new ObservableLongMeasurementImpl(agg);
+        meter.registerObservableCallback(() -> callback.accept(measurement));
+        return new ObservableLongCounter() {};
     }
 
     @Override
     public ObservableLongMeasurement buildObserver() {
-        throw new UnsupportedOperationException(
-                "M4 MVP : ObservableLongMeasurement pas encore supporté (différé en M4b)");
+        SumAggregator agg = new SumAggregator();
+        meter.register(new InstrumentEntry(name, description, unit,
+                InstrumentType.OBSERVABLE_COUNTER, AggregationTemporality.CUMULATIVE, true, agg));
+        return new ObservableLongMeasurementImpl(agg);
     }
 }

@@ -28,6 +28,7 @@ public final class SdkMeter implements Meter {
     private final Resource resource;
     private final Clock clock;
     private final List<InstrumentEntry> instruments = new CopyOnWriteArrayList<>();
+    private final List<Runnable> observableCallbacks = new CopyOnWriteArrayList<>();
 
     public SdkMeter(InstrumentationScope scope, Resource resource, Clock clock) {
         this.scope = scope;
@@ -42,8 +43,7 @@ public final class SdkMeter implements Meter {
 
     @Override
     public LongUpDownCounterBuilder upDownCounterBuilder(String name) {
-        throw new UnsupportedOperationException(
-                "M4 MVP : UpDownCounter pas encore supporté (différé en M4b)");
+        return new SdkLongUpDownCounterBuilder(name, this);
     }
 
     @Override
@@ -53,12 +53,16 @@ public final class SdkMeter implements Meter {
 
     @Override
     public DoubleGaugeBuilder gaugeBuilder(String name) {
-        throw new UnsupportedOperationException(
-                "M4 MVP : Observable Gauge pas encore supporté (différé en M4b)");
+        return new SdkDoubleGaugeBuilder(name, this);
     }
 
     void register(InstrumentEntry entry) {
         instruments.add(entry);
+    }
+
+    /** Enregistre un callback observable invoqué à chaque {@link #collect(long, long)}. */
+    void registerObservableCallback(Runnable callback) {
+        observableCallbacks.add(callback);
     }
 
     public Clock clock() {
@@ -66,6 +70,13 @@ public final class SdkMeter implements Meter {
     }
 
     public Collection<MetricData> collect(long startEpochNanos, long epochNanos) {
+        // Invoque tous les callbacks observable AVANT de collecter — chaque callback
+        // met à jour son aggregator via le Measurement passé. Le snapshot ci-dessous
+        // reflète donc les valeurs les plus récentes.
+        for (Runnable cb : observableCallbacks) {
+            try { cb.run(); }
+            catch (RuntimeException ignored) { /* observable callback erratique — on log silencieux */ }
+        }
         List<MetricData> out = new ArrayList<>(instruments.size());
         for (InstrumentEntry e : instruments) {
             out.add(new MetricData(

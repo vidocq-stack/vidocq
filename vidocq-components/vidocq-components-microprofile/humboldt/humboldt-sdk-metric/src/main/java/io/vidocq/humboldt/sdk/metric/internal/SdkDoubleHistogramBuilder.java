@@ -46,8 +46,7 @@ public final class SdkDoubleHistogramBuilder implements DoubleHistogramBuilder {
 
     @Override
     public LongHistogramBuilder ofLongs() {
-        throw new UnsupportedOperationException(
-                "M4 MVP : LongHistogram pas encore supporté (différé en M4b)");
+        return new SdkLongHistogramBuilder(name, meter, description, unit);
     }
 
     @Override

@@ -11,12 +11,15 @@ package io.vidocq.humboldt.tck.arquillian;
 
 import io.opentelemetry.sdk.common.InstrumentationScopeInfo;
 import io.opentelemetry.sdk.metrics.data.AggregationTemporality;
+import io.opentelemetry.sdk.metrics.internal.data.ImmutableDoublePointData;
+import io.opentelemetry.sdk.metrics.internal.data.ImmutableGaugeData;
 import io.opentelemetry.sdk.metrics.internal.data.ImmutableHistogramData;
 import io.opentelemetry.sdk.metrics.internal.data.ImmutableHistogramPointData;
 import io.opentelemetry.sdk.metrics.internal.data.ImmutableLongPointData;
 import io.opentelemetry.sdk.metrics.internal.data.ImmutableMetricData;
 import io.opentelemetry.sdk.metrics.internal.data.ImmutableSumData;
 import io.opentelemetry.sdk.resources.Resource;
+import io.vidocq.humboldt.sdk.metric.data.DoublePointData;
 import io.vidocq.humboldt.sdk.metric.data.HistogramPointData;
 import io.vidocq.humboldt.sdk.metric.data.LongPointData;
 import io.vidocq.humboldt.sdk.metric.data.MetricData;
@@ -50,16 +53,31 @@ final class MetricDataMapper {
                 ? AggregationTemporality.CUMULATIVE : AggregationTemporality.DELTA;
 
         return switch (humboldt.instrumentType()) {
-            case COUNTER, UP_DOWN_COUNTER -> {
-                var points = new ArrayList<io.opentelemetry.sdk.metrics.data.LongPointData>(humboldt.points().size());
-                for (var p : humboldt.points()) {
-                    if (p instanceof LongPointData lp) {
-                        points.add(ImmutableLongPointData.create(
-                                lp.startEpochNanos(), lp.epochNanos(), lp.attributes(), lp.value()));
+            case COUNTER, UP_DOWN_COUNTER, OBSERVABLE_COUNTER, OBSERVABLE_UP_DOWN_COUNTER -> {
+                // Détermine si Long ou Double selon le type des points effectifs
+                boolean isDouble = !humboldt.points().isEmpty()
+                        && humboldt.points().get(0) instanceof DoublePointData;
+                if (isDouble) {
+                    var points = new ArrayList<io.opentelemetry.sdk.metrics.data.DoublePointData>(humboldt.points().size());
+                    for (var p : humboldt.points()) {
+                        if (p instanceof DoublePointData dp) {
+                            points.add(ImmutableDoublePointData.create(
+                                    dp.startEpochNanos(), dp.epochNanos(), dp.attributes(), dp.value()));
+                        }
                     }
+                    yield ImmutableMetricData.createDoubleSum(resource, scope, name, description, unit,
+                            ImmutableSumData.create(humboldt.monotonic(), temporality, points));
+                } else {
+                    var points = new ArrayList<io.opentelemetry.sdk.metrics.data.LongPointData>(humboldt.points().size());
+                    for (var p : humboldt.points()) {
+                        if (p instanceof LongPointData lp) {
+                            points.add(ImmutableLongPointData.create(
+                                    lp.startEpochNanos(), lp.epochNanos(), lp.attributes(), lp.value()));
+                        }
+                    }
+                    yield ImmutableMetricData.createLongSum(resource, scope, name, description, unit,
+                            ImmutableSumData.create(humboldt.monotonic(), temporality, points));
                 }
-                yield ImmutableMetricData.createLongSum(resource, scope, name, description, unit,
-                        ImmutableSumData.create(humboldt.monotonic(), temporality, points));
             }
             case HISTOGRAM -> {
                 var points = new ArrayList<io.opentelemetry.sdk.metrics.data.HistogramPointData>(humboldt.points().size());
@@ -75,9 +93,34 @@ final class MetricDataMapper {
                 yield ImmutableMetricData.createDoubleHistogram(resource, scope, name, description, unit,
                         ImmutableHistogramData.create(temporality, points));
             }
+            case GAUGE, OBSERVABLE_GAUGE -> {
+                boolean isDouble = !humboldt.points().isEmpty()
+                        && humboldt.points().get(0) instanceof DoublePointData;
+                if (isDouble) {
+                    var points = new ArrayList<io.opentelemetry.sdk.metrics.data.DoublePointData>(humboldt.points().size());
+                    for (var p : humboldt.points()) {
+                        if (p instanceof DoublePointData dp) {
+                            points.add(ImmutableDoublePointData.create(
+                                    dp.startEpochNanos(), dp.epochNanos(), dp.attributes(), dp.value()));
+                        }
+                    }
+                    yield ImmutableMetricData.createDoubleGauge(resource, scope, name, description, unit,
+                            ImmutableGaugeData.create(points));
+                } else {
+                    var points = new ArrayList<io.opentelemetry.sdk.metrics.data.LongPointData>(humboldt.points().size());
+                    for (var p : humboldt.points()) {
+                        if (p instanceof LongPointData lp) {
+                            points.add(ImmutableLongPointData.create(
+                                    lp.startEpochNanos(), lp.epochNanos(), lp.attributes(), lp.value()));
+                        }
+                    }
+                    yield ImmutableMetricData.createLongGauge(resource, scope, name, description, unit,
+                            ImmutableGaugeData.create(points));
+                }
+            }
             default -> throw new UnsupportedOperationException(
-                    "MetricDataMapper M4b : instrumentType " + humboldt.instrumentType()
-                            + " pas encore supporté côté bridge OTel (Gauge/Observable à venir)");
+                    "MetricDataMapper : instrumentType " + humboldt.instrumentType()
+                            + " pas encore supporté côté bridge OTel (Observable à venir)");
         };
     }
 

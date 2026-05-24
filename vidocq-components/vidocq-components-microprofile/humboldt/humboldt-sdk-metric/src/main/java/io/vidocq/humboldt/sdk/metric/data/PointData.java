@@ -7,7 +7,7 @@ import io.opentelemetry.api.common.Attributes;
  * Sealed pour exhaustivité du switch côté encoder OTLP.
  */
 public sealed interface PointData
-        permits LongPointData, HistogramPointData {
+        permits LongPointData, DoublePointData, HistogramPointData {
 
     long startEpochNanos();
 
