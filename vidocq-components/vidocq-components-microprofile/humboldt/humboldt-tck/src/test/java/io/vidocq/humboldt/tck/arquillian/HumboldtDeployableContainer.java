@@ -168,6 +168,13 @@ public class HumboldtDeployableContainer implements DeployableContainer<Humboldt
             // Properties, Sampler, SpanExporter, TracerProvider). Appliqué ci-dessous.
             HumboldtAutoConfigurationCustomizer autoCustomizer = scanAutoConfigCustomizers(archive);
 
+            // M4b — ConfigurableMetricExporterProvider SPI : scanne le WAR, bridge l'OTel
+            // MetricExporter vers humboldt via OtelMetricExporterBridge. Pattern symétrique
+            // à ConfigurableSpanExporterProvider (M7b.4b.3). Cas TCK : InMemoryMetricExporter
+            // du WAR pour les assertions awaitility.
+            List<io.vidocq.humboldt.sdk.metric.export.MetricExporter> extraMetricExporters =
+                    loadMetricExporters(archive, mpProps);
+
             // Construit l'EnvConfig Humboldt — convertit les props MP (lowercase.dotted)
             // vers les env vars OTEL (SCREAMING_SNAKE) attendues par EnvConfig.
             // Si un bridge externe est en place, force OTEL_TRACES_EXPORTER=none
@@ -200,7 +207,14 @@ public class HumboldtDeployableContainer implements DeployableContainer<Humboldt
             autoCustomizer.invokeSpanExporterCustomizers(mpProps);
             autoCustomizer.invokeTracerProviderCustomizers(mpProps);
             envMap.putIfAbsent("OTEL_TRACES_SAMPLER", "always_on");
-            envMap.putIfAbsent("OTEL_METRICS_EXPORTER", "none");
+            // Si un bridge externe est en place pour metrics, force OTEL_METRICS_EXPORTER=none
+            // pour éviter qu'Humboldt ajoute son propre InMemoryMetricExporter natif (qui
+            // polluerait les assertions TCK ou créerait un second pipeline).
+            if (!extraMetricExporters.isEmpty()) {
+                envMap.put("OTEL_METRICS_EXPORTER", "none");
+            } else {
+                envMap.putIfAbsent("OTEL_METRICS_EXPORTER", "none");
+            }
             envMap.putIfAbsent("OTEL_LOGS_EXPORTER", "none");
             if (!extraSpanExporters.isEmpty()) {
                 envMap.put("OTEL_TRACES_EXPORTER", "none");
@@ -227,7 +241,8 @@ public class HumboldtDeployableContainer implements DeployableContainer<Humboldt
                     EnvConfig.of(envMap, Map.of()),
                     extraSpanExporters,
                     spiSamplerOverride,
-                    spiPropagators);
+                    spiPropagators,
+                    extraMetricExporters);
             GlobalOpenTelemetry.set(this.humboldt);
 
             // M7c.2 : si le war contient des resources JAX-RS, démarrer
@@ -567,6 +582,55 @@ public class HumboldtDeployableContainer implements DeployableContainer<Humboldt
         if (chosen.isEmpty()) return null;
         return io.opentelemetry.context.propagation.ContextPropagators.create(
                 io.opentelemetry.context.propagation.TextMapPropagator.composite(chosen));
+    }
+
+    /**
+     * M4b — Scanne {@code META-INF/services/io.opentelemetry.sdk.autoconfigure.spi.metrics.ConfigurableMetricExporterProvider}
+     * dans le war. Si {@code otel.metrics.exporter} matche le {@code getName()} d'un
+     * provider scanné, instancie l'OTel MetricExporter via {@code createExporter()} et
+     * le wrappe dans {@link OtelMetricExporterBridge} pour intégration au pipeline humboldt.
+     * Pattern symétrique à {@code loadConfigurableSpanExporterProviders} (M7b.4b.3).
+     */
+    private static List<io.vidocq.humboldt.sdk.metric.export.MetricExporter> loadMetricExporters(
+            Archive<?> archive, Map<String, String> mpProps) {
+        String service = "io.opentelemetry.sdk.autoconfigure.spi.metrics.ConfigurableMetricExporterProvider";
+        Node node = archive.get("/META-INF/services/" + service);
+        if (node == null) {
+            node = archive.get("/WEB-INF/classes/META-INF/services/" + service);
+        }
+        if (node == null || node.getAsset() == null) return List.of();
+
+        String configured = mpProps.get("otel.metrics.exporter");
+        if (configured == null) return List.of();
+
+        List<io.vidocq.humboldt.sdk.metric.export.MetricExporter> out = new ArrayList<>();
+        ClassLoader cl = Thread.currentThread().getContextClassLoader();
+        MapConfigProperties cfg = new MapConfigProperties(mpProps);
+        try (InputStream in = node.getAsset().openStream();
+             BufferedReader r = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = r.readLine()) != null) {
+                String fqn = line.trim();
+                if (fqn.isEmpty() || fqn.startsWith("#")) continue;
+                try {
+                    Class<?> cls = Class.forName(fqn, true, cl);
+                    var provider = cls.getDeclaredConstructor().newInstance();
+                    String name = (String) cls.getMethod("getName").invoke(provider);
+                    if (!configured.equals(name)) continue;
+                    Object exporter = cls.getMethod("createExporter",
+                            io.opentelemetry.sdk.autoconfigure.spi.ConfigProperties.class).invoke(provider, cfg);
+                    if (exporter instanceof io.opentelemetry.sdk.metrics.export.MetricExporter otelExporter) {
+                        out.add(new OtelMetricExporterBridge(otelExporter));
+                        LOG.log(Level.INFO, "  → MetricExporter '{0}' ({1}) bridgé vers Humboldt", name, fqn);
+                    }
+                } catch (Exception e) {
+                    LOG.log(Level.WARNING, "  ⚠ MetricExporterProvider ignoré ({0}) : {1}", fqn, e.getMessage());
+                }
+            }
+        } catch (IOException e) {
+            LOG.log(Level.WARNING, "Erreur lecture services/{0} : {1}", service, e.getMessage());
+        }
+        return out;
     }
 
     /**

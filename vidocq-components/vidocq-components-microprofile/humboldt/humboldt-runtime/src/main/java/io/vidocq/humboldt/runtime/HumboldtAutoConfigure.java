@@ -89,6 +89,29 @@ public final class HumboldtAutoConfigure {
         return configure(env, extraSpanExporters, overrideSampler, null);
     }
 
+    /** Variante avec exporters de métriques additionnels (M4b — bridge OTel SDK). */
+    public static AutoConfiguredHumboldt configure(EnvConfig env,
+                                                    List<SpanExporter> extraSpanExporters,
+                                                    Sampler overrideSampler,
+                                                    io.opentelemetry.context.propagation.ContextPropagators overridePropagators,
+                                                    List<io.vidocq.humboldt.sdk.metric.export.MetricExporter> extraMetricExporters) {
+        EXTRA_METRIC_EXPORTERS.set(extraMetricExporters == null ? List.of() : extraMetricExporters);
+        try {
+            return configure(env, extraSpanExporters, overrideSampler, overridePropagators);
+        } finally {
+            EXTRA_METRIC_EXPORTERS.remove();
+        }
+    }
+
+    /**
+     * Slot ThreadLocal pour passer les extra MetricExporters depuis l'overload publique
+     * à 5 args jusqu'à la construction du SdkMeterProvider (qui se fait dans la méthode
+     * principale {@code configure(env, extras, sampler, propagators)}). Permet d'éviter
+     * une duplication du pipeline complet.
+     */
+    private static final ThreadLocal<List<io.vidocq.humboldt.sdk.metric.export.MetricExporter>>
+            EXTRA_METRIC_EXPORTERS = ThreadLocal.withInitial(List::of);
+
     /**
      * Variante complète avec sampler override + propagators override — pour les
      * harness Arquillian qui chargent un {@code ConfigurableSamplerProvider} et/ou
@@ -164,6 +187,14 @@ public final class HumboldtAutoConfigure {
                     .setInterval("in-memory".equals(metricsExporter)
                             ? Duration.ofMinutes(60)  // flush() explicite dans les tests
                             : Duration.ofSeconds(60))
+                    .build());
+        }
+        // Extra MetricExporters (M4b — bridge OTel SDK via humboldt-tck) passés via le
+        // ThreadLocal EXTRA_METRIC_EXPORTERS. Cas TCK : InMemoryMetricExporter du WAR.
+        // Interval court pour permettre les awaitility.until() des tests metric (10s timeout).
+        for (var extra : EXTRA_METRIC_EXPORTERS.get()) {
+            mpBuilder.registerMetricReader(PeriodicMetricReader.builder(extra)
+                    .setInterval(Duration.ofMillis(200))
                     .build());
         }
         SdkMeterProvider meterProvider = mpBuilder.build();
