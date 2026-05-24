@@ -80,6 +80,29 @@ public final class HumboldtAutoConfigure {
      * font des assertions immédiates après {@code span.end()}).
      */
     public static AutoConfiguredHumboldt configure(EnvConfig env, List<SpanExporter> extraSpanExporters) {
+        return configure(env, extraSpanExporters, null);
+    }
+
+    public static AutoConfiguredHumboldt configure(EnvConfig env,
+                                                    List<SpanExporter> extraSpanExporters,
+                                                    Sampler overrideSampler) {
+        return configure(env, extraSpanExporters, overrideSampler, null);
+    }
+
+    /**
+     * Variante complète avec sampler override + propagators override — pour les
+     * harness Arquillian qui chargent un {@code ConfigurableSamplerProvider} et/ou
+     * {@code ConfigurablePropagatorProvider} OTel via SPI du WAR.
+     *
+     * @param overrideSampler     sampler à utiliser pour le tracer provider ; si {@code null},
+     *                            fallback sur le parsing standard de {@code OTEL_TRACES_SAMPLER}.
+     * @param overridePropagators propagators à utiliser ; si {@code null}, fallback sur
+     *                            {@link W3CPropagators#get()} (W3C TraceContext + Baggage).
+     */
+    public static AutoConfiguredHumboldt configure(EnvConfig env,
+                                                    List<SpanExporter> extraSpanExporters,
+                                                    Sampler overrideSampler,
+                                                    ContextPropagators overridePropagators) {
         Resource resource = buildResource(env);
 
         // MP Telemetry 2.1 §3.1 : par défaut, le SDK OpenTelemetry est désactivé.
@@ -97,13 +120,13 @@ public final class HumboldtAutoConfigure {
                     SdkTracerProvider.builder().setResource(resource).build(),
                     SdkMeterProvider.builder().setResource(resource).build(),
                     SdkLoggerProvider.builder().setResource(resource).build(),
-                    W3CPropagators.get(),
+                    overridePropagators != null ? overridePropagators : W3CPropagators.get(),
                     null, null, null);
         }
 
         // --- Tracer ---
         String tracesExporter = env.getOrDefault("OTEL_TRACES_EXPORTER", "otlp");
-        Sampler sampler = parseSampler(env);
+        Sampler sampler = overrideSampler != null ? overrideSampler : parseSampler(env);
         InMemorySpanExporter inMemSpan = "in-memory".equals(tracesExporter)
                 ? InMemorySpanExporter.create() : null;
         SdkTracerProvider.Builder tpBuilder = SdkTracerProvider.builder()
@@ -179,7 +202,9 @@ public final class HumboldtAutoConfigure {
             installJulBridge(loggerProvider);
         }
 
-        ContextPropagators propagators = W3CPropagators.get();
+        ContextPropagators propagators = overridePropagators != null
+                ? overridePropagators
+                : W3CPropagators.get();
 
         LOG.log(Level.INFO,
                 "Humboldt autoconfig : service.name={0}, traces={1}, metrics={2}, logs={3}, sampler={4}",

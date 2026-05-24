@@ -87,8 +87,10 @@ public class HumboldtClientRequestFilter implements ClientRequestFilter {
         Span span = spanBuilder.startSpan();
         Scope scope = Context.current().with(span).makeCurrent();
 
-        // Propagation W3C — inject traceparent/baggage dans les headers sortants
-        TextMapPropagator propagator = W3CPropagators.textMap();
+        // Propagation : utilise le TextMapPropagator du Humboldt global. Inclut W3C
+        // (TraceContext + Baggage) par défaut + propagators custom déclarés via SPI
+        // ConfigurablePropagatorProvider (MP Telemetry §3.3 / cluster D).
+        TextMapPropagator propagator = otel.getPropagators().getTextMapPropagator();
         propagator.inject(Context.current(), requestContext, HEADER_SETTER);
 
         requestContext.setProperty(SPAN_PROPERTY, span);

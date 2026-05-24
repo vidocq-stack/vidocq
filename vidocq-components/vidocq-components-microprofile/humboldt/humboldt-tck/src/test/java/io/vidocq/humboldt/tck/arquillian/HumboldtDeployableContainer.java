@@ -152,9 +152,16 @@ public class HumboldtDeployableContainer implements DeployableContainer<Humboldt
             String spiResourceAttrs = loadResourceProviderAttrs(archive, mpProps);
 
             // Cluster D — ConfigurableSamplerProvider SPI : scanne pour les samplers custom.
-            // Si otel.traces.sampler matche un provider getName(), traduit l'OTel Sampler en
-            // un nom de sampler humboldt supporté (always_off / always_on) via probe heuristique.
-            String spiSamplerOverride = resolveSpiSampler(archive, mpProps);
+            // Si otel.traces.sampler matche un provider getName(), crée le Sampler OTel et le
+            // wrappe dans un OtelSamplerBridge (humboldt.Sampler) pour utilisation directe.
+            io.vidocq.humboldt.sdk.trace.samplers.Sampler spiSamplerOverride = resolveSpiSampler(archive, mpProps);
+
+            // Cluster D — ConfigurablePropagatorProvider SPI : scanne pour les propagators
+            // custom déclarés dans le WAR. Si otel.propagators (ou MP_TELEMETRY_PROPAGATORS)
+            // contient un nom qui matche getName() d'un provider scanné, composer son propagator
+            // avec W3C TraceContext + Baggage (défaut MP Telemetry §3.3).
+            io.opentelemetry.context.propagation.ContextPropagators spiPropagators =
+                    resolveSpiPropagators(archive, mpProps);
 
             // Construit l'EnvConfig Humboldt — convertit les props MP (lowercase.dotted)
             // vers les env vars OTEL (SCREAMING_SNAKE) attendues par EnvConfig.
@@ -166,11 +173,7 @@ public class HumboldtDeployableContainer implements DeployableContainer<Humboldt
                 envMap.put("OTEL_RESOURCE_ATTRIBUTES",
                         existing == null || existing.isEmpty() ? spiResourceAttrs : existing + "," + spiResourceAttrs);
             }
-            if (spiSamplerOverride != null) {
-                envMap.put("OTEL_TRACES_SAMPLER", spiSamplerOverride);
-            } else {
-                envMap.putIfAbsent("OTEL_TRACES_SAMPLER", "always_on");
-            }
+            envMap.putIfAbsent("OTEL_TRACES_SAMPLER", "always_on");
             envMap.putIfAbsent("OTEL_METRICS_EXPORTER", "none");
             envMap.putIfAbsent("OTEL_LOGS_EXPORTER", "none");
             if (!extraSpanExporters.isEmpty()) {
@@ -181,7 +184,9 @@ public class HumboldtDeployableContainer implements DeployableContainer<Humboldt
 
             this.humboldt = HumboldtAutoConfigure.configure(
                     EnvConfig.of(envMap, Map.of()),
-                    extraSpanExporters);
+                    extraSpanExporters,
+                    spiSamplerOverride,
+                    spiPropagators);
             GlobalOpenTelemetry.set(this.humboldt);
 
             // M7c.2 : si le war contient des resources JAX-RS, démarrer
@@ -388,18 +393,14 @@ public class HumboldtDeployableContainer implements DeployableContainer<Humboldt
     /**
      * Cluster D — Scanne {@code ConfigurableSamplerProvider} dans le war. Si
      * {@code otel.traces.sampler} matche le {@code getName()} d'un provider, instancie
-     * le sampler OTel via {@code createSampler()} et le sonde sur un contexte dummy
-     * pour deviner l'équivalent humboldt :
-     * <ul>
-     *   <li>{@code SamplingDecision.DROP} → {@code "always_off"}</li>
-     *   <li>{@code SamplingDecision.RECORD_AND_SAMPLE} → {@code "always_on"}</li>
-     *   <li>autre → {@code null} (fallback sur la config existante — bridge complet
-     *       OTel→humboldt Sampler à faire dans un item séparé)</li>
-     * </ul>
+     * le sampler OTel via {@code createSampler(configProperties)} et le wrappe dans
+     * un {@link OtelSamplerBridge} pour utilisation directe par humboldt.
      *
-     * @return le nom du sampler humboldt à utiliser, ou {@code null} si aucun override.
+     * @return un {@code humboldt.Sampler} prêt à être passé à {@code HumboldtAutoConfigure.configure(...)},
+     *         ou {@code null} si aucun provider ne matche.
      */
-    private static String resolveSpiSampler(Archive<?> archive, Map<String, String> mpProps) {
+    private static io.vidocq.humboldt.sdk.trace.samplers.Sampler resolveSpiSampler(
+            Archive<?> archive, Map<String, String> mpProps) {
         String configuredName = mpProps.get("otel.traces.sampler");
         if (configuredName == null) return null;
 
@@ -426,20 +427,9 @@ public class HumboldtDeployableContainer implements DeployableContainer<Humboldt
                     Object sampler = cls.getMethod("createSampler",
                             io.opentelemetry.sdk.autoconfigure.spi.ConfigProperties.class).invoke(provider, configProps);
                     if (sampler instanceof io.opentelemetry.sdk.trace.samplers.Sampler otelSampler) {
-                        // Sonder le sampler : appel shouldSample avec un context dummy.
-                        var decision = otelSampler.shouldSample(
-                                io.opentelemetry.context.Context.root(),
-                                io.opentelemetry.api.trace.TraceId.fromLongs(0L, 1L),
-                                "probe", io.opentelemetry.api.trace.SpanKind.INTERNAL,
-                                io.opentelemetry.api.common.Attributes.empty(),
-                                java.util.Collections.emptyList()).getDecision();
-                        String humboldtSampler = switch (decision) {
-                            case DROP -> "always_off";
-                            case RECORD_ONLY, RECORD_AND_SAMPLE -> "always_on";
-                        };
-                        LOG.log(Level.INFO, "  → SamplerProvider '{0}' ({1}) bridgé → {2}",
-                                name, fqn, humboldtSampler);
-                        return humboldtSampler;
+                        LOG.log(Level.INFO, "  → SamplerProvider '{0}' ({1}) bridgé via OtelSamplerBridge",
+                                name, fqn);
+                        return new OtelSamplerBridge(otelSampler);
                     }
                 } catch (Exception e) {
                     LOG.log(Level.WARNING, "  ⚠ SamplerProvider ignoré ({0}) : {1}",
@@ -450,6 +440,85 @@ public class HumboldtDeployableContainer implements DeployableContainer<Humboldt
             LOG.log(Level.WARNING, "Erreur lecture services/{0} : {1}", service, e.getMessage());
         }
         return null;
+    }
+
+    /**
+     * Cluster D — Scanne {@code ConfigurablePropagatorProvider} dans le war. Si
+     * {@code otel.propagators} contient un nom qui matche le {@code getName()} d'un provider,
+     * instancie le propagator OTel via {@code getPropagator(configProperties)} et compose
+     * un {@link io.opentelemetry.context.propagation.ContextPropagators} (W3C TraceContext
+     * + Baggage par défaut + propagators custom listés).
+     *
+     * @return un {@code ContextPropagators} composite, ou {@code null} si aucun custom
+     *         provider n'est requis (le caller utilisera alors W3CPropagators.get()).
+     */
+    private static io.opentelemetry.context.propagation.ContextPropagators resolveSpiPropagators(
+            Archive<?> archive, Map<String, String> mpProps) {
+        // MP Telemetry §3.3 : la propriété mp_telemetry.propagators est aussi acceptée,
+        // avec mappage vers otel.propagators.
+        String configured = mpProps.getOrDefault("otel.propagators",
+                mpProps.get("mp_telemetry.propagators"));
+        if (configured == null) return null;
+
+        // Découpe la liste de noms (CSV, espaces tolérés)
+        List<String> names = new ArrayList<>();
+        for (String name : configured.split(",")) {
+            String trimmed = name.trim();
+            if (!trimmed.isEmpty()) names.add(trimmed);
+        }
+        if (names.isEmpty()) return null;
+
+        String service = "io.opentelemetry.sdk.autoconfigure.spi.ConfigurablePropagatorProvider";
+        Node node = archive.get("/META-INF/services/" + service);
+        if (node == null) {
+            node = archive.get("/WEB-INF/classes/META-INF/services/" + service);
+        }
+        if (node == null || node.getAsset() == null) return null;
+
+        ClassLoader cl = Thread.currentThread().getContextClassLoader();
+        MapConfigProperties configProps = new MapConfigProperties(mpProps);
+        Map<String, io.opentelemetry.context.propagation.TextMapPropagator> byName = new LinkedHashMap<>();
+        try (InputStream in = node.getAsset().openStream();
+             BufferedReader r = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = r.readLine()) != null) {
+                String fqn = line.trim();
+                if (fqn.isEmpty() || fqn.startsWith("#")) continue;
+                try {
+                    Class<?> cls = Class.forName(fqn, true, cl);
+                    var provider = cls.getDeclaredConstructor().newInstance();
+                    String name = (String) cls.getMethod("getName").invoke(provider);
+                    Object p = cls.getMethod("getPropagator",
+                            io.opentelemetry.sdk.autoconfigure.spi.ConfigProperties.class).invoke(provider, configProps);
+                    if (p instanceof io.opentelemetry.context.propagation.TextMapPropagator tmp) {
+                        byName.put(name, tmp);
+                        LOG.log(Level.INFO, "  → PropagatorProvider chargé : {0} (name={1})", fqn, name);
+                    }
+                } catch (Exception e) {
+                    LOG.log(Level.WARNING, "  ⚠ PropagatorProvider ignoré ({0}) : {1}", fqn, e.getMessage());
+                }
+            }
+        } catch (IOException e) {
+            LOG.log(Level.WARNING, "Erreur lecture services/{0} : {1}", service, e.getMessage());
+        }
+
+        // Composer la liste finale : pour chaque nom dans `otel.propagators`, utiliser
+        // le builtin si reconnu (tracecontext, baggage), sinon le custom SPI scanné.
+        List<io.opentelemetry.context.propagation.TextMapPropagator> chosen = new ArrayList<>();
+        for (String n : names) {
+            switch (n) {
+                case "tracecontext" -> chosen.add(io.opentelemetry.api.trace.propagation.W3CTraceContextPropagator.getInstance());
+                case "baggage" -> chosen.add(io.opentelemetry.api.baggage.propagation.W3CBaggagePropagator.getInstance());
+                default -> {
+                    var p = byName.get(n);
+                    if (p != null) chosen.add(p);
+                    else LOG.log(Level.WARNING, "  ⚠ Propagator '{0}' demandé mais non disponible (ni builtin ni SPI scanné)", n);
+                }
+            }
+        }
+        if (chosen.isEmpty()) return null;
+        return io.opentelemetry.context.propagation.ContextPropagators.create(
+                io.opentelemetry.context.propagation.TextMapPropagator.composite(chosen));
     }
 
     /**
