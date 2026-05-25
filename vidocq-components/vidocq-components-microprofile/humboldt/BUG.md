@@ -79,3 +79,32 @@
   dans `build()` même si pas de `scanLocal()`) serait plus propre — chantier Vauban séparé.
 
 ---
+
+### [HBT-3] JPMS contourné dans `humboldt-rest` via copie manuelle des JARs compile-scope
+
+- **Date** : 2026-05-25
+- **Composant** : humboldt-rest/pom.xml
+- **Statut** : ⚠️ OPEN — workaround actif
+- **Affecté** : humboldt 0.1.0-SNAPSHOT
+- **Symptôme** : `humboldt-rest/pom.xml` utilise `maven-dependency-plugin` (phase `initialize`)
+  pour copier les JARs compile-scope (`humboldt-propagator-w3c`, `humboldt-otel-api`,
+  `humboldt-otel-context`) dans `target/javamodules/`, puis passe
+  `--module-path ${project.build.directory}/javamodules` manuellement au compilateur javac.
+  Ce contournement est limité au sous-module `humboldt-rest` (les autres modules humboldt
+  ne semblent pas affectés).
+- **Reproduction** :
+  ```bash
+  grep -n "javamodules\|module-path" humboldt/humboldt-rest/pom.xml
+  # révèle maven-dependency-plugin + compilerArgs
+  ```
+  Supprimer la config et recompiler `humboldt-rest` pour observer les erreurs `module not found`.
+- **Hypothèse de cause** : les modules OTel (`opentelemetry-api`, `opentelemetry-context`)
+  et les modules humboldt intermédiaires copiés n'ont pas de `module-info.class` reconnu par
+  `maven-compiler-plugin` 4.x. La copie dans `target/javamodules/` permet à javac de les
+  résoudre comme automatic modules depuis le nom de fichier JAR.
+- **Correction envisagée** : vérifier si `opentelemetry-api` 1.x publie un descripteur JPMS
+  explicite dans ses versions récentes ; wrapper si nécessaire. Investiguer pourquoi
+  `humboldt-propagator-w3c` et `humboldt-otel-*` (modules internes) ne sont pas résolus
+  nativement — ils devraient avoir leur propre `module-info.class`.
+
+---
