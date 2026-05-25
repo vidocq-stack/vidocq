@@ -3,17 +3,32 @@
     Pom racine "agrégateur" — il NE FAIT PAS office de parent pour les sous-reactors.
     Les trois sous-projets (mansart-pool, mansart-jakarta-data, mansart-transactions) sont
     des reactors Maven INDÉPENDANTS, chacun avec son propre groupId/version/distributionManagement
-    et build/deploy lifecycle. Ce pom existe uniquement pour :
+    et build/deploy lifecycle (chacun parente vidocq-parent directement, jamais ce workspace).
+    Ce pom existe uniquement pour :
       * permettre à IntelliJ d'importer le workspace en un seul "Maven project"
       * permettre `mvn -ntp install` à la racine de builder les trois reactors en cascade
 
     Pattern : Maven 4 <subprojects> + packaging=pom, sans dependencyManagement ni
-    pluginManagement à ce niveau (chaque reactor a le sien, calibré à ses besoins).
+    pluginManagement propres (chaque reactor a le sien, calibré à ses besoins).
+
+    Il hérite tout de même de vidocq-parent : ce pom agrégateur est lui-même déployé en
+    tête du reactor par `mvn -Psnapshot deploy` (CI), et a donc besoin du
+    distributionManagement (central-snapshots) + du profil snapshot fournis par le parent.
+    Sans parent, le deploy de ce pom échouait ("repository element was not specified"),
+    faisant avorter tout le deploy → aucun artefact mansart publié. L'héritage n'affecte
+    QUE ce pom (les sous-reactors ne le parentent pas), donc n'altère pas leurs builds.
 -->
 <project xmlns="http://maven.apache.org/POM/4.1.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.1.0 https://maven.apache.org/xsd/maven-4.1.0.xsd">
     <modelVersion>4.1.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq</groupId>
+        <artifactId>vidocq-parent</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+        <relativePath/>
+    </parent>
 
     <groupId>io.vidocq.mansart</groupId>
     <artifactId>mansart-workspace</artifactId>
