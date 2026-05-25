@@ -22,6 +22,13 @@
 
     <name>Mansart :: Workspace</name>
     <description>Aggregator for the three independent Mansart reactors — pool, jakarta-data, transactions.</description>
+    <url>https://codeberg.org/Vidocq/mansart</url>
+
+    <scm>
+        <connection>scm:git:https://codeberg.org/Vidocq/mansart.git</connection>
+        <developerConnection>scm:git:ssh://git@codeberg.org/Vidocq/mansart.git</developerConnection>
+        <url>https://codeberg.org/Vidocq/mansart</url>
+    </scm>
 
     <subprojects>
         <subproject>mansart-pool</subproject>

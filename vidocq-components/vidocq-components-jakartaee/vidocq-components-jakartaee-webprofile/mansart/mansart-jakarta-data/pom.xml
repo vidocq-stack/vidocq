@@ -4,6 +4,13 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.1.0 https://maven.apache.org/xsd/maven-4.1.0.xsd">
     <modelVersion>4.1.0</modelVersion>
 
+    <parent>
+        <groupId>io.vidocq</groupId>
+        <artifactId>vidocq-parent</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+        <relativePath/>
+    </parent>
+
     <groupId>io.vidocq.mansart</groupId>
     <artifactId>mansart-jakarta-data</artifactId>
     <version>1.0.0-SNAPSHOT</version>
@@ -11,67 +18,17 @@
 
     <name>Mansart :: Jakarta Data 1.0</name>
     <description>Jakarta Data 1.0 implementation for the Vidocq ecosystem.</description>
-
-    <distributionManagement>
-        <snapshotRepository>
-            <id>vidocq-snapshots</id>
-            <url>https://repo.vidocq.dev/snapshots</url>
-        </snapshotRepository>
-        <repository>
-            <id>vidocq-releases</id>
-            <url>https://repo.vidocq.dev/releases</url>
-        </repository>
-    </distributionManagement>
-
-    <repositories>
-        <repository>
-            <id>vidocq-snapshots</id>
-            <url>https://repo.vidocq.dev/snapshots</url>
-            <releases><enabled>false</enabled></releases>
-            <snapshots><enabled>true</enabled></snapshots>
-        </repository>
-        <repository>
-            <id>vidocq-releases</id>
-            <url>https://repo.vidocq.dev/releases</url>
-            <releases><enabled>true</enabled></releases>
-            <snapshots><enabled>false</enabled></snapshots>
-        </repository>
-    </repositories>
-
-    <pluginRepositories>
-        <pluginRepository>
-            <id>vidocq-snapshots</id>
-            <url>https://repo.vidocq.dev/snapshots</url>
-            <releases><enabled>false</enabled></releases>
-            <snapshots><enabled>true</enabled></snapshots>
-        </pluginRepository>
-        <pluginRepository>
-            <id>vidocq-releases</id>
-            <url>https://repo.vidocq.dev/releases</url>
-            <releases><enabled>true</enabled></releases>
-            <snapshots><enabled>false</enabled></snapshots>
-        </pluginRepository>
-    </pluginRepositories>
-
     <properties>
-        <maven.compiler.release>25</maven.compiler.release>
-        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-
         <jakarta.data.version>1.0.1</jakarta.data.version>
         <jakarta.persistence.version>3.2.0</jakarta.persistence.version>
         <jakarta.cdi.version>4.1.0</jakarta.cdi.version>
         <jakarta.inject.version>2.0.1</jakarta.inject.version>
         <jakarta.transaction.version>2.0.1</jakarta.transaction.version>
 
-        <junit.version>6.0.3</junit.version>
         <assertj.version>3.27.0</assertj.version>
         <h2.version>2.3.232</h2.version>
         <postgresql.version>42.7.4</postgresql.version>
         <testcontainers.version>1.20.4</testcontainers.version>
-
-        <maven.compiler.plugin.version>4.0.0-beta-4</maven.compiler.plugin.version>
-        <maven.surefire.plugin.version>3.5.2</maven.surefire.plugin.version>
-        <maven.jar.plugin.version>3.4.2</maven.jar.plugin.version>
     </properties>
 
     <subprojects>
@@ -142,13 +99,6 @@
             </dependency>
 
             <dependency>
-                <groupId>org.junit</groupId>
-                <artifactId>junit-bom</artifactId>
-                <version>${junit.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-            <dependency>
                 <groupId>org.junit.jupiter</groupId>
                 <artifactId>junit-jupiter</artifactId>
                 <version>${junit.version}</version>
@@ -184,7 +134,6 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-compiler-plugin</artifactId>
-                    <version>${maven.compiler.plugin.version}</version>
                     <configuration>
                         <release>25</release>
                         <!-- Keep parameter names in the .class files so APT and the runtime
@@ -193,26 +142,6 @@
                         <compilerArgs>
                             <arg>-parameters</arg>
                         </compilerArgs>
-                    </configuration>
-                </plugin>
-                <plugin>
-                    <groupId>org.apache.maven.plugins</groupId>
-                    <artifactId>maven-surefire-plugin</artifactId>
-                    <version>${maven.surefire.plugin.version}</version>
-                </plugin>
-                <plugin>
-                    <groupId>org.apache.maven.plugins</groupId>
-                    <artifactId>maven-jar-plugin</artifactId>
-                    <version>${maven.jar.plugin.version}</version>
-                </plugin>
-                <plugin>
-                    <groupId>org.apache.maven.plugins</groupId>
-                    <artifactId>maven-deploy-plugin</artifactId>
-                    <!-- 3.1.4 : fixe les bugs `deployAtEnd` sur Maven 4 ; 3.1.3
-                         BUILD SUCCESS sans rien pousser sur la registry. -->
-                    <version>3.1.4</version>
-                    <configuration>
-                        <deployAtEnd>false</deployAtEnd>
                     </configuration>
                 </plugin>
             </plugins>
