@@ -26,6 +26,17 @@
         </license>
     </licenses>
 
+    <developers>
+        <developer>
+            <name>Yann Blazart</name>
+            <email>yann.blazart@gmail.com</email>
+        </developer>
+        <developer>
+            <name>Antoine Sabot-Durand</name>
+            <email>antoine@sabot-durand.net</email>
+        </developer>
+    </developers>
+
     <distributionManagement>
         <repository>
             <id>central</id>
