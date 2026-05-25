@@ -66,6 +66,17 @@
             <version>${vauban.version}</version>
             <scope>test</scope>
         </dependency>
+        <!--
+            vauban-core a un `requires` (runtime) sur io.vidocq.vauban.classloader.spi, mais le
+            déclare en <optional> dans son pom (non transitif). On l'ajoute donc explicitement
+            pour que le module-path de test résolve la boot layer modulaire de vauban-core.
+        -->
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-classloader-spi</artifactId>
+            <version>${vauban.version}</version>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>io.vidocq.vauban</groupId>
             <artifactId>vauban-junit</artifactId>
@@ -73,4 +84,22 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <!--
+                Les sous-classes interceptées générées par vauban (TxService$$Intercepted) vivent
+                dans CE module mais référencent io.vidocq.vauban.core.interceptor.InterceptorManager.
+                vauban-core n'étant qu'une dépendance de TEST (container CDI cible), on ouvre la
+                lecture du module uniquement pour l'exécution des tests via l'option add-reads.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <argLine>--add-reads io.vidocq.mansart.transactions.cdi=io.vidocq.vauban.core</argLine>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>
