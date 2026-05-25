@@ -36,31 +36,12 @@
     <build>
         <plugins>
             <!--
-                JPMS workaround dirac-bench : module-info.java sous src/main/module-info,
-                tests en classpath, compilation du descripteur en prepare-package.
+                dirac-bench is NOT a JPMS module: the JMH benchmarks deliberately reach into
+                non-exported internal packages (io.vidocq.dirac.internal.*,
+                io.vidocq.dirac.cdi.internal.*) to measure raw overhead. It is a shaded,
+                classpath-only executable, never a published library, so it stays on the
+                classpath (no module-info.java). See CLAUDE.md "Conventions".
             -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-clean-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <id>remove-module-info-before-testcompile</id>
-                        <phase>generate-test-sources</phase>
-                        <goals><goal>clean</goal></goals>
-                        <configuration>
-                            <excludeDefaultDirectories>true</excludeDefaultDirectories>
-                            <filesets>
-                                <fileset>
-                                    <directory>${project.build.outputDirectory}</directory>
-                                    <includes>
-                                        <include>module-info.class</include>
-                                    </includes>
-                                </fileset>
-                            </filesets>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
@@ -74,18 +55,6 @@
                         </path>
                     </annotationProcessorPaths>
                 </configuration>
-                <executions>
-                    <execution>
-                        <id>compile-module-info</id>
-                        <phase>prepare-package</phase>
-                        <goals><goal>compile</goal></goals>
-                        <configuration>
-                            <compileSourceRoots>
-                                <compileSourceRoot>${project.basedir}/src/main/module-info</compileSourceRoot>
-                            </compileSourceRoots>
-                        </configuration>
-                    </execution>
-                </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
