@@ -13,6 +13,19 @@
     <name>Heisenberg :: Examples</name>
     <description>Exemples d'utilisation de MicroProfile Fault Tolerance 4.1 via Heisenberg</description>
 
+    <properties>
+        <!--
+            Demo / placeholder module: it only carries a package-info.java, so there is no
+            public or protected API. The javadoc tool then fails the deploy job with
+            "No public or protected classes found to document", and Maven Central requires a
+            javadoc jar for every released artifact. This module is a usage sample, not a
+            published dependency: skip its deploy and its javadoc (it is still compiled, so
+            the examples keep being checked against the API).
+        -->
+        <maven.deploy.skip>true</maven.deploy.skip>
+        <maven.javadoc.skip>true</maven.javadoc.skip>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>io.vidocq.heisenberg</groupId>
