@@ -111,12 +111,19 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
                     <!--
-                        Force Humboldt à utiliser des exporters in-memory pour
-                        permettre la lecture des spans via SpansResource. Ces
-                        properties DOIVENT être set AVANT que le surefire forke
-                        la JVM, sinon HumboldtExtension.configure() les manque.
+                        Force Humboldt to use in-memory exporters so the captured
+                        spans can be read back through SpansResource. These properties
+                        MUST be set before surefire forks the JVM, otherwise
+                        HumboldtExtension.configure() misses them.
+
+                        OTEL_SDK_DISABLED=false is mandatory: per MP Telemetry 2.1 the
+                        SDK is disabled by default (HumboldtAutoConfigure reads
+                        OTEL_SDK_DISABLED with default true), so without it the SDK boots
+                        as a no-op and inMemorySpanExporter() stays null — SpansResource
+                        then returns the "humboldt-not-configured-in-memory" marker.
                     -->
                     <systemPropertyVariables>
+                        <OTEL_SDK_DISABLED>false</OTEL_SDK_DISABLED>
                         <OTEL_TRACES_EXPORTER>in-memory</OTEL_TRACES_EXPORTER>
                         <OTEL_METRICS_EXPORTER>none</OTEL_METRICS_EXPORTER>
                         <OTEL_LOGS_EXPORTER>none</OTEL_LOGS_EXPORTER>

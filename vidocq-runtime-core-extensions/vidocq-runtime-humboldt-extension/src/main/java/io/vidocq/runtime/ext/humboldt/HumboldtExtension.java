@@ -147,5 +147,10 @@ public final class HumboldtExtension implements VidocqExtension {
             "OTEL_TRACES_SAMPLER",
             "OTEL_TRACES_SAMPLER_ARG",
             "MP_TELEMETRY_SDK_DISABLED",
+            // OTEL_SDK_DISABLED gates the whole SDK in HumboldtAutoConfigure
+            // (env.getBoolean("OTEL_SDK_DISABLED", true) — disabled by default per
+            // MP Telemetry 2.1). Without bridging it, the SDK could never be enabled
+            // through VidocqConfiguration and always booted as a no-op.
+            "OTEL_SDK_DISABLED",
     };
 }
