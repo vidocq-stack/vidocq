@@ -226,11 +226,20 @@
         </profile>
 
         <!--
-            Publication des -SNAPSHOT vers le repo snapshots du Central Portal.
-            On NE passe PAS par central-publishing-maven-plugin : son hook de publication
-            en fin de session ne se déclenche pas sous Maven 4 → BUILD SUCCESS mais rien publié.
-            Le maven-deploy-plugin standard pousse vers distributionManagement/snapshotRepository.
-            Les SNAPSHOT ne sont pas validés par Central : ni bundle ni signature GPG requis. -->
+            Publish -SNAPSHOT artifacts to the Central Portal snapshot repository.
+            We do NOT go through central-publishing-maven-plugin: its end-of-session
+            publish hook does not fire under Maven 4 (BUILD SUCCESS but nothing published).
+            The standard maven-deploy-plugin pushes to distributionManagement/snapshotRepository.
+            SNAPSHOTs are not validated by Central: no bundle, no GPG signature required.
+
+            We also do NOT attach a javadoc jar for snapshots. Central-snapshots does not
+            require it, and modules that keep module-info.java under src/main/module-info
+            (the testCompile-on-classpath workaround, e.g. dirac-core/-cdi-vauban/-rest)
+            break javadoc:jar under Maven 4: the compile-module-info execution's
+            compileSourceRoots is now project-wide, so javadoc switches to module mode and
+            fails with "No source files for package ...". Releases still build+sign javadoc
+            (see the release profile), where it matters for Central validation.
+            The sources jar is cheap and module-info-safe, so we keep it. -->
         <profile>
             <id>snapshot</id>
             <build>
@@ -243,20 +252,6 @@
                             <execution>
                                 <id>attach-sources</id>
                                 <goals><goal>jar-no-fork</goal></goals>
-                            </execution>
-                        </executions>
-                    </plugin>
-                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-javadoc-plugin</artifactId>
-                        <version>${maven.javadoc.plugin.version}</version>
-                        <configuration>
-                            <doclint>none</doclint>
-                        </configuration>
-                        <executions>
-                            <execution>
-                                <id>attach-javadocs</id>
-                                <goals><goal>jar</goal></goals>
                             </execution>
                         </executions>
                     </plugin>
