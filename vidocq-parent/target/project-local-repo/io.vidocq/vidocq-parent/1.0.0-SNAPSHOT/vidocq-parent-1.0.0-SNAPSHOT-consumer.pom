@@ -172,6 +172,7 @@
             </executions>
             <configuration>
               <doclint>none</doclint>
+              <sourcepath>${project.basedir}/src/main/java</sourcepath>
             </configuration>
           </plugin>
           <plugin>
@@ -237,6 +238,7 @@
             </executions>
             <configuration>
               <doclint>none</doclint>
+              <sourcepath>${project.basedir}/src/main/java</sourcepath>
             </configuration>
           </plugin>
         </plugins>

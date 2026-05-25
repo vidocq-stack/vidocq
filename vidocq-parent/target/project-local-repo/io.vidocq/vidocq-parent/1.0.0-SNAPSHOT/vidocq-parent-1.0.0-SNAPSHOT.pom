@@ -182,6 +182,19 @@
                         <version>${maven.javadoc.plugin.version}</version>
                         <configuration>
                             <doclint>none</doclint>
+                            <!--
+                                Force legacy (non-modular) javadoc. Modules that keep
+                                module-info.java under src/main/module-info (the
+                                testCompile-on-classpath workaround, e.g. dirac-core) trip
+                                maven-javadoc-plugin into module mode under Maven 4 (the
+                                compile-module-info execution's compileSourceRoots is now
+                                project-wide), and it fails with "No source files for
+                                package ...". Pinning sourcepath to src/main/java keeps
+                                javadoc classpath-based over the real sources for every
+                                module style (verified on clean-modular and workaround
+                                layouts alike). ${project.basedir} resolves per child module.
+                            -->
+                            <sourcepath>${project.basedir}/src/main/java</sourcepath>
                         </configuration>
                         <executions>
                             <execution>
@@ -226,11 +239,16 @@
         </profile>
 
         <!--
-            Publication des -SNAPSHOT vers le repo snapshots du Central Portal.
-            On NE passe PAS par central-publishing-maven-plugin : son hook de publication
-            en fin de session ne se déclenche pas sous Maven 4 → BUILD SUCCESS mais rien publié.
-            Le maven-deploy-plugin standard pousse vers distributionManagement/snapshotRepository.
-            Les SNAPSHOT ne sont pas validés par Central : ni bundle ni signature GPG requis. -->
+            Publish -SNAPSHOT artifacts to the Central Portal snapshot repository.
+            We do NOT go through central-publishing-maven-plugin: its end-of-session
+            publish hook does not fire under Maven 4 (BUILD SUCCESS but nothing published).
+            The standard maven-deploy-plugin pushes to distributionManagement/snapshotRepository.
+            SNAPSHOTs are not validated by Central: no bundle, no GPG signature required.
+
+            Snapshots DO attach sources and javadoc (the latter pinned to legacy mode via
+            sourcepath, like the release profile). This is deliberate: it makes the snapshot
+            artifacts mirror a release minus GPG signing, so a green snapshot deploy proves
+            the release-time javadoc:jar will also succeed (canary). -->
         <profile>
             <id>snapshot</id>
             <build>
@@ -252,6 +270,8 @@
                         <version>${maven.javadoc.plugin.version}</version>
                         <configuration>
                             <doclint>none</doclint>
+                            <!-- See the release profile: legacy javadoc for every module style. -->
+                            <sourcepath>${project.basedir}/src/main/java</sourcepath>
                         </configuration>
                         <executions>
                             <execution>

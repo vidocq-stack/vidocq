@@ -182,6 +182,19 @@
                         <version>${maven.javadoc.plugin.version}</version>
                         <configuration>
                             <doclint>none</doclint>
+                            <!--
+                                Force legacy (non-modular) javadoc. Modules that keep
+                                module-info.java under src/main/module-info (the
+                                testCompile-on-classpath workaround, e.g. dirac-core) trip
+                                maven-javadoc-plugin into module mode under Maven 4 (the
+                                compile-module-info execution's compileSourceRoots is now
+                                project-wide), and it fails with "No source files for
+                                package ...". Pinning sourcepath to src/main/java keeps
+                                javadoc classpath-based over the real sources for every
+                                module style (verified on clean-modular and workaround
+                                layouts alike). ${project.basedir} resolves per child module.
+                            -->
+                            <sourcepath>${project.basedir}/src/main/java</sourcepath>
                         </configuration>
                         <executions>
                             <execution>
@@ -232,14 +245,10 @@
             The standard maven-deploy-plugin pushes to distributionManagement/snapshotRepository.
             SNAPSHOTs are not validated by Central: no bundle, no GPG signature required.
 
-            We also do NOT attach a javadoc jar for snapshots. Central-snapshots does not
-            require it, and modules that keep module-info.java under src/main/module-info
-            (the testCompile-on-classpath workaround, e.g. dirac-core/-cdi-vauban/-rest)
-            break javadoc:jar under Maven 4: the compile-module-info execution's
-            compileSourceRoots is now project-wide, so javadoc switches to module mode and
-            fails with "No source files for package ...". Releases still build+sign javadoc
-            (see the release profile), where it matters for Central validation.
-            The sources jar is cheap and module-info-safe, so we keep it. -->
+            Snapshots DO attach sources and javadoc (the latter pinned to legacy mode via
+            sourcepath, like the release profile). This is deliberate: it makes the snapshot
+            artifacts mirror a release minus GPG signing, so a green snapshot deploy proves
+            the release-time javadoc:jar will also succeed (canary). -->
         <profile>
             <id>snapshot</id>
             <build>
@@ -252,6 +261,22 @@
                             <execution>
                                 <id>attach-sources</id>
                                 <goals><goal>jar-no-fork</goal></goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-javadoc-plugin</artifactId>
+                        <version>${maven.javadoc.plugin.version}</version>
+                        <configuration>
+                            <doclint>none</doclint>
+                            <!-- See the release profile: legacy javadoc for every module style. -->
+                            <sourcepath>${project.basedir}/src/main/java</sourcepath>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <id>attach-javadocs</id>
+                                <goals><goal>jar</goal></goals>
                             </execution>
                         </executions>
                     </plugin>
