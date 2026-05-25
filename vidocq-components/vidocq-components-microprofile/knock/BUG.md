@@ -102,3 +102,44 @@ Total : 1m06s. Le gate `deploy needs: [build, tck-mp-health]` est respecté.
 - `Forge-New/99-Annexes/Gotchas-Java-Maven.md` §2 (recette générique des TCK hors reactor)
 - `Forge-New/60-CICD-Cross-Repo/Workflow-ci.yml.md` (section "Publication des TCK out-of-reactor")
 - `cassini/.forgejo/workflows/ci.yml` (step ajouté ligne ~71)
+
+---
+
+## BUG-002 — JPMS contourné via copie manuelle des JARs compile-scope
+
+- **Date ouverture** : 2026-05-25
+- **Statut** : ⚠️ OPEN — workaround actif
+
+### Symptôme
+
+Le `pom.xml` racine de knock utilise `maven-dependency-plugin` (phase `initialize`) pour
+vider puis repeupler `target/javamodules/` avec tous les JARs de scope compile, puis passe
+`--module-path ${project.build.directory}/javamodules` manuellement au compilateur.
+
+Ce contournement indique que la résolution JPMS native de Maven ne fonctionne pas pour
+certaines dépendances compile-scope de knock, notamment `champollion-jsonp`, `cassini-core`
+et `vauban-core`/`vauban-classloader-spi`.
+
+### Repro minimal
+
+```bash
+grep -n "javamodules\|module-path" knock/pom.xml
+# révèle maven-clean-plugin + maven-dependency-plugin + compilerArgs
+```
+
+Sans le workaround, `javac` échoue au moment de résoudre les modules `io.vidocq.champollion`
+ou `io.vidocq.cassini` depuis le `module-info.java` des sous-modules knock.
+
+### Hypothèse de cause
+
+Les JARs concernés ne disposent pas de `module-info.class` dans une version reconnue par
+`maven-compiler-plugin` 4.x pour placement automatique sur le `--module-path`. La copie
+dans `target/javamodules/` force javac à les traiter comme automatic modules. Le
+`maven-clean-plugin` en phase `initialize` évite des conflits de JAR périmés lors des
+builds incrémentaux.
+
+### Piste de résolution
+
+Vérifier module par module lesquels ont un descripteur JPMS explicite et lesquels
+n'ont qu'un `Automatic-Module-Name` — puis supprimer les entrées correspondantes du
+workaround au fur et à mesure que les modules amont sont corrigés.
