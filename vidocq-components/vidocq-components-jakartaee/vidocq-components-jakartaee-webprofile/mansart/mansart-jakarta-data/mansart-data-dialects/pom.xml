@@ -7,7 +7,7 @@
     <parent>
         <groupId>io.vidocq.mansart</groupId>
         <artifactId>mansart-jakarta-data</artifactId>
-        <version>1.0.0-SNAPSHOT</version>
+        <version>0.1.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>mansart-data-dialects</artifactId>
