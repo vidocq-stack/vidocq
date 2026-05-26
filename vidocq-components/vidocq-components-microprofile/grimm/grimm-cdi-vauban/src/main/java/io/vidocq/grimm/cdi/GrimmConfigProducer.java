@@ -2,6 +2,7 @@ package io.vidocq.grimm.cdi;
 
 import io.vidocq.grimm.internal.config.GrimmConfig;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.inject.Produces;
 import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.ConfigProvider;
@@ -14,7 +15,7 @@ import org.eclipse.microprofile.config.ConfigProvider;
  * application-scoped instantiation. In Vidocq deployments this resolves to the Ravel
  * MP-Config provider.</p>
  */
-@ApplicationScoped
+@Dependent
 public class GrimmConfigProducer {
 
     @Produces

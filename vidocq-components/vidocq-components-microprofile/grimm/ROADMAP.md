@@ -285,10 +285,10 @@ JSON Schema dialect.
 | `GrimmModelCache` `@ApplicationScoped` | Holds the final `OpenAPI` document built by the pipeline; thread-safe lazy init | ☑ |
 | `GrimmConfigProducer` `@ApplicationScoped` | Reads `GrimmConfig` from Ravel at startup; CDI-producible for injection | ☑ |
 | `OpenApiResource` `@Path("/openapi")` | `@GET` method; reads from `GrimmModelCache`; content negotiation JSON/YAML; `format` query param | ☑ |
-| Cassini/Chappe integration | `OpenApiResource` discovered by Cassini scanner as a standard JAX-RS resource — no special adapter needed | ◐ |
+| Cassini/Chappe integration | `OpenApiResource` discovered by Cassini scanner as a standard JAX-RS resource — no special adapter needed | ☑ |
 | `GrimmAutoDiscovery` | ServiceLoader bridge registering the `OASFactoryResolver` for the CDI environment | ☑ |
-| CDI integration tests | Vauban embedded; inject `GrimmModelCache`; verify model content | ◐ |
-| HTTP endpoint test | Start Cassini + Chappe; GET `/openapi`; verify JSON and YAML responses | ◐ |
+| CDI integration tests | Vauban embedded; inject `GrimmModelCache`; verify model content | ☑ |
+| HTTP endpoint test | Start Cassini + Chappe; GET `/openapi`; verify JSON and YAML responses | ☑ |
 
 **Deliverable:** Full end-to-end pipeline from annotated JAX-RS resources to `/openapi` HTTP
 endpoint, integrated with Vauban (CDI) and Cassini (JAX-RS).
@@ -372,10 +372,11 @@ endpoint, integrated with Vauban (CDI) and Cassini (JAX-RS).
       `ConfigApplier` applies `mp.openapi.servers` to the model and registers JSON schema
       overrides in `SchemaRegistry`; exposed `JsonDeserializer.parseRaw`; integration tests
       use a manual MP-Config double (no impl dependency).
-- [x] M9 core started: CDI runtime layer now includes `GrimmExtension` (BCE class discovery),
+- [x] M9 completed: CDI runtime layer includes `GrimmExtension` (BCE class discovery),
       `GrimmConfigProducer`, `GrimmModelCache`, `GrimmAutoDiscovery`, and a CDI-wired
-      `OpenApiResource` bound to `/openapi`; added unit/integration-style tests for cache,
-      extension discovery, producer bridge, and endpoint metadata/format rendering.
+      `OpenApiResource` bound to `/openapi`; verified with embedded Vauban injection test
+      (`GrimmVaubanIntegrationTest`) and real HTTP transport test through Cassini+Chappe
+      (`OpenApiHttpChappeTest`) covering YAML default and JSON `format` override.
 - [x] M7 core completed: ModelMerger with sealed interface + ModelReaderInvoker + FilterInvoker
 
 ## Open Decisions
