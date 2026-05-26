@@ -33,15 +33,37 @@ public final class YamlSerializer {
     private void writeMap(Map<?, ?> mapValue, StringBuilder builder, int indent) {
         for (Map.Entry<?, ?> entry : mapValue.entrySet()) {
             appendIndent(builder, indent);
-            builder.append(entry.getKey()).append(':');
+            builder.append(writeKey(entry.getKey())).append(':');
             Object child = entry.getValue();
-            if (child instanceof Map<?, ?> || child instanceof List<?>) {
-                builder.append('\n');
-                writeYaml(child, builder, indent + 2);
+            if (child instanceof Map<?, ?> childMap) {
+                if (childMap.isEmpty()) {
+                    builder.append(" {}\n");
+                } else {
+                    builder.append('\n');
+                    writeYaml(childMap, builder, indent + 2);
+                }
+            } else if (child instanceof List<?> childList) {
+                if (childList.isEmpty()) {
+                    builder.append(" []\n");
+                } else {
+                    builder.append('\n');
+                    writeYaml(childList, builder, indent + 2);
+                }
             } else {
                 builder.append(' ').append(writeScalar(child)).append('\n');
             }
         }
+    }
+
+    private String writeKey(Object key) {
+        if (key == null) {
+            return "\"null\"";
+        }
+        String text = String.valueOf(key);
+        if (text.matches("[A-Za-z0-9_./-]+")) {
+            return text;
+        }
+        return '"' + escapeString(text) + '"';
     }
 
     private void writeList(List<?> listValue, StringBuilder builder, int indent) {

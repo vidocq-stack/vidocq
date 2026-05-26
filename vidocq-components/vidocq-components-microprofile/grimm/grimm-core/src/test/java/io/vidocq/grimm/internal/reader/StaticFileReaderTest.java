@@ -90,6 +90,63 @@ class StaticFileReaderTest {
         assertTrue(exception.getMessage() != null && !exception.getMessage().isBlank());
     }
 
+    @Test
+    void readOpenAPI_parsesYamlWithCommentsBlockScalarAndInlineListMap() {
+        String yaml = """
+                # header comment
+                openapi: 3.1.0
+                info:
+                  title: Callback Example
+                  version: 1.0.0
+                paths:
+                  /streams:
+                    post:
+                      description: subscribes a client
+                      parameters:
+                        - name: callbackUrl
+                          in: query
+                          required: true
+                          description: |
+                            line 1
+                            line 2
+                      responses:
+                        '201':
+                          description: created
+                          content:
+                            application/json:
+                              schema:
+                                description: subscription information
+                      callbacks:
+                        onData:
+                          '{$request.query.callbackUrl}/data':
+                            post:
+                              description: callback post operation
+                """;
+
+        Optional<OpenAPI> result = withContextClassLoader(
+                new MapBackedClassLoader(Map.of("META-INF/openapi.yaml", yaml)),
+                () -> new StaticFileReader().readOpenAPI()
+        );
+
+        assertTrue(result.isPresent());
+        OpenAPI doc = result.get();
+        assertNotNull(doc.getPaths());
+        assertNotNull(doc.getPaths().getPathItem("/streams"));
+        assertNotNull(doc.getPaths().getPathItem("/streams").getPOST());
+        var response201 = doc.getPaths().getPathItem("/streams").getPOST().getResponses().getAPIResponse("201");
+        assertNotNull(response201);
+        assertEquals("created", response201.getDescription());
+        assertNotNull(response201.getContent());
+        assertNotNull(response201.getContent().getMediaType("application/json"));
+        assertEquals("subscription information", response201.getContent().getMediaType("application/json").getSchema().getDescription());
+
+        var callbackPath = doc.getPaths().getPathItem("/streams").getPOST().getCallbacks().get("onData")
+                .getPathItem("{$request.query.callbackUrl}/data");
+        assertNotNull(callbackPath);
+        assertNotNull(callbackPath.getPOST());
+        assertEquals("callback post operation", callbackPath.getPOST().getDescription());
+    }
+
     private static <T> T withContextClassLoader(ClassLoader classLoader, Supplier<T> supplier) {
         Thread thread = Thread.currentThread();
         ClassLoader original = thread.getContextClassLoader();

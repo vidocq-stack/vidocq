@@ -74,7 +74,7 @@ public final class YamlDeserializer {
                     throw new IllegalArgumentException("Invalid YAML line: " + line);
                 }
 
-                String key = trimmed.substring(0, colon);
+                String key = normalizeKey(trimmed.substring(0, colon));
                 String rest = trimmed.substring(colon + 1).trim();
                 index++;
 
@@ -85,6 +85,8 @@ public final class YamlDeserializer {
                     } else {
                         result.put(key, parseNode(currentIndent + 2));
                     }
+                } else if ("|".equals(rest) || ">".equals(rest)) {
+                    result.put(key, parseBlockScalar(currentIndent + 2, ">".equals(rest)));
                 } else {
                     result.put(key, parseScalar(rest));
                 }
@@ -119,6 +121,8 @@ public final class YamlDeserializer {
                     } else {
                         result.add(parseNode(currentIndent + 2));
                     }
+                } else if (rest.contains(":")) {
+                    result.add(parseInlineMapItem(rest, currentIndent));
                 } else {
                     result.add(parseScalar(rest));
                 }
@@ -174,9 +178,85 @@ public final class YamlDeserializer {
         }
 
         private void skipBlankLines() {
-            while (index < lines.size() && lines.get(index).trim().isEmpty()) {
+            while (index < lines.size()) {
+                String trimmed = lines.get(index).trim();
+                if (trimmed.isEmpty() || trimmed.startsWith("#")) {
+                    index++;
+                    continue;
+                }
+                break;
+            }
+        }
+
+        private String normalizeKey(String key) {
+            String trimmed = key.trim();
+            if ((trimmed.startsWith("\"") && trimmed.endsWith("\""))
+                    || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+                return trimmed.substring(1, trimmed.length() - 1);
+            }
+            return trimmed;
+        }
+
+        private Map<String, Object> parseInlineMapItem(String rest, int listIndent) {
+            int colon = rest.indexOf(':');
+            if (colon < 0) {
+                throw new IllegalArgumentException("Invalid YAML list item: " + rest);
+            }
+            String key = normalizeKey(rest.substring(0, colon));
+            String valuePart = rest.substring(colon + 1).trim();
+
+            LinkedHashMap<String, Object> map = new LinkedHashMap<>();
+            if (valuePart.isEmpty()) {
+                skipBlankLines();
+                if (index < lines.size() && indentOf(lines.get(index)) > listIndent) {
+                    map.put(key, parseNode(listIndent + 2));
+                } else {
+                    map.put(key, null);
+                }
+            } else if ("|".equals(valuePart) || ">".equals(valuePart)) {
+                map.put(key, parseBlockScalar(listIndent + 2, ">".equals(valuePart)));
+            } else {
+                map.put(key, parseScalar(valuePart));
+            }
+
+            skipBlankLines();
+            if (index < lines.size()
+                    && indentOf(lines.get(index)) == listIndent + 2
+                    && !lines.get(index).trim().startsWith("-")) {
+                map.putAll(parseMap(listIndent + 2));
+            }
+            return map;
+        }
+
+        private String parseBlockScalar(int expectedIndent, boolean folded) {
+            StringBuilder block = new StringBuilder();
+            while (index < lines.size()) {
+                String line = lines.get(index);
+                String trimmed = line.trim();
+                if (trimmed.isEmpty()) {
+                    block.append('\n');
+                    index++;
+                    continue;
+                }
+                int indent = indentOf(line);
+                if (indent < expectedIndent) {
+                    break;
+                }
+                String part = line.substring(Math.min(expectedIndent, line.length()));
+                if (folded) {
+                    if (block.length() > 0 && block.charAt(block.length() - 1) != '\n') {
+                        block.append(' ');
+                    }
+                    block.append(part.trim());
+                } else {
+                    block.append(part).append('\n');
+                }
                 index++;
             }
+            if (!folded && block.length() > 0 && block.charAt(block.length() - 1) == '\n') {
+                block.setLength(block.length() - 1);
+            }
+            return block.toString();
         }
 
         private int indentOf(String line) {

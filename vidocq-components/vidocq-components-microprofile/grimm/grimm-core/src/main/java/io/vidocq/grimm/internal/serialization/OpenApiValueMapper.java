@@ -28,11 +28,21 @@ final class OpenApiValueMapper {
         if (value instanceof String || value instanceof Number || value instanceof Boolean) {
             return value;
         }
+        if (value instanceof Character characterValue) {
+            return String.valueOf(characterValue);
+        }
+        if (value instanceof CharSequence sequence) {
+            return sequence.toString();
+        }
         if (value instanceof Enum<?> enumValue) {
-            return enumValue.name().toLowerCase(Locale.ROOT);
+            return enumLiteral(enumValue);
         }
         if (value instanceof Map<?, ?> mapValue) {
-            return toSerializableMap(mapValue);
+            Object mapped = toSerializableMap(mapValue);
+            if (value instanceof Extensible<?> extensible) {
+                return mergeWithExtensions(mapped, extensible);
+            }
+            return mapped;
         }
         if (value instanceof List<?> listValue) {
             return toSerializableList(listValue);
@@ -52,7 +62,27 @@ final class OpenApiValueMapper {
             return toSerializable(securityRequirement.getSchemes());
         }
         if (value instanceof Callback callback) {
-            return mergeWithExtensions(toSerializable(callback.getPathItems()), callback);
+            LinkedHashMap<String, Object> result = new LinkedHashMap<>();
+            Object pathItems = toSerializable(callback.getPathItems());
+            if (pathItems instanceof Map<?, ?> pathItemsMap) {
+                for (Map.Entry<?, ?> entry : pathItemsMap.entrySet()) {
+                    if (entry.getKey() != null) {
+                        result.put(String.valueOf(entry.getKey()), entry.getValue());
+                    }
+                }
+            }
+            if (callback.getRef() != null) {
+                result.put("$ref", callback.getRef());
+            }
+            Map<String, Object> extensions = callback.getExtensions();
+            if (extensions != null) {
+                for (Map.Entry<String, Object> entry : extensions.entrySet()) {
+                    if (entry.getValue() != null) {
+                        result.put(entry.getKey(), toSerializable(entry.getValue()));
+                    }
+                }
+            }
+            return result;
         }
 
         return toSerializableBean(value);
@@ -93,6 +123,22 @@ final class OpenApiValueMapper {
             if (propertyName == null || "class".equals(propertyName)) {
                 continue;
             }
+            if ("operations".equals(propertyName)) {
+                continue;
+            }
+            if ("all".equals(propertyName) && rawValue instanceof Map<?, ?> allMap) {
+                for (Map.Entry<?, ?> entry : allMap.entrySet()) {
+                    if (entry.getKey() == null || entry.getValue() == null) {
+                        continue;
+                    }
+                    String key = String.valueOf(entry.getKey());
+                    if ("schemaDialect".equals(key)) {
+                        key = "$schema";
+                    }
+                    result.putIfAbsent(key, toSerializable(entry.getValue()));
+                }
+                continue;
+            }
             if ("extensions".equals(propertyName)) {
                 Map<?, ?> extensions = (Map<?, ?>) rawValue;
                 for (Map.Entry<?, ?> extension : extensions.entrySet()) {
@@ -103,10 +149,7 @@ final class OpenApiValueMapper {
                 continue;
             }
 
-            // $ref is represented as getRef() in the model API.
-            if ("ref".equals(propertyName)) {
-                propertyName = "$ref";
-            }
+            propertyName = toOpenApiPropertyName(propertyName);
 
             result.put(propertyName, toSerializable(rawValue));
         }
@@ -119,7 +162,11 @@ final class OpenApiValueMapper {
             if (entry.getKey() == null || entry.getValue() == null) {
                 continue;
             }
-            result.put(String.valueOf(entry.getKey()), toSerializable(entry.getValue()));
+            String key = String.valueOf(entry.getKey());
+            if ("schemaDialect".equals(key)) {
+                key = "$schema";
+            }
+            result.put(key, toSerializable(entry.getValue()));
         }
         return result;
     }
@@ -168,6 +215,33 @@ final class OpenApiValueMapper {
             return raw.toLowerCase(Locale.ROOT);
         }
         return Character.toLowerCase(raw.charAt(0)) + raw.substring(1);
+    }
+
+    private static String enumLiteral(Enum<?> enumValue) {
+        // OpenAPI has a few enum literals that are not plain lower-case.
+        if (enumValue instanceof org.eclipse.microprofile.openapi.models.security.SecurityScheme.Type type) {
+            return switch (type) {
+                case APIKEY -> "apiKey";
+                case OPENIDCONNECT -> "openIdConnect";
+                case OAUTH2 -> "oauth2";
+                case HTTP -> "http";
+                case MUTUALTLS -> "mutualTLS";
+            };
+        }
+        return enumValue.name().toLowerCase(Locale.ROOT);
+    }
+
+    private static String toOpenApiPropertyName(String propertyName) {
+        return switch (propertyName) {
+            // $ref is represented as getRef() in the model API.
+            case "ref" -> "$ref";
+            // MP model exposes *DefaultValue accessors for JSON keys named "default".
+            case "defaultValue" -> "default";
+            case "enumeration" -> "enum";
+            case "schemaDialect" -> "$schema";
+            case "additionalPropertiesSchema" -> "additionalProperties";
+            default -> propertyName;
+        };
     }
 }
 

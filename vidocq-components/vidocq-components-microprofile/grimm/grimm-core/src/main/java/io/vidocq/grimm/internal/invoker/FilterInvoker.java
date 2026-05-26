@@ -71,14 +71,16 @@ public final class FilterInvoker {
         Iterator<Map.Entry<String, PathItem>> it = paths.getPathItems().entrySet().iterator();
         while (it.hasNext()) {
             Map.Entry<String, PathItem> e = it.next();
-            PathItem filteredItem = filter.filterPathItem(e.getValue());
+            PathItem candidate = e.getValue();
+            filterOperations(candidate, filter);
+            filterParameters(candidate.getParameters(), filter, candidate::setParameters);
+            filterServers(candidate.getServers(), filter, candidate::setServers);
+
+            PathItem filteredItem = filter.filterPathItem(candidate);
             if (filteredItem == null) {
                 it.remove();
                 continue;
             }
-            filterOperations(filteredItem, filter);
-            filterParameters(filteredItem.getParameters(), filter, filteredItem::setParameters);
-            filterServers(filteredItem.getServers(), filter, filteredItem::setServers);
             e.setValue(filteredItem);
         }
     }
@@ -87,12 +89,12 @@ public final class FilterInvoker {
         for (PathItem.HttpMethod m : PathItem.HttpMethod.values()) {
             Operation op = getOperation(item, m);
             if (op == null) continue;
+            filterOperationDetails(op, filter);
             Operation filtered = filter.filterOperation(op);
             if (filtered == null) {
                 setOperation(item, m, null);
                 continue;
             }
-            filterOperationDetails(filtered, filter);
             setOperation(item, m, filtered);
         }
     }
@@ -113,14 +115,16 @@ public final class FilterInvoker {
                     responses.getAPIResponses().entrySet().iterator();
             while (rit.hasNext()) {
                 Map.Entry<String, APIResponse> entry = rit.next();
-                APIResponse filtered = filter.filterAPIResponse(entry.getValue());
+                APIResponse candidate = entry.getValue();
+                filterContentSchemas(candidate.getContent(), filter);
+                filterMap(candidate.getHeaders(), filter::filterHeader);
+                filterMap(candidate.getLinks(), filter::filterLink);
+
+                APIResponse filtered = filter.filterAPIResponse(candidate);
                 if (filtered == null) {
                     rit.remove();
                     continue;
                 }
-                filterContentSchemas(filtered.getContent(), filter);
-                filterMap(filtered.getHeaders(), filter::filterHeader);
-                filterMap(filtered.getLinks(), filter::filterLink);
                 entry.setValue(filtered);
             }
         }

@@ -14,10 +14,25 @@ import jakarta.ws.rs.QueryParam;
 import org.eclipse.microprofile.openapi.annotations.Operation;
 import org.eclipse.microprofile.openapi.annotations.callbacks.Callback;
 import org.eclipse.microprofile.openapi.annotations.enums.ParameterIn;
+import org.eclipse.microprofile.openapi.annotations.enums.SecuritySchemeIn;
+import org.eclipse.microprofile.openapi.annotations.enums.SecuritySchemeType;
+import org.eclipse.microprofile.openapi.annotations.extensions.Extension;
+import org.eclipse.microprofile.openapi.annotations.extensions.Extensions;
+import org.eclipse.microprofile.openapi.annotations.media.Content;
 import org.eclipse.microprofile.openapi.annotations.parameters.Parameter;
 import org.eclipse.microprofile.openapi.annotations.parameters.RequestBody;
+import org.eclipse.microprofile.openapi.annotations.parameters.RequestBodySchema;
 import org.eclipse.microprofile.openapi.annotations.responses.APIResponse;
+import org.eclipse.microprofile.openapi.annotations.responses.APIResponseSchema;
 import org.eclipse.microprofile.openapi.annotations.responses.APIResponses;
+import org.eclipse.microprofile.openapi.annotations.security.OAuthFlow;
+import org.eclipse.microprofile.openapi.annotations.security.OAuthFlows;
+import org.eclipse.microprofile.openapi.annotations.security.OAuthScope;
+import org.eclipse.microprofile.openapi.annotations.security.SecurityRequirement;
+import org.eclipse.microprofile.openapi.annotations.security.SecurityScheme;
+import org.eclipse.microprofile.openapi.annotations.security.SecuritySchemes;
+import org.eclipse.microprofile.openapi.annotations.servers.Server;
+import org.eclipse.microprofile.openapi.annotations.servers.ServerVariable;
 import org.eclipse.microprofile.openapi.models.OpenAPI;
 import org.eclipse.microprofile.openapi.models.PathItem;
 import org.junit.jupiter.api.Test;
@@ -193,6 +208,22 @@ class JaxRsResourceScannerTest {
     }
 
     @Test
+    void operationServersIncludeServerVariables() {
+        // Spec §3.5: @Server variables are part of the operation-level server object.
+        AnnotationScanner scanner = new AnnotationScanner(ScanConfig.defaultConfig());
+        OpenAPI model = scanner.scanClasses(List.of(ServerVariablesResource.class));
+
+        var server = model.getPaths().getPathItem("/reviews/{id}").getDELETE().getServers().stream()
+                .filter(s -> "{protocol}://test-server.com".equals(s.getUrl()))
+                .findFirst()
+                .orElseThrow();
+        assertNotNull(server.getVariables());
+        assertNotNull(server.getVariables().get("protocol"));
+        assertEquals("https", server.getVariables().get("protocol").getDefaultValue());
+        assertEquals(2, server.getVariables().get("protocol").getEnumeration().size());
+    }
+
+    @Test
     void operationDeprecatedAndTagsApplied() {
         // Spec §3.6: deprecated and tags on @Operation are applied; missing operationId derived from method name.
         AnnotationScanner scanner = new AnnotationScanner(ScanConfig.defaultConfig());
@@ -204,12 +235,157 @@ class JaxRsResourceScannerTest {
     }
 
     @Test
+    void operationTagsIncludeTagRefFromClassLevel() {
+        AnnotationScanner scanner = new AnnotationScanner(ScanConfig.defaultConfig());
+        OpenAPI model = scanner.scanClasses(List.of(TagRefResource.class));
+
+        var op = model.getPaths().getPathItem("/tag-ref/{id}").getGET();
+        assertNotNull(op.getTags());
+        assertTrue(op.getTags().contains("ParentTag"));
+        assertTrue(op.getTags().contains("ChildTag"));
+    }
+
+    @Test
+    void apiResponseHeadersAndLinksAreMapped() {
+        AnnotationScanner scanner = new AnnotationScanner(ScanConfig.defaultConfig());
+        OpenAPI model = scanner.scanClasses(List.of(ResponseLinksHeadersResource.class));
+
+        var response = model.getPaths().getPathItem("/responses-links").getGET()
+                .getResponses().getAPIResponse("200");
+        assertNotNull(response);
+        assertNotNull(response.getHeaders());
+        assertNotNull(response.getHeaders().get("Max-Rate"));
+        assertEquals("Maximum rate", response.getHeaders().get("Max-Rate").getDescription());
+        assertNotNull(response.getLinks());
+        assertNotNull(response.getLinks().get("User name"));
+        assertEquals("getUserByName", response.getLinks().get("User name").getOperationId());
+    }
+
+    @Test
     void resourceWithoutPathIsIgnored() {
         // Spec §3.6: a class without @Path produces no path items.
         AnnotationScanner scanner = new AnnotationScanner(ScanConfig.defaultConfig());
         OpenAPI model = scanner.scanClasses(List.of(NoPathClass.class));
 
         assertTrue(model.getPaths() == null || model.getPaths().getPathItems() == null || model.getPaths().getPathItems().isEmpty());
+    }
+
+    @Test
+    void classSecuritySchemesAreMappedToComponents() {
+        AnnotationScanner scanner = new AnnotationScanner(ScanConfig.defaultConfig());
+        OpenAPI model = scanner.scanClasses(List.of(SecurityResource.class));
+
+        assertNotNull(model.getComponents());
+        assertNotNull(model.getComponents().getSecuritySchemes());
+        var apiKey = model.getComponents().getSecuritySchemes().get("petsApiKey");
+        assertNotNull(apiKey);
+        assertEquals(org.eclipse.microprofile.openapi.models.security.SecurityScheme.Type.APIKEY, apiKey.getType());
+        assertEquals(org.eclipse.microprofile.openapi.models.security.SecurityScheme.In.HEADER, apiKey.getIn());
+        assertEquals("api_key", apiKey.getName());
+
+        var oauth2 = model.getComponents().getSecuritySchemes().get("petsOAuth2");
+        assertNotNull(oauth2);
+        assertNotNull(oauth2.getFlows());
+        assertNotNull(oauth2.getFlows().getImplicit());
+        assertEquals("https://example.com/api/oauth/dialog", oauth2.getFlows().getImplicit().getAuthorizationUrl());
+        assertEquals("write:pets", oauth2.getFlows().getImplicit().getScopes().keySet().stream().findFirst().orElseThrow());
+    }
+
+    @Test
+    void classAndMethodSecurityRequirementsAreAppliedToOperation() {
+        AnnotationScanner scanner = new AnnotationScanner(ScanConfig.defaultConfig());
+        OpenAPI model = scanner.scanClasses(List.of(SecurityResource.class));
+
+        var op = model.getPaths().getPathItem("/secure/{id}").getDELETE();
+        assertNotNull(op.getSecurity());
+        assertTrue(op.getSecurity().stream().anyMatch(sec -> sec.getScheme("petsOAuth2") != null));
+        assertTrue(op.getSecurity().stream().anyMatch(sec -> sec.getScheme("petsApiKey") != null));
+    }
+
+    @Test
+    void operationExtensionsAndApiResponseSchemaAreMapped() {
+        AnnotationScanner scanner = new AnnotationScanner(ScanConfig.defaultConfig());
+        OpenAPI model = scanner.scanClasses(List.of(ExtensionAndResponseSchemaResource.class));
+
+        var op = model.getPaths().getPathItem("/response-schema/{id}").getPOST();
+        assertEquals("test-operation-ext", op.getExtension("x-operation-ext"));
+        var response = op.getResponses().getAPIResponse("204");
+        assertNotNull(response);
+        assertNotNull(response.getContent());
+        var mediaType = response.getContent().getMediaType("application/json");
+        assertNotNull(mediaType);
+        assertNotNull(mediaType.getSchema());
+        assertEquals("#/components/schemas/Payload", mediaType.getSchema().getRef());
+    }
+
+    @Test
+    void requestBodySchemaAnnotationOverridesBodyInference() {
+        AnnotationScanner scanner = new AnnotationScanner(ScanConfig.defaultConfig());
+        OpenAPI model = scanner.scanClasses(List.of(RequestBodySchemaResource.class));
+
+        var op = model.getPaths().getPathItem("/request-schema").getPOST();
+        var mediaType = op.getRequestBody().getContent().getMediaType("application/json");
+        assertNotNull(mediaType);
+        assertNotNull(mediaType.getSchema());
+        assertEquals("#/components/schemas/Payload", mediaType.getSchema().getRef());
+    }
+
+    @Test
+    void apiResponsesExtensionsAreAppliedOnResponsesObject() {
+        AnnotationScanner scanner = new AnnotationScanner(ScanConfig.defaultConfig());
+        OpenAPI model = scanner.scanClasses(List.of(ResponseExtensionsResource.class));
+
+        var op = model.getPaths().getPathItem("/responses-ext").getGET();
+        assertNotNull(op.getResponses());
+        assertEquals("test-responses-ext", op.getResponses().getExtension("x-responses-ext"));
+    }
+
+    @Test
+    void apiResponseSchemaWithoutCodeTargetsSuccessResponse() {
+        AnnotationScanner scanner = new AnnotationScanner(ScanConfig.defaultConfig());
+        OpenAPI model = scanner.scanClasses(List.of(DefaultResponseSchemaResource.class));
+
+        var op = model.getPaths().getPathItem("/response-schema-default").getGET();
+        assertNotNull(op.getResponses().getAPIResponse("200"));
+        assertNull(op.getResponses().getAPIResponse("default"));
+        var schema = op.getResponses().getAPIResponse("200")
+                .getContent().getMediaType("application/json").getSchema();
+        assertNotNull(schema);
+        assertNotNull(schema.getItems());
+        assertEquals("#/components/schemas/Payload", schema.getItems().getRef());
+    }
+
+    @Test
+    void apiResponseContentExtensionsAreMappedToMediaType() {
+        AnnotationScanner scanner = new AnnotationScanner(ScanConfig.defaultConfig());
+        OpenAPI model = scanner.scanClasses(List.of(ResponseContentExtensionResource.class));
+
+        var mediaType = model.getPaths().getPathItem("/responses-content-ext").getGET()
+                .getResponses().getAPIResponse("503")
+                .getContent().getMediaType("application/json");
+        assertNotNull(mediaType);
+        assertEquals("true", mediaType.getExtension("x-notavailable-ext"));
+    }
+
+    @Test
+    void standaloneExtensionsAnnotationIsAppliedToOperation() {
+        AnnotationScanner scanner = new AnnotationScanner(ScanConfig.defaultConfig());
+        OpenAPI model = scanner.scanClasses(List.of(StandaloneExtensionsResource.class));
+
+        var op = model.getPaths().getPathItem("/ext").getGET();
+        assertEquals("ok", op.getExtension("x-op-ext"));
+    }
+
+    @Test
+    void beanValidationOnParameterIsMappedToSchema() {
+        AnnotationScanner scanner = new AnnotationScanner(ScanConfig.defaultConfig());
+        OpenAPI model = scanner.scanClasses(List.of(BeanValidationParameterResource.class));
+
+        var op = model.getPaths().getPathItem("/validation/{test}").getPOST();
+        var parameter = op.getParameters().stream().filter(p -> "test".equals(p.getName())).findFirst().orElseThrow();
+        assertNotNull(parameter.getSchema());
+        assertEquals(Integer.valueOf(6), parameter.getSchema().getMaxLength());
+        assertEquals(Boolean.TRUE, parameter.getRequired());
     }
 
     // ---------- Fixtures ----------
@@ -313,6 +489,17 @@ class JaxRsResourceScannerTest {
         public Object subscribe(Payload p) { return null; }
     }
 
+    @Path("/reviews/{id}")
+    static class ServerVariablesResource {
+        @DELETE
+        @Server(
+            url = "{protocol}://test-server.com",
+            variables = @ServerVariable(name = "protocol", defaultValue = "https", enumeration = {"http", "https"})
+        )
+        public void delete(@PathParam("id") String id) {
+        }
+    }
+
     @Path("/deprecated")
     static class DeprecatedTaggedResource {
         @GET
@@ -321,8 +508,150 @@ class JaxRsResourceScannerTest {
         public Object g() { return null; }
     }
 
+    @Path("/tag-ref")
+    @org.eclipse.microprofile.openapi.annotations.tags.Tag(ref = "ParentTag")
+    static class TagRefResource {
+        @GET
+        @Path("/{id}")
+        @org.eclipse.microprofile.openapi.annotations.tags.Tag(name = "ChildTag")
+        public Object get(@PathParam("id") String id) {
+            return null;
+        }
+    }
+
+    @Path("/responses-links")
+    static class ResponseLinksHeadersResource {
+        @GET
+        @APIResponse(
+                responseCode = "200",
+                description = "OK",
+                headers = @org.eclipse.microprofile.openapi.annotations.headers.Header(
+                        name = "Max-Rate",
+                        description = "Maximum rate"
+                ),
+                links = @org.eclipse.microprofile.openapi.annotations.links.Link(
+                        name = "User name",
+                        operationId = "getUserByName"
+                )
+        )
+        public Object get() {
+            return null;
+        }
+    }
+
     static class NoPathClass {
         @GET public Object g() { return null; }
+    }
+
+    @Path("/secure")
+    @SecuritySchemes({
+            @SecurityScheme(
+                    securitySchemeName = "petsApiKey",
+                    type = SecuritySchemeType.APIKEY,
+                    in = SecuritySchemeIn.HEADER,
+                    apiKeyName = "api_key"
+            ),
+            @SecurityScheme(
+                    securitySchemeName = "petsOAuth2",
+                    type = SecuritySchemeType.OAUTH2,
+                    flows = @OAuthFlows(
+                            implicit = @OAuthFlow(
+                                    authorizationUrl = "https://example.com/api/oauth/dialog",
+                                    scopes = @OAuthScope(name = "write:pets", description = "modify pets")
+                            )
+                    )
+            )
+    })
+    @SecurityRequirement(name = "petsOAuth2", scopes = {"write:pets"})
+    static class SecurityResource {
+        @DELETE
+        @Path("/{id}")
+        @SecurityRequirement(name = "petsApiKey")
+        public Object delete(@PathParam("id") String id) {
+            return null;
+        }
+    }
+
+    @Path("/response-schema")
+    static class ExtensionAndResponseSchemaResource {
+        @POST
+        @Path("/{id}")
+        @Produces("application/json")
+        @Operation(extensions = @Extension(name = "x-operation-ext", value = "test-operation-ext"))
+        @APIResponseSchema(value = Payload.class, responseCode = "204", responseDescription = "No content")
+        public Object update(@PathParam("id") String id, Payload payload) {
+            return null;
+        }
+    }
+
+    @Path("/request-schema")
+    static class RequestBodySchemaResource {
+        @POST
+        @Consumes("application/json")
+        public Object create(@RequestBodySchema(Payload.class) String csvBody) {
+            return null;
+        }
+    }
+
+    @Path("/ext")
+    static class StandaloneExtensionsResource {
+        @GET
+        @Extensions(@Extension(name = "x-op-ext", value = "ok"))
+        public Object get() {
+            return null;
+        }
+    }
+
+    @Path("/responses-ext")
+    static class ResponseExtensionsResource {
+        @GET
+        @Produces("application/json")
+        @APIResponses(
+                value = @APIResponse(responseCode = "200", description = "OK"),
+                extensions = @Extension(name = "x-responses-ext", value = "test-responses-ext")
+        )
+        public Object get() {
+            return null;
+        }
+    }
+
+    @Path("/response-schema-default")
+    static class DefaultResponseSchemaResource {
+        @GET
+        @Produces("application/json")
+        @APIResponseSchema(Payload[].class)
+        public Object get() {
+            return null;
+        }
+    }
+
+    @Path("/responses-content-ext")
+    static class ResponseContentExtensionResource {
+        @GET
+        @Produces("application/json")
+        @APIResponse(
+                responseCode = "503",
+                description = "service not available",
+                content = @Content(
+                        extensions = @Extension(name = "x-notavailable-ext", value = "true")
+                )
+        )
+        public Object get() {
+            return null;
+        }
+    }
+
+    @Path("/validation")
+    static class BeanValidationParameterResource {
+        @POST
+        @Path("/{test}")
+        public Object create(
+                @PathParam("test")
+                @jakarta.validation.constraints.Size(max = 6)
+                @jakarta.validation.constraints.NotNull
+                String test) {
+            return null;
+        }
     }
 
     static class Payload {

@@ -37,22 +37,23 @@ public class OpenApiResource {
     static final String MEDIA_TYPE_JSON = "application/json";
     static final String MEDIA_TYPE_YAML = "application/yaml";
 
-    private final Supplier<OpenAPI> documentSupplier;
+    private Supplier<OpenAPI> documentSupplier;
 
     /** CDI constructor — reads the model from the shared {@link GrimmModelCache}. */
     @Inject
     public OpenApiResource(GrimmModelCache cache) {
-        this(cache::getDocument);
+        this.documentSupplier = Objects.requireNonNull(cache, "cache must not be null")::getDocument;
     }
 
     /** No-arg fallback for proxy / legacy bootstrap use. */
     public OpenApiResource() {
-        this(() -> OASFactory.createObject(OpenAPI.class).openapi("3.1.0"));
+        this.documentSupplier = () -> OASFactory.createObject(OpenAPI.class).openapi("3.1.0");
     }
 
-    /** Test/internal constructor — accepts any document supplier. */
-    OpenApiResource(Supplier<OpenAPI> documentSupplier) {
-        this.documentSupplier = Objects.requireNonNull(documentSupplier, "documentSupplier must not be null");
+    static OpenApiResource fromSupplier(Supplier<OpenAPI> documentSupplier) {
+        OpenApiResource resource = new OpenApiResource();
+        resource.documentSupplier = Objects.requireNonNull(documentSupplier, "documentSupplier must not be null");
+        return resource;
     }
 
     /**

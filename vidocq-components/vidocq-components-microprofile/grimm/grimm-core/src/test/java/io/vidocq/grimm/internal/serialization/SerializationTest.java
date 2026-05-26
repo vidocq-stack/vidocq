@@ -6,12 +6,16 @@ import org.eclipse.microprofile.openapi.models.Operation;
 import org.eclipse.microprofile.openapi.models.PathItem;
 import org.eclipse.microprofile.openapi.models.Paths;
 import org.eclipse.microprofile.openapi.models.info.Info;
+import org.eclipse.microprofile.openapi.models.media.Schema;
 import org.eclipse.microprofile.openapi.models.responses.APIResponse;
 import org.eclipse.microprofile.openapi.models.responses.APIResponses;
 import org.eclipse.microprofile.openapi.models.security.SecurityRequirement;
+import org.eclipse.microprofile.openapi.models.security.SecurityScheme;
 import org.eclipse.microprofile.openapi.models.servers.Server;
 import org.eclipse.microprofile.openapi.models.tags.Tag;
 import org.junit.jupiter.api.Test;
+
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -134,6 +138,94 @@ class SerializationTest {
         assertTrue("https://api.example.com".equals(restored.getServers().getFirst().getUrl()));
         assertTrue(restored.getSecurity() != null && restored.getSecurity().size() == 1);
         assertTrue(restored.getSecurity().getFirst().getScheme("oauth2") != null);
+    }
+
+    @Test
+    void serializers_useOpenApiFieldNamesAndSkipInternalAccessors() {
+        OpenAPI openAPI = OASFactory.createObject(OpenAPI.class).openapi("3.1.0");
+        Schema schema = OASFactory.createObject(Schema.class);
+        schema.setType(List.of(Schema.SchemaType.STRING));
+        schema.setDefaultValue("Dog");
+        schema.setEnumeration(List.of("Dog", "Cat"));
+
+        Schema additionalProperties = OASFactory.createObject(Schema.class);
+        additionalProperties.setType(List.of(Schema.SchemaType.INTEGER));
+        schema.setAdditionalPropertiesSchema(additionalProperties);
+
+        var content = OASFactory.createObject(org.eclipse.microprofile.openapi.models.media.Content.class)
+                .addMediaType("application/json", OASFactory.createObject(org.eclipse.microprofile.openapi.models.media.MediaType.class)
+                        .schema(schema));
+        APIResponse response = OASFactory.createObject(APIResponse.class)
+                .description("ok")
+                .content(content);
+        APIResponses responses = OASFactory.createObject(APIResponses.class).addAPIResponse("200", response);
+        Operation operation = OASFactory.createObject(Operation.class).responses(responses);
+        PathItem item = OASFactory.createObject(PathItem.class).GET(operation);
+        openAPI.paths(OASFactory.createObject(Paths.class).addPathItem("/pets", item));
+
+        String json = new JsonSerializer().serialize(openAPI);
+
+        assertTrue(json.contains("\"default\":\"Dog\""));
+        assertTrue(json.contains("\"enum\":[\"Dog\",\"Cat\"]"));
+        assertTrue(json.contains("\"additionalProperties\":"));
+        assertFalse(json.contains("\"defaultValue\":"));
+        assertFalse(json.contains("\"enumeration\":"));
+        assertFalse(json.contains("\"additionalPropertiesSchema\":"));
+        assertFalse(json.contains("\"all\":"));
+        assertFalse(json.contains("\"operations\":"));
+    }
+
+    @Test
+    void serializers_useCanonicalEnumLiteralsForSecuritySchemeType() {
+        OpenAPI openAPI = OASFactory.createObject(OpenAPI.class).openapi("3.1.0");
+        var components = OASFactory.createObject(org.eclipse.microprofile.openapi.models.Components.class);
+        var apiKey = OASFactory.createObject(SecurityScheme.class)
+                .type(SecurityScheme.Type.APIKEY)
+                .in(SecurityScheme.In.HEADER)
+                .name("createPetProfile");
+        components.addSecurityScheme("petsApiKey", apiKey);
+        openAPI.setComponents(components);
+
+        String json = new JsonSerializer().serialize(openAPI);
+
+        assertTrue(json.contains("\"type\":\"apiKey\""));
+        assertFalse(json.contains("\"type\":\"apikey\""));
+    }
+
+    @Test
+    void yamlSerializer_preservesEmptyCollections() {
+        OpenAPI openAPI = OASFactory.createObject(OpenAPI.class).openapi("3.1.0");
+        APIResponse response = OASFactory.createObject(APIResponse.class).description("ok");
+        var content = OASFactory.createObject(org.eclipse.microprofile.openapi.models.media.Content.class);
+        content.addMediaType("*/*", OASFactory.createObject(org.eclipse.microprofile.openapi.models.media.MediaType.class));
+        response.setContent(content);
+
+        APIResponses responses = OASFactory.createObject(APIResponses.class)
+                .addAPIResponse("503", response);
+        Operation operation = OASFactory.createObject(Operation.class).responses(responses);
+        PathItem item = OASFactory.createObject(PathItem.class).GET(operation);
+        openAPI.setPaths(OASFactory.createObject(Paths.class).addPathItem("/pets", item));
+
+        String yaml = new YamlSerializer().serialize(openAPI);
+
+        assertTrue(yaml.contains("*/*: {}") || yaml.contains("\"*/*\": {}"));
+    }
+
+    @Test
+    void serializers_mapSchemaDialectToDollarSchema() {
+        OpenAPI openAPI = OASFactory.createObject(OpenAPI.class).openapi("3.1.0");
+        Schema schema = OASFactory.createObject(Schema.class)
+                .schemaDialect("http://example.com/myCustomSchema")
+                .type(List.of(Schema.SchemaType.OBJECT));
+        var components = OASFactory.createObject(org.eclipse.microprofile.openapi.models.Components.class)
+                .addSchema("custom", schema);
+        openAPI.setComponents(components);
+
+        String json = new JsonSerializer().serialize(openAPI);
+
+        assertTrue(json.contains("\"$schema\":\"http://example.com/myCustomSchema\""));
+        assertFalse(json.contains("\"schemaDialect\""));
+        assertFalse(json.contains("\"jsonSchemaDialect\""));
     }
 
     private OpenAPI createSampleModel() {

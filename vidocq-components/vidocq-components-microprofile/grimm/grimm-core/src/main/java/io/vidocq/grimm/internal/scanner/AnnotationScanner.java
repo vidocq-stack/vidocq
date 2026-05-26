@@ -4,13 +4,19 @@ import io.vidocq.grimm.internal.config.ScanConfig;
 import io.vidocq.grimm.internal.schema.SchemaGenerator;
 import io.vidocq.grimm.internal.schema.SchemaRegistry;
 import org.eclipse.microprofile.openapi.OASFactory;
+import org.eclipse.microprofile.openapi.annotations.Components;
 import org.eclipse.microprofile.openapi.annotations.ExternalDocumentation;
 import org.eclipse.microprofile.openapi.annotations.OpenAPIDefinition;
+import org.eclipse.microprofile.openapi.annotations.headers.Header;
+import org.eclipse.microprofile.openapi.annotations.info.Contact;
 import org.eclipse.microprofile.openapi.annotations.info.Info;
+import org.eclipse.microprofile.openapi.annotations.info.License;
 import org.eclipse.microprofile.openapi.annotations.security.SecurityRequirement;
 import org.eclipse.microprofile.openapi.annotations.servers.Server;
+import org.eclipse.microprofile.openapi.annotations.servers.ServerVariable;
 import org.eclipse.microprofile.openapi.annotations.tags.Tag;
 import org.eclipse.microprofile.openapi.models.OpenAPI;
+import org.eclipse.microprofile.openapi.models.Paths;
 
 import java.lang.reflect.Method;
 import java.util.Collection;
@@ -29,6 +35,7 @@ public final class AnnotationScanner {
     private final ScanConfig config;
     private final JaxRsResourceScanner jaxRsScanner;
     private final SchemaRegistry schemaRegistry;
+    private final SchemaGenerator schemaGenerator;
 
     /**
      * Creates an {@code AnnotationScanner} with the given configuration.
@@ -38,7 +45,8 @@ public final class AnnotationScanner {
     public AnnotationScanner(ScanConfig config) {
         this.config = Objects.requireNonNull(config, "config must not be null");
         this.schemaRegistry = new SchemaRegistry();
-        this.jaxRsScanner = new JaxRsResourceScanner(new SchemaGenerator(schemaRegistry));
+        this.schemaGenerator = new SchemaGenerator(schemaRegistry);
+        this.jaxRsScanner = new JaxRsResourceScanner(schemaGenerator);
     }
 
     /** Returns the per-scan {@link SchemaRegistry} (exposed for testing / inspection). */
@@ -65,13 +73,16 @@ public final class AnnotationScanner {
 
             processOpenAPIDefinition(clazz, openAPI);
             processTags(clazz, openAPI);
-            processServers(clazz, openAPI);
             processExternalDocumentation(clazz, openAPI);
             jaxRsScanner.scan(clazz, openAPI);
         }
 
         // Spec §3.10 — interned schemas (POJOs, enums) become components/schemas.
         schemaRegistry.applyTo(openAPI);
+
+        if (openAPI.getPaths() == null) {
+            openAPI.setPaths(OASFactory.createObject(Paths.class));
+        }
 
         return openAPI;
     }
@@ -93,6 +104,7 @@ public final class AnnotationScanner {
         addTags(openAPI, annotation.tags());
         addServers(openAPI, annotation.servers());
         addSecurityRequirements(openAPI, annotation.security());
+        addComponents(openAPI, annotation.components());
 
         ExternalDocumentation externalDocs = annotation.externalDocs();
         if (!externalDocs.url().isEmpty()) {
@@ -116,6 +128,44 @@ public final class AnnotationScanner {
         if (!infoAnnotation.termsOfService().isEmpty()) {
             info.setTermsOfService(infoAnnotation.termsOfService());
         }
+
+        Contact contactAnnotation = infoAnnotation.contact();
+        if (!contactAnnotation.name().isEmpty()
+            || !contactAnnotation.url().isEmpty()
+            || !contactAnnotation.email().isEmpty()) {
+            org.eclipse.microprofile.openapi.models.info.Contact contact = OASFactory.createObject(
+                org.eclipse.microprofile.openapi.models.info.Contact.class
+            );
+            if (!contactAnnotation.name().isEmpty()) {
+                contact.setName(contactAnnotation.name());
+            }
+            if (!contactAnnotation.url().isEmpty()) {
+                contact.setUrl(contactAnnotation.url());
+            }
+            if (!contactAnnotation.email().isEmpty()) {
+                contact.setEmail(contactAnnotation.email());
+            }
+            info.setContact(contact);
+        }
+
+        License licenseAnnotation = infoAnnotation.license();
+        if (!licenseAnnotation.name().isEmpty()
+            || !licenseAnnotation.url().isEmpty()
+            || !licenseAnnotation.identifier().isEmpty()) {
+            org.eclipse.microprofile.openapi.models.info.License license = OASFactory.createObject(
+                org.eclipse.microprofile.openapi.models.info.License.class
+            );
+            if (!licenseAnnotation.name().isEmpty()) {
+                license.setName(licenseAnnotation.name());
+            }
+            if (!licenseAnnotation.url().isEmpty()) {
+                license.setUrl(licenseAnnotation.url());
+            }
+            if (!licenseAnnotation.identifier().isEmpty()) {
+                license.setIdentifier(licenseAnnotation.identifier());
+            }
+            info.setLicense(license);
+        }
     }
 
     private void processTags(Class<?> clazz, OpenAPI openAPI) {
@@ -125,12 +175,6 @@ public final class AnnotationScanner {
         }
     }
 
-    private void processServers(Class<?> clazz, OpenAPI openAPI) {
-        addServers(openAPI, clazz.getAnnotationsByType(Server.class));
-        for (Method method : clazz.getDeclaredMethods()) {
-            addServers(openAPI, method.getAnnotationsByType(Server.class));
-        }
-    }
 
     private void processExternalDocumentation(Class<?> clazz, OpenAPI openAPI) {
         OpenAPIDefinition openApiDefinition = clazz.getAnnotation(OpenAPIDefinition.class);
@@ -195,7 +239,64 @@ public final class AnnotationScanner {
             if (!serverAnnotation.description().isEmpty()) {
                 server.setDescription(serverAnnotation.description());
             }
+            for (ServerVariable variableAnnotation : serverAnnotation.variables()) {
+                String variableName = variableAnnotation.name();
+                if (variableName.isEmpty()) {
+                    continue;
+                }
+                var variable = OASFactory.createObject(org.eclipse.microprofile.openapi.models.servers.ServerVariable.class);
+                if (!variableAnnotation.description().isEmpty()) {
+                    variable.setDescription(variableAnnotation.description());
+                }
+                if (!variableAnnotation.defaultValue().isEmpty()) {
+                    variable.setDefaultValue(variableAnnotation.defaultValue());
+                }
+                if (variableAnnotation.enumeration().length > 0) {
+                    variable.setEnumeration(List.of(variableAnnotation.enumeration()));
+                }
+                server.addVariable(variableName, variable);
+            }
             openAPI.addServer(server);
+        }
+    }
+
+    private void addComponents(OpenAPI openAPI, Components componentsAnnotation) {
+        if (componentsAnnotation == null) {
+            return;
+        }
+        addComponentHeaders(openAPI, componentsAnnotation.headers());
+    }
+
+    private void addComponentHeaders(OpenAPI openAPI, Header[] headers) {
+        if (headers == null || headers.length == 0) {
+            return;
+        }
+        org.eclipse.microprofile.openapi.models.Components components = openAPI.getComponents();
+        if (components == null) {
+            components = OASFactory.createObject(org.eclipse.microprofile.openapi.models.Components.class);
+            openAPI.setComponents(components);
+        }
+
+        for (Header headerAnnotation : headers) {
+            String name = headerAnnotation.name();
+            if (name.isEmpty()) {
+                continue;
+            }
+            var header = OASFactory.createObject(org.eclipse.microprofile.openapi.models.headers.Header.class);
+            if (!headerAnnotation.ref().isEmpty()) {
+                header.setRef(headerAnnotation.ref());
+            }
+            if (!headerAnnotation.description().isEmpty()) {
+                header.setDescription(headerAnnotation.description());
+            }
+            header.setRequired(headerAnnotation.required());
+            header.setDeprecated(headerAnnotation.deprecated());
+            header.setAllowEmptyValue(headerAnnotation.allowEmptyValue());
+
+            if (headerAnnotation.schema() != null) {
+                header.setSchema(schemaGenerator.generate(Object.class, headerAnnotation.schema()));
+            }
+            components.addHeader(name, header);
         }
     }
 

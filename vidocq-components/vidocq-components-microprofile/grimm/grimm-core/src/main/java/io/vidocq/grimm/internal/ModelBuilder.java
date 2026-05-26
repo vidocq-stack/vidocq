@@ -60,7 +60,7 @@ public final class ModelBuilder {
         List<ModelSource> sources = new ArrayList<>(3);
 
         // Step 1 — static file (spec §4.2)
-        Optional<OpenAPI> staticModel = staticFileReader.readOpenAPI();
+        Optional<OpenAPI> staticModel = staticFileReader.readOpenAPI(annotatedTypes);
         staticModel.ifPresent(m -> sources.add(new StaticFileSource(m)));
 
         // Step 2 — OASModelReader (spec §4.1)

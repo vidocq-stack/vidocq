@@ -114,5 +114,31 @@ class ScanConfigTest {
         assertTrue(config.shouldScan("com.example.user.UserClass"));
         assertFalse(config.shouldScan("com.example.admin.AdminClass"));
     }
+
+    @Test
+    void includeClass_overridesPackageExclusion() {
+        ScanConfig config = new ScanConfig(
+            false,
+            Set.of(),
+            Set.of("com.example.api.ImportantResource"),
+            Set.of("com.example"),
+            Set.of()
+        );
+        assertTrue(config.shouldScan("com.example.api.ImportantResource"));
+    }
+
+    @Test
+    void mostSpecificPackageRuleWins() {
+        ScanConfig config = new ScanConfig(
+            false,
+            Set.of("com.example", "com.example.admin.safe"),
+            Set.of(),
+            Set.of("com.example.admin"),
+            Set.of()
+        );
+        assertTrue(config.shouldScan("com.example.user.UserResource"));
+        assertFalse(config.shouldScan("com.example.admin.AdminResource"));
+        assertTrue(config.shouldScan("com.example.admin.safe.SafeResource"));
+    }
 }
 

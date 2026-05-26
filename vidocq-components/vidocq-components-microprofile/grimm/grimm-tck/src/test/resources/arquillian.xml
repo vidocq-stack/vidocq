@@ -6,9 +6,14 @@
     <container qualifier="grimm" default="true">
         <configuration>
             <property name="host">127.0.0.1</property>
-            <property name="port">8080</property>
+            <property name="port">0</property>
+            <property name="waitForReadiness">true</property>
+            <property name="readinessTimeoutMillis">10000</property>
+            <property name="readinessPath">/openapi</property>
+            <property name="systemProperties"></property>
         </configuration>
     </container>
 </arquillian>
+
 
 

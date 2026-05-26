@@ -8,9 +8,14 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import org.eclipse.microprofile.openapi.annotations.ExternalDocumentation;
 import org.eclipse.microprofile.openapi.annotations.OpenAPIDefinition;
+import org.eclipse.microprofile.openapi.annotations.Components;
+import org.eclipse.microprofile.openapi.annotations.headers.Header;
 import org.eclipse.microprofile.openapi.annotations.info.Info;
+import org.eclipse.microprofile.openapi.annotations.info.License;
+import org.eclipse.microprofile.openapi.annotations.media.Schema;
 import org.eclipse.microprofile.openapi.annotations.security.SecurityRequirement;
 import org.eclipse.microprofile.openapi.annotations.servers.Server;
+import org.eclipse.microprofile.openapi.annotations.servers.ServerVariable;
 import org.eclipse.microprofile.openapi.annotations.tags.Tag;
 import org.eclipse.microprofile.openapi.models.OpenAPI;
 import org.junit.jupiter.api.Test;
@@ -73,13 +78,12 @@ class AnnotationScannerTest {
 
     @Test
     void scanClasses_scansServerAnnotations() {
-        // Spec §3.5: @Server annotations should be added to the model
+        // Spec §3.5: class/method @Server are contextual; they are not aggregated globally.
         AnnotationScanner scanner = new AnnotationScanner(ScanConfig.defaultConfig());
         OpenAPI model = scanner.scanClasses(List.of(ServerClass.class));
 
         assertNotNull(model);
-        assertTrue(model.getServers() != null && model.getServers().size() > 0);
-        assertTrue(model.getServers().stream().anyMatch(s -> "https://api.example.com".equals(s.getUrl())));
+        assertTrue(model.getServers() == null || model.getServers().isEmpty());
     }
 
     @Test
@@ -120,19 +124,18 @@ class AnnotationScannerTest {
 
     @Test
     void scanClasses_collectsMethodLevelTagsAndServers() {
-        // Spec §3.5: method-level annotations contribute to top-level document tags/servers.
+        // Spec §3.5: method-level tags are declared globally; servers remain contextual.
         AnnotationScanner scanner = new AnnotationScanner(ScanConfig.defaultConfig());
         OpenAPI model = scanner.scanClasses(List.of(MethodLevelClass.class));
 
         assertNotNull(model.getTags());
         assertTrue(model.getTags().stream().anyMatch(tag -> "method-tag".equals(tag.getName())));
-        assertNotNull(model.getServers());
-        assertTrue(model.getServers().stream().anyMatch(server -> "https://method.example.com".equals(server.getUrl())));
+        assertTrue(model.getServers() == null || model.getServers().isEmpty());
     }
 
     @Test
     void scanClasses_deduplicatesTagsAndServers() {
-        // Spec §3.5: same semantic entry should not be duplicated when discovered multiple times.
+        // Spec §3.5: same semantic tag entry should not be duplicated.
         AnnotationScanner scanner = new AnnotationScanner(ScanConfig.defaultConfig());
         OpenAPI model = scanner.scanClasses(List.of(DuplicateAnnotationsClass.class));
 
@@ -140,11 +143,7 @@ class AnnotationScannerTest {
         long petsTagCount = model.getTags().stream().filter(tag -> "pets".equals(tag.getName())).count();
         assertEquals(1, petsTagCount);
 
-        assertNotNull(model.getServers());
-        long serverCount = model.getServers().stream()
-            .filter(server -> "https://api.example.com".equals(server.getUrl()))
-            .count();
-        assertEquals(1, serverCount);
+        assertTrue(model.getServers() == null || model.getServers().isEmpty());
     }
 
     @Test
@@ -159,6 +158,39 @@ class AnnotationScannerTest {
         assertTrue(model.getServers().stream().anyMatch(server -> "https://definition.example.com".equals(server.getUrl())));
         assertNotNull(model.getSecurity());
         assertTrue(model.getSecurity().stream().anyMatch(requirement -> requirement.getScheme("oauth2") != null));
+    }
+
+    @Test
+    void scanClasses_mapsInfoLicenseAndContactFromOpenApiDefinition() {
+        AnnotationScanner scanner = new AnnotationScanner(ScanConfig.defaultConfig());
+        OpenAPI model = scanner.scanClasses(List.of(DefinitionWithLicenseAndContact.class));
+
+        assertNotNull(model.getInfo());
+        assertNotNull(model.getInfo().getLicense());
+        assertEquals("Apache 2.0", model.getInfo().getLicense().getName());
+        assertEquals("Apache-2.0", model.getInfo().getLicense().getIdentifier());
+        assertNotNull(model.getInfo().getContact());
+        assertEquals("support@example.com", model.getInfo().getContact().getEmail());
+    }
+
+    @Test
+    void scanClasses_mapsOpenApiDefinitionComponentsHeadersAndServerVariables() {
+        // Spec §3.4: @OpenAPIDefinition.components and server variables should be mapped.
+        AnnotationScanner scanner = new AnnotationScanner(ScanConfig.defaultConfig());
+        OpenAPI model = scanner.scanClasses(List.of(DefinitionWithComponentsAndServerVariables.class));
+
+        assertNotNull(model.getServers());
+        var server = model.getServers().stream()
+                .filter(s -> "https://{username}.gigantic-server.com:{port}/{basePath}".equals(s.getUrl()))
+                .findFirst()
+                .orElseThrow();
+        assertNotNull(server.getVariables());
+        assertEquals(4, server.getVariables().size());
+        assertEquals("v2", server.getVariables().get("basePath").getDefaultValue());
+
+        assertNotNull(model.getComponents());
+        assertNotNull(model.getComponents().getHeaders());
+        assertEquals("Maximum rate", model.getComponents().getHeaders().get("Max-Rate").getDescription());
     }
 
     @OpenAPIDefinition(
@@ -216,6 +248,43 @@ class AnnotationScannerTest {
         security = @SecurityRequirement(name = "oauth2", scopes = {"read", "write"})
     )
     static class DefinitionWithTagsServersSecurity {
+    }
+
+    @OpenAPIDefinition(
+        info = @Info(
+            title = "Info API",
+            version = "1.0.0",
+            license = @License(name = "Apache 2.0", identifier = "Apache-2.0"),
+            contact = @org.eclipse.microprofile.openapi.annotations.info.Contact(email = "support@example.com")
+        )
+    )
+    static class DefinitionWithLicenseAndContact {
+    }
+
+    @OpenAPIDefinition(
+        info = @Info(title = "Filter API", version = "1.0.0"),
+        servers = @Server(
+            url = "https://{username}.gigantic-server.com:{port}/{basePath}",
+            description = "The production API server",
+            variables = {
+                @ServerVariable(name = "username", defaultValue = "user1", enumeration = {"user1", "user2"}, description = "Reviews of the app by users"),
+                @ServerVariable(name = "port", defaultValue = "8443", description = "Booking data"),
+                @ServerVariable(name = "user", defaultValue = "user", description = "User data"),
+                @ServerVariable(name = "basePath", defaultValue = "v2")
+            }
+        ),
+        components = @Components(
+            headers = @Header(
+                name = "Max-Rate",
+                description = "Maximum rate",
+                required = true,
+                deprecated = true,
+                allowEmptyValue = true,
+                schema = @Schema(type = org.eclipse.microprofile.openapi.annotations.enums.SchemaType.INTEGER)
+            )
+        )
+    )
+    static class DefinitionWithComponentsAndServerVariables {
     }
 
     @Test

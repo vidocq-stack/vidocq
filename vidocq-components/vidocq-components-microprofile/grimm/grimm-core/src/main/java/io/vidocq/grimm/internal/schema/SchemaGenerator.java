@@ -305,9 +305,10 @@ public final class SchemaGenerator {
                     continue;
                 }
                 Schema propSchema = generate(f.getGenericType(), fieldAnn);
+                BeanValidationMapper.apply(propSchema, f.getDeclaredAnnotations());
                 properties.put(name, propSchema);
-                if (fieldAnn != null && fieldAnn.required()) {
-                    required.add(name);
+                if ((fieldAnn != null && fieldAnn.required()) || BeanValidationMapper.hasNotNull(f.getDeclaredAnnotations())) {
+                    addRequired(required, name);
                 }
             }
             // Also pick up bean-style getters not backed by a field.
@@ -316,7 +317,7 @@ public final class SchemaGenerator {
                     continue;
                 }
                 String prop = propertyNameOf(m);
-                if (prop == null || properties.containsKey(prop)) {
+                if (prop == null) {
                     continue;
                 }
                 var ann = m.getAnnotation(
@@ -324,12 +325,27 @@ public final class SchemaGenerator {
                 if (ann != null && ann.hidden()) {
                     continue;
                 }
-                Schema propSchema = generate(m.getGenericReturnType(), ann);
-                properties.put(prop, propSchema);
-                if (ann != null && ann.required()) {
-                    required.add(prop);
+                Schema existing = properties.get(prop);
+                if (existing != null) {
+                    if (ann != null) {
+                        properties.put(prop, applyAnnotationOverrides(existing, ann));
+                    }
+                    BeanValidationMapper.apply(properties.get(prop), m.getDeclaredAnnotations());
+                } else {
+                    Schema propSchema = generate(m.getGenericReturnType(), ann);
+                    BeanValidationMapper.apply(propSchema, m.getDeclaredAnnotations());
+                    properties.put(prop, propSchema);
+                }
+                if ((ann != null && ann.required()) || BeanValidationMapper.hasNotNull(m.getDeclaredAnnotations())) {
+                    addRequired(required, prop);
                 }
             }
+        }
+    }
+
+    private void addRequired(List<String> required, String propertyName) {
+        if (!required.contains(propertyName)) {
+            required.add(propertyName);
         }
     }
 
@@ -368,6 +384,12 @@ public final class SchemaGenerator {
             base = OASFactory.createObject(Schema.class);
         }
         if (ann.type() != SchemaType.DEFAULT) {
+            if (ann.type() == SchemaType.ARRAY && base.getRef() != null && base.getItems() == null) {
+                Schema itemRef = OASFactory.createObject(Schema.class);
+                itemRef.setRef(base.getRef());
+                base.setRef(null);
+                base.setItems(itemRef);
+            }
             base.setType(new ArrayList<>(List.of(mapAnnotationType(ann.type()))));
         }
         if (!ann.format().isEmpty()) base.setFormat(ann.format());
@@ -377,17 +399,42 @@ public final class SchemaGenerator {
         if (!ann.example().isEmpty()) base.setExample(ann.example());
         if (!ann.defaultValue().isEmpty()) base.setDefaultValue(ann.defaultValue());
         if (ann.minLength() > 0) base.setMinLength(ann.minLength());
-        if (ann.maxLength() > 0) base.setMaxLength(ann.maxLength());
-        if (!ann.minimum().isEmpty()) base.setMinimum(new BigDecimal(ann.minimum()));
-        if (!ann.maximum().isEmpty()) base.setMaximum(new BigDecimal(ann.maximum()));
+        if (ann.maxLength() != Integer.MAX_VALUE) base.setMaxLength(ann.maxLength());
+        BigDecimal minimum = ann.minimum().isEmpty() ? null : new BigDecimal(ann.minimum());
+        BigDecimal maximum = ann.maximum().isEmpty() ? null : new BigDecimal(ann.maximum());
+        if (minimum != null) base.setMinimum(minimum);
+        if (maximum != null) base.setMaximum(maximum);
+        if (ann.exclusiveMinimum() && minimum != null) base.setExclusiveMinimum(minimum);
+        if (ann.exclusiveMaximum() && maximum != null) base.setExclusiveMaximum(maximum);
         if (ann.multipleOf() != 0d) base.setMultipleOf(BigDecimal.valueOf(ann.multipleOf()));
         if (ann.deprecated()) base.setDeprecated(true);
         if (ann.readOnly()) base.setReadOnly(true);
         if (ann.writeOnly()) base.setWriteOnly(true);
+        if (ann.requiredProperties().length > 0) {
+            List<String> mergedRequired = base.getRequired() == null
+                    ? new ArrayList<>()
+                    : new ArrayList<>(base.getRequired());
+            for (String property : ann.requiredProperties()) {
+                if (!property.isEmpty() && !mergedRequired.contains(property)) {
+                    mergedRequired.add(property);
+                }
+            }
+            if (!mergedRequired.isEmpty()) {
+                base.setRequired(mergedRequired);
+            }
+        }
         if (ann.enumeration().length > 0) {
             List<Object> values = new ArrayList<>(ann.enumeration().length);
             for (String v : ann.enumeration()) values.add(v);
             base.setEnumeration(values);
+        }
+        if (!ann.externalDocs().url().isEmpty()) {
+            var externalDocs = OASFactory.createObject(org.eclipse.microprofile.openapi.models.ExternalDocumentation.class);
+            externalDocs.setUrl(ann.externalDocs().url());
+            if (!ann.externalDocs().description().isEmpty()) {
+                externalDocs.setDescription(ann.externalDocs().description());
+            }
+            base.setExternalDocs(externalDocs);
         }
         return base;
     }

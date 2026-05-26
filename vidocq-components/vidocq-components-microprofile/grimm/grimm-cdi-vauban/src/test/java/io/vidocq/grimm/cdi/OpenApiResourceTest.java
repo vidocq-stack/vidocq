@@ -16,7 +16,7 @@ class OpenApiResourceTest {
     @Test
     void getOpenApi_usesFormatQueryParameterOverAcceptHeader() {
         // Spec §2.3: format query parameter overrides Accept negotiation.
-        OpenApiResource resource = new OpenApiResource(sampleModelSupplier());
+        OpenApiResource resource = OpenApiResource.fromSupplier(sampleModelSupplier());
 
         var response = resource.render("json", "application/yaml");
 
@@ -28,7 +28,7 @@ class OpenApiResourceTest {
     @Test
     void getOpenApi_defaultsToYamlWhenNoFormatAndNoAccept() {
         // Spec §2.2: YAML is the default representation.
-        OpenApiResource resource = new OpenApiResource(sampleModelSupplier());
+        OpenApiResource resource = OpenApiResource.fromSupplier(sampleModelSupplier());
 
         var response = resource.render(null, null);
 
@@ -40,7 +40,7 @@ class OpenApiResourceTest {
     @Test
     void getOpenApi_usesAcceptHeaderWhenFormatParameterIsMissing() {
         // Spec §2.2: Accept header drives representation when format is absent.
-        OpenApiResource resource = new OpenApiResource(sampleModelSupplier());
+        OpenApiResource resource = OpenApiResource.fromSupplier(sampleModelSupplier());
 
         var response = resource.render(null, "application/json");
 

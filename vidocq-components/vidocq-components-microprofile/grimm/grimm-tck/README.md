@@ -18,6 +18,19 @@ From the repository root:
 ```bash
 ./run-official-tck-mp-openapi-4.1.sh
 ./run-official-tck-mp-openapi-4.1.sh all
+./run-official-tck-mp-openapi-4.1.sh matrix PetStoreAppTest
 ./run-official-tck-mp-openapi-4.1.sh -Dtest=AnnotationScanTest
 ```
+
+## Runtime matrix knobs
+
+The custom Arquillian container can be tuned through JVM properties (`-Dgrimm.tck.*`) to
+stabilize startup diagnostics:
+
+- `grimm.tck.host` (default `127.0.0.1`)
+- `grimm.tck.port` (default `0`, ephemeral)
+- `grimm.tck.waitForReadiness` (default `true`)
+- `grimm.tck.readinessTimeoutMillis` (default `10000`)
+- `grimm.tck.readinessPath` (default `/openapi`)
+- `grimm.tck.systemProperties` (semicolon-separated `key=value` pairs propagated before bootstrap)
 

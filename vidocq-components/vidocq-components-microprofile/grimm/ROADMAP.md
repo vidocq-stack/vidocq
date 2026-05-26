@@ -383,6 +383,10 @@ endpoint, integrated with Vauban (CDI) and Cassini (JAX-RS).
       container (353 tests, 317 failures, 29 skipped), improving over initial wiring;
       remaining failures are mainly endpoint reachability (`ConnectException`) plus
       deployment-time archive/descriptor edge cases on a subset of apps.
+- [x] M10 infra hardening: custom Arquillian container now supports a runtime matrix
+      (`default-readiness` / `extended-readiness` / `no-readiness-probe`) with
+      configurable `grimm.tck.*` overrides and `/openapi` readiness probing to
+      reduce transient HTTP reachability failures while debugging container wiring.
 - [x] M7 core completed: ModelMerger with sealed interface + ModelReaderInvoker + FilterInvoker
 
 ## Open Decisions

@@ -180,6 +180,59 @@ class SchemaGeneratorTest {
     }
 
     @Test
+    void generate_mergesGetterSchemaOverridesWithFieldProperty() {
+        generator.generate(GetterAnnotated.class);
+        var body = registry.snapshot().get("GetterAnnotated");
+        assertNotNull(body.getRequired());
+        assertTrue(body.getRequired().contains("name"));
+        assertEquals("doggie", body.getProperties().get("name").getExample());
+    }
+
+    @Test
+    void generate_mapsExclusiveBoundsFromSchemaAnnotation() {
+        generator.generate(ExclusiveBounds.class);
+        var body = registry.snapshot().get("ExclusiveBounds");
+        var id = body.getProperties().get("id");
+        assertEquals(new BigDecimal("101"), id.getExclusiveMaximum());
+        assertEquals(new BigDecimal("9"), id.getExclusiveMinimum());
+    }
+
+    @Test
+    void generate_mapsSchemaExternalDocs() {
+        generator.generate(WithExternalDocs.class);
+        var body = registry.snapshot().get("WithExternalDocs");
+        var code = body.getProperties().get("code");
+        assertNotNull(code.getExternalDocs());
+        assertEquals("Pet Types", code.getExternalDocs().getDescription());
+        assertEquals("http://example.com/pettypes", code.getExternalDocs().getUrl());
+    }
+
+    @Test
+    void generate_mapsBeanValidationConstraints() {
+        generator.generate(BeanValidated.class);
+        var body = registry.snapshot().get("BeanValidated");
+
+        var sizedText = body.getProperties().get("sizedText");
+        assertEquals(Integer.valueOf(1), sizedText.getMinLength());
+        assertEquals(Integer.valueOf(6), sizedText.getMaxLength());
+
+        var positiveInt = body.getProperties().get("positiveInt");
+        assertEquals(new BigDecimal("0"), positiveInt.getExclusiveMinimum());
+
+        var positiveOrZeroInt = body.getProperties().get("positiveOrZeroInt");
+        assertEquals(new BigDecimal("0"), positiveOrZeroInt.getMinimum());
+
+        var sizedList = body.getProperties().get("sizedList");
+        assertEquals(Integer.valueOf(1), sizedList.getMinItems());
+
+        var sizedMap = body.getProperties().get("sizedMap");
+        assertEquals(Integer.valueOf(3), sizedMap.getMinProperties());
+
+        assertNotNull(body.getRequired());
+        assertTrue(body.getRequired().contains("requiredName"));
+    }
+
+    @Test
     void generate_appliesRefOverrideFromAnnotation() throws Exception {
         Field f = HasRef.class.getDeclaredField("ext");
         var ann = f.getAnnotation(Schema.class);
@@ -253,6 +306,20 @@ class SchemaGeneratorTest {
         String name;
     }
 
+    static final class GetterAnnotated {
+        String name;
+
+        @Schema(example = "doggie", required = true)
+        public String getName() {
+            return name;
+        }
+    }
+
+    static final class ExclusiveBounds {
+        @Schema(maximum = "101", exclusiveMaximum = true, minimum = "9", exclusiveMinimum = true)
+        Long id;
+    }
+
     static final class HasRef {
         @Schema(ref = "#/components/schemas/External")
         Object ext;
@@ -261,6 +328,34 @@ class SchemaGeneratorTest {
     static final class HasImpl {
         @Schema(implementation = Pet.class)
         Object any;
+    }
+
+    static final class WithExternalDocs {
+        @Schema(externalDocs = @org.eclipse.microprofile.openapi.annotations.ExternalDocumentation(
+                description = "Pet Types",
+                url = "http://example.com/pettypes"
+        ))
+        String code;
+    }
+
+    static final class BeanValidated {
+        @jakarta.validation.constraints.Size(min = 1, max = 6)
+        String sizedText;
+
+        @jakarta.validation.constraints.Positive
+        Integer positiveInt;
+
+        @jakarta.validation.constraints.PositiveOrZero
+        Integer positiveOrZeroInt;
+
+        @jakarta.validation.constraints.Size(min = 1)
+        List<String> sizedList;
+
+        @jakarta.validation.constraints.Size(min = 3)
+        Map<String, String> sizedMap;
+
+        @jakarta.validation.constraints.NotNull
+        String requiredName;
     }
 
     static final class Other {

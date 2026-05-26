@@ -43,29 +43,31 @@ public record ScanConfig(
             return false;
         }
 
-        // Check explicit class exclusion first
+        // Explicit class exclusion has highest priority.
         if (excludeClasses.contains(className)) {
             return false;
         }
 
-        // Check package exclusion
-        String packageName = extractPackageName(className);
-        if (isPackageExcluded(packageName)) {
-            return false;
-        }
-
-        // If include lists are empty, include all (except excluded above)
-        if (includeClasses.isEmpty() && includePackages.isEmpty()) {
-            return true;
-        }
-
-        // Check explicit class inclusion
+        // Explicit class inclusion can override package-level excludes.
         if (includeClasses.contains(className)) {
             return true;
         }
 
-        // Check package inclusion
-        return isPackageIncluded(packageName);
+        String packageName = extractPackageName(className);
+        int includePackageMatch = bestPackageMatch(includePackages, packageName);
+        int excludePackageMatch = bestPackageMatch(excludePackages, packageName);
+        boolean hasIncludes = !includeClasses.isEmpty() || !includePackages.isEmpty();
+
+        if (!hasIncludes) {
+            return excludePackageMatch < 0;
+        }
+
+        if (includePackageMatch < 0) {
+            return false;
+        }
+
+        // For overlapping include/exclude package filters, the most specific package wins.
+        return includePackageMatch > excludePackageMatch;
     }
 
     private String extractPackageName(String className) {
@@ -73,22 +75,14 @@ public record ScanConfig(
         return lastDot > 0 ? className.substring(0, lastDot) : "";
     }
 
-    private boolean isPackageIncluded(String packageName) {
-        for (String included : includePackages) {
-            if (packageName.equals(included) || packageName.startsWith(included + ".")) {
-                return true;
+    private int bestPackageMatch(Set<String> packages, String packageName) {
+        int best = -1;
+        for (String candidate : packages) {
+            if (packageName.equals(candidate) || packageName.startsWith(candidate + ".")) {
+                best = Math.max(best, candidate.length());
             }
         }
-        return false;
-    }
-
-    private boolean isPackageExcluded(String packageName) {
-        for (String excluded : excludePackages) {
-            if (packageName.equals(excluded) || packageName.startsWith(excluded + ".")) {
-                return true;
-            }
-        }
-        return false;
+        return best;
     }
 }
 

@@ -9,7 +9,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashSet;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Reads static OpenAPI documents from the deployment classpath.
@@ -23,7 +25,10 @@ public final class StaticFileReader {
     private static final String[] SEARCH_PATHS = {
             "META-INF/openapi.yaml",
             "META-INF/openapi.yml",
-            "META-INF/openapi.json"
+            "META-INF/openapi.json",
+            "openapi.yaml",
+            "openapi.yml",
+            "openapi.json"
     };
 
     /**
@@ -40,19 +45,82 @@ public final class StaticFileReader {
         if (classLoader == null) {
             classLoader = StaticFileReader.class.getClassLoader();
         }
-
         for (String resourcePath : SEARCH_PATHS) {
             Optional<String> content = readResource(classLoader, resourcePath);
             if (content.isPresent()) {
                 return Optional.of(deserialize(content.get(), resourcePath));
             }
         }
-
         return Optional.empty();
+    }
+
+    /**
+     * Reads static OpenAPI files while trying deployment-related classloaders first.
+     */
+    public Optional<OpenAPI> readOpenAPI(Iterable<Class<?>> knownDeploymentTypes) {
+        Set<ClassLoader> candidates = collectCandidateClassLoaders(knownDeploymentTypes);
+        for (ClassLoader classLoader : candidates) {
+            for (String resourcePath : SEARCH_PATHS) {
+                Optional<String> content = readResource(classLoader, resourcePath);
+                if (content.isPresent()) {
+                    return Optional.of(deserialize(content.get(), resourcePath));
+                }
+            }
+        }
+
+        if (knownDeploymentTypes != null) {
+            for (Class<?> type : knownDeploymentTypes) {
+                if (type == null) {
+                    continue;
+                }
+                for (String resourcePath : SEARCH_PATHS) {
+                    Optional<String> content = readResource(type, resourcePath);
+                    if (content.isPresent()) {
+                        return Optional.of(deserialize(content.get(), resourcePath));
+                    }
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+    private Set<ClassLoader> collectCandidateClassLoaders(Iterable<Class<?>> knownDeploymentTypes) {
+        LinkedHashSet<ClassLoader> classLoaders = new LinkedHashSet<>();
+
+        ClassLoader tccl = Thread.currentThread().getContextClassLoader();
+        if (tccl != null) {
+            classLoaders.add(tccl);
+        }
+
+        if (knownDeploymentTypes != null) {
+            for (Class<?> type : knownDeploymentTypes) {
+                if (type != null && type.getClassLoader() != null) {
+                    classLoaders.add(type.getClassLoader());
+                }
+            }
+        }
+
+        ClassLoader own = StaticFileReader.class.getClassLoader();
+        if (own != null) {
+            classLoaders.add(own);
+        }
+        return classLoaders;
     }
 
     private Optional<String> readResource(ClassLoader classLoader, String resourcePath) {
         try (InputStream is = classLoader.getResourceAsStream(resourcePath)) {
+            if (is == null) {
+                return Optional.empty();
+            }
+            return Optional.of(readInputStream(is));
+        } catch (IOException e) {
+            throw new IllegalArgumentException("Unable to read resource: " + resourcePath, e);
+        }
+    }
+
+    private Optional<String> readResource(Class<?> type, String resourcePath) {
+        String absolutePath = "/" + resourcePath;
+        try (InputStream is = type.getResourceAsStream(absolutePath)) {
             if (is == null) {
                 return Optional.empty();
             }
