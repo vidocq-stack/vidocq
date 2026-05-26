@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.1.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.1.0 http://maven.apache.org/xsd/maven-4.1.0.xsd">
+    <modelVersion>4.1.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.cervantes</groupId>
+        <artifactId>cervantes-parent</artifactId>
+    </parent>
+
+    <artifactId>cervantes-core</artifactId>
+    <name>Cervantes :: Core</name>
+    <description>Moteur pur Java 25 : parsing JWT, vérification de signature (RS/ES 256/384/512 via java.security), validation des claims (iss/aud/exp/nbf/iat + clock-skew), chargement des clés (PEM ; JWKS à partir de M2). Sans CDI, sans JAX-RS.</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.cervantes</groupId>
+            <artifactId>cervantes-api</artifactId>
+        </dependency>
+        <!-- JSON-P via Champollion : jakarta.json pour décoder header/payload -->
+        <dependency>
+            <groupId>io.vidocq.champollion</groupId>
+            <artifactId>champollion-api</artifactId>
+        </dependency>
+
+        <!-- Tests -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Implémentation JSON-P (JsonProvider) pour les tests (sur le classpath via ServiceLoader) -->
+        <dependency>
+            <groupId>io.vidocq.champollion</groupId>
+            <artifactId>champollion-jsonp</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!--
+                JPMS workaround (cf. heisenberg-core) : module-info.java dans src/main/module-info/
+                pour éviter l'activation JPMS au testCompile (deps test sans Automatic-Module-Name
+                sur le module-path). 1) clean retire module-info.class avant testCompile ;
+                2) compile recompile module-info.java seul à prepare-package ;
+                3) surefire exécute les tests sur le classpath.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-clean-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <!--
+                            Lié à process-sources (AVANT compile), pas seulement avant testCompile :
+                            sur un build incrémental sans `clean`, le module-info.class laissé par
+                            le compile-module-info du build précédent ferait basculer default-compile
+                            en mode module (deps test/classpath introuvables sur le module-path).
+                            prepare-package le recompile ensuite. Sur un build propre, c'est un no-op.
+                        -->
+                        <id>remove-stale-module-info</id>
+                        <phase>process-sources</phase>
+                        <goals><goal>clean</goal></goals>
+                        <configuration>
+                            <excludeDefaultDirectories>true</excludeDefaultDirectories>
+                            <filesets>
+                                <fileset>
+                                    <directory>${project.build.outputDirectory}</directory>
+                                    <includes>
+                                        <include>module-info.class</include>
+                                    </includes>
+                                </fileset>
+                            </filesets>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>compile-module-info</id>
+                        <phase>prepare-package</phase>
+                        <goals><goal>compile</goal></goals>
+                        <configuration>
+                            <compileSourceRoots>
+                                <compileSourceRoot>${project.basedir}/src/main/module-info</compileSourceRoot>
+                            </compileSourceRoots>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <useModulePath>false</useModulePath>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

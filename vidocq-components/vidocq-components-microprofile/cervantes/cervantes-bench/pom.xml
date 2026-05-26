@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.1.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.1.0 http://maven.apache.org/xsd/maven-4.1.0.xsd">
+    <modelVersion>4.1.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.cervantes</groupId>
+        <artifactId>cervantes-parent</artifactId>
+    </parent>
+
+    <artifactId>cervantes-bench</artifactId>
+    <name>Cervantes :: Bench</name>
+    <description>Benchmarks JMH : débit de validation JWT vs SmallRye JWT. Rempli à partir de M7. Jamais publié.</description>
+
+    <properties>
+        <!-- Module de bench : jamais déployé, jamais javadocé (placeholder vide jusqu'à M7). -->
+        <maven.deploy.skip>true</maven.deploy.skip>
+        <maven.javadoc.skip>true</maven.javadoc.skip>
+    </properties>
+
+</project>

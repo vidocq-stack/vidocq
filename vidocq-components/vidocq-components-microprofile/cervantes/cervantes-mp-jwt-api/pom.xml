@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.1.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.1.0 http://maven.apache.org/xsd/maven-4.1.0.xsd">
+    <modelVersion>4.1.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.cervantes</groupId>
+        <artifactId>cervantes-parent</artifactId>
+    </parent>
+
+    <artifactId>cervantes-mp-jwt-api</artifactId>
+    <name>Cervantes :: MicroProfile JWT API (modularisé)</name>
+    <description>
+        Re-package de org.eclipse.microprofile.jwt:microprofile-jwt-auth-api:2.1 avec un
+        module-info.class explicite (nom : org.eclipse.microprofile.jwt). L'API officielle ne
+        fournit ni module-info ni Automatic-Module-Name, ce qui empêche son usage avec jlink.
+        Cet artefact est l'unique source de la spec MP JWT 2.1 consommée par les modules
+        Cervantes ; le TCK officiel (hors reactor) continue d'utiliser l'API d'origine.
+    </description>
+
+    <dependencies>
+        <!--
+            La spec officielle est récupérée en 'provided' uniquement pour permettre l'unpack
+            de ses .class dans target/classes ; elle n'est pas exposée transitivement aux
+            consommateurs, qui reçoivent à la place le jar repackagé avec son module-info explicite.
+        -->
+        <dependency>
+            <groupId>org.eclipse.microprofile.jwt</groupId>
+            <artifactId>microprofile-jwt-auth-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- 1) Décompresse les .class de microprofile-jwt-auth-api dans target/classes -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <version>3.8.1</version>
+                <executions>
+                    <execution>
+                        <id>unpack-microprofile-jwt-api</id>
+                        <phase>generate-resources</phase>
+                        <goals>
+                            <goal>unpack</goal>
+                        </goals>
+                        <configuration>
+                            <artifactItems>
+                                <artifactItem>
+                                    <groupId>org.eclipse.microprofile.jwt</groupId>
+                                    <artifactId>microprofile-jwt-auth-api</artifactId>
+                                    <version>${microprofile.jwt.version}</version>
+                                    <outputDirectory>${project.build.outputDirectory}</outputDirectory>
+                                    <!--
+                                        On exclut le manifest et les méta d'origine ;
+                                        maven-jar-plugin réécrira un manifest propre pour notre
+                                        artefact (Automatic-Module-Name désormais superflu :
+                                        le module est explicite).
+                                    -->
+                                    <excludes>META-INF/MANIFEST.MF,META-INF/maven/**,META-INF/LICENSE,META-INF/NOTICE,META-INF/versions/**</excludes>
+                                </artifactItem>
+                            </artifactItems>
+                            <overWriteReleases>true</overWriteReleases>
+                            <overWriteSnapshots>true</overWriteSnapshots>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!--
+                2) Compile uniquement src/main/java/module-info.java en le patchant dans le module
+                   'org.eclipse.microprofile.jwt' (les .class unpackés plus haut fournissent les
+                   packages exportés que javac valide). Le module-info ne déclare que des exports
+                   (aucun requires) : les consommateurs déclarent eux-mêmes leurs requires
+                   (jakarta.json, jakarta.cdi) — même approche que heisenberg-mp-ft-api.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <release>25</release>
+                    <compilerArgs combine.children="append">
+                        <arg>--patch-module</arg>
+                        <arg>org.eclipse.microprofile.jwt=${project.build.outputDirectory}</arg>
+                    </compilerArgs>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

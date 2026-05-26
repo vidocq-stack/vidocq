@@ -1,0 +1,158 @@
+package io.vidocq.cervantes.internal;
+
+import io.vidocq.cervantes.api.JwtConfig;
+import io.vidocq.cervantes.api.JwtValidationException;
+import io.vidocq.cervantes.api.SignatureAlgorithm;
+import jakarta.json.Json;
+import jakarta.json.JsonObject;
+import org.eclipse.microprofile.jwt.JsonWebToken;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+
+import java.security.KeyPair;
+import java.security.PublicKey;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+/**
+ * Tests de la résolution de clé par JWKS (MicroProfile JWT 2.1 §9 ; RFC 7517) : validation
+ * end-to-end, cache, rotation par {@code kid}, kid inconnu, clé EC.
+ */
+class JwksKeyResolverTest {
+
+    private static final Instant NOW = Instant.parse("2026-05-26T12:00:00Z");
+    private static final Clock CLOCK = Clock.fixed(NOW, ZoneOffset.UTC);
+    private static final String ISS = "https://issuer.vidocq.dev";
+
+    private static KeyPair RSA_A;
+    private static KeyPair RSA_B;
+    private static KeyPair EC;
+
+    @BeforeAll
+    static void keys() throws Exception {
+        RSA_A = TestJwts.rsaKeyPair();
+        RSA_B = TestJwts.rsaKeyPair();
+        EC = TestJwts.ecKeyPair("secp256r1");
+    }
+
+    private static JsonObject claims() {
+        return Json.createObjectBuilder()
+                .add("iss", ISS)
+                .add("sub", "u-1")
+                .add("exp", NOW.getEpochSecond() + 3600)
+                .build();
+    }
+
+    private static String token(String kid, KeyPair kp, SignatureAlgorithm alg) throws Exception {
+        return TestJwts.sign(TestJwts.header(alg, kid), claims(), kp.getPrivate(), alg);
+    }
+
+    private static DefaultJwtValidator validator(io.vidocq.cervantes.api.KeyResolver resolver) {
+        return new DefaultJwtValidator(resolver, JwtConfig.forIssuer(ISS), CLOCK);
+    }
+
+    @Test
+    void validatesTokenWhoseKeyIsInTheJwks() throws Exception {
+        byte[] jwks = TestJwks.jwksJson("rsa-a", RSA_A.getPublic());
+        JwksKeyResolver resolver = new JwksKeyResolver(() -> jwks);
+
+        JsonWebToken jwt = validator(resolver).validate(token("rsa-a", RSA_A, SignatureAlgorithm.RS256));
+        assertEquals("u-1", jwt.getSubject());
+    }
+
+    @Test
+    void resolvesEcKeyFromJwks() throws Exception {
+        byte[] jwks = TestJwks.jwksJson("ec-1", EC.getPublic());
+        JwksKeyResolver resolver = new JwksKeyResolver(() -> jwks);
+
+        JsonWebToken jwt = validator(resolver).validate(token("ec-1", EC, SignatureAlgorithm.ES256));
+        assertEquals("u-1", jwt.getSubject());
+    }
+
+    @Test
+    void cachesWithinRefreshInterval() throws Exception {
+        AtomicInteger fetches = new AtomicInteger();
+        byte[] jwks = TestJwks.jwksJson("rsa-a", RSA_A.getPublic());
+        JwksSource counting = () -> {
+            fetches.incrementAndGet();
+            return jwks;
+        };
+        JwksKeyResolver resolver = new JwksKeyResolver(
+                counting, Duration.ofMinutes(5), Duration.ofSeconds(15), CLOCK);
+
+        assertTrue(resolver.resolve("rsa-a", SignatureAlgorithm.RS256).isPresent());
+        assertTrue(resolver.resolve("rsa-a", SignatureAlgorithm.RS256).isPresent());
+        assertEquals(1, fetches.get(), "known kid within TTL must not re-fetch");
+    }
+
+    @Test
+    void refreshesOnUnknownKid_pickingUpRotatedKey() throws Exception {
+        // Source mutable : d'abord seulement la clé A, puis A + B (rotation).
+        Map<String, PublicKey> set = new LinkedHashMap<>();
+        set.put("rsa-a", RSA_A.getPublic());
+        AtomicReference<byte[]> body = new AtomicReference<>(TestJwks.jwksJson(set));
+        JwksSource mutable = () -> body.get();
+
+        // minRefreshInterval = 0 → un kid inconnu déclenche immédiatement un refresh.
+        JwksKeyResolver resolver = new JwksKeyResolver(
+                mutable, Duration.ofMinutes(5), Duration.ZERO, CLOCK);
+
+        // kid b absent du set → introuvable
+        assertEquals(Optional.empty(), resolver.resolve("rsa-b", SignatureAlgorithm.RS256));
+
+        // rotation : la nouvelle clé B est publiée
+        set.put("rsa-b", RSA_B.getPublic());
+        body.set(TestJwks.jwksJson(set));
+
+        assertTrue(resolver.resolve("rsa-b", SignatureAlgorithm.RS256).isPresent(),
+                "unknown kid must trigger a refresh that discovers the rotated key");
+    }
+
+    @Test
+    void keepsStaleSnapshotWhenRefreshFails() throws Exception {
+        AtomicReference<JwksSource> delegate =
+                new AtomicReference<>(() -> TestJwks.jwksJson("rsa-a", RSA_A.getPublic()));
+        JwksSource flaky = () -> delegate.get().fetch();
+        JwksKeyResolver resolver = new JwksKeyResolver(
+                flaky, Duration.ZERO, Duration.ZERO, CLOCK); // TTL 0 → refresh à chaque appel
+
+        assertTrue(resolver.resolve("rsa-a", SignatureAlgorithm.RS256).isPresent());
+
+        // la source tombe en panne : on doit conserver l'ancien snapshot
+        delegate.set(() -> { throw new JwtValidationException("network down"); });
+        assertTrue(resolver.resolve("rsa-a", SignatureAlgorithm.RS256).isPresent(),
+                "a transient fetch failure must fall back to the cached snapshot");
+    }
+
+    @Test
+    void propagatesFailureOnInitialLoad() {
+        JwksKeyResolver resolver = new JwksKeyResolver(() -> {
+            throw new JwtValidationException("unreachable");
+        });
+        assertThrows(JwtValidationException.class,
+                () -> resolver.resolve("any", SignatureAlgorithm.RS256));
+    }
+
+    @Test
+    void usesSingleKeyWhenTokenHasNoKid() throws Exception {
+        byte[] jwks = TestJwks.jwksJson("rsa-a", RSA_A.getPublic());
+        JwksKeyResolver resolver = new JwksKeyResolver(() -> jwks);
+
+        // kid null + set à clé unique → la clé est utilisée
+        Optional<PublicKey> key = resolver.resolve(null, SignatureAlgorithm.RS256);
+        assertNotNull(key.orElse(null));
+    }
+}

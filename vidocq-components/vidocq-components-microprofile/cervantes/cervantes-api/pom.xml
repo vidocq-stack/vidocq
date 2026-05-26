@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.1.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.1.0 http://maven.apache.org/xsd/maven-4.1.0.xsd">
+    <modelVersion>4.1.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.cervantes</groupId>
+        <artifactId>cervantes-parent</artifactId>
+    </parent>
+
+    <artifactId>cervantes-api</artifactId>
+    <name>Cervantes :: API</name>
+    <description>Re-exposition contrôlée de la spec MicroProfile JWT 2.1 + SPI Cervantes (JwtValidator, KeyResolver, TokenHolder) — remplie à partir de M1</description>
+
+    <dependencies>
+        <!-- Spec MP JWT 2.1 — version modularisée, re-exposée transitivement -->
+        <dependency>
+            <groupId>io.vidocq.cervantes</groupId>
+            <artifactId>cervantes-mp-jwt-api</artifactId>
+        </dependency>
+    </dependencies>
+
+</project>

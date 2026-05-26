@@ -1,0 +1,199 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.1.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.1.0 http://maven.apache.org/xsd/maven-4.1.0.xsd"
+         root="true">
+    <modelVersion>4.1.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq</groupId>
+        <artifactId>vidocq-parent</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>io.vidocq.cervantes</groupId>
+    <artifactId>cervantes-parent</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <name>Cervantes</name>
+    <description>Implémentation MicroProfile JWT 2.1 — zéro librairie tierce, crypto via java.security, JSON via Champollion, config via Ravel, JPMS strict, virtual threads, CDI via Vauban</description>
+    <url>https://codeberg.org/Vidocq/cervantes</url>
+
+    <licenses>
+        <license>
+            <name>Apache License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+        </license>
+    </licenses>
+
+    <scm>
+        <url>https://codeberg.org/Vidocq/cervantes</url>
+        <connection>scm:git:https://codeberg.org/Vidocq/cervantes.git</connection>
+        <developerConnection>scm:git:git@codeberg.org:Vidocq/cervantes.git</developerConnection>
+    </scm>
+
+    <properties>
+        <!--
+            MicroProfile JWT 2.1 API. L'artefact officiel n'a NI module-info NI
+            Automatic-Module-Name : il est repackagé en module nommé explicite par
+            cervantes-mp-jwt-api (nom de module : org.eclipse.microprofile.jwt).
+            Dépendances compile de la spec : jakarta.json-api + jakarta.enterprise.cdi-api.
+        -->
+        <microprofile.jwt.version>2.1</microprofile.jwt.version>
+
+        <!-- Jakarta EE 11 -->
+        <jakarta.cdi.version>4.1.0</jakarta.cdi.version>
+        <jakarta.inject.version>2.0.1</jakarta.inject.version>
+        <jakarta.annotation.version>3.0.0</jakarta.annotation.version>
+        <jakarta.ws.rs.version>4.0.0</jakarta.ws.rs.version>
+
+        <!-- Implémentations Vidocq upstream -->
+        <champollion.version>0.1.0-SNAPSHOT</champollion.version>
+        <ravel.version>0.1.0-SNAPSHOT</ravel.version>
+        <vauban.version>0.1.0-SNAPSHOT</vauban.version>
+        <cassini.version>0.1.0-SNAPSHOT</cassini.version>
+
+        <!-- JMH pour cervantes-bench -->
+        <jmh.version>1.37</jmh.version>
+    </properties>
+
+    <!--
+        cervantes-tck est volontairement HORS reactor (POM Model 4.0.0 standalone, sans
+        <parent>) pour contourner ShrinkWrap Maven Resolver 3.3 qui ne sait pas parser les
+        POMs Model 4.1.0. Il sera invoqué par run-official-tck-mp-jwt-2.1.sh après
+        installation locale du reactor. Ne pas l'ajouter ici.
+    -->
+    <subprojects>
+        <subproject>cervantes-mp-jwt-api</subproject>
+        <subproject>cervantes-api</subproject>
+        <subproject>cervantes-core</subproject>
+        <subproject>cervantes-cdi-vauban</subproject>
+        <subproject>cervantes-cassini</subproject>
+        <subproject>cervantes-bench</subproject>
+        <subproject>cervantes-examples</subproject>
+    </subprojects>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- Spec MP JWT 2.1 — repackagée (named module) consommée par les modules Cervantes -->
+            <dependency>
+                <groupId>io.vidocq.cervantes</groupId>
+                <artifactId>cervantes-mp-jwt-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <!-- API officielle conservée pour le TCK hors-reactor uniquement -->
+            <dependency>
+                <groupId>org.eclipse.microprofile.jwt</groupId>
+                <artifactId>microprofile-jwt-auth-api</artifactId>
+                <version>${microprofile.jwt.version}</version>
+            </dependency>
+
+            <!-- Modules internes Cervantes -->
+            <dependency>
+                <groupId>io.vidocq.cervantes</groupId>
+                <artifactId>cervantes-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.cervantes</groupId>
+                <artifactId>cervantes-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.cervantes</groupId>
+                <artifactId>cervantes-cdi-vauban</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.cervantes</groupId>
+                <artifactId>cervantes-cassini</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <!-- Jakarta CDI / Inject / Annotation (provided dans les modules concernés) -->
+            <dependency>
+                <groupId>jakarta.enterprise</groupId>
+                <artifactId>jakarta.enterprise.cdi-api</artifactId>
+                <version>${jakarta.cdi.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>jakarta.inject</groupId>
+                <artifactId>jakarta.inject-api</artifactId>
+                <version>${jakarta.inject.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>jakarta.annotation</groupId>
+                <artifactId>jakarta.annotation-api</artifactId>
+                <version>${jakarta.annotation.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>jakarta.ws.rs</groupId>
+                <artifactId>jakarta.ws.rs-api</artifactId>
+                <version>${jakarta.ws.rs.version}</version>
+            </dependency>
+
+            <!-- JSON-P via Champollion (fournit jakarta.json transitivement) -->
+            <dependency>
+                <groupId>io.vidocq.champollion</groupId>
+                <artifactId>champollion-api</artifactId>
+                <version>${champollion.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.champollion</groupId>
+                <artifactId>champollion-jsonp</artifactId>
+                <version>${champollion.version}</version>
+            </dependency>
+
+            <!-- Config via Ravel (MP Config) -->
+            <dependency>
+                <groupId>io.vidocq.ravel</groupId>
+                <artifactId>ravel-mp-config-api</artifactId>
+                <version>${ravel.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.ravel</groupId>
+                <artifactId>ravel-core</artifactId>
+                <version>${ravel.version}</version>
+            </dependency>
+
+            <!-- CDI via Vauban (test scope dans les modules) -->
+            <dependency>
+                <groupId>io.vidocq.vauban</groupId>
+                <artifactId>vauban-core</artifactId>
+                <version>${vauban.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.vauban</groupId>
+                <artifactId>vauban-classloader-spi</artifactId>
+                <version>${vauban.version}</version>
+            </dependency>
+
+            <!-- JAX-RS via Cassini (intégration sécurité M4) -->
+            <dependency>
+                <groupId>io.vidocq.cassini</groupId>
+                <artifactId>cassini-api</artifactId>
+                <version>${cassini.version}</version>
+            </dependency>
+            <!-- Adaptateur Chappe : fournit un RuntimeDelegate JAX-RS (tests de cervantes-cassini) -->
+            <dependency>
+                <groupId>io.vidocq.cassini</groupId>
+                <artifactId>cassini-chappe</artifactId>
+                <version>${cassini.version}</version>
+            </dependency>
+
+            <!-- JMH -->
+            <dependency>
+                <groupId>org.openjdk.jmh</groupId>
+                <artifactId>jmh-core</artifactId>
+                <version>${jmh.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.openjdk.jmh</groupId>
+                <artifactId>jmh-generator-annprocess</artifactId>
+                <version>${jmh.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+</project>
