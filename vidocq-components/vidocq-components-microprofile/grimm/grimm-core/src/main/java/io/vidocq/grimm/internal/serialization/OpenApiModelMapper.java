@@ -1,6 +1,7 @@
 package io.vidocq.grimm.internal.serialization;
 
 import org.eclipse.microprofile.openapi.OASFactory;
+import org.eclipse.microprofile.openapi.models.ExternalDocumentation;
 import org.eclipse.microprofile.openapi.models.OpenAPI;
 import org.eclipse.microprofile.openapi.models.Operation;
 import org.eclipse.microprofile.openapi.models.PathItem;
@@ -8,7 +9,12 @@ import org.eclipse.microprofile.openapi.models.Paths;
 import org.eclipse.microprofile.openapi.models.info.Info;
 import org.eclipse.microprofile.openapi.models.responses.APIResponse;
 import org.eclipse.microprofile.openapi.models.responses.APIResponses;
+import org.eclipse.microprofile.openapi.models.security.SecurityRequirement;
+import org.eclipse.microprofile.openapi.models.servers.Server;
+import org.eclipse.microprofile.openapi.models.tags.Tag;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 final class OpenApiModelMapper {
@@ -28,6 +34,10 @@ final class OpenApiModelMapper {
             switch (key) {
                 case "openapi" -> openAPI.setOpenapi(asString(value));
                 case "info" -> openAPI.setInfo(toInfo(value));
+                case "externalDocs" -> openAPI.setExternalDocs(toExternalDocs(value));
+                case "servers" -> openAPI.setServers(toServers(value));
+                case "security" -> openAPI.setSecurity(toSecurity(value));
+                case "tags" -> openAPI.setTags(toTags(value));
                 case "paths" -> openAPI.setPaths(toPaths(value));
                 default -> {
                     if (key.startsWith("x-")) {
@@ -78,6 +88,130 @@ final class OpenApiModelMapper {
             paths.addPathItem(key, toPathItem(value));
         }
         return paths;
+    }
+
+    private static ExternalDocumentation toExternalDocs(Object raw) {
+        if (!(raw instanceof Map<?, ?> map)) {
+            return null;
+        }
+        ExternalDocumentation externalDocs = OASFactory.createObject(ExternalDocumentation.class);
+        for (Map.Entry<?, ?> entry : map.entrySet()) {
+            String key = String.valueOf(entry.getKey());
+            Object value = entry.getValue();
+            switch (key) {
+                case "url" -> externalDocs.setUrl(asString(value));
+                case "description" -> externalDocs.setDescription(asString(value));
+                default -> {
+                    if (key.startsWith("x-")) {
+                        externalDocs.addExtension(key, value);
+                    }
+                }
+            }
+        }
+        return externalDocs;
+    }
+
+    private static List<Server> toServers(Object raw) {
+        if (!(raw instanceof List<?> list)) {
+            return null;
+        }
+        ArrayList<Server> servers = new ArrayList<>(list.size());
+        for (Object item : list) {
+            Server server = toServer(item);
+            if (server != null) {
+                servers.add(server);
+            }
+        }
+        return servers;
+    }
+
+    private static Server toServer(Object raw) {
+        if (!(raw instanceof Map<?, ?> map)) {
+            return null;
+        }
+        Server server = OASFactory.createObject(Server.class);
+        for (Map.Entry<?, ?> entry : map.entrySet()) {
+            String key = String.valueOf(entry.getKey());
+            Object value = entry.getValue();
+            switch (key) {
+                case "url" -> server.setUrl(asString(value));
+                case "description" -> server.setDescription(asString(value));
+                default -> {
+                    if (key.startsWith("x-")) {
+                        server.addExtension(key, value);
+                    }
+                }
+            }
+        }
+        return server;
+    }
+
+    private static List<SecurityRequirement> toSecurity(Object raw) {
+        if (!(raw instanceof List<?> list)) {
+            return null;
+        }
+        ArrayList<SecurityRequirement> requirements = new ArrayList<>(list.size());
+        for (Object item : list) {
+            SecurityRequirement requirement = toSecurityRequirement(item);
+            if (requirement != null) {
+                requirements.add(requirement);
+            }
+        }
+        return requirements;
+    }
+
+    private static SecurityRequirement toSecurityRequirement(Object raw) {
+        if (!(raw instanceof Map<?, ?> map)) {
+            return null;
+        }
+        SecurityRequirement requirement = OASFactory.createObject(SecurityRequirement.class);
+        for (Map.Entry<?, ?> entry : map.entrySet()) {
+            String schemeName = String.valueOf(entry.getKey());
+            Object rawScopes = entry.getValue();
+            if (rawScopes instanceof List<?> scopes) {
+                ArrayList<String> scopeNames = new ArrayList<>(scopes.size());
+                for (Object scope : scopes) {
+                    scopeNames.add(asString(scope));
+                }
+                requirement.addScheme(schemeName, scopeNames);
+            }
+        }
+        return requirement;
+    }
+
+    private static List<Tag> toTags(Object raw) {
+        if (!(raw instanceof List<?> list)) {
+            return null;
+        }
+        ArrayList<Tag> tags = new ArrayList<>(list.size());
+        for (Object item : list) {
+            Tag tag = toTag(item);
+            if (tag != null) {
+                tags.add(tag);
+            }
+        }
+        return tags;
+    }
+
+    private static Tag toTag(Object raw) {
+        if (!(raw instanceof Map<?, ?> map)) {
+            return null;
+        }
+        Tag tag = OASFactory.createObject(Tag.class);
+        for (Map.Entry<?, ?> entry : map.entrySet()) {
+            String key = String.valueOf(entry.getKey());
+            Object value = entry.getValue();
+            switch (key) {
+                case "name" -> tag.setName(asString(value));
+                case "description" -> tag.setDescription(asString(value));
+                default -> {
+                    if (key.startsWith("x-")) {
+                        tag.addExtension(key, value);
+                    }
+                }
+            }
+        }
+        return tag;
     }
 
     private static PathItem toPathItem(Object raw) {

@@ -3,7 +3,12 @@ package io.vidocq.grimm.internal.reader;
 import org.eclipse.microprofile.openapi.models.OpenAPI;
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.Map;
 import java.util.Optional;
+import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -43,14 +48,74 @@ class StaticFileReaderTest {
     }
 
     @Test
-    void readOpenAPI_prioritizesJsonOverYaml() {
-        // Spec §4.2: Priority order is openapi.yaml > openapi.yml > openapi.json
-        // Since we only have openapi.yaml on test classpath, it should be read.
-        // This test would need both files to verify actual priority.
-        StaticFileReader reader = new StaticFileReader();
-        Optional<OpenAPI> result = reader.readOpenAPI();
+    void readOpenAPI_prioritizesYamlOverJsonWhenBothExist() {
+        // Spec §4.2: Priority order is openapi.yaml > openapi.yml > openapi.json.
+        String yaml = "openapi: \"3.1.0\"\ninfo:\n  title: \"From YAML\"\n  version: \"1.0.0\"\n";
+        String json = "{\"openapi\":\"3.1.0\",\"info\":{\"title\":\"From JSON\",\"version\":\"1.0.0\"}}";
+
+        Optional<OpenAPI> result = withContextClassLoader(
+            new MapBackedClassLoader(Map.of(
+                "META-INF/openapi.yaml", yaml,
+                "META-INF/openapi.json", json
+            )),
+            () -> new StaticFileReader().readOpenAPI()
+        );
 
         assertTrue(result.isPresent(), "StaticFileReader should find a static file");
+        assertEquals("From YAML", result.get().getInfo().getTitle());
+    }
+
+    @Test
+    void readOpenAPI_returnsEmptyWhenNoFileIsFound() {
+        Optional<OpenAPI> result = withContextClassLoader(
+            new MapBackedClassLoader(Map.of()),
+            () -> new StaticFileReader().readOpenAPI()
+        );
+
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    void readOpenAPI_throwsOnMalformedStaticFile() {
+        String malformedYaml = "openapi \"3.1.0\"\ninfo:\n  title: \"Broken\"\n";
+
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> withContextClassLoader(
+                new MapBackedClassLoader(Map.of("META-INF/openapi.yaml", malformedYaml)),
+                () -> new StaticFileReader().readOpenAPI()
+            )
+        );
+
+        assertTrue(exception.getMessage() != null && !exception.getMessage().isBlank());
+    }
+
+    private static <T> T withContextClassLoader(ClassLoader classLoader, Supplier<T> supplier) {
+        Thread thread = Thread.currentThread();
+        ClassLoader original = thread.getContextClassLoader();
+        thread.setContextClassLoader(classLoader);
+        try {
+            return supplier.get();
+        } finally {
+            thread.setContextClassLoader(original);
+        }
+    }
+
+    private static final class MapBackedClassLoader extends ClassLoader {
+        private final Map<String, String> resources;
+
+        private MapBackedClassLoader(Map<String, String> resources) {
+            this.resources = resources;
+        }
+
+        @Override
+        public InputStream getResourceAsStream(String name) {
+            String content = resources.get(name);
+            if (content == null) {
+                return null;
+            }
+            return new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8));
+        }
     }
 }
 

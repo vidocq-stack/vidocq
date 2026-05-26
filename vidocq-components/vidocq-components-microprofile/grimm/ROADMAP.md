@@ -136,7 +136,7 @@ ServiceLoader.
 | `JsonDeserializer` | Parses JSON `OpenAPI` document (for static file reading); JSON-P streaming | ☑ |
 | `YamlDeserializer` | Parses YAML `OpenAPI` document (for static file reading) | ☑ |
 | Round-trip unit tests | Serialize → deserialize → verify equality for all model objects | ☑ |
-| `format` query parameter | `?format=json` vs `?format=yaml` (wired in M9 endpoint) | ☐ |
+| `format` query parameter | `?format=json` vs `?format=yaml` (implémenté dans `OpenApiResource`; validation finale en clôture M9 endpoint) | ◐ |
 
 **Decisions M2:**
 - JSON serialization delegates to Champollion (Jakarta JSON-P 2.1) — already in the Vidocq
@@ -178,7 +178,7 @@ ServiceLoader.
 | `@OpenAPIDefinition` processing | Maps `info`, `tags`, `servers`, `security`, `externalDocs` to the model | ☑ |
 | `@Tag` / `@Tags` processing | Class-level and method-level; deduplication by name | ☑ |
 | `@Server` / `@Servers` processing | Class-level and method-level; merged per spec §3.5.2 | ☑ |
-| `@ExternalDocumentation` processing | Top-level and operation-level | ☐ |
+| `@ExternalDocumentation` processing | Top-level and operation-level | ☑ |
 | Unit tests | Classes bearing each annotation; verify model output | ☑ |
 
 **Deliverable:** Document-level annotations scanned and merged into the model correctly.
