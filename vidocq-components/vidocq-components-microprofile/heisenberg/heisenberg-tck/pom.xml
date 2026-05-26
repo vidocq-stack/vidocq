@@ -41,6 +41,7 @@
         <microprofile.fault.tolerance.version>4.1</microprofile.fault.tolerance.version>
         <vauban.version>0.1.0-SNAPSHOT</vauban.version>
         <ravel.version>0.1.0-SNAPSHOT</ravel.version>
+        <humboldt.version>0.1.0-SNAPSHOT</humboldt.version>
     </properties>
 
     <repositories>
@@ -214,9 +215,6 @@
                             </includes>
                             <excludes>
                                 <exclude>**/HeisenbergTckSmokeTest.class</exclude>
-                                <!-- Temporaire : réactiver après implémentation MP Telemetry -->
-                                <exclude>**/telemetry/**</exclude>
-                                <exclude>**/*Telemetry*Test.class</exclude>
                             </excludes>
                             <trimStackTrace>false</trimStackTrace>
                             <redirectTestOutputToFile>false</redirectTestOutputToFile>
@@ -260,16 +258,16 @@
                 </dependency>
 
                 <dependency>
-                    <groupId>org.eclipse.microprofile.metrics</groupId>
-                    <artifactId>microprofile-metrics-api</artifactId>
-                    <version>4.0</version>
+                    <groupId>io.vidocq.dirac</groupId>
+                    <artifactId>dirac-cdi-vauban</artifactId>
+                    <version>0.1.0-SNAPSHOT</version>
                     <scope>test</scope>
                 </dependency>
 
                 <dependency>
-                    <groupId>io.vidocq.dirac</groupId>
-                    <artifactId>dirac-cdi-vauban</artifactId>
-                    <version>0.1.0-SNAPSHOT</version>
+                    <groupId>io.vidocq.humboldt</groupId>
+                    <artifactId>humboldt-cdi</artifactId>
+                    <version>${humboldt.version}</version>
                     <scope>test</scope>
                 </dependency>
 

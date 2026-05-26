@@ -155,17 +155,15 @@ public class DiracFtMetricsRecorder implements FtMetricsRecorder {
     @Override
     public void recordInvocation(Class<?> beanClass, Method method,
                                  boolean succeeded, boolean fallbackApplied, boolean fallbackDefined) {
+        if (!isMetricsEnabled()) return;
         Tag methodTag = methodTag(beanClass, method);
         String result = succeeded ? "valueReturned" : "exceptionThrown";
         String fb = fallbackDefined
                 ? (fallbackApplied ? "applied" : "notApplied")
                 : "notDefined";
-        System.err.println("[HEISENBERG-DEBUG] recordInvocation " + methodTag + " result=" + result + " fb=" + fb + " registry=" + System.identityHashCode(registry));
         Counter c = registry.counter("ft.invocations.total", methodTag,
                 new Tag("result", result), new Tag("fallback", fb));
-        System.err.println("[HEISENBERG-DEBUG] counter before inc: " + c.getCount() + " id=" + System.identityHashCode(c));
         c.inc();
-        System.err.println("[HEISENBERG-DEBUG] counter after inc: " + c.getCount());
     }
 
     // ------------------------------------------------------------------
@@ -174,6 +172,7 @@ public class DiracFtMetricsRecorder implements FtMetricsRecorder {
 
     @Override
     public void recordRetry(Class<?> beanClass, Method method, int retryCount, RetryResult result) {
+        if (!isMetricsEnabled()) return;
         Tag methodTag = methodTag(beanClass, method);
         boolean retried = retryCount > 0;
         registry.counter("ft.retry.calls.total", methodTag,
@@ -190,6 +189,7 @@ public class DiracFtMetricsRecorder implements FtMetricsRecorder {
 
     @Override
     public void recordTimeout(Class<?> beanClass, Method method, boolean timedOut, long durationNanos) {
+        if (!isMetricsEnabled()) return;
         Tag methodTag = methodTag(beanClass, method);
         registry.counter("ft.timeout.calls.total", methodTag,
                 new Tag("timedOut", String.valueOf(timedOut))).inc();
@@ -206,6 +206,7 @@ public class DiracFtMetricsRecorder implements FtMetricsRecorder {
 
     @Override
     public void recordCircuitBreakerCall(Class<?> beanClass, Method method, CBCallResult result) {
+        if (!isMetricsEnabled()) return;
         Tag methodTag = methodTag(beanClass, method);
         registry.counter("ft.circuitbreaker.calls.total", methodTag,
                 new Tag("circuitBreakerResult", result.tagValue())).inc();
@@ -213,6 +214,7 @@ public class DiracFtMetricsRecorder implements FtMetricsRecorder {
 
     @Override
     public void notifyCircuitBreakerStateChange(Class<?> beanClass, Method method, CBState from, CBState to) {
+        if (!isMetricsEnabled()) return;
         String key = methodKey(beanClass, method);
         CBStateTracker tracker = cbStateTrackers.get(key);
         if (tracker != null) {
@@ -229,6 +231,8 @@ public class DiracFtMetricsRecorder implements FtMetricsRecorder {
 
     @Override
     public void recordBulkheadAccepted(Class<?> beanClass, Method method, long waitNanos, long runNanos) {
+        if (!isMetricsEnabled()) return;
+        String key = methodKey(beanClass, method);
         Tag methodTag = methodTag(beanClass, method);
         registry.counter("ft.bulkhead.calls.total", methodTag,
                 new Tag("bulkheadResult", "accepted")).inc();
@@ -237,29 +241,35 @@ public class DiracFtMetricsRecorder implements FtMetricsRecorder {
                 .withUnit(MetricUnits.NANOSECONDS)
                 .build();
         registry.histogram(runMeta, methodTag).update(runNanos);
-        if (waitNanos > 0) {
+        // In async bulkhead mode, waitingDuration is reported for every accepted execution,
+        // including immediate acquisitions (0ns), so histogram counts stay consistent with
+        // the calls.total counter. In sync mode, only emit if we actually tracked waiting.
+        if (bulkheadWaiting.containsKey(key)) {
             Metadata waitMeta = Metadata.builder()
                     .withName("ft.bulkhead.waitingDuration")
                     .withUnit(MetricUnits.NANOSECONDS)
                     .build();
-            registry.histogram(waitMeta, methodTag).update(waitNanos);
+            registry.histogram(waitMeta, methodTag).update(Math.max(0L, waitNanos));
         }
     }
 
     @Override
     public void recordBulkheadRejected(Class<?> beanClass, Method method) {
+        if (!isMetricsEnabled()) return;
         registry.counter("ft.bulkhead.calls.total", methodTag(beanClass, method),
                 new Tag("bulkheadResult", "rejected")).inc();
     }
 
     @Override
     public void bulkheadRunningDelta(Class<?> beanClass, Method method, int delta) {
+        if (!isMetricsEnabled()) return;
         AtomicLong counter = bulkheadRunning.get(methodKey(beanClass, method));
         if (counter != null) counter.addAndGet(delta);
     }
 
     @Override
     public void bulkheadWaitingDelta(Class<?> beanClass, Method method, int delta) {
+        if (!isMetricsEnabled()) return;
         AtomicLong counter = bulkheadWaiting.get(methodKey(beanClass, method));
         if (counter != null) counter.addAndGet(delta);
     }
@@ -269,11 +279,11 @@ public class DiracFtMetricsRecorder implements FtMetricsRecorder {
     // ------------------------------------------------------------------
 
     private static String methodKey(Class<?> beanClass, Method method) {
-        return beanClass.getCanonicalName() + "." + method.getName();
+        return beanClass.getName() + "." + method.getName();
     }
 
     private static Tag methodTag(Class<?> beanClass, Method method) {
-        return new Tag("method", beanClass.getCanonicalName() + "." + method.getName());
+        return new Tag("method", beanClass.getName() + "." + method.getName());
     }
 
     private boolean isMetricsEnabled() {

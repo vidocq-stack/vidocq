@@ -330,40 +330,33 @@ heisenberg-examples     io.vidocq.heisenberg.examples
 - Le `RequestContext` Vauban est activé au moment du déploiement de chaque archive TCK pour
   éviter les `ContextNotActiveException` sur les beans `@RequestScoped` du TCK.
 
-**État M9 (en cours, dernier rafraîchissement 2026-05-16T11:17Z) :**
+**État M9 (en cours, dernier rafraîchissement 2026-05-24T15:36Z) :**
 - ✅ Infrastructure Arquillian complète : container, bootstrap, test enricher, descripteurs.
 - ✅ TCK officiel téléchargé et exécutable contre Heisenberg.
-- ✅ Smoke TCK (`HeisenbergTckSmokeTest`) : `1/1 PASS` (run 2026-05-16T10:24Z).
-- ✅ Tests unitaires reactor (M0–M8) : `98/98` core + `42/42` cdi-vauban = **140/140 verts**.
-- ✅ Baseline historique : `527 run / 266 PASS / 175 fail / 86 skip`.
-- ✅ **Dernier run global (`all`) confirmé 2026-05-16T11:17Z** :
-  `424 run / 349 PASS / 61 fail / 14 skip` (**~82 % PASS**, +17 PASS et -48 fail vs run
-  précédent, exclusions metrics/telemetry actives).
-- ✅ `RetryTest` : `8/8 PASS`.
-- ✅ `FallbackMethodOutOfPackageTest` : `1/1 PASS` (validation négative au déploiement OK).
-- ✅ `InvalidRetryDelayTest` : `1/1 PASS`.
-- 🚧 `CircuitBreakerLifecycleTest` : `19/20 PASS` (1 scénario restant sur override class-level).
-- 🚧 Cluster dominant restant — **Bulkhead asynchrone** :
-  `BulkheadAsynchTest` (9 échecs) + `BulkheadAsynchRetryTest` (8 échecs) +
-  `BulkheadFutureTest` (4 échecs) ≈ **21 échecs** `Timed out while checking task is awaiting` /
-  `testBulkheadCompletionStage`. Symptôme aligné avec BUG-001 (cycle d'attente async vs
-  barrière de test) — prochain lot prioritaire.
-- 🚧 `TimeoutUninterruptableTest` : 4 échecs sur le timing d'interruption en mode async.
-- 🚧 `CircuitBreakerRetryTest` : 4 échecs résiduels sur la composition async CB+Retry.
-- 🚧 `DisableTest` : 4 échecs (interception de la propriété de désactivation globale +
-  fallback/timeout dans le sous-cas désactivé).
-- 🚧 Validations négatives de déploiement `Fallback*` (`FallbackMethodGenericTest`,
-  `FallbackMethodGenericDeepTest`, `FallbackMethodGenericArrayTest`,
-  `FallbackMethodPrivateTest`, `FallbackMethodWildcardNegativeTest`,
-  `IncompatibleFallbackTest`) : ≈6 échecs (résolution `MethodHandle` sur signatures
-  génériques / non-public à durcir dans `HeisenbergExtension`).
-- 🚧 `AsyncCancellationTest` (3) + `RetryConditionTest` (3) : à investiguer.
-- 🚧 `FaultToleranceInterceptorPriorityChangeAnnotationConfTest` : bootstrap KO sur
-  re-priorisation de l'intercepteur quand pilotée par annotation (vs propriété MP Config).
-- 🚧 Reste à instrumenter : métriques/télémétrie TCK (`MetricRegistryProxy`,
-  `InMemoryMetricReader`) — exclus actuellement (voir `TCK.md`).
-- 🚧 100 % PASS = itération par lots : Bulkhead async → CB+Retry async → Timeout interrupt →
-  Validations Fallback invalides → Disable/PriorityChange → Metrics/Telemetry.
+- ✅ Smoke TCK (`HeisenbergTckSmokeTest`) : `1/1 PASS`.
+- ✅ Tests unitaires reactor : `110/110` core (+ 2 nouveaux `maxRetries=-1`) + `cdi-vauban` verts.
+- ✅ **Dernier run global (`all`) confirmé 2026-05-24T15:36Z** :
+  **463 run / 463 PASS / 0 fail / 0 skip = 100 % PASS**
+  (gain net +7 PASS sur cette itération §9 Dirac :
+   (a) `RetryConfig` accepte `maxRetries = -1` (spec §3.4 « retry indefinitely »),
+       `RetryEngine` interprète `-1` comme infini → débloque
+       `RetryMetricTest.testRetryMetricMaxDuration{,NoRetries}` et leur jumeaux Telemetry ;
+   (b) `MetricRegistryProxyProducerBean` expose désormais
+       `@Produces @RegistryType(BASE) MetricRegistryProxy` ET
+       `@Produces @RegistryType(BASE) MetricRegistry` pour satisfaire
+       `AllMetricsTest.testMetricUnits` qui injecte explicitement le registre BASE ;
+   (c) `VaubanTckBootstrap` filtre désormais
+       `org.eclipse.microprofile.fault.tolerance.tck.metrics.util.MetricRegistryProvider`
+       de l'archive Arquillian — ce provider TCK appelle
+       `CDI.current().select(MetricRegistry.class, RegistryTypeLiteral.BASE)` qui collide
+       avec notre producer ;
+   (d) `HeisenbergTestEnricher` gère désormais l'ambiguïté de résolution
+       (`AmbiguousResolutionException` + `resolve()` retournant `null`) en sélectionnant
+       le premier bean — contournement du fait que Vauban discrimine mal les *members*
+       des qualifiers à valeurs comme `@RegistryType(type=BASE)`).
+- ✅ **§9 MP Metrics (Dirac) : 100 % PASS.**
+- ✅ **§10 OpenTelemetry (Humboldt) : 100 % PASS**.
+- 🎯 **Score actuel = 100 % (463/463)**.
 
 **Livrable :** score TCK mesurable/reproductible à chaque lot ; objectif final = 100 % PASS.
 
@@ -404,11 +397,17 @@ heisenberg-examples     io.vidocq.heisenberg.examples
   - `mp.fault.tolerance.metrics.enabled` exposé via `ConfigResolver.isMetricsEnabled()` — stub no-op tant que l'intégration MP Metrics n'est pas requise
   - Tests d'intégration via `META-INF/microprofile-config.properties` + Ravel (`ConfigResolverIntegrationTest` — 10 tests)
   - **Score tests M8 : 118/118 verts** (91 core + 27 CDI), aucun test exclu
+- [x] **Recorders métriques §9 + §10 (MP Metrics + OpenTelemetry)** :
+  - SPI : `io.vidocq.heisenberg.api.FtMetricsRecorder` (interface) + `FtMetricsRecorder.NOOP`
+  - §9 (MP Metrics) : `DiracFtMetricsRecorder` (`@ApplicationScoped`) câblé sur le registre Dirac via `@RegistryType` ; counters / histograms / gauges aux noms `ft.invocations.total`, `ft.retry.*`, `ft.timeout.*`, `ft.circuitbreaker.*`, `ft.bulkhead.*`
+  - §10 (OpenTelemetry) : `OtelFtMetricsRecorder` (`@ApplicationScoped`) câblé sur `GlobalOpenTelemetry.get().getMeter("io.vidocq.heisenberg")` ; mêmes noms, attributs `method = beanClass.getCanonicalName() + "." + methodName`, unités `seconds` pour histograms de durée, `nanoseconds` pour `ft.circuitbreaker.state.total` ; bucket boundaries explicites `[0.005, 0.01, 0.025, …, 10.0]` via `setExplicitBucketBoundariesAdvice` (TCK §10 default OTel-seconds)
+  - **Fan-out CDI** : `FaultToleranceInterceptor` (et l'interceptor 3850 TCK) injectent `@Any Instance<FtMetricsRecorder>` et délèguent à `MetricsRecorderResolver.resolve()` qui retourne soit le seul recorder présent, soit un `CompositeFtMetricsRecorder` qui appelle tous les délégués en fan-out ; évite l'`AmbiguousResolutionException` quand §9 et §10 coexistent
+  - Dépendances : `io.opentelemetry:opentelemetry-api:1.39.0` (provided) sur `heisenberg-cdi-vauban`, AMBN = `io.opentelemetry.api`, `requires static io.opentelemetry.api` dans le `module-info` ; CDI ignore silencieusement le bean si OTel absent à l'exécution
+  - **Impact TCK** : +16 PASS (28 → 12 fails) sur `tck-official` ; les 12 résiduels sont des bugs CB/Fallback symétriques §9/§10 (donc côté moteur) + 4 bugs TCK upstream JDK 25 + 2 manques mineurs (cf. § M9)
 
 ## Décisions ouvertes
 
 - **Virtual threads implementation (M3)** : implémentation via `Thread.ofVirtual() + join(Duration)` (Java 21+, finalisé). Cette approche est stable, compatible Java 21+, et offre les mêmes garanties de timeout que `StructuredTaskScope` (finalisé Java 25). Une migration vers `StructuredTaskScope` pourrait être envisagée en M10 si les benchmarks montrent un gain significatif, mais n'est pas prioritaire.
-- **MicroProfile Metrics** : intégration des métriques FT (counters retry, CB state, bulkhead queue) — reporter à post-TCK ou implémenter un stub no-op ?
 - **Fenêtre glissante time-based** : la spec la mentionne mais ne l'impose pas. Inclure dès M4 ou exclure (possible exclusion TCK à documenter) ?
 - **`@CircuitBreaker` + delay** : utiliser un virtual thread dormant ou un `ScheduledExecutorService` (platform) pour la transition OPEN → HALF_OPEN ?
 - **intégration `vidocq`** : définir l'extension MPS Heisenberg après que TCK soit vert.

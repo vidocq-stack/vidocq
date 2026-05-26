@@ -52,6 +52,38 @@ class RetryEngineTest {
     }
 
     @Test
+    void maxRetriesMinusOneMeansRetryIndefinitelyUntilSuccess() throws Exception {
+        // MP FT 4.1 §3.4 : maxRetries = -1 signifie « retry indefinitely ».
+        AtomicInteger calls = new AtomicInteger();
+        RetryConfig config = config(-1, 0, 5_000, 0, new Class[]{IOException.class}, new Class[0]);
+
+        Object result = RetryEngine.execute(() -> {
+            if (calls.getAndIncrement() < 50) {
+                throw new IOException("temporary");
+            }
+            return "ok";
+        }, config);
+
+        assertEquals("ok", result);
+        assertEquals(51, calls.get());
+    }
+
+    @Test
+    void maxRetriesMinusOneStopsOnMaxDuration() {
+        // MP FT 4.1 §3.4 : maxRetries = -1 + maxDuration borne le total dans le temps.
+        AtomicInteger calls = new AtomicInteger();
+        RetryConfig config = config(-1, 0, 50, 0, new Class[]{IOException.class}, new Class[0]);
+
+        assertThrows(IOException.class, () -> RetryEngine.execute(() -> {
+            calls.incrementAndGet();
+            Thread.sleep(10);
+            throw new IOException("boom");
+        }, config));
+
+        assertTrue(calls.get() >= 1, "should retry at least once before maxDuration");
+    }
+
+    @Test
     void maxRetriesZeroDoesNotRetry() {
         AtomicInteger calls = new AtomicInteger();
         RetryConfig config = config(0, 0, 5_000, 0, new Class[]{Exception.class}, new Class[0]);

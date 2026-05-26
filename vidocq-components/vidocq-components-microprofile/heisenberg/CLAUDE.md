@@ -59,6 +59,11 @@ heisenberg-examples     ← Exemples d'utilisation
 `@Interceptor` CDI qui orchestre ces moteurs. Ainsi, les politiques sont testables unitairement
 sans container CDI.
 
+**État effectif (2026-05-26) : M0–M9 terminés, TCK à 100 % PASS**
+(`463 tests, 463 PASS, 0 fail, 0 skip`). **§9 MP Metrics (Dirac) et §10 OpenTelemetry
+(Humboldt) à 100 %.** Le `ROADMAP.md` est la source de vérité du score
+et liste précisément les échecs résiduels.
+
 **Flux d'une invocation :** CDI intercepte l'appel via `FaultToleranceInterceptor.around()` →
 `PolicyComposer` construit la chaîne de politiques dans l'ordre défini par la spec →
 chaque moteur exécute sa logique (retry, timeout, circuit breaker, bulkhead, fallback) →
@@ -67,9 +72,18 @@ résultat ou exception remontés selon les règles de composition.
 **Ordre de composition des politiques** (spec MP FT §2.5, de l'extérieur vers l'intérieur) :
 `@Fallback` → `@CircuitBreaker` → `@Bulkhead` → `@Timeout` → `@Retry` → méthode réelle.
 
-**Gestion d'état :** `StateRegistry` (singleton CDI `@ApplicationScoped`) maintient l'état
-des `CircuitBreaker` et `Bulkhead` identifiés par `(BeanClass, Method)` — les beans
-`@RequestScoped` créent de nouvelles instances mais l'état FT est partagé conformément à la spec.
+**Gestion d'état :** `StateRegistryBean` + `BulkheadStateRegistryBean` (singletons CDI
+`@ApplicationScoped`) maintiennent l'état des `CircuitBreaker` et `Bulkhead` identifiés par
+`(BeanClass, Method)` — les beans `@RequestScoped` créent de nouvelles instances mais l'état
+FT est partagé conformément à la spec.
+
+**Métriques §9 / §10 :** la SPI `io.vidocq.heisenberg.api.FtMetricsRecorder` est implémentée
+en parallèle par `DiracFtMetricsRecorder` (MP Metrics via Dirac) et `OtelFtMetricsRecorder`
+(OpenTelemetry via `GlobalOpenTelemetry`). Le `FaultToleranceInterceptor` injecte
+`@Any Instance<FtMetricsRecorder>` et délègue à `MetricsRecorderResolver.resolve()` qui
+encapsule les multiples recorders dans un `CompositeFtMetricsRecorder` (fan-out). Cela évite
+l'`AmbiguousResolutionException` quand §9 et §10 cohabitent, et permet de publier les deux
+familles de métriques simultanément.
 
 ## Contraintes d'architecture à ne pas violer
 
@@ -147,8 +161,13 @@ org.eclipse.microprofile.fault-tolerance:microprofile-fault-tolerance-api:4.1
 jakarta.enterprise:jakarta.enterprise.cdi-api:4.1              (provided)
 jakarta.interceptor:jakarta.interceptor-api:2.2                 (provided)
 org.eclipse.microprofile.config:microprofile-config-api:3.1     (provided)
+io.opentelemetry:opentelemetry-api:1.39.0                       (provided — §10)
 org.junit:junit-bom:6.0.3                                       (test, BOM)
 ```
+
+`opentelemetry-api` est `provided` sur `heisenberg-cdi-vauban` uniquement
+(`requires static io.opentelemetry.api` dans le `module-info`). CDI ignore silencieusement
+`OtelFtMetricsRecorder` si OTel n'est pas présent à l'exécution.
 
 Toute nouvelle dépendance `<scope>compile</scope>` ou `<scope>runtime</scope>` doit passer
 le `dependency-gatekeeper` et être explicitement justifiée dans la PR.

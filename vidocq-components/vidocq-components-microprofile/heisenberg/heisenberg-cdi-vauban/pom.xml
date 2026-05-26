@@ -38,10 +38,22 @@
             <artifactId>jakarta.interceptor-api</artifactId>
             <scope>provided</scope>
         </dependency>
-        <!-- MP Metrics API — version modularisée Dirac (named module, jlink-compatible), provided en runtime -->
+        <!-- MP Metrics API — version modularise Dirac (named module, jlink-compatible), provided en runtime -->
         <dependency>
             <groupId>io.vidocq.dirac</groupId>
             <artifactId>dirac-mp-metrics-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <!--
+            OpenTelemetry API : utilis par OtelFtMetricsRecorder pour publier les mtriques §10
+            (ft.invocations.total, ft.retry.calls.total, etc.) via GlobalOpenTelemetry.
+            Optionnel  l'excution (le bean est silencieusement ignor par CDI si OTel absent).
+            justifi par dependency-gatekeeper : §10 de la spec MP Fault Tolerance 4.1.
+        -->
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-api</artifactId>
+            <version>1.39.0</version>
             <scope>provided</scope>
         </dependency>
 
@@ -71,6 +83,40 @@
 
     <build>
         <plugins>
+            <!--
+                Copie supplmentaire pour opentelemetry-api (scope=provided) dans
+                target/javamodules/ : le plugin parent ne copie que compile-scope, mais OTel
+                est utilis par OtelFtMetricsRecorder pour compiler le module-info JPMS.
+                AMBN = io.opentelemetry.api (vrifi dans MANIFEST.MF de la 1.39.0).
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>copy-otel-api-to-module-path</id>
+                        <phase>initialize</phase>
+                        <goals><goal>copy</goal></goals>
+                        <configuration>
+                            <outputDirectory>${project.build.directory}/javamodules</outputDirectory>
+                            <artifactItems>
+                                <artifactItem>
+                                    <groupId>io.opentelemetry</groupId>
+                                    <artifactId>opentelemetry-api</artifactId>
+                                    <version>1.39.0</version>
+                                    <type>jar</type>
+                                </artifactItem>
+                                <artifactItem>
+                                    <groupId>io.opentelemetry</groupId>
+                                    <artifactId>opentelemetry-context</artifactId>
+                                    <version>1.39.0</version>
+                                    <type>jar</type>
+                                </artifactItem>
+                            </artifactItems>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
             <!--
                 JPMS workaround heisenberg-cdi-vauban : même problème que heisenberg-core.
                 vauban-core et ravel-core sont test-scope, absents de target/javamodules/.

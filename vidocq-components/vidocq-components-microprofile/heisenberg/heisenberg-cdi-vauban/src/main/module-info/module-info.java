@@ -26,6 +26,7 @@ module io.vidocq.heisenberg.cdi.vauban {
     requires static jakarta.annotation;
     requires static jakarta.interceptor;
     requires static microprofile.metrics.api;
+    requires static io.opentelemetry.api;
 
     exports io.vidocq.heisenberg.cdi.internal;
 

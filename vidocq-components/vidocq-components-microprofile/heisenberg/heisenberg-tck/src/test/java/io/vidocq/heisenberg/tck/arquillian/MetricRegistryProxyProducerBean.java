@@ -25,7 +25,7 @@ import java.lang.reflect.Proxy;
  * qualificateur {@code @Default} (les tests TCK injectent sans qualificateur).</p>
  */
 @ApplicationScoped
-class MetricRegistryProxyProducerBean {
+public class MetricRegistryProxyProducerBean {
 
     @SuppressWarnings("deprecation")
     @Inject
@@ -33,7 +33,42 @@ class MetricRegistryProxyProducerBean {
     private MetricRegistry applicationRegistry;
 
     @Produces
-    MetricRegistryProxy produce() {
+    public MetricRegistryProxy produce() {
+        return buildProxy();
+    }
+
+    /**
+     * Producer qualifié pour les tests TCK qui injectent
+     * {@code @Inject @RegistryType(type=Type.BASE) MetricRegistryProxy} (cf.
+     * {@code AllMetricsTest.testMetricUnits}).
+     *
+     * <p>En MP Metrics 5, la distinction BASE/APPLICATION/VENDOR est dépréciée — toutes
+     * les métriques cohabitent dans le même registre. On expose donc le même registre
+     * Dirac sous le qualificateur attendu par le TCK.</p>
+     */
+    @SuppressWarnings("deprecation")
+    @Produces
+    @RegistryType(type = MetricRegistry.Type.BASE)
+    public MetricRegistryProxy produceBase() {
+        return buildProxy();
+    }
+
+    /**
+     * Producer de {@link MetricRegistry} qualifié {@code @RegistryType(BASE)} — requis par
+     * le bean {@code MetricRegistryProvider} du TCK qui fait
+     * {@code CDI.current().select(MetricRegistry.class, RegistryTypeLiteral.BASE)} pour
+     * construire son propre {@code MetricRegistryProxy}. Dirac n'expose que le registre
+     * {@code @RegistryType()} (par défaut Type.APPLICATION) — on réexpose la même
+     * instance avec le qualifier BASE attendu par la spec MP Metrics 4.x.
+     */
+    @SuppressWarnings("deprecation")
+    @Produces
+    @RegistryType(type = MetricRegistry.Type.BASE)
+    public MetricRegistry produceBaseRegistry() {
+        return applicationRegistry;
+    }
+
+    private MetricRegistryProxy buildProxy() {
         return (MetricRegistryProxy) Proxy.newProxyInstance(
                 MetricRegistryProxy.class.getClassLoader(),
                 new Class<?>[] { MetricRegistryProxy.class },

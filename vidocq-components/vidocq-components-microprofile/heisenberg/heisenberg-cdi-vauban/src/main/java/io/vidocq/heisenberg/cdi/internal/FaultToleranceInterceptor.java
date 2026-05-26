@@ -1,9 +1,12 @@
 package io.vidocq.heisenberg.cdi.internal;
 
 import io.vidocq.heisenberg.api.FtMetricsRecorder;
+import io.vidocq.heisenberg.internal.AnnotationReader;
 import io.vidocq.heisenberg.internal.ConfigResolver;
 import io.vidocq.heisenberg.internal.PolicyComposer;
 import java.lang.reflect.Method;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import jakarta.annotation.Priority;
 import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Instance;
@@ -59,18 +62,40 @@ public class FaultToleranceInterceptor {
             return context.proceed();
         }
 
-        FtMetricsRecorder recorder;
-        if (recorderInstance == null || recorderInstance.isUnsatisfied()) {
-            System.err.println("[HEISENBERG-DEBUG] recorderInstance=" + recorderInstance + " → using NOOP");
-            recorder = FtMetricsRecorder.NOOP;
-        } else {
-            recorder = recorderInstance.get();
-            System.err.println("[HEISENBERG-DEBUG] recorder=" + recorder.getClass().getSimpleName());
-        }
+        FtMetricsRecorder recorder = MetricsRecorderResolver.resolve(recorderInstance);
 
         Method resolvedMethod = resolveInterceptedMethod(context);
+        registerMetricsOnce(recorder, context.getTarget(), resolvedMethod);
         return PolicyComposer.invoke(context::proceed, context.getTarget(), resolvedMethod,
                 context.getParameters(), stateRegistry, bulkheadRegistry, recorder);
+    }
+
+    /**
+     * MP FT 4.1 §9/§10 : pré-enregistre les métriques d'une méthode FT au plus tôt (lors
+     * de la première interception). Cela matérialise les compteurs OTel avec leur unité,
+     * de sorte que les tests TCK {@code testMetricUnits} qui inspectent les méta-données
+     * via {@code InMemoryMetricReader.getUnit(...)} retrouvent les métriques même quand
+     * aucune incrémentation n'a encore eu lieu pour certaines séries d'attributs.
+     */
+    private static final Set<String> REGISTERED = ConcurrentHashMap.newKeySet();
+
+    private static void registerMetricsOnce(FtMetricsRecorder recorder, Object target, Method method) {
+        if (recorder == null || method == null) return;
+        Class<?> beanClass = target != null ? target.getClass() : method.getDeclaringClass();
+        // Démêler les classes intercepted (Vauban : $$Intercepted)
+        while (beanClass.getName().contains("$$Intercepted") && beanClass.getSuperclass() != null) {
+            beanClass = beanClass.getSuperclass();
+        }
+        String key = beanClass.getName() + "#" + method.getName();
+        if (!REGISTERED.add(key)) return;
+        AnnotationReader.FaultToleranceAnnotations ann = AnnotationReader.read(method, beanClass);
+        recorder.register(beanClass, method,
+                ann.retry() != null,
+                ann.timeout() != null,
+                ann.circuitBreaker() != null,
+                ann.bulkhead() != null,
+                ann.fallback() != null,
+                ann.bulkhead() != null && ann.asynchronous() != null);
     }
 
 

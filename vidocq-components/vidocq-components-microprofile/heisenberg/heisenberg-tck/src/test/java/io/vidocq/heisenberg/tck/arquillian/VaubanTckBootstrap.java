@@ -10,13 +10,20 @@ import io.vidocq.dirac.cdi.internal.CountedInterceptor;
 import io.vidocq.dirac.cdi.internal.GaugeRegistrationBean;
 import io.vidocq.dirac.cdi.internal.MetricRegistryProducerBean;
 import io.vidocq.dirac.cdi.internal.TimedInterceptor;
+import io.vidocq.humboldt.cdi.HumboldtBuildCompatibleExtension;
+import io.vidocq.humboldt.cdi.WithSpanInterceptor;
 import io.vidocq.heisenberg.cdi.internal.BulkheadStateRegistryBean;
 import io.vidocq.heisenberg.cdi.internal.DiracFtMetricsRecorder;
 import io.vidocq.heisenberg.cdi.internal.FaultToleranceInterceptor;
 import io.vidocq.heisenberg.cdi.internal.FaultTolerancePriority3850Interceptor;
 import io.vidocq.heisenberg.cdi.internal.HeisenbergExtension;
+import io.vidocq.heisenberg.cdi.internal.OtelFtMetricsRecorder;
 import io.vidocq.heisenberg.cdi.internal.StateRegistryBean;
 import io.vidocq.vauban.core.container.VaubanContainer;
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.sdk.OpenTelemetrySdk;
+import io.opentelemetry.sdk.metrics.SdkMeterProvider;
+import org.eclipse.microprofile.fault.tolerance.tck.telemetryMetrics.util.InMemoryMetricReader;
 import org.jboss.shrinkwrap.api.Archive;
 import org.jboss.shrinkwrap.api.Node;
 import org.jboss.shrinkwrap.api.asset.ArchiveAsset;
@@ -54,6 +61,8 @@ final class VaubanTckBootstrap {
     private VaubanTckBootstrap() {}
 
     static void deploy(Archive<?> archive) {
+        ensureTelemetryReaderIsRegistered();
+
         Properties configProps = extractConfig(archive);
         exportToSystemProperties(configProps);
 
@@ -75,7 +84,10 @@ final class VaubanTckBootstrap {
                 .addBeanClass(CountedInterceptor.class)
                 .addBeanClass(TimedInterceptor.class)
                 .addBeanClass(MetricRegistryProxyProducerBean.class)
-                .addBeanClass(DiracFtMetricsRecorder.class);
+                .addBeanClass(HumboldtBuildCompatibleExtension.class)
+                .addBeanClass(WithSpanInterceptor.class)
+                .addBeanClass(DiracFtMetricsRecorder.class)
+                .addBeanClass(OtelFtMetricsRecorder.class);
         for (Class<?> c : beanClasses) {
             builder.addBeanClass(c);
         }
@@ -92,6 +104,21 @@ final class VaubanTckBootstrap {
 
         System.err.println("[HeisenbergTCK] Vauban CDI container started for archive '"
                 + archive.getName() + "' — " + beanClasses.size() + " class(es) registered");
+    }
+
+    private static void ensureTelemetryReaderIsRegistered() {
+        try {
+            GlobalOpenTelemetry.resetForTest();
+            InMemoryMetricReader reader = InMemoryMetricReader.current();
+            SdkMeterProvider meterProvider = SdkMeterProvider.builder()
+                    .registerMetricReader(reader)
+                    .build();
+            OpenTelemetrySdk.builder()
+                    .setMeterProvider(meterProvider)
+                    .buildAndRegisterGlobal();
+        } catch (Exception e) {
+            System.err.println("[HeisenbergTCK] OpenTelemetry reader bootstrap failed: " + e.getMessage());
+        }
     }
 
     static void undeploy() {
@@ -164,10 +191,21 @@ final class VaubanTckBootstrap {
     // Bean class extraction
     // -------------------------------------------------------------------
 
+    /**
+     * Classes du TCK qu'on remplace par nos propres beans pour éviter les collisions
+     * (typiquement {@code @Inject @RegistryType(BASE)} dans des producers TCK qui ne
+     * fonctionnent pas avec la résolution Vauban des qualifiers à members). Notre
+     * {@link MetricRegistryProxyProducerBean} produit déjà tout ce qu'il faut.
+     */
+    private static final java.util.Set<String> EXCLUDED_TCK_CLASSES = java.util.Set.of(
+            "org.eclipse.microprofile.fault.tolerance.tck.metrics.util.MetricRegistryProvider"
+    );
+
     private static List<Class<?>> extractBeanClasses(Archive<?> archive) {
         var classes = new ArrayList<Class<?>>();
         ClassLoader cl = Thread.currentThread().getContextClassLoader();
         collectClassesFromArchive(archive, cl, classes, false);
+        classes.removeIf(c -> EXCLUDED_TCK_CLASSES.contains(c.getName()));
         return classes;
     }
 

@@ -1,9 +1,12 @@
 package io.vidocq.heisenberg.cdi.internal;
 
+import io.vidocq.heisenberg.api.FtMetricsRecorder;
 import io.vidocq.heisenberg.internal.ConfigResolver;
 import io.vidocq.heisenberg.internal.PolicyComposer;
 import java.lang.reflect.Method;
 import jakarta.annotation.Priority;
+import jakarta.enterprise.inject.Any;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 import jakarta.interceptor.AroundInvoke;
 import jakarta.interceptor.Interceptor;
@@ -27,6 +30,10 @@ public class FaultTolerancePriority3850Interceptor {
     @Inject
     private BulkheadStateRegistryBean bulkheadRegistry;
 
+    @Inject
+    @Any
+    private Instance<FtMetricsRecorder> recorderInstance;
+
     @AroundInvoke
     public Object around(InvocationContext context) throws Exception {
         if (ConfigResolver.interceptorPriority() != FaultToleranceInterceptor.TCK_PRIORITY_3850) {
@@ -36,9 +43,11 @@ public class FaultTolerancePriority3850Interceptor {
             return context.proceed();
         }
 
+        FtMetricsRecorder recorder = MetricsRecorderResolver.resolve(recorderInstance);
+
         Method resolvedMethod = FaultToleranceInterceptor.resolveInterceptedMethod(context);
         return PolicyComposer.invoke(context::proceed, context.getTarget(), resolvedMethod,
-                context.getParameters(), stateRegistry, bulkheadRegistry);
+                context.getParameters(), stateRegistry, bulkheadRegistry, recorder);
     }
 }
 

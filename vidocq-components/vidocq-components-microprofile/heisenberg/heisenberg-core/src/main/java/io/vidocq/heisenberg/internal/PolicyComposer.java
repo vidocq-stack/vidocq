@@ -167,6 +167,14 @@ public final class PolicyComposer {
                 } catch (CircuitBreakerOpenException e) {
                     cbResult[0] = FtMetricsRecorder.CBCallResult.CIRCUIT_BREAKER_OPEN;
                     throw e;
+                } catch (Throwable t) {
+                    // MP FT 4.1 §5.1.1 : une exception non listée dans failOn (ou listée dans
+                    // skipOn) ne compte PAS comme un échec CB — elle doit être rapportée comme
+                    // SUCCESS dans la métrique ft.circuitbreaker.calls.total.
+                    cbResult[0] = isCircuitBreakerFailure(t, cbConfig)
+                            ? FtMetricsRecorder.CBCallResult.FAILURE
+                            : FtMetricsRecorder.CBCallResult.SUCCESS;
+                    throw t;
                 } finally {
                     recorder.recordCircuitBreakerCall(runtimeBeanClass, method, cbResult[0]);
                     CircuitBreakerState stateAfter = cbRegistry.getState(beanClassName, methodKey);
@@ -256,6 +264,28 @@ public final class PolicyComposer {
             case OPEN -> FtMetricsRecorder.CBState.OPEN;
             case HALF_OPEN -> FtMetricsRecorder.CBState.HALF_OPEN;
         };
+    }
+
+    /**
+     * MP FT 4.1 §5.1.1 : détermine si une exception levée par la méthode protégée doit
+     * être comptabilisée comme un échec du circuit breaker.
+     *
+     * <p>{@code skipOn} a priorité sur {@code failOn} ; une exception non listée dans
+     * {@code failOn} (ou listée dans {@code skipOn}) ne compte PAS comme un échec et doit
+     * être rapportée comme succès dans la métrique {@code ft.circuitbreaker.calls.total}
+     * (résultat {@code success}).</p>
+     */
+    private static boolean isCircuitBreakerFailure(Throwable failure, CircuitBreakerConfig config) {
+        if (matchesAny(failure, config.skipOn())) return false;
+        return matchesAny(failure, config.failOn());
+    }
+
+    private static boolean matchesAny(Throwable failure, Class<? extends Throwable>[] types) {
+        if (types == null) return false;
+        for (Class<? extends Throwable> type : types) {
+            if (type != null && type.isAssignableFrom(failure.getClass())) return true;
+        }
+        return false;
     }
 
     private static Class<?> resolveRuntimeBeanClass(Object target, Method method) {

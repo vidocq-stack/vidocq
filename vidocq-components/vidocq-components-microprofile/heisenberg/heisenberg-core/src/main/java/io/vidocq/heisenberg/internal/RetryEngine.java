@@ -2,7 +2,9 @@ package io.vidocq.heisenberg.internal;
 
 import io.vidocq.heisenberg.api.FtMetricsRecorder;
 import java.lang.reflect.Method;
+import java.lang.reflect.InvocationTargetException;
 import java.time.Duration;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ThreadLocalRandom;
 
 public final class RetryEngine {
@@ -25,21 +27,23 @@ public final class RetryEngine {
                 recorder.recordRetry(beanClass, method, attempt, FtMetricsRecorder.RetryResult.VALUE_RETURNED);
                 return result;
             } catch (Throwable failure) {
+                Throwable effectiveFailure = unwrapInvocationFailure(failure);
                 Duration attemptDuration = Duration.ofNanos(System.nanoTime() - attemptStartedAt);
-                if (!shouldRetry(failure, config)) {
+                if (!shouldRetry(effectiveFailure, config)) {
                     recorder.recordRetry(beanClass, method, attempt, FtMetricsRecorder.RetryResult.EXCEPTION_NOT_RETRYABLE);
-                    throwAsException(failure);
+                    throwAsException(effectiveFailure);
                 }
 
-                if (attempt >= config.maxRetries()) {
+                // MP FT 4.1 §3.4 : maxRetries = -1 signifie « retry indefinitely ».
+                if (config.maxRetries() >= 0 && attempt >= config.maxRetries()) {
                     recorder.recordRetry(beanClass, method, attempt, FtMetricsRecorder.RetryResult.MAX_RETRIES_REACHED);
-                    throwAsException(failure);
+                    throwAsException(effectiveFailure);
                 }
 
                 Duration sleepDuration = computeBackoff(config);
                 if (exceedsMaxDuration(startedAt, config.maxDurationValue(), sleepDuration, attemptDuration)) {
                     recorder.recordRetry(beanClass, method, attempt, FtMetricsRecorder.RetryResult.MAX_DURATION_REACHED);
-                    throwAsException(failure);
+                    throwAsException(effectiveFailure);
                 }
 
                 sleep(sleepDuration);
@@ -130,6 +134,16 @@ public final class RetryEngine {
             throw error;
         }
         throw new RuntimeException(failure);
+    }
+
+    private static Throwable unwrapInvocationFailure(Throwable failure) {
+        if (failure instanceof InvocationTargetException ite && ite.getCause() != null) {
+            return ite.getCause();
+        }
+        if (failure instanceof ExecutionException ee && ee.getCause() != null) {
+            return ee.getCause();
+        }
+        return failure;
     }
 }
 

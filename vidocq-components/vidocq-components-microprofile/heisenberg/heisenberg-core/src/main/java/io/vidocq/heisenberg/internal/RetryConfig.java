@@ -15,8 +15,10 @@ public record RetryConfig(
         Class<? extends Throwable>[] abortOn
 ) {
     public RetryConfig {
-        if (maxRetries < 0) {
-            throw new IllegalArgumentException("maxRetries must be >= 0");
+        // MP FT 4.1 §3.4 : maxRetries = -1 signifie « retry indefinitely »
+        // (interprétation infinie par RetryEngine). Toute valeur < -1 est invalide.
+        if (maxRetries < -1) {
+            throw new IllegalArgumentException("maxRetries must be >= -1");
         }
         if (delay < 0) {
             throw new IllegalArgumentException("delay must be >= 0");

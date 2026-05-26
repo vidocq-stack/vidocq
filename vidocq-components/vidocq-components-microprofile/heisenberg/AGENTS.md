@@ -22,12 +22,24 @@
 ## État réel du code à connaître avant de modifier
 
 - Consulter `ROADMAP.md` pour l'état détaillé de chaque milestone (M0..M9).
-- Les milestones marqués ✅ sont terminés ; ceux marqués 🚧 sont en cours.
-- **État à date : M0 (bootstrap) terminé, M1+ non démarré.** Les seuls fichiers Java de
-  production existants sont des placeholders : `PolicyComposer` (vide, `private` ctor),
-  `HeisenbergExtension` (implémente `BuildCompatibleExtension` sans logique),
-  `FaultToleranceException`. Toute description ci-dessous d'un moteur (`RetryEngine`,
-  `TimeoutEngine`, etc.) est la **cible** — pas du code existant à modifier.
+- **État à date (2026-05-26) : M0–M9 terminés, TCK à 100 % PASS** —
+  `463 tests, 463 PASS, 0 fail, 0 skip` sur `run-official-tck-mp-fault-tolerance-4.1.sh all`.
+  **§9 MP Metrics (Dirac) : 100 % PASS. §10 OpenTelemetry (Humboldt) : 100 % PASS.**
+- Tous les moteurs existent et sont câblés dans `heisenberg-core` :
+  `RetryEngine`, `TimeoutEngine`, `CircuitBreakerEngine` (`CircuitBreakerState`
+  CLOSED/OPEN/HALF_OPEN), `BulkheadEngine`, `BulkheadStateRegistry`,
+  `CircuitBreakerStateRegistry`, `FallbackResolver`, `FallbackPolicy`,
+  `PolicyComposer`, `AsynchronousEngine`, `AnnotationReader`, `ConfigResolver`,
+  configs immuables (`RetryConfig`, `TimeoutConfig`, `CircuitBreakerConfig`,
+  `BulkheadConfig`, `FallbackConfig`).
+- Dans `heisenberg-cdi-vauban` (intercepteur + BCE) :
+  `FaultToleranceInterceptor` (priorité 4010), `FaultTolerancePriority3850Interceptor`
+  (variante TCK pour la priorité 3850), `FaultToleranceBinding` (marqueur),
+  `HeisenbergExtension` (BCE CDI 4.1 — validations + ré-écriture `@Priority`),
+  `StateRegistryBean` + `BulkheadStateRegistryBean` (`@ApplicationScoped`),
+  `HeisenbergAutoDiscovery` (bridge ServiceLoader vers Ravel),
+  **recorders métriques §9 / §10** (`DiracFtMetricsRecorder` + `OtelFtMetricsRecorder`,
+  fan-out via `CompositeFtMetricsRecorder` et `MetricsRecorderResolver`).
 - Modules JPMS effectifs : `io.vidocq.heisenberg.api`, `io.vidocq.heisenberg.core`,
   `io.vidocq.heisenberg.cdi.vauban` (note : suffixe `.vauban`, pas `.cdi` seul).
 - `heisenberg-core` exporte son package interne **en export qualifié** :
@@ -39,18 +51,19 @@
   l'ancien `jakarta.enterprise.inject.spi.Extension` portable. Déclaré via
   `provides … with io.vidocq.heisenberg.cdi.internal.HeisenbergExtension` dans le
   `module-info` de `cdi-vauban`.
-- Le flux cible dans `heisenberg-cdi-vauban` :
+- Le flux effectif dans `heisenberg-cdi-vauban` :
   `@Retry @Timeout @CircuitBreaker @Bulkhead @Fallback` sur une méthode CDI →
   `FaultToleranceInterceptor.around(InvocationContext)` →
-  `AnnotationReader.read(ctx)` → `PolicyComposer.build(config)` →
+  `AnnotationReader.read(ctx)` → `PolicyComposer.invoke(...)` →
   exécution de la chaîne : `FallbackPolicy` → `CircuitBreakerEngine` → `BulkheadEngine`
   → `TimeoutEngine` → `RetryEngine` → `ctx.proceed()`.
-- `StateRegistry` (`@ApplicationScoped`) stocke les états `CircuitBreakerState` et
-  `BulkheadSemaphore` via `ConcurrentHashMap<StateKey, Object>` où
+- `StateRegistryBean` / `BulkheadStateRegistryBean` (`@ApplicationScoped`) stockent
+  les états `CircuitBreakerState` et `BulkheadSemaphore` via
+  `ConcurrentHashMap<StateKey, ...>` où
   `StateKey = (beanClass.getName() + "#" + method.getName() + descriptor)`.
 - La SPI exportée est `io.vidocq.heisenberg.api.*` :
-  `PolicyContext`, `StateRegistry`, `FaultToleranceException` et les configs immuables
-  (`RetryConfig`, `TimeoutConfig`, `CircuitBreakerConfig`, `BulkheadConfig`).
+  `FaultToleranceException`, `FtMetricsRecorder` (avec `NOOP` et enums
+  `RetryResult` / `CBCallResult` / `CBState`).
 
 ## Frontières à ne pas casser
 
@@ -143,13 +156,18 @@ java -jar heisenberg-bench/target/benchmarks.jar
 
 - `heisenberg-core` est la brique fondatrice : `RetryEngine`, `TimeoutEngine`,
   `CircuitBreakerEngine` (avec `CircuitBreakerState` : CLOSED/OPEN/HALF_OPEN),
-  `BulkheadEngine`, `FallbackResolver`, `PolicyComposer`.
-  Aucun de ces composants n'importe de classe CDI.
+  `BulkheadEngine`, `FallbackResolver`, `PolicyComposer`, `AsynchronousEngine`,
+  `ConfigResolver`. **Tous existent et sont testés** (108 tests unitaires verts).
+  Aucun n'importe de classe CDI.
 - `heisenberg-cdi-vauban` est le point d'entrée CDI : `FaultToleranceInterceptor`
   (priorité de base 4010, configurable via `mp.fault.tolerance.interceptor.priority`),
+  `FaultTolerancePriority3850Interceptor` (variante TCK),
   `HeisenbergExtension` (BCE CDI 4.1 `BuildCompatibleExtension` sous
-  `io.vidocq.heisenberg.cdi.internal`, qui valide les annotations au démarrage du container),
-  `StateRegistry` (bean `@ApplicationScoped` portant l'état global des CB et Bulkheads).
+  `io.vidocq.heisenberg.cdi.internal`, qui valide les annotations au démarrage du container
+  et ré-écrit `@Priority` selon la config),
+  `StateRegistryBean` + `BulkheadStateRegistryBean` (`@ApplicationScoped`),
+  `DiracFtMetricsRecorder` (§9 MP Metrics) et `OtelFtMetricsRecorder` (§10 OpenTelemetry)
+  qui coexistent via fan-out (`CompositeFtMetricsRecorder`, `MetricsRecorderResolver`).
 - La configuration externe suit la précédence MP FT 4.1 §9 :
   `<className>/<methodName>/<AnnotationName>/<parameter>` >
   `<className>/<AnnotationName>/<parameter>` >
@@ -160,5 +178,15 @@ java -jar heisenberg-bench/target/benchmarks.jar
   Respecter scrupuleusement cet ordre dans `PolicyComposer`.
 - `@Asynchronous` change le type de retour : `CompletionStage<T>` ou `Future<T>`.
   L'exécution se fait via `Executors.newVirtualThreadPerTaskExecutor()` — pas de pool platform.
-- Avant toute modification structurelle du `PolicyComposer` ou du `StateRegistry`,
-  raisonner avec le contrat final : **TCK MicroProfile Fault Tolerance 4.1 à 100 % PASS**.
+- **Métriques §9 (MP Metrics) et §10 (OpenTelemetry)** : les deux APIs sont publiables
+  simultanément, le `Composite` fan-out chaque appel sur tous les recorders présents.
+  Pour ajouter une nouvelle métrique côté §10 : éditer `OtelFtMetricsRecorder` (noms et
+  attributs définis par le TCK `TelemetryMetricDefinition`, unités `seconds` pour les
+  durées, bucket boundaries explicites définies dans `histogram(name, "seconds")`).
+- **Test enricher Arquillian** (`heisenberg-tck/src/test/java/.../VaubanTckBootstrap.java`) :
+  la liste des beans enregistrés au container est **explicite**. Tout nouveau bean
+  `@ApplicationScoped` côté Heisenberg destiné à être visible dans le TCK doit y être
+  ajouté (sinon Vauban ne le découvre pas en mode TCK).
+- Avant toute modification structurelle du `PolicyComposer` ou des `*StateRegistryBean`,
+  raisonner avec le contrat final : **TCK MicroProfile Fault Tolerance 4.1 à 100 % PASS**
+  (à date : 463/463 = 100 %, §9 Dirac 100 %, §10 Humboldt 100 %).
