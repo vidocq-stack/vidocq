@@ -257,7 +257,7 @@ JSON Schema dialect.
 
 | Task | Notes | Status |
 |---|---|---|
-| `GrimmConfig` | Reads all `mp.openapi.*` keys via `ConfigProvider.getConfig()` (Ravel); immutable snapshot at startup | ☐ |
+| `GrimmConfig` | Reads all `mp.openapi.*` keys via `ConfigProvider.getConfig()` (Ravel); immutable snapshot at startup | ☑ |
 | `FilterConfig` | Configuration for filter and model reader class names | ☑ |
 | `mp.openapi.scan.disable` | Skip annotation scanning entirely when `true` | ☑ |
 | `mp.openapi.scan.packages` | Comma-separated list of packages to include | ☑ |
@@ -266,10 +266,10 @@ JSON Schema dialect.
 | `mp.openapi.scan.exclude.classes` | Classes to exclude | ☑ |
 | `mp.openapi.filter` | FQCN of `OASFilter` implementation | ☑ |
 | `mp.openapi.model.reader` | FQCN of `OASModelReader` implementation | ☑ |
-| `mp.openapi.servers` | Comma-separated list of server URLs to set on the model | ☐ |
-| `mp.openapi.schema.<FQCN>` | JSON string defining the schema for a class (already in M6) | ☐ |
-| `mp.openapi.extensions.scan.disable` | Disable `@Extension` annotation scanning | ☐ |
-| Integration tests | `META-INF/microprofile-config.properties` + Ravel; all config keys exercised | ☐ |
+| `mp.openapi.servers` | Comma-separated list of server URLs to set on the model | ☑ |
+| `mp.openapi.schema.<FQCN>` | JSON string defining the schema for a class (already in M6) | ☑ |
+| `mp.openapi.extensions.scan.disable` | Disable `@Extension` annotation scanning | ☑ |
+| Integration tests | `META-INF/microprofile-config.properties` + Ravel; all config keys exercised | ☑ |
 
 **Deliverable:** All spec-defined configuration keys honoured; tested via Ravel config provider.
 
@@ -367,6 +367,11 @@ endpoint, integrated with Vauban (CDI) and Cassini (JAX-RS).
       priority fix (annotation/reader paths now overwrite static); comprehensive unit tests
       (FilterInvoker null-removal × 6 + filterOpenAPI-last ordering, ModelMerger path conflicts,
       union, tag override, absent sources).
+- [x] M8 completed: `GrimmConfig` immutable snapshot reading every spec §4.1 key
+      (scan.* / filter / model.reader / servers / schema.<FQCN> / extensions.scan.disable);
+      `ConfigApplier` applies `mp.openapi.servers` to the model and registers JSON schema
+      overrides in `SchemaRegistry`; exposed `JsonDeserializer.parseRaw`; integration tests
+      use a manual MP-Config double (no impl dependency).
 - [x] M7 core completed: ModelMerger with sealed interface + ModelReaderInvoker + FilterInvoker
 
 ## Open Decisions

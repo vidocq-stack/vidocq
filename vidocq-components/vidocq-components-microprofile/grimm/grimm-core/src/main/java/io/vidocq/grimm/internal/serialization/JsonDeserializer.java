@@ -17,6 +17,18 @@ public final class JsonDeserializer {
         return OpenApiModelMapper.toOpenApi(parsed);
     }
 
+    /**
+     * Parses a JSON string into a raw object tree
+     * ({@link Map}/{@link List}/{@link String}/{@link Number}/{@link Boolean}/{@code null}).
+     * Exposed for callers that want to consume sub-trees (e.g. schema fragments).
+     */
+    public static Object parseRaw(String json) {
+        if (json == null) {
+            throw new NullPointerException("json must not be null");
+        }
+        return new Parser(json).parse();
+    }
+
     private static final class Parser {
         private final String source;
         private int index;
