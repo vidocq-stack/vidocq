@@ -18,7 +18,7 @@ class OpenApiResourceTest {
         // Spec §2.3: format query parameter overrides Accept negotiation.
         OpenApiResource resource = new OpenApiResource(sampleModelSupplier());
 
-        var response = resource.getOpenApi("json", "application/yaml");
+        var response = resource.render("json", "application/yaml");
 
         assertEquals("application/json", response.mediaType());
         assertNotNull(response.body());
@@ -30,7 +30,7 @@ class OpenApiResourceTest {
         // Spec §2.2: YAML is the default representation.
         OpenApiResource resource = new OpenApiResource(sampleModelSupplier());
 
-        var response = resource.getOpenApi(null, null);
+        var response = resource.render(null, null);
 
         assertEquals("application/yaml", response.mediaType());
         assertNotNull(response.body());
@@ -42,9 +42,25 @@ class OpenApiResourceTest {
         // Spec §2.2: Accept header drives representation when format is absent.
         OpenApiResource resource = new OpenApiResource(sampleModelSupplier());
 
-        var response = resource.getOpenApi(null, "application/json");
+        var response = resource.render(null, "application/json");
 
         assertEquals("application/json", response.mediaType());
+    }
+
+    @Test
+    void getOpenApi_returnsJaxRsResponseWithExpectedMediaType() {
+        // Keep this test runtime-provider free: validate endpoint metadata by reflection.
+        assertNotNull(OpenApiResource.class.getAnnotation(jakarta.ws.rs.Path.class));
+        try {
+            var method = OpenApiResource.class.getMethod("getOpenApi", String.class, String.class);
+            assertNotNull(method.getAnnotation(jakarta.ws.rs.GET.class));
+            var produces = method.getAnnotation(jakarta.ws.rs.Produces.class);
+            assertNotNull(produces);
+            assertTrue(java.util.Arrays.asList(produces.value()).contains("application/json"));
+            assertTrue(java.util.Arrays.asList(produces.value()).contains("application/yaml"));
+        } catch (NoSuchMethodException e) {
+            throw new AssertionError(e);
+        }
     }
 
     private Supplier<OpenAPI> sampleModelSupplier() {

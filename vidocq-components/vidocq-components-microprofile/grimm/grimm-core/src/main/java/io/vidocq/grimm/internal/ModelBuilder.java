@@ -1,0 +1,96 @@
+package io.vidocq.grimm.internal;
+
+import io.vidocq.grimm.internal.config.ConfigApplier;
+import io.vidocq.grimm.internal.config.GrimmConfig;
+import io.vidocq.grimm.internal.invoker.FilterInvoker;
+import io.vidocq.grimm.internal.invoker.ModelReaderInvoker;
+import io.vidocq.grimm.internal.merger.AnnotationSource;
+import io.vidocq.grimm.internal.merger.ModelMerger;
+import io.vidocq.grimm.internal.merger.ModelSource;
+import io.vidocq.grimm.internal.merger.ReaderSource;
+import io.vidocq.grimm.internal.merger.StaticFileSource;
+import io.vidocq.grimm.internal.reader.StaticFileReader;
+import io.vidocq.grimm.internal.scanner.AnnotationScanner;
+import org.eclipse.microprofile.openapi.OASFactory;
+import org.eclipse.microprofile.openapi.models.OpenAPI;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.Optional;
+
+/**
+ * Orchestrates the full MicroProfile OpenAPI 4.1 model build pipeline (spec §4.4).
+ *
+ * <p>Six steps, executed once at startup:</p>
+ * <ol>
+ *   <li>Read static file ({@link StaticFileReader})</li>
+ *   <li>Invoke {@link org.eclipse.microprofile.openapi.OASModelReader} if configured
+ *       ({@link ModelReaderInvoker})</li>
+ *   <li>Scan annotated classes ({@link AnnotationScanner})</li>
+ *   <li>Merge the three sources with spec priority annotation &gt; reader &gt; static
+ *       ({@link ModelMerger})</li>
+ *   <li>Apply {@code mp.openapi.servers} / {@code mp.openapi.schema.<FQCN>}
+ *       ({@link ConfigApplier})</li>
+ *   <li>Apply {@link org.eclipse.microprofile.openapi.OASFilter} if configured
+ *       ({@link FilterInvoker})</li>
+ * </ol>
+ *
+ * <p>Pure Java — no CDI dependency. Consumed by the {@code grimm-cdi-vauban}
+ * extension which calls {@link #build(GrimmConfig, Collection)} at container startup.</p>
+ */
+public final class ModelBuilder {
+
+    private final StaticFileReader staticFileReader = new StaticFileReader();
+    private final ModelReaderInvoker modelReaderInvoker = new ModelReaderInvoker();
+    private final ModelMerger merger = new ModelMerger();
+    private final FilterInvoker filterInvoker = new FilterInvoker();
+
+    /**
+     * Runs the full pipeline.
+     *
+     * @param config         immutable configuration snapshot (must not be {@code null})
+     * @param annotatedTypes JAX-RS resource / model classes to scan (may be empty)
+     * @return the merged, filtered {@link OpenAPI} document
+     */
+    public OpenAPI build(GrimmConfig config, Collection<Class<?>> annotatedTypes) {
+        if (config == null) config = GrimmConfig.defaults();
+        if (annotatedTypes == null) annotatedTypes = List.of();
+
+        List<ModelSource> sources = new ArrayList<>(3);
+
+        // Step 1 — static file (spec §4.2)
+        Optional<OpenAPI> staticModel = staticFileReader.readOpenAPI();
+        staticModel.ifPresent(m -> sources.add(new StaticFileSource(m)));
+
+        // Step 2 — OASModelReader (spec §4.1)
+        OpenAPI readerModel = modelReaderInvoker.invokeModelReader(config.filter());
+        if (readerModel != null) {
+            sources.add(new ReaderSource(readerModel));
+        }
+
+        // Step 3 — annotation scanning (spec §3)
+        AnnotationScanner scanner = new AnnotationScanner(config.scan());
+        OpenAPI annotationModel = scanner.scanClasses(annotatedTypes);
+        sources.add(new AnnotationSource(annotationModel));
+
+        // Step 4 — merge with spec priority (§4.4)
+        OpenAPI merged = merger.merge(sources);
+        if (merged.getOpenapi() == null) {
+            merged.setOpenapi("3.1.0");
+        }
+
+        // Step 5 — apply config overrides (mp.openapi.servers, mp.openapi.schema.<FQCN>)
+        ConfigApplier.applyServers(merged, config);
+        ConfigApplier.applySchemaOverrides(scanner.schemaRegistry(), config);
+        scanner.schemaRegistry().applyTo(merged);
+
+        // Step 6 — OASFilter (§4.3)
+        OpenAPI filtered = filterInvoker.applyFilter(merged, config.filter());
+
+        // Defensive: if filterInvoker returned null (model was null), fall back to empty model.
+        return filtered != null ? filtered : OASFactory.createObject(OpenAPI.class).openapi("3.1.0");
+    }
+}
+
+
