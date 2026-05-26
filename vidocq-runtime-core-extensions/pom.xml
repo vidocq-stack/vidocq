@@ -18,6 +18,7 @@
         <subproject>vidocq-runtime-chappe-extension</subproject>
         <subproject>vidocq-runtime-cassini-rest-extension</subproject>
         <subproject>vidocq-runtime-cyrano-extension</subproject>
+        <subproject>vidocq-runtime-cervantes-jwt-extension</subproject>
         <subproject>vidocq-runtime-humboldt-extension</subproject>
         <subproject>vidocq-runtime-mansart-pool-extension</subproject>
         <subproject>vidocq-runtime-mansart-data-extension</subproject>

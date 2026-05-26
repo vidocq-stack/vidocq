@@ -18,5 +18,6 @@
         <subproject>vidocq-runtime-arquillian</subproject>
         <subproject>vidocq-runtime-it-cassini-rest</subproject>
         <subproject>vidocq-runtime-it-humboldt-cassini</subproject>
+        <subproject>vidocq-runtime-it-cervantes-jwt</subproject>
     </subprojects>
 </project>
