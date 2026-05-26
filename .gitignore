@@ -34,3 +34,6 @@ bin/
 # IntelliJ IDEA
 .idea/
 *.iml
+
+# Claude Code / tooling local
+.claude/
