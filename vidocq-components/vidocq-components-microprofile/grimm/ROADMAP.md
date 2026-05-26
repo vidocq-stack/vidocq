@@ -192,15 +192,15 @@ ServiceLoader.
 
 | Task | Notes | Status |
 |---|---|---|
-| JAX-RS resource class discovery | Identify `@Path`-annotated classes; derive HTTP method + path from `@GET`/`@POST`/… + `@Path` | ☐ |
-| `@Operation` processing | Maps `operationId`, `summary`, `description`, `tags`, `deprecated`, `hidden` | ☐ |
-| `@Parameter` / `@Parameters` | `in` (path/query/header/cookie), `name`, `required`, `schema`, `description` | ☐ |
-| JAX-RS parameter inference | Infer path/query/header parameters from `@PathParam`, `@QueryParam`, `@HeaderParam` when no explicit `@Parameter` | ☐ |
-| `@RequestBody` processing | `content`, `description`, `required`; infer from JAX-RS `@Consumes` + entity body parameter | ☐ |
-| `@APIResponse` / `@APIResponses` | Status codes, `content`, `description`, `headers` | ☐ |
-| Response inference | Infer 200 response with return type schema when no explicit `@APIResponse` | ☐ |
-| `@Callback` / `@Callbacks` | Maps callbacks on operations | ☐ |
-| Unit tests | JAX-RS resources with various annotation combinations; verify generated `PathItem` / `Operation` | ☐ |
+| JAX-RS resource class discovery | Identify `@Path`-annotated classes; derive HTTP method + path from `@GET`/`@POST`/… + `@Path` | ☑ |
+| `@Operation` processing | Maps `operationId`, `summary`, `description`, `tags`, `deprecated`, `hidden` | ☑ |
+| `@Parameter` / `@Parameters` | `in` (path/query/header/cookie), `name`, `required`, `schema`, `description` | ☑ |
+| JAX-RS parameter inference | Infer path/query/header parameters from `@PathParam`, `@QueryParam`, `@HeaderParam` when no explicit `@Parameter` | ☑ |
+| `@RequestBody` processing | `content`, `description`, `required`; infer from JAX-RS `@Consumes` + entity body parameter | ☑ |
+| `@APIResponse` / `@APIResponses` | Status codes, `content`, `description`, `headers` | ☑ |
+| Response inference | Infer 200 response with return type schema when no explicit `@APIResponse` | ☑ |
+| `@Callback` / `@Callbacks` | Maps callbacks on operations | ☑ |
+| Unit tests | JAX-RS resources with various annotation combinations; verify generated `PathItem` / `Operation` | ☑ |
 | First JMH benchmark baseline | Scanning throughput on a 50-resource class set vs SmallRye OpenAPI | ☐ |
 
 **Deliverable:** Fully annotated JAX-RS resources produce correct `paths` in the model.
@@ -353,6 +353,9 @@ endpoint, integrated with Vauban (CDI) and Cassini (JAX-RS).
 - [x] M2 completed: JSON/YAML serialization with round-trip tests
 - [x] M3 completed: StaticFileReader with classpath scanning
 - [x] M4 completed: AnnotationScanner with document-level annotations + ScanConfig filtering
+- [x] M5 core completed: JAX-RS resource scanning — `@Operation`, `@Parameter`/JAX-RS param
+      inference, `@RequestBody` (+ `@Consumes` inference), `@APIResponse`/`@APIResponses`
+      (+ default 200 inference), `@Callback`/`@Callbacks`. JMH baseline benchmark deferred.
 - [x] M7 core completed: ModelMerger with sealed interface + ModelReaderInvoker + FilterInvoker
 
 ## Open Decisions

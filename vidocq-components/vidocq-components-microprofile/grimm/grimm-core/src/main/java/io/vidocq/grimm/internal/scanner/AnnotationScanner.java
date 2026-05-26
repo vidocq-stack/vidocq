@@ -25,6 +25,7 @@ import java.util.Objects;
 public final class AnnotationScanner {
 
     private final ScanConfig config;
+    private final JaxRsResourceScanner jaxRsScanner = new JaxRsResourceScanner();
 
     /**
      * Creates an {@code AnnotationScanner} with the given configuration.
@@ -56,6 +57,7 @@ public final class AnnotationScanner {
             processTags(clazz, openAPI);
             processServers(clazz, openAPI);
             processExternalDocumentation(clazz, openAPI);
+            jaxRsScanner.scan(clazz, openAPI);
         }
 
         return openAPI;
