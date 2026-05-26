@@ -106,7 +106,7 @@ public final class ModelMerger {
             if (target.getPaths() == null) {
                 target.setPaths(source.getPaths());
             } else {
-                mergePaths(target.getPaths(), source.getPaths());
+                mergePaths(target.getPaths(), source.getPaths(), true);
             }
         }
         if (source.getComponents() != null) {
@@ -137,7 +137,7 @@ public final class ModelMerger {
             if (target.getPaths() == null) {
                 target.setPaths(source.getPaths());
             } else {
-                mergePaths(target.getPaths(), source.getPaths());
+                mergePaths(target.getPaths(), source.getPaths(), true);
             }
         }
         if (source.getComponents() != null) {
@@ -154,10 +154,17 @@ public final class ModelMerger {
         }
     }
 
-    private void mergePaths(Paths target, Paths source) {
+    /**
+     * Merges {@code source} path items into {@code target}.
+     *
+     * @param overwriteOnConflict if {@code true}, source path items override existing ones in
+     *                            target (used by reader/annotation merges); if {@code false},
+     *                            existing target items are preserved (static file merges).
+     */
+    private void mergePaths(Paths target, Paths source, boolean overwriteOnConflict) {
         if (source.getPathItems() != null) {
             for (String path : source.getPathItems().keySet()) {
-                if (!target.hasPathItem(path)) {
+                if (overwriteOnConflict || !target.hasPathItem(path)) {
                     target.addPathItem(path, source.getPathItem(path));
                 }
             }

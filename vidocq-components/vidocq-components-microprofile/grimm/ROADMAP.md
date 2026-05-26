@@ -239,13 +239,13 @@ JSON Schema dialect.
 |---|---|---|
 | `ModelReaderInvoker` | Loads class named by `mp.openapi.model.reader` via `Class.forName` + instantiation; calls `buildModel()` | ☑ |
 | `FilterInvoker` | Loads class named by `mp.openapi.filter`; calls each `filterXxx` method in the order defined by spec §4.3 | ☑ |
-| Filter method order | `filterOpenAPI` is called last (§4.3); implement the full sequence: `filterPathItem`, `filterOperation`, `filterParameter`, `filterRequestBody`, `filterAPIResponse`, `filterSchema`, `filterHeader`, `filterTag`, `filterServer`, `filterLink`, `filterCallback`, `filterOpenAPI` | ☐ |
-| `null` return from filter | A filter method returning `null` removes the element from the model (spec §4.3.1) | ☐ |
+| Filter method order | `filterOpenAPI` is called last (§4.3); implement the full sequence: `filterPathItem`, `filterOperation`, `filterParameter`, `filterRequestBody`, `filterAPIResponse`, `filterSchema`, `filterHeader`, `filterTag`, `filterServer`, `filterLink`, `filterCallback`, `filterOpenAPI` | ☑ |
+| `null` return from filter | A filter method returning `null` removes the element from the model (spec §4.3.1) | ☑ |
 | `ModelMerger` — three-source merge | Priority: annotations > `OASModelReader` > static file (spec §4.4) | ☑ |
 | `ModelSource` sealed interface | `StaticFileSource`, `AnnotationSource`, `ReaderSource` — used by `ModelMerger` | ☑ |
 | Unit tests `FilterInvoker` | Filter that removes operations; filter that renames tags | ☑ |
 | Unit tests `ModelReaderInvoker` | Reader that adds a server; reader that sets `info` | ☑ |
-| Unit tests `ModelMerger` | All three sources present; priority conflicts; absent sources | ☐ |
+| Unit tests `ModelMerger` | All three sources present; priority conflicts; absent sources | ☑ |
 
 **Deliverable:** Full programmatic model extension and post-processing pipeline working.
 
@@ -361,6 +361,12 @@ endpoint, integrated with Vauban (CDI) and Cassini (JAX-RS).
       `JaxRsResourceScanner`: parameters, request body, and response media types now carry
       generated schemas, and `components/schemas` is populated. `mp.openapi.schema.<FQCN>`
       config override deferred to M8.
+- [x] M7 completed: full `OASFilter` traversal (spec §4.3 — paths, operations, parameters,
+      request bodies, responses, schemas, headers, tags, servers, links, callbacks, security
+      schemes; `filterOpenAPI` last) with `null`-return removal (§4.3.1); `ModelMerger`
+      priority fix (annotation/reader paths now overwrite static); comprehensive unit tests
+      (FilterInvoker null-removal × 6 + filterOpenAPI-last ordering, ModelMerger path conflicts,
+      union, tag override, absent sources).
 - [x] M7 core completed: ModelMerger with sealed interface + ModelReaderInvoker + FilterInvoker
 
 ## Open Decisions
