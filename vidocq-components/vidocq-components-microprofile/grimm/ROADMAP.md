@@ -379,9 +379,10 @@ endpoint, integrated with Vauban (CDI) and Cassini (JAX-RS).
       (`OpenApiHttpChappeTest`) covering YAML default and JSON `format` override.
 - [x] M10 launched: `grimm-tck` now runs a smoke test (`GrimmTckSmokeTest`) and
       executes the official MP OpenAPI 4.1 TCK from dependency scanning under
-      `-Ptck-official`. Current baseline: suite executes (347 tests), but endpoint
-      calls fail with `ConnectException: Connection refused` in Arquillian runtime;
-      next step is runtime/container wiring for TCK deployments.
+      `-Ptck-official`. Current baseline: suite executes with custom Grimm Arquillian
+      container (353 tests, 317 failures, 29 skipped), improving over initial wiring;
+      remaining failures are mainly endpoint reachability (`ConnectException`) plus
+      deployment-time archive/descriptor edge cases on a subset of apps.
 - [x] M7 core completed: ModelMerger with sealed interface + ModelReaderInvoker + FilterInvoker
 
 ## Open Decisions
