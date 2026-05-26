@@ -35,9 +35,19 @@ public final class JweDecryptor {
     private static final int GCM_TAG_BITS = 128;
 
     private final PrivateKey decryptionKey;
+    /**
+     * If non-null, only JWE tokens whose header {@code alg} exactly matches this value are
+     * accepted. Enforces {@code mp.jwt.decrypt.key.algorithm} (MP JWT spec §9.2.4).
+     */
+    private final String requiredAlgorithm;
 
     public JweDecryptor(PrivateKey decryptionKey) {
+        this(decryptionKey, null);
+    }
+
+    public JweDecryptor(PrivateKey decryptionKey, String requiredAlgorithm) {
         this.decryptionKey = Objects.requireNonNull(decryptionKey, "decryptionKey");
+        this.requiredAlgorithm = requiredAlgorithm; // nullable
     }
 
     /** @return le JWS compact imbriqué (à valider ensuite). */
@@ -49,6 +59,19 @@ public final class JweDecryptor {
         JsonObject header = readHeader(parts[0]);
         String alg = stringMember(header, "alg");
         String enc = stringMember(header, "enc");
+
+        // MP JWT spec §9.2.4: if mp.jwt.decrypt.key.algorithm is configured, enforce it.
+        if (requiredAlgorithm != null && !requiredAlgorithm.equals(alg)) {
+            throw new JwtValidationException(
+                    "JWE key-management algorithm mismatch: configured=" + requiredAlgorithm + ", token=" + alg);
+        }
+
+        // MP JWT spec §9.2: JWE must have cty="JWT" to indicate the payload is a nested JWT (JWS).
+        String cty = stringMember(header, "cty");
+        if (!"JWT".equalsIgnoreCase(cty)) {
+            throw new JwtValidationException(
+                    "JWE 'cty' header must be 'JWT' for nested JWT, got: " + cty);
+        }
 
         byte[] cek = unwrapContentKey(B64URL.decode(parts[1]), alg);
         byte[] aad = parts[0].getBytes(StandardCharsets.US_ASCII);

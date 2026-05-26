@@ -51,8 +51,31 @@ public class CervantesClaimExtension implements BuildCompatibleExtension {
 
     @Synthesis
     public void synthesizeClaimBeans(SyntheticComponents components, Types types) {
-        Set<String> registered = new HashSet<>();
+        // First pass: resolve Provider<T>/Instance<T> wrappers → collect the effective types to
+        // register. CDI/Vauban strips Provider<T> and Instance<T> wrappers and looks up a bean of
+        // type T directly (CDI spec §6.6). We must register a synthetic @Claim bean for T, not for
+        // Provider<T>/Instance<T>. ClaimValue<T>, Optional<T>, Supplier<T> are NOT stripped —
+        // ClaimSyntheticCreator inspects the full InjectionPoint type and handles the wrapping.
+        Map<String, Type> effectiveTypes = new LinkedHashMap<>();
         for (Type type : claimTypes.values()) {
+            if (type instanceof ParameterizedType pt) {
+                String rawName = rawTypeName(pt);
+                if ("jakarta.inject.Provider".equals(rawName)
+                        || "jakarta.enterprise.inject.Instance".equals(rawName)) {
+                    // Unwrap: register a bean for the inner type T
+                    Type innerType = pt.typeArguments().isEmpty() ? null : pt.typeArguments().get(0);
+                    if (innerType != null) {
+                        effectiveTypes.putIfAbsent(innerType.toString(), innerType);
+                    }
+                    // Do NOT add Provider<T>/Instance<T> itself
+                    continue;
+                }
+            }
+            effectiveTypes.put(type.toString(), type);
+        }
+
+        Set<String> registered = new HashSet<>();
+        for (Type type : effectiveTypes.values()) {
             // Primitifs (boolean, int, long, …) : on enregistre le bean au type boxé — Weld/Vauban
             // résout une injection primitive depuis un bean wrapper via auto-unboxing (cf.
             // ConfigCdiExtension de Ravel). Nécessite que le lang-model expose bien un PrimitiveType
@@ -65,23 +88,33 @@ public class CervantesClaimExtension implements BuildCompatibleExtension {
                 addClaimBean(components, effectiveClass);
                 continue;
             }
-            if (!registered.add(type.toString())) {
-                continue;
-            }
-            boolean parameterized = type instanceof ParameterizedType;
-            Class<?> runtimeClass = parameterized ? null : toRuntimeClassOrNull(type);
-            if (runtimeClass != null) {
-                addClaimBean(components, runtimeClass);
-            } else {
-                // Types paramétrés (ClaimValue<T>, Optional<T>, Provider<T>, Set<String>, …) : on
-                // conserve la Type lang-model, sinon le paramètre générique est perdu.
-                components.addBean(Object.class)
-                        .type(type)
-                        .qualifier(Claim.class)
-                        .scope(Dependent.class)
-                        .createWith(ClaimSyntheticCreator.class);
-            }
+            registerForType(components, registered, type);
         }
+    }
+
+    private static void registerForType(SyntheticComponents components, Set<String> registered, Type type) {
+        if (!registered.add(type.toString())) {
+            return;
+        }
+        boolean parameterized = type instanceof ParameterizedType;
+        Class<?> runtimeClass = parameterized ? null : toRuntimeClassOrNull(type);
+        if (runtimeClass != null) {
+            addClaimBean(components, runtimeClass);
+        } else {
+            // Types paramétrés (ClaimValue<T>, Optional<T>, Set<String>, …) : on
+            // conserve la Type lang-model, sinon le paramètre générique est perdu.
+            components.addBean(Object.class)
+                    .type(type)
+                    .qualifier(Claim.class)
+                    .scope(Dependent.class)
+                    .createWith(ClaimSyntheticCreator.class);
+        }
+    }
+
+    /** Returns the fully-qualified raw type name for a lang-model ParameterizedType, or null. */
+    private static String rawTypeName(ParameterizedType pt) {
+        // CDI lang-model API: ParameterizedType.genericClass() returns the raw ClassType
+        return pt.genericClass().declaration().name();
     }
 
     /** Enregistre un {@code SyntheticBean} {@code @Claim} {@code @Dependent} de type {@code beanClass}. */

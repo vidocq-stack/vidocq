@@ -19,6 +19,7 @@ module io.vidocq.cervantes.cassini {
 
     requires static jakarta.cdi;
     requires static jakarta.inject;
+    requires static org.eclipse.microprofile.config; // mp.jwt.token.header / mp.jwt.token.cookie
 
     exports io.vidocq.cervantes.cassini;
 }

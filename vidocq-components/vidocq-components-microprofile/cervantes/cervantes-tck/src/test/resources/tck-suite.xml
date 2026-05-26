@@ -1,0 +1,26 @@
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
+<!--
+    TestNG suite for the MP JWT 2.1 base TCK.
+    Groups: jwt, utils, jaxrs, cdi, cdi-json, cdi-provider, config
+    Excludes: ejb-optional, jacc-optional (not applicable for a JAX-RS-only implementation)
+-->
+<suite name="MP JWT 2.1 TCK" verbose="2">
+    <test name="MP JWT Base Tests">
+        <groups>
+            <run>
+                <include name="jwt"/>
+                <include name="utils"/>
+                <include name="jaxrs"/>
+                <include name="cdi"/>
+                <include name="cdi-json"/>
+                <include name="cdi-provider"/>
+                <include name="config"/>
+                <!-- ee-security-optional: group-to-role mapping (EE Security API) — not implemented -->
+                <exclude name="ee-security-optional"/>
+            </run>
+        </groups>
+        <packages>
+            <package name="org.eclipse.microprofile.jwt.tck"/>
+        </packages>
+    </test>
+</suite>

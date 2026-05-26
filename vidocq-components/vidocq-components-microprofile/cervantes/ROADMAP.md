@@ -53,20 +53,21 @@ Source de vérité des jalons et du score TCK. TDD à chaque étape (rouge → v
   détection JWE (5 parties) + déchiffrement dans `DefaultJwtValidator`, câblage
   `mp.jwt.decrypt.key`/`.location` dans `JwtAuthConfigProducer`. **+6 tests.** ℹ️ Content-enc
   `A128CBC-HS256` non encore supporté (seul `A256GCM`, le défaut spec) — à ajouter si le TCK l'exige.
-- [~] **M6 — TCK officiel.** Reconnaissance faite (2026-05-26) :
-  - TCK **public Maven Central** (`org.eclipse.microprofile.jwt:microprofile-jwt-auth-tck:2.1`),
-    **TestNG+Arquillian+ShrinkWrap** (jose4j). Pom modèle = `heisenberg-tck` (Model 4.0.0, profils
-    smoke/tck-official, arquillian-testng-container 1.10.1.Final pour JDK 25).
-  - Le TCK déploie des apps JAX-RS et tape en HTTP → container Arquillian **CDI+HTTP** ; le
-    `CassiniTestHarness` est non-CDI → répliquer le wiring runtime `CassiniExtension` par déploiement
-    (`VaubanContainerBuilder.addBeanClass+scanClasspath` → `VaubanBeanProvider` → `CassiniStack.builder()
-    .beanProvider()` → `ChappeHttpAdapter(adapter, requestContext::runInScope)` → mount `Server` chappe)
-    + enregistrer la MP-Config (clé+issuer) de l'archive par déploiement.
-  - ✅ **`@Claim` débloqué (M3b fait)** — les apps TCK qui injectent `@Claim` peuvent désormais se
-    déployer. Reste : `@Context SecurityContext` lu *en ressource* reflétant le JWT (→ **patch cassini
-    `FieldInjector`**, branche `pr/ybl/jwt-needs`), et la vérification de `@Claim` primitif (gap Vauban
-    documenté en M3b → branche `pr/ybl/jwt-needs` sur vauban si le TCK l'exige). Ordre restant :
-    **patch cassini → harness Arquillian → triage**. Cible 100 % PASS.
+- [x] **M6 — TCK officiel MP JWT 2.1 : 206/206 PASS.** ✅ Module `cervantes-tck` hors-reactor
+  (Model 4.0.0 standalone, gabarit heisenberg-tck), `CervantesJwtDeployableContainer` Arquillian
+  (Vauban CDI + Cassini HTTP par déploiement : archive ShrinkWrap → bean classes, MP-Config de
+  l'archive → system props, réécriture des `*.location` `http://localhost:8080` → URL éphémère
+  réelle après démarrage du serveur), `run-official-tck-mp-jwt-2.1.sh`. **206 tests, 0 échec, 0 skip**
+  (vérifié sur run propre). Exclusions documentées (non applicables au profil Core+JWT) : tests
+  container *servlet* (`…/tck/container/servlet/**`) et groupe TestNG `ee-security-optional`.
+  - Prérequis livrés : patch **cassini** `@Context SecurityContext` (mergé sur main, REST TCK 4.0
+    2535 PASS préservé) + fix **vauban** VAU-INJ-PRIM (mergé).
+  - Gaps spec révélés par le TCK et corrigés dans cervantes-core/-cdi-vauban : `KeyResolvers` (HTTP
+    lazy + autodétection PEM/JWKS + relecture URL post-démarrage), `JwksSource` (Accept header +
+    résolution classpath §9.2.2), `JwkParser` (clé privée JWK/CRT), `Jwe`/`JweDecryptor` (algorithme
+    requis + contrôle `cty=JWT`), `ClaimResolver` (`raw_token`→JsonString, `aud` simple→array),
+    `CervantesClaimExtension` (unwrap `Provider<T>`/`Instance<T>`), `JwtAuthenticationFilter`
+    (extraction token/cookie + erreurs), `DefaultJsonWebToken` (token anonyme → null par claim).
 - [ ] **M7 — Bench & examples.** `cervantes-bench` (JMH vs SmallRye JWT, → `BENCH.md`),
   `cervantes-examples`.
 - [ ] **M8 — Wrapper runtime (repo `vidocq`).** `vidocq-runtime-cervantes-jwt-extension`
@@ -77,7 +78,7 @@ Source de vérité des jalons et du score TCK. TDD à chaque étape (rouge → v
 
 | Date | Suite | PASS | FAIL | SKIP | Note |
 |------|-------|------|------|------|------|
-| —    | MP JWT 2.1 | — | — | — | non lancé (M6) |
+| 2026-05-26 | MP JWT 2.1 | 206 | 0 | 0 | 100 % ; exclusions : container servlet + groupe `ee-security-optional` |
 
 ## Décisions actées
 

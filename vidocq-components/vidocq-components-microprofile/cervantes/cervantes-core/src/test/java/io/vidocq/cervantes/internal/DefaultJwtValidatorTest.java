@@ -171,7 +171,7 @@ class DefaultJwtValidatorTest {
         // config sans issuer : iss du token ignoré
         DefaultJwtValidator validator = new DefaultJwtValidator(
                 new ConfiguredKeyResolver(RSA.getPublic()),
-                new JwtConfig(Optional.empty(), Set.of(), Duration.ofSeconds(60), true),
+                new JwtConfig(Optional.empty(), Set.of(), Duration.ofSeconds(60), true, Optional.empty(), false),
                 CLOCK);
         String token = rsaToken(baseClaims().add("iss", "https://whatever").build());
         assertNotNull(validator.validate(token));

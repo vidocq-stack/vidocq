@@ -4,6 +4,7 @@ import io.vidocq.cervantes.cdi.JsonWebTokenContext;
 import io.vidocq.cervantes.internal.DefaultJsonWebToken;
 import jakarta.enterprise.inject.spi.InjectionPoint;
 import jakarta.inject.Provider;
+import jakarta.json.Json;
 import jakarta.json.JsonArray;
 import jakarta.json.JsonNumber;
 import jakarta.json.JsonObject;
@@ -152,7 +153,9 @@ public final class ClaimResolver {
             return v.getValueType() == JsonValue.ValueType.OBJECT ? v.asJsonObject() : null;
         }
         if (raw == JsonArray.class) {
-            return v.getValueType() == JsonValue.ValueType.ARRAY ? v.asJsonArray() : null;
+            if (v.getValueType() == JsonValue.ValueType.ARRAY) return v.asJsonArray();
+            // MP JWT spec: 'aud' can be a single string — wrap in an array for JsonArray injection
+            return Json.createArrayBuilder().add(v).build();
         }
         if (raw == JsonString.class) {
             return v instanceof JsonString ? v : null;
@@ -164,6 +167,12 @@ public final class ClaimResolver {
     }
 
     private static JsonValue rawJson(JsonWebToken token, String name) {
+        // raw_token is not in the JWT payload — it is the raw string of the token itself.
+        // getClaim(Claims.raw_token.name()) returns the raw String; wrap it as JsonString.
+        if (Claims.raw_token.name().equals(name)) {
+            String raw = token.getRawToken();
+            return raw != null ? Json.createValue(raw) : JsonValue.NULL;
+        }
         if (token instanceof DefaultJsonWebToken d) {
             return d.rawClaim(name);
         }

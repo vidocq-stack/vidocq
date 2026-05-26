@@ -33,7 +33,9 @@ class JsonWebTokenProducerTest {
         JsonWebToken jwt = producer.currentToken(new JsonWebTokenContext());
 
         assertNull(jwt.getName(), "anonymous principal has no name");
-        assertTrue(jwt.getClaimNames().isEmpty(), "anonymous principal has no claims");
+        // MP JWT TCK EmptyTokenTest: an unauthenticated/empty token exposes null claim names
+        // (not an empty set) — the DefaultJsonWebToken.anonymous() contract.
+        assertNull(jwt.getClaimNames(), "anonymous principal exposes no claim names");
     }
 
     @Test

@@ -30,16 +30,28 @@ public final class DefaultJsonWebToken implements JsonWebToken {
         this.rawToken = rawToken;
     }
 
+    /** Sentinel payload for the anonymous token — distinguishable from a real empty payload. */
+    private static final JsonObject ANONYMOUS_PAYLOAD = JsonValue.EMPTY_JSON_OBJECT;
+
     /**
-     * Principal anonyme (aucun claim, {@code getName() == null}, {@code getGroups()} vide) — utilisé
-     * par l'intégration CDI quand aucun JWT n'est présent sur la requête courante.
+     * Principal anonyme (aucun claim, {@code getName() == null}, {@code getClaimNames() == null},
+     * {@code getRawToken() == null}) — utilisé par l'intégration CDI quand aucun JWT n'est
+     * présent sur la requête courante.
+     *
+     * <p>MP JWT spec §"EmptyToken" : l'endpoint peut recevoir un principal anonyme ; les méthodes
+     * d'accès aux claims doivent toutes renvoyer {@code null} (pas une collection vide).</p>
      */
     public static DefaultJsonWebToken anonymous() {
-        return new DefaultJsonWebToken(JsonValue.EMPTY_JSON_OBJECT, null);
+        return new DefaultJsonWebToken(ANONYMOUS_PAYLOAD, null);
+    }
+
+    private boolean isAnonymous() {
+        return payload == ANONYMOUS_PAYLOAD && rawToken == null;
     }
 
     @Override
     public String getName() {
+        if (isAnonymous()) return null;
         String upn = getClaim("upn");
         if (upn != null) return upn;
         String preferred = getClaim("preferred_username");
@@ -49,6 +61,7 @@ public final class DefaultJsonWebToken implements JsonWebToken {
 
     @Override
     public Set<String> getClaimNames() {
+        if (isAnonymous()) return null;
         return Set.copyOf(payload.keySet());
     }
 
@@ -67,12 +80,15 @@ public final class DefaultJsonWebToken implements JsonWebToken {
 
     @Override
     public String getRawToken() {
-        return rawToken;
+        return rawToken; // null for anonymous
     }
 
     @Override
     @SuppressWarnings("unchecked")
     public <T> T getClaim(String claimName) {
+        if (isAnonymous()) {
+            return null;
+        }
         if (Claims.raw_token.name().equals(claimName)) {
             return (T) rawToken;
         }

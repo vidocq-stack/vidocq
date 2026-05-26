@@ -55,15 +55,21 @@ public class JwtAuthConfigProducer {
         }
     }
 
-    /** Déchiffrement JWE optionnel : {@code mp.jwt.decrypt.key} (inline) ou {@code .location}. {@code null} si absent. */
+    /**
+     * Déchiffrement JWE optionnel : {@code mp.jwt.decrypt.key} (inline) ou {@code .location}.
+     * {@code null} si absent. Lit optionnellement {@code mp.jwt.decrypt.key.algorithm} pour
+     * valider que l'algorithme dans le JWE correspond à celui configuré.
+     */
     static JweDecryptor buildDecryptor(Config config) throws JwtValidationException {
+        Optional<String> algorithm = config.getOptionalValue("mp.jwt.decrypt.key.algorithm", String.class);
+        String requiredAlgorithm = algorithm.orElse(null);
         Optional<String> inline = config.getOptionalValue("mp.jwt.decrypt.key", String.class);
         if (inline.isPresent()) {
-            return Jwe.decryptorFromInlinePem(inline.get());
+            return Jwe.decryptorFromInlinePem(inline.get(), requiredAlgorithm);
         }
         Optional<String> location = config.getOptionalValue("mp.jwt.decrypt.key.location", String.class);
         if (location.isPresent()) {
-            return Jwe.decryptorFromLocation(location.get());
+            return Jwe.decryptorFromLocation(location.get(), requiredAlgorithm);
         }
         return null;
     }
@@ -73,7 +79,11 @@ public class JwtAuthConfigProducer {
         Set<String> audiences = config.getOptionalValue("mp.jwt.verify.audiences", String.class)
                 .map(JwtAuthConfigProducer::splitCsv)
                 .orElseGet(Set::of);
-        return new JwtConfig(issuer, audiences, JwtConfig.DEFAULT_CLOCK_SKEW, true);
+        Optional<Long> tokenAge = config.getOptionalValue("mp.jwt.verify.token.age", Long.class);
+        // Encryption required when a decryption key is configured (mp.jwt.decrypt.key or .location)
+        boolean encryptionRequired = config.getOptionalValue("mp.jwt.decrypt.key", String.class).isPresent()
+                || config.getOptionalValue("mp.jwt.decrypt.key.location", String.class).isPresent();
+        return new JwtConfig(issuer, audiences, JwtConfig.DEFAULT_CLOCK_SKEW, true, tokenAge, encryptionRequired);
     }
 
     static KeyResolver buildKeyResolver(Config config) throws JwtValidationException {

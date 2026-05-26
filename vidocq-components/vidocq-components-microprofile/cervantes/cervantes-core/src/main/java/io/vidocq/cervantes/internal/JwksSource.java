@@ -22,15 +22,41 @@ interface JwksSource {
     byte[] fetch() throws JwtValidationException;
 
     /**
-     * Construit une source depuis une location : {@code http(s)://…} → HTTP (HttpClient JDK,
-     * virtual threads), sinon traitée comme un chemin de fichier (avec ou sans schéma {@code file:}).
+     * Construit une source depuis une location (MP JWT spec §9.2.2) :
+     * <ul>
+     *   <li>{@code http(s)://…} → HTTP (HttpClient JDK, virtual threads)</li>
+     *   <li>{@code /…} → ressource classpath (Thread classloader ou system classloader)</li>
+     *   <li>{@code file:…} → chemin fichier avec schéma URI</li>
+     *   <li>Sinon → ressource classpath (chemin relatif) puis fichier système</li>
+     * </ul>
      */
     static JwksSource fromLocation(String location, HttpClient httpClient, Duration timeout) {
         if (location.startsWith("http://") || location.startsWith("https://")) {
             return new Http(URI.create(location), httpClient, timeout);
         }
-        Path path = location.startsWith("file:") ? Path.of(URI.create(location)) : Path.of(location);
-        return new File(path);
+        if (location.startsWith("file:")) {
+            return new File(Path.of(URI.create(location)));
+        }
+        // Classpath resource: starts with "/" or relative path
+        // MP JWT spec §9.2.2: location is treated as a classpath resource first
+        String classpathPath = location.startsWith("/") ? location : "/" + location;
+        java.net.URL url = JwksSource.class.getResource(classpathPath);
+        if (url == null) {
+            url = Thread.currentThread().getContextClassLoader().getResource(
+                    location.startsWith("/") ? location.substring(1) : location);
+        }
+        if (url != null) {
+            final java.net.URL finalUrl = url;
+            return () -> {
+                try {
+                    return finalUrl.openStream().readAllBytes();
+                } catch (java.io.IOException e) {
+                    throw new JwtValidationException("Classpath resource unreadable: " + location, e);
+                }
+            };
+        }
+        // Fallback to filesystem
+        return new File(Path.of(location));
     }
 
     /** Variante avec un {@link HttpClient} par défaut (connect timeout 5 s). */
@@ -58,7 +84,7 @@ interface JwksSource {
             try {
                 HttpRequest request = HttpRequest.newBuilder(uri)
                         .timeout(timeout)
-                        .header("Accept", "application/json")
+                        .header("Accept", "application/json, text/plain, */*")
                         .GET()
                         .build();
                 HttpResponse<byte[]> response = client.send(request, HttpResponse.BodyHandlers.ofByteArray());

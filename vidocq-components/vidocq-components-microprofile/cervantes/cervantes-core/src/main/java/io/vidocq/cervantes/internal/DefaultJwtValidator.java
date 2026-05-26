@@ -69,6 +69,7 @@ public final class DefaultJwtValidator implements JwtValidator {
     /**
      * Si le token est un JWE compact (5 parties), le déchiffre en son JWS imbriqué ; sinon le
      * renvoie tel quel. Un JWE reçu sans clé de déchiffrement configurée est rejeté.
+     * Un JWS reçu alors que le chiffrement est requis ({@code config.encryptionRequired()}) est rejeté.
      */
     private String decryptIfEncrypted(String token) throws JwtValidationException {
         if (token == null) {
@@ -81,7 +82,11 @@ public final class DefaultJwtValidator implements JwtValidator {
             }
             return decryptor.decryptToCompactJws(token);
         }
-        return token; // JWS (3 parties) — le parser valide la forme exacte
+        // JWS (3 parties) — rejeter si le chiffrement est exigé par la config
+        if (config.encryptionRequired()) {
+            throw new JwtValidationException("token must be encrypted (JWE) but received a signed-only token (JWS)");
+        }
+        return token; // le parser valide la forme exacte
     }
 
     private static String headerString(ParsedJwt jwt, String name) {

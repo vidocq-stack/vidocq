@@ -16,9 +16,12 @@ import java.util.Set;
  *
  * <ul>
  *   <li>{@code exp} : rejeté si {@code exp + skew < now} ; absence rejetée si {@code requireExpiration}.</li>
+ *   <li>{@code iat} : rejeté si {@code iat > exp} (token dont l'émission est postérieure à l'expiration).</li>
  *   <li>{@code nbf} : rejeté si {@code nbf - skew > now}.</li>
  *   <li>{@code iss} : si un émetteur est configuré, doit l'égaler exactement.</li>
  *   <li>{@code aud} : si des audiences sont configurées, l'intersection avec {@code aud} doit être non vide.</li>
+ *   <li>âge du token : si {@code mp.jwt.verify.token.age} est configuré, {@code now - iat > tokenAge} est rejeté.</li>
+ *   <li>identité : au moins un claim parmi {@code upn}, {@code preferred_username}, {@code sub} doit être présent.</li>
  * </ul>
  */
 final class JwtClaimsValidator {
@@ -32,6 +35,19 @@ final class JwtClaimsValidator {
             if (config.requireExpiration()) throw new JwtValidationException("missing required 'exp' claim");
         } else if (exp.longValue() + skew < now) {
             throw new JwtValidationException("token has expired");
+        }
+
+        JsonNumber iat = numberOrNull(claims, "iat");
+        if (iat != null && exp != null && iat.longValue() > exp.longValue()) {
+            throw new JwtValidationException("token 'iat' claim is older than 'exp' claim (iat > exp)");
+        }
+
+        // MP JWT spec §9.2.1: mp.jwt.verify.token.age — reject if now - iat > tokenAge (in seconds)
+        if (iat != null && config.tokenAge().isPresent()) {
+            long age = now - iat.longValue();
+            if (age > config.tokenAge().get()) {
+                throw new JwtValidationException("token age " + age + "s exceeds mp.jwt.verify.token.age=" + config.tokenAge().get() + "s");
+            }
         }
 
         JsonNumber nbf = numberOrNull(claims, "nbf");
@@ -51,6 +67,14 @@ final class JwtClaimsValidator {
             if (aud.stream().noneMatch(config.audiences()::contains)) {
                 throw new JwtValidationException("audience mismatch (none of " + config.audiences() + ")");
             }
+        }
+
+        // MP JWT spec §4.1: the principal name must be derivable from upn, preferred_username, or sub
+        String upn = stringOrNull(claims, "upn");
+        String preferred = stringOrNull(claims, "preferred_username");
+        String sub = stringOrNull(claims, "sub");
+        if (upn == null && preferred == null && sub == null) {
+            throw new JwtValidationException("token must have at least one of 'upn', 'preferred_username', or 'sub' claims");
         }
     }
 

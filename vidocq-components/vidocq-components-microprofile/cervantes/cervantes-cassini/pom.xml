@@ -20,6 +20,13 @@
             <artifactId>cervantes-cdi-vauban</artifactId>
         </dependency>
 
+        <!-- MicroProfile Config API : lecture de mp.jwt.token.header / mp.jwt.token.cookie -->
+        <dependency>
+            <groupId>io.vidocq.ravel</groupId>
+            <artifactId>ravel-mp-config-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
         <!-- API JAX-RS standard : filtres, DynamicFeature, SecurityContext -->
         <dependency>
             <groupId>jakarta.ws.rs</groupId>
