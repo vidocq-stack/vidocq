@@ -6,13 +6,49 @@
   <groupId>io.vidocq.grimm</groupId>
   <artifactId>grimm-tck</artifactId>
   <version>0.1.0-SNAPSHOT</version>
+  <packaging>jar</packaging>
 
   <name>grimm-tck</name>
   <description>Official MicroProfile OpenAPI 4.1 TCK harness for Grimm</description>
 
   <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <maven.compiler.release>25</maven.compiler.release>
+    <grimm.version>0.1.0-SNAPSHOT</grimm.version>
+    <microprofile.openapi.version>4.1</microprofile.openapi.version>
   </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>io.vidocq.grimm</groupId>
+      <artifactId>grimm-core</artifactId>
+      <version>${grimm.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>io.vidocq.grimm</groupId>
+      <artifactId>grimm-cdi-vauban</artifactId>
+      <version>${grimm.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.eclipse.microprofile.openapi</groupId>
+      <artifactId>microprofile-openapi-api</artifactId>
+      <version>${microprofile.openapi.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <version>6.0.3</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testng</groupId>
+      <artifactId>testng</artifactId>
+      <version>7.11.0</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
 
   <build>
     <pluginManagement>
@@ -27,6 +63,11 @@
         </plugin>
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-surefire-plugin</artifactId>
+          <version>3.5.4</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-resources-plugin</artifactId>
           <version>3.3.1</version>
         </plugin>
@@ -36,7 +77,100 @@
 
   <profiles>
     <profile>
+      <id>smoke</id>
+      <activation>
+        <activeByDefault>true</activeByDefault>
+      </activation>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-surefire-plugin</artifactId>
+            <configuration>
+              <useModulePath>false</useModulePath>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+
+    <profile>
       <id>tck-official</id>
+      <dependencies>
+        <dependency>
+          <groupId>org.eclipse.microprofile.openapi</groupId>
+          <artifactId>microprofile-openapi-tck</artifactId>
+          <version>${microprofile.openapi.version}</version>
+          <scope>test</scope>
+        </dependency>
+        <dependency>
+          <groupId>io.vidocq.runtime</groupId>
+          <artifactId>vidocq-runtime-arquillian</artifactId>
+          <version>0.1.0-SNAPSHOT</version>
+          <scope>test</scope>
+        </dependency>
+        <dependency>
+          <groupId>io.vidocq.runtime</groupId>
+          <artifactId>vidocq-runtime-core</artifactId>
+          <version>0.1.0-SNAPSHOT</version>
+          <scope>test</scope>
+        </dependency>
+        <dependency>
+          <groupId>io.vidocq.runtime</groupId>
+          <artifactId>vidocq-runtime-cassini-rest-extension</artifactId>
+          <version>0.1.0-SNAPSHOT</version>
+          <scope>test</scope>
+        </dependency>
+        <dependency>
+          <groupId>io.vidocq.runtime</groupId>
+          <artifactId>vidocq-runtime-chappe-extension</artifactId>
+          <version>0.1.0-SNAPSHOT</version>
+          <scope>test</scope>
+        </dependency>
+        <dependency>
+          <groupId>jakarta.ws.rs</groupId>
+          <artifactId>jakarta.ws.rs-api</artifactId>
+          <version>4.0.0</version>
+          <scope>test</scope>
+        </dependency>
+        <dependency>
+          <groupId>jakarta.enterprise</groupId>
+          <artifactId>jakarta.enterprise.cdi-api</artifactId>
+          <version>4.1.0</version>
+          <scope>test</scope>
+        </dependency>
+        <dependency>
+          <groupId>jakarta.annotation</groupId>
+          <artifactId>jakarta.annotation-api</artifactId>
+          <version>3.0.0</version>
+          <scope>test</scope>
+        </dependency>
+      </dependencies>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-surefire-plugin</artifactId>
+            <configuration>
+              <useModulePath>false</useModulePath>
+              <dependenciesToScan>
+                <dependency>org.eclipse.microprofile.openapi:microprofile-openapi-tck</dependency>
+              </dependenciesToScan>
+              <trimStackTrace>false</trimStackTrace>
+              <redirectTestOutputToFile>false</redirectTestOutputToFile>
+              <useFile>false</useFile>
+              <forkedProcessExitTimeoutInSeconds>120</forkedProcessExitTimeoutInSeconds>
+            </configuration>
+            <dependencies>
+              <dependency>
+                <groupId>org.apache.maven.surefire</groupId>
+                <artifactId>surefire-testng</artifactId>
+                <version>3.5.4</version>
+              </dependency>
+            </dependencies>
+          </plugin>
+        </plugins>
+      </build>
     </profile>
   </profiles>
 </project>
