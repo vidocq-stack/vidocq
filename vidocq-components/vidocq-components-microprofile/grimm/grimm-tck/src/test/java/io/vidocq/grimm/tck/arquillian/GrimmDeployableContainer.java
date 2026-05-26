@@ -1,6 +1,7 @@
 package io.vidocq.grimm.tck.arquillian;
 
 import io.vidocq.grimm.cdi.TckDeploymentContext;
+import io.vidocq.grimm.internal.reader.StaticFileReader;
 import io.vidocq.runtime.core.VidocqBootstrap;
 import org.jboss.arquillian.container.spi.client.container.DeployableContainer;
 import org.jboss.arquillian.container.spi.client.container.DeploymentException;
@@ -84,6 +85,7 @@ public class GrimmDeployableContainer implements DeployableContainer<GrimmContai
             addRequiredRuntimeClasses(classNames);
             TckDeploymentContext.setDiscoveredTypes(resolveScanClasses(classNames));
             TckDeploymentContext.setConfig(extractMicroProfileConfig(archive));
+            installStaticDocumentOverride(archive);
 
             applyBootstrapSystemProperties(host, actualPort, systemProperties);
 
@@ -112,6 +114,7 @@ public class GrimmDeployableContainer implements DeployableContainer<GrimmContai
             bootstrap = null;
         }
         TckDeploymentContext.clear();
+        StaticFileReader.clearExplicitDocument();
         clearBootstrapSystemProperties(resolveString("grimm.tck.systemProperties", config.getSystemProperties()));
     }
 
@@ -170,6 +173,38 @@ public class GrimmDeployableContainer implements DeployableContainer<GrimmContai
             }
         }
         return out;
+    }
+
+    private void installStaticDocumentOverride(Archive<?> archive) {
+        String[] candidates = {
+                "/META-INF/openapi.yaml",
+                "/META-INF/openapi.yml",
+                "/META-INF/openapi.json",
+                "/WEB-INF/classes/META-INF/openapi.yaml",
+                "/WEB-INF/classes/META-INF/openapi.yml",
+                "/WEB-INF/classes/META-INF/openapi.json"
+        };
+        Map<ArchivePath, org.jboss.shrinkwrap.api.Node> content = archive.getContent();
+        for (Map.Entry<ArchivePath, org.jboss.shrinkwrap.api.Node> entry : content.entrySet()) {
+            String path = entry.getKey().get();
+            if (path == null) continue;
+            for (String candidate : candidates) {
+                if (path.equals(candidate)) {
+                    org.jboss.shrinkwrap.api.Node node = entry.getValue();
+                    if (node == null || node.getAsset() == null) continue;
+                    try (InputStream stream = node.getAsset().openStream()) {
+                        String body = new String(stream.readAllBytes(), StandardCharsets.UTF_8);
+                        String logical = candidate.substring(candidate.lastIndexOf("META-INF/"));
+                        StaticFileReader.setExplicitDocument(logical, body);
+                        return;
+                    } catch (IOException ignored) {
+                        // try next
+                    }
+                }
+            }
+        }
+        // No static document in this deployment — make sure no stale override remains.
+        StaticFileReader.clearExplicitDocument();
     }
 
     private List<Class<?>> resolveScanClasses(List<String> classNames) {

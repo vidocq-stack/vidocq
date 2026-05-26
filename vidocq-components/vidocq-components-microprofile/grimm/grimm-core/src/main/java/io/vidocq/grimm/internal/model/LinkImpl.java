@@ -29,20 +29,23 @@ public class LinkImpl extends AbstractExtensibleRef<Link> implements Link {
     @Override public String getOperationId() { return operationId; }
     @Override public void setOperationId(String operationId) { this.operationId = operationId; }
 
-    @Override public Map<String, Object> getParameters() { return parameters; }
-    @Override public void setParameters(Map<String, Object> parameters) { this.parameters = parameters; }
+    @Override public Map<String, Object> getParameters() { return ModelCollections.immutableMapView(parameters); }
+    @Override public void setParameters(Map<String, Object> parameters) { this.parameters = ModelCollections.mutableMap(parameters); }
 
     @Override
     public Link addParameter(String name, Object parameter) {
         if (parameter == null) return this;
-        if (parameters == null) parameters = new LinkedHashMap<>();
+        parameters = ModelCollections.copyOnWriteMap(parameters);
         parameters.put(name, parameter);
         return this;
     }
 
     @Override
     public void removeParameter(String name) {
-        if (parameters != null) parameters.remove(name);
+        if (parameters != null) {
+            parameters = ModelCollections.copyOnWriteMap(parameters);
+            parameters.remove(name);
+        }
     }
 
     @Override public String getDescription() { return description; }

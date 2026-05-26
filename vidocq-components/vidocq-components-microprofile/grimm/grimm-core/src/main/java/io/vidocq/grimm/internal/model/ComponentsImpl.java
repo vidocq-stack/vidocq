@@ -29,93 +29,93 @@ public class ComponentsImpl extends AbstractExtensible<Components> implements Co
     private Map<String, PathItem> pathItems;
 
     // ── schemas ──
-    @Override public Map<String, Schema> getSchemas() { return schemas; }
-    @Override public void setSchemas(Map<String, Schema> schemas) { this.schemas = schemas; }
+    @Override public Map<String, Schema> getSchemas() { return ModelCollections.immutableMapView(schemas); }
+    @Override public void setSchemas(Map<String, Schema> schemas) { this.schemas = ModelCollections.mutableMap(schemas); }
     @Override public Components addSchema(String key, Schema schema) {
         if (schema == null) return this;
-        if (schemas == null) schemas = new LinkedHashMap<>();
+        schemas = ModelCollections.copyOnWriteMap(schemas);
         schemas.put(key, schema); return this; }
-    @Override public void removeSchema(String key) { if (schemas != null) schemas.remove(key); }
+    @Override public void removeSchema(String key) { if (schemas != null) { schemas = ModelCollections.copyOnWriteMap(schemas); schemas.remove(key); } }
 
     // ── responses ──
-    @Override public Map<String, APIResponse> getResponses() { return responses; }
-    @Override public void setResponses(Map<String, APIResponse> responses) { this.responses = responses; }
+    @Override public Map<String, APIResponse> getResponses() { return ModelCollections.immutableMapView(responses); }
+    @Override public void setResponses(Map<String, APIResponse> responses) { this.responses = ModelCollections.mutableMap(responses); }
     @Override public Components addResponse(String key, APIResponse response) {
         if (response == null) return this;
-        if (responses == null) responses = new LinkedHashMap<>();
+        responses = ModelCollections.copyOnWriteMap(responses);
         responses.put(key, response); return this; }
-    @Override public void removeResponse(String key) { if (responses != null) responses.remove(key); }
+    @Override public void removeResponse(String key) { if (responses != null) { responses = ModelCollections.copyOnWriteMap(responses); responses.remove(key); } }
 
     // ── parameters ──
-    @Override public Map<String, Parameter> getParameters() { return parameters; }
-    @Override public void setParameters(Map<String, Parameter> parameters) { this.parameters = parameters; }
+    @Override public Map<String, Parameter> getParameters() { return ModelCollections.immutableMapView(parameters); }
+    @Override public void setParameters(Map<String, Parameter> parameters) { this.parameters = ModelCollections.mutableMap(parameters); }
     @Override public Components addParameter(String key, Parameter parameter) {
         if (parameter == null) return this;
-        if (parameters == null) parameters = new LinkedHashMap<>();
+        parameters = ModelCollections.copyOnWriteMap(parameters);
         parameters.put(key, parameter); return this; }
-    @Override public void removeParameter(String key) { if (parameters != null) parameters.remove(key); }
+    @Override public void removeParameter(String key) { if (parameters != null) { parameters = ModelCollections.copyOnWriteMap(parameters); parameters.remove(key); } }
 
     // ── examples ──
-    @Override public Map<String, Example> getExamples() { return examples; }
-    @Override public void setExamples(Map<String, Example> examples) { this.examples = examples; }
+    @Override public Map<String, Example> getExamples() { return ModelCollections.immutableMapView(examples); }
+    @Override public void setExamples(Map<String, Example> examples) { this.examples = ModelCollections.mutableMap(examples); }
     @Override public Components addExample(String key, Example example) {
         if (example == null) return this;
-        if (examples == null) examples = new LinkedHashMap<>();
+        examples = ModelCollections.copyOnWriteMap(examples);
         examples.put(key, example); return this; }
-    @Override public void removeExample(String key) { if (examples != null) examples.remove(key); }
+    @Override public void removeExample(String key) { if (examples != null) { examples = ModelCollections.copyOnWriteMap(examples); examples.remove(key); } }
 
     // ── requestBodies ──
-    @Override public Map<String, RequestBody> getRequestBodies() { return requestBodies; }
-    @Override public void setRequestBodies(Map<String, RequestBody> requestBodies) { this.requestBodies = requestBodies; }
+    @Override public Map<String, RequestBody> getRequestBodies() { return ModelCollections.immutableMapView(requestBodies); }
+    @Override public void setRequestBodies(Map<String, RequestBody> requestBodies) { this.requestBodies = ModelCollections.mutableMap(requestBodies); }
     @Override public Components addRequestBody(String key, RequestBody requestBody) {
         if (requestBody == null) return this;
-        if (requestBodies == null) requestBodies = new LinkedHashMap<>();
+        requestBodies = ModelCollections.copyOnWriteMap(requestBodies);
         requestBodies.put(key, requestBody); return this; }
-    @Override public void removeRequestBody(String key) { if (requestBodies != null) requestBodies.remove(key); }
+    @Override public void removeRequestBody(String key) { if (requestBodies != null) { requestBodies = ModelCollections.copyOnWriteMap(requestBodies); requestBodies.remove(key); } }
 
     // ── headers ──
-    @Override public Map<String, Header> getHeaders() { return headers; }
-    @Override public void setHeaders(Map<String, Header> headers) { this.headers = headers; }
+    @Override public Map<String, Header> getHeaders() { return ModelCollections.immutableMapView(headers); }
+    @Override public void setHeaders(Map<String, Header> headers) { this.headers = ModelCollections.mutableMap(headers); }
     @Override public Components addHeader(String key, Header header) {
         if (header == null) return this;
-        if (headers == null) headers = new LinkedHashMap<>();
+        headers = ModelCollections.copyOnWriteMap(headers);
         headers.put(key, header); return this; }
-    @Override public void removeHeader(String key) { if (headers != null) headers.remove(key); }
+    @Override public void removeHeader(String key) { if (headers != null) { headers = ModelCollections.copyOnWriteMap(headers); headers.remove(key); } }
 
     // ── securitySchemes ──
-    @Override public Map<String, SecurityScheme> getSecuritySchemes() { return securitySchemes; }
-    @Override public void setSecuritySchemes(Map<String, SecurityScheme> securitySchemes) { this.securitySchemes = securitySchemes; }
+    @Override public Map<String, SecurityScheme> getSecuritySchemes() { return ModelCollections.immutableMapView(securitySchemes); }
+    @Override public void setSecuritySchemes(Map<String, SecurityScheme> securitySchemes) { this.securitySchemes = ModelCollections.mutableMap(securitySchemes); }
     @Override public Components addSecurityScheme(String key, SecurityScheme securityScheme) {
         if (securityScheme == null) return this;
-        if (securitySchemes == null) securitySchemes = new LinkedHashMap<>();
+        securitySchemes = ModelCollections.copyOnWriteMap(securitySchemes);
         securitySchemes.put(key, securityScheme); return this; }
-    @Override public void removeSecurityScheme(String key) { if (securitySchemes != null) securitySchemes.remove(key); }
+    @Override public void removeSecurityScheme(String key) { if (securitySchemes != null) { securitySchemes = ModelCollections.copyOnWriteMap(securitySchemes); securitySchemes.remove(key); } }
 
     // ── links ──
-    @Override public Map<String, Link> getLinks() { return links; }
-    @Override public void setLinks(Map<String, Link> links) { this.links = links; }
+    @Override public Map<String, Link> getLinks() { return ModelCollections.immutableMapView(links); }
+    @Override public void setLinks(Map<String, Link> links) { this.links = ModelCollections.mutableMap(links); }
     @Override public Components addLink(String key, Link link) {
         if (link == null) return this;
-        if (links == null) links = new LinkedHashMap<>();
+        links = ModelCollections.copyOnWriteMap(links);
         links.put(key, link); return this; }
-    @Override public void removeLink(String key) { if (links != null) links.remove(key); }
+    @Override public void removeLink(String key) { if (links != null) { links = ModelCollections.copyOnWriteMap(links); links.remove(key); } }
 
     // ── callbacks ──
-    @Override public Map<String, Callback> getCallbacks() { return callbacks; }
-    @Override public void setCallbacks(Map<String, Callback> callbacks) { this.callbacks = callbacks; }
+    @Override public Map<String, Callback> getCallbacks() { return ModelCollections.immutableMapView(callbacks); }
+    @Override public void setCallbacks(Map<String, Callback> callbacks) { this.callbacks = ModelCollections.mutableMap(callbacks); }
     @Override public Components addCallback(String key, Callback callback) {
         if (callback == null) return this;
-        if (callbacks == null) callbacks = new LinkedHashMap<>();
+        callbacks = ModelCollections.copyOnWriteMap(callbacks);
         callbacks.put(key, callback); return this; }
-    @Override public void removeCallback(String key) { if (callbacks != null) callbacks.remove(key); }
+    @Override public void removeCallback(String key) { if (callbacks != null) { callbacks = ModelCollections.copyOnWriteMap(callbacks); callbacks.remove(key); } }
 
     // ── pathItems (MP OpenAPI 4.0+) ──
-    @Override public Map<String, PathItem> getPathItems() { return pathItems; }
-    @Override public void setPathItems(Map<String, PathItem> pathItems) { this.pathItems = pathItems; }
+    @Override public Map<String, PathItem> getPathItems() { return ModelCollections.immutableMapView(pathItems); }
+    @Override public void setPathItems(Map<String, PathItem> pathItems) { this.pathItems = ModelCollections.mutableMap(pathItems); }
     @Override public Components addPathItem(String name, PathItem pathItem) {
         if (pathItem == null) return this;
-        if (pathItems == null) pathItems = new LinkedHashMap<>();
+        pathItems = ModelCollections.copyOnWriteMap(pathItems);
         pathItems.put(name, pathItem); return this; }
-    @Override public void removePathItem(String name) { if (pathItems != null) pathItems.remove(name); }
+    @Override public void removePathItem(String name) { if (pathItems != null) { pathItems = ModelCollections.copyOnWriteMap(pathItems); pathItems.remove(name); } }
 }
 

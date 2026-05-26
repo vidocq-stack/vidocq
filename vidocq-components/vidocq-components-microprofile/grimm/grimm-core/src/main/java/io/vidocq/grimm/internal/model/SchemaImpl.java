@@ -6,7 +6,9 @@ import org.eclipse.microprofile.openapi.models.media.Schema;
 import org.eclipse.microprofile.openapi.models.media.XML;
 
 import java.math.BigDecimal;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -94,12 +96,17 @@ public class SchemaImpl extends AbstractExtensibleRef<Schema> implements Schema 
     @Override public void setDefaultValue(Object defaultValue) { this.defaultValue = defaultValue; }
 
     // ── enumeration ──
-    @Override public List<Object> getEnumeration() { return enumeration; }
-    @Override public void setEnumeration(List<Object> enumeration) { this.enumeration = enumeration; }
+    @Override public List<Object> getEnumeration() { return ModelCollections.immutableListView(enumeration); }
+    @Override public void setEnumeration(List<Object> enumeration) { this.enumeration = ModelCollections.mutableList(enumeration); }
     @Override public Schema addEnumeration(Object value) {
-        if (enumeration == null) enumeration = new ArrayList<>();
+        enumeration = ModelCollections.copyOnWriteList(enumeration);
         enumeration.add(value); return this; }
-    @Override public void removeEnumeration(Object value) { if (enumeration != null) enumeration.remove(value); }
+    @Override public void removeEnumeration(Object value) {
+        if (enumeration != null) {
+            enumeration = ModelCollections.copyOnWriteList(enumeration);
+            enumeration.remove(value);
+        }
+    }
 
     // ── multipleOf ──
     @Override public BigDecimal getMultipleOf() { return multipleOf; }
@@ -140,43 +147,64 @@ public class SchemaImpl extends AbstractExtensibleRef<Schema> implements Schema 
     @Override public void setMinProperties(Integer minProperties) { this.minProperties = minProperties; }
 
     // ── required ──
-    @Override public List<String> getRequired() { return required; }
-    @Override public void setRequired(List<String> required) { this.required = required; }
+    @Override public List<String> getRequired() { return ModelCollections.immutableListView(required); }
+    @Override public void setRequired(List<String> required) { this.required = ModelCollections.mutableList(required); }
     @Override public Schema addRequired(String req) {
-        if (required == null) required = new ArrayList<>();
+        required = ModelCollections.copyOnWriteList(required);
         required.add(req); return this; }
-    @Override public void removeRequired(String req) { if (required != null) required.remove(req); }
+    @Override public void removeRequired(String req) {
+        if (required != null) {
+            required = ModelCollections.copyOnWriteList(required);
+            required.remove(req);
+        }
+    }
 
     // ── type ──
-    @Override public List<SchemaType> getType() { return type; }
-    @Override public void setType(List<SchemaType> types) { this.type = types; }
+    @Override public List<SchemaType> getType() { return ModelCollections.immutableListView(type); }
+    @Override public void setType(List<SchemaType> types) { this.type = ModelCollections.mutableList(types); }
     @Override public Schema addType(SchemaType t) {
-        if (type == null) type = new ArrayList<>();
+        type = ModelCollections.copyOnWriteList(type);
         type.add(t); return this; }
-    @Override public void removeType(SchemaType t) { if (type != null) type.remove(t); }
+    @Override public void removeType(SchemaType t) {
+        if (type != null) {
+            type = ModelCollections.copyOnWriteList(type);
+            type.remove(t);
+        }
+    }
 
     // ── not ──
     @Override public Schema getNot() { return not; }
     @Override public void setNot(Schema not) { this.not = not; }
 
     // ── properties ──
-    @Override public Map<String, Schema> getProperties() { return properties; }
-    @Override public void setProperties(Map<String, Schema> properties) { this.properties = properties; }
+    @Override public Map<String, Schema> getProperties() { return ModelCollections.immutableMapView(properties); }
+    @Override public void setProperties(Map<String, Schema> properties) { this.properties = ModelCollections.mutableMap(properties); }
     @Override public Schema addProperty(String key, Schema propertySchema) {
         if (propertySchema == null) return this;
-        if (properties == null) properties = new LinkedHashMap<>();
+        properties = ModelCollections.copyOnWriteMap(properties);
         properties.put(key, propertySchema); return this; }
-    @Override public void removeProperty(String key) { if (properties != null) properties.remove(key); }
+    @Override public void removeProperty(String key) {
+        if (properties != null) {
+            properties = ModelCollections.copyOnWriteMap(properties);
+            properties.remove(key);
+        }
+    }
 
     // ── additionalProperties ──
     @Override public Schema getAdditionalPropertiesSchema() { return additionalPropertiesSchema; }
     @Override public Boolean getAdditionalPropertiesBoolean() { return additionalPropertiesBoolean; }
     @Override public void setAdditionalPropertiesSchema(Schema additionalProperties) {
         this.additionalPropertiesSchema = additionalProperties;
-        this.additionalPropertiesBoolean = null; }
+        this.additionalPropertiesBoolean = null;
+    }
     @Override public void setAdditionalPropertiesBoolean(Boolean additionalProperties) {
         this.additionalPropertiesBoolean = additionalProperties;
-        this.additionalPropertiesSchema = null; }
+        if (additionalProperties == null) {
+            this.additionalPropertiesSchema = null;
+        } else {
+            this.additionalPropertiesSchema = new SchemaImpl().booleanSchema(additionalProperties);
+        }
+    }
 
     // ── description / format ──
     @Override public String getDescription() { return description; }
@@ -211,23 +239,23 @@ public class SchemaImpl extends AbstractExtensibleRef<Schema> implements Schema 
     @Override public void setItems(Schema items) { this.items = items; }
 
     // ── allOf / anyOf / oneOf ──
-    @Override public List<Schema> getAllOf() { return allOf; }
-    @Override public void setAllOf(List<Schema> allOf) { this.allOf = allOf; }
+    @Override public List<Schema> getAllOf() { return ModelCollections.immutableListView(allOf); }
+    @Override public void setAllOf(List<Schema> allOf) { this.allOf = ModelCollections.mutableList(allOf); }
     @Override public Schema addAllOf(Schema s) {
-        if (allOf == null) allOf = new ArrayList<>(); allOf.add(s); return this; }
-    @Override public void removeAllOf(Schema s) { if (allOf != null) allOf.remove(s); }
+        allOf = ModelCollections.copyOnWriteList(allOf); allOf.add(s); return this; }
+    @Override public void removeAllOf(Schema s) { if (allOf != null) { allOf = ModelCollections.copyOnWriteList(allOf); allOf.remove(s); } }
 
-    @Override public List<Schema> getAnyOf() { return anyOf; }
-    @Override public void setAnyOf(List<Schema> anyOf) { this.anyOf = anyOf; }
+    @Override public List<Schema> getAnyOf() { return ModelCollections.immutableListView(anyOf); }
+    @Override public void setAnyOf(List<Schema> anyOf) { this.anyOf = ModelCollections.mutableList(anyOf); }
     @Override public Schema addAnyOf(Schema s) {
-        if (anyOf == null) anyOf = new ArrayList<>(); anyOf.add(s); return this; }
-    @Override public void removeAnyOf(Schema s) { if (anyOf != null) anyOf.remove(s); }
+        anyOf = ModelCollections.copyOnWriteList(anyOf); anyOf.add(s); return this; }
+    @Override public void removeAnyOf(Schema s) { if (anyOf != null) { anyOf = ModelCollections.copyOnWriteList(anyOf); anyOf.remove(s); } }
 
-    @Override public List<Schema> getOneOf() { return oneOf; }
-    @Override public void setOneOf(List<Schema> oneOf) { this.oneOf = oneOf; }
+    @Override public List<Schema> getOneOf() { return ModelCollections.immutableListView(oneOf); }
+    @Override public void setOneOf(List<Schema> oneOf) { this.oneOf = ModelCollections.mutableList(oneOf); }
     @Override public Schema addOneOf(Schema s) {
-        if (oneOf == null) oneOf = new ArrayList<>(); oneOf.add(s); return this; }
-    @Override public void removeOneOf(Schema s) { if (oneOf != null) oneOf.remove(s); }
+        oneOf = ModelCollections.copyOnWriteList(oneOf); oneOf.add(s); return this; }
+    @Override public void removeOneOf(Schema s) { if (oneOf != null) { oneOf = ModelCollections.copyOnWriteList(oneOf); oneOf.remove(s); } }
 
     // ── schemaDialect / $comment ──
     @Override public String getSchemaDialect() { return schemaDialect; }
@@ -244,35 +272,41 @@ public class SchemaImpl extends AbstractExtensibleRef<Schema> implements Schema 
     @Override public void setElseSchema(Schema elseSchema) { this.elseSchema = elseSchema; }
 
     // ── dependentSchemas ──
-    @Override public Map<String, Schema> getDependentSchemas() { return dependentSchemas; }
-    @Override public void setDependentSchemas(Map<String, Schema> dependentSchemas) { this.dependentSchemas = dependentSchemas; }
+    @Override public Map<String, Schema> getDependentSchemas() { return ModelCollections.immutableMapView(dependentSchemas); }
+    @Override public void setDependentSchemas(Map<String, Schema> dependentSchemas) { this.dependentSchemas = ModelCollections.mutableMap(dependentSchemas); }
     @Override public Schema addDependentSchema(String propertyName, Schema schema) {
-        if (dependentSchemas == null) dependentSchemas = new LinkedHashMap<>();
+        if (schema == null) {
+            return this;
+        }
+        dependentSchemas = ModelCollections.copyOnWriteMap(dependentSchemas);
         dependentSchemas.put(propertyName, schema); return this; }
     @Override public void removeDependentSchema(String propertyName) {
-        if (dependentSchemas != null) dependentSchemas.remove(propertyName); }
+        if (dependentSchemas != null) { dependentSchemas = ModelCollections.copyOnWriteMap(dependentSchemas); dependentSchemas.remove(propertyName); } }
 
     // ── prefixItems ──
-    @Override public List<Schema> getPrefixItems() { return prefixItems; }
-    @Override public void setPrefixItems(List<Schema> prefixItems) { this.prefixItems = prefixItems; }
+    @Override public List<Schema> getPrefixItems() { return ModelCollections.immutableListView(prefixItems); }
+    @Override public void setPrefixItems(List<Schema> prefixItems) { this.prefixItems = ModelCollections.mutableList(prefixItems); }
     @Override public Schema addPrefixItem(Schema prefixItem) {
-        if (prefixItems == null) prefixItems = new ArrayList<>();
+        prefixItems = ModelCollections.copyOnWriteList(prefixItems);
         prefixItems.add(prefixItem); return this; }
     @Override public void removePrefixItem(Schema prefixItem) {
-        if (prefixItems != null) prefixItems.remove(prefixItem); }
+        if (prefixItems != null) { prefixItems = ModelCollections.copyOnWriteList(prefixItems); prefixItems.remove(prefixItem); } }
 
     // ── contains ──
     @Override public Schema getContains() { return contains; }
     @Override public void setContains(Schema contains) { this.contains = contains; }
 
     // ── patternProperties ──
-    @Override public Map<String, Schema> getPatternProperties() { return patternProperties; }
-    @Override public void setPatternProperties(Map<String, Schema> patternProperties) { this.patternProperties = patternProperties; }
+    @Override public Map<String, Schema> getPatternProperties() { return ModelCollections.immutableMapView(patternProperties); }
+    @Override public void setPatternProperties(Map<String, Schema> patternProperties) { this.patternProperties = ModelCollections.mutableMap(patternProperties); }
     @Override public Schema addPatternProperty(String regex, Schema schema) {
-        if (patternProperties == null) patternProperties = new LinkedHashMap<>();
+        if (schema == null) {
+            return this;
+        }
+        patternProperties = ModelCollections.copyOnWriteMap(patternProperties);
         patternProperties.put(regex, schema); return this; }
     @Override public void removePatternProperty(String regex) {
-        if (patternProperties != null) patternProperties.remove(regex); }
+        if (patternProperties != null) { patternProperties = ModelCollections.copyOnWriteMap(patternProperties); patternProperties.remove(regex); } }
 
     // ── propertyNames ──
     @Override public Schema getPropertyNames() { return propertyNames; }
@@ -295,13 +329,21 @@ public class SchemaImpl extends AbstractExtensibleRef<Schema> implements Schema 
     @Override public void setMinContains(Integer minContains) { this.minContains = minContains; }
 
     // ── dependentRequired ──
-    @Override public Map<String, List<String>> getDependentRequired() { return dependentRequired; }
-    @Override public void setDependentRequired(Map<String, List<String>> dependentRequired) { this.dependentRequired = dependentRequired; }
+    @Override
+    public Map<String, List<String>> getDependentRequired() {
+        return ModelCollections.immutableMapView(dependentRequired);
+    }
+    @Override public void setDependentRequired(Map<String, List<String>> dependentRequired) {
+        this.dependentRequired = ModelCollections.mutableMap(dependentRequired);
+    }
     @Override public Schema addDependentRequired(String propertyName, List<String> additionalRequiredPropertyNames) {
-        if (dependentRequired == null) dependentRequired = new LinkedHashMap<>();
+        if (additionalRequiredPropertyNames == null) {
+            return this;
+        }
+        dependentRequired = ModelCollections.copyOnWriteMap(dependentRequired);
         dependentRequired.put(propertyName, additionalRequiredPropertyNames); return this; }
     @Override public void removeDependentRequired(String propertyName) {
-        if (dependentRequired != null) dependentRequired.remove(propertyName); }
+        if (dependentRequired != null) { dependentRequired = ModelCollections.copyOnWriteMap(dependentRequired); dependentRequired.remove(propertyName); } }
 
     // ── content* ──
     @Override public String getContentEncoding() { return contentEncoding; }
@@ -316,12 +358,12 @@ public class SchemaImpl extends AbstractExtensibleRef<Schema> implements Schema 
     @Override public void setBooleanSchema(Boolean booleanSchema) { this.booleanSchema = booleanSchema; }
 
     // ── examples (list) ──
-    @Override public List<Object> getExamples() { return examples; }
-    @Override public void setExamples(List<Object> examples) { this.examples = examples; }
+    @Override public List<Object> getExamples() { return ModelCollections.immutableListView(examples); }
+    @Override public void setExamples(List<Object> examples) { this.examples = ModelCollections.mutableList(examples); }
     @Override public Schema addExample(Object example) {
-        if (examples == null) examples = new ArrayList<>();
+        examples = ModelCollections.copyOnWriteList(examples);
         examples.add(example); return this; }
-    @Override public void removeExample(Object example) { if (examples != null) examples.remove(example); }
+    @Override public void removeExample(Object example) { if (examples != null) { examples = ModelCollections.copyOnWriteList(examples); examples.remove(example); } }
 
     // ── generic property access (Schema.get / Schema.set / getAll / setAll) ──
     @Override
@@ -329,19 +371,36 @@ public class SchemaImpl extends AbstractExtensibleRef<Schema> implements Schema 
         if (extraProperties != null && extraProperties.containsKey(propertyName)) {
             return extraProperties.get(propertyName);
         }
+        Method getter = resolveGetter(propertyName);
+        if (getter != null) {
+            try {
+                return getter.invoke(this);
+            } catch (ReflectiveOperationException ignored) {
+                // Fall through to null for unknown/non-invocable properties.
+            }
+        }
         return null;
     }
 
     @Override
     public Schema set(String propertyName, Object value) {
-        if (extraProperties == null) extraProperties = new LinkedHashMap<>();
+        Method setter = resolveSetter(propertyName, value);
+        if (setter != null) {
+            try {
+                setter.invoke(this, value);
+                return this;
+            } catch (ReflectiveOperationException ignored) {
+                // Fall through to extension-style storage for unknown properties.
+            }
+        }
+        extraProperties = ModelCollections.copyOnWriteMap(extraProperties);
         extraProperties.put(propertyName, value);
         return this;
     }
 
     @Override
     public Map<String, ?> getAll() {
-        return extraProperties == null ? Map.of() : extraProperties;
+        return extraProperties == null ? Map.of() : ModelCollections.immutableMapView(extraProperties);
     }
 
     @Override
@@ -351,6 +410,72 @@ public class SchemaImpl extends AbstractExtensibleRef<Schema> implements Schema 
         } else {
             extraProperties = new LinkedHashMap<>(allProperties);
         }
+    }
+
+    private Method resolveGetter(String propertyName) {
+        if (propertyName == null || propertyName.isEmpty()) {
+            return null;
+        }
+        String suffix = accessorSuffix(propertyName);
+        try {
+            return getClass().getMethod("get" + suffix);
+        } catch (NoSuchMethodException ignored) {
+            try {
+                return getClass().getMethod("is" + suffix);
+            } catch (NoSuchMethodException ignoredToo) {
+                return null;
+            }
+        }
+    }
+
+    private Method resolveSetter(String propertyName, Object value) {
+        if (propertyName == null || propertyName.isEmpty()) {
+            return null;
+        }
+        if ("additionalProperties".equals(propertyName)) {
+            try {
+                if (value instanceof Boolean || value == null) {
+                    return getClass().getMethod("setAdditionalPropertiesBoolean", Boolean.class);
+                }
+                return getClass().getMethod("setAdditionalPropertiesSchema", Schema.class);
+            } catch (NoSuchMethodException ignored) {
+                return null;
+            }
+        }
+        String name = "set" + accessorSuffix(propertyName);
+        Method[] methods = getClass().getMethods();
+        for (Method method : methods) {
+            if (!method.getName().equals(name) || method.getParameterCount() != 1) {
+                continue;
+            }
+            Class<?> parameterType = method.getParameterTypes()[0];
+            if (value == null || parameterType.isInstance(value)) {
+                return method;
+            }
+        }
+        return null;
+    }
+
+    private static String capitalize(String value) {
+        if (value.length() == 1) {
+            return value.toUpperCase();
+        }
+        return Character.toUpperCase(value.charAt(0)) + value.substring(1);
+    }
+
+    private static String accessorSuffix(String propertyName) {
+        return switch (propertyName) {
+            case "default" -> "DefaultValue";
+            case "enum" -> "Enumeration";
+            case "$schema" -> "SchemaDialect";
+            case "$comment" -> "Comment";
+            case "if" -> "IfSchema";
+            case "then" -> "ThenSchema";
+            case "else" -> "ElseSchema";
+            case "const" -> "ConstValue";
+            case "additionalProperties" -> "AdditionalPropertiesSchema";
+            default -> capitalize(propertyName);
+        };
     }
 }
 

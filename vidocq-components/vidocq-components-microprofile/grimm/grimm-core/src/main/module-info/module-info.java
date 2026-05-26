@@ -8,6 +8,7 @@ module io.vidocq.grimm.core {
   exports io.vidocq.grimm.internal.config to io.vidocq.grimm.cdi.vauban;
   exports io.vidocq.grimm.internal.merger to io.vidocq.grimm.cdi.vauban;
   exports io.vidocq.grimm.internal.schema to io.vidocq.grimm.cdi.vauban;
+  exports io.vidocq.grimm.internal.reader;
 
   provides org.eclipse.microprofile.openapi.spi.OASFactoryResolver
       with io.vidocq.grimm.internal.factory.GrimmOASFactoryResolver;

@@ -16,12 +16,12 @@ public abstract class AbstractExtensible<T extends Extensible<T>> implements Ext
 
     @Override
     public Map<String, Object> getExtensions() {
-        return extensions;
+        return ModelCollections.immutableMapView(extensions);
     }
 
     @Override
     public void setExtensions(Map<String, Object> extensions) {
-        this.extensions = extensions;
+        this.extensions = ModelCollections.mutableMap(extensions);
     }
 
     @Override
@@ -30,9 +30,7 @@ public abstract class AbstractExtensible<T extends Extensible<T>> implements Ext
         if (value == null) {
             return (T) this;
         }
-        if (extensions == null) {
-            extensions = new LinkedHashMap<>();
-        }
+        extensions = ModelCollections.copyOnWriteMap(extensions);
         extensions.put(name, value);
         return (T) this;
     }
@@ -40,6 +38,7 @@ public abstract class AbstractExtensible<T extends Extensible<T>> implements Ext
     @Override
     public void removeExtension(String name) {
         if (extensions != null) {
+            extensions = ModelCollections.copyOnWriteMap(extensions);
             extensions.remove(name);
         }
     }

@@ -16,17 +16,20 @@ public class DiscriminatorImpl implements Discriminator {
     @Override
     public Discriminator addMapping(String name, String value) {
         if (value == null) return this;
-        if (mapping == null) mapping = new LinkedHashMap<>();
+        mapping = ModelCollections.copyOnWriteMap(mapping);
         mapping.put(name, value);
         return this;
     }
 
     @Override
     public void removeMapping(String name) {
-        if (mapping != null) mapping.remove(name);
+        if (mapping != null) {
+            mapping = ModelCollections.copyOnWriteMap(mapping);
+            mapping.remove(name);
+        }
     }
 
-    @Override public Map<String, String> getMapping() { return mapping; }
-    @Override public void setMapping(Map<String, String> mapping) { this.mapping = mapping; }
+    @Override public Map<String, String> getMapping() { return ModelCollections.immutableMapView(mapping); }
+    @Override public void setMapping(Map<String, String> mapping) { this.mapping = ModelCollections.mutableMap(mapping); }
 }
 

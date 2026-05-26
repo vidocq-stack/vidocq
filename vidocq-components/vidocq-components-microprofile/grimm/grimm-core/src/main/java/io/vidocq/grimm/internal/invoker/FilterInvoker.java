@@ -21,6 +21,7 @@ import org.eclipse.microprofile.openapi.models.tags.Tag;
 
 import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -67,10 +68,11 @@ public final class FilterInvoker {
 
     private void filterPaths(OpenAPI model, OASFilter filter) {
         var paths = model.getPaths();
-        if (paths == null || paths.getPathItems() == null) return;
-        Iterator<Map.Entry<String, PathItem>> it = paths.getPathItems().entrySet().iterator();
-        while (it.hasNext()) {
-            Map.Entry<String, PathItem> e = it.next();
+        Map<String, PathItem> pathItems = paths == null ? null : paths.getPathItems();
+        if (pathItems == null || pathItems.isEmpty()) return;
+
+        Map<String, PathItem> kept = new LinkedHashMap<>();
+        for (Map.Entry<String, PathItem> e : pathItems.entrySet()) {
             PathItem candidate = e.getValue();
             filterOperations(candidate, filter);
             filterParameters(candidate.getParameters(), filter, candidate::setParameters);
@@ -78,11 +80,11 @@ public final class FilterInvoker {
 
             PathItem filteredItem = filter.filterPathItem(candidate);
             if (filteredItem == null) {
-                it.remove();
                 continue;
             }
-            e.setValue(filteredItem);
+            kept.put(e.getKey(), filteredItem);
         }
+        paths.setPathItems(kept);
     }
 
     private void filterOperations(PathItem item, OASFilter filter) {
@@ -111,26 +113,24 @@ public final class FilterInvoker {
 
         APIResponses responses = op.getResponses();
         if (responses != null && responses.getAPIResponses() != null) {
-            Iterator<Map.Entry<String, APIResponse>> rit =
-                    responses.getAPIResponses().entrySet().iterator();
-            while (rit.hasNext()) {
-                Map.Entry<String, APIResponse> entry = rit.next();
+            Map<String, APIResponse> keptResponses = new LinkedHashMap<>();
+            for (Map.Entry<String, APIResponse> entry : responses.getAPIResponses().entrySet()) {
                 APIResponse candidate = entry.getValue();
                 filterContentSchemas(candidate.getContent(), filter);
-                filterMap(candidate.getHeaders(), filter::filterHeader);
-                filterMap(candidate.getLinks(), filter::filterLink);
+                filterMap(candidate.getHeaders(), filter::filterHeader, candidate::setHeaders);
+                filterMap(candidate.getLinks(), filter::filterLink, candidate::setLinks);
 
                 APIResponse filtered = filter.filterAPIResponse(candidate);
                 if (filtered == null) {
-                    rit.remove();
                     continue;
                 }
-                entry.setValue(filtered);
+                keptResponses.put(entry.getKey(), filtered);
             }
+            responses.setAPIResponses(keptResponses);
         }
 
         if (op.getCallbacks() != null) {
-            filterMap(op.getCallbacks(), filter::filterCallback);
+            filterMap(op.getCallbacks(), filter::filterCallback, op::setCallbacks);
         }
         filterServers(op.getServers(), filter, op::setServers);
     }
@@ -187,28 +187,26 @@ public final class FilterInvoker {
     private void filterComponents(OpenAPI model, OASFilter filter) {
         Components c = model.getComponents();
         if (c == null) return;
-        filterMap(c.getSchemas(), filter::filterSchema);
-        filterMap(c.getHeaders(), filter::filterHeader);
-        filterMap(c.getParameters(), filter::filterParameter);
-        filterMap(c.getRequestBodies(), filter::filterRequestBody);
-        filterMap(c.getResponses(), filter::filterAPIResponse);
-        filterMap(c.getLinks(), filter::filterLink);
-        filterMap(c.getCallbacks(), filter::filterCallback);
-        filterMap(c.getSecuritySchemes(), filter::filterSecurityScheme);
+        filterMap(c.getSchemas(), filter::filterSchema, c::setSchemas);
+        filterMap(c.getHeaders(), filter::filterHeader, c::setHeaders);
+        filterMap(c.getParameters(), filter::filterParameter, c::setParameters);
+        filterMap(c.getRequestBodies(), filter::filterRequestBody, c::setRequestBodies);
+        filterMap(c.getResponses(), filter::filterAPIResponse, c::setResponses);
+        filterMap(c.getLinks(), filter::filterLink, c::setLinks);
+        filterMap(c.getCallbacks(), filter::filterCallback, c::setCallbacks);
+        filterMap(c.getSecuritySchemes(), filter::filterSecurityScheme, c::setSecuritySchemes);
     }
 
-    private <V> void filterMap(Map<String, V> map, Function<V, V> fn) {
+    private <V> void filterMap(Map<String, V> map, Function<V, V> fn, Consumer<Map<String, V>> setter) {
         if (map == null || map.isEmpty()) return;
-        Iterator<Map.Entry<String, V>> it = map.entrySet().iterator();
-        while (it.hasNext()) {
-            Map.Entry<String, V> e = it.next();
+        Map<String, V> kept = new LinkedHashMap<>();
+        for (Map.Entry<String, V> e : map.entrySet()) {
             V filtered = fn.apply(e.getValue());
-            if (filtered == null) {
-                it.remove();
-            } else {
-                e.setValue(filtered);
+            if (filtered != null) {
+                kept.put(e.getKey(), filtered);
             }
         }
+        setter.accept(kept);
     }
 
     // -------------- PathItem verb helpers --------------

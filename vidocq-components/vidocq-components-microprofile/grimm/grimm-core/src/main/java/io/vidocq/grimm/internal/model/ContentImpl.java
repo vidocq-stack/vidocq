@@ -13,20 +13,23 @@ public class ContentImpl implements Content {
     @Override
     public Content addMediaType(String name, MediaType mediaType) {
         if (mediaType == null) return this;
-        if (mediaTypes == null) mediaTypes = new LinkedHashMap<>();
+        mediaTypes = ModelCollections.copyOnWriteMap(mediaTypes);
         mediaTypes.put(name, mediaType);
         return this;
     }
 
     @Override
     public void removeMediaType(String name) {
-        if (mediaTypes != null) mediaTypes.remove(name);
+        if (mediaTypes != null) {
+            mediaTypes = ModelCollections.copyOnWriteMap(mediaTypes);
+            mediaTypes.remove(name);
+        }
     }
 
     @Override
-    public Map<String, MediaType> getMediaTypes() { return mediaTypes; }
+    public Map<String, MediaType> getMediaTypes() { return ModelCollections.immutableMapView(mediaTypes); }
 
     @Override
-    public void setMediaTypes(Map<String, MediaType> mediaTypes) { this.mediaTypes = mediaTypes; }
+    public void setMediaTypes(Map<String, MediaType> mediaTypes) { this.mediaTypes = ModelCollections.mutableMap(mediaTypes); }
 }
 

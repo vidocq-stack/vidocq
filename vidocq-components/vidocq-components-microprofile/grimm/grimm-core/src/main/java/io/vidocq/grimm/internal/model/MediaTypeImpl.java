@@ -18,39 +18,45 @@ public class MediaTypeImpl extends AbstractExtensible<MediaType> implements Medi
     @Override public Schema getSchema() { return schema; }
     @Override public void setSchema(Schema schema) { this.schema = schema; }
 
-    @Override public Map<String, Example> getExamples() { return examples; }
-    @Override public void setExamples(Map<String, Example> examples) { this.examples = examples; }
+    @Override public Map<String, Example> getExamples() { return ModelCollections.immutableMapView(examples); }
+    @Override public void setExamples(Map<String, Example> examples) { this.examples = ModelCollections.mutableMap(examples); }
 
     @Override
     public MediaType addExample(String key, Example example) {
         if (example == null) return this;
-        if (examples == null) examples = new LinkedHashMap<>();
+        examples = ModelCollections.copyOnWriteMap(examples);
         examples.put(key, example);
         return this;
     }
 
     @Override
     public void removeExample(String key) {
-        if (examples != null) examples.remove(key);
+        if (examples != null) {
+            examples = ModelCollections.copyOnWriteMap(examples);
+            examples.remove(key);
+        }
     }
 
     @Override public Object getExample() { return example; }
     @Override public void setExample(Object example) { this.example = example; }
 
-    @Override public Map<String, Encoding> getEncoding() { return encoding; }
-    @Override public void setEncoding(Map<String, Encoding> encoding) { this.encoding = encoding; }
+    @Override public Map<String, Encoding> getEncoding() { return ModelCollections.immutableMapView(encoding); }
+    @Override public void setEncoding(Map<String, Encoding> encoding) { this.encoding = ModelCollections.mutableMap(encoding); }
 
     @Override
     public MediaType addEncoding(String key, Encoding encodingItem) {
         if (encodingItem == null) return this;
-        if (encoding == null) encoding = new LinkedHashMap<>();
+        encoding = ModelCollections.copyOnWriteMap(encoding);
         encoding.put(key, encodingItem);
         return this;
     }
 
     @Override
     public void removeEncoding(String key) {
-        if (encoding != null) encoding.remove(key);
+        if (encoding != null) {
+            encoding = ModelCollections.copyOnWriteMap(encoding);
+            encoding.remove(key);
+        }
     }
 }
 

@@ -56,20 +56,23 @@ public class ParameterImpl extends AbstractExtensibleRef<Parameter> implements P
     @Override public Schema getSchema() { return schema; }
     @Override public void setSchema(Schema schema) { this.schema = schema; }
 
-    @Override public Map<String, Example> getExamples() { return examples; }
-    @Override public void setExamples(Map<String, Example> examples) { this.examples = examples; }
+    @Override public Map<String, Example> getExamples() { return ModelCollections.immutableMapView(examples); }
+    @Override public void setExamples(Map<String, Example> examples) { this.examples = ModelCollections.mutableMap(examples); }
 
     @Override
     public Parameter addExample(String key, Example example) {
         if (example == null) return this;
-        if (examples == null) examples = new LinkedHashMap<>();
+        examples = ModelCollections.copyOnWriteMap(examples);
         examples.put(key, example);
         return this;
     }
 
     @Override
     public void removeExample(String key) {
-        if (examples != null) examples.remove(key);
+        if (examples != null) {
+            examples = ModelCollections.copyOnWriteMap(examples);
+            examples.remove(key);
+        }
     }
 
     @Override public Object getExample() { return example; }

@@ -60,12 +60,12 @@ public class OpenAPIImpl extends AbstractExtensible<OpenAPI> implements OpenAPI 
 
     @Override
     public List<Server> getServers() {
-        return servers;
+        return ModelCollections.immutableListView(servers);
     }
 
     @Override
     public void setServers(List<Server> servers) {
-        this.servers = servers;
+        this.servers = ModelCollections.mutableList(servers);
     }
 
     @Override
@@ -73,9 +73,7 @@ public class OpenAPIImpl extends AbstractExtensible<OpenAPI> implements OpenAPI 
         if (server == null) {
             return this;
         }
-        if (servers == null) {
-            servers = new ArrayList<>();
-        }
+        servers = ModelCollections.copyOnWriteList(servers);
         servers.add(server);
         return this;
     }
@@ -83,18 +81,19 @@ public class OpenAPIImpl extends AbstractExtensible<OpenAPI> implements OpenAPI 
     @Override
     public void removeServer(Server server) {
         if (servers != null) {
+            servers = ModelCollections.copyOnWriteList(servers);
             servers.remove(server);
         }
     }
 
     @Override
     public List<SecurityRequirement> getSecurity() {
-        return security;
+        return ModelCollections.immutableListView(security);
     }
 
     @Override
     public void setSecurity(List<SecurityRequirement> security) {
-        this.security = security;
+        this.security = ModelCollections.mutableList(security);
     }
 
     @Override
@@ -102,9 +101,7 @@ public class OpenAPIImpl extends AbstractExtensible<OpenAPI> implements OpenAPI 
         if (securityRequirement == null) {
             return this;
         }
-        if (security == null) {
-            security = new ArrayList<>();
-        }
+        security = ModelCollections.copyOnWriteList(security);
         security.add(securityRequirement);
         return this;
     }
@@ -112,18 +109,19 @@ public class OpenAPIImpl extends AbstractExtensible<OpenAPI> implements OpenAPI 
     @Override
     public void removeSecurityRequirement(SecurityRequirement securityRequirement) {
         if (security != null) {
+            security = ModelCollections.copyOnWriteList(security);
             security.remove(securityRequirement);
         }
     }
 
     @Override
     public List<Tag> getTags() {
-        return tags;
+        return ModelCollections.immutableListView(tags);
     }
 
     @Override
     public void setTags(List<Tag> tags) {
-        this.tags = tags;
+        this.tags = ModelCollections.mutableList(tags);
     }
 
     @Override
@@ -131,9 +129,7 @@ public class OpenAPIImpl extends AbstractExtensible<OpenAPI> implements OpenAPI 
         if (tag == null) {
             return this;
         }
-        if (tags == null) {
-            tags = new ArrayList<>();
-        }
+        tags = ModelCollections.copyOnWriteList(tags);
         tags.add(tag);
         return this;
     }
@@ -141,6 +137,7 @@ public class OpenAPIImpl extends AbstractExtensible<OpenAPI> implements OpenAPI 
     @Override
     public void removeTag(Tag tag) {
         if (tags != null) {
+            tags = ModelCollections.copyOnWriteList(tags);
             tags.remove(tag);
         }
     }
@@ -157,12 +154,12 @@ public class OpenAPIImpl extends AbstractExtensible<OpenAPI> implements OpenAPI 
 
     @Override
     public Map<String, PathItem> getWebhooks() {
-        return webhooks;
+        return ModelCollections.immutableMapView(webhooks);
     }
 
     @Override
     public void setWebhooks(Map<String, PathItem> webhooks) {
-        this.webhooks = webhooks;
+        this.webhooks = ModelCollections.mutableMap(webhooks);
     }
 
     @Override
@@ -170,9 +167,7 @@ public class OpenAPIImpl extends AbstractExtensible<OpenAPI> implements OpenAPI 
         if (name == null || webhook == null) {
             return this;
         }
-        if (webhooks == null) {
-            webhooks = new LinkedHashMap<>();
-        }
+        webhooks = ModelCollections.copyOnWriteMap(webhooks);
         webhooks.put(name, webhook);
         return this;
     }
@@ -180,6 +175,7 @@ public class OpenAPIImpl extends AbstractExtensible<OpenAPI> implements OpenAPI 
     @Override
     public void removeWebhook(String name) {
         if (webhooks != null) {
+            webhooks = ModelCollections.copyOnWriteMap(webhooks);
             webhooks.remove(name);
         }
     }

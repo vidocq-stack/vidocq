@@ -23,6 +23,9 @@ import org.eclipse.microprofile.openapi.models.servers.ServerVariable;
 import org.eclipse.microprofile.openapi.models.tags.Tag;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+import java.util.Map;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -324,6 +327,46 @@ class OASFactoryTest {
         assertEquals(item, paths.getPathItem("/users"));
         paths.removePathItem("/users");
         assertFalse(paths.hasPathItem("/users"));
+    }
+
+    @Test
+    void extensions_setImmutableMap_thenAddExtension_isMutable() {
+        Info info = OASFactory.createObject(Info.class);
+        info.setExtensions(Map.of("x-a", 1));
+
+        info.addExtension("x-b", 2);
+
+        assertEquals(2, info.getExtension("x-b"));
+    }
+
+    @Test
+    void content_setImmutableMap_thenAddMediaType_isMutable() {
+        Content content = OASFactory.createObject(Content.class);
+        content.setMediaTypes(Map.of("application/json", OASFactory.createObject(MediaType.class)));
+
+        content.addMediaType("application/yaml", OASFactory.createObject(MediaType.class));
+
+        assertEquals(2, content.getMediaTypes().size());
+    }
+
+    @Test
+    void discriminator_setImmutableMap_thenAddMapping_isMutable() {
+        Discriminator discriminator = OASFactory.createObject(Discriminator.class);
+        discriminator.setMapping(Map.of("cat", "#/components/schemas/Cat"));
+
+        discriminator.addMapping("dog", "#/components/schemas/Dog");
+
+        assertEquals("#/components/schemas/Dog", discriminator.getMapping().get("dog"));
+    }
+
+    @Test
+    void operation_setImmutableList_thenAddTag_isMutable() {
+        Operation operation = OASFactory.createObject(Operation.class);
+        operation.setTags(List.of("pets"));
+
+        operation.addTag("store");
+
+        assertEquals(List.of("pets", "store"), operation.getTags());
     }
 }
 

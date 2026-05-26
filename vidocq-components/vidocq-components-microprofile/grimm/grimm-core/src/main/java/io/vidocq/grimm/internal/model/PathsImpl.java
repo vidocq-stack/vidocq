@@ -13,20 +13,23 @@ public class PathsImpl extends AbstractExtensible<Paths> implements Paths {
     @Override
     public Paths addPathItem(String name, PathItem item) {
         if (item == null) return this;
-        if (pathItems == null) pathItems = new LinkedHashMap<>();
+        pathItems = ModelCollections.copyOnWriteMap(pathItems);
         pathItems.put(name, item);
         return this;
     }
 
     @Override
     public void removePathItem(String name) {
-        if (pathItems != null) pathItems.remove(name);
+        if (pathItems != null) {
+            pathItems = ModelCollections.copyOnWriteMap(pathItems);
+            pathItems.remove(name);
+        }
     }
 
     @Override
-    public Map<String, PathItem> getPathItems() { return pathItems; }
+    public Map<String, PathItem> getPathItems() { return ModelCollections.immutableMapView(pathItems); }
 
     @Override
-    public void setPathItems(Map<String, PathItem> items) { this.pathItems = items; }
+    public void setPathItems(Map<String, PathItem> items) { this.pathItems = ModelCollections.mutableMap(items); }
 }
 

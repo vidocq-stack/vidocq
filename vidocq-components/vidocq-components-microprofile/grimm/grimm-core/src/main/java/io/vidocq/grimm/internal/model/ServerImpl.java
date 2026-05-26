@@ -18,20 +18,23 @@ public class ServerImpl extends AbstractExtensible<Server> implements Server {
     @Override public String getDescription() { return description; }
     @Override public void setDescription(String description) { this.description = description; }
 
-    @Override public Map<String, ServerVariable> getVariables() { return variables; }
-    @Override public void setVariables(Map<String, ServerVariable> variables) { this.variables = variables; }
+    @Override public Map<String, ServerVariable> getVariables() { return ModelCollections.immutableMapView(variables); }
+    @Override public void setVariables(Map<String, ServerVariable> variables) { this.variables = ModelCollections.mutableMap(variables); }
 
     @Override
     public Server addVariable(String variableName, ServerVariable variable) {
         if (variable == null) return this;
-        if (variables == null) variables = new LinkedHashMap<>();
+        variables = ModelCollections.copyOnWriteMap(variables);
         variables.put(variableName, variable);
         return this;
     }
 
     @Override
     public void removeVariable(String variableName) {
-        if (variables != null) variables.remove(variableName);
+        if (variables != null) {
+            variables = ModelCollections.copyOnWriteMap(variables);
+            variables.remove(variableName);
+        }
     }
 }
 

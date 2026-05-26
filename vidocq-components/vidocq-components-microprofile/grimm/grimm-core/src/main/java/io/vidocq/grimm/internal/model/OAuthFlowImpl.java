@@ -23,17 +23,20 @@ public class OAuthFlowImpl extends AbstractExtensible<OAuthFlow> implements OAut
 
     @Override
     public OAuthFlow addScope(String scope, String description) {
-        if (scopes == null) scopes = new LinkedHashMap<>();
+        scopes = ModelCollections.copyOnWriteMap(scopes);
         scopes.put(scope, description == null ? "" : description);
         return this;
     }
 
     @Override
     public void removeScope(String scope) {
-        if (scopes != null) scopes.remove(scope);
+        if (scopes != null) {
+            scopes = ModelCollections.copyOnWriteMap(scopes);
+            scopes.remove(scope);
+        }
     }
 
-    @Override public Map<String, String> getScopes() { return scopes; }
-    @Override public void setScopes(Map<String, String> scopes) { this.scopes = scopes; }
+    @Override public Map<String, String> getScopes() { return ModelCollections.immutableMapView(scopes); }
+    @Override public void setScopes(Map<String, String> scopes) { this.scopes = ModelCollections.mutableMap(scopes); }
 }
 

@@ -17,20 +17,23 @@ public class EncodingImpl extends AbstractExtensible<Encoding> implements Encodi
     @Override public String getContentType() { return contentType; }
     @Override public void setContentType(String contentType) { this.contentType = contentType; }
 
-    @Override public Map<String, Header> getHeaders() { return headers; }
-    @Override public void setHeaders(Map<String, Header> headers) { this.headers = headers; }
+    @Override public Map<String, Header> getHeaders() { return ModelCollections.immutableMapView(headers); }
+    @Override public void setHeaders(Map<String, Header> headers) { this.headers = ModelCollections.mutableMap(headers); }
 
     @Override
     public Encoding addHeader(String key, Header header) {
         if (header == null) return this;
-        if (headers == null) headers = new LinkedHashMap<>();
+        headers = ModelCollections.copyOnWriteMap(headers);
         headers.put(key, header);
         return this;
     }
 
     @Override
     public void removeHeader(String key) {
-        if (headers != null) headers.remove(key);
+        if (headers != null) {
+            headers = ModelCollections.copyOnWriteMap(headers);
+            headers.remove(key);
+        }
     }
 
     @Override public Style getStyle() { return style; }

@@ -36,14 +36,22 @@ public class SecurityRequirementImpl implements SecurityRequirement {
 
     @Override
     public void removeScheme(String securitySchemeName) {
-        if (schemes != null) schemes.remove(securitySchemeName);
+        if (schemes != null) {
+            schemes = ModelCollections.copyOnWriteMap(schemes);
+            schemes.remove(securitySchemeName);
+        }
     }
 
-    @Override public Map<String, List<String>> getSchemes() { return schemes; }
-    @Override public void setSchemes(Map<String, List<String>> items) { this.schemes = items; }
+    @Override
+    public Map<String, List<String>> getSchemes() {
+        return ModelCollections.immutableMapView(schemes);
+    }
+    @Override public void setSchemes(Map<String, List<String>> items) {
+        this.schemes = ModelCollections.mutableMap(items);
+    }
 
     private void initSchemes() {
-        if (schemes == null) schemes = new LinkedHashMap<>();
+        schemes = ModelCollections.copyOnWriteMap(schemes);
     }
 }
 

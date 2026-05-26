@@ -15,17 +15,20 @@ public class CallbackImpl extends AbstractExtensibleRef<Callback> implements Cal
     @Override
     public Callback addPathItem(String name, PathItem pathItem) {
         if (pathItem == null) return this;
-        if (pathItems == null) pathItems = new LinkedHashMap<>();
+        pathItems = ModelCollections.copyOnWriteMap(pathItems);
         pathItems.put(name, pathItem);
         return this;
     }
 
     @Override
     public void removePathItem(String name) {
-        if (pathItems != null) pathItems.remove(name);
+        if (pathItems != null) {
+            pathItems = ModelCollections.copyOnWriteMap(pathItems);
+            pathItems.remove(name);
+        }
     }
 
-    @Override public Map<String, PathItem> getPathItems() { return pathItems; }
-    @Override public void setPathItems(Map<String, PathItem> items) { this.pathItems = items; }
+    @Override public Map<String, PathItem> getPathItems() { return ModelCollections.immutableMapView(pathItems); }
+    @Override public void setPathItems(Map<String, PathItem> items) { this.pathItems = ModelCollections.mutableMap(items); }
 }
 

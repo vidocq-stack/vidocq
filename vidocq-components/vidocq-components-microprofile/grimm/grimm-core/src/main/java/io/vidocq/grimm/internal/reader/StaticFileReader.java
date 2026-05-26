@@ -12,6 +12,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashSet;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Reads static OpenAPI documents from the deployment classpath.
@@ -25,11 +26,37 @@ public final class StaticFileReader {
     private static final String[] SEARCH_PATHS = {
             "META-INF/openapi.yaml",
             "META-INF/openapi.yml",
-            "META-INF/openapi.json",
-            "openapi.yaml",
-            "openapi.yml",
-            "openapi.json"
+            "META-INF/openapi.json"
     };
+
+    /**
+     * Optional explicit static document content (path -> raw text) installed by the deployment
+     * harness (e.g. the Arquillian container) when the classpath cannot be used to isolate per
+     * deployment files. When set, classpath lookup is skipped entirely.
+     */
+    private static final AtomicReference<StaticDocumentOverride> OVERRIDE = new AtomicReference<>();
+
+    /**
+     * Installs an explicit static document, bypassing classpath search.
+     *
+     * @param resourcePath logical file name (e.g. {@code META-INF/openapi.yaml}); used to choose
+     *                     the deserializer (json vs yaml).
+     * @param content      raw text content. {@code null} clears any previous override.
+     */
+    public static void setExplicitDocument(String resourcePath, String content) {
+        if (content == null || resourcePath == null) {
+            OVERRIDE.set(null);
+            return;
+        }
+        OVERRIDE.set(new StaticDocumentOverride(resourcePath, content));
+    }
+
+    /** Clears any explicit document set via {@link #setExplicitDocument(String, String)}. */
+    public static void clearExplicitDocument() {
+        OVERRIDE.set(null);
+    }
+
+    private record StaticDocumentOverride(String resourcePath, String content) {}
 
     /**
      * Reads the static OpenAPI document from the deployment classpath.
@@ -41,6 +68,10 @@ public final class StaticFileReader {
      * @throws IllegalArgumentException if a file is found but cannot be parsed
      */
     public Optional<OpenAPI> readOpenAPI() {
+        StaticDocumentOverride override = OVERRIDE.get();
+        if (override != null) {
+            return Optional.of(deserialize(override.content(), override.resourcePath()));
+        }
         ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
         if (classLoader == null) {
             classLoader = StaticFileReader.class.getClassLoader();
@@ -58,6 +89,10 @@ public final class StaticFileReader {
      * Reads static OpenAPI files while trying deployment-related classloaders first.
      */
     public Optional<OpenAPI> readOpenAPI(Iterable<Class<?>> knownDeploymentTypes) {
+        StaticDocumentOverride override = OVERRIDE.get();
+        if (override != null) {
+            return Optional.of(deserialize(override.content(), override.resourcePath()));
+        }
         Set<ClassLoader> candidates = collectCandidateClassLoaders(knownDeploymentTypes);
         for (ClassLoader classLoader : candidates) {
             for (String resourcePath : SEARCH_PATHS) {
@@ -87,11 +122,6 @@ public final class StaticFileReader {
     private Set<ClassLoader> collectCandidateClassLoaders(Iterable<Class<?>> knownDeploymentTypes) {
         LinkedHashSet<ClassLoader> classLoaders = new LinkedHashSet<>();
 
-        ClassLoader tccl = Thread.currentThread().getContextClassLoader();
-        if (tccl != null) {
-            classLoaders.add(tccl);
-        }
-
         if (knownDeploymentTypes != null) {
             for (Class<?> type : knownDeploymentTypes) {
                 if (type != null && type.getClassLoader() != null) {
@@ -100,10 +130,13 @@ public final class StaticFileReader {
             }
         }
 
-        ClassLoader own = StaticFileReader.class.getClassLoader();
-        if (own != null) {
-            classLoaders.add(own);
+        if (classLoaders.isEmpty()) {
+            ClassLoader tccl = Thread.currentThread().getContextClassLoader();
+            if (tccl != null) {
+                classLoaders.add(tccl);
+            }
         }
+
         return classLoaders;
     }
 

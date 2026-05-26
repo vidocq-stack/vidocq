@@ -85,36 +85,42 @@ public class PathItemImpl extends AbstractExtensibleRef<PathItem> implements Pat
         }
     }
 
-    @Override public List<Server> getServers() { return servers; }
-    @Override public void setServers(List<Server> servers) { this.servers = servers; }
+    @Override public List<Server> getServers() { return ModelCollections.immutableListView(servers); }
+    @Override public void setServers(List<Server> servers) { this.servers = ModelCollections.mutableList(servers); }
 
     @Override
     public PathItem addServer(Server server) {
         if (server == null) return this;
-        if (servers == null) servers = new ArrayList<>();
+        servers = ModelCollections.copyOnWriteList(servers);
         servers.add(server);
         return this;
     }
 
     @Override
     public void removeServer(Server server) {
-        if (servers != null) servers.remove(server);
+        if (servers != null) {
+            servers = ModelCollections.copyOnWriteList(servers);
+            servers.remove(server);
+        }
     }
 
-    @Override public List<Parameter> getParameters() { return parameters; }
-    @Override public void setParameters(List<Parameter> parameters) { this.parameters = parameters; }
+    @Override public List<Parameter> getParameters() { return ModelCollections.immutableListView(parameters); }
+    @Override public void setParameters(List<Parameter> parameters) { this.parameters = ModelCollections.mutableList(parameters); }
 
     @Override
     public PathItem addParameter(Parameter parameter) {
         if (parameter == null) return this;
-        if (parameters == null) parameters = new ArrayList<>();
+        parameters = ModelCollections.copyOnWriteList(parameters);
         parameters.add(parameter);
         return this;
     }
 
     @Override
     public void removeParameter(Parameter parameter) {
-        if (parameters != null) parameters.remove(parameter);
+        if (parameters != null) {
+            parameters = ModelCollections.copyOnWriteList(parameters);
+            parameters.remove(parameter);
+        }
     }
 }
 

@@ -11,20 +11,23 @@ public class ServerVariableImpl extends AbstractExtensible<ServerVariable> imple
     private String defaultValue;
     private String description;
 
-    @Override public List<String> getEnumeration() { return enumeration; }
-    @Override public void setEnumeration(List<String> enumeration) { this.enumeration = enumeration; }
+    @Override public List<String> getEnumeration() { return ModelCollections.immutableListView(enumeration); }
+    @Override public void setEnumeration(List<String> enumeration) { this.enumeration = ModelCollections.mutableList(enumeration); }
 
     @Override
     public ServerVariable addEnumeration(String value) {
         if (value == null) return this;
-        if (enumeration == null) enumeration = new ArrayList<>();
+        enumeration = ModelCollections.copyOnWriteList(enumeration);
         enumeration.add(value);
         return this;
     }
 
     @Override
     public void removeEnumeration(String value) {
-        if (enumeration != null) enumeration.remove(value);
+        if (enumeration != null) {
+            enumeration = ModelCollections.copyOnWriteList(enumeration);
+            enumeration.remove(value);
+        }
     }
 
     @Override public String getDefaultValue() { return defaultValue; }
