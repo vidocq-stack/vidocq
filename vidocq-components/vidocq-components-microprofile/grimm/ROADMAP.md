@@ -131,11 +131,11 @@ ServiceLoader.
 
 | Task | Notes | Status |
 |---|---|---|
-| `JsonSerializer` | Serializes `OpenAPI` model to JSON string; zero external JSON library — hand-written using `java.io` / `StringBuilder` or `javax.json` (Jakarta JSON-P via Champollion) | ☐ |
-| `YamlSerializer` | Serializes `OpenAPI` model to YAML string; zero external YAML library — hand-written indented serializer | ☐ |
-| `JsonDeserializer` | Parses JSON `OpenAPI` document (for static file reading); JSON-P streaming | ☐ |
-| `YamlDeserializer` | Parses YAML `OpenAPI` document (for static file reading) | ☐ |
-| Round-trip unit tests | Serialize → deserialize → verify equality for all model objects | ☐ |
+| `JsonSerializer` | Serializes `OpenAPI` model to JSON string; zero external JSON library — hand-written using `java.io` / `StringBuilder` or `javax.json` (Jakarta JSON-P via Champollion) | ☑ |
+| `YamlSerializer` | Serializes `OpenAPI` model to YAML string; zero external YAML library — hand-written indented serializer | ☑ |
+| `JsonDeserializer` | Parses JSON `OpenAPI` document (for static file reading); JSON-P streaming | ☑ |
+| `YamlDeserializer` | Parses YAML `OpenAPI` document (for static file reading) | ☑ |
+| Round-trip unit tests | Serialize → deserialize → verify equality for all model objects | ☑ |
 | `format` query parameter | `?format=json` vs `?format=yaml` (wired in M9 endpoint) | ☐ |
 
 **Decisions M2:**
@@ -157,11 +157,11 @@ ServiceLoader.
 
 | Task | Notes | Status |
 |---|---|---|
-| `StaticFileReader` | Reads `META-INF/openapi.yaml`, `openapi.yml`, `openapi.json` from the deployment classpath (in that priority order per spec) | ☐ |
-| Format detection | Detect file format from extension; delegate to `YamlDeserializer` or `JsonDeserializer` | ☐ |
-| Classpath scanning | Use `ClassLoader.getResourceAsStream` — JPMS-safe, no file-system assumptions | ☐ |
-| Absent file | Return `Optional.empty()` cleanly (not an error) | ☐ |
-| Unit tests | Files present / absent / malformed | ☐ |
+| `StaticFileReader` | Reads `META-INF/openapi.yaml`, `openapi.yml`, `openapi.json` from the deployment classpath (in that priority order per spec) | ☑ |
+| Format detection | Detect file format from extension; delegate to `YamlDeserializer` or `JsonDeserializer` | ☑ |
+| Classpath scanning | Use `ClassLoader.getResourceAsStream` — JPMS-safe, no file-system assumptions | ☑ |
+| Absent file | Return `Optional.empty()` cleanly (not an error) | ☑ |
+| Unit tests | Files present / absent / malformed | ☑ |
 
 **Deliverable:** Static file reading works independently; tested without CDI.
 
@@ -173,13 +173,13 @@ ServiceLoader.
 
 | Task | Notes | Status |
 |---|---|---|
-| `AnnotationScanner` — skeleton | Accepts a list of classes; produces a partial `OpenAPI` model | ☐ |
-| `ScanConfig` record | `disableScan`, `includePackages`, `includeClasses`, `excludePackages`, `excludeClasses` | ☐ |
-| `@OpenAPIDefinition` processing | Maps `info`, `tags`, `servers`, `security`, `externalDocs` to the model | ☐ |
-| `@Tag` / `@Tags` processing | Class-level and method-level; deduplication by name | ☐ |
-| `@Server` / `@Servers` processing | Class-level and method-level; merged per spec §3.5.2 | ☐ |
+| `AnnotationScanner` — skeleton | Accepts a list of classes; produces a partial `OpenAPI` model | ☑ |
+| `ScanConfig` record | `disableScan`, `includePackages`, `includeClasses`, `excludePackages`, `excludeClasses` | ☑ |
+| `@OpenAPIDefinition` processing | Maps `info`, `tags`, `servers`, `security`, `externalDocs` to the model | ☑ |
+| `@Tag` / `@Tags` processing | Class-level and method-level; deduplication by name | ☑ |
+| `@Server` / `@Servers` processing | Class-level and method-level; merged per spec §3.5.2 | ☑ |
 | `@ExternalDocumentation` processing | Top-level and operation-level | ☐ |
-| Unit tests | Classes bearing each annotation; verify model output | ☐ |
+| Unit tests | Classes bearing each annotation; verify model output | ☑ |
 
 **Deliverable:** Document-level annotations scanned and merged into the model correctly.
 
@@ -237,14 +237,14 @@ JSON Schema dialect.
 
 | Task | Notes | Status |
 |---|---|---|
-| `ModelReaderInvoker` | Loads class named by `mp.openapi.model.reader` via `Class.forName` + instantiation; calls `buildModel(OpenAPI)` | ☐ |
-| `FilterInvoker` | Loads class named by `mp.openapi.filter`; calls each `filterXxx` method in the order defined by spec §4.3 | ☐ |
+| `ModelReaderInvoker` | Loads class named by `mp.openapi.model.reader` via `Class.forName` + instantiation; calls `buildModel()` | ☑ |
+| `FilterInvoker` | Loads class named by `mp.openapi.filter`; calls each `filterXxx` method in the order defined by spec §4.3 | ☑ |
 | Filter method order | `filterOpenAPI` is called last (§4.3); implement the full sequence: `filterPathItem`, `filterOperation`, `filterParameter`, `filterRequestBody`, `filterAPIResponse`, `filterSchema`, `filterHeader`, `filterTag`, `filterServer`, `filterLink`, `filterCallback`, `filterOpenAPI` | ☐ |
 | `null` return from filter | A filter method returning `null` removes the element from the model (spec §4.3.1) | ☐ |
-| `ModelMerger` — three-source merge | Priority: annotations > `OASModelReader` > static file (spec §4.4) | ☐ |
-| `ModelSource` sealed interface | `StaticFileSource`, `AnnotationSource`, `ReaderSource` — used by `ModelMerger` | ☐ |
-| Unit tests `FilterInvoker` | Filter that removes operations; filter that renames tags | ☐ |
-| Unit tests `ModelReaderInvoker` | Reader that adds a server; reader that sets `info` | ☐ |
+| `ModelMerger` — three-source merge | Priority: annotations > `OASModelReader` > static file (spec §4.4) | ☑ |
+| `ModelSource` sealed interface | `StaticFileSource`, `AnnotationSource`, `ReaderSource` — used by `ModelMerger` | ☑ |
+| Unit tests `FilterInvoker` | Filter that removes operations; filter that renames tags | ☑ |
+| Unit tests `ModelReaderInvoker` | Reader that adds a server; reader that sets `info` | ☑ |
 | Unit tests `ModelMerger` | All three sources present; priority conflicts; absent sources | ☐ |
 
 **Deliverable:** Full programmatic model extension and post-processing pipeline working.
@@ -258,13 +258,14 @@ JSON Schema dialect.
 | Task | Notes | Status |
 |---|---|---|
 | `GrimmConfig` | Reads all `mp.openapi.*` keys via `ConfigProvider.getConfig()` (Ravel); immutable snapshot at startup | ☐ |
-| `mp.openapi.scan.disable` | Skip annotation scanning entirely when `true` | ☐ |
-| `mp.openapi.scan.packages` | Comma-separated list of packages to include | ☐ |
-| `mp.openapi.scan.classes` | Comma-separated list of classes to include | ☐ |
-| `mp.openapi.scan.exclude.packages` | Packages to exclude (takes priority over include) | ☐ |
-| `mp.openapi.scan.exclude.classes` | Classes to exclude | ☐ |
-| `mp.openapi.filter` | FQCN of `OASFilter` implementation | ☐ |
-| `mp.openapi.model.reader` | FQCN of `OASModelReader` implementation | ☐ |
+| `FilterConfig` | Configuration for filter and model reader class names | ☑ |
+| `mp.openapi.scan.disable` | Skip annotation scanning entirely when `true` | ☑ |
+| `mp.openapi.scan.packages` | Comma-separated list of packages to include | ☑ |
+| `mp.openapi.scan.classes` | Comma-separated list of classes to include | ☑ |
+| `mp.openapi.scan.exclude.packages` | Packages to exclude (takes priority over include) | ☑ |
+| `mp.openapi.scan.exclude.classes` | Classes to exclude | ☑ |
+| `mp.openapi.filter` | FQCN of `OASFilter` implementation | ☑ |
+| `mp.openapi.model.reader` | FQCN of `OASModelReader` implementation | ☑ |
 | `mp.openapi.servers` | Comma-separated list of server URLs to set on the model | ☐ |
 | `mp.openapi.schema.<FQCN>` | JSON string defining the schema for a class (already in M6) | ☐ |
 | `mp.openapi.extensions.scan.disable` | Disable `@Extension` annotation scanning | ☐ |
@@ -349,6 +350,10 @@ endpoint, integrated with Vauban (CDI) and Cassini (JAX-RS).
 - [x] M1 completed: all MP OpenAPI model POJOs + `OASFactoryResolver` ServiceLoader wiring
 - [x] JPMS alignment: use `requires org.eclipse.microprofile.openapi` (real module name in MP OpenAPI 4.1)
 - [x] MP Config API is consumed via `io.vidocq.ravel:ravel-mp-config-api` (repackaged modular API)
+- [x] M2 completed: JSON/YAML serialization with round-trip tests
+- [x] M3 completed: StaticFileReader with classpath scanning
+- [x] M4 completed: AnnotationScanner with document-level annotations + ScanConfig filtering
+- [x] M7 core completed: ModelMerger with sealed interface + ModelReaderInvoker + FilterInvoker
 
 ## Open Decisions
 
