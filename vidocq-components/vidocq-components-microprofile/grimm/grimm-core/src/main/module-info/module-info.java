@@ -1,9 +1,12 @@
 module io.vidocq.grimm.core {
-  requires microprofile.openapi.api;
+  requires org.eclipse.microprofile.openapi;
   requires jakarta.ws.rs;
   requires jakarta.annotation;
   requires org.eclipse.microprofile.config;
 
   exports io.vidocq.grimm.internal to io.vidocq.grimm.cdi.vauban;
+
+  provides org.eclipse.microprofile.openapi.spi.OASFactoryResolver
+      with io.vidocq.grimm.internal.factory.GrimmOASFactoryResolver;
 }
 

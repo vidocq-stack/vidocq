@@ -44,7 +44,8 @@ sdk env
 ## Architecture
 
 Grimm is a **MicroProfile OpenAPI 4.1** implementation with zero implementation dependencies:
-only the MicroProfile OpenAPI API and required Jakarta specs are compiled.
+only the MicroProfile OpenAPI API, required Jakarta specs, and the Vidocq modular repackage
+`io.vidocq.ravel:ravel-mp-config-api` are compiled.
 
 ```
 grimm-core         ← Scanner, OASFactory impl, model POJOs, JSON/YAML serializer, model merger
@@ -74,7 +75,8 @@ reads from `GrimmModelCache` and serves the document as `application/json` or `a
 ## Architecture Constraints — Do Not Violate
 
 1. **Zero implementation imports in `grimm-core`** — only `microprofile-openapi-api`,
-   `jakarta.ws.rs-api`, `jakarta.annotation-api`. No CDI, no Vauban, no Cassini, no Chappe.
+   `io.vidocq.ravel:ravel-mp-config-api`, `jakarta.ws.rs-api`, `jakarta.annotation-api`.
+   No CDI, no Vauban, no Cassini, no Chappe.
 2. **No `synchronized` blocks, no `ThreadLocal`** — virtual-thread-friendly.
    Use `ReentrantLock`, `ConcurrentHashMap`, `ScopedValue` where shared state is needed.
 3. **No `setAccessible(true)` in production** — use `MethodHandles.privateLookupIn` for
@@ -145,7 +147,7 @@ org.eclipse.microprofile.openapi:microprofile-openapi-api:4.1
 jakarta.ws.rs:jakarta.ws.rs-api:4.0                            (provided)
 jakarta.enterprise:jakarta.enterprise.cdi-api:4.1              (provided)
 jakarta.annotation:jakarta.annotation-api:3.0                   (provided)
-org.eclipse.microprofile.config:microprofile-config-api:3.1     (provided)
+io.vidocq.ravel:ravel-mp-config-api:0.1.0-SNAPSHOT              (provided)
 org.junit:junit-bom:6.0.3                                       (test, BOM)
 ```
 

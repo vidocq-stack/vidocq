@@ -34,7 +34,7 @@
 grimm-core              io.vidocq.grimm.core
   exports io.vidocq.grimm.internal
           to io.vidocq.grimm.cdi.vauban     (qualified export)
-  requires microprofile.openapi.api
+  requires org.eclipse.microprofile.openapi
   requires jakarta.ws.rs
   requires jakarta.annotation
   requires org.eclipse.microprofile.config
@@ -45,7 +45,7 @@ grimm-core              io.vidocq.grimm.core
 
 grimm-cdi-vauban        io.vidocq.grimm.cdi.vauban
   requires io.vidocq.grimm.core
-  requires microprofile.openapi.api
+  requires org.eclipse.microprofile.openapi
   requires jakarta.enterprise.cdi
   requires jakarta.ws.rs
   requires jakarta.annotation
@@ -96,22 +96,22 @@ compilable.
 
 | Task | Notes | Status |
 |---|---|---|
-| `OASFactoryImpl` | Implements `OASFactory` SPI; registered via `ServiceLoader` (`META-INF/services` + JPMS `provides`) | ☐ |
-| `OpenAPIImpl` record/POJO | Implements `org.eclipse.microprofile.openapi.models.OpenAPI` | ☐ |
-| `InfoImpl` | Implements `Info` | ☐ |
-| `PathItemImpl` | Implements `PathItem` | ☐ |
-| `OperationImpl` | Implements `Operation` | ☐ |
-| `ParameterImpl` | Implements `Parameter` | ☐ |
-| `RequestBodyImpl` | Implements `RequestBody` | ☐ |
-| `APIResponseImpl` / `APIResponsesImpl` | Implements `APIResponse` / `APIResponses` | ☐ |
-| `SchemaImpl` | Implements `Schema` (OpenAPI 3.1 — supports JSON Schema dialect) | ☐ |
-| `TagImpl`, `ServerImpl`, `ContactImpl`, `LicenseImpl` | Metadata model objects | ☐ |
-| `SecuritySchemeImpl`, `SecurityRequirementImpl` | Security model objects | ☐ |
-| `CallbackImpl`, `LinkImpl`, `HeaderImpl` | Advanced model objects | ☐ |
-| `ComponentsImpl` | `components` object for shared definitions | ☐ |
-| `MediaTypeImpl`, `EncodingImpl` | Request/response media types | ☐ |
-| `ExternalDocumentationImpl`, `ExtensibleImpl` | Cross-cutting model support | ☐ |
-| Unit tests — builder API | Round-trip: build via `OASFactory` → verify all fields | ☐ |
+| `OASFactoryImpl` | Implements `OASFactory` SPI; registered via `ServiceLoader` (`META-INF/services` + JPMS `provides`) | ☑ |
+| `OpenAPIImpl` record/POJO | Implements `org.eclipse.microprofile.openapi.models.OpenAPI` | ☑ |
+| `InfoImpl` | Implements `Info` | ☑ |
+| `PathItemImpl` | Implements `PathItem` | ☑ |
+| `OperationImpl` | Implements `Operation` | ☑ |
+| `ParameterImpl` | Implements `Parameter` | ☑ |
+| `RequestBodyImpl` | Implements `RequestBody` | ☑ |
+| `APIResponseImpl` / `APIResponsesImpl` | Implements `APIResponse` / `APIResponses` | ☑ |
+| `SchemaImpl` | Implements `Schema` (OpenAPI 3.1 — supports JSON Schema dialect) | ☑ |
+| `TagImpl`, `ServerImpl`, `ContactImpl`, `LicenseImpl` | Metadata model objects | ☑ |
+| `SecuritySchemeImpl`, `SecurityRequirementImpl` | Security model objects | ☑ |
+| `CallbackImpl`, `LinkImpl`, `HeaderImpl` | Advanced model objects | ☑ |
+| `ComponentsImpl` | `components` object for shared definitions | ☑ |
+| `MediaTypeImpl`, `EncodingImpl` | Request/response media types | ☑ |
+| `ExternalDocumentationImpl`, `AbstractExtensible` | Cross-cutting model support | ☑ |
+| Unit tests — builder API | Round-trip: build via `OASFactory` → verify all fields | ☑ |
 
 **Decisions M1:**
 - All model POJOs are mutable plain Java objects (MP OpenAPI API imposes a builder-style fluent
@@ -346,6 +346,9 @@ endpoint, integrated with Vauban (CDI) and Cassini (JAX-RS).
       OASFilter (spec §4.4)
 - [x] `grimm-tck/pom.xml` on Model 4.0.0 — ShrinkWrap constraint (ecosystem-wide)
 - [x] `/openapi` endpoint as a plain JAX-RS resource discovered by Cassini — no special adapter
+- [x] M1 completed: all MP OpenAPI model POJOs + `OASFactoryResolver` ServiceLoader wiring
+- [x] JPMS alignment: use `requires org.eclipse.microprofile.openapi` (real module name in MP OpenAPI 4.1)
+- [x] MP Config API is consumed via `io.vidocq.ravel:ravel-mp-config-api` (repackaged modular API)
 
 ## Open Decisions
 

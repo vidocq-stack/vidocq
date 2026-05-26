@@ -1,6 +1,6 @@
 module io.vidocq.grimm.cdi.vauban {
   requires io.vidocq.grimm.core;
-  requires microprofile.openapi.api;
+  requires org.eclipse.microprofile.openapi;
   requires jakarta.enterprise.cdi;
   requires jakarta.ws.rs;
   requires jakarta.annotation;

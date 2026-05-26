@@ -1,0 +1,69 @@
+package io.vidocq.grimm.internal.model;
+
+import org.eclipse.microprofile.openapi.models.examples.Example;
+import org.eclipse.microprofile.openapi.models.headers.Header;
+import org.eclipse.microprofile.openapi.models.media.Content;
+import org.eclipse.microprofile.openapi.models.media.Schema;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+public class HeaderImpl extends AbstractExtensibleRef<Header> implements Header {
+
+    private String description;
+    private Boolean required;
+    private Boolean deprecated;
+    private Boolean allowEmptyValue;
+    private Style style;
+    private Boolean explode;
+    private Schema schema;
+    private Map<String, Example> examples;
+    private Object example;
+    private Content content;
+
+    @Override protected String resolveComponentPrefix() { return "#/components/headers/"; }
+
+    @Override public String getDescription() { return description; }
+    @Override public void setDescription(String description) { this.description = description; }
+
+    @Override public Boolean getRequired() { return required; }
+    @Override public void setRequired(Boolean required) { this.required = required; }
+
+    @Override public Boolean getDeprecated() { return deprecated; }
+    @Override public void setDeprecated(Boolean deprecated) { this.deprecated = deprecated; }
+
+    @Override public Boolean getAllowEmptyValue() { return allowEmptyValue; }
+    @Override public void setAllowEmptyValue(Boolean allowEmptyValue) { this.allowEmptyValue = allowEmptyValue; }
+
+    @Override public Style getStyle() { return style; }
+    @Override public void setStyle(Style style) { this.style = style; }
+
+    @Override public Boolean getExplode() { return explode; }
+    @Override public void setExplode(Boolean explode) { this.explode = explode; }
+
+    @Override public Schema getSchema() { return schema; }
+    @Override public void setSchema(Schema schema) { this.schema = schema; }
+
+    @Override public Map<String, Example> getExamples() { return examples; }
+    @Override public void setExamples(Map<String, Example> examples) { this.examples = examples; }
+
+    @Override
+    public Header addExample(String key, Example example) {
+        if (example == null) return this;
+        if (examples == null) examples = new LinkedHashMap<>();
+        examples.put(key, example);
+        return this;
+    }
+
+    @Override
+    public void removeExample(String key) {
+        if (examples != null) examples.remove(key);
+    }
+
+    @Override public Object getExample() { return example; }
+    @Override public void setExample(Object example) { this.example = example; }
+
+    @Override public Content getContent() { return content; }
+    @Override public void setContent(Content content) { this.content = content; }
+}
+

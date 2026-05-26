@@ -8,8 +8,9 @@
 
 - Grimm implements **MicroProfile OpenAPI 4.1** in Java 25, with **zero third-party
   implementation libraries**: only spec APIs (`microprofile-openapi-api`, `jakarta.ws.rs-api`,
-  `jakarta.enterprise.cdi-api`, `jakarta.annotation-api`, `microprofile-config-api`) are
-  compiled into `grimm-core` and `grimm-cdi-vauban`.
+  `jakarta.enterprise.cdi-api`, `jakarta.annotation-api`) plus the Vidocq modular repackage
+  `io.vidocq.ravel:ravel-mp-config-api` are compiled into `grimm-core` and
+  `grimm-cdi-vauban`.
 - Strict JPMS architecture: `grimm-core` is pure Java scanning + serialization logic with no
   CDI dependency; `grimm-cdi-vauban` is the CDI integration layer and JAX-RS endpoint host;
   `grimm-tck` is out-of-reactor.
@@ -23,7 +24,8 @@
 ## Real Code State to Know Before Modifying
 
 - Consult `ROADMAP.md` for the detailed state of each milestone.
-- This project is in initial setup phase (M0). No implementation code exists yet.
+- M1 is implemented: `OASFactoryResolver` wiring (`ServiceLoader`) and model POJOs are present
+  in `grimm-core`.
 - `grimm-core` will export `io.vidocq.grimm.internal` as a **qualified export** to
   `io.vidocq.grimm.cdi.vauban` only — any new internal class is invisible outside
   `cdi-vauban` without a `module-info.java` change.
@@ -60,8 +62,10 @@
 - Module-path JARs are assembled by `maven-dependency-plugin` in the `initialize` phase
   (copied to `target/javamodules/`). Any new module-path dependency must be referenced in
   that copy step.
-- `microprofile-openapi-api:4.1` may not have a `module-info.class`; derive the JPMS module
-  name from the artifact name (`microprofile.openapi.api`) and use that in `requires`.
+- `microprofile-openapi-api:4.1` provides `module-info.class`; use
+  `requires org.eclipse.microprofile.openapi` in `module-info.java`.
+- MP Config API is consumed via `io.vidocq.ravel:ravel-mp-config-api`, which provides
+  `module org.eclipse.microprofile.config` for JPMS/jlink compatibility.
 
 ## Model Build Pipeline
 
