@@ -46,6 +46,7 @@
         <mansart.version>0.1.0-SNAPSHOT</mansart.version>
         <knock.version>0.1.0-SNAPSHOT</knock.version>
         <cyrano.version>0.1.0-SNAPSHOT</cyrano.version>
+        <cervantes.version>0.1.0-SNAPSHOT</cervantes.version>
         <humboldt.version>0.1.0-SNAPSHOT</humboldt.version>
         <champollion.version>0.1.0-SNAPSHOT</champollion.version>
         <microprofile.config.version>3.1.1</microprofile.config.version>
@@ -170,6 +171,33 @@
                 <version>${cyrano.version}</version>
             </dependency>
 
+            <!-- Cervantes — MicroProfile JWT 2.1 implementation -->
+            <dependency>
+                <groupId>io.vidocq.cervantes</groupId>
+                <artifactId>cervantes-mp-jwt-api</artifactId>
+                <version>${cervantes.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.cervantes</groupId>
+                <artifactId>cervantes-api</artifactId>
+                <version>${cervantes.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.cervantes</groupId>
+                <artifactId>cervantes-core</artifactId>
+                <version>${cervantes.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.cervantes</groupId>
+                <artifactId>cervantes-cdi-vauban</artifactId>
+                <version>${cervantes.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.cervantes</groupId>
+                <artifactId>cervantes-cassini</artifactId>
+                <version>${cervantes.version}</version>
+            </dependency>
+
             <!-- Humboldt — MicroProfile Telemetry 2.1 (tracing, metrics, logs) -->
             <dependency>
                 <groupId>io.vidocq.humboldt</groupId>
@@ -221,6 +249,11 @@
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-cyrano-extension</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.runtime</groupId>
+                <artifactId>vidocq-runtime-cervantes-jwt-extension</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
