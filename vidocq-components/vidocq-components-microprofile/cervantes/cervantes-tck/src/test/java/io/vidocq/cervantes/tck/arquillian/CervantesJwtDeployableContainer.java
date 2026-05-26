@@ -511,6 +511,13 @@ public class CervantesJwtDeployableContainer implements DeployableContainer<Cerv
             all.remove(JwtAuthenticationFilter.class);
             return all;
         }
+
+        @Override
+        public Object contextualInstance(Class<?> type, Object bean) {
+            // Délègue à VaubanBeanProvider pour déproxifier les ressources @RequestScoped
+            // (sinon @Context SecurityContext reste null dans le corps de la méthode resource).
+            return delegate.contextualInstance(type, bean);
+        }
     }
 
     /**
