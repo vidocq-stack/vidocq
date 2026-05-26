@@ -17,6 +17,9 @@ module io.vidocq.cervantes.cdi.vauban {
     requires static jakarta.inject;
     requires static jakarta.annotation;
 
+    provides jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension
+            with io.vidocq.cervantes.cdi.CervantesClaimExtension;
+
     exports io.vidocq.cervantes.cdi;
     exports io.vidocq.cervantes.cdi.internal;
 }

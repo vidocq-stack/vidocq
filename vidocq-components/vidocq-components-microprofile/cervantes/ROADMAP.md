@@ -22,9 +22,23 @@ Source de vérité des jalons et du score TCK. TDD à chaque étape (rouge → v
   filtre M4), `JsonWebTokenProducer` (`@Produces @RequestScoped JsonWebToken`, principal anonyme si
   absent), `JwtAuthConfigProducer` (lit `mp.jwt.verify.*` via Ravel → produit le `JwtValidator`),
   fabrique publique `KeyResolvers` (core : inline PEM / fichier PEM / fichier ou URL JWKS),
-  `DefaultJsonWebToken.anonymous()`. **8 tests** (unit + intégration container Vauban). ⏳ **Injection
-  `@Claim` typée reportée** — raffinement séparé (synthetic beans BCE, comme `@ConfigProperty` de
-  Ravel qui a nécessité VAU-BCE-001) ; sera durcie avec le TCK (M6).
+  `DefaultJsonWebToken.anonymous()`. **8 tests** (unit + intégration container Vauban).
+- [x] **M3b — Injection `@Claim` typée (synthetic beans BCE).** `CervantesClaimExtension`
+  (`BuildCompatibleExtension` : `@Registration` collecte les types des points d'injection `@Claim`,
+  `@Synthesis` enregistre un `SyntheticBean` `@Dependent` qualifié `@Claim` par type — `@Claim` ayant
+  `value`/`standard` `@Nonbinding`, un bean par type couvre tous les sites), `ClaimSyntheticCreator`
+  (`SyntheticBeanCreator` → `InjectionPoint` + `JsonWebTokenContext` courant), `ClaimResolver`
+  (extraction/conversion : `String`, `Long`, `Integer`, `Boolean`, `Double`, `Set<String>`, types
+  `jakarta.json` `JsonValue`/`JsonString`/`JsonNumber`/`JsonObject`/`JsonArray`, `Optional<T>` eager,
+  `ClaimValue<T>`/`Provider<T>`/`Supplier<T>` lazy qui relisent le token courant), `ClaimValueImpl`,
+  `DefaultJsonWebToken.rawClaim()` (valeur JSON brute). Modèle = `ravel/ConfigCdiExtension` (débloqué
+  par VAU-BCE-001). `provides BuildCompatibleExtension`. **+2 tests** (intégration Vauban embarqué,
+  matrice de types complète dont champ primitif `boolean`, + lazy multi-scope). ✅ **`@Claim` sur un
+  champ primitif** fonctionne (boxing au type wrapper, pattern Ravel) **grâce au fix Vauban
+  VAU-INJ-PRIM** (branche `pr/ybl/jwt-needs` : `TypeMapper` exposait un point d'injection primitif comme
+  `ClassType[boolean]` au lieu d'un `PrimitiveType`, donc le boxing ne se déclenchait pas). ⚠️ **M3b
+  dépend donc d'un Vauban ≥ le SNAPSHOT contenant VAU-INJ-PRIM** — pousser/publier le fix Vauban avant
+  la CI de cervantes M3b, sinon l'injection `@Claim boolean` échoue silencieusement.
 - [x] **M4 — Sécurité JAX-RS (`cervantes-cassini`).** `JwtSecurityContext` (adossé au `JsonWebToken`),
   `JwtAuthenticationFilter` (`@PreMatching` `@Priority(AUTHENTICATION)` : extrait le Bearer, valide,
   `setSecurityContext` + pose le `JsonWebTokenContext` ; 401 si invalide ; anonyme si absent),
@@ -39,8 +53,20 @@ Source de vérité des jalons et du score TCK. TDD à chaque étape (rouge → v
   détection JWE (5 parties) + déchiffrement dans `DefaultJwtValidator`, câblage
   `mp.jwt.decrypt.key`/`.location` dans `JwtAuthConfigProducer`. **+6 tests.** ℹ️ Content-enc
   `A128CBC-HS256` non encore supporté (seul `A256GCM`, le défaut spec) — à ajouter si le TCK l'exige.
-- [ ] **M6 — TCK officiel.** `cervantes-tck` hors reactor (Model 4.0.0), container Arquillian
-  (chappe+cassini+vauban+cervantes), `run-official-tck-mp-jwt-2.1.sh`. Cible : 100 % PASS.
+- [~] **M6 — TCK officiel.** Reconnaissance faite (2026-05-26) :
+  - TCK **public Maven Central** (`org.eclipse.microprofile.jwt:microprofile-jwt-auth-tck:2.1`),
+    **TestNG+Arquillian+ShrinkWrap** (jose4j). Pom modèle = `heisenberg-tck` (Model 4.0.0, profils
+    smoke/tck-official, arquillian-testng-container 1.10.1.Final pour JDK 25).
+  - Le TCK déploie des apps JAX-RS et tape en HTTP → container Arquillian **CDI+HTTP** ; le
+    `CassiniTestHarness` est non-CDI → répliquer le wiring runtime `CassiniExtension` par déploiement
+    (`VaubanContainerBuilder.addBeanClass+scanClasspath` → `VaubanBeanProvider` → `CassiniStack.builder()
+    .beanProvider()` → `ChappeHttpAdapter(adapter, requestContext::runInScope)` → mount `Server` chappe)
+    + enregistrer la MP-Config (clé+issuer) de l'archive par déploiement.
+  - ✅ **`@Claim` débloqué (M3b fait)** — les apps TCK qui injectent `@Claim` peuvent désormais se
+    déployer. Reste : `@Context SecurityContext` lu *en ressource* reflétant le JWT (→ **patch cassini
+    `FieldInjector`**, branche `pr/ybl/jwt-needs`), et la vérification de `@Claim` primitif (gap Vauban
+    documenté en M3b → branche `pr/ybl/jwt-needs` sur vauban si le TCK l'exige). Ordre restant :
+    **patch cassini → harness Arquillian → triage**. Cible 100 % PASS.
 - [ ] **M7 — Bench & examples.** `cervantes-bench` (JMH vs SmallRye JWT, → `BENCH.md`),
   `cervantes-examples`.
 - [ ] **M8 — Wrapper runtime (repo `vidocq`).** `vidocq-runtime-cervantes-jwt-extension`
@@ -71,3 +97,11 @@ Source de vérité des jalons et du score TCK. TDD à chaque étape (rouge → v
   `ClassCastException`). Contournement : producteur ET produit en `@Dependent` (pattern
   `RavelConfigProducer`). `JwtAuthConfigProducer.jwtValidator()` repassera en `@ApplicationScoped`
   une fois le défaut Vauban corrigé.
+- **2026-05-26** — Gap Vauban (M3b) **CORRIGÉ** (VAU-INJ-PRIM, branche `pr/ybl/jwt-needs` sur vauban) :
+  l'injection `@Claim` sur champ primitif échouait car `TypeMapper` exposait un point d'injection
+  primitif comme `ClassType[name=boolean]` au lieu d'un `PrimitiveType` → `instanceof PrimitiveType`
+  faux dans la BCE → pas de boxing → bean synthétique mal enregistré → résolution vide (silencieuse).
+  Fix : `TypeMapper.map` mappe un `ClassType` de nom primitif vers `VaubanPrimitiveType` + test de
+  régression `PrimitiveQualifiedInjectionTest`. Vérifié bout-en-bout (cervantes `@Claim boolean` vert).
+  L'extension cervantes est revenue au boxing simple (pattern Ravel). **Dépendance** : cervantes M3b
+  exige un Vauban embarquant ce fix.

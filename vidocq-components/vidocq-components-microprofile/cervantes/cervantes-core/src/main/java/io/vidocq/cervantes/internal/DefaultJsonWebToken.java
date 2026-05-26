@@ -52,6 +52,19 @@ public final class DefaultJsonWebToken implements JsonWebToken {
         return Set.copyOf(payload.keySet());
     }
 
+    /**
+     * Valeur JSON brute (non convertie) du claim — support de l'injection {@code @Claim} des types
+     * {@code jakarta.json} ({@code JsonValue}, {@code JsonString}, {@code JsonNumber},
+     * {@code JsonObject}, {@code JsonArray}) et de la reconstruction d'un {@code Set<String>} depuis
+     * un claim tableau quelconque (au-delà de {@code groups}/{@code aud}).
+     *
+     * @return le {@link JsonValue} du payload, ou {@link JsonValue#NULL} si le claim est absent.
+     */
+    public JsonValue rawClaim(String claimName) {
+        JsonValue v = payload.get(claimName);
+        return v == null ? JsonValue.NULL : v;
+    }
+
     @Override
     public String getRawToken() {
         return rawToken;
