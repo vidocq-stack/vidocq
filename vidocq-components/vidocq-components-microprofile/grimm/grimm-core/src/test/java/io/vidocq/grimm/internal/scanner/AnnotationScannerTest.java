@@ -1,6 +1,11 @@
 package io.vidocq.grimm.internal.scanner;
 
 import io.vidocq.grimm.internal.config.ScanConfig;
+import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.POST;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.Produces;
 import org.eclipse.microprofile.openapi.annotations.ExternalDocumentation;
 import org.eclipse.microprofile.openapi.annotations.OpenAPIDefinition;
 import org.eclipse.microprofile.openapi.annotations.info.Info;
@@ -211,5 +216,43 @@ class AnnotationScannerTest {
         security = @SecurityRequirement(name = "oauth2", scopes = {"read", "write"})
     )
     static class DefinitionWithTagsServersSecurity {
+    }
+
+    @Test
+    void scanClasses_wiresGeneratedSchemasIntoComponents() {
+        // Spec §3.10 + §3.11: POJO request body and return types are interned in components/schemas
+        // and referenced by media-type schemas via $ref.
+        AnnotationScanner scanner = new AnnotationScanner(ScanConfig.defaultConfig());
+        OpenAPI openAPI = scanner.scanClasses(List.of(PetResource.class));
+
+        assertNotNull(openAPI.getComponents());
+        var schemas = openAPI.getComponents().getSchemas();
+        assertTrue(schemas.containsKey("Pet"), "components/schemas should contain Pet");
+
+        var get = openAPI.getPaths().getPathItem("/pets").getGET();
+        var okMt = get.getResponses().getAPIResponse("200")
+                .getContent().getMediaType("application/json");
+        assertNotNull(okMt.getSchema());
+        // Return type is List<Pet> → array of $ref Pet
+        assertEquals("#/components/schemas/Pet", okMt.getSchema().getItems().getRef());
+
+        var post = openAPI.getPaths().getPathItem("/pets").getPOST();
+        var bodyMt = post.getRequestBody().getContent().getMediaType("application/json");
+        assertEquals("#/components/schemas/Pet", bodyMt.getSchema().getRef());
+    }
+
+    @Path("/pets")
+    @Produces("application/json")
+    @Consumes("application/json")
+    static class PetResource {
+        @GET
+        public List<Pet> list() { return List.of(); }
+        @POST
+        public Pet create(Pet pet) { return pet; }
+    }
+
+    static final class Pet {
+        public String name;
+        public int age;
     }
 }

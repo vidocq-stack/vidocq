@@ -1,6 +1,8 @@
 package io.vidocq.grimm.internal.scanner;
 
 import io.vidocq.grimm.internal.config.ScanConfig;
+import io.vidocq.grimm.internal.schema.SchemaGenerator;
+import io.vidocq.grimm.internal.schema.SchemaRegistry;
 import org.eclipse.microprofile.openapi.OASFactory;
 import org.eclipse.microprofile.openapi.annotations.ExternalDocumentation;
 import org.eclipse.microprofile.openapi.annotations.OpenAPIDefinition;
@@ -25,7 +27,8 @@ import java.util.Objects;
 public final class AnnotationScanner {
 
     private final ScanConfig config;
-    private final JaxRsResourceScanner jaxRsScanner = new JaxRsResourceScanner();
+    private final JaxRsResourceScanner jaxRsScanner;
+    private final SchemaRegistry schemaRegistry;
 
     /**
      * Creates an {@code AnnotationScanner} with the given configuration.
@@ -34,6 +37,13 @@ public final class AnnotationScanner {
      */
     public AnnotationScanner(ScanConfig config) {
         this.config = Objects.requireNonNull(config, "config must not be null");
+        this.schemaRegistry = new SchemaRegistry();
+        this.jaxRsScanner = new JaxRsResourceScanner(new SchemaGenerator(schemaRegistry));
+    }
+
+    /** Returns the per-scan {@link SchemaRegistry} (exposed for testing / inspection). */
+    public SchemaRegistry schemaRegistry() {
+        return schemaRegistry;
     }
 
     /**
@@ -59,6 +69,9 @@ public final class AnnotationScanner {
             processExternalDocumentation(clazz, openAPI);
             jaxRsScanner.scan(clazz, openAPI);
         }
+
+        // Spec §3.10 — interned schemas (POJOs, enums) become components/schemas.
+        schemaRegistry.applyTo(openAPI);
 
         return openAPI;
     }

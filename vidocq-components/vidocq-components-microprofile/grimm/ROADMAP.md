@@ -214,18 +214,18 @@ JSON Schema dialect.
 
 | Task | Notes | Status |
 |---|---|---|
-| `SchemaGenerator` | Maps Java types → `Schema` objects: primitives, `String`, `Date`/`Instant`, `UUID`, `BigDecimal` | ☐ |
-| Collection types | `List<T>`, `Set<T>`, `T[]` → `type: array, items: schemaOf(T)` | ☐ |
-| Map types | `Map<String,V>` → `type: object, additionalProperties: schemaOf(V)` | ☐ |
-| POJO introspection | Public getters + fields → `type: object, properties: …`; respect `@JsonbProperty` if present | ☐ |
-| Enum types | `type: string, enum: [values]` | ☐ |
-| `@Schema` annotation override | Explicit `@Schema` on field/class overrides inferred schema | ☐ |
-| `@Schema(hidden=true)` | Exclude field/class from generated schema | ☐ |
-| `@Schema(ref=…)` | `$ref` resolution to `#/components/schemas/…` | ☐ |
-| Recursive / circular types | Detect cycles; emit `$ref` to `components/schemas` | ☐ |
-| `SchemaRegistry` | Shared registry for named schemas → `components/schemas`; avoids duplication | ☐ |
+| `SchemaGenerator` | Maps Java types → `Schema` objects: primitives, `String`, `Date`/`Instant`, `UUID`, `BigDecimal` | ☑ |
+| Collection types | `List<T>`, `Set<T>`, `T[]` → `type: array, items: schemaOf(T)` | ☑ |
+| Map types | `Map<String,V>` → `type: object, additionalProperties: schemaOf(V)` | ☑ |
+| POJO introspection | Public getters + fields → `type: object, properties: …`; respect `@JsonbProperty` if present | ☑ |
+| Enum types | `type: string, enum: [values]` | ☑ |
+| `@Schema` annotation override | Explicit `@Schema` on field/class overrides inferred schema | ☑ |
+| `@Schema(hidden=true)` | Exclude field/class from generated schema | ☑ |
+| `@Schema(ref=…)` | `$ref` resolution to `#/components/schemas/…` | ☑ |
+| Recursive / circular types | Detect cycles; emit `$ref` to `components/schemas` | ☑ |
+| `SchemaRegistry` | Shared registry for named schemas → `components/schemas`; avoids duplication | ☑ |
 | `mp.openapi.schema.<FQCN>` | Config-driven schema override for a fully-qualified class name | ☐ |
-| Unit tests | All Java-to-schema mappings; circular reference detection; `@Schema` override | ☐ |
+| Unit tests | All Java-to-schema mappings; circular reference detection; `@Schema` override | ☑ |
 
 **Deliverable:** Schema generation from Java types; `components/schemas` populated correctly.
 
@@ -356,6 +356,11 @@ endpoint, integrated with Vauban (CDI) and Cassini (JAX-RS).
 - [x] M5 core completed: JAX-RS resource scanning — `@Operation`, `@Parameter`/JAX-RS param
       inference, `@RequestBody` (+ `@Consumes` inference), `@APIResponse`/`@APIResponses`
       (+ default 200 inference), `@Callback`/`@Callbacks`. JMH baseline benchmark deferred.
+- [x] M6 core completed: `SchemaGenerator` + `SchemaRegistry` (scalars, collections, maps,
+      enums, POJOs, recursive refs, `@Schema` overrides/hidden/ref/implementation). Wired into
+      `JaxRsResourceScanner`: parameters, request body, and response media types now carry
+      generated schemas, and `components/schemas` is populated. `mp.openapi.schema.<FQCN>`
+      config override deferred to M8.
 - [x] M7 core completed: ModelMerger with sealed interface + ModelReaderInvoker + FilterInvoker
 
 ## Open Decisions

@@ -27,9 +27,11 @@ import org.eclipse.microprofile.openapi.models.PathItem;
 import org.eclipse.microprofile.openapi.models.Paths;
 import org.eclipse.microprofile.openapi.models.media.MediaType;
 import org.eclipse.microprofile.openapi.models.parameters.Parameter.In;
+import io.vidocq.grimm.internal.schema.SchemaGenerator;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
+import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -44,6 +46,16 @@ import java.util.Objects;
  * Spec §3.9: {@code @APIResponse} / {@code @APIResponses}
  */
 final class JaxRsResourceScanner {
+
+    private final SchemaGenerator schemaGenerator;
+
+    JaxRsResourceScanner() {
+        this(null);
+    }
+
+    JaxRsResourceScanner(SchemaGenerator schemaGenerator) {
+        this.schemaGenerator = schemaGenerator;
+    }
 
     void scan(Class<?> clazz, OpenAPI openAPI) {
         Path classPath = clazz.getAnnotation(Path.class);
@@ -198,21 +210,23 @@ final class JaxRsResourceScanner {
     private void processParameters(Method method, org.eclipse.microprofile.openapi.models.Operation op) {
         var paramAnnotations = method.getParameterAnnotations();
         var paramTypes = method.getParameterTypes();
+        var paramGenericTypes = method.getGenericParameterTypes();
 
         // Method-level @Parameters / @Parameter — explicit declarations.
         var methodLevelParameters = method.getAnnotation(Parameters.class);
         if (methodLevelParameters != null) {
             for (Parameter p : methodLevelParameters.value()) {
-                addParameter(op, buildExplicitParameter(p, null, null));
+                addParameter(op, buildExplicitParameter(p, null, null, null));
             }
         }
         for (Parameter p : method.getAnnotationsByType(Parameter.class)) {
-            addParameter(op, buildExplicitParameter(p, null, null));
+            addParameter(op, buildExplicitParameter(p, null, null, null));
         }
 
         for (int i = 0; i < paramAnnotations.length; i++) {
             Annotation[] anns = paramAnnotations[i];
             Class<?> type = paramTypes[i];
+            Type genericType = paramGenericTypes[i];
 
             if (hasAnnotation(anns, Context.class) || hasAnnotation(anns, FormParam.class)) {
                 continue; // @Context never appears in OpenAPI; @FormParam contributes to RequestBody (deferred).
@@ -240,7 +254,7 @@ final class JaxRsResourceScanner {
                 continue;
             }
 
-            var modelParam = buildExplicitParameter(explicit, inferredName, inferredIn);
+            var modelParam = buildExplicitParameter(explicit, inferredName, inferredIn, genericType);
             addParameter(op, modelParam);
         }
     }
@@ -261,8 +275,8 @@ final class JaxRsResourceScanner {
         op.addParameter(param);
     }
 
-    private static org.eclipse.microprofile.openapi.models.parameters.Parameter buildExplicitParameter(
-            Parameter explicit, String inferredName, In inferredIn) {
+    private org.eclipse.microprofile.openapi.models.parameters.Parameter buildExplicitParameter(
+            Parameter explicit, String inferredName, In inferredIn, Type sourceType) {
         var p = OASFactory.createObject(org.eclipse.microprofile.openapi.models.parameters.Parameter.class);
 
         String name = (explicit != null && !explicit.name().isEmpty()) ? explicit.name() : inferredName;
@@ -295,7 +309,27 @@ final class JaxRsResourceScanner {
                 p.setExample(explicit.example());
             }
         }
+        // Schema (§3.10): site-level @Schema on the parameter, or inferred from the type.
+        if (schemaGenerator != null && sourceType != null) {
+            var siteAnn = explicit != null ? explicit.schema() : null;
+            // The annotation's default name is empty — treat a zero-content @Schema as absent.
+            var schema = (siteAnn != null && hasAnyContent(siteAnn))
+                    ? schemaGenerator.generate(sourceType, siteAnn)
+                    : schemaGenerator.generate(sourceType);
+            p.setSchema(schema);
+        }
         return p;
+    }
+
+    private static boolean hasAnyContent(org.eclipse.microprofile.openapi.annotations.media.Schema s) {
+        return s.implementation() != Void.class
+                || !s.ref().isEmpty()
+                || s.type() != org.eclipse.microprofile.openapi.annotations.enums.SchemaType.DEFAULT
+                || !s.format().isEmpty()
+                || !s.description().isEmpty()
+                || !s.title().isEmpty()
+                || s.required()
+                || s.enumeration().length > 0;
     }
 
     private static In toModelIn(ParameterIn in) {
@@ -313,6 +347,7 @@ final class JaxRsResourceScanner {
     private void processRequestBody(Method method, org.eclipse.microprofile.openapi.models.Operation op, String[] consumes) {
         var paramAnnotations = method.getParameterAnnotations();
         var paramTypes = method.getParameterTypes();
+        var paramGenericTypes = method.getGenericParameterTypes();
 
         RequestBody explicit = null;
         int entityIndex = -1;
@@ -379,8 +414,13 @@ final class JaxRsResourceScanner {
             // infer content from @Consumes
             var content = OASFactory.createObject(org.eclipse.microprofile.openapi.models.media.Content.class);
             String[] effective = consumes.length > 0 ? consumes : new String[]{"application/json"};
+            Type entityType = (entityIndex >= 0) ? paramGenericTypes[entityIndex] : null;
             for (String mt : effective) {
-                content.addMediaType(mt, OASFactory.createObject(MediaType.class));
+                MediaType mediaType = OASFactory.createObject(MediaType.class);
+                if (schemaGenerator != null && entityType != null) {
+                    mediaType.setSchema(schemaGenerator.generate(entityType));
+                }
+                content.addMediaType(mt, mediaType);
             }
             modelBody.setContent(content);
         }
@@ -399,8 +439,13 @@ final class JaxRsResourceScanner {
             inferred.setDescription("OK");
             if (produces.length > 0 && method.getReturnType() != void.class && method.getReturnType() != Void.class) {
                 var content = OASFactory.createObject(org.eclipse.microprofile.openapi.models.media.Content.class);
+                Type returnType = method.getGenericReturnType();
                 for (String mt : produces) {
-                    content.addMediaType(mt, OASFactory.createObject(MediaType.class));
+                    MediaType mediaType = OASFactory.createObject(MediaType.class);
+                    if (schemaGenerator != null) {
+                        mediaType.setSchema(schemaGenerator.generate(returnType));
+                    }
+                    content.addMediaType(mt, mediaType);
                 }
                 inferred.setContent(content);
             }
