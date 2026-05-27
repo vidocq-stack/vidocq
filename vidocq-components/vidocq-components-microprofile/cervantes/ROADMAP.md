@@ -68,11 +68,13 @@ Source de vérité des jalons et du score TCK. TDD à chaque étape (rouge → v
     requis + contrôle `cty=JWT`), `ClaimResolver` (`raw_token`→JsonString, `aud` simple→array),
     `CervantesClaimExtension` (unwrap `Provider<T>`/`Instance<T>`), `JwtAuthenticationFilter`
     (extraction token/cookie + erreurs), `DefaultJsonWebToken` (token anonyme → null par claim).
-- [ ] **M7 — Bench & examples.** `cervantes-bench` (JMH vs SmallRye JWT, → `BENCH.md`),
-  `cervantes-examples`.
-- [ ] **M8 — Wrapper runtime (repo `vidocq`).** `vidocq-runtime-cervantes-jwt-extension`
+- [x] **M7 — Bench & examples.** `cervantes-bench` (JMH `DefaultJwtValidator.validate`, RS256/RS512 ;
+  baseline SmallRye JWT derrière le profil opt-in `-Pcompare-smallrye` → `BENCH.md`).
+  `cervantes-examples` (`ProtectedResource` : `@RolesAllowed` + `@Inject @Claim`, démontré sous Vauban
+  embarqué).
+- [x] **M8 — Wrapper runtime (repo `vidocq`).** `vidocq-runtime-cervantes-jwt-extension`
   (`VidocqExtension`, priorité ~500), ajout au reactor `vidocq-runtime-core-extensions` + jlink +
-  IT `vidocq-runtime-it-cervantes-jwt`.
+  IT `vidocq-runtime-it-cervantes-jwt`. (PR vidocq #1 mergée.)
 
 ## Score TCK
 

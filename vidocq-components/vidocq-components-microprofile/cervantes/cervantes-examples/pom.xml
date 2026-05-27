@@ -11,15 +11,80 @@
 
     <artifactId>cervantes-examples</artifactId>
     <name>Cervantes :: Examples</name>
-    <description>Exemples d'utilisation de MicroProfile JWT 2.1 via Cervantes : ressource JAX-RS @RolesAllowed + injection @Inject @Claim. Rempli à partir de M7.</description>
+    <description>Exemples d'utilisation de MicroProfile JWT 2.1 via Cervantes : ressource JAX-RS @RolesAllowed + injection @Inject @Claim, démontrée sous container Vauban embarqué.</description>
 
     <properties>
         <!--
             Module de démonstration : jamais publié comme dépendance (deploy.skip), et javadoc.skip
             car un module d'exemples sans API publique fait échouer le canari javadoc au deploy.
+            Pas de module-info : l'exemple tourne en classpath (le test pilote un container Vauban
+            embarqué — même approche que les tests d'intégration de cervantes-cdi-vauban).
         -->
         <maven.deploy.skip>true</maven.deploy.skip>
         <maven.javadoc.skip>true</maven.javadoc.skip>
     </properties>
+
+    <dependencies>
+        <!-- API MicroProfile JWT 2.1 : @Claim, Claims, ClaimValue, JsonWebToken. -->
+        <dependency>
+            <groupId>io.vidocq.cervantes</groupId>
+            <artifactId>cervantes-mp-jwt-api</artifactId>
+        </dependency>
+        <!-- Annotations JAX-RS (@Path/@GET/@Produces) — via cassini-api. -->
+        <dependency>
+            <groupId>io.vidocq.cassini</groupId>
+            <artifactId>cassini-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <!-- @RolesAllowed/@PermitAll/@DenyAll. -->
+        <dependency>
+            <groupId>jakarta.annotation</groupId>
+            <artifactId>jakarta.annotation-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <!-- @Inject + CDI. -->
+        <dependency>
+            <groupId>jakarta.inject</groupId>
+            <artifactId>jakarta.inject-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- Test : démonstration end-to-end sous Vauban embarqué (sans serveur HTTP). -->
+        <dependency>
+            <groupId>io.vidocq.cervantes</groupId>
+            <artifactId>cervantes-cdi-vauban</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.cervantes</groupId>
+            <artifactId>cervantes-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-classloader-spi</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.champollion</groupId>
+            <artifactId>champollion-jsonp</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
 
 </project>
