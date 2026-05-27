@@ -1,0 +1,54 @@
+= Utilisation
+
+== Appliquer des politiques
+
+Annotez une méthode de bean CDI avec les annotations MicroProfile Fault Tolerance. L'intercepteur Heisenberg les compose de l'extérieur vers l'intérieur : `@Fallback` enveloppe `@CircuitBreaker`, qui enveloppe `@Bulkhead`, `@Timeout` et `@Retry`, lesquels appellent enfin la méthode réelle.
+
+[source,java]
+----
+import org.eclipse.microprofile.faulttolerance.CircuitBreaker;
+import org.eclipse.microprofile.faulttolerance.Fallback;
+import org.eclipse.microprofile.faulttolerance.Retry;
+import jakarta.enterprise.context.ApplicationScoped;
+
+@ApplicationScoped
+public class InventoryClient {
+
+    @Retry(maxRetries = 3, delay = 200)
+    @CircuitBreaker(requestVolumeThreshold = 10, failureRatio = 0.5)
+    @Fallback(fallbackMethod = "cachedStock")
+    public Stock currentStock(String sku) {
+        // appel distant susceptible d'échouer ou de se bloquer
+        return remote.fetch(sku);
+    }
+
+    // la signature du repli doit correspondre au type de retour de la méthode protégée
+    private Stock cachedStock(String sku) {
+        return Stock.empty(sku);
+    }
+}
+----
+
+* `@Retry` ré-invoque la méthode jusqu'à `maxRetries` fois avec le `delay` configuré.
+* `@CircuitBreaker` s'ouvre dès que le ratio d'échecs est atteint sur la fenêtre de volume de requêtes, court-circuitant les appels suivants jusqu'à son passage en HALF_OPEN.
+* `@Fallback` fournit le résultat alternatif lorsque l'appel protégé finit par échouer ; ici `cachedStock` est une méthode de la même classe. Un `FallbackHandler` peut être utilisé à la place.
+
+`@Timeout` borne chaque tentative à l'aide des virtual threads et de `join(Duration)`, tandis que `@Asynchronous` exécute l'invocation sur un virtual thread et retourne un `CompletionStage` ou un `Future`.
+
+== Coordonnées Maven
+
+Ajoutez l'API et l'intégration CDI Vauban :
+
+[source,xml]
+----
+<dependency>
+  <groupId>io.vidocq.heisenberg</groupId>
+  <artifactId>heisenberg-cdi-vauban</artifactId>
+</dependency>
+----
+
+Les modules JPMS correspondants sont `io.vidocq.heisenberg.core` et `io.vidocq.heisenberg.cdi.vauban`.
+
+== Surcharges de configuration
+
+Les paramètres des politiques peuvent être surchargés en externe via MicroProfile Config (fourni par Ravel à l'exécution), en suivant la précédence standard MP Fault Tolerance : la configuration au niveau méthode prime sur celle au niveau classe, qui prime sur la valeur globale par défaut.

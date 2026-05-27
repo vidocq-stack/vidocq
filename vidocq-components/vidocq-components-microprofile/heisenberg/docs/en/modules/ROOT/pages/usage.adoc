@@ -1,0 +1,54 @@
+= Usage
+
+== Applying policies
+
+Annotate a CDI bean method with the MicroProfile Fault Tolerance annotations. The Heisenberg interceptor composes them from the outside in: `@Fallback` wraps `@CircuitBreaker`, which wraps `@Bulkhead`, `@Timeout` and `@Retry`, which finally call the real method.
+
+[source,java]
+----
+import org.eclipse.microprofile.faulttolerance.CircuitBreaker;
+import org.eclipse.microprofile.faulttolerance.Fallback;
+import org.eclipse.microprofile.faulttolerance.Retry;
+import jakarta.enterprise.context.ApplicationScoped;
+
+@ApplicationScoped
+public class InventoryClient {
+
+    @Retry(maxRetries = 3, delay = 200)
+    @CircuitBreaker(requestVolumeThreshold = 10, failureRatio = 0.5)
+    @Fallback(fallbackMethod = "cachedStock")
+    public Stock currentStock(String sku) {
+        // remote call that may fail or hang
+        return remote.fetch(sku);
+    }
+
+    // fallback signature must match the guarded method's return type
+    private Stock cachedStock(String sku) {
+        return Stock.empty(sku);
+    }
+}
+----
+
+* `@Retry` re-invokes the method up to `maxRetries` times with the configured `delay`.
+* `@CircuitBreaker` opens once the failure ratio is reached over the request volume window, short-circuiting further calls until it transitions to HALF_OPEN.
+* `@Fallback` provides the alternative result when the guarded call ultimately fails; here `cachedStock` is a method on the same class. A `FallbackHandler` may be used instead.
+
+`@Timeout` bounds each attempt using virtual threads and `join(Duration)`, while `@Asynchronous` runs the invocation on a virtual thread and returns a `CompletionStage` or `Future`.
+
+== Maven coordinates
+
+Add the API and the Vauban CDI integration:
+
+[source,xml]
+----
+<dependency>
+  <groupId>io.vidocq.heisenberg</groupId>
+  <artifactId>heisenberg-cdi-vauban</artifactId>
+</dependency>
+----
+
+The matching JPMS modules are `io.vidocq.heisenberg.core` and `io.vidocq.heisenberg.cdi.vauban`.
+
+== Configuration overrides
+
+Policy parameters can be overridden externally through MicroProfile Config (provided by Ravel at runtime), following the standard MP Fault Tolerance precedence: method-level configuration takes priority over class-level, which takes priority over the global default.

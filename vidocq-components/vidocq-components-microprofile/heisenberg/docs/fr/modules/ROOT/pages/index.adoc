@@ -1,0 +1,44 @@
+= Heisenberg
+:description: Implémentation MicroProfile Fault Tolerance 4.1 pour Vidocq.
+
+[.lead]
+Heisenberg est le sous-système de tolérance aux pannes de l'écosystème Vidocq. Il applique des politiques de ré-essai, de timeout, de disjoncteur, de bulkhead et de repli aux beans CDI au travers d'un unique intercepteur, s'intègre au container CDI xref:vauban::index.adoc[Vauban] et protège les appels effectués via des services tels que xref:cassini::index.adoc[Cassini].
+
+== Origine du nom
+Werner Heisenberg (1901-1976) a formulé le principe d'incertitude : on ne peut pas mesurer simultanément la position et la quantité de mouvement d'une particule avec une précision arbitraire. Le projet Heisenberg encapsule l'incertitude inhérente aux appels réseau et aux services distants, et y répond avec ordre, mesure et résilience.
+
+== En un coup d'œil
+
+[cols="1,3"]
+|===
+| Spec implémentée | {spec-mp-fault-tolerance}
+| Repo | {repo-heisenberg}
+| Java | 25 (LTS)
+| Modules | `heisenberg-api`, `heisenberg-core`, `heisenberg-cdi-vauban`, `heisenberg-bench`, `heisenberg-tck`, `heisenberg-examples`
+| TCK | En cours — voir ROADMAP
+|===
+
+== Politiques de tolérance aux pannes
+
+Heisenberg implémente l'ensemble des annotations MicroProfile Fault Tolerance 4.1 :
+
+[cols="1,3"]
+|===
+| `@Retry` | Ré-essais automatiques avec délai, jitter, `retryOn` / `abortOn`
+| `@Timeout` | Délai maximal d'exécution par tentative (virtual threads + `join(Duration)`)
+| `@CircuitBreaker` | Disjoncteur (CLOSED / OPEN / HALF_OPEN), fenêtre glissante
+| `@Bulkhead` | Isolation par sémaphore (sync) ou file (async)
+| `@Fallback` | Alternative en cas d'échec (`FallbackHandler` ou méthode de la classe)
+| `@Asynchronous` | Exécution sur virtual thread, retour `CompletionStage` / `Future`
+|===
+
+Le module `heisenberg-core` contient les moteurs de politiques purs Java 25, sans dépendance CDI, ce qui rend chaque politique testable unitairement sans container. Le module `heisenberg-cdi-vauban` porte l'unique `@Interceptor` CDI qui orchestre ces moteurs, composant les politiques de l'extérieur vers l'intérieur (`@Fallback` -> `@CircuitBreaker` -> `@Bulkhead` -> `@Timeout` -> `@Retry` -> méthode réelle), conformément à la section 2.5 de la spec.
+
+== Observabilité optionnelle
+
+Les métriques et la télémétrie sont optionnelles. La SPI `io.vidocq.heisenberg.api.FtMetricsRecorder` peut être adossée à un recorder OpenTelemetry (section 10) et/ou à un recorder MP Metrics (section 9) ; les deux ne sont câblés que s'ils sont présents à l'exécution. Le support OpenTelemetry est déclaré `requires static io.opentelemetry.api`, de sorte que CDI ignore silencieusement le recorder OTel quand OpenTelemetry est absent. Le script `run-tck-no-observability.sh` exécute le TCK avec l'observabilité désactivée, confirmant que la tolérance aux pannes fonctionne sans aucune dépendance d'observabilité dans le classpath.
+
+== Liens rapides
+* xref:usage.adoc[Utilisation]
+
+Bugs et benchmarks consolidés : link:{repo-heisenberg}/src/branch/main/BUG.md[BUG.md], link:{repo-heisenberg}/src/branch/main/BENCH.md[BENCH.md].

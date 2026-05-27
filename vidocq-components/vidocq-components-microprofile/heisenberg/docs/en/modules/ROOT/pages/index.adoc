@@ -1,0 +1,44 @@
+= Heisenberg
+:description: MicroProfile Fault Tolerance 4.1 implementation for Vidocq.
+
+[.lead]
+Heisenberg is the fault tolerance subsystem in the Vidocq ecosystem. It applies retry, timeout, circuit breaker, bulkhead and fallback policies to CDI beans through a single interceptor, wiring into the xref:vauban::index.adoc[Vauban] CDI container and protecting calls made through services such as xref:cassini::index.adoc[Cassini].
+
+== Origin of the name
+Werner Heisenberg (1901-1976) formulated the uncertainty principle: one cannot simultaneously measure a particle's position and momentum with arbitrary precision. The Heisenberg project encapsulates the uncertainty inherent in network calls and remote services, and responds to it with order, measurement and resilience.
+
+== At a glance
+
+[cols="1,3"]
+|===
+| Implemented spec | {spec-mp-fault-tolerance}
+| Repo | {repo-heisenberg}
+| Java | 25 (LTS)
+| Modules | `heisenberg-api`, `heisenberg-core`, `heisenberg-cdi-vauban`, `heisenberg-bench`, `heisenberg-tck`, `heisenberg-examples`
+| TCK | In progress — see ROADMAP
+|===
+
+== Fault tolerance policies
+
+Heisenberg implements the full MicroProfile Fault Tolerance 4.1 annotation set:
+
+[cols="1,3"]
+|===
+| `@Retry` | Automatic retries with delay, jitter, `retryOn` / `abortOn`
+| `@Timeout` | Maximum execution time per attempt (virtual threads + `join(Duration)`)
+| `@CircuitBreaker` | Circuit breaker (CLOSED / OPEN / HALF_OPEN), sliding window
+| `@Bulkhead` | Isolation via semaphore (sync) or queue (async)
+| `@Fallback` | Alternative on failure (`FallbackHandler` or a method on the class)
+| `@Asynchronous` | Execution on a virtual thread, returning `CompletionStage` / `Future`
+|===
+
+The `heisenberg-core` module holds pure Java 25 policy engines with no CDI dependency, so each policy is unit-testable without a container. The `heisenberg-cdi-vauban` module carries the single CDI `@Interceptor` that orchestrates these engines, composing policies from the outside in (`@Fallback` -> `@CircuitBreaker` -> `@Bulkhead` -> `@Timeout` -> `@Retry` -> actual method), per spec section 2.5.
+
+== Optional observability
+
+Metrics and telemetry are optional. The `io.vidocq.heisenberg.api.FtMetricsRecorder` SPI can be backed by an OpenTelemetry recorder (section 10) and/or an MP Metrics recorder (section 9); both are wired only when present at runtime. OpenTelemetry support is declared `requires static io.opentelemetry.api`, so CDI silently ignores the OTel recorder when OpenTelemetry is absent. The `run-tck-no-observability.sh` script runs the TCK with observability switched off, confirming that fault tolerance works with zero observability dependencies on the classpath.
+
+== Quick links
+* xref:usage.adoc[Usage]
+
+Consolidated bugs and benchmarks: link:{repo-heisenberg}/src/branch/main/BUG.md[BUG.md], link:{repo-heisenberg}/src/branch/main/BENCH.md[BENCH.md].
