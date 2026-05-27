@@ -17,7 +17,8 @@ public record ScanConfig(
     Set<String> includePackages,
     Set<String> includeClasses,
     Set<String> excludePackages,
-    Set<String> excludeClasses
+    Set<String> excludeClasses,
+    boolean scanBeanValidation
 ) {
     /**
      * Creates a default {@code ScanConfig} with scanning enabled and no filters.
@@ -28,8 +29,20 @@ public record ScanConfig(
             Set.of(),
             Set.of(),
             Set.of(),
-            Set.of()
+            Set.of(),
+            true
         );
+    }
+
+    /** Backwards-compatible constructor (bean validation defaults to enabled). */
+    public ScanConfig(
+        boolean disableScan,
+        Set<String> includePackages,
+        Set<String> includeClasses,
+        Set<String> excludePackages,
+        Set<String> excludeClasses
+    ) {
+        this(disableScan, includePackages, includeClasses, excludePackages, excludeClasses, true);
     }
 
     /**

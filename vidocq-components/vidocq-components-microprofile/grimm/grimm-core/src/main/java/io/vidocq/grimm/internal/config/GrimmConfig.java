@@ -39,6 +39,8 @@ public record GrimmConfig(
         ScanConfig scan,
         FilterConfig filter,
         List<String> servers,
+        Map<String, List<String>> pathServers,
+        Map<String, List<String>> operationServers,
         Map<String, String> schemaOverrides,
         boolean extensionsScanDisable) {
 
@@ -47,6 +49,8 @@ public record GrimmConfig(
         Objects.requireNonNull(scan, "scan");
         Objects.requireNonNull(filter, "filter");
         servers = List.copyOf(servers == null ? List.of() : servers);
+        pathServers = immutableListMap(pathServers);
+        operationServers = immutableListMap(operationServers);
         schemaOverrides = Map.copyOf(schemaOverrides == null ? Map.of() : schemaOverrides);
     }
 
@@ -56,6 +60,8 @@ public record GrimmConfig(
                 ScanConfig.defaultConfig(),
                 FilterConfig.defaultConfig(),
                 List.of(),
+                Map.of(),
+                Map.of(),
                 Map.of(),
                 false);
     }
@@ -84,17 +90,37 @@ public record GrimmConfig(
         Set<String> incCls = csvSet(get.apply("mp.openapi.scan.classes"));
         Set<String> excPkg = csvSet(get.apply("mp.openapi.scan.exclude.packages"));
         Set<String> excCls = csvSet(get.apply("mp.openapi.scan.exclude.classes"));
-        ScanConfig scan = new ScanConfig(disableScan, incPkg, incCls, excPkg, excCls);
+        String bvRaw = get.apply("mp.openapi.scan.beanvalidation");
+        boolean scanBeanValidation = bvRaw == null || !bvRaw.trim().equalsIgnoreCase("false");
+        ScanConfig scan = new ScanConfig(disableScan, incPkg, incCls, excPkg, excCls, scanBeanValidation);
 
         FilterConfig filter = new FilterConfig(
                 trimToNull(get.apply("mp.openapi.filter")),
                 trimToNull(get.apply("mp.openapi.model.reader")));
 
         List<String> servers = List.copyOf(csvList(get.apply("mp.openapi.servers")));
+        Map<String, List<String>> pathServers = new LinkedHashMap<>();
+        Map<String, List<String>> operationServers = new LinkedHashMap<>();
 
         Map<String, String> schemaOverrides = new LinkedHashMap<>();
         String prefix = "mp.openapi.schema.";
         for (String key : knownKeys) {
+            if (key != null && key.startsWith("mp.openapi.servers.path.")) {
+                String pathKey = key.substring("mp.openapi.servers.path.".length());
+                List<String> values = csvList(get.apply(key));
+                if (!pathKey.isBlank() && !values.isEmpty()) {
+                    pathServers.put(pathKey, values);
+                }
+                continue;
+            }
+            if (key != null && key.startsWith("mp.openapi.servers.operation.")) {
+                String operationId = key.substring("mp.openapi.servers.operation.".length());
+                List<String> values = csvList(get.apply(key));
+                if (!operationId.isBlank() && !values.isEmpty()) {
+                    operationServers.put(operationId, values);
+                }
+                continue;
+            }
             if (key != null && key.startsWith(prefix) && key.length() > prefix.length()) {
                 String fqcn = key.substring(prefix.length());
                 String value = get.apply(key);
@@ -106,7 +132,21 @@ public record GrimmConfig(
 
         boolean extScanDisable = bool(get.apply("mp.openapi.extensions.scan.disable"));
 
-        return new GrimmConfig(scan, filter, servers, schemaOverrides, extScanDisable);
+        return new GrimmConfig(scan, filter, servers, pathServers, operationServers, schemaOverrides, extScanDisable);
+    }
+
+    private static Map<String, List<String>> immutableListMap(Map<String, List<String>> source) {
+        if (source == null || source.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, List<String>> copy = new LinkedHashMap<>();
+        for (Map.Entry<String, List<String>> entry : source.entrySet()) {
+            if (entry.getKey() == null || entry.getKey().isBlank()) {
+                continue;
+            }
+            copy.put(entry.getKey(), List.copyOf(entry.getValue() == null ? List.of() : entry.getValue()));
+        }
+        return Map.copyOf(copy);
     }
 
     // ----------------- Helpers -----------------

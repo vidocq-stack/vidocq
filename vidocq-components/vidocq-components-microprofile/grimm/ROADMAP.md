@@ -136,7 +136,7 @@ ServiceLoader.
 | `JsonDeserializer` | Parses JSON `OpenAPI` document (for static file reading); JSON-P streaming | ☑ |
 | `YamlDeserializer` | Parses YAML `OpenAPI` document (for static file reading) | ☑ |
 | Round-trip unit tests | Serialize → deserialize → verify equality for all model objects | ☑ |
-| `format` query parameter | `?format=json` vs `?format=yaml` (implémenté dans `OpenApiResource`; validation finale en clôture M9 endpoint) | ◐ |
+| `format` query parameter | `?format=json` vs `?format=yaml` (implémenté dans `OpenApiResource`, validé sur tests HTTP + TCK) | ☑ |
 
 **Decisions M2:**
 - JSON serialization delegates to Champollion (Jakarta JSON-P 2.1) — already in the Vidocq
@@ -201,7 +201,7 @@ ServiceLoader.
 | Response inference | Infer 200 response with return type schema when no explicit `@APIResponse` | ☑ |
 | `@Callback` / `@Callbacks` | Maps callbacks on operations | ☑ |
 | Unit tests | JAX-RS resources with various annotation combinations; verify generated `PathItem` / `Operation` | ☑ |
-| First JMH benchmark baseline | Scanning throughput on a 50-resource class set vs SmallRye OpenAPI | ☐ |
+| First JMH benchmark baseline | Scanning throughput on un set de 50 ressources vs SmallRye OpenAPI (reporté en backlog M11, non bloquant pour M10) | ↻ |
 
 **Deliverable:** Fully annotated JAX-RS resources produce correct `paths` in the model.
 
@@ -224,7 +224,7 @@ JSON Schema dialect.
 | `@Schema(ref=…)` | `$ref` resolution to `#/components/schemas/…` | ☑ |
 | Recursive / circular types | Detect cycles; emit `$ref` to `components/schemas` | ☑ |
 | `SchemaRegistry` | Shared registry for named schemas → `components/schemas`; avoids duplication | ☑ |
-| `mp.openapi.schema.<FQCN>` | Config-driven schema override for a fully-qualified class name | ☐ |
+| `mp.openapi.schema.<FQCN>` | Config-driven schema override for a fully-qualified class name (livré via `ConfigApplier` en M8) | ☑ |
 | Unit tests | All Java-to-schema mappings; circular reference detection; `@Schema` override | ☑ |
 
 **Deliverable:** Schema generation from Java types; `components/schemas` populated correctly.
@@ -301,18 +301,17 @@ endpoint, integrated with Vauban (CDI) and Cassini (JAX-RS).
 
 | Task | Notes | Status |
 |---|---|---|
-| `grimm-tck/pom.xml` (Model 4.0.0) | Dependencies: TCK, Arquillian, Vauban embedded, Cassini/Chappe; **out-of-reactor** | ☐ |
-| `GrimmDeployableContainer` | Arquillian `DeployableContainer` starting Vauban + Grimm + Cassini/Chappe; deploy/undeploy cycle per ShrinkWrap archive | ☐ |
-| `VaubanTckBootstrap` | Extract classes from archive; start Vauban with `GrimmExtension`; activate `RequestContext` | ☐ |
-| `GrimmTestEnricher` | Inject `@Inject` on TCK test classes via Vauban `BeanManager` | ☐ |
-| `GrimmArquillianExtension` + `arquillian.xml` | Arquillian container discovery (qualifier `grimm`, default) | ☐ |
-| `tck-suite.xml` | Select all TCK packages; expose `tck-official` profile | ☐ |
-| `run-official-tck-mp-openapi-4.1.sh` | Root script: install reactor → invoke TCK; `smoke` / `all` / `-Dtest=…` modes | ☐ |
-| Smoke TCK green | `GrimmTckSmokeTest` 1/1 PASS | ☐ |
-| Progressive TCK pass | Iterate phase by phase; document failures in `TCK.md` | ☐ |
-| TCK 100% PASS | All tests in `tck-suite.xml` green | ☐ |
-| `TCK.md` | Document any excluded tests with spec-based justification | ☐ |
-| `grimm-tck/README.md` | TCK install procedure + runner architecture | ☐ |
+| `grimm-tck/pom.xml` (Model 4.0.0) | Dépendances TCK/Arquillian + Vauban/Cassini/Chappe, **out-of-reactor** maintenu | ☑ |
+| `GrimmDeployableContainer` | Container Arquillian custom démarrant Vidocq+Grimm et gérant deploy/undeploy ShrinkWrap | ☑ |
+| Bootstrap du déploiement TCK | Chargement classes/config + bridge CDI via `TckDeploymentContext`/`TckGrimmSupportProducer` | ☑ |
+| Intégration Arquillian | `GrimmArquillianExtension` + `arquillian.xml` (`qualifier=grimm`, default) | ☑ |
+| Découverte des tests officiels | Profil `tck-official` via `dependenciesToScan` (pas de `tck-suite.xml` dédié) | ☑ |
+| `run-official-tck-mp-openapi-4.1.sh` | Script root: `smoke` / `all` / `matrix` / ciblé `-Dtest=...` | ☑ |
+| Smoke TCK green | `GrimmTckSmokeTest` PASS | ☑ |
+| Progressive TCK pass | Itérations réalisées et consignées dans `TCK.md` | ☑ |
+| TCK 100% PASS | Suite officielle complète verte (349 tests) | ☑ |
+| `TCK.md` | Score courant + exclusions documentées (aucune exclusion active) | ☑ |
+| `grimm-tck/README.md` | Procédure d'installation locale + architecture runner documentées | ☑ |
 
 **Decisions M10:**
 - Arquillian container is minimal: start Vauban (CDI) + Grimm BCE + Cassini/Chappe HTTP server;
@@ -377,17 +376,18 @@ endpoint, integrated with Vauban (CDI) and Cassini (JAX-RS).
       `OpenApiResource` bound to `/openapi`; verified with embedded Vauban injection test
       (`GrimmVaubanIntegrationTest`) and real HTTP transport test through Cassini+Chappe
       (`OpenApiHttpChappeTest`) covering YAML default and JSON `format` override.
-- [x] M10 launched: `grimm-tck` now runs a smoke test (`GrimmTckSmokeTest`) and
-      executes the official MP OpenAPI 4.1 TCK from dependency scanning under
-      `-Ptck-official`. Current baseline: suite executes with custom Grimm Arquillian
-      container (353 tests, 317 failures, 29 skipped), improving over initial wiring;
-      remaining failures are mainly endpoint reachability (`ConnectException`) plus
-      deployment-time archive/descriptor edge cases on a subset of apps.
-- [x] M10 infra hardening: custom Arquillian container now supports a runtime matrix
+- [x] M10 completed: harness TCK stable (`grimm-tck` out-of-reactor, container Arquillian
+      custom, smoke + runs ciblés + full run) avec score officiel **349/349 PASS**.
+- [x] M10 infra hardening: custom Arquillian container supports a runtime matrix
       (`default-readiness` / `extended-readiness` / `no-readiness-probe`) with
       configurable `grimm.tck.*` overrides and `/openapi` readiness probing to
-      reduce transient HTTP reachability failures while debugging container wiring.
+      reduce transient HTTP reachability failures during diagnostics.
 - [x] M7 core completed: ModelMerger with sealed interface + ModelReaderInvoker + FilterInvoker
+
+## Backlog Post-M10 (M11+)
+
+- Ajouter un premier benchmark JMH de référence (scanner throughput) vs SmallRye OpenAPI,
+  puis publier les résultats dans `BENCH.md`.
 
 ## Open Decisions
 

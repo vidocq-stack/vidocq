@@ -341,8 +341,23 @@ public final class ModelMerger {
         if (source.getRef() != null) {
             target.setRef(source.getRef());
         }
+        if (source.getFormat() != null) {
+            target.setFormat(source.getFormat());
+        }
         if (source.getType() != null && !source.getType().isEmpty()) {
             target.setType(source.getType());
+        }
+        if (source.getTitle() != null) {
+            target.setTitle(source.getTitle());
+        }
+        if (source.getDefaultValue() != null) {
+            target.setDefaultValue(source.getDefaultValue());
+        }
+        if (source.getEnumeration() != null && !source.getEnumeration().isEmpty()) {
+            target.setEnumeration(source.getEnumeration());
+        }
+        if (source.getRequired() != null && !source.getRequired().isEmpty()) {
+            target.setRequired(source.getRequired());
         }
         if (source.getItems() != null) {
             target.setItems(target.getItems() == null
@@ -361,6 +376,12 @@ public final class ModelMerger {
         }
         if (source.getDescription() != null) {
             target.setDescription(source.getDescription());
+        }
+        if (source.getAdditionalPropertiesBoolean() != null) {
+            target.setAdditionalPropertiesBoolean(source.getAdditionalPropertiesBoolean());
+        }
+        if (source.getAdditionalPropertiesSchema() != null) {
+            target.setAdditionalPropertiesSchema(source.getAdditionalPropertiesSchema());
         }
         if (source.getSchemaDialect() != null) {
             target.setSchemaDialect(source.getSchemaDialect());

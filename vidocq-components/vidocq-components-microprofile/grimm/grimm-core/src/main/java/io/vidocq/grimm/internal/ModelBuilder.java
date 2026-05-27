@@ -13,6 +13,7 @@ import io.vidocq.grimm.internal.reader.StaticFileReader;
 import io.vidocq.grimm.internal.scanner.AnnotationScanner;
 import org.eclipse.microprofile.openapi.OASFactory;
 import org.eclipse.microprofile.openapi.models.OpenAPI;
+import org.eclipse.microprofile.openapi.models.info.Info;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -57,6 +58,9 @@ public final class ModelBuilder {
         if (config == null) config = GrimmConfig.defaults();
         if (annotatedTypes == null) annotatedTypes = List.of();
 
+        // Honor mp.openapi.scan.beanvalidation across the whole build.
+        io.vidocq.grimm.internal.schema.BeanValidationMapper.setEnabled(config.scan().scanBeanValidation());
+
         List<ModelSource> sources = new ArrayList<>(3);
 
         // Step 1 — static file (spec §4.2)
@@ -71,6 +75,10 @@ public final class ModelBuilder {
 
         // Step 3 — annotation scanning (spec §3)
         AnnotationScanner scanner = new AnnotationScanner(config.scan());
+
+        // Register schema overrides before scan so generator can resolve scalar refs (e.g. Instant).
+        ConfigApplier.applySchemaOverrides(scanner.schemaRegistry(), config);
+
         OpenAPI annotationModel = scanner.scanClasses(annotatedTypes);
         sources.add(new AnnotationSource(annotationModel));
 
@@ -79,10 +87,10 @@ public final class ModelBuilder {
         if (merged.getOpenapi() == null) {
             merged.setOpenapi("3.1.0");
         }
+        ensureDefaultInfo(merged);
 
         // Step 5 — apply config overrides (mp.openapi.servers, mp.openapi.schema.<FQCN>)
         ConfigApplier.applyServers(merged, config);
-        ConfigApplier.applySchemaOverrides(scanner.schemaRegistry(), config);
         scanner.schemaRegistry().applyTo(merged);
 
         // Step 6 — OASFilter (§4.3)
@@ -90,6 +98,20 @@ public final class ModelBuilder {
 
         // Defensive: if filterInvoker returned null (model was null), fall back to empty model.
         return filtered != null ? filtered : OASFactory.createObject(OpenAPI.class).openapi("3.1.0");
+    }
+
+    private void ensureDefaultInfo(OpenAPI model) {
+        Info info = model.getInfo();
+        if (info == null) {
+            info = OASFactory.createObject(Info.class);
+            model.setInfo(info);
+        }
+        if (info.getTitle() == null || info.getTitle().isBlank()) {
+            info.setTitle("Generated API");
+        }
+        if (info.getVersion() == null || info.getVersion().isBlank()) {
+            info.setVersion("1.0");
+        }
     }
 }
 

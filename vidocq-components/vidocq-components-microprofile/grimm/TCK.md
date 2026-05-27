@@ -4,18 +4,11 @@ Track MicroProfile OpenAPI 4.1 TCK progress here.
 
 ## Current score
 
-- Status: M10 bootstrap in progress
-- Baseline known from `ROADMAP.md`: 353 tests, 317 failures, 29 skipped
-- Current blocking families:
-  - container deployment/wiring edge cases (archive descriptors)
-  - endpoint reachability intermittence (`ConnectException`)
-  - functional OpenAPI assertions once deployment is up (e.g. missing expected paths/responses)
-
-Latest targeted run (`PetStoreAppTest`):
-
-- deployment now succeeds (no `Invalid class descriptor`, no `Unsatisfied dependency`)
-- HTTP endpoint is reachable (`/openapi` responds)
-- remaining failures are model-content mismatches (assertions on `paths`, `responses`, security blocks)
+- Status: M10 completed
+- Official full suite: **349 tests, 0 failures, 0 errors, 0 skipped**
+- Evidence (Surefire): `grimm-tck/target/surefire-reports/TEST-TestSuite.xml`
+- Last targeted reference also green: `AirlinesAppTest` (**118/118**) in
+  `grimm-tck/target/surefire-reports/TEST-org.eclipse.microprofile.openapi.tck.AirlinesAppTest.xml`
 
 ## Runtime matrix (Cassini/Chappe)
 
@@ -48,5 +41,5 @@ These can be overridden per run with JVM properties `-Dgrimm.tck.*`.
 
 ## Exclusions
 
-Document any excluded tests with spec-based justification.
+No excluded tests currently.
 

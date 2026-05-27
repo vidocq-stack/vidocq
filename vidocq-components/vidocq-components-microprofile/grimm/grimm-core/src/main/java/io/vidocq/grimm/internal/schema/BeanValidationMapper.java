@@ -15,10 +15,24 @@ public final class BeanValidationMapper {
     private static final String JAKARTA = "jakarta.validation.constraints.";
     private static final String JAVAX = "javax.validation.constraints.";
 
+    private static final java.util.concurrent.atomic.AtomicBoolean ENABLED =
+            new java.util.concurrent.atomic.AtomicBoolean(true);
+
+    /**
+     * Enables or disables bean validation → schema mapping globally for the current
+     * build. Honors {@code mp.openapi.scan.beanvalidation=false}.
+     */
+    public static void setEnabled(boolean enabled) {
+        ENABLED.set(enabled);
+    }
+
     private BeanValidationMapper() {
     }
 
     public static void apply(Schema schema, Annotation[] annotations) {
+        if (!ENABLED.get()) {
+            return;
+        }
         if (schema == null || annotations == null || annotations.length == 0) {
             return;
         }

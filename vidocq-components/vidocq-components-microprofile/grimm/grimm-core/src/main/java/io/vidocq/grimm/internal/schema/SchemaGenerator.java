@@ -75,6 +75,17 @@ public final class SchemaGenerator {
             ref.setRef(site.ref());
             return ref;
         }
+        // Site-level @Schema(implementation=Schema.True/False.class) → JSON Schema boolean form.
+        if (site != null && site.implementation() == org.eclipse.microprofile.openapi.annotations.media.Schema.True.class) {
+            Schema bool = OASFactory.createObject(Schema.class);
+            bool.setBooleanSchema(Boolean.TRUE);
+            return bool;
+        }
+        if (site != null && site.implementation() == org.eclipse.microprofile.openapi.annotations.media.Schema.False.class) {
+            Schema bool = OASFactory.createObject(Schema.class);
+            bool.setBooleanSchema(Boolean.FALSE);
+            return bool;
+        }
         // Site-level @Schema(implementation=…) overrides the declared type.
         if (site != null && site.implementation() != Void.class) {
             Schema base = generateInternal(site.implementation(), null);
@@ -111,6 +122,14 @@ public final class SchemaGenerator {
             s.setItems(generate(clazz.getComponentType()));
             return s;
         }
+
+        // Config overrides (mp.openapi.schema.<FQCN>) are pre-registered in the registry and
+        // must win even for scalar JVM types such as java.time.Instant.
+        String preRegistered = registry.nameOf(clazz);
+        if (preRegistered != null) {
+            return registry.buildRef(preRegistered);
+        }
+
         if (clazz.isEnum()) {
             return registerEnum(clazz);
         }
@@ -236,15 +255,23 @@ public final class SchemaGenerator {
         if (existing != null) {
             return registry.buildRef(existing);
         }
-        String name = registry.reserve(enumClass, simpleName(enumClass));
+        var enumAnn = enumClass.getAnnotation(
+                org.eclipse.microprofile.openapi.annotations.media.Schema.class);
+        String preferred = (enumAnn != null && !enumAnn.name().isEmpty())
+                ? enumAnn.name() : simpleName(enumClass);
+        String name = registry.reserve(enumClass, preferred);
         Schema body = OASFactory.createObject(Schema.class);
         body.addType(Schema.SchemaType.STRING);
-        Object[] constants = enumClass.getEnumConstants();
-        if (constants != null) {
-            List<Object> values = new ArrayList<>(constants.length);
-            for (Object c : constants) {
-                values.add(((Enum<?>) c).name());
+        List<Object> values = new ArrayList<>();
+        if (enumAnn != null && enumAnn.enumeration().length > 0) {
+            for (String v : enumAnn.enumeration()) values.add(v);
+        } else {
+            Object[] constants = enumClass.getEnumConstants();
+            if (constants != null) {
+                for (Object c : constants) values.add(((Enum<?>) c).name());
             }
+        }
+        if (!values.isEmpty()) {
             body.setEnumeration(values);
         }
         registry.publish(name, body);
@@ -316,8 +343,8 @@ public final class SchemaGenerator {
                 if (!isGetter(m)) {
                     continue;
                 }
-                String prop = propertyNameOf(m);
-                if (prop == null) {
+                String derivedPropertyName = propertyNameOf(m);
+                if (derivedPropertyName == null) {
                     continue;
                 }
                 var ann = m.getAnnotation(
@@ -325,6 +352,14 @@ public final class SchemaGenerator {
                 if (ann != null && ann.hidden()) {
                     continue;
                 }
+                Field backingField = findFieldInHierarchy(c, derivedPropertyName);
+                if (backingField != null) {
+                    var fieldSchema = backingField.getAnnotation(org.eclipse.microprofile.openapi.annotations.media.Schema.class);
+                    if (fieldSchema != null && fieldSchema.hidden()) {
+                        continue;
+                    }
+                }
+                String prop = (ann != null && !ann.name().isEmpty()) ? ann.name() : derivedPropertyName;
                 Schema existing = properties.get(prop);
                 if (existing != null) {
                     if (ann != null) {
@@ -376,6 +411,18 @@ public final class SchemaGenerator {
         return n.isEmpty() ? c.getName().replace('.', '_') : n;
     }
 
+    private static Field findFieldInHierarchy(Class<?> type, String fieldName) {
+        Class<?> current = type;
+        while (current != null && current != Object.class) {
+            try {
+                return current.getDeclaredField(fieldName);
+            } catch (NoSuchFieldException ignored) {
+                current = current.getSuperclass();
+            }
+        }
+        return null;
+    }
+
     // ------------------ @Schema overrides ------------------
 
     private Schema applyAnnotationOverrides(Schema base,
@@ -395,11 +442,20 @@ public final class SchemaGenerator {
         if (!ann.format().isEmpty()) base.setFormat(ann.format());
         if (!ann.title().isEmpty()) base.setTitle(ann.title());
         if (!ann.description().isEmpty()) base.setDescription(ann.description());
+        if (!ann.comment().isEmpty()) base.setComment(ann.comment());
         if (!ann.pattern().isEmpty()) base.setPattern(ann.pattern());
-        if (!ann.example().isEmpty()) base.setExample(ann.example());
+        if (!ann.example().isEmpty()) {
+            base.setExample(ann.example());
+            base.setExamples(List.of(ann.example()));
+        }
         if (!ann.defaultValue().isEmpty()) base.setDefaultValue(ann.defaultValue());
         if (ann.minLength() > 0) base.setMinLength(ann.minLength());
         if (ann.maxLength() != Integer.MAX_VALUE) base.setMaxLength(ann.maxLength());
+        if (ann.minProperties() > 0) base.setMinProperties(ann.minProperties());
+        if (ann.maxProperties() != Integer.MAX_VALUE) base.setMaxProperties(ann.maxProperties());
+        if (ann.minItems() > 0) base.setMinItems(ann.minItems());
+        if (ann.maxItems() != Integer.MAX_VALUE) base.setMaxItems(ann.maxItems());
+        if (ann.uniqueItems()) base.setUniqueItems(Boolean.TRUE);
         BigDecimal minimum = ann.minimum().isEmpty() ? null : new BigDecimal(ann.minimum());
         BigDecimal maximum = ann.maximum().isEmpty() ? null : new BigDecimal(ann.maximum());
         if (minimum != null) base.setMinimum(minimum);
@@ -410,6 +466,18 @@ public final class SchemaGenerator {
         if (ann.deprecated()) base.setDeprecated(true);
         if (ann.readOnly()) base.setReadOnly(true);
         if (ann.writeOnly()) base.setWriteOnly(true);
+        if (ann.nullable()) {
+            List<Schema.SchemaType> types = base.getType() == null
+                    ? new ArrayList<>()
+                    : new ArrayList<>(base.getType());
+            if (!types.contains(Schema.SchemaType.NULL)) {
+                types.add(Schema.SchemaType.NULL);
+            }
+            base.setType(types);
+        }
+        if (!ann.contentEncoding().isEmpty()) base.setContentEncoding(ann.contentEncoding());
+        if (!ann.contentMediaType().isEmpty()) base.setContentMediaType(ann.contentMediaType());
+        if (!ann.constValue().isEmpty()) base.setConstValue(parseScalar(ann.constValue()));
         if (ann.requiredProperties().length > 0) {
             List<String> mergedRequired = base.getRequired() == null
                     ? new ArrayList<>()
@@ -423,10 +491,111 @@ public final class SchemaGenerator {
                 base.setRequired(mergedRequired);
             }
         }
+        if (ann.properties().length > 0) {
+            Map<String, Schema> mergedProperties = base.getProperties() == null
+                    ? new LinkedHashMap<>()
+                    : new LinkedHashMap<>(base.getProperties());
+            List<String> mergedRequired = base.getRequired() == null
+                    ? new ArrayList<>()
+                    : new ArrayList<>(base.getRequired());
+            for (org.eclipse.microprofile.openapi.annotations.media.SchemaProperty property : ann.properties()) {
+                String propertyName = property.name();
+                if (propertyName.isEmpty()) {
+                    continue;
+                }
+                if (property.hidden()) {
+                    mergedProperties.remove(propertyName);
+                    mergedRequired.remove(propertyName);
+                    continue;
+                }
+                Schema propertySchema = mergedProperties.get(propertyName);
+                if (propertySchema == null) {
+                    Type baseType = property.implementation() != Void.class ? property.implementation() : Object.class;
+                    propertySchema = generate(baseType);
+                }
+                if (!property.ref().isEmpty()) {
+                    propertySchema.setRef(property.ref());
+                }
+                if (property.type() != SchemaType.DEFAULT) {
+                    propertySchema.setType(new ArrayList<>(List.of(mapAnnotationType(property.type()))));
+                }
+                if (!property.title().isEmpty()) {
+                    propertySchema.setTitle(property.title());
+                }
+                if (!property.description().isEmpty()) {
+                    propertySchema.setDescription(property.description());
+                }
+                if (!property.format().isEmpty()) {
+                    propertySchema.setFormat(property.format());
+                }
+                if (!property.example().isEmpty()) {
+                    propertySchema.setExample(property.example());
+                    propertySchema.setExamples(List.of(property.example()));
+                }
+                if (!property.comment().isEmpty()) {
+                    propertySchema.setComment(property.comment());
+                }
+                for (org.eclipse.microprofile.openapi.annotations.extensions.Extension extension : property.extensions()) {
+                    if (!extension.name().isEmpty()) {
+                        propertySchema.addExtension(extension.name(), parseExtensionValue(extension));
+                    }
+                }
+                mergedProperties.put(propertyName, propertySchema);
+            }
+            if (!mergedProperties.isEmpty()) {
+                base.setProperties(mergedProperties);
+            }
+            if (!mergedRequired.isEmpty()) {
+                base.setRequired(mergedRequired);
+            }
+        }
         if (ann.enumeration().length > 0) {
             List<Object> values = new ArrayList<>(ann.enumeration().length);
             for (String v : ann.enumeration()) values.add(v);
             base.setEnumeration(values);
+        }
+        if (ann.dependentRequired().length > 0) {
+            Map<String, List<String>> dependentRequired = base.getDependentRequired() == null
+                    ? new LinkedHashMap<>()
+                    : new LinkedHashMap<>(base.getDependentRequired());
+            for (var dr : ann.dependentRequired()) {
+                if (dr.name().isEmpty()) continue;
+                dependentRequired.put(dr.name(), new ArrayList<>(List.of(dr.requires())));
+            }
+            if (!dependentRequired.isEmpty()) {
+                base.setDependentRequired(dependentRequired);
+            }
+        }
+        if (ann.dependentSchemas().length > 0) {
+            Map<String, Schema> dependentSchemas = base.getDependentSchemas() == null
+                    ? new LinkedHashMap<>()
+                    : new LinkedHashMap<>(base.getDependentSchemas());
+            for (var ds : ann.dependentSchemas()) {
+                if (ds.name().isEmpty()) continue;
+                Class<?> schemaImpl = ds.schema();
+                Schema schema;
+                if (schemaImpl == org.eclipse.microprofile.openapi.annotations.media.Schema.True.class) {
+                    schema = OASFactory.createObject(Schema.class);
+                    schema.setBooleanSchema(Boolean.TRUE);
+                } else if (schemaImpl == org.eclipse.microprofile.openapi.annotations.media.Schema.False.class) {
+                    schema = OASFactory.createObject(Schema.class);
+                    schema.setBooleanSchema(Boolean.FALSE);
+                } else {
+                    schema = generate(schemaImpl);
+                }
+                dependentSchemas.put(ds.name(), schema);
+            }
+            if (!dependentSchemas.isEmpty()) {
+                base.setDependentSchemas(dependentSchemas);
+            }
+        }
+        Class<?> additionalProperties = ann.additionalProperties();
+        if (additionalProperties == org.eclipse.microprofile.openapi.annotations.media.Schema.True.class) {
+            base.setAdditionalPropertiesBoolean(Boolean.TRUE);
+        } else if (additionalProperties == org.eclipse.microprofile.openapi.annotations.media.Schema.False.class) {
+            base.setAdditionalPropertiesBoolean(Boolean.FALSE);
+        } else if (additionalProperties != Void.class) {
+            base.setAdditionalPropertiesSchema(generate(additionalProperties));
         }
         if (!ann.externalDocs().url().isEmpty()) {
             var externalDocs = OASFactory.createObject(org.eclipse.microprofile.openapi.models.ExternalDocumentation.class);
@@ -436,7 +605,34 @@ public final class SchemaGenerator {
             }
             base.setExternalDocs(externalDocs);
         }
+        for (org.eclipse.microprofile.openapi.annotations.extensions.Extension extension : ann.extensions()) {
+            if (!extension.name().isEmpty()) {
+                base.addExtension(extension.name(), parseExtensionValue(extension));
+            }
+        }
         return base;
+    }
+
+    private static Object parseExtensionValue(org.eclipse.microprofile.openapi.annotations.extensions.Extension extension) {
+        String rawValue = extension.value();
+        if (!extension.parseValue()) {
+            return rawValue;
+        }
+        return parseScalar(rawValue);
+    }
+
+    private static Object parseScalar(String rawValue) {
+        if ("true".equalsIgnoreCase(rawValue) || "false".equalsIgnoreCase(rawValue)) {
+            return Boolean.parseBoolean(rawValue);
+        }
+        try {
+            if (rawValue.contains(".")) {
+                return Double.parseDouble(rawValue);
+            }
+            return Long.parseLong(rawValue);
+        } catch (NumberFormatException ignored) {
+            return rawValue;
+        }
     }
 
     private static Schema.SchemaType mapAnnotationType(SchemaType t) {

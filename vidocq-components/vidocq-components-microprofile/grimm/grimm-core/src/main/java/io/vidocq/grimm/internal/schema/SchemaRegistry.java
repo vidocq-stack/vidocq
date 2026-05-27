@@ -6,6 +6,7 @@ import org.eclipse.microprofile.openapi.models.OpenAPI;
 import org.eclipse.microprofile.openapi.models.media.Schema;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.locks.ReentrantLock;
@@ -108,7 +109,113 @@ public final class SchemaRegistry {
             openAPI.setComponents(components);
         }
         for (Map.Entry<String, Schema> e : snap.entrySet()) {
-            components.addSchema(e.getKey(), e.getValue());
+            Schema existing = components.getSchemas() != null ? components.getSchemas().get(e.getKey()) : null;
+            if (existing == null) {
+                components.addSchema(e.getKey(), e.getValue());
+                continue;
+            }
+            components.addSchema(e.getKey(), mergeSchema(e.getValue(), existing));
+        }
+    }
+
+    private Schema mergeSchema(Schema generated, Schema explicit) {
+        if (generated == null) {
+            return explicit;
+        }
+        if (explicit == null) {
+            return generated;
+        }
+        Schema merged = OASFactory.createObject(Schema.class);
+        copySchema(generated, merged);
+        copySchema(explicit, merged);
+
+        Map<String, Schema> generatedProperties = generated.getProperties();
+        Map<String, Schema> explicitProperties = explicit.getProperties();
+        if (generatedProperties != null || explicitProperties != null) {
+            Map<String, Schema> mergedProperties = new LinkedHashMap<>();
+            if (generatedProperties != null) {
+                mergedProperties.putAll(generatedProperties);
+            }
+            if (explicitProperties != null) {
+                mergedProperties.putAll(explicitProperties);
+            }
+            merged.setProperties(mergedProperties);
+        }
+
+        List<String> generatedRequired = generated.getRequired();
+        List<String> explicitRequired = explicit.getRequired();
+        if (generatedRequired != null || explicitRequired != null) {
+            List<String> required = new java.util.ArrayList<>();
+            if (generatedRequired != null) {
+                required.addAll(generatedRequired);
+            }
+            if (explicitRequired != null) {
+                for (String item : explicitRequired) {
+                    if (!required.contains(item)) {
+                        required.add(item);
+                    }
+                }
+            }
+            merged.setRequired(required);
+        }
+        return merged;
+    }
+
+    private void copySchema(Schema source, Schema target) {
+        if (source.getRef() != null) target.setRef(source.getRef());
+        if (source.getTitle() != null) target.setTitle(source.getTitle());
+        if (source.getDescription() != null) target.setDescription(source.getDescription());
+        if (source.getType() != null) target.setType(source.getType());
+        if (source.getFormat() != null) target.setFormat(source.getFormat());
+        if (source.getDefaultValue() != null) target.setDefaultValue(source.getDefaultValue());
+        if (source.getExample() != null) target.setExample(source.getExample());
+        if (source.getExamples() != null) target.setExamples(source.getExamples());
+        if (source.getReadOnly() != null) target.setReadOnly(source.getReadOnly());
+        if (source.getWriteOnly() != null) target.setWriteOnly(source.getWriteOnly());
+        if (source.getDeprecated() != null) target.setDeprecated(source.getDeprecated());
+        if (source.getDiscriminator() != null) target.setDiscriminator(source.getDiscriminator());
+        if (source.getXml() != null) target.setXml(source.getXml());
+        if (source.getDependentRequired() != null) target.setDependentRequired(source.getDependentRequired());
+        if (source.getDependentSchemas() != null) target.setDependentSchemas(source.getDependentSchemas());
+        if (source.getPropertyNames() != null) target.setPropertyNames(source.getPropertyNames());
+        if (source.getContains() != null) target.setContains(source.getContains());
+        if (source.getIfSchema() != null) target.setIfSchema(source.getIfSchema());
+        if (source.getThenSchema() != null) target.setThenSchema(source.getThenSchema());
+        if (source.getElseSchema() != null) target.setElseSchema(source.getElseSchema());
+        if (source.getConstValue() != null) target.setConstValue(source.getConstValue());
+        if (source.getExternalDocs() != null) target.setExternalDocs(source.getExternalDocs());
+        if (source.getItems() != null) target.setItems(source.getItems());
+        if (source.getAllOf() != null) target.setAllOf(source.getAllOf());
+        if (source.getAnyOf() != null) target.setAnyOf(source.getAnyOf());
+        if (source.getOneOf() != null) target.setOneOf(source.getOneOf());
+        if (source.getNot() != null) target.setNot(source.getNot());
+        if (source.getMaximum() != null) target.setMaximum(source.getMaximum());
+        if (source.getExclusiveMaximum() != null) target.setExclusiveMaximum(source.getExclusiveMaximum());
+        if (source.getMinimum() != null) target.setMinimum(source.getMinimum());
+        if (source.getExclusiveMinimum() != null) target.setExclusiveMinimum(source.getExclusiveMinimum());
+        if (source.getMaxLength() != null) target.setMaxLength(source.getMaxLength());
+        if (source.getMinLength() != null) target.setMinLength(source.getMinLength());
+        if (source.getPattern() != null) target.setPattern(source.getPattern());
+        if (source.getMaxItems() != null) target.setMaxItems(source.getMaxItems());
+        if (source.getMinItems() != null) target.setMinItems(source.getMinItems());
+        if (source.getUniqueItems() != null) target.setUniqueItems(source.getUniqueItems());
+        if (source.getMaxProperties() != null) target.setMaxProperties(source.getMaxProperties());
+        if (source.getMinProperties() != null) target.setMinProperties(source.getMinProperties());
+        if (source.getMultipleOf() != null) target.setMultipleOf(source.getMultipleOf());
+        if (source.getEnumeration() != null) target.setEnumeration(source.getEnumeration());
+        // additionalProperties is a union (boolean OR schema); copy the active form only,
+        // otherwise the synthesised Schema returned by getAdditionalPropertiesSchema() for the
+        // boolean form would clobber the boolean (cf. SchemaImpl).
+        if (source.getAdditionalPropertiesBoolean() != null) {
+            target.setAdditionalPropertiesBoolean(source.getAdditionalPropertiesBoolean());
+        } else if (source.getAdditionalPropertiesSchema() != null) {
+            target.setAdditionalPropertiesSchema(source.getAdditionalPropertiesSchema());
+        }
+        if (source.getComment() != null) target.setComment(source.getComment());
+        if (source.getExtensions() != null) {
+            for (Map.Entry<String, Object> extension : source.getExtensions().entrySet()) {
+                target.addExtension(extension.getKey(), extension.getValue());
+            }
         }
     }
 

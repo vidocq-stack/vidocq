@@ -1,6 +1,7 @@
 package io.vidocq.grimm.internal.schema;
 
 import org.eclipse.microprofile.openapi.annotations.media.Schema;
+import org.eclipse.microprofile.openapi.annotations.extensions.Extension;
 import org.eclipse.microprofile.openapi.models.OpenAPI;
 import org.eclipse.microprofile.openapi.models.media.Schema.SchemaType;
 import org.junit.jupiter.api.Test;
@@ -208,6 +209,23 @@ class SchemaGeneratorTest {
     }
 
     @Test
+    void generate_mapsSchemaAdditionalPropertiesAndExtensions() {
+        generator.generate(AdditionalPropertiesFixture.class);
+        var body = registry.snapshot().get("AdditionalPropertiesFixture");
+
+        var metadata = body.getProperties().get("metadata");
+        assertEquals(Boolean.TRUE, metadata.getAdditionalPropertiesBoolean());
+
+        var strict = body.getProperties().get("strict");
+        assertEquals(Boolean.FALSE, strict.getAdditionalPropertiesBoolean());
+
+        var typed = body.getProperties().get("typed");
+        assertNotNull(typed.getAdditionalPropertiesSchema());
+        assertEquals(SchemaType.STRING, typed.getAdditionalPropertiesSchema().getType().get(0));
+        assertEquals("field-ext", typed.getExtensions().get("x-field"));
+    }
+
+    @Test
     void generate_mapsBeanValidationConstraints() {
         generator.generate(BeanValidated.class);
         var body = registry.snapshot().get("BeanValidated");
@@ -356,6 +374,18 @@ class SchemaGeneratorTest {
 
         @jakarta.validation.constraints.NotNull
         String requiredName;
+    }
+
+    static final class AdditionalPropertiesFixture {
+        @Schema(additionalProperties = Schema.True.class)
+        Map<String, Object> metadata;
+
+        @Schema(additionalProperties = Schema.False.class)
+        Map<String, Object> strict;
+
+        @Schema(additionalProperties = String.class,
+                extensions = @Extension(name = "x-field", value = "field-ext"))
+        Map<String, Object> typed;
     }
 
     static final class Other {

@@ -191,7 +191,17 @@ public class SchemaImpl extends AbstractExtensibleRef<Schema> implements Schema 
     }
 
     // ── additionalProperties ──
-    @Override public Schema getAdditionalPropertiesSchema() { return additionalPropertiesSchema; }
+    @Override public Schema getAdditionalPropertiesSchema() {
+        if (additionalPropertiesSchema != null) {
+            return additionalPropertiesSchema;
+        }
+        if (additionalPropertiesBoolean != null) {
+            Schema synthetic = new SchemaImpl();
+            synthetic.setBooleanSchema(additionalPropertiesBoolean);
+            return synthetic;
+        }
+        return null;
+    }
     @Override public Boolean getAdditionalPropertiesBoolean() { return additionalPropertiesBoolean; }
     @Override public void setAdditionalPropertiesSchema(Schema additionalProperties) {
         this.additionalPropertiesSchema = additionalProperties;
@@ -199,11 +209,9 @@ public class SchemaImpl extends AbstractExtensibleRef<Schema> implements Schema 
     }
     @Override public void setAdditionalPropertiesBoolean(Boolean additionalProperties) {
         this.additionalPropertiesBoolean = additionalProperties;
-        if (additionalProperties == null) {
-            this.additionalPropertiesSchema = null;
-        } else {
-            this.additionalPropertiesSchema = new SchemaImpl().booleanSchema(additionalProperties);
-        }
+        // OpenAPI models `additionalProperties` as either a boolean OR a schema.
+        // Keep schema null when the boolean form is chosen.
+        this.additionalPropertiesSchema = null;
     }
 
     // ── description / format ──

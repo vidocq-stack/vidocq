@@ -9,6 +9,7 @@ import jakarta.ws.rs.Produces;
 import org.eclipse.microprofile.openapi.annotations.ExternalDocumentation;
 import org.eclipse.microprofile.openapi.annotations.OpenAPIDefinition;
 import org.eclipse.microprofile.openapi.annotations.Components;
+import org.eclipse.microprofile.openapi.annotations.extensions.Extension;
 import org.eclipse.microprofile.openapi.annotations.headers.Header;
 import org.eclipse.microprofile.openapi.annotations.info.Info;
 import org.eclipse.microprofile.openapi.annotations.info.License;
@@ -193,6 +194,42 @@ class AnnotationScannerTest {
         assertEquals("Maximum rate", model.getComponents().getHeaders().get("Max-Rate").getDescription());
     }
 
+    @Test
+    void scanClasses_mapsOpenApiDefinitionComponentSchemaWithoutImplementation() {
+        // Spec §3.4: @OpenAPIDefinition.components.schemas with only name/type/format must
+        // populate the component schema keywords.
+        AnnotationScanner scanner = new AnnotationScanner(ScanConfig.defaultConfig());
+        OpenAPI model = scanner.scanClasses(List.of(DefinitionWithNamedScalarSchema.class));
+
+        assertNotNull(model.getComponents());
+        assertNotNull(model.getComponents().getSchemas());
+        var id = model.getComponents().getSchemas().get("id");
+        assertNotNull(id);
+        assertEquals("int32", id.getFormat());
+        assertNotNull(id.getType());
+        assertTrue(id.getType().contains(org.eclipse.microprofile.openapi.models.media.Schema.SchemaType.INTEGER));
+    }
+
+    @Test
+    void scanClasses_mapsOpenApiDefinitionExtensions() {
+        // Spec §3.4: extensions from document-level annotations are serialized as x-* fields.
+        AnnotationScanner scanner = new AnnotationScanner(ScanConfig.defaultConfig());
+        OpenAPI model = scanner.scanClasses(List.of(DefinitionWithExtensions.class));
+
+        assertEquals("root", model.getExtensions().get("x-openapi-definition"));
+        assertNotNull(model.getInfo());
+        assertEquals("info", model.getInfo().getExtensions().get("x-info"));
+        assertNotNull(model.getInfo().getContact());
+        assertEquals("contact", model.getInfo().getContact().getExtensions().get("x-contact"));
+        assertNotNull(model.getInfo().getLicense());
+        assertEquals("license", model.getInfo().getLicense().getExtensions().get("x-license"));
+        assertNotNull(model.getExternalDocs());
+        assertEquals("docs", model.getExternalDocs().getExtensions().get("x-external-docs"));
+        var server = model.getServers().get(0);
+        assertEquals("server", server.getExtensions().get("x-server"));
+        assertEquals("server-var", server.getVariables().get("env").getExtensions().get("x-server-variable"));
+    }
+
     @OpenAPIDefinition(
         info = @Info(
             title = "My API",
@@ -285,6 +322,51 @@ class AnnotationScannerTest {
         )
     )
     static class DefinitionWithComponentsAndServerVariables {
+    }
+
+    @OpenAPIDefinition(
+        info = @Info(title = "Schema API", version = "1.0.0"),
+        components = @Components(
+            schemas = @Schema(
+                name = "id",
+                type = org.eclipse.microprofile.openapi.annotations.enums.SchemaType.INTEGER,
+                format = "int32"
+            )
+        )
+    )
+    static class DefinitionWithNamedScalarSchema {
+    }
+
+    @OpenAPIDefinition(
+        info = @Info(
+            title = "Extensions API",
+            version = "1.0.0",
+            contact = @org.eclipse.microprofile.openapi.annotations.info.Contact(
+                name = "support",
+                extensions = @Extension(name = "x-contact", value = "contact")
+            ),
+            license = @License(
+                name = "Apache-2.0",
+                extensions = @Extension(name = "x-license", value = "license")
+            ),
+            extensions = @Extension(name = "x-info", value = "info")
+        ),
+        externalDocs = @ExternalDocumentation(
+            url = "https://example.com/docs",
+            extensions = @Extension(name = "x-external-docs", value = "docs")
+        ),
+        servers = @Server(
+            url = "https://{env}.example.com",
+            extensions = @Extension(name = "x-server", value = "server"),
+            variables = @ServerVariable(
+                name = "env",
+                defaultValue = "dev",
+                extensions = @Extension(name = "x-server-variable", value = "server-var")
+            )
+        ),
+        extensions = @Extension(name = "x-openapi-definition", value = "root")
+    )
+    static class DefinitionWithExtensions {
     }
 
     @Test

@@ -70,9 +70,20 @@ public final class YamlSerializer {
         for (Object item : listValue) {
             appendIndent(builder, indent);
             builder.append('-');
-            if (item instanceof Map<?, ?> || item instanceof List<?>) {
-                builder.append('\n');
-                writeYaml(item, builder, indent + 2);
+            if (item instanceof Map<?, ?> itemMap) {
+                if (itemMap.isEmpty()) {
+                    builder.append(" {}\n");
+                } else {
+                    builder.append('\n');
+                    writeYaml(itemMap, builder, indent + 2);
+                }
+            } else if (item instanceof List<?> itemList) {
+                if (itemList.isEmpty()) {
+                    builder.append(" []\n");
+                } else {
+                    builder.append('\n');
+                    writeYaml(itemList, builder, indent + 2);
+                }
             } else {
                 builder.append(' ').append(writeScalar(item)).append('\n');
             }

@@ -121,7 +121,7 @@ public final class YamlDeserializer {
                     } else {
                         result.add(parseNode(currentIndent + 2));
                     }
-                } else if (rest.contains(":")) {
+                } else if (isInlineMapItem(rest)) {
                     result.add(parseInlineMapItem(rest, currentIndent));
                 } else {
                     result.add(parseScalar(rest));
@@ -144,6 +144,9 @@ public final class YamlDeserializer {
 
             if (raw.startsWith("\"") && raw.endsWith("\"") && raw.length() >= 2) {
                 return unescape(raw.substring(1, raw.length() - 1));
+            }
+            if (raw.startsWith("'") && raw.endsWith("'") && raw.length() >= 2) {
+                return raw.substring(1, raw.length() - 1).replace("''", "'");
             }
 
             if (raw.matches("-?\\d+")) {
@@ -228,6 +231,18 @@ public final class YamlDeserializer {
             return map;
         }
 
+        private boolean isInlineMapItem(String rest) {
+            int colon = rest.indexOf(':');
+            if (colon <= 0 || colon + 1 >= rest.length()) {
+                return false;
+            }
+            // URLs like "https://..." are scalar values, not inline maps.
+            if (colon + 2 < rest.length() && rest.charAt(colon + 1) == '/' && rest.charAt(colon + 2) == '/') {
+                return false;
+            }
+            return Character.isWhitespace(rest.charAt(colon + 1));
+        }
+
         private String parseBlockScalar(int expectedIndent, boolean folded) {
             StringBuilder block = new StringBuilder();
             while (index < lines.size()) {
@@ -252,9 +267,6 @@ public final class YamlDeserializer {
                     block.append(part).append('\n');
                 }
                 index++;
-            }
-            if (!folded && block.length() > 0 && block.charAt(block.length() - 1) == '\n') {
-                block.setLength(block.length() - 1);
             }
             return block.toString();
         }

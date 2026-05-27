@@ -59,7 +59,15 @@ final class OpenApiValueMapper {
             return mergeWithExtensions(toSerializable(apiResponses.getAPIResponses()), apiResponses);
         }
         if (value instanceof SecurityRequirement securityRequirement) {
-            return toSerializable(securityRequirement.getSchemes());
+            Map<String, List<String>> schemes = securityRequirement.getSchemes();
+            if (schemes == null || schemes.isEmpty()) {
+                return Map.of();
+            }
+            return toSerializable(schemes);
+        }
+        if (value instanceof org.eclipse.microprofile.openapi.models.media.Schema schema
+                && schema.getBooleanSchema() != null) {
+            return schema.getBooleanSchema();
         }
         if (value instanceof Callback callback) {
             LinkedHashMap<String, Object> result = new LinkedHashMap<>();
@@ -150,8 +158,11 @@ final class OpenApiValueMapper {
             }
 
             propertyName = toOpenApiPropertyName(propertyName);
-
-            result.put(propertyName, toSerializable(rawValue));
+            Object serializableValue = toSerializable(rawValue);
+            if ("type".equals(propertyName) && serializableValue instanceof List<?> types && types.size() == 1) {
+                serializableValue = types.getFirst();
+            }
+            result.put(propertyName, serializableValue);
         }
         return result;
     }
@@ -228,6 +239,25 @@ final class OpenApiValueMapper {
                 case MUTUALTLS -> "mutualTLS";
             };
         }
+        if (enumValue instanceof org.eclipse.microprofile.openapi.models.media.Encoding.Style style) {
+            return switch (style) {
+                case FORM -> "form";
+                case SPACE_DELIMITED -> "spaceDelimited";
+                case PIPE_DELIMITED -> "pipeDelimited";
+                case DEEP_OBJECT -> "deepObject";
+            };
+        }
+        if (enumValue instanceof org.eclipse.microprofile.openapi.models.parameters.Parameter.Style style) {
+            return switch (style) {
+                case MATRIX -> "matrix";
+                case LABEL -> "label";
+                case FORM -> "form";
+                case SIMPLE -> "simple";
+                case SPACEDELIMITED -> "spaceDelimited";
+                case PIPEDELIMITED -> "pipeDelimited";
+                case DEEPOBJECT -> "deepObject";
+            };
+        }
         return enumValue.name().toLowerCase(Locale.ROOT);
     }
 
@@ -239,7 +269,13 @@ final class OpenApiValueMapper {
             case "defaultValue" -> "default";
             case "enumeration" -> "enum";
             case "schemaDialect" -> "$schema";
+            case "comment" -> "$comment";
+            case "additionalPropertiesBoolean" -> "additionalProperties";
             case "additionalPropertiesSchema" -> "additionalProperties";
+            case "constValue" -> "const";
+            case "ifSchema" -> "if";
+            case "thenSchema" -> "then";
+            case "elseSchema" -> "else";
             default -> propertyName;
         };
     }

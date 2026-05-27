@@ -4,6 +4,8 @@ import io.vidocq.grimm.internal.schema.SchemaRegistry;
 import io.vidocq.grimm.internal.serialization.JsonDeserializer;
 import org.eclipse.microprofile.openapi.OASFactory;
 import org.eclipse.microprofile.openapi.models.OpenAPI;
+import org.eclipse.microprofile.openapi.models.Operation;
+import org.eclipse.microprofile.openapi.models.PathItem;
 import org.eclipse.microprofile.openapi.models.media.Schema;
 import org.eclipse.microprofile.openapi.models.servers.Server;
 
@@ -30,16 +32,71 @@ public final class ConfigApplier {
      * are left untouched.
      */
     public static void applyServers(OpenAPI openAPI, GrimmConfig config) {
-        if (openAPI == null || config == null || config.servers().isEmpty()) {
+        if (openAPI == null || config == null) {
             return;
         }
+
+        List<Server> globalServers = createServers(config.servers());
+        if (!globalServers.isEmpty()) {
+            openAPI.setServers(globalServers);
+        }
+
+        var paths = openAPI.getPaths();
+        var pathItems = paths == null ? null : paths.getPathItems();
+        if (pathItems == null || pathItems.isEmpty()) {
+            return;
+        }
+
+        for (Map.Entry<String, PathItem> entry : pathItems.entrySet()) {
+            PathItem item = entry.getValue();
+            if (item == null) {
+                continue;
+            }
+            List<Server> pathServers = createServers(config.pathServers().get(entry.getKey()));
+            if (!pathServers.isEmpty()) {
+                item.setServers(pathServers);
+            }
+
+            for (PathItem.HttpMethod httpMethod : PathItem.HttpMethod.values()) {
+                Operation operation = getOperation(item, httpMethod);
+                if (operation == null || operation.getOperationId() == null) {
+                    continue;
+                }
+                List<Server> operationServers = createServers(config.operationServers().get(operation.getOperationId()));
+                if (!operationServers.isEmpty()) {
+                    operation.setServers(operationServers);
+                }
+            }
+        }
+    }
+
+    private static List<Server> createServers(List<String> urls) {
+        if (urls == null || urls.isEmpty()) {
+            return List.of();
+        }
         List<Server> servers = new ArrayList<>();
-        for (String url : config.servers()) {
+        for (String url : urls) {
+            if (url == null || url.isBlank()) {
+                continue;
+            }
             Server s = OASFactory.createObject(Server.class);
             s.setUrl(url);
             servers.add(s);
         }
-        openAPI.setServers(servers);
+        return servers;
+    }
+
+    private static Operation getOperation(PathItem item, PathItem.HttpMethod method) {
+        return switch (method) {
+            case GET -> item.getGET();
+            case POST -> item.getPOST();
+            case PUT -> item.getPUT();
+            case DELETE -> item.getDELETE();
+            case PATCH -> item.getPATCH();
+            case HEAD -> item.getHEAD();
+            case OPTIONS -> item.getOPTIONS();
+            case TRACE -> item.getTRACE();
+        };
     }
 
     /**
@@ -70,7 +127,10 @@ public final class ConfigApplier {
                 continue; // not a JSON object — skip
             }
             Schema schema = toSchema(map);
-            String name = registry.reserve(clazz, clazz.getSimpleName());
+            Object nameField = map.get("name");
+            String preferredName = nameField instanceof String s && !s.isBlank()
+                    ? s : clazz.getSimpleName();
+            String name = registry.reserve(clazz, preferredName);
             registry.publish(name, schema);
             result.put(fqcn, name);
         }

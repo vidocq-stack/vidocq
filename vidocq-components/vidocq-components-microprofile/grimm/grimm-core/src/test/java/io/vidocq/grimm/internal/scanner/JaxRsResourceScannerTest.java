@@ -241,8 +241,8 @@ class JaxRsResourceScannerTest {
 
         var op = model.getPaths().getPathItem("/tag-ref/{id}").getGET();
         assertNotNull(op.getTags());
-        assertTrue(op.getTags().contains("ParentTag"));
         assertTrue(op.getTags().contains("ChildTag"));
+        assertTrue(!op.getTags().contains("ParentTag"));
     }
 
     @Test
