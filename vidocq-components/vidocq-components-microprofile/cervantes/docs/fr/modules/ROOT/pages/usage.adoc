@@ -1,0 +1,57 @@
+= Utilisation
+
+== Sécuriser une ressource JAX-RS
+
+Annotez les méthodes de ressource avec `@RolesAllowed`, `@PermitAll` ou `@DenyAll`. Le
+`JwtAuthenticationFilter` extrait et valide le bearer token, puis publie le principal
+`JsonWebToken` ; le `RolesAllowedDynamicFeature` applique les contrôles de rôle (401 si le
+token est absent ou invalide, 403 si l'appelant n'a pas le rôle). Injectez le principal
+validé — et les claims individuels — via CDI.
+
+[source,java]
+----
+import jakarta.annotation.security.RolesAllowed;
+import jakarta.inject.Inject;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.Path;
+import org.eclipse.microprofile.jwt.Claim;
+import org.eclipse.microprofile.jwt.JsonWebToken;
+
+@Path("/orders")
+public class OrderResource {
+
+    @Inject
+    JsonWebToken jwt;            // le principal validé (anonyme si pas de token)
+
+    @Inject
+    @Claim("upn")
+    String userPrincipalName;    // un claim isolé, typé
+
+    @GET
+    @RolesAllowed("manager")
+    public String list() {
+        return "orders for " + jwt.getName()
+             + " (upn=" + userPrincipalName + ", groups=" + jwt.getGroups() + ")";
+    }
+}
+----
+
+== Configuration
+
+Cervantes lit les propriétés MicroProfile JWT standard via Ravel (MP Config). Placez-les
+dans `META-INF/microprofile-config.properties` :
+
+[source,properties]
+----
+# Emplacement de la clé publique de vérification (PEM inline/fichier, ou URL/fichier JWKS)
+mp.jwt.verify.publickey.location=https://issuer.example.com/.well-known/jwks.json
+
+# Émetteur attendu du token (claim "iss")
+mp.jwt.verify.issuer=https://issuer.example.com
+
+# Audiences acceptées (claim "aud") — séparées par des virgules
+mp.jwt.verify.audiences=orders-api
+
+# Optionnel : header portant le token (défaut Authorization, schéma Bearer)
+mp.jwt.token.header=Authorization
+----

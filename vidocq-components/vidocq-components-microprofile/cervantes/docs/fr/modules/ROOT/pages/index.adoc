@@ -1,0 +1,36 @@
+= Cervantes
+:description: Implémentation MicroProfile JWT 2.1 — RBAC par bearer token pour l'écosystème Vidocq — zéro dépendance d'implémentation, JPMS strict, virtual threads, Java 25.
+
+[.lead]
+Cervantes est l'implémentation MicroProfile JWT 2.1 de l'écosystème Vidocq. Elle valide les bearer tokens JWT signés (et optionnellement chiffrés) avec `java.security` uniquement, parse le JSON via Champollion, lit sa configuration via Ravel, expose le principal en CDI via xref:vauban::index.adoc[Vauban], et applique `@RolesAllowed` sur les endpoints JAX-RS via xref:cassini::index.adoc[Cassini]. Pas de Bouncy Castle, pas de Nimbus, pas de jose4j, pas de SmallRye JWT.
+
+== Origine du nom
+
+Miguel de Cervantes a écrit *Don Quichotte*, un hidalgo qui se *proclame* chevalier et somme le monde de tenir ses titres pour vrais. Le projet Cervantes implémente MicroProfile JWT 2.1 : il reçoit les *claims* d'identité revendiqués par un porteur de token et — contrairement aux moulins de La Manche — les vérifie réellement (signature, émetteur, audience, expiration) avant d'accorder le moindre rôle.
+
+== En un coup d'œil
+
+[cols="1,3"]
+|===
+| Spec implémentée | {spec-mp-jwt}
+| Repo | {repo-cervantes}
+| Java | 25 (LTS)
+| Modules | `cervantes-mp-jwt-api`, `cervantes-api`, `cervantes-core`, `cervantes-cdi-vauban`, `cervantes-cassini`, `cervantes-bench`, `cervantes-examples`, `cervantes-tck`
+| TCK | 206 / 206 PASS (MicroProfile JWT 2.1, jalon M6)
+|===
+
+`cervantes-core` est le moteur de validation pur et ne connaît ni HTTP ni CDI ; `cervantes-cassini` y branche la sécurité JAX-RS et `cervantes-cdi-vauban` l'injection CDI, un `TokenHolder` per-request reliant le filtre d'auth et le producteur sans couplage direct.
+
+== Vérification du token
+
+Le cœur valide les bearer tokens signés en `RS256/384/512` (RSA) et `ES256/384/512` (ECDSA), en contrôlant les claims standard `iss`, `aud`, `exp`, `nbf`, `iat` avec une tolérance de clock-skew configurable. Les clés publiques se chargent depuis du PEM (inline ou fichier) ou une source JWKS (URL ou fichier, résolution par `kid`, refresh TTL et rotation). Les tokens chiffrés (JWE, `RSA-OAEP` + `A256GCM`) sont déchiffrés avant validation. Tout passe par `java.security` / `javax.crypto` ; le fetch JWKS utilise le `HttpClient` du JDK et reste virtual-thread-friendly (pas de `synchronized` autour de l'I/O).
+
+== Claims et RBAC
+
+Le principal `JsonWebToken` validé est `@RequestScoped` et injectable en CDI, et l'injection typée `@Claim` est fournie via une extension build-compatible sur xref:vauban::index.adoc[Vauban]. Côté JAX-RS, l'intégration xref:cassini::index.adoc[Cassini] applique `@RolesAllowed`, `@PermitAll` et `@DenyAll` (précédence méthode sur classe), adossée à un `SecurityContext` calé sur les groupes du token, posé via `setSecurityContext` plutôt qu'un `ThreadLocal`. La configuration utilise les propriétés MP-Config standard `mp.jwt.verify.publickey.location`, `mp.jwt.verify.issuer`, `mp.jwt.verify.audiences`, `mp.jwt.token.header`, lues via xref:ravel::index.adoc[Ravel].
+
+== Liens rapides
+
+* xref:usage.adoc[Utilisation]
+
+Bugs et benchmarks consolidés : link:{repo-cervantes}/src/branch/main/BUG.md[BUG.md], link:{repo-cervantes}/src/branch/main/BENCH.md[BENCH.md].

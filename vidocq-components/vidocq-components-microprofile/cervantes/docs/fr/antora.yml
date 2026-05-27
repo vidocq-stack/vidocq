@@ -1,0 +1,8 @@
+name: cervantes-fr
+title: Cervantes
+version: ~
+nav:
+  - modules/ROOT/nav.adoc
+asciidoc:
+  attributes:
+    lang: fr
