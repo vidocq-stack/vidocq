@@ -1,0 +1,77 @@
+= Utilisation
+:description: Comment annoter des beans avec MicroProfile Metrics et les exposer avec Dirac.
+
+[.lead]
+Annotez vos beans CDI avec les annotations MicroProfile Metrics et Dirac enregistre, agrège et expose les valeurs — sans aucune librairie d'implémentation.
+
+== Coordonnées Maven
+
+La seule dépendance spec à compiler est l'API MicroProfile Metrics ; Dirac fournit l'implémentation.
+
+[source,xml]
+----
+<dependency>
+  <groupId>org.eclipse.microprofile.metrics</groupId>
+  <artifactId>microprofile-metrics-api</artifactId>
+  <version>5.1.1</version>
+  <scope>provided</scope>
+</dependency>
+----
+
+Ajoutez `dirac-cdi-vauban` pour les intercepteurs CDI et l'extension `DiracExtension`, et `dirac-rest` si vous voulez l'endpoint optionnel `GET /metrics` servi via xref:cassini::index.adoc[Cassini].
+
+== Annoter un bean
+
+`@Counted` incrémente un compteur monotone à chaque invocation, `@Timed` enregistre la durée des appels, et `@Gauge` expose une valeur instantanée résolue par `MethodHandle` au démarrage du container.
+
+[source,java]
+----
+import jakarta.enterprise.context.ApplicationScoped;
+import org.eclipse.microprofile.metrics.annotation.Counted;
+import org.eclipse.microprofile.metrics.annotation.Gauge;
+import org.eclipse.microprofile.metrics.annotation.Timed;
+
+@ApplicationScoped
+public class OrderService {
+
+    private final java.util.Queue<String> pending = new java.util.concurrent.ConcurrentLinkedQueue<>();
+
+    @Counted(name = "orders_placed_total", description = "Total orders placed")
+    public void placeOrder(String id) {
+        pending.add(id);
+    }
+
+    @Timed(name = "order_checkout_seconds", description = "Checkout duration")
+    public void checkout(String id) {
+        pending.remove(id);
+    }
+
+    @Gauge(name = "orders_pending", unit = "none", description = "Orders awaiting checkout")
+    public int pendingOrders() {
+        return pending.size();
+    }
+}
+----
+
+Les intercepteurs `@Counted` et `@Timed` ainsi que la résolution `@Gauge` sont câblés par `DiracExtension`, l'extension build-compatible exécutée sur xref:vauban::index.adoc[Vauban]. Aucun proxy dynamique n'est utilisé.
+
+== Exposer les métriques
+
+Lorsque `dirac-rest` et xref:cassini::index.adoc[Cassini] sont sur le classpath, les métriques sont exposées en HTTP avec négociation de contenu :
+
+[source,bash]
+----
+# Format texte OpenMetrics / Prometheus (par défaut)
+curl -H 'Accept: text/plain' http://localhost:8080/metrics
+
+# Format JSON (MicroProfile Metrics §3.2)
+curl -H 'Accept: application/json' http://localhost:8080/metrics
+
+# Un seul scope (application | base | vendor) — 404 si inconnu
+curl http://localhost:8080/metrics/application
+
+# Une seule métrique — 404 si introuvable
+curl http://localhost:8080/metrics/application/orders_pending
+----
+
+L'exposition JSON est produite sans moteur JSON tiers, dans l'esprit de xref:champollion::index.adoc[Champollion].
