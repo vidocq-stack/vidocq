@@ -1,0 +1,40 @@
+= Configuration
+:description: MicroProfile OpenAPI configuration keys consumed by Grimm.
+
+Grimm consumes `mp.openapi.*` configuration keys (through MP Config / Ravel).
+
+== Main keys
+
+- `mp.openapi.model.reader`
+- `mp.openapi.filter`
+- `mp.openapi.scan.disable`
+- `mp.openapi.scan.packages`
+- `mp.openapi.scan.classes`
+- `mp.openapi.scan.exclude.packages`
+- `mp.openapi.scan.exclude.classes`
+- `mp.openapi.servers`
+- `mp.openapi.schema.<FQCN>`
+- `mp.openapi.extensions.scan.disable`
+
+== Example
+
+[source,properties]
+----
+mp.openapi.scan.packages=com.acme.api
+mp.openapi.scan.exclude.classes=com.acme.api.internal.InternalResource
+mp.openapi.model.reader=com.acme.api.openapi.CustomReader
+mp.openapi.filter=com.acme.api.openapi.CustomFilter
+mp.openapi.servers=https://api.acme.dev,https://api.acme.prod
+----
+
+== Important behavior
+
+- `exclude` has priority over `include`
+- `mp.openapi.scan.disable=true` disables annotation scanning entirely
+- `mp.openapi.schema.<FQCN>` overrides schema generation for a specific class
+
+== `/openapi` endpoint
+
+- `?format=json` forces JSON
+- `?format=yaml` forces YAML
+- without `format`, content negotiation uses `Accept` (YAML default)

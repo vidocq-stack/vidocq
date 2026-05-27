@@ -1,0 +1,36 @@
+= TCK MicroProfile OpenAPI 4.1
+:description: Statut et architecture du runner TCK officiel pour Grimm.
+
+== Statut
+
+Le projet atteint un score officiel *100% PASS* sur la suite MicroProfile OpenAPI 4.1 :
+
+- 349 tests
+- 0 failure
+- 0 error
+- 0 skipped
+
+Voir aussi `TCK.md` pour le suivi détaillé.
+
+== Commandes utiles
+
+[source,bash]
+----
+./run-official-tck-mp-openapi-4.1.sh smoke
+./run-official-tck-mp-openapi-4.1.sh all
+./run-official-tck-mp-openapi-4.1.sh matrix PetStoreAppTest
+./run-official-tck-mp-openapi-4.1.sh -Dtest=AirlinesAppTest
+----
+
+== Architecture du runner
+
+Le runner officiel est dans `grimm-tck` (hors réacteur) :
+
+- TestNG + Arquillian
+- container custom `GrimmDeployableContainer`
+- stack runtime : Vauban + Cassini/Chappe + Grimm
+
+== Contrat qualité
+
+Toute évolution structurelle de `grimm-core` ou `grimm-cdi-vauban` doit préserver
+le score TCK complet.

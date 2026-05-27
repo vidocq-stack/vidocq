@@ -1,0 +1,42 @@
+= Grimm
+:description: Implémentation MicroProfile OpenAPI 4.1 pour l'écosystème Vidocq.
+
+[.text-center]
+image::grimm-logo.svg[Grimm,300,role=module-logo]
+
+Grimm implémente *MicroProfile OpenAPI 4.1* avec une architecture modulaire stricte (JPMS)
+et sans bibliothèque d'implémentation tierce en production.
+
+== Positionnement
+
+- *Spécification cible* : MicroProfile OpenAPI 4.1
+- *Langage/runtime* : Java 25
+- *Architecture* : séparation stricte `grimm-core` / `grimm-cdi-vauban`
+- *Contrat qualité* : suite officielle TCK à 100% PASS
+
+== Modules
+
+- `grimm-core` : scanner d'annotations, génération de schémas, merge des sources, sérialisation JSON/YAML.
+- `grimm-cdi-vauban` : intégration CDI (BCE), cache du modèle, endpoint JAX-RS `/openapi`.
+- `grimm-tck` : runner officiel TCK (module volontairement hors réacteur).
+- `grimm-bench` : benchmarks JMH.
+- `grimm-examples` : exemples d'usage.
+
+== Pipeline de construction du document OpenAPI
+
+Le document final est construit une fois au démarrage CDI :
+
+1. lecture fichier statique (`META-INF/openapi.yaml|yml|json`)
+2. invocation `OASModelReader` (si configuré)
+3. scan annotations JAX-RS + MP OpenAPI
+4. merge des 3 sources (priorité : annotations > reader > fichier statique)
+5. application `OASFilter` (si configuré)
+6. mise en cache immuable dans `GrimmModelCache`
+
+== Navigation
+
+* xref:getting-started.adoc[Démarrage rapide]
+* xref:architecture.adoc[Architecture]
+* xref:configuration.adoc[Configuration MP OpenAPI]
+* xref:tck.adoc[TCK MicroProfile OpenAPI 4.1]
+* xref:roadmap.adoc[Roadmap]

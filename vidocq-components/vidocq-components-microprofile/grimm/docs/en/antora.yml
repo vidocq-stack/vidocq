@@ -1,0 +1,8 @@
+name: grimm
+title: Grimm
+version: ~
+nav:
+  - modules/ROOT/nav.adoc
+asciidoc:
+  attributes:
+    lang: en

@@ -1,0 +1,41 @@
+= Démarrage rapide
+:description: Premiers pas avec Grimm — MicroProfile OpenAPI 4.1 pour Vidocq.
+
+== Prérequis
+
+- Java 25
+- Maven 4.0.0-rc-5
+- Artefact TCK officiel installé localement (cf. `grimm-tck/README.md`)
+
+== Build local
+
+[source,bash]
+----
+sdk env
+./mvnw -ntp install -DskipTests
+./mvnw test
+----
+
+== TCK officiel
+
+[source,bash]
+----
+./run-official-tck-mp-openapi-4.1.sh smoke
+./run-official-tck-mp-openapi-4.1.sh all
+./run-official-tck-mp-openapi-4.1.sh matrix PetStoreAppTest
+./run-official-tck-mp-openapi-4.1.sh -Dtest=AnnotationScanTest
+----
+
+== Endpoint `/openapi`
+
+`grimm-cdi-vauban` expose un endpoint JAX-RS :
+
+- chemin : `/openapi`
+- formats : `application/yaml` (défaut) et `application/json`
+- priorité de format : query param `format` (`json|yaml`) puis header `Accept`
+
+== Étapes suivantes
+
+* xref:architecture.adoc[Architecture]
+* xref:configuration.adoc[Configuration MP OpenAPI]
+* xref:tck.adoc[TCK]

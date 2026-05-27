@@ -1,0 +1,42 @@
+= Architecture
+:description: Internal structure of Grimm — module split, JPMS, and execution flow.
+
+== Separation of responsibilities
+
+Grimm follows a strict separation pattern inspired by other Vidocq modules:
+
+- `grimm-core`: pure Java logic (scan, schema generation, merge, serialization)
+- `grimm-cdi-vauban`: CDI integration, startup orchestration, and HTTP endpoint
+
+This split keeps `grimm-core` fully testable without a CDI container.
+
+== JPMS modules
+
+- module `io.vidocq.grimm.core`
+- module `io.vidocq.grimm.cdi.vauban`
+
+`grimm-core` exposes internals with a qualified export toward `grimm-cdi-vauban`.
+
+== Execution flow
+
+1. `StaticFileReader`
+2. `ModelReaderInvoker`
+3. `AnnotationScanner`
+4. `ModelMerger`
+5. `FilterInvoker`
+6. `GrimmModelCache`
+
+The final model is computed once and reused for every `/openapi` request.
+
+== Dependency constraints
+
+In production, Grimm does not embed third-party OpenAPI implementation libraries
+(SmallRye, Swagger Core, Jackson, Snakeyaml).
+
+== Concurrency
+
+The project enforces virtual-thread-friendly rules:
+
+- no `synchronized`
+- no `ThreadLocal`
+- prefer explicit locks and non-blocking primitives
