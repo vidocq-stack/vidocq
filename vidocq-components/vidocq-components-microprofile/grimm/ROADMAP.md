@@ -383,11 +383,16 @@ endpoint, integrated with Vauban (CDI) and Cassini (JAX-RS).
       configurable `grimm.tck.*` overrides and `/openapi` readiness probing to
       reduce transient HTTP reachability failures during diagnostics.
 - [x] M7 core completed: ModelMerger with sealed interface + ModelReaderInvoker + FilterInvoker
+- [x] M11 started: `grimm-bench` now runs JMH baseline `OpenApiPipelineBenchmark`
+      (model build throughput + cached JSON/YAML rendering throughput), first local results
+      published in `BENCH.md`.
 
 ## Backlog Post-M10 (M11+)
 
-- Ajouter un premier benchmark JMH de référence (scanner throughput) vs SmallRye OpenAPI,
-  puis publier les résultats dans `BENCH.md`.
+- [x] Ajouter un premier benchmark JMH de reference (scanner throughput) vs SmallRye OpenAPI,
+      puis publier les resultats dans `BENCH.md`.
+- [ ] Ajouter un profil de publication benchmark (iterations/forks longs) et historiser les sorties brutes.
+- [ ] Ajouter des benchmarks de comparaison SmallRye OpenAPI sur la meme JVM et les memes parametres JMH.
 
 ## Open Decisions
 
