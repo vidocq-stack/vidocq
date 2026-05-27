@@ -22,9 +22,13 @@
 ## État réel du code à connaître avant de modifier
 
 - Consulter `ROADMAP.md` pour l'état détaillé de chaque milestone (M0..M9).
-- **État à date (2026-05-26) : M0–M9 terminés, TCK à 100 % PASS** —
-  `463 tests, 463 PASS, 0 fail, 0 skip` sur `run-official-tck-mp-fault-tolerance-4.1.sh all`.
-  **§9 MP Metrics (Dirac) : 100 % PASS. §10 OpenTelemetry (Humboldt) : 100 % PASS.**
+- **État à date : M0–M8 terminés, M9 (TCK complet 100 %) en cours (🚧).**
+  Dernier run `all` reproductible (TCK.md, 2026-05-16T11:17Z) :
+  `424 run / 349 PASS / 61 fail / 14 skip` (~82 % PASS) sur
+  `run-official-tck-mp-fault-tolerance-4.1.sh all` — objectif 100 % visé.
+  **§9 MP Metrics (Dirac)** : run ciblé `24 run / 1 PASS / 23 fail` (infra CDI OK,
+  publication des métriques FT encore manquante). **§10 OpenTelemetry (Humboldt)** :
+  tests exclus du profil tant que MP Telemetry n'est pas livré.
 - Tous les moteurs existent et sont câblés dans `heisenberg-core` :
   `RetryEngine`, `TimeoutEngine`, `CircuitBreakerEngine` (`CircuitBreakerState`
   CLOSED/OPEN/HALF_OPEN), `BulkheadEngine`, `BulkheadStateRegistry`,
@@ -189,4 +193,4 @@ java -jar heisenberg-bench/target/benchmarks.jar
   ajouté (sinon Vauban ne le découvre pas en mode TCK).
 - Avant toute modification structurelle du `PolicyComposer` ou des `*StateRegistryBean`,
   raisonner avec le contrat final : **TCK MicroProfile Fault Tolerance 4.1 à 100 % PASS**
-  (à date : 463/463 = 100 %, §9 Dirac 100 %, §10 Humboldt 100 %).
+  (objectif visé ; à date : ~82 % PASS = 349/424, jalon M9 en cours — voir `TCK.md`).
