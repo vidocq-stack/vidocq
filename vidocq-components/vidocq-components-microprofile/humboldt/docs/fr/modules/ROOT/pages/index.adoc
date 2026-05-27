@@ -1,10 +1,6 @@
 = Humboldt
 :description: Implémentation MicroProfile Telemetry 2.1 — traces distribuées, metrics, logs — OpenTelemetry-native, JPMS strict, zéro SDK tiers, Java 25.
 
-[.text-center]
-image::humboldt-logo.png[Humboldt,300,role=module-logo]
-
-
 [.lead]
 Humboldt est l'implémentation MicroProfile Telemetry 2.1 de l'écosystème Vidocq. Elle implémente son propre SDK OpenTelemetry (traces, metrics, logs) directement sur la surface API OTel, et s'intègre avec xref:chappe::index.adoc[Chappe] pour le transport HTTP, xref:vauban::index.adoc[Vauban] pour le CDI, et xref:cassini::index.adoc[Cassini] pour l'instrumentation JAX-RS. Objectif : conformité TCK 100 %, sans dépendance `opentelemetry-sdk` / `opentelemetry-exporter-*`, sans Netty, sans pile gRPC.
 
@@ -35,7 +31,7 @@ OpenTelemetry est le Naturgemälde des systèmes distribués. Humboldt l'embarqu
 | Java | 25 (LTS)
 | Modules JPMS | `io.vidocq.humboldt.api`, `io.vidocq.humboldt.sdk.trace`, `io.vidocq.humboldt.sdk.metric`, `io.vidocq.humboldt.sdk.log`, `io.vidocq.humboldt.exporter.otlp.http`, `io.vidocq.humboldt.cdi`, `io.vidocq.humboldt.rest`
 | Dépendances runtime | `opentelemetry-api`, `opentelemetry-context`, `opentelemetry-semconv` (specs seulement — SDK et exporters réimplémentés). CDI optionnel via xref:vauban::index.adoc[Vauban].
-| TCK | 🚧 En attente — jalon M7 (voir xref:tck.adoc[statut TCK])
+| TCK | 🚧 En attente — jalon M7
 |===
 
 == Position dans l'écosystème
@@ -59,19 +55,8 @@ flowchart LR
 
 Humboldt partage son transport avec le reste de l'écosystème Vidocq (Chappe HTTP/1.1 + H2). Pas de Netty, pas de grpc-java, pas d'OkHttp, pas de pile HTTP tierce. Le futur exporter gRPC OTLP sera livré via un module natif `chappe-grpc` (cf. PLAN.md §3.5).
 
-== Liens rapides
+== Chapitres prévus
 
-* xref:getting-started.adoc[Démarrage rapide]
-* xref:concepts.adoc[Concepts : signaux, contexte, baggage]
-* xref:tracing.adoc[Traces]
-* xref:metrics.adoc[Metrics]
-* xref:logs.adoc[Logs]
-* xref:exporters.adoc[Exporters]
-* xref:configuration.adoc[Configuration (`OTEL_*` / `MP_TELEMETRY_*`)]
-* xref:performance.adoc[Performance vs SmallRye Telemetry]
-* xref:internals.adoc[Fonctionnement interne (codegen Class-File API, APT)]
-* xref:tck.adoc[Statut TCK]
-* xref:reference.adoc[Référence API]
-* xref:migration.adoc[Migration depuis SmallRye Telemetry]
+La documentation en est encore au jalon M0. Les chapitres à venir couvriront : démarrage rapide, concepts (signaux, contexte, baggage), traces, metrics, logs, exporters, configuration (`OTEL_*` / `MP_TELEMETRY_*`), performance vs SmallRye Telemetry, fonctionnement interne (codegen Class-File API, APT), statut TCK, référence API, et migration depuis SmallRye Telemetry.
 
 Bugs et benchmarks consolidés : lien:{repo-humboldt}/src/branch/main/BUG.md[BUG.md], lien:{repo-humboldt}/src/branch/main/BENCH.md[BENCH.md].
