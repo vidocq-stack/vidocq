@@ -20,4 +20,14 @@
         <subproject>vidocq-runtime-it-humboldt-cassini</subproject>
         <subproject>vidocq-runtime-it-cervantes-jwt</subproject>
     </subprojects>
+
+    <build>
+        <plugins>
+            <!-- Inherits the checkpom execution from vidocq-runtime-parent/pluginManagement. -->
+            <plugin>
+                <groupId>io.vidocq.runtime</groupId>
+                <artifactId>vidocq-runtime-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
 </project>

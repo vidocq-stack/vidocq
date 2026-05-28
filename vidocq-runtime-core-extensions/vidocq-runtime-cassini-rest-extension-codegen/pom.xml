@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.1.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.1.0 http://maven.apache.org/xsd/maven-4.1.0.xsd">
+    <modelVersion>4.1.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.runtime</groupId>
+        <artifactId>vidocq-runtime-core-extensions</artifactId>
+    </parent>
+
+    <artifactId>vidocq-runtime-cassini-rest-extension-codegen</artifactId>
+    <packaging>pom</packaging>
+    <name>Vidocq :: Core Extensions :: REST (Cassini) :: Codegen Bundle</name>
+    <description>
+        Companion codegen bundle for vidocq-runtime-cassini-rest-extension.
+        Declare this artifact in &lt;annotationProcessorPaths&gt; whenever the
+        application depends on the REST extension; Maven resolves the transitive
+        APT dependencies below automatically.
+
+        Pre-generates &lt;Resource&gt;$$CassiniAdapter + $$CassiniRoutes at compile
+        time (no runtime reflection, AOT-safe). Without this APT, AdapterRegistry
+        falls back to RuntimeAdapterGenerator at the first request (JVM-only path
+        with a JPMS warning); functionally OK, but off the nominal codegen path
+        documented in cassini/CLAUDE.md (M4).
+    </description>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.cassini</groupId>
+            <artifactId>cassini-processor</artifactId>
+            <version>${cassini.version}</version>
+        </dependency>
+    </dependencies>
+</project>

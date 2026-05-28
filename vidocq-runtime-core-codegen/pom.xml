@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.1.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.1.0 http://maven.apache.org/xsd/maven-4.1.0.xsd">
+    <modelVersion>4.1.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.runtime</groupId>
+        <artifactId>vidocq-runtime-parent</artifactId>
+    </parent>
+
+    <artifactId>vidocq-runtime-core-codegen</artifactId>
+    <packaging>pom</packaging>
+    <name>Vidocq :: Core :: Codegen Bundle</name>
+    <description>
+        Compile-time annotation-processor bundle that every Vidocq runtime module
+        needs (Vauban indexer — CDI bean discovery). Consumed via
+        &lt;annotationProcessorPaths&gt; in maven-compiler-plugin; Maven resolves
+        the transitive dependencies declared below into APT paths automatically.
+        Wired by default through the vidocq-runtime-parent pluginManagement so
+        downstream modules inherit it without restating anything.
+    </description>
+
+    <dependencies>
+        <!-- Vauban indexer: produces META-INF/vauban-beans.list listing every CDI
+             class (@Singleton / @ApplicationScoped / @Dependent / @Produces).
+             Required by *every* Vidocq module that exposes user beans. -->
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-processor</artifactId>
+            <version>${vauban.version}</version>
+        </dependency>
+    </dependencies>
+</project>

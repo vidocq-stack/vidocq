@@ -17,14 +17,29 @@
     <subprojects>
         <subproject>vidocq-runtime-chappe-extension</subproject>
         <subproject>vidocq-runtime-cassini-rest-extension</subproject>
+        <subproject>vidocq-runtime-cassini-rest-extension-codegen</subproject>
         <subproject>vidocq-runtime-cyrano-extension</subproject>
         <subproject>vidocq-runtime-cervantes-jwt-extension</subproject>
         <subproject>vidocq-runtime-humboldt-extension</subproject>
         <subproject>vidocq-runtime-mansart-pool-extension</subproject>
         <subproject>vidocq-runtime-mansart-data-extension</subproject>
+        <subproject>vidocq-runtime-mansart-data-extension-codegen</subproject>
         <subproject>vidocq-runtime-mansart-transactions-extension</subproject>
+        <subproject>vidocq-runtime-mansart-transactions-extension-codegen</subproject>
         <subproject>vidocq-runtime-knock-extension</subproject>
     </subprojects>
+
+    <build>
+        <plugins>
+            <!-- Inherits the execution from vidocq-runtime-parent/pluginManagement.
+                 Re-declaring the <plugin> here (without restating <executions>) is
+                 enough to *activate* the bound checkpom execution on every child. -->
+            <plugin>
+                <groupId>io.vidocq.runtime</groupId>
+                <artifactId>vidocq-runtime-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
 
     <!--
         vidocq-runtime-cassini-rest-extension (Jersey 4 + Jetty 12) est décommissionné,

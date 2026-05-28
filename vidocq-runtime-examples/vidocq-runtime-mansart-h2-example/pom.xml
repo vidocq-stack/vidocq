@@ -109,50 +109,30 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
-                    <annotationProcessorPaths>
-                        <!-- Vauban indexer : produit META-INF/vauban-beans.list listant les classes
-                             CDI (@Singleton / @ApplicationScoped / @Dependent / @Produces). Sans
-                             cet APT, Vauban ne trouve pas les beans utilisateurs et JAX-RS n'a
-                             aucune ressource à monter. -->
+                    <!-- Rule of thumb: for every vidocq-runtime-<X>-extension you depend on,
+                         add a <path> entry for the matching vidocq-runtime-<X>-extension-codegen
+                         POM bundle below. Each bundle pulls the right APT processors and BCE-
+                         hosting CDI artifacts transitively. The vidocq-runtime-core-codegen
+                         (Vauban indexer) is inherited from the parent pluginManagement, so
+                         keeping combine.children="append" preserves it. -->
+                    <annotationProcessorPaths combine.children="append">
                         <path>
-                            <groupId>io.vidocq.vauban</groupId>
-                            <artifactId>vauban-processor</artifactId>
-                            <version>${vauban.version}</version>
+                            <groupId>io.vidocq.runtime</groupId>
+                            <artifactId>vidocq-runtime-cassini-rest-extension-codegen</artifactId>
+                            <version>${project.version}</version>
+                            <type>pom</type>
                         </path>
-                        <!-- Mansart APT : _Entity metamodel + *RepositoryImpl
-                             + META-INF/mansart-repositories.list (lu par le BCE mansart-data-cdi). -->
                         <path>
-                            <groupId>io.vidocq.mansart</groupId>
-                            <artifactId>mansart-data-processor</artifactId>
-                            <version>${mansart.version}</version>
+                            <groupId>io.vidocq.runtime</groupId>
+                            <artifactId>vidocq-runtime-mansart-data-extension-codegen</artifactId>
+                            <version>${project.version}</version>
+                            <type>pom</type>
                         </path>
-                        <!-- mansart-data-cdi héberge la BuildCompatibleExtension et le @Produces
-                             RepositoryRuntime. Sans la déclarer ici, le APT classloader (isolé par
-                             Maven) ne voit pas le BCE ni le producer, et le DeploymentValidator
-                             rejette les @Inject d'un repository (ou de RepositoryRuntime). -->
                         <path>
-                            <groupId>io.vidocq.mansart</groupId>
-                            <artifactId>mansart-data-cdi</artifactId>
-                            <version>${mansart.version}</version>
-                        </path>
-                        <!-- mansart-transactions-cdi héberge la BuildCompatibleExtension qui
-                             enregistre @TransactionScoped + déclare @Enhancement(TransactionScoped)
-                             pour que Vauban inclue les beans utilisateurs annotés @TransactionScoped
-                             dans son index APT. Sans cette entrée, OperationAudit serait invisible. -->
-                        <path>
-                            <groupId>io.vidocq.mansart</groupId>
-                            <artifactId>mansart-transactions-cdi</artifactId>
-                            <version>${mansart.version}</version>
-                        </path>
-                        <!-- Cassini APT : pré-génère <Resource>$$CassiniAdapter + $$CassiniRoutes
-                             à compile-time pour les ressources JAX-RS. Sans cet APT, AdapterRegistry
-                             tombe en runtime sur RuntimeAdapterGenerator (fallback JVM-only, non
-                             AOT-safe, avec warning JPMS lié au `read` du module aval). C'est le
-                             chemin nominal documenté dans cassini/CLAUDE.md (M4 codegen). -->
-                        <path>
-                            <groupId>io.vidocq.cassini</groupId>
-                            <artifactId>cassini-processor</artifactId>
-                            <version>${cassini.version}</version>
+                            <groupId>io.vidocq.runtime</groupId>
+                            <artifactId>vidocq-runtime-mansart-transactions-extension-codegen</artifactId>
+                            <version>${project.version}</version>
+                            <type>pom</type>
                         </path>
                     </annotationProcessorPaths>
                 </configuration>

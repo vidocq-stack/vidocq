@@ -111,6 +111,14 @@
                         <arg>--module-path</arg>
                         <arg>${project.build.directory}/javamodules</arg>
                     </compilerArgs>
+                    <annotationProcessorPaths combine.children="append">
+                        <path>
+                            <groupId>io.vidocq.runtime</groupId>
+                            <artifactId>vidocq-runtime-cassini-rest-extension-codegen</artifactId>
+                            <version>${project.version}</version>
+                            <type>pom</type>
+                        </path>
+                    </annotationProcessorPaths>
                 </configuration>
                 <executions>
                     <execution>

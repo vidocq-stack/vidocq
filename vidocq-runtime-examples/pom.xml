@@ -19,4 +19,14 @@
         <subproject>vidocq-runtime-cassini-rest-example</subproject>
         <subproject>vidocq-runtime-mansart-h2-example</subproject>
     </subprojects>
+
+    <build>
+        <plugins>
+            <!-- Inherits the checkpom execution from vidocq-runtime-parent/pluginManagement. -->
+            <plugin>
+                <groupId>io.vidocq.runtime</groupId>
+                <artifactId>vidocq-runtime-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
 </project>

@@ -267,6 +267,36 @@
                 <version>${project.version}</version>
             </dependency>
 
+            <!-- Codegen bundles — POM-only artifacts referenced from
+                 <annotationProcessorPaths>. core-codegen is wired by default
+                 through pluginManagement (Vauban indexer is universal). Each
+                 *-extension-codegen is opt-in: declare it whenever you depend
+                 on the matching *-extension runtime. -->
+            <dependency>
+                <groupId>io.vidocq.runtime</groupId>
+                <artifactId>vidocq-runtime-core-codegen</artifactId>
+                <version>${project.version}</version>
+                <type>pom</type>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.runtime</groupId>
+                <artifactId>vidocq-runtime-cassini-rest-extension-codegen</artifactId>
+                <version>${project.version}</version>
+                <type>pom</type>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.runtime</groupId>
+                <artifactId>vidocq-runtime-mansart-data-extension-codegen</artifactId>
+                <version>${project.version}</version>
+                <type>pom</type>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.runtime</groupId>
+                <artifactId>vidocq-runtime-mansart-transactions-extension-codegen</artifactId>
+                <version>${project.version}</version>
+                <type>pom</type>
+            </dependency>
+
             <!-- Arquillian BOM -->
             <dependency>
                 <groupId>org.jboss.arquillian</groupId>
@@ -277,4 +307,60 @@
             </dependency>
         </dependencies>
     </dependencyManagement>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <!--
+                  Every Vidocq runtime module that processes user beans needs the
+                  Vauban indexer APT. Wire it once here through vidocq-runtime-core-codegen
+                  so downstream poms inherit it for free.
+
+                  Modules that need extension-specific processors (Cassini, Mansart…)
+                  declare their own <annotationProcessorPaths> WITH
+                  combine.children="append" to keep this entry. See
+                  vidocq-runtime-examples/vidocq-runtime-mansart-h2-example/pom.xml
+                  for the canonical pattern.
+                -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <configuration>
+                        <annotationProcessorPaths>
+                            <path>
+                                <groupId>io.vidocq.runtime</groupId>
+                                <artifactId>vidocq-runtime-core-codegen</artifactId>
+                                <version>${project.version}</version>
+                                <type>pom</type>
+                            </path>
+                        </annotationProcessorPaths>
+                    </configuration>
+                </plugin>
+
+                <!--
+                  Vidocq Maven plugin: checkpom configured here in pluginManagement
+                  so that intermediate parents (core-extensions, examples,
+                  integration-tests) just have to <plugin>{ref}</plugin> to activate
+                  it without restating the execution. The plugin can't be declared
+                  in <build><plugins> at the root level because vidocq-runtime-core
+                  and vidocq-runtime-spi are upstream of the plugin itself —
+                  applying it there creates a reactor cycle.
+                -->
+                <plugin>
+                    <groupId>io.vidocq.runtime</groupId>
+                    <artifactId>vidocq-runtime-maven-plugin</artifactId>
+                    <version>${project.version}</version>
+                    <executions>
+                        <execution>
+                            <id>vidocq-checkpom</id>
+                            <phase>validate</phase>
+                            <goals>
+                                <goal>checkpom</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
 </project>
