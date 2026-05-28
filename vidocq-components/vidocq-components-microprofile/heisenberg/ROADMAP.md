@@ -318,7 +318,7 @@ heisenberg-examples     io.vidocq.heisenberg.examples
 | `run-official-tck-mp-fault-tolerance-4.1.sh` | Script racine : install reactor → invoke TCK ; modes `smoke` / `all` / `-Dtest=…` | ☑ |
 | Passage TCK smoke test | `HeisenbergTckSmokeTest` vert (1/1) | ☑ |
 | Activation des intercepteurs CDI dans Vauban | Verrou levé (binding marqueur BCE + résolution Vauban corrigée) ; `RetryTest` validé à 8/8 PASS | ☑ |
-| Passage TCK complet | 100 % PASS sur l'ensemble du `tck-suite.xml` | 🚧 |
+| Passage TCK complet | 100 % PASS sur l'ensemble du `tck-suite.xml` (463/463, reconfirmé 2026-05-28T09:05:59Z) | ☑ |
 | `TCK.md` | Documentation des challenges et tests exclus (baseline initial documenté) | ☑ |
 | `heisenberg-tck/README.md` | Procédure d'installation TCK + architecture du runner | ☑ |
 
@@ -330,7 +330,7 @@ heisenberg-examples     io.vidocq.heisenberg.examples
 - Le `RequestContext` Vauban est activé au moment du déploiement de chaque archive TCK pour
   éviter les `ContextNotActiveException` sur les beans `@RequestScoped` du TCK.
 
-**État M9 (en cours, dernier rafraîchissement 2026-05-24T15:36Z) :**
+**État M9 (ATTEINT — reconfirmé 2026-05-28T09:05:59Z, dernier rafraîchissement majeur 2026-05-24T15:36Z) :**
 - ✅ Infrastructure Arquillian complète : container, bootstrap, test enricher, descripteurs.
 - ✅ TCK officiel téléchargé et exécutable contre Heisenberg.
 - ✅ Smoke TCK (`HeisenbergTckSmokeTest`) : `1/1 PASS`.

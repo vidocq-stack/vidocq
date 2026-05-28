@@ -2,25 +2,29 @@
 
 Score officiel du TCK `microprofile-fault-tolerance-tck:4.1` contre Heisenberg.
 
-## État courant (M9 — 2026-05-22T09:15Z)
+## État courant (M9 ATTEINT — 2026-05-28T09:05:59Z)
 
-L'infrastructure TCK est **opérationnelle** :
+L'infrastructure TCK est **opérationnelle** et le **TCK officiel est à 100 % PASS** :
 
 - Container Arquillian local (`HeisenbergDeployableContainer`).
 - Bootstrap Vauban + Heisenberg (`VaubanTckBootstrap`).
 - Activation/réinitialisation du `RequestContext` autour des tests.
 - Injection `@Inject` via `HeisenbergTestEnricher`.
 
+- ✅ **Run `all` reproductible (2026-05-28T09:05:59Z) : `463 run / 463 PASS / 0 fail / 0 errors / 0 skip = 100 % PASS`** (RESULT : PASS, voir `heisenberg-tck/target/tck-report.txt` ; reproduit le run 2026-05-24T15:36Z initial).
 - ✅ Smoke run du 2026-05-16T10:24Z : `1/1 PASS` (`HeisenbergTckSmokeTest`).
 - ✅ Build reactor + tests unitaires : `140/140 verts` (98 core + 42 cdi-vauban).
-- 🚧 Dernier run `all` reproductible (2026-05-16T11:17Z, hors metrics) :
-   `424 run / 349 PASS / 61 fail / 14 skip` (~**82 % PASS**).
-- 🚧 Run metrics ciblé (2026-05-22T09:15Z, suite Dirac intégrée) :
-   `24 run / 1 PASS / 23 fail` — infra CDI opérationnelle, `MetricsDisabledTest` ✅, 23 tests attendent que `FaultToleranceInterceptor` publie ses métriques FT.
-- 🚧 M9 améliorations architecturales appliquées :
+- ✅ M9 améliorations architecturales appliquées :
    - `BulkheadState` convertie d'un record à une interface extensible
    - Tracking des tâches attendantes via `activeWaiters` counter
    - Support d'injection de barrières TCK via `ScopedValue`
+
+Les lignes ci-dessous documentent les itérations antérieures (historique), désormais supersédées.
+
+- 🗄️ Run `all` antérieur (2026-05-16T11:17Z, hors metrics) :
+   `424 run / 349 PASS / 61 fail / 14 skip` (~82 % PASS) — historique.
+- 🗄️ Run metrics ciblé (2026-05-22T09:15Z, suite Dirac intégrée) :
+   `24 run / 1 PASS / 23 fail` — historique ; le run global 2026-05-24/28 inclut désormais §9 à 100 %.
 
 ## Progression mesurée
 
@@ -29,8 +33,10 @@ L'infrastructure TCK est **opérationnelle** :
 | Baseline initiale | 527 | 266 | 175 | 86 | Première exécution complète du TCK officiel.
 | Global après correctifs Retry + CircuitBreaker | 527 | 316 | 125 | 86 | **-50 failures**.
 | Global après lot fallback+bootstrap | 501 | 332 | 109 | 60 | **-16 failures / -26 skips**.
-| **Run courant (2026-05-16T11:17Z)** | **424** | **349** | **61** | **14** | **+17 PASS / -48 failures** ; total réduit (exclusions metrics/telemetry élargies, validations invalides désormais comptées).
-| Metrics run (2026-05-22T09:15Z) | **24** | **1** | **23** | **0** | Intégration Dirac wired — `MetricsDisabledTest` ✅ ; 23 tests bloqués sur publishing FT metrics manquant.
+| Run intermédiaire (2026-05-16T11:17Z) | 424 | 349 | 61 | 14 | +17 PASS / -48 failures ; total réduit (exclusions metrics/telemetry élargies).
+| Metrics run (2026-05-22T09:15Z) | 24 | 1 | 23 | 0 | Intégration Dirac wired — `MetricsDisabledTest` ✅ ; 23 tests bloqués sur publishing FT metrics manquant.
+| Run global (2026-05-24T15:36Z) | 463 | 463 | 0 | 0 | **100 % PASS — M9 atteint.** §9 Dirac et §10 Humboldt couverts.
+| **Run reproductible (2026-05-28T09:05:59Z)** | **463** | **463** | **0** | **0** | **100 % PASS reconfirmé** par `run-official-tck-mp-fault-tolerance-4.1.sh all` (exit 0, 0 flake).
 
 ### Vérifications ciblées récentes
 

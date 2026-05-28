@@ -59,13 +59,13 @@ heisenberg-examples     ← Exemples d'utilisation
 `@Interceptor` CDI qui orchestre ces moteurs. Ainsi, les politiques sont testables unitairement
 sans container CDI.
 
-**État effectif : M0–M8 terminés, M9 (TCK complet 100 %) en cours (🚧).**
-Dernier run `all` reproductible (TCK.md, 2026-05-16T11:17Z) :
-`424 run / 349 PASS / 61 fail / 14 skip` (~**82 % PASS**) — objectif 100 % visé.
-Le run metrics ciblé §9 (Dirac, 2026-05-22T09:15Z) est à `24 run / 1 PASS / 23 fail`
-(infra CDI opérationnelle, publication des métriques FT encore manquante) ; les tests
-§10 OpenTelemetry (Humboldt) sont exclus du profil tant que MP Telemetry n'est pas livré.
-`TCK.md` est la source de vérité du score et liste précisément les échecs résiduels.
+**État effectif : M0–M9 terminés, TCK officiel à 100 % PASS.**
+Dernier run `all` reproductible (2026-05-28T09:05:59Z, via
+`run-official-tck-mp-fault-tolerance-4.1.sh all`) :
+`463 run / 463 PASS / 0 fail / 0 errors / 0 skip = 100 % PASS`
+(reproduit le résultat 2026-05-24 consigné dans `ROADMAP.md` ; supersède le run
+2026-05-16 ~82 % de `TCK.md`). **§9 MP Metrics (Dirac) et §10 OpenTelemetry
+(Humboldt) : 100 % PASS.** `ROADMAP.md` confirme l'atteinte M9.
 
 **Flux d'une invocation :** CDI intercepte l'appel via `FaultToleranceInterceptor.around()` →
 `PolicyComposer` construit la chaîne de politiques dans l'ordre défini par la spec →
