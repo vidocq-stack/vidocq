@@ -1,0 +1,153 @@
+= Concepts
+:description: MicroProfile Metrics 5.1.1 model — types, scopes, tags, formats, registries.
+
+[.lead]
+Dirac implements MicroProfile Metrics 5.1.1, whose vocabulary nails down four primitives — `Counter`, `Gauge`, `Histogram`, `Timer` — their scopes (`APPLICATION`, `BASE`, `VENDOR`), and their exposition in two formats (OpenMetrics text and JSON). This page sweeps through these choices and states the invariants of the Vidocq implementation.
+
+== The four metric types
+
+MP Metrics 5.0 simplified the surface inherited from the 1.x and 2.x lines: `Meter`, `ConcurrentGauge`, and `SimpleTimer` were dropped. Four primitives remain:
+
+[cols="1,1,3"]
+|===
+| Type | Annotation | Description
+
+| `Counter`
+| `@Counted`
+| Monotonic incremental counter. Implementation: `LongAdder` without contention.
+
+| `Gauge<T>`
+| `@Gauge`
+| Instantaneous value returned by a bean method. Resolved once at startup via `MethodHandle`, never via `java.lang.reflect.Proxy`.
+
+| `Histogram`
+| _(not annotable in the 5.1.1 API JAR used here)_
+| Value distribution with configurable percentiles (p50–p999 by default) and optional buckets.
+
+| `Timer`
+| `@Timed`
+| Invocation duration measured in `System.nanoTime()`, aggregated by an internal `HistogramImpl`. Output type: OpenMetrics `summary`.
+|===
+
+[NOTE]
+====
+The `microprofile-metrics-api:5.1.1` JAR used by `dirac-mp-metrics-api` does not expose an `@Histogram` annotation at spec level — histograms are registered programmatically via `MetricRegistry.histogram(...)`, or indirectly through `@Timed`.
+====
+
+== Three mandatory scopes
+
+Spec §1.3 distinguishes three registries, populated and read separately:
+
+[cols="1,3"]
+|===
+| Scope | Role
+
+| `APPLICATION`
+| Application metrics. Injectable with no qualifier (default registry).
+
+| `BASE`
+| Spec-mandated JVM metrics: `cpu.processCpuLoad`, `gc.total`, `memory.usedHeap`, `thread.count`, `classloader.loadedClasses.count`, `jvm.uptime`. Populated by `BaseMetricsRegistrar` at startup.
+
+| `VENDOR`
+| Runtime-specific metrics — initially empty on Dirac's side, extensible.
+|===
+
+On the injection side:
+
+[source,java]
+----
+@Inject
+MetricRegistry application;                              // APPLICATION by default
+
+@Inject @RegistryScope(scope = MetricRegistry.BASE_SCOPE)
+MetricRegistry base;
+
+@Inject @RegistryScope(scope = MetricRegistry.VENDOR_SCOPE)
+MetricRegistry vendor;
+----
+
+== Metric identity: `MetricID`
+
+The pair `(name, tags)` is the unique identity. Two counters with the same name but different tags are distinct metrics; two counters with the same name and the same tags are the same metric.
+
+[source,java]
+----
+counter("http_requests_total", new Tag("method", "GET"));
+counter("http_requests_total", new Tag("method", "POST"));
+// → two distinct Counter instances, aggregated under the same OpenMetrics family
+----
+
+`MetricID` is an immutable record. The registry is a `ConcurrentHashMap<MetricID, Metric>` per scope.
+
+== Tags
+
+Tags are arbitrary `(key, value)` pairs. Three sources combine:
+
+. **Annotation tags** — fixed at declaration: `@Counted(tags = "endpoint=orders")`.
+. **Global application tags** — key `mp.metrics.tags`, e.g. `mp.metrics.tags=app=orders,env=prod`. Added to every metric of the application.
+. **`mp_scope` tag** — automatically injected by the OpenMetrics formatter with the scope value (`application`, `base`, `vendor`).
+
+A metric's uniqueness is computed on the union of those tags after spec §3 normalisation.
+
+== Exposition formats
+
+Two formats are produced by `dirac-core`, both hand-written with `StringBuilder`:
+
+[cols="2,3"]
+|===
+| Format | Detail
+
+| OpenMetrics / Prometheus text
+| Content-Type `text/plain;version=0.0.4`. `# HELP`, `# TYPE` lines, then samples. Emitted by `OpenMetricsFormatter`. Default format with no `Accept`.
+
+| JSON
+| Content-Type `application/json`. MP Metrics §3.2 tree — one object per scope, containing one object per metric. Emitted by `JsonMetricsFormatter`, no third-party JSON engine, in the spirit of xref:champollion::index.adoc[Champollion].
+|===
+
+Content negotiation is handled by `MetricsEndpoint` (xref:reference.adoc[Reference]).
+
+== Distribution configuration
+
+Histograms and timers read three `mp.metrics.distribution.*` keys through MicroProfile Config:
+
+[cols="2,3"]
+|===
+| Key | Effect
+
+| `mp.metrics.distribution.percentiles`
+| List of percentiles (`0.5,0.95,0.99`) emitted by the snapshots — global, or per metric via the `name=values` form.
+
+| `mp.metrics.distribution.histogram.buckets`
+| Fixed buckets for `Histogram` — global or per metric.
+
+| `mp.metrics.distribution.timer.buckets`
+| Fixed buckets for `Timer`, expressed as `ms`, `s`, `ns`, etc. — global or per metric.
+|===
+
+An empty value (`mp.metrics.distribution.percentiles=`) disables percentiles entirely. Implementation lives in `DistributionConfig` inside `dirac-core`.
+
+== REST endpoint `GET /metrics`
+
+When `dirac-rest` and xref:cassini::index.adoc[Cassini] are on the classpath, three paths are exposed:
+
+[cols="2,3"]
+|===
+| Route | Effect
+
+| `GET /metrics`
+| Every scope, format negotiated on `Accept`.
+
+| `GET /metrics/{scope}`
+| A single scope (`application` \| `base` \| `vendor`). 404 if unknown.
+
+| `GET /metrics/{scope}/{name}`
+| A single metric family. 404 if not found.
+|===
+
+The endpoint is optional: without `dirac-rest`, metrics are still reachable programmatically via `MetricRegistry`.
+
+== Further reading
+
+* xref:usage.adoc[Usage patterns] — annotations, tags, percentiles.
+* xref:internals.adoc[Internals] — lock-free registry, Vauban BCE.
+* xref:reference.adoc[Reference] — exhaustive `mp.metrics.*` keys.

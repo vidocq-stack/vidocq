@@ -1,0 +1,188 @@
+= Reference
+:description: Maven artefacts, JPMS modules, supported annotations, MicroProfile Config keys, types and units.
+
+[.lead]
+This page consolidates the public surface of Dirac: artefacts to declare, exported JPMS modules, supported MicroProfile Metrics 5.1.1 annotations, and the `mp.metrics.*` keys recognised by the implementation.
+
+== Maven artefacts
+
+[cols="2,2,3"]
+|===
+| `groupId` | `artifactId` | Role
+
+| `io.vidocq.dirac`
+| `dirac-mp-metrics-api`
+| Local repackage of `microprofile-metrics-api:5.1.1` with an explicit `module-info.class`. Lifts the `jlink` blocker (M9).
+
+| `io.vidocq.dirac`
+| `dirac-api`
+| Re-exposition of the MP Metrics spec and stable Dirac SPI (`DiracException`, `HistogramSnapshot`, `TimerSnapshot`).
+
+| `io.vidocq.dirac`
+| `dirac-core`
+| Pure-Java implementations: `CounterImpl`, `GaugeImpl`, `HistogramImpl`, `TimerImpl`, `MetricRegistryImpl`, `BaseMetricsRegistrar`, `OpenMetricsFormatter`, `JsonMetricsFormatter`. No CDI dependency.
+
+| `io.vidocq.dirac`
+| `dirac-cdi-vauban`
+| CDI interceptors (`CountedInterceptor`, `TimedInterceptor`), BCE `DiracExtension`, producer `MetricRegistryProducerBean`.
+
+| `io.vidocq.dirac`
+| `dirac-rest`
+| JAX-RS resource `MetricsEndpoint` exposing `GET /metrics`. Optional — activated only if Cassini is on the classpath.
+
+| `io.vidocq.dirac`
+| `dirac-bench`
+| JMH benchmarks vs Micrometer / SmallRye Metrics. Not for production.
+
+| `io.vidocq.dirac`
+| `dirac-examples`
+| Standalone and vidocq-mps-integrated examples. Not for production.
+
+| `io.vidocq.dirac`
+| `dirac-tck`
+| Official MP Metrics 5.1.1 TCK runner — outside reactor (Model 4.0.0). Do not declare as an application dependency.
+|===
+
+All versions at `0.1.0-SNAPSHOT` at the time of writing.
+
+== JPMS modules
+
+[cols="2,3"]
+|===
+| Module | Contents
+
+| `microprofile.metrics.api`
+| MP Metrics 5.1.1 repackage with an explicit `module-info.class`. Exports `org.eclipse.microprofile.metrics` and `org.eclipse.microprofile.metrics.annotation`.
+
+| `io.vidocq.dirac.api`
+| `io.vidocq.dirac.api.*` — stable public SPI. `requires transitive microprofile.metrics.api`.
+
+| `io.vidocq.dirac.core`
+| `io.vidocq.dirac.internal.*` — private implementations, exported only to `io.vidocq.dirac.cdi.vauban` and `io.vidocq.dirac.rest`.
+
+| `io.vidocq.dirac.cdi.vauban`
+| `io.vidocq.dirac.cdi.internal.*` — interceptors and BCE. `provides BuildCompatibleExtension with DiracExtension`.
+
+| `io.vidocq.dirac.rest`
+| `io.vidocq.dirac.rest.*` — JAX-RS resource. `opens` to `jakarta.cdi` and `jakarta.ws.rs` for runtime introspection.
+|===
+
+`io.vidocq.dirac.internal.*` is never exported to application code: any direct dependency signals a regression.
+
+== Supported MicroProfile Metrics annotations
+
+[cols="2,3,1"]
+|===
+| Annotation | Effect | Status
+
+| `@Counted`
+| Interceptor increments a `Counter` (`LongAdder`) on every invocation. Supports `name`, `absolute`, `description`, `unit`, `tags`, `scope`.
+| ✅
+
+| `@Timed`
+| Interceptor measures duration via `System.nanoTime()` and feeds a `Timer` (internal `HistogramImpl`). Supports the same attributes as `@Counted`.
+| ✅
+
+| `@Gauge`
+| Resolved once by `DiracExtension` at startup via `MethodHandle`. Method must return a numeric type (`int`, `long`, `double`, `Number`).
+| ✅
+
+| `@RegistryScope`
+| Injection qualifier to pick among the three `MetricRegistry` (`APPLICATION`, `BASE`, `VENDOR`). Without qualifier → `APPLICATION` registry.
+| ✅
+
+| `@Metric`
+| Extra metadata on an injection point (name, description, unit, tags).
+| ✅
+
+| `@Histogram`
+| _Annotation absent from the `microprofile-metrics-api:5.1.1` JAR used — histograms are declared programmatically._
+| ⚠️ Not exposed by the API
+|===
+
+== MicroProfile Config keys
+
+All keys are read via `ConfigProvider.getConfig()` (xref:ravel::index.adoc[Ravel]). See `DistributionConfig` and `MetricRegistryImpl`.
+
+[cols="2,3"]
+|===
+| Key | Effect
+
+| `mp.metrics.appName`
+| Logical application name — emitted as a global `_app` tag.
+
+| `mp.metrics.tags`
+| Global tags, format `key=val,key=val`. Applied to every metric of the application.
+
+| `mp.metrics.distribution.percentiles`
+| Global percentile list (`0.5,0.95,0.99`) or per-metric (`name=0.5,0.99`). An empty value disables percentiles.
+
+| `mp.metrics.distribution.histogram.buckets`
+| Fixed buckets for `Histogram`. Global or per metric.
+
+| `mp.metrics.distribution.timer.buckets`
+| Fixed buckets for `Timer`, expressed as `ms`, `s`, `ns`, etc. Global or per metric.
+
+| `mp.metrics.smallrye.timer.minmax.histogram.buckets.percentiles`
+| _Possible compat key (non-standard) — check `DistributionConfig`._
+|===
+
+[NOTE]
+====
+The MP Metrics 5.1 spec defines no path option (no equivalent of `quarkus.smallrye-metrics.path`). The `/metrics` endpoint is fixed by spec §2.3.
+====
+
+== `MetricUnits` types
+
+`org.eclipse.microprofile.metrics.MetricUnits` enumerates the canonical units:
+
+* Durations — `NANOSECONDS`, `MICROSECONDS`, `MILLISECONDS`, `SECONDS`, `MINUTES`, `HOURS`, `DAYS`
+* Sizes — `BITS`, `KILOBITS`, `MEGABITS`, `BYTES`, `KILOBYTES`, `MEGABYTES`, `GIGABYTES`
+* Generic — `NONE`, `PERCENT`, `PER_SECOND`
+
+Dirac performs no automatic conversion: the unit is exposed as declared. Prometheus convention: express durations as `SECONDS`, sizes as `BYTES`.
+
+== `GET /metrics` endpoint
+
+[cols="1,3"]
+|===
+| Route | `GET /metrics`, `GET /metrics/{scope}`, `GET /metrics/{scope}/{name}`
+| Verbs | `GET`, `OPTIONS`
+| Types | `text/plain;version=0.0.4` (default, OpenMetrics), `application/json` (MP Metrics §3.2)
+| Source | `MetricRegistryImpl` (all three scopes)
+| Status | `200` on success, `404` on unknown scope/metric
+| Implementation | `MetricsEndpoint` in `dirac-rest`
+|===
+
+== Injectable `MetricRegistry`
+
+[source,java]
+----
+@Inject
+MetricRegistry application;                                          // APPLICATION
+
+@Inject @RegistryScope(scope = MetricRegistry.BASE_SCOPE)
+MetricRegistry base;
+
+@Inject @RegistryScope(scope = MetricRegistry.VENDOR_SCOPE)
+MetricRegistry vendor;
+----
+
+== Compatibility
+
+* Java 25 (LTS), Maven 4.0.0-rc-5.
+* CDI 4.1 Lite (Vauban) or Lite-compatible — the standard `Interceptor` and `BuildCompatibleExtension` suffice.
+* JAX-RS 4.0 (Cassini) — only if `dirac-rest` is used.
+* MicroProfile Config 3.1 (Ravel) — strongly recommended for `mp.metrics.tags` and `mp.metrics.distribution.*`.
+* No Jakarta EE Full Profile dependency.
+
+== Bugs and benchmarks
+
+* link:{repo-dirac}/src/branch/main/BUG.md[BUG.md] — tracked reproducible bugs.
+* link:{repo-dirac}/src/branch/main/BENCH.md[BENCH.md] — JMH benchmarks (vs Micrometer / SmallRye).
+
+== Further reading
+
+* xref:concepts.adoc[Concepts] — MP Metrics 5.1.1 model.
+* xref:internals.adoc[Internals] — lock-free registry, BCE, formatters.
+* xref:tck.adoc[TCK] — status and execution.

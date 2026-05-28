@@ -1,0 +1,111 @@
+= MicroProfile Metrics 5.1.1 TCK
+:description: Status, runner execution, out-of-reactor architecture, M9 jlink smoke test.
+
+[.lead]
+The official MicroProfile Metrics 5.1.1 TCK (`org.eclipse.microprofile.metrics:microprofile-metrics-tck:5.1.1`) validates that an implementation honours the whole spec — exposition formats, scopes, types, configuration. Dirac's target is *100 % PASS* (milestone M8). The runner ships in the `dirac-tck` module, deliberately detached from the reactor.
+
+== Status
+
+[cols="2,1"]
+|===
+| Metric | Value
+
+| Target | 100 % PASS on the official 5.1.1 suite
+| Milestone | M8 (xref:{repo-dirac}/src/branch/main/ROADMAP.md[ROADMAP.md])
+| Current count | 🚧 status to be confirmed in `dirac-tck/target/tck-report.txt`
+| Smoke test (out of Arquillian) | ✅ `DiracTckSmokeTest` operational
+| M9 jlink smoke | ✅ `dirac-image-smoke` image built (`run-jlink-smoke.sh`)
+|===
+
+[NOTE]
+====
+As long as the full suite is not green, the exact figure lives in `dirac-tck/target/tck-report.txt` (regenerated on each run by `run-official-tck-mp-metrics-5.1.sh`). This page does not freeze a score in advance.
+====
+
+== Prerequisites
+
+The artefact `org.eclipse.microprofile.metrics:microprofile-metrics-tck:5.1.1` is available on Maven Central. The runner first installs the required Dirac modules in the local M2, then runs Maven on the detached `dirac-tck/pom.xml`.
+
+[source,bash]
+----
+sdk env                                              # Java 25 + Maven 4.0.0-rc-5
+./mvnw -ntp install -DskipTests                      # full reactor build
+----
+
+== Running the runner
+
+The script `run-official-tck-mp-metrics-5.1.sh` at the repository root orchestrates every variant.
+
+[source,bash]
+----
+# Smoke test — DiracTckSmokeTest, no Arquillian
+./run-official-tck-mp-metrics-5.1.sh
+
+# Full suite — TestNG/Arquillian, tck-official profile
+./run-official-tck-mp-metrics-5.1.sh all
+
+# Targeted test — tck-official profile + -Dtest=
+./run-official-tck-mp-metrics-5.1.sh -Dtest=CounterTest
+----
+
+The runner installs `dirac-api`, `dirac-core`, `dirac-cdi-vauban` in the local M2 (step 1), then invokes Maven on `dirac-tck/pom.xml` (step 2). The summary report lands in `dirac-tck/target/tck-report.txt`.
+
+== Runner architecture
+
+`dirac-tck` is **deliberately outside the reactor**: its `pom.xml` is in `modelVersion 4.0.0` standalone, without `<parent>`.
+
+[NOTE]
+====
+This detachment is forced by ShrinkWrap Maven Resolver 3.3, transitive to the official TCK, which cannot parse Model 4.1.0 POMs and crashes on the Vidocq reactor. The rule is documented in the workspace root (§ _Critical architecture constraint: TCK runners outside the reactor_). **Do not reintegrate `dirac-tck` into the parent reactor `<modules>`, do not give it a `<parent>`, do not build it via `mvn -pl`.** Always go through the script.
+====
+
+Stack assembled by the runner:
+
+[cols="1,3"]
+|===
+| Layer | Component
+
+| Spec
+| `microprofile-metrics-api` 5.1.1, `jakarta.enterprise.cdi-api` 4.1, `jakarta.interceptor-api` 2.2, `jakarta.annotation-api` 3.0, `jakarta.ws.rs-api` 4.0
+
+| Metrics implementation
+| `dirac-api` + `dirac-core` + `dirac-cdi-vauban` + `dirac-rest`
+
+| CDI container
+| Vauban (`io.vidocq.vauban.core`) embedded
+
+| Arquillian container
+| Dirac container that deploys the archive and exposes `/metrics` via Cassini + Chappe
+
+| HTTP transport
+| Chappe (`io.vidocq.chappe.http`)
+
+| Test framework
+| TestNG (upstream constraint — not JUnit)
+|===
+
+Arquillian configuration in `dirac-tck/src/test/resources/arquillian.xml`. Current smoke test: `dirac-tck/src/test/java/io/vidocq/dirac/tck/DiracTckSmokeTest.java`.
+
+== jlink smoke (M9)
+
+The jlink smoke validates that the whole Dirac stack can be assembled into a Java native image without an automatic module lacking a canonical name. The blocker is lifted by `dirac-mp-metrics-api`, which repackages the MP Metrics spec with an explicit `module-info.class` (`module microprofile.metrics.api { exports ...; }`).
+
+[source,bash]
+----
+./run-jlink-smoke.sh           # build + jlink + dirac-image-smoke image
+./run-jlink-smoke-ci.sh        # blocking CI wrapper
+./mvnw -ntp -N -Pjlink-smoke verify
+----
+
+Details in link:{repo-dirac}/src/branch/main/JLINK.md[JLINK.md].
+
+== Quality contract
+
+Any structural modification of `dirac-core`, `dirac-cdi-vauban` or `dirac-rest` must preserve the TCK score before merge. A TCK regression is a CI-level blocker: the PR does not pass. Any excluded test (if any) must be listed in the TestNG suite and justified in `TCK.md` (to be created on first exclusion).
+
+== Further reading
+
+* xref:internals.adoc[Internals] — what the TCK validates.
+* xref:reference.adoc[Reference] — annotations and keys exercised.
+* link:{repo-dirac}/src/branch/main/BUG.md[BUG.md] — tracked reproducible bugs.
+* link:{repo-dirac}/src/branch/main/BENCH.md[BENCH.md] — consolidated JMH benchmarks.

@@ -1,0 +1,160 @@
+= Démarrage rapide
+:description: Première métrique annotée, premier appel à GET /metrics, en moins de cinq minutes.
+
+[.lead]
+Cette page suppose une application Jakarta CDI 4.1 déjà fonctionnelle sur xref:vauban::index.adoc[Vauban]. Elle décrit l'ajout de Dirac : dépendances, premier `@Counted`, premier appel à `GET /metrics` au format OpenMetrics.
+
+== Prérequis
+
+* Java 25 (LTS) — Temurin recommandé.
+* Maven 4.0.0-rc-5 — épinglé par `.sdkmanrc` à la racine du dépôt Dirac.
+* Une application CDI 4.1 déjà démarrée par Vauban (ou tout container Lite-compatible). Pour l'endpoint `/metrics`, ajouter aussi xref:cassini::index.adoc[Cassini].
+
+[source,bash]
+----
+sdk env
+./mvnw -ntp install -DskipTests
+----
+
+== Dépendances Maven
+
+`dirac-core` contient les implémentations pures Java (Counter, Gauge, Histogram, Timer, registre, formatters). `dirac-cdi-vauban` ajoute les intercepteurs et la BCE `DiracExtension`. `dirac-rest` expose l'endpoint optionnel `GET /metrics`. Pour une application standard, déclarer les trois et laisser le runtime brancher le reste.
+
+[source,xml]
+----
+<dependencies>
+    <dependency>
+        <groupId>io.vidocq.dirac</groupId>
+        <artifactId>dirac-core</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </dependency>
+    <dependency>
+        <groupId>io.vidocq.dirac</groupId>
+        <artifactId>dirac-cdi-vauban</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </dependency>
+    <dependency>
+        <groupId>io.vidocq.dirac</groupId>
+        <artifactId>dirac-rest</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </dependency>
+    <dependency>
+        <groupId>org.eclipse.microprofile.metrics</groupId>
+        <artifactId>microprofile-metrics-api</artifactId>
+        <version>5.1.1</version>
+    </dependency>
+</dependencies>
+----
+
+[NOTE]
+====
+`microprofile-metrics-api` est en `provided` dans `dirac-core` : c'est la spec qui apporte les annotations à utiliser côté application (`@Counted`, `@Timed`, `@Gauge`).
+====
+
+== Annoter un bean
+
+L'exemple ci-dessous expose trois métriques à partir d'un seul bean CDI. `@Counted` enregistre un compteur monotone (`LongAdder`), `@Timed` enregistre un histogramme de durée (`System.nanoTime()`), et `@Gauge` expose une valeur instantanée résolue par `MethodHandle` au démarrage.
+
+[source,java]
+----
+package io.example;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import org.eclipse.microprofile.metrics.annotation.Counted;
+import org.eclipse.microprofile.metrics.annotation.Gauge;
+import org.eclipse.microprofile.metrics.annotation.Timed;
+
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
+
+@ApplicationScoped
+public class OrderService {
+
+    private final Queue<String> pending = new ConcurrentLinkedQueue<>();
+
+    @Counted(name = "orders_placed_total", description = "Total orders placed")
+    public void placeOrder(String id) {
+        pending.add(id);
+    }
+
+    @Timed(name = "order_checkout_seconds", description = "Checkout duration")
+    public void checkout(String id) {
+        pending.remove(id);
+    }
+
+    @Gauge(name = "orders_pending", unit = "none", description = "Orders awaiting checkout")
+    public int pendingOrders() {
+        return pending.size();
+    }
+}
+----
+
+Les intercepteurs `@Counted` et `@Timed`, ainsi que la résolution `@Gauge`, sont câblés par `DiracExtension` — la BCE Vauban exécutée à `Build Compatible Extension` time. Aucun proxy dynamique n'est employé, et aucune réflexion sur le chemin chaud.
+
+== Lancer et vérifier
+
+Une fois le container démarré, les métriques sont accessibles en HTTP via l'endpoint `GET /metrics` exposé par `dirac-rest` à travers xref:cassini::index.adoc[Cassini].
+
+[source,bash]
+----
+# Format OpenMetrics / Prometheus text (par défaut)
+curl -H 'Accept: text/plain' http://localhost:8080/metrics
+
+# Format JSON (MP Metrics §3.2)
+curl -H 'Accept: application/json' http://localhost:8080/metrics
+
+# Un seul scope (application | base | vendor) — 404 si inconnu
+curl http://localhost:8080/metrics/application
+
+# Une métrique précise — 404 si introuvable
+curl http://localhost:8080/metrics/application/orders_pending
+----
+
+La sortie OpenMetrics ressemble à :
+
+[source,text]
+----
+# HELP orders_placed_total Total orders placed
+# TYPE orders_placed_total counter
+orders_placed_total{mp_scope="application"} 7
+
+# HELP order_checkout_seconds Checkout duration
+# TYPE order_checkout_seconds summary
+order_checkout_seconds{mp_scope="application",quantile="0.5"} 0.024
+order_checkout_seconds{mp_scope="application",quantile="0.95"} 0.072
+order_checkout_seconds_count{mp_scope="application"} 7
+order_checkout_seconds_sum{mp_scope="application"} 0.180
+
+# HELP orders_pending Orders awaiting checkout
+# TYPE orders_pending gauge
+orders_pending{mp_scope="application"} 3
+----
+
+== Trois scopes obligatoires
+
+Dirac peuple trois registres au démarrage, conformément à la spec :
+
+[cols="1,3,2"]
+|===
+| Scope | Description | Peuplé par
+
+| `APPLICATION`
+| Métriques applicatives — injectable, c'est ce que l'application enregistre.
+| Vous via `@Counted` / `@Timed` / `@Gauge`, ou directement via `MetricRegistry.counter(...)`.
+
+| `BASE`
+| Métriques JVM standardisées par la spec : heap, GC, threads, classloader, uptime.
+| Automatique au démarrage — `BaseMetricsRegistrar` + `DiracExtension`.
+
+| `VENDOR`
+| Métriques propres au runtime (compteurs internes Dirac).
+| Automatique — extensible par l'utilisateur via `@Inject @RegistryScope(VENDOR) MetricRegistry`.
+|===
+
+Voir xref:concepts.adoc[Concepts] pour le détail du modèle.
+
+== Étape suivante
+
+* xref:usage.adoc[Cas d'usage] — `@Counted`, `@Timed`, `@Gauge`, tags, percentiles, format JSON.
+* xref:concepts.adoc[Concepts] — types de métriques, scopes, tags, formats.
+* xref:reference.adoc[Référence] — annotations supportées et clés `mp.metrics.*`.

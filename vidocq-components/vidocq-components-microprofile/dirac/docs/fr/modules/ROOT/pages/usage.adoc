@@ -1,12 +1,12 @@
-= Utilisation
-:description: Comment annoter des beans avec MicroProfile Metrics et les exposer avec Dirac.
+= Cas d'usage
+:description: Annotations, tags, percentiles, exposition REST, configuration via Ravel — patrons concrets pour instrumenter une application MP Metrics 5.1.1.
 
 [.lead]
-Annotez vos beans CDI avec les annotations MicroProfile Metrics et Dirac enregistre, agrège et expose les valeurs — sans aucune librairie d'implémentation.
+Cette page parcourt les patrons d'instrumentation MP Metrics 5.1.1 couramment rencontrés. Tous les exemples reposent strictement sur les annotations standard `org.eclipse.microprofile.metrics.annotation.*` ; aucun import propriétaire Dirac n'est jamais requis dans le code applicatif.
 
 == Coordonnées Maven
 
-La seule dépendance spec à compiler est l'API MicroProfile Metrics ; Dirac fournit l'implémentation.
+Seule la spec MP Metrics est compilée par l'application :
 
 [source,xml]
 ----
@@ -18,60 +18,198 @@ La seule dépendance spec à compiler est l'API MicroProfile Metrics ; Dirac fou
 </dependency>
 ----
 
-Ajoutez `dirac-cdi-vauban` pour les intercepteurs CDI et l'extension `DiracExtension`, et `dirac-rest` si vous voulez l'endpoint optionnel `GET /metrics` servi via xref:cassini::index.adoc[Cassini].
+Ajoutez `dirac-cdi-vauban` pour les intercepteurs et la BCE, et `dirac-rest` pour l'endpoint `GET /metrics`.
 
-== Annoter un bean
+== Compteur — `@Counted`
 
-`@Counted` incrémente un compteur monotone à chaque invocation, `@Timed` enregistre la durée des appels, et `@Gauge` expose une valeur instantanée résolue par `MethodHandle` au démarrage du container.
+Compteur monotone, incrémenté à chaque invocation. Implémentation interne : `LongAdder` — sans contention sur la concurrence forte.
 
 [source,java]
 ----
-import jakarta.enterprise.context.ApplicationScoped;
-import org.eclipse.microprofile.metrics.annotation.Counted;
-import org.eclipse.microprofile.metrics.annotation.Gauge;
-import org.eclipse.microprofile.metrics.annotation.Timed;
-
 @ApplicationScoped
 public class OrderService {
 
-    private final java.util.Queue<String> pending = new java.util.concurrent.ConcurrentLinkedQueue<>();
-
-    @Counted(name = "orders_placed_total", description = "Total orders placed")
+    @Counted(name = "orders_placed_total",
+             description = "Total number of orders placed",
+             tags = "endpoint=orders")
     public void placeOrder(String id) {
-        pending.add(id);
-    }
-
-    @Timed(name = "order_checkout_seconds", description = "Checkout duration")
-    public void checkout(String id) {
-        pending.remove(id);
-    }
-
-    @Gauge(name = "orders_pending", unit = "none", description = "Orders awaiting checkout")
-    public int pendingOrders() {
-        return pending.size();
+        // ...
     }
 }
 ----
 
-Les intercepteurs `@Counted` et `@Timed` ainsi que la résolution `@Gauge` sont câblés par `DiracExtension`, l'extension build-compatible exécutée sur xref:vauban::index.adoc[Vauban]. Aucun proxy dynamique n'est utilisé.
+`absolute=true` (par défaut `false`) supprime le préfixage par le nom de la classe.
 
-== Exposer les métriques
+== Minuterie — `@Timed`
 
-Lorsque `dirac-rest` et xref:cassini::index.adoc[Cassini] sont sur le classpath, les métriques sont exposées en HTTP avec négociation de contenu :
+Mesure de durée par appel, agrégée dans un `HistogramImpl`. Mesure via `System.nanoTime()` autour de `proceed()`.
+
+[source,java]
+----
+@ApplicationScoped
+public class CheckoutService {
+
+    @Timed(name = "order_checkout_seconds",
+           description = "Duration of checkout flow",
+           unit = MetricUnits.SECONDS)
+    public Receipt checkout(Cart cart) {
+        // ...
+    }
+}
+----
+
+`unit` est libre (le formatter ne fait pas de conversion automatique) — par convention, exprimer la durée en `MetricUnits.SECONDS` pour Prometheus.
+
+== Jauge — `@Gauge`
+
+Valeur instantanée renvoyée par une méthode du bean. Résolution par `MethodHandle` au démarrage par `DiracExtension` — jamais par `java.lang.reflect.Proxy`.
+
+[source,java]
+----
+@ApplicationScoped
+public class QueueService {
+
+    private final BlockingQueue<Order> backlog = new LinkedBlockingQueue<>();
+
+    @Gauge(name = "backlog_size",
+           unit = "none",
+           description = "Pending orders in backlog")
+    public int backlogSize() {
+        return backlog.size();
+    }
+}
+----
+
+[CAUTION]
+====
+La méthode jauge doit retourner un type numérique (`int`, `long`, `double`, `Number`). Une signature invalide fait échouer la BCE au démarrage avec un message explicite — pas de surprise silencieuse au premier appel à `/metrics`.
+====
+
+== Métriques programmatiques
+
+Pour les cas qui ne s'expriment pas via annotation (compteur incrémenté depuis un callback non interceptable, histogramme alimenté en lot, etc.) :
+
+[source,java]
+----
+@ApplicationScoped
+public class RateLimiter {
+
+    @Inject
+    MetricRegistry registry;
+
+    private Counter rejections;
+
+    @PostConstruct
+    void init() {
+        rejections = registry.counter(
+            Metadata.builder()
+                .withName("rate_limited_total")
+                .withDescription("Requests rejected by rate limit")
+                .build(),
+            new Tag("policy", "burst"));
+    }
+
+    public void reject() {
+        rejections.inc();
+    }
+}
+----
+
+`MetricRegistry.counter/histogram/timer/gauge(...)` est idempotent sur `MetricID` : un second appel renvoie l'instance déjà enregistrée.
+
+== Tags d'annotation
+
+Le format spec est `tags = { "clef1=valeur1", "clef2=valeur2" }`. L'unicité d'une métrique se calcule sur l'union (`name`, tags d'annotation, tags globaux `mp.metrics.tags`).
+
+[source,java]
+----
+@Counted(name = "http_requests_total",
+         tags = { "method=GET", "endpoint=orders" })
+public List<Order> list() {
+    // ...
+}
+----
+
+Pour des tags dynamiques (par requête, par utilisateur), utiliser l'API programmatique :
+
+[source,java]
+----
+registry.counter("http_requests_total",
+    new Tag("method", request.method()),
+    new Tag("status", String.valueOf(response.status())))
+    .inc();
+----
+
+== Percentiles et buckets — distribution
+
+La spec §4 expose trois clés `mp.metrics.distribution.*` lues via `DistributionConfig`. Elles s'appliquent globalement ou par métrique nommée.
+
+[source,properties]
+----
+# microprofile-config.properties
+mp.metrics.distribution.percentiles=0.5,0.75,0.95,0.99
+mp.metrics.distribution.percentiles=order_checkout_seconds=0.5,0.95,0.99
+mp.metrics.distribution.timer.buckets=order_checkout_seconds=10ms,50ms,250ms,1s,5s
+----
+
+Une valeur vide (`mp.metrics.distribution.percentiles=`) désactive les percentiles globalement et n'émet plus que `_count` et `_sum`.
+
+== Tags globaux d'application
+
+`mp.metrics.tags=app=orders,env=prod` ajoute deux tags à toutes les métriques, à toutes les expositions, sans modifier le code applicatif.
+
+[source,properties]
+----
+mp.metrics.appName=orders-service
+mp.metrics.tags=app=orders-service,env=prod,region=eu-west-3
+----
+
+Ces clés sont résolues via xref:ravel::index.adoc[Ravel] qui implémente MicroProfile Config 3.1.
+
+== Exposition HTTP
+
+Avec `dirac-rest` sur le classpath, l'endpoint suit la spec MP Metrics §3 :
 
 [source,bash]
 ----
-# Format texte OpenMetrics / Prometheus (par défaut)
-curl -H 'Accept: text/plain' http://localhost:8080/metrics
+# OpenMetrics / Prometheus text (défaut)
+curl http://localhost:8080/metrics
 
-# Format JSON (MicroProfile Metrics §3.2)
+# JSON (MP Metrics §3.2)
 curl -H 'Accept: application/json' http://localhost:8080/metrics
 
-# Un seul scope (application | base | vendor) — 404 si inconnu
+# Un seul scope
 curl http://localhost:8080/metrics/application
+curl http://localhost:8080/metrics/base
+curl http://localhost:8080/metrics/vendor
 
-# Une seule métrique — 404 si introuvable
-curl http://localhost:8080/metrics/application/orders_pending
+# Une famille précise
+curl http://localhost:8080/metrics/application/orders_placed_total
 ----
 
-L'exposition JSON est produite sans moteur JSON tiers, dans l'esprit de xref:champollion::index.adoc[Champollion].
+La négociation se fait sur `Accept`. La sortie OpenMetrics ressemble à :
+
+[source,text]
+----
+# HELP order_checkout_seconds Duration of checkout flow
+# TYPE order_checkout_seconds summary
+order_checkout_seconds{mp_scope="application",quantile="0.5"} 0.024
+order_checkout_seconds{mp_scope="application",quantile="0.95"} 0.072
+order_checkout_seconds_count{mp_scope="application"} 1542
+order_checkout_seconds_sum{mp_scope="application"} 38.71
+----
+
+== Métriques JVM (`BASE`)
+
+Pas de code à écrire : `BaseMetricsRegistrar` peuple le registre `BASE` au démarrage, via `DiracExtension`. Les métriques listées par la spec §5 (mémoire, GC, threads, classes, CPU, uptime) sont exposées automatiquement sur `GET /metrics/base`.
+
+[source,bash]
+----
+curl http://localhost:8080/metrics/base
+----
+
+== Pour aller plus loin
+
+* xref:reference.adoc[Référence] — annotations exhaustives, clés `mp.metrics.*`, types `MetricUnits`.
+* xref:concepts.adoc[Concepts] — modèle, scopes, tags.
+* xref:internals.adoc[Fonctionnement interne] — implémentation lock-free, BCE.

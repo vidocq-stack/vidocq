@@ -1,47 +1,105 @@
 = Dirac
-:description: MicroProfile Metrics 5.1.1 implementation for Vidocq — counters, gauges, histograms, timers exposed in OpenMetrics / Prometheus and JSON, zero third-party library, JPMS-strict, virtual-thread-friendly, Java 25.
+:description: MicroProfile Metrics 5.1.1 implementation — counters, gauges, histograms, timers exposed in OpenMetrics / Prometheus and JSON, zero third-party library, zero contention, strict JPMS, jlink-ready.
+
+////
+[.text-center]
+image::dirac-logo.png[Dirac,300,role=module-logo]
+////
 
 [.lead]
-Dirac is the MicroProfile Metrics 5.1.1 implementation of the Vidocq ecosystem. It measures the runtime state of an application — counters, gauges, histograms, timers — and exposes it in a standard format (OpenMetrics / Prometheus text and JSON), without any implementation library. CDI annotations (`@Counted`, `@Timed`, `@Gauge`) are wired through xref:vauban::index.adoc[Vauban], the optional `GET /metrics` endpoint is served by xref:cassini::index.adoc[Cassini], and the JSON exposition is produced without a third-party JSON engine in the spirit of xref:champollion::index.adoc[Champollion].
+Dirac is the MicroProfile Metrics 5.1.1 implementation of the Vidocq ecosystem. It measures the runtime state of an application — counters, gauges, histograms, timers — and exposes it as OpenMetrics / Prometheus text and JSON, without ever altering the observable through observation. CDI annotations (`@Counted`, `@Timed`, `@Gauge`) are wired through xref:vauban::index.adoc[Vauban], the optional `GET /metrics` endpoint is served by xref:cassini::index.adoc[Cassini], and `mp.metrics.*` configuration is resolved through xref:ravel::index.adoc[Ravel].
 
 == Origin of the name
 
-Paul Dirac (1902–1984) formulated the Dirac equation, predicted antimatter, and laid the foundations of Fermi–Dirac statistics. The Dirac project implements MicroProfile Metrics 5.1.1: it measures the state of applications with precision — counters, gauges, histograms, timers — and exposes it in a standard format (OpenMetrics / Prometheus), without ever altering the observable through observation.
+**Paul Dirac (1902-1984)**, English physicist, Nobel Prize 1933. Author of the Dirac equation (the relativistic equation of the electron, 1928), he predicted the existence of antimatter through pure mathematical symmetry and laid, with Fermi, the statistics of fermion occupation. See https://en.wikipedia.org/wiki/Paul_Dirac[the Wikipedia article].
+
+Dirac built the formal frame that separates the observable from the instrument — his bra-ket notation orders quantum measurement without confusing the state with the gesture that probes it. The Dirac runtime applies the same discipline to application metrics: no `synchronized`, no `ThreadLocal`, `LongAdder`-backed counters with no contention, and `System.nanoTime()` everywhere for time resolution. Instrumentation stays orthogonal to business code, never intrusive on the hot path.
+
+[cols="1,3"]
+|===
+| Paul Dirac, the physicist | Dirac, the metrics runtime
+
+| Dirac equation — relativistic formalism of the electron
+| MP Metrics 5.1.1 model — Counter, Gauge, Histogram, Timer
+
+| Predicting antimatter by symmetry
+| Negative counters allowed (deltas), non-blocking `LongAdder`
+
+| Fermi-Dirac statistics — discrete occupation
+| Discrete-bucket histograms, p50–p999 percentiles
+
+| Dirac constant (`ℏ`) — fundamental quantum
+| `System.nanoTime()` — minimal runtime resolution
+
+| Bra-ket notation — observable orthogonal to state
+| Instrumentation orthogonal to business code (interceptors)
+
+| Quantum measurement without disturbing the state
+| Zero `synchronized`, zero `ThreadLocal` on the hot path
+|===
 
 == At a glance
 
 [cols="1,3"]
 |===
-| Implemented spec | {spec-mp-metrics}
+| Implemented spec | {spec-mp-metrics}[MicroProfile Metrics 5.1.1]
 | Repo | {repo-dirac}
 | Java | 25 (LTS)
-| Modules | `dirac-mp-metrics-api`, `dirac-api`, `dirac-core`, `dirac-cdi-vauban`, `dirac-rest`, `dirac-bench`, `dirac-tck`, `dirac-examples`
-| TCK | 🚧 see ROADMAP (M8 — official MicroProfile Metrics 5.1.1 TCK, target 100 % PASS)
+| JPMS modules | `io.vidocq.dirac.api`, `io.vidocq.dirac.core`, `io.vidocq.dirac.cdi.vauban`, `io.vidocq.dirac.rest`, `microprofile.metrics.api` (repackage)
+| Public packages | `io.vidocq.dirac.api.*` (stable SPI), `io.vidocq.dirac.cdi.internal.*` (CDI integration)
+| Runtime dependencies | `microprofile-metrics-api` 5.1.1, `jakarta.enterprise.cdi-api` 4.1, `jakarta.interceptor-api` 2.2, `jakarta.annotation-api` 3.0, `jakarta.ws.rs-api` 4.0 (only `dirac-rest`)
+| jlink-ready | ✅ — every sub-module ships its own `module-info.java`, `dirac-mp-metrics-api` repackages the MP spec with an explicit `module-info.class` (M9)
+| MP Metrics 5.1.1 TCK | 🚧 M8 — status to be confirmed in `BENCH.md` and `dirac-tck/target/tck-report.txt`
 |===
 
-== Metric types
+== Three identifying traits
 
-Dirac implements the four metric types of the simplified MicroProfile Metrics 5.x surface (`Meter`, `ConcurrentGauge` and `SimpleTimer` were removed in 5.0 and are not implemented):
+. **Zero third-party library** — no Micrometer, no Dropwizard Metrics, no SmallRye Metrics. Only `microprofile-metrics-api` is compiled into `dirac-core`. The OpenMetrics and JSON formatters are hand-written with `StringBuilder`.
+. **Zero contention on the instrumentation path** — `LongAdder` for counters, `AtomicLongArray` for histograms, `System.nanoTime()` for timers, `ConcurrentHashMap` for registries. No `synchronized`, no `ThreadLocal`, no platform locks — virtual-thread-friendly by construction.
+. **Strict JPMS + validated jlink (M9)** — every Dirac artefact has its own `module-info.java`. `dirac-mp-metrics-api` is a local repackage of MP Metrics 5.1.1 with an explicit `module-info.class`, shipped so that `jlink` does not have to cross an automatic module without a canonical name.
 
-[cols="1,1,3"]
-|===
-| Type | Annotation | Description
-| `Counter` | `@Counted` | Monotonic incremental counter, backed by `LongAdder`
-| `Gauge<T>` | `@Gauge` | Instantaneous value resolved via `MethodHandle` at container startup
-| `Histogram` | _(annotation not exposed by the 5.1.1 API JAR used here)_ | Value distribution (percentiles p50–p999)
-| `Timer` | `@Timed` | Call duration (`System.nanoTime()` + histogram)
-|===
+== Position in the ecosystem
 
-Metrics live in three scopes: `APPLICATION` (default, injectable), `BASE` (JVM metrics) and `VENDOR`. Thread-safety is achieved without contention — `LongAdder`, `AtomicReference`, `ConcurrentHashMap`, no `synchronized` and no `ThreadLocal`, so hot paths stay virtual-thread-friendly.
+[mermaid]
+....
+flowchart LR
+  App["Application<br/>@Counted, @Timed, @Gauge"]
+  IC["Interceptors<br/>CountedInterceptor<br/>TimedInterceptor"]
+  BCE["DiracExtension (BCE)<br/>@Gauge resolution + BASE"]
+  Registry["MetricRegistryImpl<br/>APPLICATION / BASE / VENDOR"]
+  Formatter["OpenMetricsFormatter<br/>JsonMetricsFormatter"]
+  Endpoint["GET /metrics<br/>text/plain or application/json"]
+  Prom["Prometheus<br/>OpenTelemetry Collector"]
 
-== Exposition and integration
+  App --> IC
+  IC --> Registry
+  BCE --> Registry
+  Registry --> Formatter
+  Formatter --> Endpoint
+  Endpoint --> Prom
 
-* *OpenMetrics / Prometheus text* (`text/plain;version=0.0.4`) and *JSON* (MicroProfile Metrics §3.2) formatters, both written with `StringBuilder` — no third-party JSON library.
-* *Optional REST endpoint* via xref:cassini::index.adoc[Cassini]: `GET /metrics`, `GET /metrics/{scope}` and `GET /metrics/{scope}/{name}`, with content negotiation (`Accept: text/plain` → OpenMetrics, `Accept: application/json` → JSON). Activated only when Cassini is on the classpath.
-* *CDI via* xref:vauban::index.adoc[Vauban]: interceptors for `@Counted` and `@Timed`, and the `DiracExtension` build-compatible extension that validates and resolves `@Gauge` methods — `@Gauge` is resolved by `MethodHandle`, never by `java.lang.reflect.Proxy`, so the code stays AOT- and GraalVM-native-image-friendly.
+  IC -.@Inject.-> Vauban["Vauban<br/>CDI Lite"]
+  BCE -.BCE.-> Vauban
+  Endpoint -.JAX-RS.-> Cassini["Cassini<br/>Jakarta REST 4.0"]
+  Cassini --> Chappe["Chappe<br/>HTTP transport"]
+  Registry -.config.-> Ravel["Ravel<br/>MicroProfile Config"]
+
+  classDef rt fill:#e1f5fe,stroke:#0288d1
+  class Registry,Formatter rt
+....
+
+Dirac consumes the ecosystem bottom-up: xref:chappe::index.adoc[Chappe] serves the endpoint, xref:cassini::index.adoc[Cassini] exposes the JAX-RS resource `GET /metrics`, xref:vauban::index.adoc[Vauban] orchestrates the interceptors and the `DiracExtension` BCE, xref:ravel::index.adoc[Ravel] resolves `mp.metrics.*` keys. Dirac adds the observation layer — counters, histograms, formatters — without rewriting anything else.
 
 == Quick links
 
-* xref:usage.adoc[Usage]
+* xref:getting-started.adoc[Getting started] — first counter, first `/metrics`.
+* xref:usage.adoc[Usage patterns] — `@Counted`, `@Timed`, `@Gauge`, tags, format, configuration.
+* xref:concepts.adoc[Concepts] — metric types, scopes, tags, formats, registries.
+* xref:internals.adoc[Internals] — lock-free registry, Vauban BCE, formatters.
+* xref:tck.adoc[TCK] — execution, status, out-of-reactor runner.
+* xref:reference.adoc[Reference] — artefacts, annotations, `mp.metrics.*` keys.
+* xref:migration.adoc[Migration] — from SmallRye, Micrometer or Dropwizard.
 
 Consolidated bugs and benchmarks: link:{repo-dirac}/src/branch/main/BUG.md[BUG.md], link:{repo-dirac}/src/branch/main/BENCH.md[BENCH.md].
+
+Next: xref:getting-started.adoc[Getting started].

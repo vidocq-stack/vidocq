@@ -1,0 +1,111 @@
+= Migration
+:description: Moving from SmallRye Metrics, Micrometer or Dropwizard Metrics to Dirac — equivalences, configs, gotchas.
+
+[CAUTION]
+====
+Dirac is at `0.1.0-SNAPSHOT`. The MicroProfile Metrics 5.1.1 spec is the goal (M8 — TCK 100 % PASS, status to be confirmed in `dirac-tck/target/tck-report.txt`). The public SPI may still evolve before `1.0.0`. This page documents the mappings to prepare a progressive migration.
+====
+
+[.lead]
+On the application side, migrating to Dirac is trivial: Dirac strictly consumes the standard annotations `org.eclipse.microprofile.metrics.annotation.*`. No proprietary import to replace. The deltas live in configuration, packaging and default exposition format.
+
+== From SmallRye Metrics
+
+SmallRye Metrics is the reference implementation in Quarkus and some Jakarta EE servers. Direct migration — Dirac targets strict conformance to the same spec.
+
+[cols="2,2,3"]
+|===
+| SmallRye Metrics | Dirac | Note
+
+| Annotations `org.eclipse.microprofile.metrics.annotation.*`
+| Same annotations
+| No application-code change.
+
+| `/metrics` endpoint
+| `/metrics` endpoint
+| Identical. OpenMetrics/JSON content negotiation identical.
+
+| `mp.metrics.*` (MP Config keys)
+| `mp.metrics.*` (same keys)
+| Global tags, percentiles, buckets: identical.
+
+| Dependencies: Micrometer, HdrHistogram, Jackson…
+| None (hand-written formatters)
+| Smaller classpath footprint. Immediate jlink compatibility (M9).
+
+| JSON format via Jackson
+| JSON format via hand-written `StringBuilder`
+| No external JSON engine — check clients that rely on key ordering.
+|===
+
+== From Micrometer
+
+Micrometer is the default instrumentation API for Spring Boot. Migrating to MP Metrics implies swapping the application-side API.
+
+[cols="2,2,3"]
+|===
+| Micrometer | Dirac (MP Metrics) | Note
+
+| `@Counted("metric")` (`io.micrometer.core.annotation`)
+| `@Counted(name = "metric")` (`org.eclipse.microprofile.metrics.annotation`)
+| Import change. Same semantics.
+
+| `Counter.builder("name").tags(...).register(registry)`
+| `registry.counter(Metadata.builder().withName("name").build(), tags)`
+| Different programmatic API, equivalent behaviour.
+
+| `MeterRegistry` (`io.micrometer.core.instrument`)
+| `MetricRegistry` (`org.eclipse.microprofile.metrics`)
+| Injection via `@Inject` + `@RegistryScope` qualifier.
+
+| Backend-specific exporters (Prometheus, Datadog, StatsD…)
+| Native OpenMetrics text + JSON
+| For other backends, plug a Prometheus scraper → destination exporter.
+|===
+
+== From Dropwizard Metrics
+
+Dropwizard is the ancestor of much of the MP Metrics spec. Two-step migration: change the API, then expose.
+
+[cols="2,2,3"]
+|===
+| Dropwizard | Dirac (MP Metrics) | Note
+
+| `MetricRegistry.counter("name")`
+| `registry.counter(metadata, tags)`
+| Tags concept absent in Dropwizard — switch to MP tags.
+
+| `Timer.time(Runnable)`
+| `@Timed` or `Timer.time(Runnable)`
+| Equivalent runtime API; prefer the annotation for CDI-intercepted code.
+
+| `Histogram.update(value)`
+| `Histogram.update(value)`
+| Identical. Percentiles configured via `mp.metrics.distribution.percentiles`.
+
+| Exposition via `MetricsServlet` + `prometheus-dropwizard` adapter
+| Native OpenMetrics + JSON exposition on `/metrics`
+| Drop the adapter and the servlet — the MP Metrics endpoint suffices.
+|===
+
+== Gotchas
+
+* **No `Meter`, no `ConcurrentGauge`, no `SimpleTimer`** — removed in MP Metrics 5.0. Replace with `Counter` + `Timer` as appropriate.
+* **`@Histogram` (annotation)** — absent from the `microprofile-metrics-api:5.1.1` JAR used by Dirac. Declare histograms programmatically via `MetricRegistry.histogram(...)`.
+* **No `setAccessible(true)`** — if application code relied on non-public classes scanned by a permissive scanner, Dirac will not reach them. Make types `public` or add `opens` in the application `module-info`.
+* **Fixed endpoint** — `/metrics` is mandated by the spec. To publish at another path, add a JAX-RS alias on the application side.
+* **Global tags** — `mp.metrics.tags=app=orders,env=prod` is applied to the union of all three scopes; there is no need to patch every registration call.
+
+== Porting checklist
+
+. Declare `dirac-core` + `dirac-cdi-vauban` + `dirac-rest` instead of SmallRye / Micrometer / Dropwizard.
+. Replace proprietary imports (`io.micrometer.*`, `com.codahale.*`, `io.smallrye.metrics.*`) with `org.eclipse.microprofile.metrics.*`.
+. Migrate proprietary properties to `mp.metrics.*` keys (xref:reference.adoc[Reference]).
+. Run `./mvnw test` then `./run-official-tck-mp-metrics-5.1.sh all`.
+. Compare OpenMetrics output before/after — check canonical names, global tags, units.
+
+== Further reading
+
+* xref:concepts.adoc[Concepts] — MP Metrics 5.1.1 model.
+* xref:reference.adoc[Reference] — annotations and `mp.metrics.*` keys.
+* link:{repo-dirac}/src/branch/main/BUG.md[BUG.md] — known pitfalls.

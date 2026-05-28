@@ -1,0 +1,126 @@
+= Internals
+:description: Lock-free registry, CDI interceptors, Vauban BCE, hand-written formatters, threading model.
+
+[.lead]
+Dirac rejects instrumentation by hot-path reflection: all wiring is done at CDI container startup, and the hot path — bumping a counter, measuring a duration — engages neither lock, nor stray allocation, nor `synchronized`. This page describes the exact sequence and the threading invariants.
+
+== Separation `dirac-core` / `dirac-cdi-vauban`
+
+`dirac-core` is pure Java. It knows nothing of CDI or JAX-RS — only the MP Metrics spec. `CounterImpl`, `GaugeImpl`, `HistogramImpl`, `TimerImpl`, `MetricRegistryImpl`, `BaseMetricsRegistrar`, `OpenMetricsFormatter` and `JsonMetricsFormatter` are unit-testable without a container, and usable outside CDI (a Maven plugin or a JMH benchmark can consume them directly).
+
+`dirac-cdi-vauban` is the integration layer: `@Counted` and `@Timed` interceptors, the `DiracExtension` BCE that validates and resolves `@Gauge`, and the `MetricRegistryProducerBean` producer that exposes the three `MetricRegistry`.
+
+`dirac-rest` is the optional HTTP layer: `MetricsEndpoint` consumes the registries and delegates to a formatter according to `Accept`.
+
+== Startup pipeline
+
+[mermaid]
+....
+flowchart LR
+  BCE["DiracExtension<br/>BuildCompatibleExtension"]
+  Reg["MetricRegistryImpl<br/>APPLICATION / BASE / VENDOR"]
+  Base["BaseMetricsRegistrar<br/>JVM gauges"]
+  Gauges["@Gauge resolution<br/>MethodHandle"]
+  Prod["MetricRegistryProducerBean<br/>@ApplicationScoped"]
+
+  BCE --> Reg
+  BCE --> Base
+  Base --> Reg
+  BCE --> Gauges
+  Gauges --> Reg
+  BCE --> Prod
+  Prod --> Reg
+....
+
+. `DiracExtension` is discovered by Vauban through `ServiceLoader` (`provides BuildCompatibleExtension`).
+. `@Enhancement` phase — gathers classes annotated with `@Gauge`; every method is resolved to a `MethodHandle` (preferring `MethodHandles.privateLookupIn` over `setAccessible`).
+. `@Synthesis` phase — synthesises the `@ApplicationScoped` `MetricRegistryProducerBean`, owner of the three registries.
+. On container activation, the producer's `@PostConstruct` instantiates the `MetricRegistryImpl` and invokes `BaseMetricsRegistrar` to populate the `BASE` scope (JVM gauges, GC, threads, heap).
+. The gathered `@Gauge` are registered as `Gauge<T>` in the target scope (`APPLICATION` by default).
+
+No user class is instantiated until it is actually injected: `MethodHandle` resolution runs on metadata, not on instances.
+
+== `@Counted` hot path
+
+The `CountedInterceptor` is dispatched by CDI on every invocation. It maintains a `ConcurrentHashMap<CacheKey, ResolvedCounter>` cache keyed by `(BeanClass, Method)` — `MetricID` resolution happens only once, on the first call; subsequent calls pull from the cache.
+
+[source,java]
+----
+// simplified excerpt from CountedInterceptor.aroundInvoke
+ResolvedCounter resolved = counters.computeIfAbsent(
+    new CacheKey(beanClass, method),
+    k -> resolve(beanClass, method));
+resolved.counter.inc();        // LongAdder — no contention
+return ctx.proceed();
+----
+
+`Counter.inc()` is a `LongAdder.increment()` — no CAS, no `synchronized`. `Tag` is an immutable record.
+
+`TimedInterceptor` follows the same scheme: `long t0 = System.nanoTime();` before `ctx.proceed()`, `histogram.update(System.nanoTime() - t0);` after.
+
+== `MetricRegistryImpl`
+
+Three invariants:
+
+. **`ConcurrentHashMap` per scope** — key `MetricID`, value `Metric`. Insert via `computeIfAbsent`, lock-free read.
+. **Idempotence** — `counter(metadata, tags)` returns the existing metric if already registered. No duplicate on a `MetricID`.
+. **No `synchronized`** — registration and reads go through the `ConcurrentHashMap` only. No critical memory barrier.
+
+The registry is `@ApplicationScoped`: one instance per scope, owned by `MetricRegistryProducerBean`.
+
+== `HistogramImpl` and percentiles
+
+`HistogramImpl` uses three lock-free primitives:
+
+* `LongAdder count` — sample counter.
+* `LongAdder sum` — sum of values.
+* `LongAccumulator max(Long::max, Long.MIN_VALUE)` — maximum.
+* `ConcurrentLinkedQueue<Long> values` — buffer for read-time percentile computation.
+
+Percentiles are computed lazily by the formatter (buffer sort + interpolation), not on every update. Instrumentation cost: one `add` on a lock-free queue plus three `adder` increments.
+
+Fixed buckets (`mp.metrics.distribution.histogram.buckets`) add a `_bucket{le=...}` family to the OpenMetrics output, computed by buffer scan.
+
+== `TimerImpl`
+
+`TimerImpl` wraps a `HistogramImpl` (with `timerMetric=true` to enable the timer-bucket profile). The `time(Runnable)` method measures via `System.nanoTime()`. No `ThreadLocal`, no thread-bound `Stopwatch`: the measurement lives on the call stack.
+
+== OpenMetrics format
+
+`OpenMetricsFormatter` writes directly to an `OutputStream` via `StringBuilder` + `getBytes(UTF_8)`. No third-party library, no templating engine.
+
+Convention: for `Timer`, the emitted type is `summary` (lines `_sum`, `_count`, `quantile`), per `https://openmetrics.io`. For `Histogram` with buckets, the type is `histogram` (lines `_bucket{le=...}`, `_sum`, `_count`).
+
+== JSON format
+
+`JsonMetricsFormatter` produces the MP Metrics §3.2 tree — one object per scope, containing one object per metric family. The serialiser is hand-written with `StringBuilder` (minimal string escaping, no pretty-printing) — in the spirit of xref:champollion::index.adoc[Champollion], without Jackson or Yasson.
+
+== Threading model
+
+=== No hot-path locks
+
+The hot path — `inc()`, `update(long)`, `time(...)` — engages neither `synchronized` nor `ReentrantLock`. The concurrent data structures (`LongAdder`, `LongAccumulator`, `AtomicLongArray`, `ConcurrentHashMap`, `ConcurrentLinkedQueue`) are designed for heavy concurrency with no yield to the scheduler.
+
+=== No `ThreadLocal`
+
+Per the module's `CLAUDE.md`, no `ThreadLocal` is used in production. When state sharing is required, the concurrent structures above are preferred.
+
+=== Virtual threads
+
+On a host runtime that runs on virtual threads (for example Chappe with `Executors.newVirtualThreadPerTaskExecutor()`), Dirac introduces no platform contention: `LongAdder` and `ConcurrentHashMap` are indifferent to the kind of carrier thread.
+
+== `MetricsEndpoint`
+
+`MetricsEndpoint` is an `@ApplicationScoped` JAX-RS resource in `dirac-rest`. Three routes (`/metrics`, `/metrics/{scope}`, `/metrics/{scope}/{name}`), three steps per call:
+
+. Resolve the format via `Accept` (default: `text/plain`, OpenMetrics).
+. Fetch the target registry via `MetricRegistryProducerBean.registry(scope)`.
+. Emit via `OpenMetricsFormatter` or `JsonMetricsFormatter`.
+
+No lock is taken; the serialisation itself can be parallelised safely, since registry reads are lock-free.
+
+== Further reading
+
+* xref:concepts.adoc[Concepts] — MP Metrics 5.1.1 model.
+* xref:tck.adoc[TCK] — execution and status.
+* xref:reference.adoc[Reference] — public surfaces.
