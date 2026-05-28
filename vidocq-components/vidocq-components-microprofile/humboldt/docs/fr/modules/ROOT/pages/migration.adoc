@@ -1,0 +1,134 @@
+= Migration
+:description: Migration depuis SmallRye Telemetry / Quarkus OpenTelemetry vers Humboldt — différences API, deltas de configuration, points d'attention.
+
+[.lead]
+Cette page guide la migration d'une application qui utilise déjà SmallRye Telemetry (Quarkus) ou l'OpenTelemetry SDK Java officiel. La bonne nouvelle : *la surface API utilisée par le code applicatif est identique* — `io.opentelemetry.api.trace.Tracer`, `Meter`, `Logger`, `@WithSpan`. La migration porte essentiellement sur les artefacts à remplacer et la configuration.
+
+== Surface inchangée
+
+Les points suivants sont strictement identiques entre SmallRye Telemetry, OTel SDK Java officiel, et Humboldt :
+
+* Annotations : `@WithSpan`, `@SpanAttribute`.
+* API : `Tracer`, `Meter`, `Logger`, `Span`, `Baggage`, `Context`, `TextMapPropagator`.
+* Configuration : `OTEL_*` env vars, `otel.*` system properties.
+* Sémantique conventions OTel (`http.*`, `db.*`, etc.).
+* Format de sortie : OTLP/HTTP-JSON ou OTLP/HTTP-protobuf vers Collector standard.
+
+Si votre code n'utilise que ces APIs, la migration est essentiellement un changement de dépendances.
+
+== Remplacement des artefacts
+
+[cols="3,3"]
+|===
+| Avant (SmallRye / Quarkus) | Après (Humboldt)
+
+| `io.quarkus:quarkus-opentelemetry`
+| `io.vidocq.humboldt:humboldt-runtime` + `humboldt-rest` + `humboldt-cdi`
+
+| `io.smallrye.opentelemetry:smallrye-opentelemetry`
+| `io.vidocq.humboldt:humboldt-runtime`
+
+| `io.opentelemetry:opentelemetry-sdk`
+| _(supprimé — réécrit par humboldt-sdk-*)_
+
+| `io.opentelemetry:opentelemetry-exporter-otlp`
+| `io.vidocq.humboldt:humboldt-exporter-otlp-http` (transitif)
+
+| `io.opentelemetry:opentelemetry-exporter-otlp-common`
+| _(supprimé — encoder interne)_
+
+| `io.grpc:grpc-netty` + `io.netty:netty-*`
+| _(supprimés — pas de gRPC en v1)_
+
+| `io.opentelemetry:opentelemetry-api`
+| _(conservé — non réimplémenté)_
+
+| `io.opentelemetry:opentelemetry-context`
+| _(conservé — non réimplémenté)_
+|===
+
+Conséquence directe : ~25 jars → 6 jars runtime (cf. table de différenciation dans xref:index.adoc[index]).
+
+== Bascule transport gRPC → HTTP
+
+Si la configuration actuelle utilise gRPC :
+
+[source,bash]
+----
+# Avant
+export OTEL_EXPORTER_OTLP_PROTOCOL=grpc
+export OTEL_EXPORTER_OTLP_ENDPOINT=http://collector:4317
+----
+
+Après — bascule sur HTTP (port standard 4318) :
+
+[source,bash]
+----
+export OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+export OTEL_EXPORTER_OTLP_ENDPOINT=http://collector:4318
+----
+
+Le Collector accepte les deux transports en parallèle (receivers `otlp.protocols.grpc` et `otlp.protocols.http`). Aucun changement côté infra requis.
+
+Pour les architectures qui dépendent strictement de gRPC (compression, multiplexing H2 explicite), attendre le futur module `humboldt-exporter-otlp-grpc` (post-MVP, via `chappe-grpc`).
+
+== Bascule classpath → JPMS
+
+Humboldt requiert un `module-info.java` propre. Si l'application est encore en classpath :
+
+. Ajouter un `module-info.java` minimal.
+. Déclarer les `requires` Humboldt (`io.vidocq.humboldt.api`, `io.vidocq.humboldt.runtime`, optionnellement `.cdi` / `.rest`).
+. Déclarer les `requires` OTel API (`io.opentelemetry.api`, `io.opentelemetry.context`).
+. Vérifier qu'aucun `requires io.opentelemetry.sdk` ne subsiste (le module n'existe plus côté runtime).
+
+Si le passage JPMS est trop coûteux à court terme, Humboldt fonctionne aussi en classpath via le fallback `META-INF/services` standard — mais ce mode n'est pas la cible.
+
+== CDI : Vauban vs Weld / Quarkus Arc
+
+`humboldt-cdi` est implémenté en CDI 4.1 Lite (`BuildCompatibleExtension`), donc compatible avec :
+
+* xref:vauban::index.adoc[Vauban] (cible Vidocq).
+* Quarkus Arc (CDI Lite compliant).
+* Weld 5+ (CDI Full — non testé en CI mais sans incompatibilité de spec).
+
+Les `@Inject Tracer`, `@Inject Meter`, `@Inject Span` continuent de fonctionner.
+
+== Configuration : delta SmallRye → Humboldt
+
+[cols="3,3"]
+|===
+| Clé SmallRye | Équivalent Humboldt
+
+| `quarkus.opentelemetry.tracer.exporter.otlp.endpoint`
+| `OTEL_EXPORTER_OTLP_ENDPOINT`
+
+| `quarkus.opentelemetry.tracer.sampler`
+| `OTEL_TRACES_SAMPLER`
+
+| `quarkus.opentelemetry.tracer.sampler.ratio`
+| `OTEL_TRACES_SAMPLER_ARG`
+
+| `quarkus.application.name`
+| `OTEL_SERVICE_NAME`
+|===
+
+Recommandation : aligner sur les clés standard OTel (`OTEL_*`) pour la portabilité. Humboldt les lit nativement, sans besoin d'une couche de mapping Quarkus.
+
+== Points d'attention
+
+* **Pas d'agent JVM** — SmallRye/Quarkus s'appuie parfois sur l'agent Java OTel pour instrumenter les libs externes (JDBC, gRPC client…). Humboldt ne supporte pas l'agent : utiliser l'instrumentation manuelle ou attendre les modules natifs Vidocq (par exemple `humboldt-jdbc`, post-MVP).
+* **Pas de Jaeger exporter direct** — utiliser le Collector OTLP comme proxy vers Jaeger.
+* **`mp.telemetry.sdk.disabled`** — différée en M7. Pour désactiver complètement, utiliser `OTEL_TRACES_EXPORTER=none` + `_METRICS_EXPORTER=none` + `_LOGS_EXPORTER=none`.
+
+== Checklist de migration
+
+. [x] Supprimer `quarkus-opentelemetry` / `smallrye-opentelemetry` / `opentelemetry-sdk` / exporters tiers.
+. [x] Ajouter `humboldt-runtime` + modules d'intégration nécessaires.
+. [x] Compléter `module-info.java`.
+. [x] Aligner les variables d'environnement sur `OTEL_*`.
+. [x] Basculer sur `http/protobuf` si l'usage actuel est `grpc`.
+. [x] Lancer la suite de tests applicatifs.
+. [x] Vérifier les spans dans le Collector — `service.name`, attributs HTTP, latences cohérentes.
+. [x] Mesurer le delta de footprint (jars, RAM, startup) — consigner dans `BENCH.md`.
+
+Retour à xref:index.adoc[l'index].

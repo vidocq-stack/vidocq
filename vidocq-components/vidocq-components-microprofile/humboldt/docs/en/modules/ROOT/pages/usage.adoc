@@ -1,0 +1,265 @@
+= Usage
+:description: Humboldt instrumentation patterns — @WithSpan, CDI injection, OTLP exporter, sampling, baggage, metrics, logs.
+
+[.lead]
+This page gathers common patterns: instrumenting a business method, exposing an application metric, propagating baggage across an outbound call, tuning sampling, configuring an OTLP exporter to a Collector. All examples assume a runtime auto-configured through `HumboldtAutoConfigure.configure()` (cf. xref:getting-started.adoc[Getting started]).
+
+== Instrument a method with `@WithSpan`
+
+The standard OpenTelemetry annotation `@WithSpan` (from `opentelemetry-instrumentation-annotations`) is intercepted by `humboldt-cdi` through `HumboldtBuildCompatibleExtension` (CDI 4.1 Lite, Vauban-compatible).
+
+[source,java]
+----
+import io.opentelemetry.instrumentation.annotations.WithSpan;
+import io.opentelemetry.api.trace.SpanKind;
+import jakarta.enterprise.context.ApplicationScoped;
+
+@ApplicationScoped
+public class PaymentService {
+
+    @WithSpan(value = "payment.charge", kind = SpanKind.INTERNAL)
+    public Receipt charge(Order order) {
+        // span opened before entry, status ERROR + recordException on throw
+        return processor.process(order);
+    }
+}
+----
+
+Behavior of `WithSpanInterceptor`:
+
+* Annotation resolution: method overrides class.
+* Default name (`@WithSpan` without `value`): `Class.method`.
+* `Tracer` resolved via `GlobalOpenTelemetry.get()` (overridable for tests).
+* On exception: `span.recordException(ex)` + `span.setStatus(ERROR)` then re-throw.
+* Priority: `Interceptor.Priority.APPLICATION + 1`.
+
+== CDI injection: Tracer, Meter, Logger
+
+With `humboldt-cdi` active, OTel types are injectable through standard `@Inject`. Producers provided by `HumboldtTelemetryProducers`:
+
+[source,java]
+----
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.api.metrics.Meter;
+import io.opentelemetry.api.metrics.LongCounter;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
+@ApplicationScoped
+public class CheckoutMetrics {
+
+    private final LongCounter checkouts;
+
+    @Inject
+    public CheckoutMetrics(Meter meter) {
+        this.checkouts = meter
+            .counterBuilder("checkout.total")
+            .setDescription("Number of processed checkouts")
+            .setUnit("1")
+            .build();
+    }
+
+    public void recordSuccess() {
+        checkouts.add(1);
+    }
+}
+----
+
+== Manual instrumentation of a child span
+
+When `@WithSpan` is not enough (fine granularity, dynamic span):
+
+[source,java]
+----
+Tracer tracer = GlobalOpenTelemetry.getTracer("my.application");
+Span parent = Span.current();
+
+Span child = tracer.spanBuilder("db.query")
+    .setSpanKind(SpanKind.CLIENT)
+    .setAttribute("db.system", "postgresql")
+    .setAttribute("db.statement", "SELECT * FROM orders WHERE id = ?")
+    .startSpan();
+
+try (Scope ignored = child.makeCurrent()) {
+    return executeQuery();
+} catch (SQLException ex) {
+    child.recordException(ex);
+    child.setStatus(StatusCode.ERROR, ex.getMessage());
+    throw ex;
+} finally {
+    child.end();
+}
+----
+
+== Automatic HTTP propagation (inbound)
+
+With `humboldt-rest` active, every JAX-RS endpoint is automatically instrumented. Behavior of `HumboldtServerRequestFilter` (`@Provider`):
+
+. Reads headers through `TextMapGetter<ContainerRequestContext>`.
+. Extracts the span context via `W3CPropagators.textMap()`.
+. Starts a `SERVER` span with parent = extracted span, name = `{method} {path}`.
+. OTel attributes: `http.request.method`, `url.path` (normalized `/`), `url.scheme`.
+. Stores `Span` + `Scope` via `ContainerRequestContext.setProperty()`.
+
+`HumboldtServerResponseFilter` closes the span: `http.response.status_code`, status `ERROR` if ≥ 500, `Scope.close()` then `span.end()` in `finally`.
+
+No application code is required: it is enough to have `humboldt-rest` on the classpath and Cassini as the JAX-RS runtime.
+
+== Manual HTTP propagation (outbound)
+
+For an outbound HTTP call with a client other than `cassini-client`:
+
+[source,java]
+----
+HttpRequest.Builder builder = HttpRequest.newBuilder(uri);
+
+GlobalOpenTelemetry.getPropagators()
+    .getTextMapPropagator()
+    .inject(Context.current(), builder, (b, key, value) -> b.header(key, value));
+
+HttpRequest request = builder.build();
+HttpResponse<String> resp = client.send(request, BodyHandlers.ofString());
+----
+
+The `inject()` adds `traceparent`, `tracestate` and `baggage` to the headers.
+
+== Baggage — propagated application values
+
+`Baggage` carries key/value pairs (user, tenant, feature flag) across service boundaries.
+
+[source,java]
+----
+import io.opentelemetry.api.baggage.Baggage;
+
+Baggage baggage = Baggage.builder()
+    .put("tenant.id", "acme")
+    .put("feature.new_checkout", "true")
+    .build();
+
+try (Scope ignored = baggage.makeCurrent()) {
+    callService(); // outbound HTTP headers will carry baggage: tenant.id=acme,...
+}
+----
+
+Reading on the server side: `Baggage.current().getEntryValue("tenant.id")`.
+
+== Application metrics
+
+Three families of OTel instruments are supported by `humboldt-sdk-metric`:
+
+[source,java]
+----
+Meter meter = GlobalOpenTelemetry.getMeter("my.application");
+
+// Counter — monotonic, sum
+LongCounter requests = meter.counterBuilder("http.server.requests")
+    .setUnit("1").build();
+
+// Histogram — distribution (latencies, sizes)
+DoubleHistogram latency = meter.histogramBuilder("http.server.duration")
+    .setUnit("ms").build();
+
+// Async gauge — value polled at every collection
+meter.gaugeBuilder("queue.size")
+    .ofLongs()
+    .buildWithCallback(measurement -> measurement.record(queue.size()));
+
+requests.add(1, Attributes.of(
+    AttributeKey.stringKey("http.method"), "GET",
+    AttributeKey.longKey("http.status_code"), 200L));
+latency.record(durationMs);
+----
+
+`PeriodicMetricReader` collects every 60 s (configurable via `OTEL_METRIC_EXPORT_INTERVAL`).
+
+== OTel logs
+
+`humboldt-sdk-log` exposes `SdkLoggerProvider`. JUL and SLF4J bridges are deferred to M5b. In the meantime, direct emission is possible:
+
+[source,java]
+----
+io.opentelemetry.api.logs.Logger logger =
+    GlobalOpenTelemetry.getLogsBridge().get("my.application");
+
+logger.logRecordBuilder()
+    .setSeverity(Severity.INFO)
+    .setSeverityText("INFO")
+    .setBody("checkout completed")
+    .setAttribute(AttributeKey.stringKey("order.id"), order.id())
+    .emit();
+----
+
+`LogRecordBuilder` automatically captures the current `Span` (correlation `trace_id` ↔ `span_id`).
+
+== Sampling — tuning throughput
+
+Samplers are configured through env vars:
+
+[source,bash]
+----
+# Trace everything (dev)
+export OTEL_TRACES_SAMPLER=always_on
+
+# Deterministic 5 % sample (typical production)
+export OTEL_TRACES_SAMPLER=parentbased_traceidratio
+export OTEL_TRACES_SAMPLER_ARG=0.05
+
+# Drop all traces (perf incident, isolation debug)
+export OTEL_TRACES_SAMPLER=always_off
+----
+
+`ParentBased` is recommended in production: follow the upstream service's decision when present (per-trace consistency), otherwise apply the ratio.
+
+== OTLP exporter — endpoint and headers
+
+[source,bash]
+----
+# Common endpoint (suffix /v1/traces, /v1/metrics, /v1/logs added automatically)
+export OTEL_EXPORTER_OTLP_ENDPOINT=http://collector.observability:4318
+
+# Per-signal override
+export OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://traces.example/v1/traces
+
+# Auth (API key, basic, etc.)
+export OTEL_EXPORTER_OTLP_HEADERS="authorization=Bearer abcdef123,x-tenant=acme"
+----
+
+The `humboldt-exporter-otlp-http` exporter uses `java.net.http.HttpClient` with a virtual-thread executor, bounded exponential retry (`100ms × 2^attempt`, capped at 5 s) on 5xx and network errors, up to 5 attempts.
+
+== Batching and flush
+
+`BatchSpanProcessor` (virtual-thread worker) accumulates spans and exports them in batches:
+
+* Bounded queue — drops spans on overflow (counted through an internal metric).
+* Trigger: batch threshold reached, scheduled delay elapsed (`scheduleDelay`), or explicit `flush()`/`shutdown()`.
+
+[source,java]
+----
+// Synchronous flush before shutdown (e.g. application shutdown hook)
+sdk.flush().join(10, TimeUnit.SECONDS);
+----
+
+== Tests: in-memory exporter
+
+For unit tests without a Collector:
+
+[source,bash]
+----
+export OTEL_TRACES_EXPORTER=in-memory
+export OTEL_METRICS_EXPORTER=in-memory
+export OTEL_LOGS_EXPORTER=in-memory
+----
+
+[source,java]
+----
+try (AutoConfiguredHumboldt sdk = HumboldtAutoConfigure.configure()) {
+    GlobalOpenTelemetry.set(sdk);
+    runCodeUnderTest();
+    sdk.flush().join(5, TimeUnit.SECONDS);
+
+    List<SpanData> spans = sdk.inMemorySpanExporter().getFinishedSpanItems();
+    assertThat(spans).extracting(SpanData::getName).contains("payment.charge");
+}
+----
+
+Next: xref:internals.adoc[Internals].

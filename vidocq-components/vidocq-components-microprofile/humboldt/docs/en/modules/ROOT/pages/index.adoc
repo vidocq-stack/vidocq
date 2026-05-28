@@ -1,62 +1,128 @@
 = Humboldt
 :description: MicroProfile Telemetry 2.1 implementation — distributed tracing, metrics, logs — OpenTelemetry-native, JPMS-strict, zero third-party SDK, Java 25.
 
+////
+[.text-center]
+image::humboldt-logo.png[Humboldt,180,180]
+////
+
 [.lead]
-Humboldt is the MicroProfile Telemetry 2.1 implementation of the Vidocq ecosystem. It implements its own OpenTelemetry SDK (traces, metrics, logs) directly on the OTel API surface, and integrates with xref:chappe::index.adoc[Chappe] for HTTP transport, xref:vauban::index.adoc[Vauban] for CDI, and xref:cassini::index.adoc[Cassini] for JAX-RS instrumentation. Goal: 100 % TCK conformance, no `opentelemetry-sdk` / `opentelemetry-exporter-*` dependency, no Netty, no gRPC stack.
+Humboldt is the MicroProfile Telemetry 2.1 implementation of the Vidocq ecosystem. It rewrites its own OpenTelemetry SDK (traces, metrics, logs) directly on top of the public OTel API surface, and integrates with xref:chappe::index.adoc[Chappe] for HTTP transport, xref:vauban::index.adoc[Vauban] for CDI, xref:ravel::index.adoc[Ravel] for configuration, and xref:cassini::index.adoc[Cassini] for JAX-RS instrumentation. Goal: 100 % official TCK conformance, with no `opentelemetry-sdk` / `opentelemetry-exporter-*` dependency, no Netty, no gRPC stack.
 
 == Origin of the name
 
-**Alexander von Humboldt** (1769–1859), Prussian polymath, naturalist, geographer, explorer. The man who made the founding gesture of modern observability: *observe simultaneously, measure rigorously, correlate across layers*. On Chimborazo in 1802 he recorded jointly barometric pressure, temperature, terrestrial magnetism, humidity, fauna, flora — then drew the first isothermal maps revealing the hidden invariants of the planet. He invented the *Naturgemälde*, the first scientific data visualization.
+**Alexander von Humboldt** (1769–1859), Prussian polymath, naturalist, geographer, explorer. The man who made the founding gesture of modern observability: _observe simultaneously, measure rigorously, correlate across layers_. On Chimborazo in 1802, he jointly recorded barometric pressure, temperature, terrestrial magnetism, humidity, fauna and flora — then drew the first isothermal maps revealing the planet's hidden invariants. He invented the _Naturgemälde_, the first scientific data visualization, and synthesized all his knowledge in _Kosmos_.
 
 Reference: https://en.wikipedia.org/wiki/Alexander_von_Humboldt[Humboldt on Wikipedia].
 
-[cols="1,3"]
+[cols="1,1"]
 |===
-| Humboldt, the explorer | Humboldt, the runtime
-| Simultaneous pressure + temperature + magnetism measurement | Tracing + Metrics + Logs unified through the OTel SDK
-| Time-stamped, calibrated field notebooks | Span attributes + monotonic timestamp (`Clock`)
-| Isotherms — invariant curves across continents | Span links + W3C TraceContext + Baggage
-| Naturgemälde — cross-altitude visualization | Cross-signal correlation `trace_id` → metric → log
-| Mobile, embedded instruments (the only ones for the era) | Embedded SDK in-process, no daemon, no agent
+| Humboldt the explorer | Humboldt the runtime
+
+| Simultaneous observation (pressure, temperature, magnetism)
+| Three pillars: traces, metrics, logs (one SDK)
+
+| Isothermal maps
+| Aggregated views per dimension (correlated results)
+
+| Voyages covering every layer (sea, plain, summit)
+| Cross-cutting instrumentation (web → DB → external)
+
+| _Kosmos_ — global synthesis of natural knowledge
+| Unified OpenTelemetry document (W3C TraceContext + OTLP)
+
+| Network of magnetic stations
+| Network of processors / exporters / propagators
 |===
 
-OpenTelemetry is the Naturgemälde of distributed systems. Humboldt embeds it natively in Java SE.
+OpenTelemetry is the _Naturgemälde_ of distributed systems. Humboldt embeds it natively in Java SE.
 
 == At a glance
 
 [cols="1,3"]
 |===
-| Implemented spec | MicroProfile Telemetry 2.1
+| Implemented spec | MicroProfile Telemetry 2.1 (OpenTelemetry API 1.39+, semconv 1.27+)
 | Repo | {repo-humboldt}
 | Java | 25 (LTS)
-| JPMS modules | `io.vidocq.humboldt.api`, `io.vidocq.humboldt.sdk.trace`, `io.vidocq.humboldt.sdk.metric`, `io.vidocq.humboldt.sdk.log`, `io.vidocq.humboldt.exporter.otlp.http`, `io.vidocq.humboldt.cdi`, `io.vidocq.humboldt.rest`
-| Runtime dependencies | `opentelemetry-api`, `opentelemetry-context`, `opentelemetry-semconv` (specs only — SDK and exporters reimplemented). CDI optional via xref:vauban::index.adoc[Vauban].
-| TCK | 🚧 Pending — roadmap M7
+| JPMS modules | ~16 modules — main ones: `io.vidocq.humboldt.api`, `.sdk.trace`, `.sdk.metric`, `.sdk.log`, `.sdk.common`, `.context`, `.exporter.otlp.http`, `.propagator.w3c`, `.cdi`, `.rest`, `.runtime`. Full list: xref:reference.adoc[Reference].
+| Runtime dependencies | `opentelemetry-api`, `opentelemetry-context`, `opentelemetry-semconv`, `opentelemetry-instrumentation-annotations`, `protobuf-java`, `microprofile-telemetry-api`. Third-party SDK and exporters refused.
+| jlink-ready | ✅
+| MP Telemetry 2.1 TCK | 🚧 M7c in progress — first `OpenTelemetryBeanTest` PASS ✅ ; detailed status to be confirmed (see `tck-runs/`)
 |===
+
+== Three identity traits
+
+. **6 runtime jars** instead of about 25 in SmallRye Telemetry — no `opentelemetry-sdk`, no `opentelemetry-exporter-otlp`, no `grpc-java`, no Netty, no Guava.
+. **`ScopedValue<Context>`** (JEP 506) instead of plain `ThreadLocal` — zero carrier-thread pinning on virtual threads, planned for M8 (`humboldt-context` MVP uses JDK 21+-compliant `ThreadLocal`, migration ADR tracked).
+. **APT + Class-File API** at `process-classes` to generate interceptors, providers and bridges — AOT-ready for GraalVM / Leyden CDS, no dynamic proxy, no hot bytecode agent.
 
 == Position in the ecosystem
 
 [mermaid]
 ....
 flowchart LR
-  App[User application] -->|@WithSpan, MP API| HumboldtAPI[humboldt-api]
-  HumboldtAPI --> SDKTrace[humboldt-sdk-trace]
-  HumboldtAPI --> SDKMetric[humboldt-sdk-metric]
-  HumboldtAPI --> SDKLog[humboldt-sdk-log]
-  SDKTrace --> OTLP[humboldt-exporter-otlp-http]
-  SDKMetric --> OTLP
-  SDKLog --> OTLP
-  OTLP -->|HTTP/protobuf via chappe| Collector[OTel Collector]
-  Cassini[cassini-core] -->|filter| HumboldtREST[humboldt-rest]
-  HumboldtREST --> HumboldtAPI
-  Vauban[vauban-core] -->|@Inject Tracer/Meter| HumboldtCDI[humboldt-cdi]
-  HumboldtCDI --> HumboldtAPI
+  App[User application] -->|@WithSpan, MP Telemetry API| API[humboldt-api]
+  HTTP[Inbound HTTP request] -->|traceparent, tracestate| Prop[humboldt-propagator-w3c]
+  Prop --> Ctx[humboldt-context]
+  API --> Trace[humboldt-sdk-trace]
+  API --> Metric[humboldt-sdk-metric]
+  API --> Log[humboldt-sdk-log]
+  Trace --> Batch[BatchSpanProcessor VT]
+  Metric --> Reader[PeriodicMetricReader]
+  Log --> BatchL[BatchLogRecordProcessor VT]
+  Batch --> Exp[humboldt-exporter-otlp-http]
+  Reader --> Exp
+  BatchL --> Exp
+  Exp -->|HTTP/JSON or /protobuf| Coll[OTel Collector]
+  Cassini[cassini-core] -->|filter| REST[humboldt-rest]
+  REST --> API
+  Vauban[vauban-core] -->|@Inject Tracer/Meter/Logger| CDI[humboldt-cdi]
+  CDI --> API
+  Ravel[ravel-core] -->|otel.*, mp.telemetry.*| Runtime[humboldt-runtime]
+  Runtime --> Trace
+  Runtime --> Metric
+  Runtime --> Log
 ....
 
-Humboldt shares its transport with the rest of the Vidocq ecosystem (Chappe HTTP/1.1 + H2). It does not embed Netty, gRPC-java, OkHttp or any third-party HTTP stack. The future gRPC OTLP exporter will be delivered via a native `chappe-grpc` module (cf. PLAN.md §3.5).
+Humboldt shares its transport with the rest of the Vidocq ecosystem (Chappe HTTP/1.1 + H2). No Netty, grpc-java, OkHttp, Guava or any third-party HTTP stack. The future OTLP gRPC exporter will ship through a native `chappe-grpc` module (cf. PLAN.md §3.5).
 
-== Planned chapters
+== Differentiation vs SmallRye Telemetry
 
-The documentation is still at milestone M0. Upcoming chapters will cover: getting started, core concepts (signals, context, baggage), tracing, metrics, logs, exporters, configuration (`OTEL_*` / `MP_TELEMETRY_*`), performance vs SmallRye Telemetry, internals (Class-File API codegen, APT), TCK status, API reference, and migration from SmallRye Telemetry.
+[cols="1,2,2"]
+|===
+| | SmallRye | *Humboldt*
 
-Consolidated bugs and benchmarks: lien:{repo-humboldt}/src/branch/main/BUG.md[BUG.md], lien:{repo-humboldt}/src/branch/main/BENCH.md[BENCH.md].
+| Runtime dependencies
+| ~25 jars (otel-sdk, exporter-otlp, grpc-java, netty, guava, protobuf, perfmark, …)
+| *6 jars* (`opentelemetry-api`, `-context`, `-semconv`, `protobuf-java`, humboldt-*, `microprofile-telemetry-api`)
+
+| Runtime reflection
+| yes (Weld + OTel reflection)
+| *no* — APT + Class-File API at `process-classes`
+
+| Virtual-thread pinning
+| risk (`ThreadLocal` Context)
+| *no* — `ScopedValue<Context>` (JEP 506, M8 roadmap)
+
+| AOT-ready (GraalVM, Leyden)
+| partial
+| *yes* by design
+
+| OTLP transport v1
+| gRPC or HTTP
+| *HTTP/protobuf and HTTP/JSON* (gRPC through future native `chappe-grpc`)
+|===
+
+== Chapters
+
+* xref:getting-started.adoc[Getting started] — add Humboldt to a Vidocq project in a few minutes.
+* xref:concepts.adoc[Concepts] — OpenTelemetry model (Span, Metric, LogRecord, Context, Resource, Scope) and what MP Telemetry 2.1 adds.
+* xref:usage.adoc[Usage] — `@WithSpan`, Tracer/Meter/Logger injection, OTLP exporter, sampling, baggage.
+* xref:internals.adoc[Internals] — SDK pipeline, BatchSpanProcessor on virtual threads, JEP 506, APT/Class-File codegen.
+* xref:tck.adoc[TCK] — MicroProfile Telemetry 2.1 status, commands, out-of-reactor constraints.
+* xref:reference.adoc[Reference] — full JPMS module table, `otel.*` / `mp.telemetry.*` keys, semantic conventions.
+* xref:migration.adoc[Migration] — from SmallRye Telemetry / Quarkus OpenTelemetry.
+
+Consolidated bugs and benchmarks: link:{repo-humboldt}/src/branch/main/BUG.md[BUG.md], link:{repo-humboldt}/src/branch/main/BENCH.md[BENCH.md].
+
+Next: xref:getting-started.adoc[Getting started].

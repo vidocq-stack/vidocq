@@ -1,0 +1,194 @@
+= Getting started
+:description: Add Humboldt to a Vidocq project, configure an OTLP exporter, emit a first trace in five minutes.
+
+[.lead]
+This page walks through a first integration: declare the artifacts, configure the OTLP exporter, boot the auto-configured runtime, and observe a span in the Collector. The target is a Java 25 + Maven 4 project that already consumes Cassini (JAX-RS) and Vauban (CDI) — HTTP and CDI integration is then automatic.
+
+== Prerequisites
+
+* Java 25 (Temurin) — `sdk env` from the repo (`.sdkmanrc` provided).
+* Maven 4.0.0-rc-5 — if `mvn` fails with “modelVersion 4.1.0 not supported”, `sdk use maven 4.0.0-rc-5`.
+* An OpenTelemetry Collector reachable over HTTP (or any OTLP/HTTP-JSON receiver). For trials: `docker run --rm -p 4318:4318 otel/opentelemetry-collector:latest`.
+
+== Declare the artifacts
+
+Add to the consumer `pom.xml`:
+
+[source,xml]
+----
+<dependency>
+    <groupId>io.vidocq.humboldt</groupId>
+    <artifactId>humboldt-runtime</artifactId>
+    <version>${humboldt.version}</version>
+</dependency>
+
+<!-- Optional — automatic JAX-RS instrumentation through Cassini -->
+<dependency>
+    <groupId>io.vidocq.humboldt</groupId>
+    <artifactId>humboldt-rest</artifactId>
+    <version>${humboldt.version}</version>
+</dependency>
+
+<!-- Optional — @WithSpan interceptor through CDI Vauban -->
+<dependency>
+    <groupId>io.vidocq.humboldt</groupId>
+    <artifactId>humboldt-cdi</artifactId>
+    <version>${humboldt.version}</version>
+</dependency>
+----
+
+The `humboldt-runtime` module transitively aggregates the trace, metric, log SDK, the OTLP HTTP exporter, the W3C propagator and the env-var auto-configuration.
+
+== Declare the module in `module-info.java`
+
+[source,java]
+----
+module my.application {
+    requires io.vidocq.humboldt.api;
+    requires io.vidocq.humboldt.runtime;
+
+    // Optional depending on integration choice
+    requires io.vidocq.humboldt.cdi;
+    requires io.vidocq.humboldt.rest;
+
+    requires io.opentelemetry.api;
+    requires io.opentelemetry.context;
+
+    exports my.application;
+}
+----
+
+== Configure via OTel environment variables
+
+Humboldt reads the standard OpenTelemetry env vars (`OTEL_*`), with fallback to equivalent system properties (`otel.*`). See xref:reference.adoc[Reference] for the full table.
+
+[source,bash]
+----
+export OTEL_SERVICE_NAME=my-service
+export OTEL_RESOURCE_ATTRIBUTES=service.namespace=billing,deployment.environment=prod
+export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
+export OTEL_TRACES_EXPORTER=otlp
+export OTEL_METRICS_EXPORTER=otlp
+export OTEL_LOGS_EXPORTER=otlp
+export OTEL_TRACES_SAMPLER=parentbased_traceidratio
+export OTEL_TRACES_SAMPLER_ARG=1.0
+----
+
+== Auto-configure the runtime
+
+At application startup:
+
+[source,java]
+----
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.vidocq.humboldt.runtime.AutoConfiguredHumboldt;
+import io.vidocq.humboldt.runtime.HumboldtAutoConfigure;
+
+public final class Main {
+    public static void main(String[] args) throws Exception {
+        try (AutoConfiguredHumboldt sdk = HumboldtAutoConfigure.configure()) {
+            GlobalOpenTelemetry.set(sdk);
+            // Start Chappe + Cassini + Vauban — HTTP instrumentation
+            // and the @WithSpan interceptor will automatically use this SDK.
+            runApplication();
+            sdk.flush().join(10, java.util.concurrent.TimeUnit.SECONDS);
+        }
+    }
+}
+----
+
+`AutoConfiguredHumboldt` implements `io.opentelemetry.api.OpenTelemetry` (standard OTel interface) and `AutoCloseable`: it exposes `getTracerProvider()`, `getMeterProvider()`, `getLogsBridge()`, `getPropagators()` and cleanly shuts down batch processors on `close()`.
+
+== Emit a first trace
+
+[source,java]
+----
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Scope;
+
+public final class CheckoutService {
+
+    private static final Tracer TRACER =
+        GlobalOpenTelemetry.getTracer("my.application", "1.0.0");
+
+    public Receipt checkout(Cart cart) {
+        Span span = TRACER.spanBuilder("checkout")
+            .setAttribute("cart.size", cart.size())
+            .startSpan();
+        try (Scope ignored = span.makeCurrent()) {
+            return doCheckout(cart);
+        } catch (RuntimeException ex) {
+            span.recordException(ex);
+            span.setStatus(io.opentelemetry.api.trace.StatusCode.ERROR);
+            throw ex;
+        } finally {
+            span.end();
+        }
+    }
+}
+----
+
+CDI variant (with `humboldt-cdi`):
+
+[source,java]
+----
+import io.opentelemetry.instrumentation.annotations.WithSpan;
+import jakarta.enterprise.context.ApplicationScoped;
+
+@ApplicationScoped
+public class CheckoutService {
+
+    @WithSpan("checkout")
+    public Receipt checkout(Cart cart) {
+        return doCheckout(cart);
+    }
+}
+----
+
+== Run a local Collector
+
+[source,bash]
+----
+docker run --rm \
+  -p 4318:4318 \
+  -v $(pwd)/otel-collector.yaml:/etc/otelcol/config.yaml \
+  otel/opentelemetry-collector:latest
+----
+
+A minimal `otel-collector.yaml`:
+
+[source,yaml]
+----
+receivers:
+  otlp:
+    protocols:
+      http:
+exporters:
+  logging:
+    loglevel: debug
+service:
+  pipelines:
+    traces:  { receivers: [otlp], exporters: [logging] }
+    metrics: { receivers: [otlp], exporters: [logging] }
+    logs:    { receivers: [otlp], exporters: [logging] }
+----
+
+At runtime, `checkout` spans will appear in the Collector console with the right `service.name` and the `cart.size` attribute.
+
+== Build and verify
+
+[source,bash]
+----
+./mvnw -ntp install -DskipTests
+./mvnw test
+----
+
+The invariant to observe in logs: exporter threads are virtual threads (`HttpClient-virtual`, `humboldt-batch-worker`). No `io.opentelemetry.sdk.*` class should appear in the application classpath — only `io.opentelemetry.api.*` is consumed.
+
+== What next?
+
+* To understand OTel vocabulary (Span, Resource, Scope, baggage), see xref:concepts.adoc[Concepts].
+* For manual instrumentation patterns, metrics and logs: xref:usage.adoc[Usage].
+* For the full table of `OTEL_*` / `MP_TELEMETRY_*` keys: xref:reference.adoc[Reference].

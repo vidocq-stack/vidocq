@@ -1,0 +1,137 @@
+= Internals
+:description: SDK pipeline, BatchSpanProcessor on virtual threads, JEP 506 ScopedValue, APT and Class-File API codegen, bootstrap sequence.
+
+[.lead]
+Humboldt runs on a simple principle: no runtime reflection on the hot path, no external bytecode library, anything computable at compile time is computed there. This page describes the internal pipeline (`TracerProvider` → `Processor` → `Exporter`), the `ScopedValue` vs `ThreadLocal` choice, code generation through APT and Class-File API, and the deliberate absence of a gRPC stack.
+
+== Signal pipeline
+
+[mermaid]
+....
+flowchart LR
+  subgraph App[Application code]
+    A1[Tracer.spanBuilder] --> A2[SdkSpan]
+    B1[Meter.counterBuilder] --> B2[Instrument]
+    C1[Logger.logRecordBuilder] --> C2[LogRecord]
+  end
+
+  A2 --> SP[SimpleSpanProcessor / BatchSpanProcessor]
+  B2 --> MR[PeriodicMetricReader]
+  C2 --> LP[SimpleLogRecordProcessor / BatchLogRecordProcessor]
+
+  SP --> EX[OtlpHttpSpanExporter]
+  MR --> EX2[OtlpHttpMetricExporter]
+  LP --> EX3[OtlpHttpLogExporter]
+
+  EX --> HC[java.net.http.HttpClient + VT executor]
+  EX2 --> HC
+  EX3 --> HC
+
+  HC -->|POST /v1/traces| Coll[OTLP Collector]
+  HC -->|POST /v1/metrics| Coll
+  HC -->|POST /v1/logs| Coll
+....
+
+Each pillar is independent: one can enable `traces=otlp`, `metrics=none`, `logs=in-memory` without interference. Shared code (JSON/protobuf encoder, retry, virtual-thread executor) lives in `humboldt-exporter-otlp-http`.
+
+== BatchSpanProcessor — virtual-thread worker
+
+`BatchSpanProcessor` is the most delicate SDK component. Internal architecture:
+
+* **Bounded queue** (`ArrayBlockingQueue<SpanData>`). Default capacity: 2048. When the queue fills, spans are _dropped_ and an internal counter is incremented.
+* **Dedicated worker** — a single virtual thread (`Thread.ofVirtual().name("humboldt-batch-worker")`) looping:
++
+. `drainTo(batch, maxExportBatchSize)`
+. If `batch.size() >= maxExportBatchSize` OR delay elapsed OR flush requested → export.
+. Calls `exporter.export(batch)` which returns a `CompletableResultCode`.
+* **`scheduleDelay`** — default 5 s. Guarantees an isolated span is flushed even without saturation.
+* **Shutdown** — final drain, awaits in-flight exports, propagates `CompletableResultCode`.
+
+Picking a virtual thread over a platform thread follows directly from Humboldt's I/O model: the HTTP exporter blocks on the network, and with a VT this blocking does not consume a carrier thread. No pool, no platform task queue.
+
+== `BatchLogRecordProcessor` — same pattern
+
+`BatchLogRecordProcessor` shares the pattern: VT worker, bounded queue, threshold + scheduleDelay + flush + shutdown. The `scheduleDelay` (1 s by default, shorter than traces since logs are more frequent and critical during incidents) and the dedicated queue are the only differences.
+
+== `PeriodicMetricReader`
+
+Metrics follow a different model: no event queue but _periodic collection_. The reader calls `meterProvider.collectAllMetrics()` every `OTEL_METRIC_EXPORT_INTERVAL` ms (default 60 s for `otlp`, 60 min for `in-memory`), then hands the `Collection<MetricData>` to the exporter.
+
+== Context storage: ThreadLocal vs ScopedValue
+
+OpenTelemetry delegates the current `Context` storage to a `ContextStorageProvider` SPI. Humboldt ships its own: `HumboldtContextStorageProvider`.
+
+[cols="2,3,3"]
+|===
+| | MVP (M1, shipped) | Post-MVP (M8 ADR)
+
+| Implementation
+| `ThreadLocal<Context>`
+| `ScopedValue<Context>` (JEP 506)
+
+| Virtual-thread pinning
+| None on pure-Java code (JEP 444)
+| None, with _structural sharing_
+
+| Memory cost per 100 K VTs
+| 1 `ThreadLocal` entry per VT
+| 1 global binding, _O(1)_ per VT
+
+| Limitation
+| Imperative `attach()/detach()` mutations
+| Immutability, explicit scope (`runWhere(...)`)
+|===
+
+The `ThreadLocal` MVP is OTel-spec-compliant and logs a `WARNING` on any out-of-order `attach()/detach()` — leak protection.
+
+== APT + Class-File API codegen
+
+Humboldt follows the Vidocq philosophy: no bytecode agent, no dynamic proxy, no third-party library like ASM or Byte Buddy. Code generation happens at `process-classes` through:
+
+* **APT** (`javax.annotation.processing`) — discovers `@WithSpan` annotations (and future ones), generates metadata under `META-INF/`, performs static checks (attribute typing, valid kind).
+* **Class-File API** (JEP 484, finalized in Java 25) — directly emits generated classes (interceptors, providers, bridges) without an external library.
+
+This guarantees:
+
+. **AOT-ready** — GraalVM native-image and Leyden CDS need no reachability metadata for Humboldt; everything is static.
+. **JPMS clean** — generated classes are emitted into the right modules with the right access.
+. **No dynamic proxy** — the `@WithSpan` interceptor is a plain static class, step-debuggable, profileable like hand-written code.
+
+== Bootstrap sequence
+
+. **JPMS startup** — `ServiceLoader` loads `HumboldtContextStorageProvider` via `provides ... with` (and `META-INF/services` fallback on classpath).
+. **`HumboldtAutoConfigure.configure()`** is called by the application `main()`.
+. **`EnvConfig.fromProcess()`** reads `System.getenv()` + `System.getProperties()`.
+. Builds the `Resource` from `OTEL_SERVICE_NAME` + `OTEL_RESOURCE_ATTRIBUTES`.
+. Based on `OTEL_TRACES_EXPORTER` — instantiates the exporter (`Otlp`, `InMemory`, `Logging`, or no-op).
+. Builds the `Sampler` from `OTEL_TRACES_SAMPLER` + `_ARG`.
+. Builds the `SdkTracerProvider` (Resource + Sampler + IdGenerator + Clock + appropriate processor).
+. Same for `SdkMeterProvider` + `PeriodicMetricReader` + `SdkLoggerProvider` + `BatchLogRecordProcessor`.
+. Composes an `AutoConfiguredHumboldt implements OpenTelemetry, AutoCloseable`.
+. **`GlobalOpenTelemetry.set(sdk)`** in the application code. From there, every `Tracer`/`Meter`/`Logger` resolved through `GlobalOpenTelemetry.getXxx()` uses this SDK.
+. On shutdown: `sdk.close()` → batch processors flush → `exporter.shutdown()` → `httpClient` released.
+
+== AOT compatibility
+
+No `Class.forName`, `Method.invoke`, `Class.getDeclaredFields()`, `Proxy.newProxyInstance()` on the hot path. The only introspection goes through the `ServiceLoader` SPI, natively handled by GraalVM native-image and Leyden CDS through the standard JVM reachability metadata.
+
+A note on protobuf: `protobuf-java` (3.x) is compatible with modern GraalVM with a handful of `reflect-config.json` entries for `DescriptorProto`; Humboldt provides these files under `META-INF/native-image/` (M8 milestone).
+
+== Deliberate absence of gRPC
+
+Humboldt only transports HTTP/1.1 and HTTP/2 (via `java.net.http.HttpClient`). No `grpc-java`, no `netty-codec-http2`. Consequence: no OTLP/gRPC transport in v1.
+
+The future `chappe-grpc` module (cf. PLAN.md §3.5) will implement gRPC natively on top of the existing Chappe transport. At that point a `humboldt-exporter-otlp-grpc` module will ship, without `grpc-java` or Netty.
+
+== Internal metrology
+
+`BatchSpanProcessor` exposes internal counters:
+
+* `humboldt.exporter.spans.dropped` — spans dropped on a full queue.
+* `humboldt.exporter.batch.size` — distribution of effective batch sizes.
+* `humboldt.exporter.export.duration` — HTTP latency per signal.
+* `humboldt.exporter.retry.count` — number of retries performed.
+
+These metrics are emitted through the internal `SdkMeterProvider` — observability of observability.
+
+Next: xref:tck.adoc[TCK].

@@ -1,0 +1,299 @@
+= Reference
+:description: JPMS modules, Maven artifacts, OTEL_* / mp.telemetry.* configuration keys, applied semantic conventions.
+
+[.lead]
+This page consolidates Humboldt's public surface: artifacts to declare, exported JPMS modules, configuration keys recognized by `HumboldtAutoConfigure`, and OTel semantic conventions applied by the automatic filters.
+
+== Maven artifacts
+
+[cols="2,2,3"]
+|===
+| `groupId` | `artifactId` | Role
+
+| `io.vidocq.humboldt`
+| `humboldt-api`
+| Public façade and stable SPI (`io.vidocq.humboldt.spi.*`).
+
+| `io.vidocq.humboldt`
+| `humboldt-sdk-common`
+| `Resource`, `Clock`, `IdGenerator`, `Attributes`.
+
+| `io.vidocq.humboldt`
+| `humboldt-context`
+| `ContextStorageProvider` SPI used by `Context.current()`.
+
+| `io.vidocq.humboldt`
+| `humboldt-sdk-trace`
+| `SdkTracerProvider`, samplers, processors, `BatchSpanProcessor`.
+
+| `io.vidocq.humboldt`
+| `humboldt-sdk-metric`
+| `SdkMeterProvider`, sync and async instruments, `PeriodicMetricReader`.
+
+| `io.vidocq.humboldt`
+| `humboldt-sdk-log`
+| `SdkLoggerProvider`, `LogRecordProcessor`, batch.
+
+| `io.vidocq.humboldt`
+| `humboldt-propagator-w3c`
+| `W3CPropagators.get()` facade composing TraceContext + Baggage.
+
+| `io.vidocq.humboldt`
+| `humboldt-exporter-otlp-http`
+| OTLP/JSON and OTLP/protobuf exporter via `java.net.http.HttpClient`.
+
+| `io.vidocq.humboldt`
+| `humboldt-cdi`
+| `WithSpanInterceptor`, Tracer/Meter/Logger producers.
+
+| `io.vidocq.humboldt`
+| `humboldt-rest`
+| JAX-RS filters `HumboldtServerRequestFilter` / `ResponseFilter`.
+
+| `io.vidocq.humboldt`
+| `humboldt-runtime`
+| Aggregator, `HumboldtAutoConfigure`, `AutoConfiguredHumboldt`, `EnvConfig`.
+
+| `io.vidocq.humboldt`
+| `humboldt-otel-api`
+| JPMS re-bundle of `io.opentelemetry:opentelemetry-api` (named module).
+
+| `io.vidocq.humboldt`
+| `humboldt-otel-context`
+| JPMS re-bundle of `io.opentelemetry:opentelemetry-context`.
+
+| `io.vidocq.humboldt`
+| `humboldt-otel-instrumentation-annotations`
+| JPMS re-bundle of `opentelemetry-instrumentation-annotations`.
+
+| `io.vidocq.humboldt`
+| `humboldt-tck`
+| Official MicroProfile Telemetry 2.1 TCK runner — out-of-reactor (Model 4.0.0). Do not declare as an application dependency.
+|===
+
+All versions are `0.1.0-SNAPSHOT` at the time of writing (M7c in progress).
+
+== JPMS modules
+
+[cols="2,3"]
+|===
+| Module | Contents
+
+| `io.vidocq.humboldt.api`
+| `io.vidocq.humboldt.spi.*` (public SPI: `ExporterProvider`, `SamplerProvider`, `ResourceProvider`).
+
+| `io.vidocq.humboldt.sdk.common`
+| `Resource`, `Clock`, `IdGenerator` (Random128).
+
+| `io.vidocq.humboldt.context`
+| `HumboldtContextStorageProvider`, `HumboldtContextStorage` (MVP `ThreadLocal`, `ScopedValue` planned in M8).
+
+| `io.vidocq.humboldt.sdk.trace`
+| `SdkTracerProvider`, `SdkSpan`, `Sampler` (AlwaysOn/Off, TraceIdRatioBased, ParentBased), `SpanProcessor` (Simple, Batch).
+
+| `io.vidocq.humboldt.sdk.metric`
+| `SdkMeterProvider`, instruments (`LongCounter`, `DoubleHistogram`, async `Gauge`), `PeriodicMetricReader`, views.
+
+| `io.vidocq.humboldt.sdk.log`
+| `SdkLoggerProvider`, `SdkLogger`, `SdkLogRecordBuilder`, Simple + Batch processors.
+
+| `io.vidocq.humboldt.propagator.w3c`
+| `W3CPropagators.get()` — composite TraceContext + Baggage.
+
+| `io.vidocq.humboldt.exporter.otlp.http`
+| `OtlpHttpSpanExporter`, `OtlpHttpMetricExporter`, `OtlpHttpLogExporter`, `OtlpJsonEncoder`, exponential retry.
+
+| `io.vidocq.humboldt.cdi`
+| `@WithSpan` annotation (re-exported), `WithSpanInterceptor`, `HumboldtBuildCompatibleExtension`, Tracer/Meter/Logger producers.
+
+| `io.vidocq.humboldt.rest`
+| `HumboldtServerRequestFilter`, `HumboldtServerResponseFilter` (JAX-RS `@Provider`).
+
+| `io.vidocq.humboldt.runtime`
+| `HumboldtAutoConfigure`, `AutoConfiguredHumboldt`, `EnvConfig`.
+
+| `io.opentelemetry.api`, `io.opentelemetry.context`, `io.opentelemetry.instrumentation_annotations`
+| JPMS modules of the public OTel artifacts, rebundled with explicit `module-info`.
+|===
+
+`io.vidocq.humboldt.internal.*` packages are never exported. Any direct access fails with a clear JPMS crash.
+
+== Configuration keys
+
+Humboldt reads standard OpenTelemetry env vars, with fallback to equivalent system properties (`SCREAMING_SNAKE_CASE` → `lower.dot.case`).
+
+=== Service identification
+
+[cols="2,1,2"]
+|===
+| Key | Default | Effect
+
+| `OTEL_SERVICE_NAME` / `otel.service.name`
+| `unknown_service:java`
+| `service.name` attribute of the `Resource`.
+
+| `OTEL_RESOURCE_ATTRIBUTES` / `otel.resource.attributes`
+| _(empty)_
+| `key1=value1,key2=value2` list merged into the `Resource`.
+|===
+
+=== Exporter per signal
+
+[cols="2,1,2"]
+|===
+| Key | Default | Values
+
+| `OTEL_TRACES_EXPORTER`
+| `otlp`
+| `otlp`, `none`, `in-memory`, `logging`
+
+| `OTEL_METRICS_EXPORTER`
+| `otlp`
+| `otlp`, `none`, `in-memory`, `logging`
+
+| `OTEL_LOGS_EXPORTER`
+| `otlp`
+| `otlp`, `none`, `in-memory`, `logging`
+|===
+
+=== OTLP HTTP endpoint
+
+[cols="2,1,2"]
+|===
+| Key | Default | Effect
+
+| `OTEL_EXPORTER_OTLP_ENDPOINT`
+| `http://localhost:4318`
+| Common endpoint (suffix `/v1/traces` etc. added automatically).
+
+| `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`
+| _(inherited)_
+| Traces override.
+
+| `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT`
+| _(inherited)_
+| Metrics override.
+
+| `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT`
+| _(inherited)_
+| Logs override.
+
+| `OTEL_EXPORTER_OTLP_HEADERS`
+| _(empty)_
+| Comma-separated HTTP headers `key1=value1,key2=value2`.
+
+| `OTEL_EXPORTER_OTLP_TIMEOUT`
+| _(deferred M7)_
+| Request timeout, ms.
+
+| `OTEL_EXPORTER_OTLP_PROTOCOL`
+| `http/protobuf`
+| `http/json` or `http/protobuf`. Full switch deferred to M7.
+|===
+
+=== Sampling
+
+[cols="2,1,2"]
+|===
+| Key | Default | Values
+
+| `OTEL_TRACES_SAMPLER`
+| `parentbased_always_on`
+| `always_on`, `always_off`, `traceidratio`, `parentbased_always_on`, `parentbased_always_off`, `parentbased_traceidratio`
+
+| `OTEL_TRACES_SAMPLER_ARG`
+| `1.0`
+| Ratio for `traceidratio` (0.0 to 1.0).
+|===
+
+=== Metric reading
+
+[cols="2,1,2"]
+|===
+| Key | Default | Effect
+
+| `OTEL_METRIC_EXPORT_INTERVAL`
+| `60000` ms (`in-memory` = `60min`)
+| Period of `PeriodicMetricReader`.
+
+| `OTEL_METRIC_EXPORT_TIMEOUT`
+| _(deferred M7)_
+| Collection timeout.
+|===
+
+=== MicroProfile Telemetry
+
+[cols="2,1,2"]
+|===
+| Key | Default | Effect
+
+| `mp.telemetry.sdk.disabled`
+| `false`
+| Completely disable the SDK (no-op). _Deferred M7._
+
+| `mp.telemetry.propagators`
+| `tracecontext,baggage`
+| Comma-separated propagator list. _Deferred M7._
+|===
+
+== Applied semantic conventions
+
+OTel HTTP conventions 1.27+ are applied automatically by `humboldt-rest` on the server side:
+
+[cols="2,3"]
+|===
+| Attribute | Source
+
+| `http.request.method`
+| `ContainerRequestContext.getMethod()`
+
+| `url.path`
+| `getUriInfo().getPath()` normalized to `/`
+
+| `url.scheme`
+| `getUriInfo().getRequestUri().getScheme()`
+
+| `http.response.status_code`
+| `ContainerResponseContext.getStatus()` (long)
+
+| `error.type` / status `ERROR`
+| If `status_code ≥ 500` (4xx ignored — OTel HTTP convention)
+|===
+
+For client-side attributes (HTTP, DB, messaging…), Humboldt does not generate them automatically: use the constants from `opentelemetry-semconv` in application code. Full reference: https://opentelemetry.io/docs/specs/semconv/[OpenTelemetry Semantic Conventions].
+
+== Registered propagators
+
+`AutoConfiguredHumboldt.getPropagators()` returns by default a composite `TextMapPropagator`:
+
+. `W3CTraceContextPropagator` — headers `traceparent`, `tracestate`.
+. `W3CBaggagePropagator` — header `baggage`.
+
+No B3 by default (opt-in via `mp.telemetry.propagators=tracecontext,baggage,b3` once the key is enabled in M7).
+
+== Outputs and formats
+
+[cols="2,3"]
+|===
+| Exporter | Output
+
+| `otlp`
+| OTLP/HTTP POST — JSON or protobuf depending on `OTEL_EXPORTER_OTLP_PROTOCOL`.
+
+| `in-memory`
+| `InMemorySpanExporter` / `InMemoryMetricReader` / `InMemoryLogRecordExporter` buffers — used by tests.
+
+| `logging`
+| `System.getLogger(...).log()` human-readable format.
+
+| `none`
+| No processor registered — signal disabled.
+|===
+
+== Compatibility
+
+* Java 25 LTS minimum (compile and runtime).
+* Maven 4.0.0-rc-5 or later (Model 4.1.0 for the parent reactor; the TCK runner stays in 4.0.0).
+* Compatible with CDI 4.1 Lite (Vauban) and JAX-RS 4.0 (Cassini). CDI Full (Weld, OpenWebBeans) not tested.
+
+Next: xref:internals.adoc[Internals].

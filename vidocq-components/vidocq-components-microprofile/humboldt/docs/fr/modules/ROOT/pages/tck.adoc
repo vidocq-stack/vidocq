@@ -1,0 +1,163 @@
+= TCK
+:description: Statut TCK MicroProfile Telemetry 2.1, structure du runner hors-reactor, commandes, contraintes Arquillian / ShrinkWrap.
+
+[.lead]
+Humboldt vise la conformité 100 % au TCK officiel **MicroProfile Telemetry 2.1** sur les trois suites (tracing + metrics + logs), avec propagation W3C TraceContext + Baggage et configuration `OTEL_*` / `MP_TELEMETRY_*`. Le runner `humboldt-tck` est **volontairement hors reactor** (POM Model 4.0.0 standalone, sans `<parent>`) pour contourner l'incompatibilité de ShrinkWrap Maven Resolver 3.3 avec Maven Model 4.1.0 — contrainte commune à `cassini-tck`, `champollion-tck`, `foy-tck`.
+
+== Cible
+
+Conformité 100 % du TCK officiel **MicroProfile Telemetry 2.1** sur les trois suites :
+
+* `microprofile-telemetry-tracing-tck:2.1`
+* `microprofile-telemetry-metrics-tck:2.1`
+* `microprofile-telemetry-logs-tck:2.1`
+
+Coordonnées TCK confirmées publiquement sur Maven Central (audit M7.1, 2026-05-21).
+
+== Stack TCK
+
+* **TestNG + Arquillian + ShrinkWrap** (pas JUnit).
+* Adapter Arquillian Humboldt : `HumboldtDeployableContainer` (déploie via Vauban + Chappe + Cassini), `HumboldtCdiEnricher` (injection des beans CDI dans les `@Test`), hook runtime `withExtraSpanExporter` pour brancher `InMemorySpanExporter` du TCK.
+* Le TCK importe sa propre copie d'`io.opentelemetry:opentelemetry-sdk` pour ses fixtures internes — c'est OK côté runner hors-reactor, ça ne pollue pas le classpath de production.
+
+== Statut courant
+
+**M7b livré (2026-05-21)** — adapter Arquillian complet, **premier test TCK officiel `OpenTelemetryBeanTest` PASS (2/2)**.
+
+[cols="2,2,2"]
+|===
+| Signal | Tests passants réels | Étape
+
+| Tracing
+| ✅ 4 / ~50 (`OpenTelemetryBeanTest`, `TracerTest`, `ExporterSpiTest`)
+| M7c.2 — débloquer HTTP
+
+| Metrics
+| ✅ 24 / ~50 (CDI counters/gauges/histos + JVM*)
+| M7c.2 — débloquer HTTP histograms
+
+| Logs
+| ✅ 3 / ~10 (`JulTest`, `ServerInstanceTest`)
+| M7c
+
+| Baggage
+| ✅ propagator W3C livré M3
+| Tests TCK en M7c.2
+
+| Config
+| ✅ env vars `OTEL_*` livré M6c
+| Tests TCK en M7c.2
+|===
+
+Statut détaillé et catégorisation des échecs résiduels : voir https://forge.vidocq.dev/vidocq/humboldt/src/branch/main/TCK.md[TCK.md] dans le repo. Compteur exact à confirmer après chaque run (voir `tck-runs/`).
+
+== Catégorisation des échecs M7c (premier run officiel, 2026-05-21)
+
+`Tests run: 138, Failures: 62, Errors: 0, Skipped: 73`
+
+[cols="3,1,4"]
+|===
+| Catégorie | Échecs | Cause / action
+
+| A. `@ArquillianResource URL` non résolu
+| 56
+| Tests HTTP. Démarrer Chappe HTTP + Cassini dans `HumboldtDeployableContainer.deploy()`, exposer le port via `ProtocolMetaData → HTTPContext`.
+
+| B. `Failed to deploy ...war`
+| 8
+| Classes/deps manquantes dans le war ShrinkWrap qui crashent `extractBeanClasses` ou `VaubanContainer.build()`. Investigation cas par cas.
+
+| C. `injected{Span, Baggage, Tracer}` null
+| 12
+| Spec MP Telemetry §"Required CDI beans" : producers manquants pour `Span.current()`, `Baggage.current()`. À ajouter dans `HumboldtTelemetryProducers`.
+
+| D. `NoSuchMethod commons.io.input.Tailer.builder()`
+| 24
+| Conflit de version commons-io entre deps TCK metrics et notre classpath. Forcer commons-io 2.16+ dans `humboldt-tck/pom.xml`.
+|===
+
+Les 4 catégories se chevauchent partiellement (un test JvmMemory peut échouer à la fois sur URL et sur Tailer). Adresser une catégorie peut débloquer plus de tests que le compteur ne le suggère.
+
+== Lancer le TCK
+
+[source,bash]
+----
+cd humboldt
+sdk env
+
+# Smoke — un seul test pour valider l'installation
+./run-official-tck-telemetry-2.1.sh
+
+# Suite complète (M7c+) — équivalent du TCK officiel à 138+ tests
+./run-official-tck-telemetry-2.1.sh all
+
+# Test ciblé
+./run-official-tck-telemetry-2.1.sh -Dtest=BasicAppTest
+----
+
+Le script :
+
+. Utilise `mvnw` (Maven 4) s'il est présent, sinon fallback sur `mvn` système.
+. Passe `maven.test.skip=true` (au lieu de `-DskipTests`) — nécessaire depuis M7c.12 car le compile-test de `humboldt-rest` échoue (`microprofile.rest.client.api` hors module-path en mode JPMS strict).
+. Les tests `humboldt-rest` restent exécutables manuellement via `mvn test -pl humboldt-rest`.
+
+== Profile rapide (un test ciblé)
+
+[source,bash]
+----
+cd humboldt-tck
+mvn -ntp -f pom.xml -Ptck-cdi-bean test
+----
+
+Profile `tck-cdi-bean` = bootstrap minimal (sans HTTP) pour les tests CDI purs comme `OpenTelemetryBeanTest`. Utile pour itérer sur les bugs catégorie C sans payer le démarrage de Chappe.
+
+== Profiles Maven du runner
+
+[cols="2,3"]
+|===
+| Profile | Effet
+
+| `tck-official`
+| Suite complète (tracing + metrics + logs). Importe les 3 artefacts TCK.
+
+| `tck-cdi-bean`
+| Sous-ensemble CDI only — pas de Chappe/Cassini.
+
+| `tck-trace-only`
+| Suite tracing seulement (itération rapide M7c).
+
+| `tck-metrics-only`
+| Suite metrics seulement.
+
+| `tck-logs-only`
+| Suite logs seulement.
+|===
+
+== Contrainte d'architecture : hors-reactor
+
+`humboldt-tck` reste en **Model 4.0.0** standalone même si le reste du reactor passe à 4.1.0. Raison rappelée dans `CLAUDE.md` du repo :
+
+> ShrinkWrap Maven Resolver 3.3 (transitive du TCK officiel) repose sur `maven-resolver 1.9` / `maven-model 3.9` qui ne savent pas parser les POMs Maven Model 4.1.0. Son `ClasspathWorkspaceReader` scanne le reactor courant et crashe sur tout POM Vidocq (version implicite via parent). Tant qu'upstream ShrinkWrap ne supporte pas Model 4.1, ce module **doit rester détaché** — ne pas le réintégrer au `<modules>` parent, ne pas lui ajouter de `<parent>`, ne pas le builder via `mvn -pl`. Toujours passer par `run-official-tck-telemetry-2.1.sh`.
+
+== Reproduire en local
+
+[source,bash]
+----
+cd humboldt-tck
+mvn -ntp -f pom.xml -Ptck-official test 2>&1 | tee /tmp/tck-humboldt.log
+
+# Trier les échecs par catégorie
+grep -E "Tests run|FAILED|ERROR" /tmp/tck-humboldt.log
+----
+
+Les artefacts du run (logs, rapports Surefire, dumps de spans `InMemorySpanExporter`) sont placés dans `humboldt-tck/target/surefire-reports/` et archivés dans `humboldt/tck-runs/<date>/` pour traçabilité.
+
+== Gate qualité
+
+Avant tout merge vers `main` :
+
+. `humboldt-tck` smoke PASS.
+. Aucune régression du compteur de la suite complète (voir `BENCH.md` consolidé).
+. Pas de nouvel `import io.opentelemetry.sdk.*` dans le code applicatif (contrainte d'architecture n°1 du `CLAUDE.md`).
+
+Suivant : xref:reference.adoc[Référence] et xref:migration.adoc[Migration].

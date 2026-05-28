@@ -1,0 +1,120 @@
+= Concepts
+:description: OpenTelemetry model — signals, context, propagation, scope, semantic conventions — and what MicroProfile Telemetry 2.1 adds.
+
+[.lead]
+Humboldt implements OpenTelemetry. To use Humboldt correctly you need to know the OTel abstractions: the three signals (traces, metrics, logs), the `Context` that correlates them, the `Resource` that identifies the producer, and the `TextMapPropagator` that carries context across processes. MicroProfile Telemetry 2.1 adds a thin layer of CDI integration and configuration.
+
+== Three signals, one SDK
+
+OpenTelemetry separates observability into three independent but correlatable signals. Humboldt ships all three in a single pure-Java SDK.
+
+[cols="1,2,2"]
+|===
+| Signal | API consumed | Humboldt module
+
+| Traces
+| `io.opentelemetry.api.trace.Tracer`
+| `humboldt-sdk-trace` — `SdkTracerProvider`, `Sampler`, `SpanProcessor`, `BatchSpanProcessor`
+
+| Metrics
+| `io.opentelemetry.api.metrics.Meter`
+| `humboldt-sdk-metric` — `SdkMeterProvider`, `Counter`, `Histogram`, async `Gauge`, `PeriodicMetricReader`
+
+| Logs
+| `io.opentelemetry.api.logs.Logger`
+| `humboldt-sdk-log` — `SdkLoggerProvider`, `LogRecordProcessor`, batch
+
+| Baggage
+| `io.opentelemetry.api.baggage.Baggage`
+| inside `humboldt-sdk-trace` (`BaggageManager`)
+
+| Context
+| `io.opentelemetry.context.Context`
+| `humboldt-context` — `ContextStorageProvider` SPI
+
+| Propagators
+| `io.opentelemetry.context.propagation.TextMapPropagator`
+| `humboldt-propagator-w3c` — TraceContext + Baggage
+|===
+
+== Span: a traced unit of work
+
+A `Span` represents a time-bounded operation: an HTTP call, an SQL query, a business method. Each span carries a `traceId` (shared by every span in the same distributed request) and a `spanId` (unique). A span has a parent (the enclosing span) and may have _links_ (to spans of other traces).
+
+Essential fields of a Humboldt span (`SpanData`, immutable record):
+
+* `traceId` (32 hex) and `spanId` (16 hex) — produced by `IdGenerator` (`Random128` by default).
+* `name`, `kind` (`SERVER`, `CLIENT`, `INTERNAL`, `PRODUCER`, `CONSUMER`).
+* `attributes` — typed key/value pairs (`http.request.method`, `db.system`, ...).
+* `events` — timestamped points with attributes (exception, log, custom).
+* `links` — references to other spans (batching, fan-in).
+* `status` — `UNSET`, `OK`, `ERROR` (with description).
+* `startEpochNanos` / `endEpochNanos` — monotonic timestamps via `Clock`.
+* `resource` — outgoing producer (see below).
+* `instrumentationScope` — `name` + `version` of the span producer.
+
+== Resource — who produces the signals?
+
+A `Resource` identifies the emitting entity: `service.name`, `service.version`, `deployment.environment`, `host.name`, `process.runtime.name`, etc. The `Resource` is merged once at startup and attached to every span, metric and log emitted. Humboldt exposes an immutable, OTel-spec-compliant semantic-merging `Resource`.
+
+== Context — the invisible glue between signals
+
+The OTel `Context` is an immutable map propagated _implicitly_ via a _scope_ (try-with-resources) or _explicitly_ via `Context.wrap()`. The current `Context` carries the active `Span`, the `Baggage`, and possibly other keys (user, tenant…).
+
+Humboldt provides the `ContextStorageProvider` SPI used by `Context.current()`:
+
+* MVP M1 — simple `ThreadLocal`, JDK 21+ compliant: no carrier-thread pinning on virtual threads for pure-Java code (JEP 444).
+* M8 — migration to `ScopedValue` (JEP 506) if memory savings are significant beyond 100 K virtual threads (ADR pending).
+
+== Scope vs Context
+
+Subtle distinction: a `Context` is _a value_, a `Scope` is _an activation_ of the context on the current thread. The canonical pattern:
+
+[source,java]
+----
+Span span = tracer.spanBuilder("op").startSpan();
+try (Scope ignored = span.makeCurrent()) {
+    // here, Span.current() == span and Context.current() carries span
+} finally {
+    span.end();
+}
+----
+
+Forgetting `Scope.close()` is a leak: any span opened on the thread stays “current” until the thread is exhausted.
+
+== Sampling — deciding what gets traced
+
+The OTel `Sampler` decides, at span creation, whether the span is recorded and exported. Humboldt ships four spec-compliant samplers:
+
+* `AlwaysOn` — everything is traced. Useful in dev/integration.
+* `AlwaysOff` — nothing is traced. Quick disable.
+* `TraceIdRatioBased(ratio)` — deterministic decision on the low 64 bits of the `traceId`; ratio 0.1 = 10 % consistent across all services.
+* `ParentBased(root)` — if a parent exists and is sampled → sampled, otherwise delegate to `root`. Standard combination: `parentbased_traceidratio` + ratio 0.05 = production.
+
+== Propagation — carrying context across services
+
+When an HTTP call leaves the service, the `traceId` and `spanId` must be injected into HTTP headers so the called service continues the same trace. The W3C standard defines two headers:
+
+* `traceparent` — `version-traceId-spanId-flags` (33 ASCII bytes).
+* `tracestate` — vendor extensions.
+* `baggage` — application key/value pairs (W3C Baggage).
+
+`humboldt-propagator-w3c` composes both propagators (`W3CTraceContextPropagator` + `W3CBaggagePropagator`) into a single `TextMapPropagator` registered by default in the auto-configured runtime.
+
+== Semantic conventions — a common vocabulary
+
+OTel _semantic conventions_ standardize attribute and metric names: `http.request.method`, `http.response.status_code`, `db.system`, `db.statement`, `messaging.system`, `network.peer.address`, etc. Humboldt imports `opentelemetry-semconv` (spec only) to expose the constants, and the `humboldt-rest` filters apply them automatically to inbound JAX-RS requests (HTTP conventions 1.27+).
+
+Reference: https://opentelemetry.io/docs/specs/semconv/[OpenTelemetry Semantic Conventions]. Humboldt does not re-implement the convention: it consumes it.
+
+== MicroProfile Telemetry 2.1 vs raw OTel API
+
+MicroProfile Telemetry 2.1 is a thin layer on top of OpenTelemetry, essentially adding:
+
+* CDI producers: `@Inject Tracer`, `@Inject Meter`, `@Inject io.opentelemetry.api.logs.Logger`, `@Inject Span` (current), `@Inject Baggage` (current).
+* MicroProfile Config–driven configuration (`mp.telemetry.*` and `otel.*`) — Humboldt relies on xref:ravel::index.adoc[Ravel] for resolution.
+* `@WithSpan` (`opentelemetry-instrumentation-annotations`) wired through a CDI interceptor.
+
+None of these additions break the OTel API: `GlobalOpenTelemetry.getTracer(...)` still works directly.
+
+Next: xref:usage.adoc[Usage].
