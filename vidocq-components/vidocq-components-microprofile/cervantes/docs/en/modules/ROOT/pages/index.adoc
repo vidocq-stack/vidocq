@@ -1,12 +1,47 @@
 = Cervantes
-:description: MicroProfile JWT 2.1 implementation — bearer-token RBAC for the Vidocq ecosystem — zero implementation dependency, JPMS-strict, virtual threads, Java 25.
+:description: MicroProfile JWT 2.1 implementation — signed-bearer-token RBAC for the Vidocq ecosystem — zero implementation dependency, strict JPMS, virtual threads, Java 25.
+
+////
+[.text-center]
+image::cervantes-logo.png[Cervantes,300,role=module-logo]
+////
 
 [.lead]
-Cervantes is the MicroProfile JWT 2.1 implementation of the Vidocq ecosystem. It validates signed (and optionally encrypted) JWT bearer tokens with `java.security` only, parses JSON through Champollion, reads configuration through Ravel, exposes the principal through CDI via xref:vauban::index.adoc[Vauban], and enforces `@RolesAllowed` on JAX-RS endpoints via xref:cassini::index.adoc[Cassini]. No Bouncy Castle, no Nimbus, no jose4j, no SmallRye JWT.
+Cervantes is the MicroProfile JWT 2.1 implementation of the Vidocq ecosystem. It validates signed (and optionally encrypted) JWT bearer tokens using `java.security` exclusively, parses JSON through xref:champollion::index.adoc[Champollion], reads its configuration through xref:ravel::index.adoc[Ravel], exposes the `JsonWebToken` principal in CDI through xref:vauban::index.adoc[Vauban], and enforces `@RolesAllowed` on JAX-RS endpoints through xref:cassini::index.adoc[Cassini]. Goal: 100 % conformance to the MicroProfile JWT 2.1 TCK (achieved, *206 / 206* at M6), zero third-party crypto or JWT library, strict JPMS, jlink-ready.
 
 == Origin of the name
 
-Miguel de Cervantes wrote *Don Quixote*, a hidalgo who *proclaims* himself a knight and demands that the world hold his titles for true. The Cervantes project implements MicroProfile JWT 2.1: it receives the identity *claims* asserted by a token bearer and — unlike the windmills of La Mancha — actually verifies them (signature, issuer, audience, expiration) before granting any role.
+**Miguel de Cervantes (1547-1616)**, Spanish writer. Author of _The Ingenious Hidalgo Don Quixote of La Mancha_ (1605 / 1615), the first great work of modern literature. See https://en.wikipedia.org/wiki/Miguel_de_Cervantes[the Wikipedia article].
+
+Don Quixote is not knighted: he _proclaims himself_ a knight-errant and carries with him the proofs of his rank — arms painted on his shield, copied letters patent, a heraldic narrative recited at every encounter. The picaresque story runs on that very mechanism: every interlocutor receives the claim, examines it, holds it as true or as folly. Cervantes invented the fiction of the _bearer of a signed identity_ — a character travelling with his own credentials and demanding that the world verify them.
+
+A JWT is exactly that: a bearer token that presents a signed identity on every HTTP request, and that each service verifies locally, without contacting a central authority. Cervantes the runtime, unlike the windmills of La Mancha, does not take the bearer's claims at face value: it actually verifies the signature, issuer, audience and expiration, and grants a role only after the check.
+
+[cols="1,3"]
+|===
+| Cervantes, the writer | Cervantes, the JWT runtime
+
+| Don Quixote carries his letters patent
+| Each request carries its `Authorization: Bearer ey…`
+
+| Local verification, no king to consult
+| Local validation via public key (offline, no callback to the issuer)
+
+| Heraldic narrative: name, arms, lineage
+| Claims: `iss`, `sub`, `aud`, `groups`, `roles`
+
+| Donor's seal
+| Digital signature (RS256, ES256, …)
+
+| Dated and expirable letters
+| `exp`, `nbf`, `iat` with clock-skew tolerance
+
+| Lineage proved by a chain of witnesses
+| Chain of trust via the JWK Set published at `iss`
+
+| Knighthood disputed by the curate and the barber
+| 401 if the signature lies, 403 if the role is missing
+|===
 
 == At a glance
 
@@ -15,22 +50,62 @@ Miguel de Cervantes wrote *Don Quixote*, a hidalgo who *proclaims* himself a kni
 | Implemented spec | {spec-mp-jwt}
 | Repo | {repo-cervantes}
 | Java | 25 (LTS)
-| Modules | `cervantes-mp-jwt-api`, `cervantes-api`, `cervantes-core`, `cervantes-cdi-vauban`, `cervantes-cassini`, `cervantes-bench`, `cervantes-examples`, `cervantes-tck`
-| TCK | 206 / 206 PASS (MicroProfile JWT 2.1, milestone M6)
+| JPMS modules | `io.vidocq.cervantes.api`, `io.vidocq.cervantes.core`, `io.vidocq.cervantes.cdi.vauban`, `io.vidocq.cervantes.cassini`, `org.eclipse.microprofile.jwt` (repackaging)
+| Public packages | `io.vidocq.cervantes.api.*` (stable SPI), `io.vidocq.cervantes.cdi.*` (CDI integration), `io.vidocq.cervantes.cassini.*` (JAX-RS integration)
+| Runtime dependencies | `microprofile-jwt-auth-api` 2.1, `jakarta.json-api` (via Champollion), `jakarta.enterprise.cdi-api` 4.1, `jakarta.ws.rs-api` 4.0, `jakarta.annotation-api` 3.0, `io.vidocq.ravel:ravel-mp-config-api`
+| Crypto | `java.security` (`Signature`, `KeyFactory`), `javax.crypto` (JWE) — *no* third-party library
+| jlink-ready | ✅ — every sub-module ships its own `module-info.java`, no `Automatic-Module-Name` fallback
+| MP JWT 2.1 TCK | ✅ *206 / 206* (100 %) — see xref:tck.adoc[detailed status]
 |===
 
-`cervantes-core` is the pure validation engine and knows nothing about HTTP or CDI; `cervantes-cassini` wires JAX-RS security and `cervantes-cdi-vauban` wires CDI injection, with a per-request `TokenHolder` bridging the auth filter and the producer without direct coupling.
+== Three identifying traits
 
-== Token verification
+. **Zero third-party crypto or JWT library.** No Nimbus, no jose4j, no Bouncy Castle, no Auth0 java-jwt, no SmallRye JWT. All signature verification (RS256/384/512, ES256/384/512, JOSE R‖S ⇄ DER transcoding for ECDSA) runs through `java.security.Signature`. JWE decryption (`RSA-OAEP`, `A256GCM`) runs through `javax.crypto`. JSON parsing runs through xref:champollion::index.adoc[Champollion] (JSON-P 2.1).
+. **Native `@RolesAllowed` without patching Cassini.** The JAX-RS integration sets a `SecurityContext` backed by the validated `JsonWebToken` and enforces `@RolesAllowed` / `@PermitAll` / `@DenyAll` through a `DynamicFeature`. Method precedence over class. 401 on invalid signature, 403 on missing role — entirely through the standard JAX-RS API, no implementation patch.
+. **Strict JPMS, virtual-thread-friendly, AOT-friendly.** Every artefact has its own `module-info.java`. `io.vidocq.cervantes.internal.*` is never exported. No `setAccessible(true)` in production, no dynamic `Proxy`. JWKS fetching uses `java.net.http.HttpClient`, with no `synchronized` around I/O. Compatible with GraalVM native-image and Leyden CDS.
 
-The core validates signed bearer tokens with `RS256/384/512` (RSA) and `ES256/384/512` (ECDSA), checking the standard claims `iss`, `aud`, `exp`, `nbf`, `iat` with configurable clock skew. Public keys load from PEM (inline or file) or from a JWKS source (URL or file, resolved by `kid`, with TTL refresh and rotation). Encrypted tokens (JWE, `RSA-OAEP` + `A256GCM`) are decrypted before validation. Everything runs on `java.security` / `javax.crypto`; JWKS fetching uses the JDK `HttpClient` and is virtual-thread-friendly (no `synchronized` around I/O).
+== Position in the ecosystem
 
-== Claims and RBAC
+[mermaid]
+....
+flowchart LR
+  Client["HTTP client<br/>Authorization: Bearer ey…"]
+  Filter["JwtAuthenticationFilter<br/>(cervantes-cassini)<br/>@PreMatching @Priority(AUTHENTICATION)"]
+  Validator["DefaultJwtValidator<br/>(cervantes-core)<br/>signature + claims + key"]
+  Keys["KeyResolver<br/>inline PEM / file PEM / JWKS URL / JWKS file"]
+  Holder["JsonWebTokenContext<br/>(@RequestScoped, cervantes-cdi-vauban)"]
+  SecCtx["JwtSecurityContext<br/>JAX-RS SecurityContext"]
+  Roles["RolesAllowedRequestFilter<br/>@RolesAllowed / @PermitAll / @DenyAll"]
+  Resource["JAX-RS resource<br/>@Inject JsonWebToken<br/>@Inject @Claim('email')"]
 
-The validated `JsonWebToken` principal is `@RequestScoped` and CDI-injectable, and typed `@Claim` injection is provided through a build-compatible extension over xref:vauban::index.adoc[Vauban]. On the JAX-RS side, xref:cassini::index.adoc[Cassini] integration enforces `@RolesAllowed`, `@PermitAll` and `@DenyAll` (method precedence over class) backed by a `SecurityContext` adossed to the token groups, set via `setSecurityContext` rather than a `ThreadLocal`. Configuration uses the standard MP-Config properties `mp.jwt.verify.publickey.location`, `mp.jwt.verify.issuer`, `mp.jwt.verify.audiences`, `mp.jwt.token.header`, read through xref:ravel::index.adoc[Ravel].
+  Client --> Filter
+  Filter -->|validate| Validator
+  Validator -->|kid| Keys
+  Filter -->|setToken| Holder
+  Filter -->|setSecurityContext| SecCtx
+  SecCtx --> Roles
+  Roles --> Resource
+  Holder -.@Inject.-> Resource
+
+  classDef rt fill:#fff3e0,stroke:#ef6c00
+  class Filter,Validator,Holder,SecCtx,Roles rt
+
+  Filter -.config.-> Ravel["Ravel<br/>mp.jwt.verify.*"]
+  Holder -.BCE.-> Vauban["Vauban<br/>CDI Lite + @Claim"]
+  Validator -.JSON.-> Champollion["Champollion<br/>JSON-P"]
+  Filter -.HTTP.-> Chappe["Chappe<br/>transport"]
+....
+
+Cervantes consumes the ecosystem from the bottom up: xref:chappe::index.adoc[Chappe] serves the requests, xref:cassini::index.adoc[Cassini] hosts the auth filter and the `@RolesAllowed` `DynamicFeature`, xref:vauban::index.adoc[Vauban] triggers the BCE that synthesises the `@Claim` beans, xref:ravel::index.adoc[Ravel] resolves the `mp.jwt.*` keys, xref:champollion::index.adoc[Champollion] parses the JSON payload of the token. Cervantes adds the signed-identity layer — without rewriting anything else.
 
 == Quick links
 
-* xref:usage.adoc[Usage]
+* xref:getting-started.adoc[Getting started] — first protected endpoint in under five minutes.
+* xref:concepts.adoc[Concepts] — JWT, standard and MP claims, signature, JWK Set, rotation.
+* xref:usage.adoc[Usage patterns] — `@RolesAllowed`, `@Claim`, JWKS, JWE, cookies, refresh.
+* xref:reference.adoc[Reference] — artefacts, annotations, `mp.jwt.*` keys, algorithms.
+* xref:internals.adoc[Internals] — pure engine, auth filter, JWKS cache, threading.
+* xref:tck.adoc[TCK] — execution, status *206 / 206*, exclusions.
+* xref:migration.adoc[Migration] — from SmallRye JWT.
 
-Consolidated bugs and benchmarks: link:{repo-cervantes}/src/branch/main/BUG.md[BUG.md], link:{repo-cervantes}/src/branch/main/BENCH.md[BENCH.md].
+Next: xref:getting-started.adoc[Getting started].

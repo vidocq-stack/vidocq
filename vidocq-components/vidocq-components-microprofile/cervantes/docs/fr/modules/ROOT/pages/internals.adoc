@@ -1,0 +1,177 @@
+= Fonctionnement interne
+:description: Pipeline de validation pur dans cervantes-core, filtre d'auth Cassini, BCE Vauban pour @Claim, cache JWKS thread-safe, threading virtuel, choix d'implémentation.
+
+[.lead]
+Cervantes sépare strictement le moteur de validation (`cervantes-core`, Java pur, sans HTTP ni CDI) des couches d'intégration (`cervantes-cassini` pour JAX-RS, `cervantes-cdi-vauban` pour CDI). Cette page détaille la séquence de validation, le filtre d'auth JAX-RS, la BCE de synthèse `@Claim`, le cache JWKS thread-safe, et les invariants de threading.
+
+== Séparation `cervantes-core` / intégrations
+
+`cervantes-core` est du Java pur. Il dépend uniquement de `cervantes-mp-jwt-api` (spec), `cervantes-api` (SPI publique), `jakarta.json` (parsing via xref:champollion::index.adoc[Champollion]), et de la SPI MicroProfile Config en signature de méthode — _pas_ d'implémentation runtime. Il s'utilise hors container : un test unitaire peut générer une paire RSA, forger un token, et valider le tout sans démarrer Cassini ni Vauban.
+
+`cervantes-cdi-vauban` branche le moteur sur CDI : producer `@RequestScoped JsonWebToken`, BCE de synthèse pour `@Claim`, producer `JwtValidator` configuré depuis MP-Config.
+
+`cervantes-cassini` branche le moteur sur JAX-RS : `ContainerRequestFilter` d'auth, `DynamicFeature` pour `@RolesAllowed`, `SecurityContext` adossé au token validé. **Aucune modification de Cassini n'a été nécessaire** — Cervantes utilise l'API JAX-RS standard (`setSecurityContext`, `@PreMatching`, `@Priority(AUTHENTICATION)`, `DynamicFeature`).
+
+== Pipeline de validation (`cervantes-core`)
+
+`DefaultJwtValidator.validate(String rawToken)` exécute la séquence :
+
+[mermaid]
+....
+flowchart LR
+  Input["rawToken : String"]
+  Detect["Détection<br/>3 segments → JWS<br/>5 segments → JWE"]
+  Decrypt["JweDecryptor<br/>RSA-OAEP + A256GCM"]
+  Parse["JwtParser<br/>base64url decode<br/>JSON parse (Champollion)"]
+  Sig["JwtSignatureVerifier<br/>java.security.Signature<br/>RS/ES/PS/HS"]
+  KeyR["KeyResolver<br/>kid → PublicKey"]
+  Claims["JwtClaimsValidator<br/>iss/aud/exp/nbf/iat<br/>+ clock-skew"]
+  Out["DefaultJsonWebToken<br/>(immuable)"]
+
+  Input --> Detect
+  Detect -->|3 parts| Parse
+  Detect -->|5 parts| Decrypt --> Parse
+  Parse --> Sig
+  Sig --> KeyR
+  KeyR --> Sig
+  Sig --> Claims
+  Claims --> Out
+
+  classDef rt fill:#fff3e0,stroke:#ef6c00
+  class Detect,Parse,Sig,KeyR,Claims rt
+....
+
+. **Détection** — un JWT a 3 segments séparés par `.`, un JWE en a 5. Dispatch sur la branche correspondante.
+. **Déchiffrement (JWE uniquement)** — `JweDecryptor` désenveloppe la clé symétrique éphémère (`RSA-OAEP[-256]`), déchiffre le contenu (`A256GCM`), vérifie le tag d'authentification, vérifie l'en-tête `cty` (doit être `JWT` pour un nested), et produit un JWS qui repart dans le pipeline normal.
+. **Parsing** — `JwtParser` décode les trois segments via `Base64.getUrlDecoder()`, parse le header et le payload JSON via Champollion → `ParsedJwt(JsonObject header, JsonObject payload, byte[] signedContent, byte[] signature)`.
+. **Sélection de clé** — `KeyResolver.resolve(header)` retourne la `PublicKey` à utiliser. Trois implémentations dans `KeyResolvers` : `fromInlinePem`, `fromLocation` (auto-détection PEM vs JWKS), et `JwksKeyResolver` pour les URL/fichiers JWKS multi-clés.
+. **Vérification de signature** — `JwtSignatureVerifier` instancie un `java.security.Signature` selon le `alg` du header, vérifie `signedContent` contre `signature`. Pour ECDSA, transcodage R‖S → DER via `EcdsaSignatures` (le JDK exige DER).
+. **Validation des claims** — `JwtClaimsValidator` contrôle `iss` (égalité stricte avec `JwtConfig.expectedIssuer`), `aud` (intersection non vide avec `JwtConfig.expectedAudiences`), `exp` (≥ `now - skew`), `nbf` (≤ `now + skew`), optionnellement `iat` (présence + âge max via `token.age`).
+. **Construction du principal** — `DefaultJsonWebToken` enveloppe le payload validé. Immuable. `getName()` priorise `upn` > `preferred_username` > `sub`. `getGroups()` extrait le claim `groups` (set non modifiable).
+
+Le résultat est un `JsonWebToken` validé ou une `JwtValidationException` typée. Aucune étape n'est court-circuitée — un échec à `n` interrompt toute la chaîne avant `n+1`.
+
+== Filtre d'auth JAX-RS (`cervantes-cassini`)
+
+`JwtAuthenticationFilter` est un `ContainerRequestFilter` `@PreMatching` `@Priority(AUTHENTICATION)`.
+
+[source,java]
+----
+// Extrait de JwtAuthenticationFilter.filter(ContainerRequestContext)
+String rawToken = extractToken(requestContext);   // Authorization ou Cookie
+if (rawToken == null) return;                      // anonyme — @RolesAllowed décidera
+
+try {
+    JsonWebToken jwt = validator.validate(rawToken);
+    tokenContext.setToken(jwt);                    // publie pour le CDI
+    SecurityContext previous = requestContext.getSecurityContext();
+    boolean secure = previous != null && previous.isSecure();
+    requestContext.setSecurityContext(new JwtSecurityContext(jwt, secure));
+} catch (JwtValidationException e) {
+    requestContext.abortWith(Response.status(Status.UNAUTHORIZED).build());
+}
+----
+
+`@PreMatching` est obligatoire pour pouvoir appeler `setSecurityContext` (JAX-RS §6.6). La priorité `AUTHENTICATION` garantit l'exécution _avant_ les filtres d'autorisation.
+
+`JwtSecurityContext` adapte `SecurityContext` :
+
+* `getUserPrincipal()` → le `JsonWebToken` (qui est un `Principal`).
+* `isUserInRole(role)` → `jwt.getGroups().contains(role)`.
+* `getAuthenticationScheme()` → `"MP-JWT"`.
+* `isSecure()` → hérité du contexte précédent.
+
+`RolesAllowedDynamicFeature` introspecte les méthodes JAX-RS au démarrage et enregistre `RolesAllowedRequestFilter` selon `@RolesAllowed` / `@PermitAll` / `@DenyAll`. Précédence : méthode > classe. Pas de réflexion à chaud — la décision est statique par endpoint, prise une fois.
+
+== Bridge CDI : `JsonWebTokenContext`
+
+Le filtre JAX-RS et le producer CDI ne se connaissent pas directement. Ils communiquent via `JsonWebTokenContext`, un bean `@RequestScoped` :
+
+[source,java]
+----
+@RequestScoped
+public class JsonWebTokenContext {
+    private JsonWebToken token;
+    public void setToken(JsonWebToken t) { this.token = t; }
+    public JsonWebToken getToken() { return token; }
+}
+----
+
+* Côté filtre : `tokenContext.setToken(jwt)` (au début de la requête).
+* Côté producer : `JsonWebTokenProducer.@Produces @RequestScoped JsonWebToken get(JsonWebTokenContext ctx)` lit `ctx.getToken()` (ou renvoie un anonyme `DefaultJsonWebToken.anonymous()` si absent).
+* Côté `@Claim` : la BCE synthétique relit aussi `ctx.getToken()` à chaque résolution.
+
+`@RequestScoped` garantit l'isolation par requête _sans_ `ThreadLocal` — ce qui évite le pinning des virtual threads.
+
+== BCE Vauban : `CervantesClaimExtension`
+
+L'injection `@Claim` est résolue par une Build Compatible Extension Vauban.
+
+. **`@Registration`** — Vauban appelle l'extension pour chaque type de point d'injection portant `@Claim`. L'extension collecte la liste des _types_ rencontrés (`String`, `Long`, `Set<String>`, `Optional<String>`, `ClaimValue<String>`, …).
+. **`@Synthesis`** — Vauban appelle l'extension qui enregistre, pour chaque type collecté, un `SyntheticBean` qualifié `@Claim` et `@Dependent`. `@Claim` ayant `value` et `standard` marqués `@Nonbinding`, _un seul bean par type_ couvre tous les sites d'injection — le nom du claim est lu sur l'`InjectionPoint` à l'instanciation.
+. **`ClaimSyntheticCreator`** — implémente `SyntheticBeanCreator<T>`. À chaque résolution, lit l'`InjectionPoint`, extrait `@Claim` (`value()` ou `standard().name()`), récupère le `JsonWebToken` courant via `JsonWebTokenContext`, et délègue à `ClaimResolver.resolve(jwt, claimName, type)` pour la conversion typée.
+
+Le pattern est calqué sur la `ConfigCdiExtension` de Ravel, qui a inspiré l'approche.
+
+== Cache JWKS thread-safe (`JwksKeyResolver`)
+
+`JwksKeyResolver` doit servir des `PublicKey` pour la durée de vie de l'application, en absorbant la rotation. Contraintes : pas de blocage des virtual threads, pas de cascade de fetch concurrents, pas de cascade d'erreurs si l'émetteur est indisponible.
+
+Implémentation :
+
+[cols="1,3"]
+|===
+| Mécanisme | Rôle
+
+| `AtomicReference<JwksSnapshot>` (`kid` → `PublicKey`)
+| Lecture lock-free. Toute requête lit le snapshot courant en `O(1)`.
+
+| `ReentrantLock` non équitable
+| Sérialise les _refresh_ — un seul thread fetch le JWK Set à la fois. Les autres attendent et relisent le snapshot.
+
+| TTL configurable + `Instant lastRefresh`
+| Refresh _périodique_ même sans rotation visible — défense contre les clés compromises.
+
+| `minRefreshInterval`
+| Refresh _réactif_ borné — un `kid` inconnu déclenche au plus un refresh par fenêtre. Défense contre un attaquant qui forge des `kid` aléatoires.
+
+| Snapshot _fallback_
+| Si le fetch échoue (réseau, 5xx, parse error), conserve le snapshot précédent et continue de servir. Pas de cascade 503.
+
+| `HttpClient` JDK + `HttpRequest.timeout(...)`
+| I/O via `java.net.http.HttpClient`, virtual-thread-friendly. Pas de `synchronized` autour de l'I/O.
+|===
+
+Le snapshot est immuable, l'`AtomicReference` joue le rôle de barrière mémoire (happens-before JMM).
+
+== Threading et `ScopedValue`
+
+. **Aucun `synchronized` autour de l'I/O.** Le fetch JWKS, la lecture de fichier PEM, le parsing JSON passent par des primitives non bloquantes pour le scheduler virtuel.
+. **Aucun `ThreadLocal`.** Le partage d'état per-request passe par `@RequestScoped` (CDI) ou par `SecurityContext` (JAX-RS), pas par `ThreadLocal`. Évite le pinning des virtual threads.
+. **`ReentrantLock` partout où un verrou est nécessaire** (refresh JWKS, registres internes), conformément à la philosophie globale Vidocq.
+
+== Compatibilité AOT / jlink
+
+* Chaque sous-module a son `module-info.java`. Pas de `Automatic-Module-Name` de repli.
+* Aucun `setAccessible(true)` en production. Quand une vue privilégiée est nécessaire (rare), `MethodHandles.privateLookupIn`.
+* Aucun `java.lang.reflect.Proxy` dynamique. Les beans `@Claim` sont _synthétiques_, créés à la compilation CDI par Vauban — pas à l'exécution.
+* `cervantes-tck` reste hors reactor (Model 4.0.0), pour ne pas empêcher la compilation des autres modules avec ShrinkWrap Maven Resolver 3.3 (limitation transitive du TCK officiel).
+
+== Tests unitaires de `cervantes-core`
+
+Un point d'honneur : la totalité du moteur est testable sans HTTP, sans CDI, avec des paires de clés générées à la volée par `KeyPairGenerator`. Les jeux de tests :
+
+* `DefaultJwtValidatorTest` — bout-en-bout signature + claims.
+* `JwtSignatureVerifierTest` — chaque famille (RSA, EC, PS, HS).
+* `JwkParserTest` — parsing JWK RSA et EC.
+* `JwksKeyResolverTest` — cache, refresh, rotation, fallback.
+* `JweDecryptorTest` — désenveloppement + déchiffrement.
+* `JwtClaimsValidatorTest` — iss/aud/exp/nbf/iat + clock-skew.
+
+Aucun Mockito — uniquement des doubles manuels et des paires de clés générées.
+
+== Pour aller plus loin
+
+* xref:concepts.adoc[Concepts] — JWT, claims, signature, JWK Set.
+* xref:tck.adoc[TCK] — ce que valide la suite officielle.
+* xref:reference.adoc[Référence] — annotations et clés `mp.jwt.*`.

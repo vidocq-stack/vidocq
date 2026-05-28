@@ -1,0 +1,159 @@
+= TCK MicroProfile JWT 2.1
+:description: Statut 206/206, exécution du runner, architecture hors reactor, exclusions documentées, écarts résolus pendant la course au 100 %.
+
+[.lead]
+Le TCK officiel MicroProfile JWT 2.1 valide qu'une implémentation accepte, rejette et expose correctement un éventail de tokens forgés contre une application Arquillian de référence — clés inline, JWKS, JWE, claims standard, claims MP, transport `Authorization` et cookie, rotation de clés, signatures falsifiées, `exp`/`nbf`/`iat` aux bornes. Cervantes le passe à **206 / 206** sur la version 2.1 (mai 2026, jalon M6).
+
+== Statut
+
+[cols="2,1"]
+|===
+| Métrique | Valeur
+
+| Tests exécutés
+| 206
+
+| Réussis
+| 206 ✅
+
+| Échoués
+| 0
+
+| Erreurs
+| 0
+
+| Ignorés
+| 0
+|===
+
+Tout écart ultérieur doit être journalisé dans `TCK.md` du dépôt avec : nom de test, motif, plan de correction.
+
+== Prérequis
+
+L'artefact `org.eclipse.microprofile.jwt:microprofile-jwt-auth-tck:2.1` (et son classifier `tests`) est désormais disponible sur Maven Central — il se télécharge automatiquement. Le runner installe également `cassini-tck` dans le M2 local pour disposer du `CassiniTestHarness`.
+
+[source,bash]
+----
+sdk env                              # Java 25 + Maven 4.0.0-rc-5
+./mvnw -ntp install -DskipTests     # installe cervantes-core, cervantes-cassini, cervantes-cdi-vauban, …
+----
+
+== Exécution du runner
+
+Le script `run-official-tck-mp-jwt-2.1.sh` à la racine du dépôt orchestre toutes les variantes.
+
+[source,bash]
+----
+# Smoke — un test rapide pour valider l'installation
+./run-official-tck-mp-jwt-2.1.sh
+
+# Suite complète — équivalent du TCK officiel à 206 tests
+./run-official-tck-mp-jwt-2.1.sh all
+
+# Test ciblé via -Dtest=
+./run-official-tck-mp-jwt-2.1.sh -Dtest=PublicKeyAsPEMTest
+----
+
+Le runner exécute Arquillian. Le rapport Surefire atterrit dans `cervantes-tck/target/surefire-reports/`.
+
+== Architecture du runner
+
+`cervantes-tck` est **volontairement hors reactor** : son `pom.xml` est en `modelVersion 4.0.0` standalone, sans `<parent>`. Gabarit calqué sur `heisenberg-tck`.
+
+[NOTE]
+====
+Ce détachement est imposé par ShrinkWrap Maven Resolver 3.3, transitive du TCK officiel, qui ne sait pas parser les POMs Model 4.1.0 et crashe sur le reactor Vidocq. La règle est documentée à la racine du workspace : **ne pas réintégrer `cervantes-tck` aux `<subprojects>` de `cervantes-parent`**.
+====
+
+Stack assemblée par le runner :
+
+[cols="1,3"]
+|===
+| Couche | Composant
+
+| Spec
+| `microprofile-jwt-auth-api` 2.1, `microprofile-jwt-auth-tck` 2.1 (+ classifier `tests`)
+
+| Implémentation MP JWT
+| `cervantes-mp-jwt-api`, `cervantes-api`, `cervantes-core`, `cervantes-cdi-vauban`, `cervantes-cassini`
+
+| Container CDI
+| Vauban (`io.vidocq.vauban.core`) en mode embarqué — instancié par déploiement Arquillian
+
+| Container Arquillian
+| `CervantesJwtDeployableContainer` — pour chaque archive ShrinkWrap : extrait les bean classes, copie le `META-INF/microprofile-config.properties` en system properties, démarre Cassini + Chappe sur port aléatoire, réécrit les `mp.jwt.verify.publickey.location=http://localhost:8080/…` vers le port éphémère réel
+
+| Transport HTTP
+| Chappe (`io.vidocq.chappe.http`)
+
+| Cadre de test
+| Arquillian + REST (le TCK MP JWT n'est *pas* TestNG-only contrairement au TCK MP FT)
+|===
+
+== Exclusions documentées
+
+Deux exclusions, non-applicables au profil Core + JWT visé par Cervantes :
+
+[cols="2,3"]
+|===
+| Exclusion | Justification
+
+| Tests `…/tck/container/servlet/**`
+| Tests destinés au profil _container servlet_ Jakarta EE Full. Cervantes vise le profil _Core_ (MicroProfile) — pas d'engagement Servlet 6.1. Le rôle Servlet est tenu par xref:foy::index.adoc[Foy], hors périmètre de cette implémentation MP JWT.
+
+| Groupe TestNG `ee-security-optional`
+| Tests marqués _optional_ par la spec pour l'intégration Jakarta EE Security 3.0. Non requis pour la conformité MP JWT 2.1.
+|===
+
+Les exclusions sont listées dans le fichier suite Arquillian/TestNG de `cervantes-tck/src/test/resources/`. Une exclusion ajoutée à l'avenir doit être tracée dans `TCK.md` avec sa justification.
+
+== Écarts résolus pendant la course au 100 %
+
+Le TCK a révélé plusieurs écarts entre la spec et l'implémentation initiale ; tous ont été corrigés dans le moteur, pas masqués par des exclusions :
+
+[cols="2,3"]
+|===
+| Composant | Écart corrigé
+
+| `KeyResolvers`
+| Charge HTTP _paresseuse_ + auto-détection PEM vs JWKS sur la même URL + relecture de l'URL après démarrage du serveur (le port n'est connu qu'après bind).
+
+| `JwksSource`
+| Ajout du header `Accept: application/json` (§9.2.2) + résolution `classpath:` honorée.
+
+| `JwkParser`
+| Parsing de clé privée JWK (`d`) et certificat (`x5c`).
+
+| `Jwe` / `JweDecryptor`
+| Contrôle explicite de l'algorithme requis + vérification `cty=JWT` pour les JWE nested.
+
+| `ClaimResolver`
+| `raw_token` exposé comme `JsonString`, `aud` simple converti en array d'un élément.
+
+| `CervantesClaimExtension`
+| Unwrap `Provider<T>` et `Instance<T>` dans la détection de types des points d'injection.
+
+| `JwtAuthenticationFilter`
+| Extraction token via cookie (§9.2.3), distinction des cas d'erreur, comportement anonyme sur token absent.
+
+| `DefaultJsonWebToken`
+| Principal anonyme → `null` pour tout claim demandé.
+|===
+
+== Prérequis livrés en amont
+
+Deux fixes externes ont été nécessaires pour atteindre 206/206 :
+
+* **cassini** — patch `@Context SecurityContext` injecté _dans une ressource_ pour refléter le JWT du `JwtAuthenticationFilter`. Mergé sur main de Cassini, REST TCK 4.0 (2535 tests) préservé.
+* **vauban** — fix VAU-INJ-PRIM : le `TypeMapper` exposait un point d'injection primitif (`boolean`) comme `ClassType[name=boolean]` au lieu de `PrimitiveType`, ce qui faisait échouer silencieusement l'injection `@Claim boolean`. Fix + test de régression `PrimitiveQualifiedInjectionTest`. Mergé sur main de Vauban.
+
+== Contrat qualité
+
+Toute modification structurelle de `cervantes-core`, `cervantes-cdi-vauban` ou `cervantes-cassini` doit préserver le score 206 / 206 avant merge. Une régression TCK est bloquante au sens CI : la PR ne passe pas.
+
+== Pour aller plus loin
+
+* xref:internals.adoc[Fonctionnement interne] — comprendre ce que le TCK valide.
+* xref:reference.adoc[Référence] — annotations et clés couvertes par les tests.
+* link:{repo-cervantes}/src/branch/main/BUG.md[BUG.md] — bugs reproductibles tracés.
+* link:{repo-cervantes}/src/branch/main/TCK.md[TCK.md] — historique des scores.

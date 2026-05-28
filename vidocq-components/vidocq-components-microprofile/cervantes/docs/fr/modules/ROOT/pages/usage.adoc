@@ -1,57 +1,261 @@
-= Utilisation
+= Cas d'usage
+:description: @RolesAllowed, @Claim typé, JWKS dynamique, JWE, transport via cookie, refresh contrôlé, principal anonyme, audit.
 
-== Sécuriser une ressource JAX-RS
+[.lead]
+Cette page parcourt les motifs MicroProfile JWT 2.1 couramment rencontrés dans une API JAX-RS protégée par bearer token, et montre comment Cervantes les exprime — sans réflexion à chaud, sans dépendance tierce, sans `ThreadLocal`.
 
-Annotez les méthodes de ressource avec `@RolesAllowed`, `@PermitAll` ou `@DenyAll`. Le
-`JwtAuthenticationFilter` extrait et valide le bearer token, puis publie le principal
-`JsonWebToken` ; le `RolesAllowedDynamicFeature` applique les contrôles de rôle (401 si le
-token est absent ou invalide, 403 si l'appelant n'a pas le rôle). Injectez le principal
-validé — et les claims individuels — via CDI.
+== Sécuriser une ressource avec `@RolesAllowed`
+
+L'annotation `jakarta.annotation.security.RolesAllowed` portée par une méthode (ou par la classe) déclenche le contrôle d'autorisation. Précédence : la méthode l'emporte sur la classe.
 
 [source,java]
 ----
+import jakarta.annotation.security.PermitAll;
 import jakarta.annotation.security.RolesAllowed;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
+import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
-import org.eclipse.microprofile.jwt.Claim;
-import org.eclipse.microprofile.jwt.JsonWebToken;
 
 @Path("/orders")
+@RolesAllowed("user")           // défaut classe — tous les endpoints exigent au moins "user"
 public class OrderResource {
 
-    @Inject
-    JsonWebToken jwt;            // le principal validé (anonyme si pas de token)
+    @GET
+    public List<Order> list() { /* hérite de @RolesAllowed("user") */ }
+
+    @GET @Path("/admin/stats")
+    @RolesAllowed("admin")     // méthode plus restrictive — l'emporte
+    public Stats stats() { /* … */ }
+
+    @GET @Path("/health")
+    @PermitAll                 // expose l'endpoint à tous (anonyme inclus)
+    public String health() { /* … */ }
+}
+----
+
+Comportement attendu :
+
+* Token absent ou invalide + endpoint non `@PermitAll` → **401 Unauthorized**.
+* Token valide mais sans le rôle requis → **403 Forbidden**.
+* Token valide avec le rôle requis → **200 OK** (la méthode s'exécute).
+* `@DenyAll` → toujours **403**, quel que soit le token.
+
+== Injecter le principal `JsonWebToken`
+
+Le principal validé est `@RequestScoped` et disponible par CDI partout dans la requête.
+
+[source,java]
+----
+import jakarta.inject.Inject;
+import org.eclipse.microprofile.jwt.JsonWebToken;
+
+@Path("/me")
+public class MeResource {
 
     @Inject
-    @Claim("upn")
-    String userPrincipalName;    // un claim isolé, typé
+    JsonWebToken jwt;
 
     @GET
-    @RolesAllowed("manager")
-    public String list() {
-        return "orders for " + jwt.getName()
-             + " (upn=" + userPrincipalName + ", groups=" + jwt.getGroups() + ")";
+    @RolesAllowed("user")
+    public String describe() {
+        return "name=" + jwt.getName()
+             + " iss=" + jwt.getIssuer()
+             + " groups=" + jwt.getGroups()
+             + " exp=" + jwt.getExpirationTime();
     }
 }
 ----
 
-== Configuration
+En l'absence de token, le principal est un _anonyme_ — `getName() == null`, `getGroups()` vide, tous les claims `null`. Aucun NPE à craindre, mais `@RolesAllowed` aura déjà renvoyé 401 si l'endpoint n'est pas `@PermitAll`.
 
-Cervantes lit les propriétés MicroProfile JWT standard via Ravel (MP Config). Placez-les
-dans `META-INF/microprofile-config.properties` :
+== Injecter un claim isolé avec `@Claim`
+
+L'annotation `@Claim("nom")` permet d'injecter une valeur typée. Cervantes synthétise un bean par type d'injection trouvé, via une BCE Vauban — la résolution est statique, sans réflexion à chaud.
+
+[source,java]
+----
+import jakarta.inject.Inject;
+import jakarta.inject.Provider;
+import org.eclipse.microprofile.jwt.Claim;
+import org.eclipse.microprofile.jwt.ClaimValue;
+
+import java.util.Optional;
+import java.util.Set;
+
+public class ClaimSamples {
+
+    @Inject @Claim("email")          String email;          // String
+    @Inject @Claim("exp")            Long exp;              // Long
+    @Inject @Claim("email_verified") Boolean verified;      // Boolean
+    @Inject @Claim("groups")         Set<String> groups;    // Set<String>
+
+    @Inject @Claim("email")          Optional<String> emailOpt;     // eager Optional
+    @Inject @Claim("email")          ClaimValue<String> emailLazy;  // lazy MP ClaimValue
+    @Inject @Claim("email")          Provider<String> emailProv;    // lazy CDI Provider
+    @Inject @Claim("raw_token")      String rawToken;       // le token brut
+}
+----
+
+Types supportés (extrait — voir xref:reference.adoc[Référence] pour la liste exhaustive) :
+
+[cols="1,3"]
+|===
+| Type Java | Sémantique
+
+| `String`, `Long`, `Integer`, `Double`, `Boolean`
+| Coercion depuis la valeur JSON du claim.
+
+| `Set<String>`, `List<String>`
+| Pour les claims tableau (`groups`, `aud`).
+
+| `jakarta.json.JsonValue` / `JsonString` / `JsonNumber` / `JsonObject` / `JsonArray`
+| Valeur brute parsée par xref:champollion::index.adoc[Champollion].
+
+| `Optional<T>`
+| Eager — résolu au moment de l'injection (token courant).
+
+| `ClaimValue<T>` (MP), `Provider<T>` (CDI), `Supplier<T>` (JDK)
+| Lazy — relit le token de la requête courante à chaque appel.
+|===
+
+[NOTE]
+====
+Sur un champ _primitif_ (`int`, `boolean`), Vauban a longtemps eu un bug (VAU-INJ-PRIM, corrigé fin mai 2026) qui rendait l'injection silencieusement vide. Cervantes 0.1.0-SNAPSHOT exige donc un Vauban incluant ce fix.
+====
+
+== Transporter le token via cookie plutôt que `Authorization`
+
+La spec MP JWT 2.1 §9.2.3 autorise un transport par cookie pour les apps qui n'aiment pas `Authorization`.
 
 [source,properties]
 ----
-# Emplacement de la clé publique de vérification (PEM inline/fichier, ou URL/fichier JWKS)
-mp.jwt.verify.publickey.location=https://issuer.example.com/.well-known/jwks.json
+# Bascule sur le mode cookie
+mp.jwt.token.header=Cookie
 
-# Émetteur attendu du token (claim "iss")
-mp.jwt.verify.issuer=https://issuer.example.com
-
-# Audiences acceptées (claim "aud") — séparées par des virgules
-mp.jwt.verify.audiences=orders-api
-
-# Optionnel : header portant le token (défaut Authorization, schéma Bearer)
-mp.jwt.token.header=Authorization
+# Nom du cookie qui porte le bearer (défaut: Bearer)
+mp.jwt.token.cookie=session-jwt
 ----
+
+Côté `JwtAuthenticationFilter`, l'extraction lit `request.getCookies().get("session-jwt").getValue()` au lieu de `Authorization: Bearer …`.
+
+== JWKS dynamique avec rotation
+
+En production, l'émetteur publie ses clés sur un endpoint connu, par exemple OpenID Connect Discovery :
+
+[source,properties]
+----
+mp.jwt.verify.publickey.location=https://issuer.example.com/.well-known/jwks.json
+mp.jwt.verify.issuer=https://issuer.example.com
+mp.jwt.verify.audiences=orders-api,billing-api
+mp.jwt.verify.publickey.algorithm=RS256
+----
+
+Comportement :
+
+. La première requête déclenche le fetch (paresseux, pas au démarrage).
+. Le JWK Set est mis en cache.
+. Tant qu'un `kid` connu est utilisé, aucun appel réseau supplémentaire.
+. À l'apparition d'un `kid` inconnu (rotation), Cervantes refresh le JWK Set (limite : un refresh max par `minRefreshInterval`).
+. Si le fetch échoue, Cervantes retombe sur le snapshot précédent — pas de cascade de 503.
+
+== JWE — recevoir des tokens chiffrés
+
+Quand l'émetteur chiffre le token (pour cacher les claims aux journaux intermédiaires) :
+
+[source,properties]
+----
+# Clé privée de déchiffrement — PEM PKCS#8 inline ou pointée par .location
+mp.jwt.decrypt.key.location=classpath:/META-INF/keys/decrypt-private.pem
+
+# Algorithme d'enveloppement attendu (RSA-OAEP par défaut, accepte aussi RSA-OAEP-256)
+mp.jwt.decrypt.key.algorithm=RSA-OAEP-256
+----
+
+Le `JweDecryptor` désenveloppe la clé symétrique éphémère, déchiffre le contenu (A256GCM), valide le tag d'authentification, puis Cervantes valide le JWS résultant comme d'habitude.
+
+== Vérifier l'âge maximal du token (`token.age`)
+
+Pour rejeter des tokens trop vieux, indépendamment de leur `exp` :
+
+[source,properties]
+----
+# Refuse tout token dont iat est plus ancien que 300 secondes
+mp.jwt.verify.token.age=300
+----
+
+Le claim `iat` doit alors être présent (sauf si `mp.jwt.verify.requireiat=false`).
+
+== Ajuster la tolérance d'horloge
+
+Quand l'émetteur et le service ne partagent pas une horloge atomique :
+
+[source,properties]
+----
+# Tolérance en secondes (défaut 60)
+mp.jwt.verify.clock.skew=120
+----
+
+`exp` est valide jusqu'à `exp + clockSkew`, `nbf` est valide à partir de `nbf - clockSkew`.
+
+== Lire un claim _ad-hoc_ via `JsonWebToken.getClaim`
+
+Quand le claim n'est pas standard et qu'on ne veut pas créer d'injection `@Claim` :
+
+[source,java]
+----
+@Inject JsonWebToken jwt;
+
+@GET
+public Response withTenant() {
+    String tenant = jwt.getClaim("https://example.com/tenant");
+    return Response.ok().header("X-Tenant", tenant).build();
+}
+----
+
+`getClaim` retourne `null` si absent. Pour la valeur JSON brute (utile quand le claim est un objet), `getClaim` retourne un `JsonObject` Champollion.
+
+== Endpoint public sur une ressource majoritairement protégée
+
+`@PermitAll` sur la méthode permet une exception locale :
+
+[source,java]
+----
+@Path("/admin")
+@RolesAllowed("admin")
+public class AdminResource {
+
+    @GET @Path("/ping")
+    @PermitAll
+    public String ping() { return "pong"; }   // accessible sans token
+
+    @GET @Path("/secret")
+    public String secret() { return "shh"; }  // exige "admin"
+}
+----
+
+== Audit — tracer chaque appel avec le principal
+
+`JsonWebTokenContext` étant `@RequestScoped`, il est injectable dans un `ContainerResponseFilter` pour logger qui a appelé quoi :
+
+[source,java]
+----
+@Provider
+@ApplicationScoped
+public class AuditFilter implements ContainerResponseFilter {
+
+    @Inject JsonWebTokenContext tokenCtx;
+
+    @Override
+    public void filter(ContainerRequestContext req, ContainerResponseContext resp) {
+        JsonWebToken jwt = tokenCtx.getToken();
+        String name = jwt == null ? "anonymous" : jwt.getName();
+        log.info("{} {} → {} (caller={})", req.getMethod(), req.getUriInfo().getPath(), resp.getStatus(), name);
+    }
+}
+----
+
+== Pour aller plus loin
+
+* xref:reference.adoc[Référence] — toutes les clés `mp.jwt.*`, tous les algorithmes.
+* xref:concepts.adoc[Concepts] — claims, signature, JWK Set, JWE.
+* xref:internals.adoc[Fonctionnement interne] — pipeline de validation, cache JWKS.

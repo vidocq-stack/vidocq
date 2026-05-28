@@ -1,0 +1,102 @@
+= Migration
+:description: Moving from SmallRye JWT to Cervantes — configuration equivalences, API equivalences, gotchas.
+
+[CAUTION]
+====
+Cervantes is at `0.1.0-SNAPSHOT`. The MicroProfile JWT 2.1 spec is fully covered (TCK 206 / 206, see xref:tck.adoc[TCK status]), but the public SPI may still evolve before `1.0.0`. This page documents the mappings to prepare a staged migration.
+====
+
+[.lead]
+On the application code side, migration is trivial: Cervantes strictly consumes the standard `org.eclipse.microprofile.jwt.*` and `jakarta.annotation.security.*` annotations. No proprietary import to replace. The gaps lie in transport/JWE configuration and in the dependency footprint.
+
+== From SmallRye JWT
+
+SmallRye JWT is the reference implementation in Quarkus and in several Jakarta EE servers. Migration is direct — Cervantes targets strict conformance to the same spec.
+
+[cols="2,2,3"]
+|===
+| SmallRye JWT | Cervantes | Note
+
+| `@RolesAllowed` / `@PermitAll` / `@DenyAll`
+| Same annotations
+| No application code change.
+
+| `@Inject JsonWebToken`
+| Same
+| Same standard MP interface.
+
+| `@Inject @Claim("…") String`
+| Same, same supported types
+| Cervantes adds support for `Supplier<T>` on top of `ClaimValue<T>`, `Provider<T>`, `Instance<T>`.
+
+| `mp.jwt.verify.*` keys
+| Same keys
+| `publickey`, `publickey.location`, `issuer`, `audiences`, `publickey.algorithm`, `clock.skew`, `token.age`, `requireiat` — identical.
+
+| `mp.jwt.token.*` keys
+| Same keys
+| `header`, `cookie` — identical. `Authorization` (default) and `Cookie` modes both supported.
+
+| `mp.jwt.decrypt.key*` keys
+| Same keys
+| `RSA-OAEP` + `A256GCM` supported. `A128CBC-HS256` not yet — not covered by the 2.1 TCK.
+
+| Transitive dependencies: jose4j, Jackson, …
+| None (`java.security` + Champollion)
+| Smaller classpath footprint. Immediate jlink compatibility. GraalVM native-image friendly.
+
+| `smallrye.jwt.path.sub`, `…path.groups`, `…claims.groups`
+| No equivalent (standard claims only)
+| If the issuer does not place `groups` in the standard location, configure a filter on the issuer side or an `OASModelReader` on the client side. Out of scope for standard MP JWT 2.1.
+
+| `smallrye.jwt.verify.aud` (alias)
+| `mp.jwt.verify.audiences` (standard key)
+| Rename.
+
+| `smallrye.jwt.token.header` / `…cookie`
+| `mp.jwt.token.header` / `mp.jwt.token.cookie`
+| Rename (`mp.jwt.` prefix instead of `smallrye.jwt.`).
+
+| Quarkus Dev Mode hot reload
+| No equivalent
+| The cycle is `./mvnw clean install` + restart.
+|===
+
+== Notable differences
+
+* **`A128CBC-HS256` unsupported** — Cervantes only implements `A256GCM` as JWE content-encryption algorithm (the spec default, covered by the TCK). To be added if an issuer requires it.
+* **No hot reflection** — `@Claim` injection is resolved by a Vauban BCE at CDI compile time, not by a dynamic proxy. If you relied on an exotic SmallRye typing convention (for instance `@Claim List<Integer>` on a numeric claim stored as a string), check that the concrete type is in the supported list (see xref:reference.adoc[Reference]).
+* **No `setAccessible(true)`** — any business class that must receive a `@Claim` injection must be normally visible to CDI (`@Dependent`, `@RequestScoped`, …). If SmallRye opened runtime packages, Cervantes does not — open explicitly in `module-info.java`.
+* **`mp.jwt.verify.publickey.location`** — PEM-vs-JWKS auto-detection is based on the format of the content, not on the file extension. A URL returning a valid JWK Set is treated as JWKS, whether it ends with `.json`, `.jwks`, or nothing.
+* **JWKS — lazy refresh** — Cervantes does not fetch the JWK Set at startup. The first unknown `kid` triggers the fetch. Upside: fast startup, no fail-fast if the issuer is temporarily down. Downside: the first request may be slightly slower.
+
+== Classpath footprint compared
+
+[cols="1,2"]
+|===
+| Choice | Runtime libs pulled in
+
+| SmallRye JWT
+| `smallrye-jwt`, `jose4j`, `parsson` (or `jackson-databind`), `microprofile-jwt-auth-api`. Indirectly: `commons-logging`, sometimes `bouncycastle`.
+
+| Cervantes
+| `cervantes-core`, `cervantes-cdi-vauban`, `cervantes-cassini`, `cervantes-api`, `cervantes-mp-jwt-api`, `champollion-impl` (JSON-P 2.1, ~120 KB), `ravel-impl` (MP Config). *No* third-party crypto/JWT library.
+|===
+
+== Porting checklist
+
+. Replace the SmallRye JWT dependency with `cervantes-cdi-vauban` + `cervantes-cassini` (or simply the `vidocq-runtime-cervantes-jwt-extension` wrapper if you package through xref:vidocq::index.adoc[Vidocq Runtime]).
+. Audit application annotations: they must all come from `org.eclipse.microprofile.jwt.*` and `jakarta.annotation.security.*`. Replace any `io.smallrye.jwt.*` annotation.
+. Migrate `smallrye.jwt.*` properties to their standard `mp.jwt.*` equivalents.
+. Verify that the expected claims really exist on the tokens: `iss`, `aud`, `exp`, `groups`. No exotic path-based remapping.
+. Run unit tests: `./mvnw test`.
+. Run the TCK to validate conformance: `./run-official-tck-mp-jwt-2.1.sh` (see xref:tck.adoc[TCK]).
+. Verify in a staging environment: a valid token passes through with 200, an expired one with 401, a missing role with 403.
+. Measure validation latency and compare (see xref:reference.adoc[Reference] and `BENCH.md`). Cervantes is ~1.5× slower than SmallRye on the RS256 hot-path — a deliberate trade-off against ~3 MB of vanished transitive dependencies.
+
+== Further reading
+
+* xref:concepts.adoc[Concepts] — JWT model, claims, signature, JWK Set.
+* xref:reference.adoc[Reference] — annotations and `mp.jwt.*` keys.
+* link:{repo-cervantes}/src/branch/main/BUG.md[BUG.md] — known gotchas.
+* link:{repo-cervantes}/src/branch/main/BENCH.md[BENCH.md] — throughput comparison with SmallRye JWT 4.6.

@@ -1,0 +1,169 @@
+= Concepts
+:description: JSON Web Token (RFC 7519), standard and MP claims, JOSE signature (RFC 7515), JWK Set (RFC 7517), JWE (RFC 7516), trust model, key rotation.
+
+[.lead]
+Cervantes implements the MicroProfile JWT 2.1 spec, which itself builds on the IETF JOSE suite: JWT (RFC 7519), JWS (RFC 7515), JWK (RFC 7517), JWE (RFC 7516), JWA (RFC 7518). This page summarises the vocabulary — _claims_, _signature_, _kid_, _algorithm_, _JWK Set_, _audience_ — and the trust mechanism that enables _offline_ verification (no callback to the issuer).
+
+== The JWT — three-part structure
+
+A compact JWT is a string of three Base64url-encoded segments separated by dots:
+
+[source]
+----
+<header-base64url>.<payload-base64url>.<signature-base64url>
+----
+
+. **Header** — JSON describing the algorithm and the key: `{"alg":"RS256","typ":"JWT","kid":"abc-123"}`.
+. **Payload** — JSON carrying the _claims_: `{"iss":"…","aud":"…","exp":…,"groups":["…"]}`.
+. **Signature** — computed over `header + "." + payload`, verified with the issuer's public key.
+
+Encoding: `Base64url` without padding (`Base64.getUrlDecoder()` from the JDK). No third-party library required.
+
+[NOTE]
+====
+An even more opaque variant: JWE (RFC 7516) with _five_ segments — encrypted header, wrapped key, IV, encrypted payload, authentication tag. Cervantes decrypts it into a JWS and validates normally (see below).
+====
+
+== Standard claims (RFC 7519)
+
+[cols="1,3"]
+|===
+| Claim | Role
+
+| `iss`
+| Issuer — who emitted the token. Compared to `mp.jwt.verify.issuer`. Refused if different.
+
+| `sub`
+| Subject — user identifier (often a UUID, sometimes a `upn`).
+
+| `aud`
+| Audience — intended recipient. Compared to `mp.jwt.verify.audiences`. At least one intersection required.
+
+| `exp`
+| Expiration — Unix timestamp (seconds). Refused if `now > exp + clockSkew`.
+
+| `nbf`
+| Not Before — Unix timestamp (seconds). Refused if `now < nbf - clockSkew`.
+
+| `iat`
+| Issued At — Unix timestamp of issuance. Used by `mp.jwt.verify.token.age` (maximum tolerated age).
+
+| `jti`
+| JWT ID — unique identifier of the token (useful for application-level blocklists).
+|===
+
+== MicroProfile JWT 2.1 claims
+
+[cols="1,3"]
+|===
+| Claim | Role
+
+| `upn`
+| User Principal Name — becomes `JsonWebToken.getName()`. Preferred over `preferred_username`, itself preferred over `sub`.
+
+| `preferred_username`
+| Fallback for `upn` when the `upn` claim is missing.
+
+| `groups`
+| List of strings — _the roles_ backing `@RolesAllowed`. Becomes `JsonWebToken.getGroups()`.
+
+| `raw_token`
+| Pseudo-claim — when injecting `@Claim("raw_token") String`, returns the original raw token.
+|===
+
+The interface `org.eclipse.microprofile.jwt.JsonWebToken` exposes all these claims through `getClaim(String)`, `getClaimNames()`, `getName()`, `getGroups()`.
+
+== JOSE signatures — supported algorithms
+
+Cervantes supports the families covered by MP JWT 2.1 and by the JDK, with no external dependency.
+
+[cols="1,2,3"]
+|===
+| Family | Algorithms | Notes
+
+| RSA (signature)
+| `RS256`, `RS384`, `RS512`
+| `Signature.getInstance("SHA256withRSA"/…)`. X.509 key ≥ 2048 bits recommended.
+
+| RSA-PSS
+| `PS256`, `PS384`, `PS512`
+| Probabilistic RSA variant (RFC 8017).
+
+| ECDSA
+| `ES256`, `ES384`, `ES512`
+| P-256 / P-384 / P-521 curves. *Internal transcoding* JOSE R‖S ↔ DER (the JDK requires DER, JOSE requires R‖S concatenated).
+
+| HMAC
+| `HS256`, `HS384`, `HS512`
+| Shared (symmetric) key. Outside the default MP profile — usable internally.
+|===
+
+`mp.jwt.verify.publickey.algorithm` enforces an expected algorithm. If the token header announces a different `alg`, validation fails. Defence in depth against `alg=none` and RS256/HS256 confusion attacks.
+
+== JWK Set — distributing public keys
+
+A JWK Set (RFC 7517) is a JSON document published by the issuer:
+
+[source,json]
+----
+{
+  "keys": [
+    {
+      "kty": "RSA", "use": "sig", "alg": "RS256",
+      "kid": "abc-123",
+      "n": "0vx7agoebGcQSuuPiLJXZptN9nndrQmbXEps2aiAFbWhM78LhWx4cbbfAAtVT86zwu1RK7aPFFxuhDR1L6tSoc_BJECPebWKRXjBZCiFV4n3oknjhMstn64tZ_2W-5JsGY4Hc5n9yBXArwl93lqt7_RN5w6Cf0h4QyQ5v-65YGjQR0_FDW2QvzqY368QQMicAtaSqzs8KJZgnYb9c7d0zgdAZHzu6qMQvRL5hajrn1n91CbOpbISD08qNLyrdkt-bFTWhAI4vMQFh6WeZu0fM4lFd2NcRwr3XPksINHaQ-G_xBniIqbw0Ls1jF44-csFCur-kEgU8awapJzKnqDKgw",
+      "e": "AQAB"
+    }
+  ]
+}
+----
+
+Cervantes:
+
+. Loads the JWK Set at startup (in fact lazily, on the first validation — no blocking startup).
+. Caches it with a TTL.
+. Selects the key via the `kid` of the token header.
+. If the `kid` is unknown, triggers a _refresh_ bounded by `minRefreshInterval` (defence against `kid`-based denial of service).
+. On a network failure, falls back to the previous _snapshot_.
+
+`JwksKeyResolver` implements this logic. See xref:internals.adoc[Internals] for the thread-safe details (`ReentrantLock` + `AtomicReference`).
+
+== Key rotation
+
+So that an issuer changing keys does not invalidate all existing tokens:
+
+. The issuer publishes _two_ keys in its JWK Set: the old one and the new one, each with its `kid`.
+. New tokens are signed with the new key (new `kid`).
+. Cervantes sees a `kid` it does not know, refreshes the JWK Set, finds the key, validates.
+. When all live tokens carry the new `kid`, the issuer can remove the old key from the JWK Set.
+
+No distributed coordination is required: rotation is carried by the JWK Set and observed by Cervantes at refresh time.
+
+== JWE — encrypted tokens (optional)
+
+MP JWT 2.1 §4 allows the carried token to be encrypted (JWE) rather than only signed (JWS). Cervantes supports this:
+
+* **Key wrapping**: `RSA-OAEP`, `RSA-OAEP-256`. Recipient's private key (`mp.jwt.decrypt.key` / `.location`).
+* **Content encryption**: `A256GCM` (the spec default). `A128CBC-HS256` is not yet supported — to be added if required.
+* **Detection**: a JWE has 5 segments. `DefaultJwtValidator` distinguishes JWS (3 segments) from JWE (5 segments) and decrypts before validating.
+* **Spec conformance**: the JWE header must carry `cty: JWT` when the content is itself a JWT (nested).
+
+See xref:reference.adoc[Reference] for the list of `mp.jwt.decrypt.*` keys.
+
+== Trust model — why offline verification works
+
+The JWT contract is: _I trust you to verify my signature with my public key, I trust nobody else_. Cervantes embodies this contract:
+
+. **The issuer** signs with its private key. Nobody else can produce a token that passes the verification.
+. **The service** (your application, powered by Cervantes) knows the issuer's public key — via `mp.jwt.verify.publickey` or via the JWK Set published at `iss`.
+. **Verification** is local: no call to the issuer per request (except to refresh the JWK Set, and only when necessary).
+. **Time** is measured by the service (`Clock.systemUTC()` by default), with a `mp.jwt.verify.clock.skew` tolerance (default 60 s) to absorb drift.
+. **The role** comes from the `groups` claim — the issuer decides who has which roles, and Cervantes accepts it.
+
+The trust service boils down to: _I verify a signature with a known public key, I check claims against a known configuration, I call nobody_.
+
+== Further reading
+
+* xref:internals.adoc[Internals] — detailed pipeline, Vauban BCE, JWKS cache, threading.
+* xref:reference.adoc[Reference] — annotations, `mp.jwt.*` keys, artefacts.
+* xref:usage.adoc[Usage patterns] — full examples.

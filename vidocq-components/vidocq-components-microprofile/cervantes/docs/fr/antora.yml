@@ -6,3 +6,5 @@ nav:
 asciidoc:
   attributes:
     lang: fr
+    spec-mp-jwt: MicroProfile JWT 2.1
+    repo-cervantes: https://codeberg.org/Vidocq/cervantes

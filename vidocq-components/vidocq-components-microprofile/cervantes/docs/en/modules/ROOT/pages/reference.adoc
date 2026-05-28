@@ -1,0 +1,298 @@
+= Reference
+:description: Maven artefacts, exported JPMS modules, supported annotations, `mp.jwt.*` MicroProfile Config keys, supported JOSE algorithms.
+
+[.lead]
+This page consolidates the public surface of Cervantes: artefacts to declare, exported JPMS modules, recognised security annotations, every `mp.jwt.*` key read by `JwtAuthConfigProducer`, and every JOSE algorithm supported by the signature and encryption engine.
+
+== Maven artefacts
+
+[cols="2,2,3"]
+|===
+| `groupId` | `artifactId` | Role
+
+| `io.vidocq.cervantes`
+| `cervantes-mp-jwt-api`
+| MP JWT 2.1 spec repackaged into a named JPMS module (`org.eclipse.microprofile.jwt`). No dependency.
+
+| `io.vidocq.cervantes`
+| `cervantes-api`
+| Stable public SPI — `JwtValidator`, `JwtConfig`, `KeyResolver`, `SignatureAlgorithm`, `JwtValidationException`.
+
+| `io.vidocq.cervantes`
+| `cervantes-core`
+| Pure validation engine — JWT parsing, signature verification (RS/ES/PS/HS), claim validation, key loading (PEM, JWKS), JWE decryption. *No* CDI, *no* JAX-RS.
+
+| `io.vidocq.cervantes`
+| `cervantes-cdi-vauban`
+| `@RequestScoped JsonWebToken` producer, `CervantesClaimExtension` BCE for `@Claim`, `JwtAuthConfigProducer` producing the `JwtValidator`.
+
+| `io.vidocq.cervantes`
+| `cervantes-cassini`
+| `JwtAuthenticationFilter` (`@PreMatching`, `AUTHENTICATION`), `RolesAllowedDynamicFeature` + `RolesAllowedRequestFilter`, `JwtSecurityContext`.
+
+| `io.vidocq.cervantes`
+| `cervantes-bench`
+| JMH benchmarks (vs SmallRye JWT, opt-in profile `-Pcompare-smallrye`). Not for production.
+
+| `io.vidocq.cervantes`
+| `cervantes-examples`
+| Examples (`ProtectedResource` with `@RolesAllowed` + `@Claim`).
+
+| `io.vidocq.cervantes`
+| `cervantes-tck`
+| Official MP JWT 2.1 TCK runner — outside the reactor (Model 4.0.0). Do not declare as an application dependency.
+|===
+
+All versions at `0.1.0-SNAPSHOT` at the time of writing. Shared parent `io.vidocq:vidocq-parent:1.0.0-SNAPSHOT`.
+
+== JPMS modules
+
+[cols="2,3"]
+|===
+| Module | Contents
+
+| `org.eclipse.microprofile.jwt`
+| Spec repackaging — annotations `@Claim`, `@LoginConfig`, interfaces `JsonWebToken`, `ClaimValue`. No `requires`.
+
+| `io.vidocq.cervantes.api`
+| `io.vidocq.cervantes.api.*` — stable SPI.
+
+| `io.vidocq.cervantes.core`
+| `io.vidocq.cervantes.api.*` (partial re-export), `io.vidocq.cervantes.internal.*` (not exported).
+
+| `io.vidocq.cervantes.cdi.vauban`
+| `io.vidocq.cervantes.cdi.*` — `JsonWebTokenContext`, `CervantesClaimExtension`. `provides BuildCompatibleExtension`.
+
+| `io.vidocq.cervantes.cassini`
+| `io.vidocq.cervantes.cassini.*` — filters, `SecurityContext`, `DynamicFeature`.
+|===
+
+`io.vidocq.cervantes.internal.*` is never exported. Any application class depending on it signals a regression to be fixed.
+
+== Recognised security annotations
+
+[cols="2,3,1"]
+|===
+| Annotation | Effect | Status
+
+| `@jakarta.annotation.security.RolesAllowed({"r1","r2"})`
+| Caller must own _at least one_ of the listed roles (a role is a string from the `groups` claim). Precedence: method > class.
+| ✅
+
+| `@jakarta.annotation.security.PermitAll`
+| Endpoint open to everyone, anonymous included. Disables inherited `@RolesAllowed`.
+| ✅
+
+| `@jakarta.annotation.security.DenyAll`
+| Endpoint always rejected with 403, whatever the token.
+| ✅
+
+| `@org.eclipse.microprofile.jwt.Claim(value="…")`
+| CDI injection qualifier. The typed value is extracted from the current `JsonWebToken`. See the type table below.
+| ✅
+
+| `@org.eclipse.microprofile.jwt.Claim(standard=Claims.email)`
+| Variant naming the claim by its MP standard enum (instead of a free string).
+| ✅
+
+| `@org.eclipse.microprofile.auth.LoginConfig(authMethod="MP-JWT")`
+| Application-level marker (spec compatibility). Cervantes accepts it without specific action — the auth filter is registered anyway.
+| ✅
+|===
+
+== Supported types for `@Claim`
+
+[cols="2,3"]
+|===
+| Java type | Semantics
+
+| `String`
+| Coercion: `JsonString.getString()`, or `toString()` for other scalars.
+
+| `Long`, `long`
+| `JsonNumber.longValue()`. Primitive field supported since Vauban VAU-INJ-PRIM.
+
+| `Integer`, `int`
+| `JsonNumber.intValueExact()`.
+
+| `Double`, `double`
+| `JsonNumber.doubleValue()`.
+
+| `Boolean`, `boolean`
+| `JsonValue.TRUE` / `JsonValue.FALSE`.
+
+| `Set<String>`, `List<String>`
+| For array-typed claims (`groups`, `aud`). Order preserved in `List`, deduplicated in `Set`.
+
+| `jakarta.json.JsonValue`
+| Raw value parsed by xref:champollion::index.adoc[Champollion].
+
+| `JsonString`, `JsonNumber`, `JsonObject`, `JsonArray`
+| JSON-P sub-types.
+
+| `Optional<T>`
+| Eager. Resolved once at injection. `Optional.empty()` if the claim is missing.
+
+| `org.eclipse.microprofile.jwt.ClaimValue<T>`
+| Lazy MP. `getValue()` re-reads the current request's token.
+
+| `jakarta.inject.Provider<T>`, `jakarta.enterprise.inject.Instance<T>`
+| Lazy CDI. `get()` re-reads the current token.
+
+| `java.util.function.Supplier<T>`
+| Lazy JDK. `get()` re-reads the current token.
+
+| `String` qualified `@Claim("raw_token")`
+| The original raw token — useful for propagation.
+|===
+
+== `mp.jwt.*` MicroProfile Config keys
+
+All keys are read through `ConfigProvider.getConfig()` — provided by xref:ravel::index.adoc[Ravel] in the Vidocq ecosystem.
+
+=== Signature verification
+
+[cols="2,3"]
+|===
+| Key | Effect
+
+| `mp.jwt.verify.publickey`
+| Inline public key. Accepts X.509 PEM (`-----BEGIN PUBLIC KEY-----`) or raw base64.
+
+| `mp.jwt.verify.publickey.location`
+| Public-key location: `classpath:/…`, `file:/…`, `http://…`, `https://…`. PEM-vs-JWKS auto-detection (format regex).
+
+| `mp.jwt.verify.publickey.algorithm`
+| Expected algorithm family (`RS256`, `ES256`, …). Default `RS256`. Rejects tokens whose header announces a different family.
+
+| `mp.jwt.verify.issuer`
+| Expected issuer — string. Strictly compared to the token's `iss` claim.
+
+| `mp.jwt.verify.audiences`
+| Accepted audiences — comma-separated list. At least one intersection with `aud` required (unless empty).
+
+| `mp.jwt.verify.clock.skew`
+| Clock-skew tolerance in seconds (default 60). Applied to `exp` and `nbf`.
+
+| `mp.jwt.verify.token.age`
+| Maximum token age, in seconds since `iat`. Optional.
+
+| `mp.jwt.verify.requireiat`
+| Boolean — require the `iat` claim. Default `false`.
+|===
+
+=== Token transport
+
+[cols="2,3"]
+|===
+| Key | Effect
+
+| `mp.jwt.token.header`
+| `Authorization` (default, `Bearer` scheme) or `Cookie` (extraction from a cookie named by `mp.jwt.token.cookie`).
+
+| `mp.jwt.token.cookie`
+| Cookie name carrying the token when `mp.jwt.token.header=Cookie`. Default `Bearer`.
+|===
+
+=== JWE decryption (optional)
+
+[cols="2,3"]
+|===
+| Key | Effect
+
+| `mp.jwt.decrypt.key`
+| Inline decryption private key. PKCS#8 PEM.
+
+| `mp.jwt.decrypt.key.location`
+| Decryption private-key location.
+
+| `mp.jwt.decrypt.key.algorithm`
+| Expected key-wrapping algorithm: `RSA-OAEP` (default) or `RSA-OAEP-256`. If set, rejects JWEs announcing anything else.
+|===
+
+== Supported signature algorithms
+
+[cols="1,2,3"]
+|===
+| Family | Algorithms | JDK implementation
+
+| RSA
+| `RS256`, `RS384`, `RS512`
+| `Signature.getInstance("SHA256withRSA"/…)`. Keys ≥ 2048 bits recommended.
+
+| RSA-PSS
+| `PS256`, `PS384`, `PS512`
+| `Signature.getInstance("RSASSA-PSS")` + `PSSParameterSpec`.
+
+| ECDSA
+| `ES256`, `ES384`, `ES512`
+| `Signature.getInstance("SHA256withECDSA"/…)`. P-256/P-384/P-521 curves. Internal R‖S ↔ DER transcoding (`EcdsaSignatures`).
+
+| HMAC
+| `HS256`, `HS384`, `HS512`
+| `Mac.getInstance("HmacSHA256"/…)`. Outside the default MP profile, usable internally.
+|===
+
+== Supported JWE algorithms
+
+[cols="2,2,3"]
+|===
+| Step | Algorithm | Notes
+
+| Key wrapping (`alg`)
+| `RSA-OAEP`, `RSA-OAEP-256`
+| `Cipher.getInstance("RSA/ECB/OAEPWithSHA-1AndMGF1Padding")` / `…SHA-256…`.
+
+| Content encryption (`enc`)
+| `A256GCM`
+| `Cipher.getInstance("AES/GCM/NoPadding")`.
+
+| (planned)
+| `A128CBC-HS256`
+| Not yet supported — to be added if a future TCK milestone requires it.
+|===
+
+== HTTP behaviour
+
+[cols="2,3"]
+|===
+| Situation | Code
+
+| No token + `@PermitAll` endpoint
+| Endpoint runs anonymously.
+
+| No token + `@RolesAllowed` or default endpoint
+| `401 Unauthorized`.
+
+| Token present, invalid signature / expired `exp` / unexpected `iss` / unexpected `aud` / unauthorised `alg`
+| `401 Unauthorized`.
+
+| Valid token but missing required role
+| `403 Forbidden`.
+
+| Valid token and required role present
+| `200 OK` (method runs).
+
+| `@DenyAll` endpoint
+| `403 Forbidden` even with a valid token.
+|===
+
+== Compatibility
+
+* Java 25 (LTS), Maven 4.0.0-rc-5.
+* JAX-RS 4.0 (xref:cassini::index.adoc[Cassini] or another compliant runtime).
+* CDI 4.1 Lite (xref:vauban::index.adoc[Vauban]) with BCE support.
+* MicroProfile Config 3.1+ (xref:ravel::index.adoc[Ravel]).
+* JSON-P 2.1 (xref:champollion::index.adoc[Champollion]).
+* No Jakarta EE Full Profile dependency.
+
+== Bugs and benchmarks
+
+* link:{repo-cervantes}/src/branch/main/BUG.md[BUG.md] — tracked reproducible bugs (empty as of today).
+* link:{repo-cervantes}/src/branch/main/BENCH.md[BENCH.md] — JMH `DefaultJwtValidator.validate` vs SmallRye JWT (M7).
+
+== Further reading
+
+* xref:concepts.adoc[Concepts] — claims, signature, JWK Set, JWE.
+* xref:internals.adoc[Internals] — pipeline and threading.
+* xref:tck.adoc[TCK] — status and execution.

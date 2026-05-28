@@ -1,0 +1,182 @@
+= Getting started
+:description: First JAX-RS endpoint protected by JWT, minimal MP-Config setup, first expected 401/200/403, in under five minutes.
+
+[.lead]
+This page assumes a Jakarta REST 4.0 application already running on xref:cassini::index.adoc[Cassini] (or any other compliant JAX-RS 4.0 runtime) with xref:vauban::index.adoc[Vauban] as the CDI container. It describes the addition of Cervantes: dependencies, minimal MP-Config setup, `@RolesAllowed` annotation on a resource, and first calls with and without a bearer token.
+
+== Prerequisites
+
+* Java 25 (LTS) — Temurin recommended.
+* Maven 4.0.0-rc-5 — pinned through `.sdkmanrc` at the root of Cervantes (`cd cervantes && sdk env`).
+* A JAX-RS 4.0 application already deployed, with at least an `Application` class and a `@Path` resource.
+* xref:vauban::index.adoc[Vauban] active as the CDI 4.1 Lite container.
+* xref:ravel::index.adoc[Ravel] active as the MicroProfile Config implementation (Cervantes reads `mp.jwt.*` keys through the standard SPI).
+
+[source,bash]
+----
+sdk env
+./mvnw -ntp install -DskipTests
+----
+
+== Maven dependencies
+
+For a standard JAX-RS application, declaring the two integration modules (`cervantes-cdi-vauban` + `cervantes-cassini`) is enough: they transitively pull in `cervantes-core`, `cervantes-api` and `cervantes-mp-jwt-api`.
+
+[source,xml]
+----
+<dependencies>
+    <dependency>
+        <groupId>io.vidocq.cervantes</groupId>
+        <artifactId>cervantes-cdi-vauban</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </dependency>
+    <dependency>
+        <groupId>io.vidocq.cervantes</groupId>
+        <artifactId>cervantes-cassini</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </dependency>
+</dependencies>
+----
+
+[NOTE]
+====
+In an application packaged by xref:vidocq::index.adoc[Vidocq Runtime], simply include the `vidocq-runtime-cervantes-jwt-extension` wrapper instead of declaring the two artefacts directly — it sets up the transitive dependency and registers it as a Vidocq extension (priority ~500).
+====
+
+== Prepare the verification public key
+
+Cervantes verifies the token signature with the issuer's public key. Two typical modes:
+
+. **JWKS** — the issuer publishes its keys at `https://issuer.example.com/.well-known/jwks.json`; `kid`-based resolution allows transparent rotation.
+. **PEM** — X.509 public key inline in the configuration, or pointed to by file. Simpler for tests, less flexible in production.
+
+Example: generate an RSA pair for testing and extract the public key as PEM.
+
+[source,bash]
+----
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out private.pem
+openssl rsa -in private.pem -pubout -out public.pem
+----
+
+Place `public.pem` under `src/main/resources/META-INF/keys/` of the application — Cervantes resolves `classpath:` locations.
+
+== MicroProfile Config
+
+Put the keys in `META-INF/microprofile-config.properties`:
+
+[source,properties]
+----
+# Verification public key — pick one:
+#   - JWKS URL (production), or
+#   - classpath/file path (tests).
+mp.jwt.verify.publickey.location=classpath:/META-INF/keys/public.pem
+
+# Expected issuer (the "iss" claim) — required for spec conformance
+mp.jwt.verify.issuer=https://issuer.example.com
+
+# Accepted audiences (the "aud" claim) — comma-separated
+mp.jwt.verify.audiences=orders-api
+
+# Optional: expected algorithm (defaults to RS256)
+mp.jwt.verify.publickey.algorithm=RS256
+----
+
+All these keys are defined by MP JWT 2.1 §9. See xref:reference.adoc[Reference] for the exhaustive list.
+
+== Annotate the JAX-RS resource
+
+A minimal resource, protected by `@RolesAllowed` and injecting both the full `JsonWebToken` principal and a single claim.
+
+[source,java]
+----
+package io.example.orders;
+
+import jakarta.annotation.security.RolesAllowed;
+import jakarta.inject.Inject;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.core.MediaType;
+import org.eclipse.microprofile.jwt.Claim;
+import org.eclipse.microprofile.jwt.JsonWebToken;
+
+@Path("/orders")
+public class OrderResource {
+
+    @Inject
+    JsonWebToken jwt;            // validated principal (anonymous if no token)
+
+    @Inject
+    @Claim("email")
+    String email;                // single claim, typed as String
+
+    @GET
+    @RolesAllowed("manager")
+    @Produces(MediaType.APPLICATION_JSON)
+    public String list() {
+        return """
+               { "caller": "%s", "email": "%s", "groups": %s }
+               """.formatted(jwt.getName(), email, jwt.getGroups());
+    }
+}
+----
+
+No filter to register manually: the Vauban BCE and the Cassini `@Provider` auto-discovery enable `JwtAuthenticationFilter` (priority `AUTHENTICATION`) and `RolesAllowedDynamicFeature` at startup.
+
+== First calls: three cases
+
+[source,bash]
+----
+# 1. No bearer token — the request is anonymous, @RolesAllowed refuses → 401
+curl -i http://localhost:8080/orders
+
+# 2. With a bearer token signed by the wrong key → 401
+curl -i -H "Authorization: Bearer eyJ.invalid.signature" http://localhost:8080/orders
+
+# 3. With a valid bearer token, groups including "manager" → 200
+TOKEN=$(./scripts/forge-token.sh manager@example.com manager)
+curl -i -H "Authorization: Bearer $TOKEN" http://localhost:8080/orders
+----
+
+A token forged for a user without the `manager` role returns `403 Forbidden`.
+
+[NOTE]
+====
+For a minimal `forge-token.sh` script that generates a valid RS256 JWT from `private.pem` (pure shell / openssl), see the `cervantes-examples` module in the repository.
+====
+
+== The server-side pipeline
+
+. xref:chappe::index.adoc[Chappe] receives the HTTP request and hands the `ContainerRequestContext` to xref:cassini::index.adoc[Cassini].
+. `JwtAuthenticationFilter` (`@PreMatching`, priority `AUTHENTICATION`) reads `Authorization: Bearer …` and extracts the raw token.
+. `DefaultJwtValidator` decodes the header (Base64url) → selects the key via `kid` → verifies the signature through `java.security.Signature` → validates the claims (`iss`, `aud`, `exp`, `nbf`, `iat`).
+. The validated `JsonWebToken` is set on `JsonWebTokenContext` (`@RequestScoped`) and on a new `JwtSecurityContext` injected into the JAX-RS request via `setSecurityContext`.
+. `RolesAllowedRequestFilter` calls `SecurityContext.isUserInRole("manager")` — which consults `JsonWebToken.getGroups()`.
+. The resource runs. `@Inject JsonWebToken jwt` and `@Inject @Claim("email") String email` resolve to the current token via the synthetic beans of the Vauban BCE.
+
+== Three combinable key sources
+
+[cols="1,3,2"]
+|===
+| Source | Description | Activation
+
+| Inline PEM
+| X.509 public key pasted into the config property.
+| `mp.jwt.verify.publickey=…`
+
+| Location (file or URL)
+| `classpath:`, `file:`, `http://`, `https://` path. Auto-detection of PEM vs JWKS.
+| `mp.jwt.verify.publickey.location=…`
+
+| Multi-key JWKS
+| JSON key set, `kid`-based resolution, TTL refresh, transparent rotation.
+| Same `location` key pointing to a JWKS URL.
+|===
+
+See xref:concepts.adoc[Concepts] for the semantics of each source, and xref:reference.adoc[Reference] for the exhaustive list of `mp.jwt.*` keys.
+
+== Next step
+
+* xref:concepts.adoc[Concepts] — JWT, claims, signature, JWK Set, rotation.
+* xref:usage.adoc[Usage patterns] — advanced `@RolesAllowed`, typed `@Claim`, JWE, cookies.
+* xref:reference.adoc[Reference] — all `mp.jwt.*` keys, all algorithms.
