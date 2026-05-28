@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.1.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.1.0 http://maven.apache.org/xsd/maven-4.1.0.xsd">
+    <modelVersion>4.1.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.runtime</groupId>
+        <artifactId>vidocq-runtime-core-extensions</artifactId>
+    </parent>
+
+    <artifactId>vidocq-runtime-ravel-extension</artifactId>
+    <name>Vidocq :: Core Extensions :: Config (Ravel)</name>
+    <description>Opt-in MicroProfile Config 3.1 integration. Plugs Ravel as a ConfigSourceProvider
+        for vidocq-runtime-core (replaces the native ConfigSource ServiceLoader when present)
+        and brings @ConfigProperty CDI injection via the transitive ravel-cdi-vauban BCE.</description>
+
+    <!--
+        Ravel is intentionally NOT a transitive dependency of vidocq-runtime-core.
+        Apps that want MicroProfile Config 3.1 features (@ConfigProperty, custom
+        MP ConfigSources, profiles, ${} expressions) must opt in by adding THIS
+        extension to their pom — same wrapper pattern as cassini/knock/humboldt.
+    -->
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-spi</artifactId>
+        </dependency>
+        <!-- vidocq-runtime-spi transitively requires vauban.core ; on le
+             déclare explicitement au cas où la transitivité Maven 4 ne suffirait
+             pas pour la résolution JPMS du compilateur. -->
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-core</artifactId>
+        </dependency>
+
+        <!-- ravel-cdi-vauban transitively brings ravel-core, ravel-api and the
+             repackaged org.eclipse.microprofile.config spec module. Carries the
+             BCE ConfigCdiExtension that wires @ConfigProperty in user beans. -->
+        <dependency>
+            <groupId>io.vidocq.ravel</groupId>
+            <artifactId>ravel-cdi-vauban</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!-- Vauban needs reflective access to the test package for
+                         @ConfigProperty injection points in beans. -->
+                    <argLine>--add-opens io.vidocq.runtime.ext.ravel/io.vidocq.runtime.ext.ravel=io.vidocq.vauban.core</argLine>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

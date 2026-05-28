@@ -6,4 +6,5 @@ module io.vidocq.runtime.spi {
 
     uses io.vidocq.runtime.spi.VidocqExtension;
     uses io.vidocq.runtime.spi.config.ConfigSource;
+    uses io.vidocq.runtime.spi.config.ConfigSourceProvider;
 }

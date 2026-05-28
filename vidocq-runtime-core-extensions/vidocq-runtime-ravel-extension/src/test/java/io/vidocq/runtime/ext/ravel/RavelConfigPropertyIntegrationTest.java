@@ -1,4 +1,4 @@
-package io.vidocq.runtime.core.config;
+package io.vidocq.runtime.ext.ravel;
 
 import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.inject.se.SeContainer;
@@ -14,15 +14,17 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Vérifie que Ravel (@ConfigProperty) fonctionne dans le contexte Vauban
- * après son intégration dans vidocq-runtime-core.
- *
- * <p>M6 — swap Smallrye Config → Ravel dans la plateforme Vidocq Runtime.</p>
+ * Vérifie que {@code @ConfigProperty} fonctionne dans le container Vauban quand
+ * cette extension est sur le module path. Test déplacé depuis vidocq-runtime-core
+ * dans le cadre du découplage core/Ravel — @ConfigProperty est désormais un
+ * opt-in de {@code vidocq-runtime-ravel-extension}.
  */
-@DisplayName("Ravel @ConfigProperty — intégration vidocq-runtime-core")
+@DisplayName("Ravel @ConfigProperty — intégration via vidocq-runtime-ravel-extension")
 class RavelConfigPropertyIntegrationTest {
 
     @AfterEach

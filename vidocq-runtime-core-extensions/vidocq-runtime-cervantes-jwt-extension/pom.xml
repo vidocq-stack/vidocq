@@ -37,6 +37,17 @@
             <artifactId>cervantes-mp-jwt-api</artifactId>
         </dependency>
 
+        <!-- MP JWT 2.1 §6.1 mandates that the runtime exposes configuration via
+             MicroProfile Config (mp.jwt.verify.publickey, mp.jwt.verify.issuer,
+             mp.jwt.token.header, etc.). Cervantes-core reads them via
+             @ConfigProperty, so we must opt-in to vidocq-runtime-ravel-extension
+             which brings ravel-cdi-vauban (the BCE that wires @ConfigProperty)
+             and routes the runtime config through Ravel. -->
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-ravel-extension</artifactId>
+        </dependency>
+
         <!-- Needed to compile cervantes-cassini's module-info requires (jakarta.ws.rs). -->
         <dependency>
             <groupId>jakarta.ws.rs</groupId>

@@ -1,6 +1,7 @@
 package io.vidocq.runtime.core.config;
 
 import io.vidocq.runtime.spi.config.ConfigSource;
+import io.vidocq.runtime.spi.config.ConfigSourceProvider;
 import io.vidocq.runtime.spi.config.Converter;
 import io.vidocq.runtime.spi.config.VidocqConfig;
 
@@ -14,19 +15,43 @@ import java.util.ServiceLoader;
 
 /**
  * Implémentation par défaut de {@link VidocqConfig}.
- * <p>
- * Charge les sources via {@link ServiceLoader} et les trie par ordinal décroissant.
- * Résolution first-wins.
- * </p>
+ *
+ * <p>Découverte des sources en deux temps :</p>
+ * <ol>
+ *   <li>{@link ServiceLoader} sur {@link ConfigSourceProvider} — si <em>au moins
+ *       un</em> provider est enregistré (typiquement
+ *       {@code vidocq-runtime-ravel-extension} qui apporte MicroProfile Config),
+ *       l'union de leurs sources est utilisée, et les {@link ConfigSource} natifs
+ *       Vidocq sont <b>ignorés</b>. C'est la responsabilité du provider d'apporter
+ *       des substituts équivalents (sys, env, fichiers) — Vidocq ne mixe pas pour
+ *       éviter le double comptage et préserver les ordinaux du moteur externe.</li>
+ *   <li>Sinon, {@link ServiceLoader} sur {@link ConfigSource} — comportement
+ *       historique : les 4 sources natives Vidocq (Sys 400, Env 300, ExternalFile,
+ *       PropertiesFile 100 qui lit {@code vidocq.properties} et
+ *       {@code application.properties}).</li>
+ * </ol>
+ *
+ * <p>Dans les deux cas, les sources sont triées par {@link ConfigSource#getOrdinal()}
+ * décroissant. Résolution first-wins.</p>
+ *
+ * <p>Le constructeur {@link #VidocqConfigImpl(List)} force une liste de sources
+ * explicite (utilisé par les tests unitaires).</p>
  */
 public final class VidocqConfigImpl implements VidocqConfig {
 
     private final List<ConfigSource> sources;
 
+    /**
+     * Auto-découverte : recherche d'abord les {@link ConfigSourceProvider}
+     * via ServiceLoader ; à défaut, charge les {@link ConfigSource} natifs.
+     */
     public VidocqConfigImpl() {
-        this(discoverSources());
+        this(discover());
     }
 
+    /**
+     * Force une liste explicite de sources (mode test).
+     */
     public VidocqConfigImpl(List<ConfigSource> sources) {
         List<ConfigSource> copy = new ArrayList<>(sources);
         copy.sort(Comparator.comparingInt(ConfigSource::getOrdinal).reversed());
@@ -78,12 +103,29 @@ public final class VidocqConfigImpl implements VidocqConfig {
         return sources;
     }
 
-    private static List<ConfigSource> discoverSources() {
-        List<ConfigSource> discovered = new ArrayList<>();
-        for (ConfigSource s : ServiceLoader.load(ConfigSource.class)) {
-            discovered.add(s);
+    // ---------- helpers ----------
+
+    private static List<ConfigSource> discover() {
+        ClassLoader cl = Thread.currentThread().getContextClassLoader();
+        if (cl == null) cl = VidocqConfigImpl.class.getClassLoader();
+
+        // Providers (ex. Ravel) prennent la main quand présents — pas d'agrégation
+        // avec les sources natives, pour respecter la sémantique d'ordinaux du
+        // moteur externe et éviter le double comptage.
+        List<ConfigSource> fromProviders = new ArrayList<>();
+        for (ConfigSourceProvider p : ServiceLoader.load(ConfigSourceProvider.class)) {
+            for (ConfigSource s : p.getConfigSources(cl)) {
+                fromProviders.add(s);
+            }
         }
-        return discovered;
+        if (!fromProviders.isEmpty()) return fromProviders;
+
+        // Fallback : sources natives Vidocq (Sys, Env, ExternalFile, PropertiesFile).
+        List<ConfigSource> natives = new ArrayList<>();
+        for (ConfigSource s : ServiceLoader.load(ConfigSource.class)) {
+            natives.add(s);
+        }
+        return natives;
     }
 
     private static List<String> splitList(String raw) {

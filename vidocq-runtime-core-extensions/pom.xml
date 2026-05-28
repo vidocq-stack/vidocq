@@ -27,6 +27,7 @@
         <subproject>vidocq-runtime-mansart-transactions-extension</subproject>
         <subproject>vidocq-runtime-mansart-transactions-extension-codegen</subproject>
         <subproject>vidocq-runtime-knock-extension</subproject>
+        <subproject>vidocq-runtime-ravel-extension</subproject>
     </subprojects>
 
     <build>

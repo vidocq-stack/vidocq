@@ -25,6 +25,17 @@
             <artifactId>vidocq-runtime-cassini-rest-extension</artifactId>
         </dependency>
 
+        <!-- MicroProfile Config 3.1 (opt-in). Quand cette extension est sur le
+             module path, RavelConfigSourceProvider remplace les ConfigSource
+             natifs du core ; vidocq.properties est lu via la MP ConfigSource
+             VidocqPropertiesConfigSource (ordinal 105) embarquée par
+             l'extension. @ConfigProperty devient également disponible côté
+             user. -->
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-ravel-extension</artifactId>
+        </dependency>
+
         <!-- Mansart pool + Jakarta Data extensions -->
         <dependency>
             <groupId>io.vidocq.runtime</groupId>

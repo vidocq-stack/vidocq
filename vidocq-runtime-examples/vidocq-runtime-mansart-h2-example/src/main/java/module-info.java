@@ -23,6 +23,10 @@ module io.vidocq.runtime.examples.mansart {
     requires io.vidocq.runtime.ext.mansart.pool;
     requires io.vidocq.runtime.ext.mansart.data;
     requires io.vidocq.runtime.ext.mansart.transactions;
+    // MicroProfile Config (opt-in) — apporte le RavelConfigSourceProvider qui
+    // remplace les ConfigSource natifs Vidocq par les sources MP au boot, et
+    // active @ConfigProperty via la BCE transitive ravel-cdi-vauban.
+    requires io.vidocq.runtime.ext.ravel;
 
     requires io.vidocq.chappe.api;
     requires io.vidocq.vauban.core;
