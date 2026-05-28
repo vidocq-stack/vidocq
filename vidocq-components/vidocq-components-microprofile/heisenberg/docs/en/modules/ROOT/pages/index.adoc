@@ -1,44 +1,107 @@
 = Heisenberg
-:description: MicroProfile Fault Tolerance 4.1 implementation for Vidocq.
+:description: MicroProfile Fault Tolerance 4.1 implementation, zero third-party libraries, virtual threads, strict JPMS, CDI via Vauban, config via Ravel.
+
+////
+[.text-center]
+image::heisenberg-logo.png[Heisenberg,300,role=module-logo]
+////
 
 [.lead]
-Heisenberg is the fault tolerance subsystem in the Vidocq ecosystem. It applies retry, timeout, circuit breaker, bulkhead and fallback policies to CDI beans through a single interceptor, wiring into the xref:vauban::index.adoc[Vauban] CDI container and protecting calls made through services such as xref:cassini::index.adoc[Cassini].
+Heisenberg is the MicroProfile Fault Tolerance 4.1 implementation of the Vidocq ecosystem. It applies the `@Retry`, `@Timeout`, `@CircuitBreaker`, `@Bulkhead`, `@Fallback` and `@Asynchronous` policies to CDI beans through a single interceptor, wired into xref:vauban::index.adoc[Vauban] for the container and xref:ravel::index.adoc[Ravel] for configuration. Goal: 100% conformance to the MicroProfile Fault Tolerance 4.1 TCK (currently 463/463), zero external dependency beyond the specs, strict JPMS, jlink-ready.
 
 == Origin of the name
-Werner Heisenberg (1901-1976) formulated the uncertainty principle: one cannot simultaneously measure a particle's position and momentum with arbitrary precision. The Heisenberg project encapsulates the uncertainty inherent in network calls and remote services, and responds to it with order, measurement and resilience.
+
+**Werner Heisenberg (1901-1976)**, German physicist. In 1927 he formulated the uncertainty principle, cornerstone of quantum mechanics: a particle's position and momentum cannot be simultaneously measured with arbitrary precision — `Δp · Δx ≥ ℏ/2`. Nobel Prize in Physics 1932 "for the creation of quantum mechanics". See https://en.wikipedia.org/wiki/Werner_Heisenberg[Wikipedia].
+
+Heisenberg established that **uncertainty is intrinsic, not a flaw of the instrument**. The Heisenberg runtime encapsulates the uncertainty inherent in network calls and remote services — variable latency, transient failures, overload — and responds with formally composable policies, ordered like non-commutative operators.
+
+[cols="1,3"]
+|===
+| Heisenberg, the physicist | Heisenberg, the runtime
+
+| Uncertainty principle
+| The network call is intrinsically uncertain — success is not predetermined.
+
+| Non-commutative observable matrices
+| Non-commutative policies: `@Retry ∘ @Timeout ≠ @Timeout ∘ @Retry`.
+
+| Matrix mechanics (Göttingen, 1925)
+| Formal composition of aspects — interceptor chain ordered by spec §2.5.
+
+| Inequality `Δp · Δx ≥ ℏ/2`
+| Intrinsic latency × throughput bound (Little's Law) — a `@Bulkhead` makes it explicit.
+
+| Wave packet collapse
+| `@CircuitBreaker` opens — state becomes discrete (OPEN), subsequent calls are short-circuited.
+
+| Eigenstates and compatible observables
+| Compatible policies, composable in a single canonical order.
+|===
 
 == At a glance
 
 [cols="1,3"]
 |===
-| Implemented spec | {spec-mp-fault-tolerance}
-| Repo | {repo-heisenberg}
+| Implemented spec | MicroProfile Fault Tolerance 4.1
+| Repository | https://codeberg.org/Vidocq/heisenberg
 | Java | 25 (LTS)
-| Modules | `heisenberg-api`, `heisenberg-core`, `heisenberg-cdi-vauban`, `heisenberg-bench`, `heisenberg-tck`, `heisenberg-examples`
-| TCK | In progress — see ROADMAP
+| JPMS modules | `io.vidocq.heisenberg.api`, `io.vidocq.heisenberg.core`, `io.vidocq.heisenberg.cdi.vauban`
+| Public packages | `io.vidocq.heisenberg.api.*` (stable SPI), `io.vidocq.heisenberg.cdi.*` (CDI integration)
+| Runtime dependencies | `microprofile-fault-tolerance-api` 4.1, `jakarta.enterprise.cdi-api` 4.1 (provided), `jakarta.interceptor-api` 2.2 (provided), `ravel-mp-config-api` (MicroProfile Config 3.1), `opentelemetry-api` 1.39 (`requires static`)
+| jlink-ready | ✅ — every sub-module has its `module-info.java`, no `Automatic-Module-Name` fallback in production.
+| MP FT 4.1 TCK | ✅ 463 / 463 — see xref:tck.adoc[detailed status]
 |===
 
-== Fault tolerance policies
+== Three identity traits
 
-Heisenberg implements the full MicroProfile Fault Tolerance 4.1 annotation set:
+. **Zero third-party implementation library** — only the specified Jakarta EE and MicroProfile APIs are compiled. No SmallRye Fault Tolerance, no Hystrix, no Resilience4j. The automata (retry, circuit breaker, bulkhead) are hand-written in `heisenberg-core`.
+. **Native virtual threads for `@Asynchronous` and `@Timeout`** — `Thread.ofVirtual()` + `join(Duration)` bound each attempt; no platform thread pool is created. No `synchronized`, no `ThreadLocal` — `ReentrantLock`, `Semaphore`, `LongAdder`, `ConcurrentHashMap` and `ScopedValue` are preferred.
+. **Ravel config + Vauban BCE** — all `fault-tolerance/...` keys are resolved through xref:ravel::index.adoc[Ravel] (MicroProfile Config 3.1); the single interceptor is registered by a xref:vauban::index.adoc[Vauban] Build Compatible Extension that scans and indexes annotations at startup.
 
-[cols="1,3"]
-|===
-| `@Retry` | Automatic retries with delay, jitter, `retryOn` / `abortOn`
-| `@Timeout` | Maximum execution time per attempt (virtual threads + `join(Duration)`)
-| `@CircuitBreaker` | Circuit breaker (CLOSED / OPEN / HALF_OPEN), sliding window
-| `@Bulkhead` | Isolation via semaphore (sync) or queue (async)
-| `@Fallback` | Alternative on failure (`FallbackHandler` or a method on the class)
-| `@Asynchronous` | Execution on a virtual thread, returning `CompletionStage` / `Future`
-|===
+== Position in the ecosystem
 
-The `heisenberg-core` module holds pure Java 25 policy engines with no CDI dependency, so each policy is unit-testable without a container. The `heisenberg-cdi-vauban` module carries the single CDI `@Interceptor` that orchestrates these engines, composing policies from the outside in (`@Fallback` -> `@CircuitBreaker` -> `@Bulkhead` -> `@Timeout` -> `@Retry` -> actual method), per spec section 2.5.
+[mermaid]
+....
+flowchart LR
+  App["Application CDI bean<br/>annotated method"]
+  Interceptor["FaultToleranceInterceptor<br/>(heisenberg-cdi-vauban)"]
+  Fallback["@Fallback"]
+  CB["@CircuitBreaker"]
+  Retry["@Retry"]
+  Timeout["@Timeout"]
+  Bulkhead["@Bulkhead"]
+  Async["@Asynchronous"]
+  Method["target method"]
 
-== Optional observability
+  App --> Interceptor
+  Interceptor --> Fallback
+  Fallback --> CB
+  CB --> Retry
+  Retry --> Timeout
+  Timeout --> Bulkhead
+  Bulkhead --> Async
+  Async --> Method
 
-Metrics and telemetry are optional. The `io.vidocq.heisenberg.api.FtMetricsRecorder` SPI can be backed by an OpenTelemetry recorder (section 10) and/or an MP Metrics recorder (section 9); both are wired only when present at runtime. OpenTelemetry support is declared `requires static io.opentelemetry.api`, so CDI silently ignores the OTel recorder when OpenTelemetry is absent. The `run-tck-no-observability.sh` script runs the TCK with observability switched off, confirming that fault tolerance works with zero observability dependencies on the classpath.
+  Interceptor -.config.-> Ravel["Ravel<br/>MicroProfile Config"]
+  Interceptor -.BCE.-> Vauban["Vauban<br/>CDI Lite"]
+  Interceptor -.opt. metrics.-> Humboldt["Humboldt<br/>OpenTelemetry"]
+
+  classDef rt fill:#e1f5fe,stroke:#0288d1
+  class Interceptor rt
+....
+
+The chain wrapping order follows MP FT 4.1 spec §2.5 — `@Fallback` is the outermost wrapper, the target method is at the core. xref:cassini::index.adoc[Cassini] and any application HTTP client benefit from fault tolerance without code change. xref:humboldt::index.adoc[Humboldt] (OpenTelemetry) and the Dirac MP Metrics implementation can collect the §9 and §10 metrics; the `run-tck-no-observability.sh` script disables them to validate that tolerance works with zero observability dependency on the classpath.
 
 == Quick links
-* xref:usage.adoc[Usage]
 
-Consolidated bugs and benchmarks: link:{repo-heisenberg}/src/branch/main/BUG.md[BUG.md], link:{repo-heisenberg}/src/branch/main/BENCH.md[BENCH.md].
+* xref:getting-started.adoc[Getting started] — first guarded method, first `@Retry + @CircuitBreaker + @Fallback` chain.
+* xref:concepts.adoc[Concepts] — annotations, composition order, circuit breaker states.
+* xref:usage.adoc[Usage] — robust REST clients, `@Asynchronous`, `FallbackHandler`, MP Config overrides.
+* xref:reference.adoc[Reference] — artifacts, JPMS modules, annotations, `fault-tolerance/*` keys.
+* xref:internals.adoc[Internals] — pure engines, `StateRegistry`, virtual threads.
+* xref:tck.adoc[TCK] — execution, status, `no-observability` mode.
+* xref:migration.adoc[Migration] — from SmallRye Fault Tolerance or Resilience4j.
+
+Consolidated bugs and benchmarks: link:https://codeberg.org/Vidocq/heisenberg/src/branch/main/BUG.md[BUG.md], link:https://codeberg.org/Vidocq/heisenberg/src/branch/main/BENCH.md[BENCH.md].
+
+Next: xref:getting-started.adoc[Getting started].

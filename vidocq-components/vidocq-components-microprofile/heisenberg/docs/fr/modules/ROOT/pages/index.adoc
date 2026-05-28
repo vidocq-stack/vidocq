@@ -1,44 +1,107 @@
 = Heisenberg
-:description: Implémentation MicroProfile Fault Tolerance 4.1 pour Vidocq.
+:description: Implémentation MicroProfile Fault Tolerance 4.1, zéro librairie tierce, virtual threads, JPMS strict, CDI via Vauban, config via Ravel.
+
+////
+[.text-center]
+image::heisenberg-logo.png[Heisenberg,300,role=module-logo]
+////
 
 [.lead]
-Heisenberg est le sous-système de tolérance aux pannes de l'écosystème Vidocq. Il applique des politiques de ré-essai, de timeout, de disjoncteur, de bulkhead et de repli aux beans CDI au travers d'un unique intercepteur, s'intègre au container CDI xref:vauban::index.adoc[Vauban] et protège les appels effectués via des services tels que xref:cassini::index.adoc[Cassini].
+Heisenberg est l'implémentation MicroProfile Fault Tolerance 4.1 de l'écosystème Vidocq. Elle applique les politiques `@Retry`, `@Timeout`, `@CircuitBreaker`, `@Bulkhead`, `@Fallback` et `@Asynchronous` aux beans CDI au travers d'un unique intercepteur, branchée sur xref:vauban::index.adoc[Vauban] pour le container et sur xref:ravel::index.adoc[Ravel] pour la configuration. Objectif : conformance 100 % au TCK MicroProfile Fault Tolerance 4.1 (actuellement 463/463), zéro dépendance externe au-delà des specs, JPMS strict, prête pour jlink.
 
 == Origine du nom
-Werner Heisenberg (1901-1976) a formulé le principe d'incertitude : on ne peut pas mesurer simultanément la position et la quantité de mouvement d'une particule avec une précision arbitraire. Le projet Heisenberg encapsule l'incertitude inhérente aux appels réseau et aux services distants, et y répond avec ordre, mesure et résilience.
+
+**Werner Heisenberg (1901-1976)**, physicien allemand. Formula en 1927 le principe d'incertitude, pierre angulaire de la mécanique quantique : la position et la quantité de mouvement d'une particule ne peuvent pas être mesurées simultanément avec une précision arbitraire — `Δp · Δx ≥ ℏ/2`. Prix Nobel de physique 1932 « pour la création de la mécanique quantique ». Voir https://fr.wikipedia.org/wiki/Werner_Heisenberg[la fiche Wikipédia].
+
+Heisenberg a posé que **l'incertitude est intrinsèque, pas un défaut de l'instrument**. Le runtime Heisenberg encapsule l'incertitude inhérente aux appels réseau et aux services distants — latence variable, échecs transitoires, surcharge — et y répond avec des politiques formellement composables, ordonnées comme des opérateurs non-commutatifs.
+
+[cols="1,3"]
+|===
+| Heisenberg, le physicien | Heisenberg, le runtime
+
+| Principe d'incertitude
+| L'appel réseau est intrinsèquement incertain — la réussite n'est pas déterminée.
+
+| Matrices observables non-commutatives
+| Politiques non-commutatives : `@Retry ∘ @Timeout ≠ @Timeout ∘ @Retry`.
+
+| Mécanique matricielle (Göttingen, 1925)
+| Composition formelle des aspects — chaîne d'intercepteurs ordonnée par la spec §2.5.
+
+| Inégalité `Δp · Δx ≥ ℏ/2`
+| Borne intrinsèque latence × débit (Little's Law) — un `@Bulkhead` la rend explicite.
+
+| Effondrement du paquet d'ondes
+| `@CircuitBreaker` qui s'ouvre — l'état devient discret (OPEN), les appels suivants sont court-circuités.
+
+| États propres et observables compatibles
+| Politiques compatibles, composables dans un ordre canonique unique.
+|===
 
 == En un coup d'œil
 
 [cols="1,3"]
 |===
-| Spec implémentée | {spec-mp-fault-tolerance}
-| Repo | {repo-heisenberg}
+| Spec implémentée | MicroProfile Fault Tolerance 4.1
+| Dépôt | https://codeberg.org/Vidocq/heisenberg
 | Java | 25 (LTS)
-| Modules | `heisenberg-api`, `heisenberg-core`, `heisenberg-cdi-vauban`, `heisenberg-bench`, `heisenberg-tck`, `heisenberg-examples`
-| TCK | En cours — voir ROADMAP
+| Modules JPMS | `io.vidocq.heisenberg.api`, `io.vidocq.heisenberg.core`, `io.vidocq.heisenberg.cdi.vauban`
+| Packages publics | `io.vidocq.heisenberg.api.*` (SPI stable), `io.vidocq.heisenberg.cdi.*` (intégration CDI)
+| Dépendances runtime | `microprofile-fault-tolerance-api` 4.1, `jakarta.enterprise.cdi-api` 4.1 (provided), `jakarta.interceptor-api` 2.2 (provided), `ravel-mp-config-api` (MicroProfile Config 3.1), `opentelemetry-api` 1.39 (`requires static`)
+| Prête pour jlink | ✅ — chaque sous-module a son `module-info.java`, pas de fallback `Automatic-Module-Name` côté production.
+| TCK MP FT 4.1 | ✅ 463 / 463 — voir xref:tck.adoc[état détaillé]
 |===
 
-== Politiques de tolérance aux pannes
+== Trois traits identitaires
 
-Heisenberg implémente l'ensemble des annotations MicroProfile Fault Tolerance 4.1 :
+. **Zéro librairie tierce d'implémentation** — seules les API Jakarta EE et MicroProfile spécifiées sont compilées. Pas de SmallRye Fault Tolerance, pas de Hystrix, pas de Resilience4j. Les automates (retry, circuit breaker, bulkhead) sont écrits à la main dans `heisenberg-core`.
+. **Virtual threads natifs pour `@Asynchronous` et `@Timeout`** — `Thread.ofVirtual()` + `join(Duration)` bornent chaque tentative ; aucun pool de threads plateforme n'est créé. Pas de `synchronized`, pas de `ThreadLocal` — `ReentrantLock`, `Semaphore`, `LongAdder`, `ConcurrentHashMap` et `ScopedValue` sont préférés.
+. **Config Ravel + BCE Vauban** — toutes les clés `fault-tolerance/...` sont résolues via xref:ravel::index.adoc[Ravel] (MicroProfile Config 3.1) ; l'intercepteur unique est enregistré par une Build Compatible Extension xref:vauban::index.adoc[Vauban], qui scanne et indexe les annotations au démarrage.
 
-[cols="1,3"]
-|===
-| `@Retry` | Ré-essais automatiques avec délai, jitter, `retryOn` / `abortOn`
-| `@Timeout` | Délai maximal d'exécution par tentative (virtual threads + `join(Duration)`)
-| `@CircuitBreaker` | Disjoncteur (CLOSED / OPEN / HALF_OPEN), fenêtre glissante
-| `@Bulkhead` | Isolation par sémaphore (sync) ou file (async)
-| `@Fallback` | Alternative en cas d'échec (`FallbackHandler` ou méthode de la classe)
-| `@Asynchronous` | Exécution sur virtual thread, retour `CompletionStage` / `Future`
-|===
+== Positionnement dans l'écosystème
 
-Le module `heisenberg-core` contient les moteurs de politiques purs Java 25, sans dépendance CDI, ce qui rend chaque politique testable unitairement sans container. Le module `heisenberg-cdi-vauban` porte l'unique `@Interceptor` CDI qui orchestre ces moteurs, composant les politiques de l'extérieur vers l'intérieur (`@Fallback` -> `@CircuitBreaker` -> `@Bulkhead` -> `@Timeout` -> `@Retry` -> méthode réelle), conformément à la section 2.5 de la spec.
+[mermaid]
+....
+flowchart LR
+  App["Bean CDI applicatif<br/>méthode annotée"]
+  Interceptor["FaultToleranceInterceptor<br/>(heisenberg-cdi-vauban)"]
+  Fallback["@Fallback"]
+  CB["@CircuitBreaker"]
+  Retry["@Retry"]
+  Timeout["@Timeout"]
+  Bulkhead["@Bulkhead"]
+  Async["@Asynchronous"]
+  Method["méthode cible"]
 
-== Observabilité optionnelle
+  App --> Interceptor
+  Interceptor --> Fallback
+  Fallback --> CB
+  CB --> Retry
+  Retry --> Timeout
+  Timeout --> Bulkhead
+  Bulkhead --> Async
+  Async --> Method
 
-Les métriques et la télémétrie sont optionnelles. La SPI `io.vidocq.heisenberg.api.FtMetricsRecorder` peut être adossée à un recorder OpenTelemetry (section 10) et/ou à un recorder MP Metrics (section 9) ; les deux ne sont câblés que s'ils sont présents à l'exécution. Le support OpenTelemetry est déclaré `requires static io.opentelemetry.api`, de sorte que CDI ignore silencieusement le recorder OTel quand OpenTelemetry est absent. Le script `run-tck-no-observability.sh` exécute le TCK avec l'observabilité désactivée, confirmant que la tolérance aux pannes fonctionne sans aucune dépendance d'observabilité dans le classpath.
+  Interceptor -.config.-> Ravel["Ravel<br/>MicroProfile Config"]
+  Interceptor -.BCE.-> Vauban["Vauban<br/>CDI Lite"]
+  Interceptor -.métriques opt.-> Humboldt["Humboldt<br/>OpenTelemetry"]
 
-== Liens rapides
-* xref:usage.adoc[Utilisation]
+  classDef rt fill:#e1f5fe,stroke:#0288d1
+  class Interceptor rt
+....
 
-Bugs et benchmarks consolidés : link:{repo-heisenberg}/src/branch/main/BUG.md[BUG.md], link:{repo-heisenberg}/src/branch/main/BENCH.md[BENCH.md].
+L'ordre d'enveloppement de la chaîne suit la spec MP FT 4.1 §2.5 — `@Fallback` est l'enveloppe la plus externe, la méthode cible est au coeur. xref:cassini::index.adoc[Cassini] et tout client HTTP applicatif bénéficient ainsi de la tolérance aux pannes sans modification de code. xref:humboldt::index.adoc[Humboldt] (OpenTelemetry) et l'implémentation MP Metrics Dirac peuvent récolter les métriques §9 et §10 ; le script `run-tck-no-observability.sh` les coupe pour valider que la tolérance fonctionne sans aucune dépendance d'observabilité au classpath.
+
+== Ressources rapides
+
+* xref:getting-started.adoc[Démarrage rapide] — première méthode protégée, première chaîne `@Retry + @CircuitBreaker + @Fallback`.
+* xref:concepts.adoc[Concepts] — annotations, ordre de composition, états du circuit breaker.
+* xref:usage.adoc[Cas d'usage] — clients REST robustes, `@Asynchronous`, `FallbackHandler`, surcharges MP Config.
+* xref:reference.adoc[Référence] — artefacts, modules JPMS, annotations, clés `fault-tolerance/*`.
+* xref:internals.adoc[Fonctionnement interne] — moteurs purs, `StateRegistry`, virtual threads.
+* xref:tck.adoc[TCK] — exécution, statut, mode `no-observability`.
+* xref:migration.adoc[Migration] — depuis SmallRye Fault Tolerance ou Resilience4j.
+
+Bugs et benchmarks consolidés : link:https://codeberg.org/Vidocq/heisenberg/src/branch/main/BUG.md[BUG.md], link:https://codeberg.org/Vidocq/heisenberg/src/branch/main/BENCH.md[BENCH.md].
+
+Suivant : xref:getting-started.adoc[Démarrage rapide].

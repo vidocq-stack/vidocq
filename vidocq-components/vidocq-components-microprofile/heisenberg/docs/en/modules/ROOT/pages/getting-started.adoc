@@ -1,0 +1,154 @@
+= Getting started
+:description: First guarded method with @Retry + @CircuitBreaker + @Fallback, in under five minutes.
+
+[.lead]
+This page assumes a working CDI 4.1 Lite application running on xref:vauban::index.adoc[Vauban] (or any CDI Lite-compatible container). It walks through adding Heisenberg: Maven dependencies, minimal annotations, expected behaviour.
+
+== Prerequisites
+
+* Java 25 (LTS) — Temurin recommended.
+* Maven 4.0.0-rc-5 — pinned by `.sdkmanrc` at the Heisenberg root.
+* A working CDI 4.1 application with at least one `@ApplicationScoped` bean.
+
+[source,bash]
+----
+sdk env                              # Java 25 + Maven 4.0.0-rc-5
+./mvnw -ntp install -DskipTests     # installs heisenberg-api, heisenberg-core, heisenberg-cdi-vauban
+----
+
+== Maven dependencies
+
+`heisenberg-cdi-vauban` brings the interceptor and the Vauban BCE; it transitively pulls `heisenberg-core` (the pure engines) and `heisenberg-api` (the SPI). A single dependency entry is enough in the application `pom.xml`.
+
+[source,xml]
+----
+<dependencies>
+    <dependency>
+        <groupId>io.vidocq.heisenberg</groupId>
+        <artifactId>heisenberg-cdi-vauban</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </dependency>
+    <dependency>
+        <groupId>org.eclipse.microprofile.fault-tolerance</groupId>
+        <artifactId>microprofile-fault-tolerance-api</artifactId>
+        <version>4.1</version>
+    </dependency>
+</dependencies>
+----
+
+[NOTE]
+====
+The MicroProfile Fault Tolerance API is declared `provided` in `heisenberg-cdi-vauban`. It ships the `@Retry`, `@Timeout`, `@CircuitBreaker`, `@Bulkhead`, `@Fallback`, `@Asynchronous` annotations used in application code. The modularised variant `io.vidocq.heisenberg:heisenberg-mp-ft-api` can replace it in a fully jlink-compatible project.
+====
+
+== First guarded method
+
+Annotate a method on a CDI bean. The Heisenberg interceptor composes policies from the outside in — `@Fallback` wraps `@CircuitBreaker`, which wraps `@Bulkhead`, `@Timeout` and `@Retry`, which eventually invoke the actual method.
+
+[source,java]
+----
+package io.example;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import org.eclipse.microprofile.faulttolerance.CircuitBreaker;
+import org.eclipse.microprofile.faulttolerance.Fallback;
+import org.eclipse.microprofile.faulttolerance.Retry;
+
+@ApplicationScoped
+public class InventoryClient {
+
+    @Retry(maxRetries = 3, delay = 200)
+    @CircuitBreaker(requestVolumeThreshold = 10, failureRatio = 0.5, delay = 5000)
+    @Fallback(fallbackMethod = "cachedStock")
+    public Stock currentStock(String sku) {
+        // remote call that may fail or hang
+        return remote.fetch(sku);
+    }
+
+    // fallback signature must match the guarded method's return type
+    private Stock cachedStock(String sku) {
+        return Stock.empty(sku);
+    }
+}
+----
+
+Semantics:
+
+* `@Retry` re-invokes the method up to `maxRetries=3` times with `delay=200` ms between attempts.
+* `@CircuitBreaker` opens as soon as `failureRatio=0.5` is reached over the `requestVolumeThreshold=10` window, short-circuiting subsequent calls for `delay=5000` ms (OPEN state) before transitioning to HALF_OPEN.
+* `@Fallback` provides the alternative result when the guarded call ultimately fails (all attempts failed or the circuit is open).
+
+== Start the container
+
+No additional bootstrap. The Vauban BCE (`HeisenbergExtension`) discovers the interceptor at startup and registers it for all annotated beans. Launching the application through `Vauban.bootstrap()` or through xref:cassini::index.adoc[Cassini] / xref:foy::index.adoc[Foy] is enough.
+
+[source,bash]
+----
+# Run the app — the Heisenberg BCE self-registers
+java -p mods -m io.example/io.example.App
+----
+
+== Visual verification
+
+Trigger a failure by shutting down the remote service. Interceptor chain traces are available through the observability recorders — see xref:internals.adoc#observability[`FtMetricsRecorder`].
+
+[source,bash]
+----
+curl -i http://localhost:8080/api/stock/SKU-42
+# 200 OK + body { "sku": "SKU-42", "qty": 0 }   <- cachedStock after 3 retries
+----
+
+== Override without recompiling
+
+Every annotation parameter is overridable through MicroProfile Config (keys `fault-tolerance/<bean>/<method>/<Annotation>/<param>`). See xref:reference.adoc#mp-config[Reference].
+
+[source,properties]
+----
+# Disable @Retry on this method without touching the code
+fault-tolerance/io.example.InventoryClient/currentStock/Retry/maxRetries=0
+
+# Lengthen the circuit breaker timeout on a slow environment
+fault-tolerance/io.example.InventoryClient/currentStock/CircuitBreaker/delay=10000
+----
+
+[NOTE]
+====
+The MP FT 4.1 §12 precedence stays classic: *target method* > *class* > *annotation default value*. The unqualified key `fault-tolerance/<Annotation>/<param>` acts as a global default.
+====
+
+== Three combinable annotation sources
+
+[cols="1,3,2"]
+|===
+| Source | Description | Activation
+
+| Direct annotation
+| `@Retry` placed on the method or the class.
+| Automatic.
+
+| Class-level annotation inherited
+| `@Bulkhead` placed on the class, seen by all its methods.
+| Automatic (spec §9.3).
+
+| MicroProfile Config
+| `fault-tolerance/...` key read by xref:ravel::index.adoc[Ravel].
+| Presence of the key is enough.
+|===
+
+== Disable fault tolerance entirely
+
+For integration tests where retry slowness is a nuisance:
+
+[source,properties]
+----
+fault-tolerance/MP_Fault_Tolerance_NonFallback_Enabled=false
+fault-tolerance/MP_Fault_Tolerance_Metrics_Enabled=false
+----
+
+`MP_Fault_Tolerance_NonFallback_Enabled=false` disables `@Retry`, `@Timeout`, `@CircuitBreaker`, `@Bulkhead` and `@Asynchronous`; `@Fallback` stays active per spec §11.
+
+== Next step
+
+* xref:concepts.adoc[Concepts] — composition order, circuit breaker states, `@Asynchronous` semantics.
+* xref:usage.adoc[Usage] — robust REST clients, typed `FallbackHandler`, virtual threads.
+* xref:reference.adoc[Reference] — every annotation, every parameter, every `fault-tolerance/*` key.

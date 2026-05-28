@@ -1,0 +1,177 @@
+= Concepts
+:description: MicroProfile Fault Tolerance model — annotations, canonical composition order, circuit breaker states, @Asynchronous semantics.
+
+[.lead]
+The MicroProfile Fault Tolerance 4.1 specification defines six composable policies. This page lays out the vocabulary (`Retry`, `Timeout`, `CircuitBreaker`, `Bulkhead`, `Fallback`, `Asynchronous`), the canonical composition order mandated by §2.5, and the conceptual distinction between _recovery_ and _protection_ policies.
+
+== The six policies
+
+[cols="1,2,3"]
+|===
+| Annotation | Family | Role
+
+| `@Retry`
+| Recovery
+| Transparent retries on transient failure — delay, jitter, `retryOn` / `abortOn`.
+
+| `@Timeout`
+| Protection
+| Hard upper bound on the execution time of an attempt.
+
+| `@CircuitBreaker`
+| Protection
+| Cuts calls to a failing service — sliding window, CLOSED/OPEN/HALF_OPEN transitions.
+
+| `@Bulkhead`
+| Protection
+| Isolates a call site — semaphore (sync) or bounded queue (async).
+
+| `@Fallback`
+| Recovery
+| Provides an alternative result when all other policies have failed.
+
+| `@Asynchronous`
+| Execution
+| Delegates the invocation to a virtual thread; the method returns `CompletionStage` or `Future`.
+|===
+
+Key distinction: **recovery** (`@Retry`, `@Fallback`) tries to _obtain a result_ despite failure; **protection** (`@Timeout`, `@CircuitBreaker`, `@Bulkhead`) tries to _bound the damage_ taken by the calling system.
+
+== Canonical composition order
+
+MP FT 4.1 spec §2.5 mandates a single wrapping order, from the outside in:
+
+[mermaid]
+....
+flowchart LR
+  Caller["Caller"]
+  Fb["@Fallback"]
+  Cb["@CircuitBreaker"]
+  Bh["@Bulkhead"]
+  To["@Timeout"]
+  Rt["@Retry"]
+  Method["target method"]
+
+  Caller --> Fb
+  Fb --> Cb
+  Cb --> Bh
+  Bh --> To
+  To --> Rt
+  Rt --> Method
+....
+
+`@Asynchronous` sits _above_ this chain when present: it switches execution onto a virtual thread, then the `@Fallback → ... → method` chain runs in that thread.
+
+Concrete consequence: composition is **non-commutative**. A `@Retry` around a `@Timeout` (what the chain does) retries each _timed attempt_. Conversely, a `@Timeout` around a `@Retry` (which MP FT does not let you express) would time-limit the _entire retry sequence_. The spec picks the first form — each attempt has its own time budget.
+
+== Circuit breaker states
+
+`@CircuitBreaker` is a three-state machine:
+
+[mermaid]
+....
+stateDiagram-v2
+  [*] --> CLOSED
+  CLOSED --> OPEN : failure ratio reached on window
+  OPEN --> HALF_OPEN : delay elapsed
+  HALF_OPEN --> CLOSED : successThreshold consecutive successes
+  HALF_OPEN --> OPEN : single failure
+....
+
+[cols="1,3"]
+|===
+| State | Semantics
+
+| `CLOSED`
+| Calls pass. The `requestVolumeThreshold` window records successes and failures. If the failure ratio crosses `failureRatio`, transition to `OPEN`.
+
+| `OPEN`
+| Calls are rejected immediately with `CircuitBreakerOpenException`. After `delay`, transition to `HALF_OPEN`.
+
+| `HALF_OPEN`
+| One _probe_ attempt is allowed. If `successThreshold` consecutive attempts succeed, transition to `CLOSED`. Any failure goes back to `OPEN`.
+|===
+
+Heisenberg metaphor: the `OPEN` state is the _wave packet collapse_ — observation forced the system into a discrete state, and we must wait `delay` before superposition (the HALF_OPEN probe) becomes possible again.
+
+== `@Fallback` vs `@CircuitBreaker`
+
+Common confusion: both intervene on failure, but their roles are orthogonal.
+
+[cols="1,2,2"]
+|===
+| Aspect | `@Fallback` | `@CircuitBreaker`
+
+| Family
+| Recovery
+| Protection
+
+| Question asked
+| "What do we return if the call failed?"
+| "Should we even try to call?"
+
+| Effect on caller
+| Sees a result (fallback) instead of an exception
+| Sees `CircuitBreakerOpenException` (unless `@Fallback` intercepts it)
+
+| Effect on remote system
+| None — the call already happened
+| Reduces load — subsequent calls are short-circuited
+|===
+
+The two combine naturally: `@CircuitBreaker` protects, `@Fallback` recovers the `CircuitBreakerOpenException` thrown.
+
+== `@Asynchronous` semantics
+
+`@Asynchronous` requires the method to return `CompletionStage<T>` or `Future<T>`. The call is delegated to a virtual thread. For `CompletionStage`:
+
+. The interceptor immediately returns an empty `CompletableFuture<T>`.
+. A virtual thread is created (`Thread.ofVirtual().start(...)`).
+. The `@Fallback → @CircuitBreaker → @Bulkhead → @Timeout → @Retry → method` chain runs on that virtual thread.
+. When the result is known, `CompletableFuture.complete(value)` is called.
+
+For `Future<T>`, the contract is stricter: `Future.cancel(true)` interrupts the virtual thread (best-effort), `Future.get(timeout)` blocks the calling thread until `timeout`.
+
+[NOTE]
+====
+A method annotated `@Asynchronous` must not be called _directly_ from another virtual thread in the same chain — spec §6.4 forbids self-reference to avoid deadlocks. The Heisenberg interceptor detects this and raises `FaultToleranceDefinitionException` at application startup.
+====
+
+== `@Bulkhead` semantics
+
+`@Bulkhead(value=N)` bounds the number of concurrent invocations:
+
+* **Synchronous mode** (no `@Asynchronous`): a `Semaphore` with N permits; a call beyond raises `BulkheadException` immediately.
+* **Asynchronous mode** (with `@Asynchronous`): a `Semaphore` with N permits + a `waitingTaskQueue` queue of pending tasks; beyond that, `BulkheadException`.
+
+== Configuration through MicroProfile Config
+
+MP FT 4.1 spec §12 defines a `fault-tolerance/...` key scheme read through MicroProfile Config — provided by xref:ravel::index.adoc[Ravel].
+
+[cols="2,3"]
+|===
+| Key | Effect
+
+| `fault-tolerance/<Annotation>/<param>`
+| Global value, takes precedence over the annotation default.
+
+| `fault-tolerance/<Class>/<Annotation>/<param>`
+| Class-level override.
+
+| `fault-tolerance/<Class>/<method>/<Annotation>/<param>`
+| Method-level override — highest precedence.
+
+| `fault-tolerance/MP_Fault_Tolerance_NonFallback_Enabled`
+| Boolean. `false` disables everything except `@Fallback`.
+
+| `fault-tolerance/MP_Fault_Tolerance_Metrics_Enabled`
+| Boolean. `false` disables §9 / §10 metric emission.
+|===
+
+See xref:reference.adoc[Reference] for the exhaustive list and per-parameter variants.
+
+== Going further
+
+* xref:usage.adoc[Usage] — typical chains (`@Retry + @Timeout + @CircuitBreaker + @Fallback`), `FallbackHandler`, `@Asynchronous`.
+* xref:internals.adoc[Internals] — invocation pipeline, pure engines, virtual threads, `StateRegistry`.
+* xref:reference.adoc[Reference] — annotations, parameters, MP Config keys.

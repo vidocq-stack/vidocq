@@ -1,0 +1,137 @@
+= Migration
+:description: Moving from SmallRye Fault Tolerance or Resilience4j to Heisenberg — equivalences, virtual threads, configuration deltas.
+
+[CAUTION]
+====
+Heisenberg is at `0.1.0-SNAPSHOT`. The MicroProfile Fault Tolerance 4.1 spec is fully covered (TCK 463/463, see xref:tck.adoc[TCK status]), but the public SPI `io.vidocq.heisenberg.api.*` may still change before `1.0.0`. This page documents the model correspondences to prepare a progressive migration.
+====
+
+[.lead]
+Application-side, migration from a MP FT implementation (SmallRye) is trivial: Heisenberg consumes the standard `org.eclipse.microprofile.faulttolerance.*` annotations strictly. No proprietary import to replace. The deltas are about configuration, packaging and the threading model. From Resilience4j (a non-standard API), migration is more structural.
+
+== From SmallRye Fault Tolerance
+
+SmallRye Fault Tolerance is the reference implementation in Quarkus and some Jakarta EE servers. Direct migration — Heisenberg aims at strict conformance to the same spec.
+
+[cols="2,2,3"]
+|===
+| SmallRye Fault Tolerance | Heisenberg | Note
+
+| Annotations `org.eclipse.microprofile.faulttolerance.*`
+| Same annotations
+| No application code change.
+
+| MP Config keys `fault-tolerance/...`
+| Same keys
+| Method > class > global precedence is identical.
+
+| Platform thread pool (`io.smallrye.faulttolerance.globalThreadPoolSize`)
+| Virtual threads — no platform pool
+| No equivalent property. Thread count self-adjusts.
+
+| Non-spec strategies (SmallRye `@RateLimit`, `@ApplyGuard`)
+| Not implemented (off-spec)
+| Keep only the standard MP FT 4.1 annotations.
+
+| Dependencies: SmallRye Common, Jandex, SmallRye Config
+| None (besides Jakarta + MicroProfile APIs)
+| Reduced classpath footprint. Immediate jlink compatibility.
+|===
+
+== From Resilience4j
+
+Resilience4j is a standalone library (no mandatory CDI). Migration requires annotation and configuration replacement.
+
+[cols="2,2,3"]
+|===
+| Resilience4j | Heisenberg | Note
+
+| `@Retry(name = "...")` + `resilience4j.retry.instances.<name>.maxAttempts`
+| `@Retry(maxRetries = N)` or MP Config key
+| No named "registry" concept — config is per-class/per-method.
+
+| `@TimeLimiter`
+| `@Timeout(value, unit)`
+| Equivalent semantics. `@TimeLimiter` requires `Future`, `@Timeout` does not.
+
+| `@CircuitBreaker(name = "...")` (`failureRateThreshold`, `slidingWindowSize`, etc.)
+| `@CircuitBreaker(failureRatio, requestVolumeThreshold, delay, successThreshold)`
+| MP spec: _request volume_ window (per-call count), no time-based window.
+
+| `@Bulkhead(name = "...")` (`maxConcurrentCalls`, `maxWaitDuration`)
+| `@Bulkhead(value, waitingTaskQueue)`
+| `maxWaitDuration` has no equivalent — MP `BulkheadException` is immediate or bounded queue (in async).
+
+| `@RateLimiter`
+| Not implemented (off-spec MP FT 4.1)
+| Keep Resilience4j alongside for this need, or implement at the gateway.
+
+| `@Fallback` (Spring Cloud) or `Try.recover` (Vavr)
+| `@Fallback(fallbackMethod = "...")` or `@Fallback(MyHandler.class)`
+| No functional bridge — use plain records.
+|===
+
+== Model difference: virtual threads vs platform pool
+
+This is the main attention point when migrating from SmallRye or Resilience4j.
+
+[cols="1,2,2"]
+|===
+| Aspect | SmallRye / Resilience4j | Heisenberg
+
+| Executing `@Asynchronous` / `@TimeLimiter`
+| Bounded platform `ExecutorService` (`io.smallrye.faulttolerance.globalThreadPoolSize=100`)
+| `Thread.ofVirtual().start(...)` — one virtual thread per invocation
+
+| Memory cost per attempt
+| ~512 kB (OS stack)
+| ~5 kB (virtual stack frame)
+
+| Saturation
+| `LinkedBlockingQueue`; beyond, rejection
+| `@Bulkhead` bounds explicitly — without a bulkhead, no bound
+
+| Pinning
+| N/A
+| `synchronized` or non-zero `ThreadLocal` = pinning → memory cost explodes. Heisenberg forbids both.
+|===
+
+[CAUTION]
+====
+If application code uses `synchronized` or `ThreadLocal` inside a method annotated `@Asynchronous`, the virtual thread is _pinned_ to its carrier — legal but inefficient. Take the migration opportunity to switch to `ReentrantLock` and `ScopedValue`. See xref:vauban::index.adoc[Vauban].
+====
+
+== Configuration deltas
+
+[cols="2,2"]
+|===
+| SmallRye | Heisenberg
+
+| `io.smallrye.faulttolerance.globalThreadPoolSize=100`
+| No equivalent — virtual threads on demand.
+
+| `io.smallrye.faulttolerance.mainThreadPoolQueueSize=...`
+| No equivalent.
+
+| `MP_Fault_Tolerance_NonFallback_Enabled` (MP spec)
+| Same key under the `fault-tolerance/MP_Fault_Tolerance_NonFallback_Enabled` prefix.
+
+| `MP_Fault_Tolerance_Metrics_Enabled` (MP spec)
+| Same key under the `fault-tolerance/MP_Fault_Tolerance_Metrics_Enabled` prefix.
+|===
+
+== Porting checklist
+
+. Declare `heisenberg-cdi-vauban` instead of `smallrye-fault-tolerance` or `resilience4j-*`.
+. Verify that application annotations come from `org.eclipse.microprofile.faulttolerance.*`. Replace proprietary annotations (`io.smallrye.faulttolerance.api.*`, `io.github.resilience4j.*`).
+. Rename MP Config keys if needed — `fault-tolerance/<FQCN>/<method>/<Annotation>/<param>` is the canonical form.
+. Drop properties related to platform thread pools — they have no effect.
+. Audit `@Asynchronous` methods for `synchronized` / `ThreadLocal` — switch to `ReentrantLock` / `ScopedValue` whenever possible.
+. Run `./mvnw test` then `./run-official-tck-mp-fault-tolerance-4.1.sh` (see xref:tck.adoc[TCK]).
+. Compare a typical call before/after — retry rate, circuit opening, p99 latency.
+
+== Going further
+
+* xref:concepts.adoc[Concepts] — MP FT model, canonical order.
+* xref:internals.adoc[Internals] — virtual threads, StateRegistry, observability.
+* link:https://codeberg.org/Vidocq/heisenberg/src/branch/main/BUG.md[BUG.md] — known pitfalls.

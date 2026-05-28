@@ -1,0 +1,153 @@
+= MicroProfile Fault Tolerance 4.1 TCK
+:description: Status, runner execution, no-observability mode, out-of-reactor architecture, documented exclusions.
+
+[.lead]
+The official MicroProfile Fault Tolerance 4.1 TCK validates that an implementation honours the semantics of §2.5 (composition), §4 (Retry), §5 (CircuitBreaker), §6 (Asynchronous), §7 (Timeout), §8 (Fallback), §9 (Bulkhead), §10 (Metrics) and §11 (OpenTelemetry) over a set of reference applications. Heisenberg passes *463 / 463* on version 4.1 (May 2026).
+
+== Status
+
+[cols="2,1"]
+|===
+| Metric | Value
+
+| Tests run
+| 463
+
+| Passed
+| 463 ✅
+
+| Failed
+| 0
+
+| Errors
+| 0
+
+| Skipped
+| 0
+|===
+
+Last reproducible run: 2026-05-28T09:05:59Z, via `./run-official-tck-mp-fault-tolerance-4.1.sh all`. Any later regression is logged in the repo `TCK.md` with: test name, reason, fix plan.
+
+== Prerequisites
+
+The `org.eclipse.microprofile.fault-tolerance:microprofile-fault-tolerance-tck:4.1` artifact must be available on Maven Central or installed manually in the local M2 repository. Detailed procedure in `heisenberg-tck/README.md`.
+
+[source,bash]
+----
+sdk env                              # Java 25 + Maven 4.0.0-rc-5
+./mvnw -ntp install -DskipTests     # installs heisenberg-api, heisenberg-core, heisenberg-cdi-vauban
+----
+
+== Main runner
+
+The `run-official-tck-mp-fault-tolerance-4.1.sh` script at the repo root orchestrates every variant.
+
+[source,bash]
+----
+# Smoke test — one quick non-Arquillian test to validate the install
+./run-official-tck-mp-fault-tolerance-4.1.sh
+
+# Full suite — the official TCK at 463 tests
+./run-official-tck-mp-fault-tolerance-4.1.sh all
+
+# Targeted test via -Dtest=
+./run-official-tck-mp-fault-tolerance-4.1.sh -Dtest=RetryTest
+./run-official-tck-mp-fault-tolerance-4.1.sh -Dtest=CircuitBreakerTest#testCircuitClosesAfterDelay
+----
+
+The runner uses Arquillian + TestNG. The Surefire report lands in `heisenberg-tck/target/surefire-reports/`, and the script generates a `tck-report.txt` summary with the count of PASS / FAIL / ERROR / SKIP tests.
+
+== `no-observability` mode
+
+The `run-tck-no-observability.sh` script wraps the main runner and **excludes** every test depending on MP Metrics §9 and OpenTelemetry §10:
+
+[source,bash]
+----
+# Smoke without observability
+./run-tck-no-observability.sh
+
+# Full suite without observability
+./run-tck-no-observability.sh all
+
+# Targeted without observability
+./run-tck-no-observability.sh -Dtest=RetryTest
+----
+
+Why this mode exists: it validates that fault tolerance _works_ even when no observability dependency is present on the classpath. Heisenberg declares OpenTelemetry as `requires static` (Java static module); if OTel is absent, CDI silently ignores `OtelFtMetricsRecorder`, and the `NoopFtMetricsRecorder` is used. This mode proves that this absence does not affect the Retry, Timeout, CircuitBreaker, Bulkhead, Fallback, Asynchronous policies.
+
+Exclusions applied by the wrapper:
+
+[source]
+----
+**/metric/**, **/metrics/**, **/*Metric*Test.class,
+**/telemetry/**, **/*Telemetry*Test.class,
+**/opentelemetry/**, **/*OpenTelemetry*Test.class
+----
+
+If `-Dsurefire.excludes=...` is already provided on the command line, the exclusions are _merged_.
+
+== Runner architecture
+
+`heisenberg-tck` is **deliberately out of reactor**: its `pom.xml` uses standalone `modelVersion 4.0.0`, with no `<parent>`.
+
+[NOTE]
+====
+This detachment is forced by ShrinkWrap Maven Resolver 3.3 (transitive of the official TCK), which cannot parse Model 4.1.0 POMs and crashes on the Vidocq reactor. The rule is documented at the workspace root: **do not reintegrate `heisenberg-tck` into the `<subprojects>` of `heisenberg-parent`**, do not add a `<parent>` to it, do not build it with `mvn -pl`.
+====
+
+Stack assembled by the runner:
+
+[cols="1,3"]
+|===
+| Layer | Component
+
+| Spec
+| `microprofile-fault-tolerance-api` 4.1, `jakarta.enterprise.cdi-api` 4.1, `jakarta.interceptor-api` 2.2, `microprofile-config-api` 3.1
+
+| Fault Tolerance implementation
+| `heisenberg-core` + `heisenberg-cdi-vauban`
+
+| CDI container
+| Vauban (`io.vidocq.vauban.core`) in embedded mode
+
+| Arquillian container
+| `HeisenbergDeployableContainer` — deploys the test archive, instantiates the `BeanManager`
+
+| HTTP transport (when needed)
+| Chappe — for tests that exercise an HTTP client
+
+| Test framework
+| TestNG (upstream constraint — not JUnit)
+|===
+
+== Tuning properties
+
+[cols="2,3"]
+|===
+| Property | Effect
+
+| `org.eclipse.microprofile.fault.tolerance.tck.timeout.multiplier`
+| TCK timeout multiplier. Default 1.0. Bump to 2.0 or 3.0 on slow CI.
+
+| `-Dtest=TestName`
+| Targets a specific test or method.
+
+| `-Dsurefire.excludes=...`
+| Surefire exclusions — useful to isolate a regression.
+|===
+
+== Documented exclusions
+
+No permanent exclusion at this time: the suite is run integrally and passes 463/463 in full mode. The `no-observability` mode is a runtime variant, not a structural exclusion — the excluded tests _also_ pass in full mode.
+
+If a permanent exclusion had to be added, it would be listed in the TestNG suite file (`heisenberg-tck/src/test/resources/tck-suite.xml`) and tracked in `TCK.md`.
+
+== Quality contract
+
+Any structural change to `heisenberg-core` or `heisenberg-cdi-vauban` must preserve the 463/463 score before merge. A TCK regression is a CI blocker: the PR does not pass. This contract is explicitly listed in the repo `CLAUDE.md`.
+
+== Going further
+
+* xref:internals.adoc[Internals] — understand what the TCK validates (pipeline, engines, observability).
+* xref:reference.adoc[Reference] — annotations and keys covered by the tests.
+* link:https://codeberg.org/Vidocq/heisenberg/src/branch/main/BUG.md[BUG.md] — tracked reproducible bugs.

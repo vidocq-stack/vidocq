@@ -1,0 +1,304 @@
+= Référence
+:description: Artefacts Maven, modules JPMS exportés, annotations supportées, ordre canonique de composition, clés MicroProfile Config.
+
+[.lead]
+Cette page consolide la surface publique de Heisenberg : artefacts Maven, modules JPMS, table complète des annotations MP FT 4.1 avec ordre canonique de composition, et clés `fault-tolerance/*` reconnues par xref:ravel::index.adoc[Ravel].
+
+== Artefacts Maven
+
+[cols="2,2,3"]
+|===
+| `groupId` | `artifactId` | Rôle
+
+| `io.vidocq.heisenberg`
+| `heisenberg-api`
+| SPI publique stable. Re-exposition typée de la spec + types `StateRegistry`, `PolicyContext`, `FtMetricsRecorder`.
+
+| `io.vidocq.heisenberg`
+| `heisenberg-core`
+| Moteurs de politiques purs Java 25 sans CDI : `RetryEngine`, `TimeoutEngine`, `CircuitBreakerEngine`, `BulkheadEngine`, `FallbackResolver`, `PolicyComposer`.
+
+| `io.vidocq.heisenberg`
+| `heisenberg-cdi-vauban`
+| Intercepteur CDI unique (`FaultToleranceInterceptor`) et BCE Vauban (`HeisenbergExtension`).
+
+| `io.vidocq.heisenberg`
+| `heisenberg-mp-ft-api`
+| Repackage modularisé de `microprofile-fault-tolerance-api` (nommé JPMS, jlink-compatible).
+
+| `io.vidocq.heisenberg`
+| `heisenberg-bench`
+| Benchmarks JMH (vs SmallRye Fault Tolerance). Pas pour la production.
+
+| `io.vidocq.heisenberg`
+| `heisenberg-examples`
+| Exemples d'utilisation, autonomes ou intégrés.
+
+| `io.vidocq.heisenberg`
+| `heisenberg-tck`
+| Runner officiel TCK MP FT 4.1 — hors reactor (Model 4.0.0). Ne pas déclarer en dépendance applicative.
+|===
+
+Toutes les versions à `0.1.0-SNAPSHOT` au moment de la rédaction.
+
+== Modules JPMS
+
+[cols="2,3"]
+|===
+| Module | Contenu
+
+| `io.vidocq.heisenberg.api`
+| `io.vidocq.heisenberg.api.*` — SPI publique : `StateRegistry`, `PolicyContext`, `FtMetricsRecorder`, configurations `RetryConfig`, `TimeoutConfig`, `CircuitBreakerConfig`, `BulkheadConfig` (records immuables), interface scellée `PolicyResult` (`Success`, `Failure`, `Fallback`).
+
+| `io.vidocq.heisenberg.core`
+| Implémentations internes : moteurs, `PolicyComposer`, `StateRegistry` en mémoire. Packages `io.vidocq.heisenberg.internal.*` non exportés.
+
+| `io.vidocq.heisenberg.cdi.vauban`
+| Intégration CDI : `FaultToleranceInterceptor`, `HeisenbergExtension` (BCE), `StateRegistryBean`, `BulkheadStateRegistryBean`, `MetricsRecorderResolver`, `CompositeFtMetricsRecorder`.
+|===
+
+`io.vidocq.heisenberg.internal.*` n'est jamais exporté. Toute classe applicative qui en dépend signale une régression à corriger.
+
+== Annotations MicroProfile Fault Tolerance 4.1
+
+Table récapitulative des six annotations, dans l'ordre de wrapping de l'extérieur vers l'intérieur.
+
+[cols="1,2,3,1"]
+|===
+| Annotation | Niveau | Effet | Statut
+
+| `@Asynchronous`
+| Méthode
+| Exécute la méthode sur un virtual thread. Type de retour : `CompletionStage<T>` ou `Future<T>`.
+| ✅
+
+| `@Fallback`
+| Méthode
+| Fournit un résultat alternatif sur échec. Paramètres : `fallbackMethod` ou classe `FallbackHandler<T>`.
+| ✅
+
+| `@CircuitBreaker`
+| Méthode ou classe
+| Disjoncteur CLOSED/OPEN/HALF_OPEN sur une fenêtre glissante.
+| ✅
+
+| `@Bulkhead`
+| Méthode ou classe
+| Isolation par sémaphore (sync) ou file bornée (async).
+| ✅
+
+| `@Timeout`
+| Méthode ou classe
+| Borne le temps d'une tentative — virtual thread + `join(Duration)`.
+| ✅
+
+| `@Retry`
+| Méthode ou classe
+| Ré-essais bornés avec délai, jitter, `retryOn` / `abortOn`.
+| ✅
+|===
+
+== Paramètres détaillés
+
+=== `@Retry`
+
+[cols="2,1,3"]
+|===
+| Paramètre | Défaut | Effet
+
+| `maxRetries`
+| 3
+| Nombre maximum de tentatives supplémentaires après la première. -1 = illimité (à utiliser avec `maxDuration`).
+
+| `delay`
+| 0
+| Délai de base entre tentatives.
+
+| `delayUnit`
+| `MILLIS`
+| Unité de `delay`.
+
+| `maxDuration`
+| 180000
+| Durée totale maximale (toutes tentatives confondues).
+
+| `durationUnit`
+| `MILLIS`
+| Unité de `maxDuration`.
+
+| `jitter`
+| 200
+| Variation aléatoire ajoutée à `delay`.
+
+| `jitterDelayUnit`
+| `MILLIS`
+| Unité de `jitter`.
+
+| `retryOn`
+| `Throwable`
+| Exceptions qui déclenchent un retry.
+
+| `abortOn`
+| Aucun
+| Exceptions qui abandonnent immédiatement (prioritaires sur `retryOn`).
+|===
+
+=== `@Timeout`
+
+[cols="2,1,3"]
+|===
+| Paramètre | Défaut | Effet
+| `value` | 1000 | Durée maximale d'une tentative.
+| `unit` | `MILLIS` | Unité de `value`.
+|===
+
+Au-delà, `TimeoutException` est levée. Pour `@Asynchronous`, le virtual thread sous-jacent est interrompu (best-effort).
+
+=== `@CircuitBreaker`
+
+[cols="2,1,3"]
+|===
+| Paramètre | Défaut | Effet
+| `requestVolumeThreshold` | 20 | Taille de la fenêtre glissante.
+| `failureRatio` | 0.5 | Seuil d'ouverture (proportion d'échecs).
+| `delay` | 5000 | Durée en état OPEN avant de passer en HALF_OPEN.
+| `delayUnit` | `MILLIS` | Unité de `delay`.
+| `successThreshold` | 1 | Nombre de sondes consécutives OK pour refermer.
+| `failOn` | `Throwable` | Exceptions comptées comme échec.
+| `skipOn` | Aucun | Exceptions non comptées (prioritaires sur `failOn`).
+|===
+
+=== `@Bulkhead`
+
+[cols="2,1,3"]
+|===
+| Paramètre | Défaut | Effet
+| `value` | 10 | Concurrence maximale (permis de sémaphore).
+| `waitingTaskQueue` | 10 | Taille de file d'attente (mode `@Asynchronous` uniquement).
+|===
+
+=== `@Fallback`
+
+[cols="2,1,3"]
+|===
+| Paramètre | Défaut | Effet
+| `value` | `Fallback.DEFAULT` | Classe `FallbackHandler<T>`.
+| `fallbackMethod` | `""` | Nom de méthode privée/package locale sur la classe.
+| `applyOn` | `Throwable` | Exceptions qui déclenchent le fallback.
+| `skipOn` | Aucun | Exceptions qui sautent le fallback.
+|===
+
+Note : `value` et `fallbackMethod` sont mutuellement exclusifs.
+
+=== `@Asynchronous`
+
+Aucun paramètre. La méthode doit retourner `CompletionStage<T>` ou `Future<T>`.
+
+== Clés MicroProfile Config
+
+[#mp-config]
+Toutes les clés sont lues via `ConfigProvider.getConfig()`. Précédence : *méthode* > *classe* > *globale* > *valeur par défaut de l'annotation* (spec §12).
+
+[cols="2,3"]
+|===
+| Clé | Effet
+
+| `fault-tolerance/<Annotation>/<param>`
+| Valeur globale.
+
+| `fault-tolerance/<FQCN>/<Annotation>/<param>`
+| Override classe.
+
+| `fault-tolerance/<FQCN>/<méthode>/<Annotation>/<param>`
+| Override méthode — prioritaire.
+
+| `fault-tolerance/MP_Fault_Tolerance_NonFallback_Enabled`
+| Booléen. `false` désactive `@Retry`, `@Timeout`, `@CircuitBreaker`, `@Bulkhead`, `@Asynchronous` ; `@Fallback` reste actif (spec §11).
+
+| `fault-tolerance/MP_Fault_Tolerance_Metrics_Enabled`
+| Booléen. `false` désactive les recorders §9 et §10.
+
+| `fault-tolerance/MP_Fault_Tolerance_Interceptor_Priority`
+| Priorité de l'intercepteur (`@Priority`).
+|===
+
+Exemples avec leurs paramètres :
+
+[source,properties]
+----
+# Globale
+fault-tolerance/Retry/maxRetries=5
+fault-tolerance/Timeout/value=2000
+fault-tolerance/CircuitBreaker/failureRatio=0.6
+
+# Par classe
+fault-tolerance/io.example.CatalogClient/Retry/maxRetries=2
+
+# Par méthode (prioritaire)
+fault-tolerance/io.example.CatalogClient/fetch/Retry/maxRetries=1
+fault-tolerance/io.example.CatalogClient/fetch/Retry/delay=500
+fault-tolerance/io.example.CatalogClient/fetch/CircuitBreaker/delay=30000
+fault-tolerance/io.example.CatalogClient/fetch/Bulkhead/value=20
+----
+
+== Exceptions
+
+[cols="2,3"]
+|===
+| Exception | Cas
+
+| `org.eclipse.microprofile.faulttolerance.exceptions.TimeoutException`
+| `@Timeout` dépassé sur une tentative.
+
+| `org.eclipse.microprofile.faulttolerance.exceptions.CircuitBreakerOpenException`
+| Appel rejeté en état OPEN.
+
+| `org.eclipse.microprofile.faulttolerance.exceptions.BulkheadException`
+| Bulkhead saturé.
+
+| `org.eclipse.microprofile.faulttolerance.exceptions.FaultToleranceException`
+| Erreur générique du runtime.
+
+| `org.eclipse.microprofile.faulttolerance.exceptions.FaultToleranceDefinitionException`
+| Annotation invalide détectée au démarrage (signature `@Asynchronous`, valeurs hors plage, etc.).
+|===
+
+== SPI Vidocq exposée par `heisenberg-api`
+
+Interfaces publiques implémentables par un module tiers — par exemple un recorder de métriques alternatif.
+
+[cols="2,3"]
+|===
+| Type | Rôle
+
+| `io.vidocq.heisenberg.api.FtMetricsRecorder`
+| Recorder de métriques. Implémenté par défaut par `DiracFtMetricsRecorder` (MP Metrics) et `OtelFtMetricsRecorder` (OpenTelemetry). Plusieurs implémentations sont composées via `CompositeFtMetricsRecorder`.
+
+| `io.vidocq.heisenberg.api.StateRegistry`
+| Registre d'état partagé pour `@CircuitBreaker` et `@Bulkhead`. Implémenté par `StateRegistryBean` (CDI `@ApplicationScoped`).
+
+| `io.vidocq.heisenberg.api.PolicyContext`
+| Contexte d'invocation : bean, méthode, paramètres, configuration résolue.
+
+| `io.vidocq.heisenberg.api.PolicyResult`
+| Interface scellée du résultat : `Success<T>`, `Failure`, `Fallback<T>`.
+|===
+
+== Compatibilité
+
+* Java 25 (LTS), Maven 4.0.0-rc-5.
+* CDI 4.1 Lite (Vauban) ou tout container CDI 4.1 Lite-compatible.
+* MicroProfile Config 3.1 (Ravel) en `provided`.
+* OpenTelemetry 1.39 (Humboldt) en `requires static` — facultatif.
+* MicroProfile Metrics 5.x (Dirac) — facultatif.
+
+== Bugs et benchmarks
+
+* link:https://codeberg.org/Vidocq/heisenberg/src/branch/main/BUG.md[BUG.md] — bugs reproductibles tracés.
+* link:https://codeberg.org/Vidocq/heisenberg/src/branch/main/BENCH.md[BENCH.md] — benchmarks JMH vs SmallRye Fault Tolerance.
+
+== Pour aller plus loin
+
+* xref:concepts.adoc[Concepts] — modèle MP FT, ordre canonique.
+* xref:internals.adoc[Fonctionnement interne] — moteurs purs, virtual threads.
+* xref:tck.adoc[TCK] — exécution et statut.
