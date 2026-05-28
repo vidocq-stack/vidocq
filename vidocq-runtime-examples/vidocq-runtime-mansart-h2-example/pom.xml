@@ -13,6 +13,19 @@
     <name>Vidocq :: Examples :: Mansart Data + H2</name>
     <description>End-to-end demo: Vidocq + Cassini REST + Mansart Data 1.0 + Mansart Pool on H2 in-memory.</description>
 
+    <!--
+        Vidocq main-module coordinates — consumed by every Vidocq goal that
+        needs to know how to launch the app (vidocq:dev, vidocq:jlink,
+        vidocq:jpackage, vidocq:docker). Defined once here so a user can run
+        the dev mode with no extra CLI flags:
+
+            ./mvnw vidocq:dev
+    -->
+    <properties>
+        <vidocq.mainModule>io.vidocq.runtime.examples.mansart</vidocq.mainModule>
+        <vidocq.mainClass>io.vidocq.runtime.examples.mansart.MansartH2ExampleApp</vidocq.mainClass>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>io.vidocq.runtime</groupId>

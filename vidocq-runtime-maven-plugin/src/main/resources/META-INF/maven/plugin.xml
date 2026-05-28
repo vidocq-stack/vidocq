@@ -10,6 +10,48 @@
     <inheritedByDefault>true</inheritedByDefault>
 
     <mojos>
+        <!-- vidocq:dev — M1 of DEBUGMODE.md (Approach A, fast process-restart).
+             Blocking goal: watches src/, recompiles, respawns the child JVM. -->
+        <mojo>
+            <goal>dev</goal>
+            <description>Vidocq dev mode: watch sources, recompile, restart child JVM (Approach A / M1)</description>
+            <requiresDependencyResolution>runtime</requiresDependencyResolution>
+            <requiresDirectInvocation>true</requiresDirectInvocation>
+            <requiresProject>true</requiresProject>
+            <requiresOnline>false</requiresOnline>
+            <aggregator>false</aggregator>
+            <implementation>io.vidocq.runtime.maven.dev.VidocqDevMojo</implementation>
+            <language>java</language>
+            <instantiationStrategy>per-lookup</instantiationStrategy>
+            <threadSafe>false</threadSafe>
+            <parameters>
+                <parameter><name>project</name><type>org.apache.maven.project.MavenProject</type><required>true</required><editable>false</editable><description>The Maven project</description></parameter>
+                <parameter><name>mainModule</name><type>java.lang.String</type><required>true</required><editable>true</editable><description>Java module containing the main class (required — Vidocq runs on the module path)</description></parameter>
+                <parameter><name>mainClass</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>Fully-qualified main class. Optional if the module declares ModuleMainClass.</description></parameter>
+                <parameter><name>watchDirs</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>Comma-separated directories to watch, relative to the project base dir.</description></parameter>
+                <parameter><name>debounceMillis</name><type>long</type><required>false</required><editable>true</editable><description>Debounce window in milliseconds; collapses bursts of editor saves into a single reload.</description></parameter>
+                <parameter><name>gracePeriodMillis</name><type>long</type><required>false</required><editable>true</editable><description>Grace period given to the child JVM after SIGTERM before forceful kill.</description></parameter>
+                <parameter><name>extraJvmArgs</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>Extra JVM args passed verbatim to the child, split on whitespace.</description></parameter>
+                <parameter><name>extraSystemProperties</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>Comma-separated key=value system properties forwarded to the child as -Dkey=value.</description></parameter>
+                <parameter><name>profile</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>Profile string injected as -Dvidocq.profile in the child JVM.</description></parameter>
+                <parameter><name>classesDir</name><type>java.io.File</type><required>false</required><editable>false</editable><description>Compiled classes directory of the project.</description></parameter>
+                <parameter><name>baseDir</name><type>java.io.File</type><required>false</required><editable>false</editable><description>Project base directory.</description></parameter>
+            </parameters>
+            <configuration>
+                <project implementation="org.apache.maven.project.MavenProject" default-value="${project}"/>
+                <mainModule implementation="java.lang.String">${vidocq.mainModule}</mainModule>
+                <mainClass implementation="java.lang.String">${vidocq.mainClass}</mainClass>
+                <watchDirs implementation="java.lang.String" default-value="src/main/java,src/main/resources">${vidocq.dev.watchDirs}</watchDirs>
+                <debounceMillis implementation="long" default-value="250">${vidocq.dev.debounceMillis}</debounceMillis>
+                <gracePeriodMillis implementation="long" default-value="5000">${vidocq.dev.gracePeriodMillis}</gracePeriodMillis>
+                <extraJvmArgs implementation="java.lang.String" default-value="">${vidocq.dev.jvmArgs}</extraJvmArgs>
+                <extraSystemProperties implementation="java.lang.String" default-value="">${vidocq.dev.systemProperties}</extraSystemProperties>
+                <profile implementation="java.lang.String" default-value="dev">${vidocq.profile}</profile>
+                <classesDir implementation="java.io.File" default-value="${project.build.outputDirectory}"/>
+                <baseDir implementation="java.io.File" default-value="${project.basedir}"/>
+            </configuration>
+        </mojo>
+
         <!-- vidocq:generate -->
         <mojo>
             <goal>generate</goal>
