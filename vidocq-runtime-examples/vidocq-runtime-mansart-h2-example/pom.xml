@@ -144,6 +144,16 @@
                             <artifactId>mansart-transactions-cdi</artifactId>
                             <version>${mansart.version}</version>
                         </path>
+                        <!-- Cassini APT : pré-génère <Resource>$$CassiniAdapter + $$CassiniRoutes
+                             à compile-time pour les ressources JAX-RS. Sans cet APT, AdapterRegistry
+                             tombe en runtime sur RuntimeAdapterGenerator (fallback JVM-only, non
+                             AOT-safe, avec warning JPMS lié au `read` du module aval). C'est le
+                             chemin nominal documenté dans cassini/CLAUDE.md (M4 codegen). -->
+                        <path>
+                            <groupId>io.vidocq.cassini</groupId>
+                            <artifactId>cassini-processor</artifactId>
+                            <version>${cassini.version}</version>
+                        </path>
                     </annotationProcessorPaths>
                 </configuration>
             </plugin>

@@ -17,6 +17,9 @@ module io.vidocq.runtime.examples.mansart {
     requires io.vidocq.runtime.core;
     requires io.vidocq.runtime.spi;
     requires io.vidocq.runtime.ext.rest.cassini;
+    // Required by cassini-processor APT output: $$CassiniAdapter implements
+    // io.vidocq.cassini.spi.gen.ResourceAdapter and uses InjectionSupport/ParamKind.
+    requires io.vidocq.cassini.api;
     requires io.vidocq.runtime.ext.mansart.pool;
     requires io.vidocq.runtime.ext.mansart.data;
     requires io.vidocq.runtime.ext.mansart.transactions;
