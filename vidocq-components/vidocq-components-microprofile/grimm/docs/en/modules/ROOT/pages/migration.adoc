@@ -1,0 +1,94 @@
+= Migration
+:description: Moving from SmallRye OpenAPI or Quarkus OpenAPI to Grimm — equivalences, configs, gotchas.
+
+[CAUTION]
+====
+Grimm is at `0.1.0-SNAPSHOT`. The MicroProfile OpenAPI 4.1 spec is fully covered (TCK 349/349, see xref:tck.adoc[TCK status]), but the public SPI may still evolve before `1.0.0`. This page documents model mappings to prepare a staged migration.
+====
+
+[.lead]
+On the application code side, migration is trivial: Grimm strictly consumes the standard `org.eclipse.microprofile.openapi.annotations.*` annotations. No proprietary import to replace. The gaps lie in configuration and packaging.
+
+== From SmallRye OpenAPI
+
+SmallRye OpenAPI is the reference implementation in Quarkus and several Jakarta EE servers. Migration is direct — Grimm targets strict conformance to the same spec.
+
+[cols="2,2,3"]
+|===
+| SmallRye OpenAPI | Grimm | Note
+
+| Annotations `org.eclipse.microprofile.openapi.annotations.*`
+| Same annotations
+| No application code change.
+
+| Classpath scan at startup
+| Scan via Vauban BCE at startup
+| Same semantics. Neither does per-request scanning.
+
+| `/openapi` endpoint
+| `/openapi` endpoint
+| Identical. YAML/JSON content negotiation identical.
+
+| `mp.openapi.*` (MP Config keys)
+| `mp.openapi.*` (same keys)
+| Overrides, exclusions, filters, model reader: identical.
+
+| Dependencies: Jandex, SnakeYAML, Jackson, etc.
+| None (hand-written serializers)
+| Reduced classpath footprint. Immediate jlink compatibility.
+
+| `quarkus.smallrye-openapi.path`
+| Fixed `/openapi` endpoint (per MP spec)
+| To publish on another path, add a JAX-RS alias in the application.
+|===
+
+== From Quarkus OpenAPI
+
+Quarkus OpenAPI sits on top of SmallRye OpenAPI but adds proprietary extensions.
+
+[cols="2,2,3"]
+|===
+| Quarkus OpenAPI | Grimm | Note
+
+| Build-time scanning via Jandex
+| Runtime scanning via Vauban BCE (at startup, not per request)
+| Equivalent startup-latency cost. No Jandex index to maintain.
+
+| `quarkus.smallrye-openapi.info-*`
+| `@OpenAPIDefinition` (standard annotation)
+| Prefer the portable annotation.
+
+| `quarkus.smallrye-openapi.security-scheme`
+| `@SecurityScheme` (standard annotation)
+| Prefer the portable annotation.
+
+| Built-in Swagger UI
+| Out of scope for Grimm
+| Wire Swagger UI or Redoc on the application side as a static resource.
+
+| `quarkus.dev` hot reload
+| No Dev Mode equivalent
+| The cycle is `./mvnw clean install` + restart. See xref:vauban::index.adoc[Vauban].
+|===
+
+== Gotchas
+
+* **No hot classpath scan** — Grimm does not expose hot document refresh (the MP OpenAPI spec does not require it). Any annotation change requires a restart.
+* **No `setAccessible(true)`** — if application code relied on non-public classes accessed by a permissive scanner, Grimm will not reach them. Open packages in the application's `module-info.java` or make the types `public`.
+* **Strict YAML** — the hand-written YAML serializer emits strict 1.2. Some lax YAML clients (legacy browsers) may want different indentation. When in doubt, prefer JSON.
+* **`mp.openapi.servers`** — the override _replaces_ the document's `servers` list entirely (spec behaviour). For a merge, go through an `OASFilter`.
+
+== Porting checklist
+
+. Declare `grimm-core` + `grimm-cdi-vauban` instead of SmallRye / Quarkus OpenAPI.
+. Audit application annotations: they must all come from `org.eclipse.microprofile.openapi.annotations.*`. Replace any proprietary annotation.
+. Migrate `quarkus.smallrye-openapi.*` properties to `@OpenAPIDefinition` / `@SecurityScheme` / `@Server` or `mp.openapi.*` keys.
+. Run `./mvnw test` then `./run-official-tck-mp-openapi-4.1.sh` (see xref:tck.adoc[TCK]).
+. Diff the produced document before/after — verify `info`, `servers`, `paths`, `components/schemas`.
+. Wire Swagger UI or Redoc on the application side if needed.
+
+== Further reading
+
+* xref:concepts.adoc[Concepts] — model, merge, filters.
+* xref:reference.adoc[Reference] — annotations and `mp.openapi.*` keys.
+* link:https://codeberg.org/Vidocq/grimm/src/branch/main/BUG.md[BUG.md] — known gotchas.

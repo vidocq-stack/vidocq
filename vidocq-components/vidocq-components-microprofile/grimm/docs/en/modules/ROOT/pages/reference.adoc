@@ -1,0 +1,197 @@
+= Reference
+:description: Maven artefacts, exported JPMS modules, supported annotations, MicroProfile Config keys.
+
+[.lead]
+This page consolidates Grimm's public surface: artefacts to declare, exported JPMS modules, OpenAPI 3.1 annotations the scanner understands, and `mp.openapi.*` keys honoured by `ConfigApplier`.
+
+== Maven artefacts
+
+[cols="2,2,3"]
+|===
+| `groupId` | `artifactId` | Role
+
+| `io.vidocq.grimm`
+| `grimm-core`
+| Annotation scanner, JSON/YAML serializer, internal model, merger, `OASFactoryResolver`.
+
+| `io.vidocq.grimm`
+| `grimm-cdi-vauban`
+| Vauban BCE, `GrimmModelCache`, `/openapi` JAX-RS resource, config producer.
+
+| `io.vidocq.grimm`
+| `grimm-bench`
+| JMH benchmarks (vs SmallRye). Not for production.
+
+| `io.vidocq.grimm`
+| `grimm-examples`
+| Standalone or integrated usage examples.
+
+| `io.vidocq.grimm`
+| `grimm-tck`
+| Official MP OpenAPI 4.1 TCK runner — out of reactor (Model 4.0.0). Do not declare as an application dependency.
+|===
+
+Every version is `0.1.0-SNAPSHOT` at the time of writing.
+
+== JPMS modules
+
+[cols="2,3"]
+|===
+| Module | Contents
+
+| `io.vidocq.grimm.core`
+| `io.vidocq.grimm.api.*` (public SPI), `io.vidocq.grimm.internal.*` (scanner, serializer, merger, model — not exported).
+
+| `io.vidocq.grimm.cdi.vauban`
+| `io.vidocq.grimm.cdi.*` — `GrimmExtension`, `OpenApiResource`, `GrimmModelCache`, `GrimmConfigProducer`, `GrimmAutoDiscovery`.
+|===
+
+`io.vidocq.grimm.internal.*` is never exported. Any application class depending on it signals a regression to fix.
+
+== Supported MicroProfile OpenAPI annotations
+
+[cols="2,3,1"]
+|===
+| Annotation | Effect | Status
+
+| `@OpenAPIDefinition`
+| Root metadata (`info`, `tags`, `servers`, `security`, `externalDocs`).
+| ✅
+
+| `@Operation`
+| Describes a JAX-RS method: summary, description, `operationId`, `deprecated`.
+| ✅
+
+| `@Parameter`
+| Describes a parameter (`path`, `query`, `header`, `cookie`).
+| ✅
+
+| `@RequestBody`
+| Describes the request body: content, schema, examples.
+| ✅
+
+| `@APIResponse` / `@APIResponses`
+| Describes possible responses, code by code, with headers and links.
+| ✅
+
+| `@Schema`
+| Describes a type: title, description, constraints, `oneOf`, `discriminator`.
+| ✅
+
+| `@SecurityScheme` / `@SecurityRequirement` / `@SecuritySchemes`
+| Security schemes (HTTP, API Key, OAuth2, OpenID Connect) and requirements.
+| ✅
+
+| `@Server` / `@Servers`
+| Target URL(s) inscribed on the document, operation, or path.
+| ✅
+
+| `@Tag` / `@Tags`
+| Logical grouping of operations.
+| ✅
+
+| `@Callback` / `@Callbacks`
+| Server-described webhooks.
+| ✅
+
+| `@Extension` / `@Extensions`
+| Free-form `x-*` extensions.
+| ✅
+
+| `@ExternalDocumentation`
+| Link to external documentation.
+| ✅
+
+| `@Components`
+| Explicit reuse catalogue.
+| ✅
+
+| `@Hidden`
+| Hides a class, method, or parameter from the document.
+| ✅
+|===
+
+JAX-RS annotations consumed by the scanner: `@Path`, `@GET`, `@POST`, `@PUT`, `@DELETE`, `@PATCH`, `@HEAD`, `@OPTIONS`, `@Produces`, `@Consumes`, `@PathParam`, `@QueryParam`, `@HeaderParam`, `@CookieParam`, `@FormParam`, `@MatrixParam`, `@DefaultValue`, `@ApplicationPath`.
+
+== MicroProfile Config keys
+
+All keys are read through `ConfigProvider.getConfig()`. See `io.vidocq.grimm.internal.config.ConfigApplier`.
+
+[cols="2,3"]
+|===
+| Key | Effect
+
+| `mp.openapi.scan.disable`
+| Boolean. Disables annotation scanning entirely.
+
+| `mp.openapi.scan.packages`
+| List of packages to scan (whitelist, comma-separated).
+
+| `mp.openapi.scan.classes`
+| List of classes to scan (whitelist).
+
+| `mp.openapi.scan.exclude.packages`
+| List of excluded packages.
+
+| `mp.openapi.scan.exclude.classes`
+| List of excluded classes.
+
+| `mp.openapi.scan.beanvalidation`
+| Boolean. Enables derivation of Bean Validation constraints into the schema.
+
+| `mp.openapi.filter`
+| FQCN of an `OASFilter` applied after merge.
+
+| `mp.openapi.model.reader`
+| FQCN of an `OASModelReader` invoked before merge.
+
+| `mp.openapi.servers`
+| List of server URLs (replaces `servers` on the document).
+
+| `mp.openapi.servers.path.<path>`
+| Overrides `servers` for one specific path.
+
+| `mp.openapi.servers.operation.<operationId>`
+| Overrides `servers` for one specific operation.
+
+| `mp.openapi.schema.<FQCN>`
+| JSON snippet describing a schema for the given class (full override).
+
+| `mp.openapi.extensions.scan.disable`
+| Boolean. Disables scanning of `@Extension` annotations.
+|===
+
+[NOTE]
+====
+The `mp.openapi.application.path.disable` and `mp.openapi.extensions.path` keys mentioned in the spec may be added to the `ConfigApplier` whitelist without touching the public SPI. Check the current status in `ConfigApplier.java`.
+====
+
+== `/openapi` endpoint
+
+[cols="1,3"]
+|===
+| Path | `/openapi`
+| Verb | `GET`
+| Media types | `application/yaml` (default, spec §2.2), `application/json`
+| Format override | `?format=yaml`, `?format=yml`, `?format=json` (takes precedence over `Accept`, spec §2.3)
+| Source | `GrimmModelCache.getDocument()`
+| Status | Always `200` when the scan succeeded
+|===
+
+== Compatibility
+
+* Java 25 (LTS), Maven 4.0.0-rc-5.
+* JAX-RS 4.0 (Cassini or any conformant runtime).
+* CDI 4.1 Lite (Vauban) or Lite-compatible.
+* No Jakarta EE Full Profile dependency.
+
+== Bugs and benchmarks
+
+* link:https://codeberg.org/Vidocq/grimm/src/branch/main/BUG.md[BUG.md] — tracked reproducible bugs (to be created if missing).
+* link:https://codeberg.org/Vidocq/grimm/src/branch/main/BENCH.md[BENCH.md] — JMH benchmarks (to be created if missing).
+
+== Further reading
+
+* xref:concepts.adoc[Concepts] — merge, filters, configuration.
+* xref:internals.adoc[Internals] — pipeline and threading.
+* xref:tck.adoc[TCK] — status and execution.

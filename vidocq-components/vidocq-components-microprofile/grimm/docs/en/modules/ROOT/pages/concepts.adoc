@@ -1,0 +1,92 @@
+= Concepts
+:description: OpenAPI 3.1 model, combinable sources, merge, OASFilter filters, MicroProfile Config keys.
+
+[.lead]
+Grimm implements MicroProfile OpenAPI 4.1, which in turn rides on OpenAPI 3.1.0. This page lays out the vocabulary — _Components_, _Paths_, _Operations_, _Schemas_ — and the mechanics of merging the various model sources.
+
+== The OpenAPI 3.1 model
+
+The OpenAPI format describes an HTTP service through a structured JSON or YAML tree. Three top-level groups:
+
+[cols="1,3"]
+|===
+| Level | Role
+
+| `info`
+| Contract metadata: title, version, license, contact, description.
+
+| `paths`
+| Operation catalogue. Each key is a path (`/pets/{id}`), each value groups HTTP verbs (`get`, `post`, …) and their `Operation`.
+
+| `components`
+| Reuse catalogue: `schemas`, `parameters`, `responses`, `requestBodies`, `headers`, `securitySchemes`, `links`, `callbacks`, `examples`.
+|===
+
+The MP OpenAPI 4.1 spec's Java model mirrors that structure: the `OpenAPI` interface → `Info`, `Paths`, `Components`. Grimm provides concrete implementations (records or final classes) in `io.vidocq.grimm.internal.model`, produced by its own `OASFactoryResolver`.
+
+== Three sources, one merge
+
+MP OpenAPI 4.1 §3 prescribes three model sources, merged in this order:
+
+. **Static file** — `META-INF/openapi.yaml`, `.yml` or `.json` packaged in the classpath. Loaded by `StaticFileReader`. Acts as the "editorial skeleton" supplied by the design team.
+. **`OASModelReader`** — an application class implementing `org.eclipse.microprofile.openapi.OASModelReader`, selected via `mp.openapi.model.reader`. Lets you build the `OpenAPI` programmatically.
+. **Annotation scan** — visits the `@Path`, `@OpenAPIDefinition`, `@Server`, `@Tag`, `@SecurityScheme` classes in the current CDI module. Driven by `AnnotationScanner`.
+
+`ModelMerger` combines the three — annotations win on conflicts, per spec. The result is a single `OpenAPI`, dropped into `GrimmModelCache`.
+
+== `OASFilter` filters
+
+An application class implementing `org.eclipse.microprofile.openapi.OASFilter` can transform the document after merge, on an operation-by-operation basis. Activation via `mp.openapi.filter=fqn.MyFilter`. Grimm runs the filter in `FilterInvoker`, with a single top-down pass that dispatches on `Operation`, `PathItem`, `APIResponse`, `Schema`, `Parameter` and others.
+
+[NOTE]
+====
+The filter runs once, at document build time, not per request. It therefore has no access to `HttpHeaders` or to a security context — for per-call transforms, use a JAX-RS `ContainerResponseFilter`.
+====
+
+== Configuration via MicroProfile Config
+
+MP OpenAPI 4.1 §4 defines a set of `mp.openapi.*` keys read through MicroProfile Config — supplied by xref:ravel::index.adoc[Ravel] in the Vidocq ecosystem.
+
+[cols="2,3"]
+|===
+| Key | Effect
+
+| `mp.openapi.scan.disable`
+| Disables annotation scanning altogether.
+
+| `mp.openapi.scan.packages`
+| Whitelist of packages to scan (comma-separated).
+
+| `mp.openapi.scan.classes`
+| Whitelist of specific classes.
+
+| `mp.openapi.scan.exclude.packages`
+| Packages excluded from the scan.
+
+| `mp.openapi.scan.exclude.classes`
+| Classes excluded.
+
+| `mp.openapi.model.reader`
+| FQCN of the `OASModelReader`.
+
+| `mp.openapi.filter`
+| FQCN of the `OASFilter`.
+
+| `mp.openapi.servers`
+| List of server URLs to enforce on the document.
+
+| `mp.openapi.schema.<FQCN>`
+| JSON snippet defining a schema for a given class (override).
+|===
+
+See xref:reference.adoc[Reference] for the exhaustive list and the `servers.path.*` / `servers.operation.*` variants.
+
+== Differences from OpenAPI 3.0 (reminder)
+
+OpenAPI 3.1 (served by MP OpenAPI 4.1) fully aligns with JSON Schema 2020-12: `type` may be an array (`["string", "null"]`), `nullable` is replaced by that syntax, `examples` is an array, `webhooks` is added at the root. Grimm reflects these choices in its serializer.
+
+== Further reading
+
+* xref:internals.adoc[Internals] — detailed pipeline, Vauban BCE, threading.
+* xref:reference.adoc[Reference] — annotations, `mp.openapi.*` keys, artefacts.
+* xref:usage.adoc[Usage patterns] — full examples.

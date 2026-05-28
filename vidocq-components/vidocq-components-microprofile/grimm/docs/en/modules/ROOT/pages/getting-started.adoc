@@ -1,41 +1,193 @@
 = Getting started
-:description: First steps with Grimm — MicroProfile OpenAPI 4.1 for Vidocq.
+:description: First annotated JAX-RS resource, first document served on /openapi, in under five minutes.
+
+[.lead]
+This page assumes a Jakarta REST 4.0 application already running on xref:cassini::index.adoc[Cassini] (or any other compatible JAX-RS runtime). It walks through adding Grimm: dependencies, minimal annotation, first `GET /openapi` call.
 
 == Prerequisites
 
-- Java 25
-- Maven 4.0.0-rc-5
-- Official TCK artifact installed locally (see `grimm-tck/README.md`)
-
-== Local build
+* Java 25 (LTS) — Temurin recommended.
+* Maven 4.0.0-rc-5 — pinned by `.sdkmanrc` at the Grimm root.
+* A JAX-RS 4.0 application already deployed, with at least one `@Path` resource.
 
 [source,bash]
 ----
 sdk env
 ./mvnw -ntp install -DskipTests
-./mvnw test
 ----
 
-== Official TCK
+== Maven dependencies
+
+`grimm-core` carries the scanner and the serializer. `grimm-cdi-vauban` adds the BCE and the `/openapi` endpoint. A standard application declares both and lets the runtime wire the rest.
+
+[source,xml]
+----
+<dependencies>
+    <dependency>
+        <groupId>io.vidocq.grimm</groupId>
+        <artifactId>grimm-core</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </dependency>
+    <dependency>
+        <groupId>io.vidocq.grimm</groupId>
+        <artifactId>grimm-cdi-vauban</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </dependency>
+    <dependency>
+        <groupId>org.eclipse.microprofile.openapi</groupId>
+        <artifactId>microprofile-openapi-api</artifactId>
+        <version>4.1</version>
+    </dependency>
+</dependencies>
+----
+
+[NOTE]
+====
+`microprofile-openapi-api` is `provided` inside `grimm-core` but should be declared `compile` in the application — it provides the annotations the application uses.
+====
+
+== Root annotation on the `Application` class
+
+The `@OpenAPIDefinition` annotation on the JAX-RS Application class supplies the document's title, version, and license.
+
+[source,java]
+----
+package io.example;
+
+import jakarta.ws.rs.ApplicationPath;
+import jakarta.ws.rs.core.Application;
+import org.eclipse.microprofile.openapi.annotations.OpenAPIDefinition;
+import org.eclipse.microprofile.openapi.annotations.info.Info;
+import org.eclipse.microprofile.openapi.annotations.info.License;
+
+@ApplicationPath("/api")
+@OpenAPIDefinition(
+    info = @Info(
+        title = "Pet Store API",
+        version = "1.0.0",
+        license = @License(name = "Apache 2.0", url = "https://www.apache.org/licenses/LICENSE-2.0")
+    )
+)
+public class PetStoreApp extends Application { }
+----
+
+== Annotated JAX-RS resource
+
+A minimal JAX-RS resource, enriched with `@Operation` and `@Schema` to describe the operation.
+
+[source,java]
+----
+package io.example;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.PathParam;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.core.MediaType;
+import org.eclipse.microprofile.openapi.annotations.Operation;
+import org.eclipse.microprofile.openapi.annotations.media.Schema;
+import org.eclipse.microprofile.openapi.annotations.parameters.Parameter;
+
+@Path("/pets")
+@ApplicationScoped
+public class PetResource {
+
+    @GET
+    @Path("/{id}")
+    @Produces(MediaType.APPLICATION_JSON)
+    @Operation(summary = "Find a pet by identifier")
+    public Pet find(
+        @Parameter(description = "Unique identifier", required = true)
+        @PathParam("id") long id) {
+        return new Pet(id, "Rex");
+    }
+
+    @Schema(name = "Pet", description = "A pet in the registry")
+    public record Pet(long id, String name) { }
+}
+----
+
+== Calling `/openapi`
+
+At startup, the `GrimmExtension` BCE scans the classpath, merges sources, and publishes the document. No additional application code is required.
 
 [source,bash]
 ----
-./run-official-tck-mp-openapi-4.1.sh smoke
-./run-official-tck-mp-openapi-4.1.sh all
-./run-official-tck-mp-openapi-4.1.sh matrix PetStoreAppTest
-./run-official-tck-mp-openapi-4.1.sh -Dtest=AnnotationScanTest
+# YAML — default format, MP OpenAPI 4.1 §2.2
+curl http://localhost:8080/openapi
+
+# JSON via Accept
+curl -H "Accept: application/json" http://localhost:8080/openapi
+
+# JSON via query override (spec §2.3, prioritized over Accept)
+curl http://localhost:8080/openapi?format=json
 ----
 
-== `/openapi` endpoint
+The YAML output looks like:
 
-`grimm-cdi-vauban` exposes a JAX-RS endpoint:
+[source,yaml]
+----
+openapi: 3.1.0
+info:
+  title: Pet Store API
+  version: 1.0.0
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0
+paths:
+  /api/pets/{id}:
+    get:
+      summary: Find a pet by identifier
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Unique identifier
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: OK
+components:
+  schemas:
+    Pet:
+      type: object
+      description: A pet in the registry
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+----
 
-- path: `/openapi`
-- formats: `application/yaml` (default) and `application/json`
-- format priority: query param `format` (`json|yaml`) then `Accept` header
+== Three combinable sources
 
-== Next steps
+Grimm merges up to three sources of truth:
 
-* xref:architecture.adoc[Architecture]
-* xref:configuration.adoc[MP OpenAPI Configuration]
-* xref:tck.adoc[TCK]
+[cols="1,3,2"]
+|===
+| Source | Description | Activation
+
+| Annotations
+| Scan of `@Path` classes in the current CDI module.
+| Automatic, default.
+
+| Static document
+| `META-INF/openapi.yaml`, `.yml` or `.json` packaged in the classpath.
+| The file's mere presence suffices.
+
+| `OASModelReader`
+| Java class building an `OpenAPI` programmatically.
+| `mp.openapi.model.reader=fqn.ModelReader`.
+|===
+
+Priority order is defined by the MP OpenAPI 4.1 spec: `OASModelReader` < static < annotations < `OASFilter`. See xref:concepts.adoc[Concepts] for the detailed mechanics.
+
+== Next step
+
+* xref:usage.adoc[Usage patterns] — pagination, polymorphism, security, callbacks.
+* xref:concepts.adoc[Concepts] — OpenAPI model, merge, filters.
+* xref:reference.adoc[Reference] — supported annotations, `mp.openapi.*` keys.

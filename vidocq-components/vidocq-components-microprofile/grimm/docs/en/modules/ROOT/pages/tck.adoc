@@ -1,36 +1,129 @@
-= TCK
-:description: MicroProfile OpenAPI 4.1 TCK status and runner architecture for Grimm.
+= TCK MicroProfile OpenAPI 4.1
+:description: Status, runner execution, out-of-reactor architecture, documented exclusions.
+
+[.lead]
+The official MicroProfile OpenAPI 4.1 TCK verifies that an implementation produces a conformant OpenAPI 3.1 document from a set of reference applications (`PetStoreApp`, `AirlinesApp`, `AnnotationTest`, …). Grimm passes it at *349 / 349* on the 4.1 release (May 2026).
 
 == Status
 
-The project reaches an official *100% PASS* score on the MicroProfile OpenAPI 4.1 suite:
+[cols="2,1"]
+|===
+| Metric | Value
 
-- 349 tests
-- 0 failures
-- 0 errors
-- 0 skipped
+| Tests executed
+| 349
 
-See `TCK.md` for detailed tracking.
+| Passed
+| 349 ✅
 
-== Useful commands
+| Failed
+| 0
+
+| Errors
+| 0
+
+| Skipped
+| 0
+|===
+
+Any future regression must be logged in the repository's `TCK.md` with: test name, reason, remediation plan.
+
+== Prerequisites
+
+The `org.eclipse.microprofile.openapi:microprofile-openapi-tck:4.1` artefact is not published on Maven Central — it must be installed manually into the local M2. Procedure detailed in `grimm-tck/README.md`.
 
 [source,bash]
 ----
-./run-official-tck-mp-openapi-4.1.sh smoke
-./run-official-tck-mp-openapi-4.1.sh all
-./run-official-tck-mp-openapi-4.1.sh matrix PetStoreAppTest
-./run-official-tck-mp-openapi-4.1.sh -Dtest=AirlinesAppTest
+sdk env                              # Java 25 + Maven 4.0.0-rc-5
+./mvnw -ntp install -DskipTests     # installs grimm-core and grimm-cdi-vauban
 ----
+
+== Runner execution
+
+The `run-official-tck-mp-openapi-4.1.sh` script at the repository root drives every variant.
+
+[source,bash]
+----
+# Smoke suite — single fast test to validate the installation
+./run-official-tck-mp-openapi-4.1.sh
+
+# Full suite — equivalent to the official 349-test TCK
+./run-official-tck-mp-openapi-4.1.sh all
+
+# Readiness matrix — runs the same test under three profiles:
+#   default-readiness (10 s timeout)
+#   extended-readiness (30 s timeout)
+#   no-readiness-probe
+./run-official-tck-mp-openapi-4.1.sh matrix PetStoreAppTest
+
+# Targeted test via -Dtest=
+./run-official-tck-mp-openapi-4.1.sh -Dtest=AnnotationScanTest
+----
+
+The runner uses Arquillian + TestNG. The Surefire report lands in `grimm-tck/target/surefire-reports/`.
 
 == Runner architecture
 
-The official runner lives in `grimm-tck` (outside reactor):
+`grimm-tck` is **deliberately outside the reactor**: its `pom.xml` uses standalone `modelVersion 4.0.0`, with no `<parent>`.
 
-- TestNG + Arquillian
-- custom container `GrimmDeployableContainer`
-- runtime stack: Vauban + Cassini/Chappe + Grimm
+[NOTE]
+====
+This detachment is forced by ShrinkWrap Maven Resolver 3.3, transitively pulled in by the official TCK, which cannot parse Model 4.1.0 POMs and crashes on the Vidocq reactor. The rule is documented at the workspace root: **do not reintegrate `grimm-tck` into the `<subprojects>` of `grimm-parent`**.
+====
+
+Stack assembled by the runner:
+
+[cols="1,3"]
+|===
+| Layer | Component
+
+| Spec
+| `microprofile-openapi-api` 4.1, `jakarta.ws.rs-api` 4.0, `jakarta.enterprise.cdi-api` 4.1
+
+| OpenAPI implementation
+| `grimm-core` + `grimm-cdi-vauban`
+
+| CDI container
+| Vauban (`io.vidocq.vauban.core`), embedded mode
+
+| Arquillian container
+| `GrimmDeployableContainer` — deploys the archive, instantiates the cache bean, exposes `/openapi`
+
+| HTTP transport
+| Chappe (`io.vidocq.chappe.http`) on a random port (`grimm.tck.port=0`)
+
+| Test framework
+| TestNG (upstream constraint — not JUnit)
+|===
+
+== Readiness matrix variants
+
+The readiness probe is parameterisable:
+
+[cols="2,3"]
+|===
+| Profile | Semantics
+
+| `default-readiness`
+| Active wait up to 10 s before running the test requests.
+
+| `extended-readiness`
+| Wait up to 30 s — useful on slow CI machines.
+
+| `no-readiness-probe`
+| Runs the test immediately without waiting — surfaces startup regressions.
+|===
+
+== Documented exclusions
+
+None to date: the full suite runs and passes at 349/349. Should an exclusion ever be added, it would be listed in the TestNG suite file (`grimm-tck/src/test/resources/tck-suite.xml`) and tracked in `TCK.md`.
 
 == Quality contract
 
-Any structural change in `grimm-core` or `grimm-cdi-vauban` must preserve
-full TCK pass.
+Any structural change to `grimm-core` or `grimm-cdi-vauban` must preserve the 349/349 score before merge. A TCK regression is a CI blocker: the PR does not pass.
+
+== Further reading
+
+* xref:internals.adoc[Internals] — understand what the TCK validates.
+* xref:reference.adoc[Reference] — annotations and keys exercised by the tests.
+* link:https://codeberg.org/Vidocq/grimm/src/branch/main/BUG.md[BUG.md] — tracked reproducible bugs.

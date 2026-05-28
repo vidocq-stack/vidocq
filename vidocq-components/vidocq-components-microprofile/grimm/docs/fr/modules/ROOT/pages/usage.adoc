@@ -1,0 +1,181 @@
+= Cas d'usage
+:description: Pagination, polymorphisme, sécurité, serveurs multiples, callbacks, exemples, liens HATEOAS, versions.
+
+[.lead]
+Cette page parcourt les motifs OpenAPI 3.1 couramment rencontrés dans une API JAX-RS réelle, et montre comment les exprimer avec les annotations MicroProfile OpenAPI 4.1 supportées par Grimm.
+
+== Pagination par query parameters
+
+Les paramètres `page` et `size` sont décrits par `@Parameter`. Les valeurs par défaut sont visibles dans le schéma via `Schema.defaultValue`.
+
+[source,java]
+----
+@GET
+@Produces(MediaType.APPLICATION_JSON)
+@Operation(summary = "Liste paginée d'animaux")
+public PetPage list(
+    @Parameter(description = "Numéro de page (zero-based)")
+    @QueryParam("page") @DefaultValue("0") int page,
+
+    @Parameter(description = "Taille de page, max 100")
+    @QueryParam("size") @DefaultValue("20") int size) {
+    /* ... */
+}
+
+@Schema(name = "PetPage")
+public record PetPage(
+    @Schema(description = "Éléments de la page") List<Pet> items,
+    @Schema(description = "Nombre total d'éléments") long total) { }
+----
+
+== Polymorphisme : `oneOf` + discriminator
+
+Un type abstrait sérialisé selon plusieurs formes concrètes se décrit avec `@Schema(oneOf = ..., discriminatorProperty = ...)`. Grimm émet `oneOf`, `discriminator.propertyName` et `discriminator.mapping`.
+
+[source,java]
+----
+@Schema(
+    oneOf = { Dog.class, Cat.class },
+    discriminatorProperty = "kind",
+    discriminatorMapping = {
+        @DiscriminatorMapping(value = "dog", schema = Dog.class),
+        @DiscriminatorMapping(value = "cat", schema = Cat.class)
+    }
+)
+public sealed interface Pet permits Dog, Cat { String kind(); }
+
+public record Dog(String kind, String breed) implements Pet { }
+public record Cat(String kind, boolean indoor) implements Pet { }
+----
+
+== Sécurité — `@SecurityScheme`
+
+Une fois déclaré au niveau Application, le schéma est référencé par `@SecurityRequirement` sur les opérations.
+
+[source,java]
+----
+@SecurityScheme(
+    securitySchemeName = "bearerAuth",
+    type = SecuritySchemeType.HTTP,
+    scheme = "bearer",
+    bearerFormat = "JWT"
+)
+@OpenAPIDefinition(info = @Info(title = "Pet Store", version = "1.0.0"))
+public class PetStoreApp extends Application { }
+
+@GET
+@Path("/admin/pets")
+@SecurityRequirement(name = "bearerAuth")
+@Operation(summary = "Vue administrateur — JWT requis")
+public List<Pet> adminList() { /* ... */ }
+----
+
+[NOTE]
+====
+La conformité JWT côté runtime relève de Cervantes (MP JWT 2.1). Grimm se limite à documenter le schéma de sécurité. Voir https://codeberg.org/Vidocq/cervantes[Cervantes].
+====
+
+== Serveurs multiples
+
+Plusieurs serveurs cibles : `@Server` répétable au niveau Application ou opération.
+
+[source,java]
+----
+@Server(url = "https://api.example.com", description = "Production")
+@Server(url = "https://staging.api.example.com", description = "Staging")
+@OpenAPIDefinition(info = @Info(title = "Pet Store", version = "1.0.0"))
+public class PetStoreApp extends Application { }
+----
+
+Surcharge possible sans recompilation via `mp.openapi.servers=https://api.example.com,https://staging.api.example.com`. Voir xref:reference.adoc[Référence].
+
+== Callbacks
+
+Un callback décrit un endpoint que le serveur appellera ultérieurement (webhook). Grimm émet un noeud `callbacks` sur l'opération concernée.
+
+[source,java]
+----
+@POST
+@Path("/subscriptions")
+@Operation(summary = "S'abonner aux événements d'animaux")
+@Callback(
+    name = "petUpdated",
+    callbackUrlExpression = "{$request.body#/callbackUrl}",
+    operations = @CallbackOperation(
+        method = "POST",
+        summary = "Notification de mise à jour d'animal",
+        requestBody = @RequestBody(content = @Content(schema = @Schema(implementation = Pet.class)))
+    )
+)
+public Response subscribe(SubscriptionRequest req) { /* ... */ }
+----
+
+== Exemples (`@ExampleObject`)
+
+Des exemples nommés enrichissent la documentation rendue par Swagger UI ou Redoc.
+
+[source,java]
+----
+@POST
+@Operation(summary = "Crée un animal")
+@RequestBody(
+    content = @Content(
+        schema = @Schema(implementation = Pet.class),
+        examples = {
+            @ExampleObject(name = "Rex", value = "{ \"name\": \"Rex\", \"kind\": \"dog\" }"),
+            @ExampleObject(name = "Whiskers", value = "{ \"name\": \"Whiskers\", \"kind\": \"cat\" }")
+        }
+    )
+)
+public Response create(Pet pet) { /* ... */ }
+----
+
+== Liens HATEOAS
+
+Le noeud `links` exprime la navigation hypermédia : `operationId` ou `operationRef`, paramètres exprimés via _runtime expressions_.
+
+[source,java]
+----
+@APIResponse(
+    responseCode = "201",
+    description = "Animal créé",
+    links = @Link(
+        name = "GetPetById",
+        operationId = "findPet",
+        parameters = @LinkParameter(name = "id", expression = "$response.body#/id")
+    )
+)
+public Response create(Pet pet) { /* ... */ }
+----
+
+== Version (`info.version`)
+
+La version du contrat est portée par `@Info(version = ...)`. Pour une lecture dynamique à partir du build, surcharger via MP Config :
+
+[source,properties]
+----
+mp.openapi.servers=https://api.example.com
+# La version du contrat n'a pas de clé MP Config dédiée :
+# soit elle est codée en dur dans @Info, soit elle est calculée
+# par un OASModelReader qui lit `application.version` depuis le manifest.
+----
+
+== Tag
+
+`@Tag` regroupe les opérations sous un libellé partagé. Utilisable au niveau classe ou méthode, répétable.
+
+[source,java]
+----
+@Path("/pets")
+@Tag(name = "pets", description = "Gestion des animaux")
+public class PetResource {
+    @GET @Operation(summary = "Liste")
+    public List<Pet> list() { /* ... */ }
+}
+----
+
+== Pour aller plus loin
+
+* xref:reference.adoc[Référence] — table exhaustive des annotations et clés.
+* xref:concepts.adoc[Concepts] — fusion des sources, filtres.
+* xref:internals.adoc[Fonctionnement interne] — pipeline détaillé.

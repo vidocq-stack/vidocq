@@ -1,42 +1,102 @@
 = Grimm
-:description: Implémentation MicroProfile OpenAPI 4.1 pour l'écosystème Vidocq.
+:description: Implémentation MicroProfile OpenAPI 4.1, scan d'annotations JAX-RS au démarrage, document statique cacheable, zéro dépendance externe.
 
+////
 [.text-center]
-image::grimm-logo.svg[Grimm,300,role=module-logo]
+image::grimm-logo.png[Grimm,300,role=module-logo]
+////
 
-Grimm implémente *MicroProfile OpenAPI 4.1* avec une architecture modulaire stricte (JPMS)
-et sans bibliothèque d'implémentation tierce en production.
+[.lead]
+Grimm est l'implémentation MicroProfile OpenAPI 4.1 de l'écosystème Vidocq. Elle scrute les annotations dispersées dans les ressources JAX-RS, fusionne le résultat avec un éventuel document statique et un éventuel `OASModelReader`, applique les filtres `OASFilter`, et publie un document OpenAPI 3.1 unifié sur `/openapi`. Objectif : conformance 100 % au TCK MicroProfile OpenAPI 4.1 (actuellement 349/349), zéro dépendance externe, JPMS strict, prête pour jlink.
 
-== Positionnement
+== Origine du nom
 
-- *Spécification cible* : MicroProfile OpenAPI 4.1
-- *Langage/runtime* : Java 25
-- *Architecture* : séparation stricte `grimm-core` / `grimm-cdi-vauban`
-- *Contrat qualité* : suite officielle TCK à 100% PASS
+**Jacob (1785-1863) et Wilhelm Grimm (1786-1859)**, linguistes et philologues prussiens. Auteurs des _Kinder- und Hausmärchen_ (les _Contes_), du _Deutsches Wörterbuch_, et fondateurs de la philologie germanique moderne. Voir https://fr.wikipedia.org/wiki/Fr%C3%A8res_Grimm[la fiche Wikipédia].
 
-== Modules
+Les Grimm ont collecté la tradition orale dispersée — contes, légendes, racines de mots — et l'ont indexée, classifiée, publiée en catalogue ordonné. Le _Wörterbuch_ a entrepris de répertorier chaque mot allemand attesté, avec ses variantes, ses dérivés et ses occurrences. Grimm le runtime fait exactement ça pour les annotations OpenAPI : il collecte les `@Operation`, `@Parameter`, `@Schema`, `@OpenAPIDefinition` dispersés dans tout le code JAX-RS, les classifie par chemin et par verbe HTTP, et produit un document OpenAPI 3.1 unifié au démarrage. Le folkloriste devient compilateur de contrats d'API.
 
-- `grimm-core` : scanner d'annotations, génération de schémas, merge des sources, sérialisation JSON/YAML.
-- `grimm-cdi-vauban` : intégration CDI (BCE), cache du modèle, endpoint JAX-RS `/openapi`.
-- `grimm-tck` : runner officiel TCK (module volontairement hors réacteur).
-- `grimm-bench` : benchmarks JMH.
-- `grimm-examples` : exemples d'usage.
+[cols="1,3"]
+|===
+| Les frères Grimm, philologues | Grimm, le runtime OpenAPI
 
-== Pipeline de construction du document OpenAPI
+| Collecte de contes oraux dispersés
+| Scan des annotations `@Operation`, `@Parameter`, `@Schema`
 
-Le document final est construit une fois au démarrage CDI :
+| Indexation par motif (racines, variantes phonétiques)
+| Catalogue par couple (path, verbe HTTP)
 
-1. lecture fichier statique (`META-INF/openapi.yaml|yml|json`)
-2. invocation `OASModelReader` (si configuré)
-3. scan annotations JAX-RS + MP OpenAPI
-4. merge des 3 sources (priorité : annotations > reader > fichier statique)
-5. application `OASFilter` (si configuré)
-6. mise en cache immuable dans `GrimmModelCache`
+| _Deutsches Wörterbuch_ — dictionnaire raisonné
+| Document OpenAPI 3.1 unifié, livré au navigateur
 
-== Navigation
+| Édition critique — variantes, sources, attestations
+| Fusion `OASModelReader` + statique + annotations + filtres
 
-* xref:getting-started.adoc[Démarrage rapide]
-* xref:architecture.adoc[Architecture]
-* xref:configuration.adoc[Configuration MP OpenAPI]
-* xref:tck.adoc[TCK MicroProfile OpenAPI 4.1]
-* xref:roadmap.adoc[Roadmap]
+| Loi de Grimm — règles de transformation phonétique
+| Pipeline `ConfigApplier` — règles de `mp.openapi.*`
+
+| Diffusion en presse, librairie
+| Endpoint `GET /openapi` (YAML par défaut, JSON sur demande)
+|===
+
+== En un coup d'œil
+
+[cols="1,3"]
+|===
+| Spec implémentée | MicroProfile OpenAPI 4.1
+| Dépôt | https://codeberg.org/Vidocq/grimm
+| Java | 25 (LTS)
+| Modules JPMS | `io.vidocq.grimm.core`, `io.vidocq.grimm.cdi.vauban`
+| Packages publics | `io.vidocq.grimm.api.*` (SPI stable), `io.vidocq.grimm.cdi.*` (intégration CDI)
+| Dépendances runtime | `microprofile-openapi-api` 4.1, `jakarta.ws.rs-api` 4.0, `jakarta.enterprise.cdi-api` 4.1, `jakarta.annotation-api` 3.0, `io.vidocq.ravel:ravel-mp-config-api`
+| Prête pour jlink | ✅ — chaque sous-module a son `module-info.java`, pas de fallback `Automatic-Module-Name`.
+| TCK MP OpenAPI 4.1 | ✅ 349 / 349 — voir xref:tck.adoc[état détaillé]
+|===
+
+== Trois traits identitaires
+
+. **Zéro dépendance externe au-delà des specs Jakarta / MicroProfile** — pas de SnakeYAML, pas de Jackson, pas de SmallRye. Le sérialiseur YAML et le sérialiseur JSON sont écrits à la main dans `grimm-core`. La seule librairie compagnonne est xref:ravel::index.adoc[Ravel] pour MicroProfile Config, et elle est elle-même zéro-dépendance.
+. **Résolution au démarrage, pas par requête** — toutes les annotations sont scannées une seule fois, à l'activation du container CDI, par une Build Compatible Extension Vauban. Le document est mis en cache (`GrimmModelCache`) et servi à chaque appel sur `/openapi`. Aucun recalcul par requête, aucun verrouillage à chaud.
+. **JPMS strict** — chaque artefact Grimm a son `module-info.java`. Packages cloisonnés : `io.vidocq.grimm.api.*` exporté, `io.vidocq.grimm.internal.*` interne, pas de `opens` non justifié, pas de `setAccessible(true)` en production.
+
+== Positionnement dans l'écosystème
+
+[mermaid]
+....
+flowchart LR
+  Resources["Ressources JAX-RS<br/>@Path, @GET, @Operation,<br/>@Parameter, @Schema"]
+  Static["Document statique<br/>META-INF/openapi.yaml"]
+  Reader["OASModelReader<br/>mp.openapi.model.reader"]
+  Filter["OASFilter<br/>mp.openapi.filter"]
+
+  Resources --> Grimm
+  Static --> Grimm
+  Reader --> Grimm
+
+  Grimm["Grimm<br/>MicroProfile OpenAPI 4.1"]
+  Grimm -->|fusion| Cache["GrimmModelCache<br/>OpenAPI 3.1"]
+  Cache --> Filter
+  Filter --> Endpoint["GET /openapi<br/>YAML par défaut, JSON sur demande"]
+
+  Endpoint --> Cassini["Cassini<br/>Jakarta REST 4.0"]
+  Cassini --> Chappe["Chappe<br/>transport HTTP"]
+
+  Grimm -.@Inject.-> Ravel["Ravel<br/>MicroProfile Config"]
+  Grimm -.BCE.-> Vauban["Vauban<br/>CDI Lite"]
+
+  classDef rt fill:#e1f5fe,stroke:#0288d1
+  class Grimm,Cache rt
+....
+
+Grimm consomme l'écosystème de bas en haut : xref:chappe::index.adoc[Chappe] sert l'endpoint, xref:cassini::index.adoc[Cassini] expose la ressource JAX-RS qui renvoie le document, xref:vauban::index.adoc[Vauban] déclenche la BCE qui orchestre le scan au démarrage, xref:ravel::index.adoc[Ravel] résout les clés `mp.openapi.*`. Grimm ajoute la couche de catalogue d'API — sans rien réécrire ailleurs.
+
+== Ressources rapides
+
+* xref:getting-started.adoc[Démarrage rapide] — première ressource annotée, premier `/openapi`.
+* xref:usage.adoc[Cas d'usage] — pagination, polymorphisme, sécurité, serveurs, callbacks.
+* xref:concepts.adoc[Concepts] — modèle OpenAPI, scan, fusion, filtres.
+* xref:internals.adoc[Fonctionnement interne] — pipeline, threading, BCE Vauban.
+* xref:tck.adoc[TCK] — exécution, statut, exclusions.
+* xref:reference.adoc[Référence] — artefacts, annotations, clés `mp.openapi.*`.
+* xref:migration.adoc[Migration] — depuis SmallRye ou Quarkus.
+
+Suivant : xref:getting-started.adoc[Démarrage rapide].

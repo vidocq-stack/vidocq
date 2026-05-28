@@ -1,0 +1,107 @@
+= Fonctionnement interne
+:description: Pipeline de construction du document OpenAPI, BCE Vauban, modèle de threading, choix d'implémentation.
+
+[.lead]
+Grimm s'oppose au scan classpath par requête : tout le travail est fait une fois, au démarrage du container CDI, et le résultat est mis en cache. Cette page décrit la séquence exacte du pipeline, le rôle de la BCE Vauban et les invariants de threading.
+
+== Séparation `grimm-core` / `grimm-cdi-vauban`
+
+`grimm-core` est du Java pur. Il ne connaît ni CDI, ni JAX-RS Runtime — uniquement les types de la spec (`@Path` est lu comme annotation, pas comme handler). Il s'utilise hors container, par exemple pour un outillage Maven qui produirait un OpenAPI à la compilation.
+
+`grimm-cdi-vauban` est la couche d'intégration : il branche `grimm-core` sur la Build Compatible Extension Vauban, expose la ressource `/openapi`, et fournit le `Supplier<OpenAPI>` consommé par les outils en aval.
+
+== Pipeline de construction
+
+Six étapes, exécutées une seule fois à l'activation du container :
+
+[mermaid]
+....
+flowchart LR
+  Cfg["ConfigApplier<br/>lit mp.openapi.*"]
+  S1["1. StaticFileReader<br/>META-INF/openapi.{yaml,yml,json}"]
+  S2["2. ModelReaderInvoker<br/>OASModelReader applicatif"]
+  S3["3. AnnotationScanner<br/>classes @Path + annotations MP OpenAPI"]
+  Merge["4. ModelMerger<br/>fusion ordonnée"]
+  S4["5. FilterInvoker<br/>OASFilter applicatif"]
+  Cache["6. GrimmModelCache<br/>OpenAPI immuable"]
+
+  Cfg --> S1
+  Cfg --> S2
+  Cfg --> S3
+  S1 --> Merge
+  S2 --> Merge
+  S3 --> Merge
+  Merge --> S4
+  S4 --> Cache
+....
+
+. **`StaticFileReader`** — cherche `META-INF/openapi.yaml`, `.yml`, puis `.json`. Lecture via le classloader courant. Retourne `Optional<OpenAPI>`.
+. **`ModelReaderInvoker`** — si `mp.openapi.model.reader` est défini, instancie la classe via réflexion (lookup CDI privilégié, fallback constructeur sans argument) et appelle `buildModel()`.
+. **`AnnotationScanner`** — parcourt les classes `@Path` du module CDI courant, lit les annotations MP OpenAPI (`@Operation`, `@Parameter`, `@Schema`, etc.) et construit un `OpenAPI` partiel. La sortie est balisée par `AnnotationSource` (sealed sub-type de `ModelSource`).
+. **`ModelMerger`** — fusionne les trois `ModelSource` (sealed : `StaticFileSource`, `ReaderSource`, `AnnotationSource`) en un seul `OpenAPI`. Stratégie : pour les opérations, les annotations gagnent ; pour les `Components`, l'union dédoublonnée par `name` ; pour les `servers`, voir `ConfigApplier`.
+. **`FilterInvoker`** — si `mp.openapi.filter` est défini, charge le `OASFilter` (lookup CDI ou constructeur sans argument) et le déroule sur l'arbre. Le filtre est invoqué récursivement via un visiteur typé `switch` sur les types modèles sealed.
+. **`GrimmModelCache`** — encapsule le `OpenAPI` final. Lecture lock-free, écriture une seule fois.
+
+== BCE Vauban : `GrimmExtension`
+
+L'orchestration est portée par `io.vidocq.grimm.cdi.GrimmExtension`, une Build Compatible Extension :
+
+[source,java]
+----
+// Pseudo-déclaration — la BCE véritable utilise les hooks @Discovery,
+// @Enhancement, @Registration et @Synthesis de CDI 4.1 Lite.
+
+@Discovery
+public void declareScanRoots(ScannedTypes types) { /* ... */ }
+
+@Synthesis
+public void synthesizeOpenApiBean(SyntheticComponents synth) {
+    // Synthétise un bean ApplicationScoped pour GrimmModelCache,
+    // alimenté au @PostConstruct par le pipeline complet.
+}
+----
+
+Le bean `GrimmModelCache` est `@ApplicationScoped`. Son `@PostConstruct` exécute le pipeline ; `getDocument()` se contente de retourner la référence cachée.
+
+== Modèle de threading
+
+[#virtual-threads]
+=== Aucun verrouillage à chaud
+
+`GrimmModelCache` stocke le document dans une référence finale, initialisée une fois dans `@PostConstruct`. Toute lecture ultérieure est lock-free : aucun `synchronized`, aucun `ReentrantLock`, aucun `volatile` au sens « happens-before » critique — la `final` du record applique la sémantique JMM.
+
+=== Virtual threads pour les opérations potentiellement bloquantes
+
+L'invocation d'un `OASModelReader` ou d'un `OASFilter` applicatif peut, en théorie, déclencher des appels bloquants (lecture de fichier, base de données). Quand le runtime hôte (Cassini + Chappe) tourne sur l'exécuteur virtuel par défaut (`Executors.newVirtualThreadPerTaskExecutor()`), ces invocations héritent du contexte virtuel — aucun pool plateforme n'est créé par Grimm.
+
+=== Pas de `ThreadLocal`
+
+Conformément au contrat du `CLAUDE.md` du module, le code de production n'utilise aucun `ThreadLocal` ni `synchronized`. Quand un partage d'état est nécessaire, `ConcurrentHashMap`, `ScopedValue` ou `ReentrantLock` sont préférés.
+
+== Sérialisation YAML et JSON
+
+`grimm-core` embarque deux sérialiseurs écrits à la main (pas de SnakeYAML, pas de Jackson) :
+
+* `JsonSerializer` — émet JSON 2020-12 brut, sans dépendance.
+* `YamlSerializer` — émet YAML 1.2 compatible OpenAPI 3.1, indentation deux espaces, scalaires bloc pour les chaînes multilignes.
+
+Symétriquement, `JsonDeserializer` et `YamlDeserializer` consomment les fichiers statiques.
+
+`OpenApiModelMapper` et `OpenApiValueMapper` traduisent entre l'arbre serialisé et le modèle `OpenAPI` interne.
+
+== Endpoint `/openapi`
+
+`OpenApiResource` est un bean JAX-RS `@ApplicationScoped` du module `grimm-cdi-vauban`. Son constructeur injecte `GrimmModelCache`. La méthode `getOpenApi(format, accept)` :
+
+. Résout le format via `?format=` (prioritaire, spec §2.3) puis `Accept` (spec §2.2, défaut YAML).
+. Récupère le document du cache.
+. Sérialise vers YAML ou JSON selon le format choisi.
+. Retourne une `Response` avec le `Content-Type` correspondant.
+
+Aucun verrou n'est pris ; la sérialisation peut elle-même se paralléliser sans risque.
+
+== Pour aller plus loin
+
+* xref:concepts.adoc[Concepts] — sources, fusion, configuration.
+* xref:tck.adoc[TCK] — exécution et statut.
+* xref:reference.adoc[Référence] — annotations et clés MP Config.
