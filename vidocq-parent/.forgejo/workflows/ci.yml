@@ -2,6 +2,13 @@ name: CI
 
 # Pom-only parent. Publishes vidocq-parent to central-snapshots so every Vidocq module
 # (which inherits from it) can resolve its <parent>. Common steps come from Vidocq/ci.
+#
+# Forgejo runner clones the Vidocq/ci action repo at every `uses:` step. Cloning
+# from codeberg.org under burst returns HTTP 504 (rate-limit on the same pack
+# server-side) and the anonymous clone from forgejo.sabot-durand.net is rejected
+# (Unauthorized) even though ls-remote works anonymously. Workaround: one
+# explicit clone using basic-auth secrets (MIRROR_ASD_*), checked out into
+# .ci-action/, then 4 `uses:` against local paths — zero further network reads.
 on:
   push:
     branches: [main]
@@ -11,13 +18,32 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: https://forgejo.sabot-durand.net/Vidocq/ci/setup-maven@v1
+
+      - name: Fetch Vidocq/ci action (Forgejo Antoine mirror, basic-auth)
+        shell: bash
+        env:
+          MIRROR_URL:  ${{ secrets.MIRROR_ASD_URL }}
+          MIRROR_USER: ${{ secrets.MIRROR_ASD_USER }}
+          MIRROR_PASS: ${{ secrets.MIRROR_ASD_PASSWORD }}
+        run: |
+          set -euo pipefail
+          # URL-encode the password (special chars are common in mirror creds).
+          enc_pass=$(python3 -c "import os,urllib.parse;print(urllib.parse.quote(os.environ['MIRROR_PASS'], safe=''))")
+          # Strip a trailing slash and the scheme from MIRROR_URL, then rebuild.
+          host="${MIRROR_URL#https://}"
+          host="${host#http://}"
+          host="${host%/}"
+          git clone --depth=1 --branch v1 \
+            "https://${MIRROR_USER}:${enc_pass}@${host}/Vidocq/ci.git" \
+            .ci-action
+
+      - uses: ./.ci-action/setup-maven
 
       - name: Build & verify
         run: mvn -B -ntp verify
 
       - name: Deploy to Maven Central
-        uses: https://forgejo.sabot-durand.net/Vidocq/ci/deploy-maven@v1
+        uses: ./.ci-action/deploy-maven
         with:
           central-username: ${{ secrets.CENTRAL_USERNAME }}
           central-password: ${{ secrets.CENTRAL_PASSWORD }}
@@ -26,7 +52,7 @@ jobs:
 
       - name: Notify Slack on failure
         if: failure()
-        uses: https://forgejo.sabot-durand.net/Vidocq/ci/notify-slack@v1
+        uses: ./.ci-action/notify-slack
         with:
           webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
           status: failure
@@ -36,7 +62,7 @@ jobs:
 
       - name: Notify Slack on success
         if: success()
-        uses: https://forgejo.sabot-durand.net/Vidocq/ci/notify-slack@v1
+        uses: ./.ci-action/notify-slack
         with:
           webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
           status: success
