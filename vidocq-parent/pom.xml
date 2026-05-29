@@ -86,6 +86,18 @@
              le script de release lorsque la dep upstream est exprimée via property. -->
         <versions.plugin.version>2.18.0</versions.plugin.version>
         <jacoco.version>0.8.13</jacoco.version>
+
+        <!--
+            central-publishing-maven-plugin's autoPublish flag, exposed as a
+            property so the release-maven workflow can flip it per-run via
+            `-Dcentral.publishing.autoPublish=true`. Default `false`: a release
+            uploads the bundle, Sonatype validates it (~10 min), and it stays
+            in state VALIDATED on central.sonatype.com/publishing waiting for
+            a manual "Publish" click. This is the safe default — set to `true`
+            in the workflow input only when you want the wait-for-Central
+            polling step to converge automatically.
+        -->
+        <central.publishing.autoPublish>false</central.publishing.autoPublish>
     </properties>
 
     <dependencyManagement>
@@ -270,11 +282,14 @@
                         <extensions>true</extensions>
                         <configuration>
                             <publishingServerId>central</publishingServerId>
-                            <!-- autoPublish=true : after Sonatype validates the
-                                 bundle (~10 min), it gets published without a
-                                 manual click. Required for the wait-for-Central
-                                 step in Vidocq/ci/release-maven@v1 to converge. -->
-                            <autoPublish>true</autoPublish>
+                            <!-- Param-driven via property. Default = false (manual
+                                 click on central.sonatype.com to publish, safest).
+                                 The release-maven workflow can set this to true
+                                 with `-Dcentral.publishing.autoPublish=true`, in
+                                 which case the bundle is published automatically
+                                 after Sonatype validation and the wait-for-Central
+                                 step in release.sh polls until it propagates. -->
+                            <autoPublish>${central.publishing.autoPublish}</autoPublish>
                         </configuration>
                     </plugin>
                 </plugins>
