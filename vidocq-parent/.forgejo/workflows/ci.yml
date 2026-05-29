@@ -11,13 +11,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: https://codeberg.org/Vidocq/ci/setup-maven@v1
+      - uses: https://github.com/vidocq-stack/ci/setup-maven@v1
 
       - name: Build & verify
         run: mvn -B -ntp verify
 
       - name: Deploy to Maven Central
-        uses: https://codeberg.org/Vidocq/ci/deploy-maven@v1
+        uses: https://github.com/vidocq-stack/ci/deploy-maven@v1
         with:
           central-username: ${{ secrets.CENTRAL_USERNAME }}
           central-password: ${{ secrets.CENTRAL_PASSWORD }}
@@ -26,7 +26,7 @@ jobs:
 
       - name: Notify Slack on failure
         if: failure()
-        uses: https://codeberg.org/Vidocq/ci/notify-slack@v1
+        uses: https://github.com/vidocq-stack/ci/notify-slack@v1
         with:
           webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
           status: failure
@@ -36,7 +36,7 @@ jobs:
 
       - name: Notify Slack on success
         if: success()
-        uses: https://codeberg.org/Vidocq/ci/notify-slack@v1
+        uses: https://github.com/vidocq-stack/ci/notify-slack@v1
         with:
           webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
           status: success
