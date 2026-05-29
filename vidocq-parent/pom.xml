@@ -78,6 +78,13 @@
         <maven.javadoc.plugin.version>3.11.2</maven.javadoc.plugin.version>
         <maven.gpg.plugin.version>3.2.7</maven.gpg.plugin.version>
         <central.publishing.plugin.version>0.9.0</central.publishing.plugin.version>
+        <!-- 3.1.1 minimum : 3.0.x crashe sur le parsing de POM Maven 4 / Model 4.1.0.
+             Pinné pour que toutes les releases (via Vidocq/ci/release-maven@v1)
+             utilisent une version éprouvée. -->
+        <maven.release.plugin.version>3.1.1</maven.release.plugin.version>
+        <!-- 2.18.0 : nécessaire pour versions:set-property utilisé par
+             le script de release lorsque la dep upstream est exprimée via property. -->
+        <versions.plugin.version>2.18.0</versions.plugin.version>
         <jacoco.version>0.8.13</jacoco.version>
     </properties>
 
@@ -155,6 +162,38 @@
                         </execution>
                     </executions>
                 </plugin>
+
+                <!--
+                    Driver behind every release. Triggered by the release.yml
+                    workflow (which calls Vidocq/ci/release-maven@v1). Pinned to
+                    3.1.1: 3.0.x doesn't grok Model 4.1.0 POMs. tagNameFormat is
+                    `v<version>` and the release builds activate the release
+                    profile (sources + javadoc + GPG + central-publishing).
+                -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-release-plugin</artifactId>
+                    <version>${maven.release.plugin.version}</version>
+                    <configuration>
+                        <tagNameFormat>v@{project.version}</tagNameFormat>
+                        <releaseProfiles>release</releaseProfiles>
+                        <pushChanges>true</pushChanges>
+                        <autoVersionSubmodules>true</autoVersionSubmodules>
+                        <preparationGoals>clean verify</preparationGoals>
+                    </configuration>
+                </plugin>
+
+                <!--
+                    Used by Vidocq/ci/release-maven@v1's release.sh when an
+                    override needs to patch a Maven property (i.e. when a dep
+                    version is declared as ${some.version}). Not invoked here;
+                    pinned so the script can pick a known-good version.
+                -->
+                <plugin>
+                    <groupId>org.codehaus.mojo</groupId>
+                    <artifactId>versions-maven-plugin</artifactId>
+                    <version>${versions.plugin.version}</version>
+                </plugin>
             </plugins>
         </pluginManagement>
     </build>
@@ -231,7 +270,11 @@
                         <extensions>true</extensions>
                         <configuration>
                             <publishingServerId>central</publishingServerId>
-                            <autoPublish>false</autoPublish>
+                            <!-- autoPublish=true : after Sonatype validates the
+                                 bundle (~10 min), it gets published without a
+                                 manual click. Required for the wait-for-Central
+                                 step in Vidocq/ci/release-maven@v1 to converge. -->
+                            <autoPublish>true</autoPublish>
                         </configuration>
                     </plugin>
                 </plugins>
