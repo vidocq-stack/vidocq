@@ -4,7 +4,7 @@
 
     <groupId>io.vidocq</groupId>
     <artifactId>vidocq-parent</artifactId>
-    <version>0.1.0</version>
+    <version>0.1.1-SNAPSHOT</version>
     <packaging>pom</packaging>
 
     <name>Vidocq :: Parent</name>
@@ -15,7 +15,7 @@
         <connection>scm:git:https://codeberg.org/Vidocq/vidocq-parent.git</connection>
         <developerConnection>scm:git:ssh://git@codeberg.org/Vidocq/vidocq-parent.git</developerConnection>
         <url>https://codeberg.org/Vidocq/vidocq-parent</url>
-      <tag>v0.1.0</tag>
+      <tag>HEAD</tag>
   </scm>
 
     <licenses>
