@@ -77,7 +77,7 @@
         <maven.source.plugin.version>3.3.1</maven.source.plugin.version>
         <maven.javadoc.plugin.version>3.11.2</maven.javadoc.plugin.version>
         <maven.gpg.plugin.version>3.2.7</maven.gpg.plugin.version>
-        <central.publishing.plugin.version>0.9.0</central.publishing.plugin.version>
+        <central.publishing.plugin.version>0.10.0</central.publishing.plugin.version>
         <!-- 3.1.1 minimum : 3.0.x crashe sur le parsing de POM Maven 4 / Model 4.1.0.
              Pinné pour que toutes les releases (via Vidocq/ci/release-maven@v1)
              utilisent une version éprouvée. -->
@@ -279,7 +279,24 @@
                         <groupId>org.sonatype.central</groupId>
                         <artifactId>central-publishing-maven-plugin</artifactId>
                         <version>${central.publishing.plugin.version}</version>
+                        <!--
+                            <extensions>true</extensions> alone is not enough under
+                            Maven 4 (rc-5): the deploy-phase binding contributed by
+                            the extension does not fire. Observed during the first
+                            real release: BUILD SUCCESS but only install:install
+                            ran in the deploy phase, no central-publishing:publish.
+                            We keep extensions=true (replaces maven-deploy-plugin
+                            on the deploy phase) AND we wire an explicit execution
+                            so the publish goal is bound deterministically.
+                        -->
                         <extensions>true</extensions>
+                        <executions>
+                            <execution>
+                                <id>injected-central-publishing</id>
+                                <phase>deploy</phase>
+                                <goals><goal>publish</goal></goals>
+                            </execution>
+                        </executions>
                         <configuration>
                             <publishingServerId>central</publishingServerId>
                             <!-- Param-driven via property. Default = false (manual
@@ -290,6 +307,22 @@
                                  after Sonatype validation and the wait-for-Central
                                  step in release.sh polls until it propagates. -->
                             <autoPublish>${central.publishing.autoPublish}</autoPublish>
+                        </configuration>
+                    </plugin>
+
+                    <!--
+                        Defensive: explicitly skip maven-deploy-plugin in the
+                        release profile. central-publishing-maven-plugin's
+                        <extensions>true</extensions> normally swaps it out, but
+                        under Maven 4 we cannot rely on that — being explicit
+                        prevents any chance of a parallel deploy to a non-existent
+                        repository.
+                    -->
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-deploy-plugin</artifactId>
+                        <configuration>
+                            <skip>true</skip>
                         </configuration>
                     </plugin>
                 </plugins>
