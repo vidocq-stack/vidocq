@@ -2,9 +2,3 @@ target/
 
 # Claude Code / tooling local
 .claude/
-
-# Sub-directory where .forgejo/workflows/release.yml clones the
-# vidocq-stack/ci action repo (private GitHub mirror). Kept out of the
-# tree so the release precheck (clean working tree) and release:prepare
-# commits ignore it.
-.ci-action/
