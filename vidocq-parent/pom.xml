@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.1.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.1.0 https://maven.apache.org/xsd/maven-4.1.0.xsd">
-    <modelVersion>4.1.0</modelVersion>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
 
     <groupId>io.vidocq</groupId>
     <artifactId>vidocq-parent</artifactId>
@@ -66,8 +66,12 @@
         <junit.version>6.0.3</junit.version>
 
         <!-- Versions des plugins Maven — overridables par propriété dans les enfants -->
-        <maven.compiler.plugin.version>4.0.0-beta-4</maven.compiler.plugin.version>
+        <maven.compiler.plugin.version>3.13.0</maven.compiler.plugin.version>
         <maven.surefire.plugin.version>3.5.5</maven.surefire.plugin.version>
+        <!-- Pinné explicitement pour les modules *-maven-plugin de l'écosystème
+             (cassini, chappe, vauban, vidocq, champollion×2) ; sinon Maven 3.9 utilise
+             une version par défaut potentiellement plus ancienne. -->
+        <maven.plugin.plugin.version>3.15.2</maven.plugin.plugin.version>
         <maven.jar.plugin.version>3.4.2</maven.jar.plugin.version>
         <maven.clean.plugin.version>3.4.0</maven.clean.plugin.version>
         <maven.resources.plugin.version>3.3.1</maven.resources.plugin.version>
@@ -77,9 +81,8 @@
         <maven.javadoc.plugin.version>3.11.2</maven.javadoc.plugin.version>
         <maven.gpg.plugin.version>3.2.7</maven.gpg.plugin.version>
         <central.publishing.plugin.version>0.10.0</central.publishing.plugin.version>
-        <!-- 3.1.1 minimum : 3.0.x crashe sur le parsing de POM Maven 4 / Model 4.1.0.
-             Pinné pour que toutes les releases (via Vidocq/ci/release-maven@v1)
-             utilisent une version éprouvée. -->
+        <!-- 3.1.1 pinné pour que toutes les releases (via Vidocq/ci/release-maven@v1)
+             utilisent une version éprouvée et stable sur Maven 3.9.x. -->
         <maven.release.plugin.version>3.1.1</maven.release.plugin.version>
         <!-- 2.18.0 : nécessaire pour versions:set-property utilisé par
              le script de release lorsque la dep upstream est exprimée via property. -->
