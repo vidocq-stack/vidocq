@@ -11,9 +11,9 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 /**
- * Smoke test : vérifie que les modules Cervantes et la spec MP JWT 2.1
- * sont bien sur le classpath et que les classes principales sont accessibles.
- * Exécuté par le profil "smoke" (actif par défaut) sans Arquillian.
+ * Smoke test: checks that Cervantes modules and JWT 2.1 spec MP
+ * are of course classpath and that the main classes are accessible.
+ * Run by the "smoke" profile (default active) without Arquillian.
  */
 class CervantesJwtTckSmokeTest {
 

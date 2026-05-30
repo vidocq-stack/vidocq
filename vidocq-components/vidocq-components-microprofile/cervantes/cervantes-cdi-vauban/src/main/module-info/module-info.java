@@ -1,13 +1,13 @@
 /**
- * Intégration CDI de Cervantes pour le container Vauban (MicroProfile JWT 2.1 §CDI).
+ * Permanent integration of Cervantes for the Vauban container (MicroProfile JWT 2.1 §CDI).
  *
- * <p>Fournit le principal {@code @RequestScoped JsonWebToken} de la requête courante (alimenté
- * par le contexte {@link io.vidocq.cervantes.cdi.JsonWebTokenContext}, posé par le filtre
- * d'authentification JAX-RS en M4) et produit un {@code JwtValidator} configuré à partir des
- * propriétés MicroProfile Config {@code mp.jwt.verify.*} (via Ravel).</p>
+ * <p>Provides the main {@code @RequestScoped JsonWebToken} of the current query (powered)
+ * by the {@link io.vidocq.cervantes.cdi.JsonWebTokenContext} context, placed by the filter
+ * and produces a {@code JwtValidator} configured from the
+ * properties MicroProfile Config {@code mp.jwt.verify.*} (via Ravel).</p>
  *
- * <p>Note JPMS — workaround testCompile : {@code module-info.java} dans {@code src/main/module-info/}
- * (vauban-core/ravel-core sont test-scope, absents du module-path). Voir {@code cervantes-core/pom.xml}.</p>
+ * <p>Note JPMS — workaround testCompile: {@code module-info.java} in {@code src/main/module-info/}
+ * (vauban-core/level-core are test-scope, absent from the path module). See ZZPH0ZZ.ZZPH1ZZ
  */
 module io.vidocq.cervantes.cdi.vauban {
     requires transitive io.vidocq.cervantes.core;

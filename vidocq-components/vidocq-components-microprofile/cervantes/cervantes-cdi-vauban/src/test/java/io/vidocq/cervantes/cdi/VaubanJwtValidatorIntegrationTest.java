@@ -20,8 +20,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 /**
- * Intégration sous container Vauban (CDI SE) : le {@code JwtValidator} produit par
- * {@link JwtAuthConfigProducer} à partir de {@code mp.jwt.verify.*} est injectable et opérationnel.
+ * Integration under Vauban container (CDI SE): the {@code JwtValidator} produced by
+ * {@link JwtAuthConfigProducer} from {@code mp.jwt.verify.*} is for injection and operational.
  */
 class VaubanJwtValidatorIntegrationTest {
 

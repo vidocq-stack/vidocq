@@ -21,21 +21,21 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * Construit le {@link JwtValidator} de l'application à partir des propriétés MicroProfile Config
+ * Built the {@link JwtValidator} application from MicroProfile Config properties
  * {@code mp.jwt.verify.*} (lues via Ravel) :
  *
  * <ul>
- *   <li>{@code mp.jwt.verify.issuer} → émetteur attendu</li>
- *   <li>{@code mp.jwt.verify.audiences} → audiences (séparées par virgule)</li>
- *   <li>{@code mp.jwt.verify.publickey} → clé publique inline (PEM/base64 X.509)</li>
- *   <li>{@code mp.jwt.verify.publickey.location} → fichier PEM / fichier JWKS / URL JWKS</li>
- *   <li>{@code mp.jwt.verify.publickey.algorithm} → {@code RS256} (défaut) ou {@code ES256}, …</li>
+ * <li>{@code mp.jwt.verify.issuer} → Expected transmitter</li>
+ * <li>{@code mp.jwt.verify.audiences} → hearings (separate)</li>
+ * <li>{@code mp.jwt.verify.publickey} → inline public key (PEM/base64 X.509)</li>
+ * <li>{@code mp.jwt.verify.publickey.location} → PEM file / JWKS file / JWKS</li> URL
+ * <li>{@code mp.jwt.verify.publickey.algorithm} → {@code RS256} (default) or {@code ES256},...</li>
  * </ul>
  *
- * <p>Producteur et produit sont {@code @Dependent} (pattern Ravel {@code RavelConfigProducer} ;
- * un produit normal-scopé déclenche une mauvaise résolution de proxy côté Vauban actuel —
- * à repasser en {@code @ApplicationScoped} quand le défaut Vauban sera corrigé). Le filtre
- * d'authentification JAX-RS (M4) injectera le validateur pour valider chaque bearer token.</p>
+ * <p>Producer and product are {@code @Dependent} (Ravel {@code RavelConfigProducer} pattern;
+ * a normal-scoped product triggers a bad proxy resolution on the current Vauban side —
+ * {@code @ApplicationScoped} when the Vauban defect is corrected). The filter
+ * the JAX-RS authentication filter (M4) will inject the validator to validate each bearer token.</p>
  */
 @Dependent
 public class JwtAuthConfigProducer {
@@ -56,9 +56,9 @@ public class JwtAuthConfigProducer {
     }
 
     /**
-     * Déchiffrement JWE optionnel : {@code mp.jwt.decrypt.key} (inline) ou {@code .location}.
-     * {@code null} si absent. Lit optionnellement {@code mp.jwt.decrypt.key.algorithm} pour
-     * valider que l'algorithme dans le JWE correspond à celui configuré.
+     * Optional JWE decryption: {@code mp.jwt.decrypt.key} (inline) or {@code.location}.
+     * {@code null} if absent. Optionally reads {@code mp.jwt.decrypt.key.algorithm} to
+     * validate that the algorithm in the JWE corresponds to that configured.
      */
     static JweDecryptor buildDecryptor(Config config) throws JwtValidationException {
         Optional<String> algorithm = config.getOptionalValue("mp.jwt.decrypt.key.algorithm", String.class);

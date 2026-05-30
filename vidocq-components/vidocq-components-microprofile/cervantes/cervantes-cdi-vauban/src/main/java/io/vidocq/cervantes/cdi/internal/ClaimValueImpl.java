@@ -5,9 +5,9 @@ import org.eclipse.microprofile.jwt.ClaimValue;
 import java.util.function.Supplier;
 
 /**
- * Implémentation paresseuse de {@link ClaimValue} : {@link #getValue()} relit le claim depuis le
- * token de la requête courante à chaque appel (spec MicroProfile JWT 2.1 — un {@code ClaimValue}
- * injecté dans un bean {@code @ApplicationScoped} doit refléter la requête active).
+ * Lazy implementation of {@link ClaimValue}: {@link #getValue()} rereads the claim from the
+ * token of the current query at each call (spec MicroProfile JWT 2.1 — a {@code ClaimValue}
+ * injected into a {@code @ApplicationScoped} bean should reflect the active request).
  *
  * @param <T> type de la valeur du claim
  */

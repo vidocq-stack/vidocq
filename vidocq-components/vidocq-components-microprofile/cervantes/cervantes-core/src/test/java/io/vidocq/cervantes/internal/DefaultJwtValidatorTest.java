@@ -24,8 +24,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Tests du moteur de validation (MicroProfile JWT 2.1 §2 ; RFC 7515/7519).
- * Horloge figée pour rendre {@code exp}/{@code nbf} déterministes.
+ * Validation engine tests (MicroProfile JWT 2.1 §2; RFC 7515/7519).
+ * Fixed clock to make {@code exp}/{@code nbf} deterministic.
  */
 class DefaultJwtValidatorTest {
 
@@ -40,7 +40,7 @@ class DefaultJwtValidatorTest {
     @BeforeAll
     static void generateKeys() throws Exception {
         RSA = TestJwts.rsaKeyPair();
-        EC = TestJwts.ecKeyPair("secp256r1"); // P-256 → ES256
+        EC = TestJwts.ecKeyPair("secp256r1"); //P-256 → ES256
     }
 
     // --- helpers -----------------------------------------------------------
@@ -86,7 +86,7 @@ class DefaultJwtValidatorTest {
 
     @Test
     void validEcToken_isAccepted() throws Exception {
-        // ES256 : exerce le transcodage JOSE R‖S ⇄ DER
+        //ES256: Transcodes JOSE R
         String token = TestJwts.sign(
                 TestJwts.header(SignatureAlgorithm.ES256, "k1"),
                 baseClaims().build(),
@@ -104,7 +104,7 @@ class DefaultJwtValidatorTest {
 
     @Test
     void clockSkew_toleratesRecentlyExpiredToken() throws Exception {
-        // exp 30 s dans le passé, skew par défaut 60 s → encore accepté
+        //exp 30 s in the past, default skew 60 s → still accepted
         String token = rsaToken(baseClaims().add("exp", NOW.getEpochSecond() - 30).build());
         assertNotNull(rsaValidator().validate(token));
     }
@@ -125,7 +125,7 @@ class DefaultJwtValidatorTest {
 
     @Test
     void tamperedSignature_isRejected() throws Exception {
-        // signé avec une AUTRE clé RSA → la signature ne vérifie pas avec la clé attendue
+        //signed with OTHER RSA key → signature does not check with expected key
         KeyPair other = TestJwts.rsaKeyPair();
         String token = TestJwts.sign(TestJwts.header(SignatureAlgorithm.RS256, null),
                 baseClaims().build(), other.getPrivate(), SignatureAlgorithm.RS256);
@@ -159,7 +159,7 @@ class DefaultJwtValidatorTest {
 
     @Test
     void unsupportedAlgorithm_isRejected() throws Exception {
-        // alg "none" (token non signé) doit être refusé
+        //alg "none" (unsigned token) must be refused
         String h = TestJwts.B64URL.encodeToString("{\"alg\":\"none\",\"typ\":\"JWT\"}".getBytes());
         String p = TestJwts.B64URL.encodeToString("{\"sub\":\"x\"}".getBytes());
         String token = h + "." + p + "."; // signature vide
@@ -168,7 +168,7 @@ class DefaultJwtValidatorTest {
 
     @Test
     void issuerNotChecked_whenNotConfigured() throws Exception {
-        // config sans issuer : iss du token ignoré
+        //config without leaving: iss du token ignored
         DefaultJwtValidator validator = new DefaultJwtValidator(
                 new ConfiguredKeyResolver(RSA.getPublic()),
                 new JwtConfig(Optional.empty(), Set.of(), Duration.ofSeconds(60), true, Optional.empty(), false),

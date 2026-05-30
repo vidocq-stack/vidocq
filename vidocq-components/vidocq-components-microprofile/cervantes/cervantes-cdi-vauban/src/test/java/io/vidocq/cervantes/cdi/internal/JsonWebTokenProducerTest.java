@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Producteur du principal {@code JsonWebToken} depuis le contexte de requête. */
+/** Producer for the {@code JsonWebToken} principal from the request context. */
 class JsonWebTokenProducerTest {
 
     private final JsonWebTokenProducer producer = new JsonWebTokenProducer();
@@ -34,7 +34,7 @@ class JsonWebTokenProducerTest {
 
         assertNull(jwt.getName(), "anonymous principal has no name");
         // MP JWT TCK EmptyTokenTest: an unauthenticated/empty token exposes null claim names
-        // (not an empty set) — the DefaultJsonWebToken.anonymous() contract.
+        //(not an empty set) — the DefaultJsonWebToken.anonymous() contract.
         assertNull(jwt.getClaimNames(), "anonymous principal exposes no claim names");
     }
 

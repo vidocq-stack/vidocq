@@ -10,10 +10,10 @@ import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 
 /**
- * Décode un JWT compact {@code header.payload.signature} en {@link ParsedJwt}.
+ * Decode a compact {@code header.payload.signature} JWT in {@link ParsedJwt}.
  *
- * <p>Décodage base64url (RFC 7515 §2, padding optionnel) puis lecture JSON via JSON-P (Champollion).
- * Ne vérifie NI la signature NI les claims — c'est le rôle de {@link JwtSignatureVerifier} et
+ * <p>Decodage base64url (RFC 7515 §2, optional padding) then read JSON via JSON-P (Champollion).
+ * Check the NI signature for claims — this is the role of {@link JwtSignatureVerifier} and
  * {@link JwtClaimsValidator}.</p>
  */
 final class JwtParser {

@@ -11,8 +11,8 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * Fabrique publique de {@link KeyResolver} à partir de la configuration MicroProfile JWT
- * ({@code mp.jwt.verify.publickey} / {@code .location}). Façade stable pour les intégrations
+ * Public manufacture of {@link KeyResolver} from the JWT MicroProfile configuration
+ * ({@code mp.jwt.verify.publickey} / {@code.location}). Stable facade for integrations
  * (CDI, JAX-RS) : garde {@code JwksSource}/{@code JwkParser} internes au package core.
  */
 public final class KeyResolvers {
@@ -20,14 +20,14 @@ public final class KeyResolvers {
     private KeyResolvers() {}
 
     /**
-     * Clé publique inline depuis {@code mp.jwt.verify.publickey}.
-     * Accepte : PEM (PKIX), JWK JSON ({…}), JWK Set JSON ({"keys":[…]}), ou base64-encoded JWK/JWKS.
-     * MP JWT spec §9.2.1 : la valeur peut être une clé PEM, base64 X.509, JWK ou JWKS.
+     * Inline public key from {@code mp.jwt.verify.publickey}.
+     * Accepts: PEM (PKIX), JWK JSON ({...}), JWK Set JSON ({"keys":[...]}), or base64-encoded JWK/JWKS.
+     * MP JWT spec §9.2.1: the value can be a PEM key, base64 X.509, JWK or JWKS.
      */
     public static KeyResolver fromInlinePem(String value, SignatureAlgorithm.Family family) throws JwtValidationException {
         String trimmed = value.trim();
         if (trimmed.startsWith("{")) {
-            // JWK or JWKS JSON inline — route to JwksKeyResolver with a static byte supplier
+            //JWK or JWKS JSON inline — route to JwksKeyResolver with a static byte begging
             byte[] bytes = trimmed.getBytes(StandardCharsets.UTF_8);
             return new JwksKeyResolver(() -> bytes);
         }
@@ -41,22 +41,22 @@ public final class KeyResolvers {
                     return new JwksKeyResolver(() -> bytes);
                 }
             } catch (IllegalArgumentException ignored) {
-                // Not valid base64 — fall through to PEM parsing
+                //Not valid base64 — fall through to PEM parsing
             }
         }
         return new ConfiguredKeyResolver(PemKeys.fromPem(trimmed, family));
     }
 
     /**
-     * Depuis {@code mp.jwt.verify.publickey.location} : URL HTTP(S) → JWKS distant ou PEM (lazy,
-     * détection de format au premier accès) ; fichier JSON ({}) → JWKS local ; sinon PEM.
+     * From {@code mp.jwt.verify.publickey.location}: HTTP(S) URL → Remote JWKS or PEM (lazy,
+     * first access format detection); JSON file ({}) → local JWKS; Or PEM.
      *
-     * <p>Pour les URL HTTP(S), le chargement est <em>lazy</em> afin que le producteur CDI
-     * puisse être construit avant que le serveur exposant la clé soit prêt. Le format (JWKS JSON
-     * ou PEM) est détecté à la première résolution de clé. L'URL est relue depuis le supplier
-     * au moment de la détection afin de capturer les rewrites effectuées par le harness TCK après
-     * démarrage du serveur ({@code mp.jwt.verify.publickey.location} peut être mis à jour dans les
-     * system properties entre la construction du résolveur et la première requête).</p>
+     * <p>For HTTP(S) URLs, loading is <em>lazy</em> so that the CDI producer
+     * can be built before the server exposing the key is ready. The format (JWKS JSON
+     * or PEM) is detected at the first key resolution. URL is reread since beg
+     * at the time of detection to capture rewrites performed by the TCK harness after
+     * server startup ({@code mp.jwt.verify.publickey.location} can be updated in
+     * system properties between the construction of the solver and the first request).</p>
      */
     public static KeyResolver fromLocation(String location, SignatureAlgorithm.Family family) throws JwtValidationException {
         if (location.startsWith("http://") || location.startsWith("https://")) {
@@ -73,11 +73,11 @@ public final class KeyResolvers {
     }
 
     /**
-     * Résolveur lazy pour les URL HTTP(S) : auto-détecte JWKS JSON ou PEM au premier accès.
-     * Mémorise le résolveur délégué après détection pour éviter de re-fetcher.
+     * Lazy solver for HTTP(S) URLs: self-detect JWKS JSON or PEM at first access.
+     * Memorizes delegated solver after detection to avoid re-fetchering.
      *
-     * <p>La location est relue via la system property à chaque nouvelle détection (i.e. quand le
-     * delegate est null) afin de capturer les rewrites effectués par le harness après démarrage.</p>
+     * <p>The rental is reread via the property system at each new detection (i.e. when the
+     * delegate is null) to capture rewrites performed by the harness after boot.</p>
      */
     private static final class LazyHttpKeyResolver implements KeyResolver {
 
@@ -110,7 +110,7 @@ public final class KeyResolvers {
             byte[] bytes = source.fetch();
             String content = new String(bytes, StandardCharsets.UTF_8).trim();
             if (content.startsWith("{")) {
-                // JWKS JSON — re-use fresh source for each delegation (supports key rotation)
+                //JWKS JSON — re-use fresh source for each delegation (supports key rotation)
                 return new JwksKeyResolver(JwksSource.fromLocation(location));
             }
             // PEM served over HTTP

@@ -14,11 +14,11 @@ import java.time.Clock;
 import java.util.Objects;
 
 /**
- * Implémentation de référence de {@link JwtValidator} : enchaîne parsing → résolution de clé →
- * vérification de signature → validation des claims, puis construit le {@link JsonWebToken}.
+ * {@link JwtValidator} Reference Implementation: parsing chain → key resolution →
+ * signature check → validation of claims, then build the {@link JsonWebToken}.
  *
- * <p>Immuable et thread-safe (les collaborateurs sont sans état). Une {@link Clock} injectable
- * rend les validations temporelles testables.</p>
+ * <p>Immutable and thread-safe (employees are unstated). {@link Clock} for injection
+ * makes time-based validation testable.</p>
  */
 public final class DefaultJwtValidator implements JwtValidator {
 
@@ -29,7 +29,7 @@ public final class DefaultJwtValidator implements JwtValidator {
     private final KeyResolver keyResolver;
     private final JwtConfig config;
     private final Clock clock;
-    private final JweDecryptor decryptor; // nullable : déchiffrement JWE (M5)
+    private final JweDecryptor decryptor; //null: decryption JWE (M5)
 
     public DefaultJwtValidator(KeyResolver keyResolver, JwtConfig config) {
         this(keyResolver, config, Clock.systemUTC(), null);
@@ -67,22 +67,22 @@ public final class DefaultJwtValidator implements JwtValidator {
     }
 
     /**
-     * Si le token est un JWE compact (5 parties), le déchiffre en son JWS imbriqué ; sinon le
-     * renvoie tel quel. Un JWE reçu sans clé de déchiffrement configurée est rejeté.
-     * Un JWS reçu alors que le chiffrement est requis ({@code config.encryptionRequired()}) est rejeté.
+     * If the token is a compact JWE (5 parts), decipher it in nested JWS sound; if not the
+     * returns as is. A JWE received without configured decryption key is rejected.
+     * A JWS received while encryption is required ({@code config.encryptionRequired()}) is rejected.
      */
     private String decryptIfEncrypted(String token) throws JwtValidationException {
         if (token == null) {
-            return null; // le parser lèvera "empty token"
+            return null; //the parser will lift "empty token"
         }
         long dots = token.chars().filter(c -> c == '.').count();
-        if (dots == 4) { // 5 parties → JWE
+        if (dots == 4) { //5 parts → JWE
             if (decryptor == null) {
                 throw new JwtValidationException("received an encrypted JWT (JWE) but no decryption key is configured");
             }
             return decryptor.decryptToCompactJws(token);
         }
-        // JWS (3 parties) — rejeter si le chiffrement est exigé par la config
+        //JWS (3 parts) — reject if encryption is required by the config
         if (config.encryptionRequired()) {
             throw new JwtValidationException("token must be encrypted (JWE) but received a signed-only token (JWS)");
         }

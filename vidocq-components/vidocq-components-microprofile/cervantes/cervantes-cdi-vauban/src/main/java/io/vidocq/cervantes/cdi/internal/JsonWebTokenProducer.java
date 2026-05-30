@@ -10,9 +10,9 @@ import org.eclipse.microprofile.jwt.JsonWebToken;
 /**
  * Producteur CDI du principal {@code @RequestScoped JsonWebToken} (MicroProfile JWT 2.1).
  *
- * <p>Expose le token validé de la requête courante (via {@link JsonWebTokenContext}). En l'absence
- * de token (requête anonyme), produit un principal anonyme sans claim plutôt que {@code null}
- * (interdit pour un bean à portée normale).</p>
+ * <p>Expose the validated token of the current request (via {@link JsonWebTokenContext}). In the absence
+ * token (anonymous request), produces an anonymous principal without claim rather than {@code null}
+ * (forbidden for normal range bean).</p>
  */
 @ApplicationScoped
 public class JsonWebTokenProducer {

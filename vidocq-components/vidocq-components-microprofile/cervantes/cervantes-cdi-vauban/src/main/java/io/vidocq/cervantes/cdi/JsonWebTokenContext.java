@@ -6,29 +6,29 @@ import org.eclipse.microprofile.jwt.JsonWebToken;
 import java.util.Optional;
 
 /**
- * Contexte de requête portant le {@link JsonWebToken} validé de la requête courante.
+ * Query context with {@link JsonWebToken} validated from the current query.
  *
- * <p>Posé par le filtre d'authentification JAX-RS (module {@code cervantes-cassini}, M4) après
+ * <p>Posted by JAX-RS authentication filter (module {@code cervantes-cassini}, M4) after
  * validation du bearer token, puis lu par {@link io.vidocq.cervantes.cdi.internal.JsonWebTokenProducer}
- * pour produire le principal injectable. {@code @RequestScoped} : une instance par requête, isolée
- * entre requêtes concurrentes par le contexte de requête Vauban.</p>
+ * to produce the main injection. {@code @RequestScoped}: one instance per query, isolated
+ * between competing requests by the Vauban.ZZPH0ZZ query context
  */
 @RequestScoped
 public class JsonWebTokenContext {
 
     private JsonWebToken token;
 
-    /** Renseigne le token validé de la requête (appelé par le filtre d'authentification). */
+    /** Stores the validated token for the request (called by the authentication filter). */
     public void setToken(JsonWebToken token) {
         this.token = token;
     }
 
-    /** @return le token de la requête courante s'il a été validé, sinon vide (requête anonyme). */
+    /** @return the token for the current request if it was validated, otherwise empty (anonymous request). */
     public Optional<JsonWebToken> current() {
         return Optional.ofNullable(token);
     }
 
-    /** Réinitialise le contexte (fin de requête). */
+    /** Resets the context (end of request). */
     public void clear() {
         this.token = null;
     }

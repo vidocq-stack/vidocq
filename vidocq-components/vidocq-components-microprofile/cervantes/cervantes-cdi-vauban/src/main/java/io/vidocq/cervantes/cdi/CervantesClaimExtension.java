@@ -24,15 +24,15 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Build Compatible Extension synthétisant un bean par type rencontré au site d'injection
+ * Build Compatible Extension synthesizing one bean by type encountered at the injection site
  * {@code @Claim} (MicroProfile JWT 2.1). Les membres {@code value}/{@code standard} de
- * {@code @Claim} étant {@code @Nonbinding}, un seul {@code SyntheticBean} qualifié {@code @Claim}
- * par type couvre tous les sites — le nom effectif du claim est résolu au runtime par
+ * {@code @Claim} being {@code @Nonbinding}, one {@code SyntheticBean} qualified {@code @Claim}
+ * by type covers all sites — the actual claim name is solved at runtime by
  * {@link ClaimSyntheticCreator} depuis l'{@code InjectionPoint}.
  *
- * <p>Implémentée en {@code @Registration(types = Object.class)} (et non {@code @Validation}) car
- * CDI Lite 4.1 interdit {@code BeanInfo} comme paramètre des méthodes {@code @Validation}. Calque
- * {@code io.vidocq.ravel.cdi.ConfigCdiExtension} (débloqué par Vauban VAU-BCE-001).</p>
+ * <p> Implemented in {@code @Registration(types = Object.class)} (not {@code @Validation}) because
+ * CDI Lite 4.1 prohibits {@code BeanInfo} as a parameter of {@code @Validation} methods. Layer
+ * {@code io.vidocq.ravel.cdi.ConfigCdiExtension} (released by Vauban VAU-BCE-001).</p>
  */
 public class CervantesClaimExtension implements BuildCompatibleExtension {
 
@@ -51,10 +51,10 @@ public class CervantesClaimExtension implements BuildCompatibleExtension {
 
     @Synthesis
     public void synthesizeClaimBeans(SyntheticComponents components, Types types) {
-        // First pass: resolve Provider<T>/Instance<T> wrappers → collect the effective types to
+        //First pass: solve Provider<T>/Forum<T> wrappers → collect the effective types to
         // register. CDI/Vauban strips Provider<T> and Instance<T> wrappers and looks up a bean of
-        // type T directly (CDI spec §6.6). We must register a synthetic @Claim bean for T, not for
-        // Provider<T>/Instance<T>. ClaimValue<T>, Optional<T>, Supplier<T> are NOT stripped —
+        //type T directly (CDI spec §6.6). We must register a synthetic @Claim bean for T, not for
+        //Provider<T>/Forum<T>. ClaimValue<T>, Optional<T>, Supplier<T> are NOT hit —
         // ClaimSyntheticCreator inspects the full InjectionPoint type and handles the wrapping.
         Map<String, Type> effectiveTypes = new LinkedHashMap<>();
         for (Type type : claimTypes.values()) {
@@ -76,10 +76,10 @@ public class CervantesClaimExtension implements BuildCompatibleExtension {
 
         Set<String> registered = new HashSet<>();
         for (Type type : effectiveTypes.values()) {
-            // Primitifs (boolean, int, long, …) : on enregistre le bean au type boxé — Weld/Vauban
-            // résout une injection primitive depuis un bean wrapper via auto-unboxing (cf.
-            // ConfigCdiExtension de Ravel). Nécessite que le lang-model expose bien un PrimitiveType
-            // pour un point d'injection primitif (corrigé dans Vauban — TypeMapper / VAU-INJ-PRIM).
+            //Primitives (boolean, int, long,...): the bean is recorded in boxed type — Weld/Vauban
+            //solves a primitive injection from a bean wrapper via auto-unboxing (cf.
+            //ConfigCdiRavel Extension). Requires the lang-model to exhibit a PrimitiveType
+            //for a primitive injection site (corrected in Vauban — TypeMapper / VAU-INJ-PRIM).
             Class<?> effectiveClass = type instanceof PrimitiveType pt ? boxPrimitive(pt.primitiveKind()) : null;
             if (effectiveClass != null) {
                 if (!registered.add(effectiveClass.getName())) {
@@ -101,8 +101,8 @@ public class CervantesClaimExtension implements BuildCompatibleExtension {
         if (runtimeClass != null) {
             addClaimBean(components, runtimeClass);
         } else {
-            // Types paramétrés (ClaimValue<T>, Optional<T>, Set<String>, …) : on
-            // conserve la Type lang-model, sinon le paramètre générique est perdu.
+            //Parametric types (ClaimValue<T>, Optional<T>, Set<String>,...): on
+            //retains the Type lang-model, otherwise the generic parameter is lost.
             components.addBean(Object.class)
                     .type(type)
                     .qualifier(Claim.class)
@@ -117,7 +117,7 @@ public class CervantesClaimExtension implements BuildCompatibleExtension {
         return pt.genericClass().declaration().name();
     }
 
-    /** Enregistre un {@code SyntheticBean} {@code @Claim} {@code @Dependent} de type {@code beanClass}. */
+    /** Registers a {@code @Claim} {@code @Dependent} {@code SyntheticBean} of type {@code beanClass}. */
     @SuppressWarnings({"unchecked", "rawtypes"})
     private static void addClaimBean(SyntheticComponents components, Class<?> beanClass) {
         ((SyntheticBeanBuilder) components.addBean(beanClass))

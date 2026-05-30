@@ -1,6 +1,6 @@
 /**
  * API CDI publique de Cervantes : {@link io.vidocq.cervantes.cdi.JsonWebTokenContext}, le contexte
- * de requête portant le {@code JsonWebToken} validé (posé par le filtre d'authentification JAX-RS,
+ * a request bearing the validated {@code JsonWebToken} (tabled by the JAX-RS authentication filter,
  * lu par le producteur du principal injectable).
  */
 package io.vidocq.cervantes.cdi;

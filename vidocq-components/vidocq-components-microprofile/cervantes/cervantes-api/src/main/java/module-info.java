@@ -1,9 +1,9 @@
 /**
- * SPI publique stable de Cervantes et ré-exposition de la spec MicroProfile JWT 2.1.
+ * Stable public SPI of Cervantes and re-exposure of the spec MicroProfile JWT 2.1.
  *
- * <p>Exporte {@code io.vidocq.cervantes.api} : la SPI transport-agnostique partagée par le core,
- * l'intégration CDI et l'intégration JAX-RS ({@code JwtValidator}, {@code KeyResolver},
- * {@code JwtConfig}, {@code SignatureAlgorithm}, {@code JwtValidationException}). Ré-expose
+ * <p>Export {@code io.vidocq.cervantes.api}: the transport-agnostic SPI shared by the core,
+ * CDI integration and JAX-RS integration ({@code JwtValidator}, {@code KeyResolver},
+ * {@code JwtConfig}, {@code SignatureAlgorithm}, {@code JwtValidationException}). Reexposed
  * transitivement la spec {@code org.eclipse.microprofile.jwt}.</p>
  */
 module io.vidocq.cervantes.api {

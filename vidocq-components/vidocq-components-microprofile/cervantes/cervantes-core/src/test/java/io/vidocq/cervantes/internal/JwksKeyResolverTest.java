@@ -28,8 +28,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Tests de la résolution de clé par JWKS (MicroProfile JWT 2.1 §9 ; RFC 7517) : validation
- * end-to-end, cache, rotation par {@code kid}, kid inconnu, clé EC.
+ * JWKS key resolution tests (MicroProfile JWT 2.1 §9; RFC 7517): validation
+ * end-to-end, cache, rotation by {@code kid}, unknown kid, EC key.
  */
 class JwksKeyResolverTest {
 
@@ -100,20 +100,20 @@ class JwksKeyResolverTest {
 
     @Test
     void refreshesOnUnknownKid_pickingUpRotatedKey() throws Exception {
-        // Source mutable : d'abord seulement la clé A, puis A + B (rotation).
+        //Mutable source: first only key A, then A + B (rotation).
         Map<String, PublicKey> set = new LinkedHashMap<>();
         set.put("rsa-a", RSA_A.getPublic());
         AtomicReference<byte[]> body = new AtomicReference<>(TestJwks.jwksJson(set));
         JwksSource mutable = () -> body.get();
 
-        // minRefreshInterval = 0 → un kid inconnu déclenche immédiatement un refresh.
+        //minRefreshInterval = 0 → An unknown kid immediately triggers a refresh.
         JwksKeyResolver resolver = new JwksKeyResolver(
                 mutable, Duration.ofMinutes(5), Duration.ZERO, CLOCK);
 
-        // kid b absent du set → introuvable
+        //kid b absent from set → not found
         assertEquals(Optional.empty(), resolver.resolve("rsa-b", SignatureAlgorithm.RS256));
 
-        // rotation : la nouvelle clé B est publiée
+        //rotation: the new key B is published
         set.put("rsa-b", RSA_B.getPublic());
         body.set(TestJwks.jwksJson(set));
 
@@ -127,7 +127,7 @@ class JwksKeyResolverTest {
                 new AtomicReference<>(() -> TestJwks.jwksJson("rsa-a", RSA_A.getPublic()));
         JwksSource flaky = () -> delegate.get().fetch();
         JwksKeyResolver resolver = new JwksKeyResolver(
-                flaky, Duration.ZERO, Duration.ZERO, CLOCK); // TTL 0 → refresh à chaque appel
+                flaky, Duration.ZERO, Duration.ZERO, CLOCK); //TTL 0 → refresh every call
 
         assertTrue(resolver.resolve("rsa-a", SignatureAlgorithm.RS256).isPresent());
 
@@ -151,7 +151,7 @@ class JwksKeyResolverTest {
         byte[] jwks = TestJwks.jwksJson("rsa-a", RSA_A.getPublic());
         JwksKeyResolver resolver = new JwksKeyResolver(() -> jwks);
 
-        // kid null + set à clé unique → la clé est utilisée
+        //kid null + single key set → key used
         Optional<PublicKey> key = resolver.resolve(null, SignatureAlgorithm.RS256);
         assertNotNull(key.orElse(null));
     }

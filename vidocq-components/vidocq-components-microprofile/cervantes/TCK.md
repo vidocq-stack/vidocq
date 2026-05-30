@@ -1,36 +1,36 @@
 # TCK.md — Cervantes (MicroProfile JWT 2.1)
 
-## Artefact
+## Artifact
 
-Framework : **Arquillian** (le TCK MP JWT est piloté par Arquillian + REST, contrairement au TCK
-MP FT qui est TestNG-only). Le container démarre la pile Vidocq complète
-(chappe + cassini + vauban + cervantes) pour servir des endpoints protégés et leur présenter des
-tokens forgés.
+Framework: **Arquillian** (the MP JWT TCK is driven by Arquillian + REST, unlike the
+MP FT TCK which is TestNG-only). The container starts the full Vidocq stack
+(chappe + cassini + vauban + cervantes) to serve protected endpoints and present them
+with forged tokens.
 
-Artefact officiel (non-public) à installer dans le M2 local :
+Official (non-public) artifact to install in the local M2:
 
 ```
 org.eclipse.microprofile.jwt:microprofile-jwt-auth-tck:2.1
 ```
 
-Procédure d'installation détaillée dans `cervantes-tck/README.md` (à créer au jalon M6).
+Detailed installation procedure in `cervantes-tck/README.md` (to be created at milestone M6).
 
-## Lancement
+## Launch
 
 ```bash
 ./run-official-tck-mp-jwt-2.1.sh            # smoke test
-./run-official-tck-mp-jwt-2.1.sh all        # suite complète
-./run-official-tck-mp-jwt-2.1.sh -Dtest=... # test ciblé
+./run-official-tck-mp-jwt-2.1.sh all        # full suite
+./run-official-tck-mp-jwt-2.1.sh -Dtest=... # targeted test
 ```
 
-> `cervantes-tck` est **hors reactor** (Model 4.0.0 standalone, sans `<parent>`) — contrainte
-> ShrinkWrap Maven Resolver 3.3 vs Model 4.1.0. Toujours passer par le script, jamais `mvn -pl`.
+> `cervantes-tck` is **out-of-reactor** (standalone Model 4.0.0, no `<parent>`) — ShrinkWrap
+> Maven Resolver 3.3 vs Model 4.1.0 constraint. Always use the script, never `mvn -pl`.
 
-## Score & exclusions
+## Score & Exclusions
 
 | Date | PASS | FAIL | SKIP | Note |
 |------|------|------|------|------|
-| —    | —    | —    | —    | non lancé (M6) |
+| —    | —    | —    | —    | not run (M6) |
 
-Toute exclusion de test sera documentée ici avec sa justification (interprétation de spec
-non-portable, limitation d'environnement, etc.).
+Any test exclusion will be documented here with its justification (non-portable spec
+interpretation, environment limitation, etc.).

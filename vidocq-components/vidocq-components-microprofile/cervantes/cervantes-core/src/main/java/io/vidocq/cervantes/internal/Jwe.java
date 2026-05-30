@@ -6,21 +6,21 @@ import java.nio.charset.StandardCharsets;
 import java.security.PrivateKey;
 
 /**
- * Fabrique publique de {@link JweDecryptor} à partir de la configuration MicroProfile JWT
- * ({@code mp.jwt.decrypt.key} / {@code mp.jwt.decrypt.key.location}). Façade stable pour les
- * intégrations : garde {@code JwksSource} (lecture fichier/URL) interne au package core.
+ * Public manufacture of {@link JweDecryptor} from the JWT MicroProfile configuration
+ * ({@code mp.jwt.decrypt.key} / {@code mp.jwt.decrypt.key.location}). Stable facade for
+ * integrations: keep {@code JwksSource} (file/URL reading) internal to the core package.
  *
- * <p>Supporte : PEM PKCS#8 ({@code -----BEGIN PRIVATE KEY-----}) et JWK/JWKS JSON (détecté
- * par le premier caractère '{') pour {@code mp.jwt.decrypt.key.location} pointant vers un
- * fichier JWK de clé privée RSA (MP JWT 2.1 spec §"JWE Private Key").</p>
+ * <p>Supports: PEM PKCS#8 ({@code -----BEGIN PRIVATE KEY-----}) and JWK/JWKS JSON (detected)
+ * by the first character '{') for {@code mp.jwt.decrypt.key.location} pointing to a
+ * RSA private key JWK file (MP JWT 2.1 spec §"JWE Private Key").</p>
  */
 public final class Jwe {
 
     private Jwe() {}
 
     /**
-     * Clé privée de déchiffrement inline (PEM PKCS#8 ou JWK JSON), depuis {@code mp.jwt.decrypt.key}.
-     * MP JWT spec §9.2.4 : la valeur peut être un PEM PKCS#8 ou un JWK JSON.
+     * Private inline decryption key (PEM PKCS#8 or JWK JSON), from {@code mp.jwt.decrypt.key}.
+     * MP JWT spec §9.2.4: the value can be a PKCS#8 PEM or JWK JSON.
      *
      * @param value          raw key value (PEM or JWK JSON)
      * @param requiredAlgorithm optional {@code mp.jwt.decrypt.key.algorithm} value to enforce (null = no check)
@@ -35,8 +35,8 @@ public final class Jwe {
     }
 
     /**
-     * Clé privée depuis {@code mp.jwt.decrypt.key.location} (fichier classpath, URL, ou chemin FS).
-     * Formats supportés : PEM PKCS#8, JWK JSON, JWKS JSON (premier caractère '{').
+     * Private key from {@code mp.jwt.decrypt.key.location} (classpath file, URL, or FS path).
+     * Supported formats: PEM PKCS#8, JWK JSON, JWKS JSON (first character '{').
      *
      * @param location       MP Config location value
      * @param requiredAlgorithm optional {@code mp.jwt.decrypt.key.algorithm} value to enforce (null = no check)
@@ -54,10 +54,10 @@ public final class Jwe {
     private static PrivateKey privateKeyFromValue(byte[] bytes) throws JwtValidationException {
         String content = new String(bytes, StandardCharsets.UTF_8).trim();
         if (content.startsWith("{")) {
-            // JWK or JWKS JSON — parse private key from JWK document
+            //JWK or JWKS JSON — parse private key from JWK document
             return JwkParser.parsePrivateKey(bytes);
         }
-        // PEM PKCS#8 — default format
+        //PEM PKCS#8 — default format
         return PemKeys.privateKeyFromPem(content);
     }
 }

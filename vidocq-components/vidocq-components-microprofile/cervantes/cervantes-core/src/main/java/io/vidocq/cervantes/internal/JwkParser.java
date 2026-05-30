@@ -26,12 +26,12 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Parse un document JWK Set (RFC 7517) — ou un JWK unique — en clés publiques {@link Jwks},
- * sans dépendance crypto tierce (reconstruction RSA via {@code n}/{@code e} et EC via
- * {@code crv}/{@code x}/{@code y} avec la JCA).
+ * Leaves a JWK Set (RFC 7517) — or a single JWK — in {@link Jwks} public keys,
+ * without third-party crypt dependence (reconstruction RSA via {@code n}/{@code e} and EC via
+ * {@code crv}/{@code x}/{@code y} with the JCA).
  *
- * <p>Les clés de chiffrement ({@code use:"enc"}) et les {@code kty} non supportés sont ignorés ;
- * une clé individuelle invalide est ignorée plutôt que de faire échouer tout le set.</p>
+ * <p>Encryption keys ({@code use:"enc"}) and unsupported {@code kty} are ignored;
+ * an invalid individual key is ignored rather than fail the entire set.ZZPH0ZZ
  */
 final class JwkParser {
 
@@ -59,7 +59,7 @@ final class JwkParser {
         Map<String, PublicKey> byKid = new LinkedHashMap<>();
         List<PublicKey> all = new ArrayList<>();
         for (JsonObject jwk : jwks) {
-            if ("enc".equals(string(jwk, "use"))) continue; // clés de signature uniquement
+            if ("enc".equals(string(jwk, "use"))) continue; //signature keys only
             PublicKey key = toPublicKey(jwk);
             if (key == null) continue;
             all.add(key);
@@ -76,10 +76,10 @@ final class JwkParser {
             return switch (kty) {
                 case "RSA" -> rsaKey(jwk);
                 case "EC" -> ecKey(jwk);
-                default -> null; // oct (HMAC) et autres non supportés
+                default -> null; //Oct (HMAC) and other unsupported
             };
         } catch (GeneralSecurityException | RuntimeException e) {
-            return null; // clé individuelle illisible : on l'ignore
+            return null; //individual key illegible: we ignore it
         }
     }
 

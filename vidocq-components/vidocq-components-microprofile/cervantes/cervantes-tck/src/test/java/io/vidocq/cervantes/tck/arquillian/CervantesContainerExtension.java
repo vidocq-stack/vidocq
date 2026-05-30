@@ -3,7 +3,7 @@ package io.vidocq.cervantes.tck.arquillian;
 import org.jboss.arquillian.container.spi.client.container.DeployableContainer;
 import org.jboss.arquillian.core.spi.LoadableExtension;
 
-/** Enregistre {@link CervantesJwtDeployableContainer} via le SPI Arquillian. */
+/** Registers {@link CervantesJwtDeployableContainer} through the Arquillian SPI. */
 public class CervantesContainerExtension implements LoadableExtension {
     @Override
     public void register(ExtensionBuilder builder) {

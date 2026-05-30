@@ -4,12 +4,12 @@ import java.io.ByteArrayOutputStream;
 import java.util.Arrays;
 
 /**
- * Transcodage des signatures ECDSA entre la forme JOSE (concaténation {@code R‖S}, RFC 7518 §3.4)
+ * Transcoding ECDSA signatures between the JOSE form (concatenation {@code R‖S}, RFC 7518 §3.4)
  * et la forme DER {@code SEQUENCE(INTEGER r, INTEGER s)} attendue par {@code java.security.Signature}.
  *
- * <p>Les JWS {@code ES256/384/512} portent une signature brute de {@code 2·n} octets ({@code n} =
- * 32/48/66 selon la courbe), alors que la JCA produit et consomme du DER. Sans ce transcodage,
- * {@code Signature.verify(...)} échoue systématiquement sur un token ECDSA légitime.</p>
+ * <p>JWS {@code ES256/384/512} bear a gross signature of {@code 2·n} bytes ({@code n} =
+ * 32/48/66 according to the curve), while JCA produces and consumes DER. Without this transcoding,
+ * {@code Signature.verify(...)} fails systematically on a legitimate ECDSA token.</p>
  */
 final class EcdsaSignatures {
 
@@ -52,11 +52,11 @@ final class EcdsaSignatures {
     // --- DER helpers -------------------------------------------------------
 
     private static byte[] asn1Integer(byte[] magnitude) {
-        boolean pad = (magnitude[0] & 0x80) != 0; // bit de signe : préfixer 0x00 pour rester positif
+        boolean pad = (magnitude[0] & 0x80) != 0; //sign bit: prefix 0x00 to stay positive
         int len = magnitude.length + (pad ? 1 : 0);
         byte[] out = new byte[2 + len];
         out[0] = 0x02;
-        out[1] = (byte) len; // len <= 67 pour P-521 → encodage long sur un seul octet
+        out[1] = (byte) len; //len <= 67 for P-521 → long encoding on a single byte
         int idx = 2;
         if (pad) out[idx++] = 0;
         System.arraycopy(magnitude, 0, out, idx, magnitude.length);
@@ -66,7 +66,7 @@ final class EcdsaSignatures {
     private static byte[] readInteger(byte[] der, int[] cur) {
         int p = cur[0];
         if (der[p++] != 0x02) throw new IllegalArgumentException("expected DER INTEGER");
-        int len = der[p++] & 0xff; // coordonnées EC : longueur < 128
+        int len = der[p++] & 0xff; //EC coordinates: length < 128
         byte[] v = Arrays.copyOfRange(der, p, p + len);
         cur[0] = p + len;
         int start = 0;

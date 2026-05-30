@@ -22,12 +22,12 @@ import java.util.Base64;
 import java.util.Objects;
 
 /**
- * Déchiffre un JWT chiffré (JWE compact, 5 parties) en son JWS imbriqué (MicroProfile JWT 2.1 :
- * <em>sign-then-encrypt</em>). Zéro dépendance crypto tierce — {@code javax.crypto} uniquement.
+ * Decrypt an encrypted JWT (JWE compact, 5 parts) in its nested JWS (MicroProfile JWT 2.1:
+ * <em>sign-then-encrypt</em>). Zero third-party cryptic dependency — {@code javax.crypto} only.
  *
- * <p>Gestion de clé : {@code RSA-OAEP} (SHA-1) et {@code RSA-OAEP-256} (SHA-256). Chiffrement de
+ * <p>Key Management: {@code RSA-OAEP} (SHA-1) and {@code RSA-OAEP-256} (SHA-256). Encryption of
  * contenu : {@code A256GCM} (AES-256-GCM, IV 96 bits, tag 128 bits, AAD = ASCII(base64url(header))).
- * Le texte clair obtenu est un JWS compact, validé ensuite par {@link DefaultJwtValidator}.</p>
+ * The clear text obtained is a compact JWS, then validated by ZZPH0ZZ.ZZPH1ZZ
  */
 public final class JweDecryptor {
 
@@ -37,7 +37,7 @@ public final class JweDecryptor {
     private final PrivateKey decryptionKey;
     /**
      * If non-null, only JWE tokens whose header {@code alg} exactly matches this value are
-     * accepted. Enforces {@code mp.jwt.decrypt.key.algorithm} (MP JWT spec §9.2.4).
+     * Accepted. Strengths {@code mp.jwt.decrypt.key.algorithm} (MP JWT spec §9.2.4).
      */
     private final String requiredAlgorithm;
 
@@ -60,13 +60,13 @@ public final class JweDecryptor {
         String alg = stringMember(header, "alg");
         String enc = stringMember(header, "enc");
 
-        // MP JWT spec §9.2.4: if mp.jwt.decrypt.key.algorithm is configured, enforce it.
+        //MP JWT spec §9.2.4: if mp.jwt.decrypt.key.algorithm is configured, forces it.
         if (requiredAlgorithm != null && !requiredAlgorithm.equals(alg)) {
             throw new JwtValidationException(
                     "JWE key-management algorithm mismatch: configured=" + requiredAlgorithm + ", token=" + alg);
         }
 
-        // MP JWT spec §9.2: JWE must have cty="JWT" to indicate the payload is a nested JWT (JWS).
+        //MP JWT spec §9.2: JWE must have cty="JWT" to indicate the payload is a registered JWT (JWS).
         String cty = stringMember(header, "cty");
         if (!"JWT".equalsIgnoreCase(cty)) {
             throw new JwtValidationException(
@@ -89,7 +89,7 @@ public final class JweDecryptor {
             case null, default -> throw new JwtValidationException("unsupported JWE key-management alg: " + alg);
         };
         try {
-            // "RSA/ECB/OAEPPadding" + OAEPParameterSpec explicite : évite le piège MGF1=SHA-1 par défaut.
+            //"RSA/ECB/OAEPPadding" + OAEPParameterExplicitSpec: avoids the default MGF1=SHA-1 trap.
             Cipher cipher = Cipher.getInstance("RSA/ECB/OAEPPadding");
             cipher.init(Cipher.DECRYPT_MODE, decryptionKey, oaep);
             return cipher.doFinal(encryptedKey);
@@ -107,7 +107,7 @@ public final class JweDecryptor {
             Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
             cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(cek, "AES"), new GCMParameterSpec(GCM_TAG_BITS, iv));
             cipher.updateAAD(aad);
-            // La JCA attend ciphertext‖tag concaténés ; JWE les sépare.
+            //The JCA is waiting for concatenated ciphertext. JWE separates them.
             byte[] combined = Arrays.copyOf(ciphertext, ciphertext.length + tag.length);
             System.arraycopy(tag, 0, combined, ciphertext.length, tag.length);
             return cipher.doFinal(combined);

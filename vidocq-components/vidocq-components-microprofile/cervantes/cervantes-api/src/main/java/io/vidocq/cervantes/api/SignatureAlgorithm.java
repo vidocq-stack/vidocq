@@ -3,13 +3,13 @@ package io.vidocq.cervantes.api;
 import java.util.Optional;
 
 /**
- * Algorithmes de signature JWS supportés par MicroProfile JWT 2.1.
+ * JWS signature algorithms supported by JWT 2.1 MicroProfile.
  *
- * <p>Chaque valeur associe le nom JOSE ({@code "RS256"}, …) à son nom d'algorithme JCA
- * ({@code java.security.Signature}) et à la famille de clé attendue. Pour les algorithmes EC,
- * {@code ecCoordinateOctets} est la taille (en octets) de chaque coordonnée {@code R}/{@code S}
- * de la signature JOSE concaténée (P-256 → 32, P-384 → 48, P-521 → 66), nécessaire au transcodage
- * JOSE {@code R‖S} ⇄ DER attendu par la JCA.</p>
+ * <p>Each value combines the name JOSE ({@code "RS256"},...) with its JCA algorithm name
+ * ({@code java.security.Signature}) and the expected key family. For EC algorithms,
+ * {@code ecCoordinateOctets} is the size (in bytes) of each coordinate {@code R}/{@code S}
+ * of the signature JOSE concatenee (P-256 → 32, P-384 → 48, P-521 → 66), necessary for transcoding
+ * JOSE {@code R‖S} 
  */
 public enum SignatureAlgorithm {
     RS256("SHA256withRSA", Family.RSA, 0),
@@ -19,7 +19,7 @@ public enum SignatureAlgorithm {
     ES384("SHA384withECDSA", Family.EC, 48),
     ES512("SHA512withECDSA", Family.EC, 66);
 
-    /** Famille de clé publique attendue. */
+    /** Expected public key family. */
     public enum Family { RSA, EC }
 
     private final String jcaName;
@@ -35,16 +35,16 @@ public enum SignatureAlgorithm {
     /** Nom d'algorithme {@code java.security.Signature} (ex. {@code "SHA256withRSA"}). */
     public String jcaName() { return jcaName; }
 
-    /** Famille de clé publique ({@code RSA} ou {@code EC}). */
+    /** Public key family ({@code RSA} or {@code EC}). */
     public Family family() { return family; }
 
     /** Taille en octets d'une coordonnée {@code R}/{@code S} (algorithmes EC), 0 sinon. */
     public int ecCoordinateOctets() { return ecCoordinateOctets; }
 
     /**
-     * Résout l'algorithme depuis son nom JOSE (en-tête {@code alg} du JWT).
+     * Resolves the algorithm from its JOSE name (JWT header {@code alg}).
      *
-     * @return l'algorithme, ou vide si le nom est inconnu/non supporté (ex. {@code "none"}, {@code "HS256"}).
+     * @return the algorithm, or empty if the name is unknown/unsupported (e.g. {@code "none"}, {@code "HS256"}).
      */
     public static Optional<SignatureAlgorithm> fromJoseName(String alg) {
         if (alg == null) return Optional.empty();

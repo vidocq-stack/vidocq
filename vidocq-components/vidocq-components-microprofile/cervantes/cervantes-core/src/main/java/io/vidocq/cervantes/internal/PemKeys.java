@@ -12,8 +12,8 @@ import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
 
 /**
- * Charge une clé publique depuis un PEM {@code SubjectPublicKeyInfo} ({@code -----BEGIN PUBLIC KEY-----})
- * via la JCA — sans dépendance crypto tierce. Couvre RSA et EC (X.509 {@link X509EncodedKeySpec}).
+ * Load a public key from a {@code SubjectPublicKeyInfo} PEM ({@code -----BEGIN PUBLIC KEY-----})
+ * via the JCA — without third-party cryptic dependence. RSA and EC cover (X.509 {@link X509EncodedKeySpec}).
  */
 public final class PemKeys {
 
@@ -38,8 +38,8 @@ public final class PemKeys {
     }
 
     /**
-     * Charge une clé privée RSA depuis un PEM PKCS#8 ({@code -----BEGIN PRIVATE KEY-----}) — clé de
-     * déchiffrement JWE ({@code mp.jwt.decrypt.key} / {@code .location}).
+     * Loads RSA private key from PKCS#8 PEM ({@code -----BEGIN PRIVATE KEY-----}) — key to
+     * JWE decryption ({@code mp.jwt.decrypt.key} / {@code.location}).
      */
     public static PrivateKey privateKeyFromPem(String pem) throws JwtValidationException {
         String base64 = pem

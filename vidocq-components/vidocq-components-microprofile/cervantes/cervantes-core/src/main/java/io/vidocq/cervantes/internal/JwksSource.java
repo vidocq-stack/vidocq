@@ -13,21 +13,21 @@ import java.time.Duration;
 
 /**
  * Source d'octets d'un document JWK Set ({@code mp.jwt.verify.publickey.location}). Abstrait
- * l'origine (HTTP ou fichier) pour {@link JwksKeyResolver}.
+ * the origin (HTTP or file) for {@link JwksKeyResolver}.
  */
 @FunctionalInterface
 interface JwksSource {
 
-    /** @return le contenu brut du JWKS ; lève si la source est injoignable/illisible. */
+    /** @return the raw JWKS content; throws if the source is unreachable or unreadable. */
     byte[] fetch() throws JwtValidationException;
 
     /**
-     * Construit une source depuis une location (MP JWT spec §9.2.2) :
+     * Built a source from a rental (MP JWT spec §9.2.2):
      * <ul>
-     *   <li>{@code http(s)://…} → HTTP (HttpClient JDK, virtual threads)</li>
-     *   <li>{@code /…} → ressource classpath (Thread classloader ou system classloader)</li>
-     *   <li>{@code file:…} → chemin fichier avec schéma URI</li>
-     *   <li>Sinon → ressource classpath (chemin relatif) puis fichier système</li>
+     * <li>{@code http(s)://…} → HTTP (HttpClient JDK, virtual threads)</li>
+     * <li>{@code /…} → classpath resource (Thread classloader or system classloader)</li>
+     * <li>{@code file:…} → file path with URI</li> schema
+     * <li>Sinon → classpath resource (relative path) then system file</li>
      * </ul>
      */
     static JwksSource fromLocation(String location, HttpClient httpClient, Duration timeout) {
@@ -38,7 +38,7 @@ interface JwksSource {
             return new File(Path.of(URI.create(location)));
         }
         // Classpath resource: starts with "/" or relative path
-        // MP JWT spec §9.2.2: location is treated as a classpath resource first
+        //MP JWT spec §9.2.2: location is treated as a classpath resource first
         String classpathPath = location.startsWith("/") ? location : "/" + location;
         java.net.URL url = JwksSource.class.getResource(classpathPath);
         if (url == null) {
@@ -59,7 +59,7 @@ interface JwksSource {
         return new File(Path.of(location));
     }
 
-    /** Variante avec un {@link HttpClient} par défaut (connect timeout 5 s). */
+    /** Variant with a default {@link HttpClient} (5 s connect timeout). */
     static JwksSource fromLocation(String location) {
         return fromLocation(
                 location,

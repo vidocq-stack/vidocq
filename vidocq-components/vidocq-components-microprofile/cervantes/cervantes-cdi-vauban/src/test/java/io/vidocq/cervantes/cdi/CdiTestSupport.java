@@ -18,7 +18,7 @@ import java.util.Base64;
 import java.util.Map;
 import java.util.Set;
 
-/** Outils de test partagés : génération de clés, forge de JWT RS256, et Config MicroProfile in-memory. */
+/** Shared test utilities: key generation, RS256 JWT creation, and in-memory MicroProfile Config. */
 public final class CdiTestSupport {
 
     private static final Base64.Encoder B64URL = Base64.getUrlEncoder().withoutPadding();
@@ -52,7 +52,7 @@ public final class CdiTestSupport {
                 .build();
     }
 
-    /** Enregistre une Config globale (résolue par {@code ConfigProvider.getConfig()} dans le container). */
+    /** Registers a global Config (resolved by {@code ConfigProvider.getConfig()} in the container). */
     public static void registerGlobalConfig(Map<String, String> values) {
         ConfigProviderResolver resolver = ConfigProviderResolver.instance();
         Config custom = resolver.getBuilder()

@@ -20,10 +20,10 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Injection {@code @Claim} typée sous container Vauban (MicroProfile JWT 2.1 §"Injection of JSON
- * Web Token claims"). La {@link CervantesClaimExtension} synthétise un bean par type rencontré ;
+ * Injection {@code @Claim} typed under Vauban container (MicroProfile JWT 2.1 §"Injection of JSON
+ * Web Token claims"). {@link CervantesClaimExtension} synthesizes a bean by type encountered;
  * {@link io.vidocq.cervantes.cdi.internal.ClaimResolver} lit le {@link DefaultJsonWebToken} de la
- * requête courante posé sur {@link JsonWebTokenContext}.
+ * current query on {@link JsonWebTokenContext}.
  */
 class CervantesClaimInjectionTest {
 
@@ -87,7 +87,7 @@ class CervantesClaimInjectionTest {
                 assertEquals("alice", upn.getValue());
             });
 
-            // Scope 2 : bob — un nouveau token, une nouvelle valeur résolue paresseusement
+            //Scope 2: bob — a new token, a new value resolved lazyly
             container.requestContext().runInScope(() -> {
                 JsonObject bob = Json.createObjectBuilder().add("sub", "u-7").add("upn", "bob").build();
                 container.select(JsonWebTokenContext.class).setToken(new DefaultJsonWebToken(bob, "raw"));

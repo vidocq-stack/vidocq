@@ -23,22 +23,22 @@ import java.util.Set;
 import java.util.function.Supplier;
 
 /**
- * Résolution d'un point d'injection {@code @Claim} (MicroProfile JWT 2.1 §"Injection of JSON Web
- * Token claims") depuis le {@link JsonWebToken} de la requête courante.
+ * {@code @Claim} injection site resolution (MicroProfile JWT 2.1 §"Injection of JSON Web
+ * Token claims") since the {@link JsonWebToken} of the current query.
  *
- * <p>Partagée par la {@code SyntheticBeanCreator} de la Build Compatible Extension. Le nom du claim
- * provient de {@link Claim#standard()} (si différent de {@link Claims#UNKNOWN}) sinon de
+ * <p>Shared by the {@code SyntheticBeanCreator} of the Build Compatible Extension. The name of the claim
+ * comes from {@link Claim#standard()} (if different from {@link Claims#UNKNOWN}) otherwise from
  * {@link Claim#value()}.</p>
  *
- * <p>Types supportés au site d'injection :</p>
+ * <p>Types supported at the injection site:</p>
  * <ul>
  *   <li><b>bruts</b> : {@code String}, {@code Long}/{@code long}, {@code Integer}/{@code int},
  *       {@code Boolean}/{@code boolean}, {@code Double}/{@code double}, {@code Set<String>} ;</li>
  *   <li><b>jakarta.json</b> : {@code JsonValue}, {@code JsonString}, {@code JsonNumber},
  *       {@code JsonObject}, {@code JsonArray} (valeur JSON brute du claim) ;</li>
  *   <li><b>conteneurs</b> : {@code Optional<T>} (eager), {@code ClaimValue<T>},
- *       {@code Provider<T>}, {@code Supplier<T>} (lazy — relisent le token courant à chaque accès,
- *       seule voie correcte pour les beans plus larges que {@code @RequestScoped}).</li>
+ * {@code Provider<T>}, {@code Supplier<T>} (lazy — reread current token at each access,
+ * only correct way for beans wider than {@code @RequestScoped}).</li>
  * </ul>
  */
 public final class ClaimResolver {
@@ -47,11 +47,11 @@ public final class ClaimResolver {
     }
 
     /**
-     * Résout la valeur du point d'injection {@code @Claim}.
+     * Resolves the value of the {@code @Claim} injection site.
      *
      * @param injectionPoint le point d'injection courant fourni par CDI
-     * @param context        le contexte de requête portant le {@link JsonWebToken} validé
-     * @return la valeur convertie selon le type déclaré au site d'injection
+     * @param context the validated {@link JsonWebToken} query context
+     * @return the converted value according to the type reported at the injection site
      */
     public static Object resolve(InjectionPoint injectionPoint, JsonWebTokenContext context) {
         Claim claim = injectionPoint.getAnnotated().getAnnotation(Claim.class);
@@ -61,8 +61,8 @@ public final class ClaimResolver {
         String name = claimName(claim);
         Type type = injectionPoint.getType();
 
-        // Conteneurs paresseux — relisent le token courant à chaque accès (spec : ClaimValue/Provider
-        // sont la voie pour injecter un claim dans un bean plus large que @RequestScoped).
+        //Lazy containers — read the current token at each access (spec: ClaimValue/Provider
+        //are the way to inject a claim into a wider bean than @RequestScoped).
         if (isParameterized(type, ClaimValue.class)) {
             Type inner = typeArgument(type);
             return new ClaimValueImpl<>(name, () -> resolveValue(inner, name, currentToken(context)));
@@ -122,8 +122,8 @@ public final class ClaimResolver {
         if (raw == Set.class) {
             return stringSet(token, name);
         }
-        // Repli : la valeur que getClaim sait produire (Set<String> pour groups/aud, JsonValue pour
-        // un objet/tableau, etc.) — couvre les claims standard non énumérés ci-dessus.
+        //Fold: the value that getClaim can produce (Set<String> for groups/aud, JsonValue for
+        //an object/table, etc.) — covers standard claims not listed above.
         return token.getClaim(name);
     }
 
@@ -143,7 +143,7 @@ public final class ClaimResolver {
     private static JsonValue jsonValue(JsonWebToken token, String name, Class<?> raw) {
         JsonValue v = rawJson(token, name);
         if (v == null || v.getValueType() == JsonValue.ValueType.NULL) {
-            // Claim absent : JsonValue → JsonValue.NULL ; sous-types typés → null.
+            //Claim absent: JsonValue → JsonValue.NULL; typed subtypes → null.
             return raw == JsonValue.class ? JsonValue.NULL : null;
         }
         if (raw == JsonValue.class) {
@@ -154,7 +154,7 @@ public final class ClaimResolver {
         }
         if (raw == JsonArray.class) {
             if (v.getValueType() == JsonValue.ValueType.ARRAY) return v.asJsonArray();
-            // MP JWT spec: 'aud' can be a single string — wrap in an array for JsonArray injection
+            //MP JWT spec: 'aud' can be a single string — wrap in an array for JsonArray injection
             return Json.createArrayBuilder().add(v).build();
         }
         if (raw == JsonString.class) {
@@ -167,7 +167,7 @@ public final class ClaimResolver {
     }
 
     private static JsonValue rawJson(JsonWebToken token, String name) {
-        // raw_token is not in the JWT payload — it is the raw string of the token itself.
+        //raw token is not in the JWT payload — it is the raw string of the token itself.
         // getClaim(Claims.raw_token.name()) returns the raw String; wrap it as JsonString.
         if (Claims.raw_token.name().equals(name)) {
             String raw = token.getRawToken();

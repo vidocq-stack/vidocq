@@ -1,31 +1,31 @@
 # BENCH.md — Cervantes
 
-Chiffres de performance (JMH). Format par entrée : `date · hardware/JVM · commande exacte ·
-résultats bruts · delta vs run précédent`. Pas de chiffre de perf ailleurs (README, commit)
-sans entrée correspondante ici.
+JMH performance numbers. Entry format: `date · hardware/JVM · exact command ·
+raw results · delta vs previous run`. No performance numbers elsewhere (README, commit)
+without a corresponding entry here.
 
 ---
 
-## 2026-05-27 — Débit de validation JWT (cervantes-core vs SmallRye JWT)
+## 2026-05-27 — JWT validation throughput (cervantes-core vs SmallRye JWT)
 
-Premier relevé (M7). Mesure le hot-path `DefaultJwtValidator.validate` de bout en bout :
-décodage Base64url → parsing JSON header+claims (Champollion JSON-P) → vérification de signature
-RSA (`java.security`) → validation des claims (iss/aud/exp/nbf/iat). Le token (RS256/RS512,
-RSA-2048) est forgé une seule fois au `@Setup` ; chaque invocation le valide intégralement.
-Baseline SmallRye JWT 4.6.1 (`DefaultJWTParser`) sur le **même token, la même clé, le même build et
-la même machine** (jar bâti avec `-Pcompare-smallrye`).
+First measurement (M7). Measures the hot-path `DefaultJwtValidator.validate` end-to-end:
+Base64url decoding → JSON header+claims parsing (Champollion JSON-P) → RSA signature verification
+(`java.security`) → claims validation (iss/aud/exp/nbf/iat). The token (RS256/RS512,
+RSA-2048) is forged once at `@Setup`; each invocation validates it in full.
+SmallRye JWT 4.6.1 baseline (`DefaultJWTParser`) on the **same token, same key, same build and
+same machine** (jar built with `-Pcompare-smallrye`).
 
-### Environnement
+### Environment
 
 | | |
 |---|---|
 | **Hardware** | Apple M4 Max (arm64) |
 | **OS** | macOS (Darwin 25.5.0) |
-| **JVM** | OpenJDK Temurin 25+36-LTS (HotSpot, Compiler Blackholes activés) |
+| **JVM** | OpenJDK Temurin 25+36-LTS (HotSpot, Compiler Blackholes enabled) |
 | **JMH** | 1.37 — Fork 1, Warmup 3×2 s, Measurement 5×2 s |
-| **Baseline** | SmallRye JWT 4.6.1 (tire jose4j ; interdit en prod, isolé dans le profil `-Pcompare-smallrye`) |
+| **Baseline** | SmallRye JWT 4.6.1 (pulls jose4j; forbidden in production, isolated in the `-Pcompare-smallrye` profile) |
 
-### Commande exacte
+### Exact command
 
 ```bash
 cd cervantes && sdk env
@@ -33,7 +33,7 @@ cd cervantes && sdk env
 java -jar cervantes-bench/target/benchmarks.jar
 ```
 
-### Résultats bruts
+### Raw results
 
 ```
 Benchmark                                              Mode  Cnt   Score    Error   Units
@@ -45,24 +45,24 @@ JwtValidationBenchmark.validateRs512                   avgt    5  45,839 ±  1,6
 SmallRyeJwtValidationBenchmark.validateRs256SmallRye   avgt    5  29,046 ±  0,388   us/op
 ```
 
-### Lecture (sans complaisance)
+### Honest analysis
 
-- **Cervantes RS256 ≈ 45 µs/op (~22 000/s) ; SmallRye RS256 ≈ 29 µs/op (~34 000/s).**
-  **SmallRye est ~1,55× plus rapide** sur cette validation. À assumer : Cervantes n'est pas (encore)
-  le plus rapide.
-- Les deux paient la **même** vérification RSA-2048 incompressible (`Signature.verify` du JDK). L'écart
-  de ~16 µs vient donc du **reste** : Cervantes matérialise un `JsonObject` complet via Champollion
-  JSON-P (header + payload) puis valide les claims, là où SmallRye/jose4j a un chemin de parsing
-  spécialisé et plus économe en allocations.
-- RS256 ≈ RS512 côté Cervantes : la différence SHA-256/SHA-512 est négligeable devant le modexp RSA.
-- **Le compromis assumé** : Cervantes échange ~1,5× de débit contre **zéro dépendance tierce**
-  (pas de jose4j/jackson/bouncycastle), JPMS natif et compatibilité AOT (GraalVM/Leyden). Même ordre
-  de grandeur, pas de gouffre. La piste d'optimisation est claire et identifiée (ci-dessous).
+- **Cervantes RS256 ≈ 45 µs/op (~22 000/s); SmallRye RS256 ≈ 29 µs/op (~34 000/s).**
+  **SmallRye is ~1.55× faster** on this validation. This is acknowledged: Cervantes is not (yet)
+  the fastest.
+- Both pay the **same** incompressible RSA-2048 verification (`Signature.verify` from the JDK). The
+  ~16 µs gap therefore comes from **the rest**: Cervantes materialises a full `JsonObject` via Champollion
+  JSON-P (header + payload) then validates the claims, whereas SmallRye/jose4j has a specialised
+  parsing path with fewer allocations.
+- RS256 ≈ RS512 on the Cervantes side: the SHA-256/SHA-512 difference is negligible next to the RSA modexp.
+- **The accepted trade-off**: Cervantes trades ~1.5× throughput for **zero third-party dependencies**
+  (no jose4j/jackson/bouncycastle), native JPMS and AOT compatibility (GraalVM/Leyden). Same order
+  of magnitude, no abyss. The optimisation path is clear and identified (see below).
 
-### TODO (prochains relevés)
+### TODO (next measurements)
 
-- **Optimiser le parsing** : éviter de matérialiser tout le payload en `JsonObject` (lecture
-  paresseuse / streaming des claims requises), réduire les allocations — c'est là qu'est l'écart.
-- Décomposer parse-only vs verify-only vs claims-only pour quantifier la part crypto incompressible.
-- Ajouter ES256 (nécessite le transcodage DER→JOSE, interne à cervantes-core).
-- Run « publiable » `-f 5 -wi 5 -i 5` pour resserrer les intervalles de confiance.
+- **Optimise parsing**: avoid materialising the entire payload as a `JsonObject` (lazy
+  reading / streaming of required claims), reduce allocations — this is where the gap lies.
+- Break down parse-only vs verify-only vs claims-only to quantify the incompressible crypto share.
+- Add ES256 (requires DER→JOSE signature transcoding, internal to cervantes-core).
+- Publishable run `-f 5 -wi 5 -i 5` to tighten confidence intervals.

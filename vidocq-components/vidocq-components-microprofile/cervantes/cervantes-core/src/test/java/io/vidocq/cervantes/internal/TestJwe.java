@@ -13,8 +13,8 @@ import java.util.Arrays;
 import java.util.Base64;
 
 /**
- * Forge un JWE compact ({@code RSA-OAEP-256} + {@code A256GCM}) enveloppant un JWS — côté émetteur,
- * inverse de {@link JweDecryptor}, pour les tests. {@code javax.crypto} uniquement.
+ * Forge a compact JWE ({@code RSA-OAEP-256} + {@code A256GCM}) wrapping a JWS — transmitter side,
+ * Inverse of {@link JweDecryptor}, for testing. {@code javax.crypto} only.
  */
 final class TestJwe {
 
@@ -23,12 +23,12 @@ final class TestJwe {
 
     private TestJwe() {}
 
-    /** Chiffre {@code nestedJws} pour le destinataire {@code recipientPublic} (RSA-OAEP-256 / A256GCM). */
+    /** Encrypts {@code nestedJws} for recipient {@code recipientPublic} (RSA-OAEP-256 / A256GCM). */
     static String encrypt(String nestedJws, PublicKey recipientPublic) throws Exception {
         String protectedHeader = "{\"alg\":\"RSA-OAEP-256\",\"enc\":\"A256GCM\",\"cty\":\"JWT\"}";
         String b64Header = B64URL.encodeToString(protectedHeader.getBytes(StandardCharsets.US_ASCII));
 
-        // CEK 256 bits, enveloppée RSA-OAEP-256
+        //CEK 256 bits, wrapped RSA-OAEP-256
         byte[] cek = new byte[32];
         RANDOM.nextBytes(cek);
         Cipher rsa = Cipher.getInstance("RSA/ECB/OAEPPadding");

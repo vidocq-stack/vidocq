@@ -16,8 +16,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Forge un document JWK Set (RFC 7517) à partir de clés publiques — inverse de {@link JwkParser},
- * pour les tests. Sans librairie tierce (encodage {@code n}/{@code e}, {@code crv}/{@code x}/{@code y}).
+ * Forge a JWK Set document (RFC 7517) from public keys — reverse of {@link JwkParser},
+ * for testing. Without third-party library (encoding {@code n}/{@code e}, {@code crv}/{@code x}/{@code y}).
  */
 final class TestJwks {
 

@@ -15,11 +15,11 @@ import java.security.spec.ECGenParameterSpec;
 import java.util.Base64;
 
 /**
- * Outils de test : génération de paires de clés et forge de JWT signés, sans aucune librairie JWT
- * tierce (java.security + JSON-P Champollion). Réutilisé par les tests de validation.
+ * Test tools: generation of key pairs and JWT forge signed, without any JWT library
+ * third party (java.security + JSON-P Champollion). Re-used by validation tests.
  *
- * <p>Pour ECDSA, {@code Signature.sign()} produit du DER ; on le transcode en JOSE {@code R‖S}
- * via {@link EcdsaSignatures#derToJose} pour produire un JWS conforme RFC 7518 §3.4.</p>
+ * <p>For ECDSA, {@code Signature.sign()} produces DER; transcoded to JOSE {@code R‖S}
+ * via {@link EcdsaSignatures#derToJose} to produce a JWS compliant RFC 7518 §3.4.</p>
  */
 final class TestJwts {
 
@@ -35,7 +35,7 @@ final class TestJwts {
 
     static KeyPair ecKeyPair(String curve) throws Exception {
         KeyPairGenerator g = KeyPairGenerator.getInstance("EC");
-        g.initialize(new ECGenParameterSpec(curve)); // ex. "secp256r1" pour ES256
+        g.initialize(new ECGenParameterSpec(curve)); // e.g. "secp256r1" for ES256
         return g.generateKeyPair();
     }
 

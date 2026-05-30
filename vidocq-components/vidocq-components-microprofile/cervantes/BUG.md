@@ -1,6 +1,6 @@
 # BUG.md — Cervantes
 
-Bugs reproductibles (issue interne, régression, comportement incorrect non encore corrigé).
-Format par entrée : `id court · date · symptôme · repro minimal · hypothèse de cause · statut`.
+Reproducible bugs (internal issue, regression, incorrect behavior not yet fixed).
+Entry format: `short id · date · symptom · minimal repro · cause hypothesis · status`.
 
-_Aucun bug enregistré pour l'instant._
+_No bugs recorded yet._

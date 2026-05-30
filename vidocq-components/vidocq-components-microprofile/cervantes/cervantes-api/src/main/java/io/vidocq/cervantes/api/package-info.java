@@ -1,11 +1,11 @@
 /**
- * SPI publique stable de Cervantes (implémentation MicroProfile JWT 2.1).
+ * Stable public SPI of Cervantes (microprofile implementation JWT 2.1).
  *
- * <p>Contrats transport-agnostiques partagés par le core de validation, l'intégration CDI et
- * l'intégration JAX-RS : {@link io.vidocq.cervantes.api.JwtValidator},
+ * <p>Transport-agnostic contracts shared by validation core, CDI integration and
+ * JAX-RS integration: {@link io.vidocq.cervantes.api.JwtValidator},
  * {@link io.vidocq.cervantes.api.KeyResolver}, {@link io.vidocq.cervantes.api.JwtConfig},
  * {@link io.vidocq.cervantes.api.SignatureAlgorithm} et
- * {@link io.vidocq.cervantes.api.JwtValidationException}. Ce package ré-expose aussi
+ * {@link io.vidocq.cervantes.api.JwtValidationException}. This package also re-exposed
  * transitivement la spec {@code org.eclipse.microprofile.jwt}.</p>
  */
 package io.vidocq.cervantes.api;

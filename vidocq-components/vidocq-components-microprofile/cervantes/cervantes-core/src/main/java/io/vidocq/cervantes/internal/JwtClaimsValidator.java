@@ -12,16 +12,16 @@ import java.util.LinkedHashSet;
 import java.util.Set;
 
 /**
- * Valide les claims temporels et d'appariement d'un JWT selon une {@link JwtConfig}.
+ * Validates the temporal and matching claims of a JWT according to a {@link JwtConfig}.
  *
  * <ul>
- *   <li>{@code exp} : rejeté si {@code exp + skew < now} ; absence rejetée si {@code requireExpiration}.</li>
- *   <li>{@code iat} : rejeté si {@code iat > exp} (token dont l'émission est postérieure à l'expiration).</li>
- *   <li>{@code nbf} : rejeté si {@code nbf - skew > now}.</li>
- *   <li>{@code iss} : si un émetteur est configuré, doit l'égaler exactement.</li>
- *   <li>{@code aud} : si des audiences sont configurées, l'intersection avec {@code aud} doit être non vide.</li>
- *   <li>âge du token : si {@code mp.jwt.verify.token.age} est configuré, {@code now - iat > tokenAge} est rejeté.</li>
- *   <li>identité : au moins un claim parmi {@code upn}, {@code preferred_username}, {@code sub} doit être présent.</li>
+ * <li>{@code exp}: rejected if {@code exp + skew < now}; absence rejected if ZZPH2ZZ.ZZPH4ZZ
+ * <li>{@code iat}: rejected if {@code iat > exp} (token after expiry).</li>
+ * <li>{@code nbf}: rejected if ZZPH1ZZ.ZZPH3ZZ
+ * <li>{@code iss}: If a transmitter is configured, must match exactement.ZZPH2ZZ
+ * <li>{@code aud}: If audiences are configured, the intersection with {@code aud} must be no vide.ZZPH3ZZ
+ * <li>Token age: if {@code mp.jwt.verify.token.age} is configured, {@code now - iat > tokenAge} is rejected.</li>
+ * <li> identity: at least one claim among {@code upn}, {@code preferred_username}, {@code sub} must be present.
  * </ul>
  */
 final class JwtClaimsValidator {
@@ -42,7 +42,7 @@ final class JwtClaimsValidator {
             throw new JwtValidationException("token 'iat' claim is older than 'exp' claim (iat > exp)");
         }
 
-        // MP JWT spec §9.2.1: mp.jwt.verify.token.age — reject if now - iat > tokenAge (in seconds)
+        //MP JWT spec §9.2.1: mp.jwt.verify.token.age — reject if now - iat > tokenAge (in seconds)
         if (iat != null && config.tokenAge().isPresent()) {
             long age = now - iat.longValue();
             if (age > config.tokenAge().get()) {
@@ -69,7 +69,7 @@ final class JwtClaimsValidator {
             }
         }
 
-        // MP JWT spec §4.1: the principal name must be derivable from upn, preferred_username, or sub
+        //MP JWT spec §4.1: the main name must be transferable from upn, preferred username, or sub
         String upn = stringOrNull(claims, "upn");
         String preferred = stringOrNull(claims, "preferred_username");
         String sub = stringOrNull(claims, "sub");
@@ -90,7 +90,7 @@ final class JwtClaimsValidator {
         return (v instanceof JsonString s) ? s.getString() : null;
     }
 
-    /** Le claim {@code aud} peut être une chaîne unique ou un tableau de chaînes (RFC 7519 §4.1.3). */
+    /** The {@code aud} claim may be a single string or an array of strings (RFC 7519 §4.1.3). */
     private static Set<String> audienceOf(JsonObject claims) {
         JsonValue v = claims.get("aud");
         Set<String> out = new LinkedHashSet<>();

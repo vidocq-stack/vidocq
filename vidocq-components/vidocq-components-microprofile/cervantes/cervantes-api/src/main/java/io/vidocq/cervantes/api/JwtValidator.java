@@ -5,16 +5,16 @@ import org.eclipse.microprofile.jwt.JsonWebToken;
 /**
  * Valide un JWT compact ({@code header.payload.signature}) et en produit un {@link JsonWebToken}.
  *
- * <p>La validation enchaîne : parsing, résolution de clé ({@link KeyResolver}), vérification de
- * signature, puis validation des claims selon une {@link JwtConfig}. Toute défaillance lève une
- * {@link JwtValidationException} — un token valide ne renvoie jamais {@code null}.</p>
+ * <p>Continuous validation: parsing, key resolution ({@link KeyResolver}), verification of
+ * signature, then validation of claims according to a {@link JwtConfig}. Any failure shall result in a
+ * {@link JwtValidationException} — a valid token never returns ZZPH1ZZ.ZZPH2ZZ
  */
 public interface JwtValidator {
 
     /**
-     * @param token le JWT compact (sans le préfixe {@code "Bearer "})
-     * @return le principal {@link JsonWebToken} si le token est valide
-     * @throws JwtValidationException si le token est mal formé, non signé correctement, ou invalide
+     * @param token compact JWT (without {@code "Bearer "} prefix)
+     * @return the {@link JsonWebToken} principal if the token is valid
+     * @throws JwtValidationException if token is poorly formed, not signed correctly, or invalid
      */
     JsonWebToken validate(String token) throws JwtValidationException;
 }

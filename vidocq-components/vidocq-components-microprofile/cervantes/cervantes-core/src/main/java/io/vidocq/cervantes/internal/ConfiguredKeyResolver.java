@@ -9,9 +9,9 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * {@link KeyResolver} à clé unique (M1) : {@code mp.jwt.verify.publickey} / {@code .location}
- * pointant une seule clé publique. Le {@code kid} est ignoré (la résolution par {@code kid} via
- * JWKS arrive au jalon M2). L'adéquation famille de clé ↔ algorithme est vérifiée par
+ * {@link KeyResolver} single key (M1): {@code mp.jwt.verify.publickey} / {@code.location}
+ * pointing to a single public key. {@code kid} is ignored (resolution by {@code kid} via
+ * JWKS reaches M2 The match key family 
  * {@link JwtSignatureVerifier}.
  */
 public final class ConfiguredKeyResolver implements KeyResolver {

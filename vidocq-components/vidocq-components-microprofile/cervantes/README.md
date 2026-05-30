@@ -1,54 +1,54 @@
 # Cervantes — MicroProfile JWT 2.1
 
-Implémentation **MicroProfile JWT 2.1** (« JWT RBAC for MicroProfile ») de l'écosystème
-[Vidocq](https://codeberg.org/Vidocq), à **zéro dépendance d'implémentation** : vérification de
-signature via `java.security`, parsing JSON via [Champollion](https://codeberg.org/Vidocq/champollion)
-(JSON-P), configuration via [Ravel](https://codeberg.org/Vidocq/ravel) (MP Config), injection CDI
-via [Vauban](https://codeberg.org/Vidocq/vauban), sécurité JAX-RS via
+**MicroProfile JWT 2.1** ("JWT RBAC for MicroProfile") implementation for the
+[Vidocq](https://codeberg.org/Vidocq) ecosystem, with **zero implementation dependencies**:
+signature verification via `java.security`, JSON parsing via [Champollion](https://codeberg.org/Vidocq/champollion)
+(JSON-P), configuration via [Ravel](https://codeberg.org/Vidocq/ravel) (MP Config), CDI injection
+via [Vauban](https://codeberg.org/Vidocq/vauban), JAX-RS security via
 [Cassini](https://codeberg.org/Vidocq/cassini).
 
-> Don Quichotte *revendique* une identité que le monde doit tenir pour vraie. Cervantes vérifie
-> réellement les *claims* d'un bearer token — signature, émetteur, audience, expiration — avant
-> d'accorder le moindre rôle.
+> Don Quixote *claims* an identity the world must accept as true. Cervantes actually verifies
+> the *claims* of a bearer token — signature, issuer, audience, expiration — before
+> granting any role.
 
-## Ce que fournit Cervantes
+## What Cervantes provides
 
-- Validation de **bearer tokens JWT signés** : `RS256/384/512` (RSA), `ES256/384/512` (ECDSA).
-- Validation des claims standard : `iss`, `aud`, `exp`, `nbf`, `iat` (avec tolérance de clock-skew).
-- Chargement des clés publiques : **PEM**, clé inline, **JWKS** (URL ou fichier, résolution par `kid`).
-- Principal **`JsonWebToken`** injectable en CDI (`@RequestScoped`) et injection **`@Claim`**.
-- Application de **`@RolesAllowed` / `@PermitAll` / `@DenyAll`** sur les endpoints JAX-RS, avec un
-  `SecurityContext` adossé aux groupes du token.
-- (Optionnel) Déchiffrement des **tokens chiffrés (JWE)** : `RSA-OAEP` + `A256GCM`.
-- Configuration via les propriétés MP-Config standard : `mp.jwt.verify.publickey.location`,
+- Validation of **signed JWT bearer tokens**: `RS256/384/512` (RSA), `ES256/384/512` (ECDSA).
+- Standard claim validation: `iss`, `aud`, `exp`, `nbf`, `iat` (with clock-skew tolerance).
+- Public key loading: **PEM**, inline key, **JWKS** (URL or file, resolution by `kid`).
+- CDI-injectable **`JsonWebToken`** principal (`@RequestScoped`) and **`@Claim`** injection.
+- **`@RolesAllowed` / `@PermitAll` / `@DenyAll`** enforcement on JAX-RS endpoints, with a
+  `SecurityContext` backed by the token's groups.
+- (Optional) Decryption of **encrypted tokens (JWE)**: `RSA-OAEP` + `A256GCM`.
+- Configuration via standard MP-Config properties: `mp.jwt.verify.publickey.location`,
   `mp.jwt.verify.issuer`, `mp.jwt.verify.audiences`, `mp.jwt.token.header`, …
 
-## Prérequis
+## Prerequisites
 
-**Java 25** (Temurin) + **Maven 3.9.16** — pinés via `.sdkmanrc` : `sdk env`.
+**Java 25** (Temurin) + **Maven 3.9.16** — pinned via `.sdkmanrc`: `sdk env`.
 
 ## Build
 
 ```bash
 sdk env
-./mvnw -ntp install -DskipTests   # build complet
-./mvnw test                        # tests unitaires
-./run-official-tck-mp-jwt-2.1.sh   # TCK officiel (artefact non-public à installer, voir cervantes-tck/README.md)
+./mvnw -ntp install -DskipTests   # full build
+./mvnw test                        # unit tests
+./run-official-tck-mp-jwt-2.1.sh   # official TCK (non-public artifact must be installed — see cervantes-tck/README.md)
 ```
 
 ## Modules
 
-| Module | Rôle |
+| Module | Role |
 |--------|------|
-| `cervantes-mp-jwt-api` | Spec MP JWT 2.1 repackagée en module nommé (jlink-compatible) |
-| `cervantes-api` | SPI publique stable + ré-exposition de la spec |
-| `cervantes-core` | Moteur de validation pur (signature, claims, clés) — sans HTTP ni CDI |
-| `cervantes-cdi-vauban` | Producteur `JsonWebToken`, injection `@Claim` (BCE Vauban) |
-| `cervantes-cassini` | Sécurité JAX-RS (`@RolesAllowed`, filtre d'auth, `SecurityContext`) |
-| `cervantes-bench` | Benchmarks JMH |
-| `cervantes-examples` | Exemples d'utilisation |
-| `cervantes-tck` | Runner TCK officiel (hors reactor — Model 4.0.0) |
+| `cervantes-mp-jwt-api` | MP JWT 2.1 spec repackaged as a named module (jlink-compatible) |
+| `cervantes-api` | Stable public SPI + spec re-export |
+| `cervantes-core` | Pure validation engine (signature, claims, keys) — no HTTP, no CDI |
+| `cervantes-cdi-vauban` | `JsonWebToken` producer, `@Claim` injection (Vauban BCE) |
+| `cervantes-cassini` | JAX-RS security (`@RolesAllowed`, auth filter, `SecurityContext`) |
+| `cervantes-bench` | JMH benchmarks |
+| `cervantes-examples` | Usage examples |
+| `cervantes-tck` | Official TCK runner (out-of-reactor — Model 4.0.0) |
 
-## Statut
+## Status
 
-En cours de développement (jalons M0–M8 dans [`ROADMAP.md`](ROADMAP.md)). Licence : Apache 2.0.
+Under active development (milestones M0–M8 in [`ROADMAP.md`](ROADMAP.md)). License: Apache 2.0.

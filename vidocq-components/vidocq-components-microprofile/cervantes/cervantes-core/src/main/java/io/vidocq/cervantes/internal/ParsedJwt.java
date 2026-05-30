@@ -3,12 +3,12 @@ package io.vidocq.cervantes.internal;
 import jakarta.json.JsonObject;
 
 /**
- * Résultat du décodage d'un JWT compact, avant vérification de signature.
+ * Result of the decoding of a compact JWT, before signature verification.
  *
- * @param header       en-tête JOSE décodé ({@code alg}, {@code kid}, {@code typ}, …)
- * @param claims       payload décodé (les claims)
+ * @param header header decoded JOSE ({@code alg}, {@code kid}, {@code typ},...)
+ * @param claims payload decoded (claims)
  * @param signingInput octets {@code base64url(header).base64url(payload)} sur lesquels porte la signature
- * @param signature    signature décodée (base64url), forme brute (JOSE {@code R‖S} pour ECDSA)
+ * @param decoded signature signature (base64url), raw form (JOSE {@code R‖S} for ECDSA)
  * @param rawToken     le JWT compact d'origine
  */
 record ParsedJwt(JsonObject header, JsonObject claims, byte[] signingInput, byte[] signature, String rawToken) {

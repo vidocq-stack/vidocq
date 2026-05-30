@@ -6,24 +6,24 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * Configuration de vérification d'un JWT (sous-ensemble des propriétés MicroProfile Config
- * {@code mp.jwt.verify.*} pertinentes pour la validation des claims).
+ * JWT verification configuration (subset of MicroProfile Config properties)
+ * {@code mp.jwt.verify.*} relevant for validating claims).
  *
  * <ul>
- *   <li>{@code issuer} — {@code mp.jwt.verify.issuer} : émetteur attendu ({@code iss}). Si présent,
- *       le claim {@code iss} du token doit l'égaler exactement.</li>
- *   <li>{@code audiences} — {@code mp.jwt.verify.audiences} : audiences acceptées. Si non vide,
- *       l'intersection avec le claim {@code aud} du token doit être non vide.</li>
- *   <li>{@code clockSkew} — tolérance d'horloge appliquée à {@code exp} et {@code nbf}.</li>
- *   <li>{@code requireExpiration} — si vrai, l'absence de {@code exp} est un échec (défaut spec).</li>
- *   <li>{@code tokenAge} — {@code mp.jwt.verify.token.age} : âge maximal du token en secondes
- *       ({@code now - iat <= tokenAge}). Absent → pas de limite d'âge.</li>
- *   <li>{@code encryptionRequired} — si vrai (quand {@code mp.jwt.decrypt.key*} est configuré),
- *       les JWS non chiffrés doivent être rejetés avec 401.</li>
+ * <li>{@code issuer} — {@code mp.jwt.verify.issuer}: expected transmitter ({@code iss}). If present,
+ * token claim {@code iss} must match exactement.ZZPH1ZZ
+ * <li>{@code audiences} — {@code mp.jwt.verify.audiences}: hearings accepted. If not empty,
+ * the intersection with the {@code aud} claim of the token must be no vide.ZZPH1ZZ
+ * ZZPH3Z{@code clockSkew} — clock tolerance applied to {@code exp} and ZZPH2ZZ.ZZPH4ZZ
+ * ZZPH2Z{@code requireExpiration} — if true, the absence of {@code exp} is a failure (default spec).</li>
+ * <li>{@code tokenAge} — {@code mp.jwt.verify.token.age}: maximum token age in seconds
+ * ({@code now - iat <= tokenAge}). No age limit.</li>
+ * <li>{@code encryptionRequired} — if true (when {@code mp.jwt.decrypt.key*} is configured),
+ * Unencrypted JWS should be rejected with 401.</li>
  * </ul>
  *
- * <p>Record immuable ; {@code audiences} est défensivement copié. La construction depuis
- * MicroProfile Config (Ravel) est branchée au jalon M3.</p>
+ * <p>Unchangeable record; {@code audiences} is defensively copied. Construction since
+ * MicroProfile Config (Ravel) is connected to the M3.ZZPH0ZZ milestone
  */
 public record JwtConfig(
         Optional<String> issuer,
@@ -33,7 +33,7 @@ public record JwtConfig(
         Optional<Long> tokenAge,
         boolean encryptionRequired) {
 
-    /** Tolérance d'horloge par défaut (60 s), conforme à l'usage courant des implémentations MP JWT. */
+    /** Default clock skew tolerance (60 s), aligned with common MP JWT implementation behavior. */
     public static final Duration DEFAULT_CLOCK_SKEW = Duration.ofSeconds(60);
 
     public JwtConfig {

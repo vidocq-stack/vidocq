@@ -11,14 +11,14 @@ import java.util.LinkedHashSet;
 import java.util.Set;
 
 /**
- * {@link JsonWebToken} adossé au payload JSON validé d'un JWT.
+ * {@link JsonWebToken} supported by JSON payload validated from a JWT.
  *
- * <p>Seules les trois méthodes abstraites de la spec sont implémentées
- * ({@link #getName()}, {@link #getClaimNames()}, {@link #getClaim(String)}) ; les accesseurs
- * typés ({@code getIssuer()}, {@code getGroups()}, {@code getExpirationTime()}, …) sont les
- * méthodes par défaut de l'interface, qui délèguent à {@code getClaim} — d'où le contrat de
- * conversion respecté ici : {@code Long} pour les claims temporels, {@code Set<String>} pour
- * {@code aud}/{@code groups}, {@code String} pour les claims chaîne.</p>
+ * <p>Only the three abstract methods of spec are implemented
+ * ({@link #getName()}, {@link #getClaimNames()}, {@link #getClaim(String)}); the accessors
+ * typed ({@code getIssuer()}, {@code getGroups()}, {@code getExpirationTime()},...) are the
+ * default methods of the interface, which delegate to {@code getClaim} — hence the contract of
+ * conversion respected here: {@code Long} for temporal claims, {@code Set<String>} for
+ * {@code aud}/{@code groups}, {@code String} for chain claims.</p>
  */
 public final class DefaultJsonWebToken implements JsonWebToken {
 
@@ -35,11 +35,11 @@ public final class DefaultJsonWebToken implements JsonWebToken {
 
     /**
      * Principal anonyme (aucun claim, {@code getName() == null}, {@code getClaimNames() == null},
-     * {@code getRawToken() == null}) — utilisé par l'intégration CDI quand aucun JWT n'est
-     * présent sur la requête courante.
+     * {@code getRawToken() == null}) — used by CDI integration when no JWT is
+     * present on the current request.
      *
-     * <p>MP JWT spec §"EmptyToken" : l'endpoint peut recevoir un principal anonyme ; les méthodes
-     * d'accès aux claims doivent toutes renvoyer {@code null} (pas une collection vide).</p>
+     * <p>MP JWT spec § "EmptyToken": the endpoint can receive an anonymous principal; methods
+     * All claims must return {@code null} (not an empty collection).</p>
      */
     public static DefaultJsonWebToken anonymous() {
         return new DefaultJsonWebToken(ANONYMOUS_PAYLOAD, null);
@@ -66,12 +66,12 @@ public final class DefaultJsonWebToken implements JsonWebToken {
     }
 
     /**
-     * Valeur JSON brute (non convertie) du claim — support de l'injection {@code @Claim} des types
+     * Gross (unconverted) JSON value of the claim — {@code @Claim} type injection support
      * {@code jakarta.json} ({@code JsonValue}, {@code JsonString}, {@code JsonNumber},
      * {@code JsonObject}, {@code JsonArray}) et de la reconstruction d'un {@code Set<String>} depuis
-     * un claim tableau quelconque (au-delà de {@code groups}/{@code aud}).
+     * any array claim (beyond {@code groups}/{@code aud}).
      *
-     * @return le {@link JsonValue} du payload, ou {@link JsonValue#NULL} si le claim est absent.
+     * @return the payload {@link JsonValue}, or {@link JsonValue#NULL} if the claim is absent.
      */
     public JsonValue rawClaim(String claimName) {
         JsonValue v = payload.get(claimName);
@@ -129,7 +129,7 @@ public final class DefaultJsonWebToken implements JsonWebToken {
             }
             case TRUE -> Boolean.TRUE;
             case FALSE -> Boolean.FALSE;
-            // objets et tableaux : exposés tels quels (JsonObject/JsonArray), conformément à l'usage MP JWT
+            //objects and tables: exposed as is (JsonObject/JsonArray), in accordance with JWT MP usage
             default -> v;
         };
     }

@@ -1,11 +1,11 @@
 package io.vidocq.cervantes.api;
 
 /**
- * Échec de validation d'un JWT : format invalide, algorithme non supporté, signature incorrecte,
- * clé introuvable, ou claim invalide ({@code iss}/{@code aud}/{@code exp}/{@code nbf}).
+ * JWT validation failed: invalid format, unsupported algorithm, incorrect signature,
+ * Key not found, or invalid claim ({@code iss}/{@code aud}/{@code exp}/{@code nbf}).
  *
- * <p>Volontairement non détaillée côté appelant HTTP (le filtre d'authentification la traduit en
- * {@code 401}). Le message reste précis pour les logs serveur, jamais renvoyé au client.</p>
+ * <p>Volunteerly not detailed on HTTP calling side (the authentication filter translates it into
+ * {@code 401}). Message remains accurate for server logs, never returned to client.ZZPH1ZZ
  */
 public class JwtValidationException extends Exception {
 

@@ -18,7 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
- * Tokens chiffrés MicroProfile JWT 2.1 (JWE, <em>sign-then-encrypt</em>) : RSA-OAEP-256 + A256GCM.
+ * Tokens MicroProfile JWT 2.1 (JWE, <em>sign-then-encrypt</em>): RSA-OAEP-256 + A256GCM.
  */
 class JweDecryptorTest {
 
@@ -26,8 +26,8 @@ class JweDecryptorTest {
     private static final Clock CLOCK = Clock.fixed(NOW, ZoneOffset.UTC);
     private static final String ISS = "https://issuer.vidocq.dev";
 
-    private static KeyPair SIGN; // signature de l'émetteur
-    private static KeyPair ENC;  // chiffrement pour le destinataire
+    private static KeyPair SIGN; //signature of the issuer
+    private static KeyPair ENC;  //encryption for the recipient
 
     @BeforeAll
     static void keys() throws Exception {
@@ -62,7 +62,7 @@ class JweDecryptorTest {
 
     @Test
     void plainSignedToken_stillValidatedByDecryptingValidator() throws Exception {
-        JsonWebToken jwt = decryptingValidator().validate(signedJws()); // 3 parties → chemin JWS
+        JsonWebToken jwt = decryptingValidator().validate(signedJws()); //3 parts → JWS path
         assertEquals("u-jwe", jwt.getSubject());
     }
 
@@ -78,7 +78,7 @@ class JweDecryptorTest {
     void tamperedCiphertext_isRejected() throws Exception {
         String jwe = TestJwe.encrypt(signedJws(), ENC.getPublic());
         String[] parts = jwe.split("\\.", -1);
-        // altère un caractère du ciphertext → l'authentification GCM doit échouer
+        //alters a ciphertext character → GCM authentication must fail
         char[] ct = parts[3].toCharArray();
         ct[0] = (ct[0] == 'A') ? 'B' : 'A';
         parts[3] = new String(ct);

@@ -9,7 +9,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Reconstruction de clés publiques depuis un JWK Set (RFC 7517) : RSA ({@code n}/{@code e}) et EC ({@code x}/{@code y}). */
+/** Reconstructs public keys from a JWK Set (RFC 7517): RSA ({@code n}/{@code e}) and EC ({@code x}/{@code y}). */
 class JwkParserTest {
 
     @Test
@@ -24,7 +24,7 @@ class JwkParserTest {
         Jwks jwks = JwkParser.parse(TestJwks.jwksJson(set));
 
         assertEquals(2, jwks.byKid().size());
-        // une clé reconstruite via X509/spec égale l'originale (même matériel)
+        //a key rebuilt via X509/spec equals the original (same hardware)
         assertEquals(rsa.getPublic(), jwks.byKid().get("rsa-1"));
         assertEquals(ec.getPublic(), jwks.byKid().get("ec-1"));
         assertTrue(jwks.all().size() == 2);
@@ -33,7 +33,7 @@ class JwkParserTest {
     @Test
     void ignoresEncryptionKeysAndUnsupportedTypes() throws Exception {
         KeyPair rsa = TestJwts.rsaKeyPair();
-        // JWKS avec une clé "sig" RSA, une clé "enc" et un kty inconnu : seule la première reste.
+        //JWKS with a "sig" RSA key, an "enc" key and an unknown kty: only the first left.
         String jwksJson = "{\"keys\":["
                 + new String(TestJwks.jwk("rsa-1", rsa.getPublic()).toString().getBytes())
                 + ",{\"kty\":\"oct\",\"kid\":\"hmac\",\"k\":\"AAAA\"}"

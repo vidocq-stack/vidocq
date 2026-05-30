@@ -14,17 +14,17 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
- * {@link KeyResolver} adossé à un JWK Set distant ou local, avec cache et rafraîchissement.
+ * {@link KeyResolver} backed by a remote or local JWK Set, with cache and refreshment.
  *
- * <p>Résolution par {@code kid}. Le set est mis en cache et rafraîchi : (1) périodiquement quand
- * le snapshot dépasse {@code refreshInterval}, et (2) à la demande quand un {@code kid} inconnu est
- * présenté (rotation de clés) — borné par {@code minRefreshInterval} pour éviter l'effet de troupeau
- * sur des {@code kid} inexistants. Un échec de rafraîchissement quand un snapshot existe déjà est
- * toléré (on conserve l'ancien) ; seul l'échec du tout premier chargement est propagé.</p>
+ * <p>Resolution by {@code kid}. The set is cached and refreshed: (1) periodically when
+ * the snapshot exceeds {@code refreshInterval}, and (2) on request when an unknown {@code kid} is
+ * presented (key rotation) — bounded by {@code minRefreshInterval} to avoid herd effect
+ * on non-existent {@code kid}. A refresh failure when a snapshot already exists is
+ * tolerated (the old one is preserved); Only the failure of the very first load is spread. </p>
  *
- * <p>Concurrence : {@link ReentrantLock} (VT-friendly, pas de pinning contrairement à
- * {@code synchronized}) autour du rafraîchissement, avec double-vérification ; le snapshot est
- * publié atomiquement via {@link AtomicReference}.</p>
+ * <p>Competition: {@link ReentrantLock} (VT-friendly, no pinning unlike
+ * {@code synchronized}) around the cooling, with double verification; The snapshot is
+ * published atomicly via ZZPH0ZZ.ZZPH1ZZ
  */
 public final class JwksKeyResolver implements KeyResolver {
 
@@ -53,14 +53,14 @@ public final class JwksKeyResolver implements KeyResolver {
     public Optional<PublicKey> resolve(String kid, SignatureAlgorithm algorithm) throws JwtValidationException {
         Snapshot current = snapshot.get();
         if (current == null) {
-            current = refresh(null); // premier chargement : un échec est propagé
+            current = refresh(null); //first load: failure spreads
         } else if (age(current).compareTo(refreshInterval) >= 0) {
-            current = tryRefresh(current); // TTL dépassé : best-effort
+            current = tryRefresh(current); //TTL exceeded: best effort
         }
 
         PublicKey key = lookup(current.jwks(), kid);
         if (key == null && kid != null && age(current).compareTo(minRefreshInterval) >= 0) {
-            current = tryRefresh(current); // kid inconnu → rotation possible
+            current = tryRefresh(current); //unknown kid → possible rotation
             key = lookup(current.jwks(), kid);
         }
         return Optional.ofNullable(key);
@@ -70,7 +70,7 @@ public final class JwksKeyResolver implements KeyResolver {
         if (kid != null) {
             return jwks.byKid().get(kid);
         }
-        // Token sans kid : autorisé seulement si le set ne contient qu'une clé.
+        //Token without kid: allowed only if the set contains only one key.
         return jwks.all().size() == 1 ? jwks.all().get(0) : null;
     }
 
@@ -78,7 +78,7 @@ public final class JwksKeyResolver implements KeyResolver {
         try {
             return refresh(stale);
         } catch (JwtValidationException e) {
-            return snapshot.get(); // conserve le snapshot existant en cas d'échec réseau transitoire
+            return snapshot.get(); //keeps the existing snapshot in case of transient network failure
         }
     }
 
@@ -86,7 +86,7 @@ public final class JwksKeyResolver implements KeyResolver {
         lock.lock();
         try {
             Snapshot current = snapshot.get();
-            // Un autre thread a peut-être rafraîchi pendant l'attente du lock.
+            //Another thread may have refreshed while waiting for the lock.
             if (current != null && current != stale && age(current).compareTo(minRefreshInterval) < 0) {
                 return current;
             }

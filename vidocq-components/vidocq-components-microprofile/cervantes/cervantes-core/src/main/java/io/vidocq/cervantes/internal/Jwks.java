@@ -5,11 +5,11 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Vue immuable d'un JWK Set résolu : clés indexées par {@code kid} et liste complète (pour le cas
- * d'un token sans {@code kid} et d'un set à clé unique).
+ * Unchangeable view of a resolved JWK Set: keys indexed by {@code kid} and complete list (for the case
+ * a token without {@code kid} and a single key set).
  *
- * @param byKid clés publiques indexées par leur {@code kid} (clés sans {@code kid} absentes)
- * @param all   toutes les clés publiques valides du set (ordre d'apparition)
+ * @param byKid public keys indexed by their {@code kid} (keys without {@code kid} absent)
+ * @param all valid public keys of the set (order of appearance)
  */
 record Jwks(Map<String, PublicKey> byKid, List<PublicKey> all) {
 
