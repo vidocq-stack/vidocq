@@ -6,7 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * VID-2 — minimal isolated checks. The end-to-end behaviour (DataSource probe + repository
+ * VID-2 — minimal isolated checks. The end-to-end behavior (DataSource probe + repository
  * inventory at boot) is exercised by the bout-en-bout example {@code vidocq-runtime-mansart-h2-example}
  * because it requires a real Vauban container.
  */

@@ -13,7 +13,7 @@ import java.util.List;
  * the transaction completes (commit or rollback).
  *
  * <p>Per Jakarta Transactions 2.0 §3.7, beans annotated with {@link TransactionScoped} must be
- * {@link Serializable} so that containers may passivate them between calls.
+ * {@link Serializable} so that containers can passivate them between calls.
  */
 @TransactionScoped
 public class OperationAudit implements Serializable {

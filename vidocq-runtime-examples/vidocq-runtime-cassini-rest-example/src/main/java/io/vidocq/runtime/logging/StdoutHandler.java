@@ -12,7 +12,7 @@ public class StdoutHandler extends StreamHandler {
     @Override
     public synchronized void publish(LogRecord record) {
         super.publish(record);
-        flush(); // StreamHandler ne flush pas automatiquement
+        flush(); // StreamHandler does not automatically flush
     }
 
     @Override

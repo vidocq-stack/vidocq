@@ -1,11 +1,11 @@
 /**
- * Vidocq Runtime Telemetry extension — branche Humboldt (MicroProfile Telemetry 2.1)
- * sur le cycle de vie Vidocq.
+ * Vidocq Runtime Telemetry extension — Humboldt branch (MicroProfile Telemetry 2.1)
+ * on the Vidocq life cycle.
  *
- * <p>Auto-config via env vars {@code OTEL_*} et system properties {@code otel.*},
- * installation de {@code GlobalOpenTelemetry}, shutdown ordonné en fin de vie.</p>
+ * <p>Auto-config via env vars {@code OTEL_*} and system properties {@code otel.*},
+ * installation of {@code GlobalOpenTelemetry}, shutdown ordered at end of life.</p>
  *
- * <p>Découverte via ServiceLoader (META-INF/services + {@code provides} JPMS).</p>
+ * <p>Discovery via ServiceLoader (META-INF/services + {@code provides} JPMS).</p>
  */
 module io.vidocq.runtime.ext.humboldt {
 
@@ -18,8 +18,8 @@ module io.vidocq.runtime.ext.humboldt {
     requires jakarta.cdi;
     requires java.logging;
 
-    // Export du package pour permettre @Inject AutoConfiguredHumboldt depuis les apps/tests
-    // (HumboldtHolder doit être accessible au container CDI Vauban).
+    // Export package to enable @Inject AutoConfiguredHumboldt from apps/tests
+    // (HumboldtHolder must be accessible to the CDI Vauban container).
     exports io.vidocq.runtime.ext.humboldt;
 
     provides io.vidocq.runtime.spi.VidocqExtension

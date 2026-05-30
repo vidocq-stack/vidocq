@@ -6,7 +6,7 @@ import io.vidocq.runtime.spi.VidocqConfiguration;
 import io.vidocq.runtime.spi.config.VidocqConfig;
 
 /**
- * Implémentation du contexte d'extension fourni lors du {@code onStart}.
+ * Implementation of the extension context provided during {@code onStart}.
  */
 record ExtensionContextImpl(
         VaubanContainer container,

@@ -6,8 +6,8 @@ import java.util.HashSet;
 import java.util.Set;
 
 /**
- * Source lisant les {@link System#getProperties() propriétés système}.
- * Ordinal 400 (défaut MicroProfile Config).
+ * Source reading {@link System#getProperties() system properties}.
+ * Ordinal 400 (MicroProfile Config default).
  */
 public final class SystemPropertiesConfigSource implements ConfigSource {
 

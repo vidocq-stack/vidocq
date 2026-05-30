@@ -15,17 +15,17 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Vérifie que {@link RavelConfigSourceProvider} expose les
- * {@code org.eclipse.microprofile.config.spi.ConfigSource} (incluant les sources
- * MP custom enregistrées par l'utilisateur) en {@link ConfigSource} Vidocq.
+ * Checks that {@link RavelConfigSourceProvider} exposes the
+ * {@code org.eclipse.microprofile.config.spi.ConfigSource} (including sources
+ * Custom MPs recorded by the user) in {@link ConfigSource} Vidocq.
  *
- * <p>Test à granularité unité : on instancie directement le provider et on
- * inspecte ses sources, sans passer par {@code VidocqConfigImpl}. C'est
- * suffisant pour garantir que côté extension, la délégation à MP Config est
- * fidèle ; l'agrégation côté {@code VidocqConfigImpl} via ServiceLoader est
- * validée par les tests du module core.</p>
+ * <p>Unit granularity test: we directly instantiate the provider and we
+ * inspects its sources, without going through {@code VidocqConfigImpl}. It is
+ * sufficient to ensure that on the extension side, delegation to MP Config is
+ * faithful; faithful; aggregation side {@code VidocqConfigImpl} via ServiceLoader is
+ * validated by core module tests.</p>
  */
-@DisplayName("RavelConfigSourceProvider — délégation vers MP Config")
+@DisplayName("RavelConfigSourceProvider - delegation to MP Config")
 class RavelConfigSourceProviderTest {
 
     @AfterEach
@@ -35,7 +35,7 @@ class RavelConfigSourceProviderTest {
     }
 
     @Test
-    @DisplayName("getConfigSources expose une source MP custom user")
+    @DisplayName("getConfigSources exposes a custom user MP source")
     void exposesCustomMpSourceAsVidocqSource() {
         registerMpSource("custom", 1000, Map.of("vidocq.test.x", "y"));
 
@@ -49,25 +49,25 @@ class RavelConfigSourceProviderTest {
                 break;
             }
         }
-        assertTrue(foundCustom, "La source MP custom doit être exposée via le provider");
+        assertTrue(foundCustom, "The custom MP source must be exposed via the provider");
     }
 
     @Test
-    @DisplayName("getConfigSources inclut les built-in MP (Sys, Env, MP-properties)")
+    @DisplayName("getConfigSources includes MP built-ins (Sys, Env, MP-properties)")
     void exposesBuiltinMpSources() {
-        // Pas d'enregistrement custom — Ravel doit déjà avoir ses sources par défaut.
+        // No custom recording — Ravel must already have its default sources.
         ConfigSourceProvider provider = new RavelConfigSourceProvider();
 
         Set<String> names = new HashSet<>();
         for (ConfigSource src : provider.getConfigSources(getClass().getClassLoader())) {
             names.add(src.getName());
         }
-        // Les noms exacts viennent de Ravel ; on vérifie au moins la présence
-        // d'une source de type "system" et d'une "environment".
+        // The exact names come from Ravel; we at least check the presence
+        // a source of type "system" and an "environment".
         boolean hasSys = names.stream().anyMatch(n -> n.toLowerCase().contains("system"));
         boolean hasEnv = names.stream().anyMatch(n -> n.toLowerCase().contains("env"));
-        assertTrue(hasSys, "MP built-in System source attendue, got " + names);
-        assertTrue(hasEnv, "MP built-in Environment source attendue, got " + names);
+        assertTrue(hasSys, "Expected an MP built-in System source, got " + names);
+        assertTrue(hasEnv, "Expected an MP built-in Environment source, got " + names);
     }
 
     // ---- helpers ----

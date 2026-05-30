@@ -18,10 +18,10 @@ import java.nio.charset.StandardCharsets;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Tests d'integration Arquillian pour l'extension REST Vidocq.
+ * Arquillian integration tests for the Vidocq REST extension.
  * <p>
- * Demarre un serveur Vidocq embarque avec les resources de test,
- * puis effectue des requetes HTTP pour verifier le fonctionnement.
+ * Starts an embedded Vidocq server with the test resources,
+ * then makes HTTP requests to verify operation.
  * </p>
  */
 @ExtendWith(ArquillianExtension.class)

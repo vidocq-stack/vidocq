@@ -29,7 +29,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 /**
- * Verifies that every {@code vidocq-runtime-<name>-extension} declared in the project
+ * Verify that every {@code vidocq-runtime-<name>-extension} declared in the project
  * dependencies has its companion {@code vidocq-runtime-<name>-extension-codegen} bundle
  * in the {@code maven-compiler-plugin}'s {@code <annotationProcessorPaths>}, and vice versa.
  *

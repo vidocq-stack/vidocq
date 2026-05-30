@@ -19,21 +19,21 @@ import java.nio.charset.StandardCharsets;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Tests E2E qui valident l'intégration complète Humboldt dans Vidocq :
+ * E2E tests that validate the full Humboldt integration in Vidocq:
  * <ol>
- *   <li><b>BCE @WithSpan</b> — la {@code BuildCompatibleExtension} de
- *       {@code humboldt-cdi} ajoute bien {@code @SpanBinding} sur les méthodes
- *       annotées {@code @WithSpan} OTel → l'interceptor s'active.
- *       (résolution du risk PLAN.md §15.1 : Vauban CDI Lite supporte BCE)</li>
- *   <li><b>Span SERVER via humboldt-rest filters</b> — chaque requête HTTP
- *       produit un span SERVER avec les attrs OTel HTTP semantic.</li>
- *   <li><b>Propagation W3C entrante</b> — un header {@code traceparent}
- *       fait hériter le traceId au span SERVER.</li>
- *   <li><b>Status ERROR sur 500</b> — quand l'endpoint throw, le span SERVER
- *       reçoit {@code status=ERROR}.</li>
+ *   <li><b>BCE @WithSpan</b> — the {@code BuildCompatibleExtension} of
+ *       {@code humboldt-cdi} adds {@code @SpanBinding} to the methods
+ *       annotated {@code @WithSpan} OTel → the interceptor is activated.
+ *       (resolution of risk PLAN.md §15.1: Vauban CDI Lite supports BCE)</li>
+ *   <li><b>Span SERVER via humboldt-rest filters</b> — each HTTP request
+ *       produces a SERVER span with OTel HTTP semantic attrs.</li>
+ *   <li><b>Inbound W3C propagation</b> — a header {@code traceparent}
+ *       inherits the traceId from the SERVER span.</li>
+ *   <li><b>Status ERROR set to 500</b> — when the endpoint throw, the SERVER span
+ *       receives {@code status=ERROR}.</li>
  * </ol>
  *
- * <p>Toute la stack est démarrée par Arquillian : Chappe (HTTP) → Cassini
+ * <p>The whole stack is started by Arquillian: Chappe (HTTP) → Cassini
  * (JAX-RS) → Vauban (CDI) → humboldt-runtime auto-config → humboldt-cdi BCE +
  * interceptor + humboldt-rest filters.</p>
  */
@@ -44,8 +44,8 @@ class HumboldtIntegrationTest {
     @ArquillianResource
     private URL baseUrl;
 
-    // Les system properties OTEL_* sont set par surefire (cf. pom.xml du module)
-    // pour qu'elles arrivent AVANT le boot d'HumboldtExtension.
+    // The OTEL_* system properties are set by surefire (see pom.xml of the module)
+    // so that they arrive BEFORE HumboldtExtension boots.
 
     @Deployment
     public static JavaArchive createDeployment() {
@@ -53,10 +53,10 @@ class HumboldtIntegrationTest {
                 .addClass(TraceTestService.class)
                 .addClass(TraceTestResource.class)
                 .addClass(SpansResource.class)
-                // Classes humboldt-rest/cdi à inclure pour que Cassini/Vauban
-                // les scanne dans ce Deployment Arquillian isolé (les classes
-                // existent sur le classpath via les deps Maven, mais le scoping
-                // Arquillian Vidocq nécessite leur présence explicite).
+                // Humboldt-rest/cdi classes to include so that Cassini/Vauban
+                // scans them in this isolated Arquillian Deployment (the classes
+                // exist on the classpath via Maven deps, but scoping
+                // Arquillian Vidocq requires their explicit presence).
                 .addClass(io.vidocq.humboldt.rest.HumboldtServerRequestFilter.class)
                 .addClass(io.vidocq.humboldt.rest.HumboldtServerResponseFilter.class)
                 .addClass(io.vidocq.humboldt.rest.HumboldtSpanFinalizer.class)
@@ -80,12 +80,12 @@ class HumboldtIntegrationTest {
         assertEquals("work-result", resp.body);
 
         String spans = httpGet("/__spans").body;
-        // Au moins 2 spans : SERVER (GET /trace/work) + INTERNAL (traced.work)
+        // At least 2 spans: SERVER (GET /trace/work) + INTERNAL (traced.work)
         assertTrue(spans.contains("\"name\":\"traced.work\""),
-                "BCE doit avoir activé l'interceptor sur @WithSpan(\"traced.work\") — spans : " + spans);
+                "The BCE should have activated the interceptor on @WithSpan(\"traced.work\") - spans: " + spans);
         assertTrue(spans.contains("\"kind\":\"INTERNAL\""));
         assertTrue(spans.contains("\"name\":\"GET /trace/work\""),
-                "humboldt-rest filter doit avoir créé un span SERVER");
+                "The humboldt-rest filter should have created a SERVER span");
     }
 
     // ============================================================
@@ -98,22 +98,22 @@ class HumboldtIntegrationTest {
         assertEquals("plain-result", resp.body);
 
         String spans = httpGet("/__spans").body;
-        // Span SERVER attendu pour /trace/plain avec attrs OTel HTTP semantic
+        // Span SERVER expected for /trace/plain with attrs OTel HTTP semantic
         assertTrue(spans.contains("\"name\":\"GET /trace/plain\""),
-                "span SERVER attendu : " + spans);
+                "Expected SERVER span: " + spans);
         assertTrue(spans.contains("\"kind\":\"SERVER\""));
         assertTrue(spans.contains("\"urlPath\":\"/trace/plain\""),
-                "attr url.path attendu : " + spans);
+                "Expected url.path attribute: " + spans);
         assertTrue(spans.contains("\"httpStatus\":200"),
-                "attr http.response.status_code=200 attendu : " + spans);
-        // Note : la BCE applique le binding au niveau classe (toutes les méthodes du bean
-        // qui a @WithSpan quelque part sont interceptées). plain() reçoit donc aussi un
-        // span INTERNAL — comportement Vauban CDI Lite cohérent avec le pattern
-        // SmallRye/Quarkus. Pas d'assertion stricte sur l'absence.
+                "Expected http.response.status_code=200 attribute: " + spans);
+        // Note: the ECB applies binding at the class level (all methods of the bean
+        // that has @WithSpan somewhere are intercepted). plain() therefore also receives an
+        // span INTERNAL — Vauban CDI Lite behavior consistent with the pattern
+        // SmallRye/Quarkus. No strict assertion about absence.
     }
 
     // ============================================================
-    //  Test 3 — Propagation W3C entrante
+    //  Test 3 — Inbound W3C Propagation
     // ============================================================
     @Test
     void w3c_traceparent_header_propagates_trace_id() throws IOException {
@@ -126,41 +126,41 @@ class HumboldtIntegrationTest {
 
         String spans = httpGet("/__spans").body;
         assertTrue(spans.contains("\"traceId\":\"" + parentTraceId + "\""),
-                "span SERVER doit hériter du traceId W3C : " + spans);
+                "The SERVER span should inherit the W3C traceId: " + spans);
         assertTrue(spans.contains("\"parentSpanId\":\"" + parentSpanId + "\""),
-                "span SERVER parentSpanId doit pointer le spanId du traceparent : " + spans);
+                "The SERVER span parentSpanId should point to the traceparent spanId: " + spans);
     }
 
     // ============================================================
-    //  Test 4 — Status ERROR sur 500
+    //  Test 4 - Status ERROR on 500
     // ============================================================
     @Test
     void server_span_status_error_when_endpoint_throws() throws IOException {
         var resp = httpGet("/trace/boom");
-        assertEquals(500, resp.statusCode, "endpoint /boom doit retourner 500");
+        assertEquals(500, resp.statusCode, "The /boom endpoint should return 500");
 
         String spans = httpGet("/__spans").body;
-        // L'interceptor humboldt-cdi @WithSpan("traced.boom") doit avoir capturé
-        // l'exception et set status=ERROR sur le span INTERNAL.
+        // The humboldt-cdi interceptor @WithSpan("traced.boom") must have captured
+        // the exception and set status=ERROR on the INTERNAL span.
         assertTrue(spans.contains("\"name\":\"traced.boom\""),
-                "span INTERNAL @WithSpan(\"traced.boom\") attendu : " + spans);
+                "Expected INTERNAL span @WithSpan(\"traced.boom\"): " + spans);
         assertTrue(spans.contains("IllegalStateException: boom from traced.boom"),
-                "le message d'exception doit être dans status.description : " + spans);
+                "The exception message should be in status.description: " + spans);
 
-        // M6d.6 — Le span SERVER pour /trace/boom doit maintenant être présent
-        // grâce à HumboldtSpanFinalizer (ExceptionMapper<Throwable> qui termine
-        // le span quand Cassini court-circuite le response filter — bug Cassini
-        // documenté dans HumboldtSpanFinalizer javadoc, workaround côté humboldt-rest).
+        // M6d.6 — The SERVER span for /trace/boom should now be present
+        // thanks to HumboldtSpanFinalizer (ExceptionMapper<Throwable> which ends
+        // the span when Cassini short-circuits the response filter — Cassini bug
+        // documented in HumboldtSpanFinalizer javadoc, workaround on humboldt-rest side).
         assertTrue(spans.contains("\"name\":\"GET /trace/boom\""),
-                "span SERVER /trace/boom attendu (terminé par HumboldtSpanFinalizer) : " + spans);
+                "Expected SERVER span /trace/boom (completed by HumboldtSpanFinalizer): " + spans);
         assertTrue(spans.contains("\"httpStatus\":500"),
-                "http.response.status_code=500 attendu sur le span SERVER : " + spans);
+                "Expected http.response.status_code=500 on the SERVER span: " + spans);
         assertTrue(spans.contains("\"status\":\"ERROR\""),
-                "au moins un span doit être ERROR (SERVER et/ou INTERNAL) : " + spans);
+                "At least one span should be ERROR (SERVER and/or INTERNAL): " + spans);
     }
 
     // ============================================================
-    //  Helpers HTTP
+    //  HTTP helpers
     // ============================================================
 
     private SimpleResponse httpGet(String path) throws IOException {

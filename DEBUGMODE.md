@@ -1,291 +1,291 @@
-# DEBUGMODE.md — Étude d'un dev mode / hot reload pour Vidocq
+# DEBUGMODE.md — Study of a dev mode / hot reload for Vidocq
 
-> **Statut : étude exploratoire.** Ce document analyse la faisabilité d'un *dev mode* type
-> Quarkus (recompilation + rechargement à chaud, capacités debug par extension) pour le runtime
-> Vidocq. Il **ne décrit aucune implémentation déjà réalisée** : c'est une matière de décision.
-> Toute affirmation de performance ici reste qualitative ; tout chiffre devra être consigné dans
-> `BENCH.md` (règle workspace) avant d'être considéré acquis.
-
----
-
-## 1. Objectif & cadrage
-
-### Ce qu'on veut
-Une boucle **code → résultat** la plus courte possible pendant le développement : modifier une
-ressource REST, un bean CDI ou une config, et voir l'effet sans `mvn install` complet ni redémarrage
-manuel. C'est exactement la valeur de `quarkus dev` : on garde le focus, on itère vite.
-
-### Ce qu'on ne veut PAS
-**Dégrader la prod.** Vidocq vend l'inverse philosophique du hot reload :
-
-- **codegen statique** — Class-File API (JEP 484) + APT, zéro proxy dynamique, zéro réflexion à chaud ;
-- **JPMS strict** — chaque module a son `module-info.java`, lancement sur **module-path**, exports
-  minimaux ;
-- **AOT-friendly** — compatible GraalVM native-image / Leyden CDS ;
-- **Virtual Threads** partout pour l'I/O.
-
-Le hot reload, lui, est par nature une activité de *churn* de classloaders, de re-scan et d'état
-mutable — l'antithèse de l'AOT.
-
-### Le cadrage retenu : dev mode = dérogation explicite et documentée
-C'est le même choix que Quarkus, où **`quarkus dev` ≠ `quarkus build --native`** : le mode développement
-relâche volontairement certaines contraintes (JPMS strict, AOT) pour gagner en vélocité, tandis que la
-**prod reste module-path + codegen statique + AOT**. Aucune des relaxations décrites ici ne doit fuiter
-dans le chemin de production ou native ; tout le code du dev mode doit être compilé **hors** du chemin
-prod (cf. §10, impact AOT).
+> **Status: exploratory study.** This document analyzes the feasibility of a Quarkus-style dev mode
+> (recompilation + hot reload, extension-driven debug capabilities) for the Vidocq runtime. It
+> **does not describe any implementation already delivered**: it is decision material.
+> Any performance claim here remains qualitative; any figure must be recorded in `BENCH.md`
+> (workspace rule) before it can be treated as established.
 
 ---
 
-## 2. Référence : ce que fait Quarkus
+## 1. Goal & scope
 
-Pour situer la cible, rappel du fonctionnement de Quarkus (architecture, pas API) :
+### What we want
+A shortest-possible **code → result** loop during development: change a REST resource, a CDI bean, or
+a config value, and see the effect without a full `mvn install` or a manual restart. That is exactly
+the value of `quarkus dev`: stay focused and iterate quickly.
 
-- **Déclencheurs** : goal Maven `quarkus:dev` et commande CLI `quarkus dev` (la CLI délègue au plugin).
-- **Classloaders hiérarchiques** : un *base-runtime ClassLoader* stable (dépendances qui ne changent
-  pas) + un *deployment/hot ClassLoader* **recréé à chaque reload** pour les classes applicatives.
-- **Trigger on-request** : Quarkus ne reconstruit pas en boucle ; à la **prochaine requête HTTP** après
-  un changement de source, il bloque, recompile les sources modifiées (compilateur en process),
-  rejoue l'**augmentation** (les *build steps* — l'équivalent de la génération de code), recrée le CL
-  applicatif, puis sert. Économe : pas de rebuild si on ne sollicite pas le serveur.
-- **DevServices** : les extensions auto-provisionnent leurs dépendances de dev (bases de données via
-  conteneurs, brokers, etc.) sans config manuelle.
-- **Dev UI** : une console `/q/dev` à laquelle chaque extension contribue des panneaux (beans, routes,
-  config, santé…).
-- **Continuous testing** : relance des tests impactés en arrière-plan.
+### What we do NOT want
+**We do not want to degrade production.** Vidocq is the opposite of hot reload philosophically:
 
-Points transposables à Vidocq : la **hiérarchie de classloaders**, le **trigger on-request**, la
-**ré-génération à chaque reload**, le **modèle par extension** (DevServices + Dev UI).
+- **static codegen** — Class-File API (JEP 484) + APT, zero dynamic proxy, zero runtime reflection;
+- **strict JPMS** — each module has its own `module-info.java`, launch on the **module-path**,
+  minimal exports;
+- **AOT-friendly** — compatible with GraalVM native-image / Leyden CDS;
+- **virtual threads** everywhere for I/O.
+
+Hot reload, by nature, is churn: classloader recreation, rescans, and mutable state — the opposite
+of AOT.
+
+### Chosen scope: dev mode as an explicit, documented exception
+It is the same choice as Quarkus, where **`quarkus dev` != `quarkus build --native`**: development
+mode deliberately relaxes some constraints (strict JPMS, AOT) to gain speed, while **production
+remains module-path + static codegen + AOT**. None of the relaxations described here must leak into
+the production or native path; all dev-mode code must be compiled **outside** the production path
+(see §10, AOT impact).
 
 ---
 
-## 3. Contraintes propres à Vidocq (et ce que l'architecture actuelle permet)
+## 2. Reference: what Quarkus does
 
-Faits vérifiés dans le code (référence `fichier:ligne` en annexe §11) :
+To frame the target, here is how Quarkus works (architecture, not API):
 
-| Brique | État actuel | Conséquence pour le reload |
+- **Triggers**: Maven goal `quarkus:dev` and CLI command `quarkus dev` (the CLI delegates to the
+  plugin).
+- **Hierarchical classloaders**: a stable *base-runtime ClassLoader* (dependencies that do not change)
+  plus a *deployment/hot ClassLoader* **recreated on each reload** for application classes.
+- **On-request trigger**: Quarkus does not rebuild in a loop; on the **next HTTP request** after a
+  source change, it blocks, recompiles modified sources (in-process compiler), reruns **augmentation**
+  (the *build steps* — the equivalent of code generation), recreates the application classloader,
+  then serves. Efficient: no rebuild if the server is not hit.
+- **DevServices**: extensions auto-provision their dev dependencies (databases via containers,
+  brokers, etc.) with no manual configuration.
+- **Dev UI**: a `/q/dev` console where each extension contributes panels (beans, routes, config,
+  health, ...).
+- **Continuous testing**: reruns impacted tests in the background.
+
+Transferable ideas for Vidocq: the **classloader hierarchy**, the **on-request trigger**, **rebuild
+on each reload**, and the **per-extension model** (DevServices + Dev UI).
+
+---
+
+## 3. Vidocq-specific constraints (and what the current architecture allows)
+
+Verified facts in the code (file:line references in appendix §11):
+
+| Brick | Current state | Consequence for reload |
 |---|---|---|
-| **Lancement prod** | module-path JPMS strict : `java --module-path lib --module …` généré par `VidocqPackageMojo` | Recharger = recréer une **couche de classes** (process neuf, ou `ModuleLayer` enfant). |
-| **Lifecycle** | `VidocqBootstrap` mono-coup : `configure() → start() → awaitShutdown() → shutdown()` ; arrêt des extensions en ordre inverse puis `container.close()` | Pas de boucle reload native : il faut un cycle **re-entrant** `shutdown()` → re-`configure()/start()`. |
-| **SPI extension** | 4 phases `configure / beforeStart / onStart / onStop`, **aucun hook reload** | Ajouter des hooks dev optionnels (cf. §7). |
-| **Codegen** | APT `VaubanProcessor` dans `javac` (marqueurs `META-INF/vauban-bce-processed`, index `META-INF/vauban-beans.list`) **+** `VaubanGenerator.generate(config)` rejouable **in-process** sur un dossier de `.class` + un `URLClassLoader` | Un reload doit **rejouer javac+APT** (classes projet) et/ou **`VaubanGenerator`** (dépendances). La partie `VaubanGenerator` est déjà une API in-process — atout. |
-| **Serveur chappe** | `Server.start()/stop()/isRunning()`, **drain gracieux** (`shutdownGracePeriod`, 30s défaut), VT-per-connexion, `SO_REUSEADDR/REUSEPORT` | Le serveur est **redémarrable proprement** ; rebind du port OK. |
-| **Précédent CLI** | `chappe-cli` (`chappe serve`, mini-YAML, fat-jar, jlink) existe déjà | Modèle pour un futur `vidocq dev` autonome. |
+| **Production launch** | strict JPMS module-path: `java --module-path lib --module …` generated by `VidocqPackageMojo` | Reloading means recreating a **class layer** (new process, or child `ModuleLayer`). |
+| **Lifecycle** | `VidocqBootstrap` single-shot: `configure() → start() → awaitShutdown() → shutdown()`; extensions stop in reverse order, then `container.close()` | No native reload loop: need a re-entrant `shutdown()` → re-`configure()/start()` cycle. |
+| **Extension SPI** | 4 phases `configure / beforeStart / onStart / onStop`, **no reload hook** | Add optional dev hooks (see §7). |
+| **Codegen** | APT `VaubanProcessor` in `javac` (`META-INF/vauban-bce-processed`, `META-INF/vauban-beans.list`) **plus** `VaubanGenerator.generate(config)` rerunnable in-process on a `.class` directory + `URLClassLoader` | Reload must **rerun javac+APT** (project classes) and/or **`VaubanGenerator`** (dependencies). `VaubanGenerator` already being in-process is an advantage. |
+| **Chappe server** | `Server.start()/stop()/isRunning()`, graceful drain (`shutdownGracePeriod`, 30s default), VT-per-connection, `SO_REUSEADDR/REUSEPORT` | The server is **cleanly restartable**; port rebind is fine. |
+| **CLI precedent** | `chappe-cli` (`chappe serve`, mini-YAML, fat-jar, jlink) already exists | Model for a future standalone `vidocq dev`. |
 
-**Atout différenciant** : le `VidocqBootstrap` logge déjà « *Started in X ms* ». Si le démarrage à froid
-est de l'ordre de quelques dizaines de millisecondes (à mesurer, §9/M1), alors **un restart de process
-complet est lui-même un hot reload acceptable** — ce qui n'est pas le cas d'un Spring/Quarkus classique
-au démarrage lourd. Cette rapidité change l'équation du choix d'approche.
+**Differentiator**: `VidocqBootstrap` already logs “*Started in X ms*”. If cold start is on the order
+of a few tens of milliseconds (to measure, §9/M1), then a full process restart itself is an acceptable
+hot reload — unlike a classic Spring/Quarkus startup path. That speed changes the tradeoff.
 
-**Contrainte de fond** : tout reload doit (1) **rejouer la génération de code** et (2) **recréer une
-couche de classes**. Les deux approches ci-dessous diffèrent sur *comment* recréer cette couche.
+**Core constraint**: any reload must (1) **rerun code generation** and (2) **recreate a class layer**.
+The two approaches below differ in *how* that layer is recreated.
 
 ---
 
-## 4. Approche A — Fast process-restart
+## 4. Approach A — Fast process restart
 
-### Principe
-Le goal `vidocq:dev` **fork un JVM enfant** lancé **exactement comme la prod** (module-path). Un
-*watcher* (parent) surveille `src/main/{java,resources}`. Sur changement :
+### Principle
+The `vidocq:dev` goal **forks a child JVM** launched **exactly like production** (module-path). A
+parent watcher monitors `src/main/{java,resources}`. On change:
 
 ```
-[watcher] détecte une modif sous src/
-   → recompile incrémentale : mvn process-classes
+[watcher] detects a modification under src/
+   → incremental recompile: mvn process-classes
         (javac + APT VaubanProcessor + vidocq:generate / VaubanGenerator)
-   → stop() gracieux du JVM enfant   (shutdown hook VidocqBootstrap + drain chappe, déjà propres)
-   → relance du JVM enfant            (java --module-path … --module …)
+   → graceful child JVM stop   (VidocqBootstrap shutdown hook + chappe drain, already clean)
+   → restart child JVM         (java --module-path … --module …)
 ```
 
-Le serveur revient à l'état neuf, mais identique à la prod.
+The server comes back fresh, but identical to production.
 
-### Pour
-- **Honore 100 % JPMS strict + codegen statique** : chaque run est une « prod miniature », rien n'est
-  relâché côté isolation modulaire ni génération.
-- **Zéro risque d'état résiduel** : pas de fuite mémoire, pas de classes fantômes, pas de piège
-  `ScopedValue`.
-- **Réutilise tout l'existant** : `VidocqBootstrap`, le shutdown hook, le drain chappe, la chaîne de
-  build. Effort d'implémentation faible.
+### Pros
+- **Honors 100% strict JPMS + static codegen**: each run is a “mini production”, nothing is relaxed on
+  modular isolation or generation.
+- **Zero residual state risk**: no memory leaks, no phantom classes, no `ScopedValue` trap.
+- **Reuses everything already present**: `VidocqBootstrap`, the shutdown hook, Chappe drain, the build
+  chain. Low implementation effort.
 
-### Contre
-- **Perd l'état applicatif** à chaque reload (sessions, caches en mémoire).
-- **Latence = temps de restart** (recompile + stop + start). Vraisemblablement faible vu la rapidité de
-  démarrage, **mais à mesurer** (M1) avant de conclure.
+### Cons
+- **Application state is lost** on every reload (sessions, in-memory caches).
+- **Latency = restart time** (recompile + stop + start). Likely low given startup speed, but must be
+  measured (M1) before concluding.
 
 ---
 
-## 5. Approche B — In-VM live reload via `ModuleLayer` enfant
+## 5. Approach B — In-VM live reload via child `ModuleLayer`
 
-### Principe
-Un **seul JVM**, **serveur chappe maintenu up**. Les classes applicatives vivent dans un **`ModuleLayer`
-enfant + un loader dédié** (`Configuration.resolve` + `ModuleLayer.defineModulesWithOneLoader`), parenté
-par le *boot layer* qui contient chappe/vauban/extensions (couche **stable**, jamais rechargée). Sur
-reload (déclenché **on-request**, comme Quarkus) :
+### Principle
+A **single JVM**, with the **Chappe server kept up**. Application classes live in a **child
+`ModuleLayer` + dedicated loader** (`Configuration.resolve` + `ModuleLayer.defineModulesWithOneLoader`),
+parented by the boot layer that contains Chappe/Vauban/extensions (the **stable** layer, never
+reloaded). On reload (triggered **on-request**, like Quarkus):
 
 ```
-[1ʳᵉ requête après modif]
-   → compile in-process     (JDK Compiler API + APT Vauban + VaubanGenerator)
-   → nouveau child ModuleLayer + loader à partir des classes recompilées
-   → rebuild VaubanContainer en scannant ce nouveau loader
-   → swap atomique du Handler/Router côté chappe (le serveur ne redémarre pas)
-   → ancien layer + loader + container partent au GC
+[first request after change]
+   → compile in-process     (JDK Compiler API + Vauban APT + VaubanGenerator)
+   → new child ModuleLayer + loader from recompiled classes
+   → rebuild VaubanContainer by scanning the new loader
+   → atomically swap the Handler/Router in Chappe (server does not restart)
+   → old layer + loader + container become GC-eligible
 ```
 
-### Pour
-- **Boucle la plus rapide** : on ne paie ni le `stop/start` du serveur ni le coût JVM.
-- **État serveur préservé** : connexions, port, threads d'I/O intacts.
-- **Préserve JPMS** — avantage **net sur Quarkus** : un `ModuleLayer` enfant reste constitué de
-  **modules réels** (avec leurs `module-info`), là où Quarkus recourt à un ClassLoader « plat »
-  non-modulaire. Vidocq pourrait offrir un hot reload *modulaire*.
+### Pros
+- **Fastest loop**: no server stop/start cost, no JVM restart cost.
+- **Preserves server state**: connections, port, I/O threads stay intact.
+- **Preserves JPMS** — a **clear advantage over Quarkus**: a child `ModuleLayer` remains composed of
+  **real modules** (with their `module-info`), whereas Quarkus uses a flat, non-modular classloader.
+  Vidocq could offer modular hot reload.
 
-### Contre
-- **Pièges d'état statique** : singletons, champs `static`, et surtout `ScopedValue`
-  (`RequestContext.CURRENT` de chappe) — risque de référencer des classes de l'ancien layer.
-- **Fuites de références boot→app** : si une classe du boot layer retient une instance applicative,
-  l'ancien loader ne sera jamais GC (classloader leak classique).
-- **Régénération d'index** : `vauban-beans.list` et les factories doivent être régénérés et rechargés
-  proprement dans le nouveau loader.
-- **Complexité nettement supérieure** ; surface de bugs subtils.
+### Cons
+- **Static-state traps**: singletons, `static` fields, and especially `ScopedValue`
+  (`RequestContext.CURRENT` in Chappe) may reference classes from the old layer.
+- **boot→app reference leaks**: if a boot-layer class retains an application instance, the old loader
+  will never be GC’d (classic classloader leak).
+- **Index regeneration**: `vauban-beans.list` and factories must be regenerated and reloaded cleanly in
+  the new loader.
+- **Much higher complexity**; a large surface for subtle bugs.
 
 ---
 
-## 6. Comparatif A vs B
+## 6. Comparison A vs B
 
-| Critère | A — Process-restart | B — In-VM ModuleLayer |
+| Criterion | A — Process restart | B — In-VM `ModuleLayer` |
 |---|---|---|
-| Honore JPMS strict | ✅ total (run = prod) | ✅ partiel (child layers = modules réels) |
-| Honore codegen statique | ✅ full pipeline rejoué | ✅ rejoué in-process |
-| Latence de reload | restart complet (à mesurer) | la plus faible |
-| Préservation d'état serveur | ❌ perdu | ✅ conservé |
-| Risque / complexité | **faible** | **élevé** (état statique, leaks) |
-| Compat AOT (prod intacte) | ✅ trivial | ✅ si bien isolé du chemin prod |
-| Effort d'implémentation | faible | élevé |
+| Honors strict JPMS | ✅ total (run = prod) | ✅ partial (child layers are real modules) |
+| Honors static codegen | ✅ full pipeline rerun | ✅ rerun in-process |
+| Reload latency | full restart (to measure) | lowest |
+| Server state preservation | ❌ lost | ✅ preserved |
+| Risk / complexity | **low** | **high** (static state, leaks) |
+| AOT compatibility (prod intact) | ✅ trivial | ✅ if well isolated from the prod path |
+| Implementation effort | low | high |
 
-**Conclusion : choix renvoyé au jalon de décision M2.** Hypothèse de travail : si le restart mesuré en
-M1 est **sub-100 ms**, l'approche **A est probablement suffisante seule**, et B devient un raffinement
-optionnel (`--in-vm`) plutôt qu'une nécessité. La rapidité de démarrage de Vidocq est précisément ce qui
-peut rendre l'approche simple compétitive.
+**Conclusion: decision deferred to milestone M2.** Working hypothesis: if the restart measured in M1
+is **sub-100 ms**, approach **A is probably sufficient alone**, and B becomes an optional refinement
+(`--in-vm`) rather than a necessity. Vidocq’s startup speed is precisely what can make the simple
+approach competitive.
 
 ---
 
-## 7. Modes debug **par extension**
+## 7. Extension-specific debug modes
 
-Modèle inspiré de Quarkus (DevServices + Dev UI), **gated par un profil** `vidocq.profile=dev`. En
-prod, les hooks dev sont absents/no-op et doivent être éliminés du chemin (DCE / compilation séparée,
-cf. §10).
+Model inspired by Quarkus (DevServices + Dev UI), **gated by** `vidocq.profile=dev`. In production,
+dev hooks are absent/no-op and must be compiled out of the path (DCE / separate compilation, see §10).
 
-### 7.1 SPI dev optionnelle
-Une extension dev déclare ses besoins via une SPI dédiée — esquisse conceptuelle (signatures
-**illustratives**, non figées) :
+### 7.1 Optional dev SPI
+An extension declares its needs through a dedicated SPI — conceptual sketch (illustrative signatures,
+not fixed):
 
-- `VidocqDevExtension` (parallèle à `VidocqExtension`, ou enrichissement de `ExtensionContext`) :
-  - **chemins surveillés** au-delà de `src/main/java` (ex. cassini surveille les classes de ressources,
-    foy un `web.xml`, champollion une config JSON-B) ;
-  - **codegen à rejouer** au reload (quel générateur, sur quelle entrée) ;
-  - **granularité de reload** demandée : `CONFIG_ONLY` / `BEAN_GRAPH` / `FULL_RESTART`. La boucle choisit
-    alors le reload **le moins cher suffisant** (recharger juste la config coûte bien moins qu'un rebuild
-    complet du graphe de beans).
+- `VidocqDevExtension` (parallel to `VidocqExtension`, or an enrichment of `ExtensionContext`):
+  - **paths to watch** beyond `src/main/java` (e.g. Cassini watches resource classes, Foy a `web.xml`,
+    Champollion a JSON-B config);
+  - **codegen to rerun** on reload (which generator, on which input);
+  - **requested reload granularity**: `CONFIG_ONLY` / `BEAN_GRAPH` / `FULL_RESTART`. The loop then
+    chooses the **cheapest sufficient** reload (reloading config only is far cheaper than rebuilding
+    the full bean graph).
 
 ### 7.2 Dev Console
-Un endpoint **dev-only** monté sous un préfixe `Router` chappe, p.ex. `/_vidocq/dev` (jamais monté hors
-profil dev). Chaque extension contribue un panneau :
+A **dev-only** endpoint mounted under a Chappe `Router` prefix, e.g. `/_vidocq/dev` (never mounted
+outside dev profile). Each extension contributes a panel:
 
-| Extension | Panneau Dev Console |
+| Extension | Dev Console panel |
 |---|---|
-| vauban | liste des beans découverts, scopes, intercepteurs |
-| cassini | routes REST (méthode, path, ressource, producteurs media-type) |
-| foy | servlets, filtres, mappings |
-| champollion | config JSON-B active, adapters enregistrés |
-| humboldt | dernières traces / spans |
-| mansart | datasource active, état du pool |
+| vauban | discovered beans, scopes, interceptors |
+| cassini | REST routes (method, path, resource, media-type producers) |
+| foy | servlets, filters, mappings |
+| champollion | active JSON-B config, registered adapters |
+| humboldt | latest traces / spans |
+| mansart | active datasource, pool state |
 
 ### 7.3 DevServices
-Un hook `devServices()` qui **provisionne les dépendances de dev** au démarrage du dev mode et les
-libère au stop :
+A `devServices()` hook that **provisions dev dependencies** at dev-mode startup and releases them on
+stop:
 
-- **mansart** → démarre une base H2 (ou conteneur) éphémère (cf. exemple existant
-  `vidocq-mps-mansart-h2-example`) ;
-- **cyrano** → démarre un *upstream stub* pour le MicroProfile Rest Client.
+- **mansart** → starts an ephemeral H2 database (or container) (see existing
+  `vidocq-mps-mansart-h2-example`);
+- **cyrano** → starts an upstream stub for the MicroProfile Rest Client.
 
-### 7.4 Découverte
-Toujours via `ServiceLoader` (cohérent avec `ExtensionLoader`). Les hooks dev sont simplement **absents
-ou no-op** quand `vidocq.profile != dev`.
-
----
-
-## 8. Impacts sur le code existant (esquisse — hors périmètre de cette étude)
-
-Pour mémoire, ce qu'une future implémentation toucherait (aucun de ces changements n'est réalisé ici) :
-
-- **`vidocq-runtime-core`** : rendre `VidocqBootstrap` **re-entrant** (cycle shutdown→restart en process)
-  ; lecture du profil dev.
-- **`vidocq-runtime-spi`** : profil dev dans `VidocqConfig` ; SPI dev (`VidocqDevExtension` / extension
-  d'`ExtensionContext`).
-- **`vidocq-runtime-maven-plugin`** : nouveau **`VidocqDevMojo`** (`vidocq:dev`) — watcher + recompile
-  incrémentale + pilotage du JVM enfant (A) ou de la boucle in-VM (B).
-- **`vidocq-runtime-chappe-extension`** : **swap de `Handler`/Router** atomique (nécessaire surtout pour
-  B ; pour A, le serveur repart de zéro).
-- **CLI** : `vidocq dev` standalone calqué sur `chappe-cli` (post-MVP, le Mojo restant le délégué).
+### 7.4 Discovery
+Still via `ServiceLoader` (consistent with `ExtensionLoader`). Dev hooks are simply **absent or no-op**
+when `vidocq.profile != dev`.
 
 ---
 
-## 9. Roadmap jalonnée (proposition)
+## 8. Impacts on existing code (sketch — out of scope for this study)
 
-> Proposition de séquencement — à arbitrer avec `ROADMAP.md`. **M1 livré 2026-05-28**, le
-> reste reste à arbitrer.
+For reference, here is what a future implementation would touch (none of these changes are implemented
+here):
 
-- **M0 — Fondations.** Profil dev `vidocq.profile=dev` + flag de log. `VidocqBootstrap` re-entrant :
-  PoC `shutdown()` → re-`configure()/start()` en process, sans fuite. *Reporté — pas requis pour A.*
-- **M1 — Mojo `vidocq:dev` (Approche A) — ✅ implémenté.** Fork JVM enfant module-path + watcher
-  NIO `src/` + recompile incrémentale via `mvnw process-classes` + restart gracieux. Bloquant, Ctrl+C
-  propre. Vit dans `vidocq-runtime-maven-plugin` ; aucune modif du runtime. Mesures dans `BENCH.md`.
-- **M2 — Décision A vs B.** Mesures M1 : reload p50 ≈ 1.8 s sur cassini-rest-example (dominé par le
-  démarrage Maven ~1.6 s ; boot Vidocq lui-même = 110 ms). Décision préliminaire : **A suffit** tant
-  qu'on ne descend pas sous la barre psychologique des 2 s. Une optimisation `mvnd` (Maven Daemon)
-  ramènerait probablement le reload sous 500 ms, ce qui rendrait B clairement non rentable. *À
-  revérifier après essai mvnd.*
-- **M3 — SPI dev + Dev Console.** `VidocqDevExtension` + granularité de reload ; Dev Console
-  `/_vidocq/dev` minimale (premier panneau : beans vauban).
-- **M4 — DevServices.** Première cible : mansart H2 (réutilise `vidocq-mps-mansart-h2-example`).
-- **M5 — (conditionnel à M2) PoC Approche B.** In-VM `ModuleLayer` enfant derrière un flag `--in-vm`.
-- **M6 — CLI + continuous testing.** `vidocq dev` standalone (modèle `chappe-cli`) ; relance des tests
-  impactés.
+- **`vidocq-runtime-core`**: make `VidocqBootstrap` **re-entrant** (shutdown→restart cycle in process);
+  read the dev profile.
+- **`vidocq-runtime-spi`**: dev profile in `VidocqConfig`; dev SPI (`VidocqDevExtension` /
+  `ExtensionContext`).
+- **`vidocq-runtime-maven-plugin`**: new **`VidocqDevMojo`** (`vidocq:dev`) — watcher + incremental
+  recompile + control of the child JVM (A) or in-VM loop (B).
+- **`vidocq-runtime-chappe-extension`**: atomic `Handler`/Router swap (mainly needed for B; for A, the
+  server restarts from scratch).
+- **CLI**: standalone `vidocq dev` modeled after `chappe-cli` (post-MVP, with the Mojo remaining the
+  delegate).
 
 ---
 
-## 10. Risques & questions ouvertes
+## 9. Milestoned roadmap (proposal)
 
-- **État statique / `ScopedValue` (approche B)** : `RequestContext.CURRENT` et tout champ `static`
-  peuvent retenir des classes de l'ancien layer → classloader leak. À auditer avant tout PoC B.
-- **Coût APT/javac à chaque reload** : la partie projet passe par `javac` (APT) ; mesurer ce coût
-  (M1) et envisager une compilation incrémentale fine (uniquement les sources modifiées).
-- **TCK runners hors-reactor** : `cassini-tck`, `foy-tck`, etc. sont volontairement détachés (Model
-  4.0.0 standalone, incompat ShrinkWrap/Model 4.1). Le dev mode **ne doit pas** interférer avec ces
-  runners ni présumer un reactor unifié.
-- **Impact AOT (critique)** : tout le code du dev mode (watcher, Mojo, SPI dev, Dev Console) doit être
-  **hors du chemin prod/native** — compilé dans des modules/scopes séparés, gardé par le profil dev, et
-  vérifié comme éliminé à la compilation native. Aucune dépendance dev ne doit alourdir l'image AOT.
-- **Granularité de reload** : bien distinguer config-only / bean-graph / full-restart pour ne pas payer
-  un rebuild complet quand une simple relecture de config suffit.
+> Sequencing proposal — to be arbitrated with `ROADMAP.md`. **M1 delivered 2026-05-28**; the rest
+> remains open for decision.
+
+- **M0 — Foundations.** `vidocq.profile=dev` + log flag. Re-entrant `VidocqBootstrap`: PoC
+  `shutdown()` → re-`configure()/start()` in process, without leaks. *Deferred — not required for A.*
+- **M1 — `vidocq:dev` Mojo (Approach A) — ✅ implemented.** Fork child JVM on module-path + NIO watcher
+  on `src/` + incremental recompile via `mvnw process-classes` + graceful restart. Blocking, clean
+  Ctrl+C. Lives in `vidocq-runtime-maven-plugin`; no runtime changes. Measurements in `BENCH.md`.
+- **M2 — A vs B decision.** M1 measurements: reload p50 ≈ 1.8 s on cassini-rest-example (dominated by
+  Maven startup ~1.6 s; Vidocq boot itself = 110 ms). Preliminary decision: **A is enough** as long as
+  we do not go below the psychological 2 s mark. An `mvnd` (Maven Daemon) optimization would probably
+  bring reload below 500 ms, which would make B clearly not worth it. *To be rechecked after trying mvnd.*
+- **M3 — Dev SPI + Dev Console.** `VidocqDevExtension` + reload granularity; minimal Dev Console
+  `/_vidocq/dev` (first panel: Vauban beans).
+- **M4 — DevServices.** First target: Mansart H2 (reuses `vidocq-mps-mansart-h2-example`).
+- **M5 — (conditional on M2) Approach B PoC.** In-VM child `ModuleLayer` behind a `--in-vm` flag.
+- **M6 — CLI + continuous testing.** Standalone `vidocq dev` (modeled on `chappe-cli`); rerun impacted
+  tests.
 
 ---
 
-## 11. Annexe
+## 10. Risks & open questions
 
-### Pointeurs fichiers (faits cités)
+- **Static state / `ScopedValue` (approach B)**: `RequestContext.CURRENT` and any `static` field may
+  retain classes from the old layer → classloader leak. Must be audited before any B PoC.
+- **APT/javac cost on every reload**: the project portion goes through `javac` (APT); measure that cost
+  (M1) and consider fine-grained incremental compilation (only modified sources).
+- **Out-of-reactor TCK runners**: `cassini-tck`, `foy-tck`, etc. are intentionally detached (standalone
+  Model 4.0.0, ShrinkWrap/Model 4.1 incompatibility). Dev mode **must not** interfere with those
+  runners or assume a unified reactor.
+- **AOT impact (critical)**: all dev-mode code (watcher, Mojo, dev SPI, Dev Console) must stay **out of
+  the prod/native path** — compiled in separate modules/scopes, gated by the dev profile, and verified
+  as eliminated in native compilation. No dev dependency must bloat the AOT image.
+- **Reload granularity**: distinguish config-only / bean-graph / full-restart so a full rebuild is not
+  paid when a simple config reread is enough.
+
+---
+
+## 11. Appendix
+
+### File pointers (cited facts)
 - `vidocq-runtime-maven-plugin/src/main/java/io/vidocq/runtime/maven/VidocqPackageMojo.java:105` —
-  lancement prod module-path (`java --module-path lib --module …`).
-- `vidocq-runtime-core/src/main/java/io/vidocq/runtime/core/VidocqBootstrap.java:63,90,147` — lifecycle
-  `configure / start / shutdown`.
-- `vidocq-runtime-spi/src/main/java/io/vidocq/runtime/spi/VidocqExtension.java:41-59` — 4 phases SPI.
+  production module-path launch (`java --module-path lib --module …`).
+- `vidocq-runtime-core/src/main/java/io/vidocq/runtime/core/VidocqBootstrap.java:63,90,147` —
+  `configure / start / shutdown` lifecycle.
+- `vidocq-runtime-spi/src/main/java/io/vidocq/runtime/spi/VidocqExtension.java:41-59` — 4-phase SPI.
 - `vidocq-runtime-maven-plugin/src/main/java/io/vidocq/runtime/maven/VidocqGenerateMojo.java:82-105` —
   `VaubanGenerator.generate(config)` in-process.
 - `chappe/chappe-api/src/main/java/io/vidocq/chappe/api/Server.java:26-39,86` — `start/stop/isRunning`,
   `shutdownGracePeriod`.
-- `chappe-cli` — précédent de CLI standalone (`chappe serve`).
+- `chappe-cli` — standalone CLI precedent (`chappe serve`).
 
-### Glossaire
-- **Augmentation** (Quarkus) : phase de génération/transformation au build qui produit le code de
-  câblage — l'équivalent du couple APT `VaubanProcessor` + `VaubanGenerator` côté Vidocq.
-- **Child ModuleLayer** : couche de modules JPMS enfant d'une couche parente, créée à l'exécution via
-  `ModuleLayer.defineModulesWithOneLoader` ; jetable (GC du layer + loader quand plus référencée).
-- **DevServices** : provisioning automatique, en mode dev, des dépendances externes (BD, brokers…) par
-  les extensions.
+### Glossary
+- **Augmentation** (Quarkus): build-time generation/transformation phase that produces wiring code —
+  the equivalent of the APT pair `VaubanProcessor` + `VaubanGenerator` in Vidocq.
+- **Child `ModuleLayer`**: a JPMS module layer child of a parent layer, created at runtime via
+  `ModuleLayer.defineModulesWithOneLoader`; disposable (GC of the layer + loader once no longer
+  referenced).
+- **DevServices**: automatic provisioning, in dev mode, of external dependencies (DBs, brokers...) by
+  extensions.

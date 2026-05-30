@@ -3,16 +3,16 @@ package io.vidocq.runtime.spi;
 import io.vidocq.vauban.core.container.VaubanContainerBuilder;
 
 /**
- * Point d'extension principal de Vidocq.
+ * Vidocq's main extension point.
  * <p>
- * Les extensions sont découvertes via {@link java.util.ServiceLoader} et
- * exécutées selon leur {@link #priority() priorité} durant le cycle de vie
- * du serveur :
+ * Extensions are discovered via {@link java.util.ServiceLoader} and
+ * executed according to their {@link #priority() priority} during the lifecycle
+ * from the server:
  * <ol>
- *   <li>{@link #configure} — configuration avant le boot CDI</li>
- *   <li>{@link #beforeStart} — enrichissement du container builder</li>
- *   <li>{@link #onStart} — le container CDI est prêt</li>
- *   <li>{@link #onStop} — arrêt du serveur (ordre inverse)</li>
+ *   <li>{@link #configure} — configuration before CDI boot</li>
+ *   <li>{@link #beforeStart} — enrichment of the container builder</li>
+ *   <li>{@link #onStart} — the CDI container is ready</li>
+ *   <li>{@link #onStop} — server shutdown (reverse order)</li>
  * </ol>
  *
  * <p><b>Main extension point for Vidocq.</b>
@@ -22,12 +22,12 @@ import io.vidocq.vauban.core.container.VaubanContainerBuilder;
 public interface VidocqExtension {
 
     /**
-     * Nom unique de l'extension. / Unique extension name.
+     * Unique name of the extension. / Unique extension name.
      */
     String name();
 
     /**
-     * Priorité d'exécution (plus bas = plus prioritaire, défaut 1000).
+     * Execution priority (lower = higher priority, default 1000).
      * <p>Execution priority (lower = higher priority, default 1000).</p>
      */
     default int priority() {
@@ -35,25 +35,25 @@ public interface VidocqExtension {
     }
 
     /**
-     * Phase de configuration : appelée avant le boot CDI.
+     * Configuration phase: called before CDI boot.
      * <p>Configuration phase: called before CDI boot.</p>
      */
     default void configure(VidocqConfiguration config) {}
 
     /**
-     * Phase de pré-démarrage : enrichir le {@link VaubanContainerBuilder}.
+     * Pre-startup phase: enrich the {@link VaubanContainerBuilder}.
      * <p>Pre-start phase: enrich the {@link VaubanContainerBuilder}.</p>
      */
     default void beforeStart(VaubanContainerBuilder builder) {}
 
     /**
-     * Phase de démarrage : le container CDI est initialisé.
+     * Startup phase: the CDI container is initialized.
      * <p>Start phase: the CDI container is initialized.</p>
      */
     default void onStart(ExtensionContext context) {}
 
     /**
-     * Phase d'arrêt : libérer les ressources.
+     * Shutdown phase: release resources.
      * <p>Stop phase: release resources.</p>
      */
     default void onStop() {}

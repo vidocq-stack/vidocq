@@ -72,7 +72,7 @@ public final class MansartDataIntegrationExtension implements VidocqExtension {
                             + "Either deploy the mansart-pool extension with vidocq.pool.url, or "
                             + "publish your own @Produces DataSource.");
         }
-        // Resolve via lookup() so Default qualifier semantics apply ; the @Any literal above is
+        // Resolve via lookup() so Default qualifier semantics apply; the @Any literal above is
         // only there to enumerate candidates for the diagnostic message.
         DataSource ds = (DataSource) bm.getReference(
                 bm.resolve(bm.getBeans(DataSource.class)),

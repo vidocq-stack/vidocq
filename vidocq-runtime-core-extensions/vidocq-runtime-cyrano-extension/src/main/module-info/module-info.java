@@ -1,6 +1,6 @@
 /**
- * Wrapper Vidocq Runtime qui active Cyrano (MicroProfile Rest Client 4.0)
- * via ses SPI standards (RestClientBuilderResolver + BCE CDI 4.1).
+ * Vidocq Runtime wrapper that activates Cyrano (MicroProfile Rest Client 4.0)
+ * via its standard SPIs (RestClientBuilderResolver + BCE CDI 4.1).
  */
 module io.vidocq.runtime.ext.cyrano {
     requires transitive io.vidocq.cyrano.api;

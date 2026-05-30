@@ -12,26 +12,26 @@ import java.util.Properties;
 import java.util.Set;
 
 /**
- * Source qui lit un fichier {@code vidocq.properties} <b>externe</b> au jar
- * applicatif — typiquement {@code dist/conf/vidocq.properties} d'une image
- * jlink/jpackage. Permet à un opérateur de surcharger la config sans
- * recompiler.
+ * Source that reads a file {@code vidocq.properties} <b>external</b> to the jar
+ * application — typically {@code dist/conf/vidocq.properties} of an image
+ * jlink/jpackage. Allows an operator to override the config without
+ * recompiled.
  *
- * <h3>Recherche du fichier (premier trouvé gagne)</h3>
+ * <h3>File search (first found wins)</h3>
  * <ol>
- *   <li>{@code -Dvidocq.config.dir=&lt;path&gt;} — propriété système explicite.</li>
- *   <li>{@code VIDOCQ_CONFIG_DIR=&lt;path&gt;} — variable d'environnement (Docker / k8s).</li>
- *   <li>{@code ${java.home}/conf} — convention jlink standalone (le runtime image
- *       embarque {@code conf/} sibling de {@code bin/}).</li>
- *   <li>{@code ./conf} — convention working dir (lancement manuel).</li>
+ *   <li>{@code -Dvidocq.config.dir=&lt;path&gt;} — explicit system property.</li>
+ *   <li>{@code VIDOCQ_CONFIG_DIR=&lt;path&gt;} — environment variable (Docker / k8s).</li>
+ *   <li>{@code ${java.home}/conf} — jlink standalone convention (the image runtime
+ *       embeds {@code conf/} sibling of {@code bin/}).</li>
+ *   <li>{@code ./conf} — working dir convention (manual launch).</li>
  * </ol>
  *
- * <p>Ordinal 250 — gagne contre {@link PropertiesFileConfigSource} (classpath, 100)
- * mais reste dominé par les variables d'environnement (300) et propriétés
- * système (400), conformément à la convention MicroProfile Config.</p>
+ * <p>Ordinal 250 — wins against {@link PropertiesFileConfigSource} (classpath, 100)
+ * but remains dominated by environment variables (300) and properties
+ * system (400), in accordance with the MicroProfile Config convention.</p>
  *
- * <p>Si aucun fichier n'est trouvé, la source est vide (ordinal effectif sans
- * effet).</p>
+ * <p>If no file is found, the source is empty (effective ordinal without
+ * effect).</p>
  */
 public final class ExternalFileConfigSource implements ConfigSource {
 
@@ -83,8 +83,8 @@ public final class ExternalFileConfigSource implements ConfigSource {
         if (envDir != null && !envDir.isBlank()) {
             return resolveOrNull(Path.of(envDir));
         }
-        // Convention jlink : ${java.home}/conf — le runtime image embarque
-        // conf/ sibling de bin/.
+        // jlink convention: ${java.home}/conf — the image runtime embeds
+        // conf/ sibling of bin/.
         String javaHome = System.getProperty("java.home");
         if (javaHome != null && !javaHome.isBlank()) {
             Path candidate = Path.of(javaHome).resolve("conf");

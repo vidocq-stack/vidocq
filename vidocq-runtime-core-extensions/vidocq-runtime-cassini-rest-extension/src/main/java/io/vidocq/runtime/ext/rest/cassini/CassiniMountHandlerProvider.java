@@ -10,22 +10,22 @@ import io.vidocq.runtime.ext.chappe.spi.MountHandlerProvider;
 import io.vidocq.vauban.core.context.RequestContext;
 
 /**
- * Provider {@code MountHandlerProvider} de type {@code restful} (Jakarta
- * RESTful Web Services) — implémentation Cassini montée sur Chappe avec un
- * {@link BeanProvider} Vauban issu du runtime Vidocq Runtime.
+ * Provider {@code MountHandlerProvider} of type {@code restful} (Jakarta
+ * RESTful Web Services) — Cassini implementation mounted on Chappe with a
+ * {@link BeanProvider} Vauban from the Vidocq Runtime.
  *
- * <p>Le {@code type} décrit le <b>contrat standard</b> (JAX-RS / Jakarta
- * RESTful Web Services), pas l'implémentation. Quand un autre provider Jakarta
- * REST sera ajouté (ex. Jersey, RESTEasy), il déclarera également
- * {@code type() = "restful"} ; la sélection se fera alors via la property
- * optionnelle {@code vidocq.http.mount.<name>.impl=<id>} (à introduire le
- * jour où plusieurs implémentations co-existeront).</p>
+ * <p>The {@code type} describes the <b>standard contract</b> (JAX-RS / Jakarta
+ * RESTful Web Services), not the implementation. When another provider Jakarta
+ * REST will be added (ex. Jersey, RESTEasy), it will also declare
+ * {@code type() = "restful"}; the selection will then be made via the property
+ * optional {@code vidocq.http.mount.<name>.impl=<id>} (to enter the
+ * day when several implementations will co-exist).</p>
  *
- * <h3>Properties supportées</h3>
+ * <h3>Supported properties</h3>
  * <pre>{@code
  * vidocq.http.mount.<name>.type = restful
- * vidocq.http.mount.<name>.path = /api      # défaut : / via le reader
- * # Aucune autre property : la découverte des @Path/@Provider se fait via Vauban.
+ * vidocq.http.mount.<name>.path = /api # default: / via the reader
+ * # No other property: discovery of @Path/@Provider is done via Vauban.
  * }</pre>
  */
 public final class CassiniMountHandlerProvider implements MountHandlerProvider {

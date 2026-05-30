@@ -7,7 +7,7 @@ import jakarta.transaction.Transactional;
 import java.util.List;
 
 /**
- * Mansart-generated implementation: APT produces {@code ProductRepositoryImpl} at compile-time
+ * Mansart-generated implementation: APT produces {@code ProductRepositoryImpl} at compile time,
  * and the {@code mansart-data-cdi} BCE wires it into Vauban as a singleton bean. The
  * {@link ProductResource} simply {@code @Inject}s this interface.
  */

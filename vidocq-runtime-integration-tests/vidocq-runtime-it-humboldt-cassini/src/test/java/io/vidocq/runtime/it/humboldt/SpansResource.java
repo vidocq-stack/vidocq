@@ -14,26 +14,26 @@ import jakarta.ws.rs.core.Response;
 import java.util.List;
 
 /**
- * Endpoint helper de test — expose les spans capturés par
- * {@code AutoConfiguredHumboldt.inMemorySpanExporter()} côté serveur.
+ * Endpoint test helper — exposes spans captured by
+ * {@code AutoConfiguredHumboldt.inMemorySpanExporter()} on the server side.
  *
- * <p>Le test JUnit tourne {@code @RunAsClient} (hors container CDI), donc il
- * ne peut pas faire {@code @Inject AutoConfiguredHumboldt} directement. Cet
- * endpoint sert d'intermédiaire — le test l'appelle via HTTP après chaque
- * scénario pour récupérer les spans à assertion.</p>
+ * <p>The JUnit test runs {@code @RunAsClient} (excluding CDI container), so it
+ * can't do {@code @Inject AutoConfiguredHumboldt} directly. This
+ * endpoint serves as an intermediary — the test calls it via HTTP after each
+ * scenario to retrieve assertion spans.</p>
  *
- * <p><b>Implémentation</b> : lookup statique via {@link GlobalOpenTelemetry#get()}
- * plutôt que {@code @Inject AutoConfiguredHumboldt}. Raison : le Deployment
- * Arquillian Vidocq utilise un bean archive distinct du runtime principal —
- * {@code HumboldtHolder} publié par {@code HumboldtExtension.beforeStart()}
- * n'est pas visible depuis le BeanManager du Deployment isolé. Le lookup
- * statique via {@code GlobalOpenTelemetry} (singleton process-wide) contourne
- * ce scoping et fonctionne dans tous les ClassLoaders. La validation
- * {@code @Inject AutoConfiguredHumboldt} dans une app vidocq standard
- * (hors Deployment Arquillian isolé) reste possible via {@code HumboldtHolder}
- * — différée en M6d.6.</p>
+ * <p><b>Implementation</b>: static lookup via {@link GlobalOpenTelemetry#get()}
+ * rather than {@code @Inject AutoConfiguredHumboldt}. Reason: Deployment
+ * Arquillian Vidocq uses an archive bean separate from the main runtime —
+ * {@code HumboldtHolder} published by {@code HumboldtExtension.beforeStart()}
+ * is not visible from the BeanManager of the isolated Deployment. The lookup
+ * static via {@code GlobalOpenTelemetry} (singleton process-wide) bypasses
+ * this scoping and works in all ClassLoaders. Validation
+ * {@code @Inject AutoConfiguredHumboldt} in a standard vidocq app
+ * (excluding isolated Arquillian Deployment) remains possible via {@code HumboldtHolder}
+ * — deferred to M6d.6.</p>
  *
- * <p>Format JSON minimal pour éviter d'importer un parser.</p>
+ * <p>Minimal JSON format to avoid importing a parser.</p>
  */
 @Path("/__spans")
 @Produces(MediaType.APPLICATION_JSON)
@@ -87,12 +87,12 @@ public class SpansResource {
     }
 
     private static AutoConfiguredHumboldt humboldt() {
-        // HumboldtHolder.INSTANCE est publié par HumboldtExtension.beforeStart()
-        // — référence statique process-wide, accessible depuis n'importe quel
-        // ClassLoader incluant les Deployment Arquillian isolés.
-        // GlobalOpenTelemetry.get() retourne un wrapper ObfuscatedOpenTelemetry,
-        // pas l'instance brute, donc pas utilisable pour caster vers
-        // AutoConfiguredHumboldt directement.
+        // HumboldtHolder.INSTANCE is released by HumboldtExtension.beforeStart()
+        // — process-wide static reference, accessible from any
+        // ClassLoader including isolated Arquillian Deployments.
+        // GlobalOpenTelemetry.get() returns an ObfuscatedOpenTelemetry wrapper,
+        // not the raw instance, therefore not usable to cast to
+        // AutoConfiguredHumboldt directly.
         return HumboldtHolder.INSTANCE;
     }
 

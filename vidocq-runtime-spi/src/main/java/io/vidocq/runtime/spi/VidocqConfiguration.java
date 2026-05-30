@@ -3,13 +3,13 @@ package io.vidocq.runtime.spi;
 import java.util.Optional;
 
 /**
- * Configuration accessible aux extensions Vidocq.
+ * Configuration accessible to Vidocq extensions.
  * <p>
- * Les propriétés sont résolues depuis (par ordre de priorité) :
+ * The properties are resolved from (in order of priority):
  * <ol>
- *   <li>Propriétés système ({@code -Dkey=value})</li>
- *   <li>Variables d'environnement</li>
- *   <li>Fichier {@code vidocq.properties} du classpath</li>
+ *   <li>System properties ({@code -Dkey=value})</li>
+ *   <li>Environment variables</li>
+ *   <li>Classpath {@code vidocq.properties} file</li>
  * </ol>
  *
  * <p><b>Configuration accessible to Vidocq extensions.</b>
@@ -19,13 +19,13 @@ import java.util.Optional;
 public interface VidocqConfiguration {
 
     /**
-     * Récupère une propriété par sa clé.
+     * Retrieves a property by its key.
      * <p>Retrieve a property by key.</p>
      */
     Optional<String> property(String key);
 
     /**
-     * Récupère une propriété avec une valeur par défaut.
+     * Retrieves a property with a default value.
      * <p>Retrieve a property with a default value.</p>
      */
     default String property(String key, String defaultValue) {
@@ -33,8 +33,8 @@ public interface VidocqConfiguration {
     }
 
     /**
-     * Récupère un port pour une extension donnée.
-     * <p>Clé consultée : {@code vidocq.<extensionName>.port}</p>
+     * Retrieves a port for a given extension.
+     * <p>Key consulted: {@code vidocq.<extensionName>.port}</p>
      * <p>Retrieve a port for a given extension.</p>
      */
     default int portFor(String extensionName, int defaultPort) {

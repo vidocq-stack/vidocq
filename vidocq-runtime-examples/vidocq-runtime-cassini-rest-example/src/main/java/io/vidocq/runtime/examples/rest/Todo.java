@@ -6,12 +6,12 @@ import jakarta.json.bind.annotation.JsonbProperty;
 public record Todo(long id, String title, boolean done) {
 
     /**
-     * Factory annotée {@link JsonbCreator} pour la désérialisation JSON-B.
-     * <p>Sans cela, Yasson 3.0.4 en mode module-path strict (jlink/jpackage)
-     * n'arrive pas à invoquer le canonical constructor du record et tombe en
-     * defaults silencieux ({@code title=null}). Le marquage explicite force
-     * Yasson à passer par cette factory, qui est résolue par les noms de
-     * paramètres ({@code @JsonbProperty}).</p>
+     * Annotated factory {@link JsonbCreator} for JSON-B deserialization.
+     * <p>Without this, Yasson 3.0.4 in strict module-path mode (jlink/jpackage)
+     * fails to invoke the canonical constructor of the record and falls into
+     * silent defaults ({@code title=null}). Explicit marking forces
+     * Yasson to go through this factory, which is resolved by the names of
+     * parameters ({@code @JsonbProperty}).</p>
      */
     @JsonbCreator
     public static Todo create(@JsonbProperty("id") long id,

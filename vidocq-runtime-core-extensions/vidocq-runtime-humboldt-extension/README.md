@@ -1,70 +1,70 @@
 # vidocq-runtime-humboldt-extension
 
-Extension Vidocq Runtime qui branche **Humboldt** (MicroProfile Telemetry 2.1 —
-tracing, metrics, logs) sur le cycle de vie Vidocq.
+Vidocq Runtime extension that wires **Humboldt** (MicroProfile Telemetry 2.1 —
+tracing, metrics, logs) into the Vidocq lifecycle.
 
-## Ce que fait l'extension
+## What the extension does
 
-- **`configure()`** : lit toutes les env vars/system properties OTel standard
-  via `VidocqConfiguration` (priorité sys-prop > env > vidocq.properties).
-- **`beforeStart()`** : appelle `HumboldtAutoConfigure.configure(env)` qui assemble
-  les 3 SDKs (`SdkTracerProvider` + `SdkMeterProvider` + `SdkLoggerProvider`)
-  avec les exporters OTLP HTTP-JSON et les propagators W3C, puis installe le
-  résultat comme `GlobalOpenTelemetry`.
-- **`onStop()`** : flush + shutdown ordonné (5s de timeout chacun).
+- **`configure()`**: reads all standard OTel env vars/system properties
+  via `VidocqConfiguration` (priority: sys-prop > env > vidocq.properties).
+- **`beforeStart()`**: calls `HumboldtAutoConfigure.configure(env)` which assembles
+  the 3 SDKs (`SdkTracerProvider` + `SdkMeterProvider` + `SdkLoggerProvider`)
+  with OTLP HTTP-JSON exporters and W3C propagators, then installs the
+  result as `GlobalOpenTelemetry`.
+- **`onStop()`**: ordered flush + shutdown (5 s timeout each).
 
-Priorité **100** — démarre avant les extensions applicatives
-(`cassini=500`, `cyrano`, `mansart`, etc.) pour que `GlobalOpenTelemetry`
-soit prêt à recevoir les spans dès le premier appel.
+Priority **100** — starts before application extensions
+(`cassini=500`, `cyrano`, `mansart`, etc.) so that `GlobalOpenTelemetry`
+is ready to receive spans from the very first call.
 
-## Activation automatique
+## Automatic activation
 
-Dès que cet artefact est sur le classpath, le ServiceLoader le découvre
+As soon as this artifact is on the classpath, the ServiceLoader discovers it
 (`META-INF/services/io.vidocq.runtime.spi.VidocqExtension` + `provides` JPMS).
-Aucune configuration code requise.
+No code configuration required.
 
-## Configuration env vars
+## Environment variable configuration
 
-| Variable | Défaut | Notes |
+| Variable | Default | Notes |
 |---|---|---|
-| `OTEL_SERVICE_NAME` | `humboldt` | Nom du service (resource attribute `service.name`) |
-| `OTEL_RESOURCE_ATTRIBUTES` | (vide) | Format `key=value,key=value` |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://localhost:4318` | Base URL collector OTel |
-| `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | `${ENDPOINT}/v1/traces` | Override per-signal |
+| `OTEL_SERVICE_NAME` | `humboldt` | Service name (resource attribute `service.name`) |
+| `OTEL_RESOURCE_ATTRIBUTES` | (empty) | Format `key=value,key=value` |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://localhost:4318` | OTel collector base URL |
+| `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | `${ENDPOINT}/v1/traces` | Per-signal override |
 | `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` | `${ENDPOINT}/v1/metrics` | |
 | `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` | `${ENDPOINT}/v1/logs` | |
 | `OTEL_TRACES_EXPORTER` | `otlp` | `otlp \| none \| in-memory \| logging` |
 | `OTEL_METRICS_EXPORTER` | `otlp` | `otlp \| none \| in-memory` |
 | `OTEL_LOGS_EXPORTER` | `otlp` | `otlp \| none \| in-memory` |
 | `OTEL_TRACES_SAMPLER` | `parentbased_always_on` | `always_on/off \| traceidratio \| parentbased_*` |
-| `OTEL_TRACES_SAMPLER_ARG` | `1.0` | Ratio pour `traceidratio` |
-| `OTEL_EXPORTER_OTLP_HEADERS` | (vide) | `Authorization=Bearer ...,X-Tenant=...` |
-| `MP_TELEMETRY_SDK_DISABLED` | `false` | `true` → extension désactivée |
+| `OTEL_TRACES_SAMPLER_ARG` | `1.0` | Ratio for `traceidratio` |
+| `OTEL_EXPORTER_OTLP_HEADERS` | (empty) | `Authorization=Bearer ...,X-Tenant=...` |
+| `MP_TELEMETRY_SDK_DISABLED` | `false` | `true` → extension disabled |
 
-## Instrumentation automatique
+## Automatic instrumentation
 
-L'extension active automatiquement :
-- **`@WithSpan`** sur n'importe quelle méthode CDI (via `humboldt-cdi` +
-  `BuildCompatibleExtension` Humboldt — l'annotation
-  `io.opentelemetry.instrumentation.annotations.WithSpan` est interceptée
-  sans configuration code, c'est le standard MicroProfile Telemetry 2.1).
-- **Filters JAX-RS server** (via `humboldt-rest`) — `ContainerRequestFilter`
-  qui extrait `traceparent` W3C, démarre un span SERVER, set
-  `http.request.method`/`url.path`/`url.scheme`, et `ContainerResponseFilter`
-  qui set `http.response.status_code` et `span.end()`.
+The extension automatically activates:
+- **`@WithSpan`** on any CDI method (via `humboldt-cdi` +
+  `BuildCompatibleExtension` Humboldt — the
+  `io.opentelemetry.instrumentation.annotations.WithSpan` annotation is intercepted
+  without any code configuration; this is the MicroProfile Telemetry 2.1 standard).
+- **JAX-RS server filters** (via `humboldt-rest`) — a `ContainerRequestFilter`
+  that extracts `traceparent` W3C, starts a SERVER span, sets
+  `http.request.method`/`url.path`/`url.scheme`, and a `ContainerResponseFilter`
+  that sets `http.response.status_code` and calls `span.end()`.
 
-## Désactivation
+## Disabling
 
 ```bash
-MP_TELEMETRY_SDK_DISABLED=true java -jar mon-app.jar
+MP_TELEMETRY_SDK_DISABLED=true java -jar my-app.jar
 ```
 
-Utile pour les tests qui veulent fournir leur propre `OpenTelemetry`
-(typiquement un `InMemorySpanExporter` pour assertions) sans interférence
-de l'autoconfig.
+Useful for tests that want to provide their own `OpenTelemetry`
+(typically an `InMemorySpanExporter` for assertions) without interference
+from the auto-configuration.
 
-## Voir aussi
+## See also
 
-- [humboldt/](https://forge.vidocq.dev/vidocq/humboldt) — implémentation Humboldt
-- [humboldt/PLAN.md](https://forge.vidocq.dev/vidocq/humboldt/src/branch/main/PLAN.md) — architecture détaillée
-- [humboldt/TCK.md](https://forge.vidocq.dev/vidocq/humboldt/src/branch/main/TCK.md) — statut TCK MP Telemetry 2.1
+- [humboldt/](https://forge.vidocq.dev/vidocq/humboldt) — Humboldt implementation
+- [humboldt/PLAN.md](https://forge.vidocq.dev/vidocq/humboldt/src/branch/main/PLAN.md) — detailed architecture
+- [humboldt/TCK.md](https://forge.vidocq.dev/vidocq/humboldt/src/branch/main/TCK.md) — MP Telemetry 2.1 TCK status

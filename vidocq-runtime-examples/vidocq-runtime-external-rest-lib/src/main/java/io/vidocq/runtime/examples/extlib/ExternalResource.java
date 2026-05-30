@@ -7,10 +7,10 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 
 /**
- * Resource JAX-RS dans une librairie externe non pre-traitee.
- * Pas de scope CDI explicite : la BCE RestScopeExtension (ou le
- * VidocqGenerateMojo) doit ajouter {@code @RequestScoped} au build
- * ou au runtime de l'application consommatrice.
+ * JAX-RS resource in an external library that was not pre-processed.
+ * No explicit CDI scope: the RestScopeExtension BCE (or the
+ * VidocqGenerateMojo) must add {@code @RequestScoped} at build time
+ * or at runtime in the consuming application.
  */
 @Path("/external")
 public class ExternalResource {

@@ -14,19 +14,19 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
- * Génère un {@code Dockerfile} qui empaquette l'image runtime jlink dans une
- * image Docker minimale (sans JRE supplémentaire — jlink contient son propre
+ * Generates a {@code Dockerfile} that packages the jlink runtime image into a
+ * minimal Docker image (without additional JRE — jlink contains its own
  * runtime).
  *
- * <p>Par défaut le Mojo se contente de générer le {@code Dockerfile} dans
- * {@code target/} et d'expliquer comment le builder. Si {@code &lt;build&gt;true&lt;/build&gt;}
- * et que le binaire {@code docker} est disponible, le Mojo lance
+ * <p>By default Mojo just generates the {@code Dockerfile} in
+ * {@code target/} and explain how the builder. If {@code &lt;build&gt;true&lt;/build&gt;}
+ * and the {@code docker} binary is available, Mojo launches
  * {@code docker build -t &lt;imageTag&gt; -f target/Dockerfile target/}.</p>
  *
- * <h3>Image de base recommandée</h3>
- * <p>{@code gcr.io/distroless/base-debian12:nonroot} (~20 MB) — pas de JRE
- * (jlink fournit le runtime), pas de shell, user non-root par défaut. Pour
- * un debug interactif : {@code gcr.io/distroless/base-debian12:debug}.</p>
+ * <h3>Recommended base image</h3>
+ * <p>{@code gcr.io/distroless/base-debian12:nonroot} (~20 MB) — no JRE
+ * (jlink provides runtime), no shell, non-root user by default. For
+ * an interactive debug: {@code gcr.io/distroless/base-debian12:debug}.</p>
  */
 @Mojo(name = "docker",
       defaultPhase = LifecyclePhase.PACKAGE,
@@ -37,32 +37,32 @@ public class VidocqDockerMojo extends AbstractMojo {
     private MavenProject project;
 
     /**
-     * Image runtime jlink en entrée. Défaut : {@code target/dist} (sortie de
-     * {@code vidocq:jlink}). Doit être un chemin relatif au {@code target/}
-     * Maven (le Dockerfile généré utilise un COPY relatif).
+     * Input jlink runtime image. Default: {@code target/dist} (output of
+     * {@code vidocq:jlink}). Must be a path relative to {@code target/}
+     * Maven (the generated Dockerfile uses relative COPY).
      */
     @Parameter(defaultValue = "${project.build.directory}/dist", property = "vidocq.runtimeImage")
     private File runtimeImage;
 
-    /** Image de base Docker. Défaut : {@code gcr.io/distroless/base-debian12:nonroot}. */
+    /** Docker base image. Default: {@code gcr.io/distroless/base-debian12:nonroot}. */
     @Parameter(defaultValue = "gcr.io/distroless/base-debian12:nonroot", property = "vidocq.docker.baseImage")
     private String baseImage;
 
-    /** Tag de l'image générée. Défaut : {@code &lt;artifactId&gt;:&lt;version&gt;}. */
+    /** Tag of the generated image. Default: {@code &lt;artifactId&gt;:&lt;version&gt;}. */
     @Parameter(defaultValue = "${project.artifactId}:${project.version}", property = "vidocq.docker.imageTag")
     private String imageTag;
 
-    /** Port exposé. Défaut : 8080. */
+    /** Exposed port. Default: 8080. */
     @Parameter(defaultValue = "8080", property = "vidocq.docker.exposedPort")
     private int exposedPort;
 
-    /** Nom du launcher dans {@code dist/bin/}. Défaut : {@code project.artifactId}. */
+    /** Launcher name in {@code dist/bin/}. Default: {@code project.artifactId}. */
     @Parameter(defaultValue = "${project.artifactId}", property = "vidocq.launcher")
     private String launcher;
 
     /**
-     * Si {@code true}, lance {@code docker build} en sus de la génération.
-     * Défaut : {@code false} (le user lance lui-même quand il veut).
+     * If {@code true}, launch {@code docker build} in addition to the generation.
+     * Default: {@code false} (the user launches it himself when he wants).
      */
     @Parameter(defaultValue = "false", property = "vidocq.docker.build")
     private boolean build;
@@ -74,14 +74,14 @@ public class VidocqDockerMojo extends AbstractMojo {
     public void execute() throws MojoExecutionException {
         if (!runtimeImage.isDirectory()) {
             throw new MojoExecutionException(
-                    "runtimeImage introuvable : " + runtimeImage
-                            + ". Lance d'abord vidocq:jlink (ou pointe runtimeImage sur une image existante).");
+                    "runtimeImage not found: " + runtimeImage
+                            + ". Run vidocq:jlink first (or point runtimeImage to an existing image).");
         }
 
         Path target = buildDir.toPath();
         Path dockerfile = target.resolve("Dockerfile");
 
-        // Le Dockerfile est dans target/, le COPY référence dist/ relatif à
+        // The Dockerfile is in target/, the COPY reference dist/ relative to
         // target/ (= build context).
         String distRel = target.relativize(runtimeImage.toPath()).toString();
 
@@ -103,8 +103,8 @@ public class VidocqDockerMojo extends AbstractMojo {
 
         try {
             Files.writeString(dockerfile, content);
-            getLog().info("Dockerfile généré : " + dockerfile.toAbsolutePath());
-            getLog().info("Build avec : docker build -t " + imageTag + " -f " + dockerfile + " " + target);
+            getLog().info("Dockerfile generated: " + dockerfile.toAbsolutePath());
+            getLog().info("Build with: docker build -t " + imageTag + " -f " + dockerfile + " " + target);
         } catch (IOException e) {
             throw new MojoExecutionException("Failed to write Dockerfile", e);
         }
@@ -124,17 +124,17 @@ public class VidocqDockerMojo extends AbstractMojo {
             getLog().info("Running: " + String.join(" ", pb.command()));
             int rc = pb.start().waitFor();
             if (rc != 0) {
-                throw new MojoExecutionException("docker build a échoué (rc=" + rc + ")");
+                throw new MojoExecutionException("docker build failed (rc=" + rc + ")");
             }
-            getLog().info("Image Docker construite : " + imageTag);
+            getLog().info("Docker image built: " + imageTag);
         } catch (IOException e) {
             throw new MojoExecutionException(
-                    "Impossible de lancer 'docker build' (binaire docker introuvable ?). "
-                            + "Lance manuellement : docker build -t " + imageTag + " -f "
+                    "Unable to launch 'docker build' (docker binary not found?). "
+                            + "Run manually: docker build -t " + imageTag + " -f "
                             + dockerfile + " " + context, e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new MojoExecutionException("docker build interrompu", e);
+            throw new MojoExecutionException("docker build interrupted", e);
         }
     }
 }

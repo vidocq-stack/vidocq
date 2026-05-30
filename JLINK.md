@@ -1,53 +1,53 @@
 # Packaging Vidocq — jlink, jpackage, Docker
 
-Workflow complet pour packager une application Vidocq en artefact déployable
-autonome via le `vidocq-runtime-maven-plugin`. Trois cibles de packaging
-disponibles, plus un mécanisme de surcharge de config externe.
+Complete workflow for packaging a Vidocq application into a self-contained
+deployable artefact via the `vidocq-runtime-maven-plugin`. Three packaging
+targets are available, plus an external configuration override mechanism.
 
-| Cible | Goal | Output | Taille | Démarrage |
+| Target | Goal | Output | Size | Start-up |
 |-------|------|--------|--------|-----------|
-| Image runtime jlink | `vidocq:jlink` | `target/dist/` (binaire + runtime Java embarqué) | ~40 MB | ~4 s |
-| Bundle natif | `vidocq:jpackage` | `target/installer/<name>.app` (macOS), `.exe`/`.msi`/`.deb`/`.rpm` selon OS, ou app-image cross-platform | ~40 MB | ~1 s (CDS) |
-| Image Docker | `vidocq:docker` | `target/Dockerfile` à builder via `docker build` | ~50 MB total | n/a |
+| jlink runtime image | `vidocq:jlink` | `target/dist/` (binary + embedded Java runtime) | ~40 MB | ~4 s |
+| Native bundle | `vidocq:jpackage` | `target/installer/<name>.app` (macOS), `.exe`/`.msi`/`.deb`/`.rpm` depending on OS, or cross-platform app-image | ~40 MB | ~1 s (CDS) |
+| Docker image | `vidocq:docker` | `target/Dockerfile` to build via `docker build` | ~50 MB total | n/a |
 
-Les trois reposent sur le **même** runtime jlink (cf. §Layout). `jpackage`
-réutilise l'image produite par `jlink` ; `docker` la copie dans un container
-distroless minimal.
+All three rely on the **same** jlink runtime (see §Layout). `jpackage`
+reuses the image produced by `jlink`; `docker` copies it into a minimal
+distroless container.
 
 ---
 
-## 1. Quick start sur `vidocq-runtime-cassini-rest-example`
+## 1. Quick start on `vidocq-runtime-cassini-rest-example`
 
-L'exemple `vidocq-runtime-cassini-rest-example` est déjà câblé pour générer les trois
-artefacts en une commande.
+The `vidocq-runtime-cassini-rest-example` example is already wired to generate all three
+artefacts in a single command.
 
 ```sh
 cd vidocq-runtime-examples/vidocq-runtime-cassini-rest-example
 mvn package -DskipTests
 ```
 
-Produit :
+Produces:
 
 ```
 target/
-├── dist/                               # image jlink autonome
-│   ├── bin/todo-app                    # launcher binaire (pas de java requis)
-│   ├── conf/                           # config surchargeable (cf. §5)
+├── dist/                               # standalone jlink image
+│   ├── bin/todo-app                    # binary launcher (no java required)
+│   ├── conf/                           # overrideable config (see §5)
 │   │   ├── vidocq.properties
 │   │   └── logging.properties
-│   ├── lib/                            # modules JPMS de l'app + JDK
+│   ├── lib/                            # app JPMS modules + JDK
 │   ├── legal/                          # licences (jlink)
-│   └── release                         # info build
+│   └── release                         # build info
 ├── installer/
-│   └── todo-app.app/                   # bundle .app jpackage
-└── Dockerfile                          # à passer à docker build
+│   └── todo-app.app/                   # jpackage .app bundle
+└── Dockerfile                          # pass to docker build
 ```
 
-Lancement immédiat :
+Immediate launch:
 
 ```sh
 ./target/dist/bin/todo-app
-# → http://127.0.0.1:8080/        UI todo-list
+# → http://127.0.0.1:8080/        todo-list UI
 # → http://127.0.0.1:8080/api/todos
 ```
 
@@ -55,24 +55,22 @@ Lancement immédiat :
 
 ## 2. Goal `vidocq:jlink`
 
-### Rôle
+### Role
 
-Empaquette l'application + toutes ses dépendances modulaires + un runtime
-Java minimal **dans un dossier autonome** (`target/dist/`). Le binaire
-`bin/<launcher>` ne nécessite **aucune JVM pré-installée** sur la machine
-cible.
+Packages the application + all its modular dependencies + a minimal Java
+runtime **into a self-contained directory** (`target/dist/`). The binary
+`bin/<launcher>` requires **no pre-installed JVM** on the target machine.
 
-### Mécanique interne
+### Internal mechanics
 
-1. Stage tous les jars `compile`+`runtime` dans `target/jlink-mods/`.
-2. Vérifie qu'aucun n'est un automatic module (sinon erreur claire).
-3. `jdeps --print-module-deps` (ToolProvider) résout les modules JDK
-   transitifs.
+1. Stages all `compile`+`runtime` jars into `target/jlink-mods/`.
+2. Verifies that none is an automatic module (otherwise a clear error is raised).
+3. `jdeps --print-module-deps` (ToolProvider) resolves transitive JDK modules.
 4. `jlink --module-path stage:$JAVA_HOME/jmods --add-modules <set>
    --launcher <name>=<module>/<mainClass> --strip-debug --compress=zip-6
    --no-header-files --no-man-pages --output target/dist`.
-5. Copie `vidocq.properties` + `logging.properties` (et toute resource
-   configurée) dans `dist/conf/`.
+5. Copies `vidocq.properties` + `logging.properties` (and any configured
+   resource) into `dist/conf/`.
 
 ### Configuration
 
@@ -85,13 +83,13 @@ cible.
             <id>jlink</id>
             <goals><goal>jlink</goal></goals>
             <configuration>
-                <mainModule>com.example.myapp</mainModule>          <!-- requis -->
-                <mainClass>com.example.myapp.MainApp</mainClass>     <!-- requis -->
-                <launcher>my-app</launcher>                          <!-- défaut: artifactId -->
-                <distDir>${project.build.directory}/dist</distDir>   <!-- défaut -->
-                <stripDebug>true</stripDebug>                        <!-- défaut: true -->
-                <compress>zip-6</compress>                           <!-- zip-0..zip-9, défaut: zip-6 -->
-                <includeResources>                                   <!-- défaut: vidocq.properties + logging.properties -->
+                <mainModule>com.example.myapp</mainModule>          <!-- required -->
+                <mainClass>com.example.myapp.MainApp</mainClass>     <!-- required -->
+                <launcher>my-app</launcher>                          <!-- default: artifactId -->
+                <distDir>${project.build.directory}/dist</distDir>   <!-- default -->
+                <stripDebug>true</stripDebug>                        <!-- default: true -->
+                <compress>zip-6</compress>                           <!-- zip-0..zip-9, default: zip-6 -->
+                <includeResources>                                   <!-- default: vidocq.properties + logging.properties -->
                     <param>vidocq.properties</param>
                     <param>logging.properties</param>
                     <param>my-custom-config.yaml</param>
@@ -102,28 +100,28 @@ cible.
 </plugin>
 ```
 
-### Lancement
+### Launch
 
 ```sh
-./target/dist/bin/my-app                                  # défaut
+./target/dist/bin/my-app                                  # default
 ./target/dist/bin/my-app -Dfoo=bar                        # system properties
-./target/dist/bin/my-app --module-path …                  # args supplémentaires (rares)
+./target/dist/bin/my-app --module-path …                  # additional args (rare)
 ```
 
 ---
 
 ## 3. Goal `vidocq:jpackage`
 
-### Rôle
+### Role
 
-Empaquette l'image jlink en un **bundle natif** par OS hôte :
+Packages the jlink image into a **native bundle** for the host OS:
 `.app`/`.dmg`/`.pkg` (macOS), `.deb`/`.rpm` (Linux), `.exe`/`.msi`
-(Windows), ou en app-image (dossier cross-platform sans installer).
+(Windows), or an app-image (cross-platform directory without installer).
 
-### Mécanique interne
+### Internal mechanics
 
-Réutilise `target/dist/` (sortie de `vidocq:jlink`) comme `--runtime-image`,
-sans re-résoudre les modules. Délègue à `java.util.spi.ToolProvider("jpackage")`.
+Reuses `target/dist/` (output of `vidocq:jlink`) as `--runtime-image`,
+without re-resolving modules. Delegates to `java.util.spi.ToolProvider("jpackage")`.
 
 ### Configuration
 
@@ -132,49 +130,47 @@ sans re-résoudre les modules. Délègue à `java.util.spi.ToolProvider("jpackag
     <id>jpackage</id>
     <goals><goal>jpackage</goal></goals>
     <configuration>
-        <mainModule>com.example.myapp</mainModule>          <!-- requis -->
-        <mainClass>com.example.myapp.MainApp</mainClass>     <!-- requis -->
-        <appName>my-app</appName>                            <!-- défaut: artifactId -->
-        <appVersion>1.0.0</appVersion>                       <!-- macOS exige 1.x.y, pas 0.x.y -->
+        <mainModule>com.example.myapp</mainModule>          <!-- required -->
+        <mainClass>com.example.myapp.MainApp</mainClass>     <!-- required -->
+        <appName>my-app</appName>                            <!-- default: artifactId -->
+        <appVersion>1.0.0</appVersion>                       <!-- macOS requires 1.x.y, not 0.x.y -->
         <type>app-image</type>                               <!-- app-image | dmg | pkg | deb | rpm | msi | exe -->
-        <runtimeImage>${project.build.directory}/dist</runtimeImage>  <!-- défaut: sortie de jlink -->
+        <runtimeImage>${project.build.directory}/dist</runtimeImage>  <!-- default: jlink output -->
         <installerDir>${project.build.directory}/installer</installerDir>
-        <icon>src/main/resources/app.icns</icon>             <!-- optionnel; .icns/.ico/.png -->
-        <vendor>${project.groupId}</vendor>                  <!-- défaut: groupId -->
-        <description>${project.description}</description>    <!-- défaut: description du POM -->
+        <icon>src/main/resources/app.icns</icon>             <!-- optional; .icns/.ico/.png -->
+        <vendor>${project.groupId}</vendor>                  <!-- default: groupId -->
+        <description>${project.description}</description>    <!-- default: POM description -->
     </configuration>
 </execution>
 ```
 
-### Type par défaut : `app-image`
+### Default type: `app-image`
 
-- **macOS** : produit un dossier `<name>.app` exécutable (Mach-O) — pas
-  d'installer signé. Idéal pour distribuer un binaire portable.
-- **Linux** : dossier avec un launcher shell.
-- **Windows** : dossier avec un `<name>.exe` Win32.
+- **macOS**: produces a runnable `<name>.app` directory (Mach-O) — no signed
+  installer. Ideal for distributing a portable binary.
+- **Linux**: directory with a shell launcher.
+- **Windows**: directory with a `<name>.exe` Win32 executable.
 
-Pour un installer **distribuable signé**, fixer `<type>` à la valeur
-appropriée (`dmg`, `deb`, etc.) et fournir l'outillage natif requis
-(`pkgbuild`/`dpkg`/Wix). Vérifier les pré-requis dans la doc Oracle/OpenJDK
-de `jpackage`.
+For a **distributable signed installer**, set `<type>` to the appropriate value
+(`dmg`, `deb`, etc.) and provide the required native tooling
+(`pkgbuild`/`dpkg`/Wix). Check prerequisites in the Oracle/OpenJDK `jpackage`
+documentation.
 
 ### Versions
 
-`jpackage` exige une version **strictement numérique** (`1.0.0`, `2.3.4`).
-Le plugin strip automatiquement `-SNAPSHOT` et tout suffixe alphanumérique
-de `${project.version}`. **macOS app-image refuse les versions commençant
-par `0`** — fixer un `<appVersion>1.x.y</appVersion>` explicite si le
-projet est en `0.x.x`.
+`jpackage` requires a **strictly numeric** version (`1.0.0`, `2.3.4`).
+The plugin automatically strips `-SNAPSHOT` and any alphanumeric suffix from
+`${project.version}`. **macOS app-image rejects versions starting with `0`** —
+set an explicit `<appVersion>1.x.y</appVersion>` if the project is on `0.x.x`.
 
 ---
 
 ## 4. Goal `vidocq:docker`
 
-### Rôle
+### Role
 
-Génère un `Dockerfile` qui empaquette l'image runtime jlink dans un
-container minimal. Pas de JRE supplémentaire requis — jlink contient son
-propre runtime.
+Generates a `Dockerfile` that packages the jlink runtime image into a minimal
+container. No additional JRE required — jlink includes its own runtime.
 
 ### Configuration
 
@@ -183,132 +179,128 @@ propre runtime.
     <id>docker</id>
     <goals><goal>docker</goal></goals>
     <configuration>
-        <launcher>my-app</launcher>                          <!-- défaut: artifactId -->
-        <imageTag>example/my-app:1.0.0</imageTag>            <!-- défaut: artifactId:version -->
-        <baseImage>gcr.io/distroless/base-debian12:nonroot</baseImage>  <!-- défaut -->
-        <exposedPort>8080</exposedPort>                      <!-- défaut: 8080 -->
+        <launcher>my-app</launcher>                          <!-- default: artifactId -->
+        <imageTag>example/my-app:1.0.0</imageTag>            <!-- default: artifactId:version -->
+        <baseImage>gcr.io/distroless/base-debian12:nonroot</baseImage>  <!-- default -->
+        <exposedPort>8080</exposedPort>                      <!-- default: 8080 -->
         <runtimeImage>${project.build.directory}/dist</runtimeImage>
-        <build>false</build>                                 <!-- défaut: false (génère seulement) -->
+        <build>false</build>                                 <!-- default: false (generate only) -->
     </configuration>
 </execution>
 ```
 
-### Pourquoi `distroless/base-debian12:nonroot` par défaut ?
+### Why `distroless/base-debian12:nonroot` by default?
 
-- ~20 MB, pas de shell, pas de package manager : surface d'attaque
-  minimale.
-- Pas de JRE — jlink fournit son propre runtime, l'inclure serait
-  redondant.
-- User non-root par défaut — sécurité par défaut conforme aux bonnes
-  pratiques k8s.
+- ~20 MB, no shell, no package manager: minimal attack surface.
+- No JRE — jlink provides its own runtime, including one would be redundant.
+- Non-root user by default — security-by-default aligned with k8s best practices.
 
-Pour un debug interactif (shell, busybox), utiliser temporairement
+For interactive debugging (shell, busybox), temporarily use
 `gcr.io/distroless/base-debian12:debug`.
 
-### Build et run
+### Build and run
 
 ```sh
-# Build (le plugin ne le fait pas automatiquement par défaut)
+# Build (the plugin does not do it automatically by default)
 docker build -t example/my-app:1.0.0 -f target/Dockerfile target/
 
 # Run
 docker run --rm -p 8080:8080 example/my-app:1.0.0
 
-# Avec config surchargée (cf. §5)
+# With overridden config (see §5)
 docker run --rm -p 8080:8080 \
     -e VIDOCQ_CONFIG_DIR=/etc/myapp \
     -v $(pwd)/conf:/etc/myapp:ro \
     example/my-app:1.0.0
 ```
 
-Pour invoquer `docker build` directement depuis Maven :
-`<configuration><build>true</build></configuration>` ou
-`-Dvidocq.docker.build=true`. Le plugin échoue proprement si le binaire
-`docker` n'est pas disponible.
+To invoke `docker build` directly from Maven:
+`<configuration><build>true</build></configuration>` or
+`-Dvidocq.docker.build=true`. The plugin fails cleanly if the `docker`
+binary is not available.
 
 ---
 
-## 5. Surcharge de config externe (`ExternalFileConfigSource`)
+## 5. External configuration override (`ExternalFileConfigSource`)
 
-Trois mécanismes par ordre de priorité décroissante :
+Three mechanisms in decreasing priority order:
 
 ```sh
-# A. Propriété système (ordinal 400)
+# A. System property (ordinal 400)
 ./bin/my-app -Dvidocq.chappe.listener.default.port=9090
 
-# B. Variable d'environnement (ordinal 300)
+# B. Environment variable (ordinal 300)
 VIDOCQ_CONFIG_DIR=/etc/my-app ./bin/my-app
-# → lit /etc/my-app/vidocq.properties
+# → reads /etc/my-app/vidocq.properties
 
-# C. Fichier externe (ordinal 250 — nouveau)
-# Cherche dans l'ordre :
+# C. External file (ordinal 250 — new)
+# Looks in this order:
 #   1. ${vidocq.config.dir}/vidocq.properties        (system prop)
 #   2. ${VIDOCQ_CONFIG_DIR}/vidocq.properties        (env var)
-#   3. ${java.home}/conf/vidocq.properties           (convention jlink)
+#   3. ${java.home}/conf/vidocq.properties           (jlink convention)
 #   4. ./conf/vidocq.properties                      (working dir)
 ```
 
-### Convention `${java.home}/conf/vidocq.properties`
+### `${java.home}/conf/vidocq.properties` convention
 
-En image jlink, `java.home` pointe sur le runtime image (= `dist/`). Le
-goal `vidocq:jlink` copie le `vidocq.properties` du classpath dans
-`dist/conf/`. Donc :
+In a jlink image, `java.home` points to the runtime image (= `dist/`). The
+`vidocq:jlink` goal copies the `vidocq.properties` from the classpath into
+`dist/conf/`. Therefore:
 
 ```sh
-# Édition à la volée sans recompilation :
+# On-the-fly edit without recompilation:
 echo "vidocq.chappe.listener.default.port=9090" >> target/dist/conf/vidocq.properties
-./target/dist/bin/my-app   # tourne désormais sur 9090
+./target/dist/bin/my-app   # now runs on 9090
 ```
 
-C'est exactement le cas d'usage "ops modifient la config d'une release
-sans rebuilder".
+This is exactly the "ops modify the config of a release without rebuilding" use
+case.
 
-### Diagnostic
+### Diagnostics
 
-Au boot, le log inclut une ligne :
+At boot, the log includes a line:
 
 ```
 INFO ExternalFileConfigSource: Loaded external config from /path/to/vidocq.properties (3 entries)
 ```
 
-Si aucun fichier n'est trouvé, la source est silencieusement absente et
-seule la config classpath (`PropertiesFileConfigSource`, ordinal 100)
-s'applique.
+If no file is found, the source is silently absent and only the classpath config
+(`PropertiesFileConfigSource`, ordinal 100) applies.
 
-### Hiérarchie complète des `ConfigSource`
+### Full `ConfigSource` hierarchy
 
 | Ordinal | Source | Description |
 |---------|--------|-------------|
 | 400 | `SystemPropertiesConfigSource` | `-Dkey=value` |
-| 300 | `EnvConfigSource` | Variables d'environnement |
-| **250** | **`ExternalFileConfigSource`** | **Fichier externe surchargeable** |
-| 100 | `PropertiesFileConfigSource` | `vidocq.properties` du classpath |
+| 300 | `EnvConfigSource` | Environment variables |
+| **250** | **`ExternalFileConfigSource`** | **Overrideable external file** |
+| 100 | `PropertiesFileConfigSource` | `vidocq.properties` from the classpath |
 
 ---
 
-## 6. Pré-requis et bonnes pratiques
+## 6. Prerequisites and best practices
 
-### 6.1 Tous les jars doivent être des modules JPMS nommés
+### 6.1 All jars must be named JPMS modules
 
-`jlink` rejette les automatic modules. Le goal détecte le cas et échoue
-proprement avec :
+`jlink` rejects automatic modules. The goal detects this and fails cleanly
+with:
 
 ```
-jlink ne supporte pas les automatic modules : my.legacy.lib (file:///…/legacy.jar).
-Convertis ces jars en vrais modules JPMS (ajout d'un module-info.java).
+jlink does not support automatic modules: my.legacy.lib (file:///…/legacy.jar).
+Convert these jars to proper JPMS modules (add a module-info.java).
 ```
 
-Pour ton propre projet :
+For your own project:
 
-- Ajouter un `module-info.java` dans le module applicatif.
-- Pour les libs tierces non modulaires : utiliser `jdeps --generate-module-info`,
-  ou demander une release modulaire upstream, ou re-packager.
+- Add a `module-info.java` to the application module.
+- For non-modular third-party libs: use `jdeps --generate-module-info`,
+  request a modular upstream release, or re-package.
 
-### 6.2 Records sérialisés via REST
+### 6.2 Records serialised via REST
 
-Yasson 3.0.4 + records + module-path strict ne désérialise pas le canonical
-constructor : les champs `String` reviennent `null` après round-trip
-POST → GET. Workaround : factory annotée `@JsonbCreator` :
+Yasson 3.0.4 + records + strict module-path does not deserialise the canonical
+constructor: `String` fields come back `null` after a POST → GET round-trip.
+Workaround: factory annotated with `@JsonbCreator`:
 
 ```java
 public record Todo(long id, String title, boolean done) {
@@ -321,13 +313,12 @@ public record Todo(long id, String title, boolean done) {
 }
 ```
 
-À retirer une fois `cassini-jsonb` maison livré
-(cf. [cassini/JSON-ROADMAP.md](../cassini/JSON-ROADMAP.md)).
+To be removed once the in-house `cassini-jsonb` is delivered
+(see [cassini/JSON-ROADMAP.md](../cassini/JSON-ROADMAP.md)).
 
-### 6.3 Reflection JAX-RS / JSON-B
+### 6.3 JAX-RS / JSON-B reflection
 
-Les ressources, providers, modèles de données doivent être dans un package
-**ouvert** :
+Resources, providers, and data models must be in an **open** package:
 
 ```java
 module com.example.myapp {
@@ -342,11 +333,11 @@ module com.example.myapp {
 
 ### 6.3.1 Custom `java.util.logging` Handler
 
-Si ton app déclare un handler logging custom (`StdoutHandler`,
-`CompactFormatter`, etc.) référencé dans `logging.properties` via
-`handlers = com.example.myapp.logging.StdoutHandler`, il faut **exporter**
-le package à `java.logging` — sinon `LogManager.createLoggerHandlers`
-échoue par `IllegalAccessException` au boot :
+If your app declares a custom logging handler (`StdoutHandler`,
+`CompactFormatter`, etc.) referenced in `logging.properties` via
+`handlers = com.example.myapp.logging.StdoutHandler`, you must **export**
+the package to `java.logging` — otherwise `LogManager.createLoggerHandlers`
+fails with `IllegalAccessException` at boot:
 
 ```java
 module com.example.myapp {
@@ -356,65 +347,65 @@ module com.example.myapp {
 }
 ```
 
-`exports … to java.logging` (ciblé) est suffisant — pas besoin d'`opens`,
-puisque `Class.newInstance()` n'utilise que le constructeur public no-arg.
+`exports … to java.logging` (qualified) is sufficient — no need for `opens`,
+since `Class.newInstance()` only uses the public no-arg constructor.
 
-### 6.4 macOS app-image et version
+### 6.4 macOS app-image and version
 
-`jpackage --type app-image` sur macOS exige `appVersion` commençant par `1`
-ou plus. Un projet `0.1.0-SNAPSHOT` doit fixer un `<appVersion>1.0.0</appVersion>`
-explicite.
+`jpackage --type app-image` on macOS requires `appVersion` starting with `1`
+or higher. A `0.1.0-SNAPSHOT` project must set an explicit
+`<appVersion>1.0.0</appVersion>`.
 
-### 6.5 Ports dans Docker
+### 6.5 Ports in Docker
 
-Le `EXPOSE` du Dockerfile généré pointe sur le port configuré
-(`<exposedPort>`, défaut 8080). S'assurer que `vidocq.chappe.listener.default.port`
-correspond, sinon le mapping `-p` est inopérant.
+The `EXPOSE` in the generated Dockerfile points to the configured port
+(`<exposedPort>`, default 8080). Make sure `vidocq.chappe.listener.default.port`
+matches, otherwise the `-p` mapping is ineffective.
 
 ---
 
-## 7. Layout des artefacts produits
+## 7. Layout of produced artefacts
 
-### Image jlink (`target/dist/`)
+### jlink image (`target/dist/`)
 
 ```
 dist/
 ├── bin/
-│   ├── java                        # binaire JVM réduit
-│   ├── keytool                     # utilitaire JDK
-│   └── <launcher>                  # ← launcher de l'app (entrypoint)
+│   ├── java                        # reduced JVM binary
+│   ├── keytool                     # JDK utility
+│   └── <launcher>                  # ← app launcher (entrypoint)
 ├── conf/
-│   ├── jaxp.properties             # config JDK
-│   ├── logging.properties          # ← copié par vidocq:jlink
+│   ├── jaxp.properties             # JDK config
+│   ├── logging.properties          # ← copied by vidocq:jlink
 │   ├── net.properties
 │   ├── security/                   # truststore, policies
-│   └── vidocq.properties           # ← copié par vidocq:jlink, surchargeable
-├── lib/                            # modules JPMS (app + JDK + libs)
-│   ├── modules                     # archive jimage des modules
+│   └── vidocq.properties           # ← copied by vidocq:jlink, overrideable
+├── lib/                            # JPMS modules (app + JDK + libs)
+│   ├── modules                     # jimage archive of modules
 │   ├── jrt-fs.jar
 │   └── …
-├── legal/                          # licences des modules JDK
-└── release                         # version JDK + modules embarqués
+├── legal/                          # JDK module licences
+└── release                         # JDK version + embedded modules
 ```
 
-### Bundle macOS (`target/installer/<name>.app/`)
+### macOS bundle (`target/installer/<name>.app/`)
 
 ```
 <name>.app/
 └── Contents/
-    ├── Info.plist                  # métadonnées Bundle
+    ├── Info.plist                  # Bundle metadata
     ├── PkgInfo
     ├── MacOS/
-    │   └── <name>                  # launcher Mach-O ARM64/x86_64
-    ├── app/                        # config additionnelle (vide ici)
-    ├── Resources/                  # icônes, assets
-    ├── runtime/                    # ← image jlink intégrée
+    │   └── <name>                  # Mach-O ARM64/x86_64 launcher
+    ├── app/                        # additional config (empty here)
+    ├── Resources/                  # icons, assets
+    ├── runtime/                    # ← embedded jlink image
     │   └── Contents/Home/          # = target/dist/ structure
     │       ├── bin/, conf/, lib/, legal/, release
-    └── _CodeSignature/             # signature ad-hoc (à re-signer pour distrib)
+    └── _CodeSignature/             # ad-hoc signature (re-sign for distribution)
 ```
 
-### Image Docker
+### Docker image
 
 ```
 gcr.io/distroless/base-debian12:nonroot
@@ -428,54 +419,54 @@ ENTRYPOINT ["/opt/app/bin/<launcher>"]
 
 ---
 
-## 8. Limitations connues
+## 8. Known limitations
 
 | # | Limitation | Workaround |
 |---|------------|------------|
-| 1 | Toute dépendance non-modulaire bloque `jlink` | Ajouter `module-info.java` ou utiliser `jdeps --generate-module-info`. **Note** : l'API MicroProfile Config est livrée sous forme de module nommé `org.eclipse.microprofile.config` via `io.vidocq.ravel:ravel-mp-config-api` (substitut JPMS de `org.eclipse.microprofile.config:microprofile-config-api`, qui reste un automatic module en amont). |
-| 2 | Yasson + records → `title=null` round-trip POST/GET en module-path | Factory `@JsonbCreator` (cf. §6.2). Sera réglé par `cassini-jsonb` maison. |
-| 3 | macOS `app-image` refuse `appVersion=0.x.y` | Fixer `<appVersion>1.0.0</appVersion>` |
-| 4 | `--strip-debug` retire `LineNumberTable` (stack-traces moins lisibles) | `<stripDebug>false</stripDebug>` en dev, `true` en prod |
-| 5 | Pas de fallback fat-jar (uber-jar via shade-plugin) | Backlog `package-fatjar` ; jlink + docker couvrent ~95 % des cas |
-| 6 | `jpackage` `--type=dmg`/`deb`/`msi` requiert un outillage natif (`pkgbuild`, `dpkg`, Wix) | Utiliser `app-image` qui n'a aucun pré-requis natif, ou installer l'outillage en CI |
+| 1 | Any non-modular dependency blocks `jlink` | Add `module-info.java` or use `jdeps --generate-module-info`. **Note**: the MicroProfile Config API is delivered as a named module `org.eclipse.microprofile.config` via `io.vidocq.ravel:ravel-mp-config-api` (JPMS substitute for `org.eclipse.microprofile.config:microprofile-config-api`, which remains an automatic module upstream). |
+| 2 | Yasson + records → `title=null` on POST/GET round-trip in module-path | `@JsonbCreator` factory (see §6.2). Will be fixed by in-house `cassini-jsonb`. |
+| 3 | macOS `app-image` rejects `appVersion=0.x.y` | Set `<appVersion>1.0.0</appVersion>` |
+| 4 | `--strip-debug` removes `LineNumberTable` (less readable stack-traces) | `<stripDebug>false</stripDebug>` in dev, `true` in prod |
+| 5 | No fat-jar fallback (uber-jar via shade-plugin) | Backlog `package-fatjar`; jlink + docker cover ~95 % of cases |
+| 6 | `jpackage` `--type=dmg`/`deb`/`msi` requires native tooling (`pkgbuild`, `dpkg`, Wix) | Use `app-image` which has no native prerequisites, or install the tooling in CI |
 
 ---
 
 ## 9. Roadmap
 
-- **`package-fatjar`** (backlog) — fallback shade-plugin pour les
-  déploiements legacy ne supportant pas le module-path.
-- **`cassini-jsonb` / `cassini-jsonp`** maison
-  ([roadmap](../cassini/JSON-ROADMAP.md)) — supprimera la friction
-  records + Yasson.
-- **CDS pré-généré** dans `vidocq:jlink` (`--generate-cds-archive`) — gain
-  de 100-300 ms supplémentaires au démarrage.
-- **Image multi-arch Docker** (buildx, `linux/amd64`+`linux/arm64`) — utile
-  pour la production multi-archi.
-- **Sign macOS / Windows installers** — workflow `codesign` + Apple
-  notarization, signtool Win32 ; pas inclus dans le plugin pour l'instant.
+- **`package-fatjar`** (backlog) — shade-plugin fallback for legacy deployments
+  that do not support module-path.
+- **In-house `cassini-jsonb` / `cassini-jsonp`**
+  ([roadmap](../cassini/JSON-ROADMAP.md)) — will remove the records + Yasson
+  friction.
+- **Pre-generated CDS** in `vidocq:jlink` (`--generate-cds-archive`) — additional
+  100–300 ms gain at start-up.
+- **Multi-arch Docker image** (buildx, `linux/amd64`+`linux/arm64`) — useful for
+  multi-architecture production deployments.
+- **Sign macOS / Windows installers** — `codesign` + Apple notarization workflow,
+  Win32 signtool; not included in the plugin for now.
 
 ---
 
-## 10. Référence rapide
+## 10. Quick reference
 
 ```sh
-# Build complet (génère dist + .app + Dockerfile)
+# Full build (generates dist + .app + Dockerfile)
 mvn package -DskipTests
 
-# Lancer image jlink directement
+# Run jlink image directly
 ./target/dist/bin/<launcher>
 
-# Lancer bundle macOS
+# Run macOS bundle
 open target/installer/<name>.app
-# ou en mode CLI pour voir les logs :
+# or in CLI mode to see logs:
 ./target/installer/<name>.app/Contents/MacOS/<launcher>
 
-# Lancer Docker
+# Run Docker
 docker build -t <tag> -f target/Dockerfile target/
 docker run --rm -p 8080:8080 <tag>
 
-# Surcharger la config sans recompiler
+# Override config without recompiling
 echo "vidocq.foo=bar" >> target/dist/conf/vidocq.properties
 ./target/dist/bin/<launcher>
 

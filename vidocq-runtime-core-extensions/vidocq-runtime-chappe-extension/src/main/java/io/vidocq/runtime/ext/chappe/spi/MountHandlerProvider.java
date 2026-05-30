@@ -3,28 +3,28 @@ package io.vidocq.runtime.ext.chappe.spi;
 import io.vidocq.chappe.api.Handler;
 
 /**
- * SPI Vidocq permettant à une extension de fournir un {@link Handler} Chappe
- * configurable par properties — invoqué par {@code ChappeMountConfigExtension}
- * pour chaque entrée {@code vidocq.http.mount.<name>.type=<type>}.
+ * SPI Vidocq allowing an extension to provide a {@link Handler} Chappe
+ * configurable by properties — invoked by {@code ChappeMountConfigExtension}
+ * for each entry {@code vidocq.http.mount.<name>.type=<type>}.
  *
- * <p>Découverte par {@link java.util.ServiceLoader} via le module path
- * (déclaration {@code provides … with …} dans {@code module-info.java}) ou
+ * <p>Discovered by {@link java.util.ServiceLoader} via the path module
+ * ({@code provides … with …} declaration in {@code module-info.java}) or
  * via {@code META-INF/services/io.vidocq.runtime.ext.chappe.spi.MountHandlerProvider}.</p>
  *
- * <h3>Convention de nommage</h3>
- * <p>{@link #type()} doit décrire le <b>contrat standard</b> servi (ex.
- * {@code "restful"} pour Jakarta RESTful Web Services, {@code "servlet"}
- * pour Jakarta Servlet, {@code "static"} pour du contenu statique), pas
- * l'implémentation. Plusieurs providers peuvent ainsi partager le même type ;
- * la sélection se fera plus tard via une property {@code .impl} optionnelle
- * (à introduire le jour où la cohabitation devient nécessaire).</p>
+ * <h3>Naming convention</h3>
+ * <p>{@link #type()} must describe the <b>standard contract</b> served (e.g.
+ * {@code "restful"} for Jakarta RESTful Web Services, {@code "servlet"}
+ * for Jakarta Servlet, {@code "static"} for static content), not
+ * the implementation. Several providers can thus share the same type;
+ * the selection will be made later via an optional property {@code .impl}
+ * (to be introduced on the day cohabitation becomes necessary).</p>
  *
- * <h3>Exemple</h3>
+ * <h3>Example</h3>
  * <pre>{@code
  * public final class CassiniMountHandlerProvider implements MountHandlerProvider {
  *     public String type() { return "restful"; }
  *     public Handler create(MountConfig cfg) {
- *         return new ChappeHttpAdapter(buildCassiniStack(cfg).adapter());
+ *         return new ChappeHttpAdapter(buildCassiniStack(cfg).adaptor());
  *     }
  * }
  * }</pre>
@@ -32,19 +32,19 @@ import io.vidocq.chappe.api.Handler;
 public interface MountHandlerProvider {
 
     /**
-     * Identifiant logique du <b>contrat standard</b> servi par ce provider
-     * (clé {@code vidocq.http.mount.<name>.type}).
+     * Logical identifier of the <b>standard contract</b> served by this provider
+     * (key {@code vidocq.http.mount.<name>.type}).
      *
-     * <p>Pour l'instant, un seul provider doit déclarer un {@code type} donné
-     * (les conflits sont signalés à la résolution). Une future property
-     * {@code .impl} permettra de partager un type entre plusieurs
-     * implémentations.</p>
+     * <p>For the moment, only one provider must declare a given {@code type}
+     * (conflicts are reported at resolution). A future property
+     * {@code .impl} will allow a type to be shared between several
+     * implementations.</p>
      */
     String type();
 
     /**
-     * Construit le {@link Handler} pour un mount donné, avec accès à la config
-     * scopée sous {@code vidocq.mount.<name>.}.
+     * Constructs the {@link Handler} for a given mount, with access to the config
+     * scoped under {@code vidocq.mount.<name>.}.
      */
     Handler create(MountConfig config);
 }

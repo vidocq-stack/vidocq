@@ -12,7 +12,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 
 /**
- * Demo-only schema bootstrap. The {@code @Observes @Initialized(ApplicationScoped.class)}
+ * Demo-only bootstrap schema. The {@code @Observes @Initialized(ApplicationScoped.class)}
  * trigger fires when the Vauban CDI container is fully started, after the {@link DataSource}
  * bean published by the mansart-pool extension is available. {@code @ApplicationScoped} beans
  * are otherwise lazy in Vauban — without the observer, this bean would never be instantiated.
@@ -23,7 +23,7 @@ import java.sql.Statement;
 @ApplicationScoped
 public class SchemaInitializer {
 
-    // Indirect via Instance<> so the Vauban APT does not statically reject the @Inject : the
+    // Indirect via Instance<> so the Vauban APT does not statically reject the @Inject: the
     // DataSource bean is contributed by mansart-pool-extension at runtime and not visible to the
     // compile-time index of this module.
     @Inject

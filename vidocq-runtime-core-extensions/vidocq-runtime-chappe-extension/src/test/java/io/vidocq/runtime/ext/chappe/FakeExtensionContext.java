@@ -7,7 +7,7 @@ import io.vidocq.runtime.spi.config.VidocqConfig;
 
 import java.util.Optional;
 
-/** Stub minimal d'{@link ExtensionContext} pour les tests d'intégration. */
+/** Minimal {@link ExtensionContext} stub for integration testing. */
 final class FakeExtensionContext implements ExtensionContext {
 
     private final VidocqConfig config;

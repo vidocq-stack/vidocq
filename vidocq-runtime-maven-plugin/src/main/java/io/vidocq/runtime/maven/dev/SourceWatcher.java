@@ -95,7 +95,7 @@ final class SourceWatcher implements AutoCloseable {
     /**
      * Block until at least one event on a watched file extension arrives,
      * then drain any further event within the debounce window. Returns
-     * {@code true} on a real change, {@code false} if the watcher was closed.
+     * {@code true} we have a real change, {@code false} if the watcher was closed.
      */
     boolean awaitChange() throws InterruptedException {
         while (true) {

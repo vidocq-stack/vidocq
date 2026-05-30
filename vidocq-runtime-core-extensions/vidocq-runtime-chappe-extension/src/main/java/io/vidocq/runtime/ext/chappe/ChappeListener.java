@@ -3,20 +3,20 @@ package io.vidocq.runtime.ext.chappe;
 import java.util.Objects;
 
 /**
- * Description d'un listener Chappe (un couple host:port, avec ou sans TLS).
+ * Description of a Chappe listener (a host:port pair, with or without TLS).
  * <p>
- * Chappe alloue une instance {@link io.vidocq.chappe.api.Server} par listener.
- * Les extensions contributrices identifient le listener par son {@link #name()}.
+ * Chappe allocates one {@link io.vidocq.chappe.api.Server} instance per listener.
+ * Contributing extensions identify the listener by its {@link #name()}.
  * </p>
  *
- * @param name  nom logique (ex. {@code default}, {@code admin})
- * @param host  hôte d'écoute
- * @param port  port d'écoute
- * @param tls   {@code true} pour activer TLS (réservé — non implémenté dans ce jalon)
+ * @param name logical name (e.g. {@code default}, {@code admin})
+ * @param host listening host
+ * @param port listening port
+ * @param tls {@code true} to enable TLS (reserved — not implemented in this milestone)
  */
 public record ChappeListener(String name, String host, int port, boolean tls) {
 
-    /** Nom du listener par défaut. */
+    /** Default listener name. */
     public static final String DEFAULT = "default";
 
     public ChappeListener {
@@ -30,7 +30,7 @@ public record ChappeListener(String name, String host, int port, boolean tls) {
         }
     }
 
-    /** Listener HTTP simple. */
+    /** Simple HTTP listener. */
     public static ChappeListener http(String name, String host, int port) {
         return new ChappeListener(name, host, port, false);
     }

@@ -30,15 +30,15 @@ import java.util.concurrent.atomic.AtomicReference;
  *       (target/classes + every runtime/compile artifact).</li>
  *   <li>Fork a child JVM with {@code -Dvidocq.profile=dev} and inherited I/O.</li>
  *   <li>Watch {@code src/main/{java,resources}} for changes.</li>
- *   <li>On a relevant change (debounced 250 ms by default), shell out
+ *   <li>We have a relevant change (debounced 250 ms by default), shell out
  *       {@code mvn process-classes}; on success, gracefully stop the child JVM
  *       and respawn it.</li>
  * </ol>
  *
  * <p>The Mojo is <b>blocking</b> — it keeps the terminal until the user hits
  * Ctrl+C, at which point a JVM shutdown hook kills the child cleanly. No state
- * survives a reload: every cycle is a "production miniature", which is why
- * Approach A honours JPMS strict + static codegen with zero risk of class-loader
+ * survives a reload: every cycle is a "miniature production", which is why
+ * Approach A honors JPMS strict + static codegen with zero risk of class-loader
  * leaks.</p>
  *
  * <p><b>Not for use against TCK runners</b> ({@code cassini-tck}, {@code foy-tck}, …)
@@ -61,7 +61,7 @@ public class VidocqDevMojo extends AbstractMojo {
     private String mainModule;
 
     /**
-     * Fully-qualified main class. Optional: when omitted, the child JVM relies
+     * Fully-qualified main class. Optional: when omitted, the child JVM links
      * on the {@code ModuleMainClass} attribute baked into the app's
      * {@code module-info.class}.
      */
@@ -80,7 +80,7 @@ public class VidocqDevMojo extends AbstractMojo {
     /**
      * Grace period given to the child JVM after {@link Process#destroy()}
      * before {@link Process#destroyForcibly()} fires. Five seconds is plenty
-     * for the chappe drain in dev — production keeps the 30 s default.
+     * for the screed drain in dev — production keeps the 30 s default.
      */
     @Parameter(property = "vidocq.dev.gracePeriodMillis", defaultValue = "5000")
     private long gracePeriodMillis;

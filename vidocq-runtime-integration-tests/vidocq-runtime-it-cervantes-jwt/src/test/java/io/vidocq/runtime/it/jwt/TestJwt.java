@@ -9,9 +9,9 @@ import java.util.Base64;
 import java.util.List;
 
 /**
- * Outils de test : génération d'une paire RSA et forge de JWT RS256 signés, sans aucune librairie
- * JWT tierce — uniquement {@code java.security} et un encodage JSON minimal. Modelé sur le
- * {@code TestJwts} de cervantes-core.
+ * Test tools: generation of an RSA pair and forging of signed JWT RS256, without any library
+ * Third-party JWT — only {@code java.security} and minimal JSON encoding. Modeled on the
+ * {@code TestJwts} from cervantes-core.
  */
 final class TestJwt {
 
@@ -25,16 +25,16 @@ final class TestJwt {
         return g.generateKeyPair();
     }
 
-    /** Clé publique X.509 encodée en base64 (valeur attendue de {@code mp.jwt.verify.publickey}). */
+    /** Base64 encoded X.509 public key (expected value of {@code mp.jwt.verify.publickey}). */
     static String publicKeyBase64(java.security.PublicKey key) {
         return Base64.getEncoder().encodeToString(key.getEncoded());
     }
 
     /**
-     * Forge un JWT RS256 compact signé avec les claims minimaux MicroProfile JWT
+     * Forge a compact RS256 JWT signed with the minimum MicroProfile JWT claims
      * ({@code iss}, {@code sub}, {@code upn}, {@code groups}, {@code exp}, {@code iat}, {@code jti}).
      *
-     * @param groups les groupes (rôles) du token, ou liste vide
+     * @param groups the groups (roles) of the token, or empty list
      */
     static String signRs256(PrivateKey key, String issuer, String subject, List<String> groups) throws Exception {
         long now = System.currentTimeMillis() / 1000L;

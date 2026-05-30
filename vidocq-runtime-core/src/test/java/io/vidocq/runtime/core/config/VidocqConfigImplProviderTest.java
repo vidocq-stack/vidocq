@@ -14,39 +14,39 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Valide la sémantique de remplacement de {@code ConfigSourceProvider} : quand
- * un provider est enregistré, ses sources remplacent intégralement les sources
- * natives ServiceLoader-découvertes. Test unitaire qui injecte une liste
- * explicite via le constructeur {@code (List)} pour éviter les effets de
- * classpath de ServiceLoader.
+ * Validates replacement semantics of {@code ConfigSourceProvider}: when
+ * a provider is registered, its sources completely replace the sources
+ * native ServiceLoader-discoveries. Unit test that injects a list
+ * explicit via the constructor {@code (List)} to avoid the effects of
+ * classpath of ServiceLoader.
  *
- * <p>Le scénario "vrai provider via ServiceLoader" est validé en E2E par
- * {@code RavelConfigSourceProviderTest} dans l'extension Ravel.</p>
+ * <p>The “real provider via ServiceLoader” scenario is validated in E2E by
+ * {@code RavelConfigSourceProviderTest} in the Ravel extension.</p>
  */
-@DisplayName("VidocqConfigImpl — sémantique remplacement vs natif")
+@DisplayName("VidocqConfigImpl - replacement semantics vs native")
 class VidocqConfigImplProviderTest {
 
     @Test
-    @DisplayName("Liste explicite remplace toute découverte ServiceLoader")
+    @DisplayName("Explicit list replaces all ServiceLoader discovery")
     void explicitListBypassesServiceLoader() {
         ConfigSource s = source("mock", 999, Map.of("vidocq.test.key", "from-mock"));
         VidocqConfig cfg = new VidocqConfigImpl(List.of(s));
         assertEquals("from-mock", cfg.getValue("vidocq.test.key").orElseThrow());
 
-        // Une éventuelle source native (SystemPropertiesConfigSource ordinal 400)
-        // n'a pas été chargée : seule la source explicite est utilisée.
+        // A possible native source (SystemPropertiesConfigSource ordinal 400)
+        // has not been loaded: only the explicit source is used.
         boolean foundOnlyMock = false;
         int count = 0;
         for (ConfigSource src : cfg.getConfigSources()) {
             count++;
             if ("mock".equals(src.getName())) foundOnlyMock = true;
         }
-        assertEquals(1, count, "La liste explicite remplace toute autre source");
+        assertEquals(1, count, "The explicit list replaces any other source");
         assertTrue(foundOnlyMock);
     }
 
     @Test
-    @DisplayName("Liste vide explicite → aucune source (ne tombe pas sur natif)")
+    @DisplayName("Explicit empty list -> no sources (does not fall back to native)")
     void emptyExplicitListIsEmpty() {
         VidocqConfig cfg = new VidocqConfigImpl(List.of());
         assertFalse(cfg.getValue("vidocq.any").isPresent());
@@ -56,7 +56,7 @@ class VidocqConfigImplProviderTest {
     }
 
     @Test
-    @DisplayName("Sources explicites triées par ordinal décroissant")
+    @DisplayName("Explicit sources sorted by descending ordinal")
     void sortsByDescendingOrdinal() {
         ConfigSource low = source("low", 50, Map.of("k", "low"));
         ConfigSource high = source("high", 500, Map.of("k", "high"));

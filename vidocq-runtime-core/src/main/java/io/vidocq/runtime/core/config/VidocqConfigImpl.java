@@ -14,43 +14,43 @@ import java.util.Optional;
 import java.util.ServiceLoader;
 
 /**
- * Implémentation par défaut de {@link VidocqConfig}.
+ * Default implementation of {@link VidocqConfig}.
  *
- * <p>Découverte des sources en deux temps :</p>
+ * <p>Discovery of sources in two stages:</p>
  * <ol>
- *   <li>{@link ServiceLoader} sur {@link ConfigSourceProvider} — si <em>au moins
- *       un</em> provider est enregistré (typiquement
- *       {@code vidocq-runtime-ravel-extension} qui apporte MicroProfile Config),
- *       l'union de leurs sources est utilisée, et les {@link ConfigSource} natifs
- *       Vidocq sont <b>ignorés</b>. C'est la responsabilité du provider d'apporter
- *       des substituts équivalents (sys, env, fichiers) — Vidocq ne mixe pas pour
- *       éviter le double comptage et préserver les ordinaux du moteur externe.</li>
- *   <li>Sinon, {@link ServiceLoader} sur {@link ConfigSource} — comportement
- *       historique : les 4 sources natives Vidocq (Sys 400, Env 300, ExternalFile,
- *       PropertiesFile 100 qui lit {@code vidocq.properties} et
+ *   <li>{@link ServiceLoader} on {@link ConfigSourceProvider} — if <em>at least
+ *       a</em>provider is registered (typically
+ *       {@code vidocq-runtime-ravel-extension} which provides MicroProfile Config),
+ *       the union of their sources is used, and the native {@link ConfigSource}
+ *       Vidocq are <b>ignored</b>. It is the responsibility of the provider to provide
+ *       equivalent substitutes (sys, env, files) — Vidocq does not mix for
+ *       avoid double counting and preserve the ordinals of the external engine.</li>
+ *   <li>Otherwise, {@link ServiceLoader} on {@link ConfigSource} — behavior
+ *       history: the 4 native Vidocq sources (Sys 400, Env 300, ExternalFile,
+ *       PropertiesFile 100 which reads {@code vidocq.properties} and
  *       {@code application.properties}).</li>
  * </ol>
  *
- * <p>Dans les deux cas, les sources sont triées par {@link ConfigSource#getOrdinal()}
- * décroissant. Résolution first-wins.</p>
+ * <p>In both cases, the sources are sorted by {@link ConfigSource#getOrdinal()}
+ * decreasing. First-wins resolution.</p>
  *
- * <p>Le constructeur {@link #VidocqConfigImpl(List)} force une liste de sources
- * explicite (utilisé par les tests unitaires).</p>
+ * <p>The constructor {@link #VidocqConfigImpl(List)} forces a list of sources
+ * explicit (used by unit tests).</p>
  */
 public final class VidocqConfigImpl implements VidocqConfig {
 
     private final List<ConfigSource> sources;
 
     /**
-     * Auto-découverte : recherche d'abord les {@link ConfigSourceProvider}
-     * via ServiceLoader ; à défaut, charge les {@link ConfigSource} natifs.
+     * Auto-discovery: first searches for {@link ConfigSourceProvider}
+     * via ServiceLoader; failing that, loads the native {@link ConfigSource}.
      */
     public VidocqConfigImpl() {
         this(discover());
     }
 
     /**
-     * Force une liste explicite de sources (mode test).
+     * Forces an explicit list of sources (test mode).
      */
     public VidocqConfigImpl(List<ConfigSource> sources) {
         List<ConfigSource> copy = new ArrayList<>(sources);
@@ -109,9 +109,9 @@ public final class VidocqConfigImpl implements VidocqConfig {
         ClassLoader cl = Thread.currentThread().getContextClassLoader();
         if (cl == null) cl = VidocqConfigImpl.class.getClassLoader();
 
-        // Providers (ex. Ravel) prennent la main quand présents — pas d'agrégation
-        // avec les sources natives, pour respecter la sémantique d'ordinaux du
-        // moteur externe et éviter le double comptage.
+        // Providers (e.g. Ravel) take control when present — no aggregation
+        // with native sources, to respect the ordinal semantics of the
+        // external motor and avoid double counting.
         List<ConfigSource> fromProviders = new ArrayList<>();
         for (ConfigSourceProvider p : ServiceLoader.load(ConfigSourceProvider.class)) {
             for (ConfigSource s : p.getConfigSources(cl)) {
@@ -120,7 +120,7 @@ public final class VidocqConfigImpl implements VidocqConfig {
         }
         if (!fromProviders.isEmpty()) return fromProviders;
 
-        // Fallback : sources natives Vidocq (Sys, Env, ExternalFile, PropertiesFile).
+        // Fallback: native Vidocq sources (Sys, Env, ExternalFile, PropertiesFile).
         List<ConfigSource> natives = new ArrayList<>();
         for (ConfigSource s : ServiceLoader.load(ConfigSource.class)) {
             natives.add(s);

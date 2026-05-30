@@ -17,40 +17,40 @@ import java.util.ServiceLoader;
 import java.util.Set;
 
 /**
- * Lit la config {@code vidocq.http.mount.<name>.*} et enregistre chaque mount
- * déclaré sur le {@link ChappeMountPoint} via le {@link MountHandlerProvider}
- * désigné par {@code .type}.
+ * Read the config {@code vidocq.http.mount.<name>.*} and save each mount
+ * declared on the {@link ChappeMountPoint} via the {@link MountHandlerProvider}
+ * denoted by {@code.type}.
  *
- * <p>Priorité 7 000 — postérieure aux extensions contributrices programmatiques
- * (Cassini : 500, custom apps : généralement < 5000) et antérieure à
- * {@code ChappeServerBootstrap} (10 000) qui démarre les serveurs.</p>
+ * <p>Priority 7000 — after programmatic contributing extensions
+ * (Cassini: 500, custom apps: generally < 5000) and older than
+ * {@code ChappeServerBootstrap} (10,000) which starts the servers.</p>
  *
- * <h3>Format de configuration</h3>
+ * <h3>Configuration format</h3>
  * <pre>{@code
- * vidocq.http.mount.ui.path          = /
- * vidocq.http.mount.ui.type          = static
- * vidocq.http.mount.ui.classpath     = static
+ * vidocq.http.mount.ui.path = /
+ * vidocq.http.mount.ui.type = static
+ * vidocq.http.mount.ui.classpath = static
  * vidocq.http.mount.ui.cache-in-memory = true
  *
- * vidocq.http.mount.api.path         = /api
- * vidocq.http.mount.api.type         = restful    # standard Jakarta REST
+ * vidocq.http.mount.api.path = /api
+ * vidocq.http.mount.api.type = restful # standard Jakarta REST
  *
- * vidocq.http.mount.legacy.path      = /srv
- * vidocq.http.mount.legacy.type      = servlet      # standard Jakarta Servlet
- * vidocq.http.mount.legacy.priority  = 200          # surcharge optionnelle
- * vidocq.http.mount.legacy.listener  = secured      # défaut : "default"
+ * vidocq.http.mount.legacy.path = /srv
+ * vidocq.http.mount.legacy.type = servlet # standard Jakarta Servlet
+ * vidocq.http.mount.legacy.priority = 200 # optional overload
+ * vidocq.http.mount.legacy.listener = secured # default: "default"
  * }</pre>
  *
- * <p>Les valeurs de {@code .type} décrivent le <b>contrat standard</b>
- * (ex. {@code restful}, {@code servlet}, {@code static}), pas une
- * implémentation. Cela laisse la porte ouverte à plusieurs providers pour
- * un même type ; un futur {@code .impl} pourra alors discriminer.</p>
+ * <p>The values ​​​​of {@code .type} describe the <b>standard contract</b>
+ * (e.g. {@code restful}, {@code servlet}, {@code static}), not one
+ * implementation. This leaves the door open for several providers to
+ * the same type; a future {@code .impl} will then be able to discriminate.</p>
  *
- * <p>Les mounts sont enregistrés par <b>priorité décroissante</b> : un mount
- * avec une priorité plus élevée gagne contre un autre qui partagerait un
- * préfixe plus court. La <b>priorité par défaut</b> est la longueur du
- * préfixe normalisé, ce qui assure naturellement que {@code /api} gagne
- * contre {@code /} sans avoir à la spécifier.</p>
+ * <p>Mounts are recorded in <b>descending priority</b>: one mount
+ * with a higher priority wins against another who would share a
+ * shorter prefix. The <b>default priority</b> is the length of the
+ * normalized prefix, which naturally ensures that {@code /api} wins
+ * against {@code /} without having to specify it.</p>
  */
 public final class ChappeMountConfigExtension implements VidocqExtension {
 
@@ -126,10 +126,10 @@ public final class ChappeMountConfigExtension implements VidocqExtension {
     }
 
     /**
-     * Priorité par défaut dérivée de la longueur du préfixe : un mount sur un
-     * préfixe plus long doit gagner contre un catch-all racine. Le mount {@code "/"}
-     * (préfixe normalisé {@code ""}) a donc priorité 0 ; {@code "/api"} a priorité
-     * 4 ; {@code "/api/v2"} a priorité 7. L'utilisateur peut surcharger via
+     * Default priority derived from prefix length: one mount on one
+     * Longer prefix should win against a root catch-all. The mount {@code "/"}
+     * (normalized prefix {@code ""}) therefore has priority 0; {@code "/api"} takes precedence
+     * 4; {@code "/api/v2"} has priority 7. User can override via
      * {@code vidocq.http.mount.<n>.priority=<int>}.
      */
     private static int defaultPriority(String normalizedPrefix) {

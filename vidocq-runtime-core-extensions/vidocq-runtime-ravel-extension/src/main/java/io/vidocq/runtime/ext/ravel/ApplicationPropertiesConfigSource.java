@@ -9,20 +9,20 @@ import java.util.Properties;
 import java.util.Set;
 
 /**
- * MicroProfile {@link org.eclipse.microprofile.config.spi.ConfigSource} qui lit
- * {@code application.properties} depuis le classpath.
+ * MicroProfile {@link org.eclipse.microprofile.config.spi.ConfigSource} which reads
+ * {@code application.properties} from the classpath.
  *
- * <p>Convention historique SE / MP-compatible. En mode Ravel, ce fichier n'est
- * pas lu par défaut — seul {@code META-INF/microprofile-config.properties} l'est,
- * conformément à la spec MP Config 3.1 §3. Cette source restitue la
- * compatibilité en enregistrant {@code application.properties} comme une MP
+ * <p>Historical SE/MP-compatible convention. In Ravel mode, this file is not
+ * not read by default — only {@code META-INF/microprofile-config.properties} is,
+ * in accordance with the MP Config 3.1 §3 spec. This source restores the
+ * compatibility by saving {@code application.properties} as a PM
  * {@code ConfigSource} standard.</p>
  *
- * <p><b>Ordinal 100</b> — identique à
- * {@code MicroprofilePropertiesConfigSource} (Ravel), ce qui place
- * {@code application.properties} et {@code microprofile-config.properties} au
- * même niveau de priorité.
- * {@link VidocqPropertiesConfigSource} (ordinal 105) gagne sur les deux.</p>
+ * <p><b>Ordinal 100</b> — same as
+ * {@code MicroprofilePropertiesConfigSource} (Ravel), which places
+ * {@code application.properties} and {@code microprofile-config.properties} at
+ * same priority level.
+ * {@link VidocqPropertiesConfigSource} (ordinal 105) wins on both.</p>
  */
 public final class ApplicationPropertiesConfigSource
         implements org.eclipse.microprofile.config.spi.ConfigSource {

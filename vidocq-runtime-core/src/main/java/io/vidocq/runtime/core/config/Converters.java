@@ -10,10 +10,10 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Registre des convertisseurs built-in pour {@link io.vidocq.runtime.spi.config.VidocqConfig}.
+ * Built-in converter registry for {@link io.vidocq.runtime.spi.config.VidocqConfig}.
  * <p>
- * Types supportés : {@code String, Boolean, Integer, Long, Double, Float,
- * Duration, URI, Path}. Les primitifs sont mappés vers leurs wrappers.
+ * Supported types: {@code String, Boolean, Integer, Long, Double, Float,
+ * Duration, URI, Path}. Primitives are mapped to their wrappers.
  * </p>
  */
 final class Converters {

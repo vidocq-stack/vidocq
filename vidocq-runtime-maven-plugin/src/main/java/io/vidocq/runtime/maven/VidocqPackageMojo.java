@@ -15,17 +15,17 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
 /**
- * Package une application Vidocq en distribution ZIP autonome.
+ * Package a Vidocq application as a standalone ZIP distribution.
  * <p>
- * Structure de sortie :
+ * Output structure:
  * <pre>
  * myapp-1.0/
- *   bin/run.sh      (lanceur Unix)
- *   bin/run.cmd     (lanceur Windows)
- *   lib/*.jar       (JAR applicatif + dépendances)
+ *   bin/run.sh (Unix launcher)
+ *   bin/run.cmd (Windows launcher)
+ *   lib/*.jar (JAR application + dependencies)
  * </pre>
  *
- * <p><b>Packages a Vidocq application as a standalone distribution ZIP.</b></p>
+ * <p><b>Packages a Vidocq application as a standalone ZIP distribution.</b></p>
  */
 @Mojo(name = "package",
       defaultPhase = LifecyclePhase.PACKAGE,

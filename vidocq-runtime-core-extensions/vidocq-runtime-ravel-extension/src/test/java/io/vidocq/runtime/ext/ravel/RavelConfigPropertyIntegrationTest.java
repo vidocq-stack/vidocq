@@ -19,12 +19,12 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Vérifie que {@code @ConfigProperty} fonctionne dans le container Vauban quand
- * cette extension est sur le module path. Test déplacé depuis vidocq-runtime-core
- * dans le cadre du découplage core/Ravel — @ConfigProperty est désormais un
- * opt-in de {@code vidocq-runtime-ravel-extension}.
+ * Checks that {@code @ConfigProperty} works in the Vauban container when
+ * this extension is on the path module. Test moved from vidocq-runtime-core
+ * as part of core/Ravel decoupling — @ConfigProperty is now a
+ * opt-in of {@code vidocq-runtime-ravel-extension}.
  */
-@DisplayName("Ravel @ConfigProperty — intégration via vidocq-runtime-ravel-extension")
+@DisplayName("Ravel @ConfigProperty - integration via vidocq-runtime-ravel-extension")
 class RavelConfigPropertyIntegrationTest {
 
     @AfterEach
@@ -35,7 +35,7 @@ class RavelConfigPropertyIntegrationTest {
     }
 
     @Test
-    @DisplayName("@ConfigProperty résout les valeurs via le container Vauban")
+    @DisplayName("@ConfigProperty resolves values through the Vauban container")
     void configPropertyResolvedInVaubanContainer() {
         var resolver = ConfigProviderResolver.instance();
         var config = resolver.getBuilder()
@@ -56,7 +56,7 @@ class RavelConfigPropertyIntegrationTest {
             assertNotNull(bean);
             assertEquals("Vidocq Runtime", bean.appName);
             assertEquals(Integer.valueOf(9090), bean.appPort);
-            assertTrue(bean.appEnv.isEmpty(), "app.env absent → Optional.empty()");
+            assertTrue(bean.appEnv.isEmpty(), "app.env is absent -> Optional.empty()");
         }
     }
 

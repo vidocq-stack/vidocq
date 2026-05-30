@@ -6,18 +6,18 @@ import java.io.IOException;
 import java.util.logging.LogManager;
 
 /**
- * Point d'entrée de l'application todo-list d'exemple — UI statique servie par
- * Chappe + endpoints REST {@code /api/todos} fournis par Cassini avec stockage
- * en mémoire dans un service CDI Vauban.
+ * Entry point of the example todo-list application — static UI served by
+ * Chappe + REST endpoints {@code /api/todos} provided by Cassini, with
+ * in-memory storage in a Vauban CDI service.
  *
  * <h3>Usage</h3>
  * <pre>{@code
  * java -m io.vidocq.runtime.examples.rest/io.vidocq.runtime.examples.rest.RestExampleApp
  * }</pre>
  *
- * <p>Une fois démarré :</p>
+ * <p>Once started:</p>
  * <ul>
- *   <li>UI  → {@code http://localhost:8080/}</li>
+ *   <li>UI → {@code http://localhost:8080/}</li>
  *   <li>API → {@code http://localhost:8080/api/todos}</li>
  * </ul>
  */

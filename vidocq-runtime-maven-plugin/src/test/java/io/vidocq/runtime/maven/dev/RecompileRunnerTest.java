@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Coverage for {@link RecompileRunner#detectMavenExecutable(Path)} — the only
  * piece we can verify without spinning a real Maven invocation in unit tests.
  *
- * <p>The end-to-end behaviour of {@link RecompileRunner#run()} is exercised by
+ * <p>The end-to-end behavior of {@link RecompileRunner#run()} is exercised by
  * the manual smoke test on {@code vidocq-runtime-cassini-rest-example}.</p>
  */
 class RecompileRunnerTest {

@@ -9,8 +9,8 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * Implémentation de {@link VidocqConfig} test-only — évite de croiser une dépendance JPMS
- * vers {@code vidocq-runtime-core} depuis le module de test.
+ * Implementation of {@link VidocqConfig} test-only — avoid crossing a JPMS dependency
+ * to {@code vidocq-runtime-core} from the test module.
  */
 final class TestConfig implements VidocqConfig {
 

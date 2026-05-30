@@ -1,34 +1,34 @@
 /**
  * <h2>Vidocq Runtime :: Knock health extension</h2>
  *
- * <p>Module <em>wrapper</em> qui active Knock (MicroProfile Health 4.0) dans un
- * déploiement vidocq. Aucune classe Java propre — voir
- * {@code docs/adr/ADR-002-vidocq-runtime-integration-strategy.md} dans le repo
+ * <p><em>wrapper</em> module that activates Knock (MicroProfile Health 4.0) in a
+ * vidocq deployment. No own Java class — see
+ * {@code docs/adr/ADR-002-vidocq-runtime-integration-strategy.md} in the repo
  * {@code knock}.</p>
  *
- * <p>L'intégration repose à 100 % sur des SPI standards :</p>
+ * <p>The integration is 100% based on standard SPIs:</p>
  * <ul>
- *   <li>CDI 4.1 BuildCompatibleExtension de {@code io.vidocq.knock.cdi.vauban}
- *       — découvre les beans {@code @Liveness/@Readiness/@Startup} ;</li>
- *   <li>JAX-RS scanning de {@code @Path} beans par
- *       {@code vidocq-runtime-cassini-rest-extension} — mount automatique de
+ *   <li>CDI 4.1 BuildCompatibleExtension of {@code io.vidocq.knock.cdi.vauban}
+ *       — discover {@code @Liveness/@Readiness/@Startup} beans;</li>
+ *   <li>JAX-RS scanning {@code @Path} beans by
+ *       {@code vidocq-runtime-cassini-rest-extension} — automatic mount of
  *       {@code KnockHealthResource} (@Path("/health")).</li>
  * </ul>
  *
- * <p>Endpoints exposés (préfixés par {@code vidocq.rest.context-path}) :
+ * <p>Exposed endpoints (prefixed by {@code vidocq.rest.context-path}):
  * {@code /health}, {@code /health/live}, {@code /health/ready},
  * {@code /health/started}.</p>
  */
 module io.vidocq.runtime.ext.knock {
-    // Modules Knock — re-exposés transitivement aux applications consommatrices
-    // pour que les beans @Liveness/@Readiness/@Startup utilisateur puissent
-    // implémenter HealthCheck sans déclarer manuellement les requires Knock.
+    // Knock modules — transitively re-exposed to consuming applications
+    // so that user @Liveness/@Readiness/@Startup beans can
+    // implement HealthCheck without manually declaring requires Knock.
     requires transitive io.vidocq.knock.api;
     requires transitive io.vidocq.knock.core;
     requires transitive io.vidocq.knock.cdi.vauban;
     requires transitive io.vidocq.knock.cassini;
 
-    // Extension REST Cassini : c'est elle qui scanne KnockHealthResource (@Path).
+    // Cassini REST extension: it scans KnockHealthResource (@Path).
     requires io.vidocq.runtime.ext.rest.cassini;
 
     requires jakarta.cdi;

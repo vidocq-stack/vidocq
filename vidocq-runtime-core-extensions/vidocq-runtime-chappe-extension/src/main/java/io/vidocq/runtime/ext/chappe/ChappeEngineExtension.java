@@ -5,14 +5,14 @@ import io.vidocq.runtime.spi.VidocqConfiguration;
 import io.vidocq.runtime.spi.VidocqExtension;
 
 /**
- * Extension Vidocq qui installe le {@link ChappeMountPoint} partagé.
+ * Vidocq extension which installs the shared {@link ChappeMountPoint}.
  * <p>
- * Priorité faible (100) : tourne avant les extensions contributrices (REST, Servlet, ...)
- * pour que celles-ci puissent appeler {@link ChappeMountPoint#instance()} dans leur
+ * Low priority (100): runs before contributing extensions (REST, Servlet, etc.)
+ * so that they can call {@link ChappeMountPoint#instance()} in their
  * phase {@code onStart}.
  * </p>
- * <p>Le démarrage effectif des serveurs Chappe est assuré par
- * {@link ChappeServerBootstrap} en fin de chaîne (priorité 10 000).</p>
+ * <p>The effective startup of the Chappe servers is ensured by
+ * {@link ChappeServerBootstrap} at the end of the chain (priority 10,000).</p>
  */
 public final class ChappeEngineExtension implements VidocqExtension {
 
@@ -37,7 +37,7 @@ public final class ChappeEngineExtension implements VidocqExtension {
 
     @Override
     public void beforeStart(VaubanContainerBuilder builder) {
-        // Rien : l'instance est exposée statiquement via ChappeMountPoint.instance().
-        // Une intégration CDI par @Produces pourra être ajoutée sans changer l'API.
+        // Nothing: the instance is statically exposed via ChappeMountPoint.instance().
+        // A CDI integration by @Produces can be added without changing the API.
     }
 }

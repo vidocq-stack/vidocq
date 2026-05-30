@@ -33,7 +33,7 @@ import java.util.Optional;
  * is not on the latency-critical port-binding path, but well before any extension that wires
  * repositories ({@code mansart-data}, priority ~300) or HTTP routing ({@code Cassini}, priority 500).
  *
- * <p>Recognised properties (every duration is parsed via {@link Duration#parse(CharSequence)},
+ * <p>Recognized properties (every duration is parsed via {@link Duration#parse(CharSequence)},
  * ISO-8601, e.g. {@code PT5S} = 5 seconds, {@code PT0S} = leak detection disabled):
  *
  * <ul>

@@ -7,8 +7,8 @@ import java.util.List;
 import java.util.ServiceLoader;
 
 /**
- * Découvre et charge les {@link VidocqExtension} via {@link ServiceLoader}.
- * <p>Les extensions sont triées par {@link VidocqExtension#priority()} croissante.</p>
+ * Discovers and loads {@link VidocqExtension} via {@link ServiceLoader}.
+ * <p>Extensions are sorted by ascending {@link VidocqExtension#priority()}.</p>
  *
  * <p><b>Discovers and loads {@link VidocqExtension}s via {@link ServiceLoader}.</b>
  * Extensions are sorted by ascending {@link VidocqExtension#priority()}.</p>
@@ -20,7 +20,7 @@ final class ExtensionLoader {
     private ExtensionLoader() {}
 
     /**
-     * Charge toutes les extensions disponibles, triées par priorité.
+     * Loads all available extensions, sorted by priority.
      */
     static List<VidocqExtension> load() {
         List<VidocqExtension> extensions = ServiceLoader.load(VidocqExtension.class)

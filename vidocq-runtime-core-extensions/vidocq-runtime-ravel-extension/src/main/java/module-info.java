@@ -29,7 +29,7 @@ module io.vidocq.runtime.ext.ravel {
 
     // MP Config SPI: backwards-compatibility for the historical Vidocq files
     // (vidocq.properties, application.properties) — Ravel doesn't read them
-    // by default, this restitutes the legacy behavior at the MP ordinal level.
+    // by default, this restores the legacy behavior at the MP ordinal level.
     provides org.eclipse.microprofile.config.spi.ConfigSource
             with VidocqPropertiesConfigSource, ApplicationPropertiesConfigSource;
 }

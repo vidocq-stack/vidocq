@@ -12,18 +12,18 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * Point d'accrochage unique partagé entre extensions pour contribuer des handlers au moteur Chappe.
+ * Single attachment point shared between extensions to contribute handlers to the Chappe engine.
  * <p>
- * Les extensions contributrices ({@code vidocq-servlet-chappe-extension},
- * {@code vidocq-rest-chappe-extension}, ...) appellent
- * {@link #mount(String, String, Handler)} durant leur phase {@code onStart}.
- * {@link ChappeServerBootstrap} assemble ensuite les {@link Router} et démarre un
- * {@link io.vidocq.chappe.api.Server Server} par listener.
+ * The contributing extensions ({@code vidocq-servlet-chappe-extension},
+ * {@code vidocq-rest-chappe-extension}, ...) call
+ * {@link #mount(String, String, Handler)} during their {@code onStart} phase.
+ * {@link ChappeServerBootstrap} then assembles the {@link Router} and starts a
+ * {@link io.vidocq.chappe.api.Server Server} by listener.
  * </p>
  *
- * <p>Thread-safety : toutes les contributions doivent être faites pendant la phase
- * {@code onStart} (mono-thread orchestrée par {@code VidocqBootstrap}). L'instance est
- * ensuite figée au démarrage du serveur.</p>
+ * <p>Thread-safety: all contributions must be made during the phase
+ * {@code onStart} (single-threaded orchestrated by {@code VidocqBootstrap}). The instance is
+ * then frozen when the server starts.</p>
  */
 public final class ChappeMountPoint {
 
@@ -38,7 +38,7 @@ public final class ChappeMountPoint {
     ChappeMountPoint() {}
 
     /**
-     * Accède à l'instance unique, non-null après le démarrage de {@link ChappeEngineExtension}.
+     * Accesses the single, non-null instance after starting {@link ChappeEngineExtension}.
      * <p>Access the singleton. Non-null after {@link ChappeEngineExtension} has started.</p>
      */
     public static ChappeMountPoint instance() {
@@ -59,7 +59,7 @@ public final class ChappeMountPoint {
     }
 
     /**
-     * Déclare un listener. Appelé par {@link ChappeServerBootstrap} au démarrage.
+     * Declared a listener. Called by {@link ChappeServerBootstrap} at startup.
      */
     void declareListener(ChappeListener listener) {
         ensureOpen();
@@ -68,7 +68,7 @@ public final class ChappeMountPoint {
     }
 
     /**
-     * Monte un handler sur le listener par défaut, sous le préfixe donné.
+     * Mounts a handler on the default listener, under the given prefix.
      * <p>Mount a handler on the default listener under the given prefix.</p>
      */
     public void mount(String prefix, Handler handler) {
@@ -76,7 +76,7 @@ public final class ChappeMountPoint {
     }
 
     /**
-     * Monte un handler sur un listener nommé.
+     * Mounts a handler on a named listener.
      * <p>Mount a handler on a named listener.</p>
      */
     public void mount(String listenerName, String prefix, Handler handler) {
@@ -88,8 +88,8 @@ public final class ChappeMountPoint {
     }
 
     /**
-     * Accès direct au {@link Router.Builder} d'un listener, pour contributions fines
-     * (routes par méthode, groupes, filtres).
+     * Direct access to the {@link Router.Builder} of a listener, for detailed contributions
+     * (routes by method, groups, filters).
      * <p>Direct access to a listener's {@link Router.Builder} for fine-grained contributions.</p>
      */
     public Router.Builder router(String listenerName) {
@@ -99,7 +99,7 @@ public final class ChappeMountPoint {
     }
 
     /**
-     * Hook exécuté juste avant le démarrage de chaque serveur.
+     * Hook executed just before starting each server.
      * <p>Hook executed right before each server starts.</p>
      */
     public void addBeforeStartHook(Runnable hook) {
@@ -109,7 +109,7 @@ public final class ChappeMountPoint {
     }
 
     /**
-     * Hook exécuté juste après l'arrêt de chaque serveur.
+     * Hook executed just after each server shuts down.
      * <p>Hook executed right after each server stops.</p>
      */
     public void addAfterStopHook(Runnable hook) {
@@ -117,7 +117,7 @@ public final class ChappeMountPoint {
         afterStopHooks.add(hook);
     }
 
-    // --- Accesseurs internes pour ChappeServerBootstrap ---
+    // --- Internal accessors for ChappeServerBootstrap ---
 
     Collection<ChappeListener> listeners() {
         return Collections.unmodifiableCollection(listeners.values());

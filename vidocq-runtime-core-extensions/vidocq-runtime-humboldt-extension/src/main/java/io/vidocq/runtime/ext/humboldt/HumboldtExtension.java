@@ -16,29 +16,29 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Extension Vidocq Runtime qui branche Humboldt (MicroProfile Telemetry 2.1) sur le
- * cycle de vie Vidocq.
+ * Vidocq Runtime extension which connects Humboldt (MicroProfile Telemetry 2.1) to the
+ * Vidocq life cycle.
  *
- * <p>Priorité <b>100</b> — démarre AVANT les extensions applicatives (cassini=500,
- * cyrano, mansart, etc.) pour que {@code GlobalOpenTelemetry} soit set et
- * prêt à recevoir les spans dès le premier appel.</p>
+ * <p>Priority <b>100</b> — starts BEFORE application extensions (cassini=500,
+ * cyrano, mansart, etc.) so that {@code GlobalOpenTelemetry} is set and
+ * ready to receive spans from the first call.</p>
  *
  * <h3>Configuration</h3>
- * <p>Lit toutes les env vars OTel standard via {@link VidocqConfiguration} :</p>
+ * <p>Reads all standard OTel env vars via {@link VidocqConfiguration}:</p>
  * <ul>
- *   <li>{@code OTEL_SERVICE_NAME} — défaut {@code "vidocq-app"}</li>
- *   <li>{@code OTEL_RESOURCE_ATTRIBUTES} — paires {@code k=v} séparées par virgule</li>
- *   <li>{@code OTEL_EXPORTER_OTLP_ENDPOINT} — défaut {@code http://localhost:4318}</li>
+ *   <li>{@code OTEL_SERVICE_NAME} — default {@code "vidocq-app"}</li>
+ *   <li>{@code OTEL_RESOURCE_ATTRIBUTES} — {@code k=v} pairs separated by commas</li>
+ *   <li>{@code OTEL_EXPORTER_OTLP_ENDPOINT} — default {@code http://localhost:4318}</li>
  *   <li>{@code OTEL_TRACES_EXPORTER} / {@code _METRICS_EXPORTER} / {@code _LOGS_EXPORTER}
  *       ∈ {@code otlp | none | in-memory | logging}</li>
- *   <li>{@code OTEL_TRACES_SAMPLER} + {@code _ARG} (cf. {@code humboldt-runtime})</li>
+ *   <li>{@code OTEL_TRACES_SAMPLER} + {@code _ARG} (see {@code humboldt-runtime})</li>
  *   <li>{@code OTEL_EXPORTER_OTLP_HEADERS} — auth Bearer, etc.</li>
  * </ul>
  *
- * <h3>Désactivation</h3>
- * <p>{@code MP_TELEMETRY_SDK_DISABLED=true} → l'extension log un message et
- * n'installe rien (utile pour les tests qui veulent forcer un OpenTelemetry
- * custom via {@code GlobalOpenTelemetry.set} manuel).</p>
+ * <h3>Deactivation</h3>
+ * <p>{@code MP_TELEMETRY_SDK_DISABLED=true} → the extension log a message and
+ * does not install anything (useful for tests that want to force an OpenTelemetry
+ * custom via {@code GlobalOpenTelemetry.set} manual).</p>
  */
 public final class HumboldtExtension implements VidocqExtension {
 
@@ -69,28 +69,28 @@ public final class HumboldtExtension implements VidocqExtension {
     public void beforeStart(VaubanContainerBuilder builder) {
         if (disabled) {
             LOG.log(Level.INFO,
-                    "Humboldt désactivé via MP_TELEMETRY_SDK_DISABLED=true — "
-                            + "aucune installation de GlobalOpenTelemetry");
+                    "Humboldt disabled via MP_TELEMETRY_SDK_DISABLED=true - "
+                            + "GlobalOpenTelemetry will not be installed");
             return;
         }
 
         EnvConfig env = bridgeFromVidocqConfig(cfg);
         humboldt = HumboldtAutoConfigure.configure(env);
 
-        // Publication du bean CDI avant addBeanClass — pattern MansartPoolHolder.
-        // Les apps/tests peuvent ensuite faire @Inject AutoConfiguredHumboldt.
+        // Publishing the CDI bean before addBeanClass — pattern MansartPoolHolder.
+        // Apps/tests can then do @Inject AutoConfiguredHumboldt.
         HumboldtHolder.INSTANCE = humboldt;
         builder.addBeanClass(HumboldtHolder.class);
 
         try {
             GlobalOpenTelemetry.set(humboldt);
             LOG.log(Level.INFO,
-                    "Humboldt installé comme GlobalOpenTelemetry (service.name=" +
+                    "Humboldt installed as GlobalOpenTelemetry (service.name=" +
                             env.getOrDefault("OTEL_SERVICE_NAME", "vidocq-app") + ")");
         } catch (IllegalStateException already) {
             LOG.log(Level.WARNING,
-                    "GlobalOpenTelemetry déjà set par un autre composant — "
-                            + "Humboldt reste actif comme SDK local mais ne sera pas le global");
+                    "GlobalOpenTelemetry is already set by another component - "
+                            + "Humboldt remains active as a local SDK but will not be the global one");
         }
     }
 
@@ -98,7 +98,7 @@ public final class HumboldtExtension implements VidocqExtension {
     public void onStart(ExtensionContext context) {
         if (humboldt != null) {
             LOG.log(Level.INFO,
-                    "Humboldt prêt : traces/metrics/logs pipeline OTLP actif "
+                    "Humboldt ready: OTLP traces/metrics/logs pipeline active "
                             + "(propagators={0})",
                     humboldt.getPropagators().getTextMapPropagator().fields());
         }
@@ -107,19 +107,19 @@ public final class HumboldtExtension implements VidocqExtension {
     @Override
     public void onStop() {
         if (humboldt == null) return;
-        LOG.log(Level.INFO, "Shutdown Humboldt — flush des spans/metrics/logs en cours");
+        LOG.log(Level.INFO, "Shutting down Humboldt - flushing spans/metrics/logs");
         humboldt.flush().join(5, TimeUnit.SECONDS);
         humboldt.shutdown().join(5, TimeUnit.SECONDS);
         HumboldtHolder.INSTANCE = null;
     }
 
     /**
-     * Bridge Vidocq → EnvConfig — les clés OTel sont résolues via
-     * {@link VidocqConfiguration} (qui consulte system properties + env vars +
-     * vidocq.properties) plutôt que via {@code System.getenv()} direct.
+     * Bridge Vidocq → EnvConfig — OTel keys are resolved via
+     * {@link VidocqConfiguration} (which consults system properties + env vars +
+     * vidocq.properties) rather than via {@code System.getenv()} directly.
      *
-     * <p>Implémentation : capture les clés OTEL_MP_TELEMETRY_* à la demande
-     * via une Map populée par les appels au constructor.</p>
+     * <p>Implementation: capture OTEL_MP_TELEMETRY_* keys on demand
+     * via a Map populated by calls to the constructor.</p>
      */
     private static EnvConfig bridgeFromVidocqConfig(VidocqConfiguration cfg) {
         Map<String, String> env = new HashMap<>();
@@ -132,7 +132,7 @@ public final class HumboldtExtension implements VidocqExtension {
         return EnvConfig.of(env, props);
     }
 
-    /** Clés OTel/MP-Telemetry standard reconnues par l'autoconfig Humboldt. */
+    /** Standard OTel/MP-Telemetry keys recognized by Humboldt autoconfig. */
     private static final String[] OTEL_KEYS_TO_BRIDGE = {
             "OTEL_SERVICE_NAME",
             "OTEL_RESOURCE_ATTRIBUTES",

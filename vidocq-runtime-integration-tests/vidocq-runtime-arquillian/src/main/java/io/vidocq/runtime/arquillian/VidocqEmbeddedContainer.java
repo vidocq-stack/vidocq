@@ -24,10 +24,10 @@ import java.util.Map;
 import java.util.ServiceLoader;
 
 /**
- * Container Arquillian embarque pour Vidocq.
+ * Embedded Arquillian container for Vidocq.
  * <p>
- * Demarre un serveur Vidocq complet (CDI + extensions) avec les classes
- * du deployment ShrinkWrap comme beans CDI.
+ * Starts a complete Vidocq server (CDI + extensions) with the classes
+ * from the ShrinkWrap deployment registered as CDI beans.
  * </p>
  */
 public class VidocqEmbeddedContainer implements DeployableContainer<VidocqContainerConfig> {
@@ -73,9 +73,9 @@ public class VidocqEmbeddedContainer implements DeployableContainer<VidocqContai
             // Extract bean classes from archive
             List<String> beanClassNames = extractClassNames(archive);
 
-            // Set system properties for the Chappe HTTP listener (consommé par
-            // ChappeServerBootstrap). Cassini (rest-cassini-extension) se monte
-            // sur ce listener via ChappeMountPoint.
+            // Set system properties for the Chappe HTTP listener (consumed by
+            // ChappeServerBootstrap). Cassini (rest-cassini-extension) mounts
+            // on this listener via ChappeMountPoint.
             System.setProperty("vidocq.chappe.listener.default.host", config.getHost());
             System.setProperty("vidocq.chappe.listener.default.port", String.valueOf(actualPort));
 

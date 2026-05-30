@@ -5,18 +5,18 @@ import io.vidocq.runtime.spi.config.ConfigSource;
 import java.util.Set;
 
 /**
- * Adapter exposant une {@link org.eclipse.microprofile.config.spi.ConfigSource}
- * MP en {@link ConfigSource} Vidocq.
+ * Adapter exposing a {@link org.eclipse.microprofile.config.spi.ConfigSource}
+ * PM in {@link ConfigSource} Vidocq.
  *
- * <p>Utilisé par {@link RavelConfigSourceProvider} pour publier les sources de
- * configuration MP (sys, env, microprofile-config.properties, sources user
- * custom, etc.) au format attendu par {@code VidocqConfig.getConfigSources()}.
- * Les valeurs sont déléguées 1-pour-1 au {@code ConfigSource} MP sous-jacent
- * — c'est lui qui décide de la résolution (priorité, profils, expressions).</p>
+ * <p>Used by {@link RavelConfigSourceProvider} to publish the sources of
+ * MP configuration (sys, env, microprofile-config.properties, user sources
+ * custom, etc.) in the format expected by {@code VidocqConfig.getConfigSources()}.
+ * Values ​​​​are delegated 1-for-1 to the underlying {@code ConfigSource} MP
+ * — it is he who decides the resolution (priority, profiles, expressions).</p>
  *
- * <p>Le delegate est conservé en référence ; tout changement à chaud d'une
- * MP {@code ConfigSource} (rare, mais possible via {@code ConfigBuilder}) est
- * reflété immédiatement.</p>
+ * <p>The delegate is kept as a reference; any hot change of a
+ * MP {@code ConfigSource} (rare, but possible via {@code ConfigBuilder}) is
+ * reflected immediately.</p>
  */
 final class MpConfigSourceAdapter implements ConfigSource {
 

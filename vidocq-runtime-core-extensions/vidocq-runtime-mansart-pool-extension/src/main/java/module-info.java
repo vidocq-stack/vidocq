@@ -12,7 +12,7 @@ module io.vidocq.runtime.ext.mansart.pool {
     requires jakarta.inject;
     requires java.sql;        // javax.sql.DataSource
 
-    // CDI scans MansartPoolHolder for @Produces; the package needs to be open so the
+    // CDI scans MansartPoolHolder for @Produces; the package needs to be opened so the
     // generated bean factory can construct it.
     exports io.vidocq.runtime.ext.mansart.pool;
     opens   io.vidocq.runtime.ext.mansart.pool;

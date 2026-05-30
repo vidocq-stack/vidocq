@@ -9,17 +9,17 @@ import java.nio.file.Path;
 import java.util.Optional;
 
 /**
- * Provider builtin servant du contenu statique via {@link StaticFileHandler}.
+ * Provider builtin serving static content via {@link StaticFileHandler}.
  *
- * <h3>Properties supportées</h3>
+ * <h3>Supported properties</h3>
  * <pre>{@code
- * vidocq.http.mount.<name>.type           = static
- * vidocq.http.mount.<name>.path           = /                  # prefix HTTP (déclaré côté reader)
- * vidocq.http.mount.<name>.classpath      = static             # base classpath (mutuellement exclusive avec filesystem)
- * vidocq.http.mount.<name>.filesystem     = /var/www/ui        # base filesystem (mutuellement exclusive avec classpath)
- * vidocq.http.mount.<name>.index          = index.html         # nom de l'index (défaut : index.html)
- * vidocq.http.mount.<name>.cache-control  = max-age=3600       # header Cache-Control (optionnel)
- * vidocq.http.mount.<name>.cache-in-memory= true               # défaut : false
+ * vidocq.http.mount.<name>.type = static
+ * vidocq.http.mount.<name>.path = / # HTTP prefix (declared on the reader side)
+ * vidocq.http.mount.<name>.classpath = static # base classpath (mutually exclusive with filesystem)
+ * vidocq.http.mount.<name>.filesystem = /var/www/ui # base filesystem (mutually exclusive with classpath)
+ * vidocq.http.mount.<name>.index = index.html # index name (default: index.html)
+ * vidocq.http.mount.<name>.cache-control = max-age=3600 # header Cache-Control (optional)
+ * vidocq.http.mount.<name>.cache-in-memory= true # default: false
  * }</pre>
  */
 public final class StaticMountHandlerProvider implements MountHandlerProvider {

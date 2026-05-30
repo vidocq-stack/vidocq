@@ -15,28 +15,28 @@ import io.vidocq.vauban.core.context.RequestContext;
 import java.util.Set;
 
 /**
- * Extension Vidocq Runtime qui branche Cassini (Jakarta REST 4.0 standalone) sur le
- * moteur HTTP Chappe via {@link ChappeHttpAdapter} — voie auto-mount legacy.
+ * Vidocq Runtime extension which connects Cassini (Jakarta REST 4.0 standalone) to the
+ * Chappe HTTP engine via {@link ChappeHttpAdapter} — legacy auto-mount route.
  *
- * <p>Priorité 500 : tourne après {@code ChappeEngineExtension} et avant
- * {@code ChappeServerBootstrap}, afin de contribuer un handler JAX-RS au
+ * <p>Priority 500: runs after {@code ChappeEngineExtension} and before
+ * {@code ChappeServerBootstrap}, in order to contribute a JAX-RS handler to the
  * {@link ChappeMountPoint}.
  *
- * <p>Le bootstrap passe par la SPI publique {@link CassiniStack#builder()} :
- * cassini-core fournit le {@code BuilderFactory} via ServiceLoader, et un
- * {@link VaubanBeanProvider} construit sur le {@code VaubanContainer} du
- * runtime expose les ressources {@code @Path}/{@code @Provider} découvertes
- * par CDI.
+ * <p>The bootstrap goes through the public SPI {@link CassiniStack#builder()}:
+ * cassini-core provides the {@code BuilderFactory} via ServiceLoader, and a
+ * {@link VaubanBeanProvider} built on the {@code VaubanContainer} of
+ * runtime exposes discovered {@code @Path}/{@code @Provider} resources
+ * by CDI.
  *
  * <h3>Configuration</h3>
  * <ul>
- *   <li>{@code vidocq.rest.context-path} — préfixe de montage (défaut : {@code /})</li>
- *   <li>{@code vidocq.rest.listener} — listener Chappe cible (défaut : {@link ChappeListener#DEFAULT})</li>
+ *   <li>{@code vidocq.rest.context-path} — mount prefix (default: {@code /})</li>
+ *   <li>{@code vidocq.rest.listener} — target Chappe listener (default: {@link ChappeListener#DEFAULT})</li>
  * </ul>
  *
- * <p><b>Désactivation :</b> dès qu'un mount déclaratif {@code vidocq.http.mount.<n>.type=restful}
- * est présent dans la config, cette extension cède la place à
- * {@code ChappeMountConfigExtension} pour éviter un double mount.</p>
+ * <p><b>Deactivation:</b> as soon as a declarative mount {@code vidocq.http.mount.<n>.type=restful}
+ * is present in the config, this extension gives way to
+ * {@code ChappeMountConfigExtension} to avoid a double mount.</p>
  */
 public final class CassiniExtension implements VidocqExtension {
 
@@ -86,7 +86,7 @@ public final class CassiniExtension implements VidocqExtension {
                 .beanProvider(beanProvider)
                 .build();
 
-        // Activation @RequestScoped via Vauban autour de chaque dispatch.
+        // @RequestScoped activation via Vauban around each dispatch.
         RequestContext requestContext = new RequestContext();
         ChappeHttpAdapter.Scoped scoped = requestContext::runInScope;
         ChappeHttpAdapter bridge = new ChappeHttpAdapter(stack.adapter(), scoped);

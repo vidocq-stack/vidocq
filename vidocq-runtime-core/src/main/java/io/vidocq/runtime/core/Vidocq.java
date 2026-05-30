@@ -1,7 +1,7 @@
 package io.vidocq.runtime.core;
 
 /**
- * Point d'entrée principal du serveur Vidocq.
+ * Main entry point to the Vidocq server.
  * <p><b>Main entry point for the Vidocq server.</b></p>
  *
  * <pre>{@code

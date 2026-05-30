@@ -4,17 +4,17 @@ import org.jboss.arquillian.container.spi.ConfigurationException;
 import org.jboss.arquillian.container.spi.client.container.ContainerConfiguration;
 
 /**
- * Configuration du container Vidocq embarque pour Arquillian.
+ * Configuration for the embedded Vidocq Arquillian container.
  */
 public class VidocqContainerConfig implements ContainerConfiguration {
 
     private String host = "localhost";
-    private int port = 0; // 0 = port aleatoire
+    private int port = 0; // 0 = random port
 
     @Override
     public void validate() throws ConfigurationException {
         if (port < 0 || port > 65535) {
-            throw new ConfigurationException("Port invalide : " + port);
+            throw new ConfigurationException("Invalid port: " + port);
         }
     }
 

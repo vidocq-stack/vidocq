@@ -10,7 +10,7 @@ import java.util.Properties;
 import java.util.Set;
 
 /**
- * Source lisant {@code vidocq.properties} et {@code application.properties} du classpath.
+ * Source reading {@code vidocq.properties} and {@code application.properties} from the classpath.
  * Ordinal 100.
  */
 public final class PropertiesFileConfigSource implements ConfigSource {

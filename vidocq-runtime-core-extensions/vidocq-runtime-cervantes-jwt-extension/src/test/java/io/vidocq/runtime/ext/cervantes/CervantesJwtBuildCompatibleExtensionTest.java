@@ -17,32 +17,32 @@ import java.lang.module.ModuleDescriptor;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Test de non-régression M8 — le wrapper {@code vidocq-runtime-cervantes-jwt-extension}
- * doit republier la BCE Cervantes (MicroProfile JWT 2.1) de façon à ce qu'elle reste
- * découverte via {@code ServiceLoader} et {@code provides ... with} JPMS.
+ * M8 non-regression test — the wrapper {@code vidocq-runtime-cervantes-jwt-extension}
+ * must republish the ECB Cervantes (MicroProfile JWT 2.1) so that it remains
+ * discovered via {@code ServiceLoader} and {@code provides ... with} JPMS.
  *
- * <p>Objectif : confirmer que l'intégration Cervantes dans vidocq n'a pas brisé la
- * découverte de la BCE côté container CDI (injection {@code @Claim} +
- * producteur {@code @RequestScoped JsonWebToken}).</p>
+ * <p>Objective: to confirm that the Cervantes integration in vidocq did not break the
+ * discovery of the ECB on the CDI container side (injection {@code @Claim} +
+ * producer {@code @RequestScoped JsonWebToken}).</p>
  */
 class CervantesJwtBuildCompatibleExtensionTest {
 
     @Test
-    @DisplayName("M8 — le wrapper republie la BCE Cervantes via ServiceLoader et JPMS provides")
+    @DisplayName("M8 - the wrapper republishes the Cervantes BCE via ServiceLoader and JPMS provides")
     void wrapper_republishes_cervantes_extension_via_service_loader_and_jpms() {
         Class<?> extensionClass;
         try {
             extensionClass = Class.forName(
                     "io.vidocq.runtime.ext.cervantes.CervantesJwtBuildCompatibleExtension");
         } catch (ClassNotFoundException e) {
-            throw new RuntimeException("Extension non trouvée : " + e.getMessage(), e);
+            throw new RuntimeException("Extension not found: " + e.getMessage(), e);
         }
 
-        // La BCE wrapper étend bien la BCE Cervantes (re-publication par héritage).
+        // The ECB wrapper extends the ECB Cervantes well (re-publication by inheritance).
         assertTrue(io.vidocq.cervantes.cdi.CervantesClaimExtension.class.isAssignableFrom(extensionClass),
-                "Le wrapper doit étendre io.vidocq.cervantes.cdi.CervantesClaimExtension");
+                "The wrapper must extend io.vidocq.cervantes.cdi.CervantesClaimExtension");
 
-        // Quand le module JPMS est nommé, il doit publier la BCE via provides ... with.
+        // When the JPMS module is named, it must publish the ECB via provides ... with.
         Module module = extensionClass.getModule();
         ModuleDescriptor descriptor = module.getDescriptor();
         if (module.isNamed() && descriptor != null) {
@@ -51,7 +51,7 @@ class CervantesJwtBuildCompatibleExtensionTest {
                             .equals(provides.service())
                             && provides.providers().contains(extensionClass.getName()));
             assertTrue(providesExtension,
-                    "Le module JPMS du wrapper doit publier BuildCompatibleExtension via provides ... with");
+                    "The wrapper JPMS module must publish BuildCompatibleExtension via provides ... with");
         }
     }
 }

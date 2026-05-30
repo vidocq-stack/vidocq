@@ -17,8 +17,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Démarre un Server Chappe réel via ChappeEngineExtension + ChappeServerBootstrap
- * et vérifie qu'il sert un handler monté, que les hooks tournent, et qu'il s'arrête proprement.
+ * Starts a real Chappe Server via ChappeEngineExtension + ChappeServerBootstrap
+ * and verify that it serves a mounted handler, that the hooks turn, and that it stops properly.
  */
 class ChappeServerEndToEndTest {
 

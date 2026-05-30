@@ -11,10 +11,10 @@ import java.util.concurrent.TimeUnit;
 /**
  * Forked child JVM launched exactly like the production runtime — strict
  * module-path, no classpath. The dev mode kills and respawns this process on
- * every accepted source change (Approach A in {@code DEBUGMODE.md}).
+ * every accepted source changes (Approach A in {@code DEBUGMODE.md}).
  *
  * <p>{@link #stop(Duration)} sends a SIGTERM-equivalent ({@link Process#destroy()})
- * and waits for the chappe drain to complete. If the child has not exited after
+ * and waits for the screed drain to complete. If the child has not exited after
  * the grace period, {@link Process#destroyForcibly()} takes over.</p>
  */
 final class ChildJvm {

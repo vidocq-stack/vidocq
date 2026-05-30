@@ -3,7 +3,7 @@ package io.vidocq.runtime.examples.extlib;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * Bean CDI dans une librairie externe non pre-traitee par Vauban.
+ * CDI bean in an external library not pre-processed by Vauban.
  */
 @ApplicationScoped
 public class ExternalService {

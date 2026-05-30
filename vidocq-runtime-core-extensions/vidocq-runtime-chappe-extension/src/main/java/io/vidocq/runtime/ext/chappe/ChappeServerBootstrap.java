@@ -11,17 +11,17 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * Démarre un {@link Server} Chappe par {@link ChappeListener} déclaré, après que toutes
- * les extensions contributrices ont appelé {@link ChappeMountPoint#mount}.
+ * Starts a {@link Server} Chappe by {@link ChappeListener} declared, after all
+ * contributing extensions called {@link ChappeMountPoint#mount}.
  * <p>
- * Priorité 10 000 : tourne après tous les contributeurs (REST, Servlet, ...).
+ * Priority 10,000: runs after all contributors (REST, Servlet, etc.).
  * </p>
  *
  * <h3>Configuration</h3>
  * <ul>
- *   <li>{@code vidocq.chappe.listeners} — liste CSV des listeners (défaut : {@code default})</li>
- *   <li>{@code vidocq.chappe.listener.<name>.host} — hôte (défaut : {@code 0.0.0.0})</li>
- *   <li>{@code vidocq.chappe.listener.<name>.port} — port (défaut : 8080 pour {@code default}, obligatoire sinon)</li>
+ *   <li>{@code vidocq.chappe.listeners} — CSV list of listeners (default: {@code default})</li>
+ *   <li>{@code vidocq.chappe.listener.<name>.host} — host (default: {@code 0.0.0.0})</li>
+ *   <li>{@code vidocq.chappe.listener.<name>.port} — port (default: 8080 for {@code default}, required otherwise)</li>
  * </ul>
  */
 public final class ChappeServerBootstrap implements VidocqExtension {

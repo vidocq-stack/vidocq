@@ -1,37 +1,36 @@
-# HOWTO — Comment j'ai utilisé Claude Code pour Vidocq
+# HOWTO — How I used Claude Code for Vidocq
 
-> Retour d'expérience sur la collaboration avec **Claude Code (Opus 4.7 / 1M)**
-> pour construire `vidocq-servlet-chappe-extension` et passer **0 → 99,2 %
-> du TCK officiel Jakarta Servlet 6.1** (608/613) en ~60 commits.
-
----
-
-## 1. Philosophie de collaboration
-
-Claude n'est ni un copilote de snippet ni un oracle : c'est un **pair-programmeur
-autonome** à qui on confie des jalons (milestones) et qui rend un diff + un
-commit. Mon rôle : cadrer, arbitrer, valider. Son rôle : explorer, coder,
-décompiler, tester, réessayer.
-
-Règles que j'ai posées (et qui ont tenu) :
-
-- **Un commit = un jalon fonctionnel** (ex. `M2b filtres`, `M2c sessions`, …).
-  Jamais de "WIP" ou de commit fourre-tout.
-- **Pas de raccourci destructif** (`--no-verify`, `git reset --hard`, …) sans
-  autorisation explicite.
-- **Root cause avant workaround** : quand un test TCK échoue, comprendre
-  *pourquoi* avant de tricher le code.
-- **Français partout** (messages de commit, code, docs) — imposé via
-  `~/.claude/CLAUDE.md`.
+> A feedback post on collaborating with **Claude Code (Opus 4.7 / 1M)**
+> to build `vidocq-servlet-chappe-extension` and go from **0 → 99.2 %
+> of the official Jakarta Servlet 6.1 TCK** (608/613) in ~60 commits.
 
 ---
 
-## 2. Configuration Claude Code
+## 1. Collaboration philosophy
 
-### 2.1 Permissions ciblées (`.claude/settings.local.json`)
+Claude is neither a snippet copilot nor an oracle: it is an **autonomous
+pair-programmer** to whom you delegate milestones and who delivers a diff +
+a commit. My role: frame, arbitrate, validate. Its role: explore, code,
+decompile, test, retry.
 
-Plutôt que d'autoriser `Bash(*)`, j'ai **whitelisté au fil de l'eau** les
-commandes utiles :
+Rules I set (that held throughout):
+
+- **One commit = one functional milestone** (e.g. `M2b filters`, `M2c sessions`, …).
+  Never "WIP" or catch-all commits.
+- **No destructive shortcut** (`--no-verify`, `git reset --hard`, …) without
+  explicit authorisation.
+- **Root cause before workaround**: when a TCK test fails, understand *why*
+  before hacking the code.
+- **English everywhere** (commit messages, code, docs).
+
+---
+
+## 2. Claude Code configuration
+
+### 2.1 Targeted permissions (`.claude/settings.local.json`)
+
+Rather than allowing `Bash(*)`, I **whitelisted on-the-fly** the useful
+commands:
 
 ```json
 {
@@ -50,118 +49,116 @@ commandes utiles :
 }
 ```
 
-**Pourquoi ça marche** : Claude décompile les classes du TCK (`javap -c`) pour
-comprendre ce que le test attend côté serveur. Je l'autorise à le faire sans
-prompt à chaque fois, **mais uniquement dans `/tmp`** et **uniquement sur les
-JARs TCK**. Pas de `Bash(rm *)`, pas de `Bash(curl *)`.
+**Why it works**: Claude decompiles TCK classes (`javap -c`) to understand what
+the test expects on the server side. I allow it to do so without prompting each
+time, **but only in `/tmp`** and **only on TCK JARs**. No `Bash(rm *)`,
+no `Bash(curl *)`.
 
-### 2.2 Instructions globales (`~/.claude/CLAUDE.md`)
+### 2.2 Global instructions (`~/.claude/CLAUDE.md`)
 
-- **Langue** : français obligatoire, accents conservés.
-- **Ton** : concis, pas de narration interne, pas de résumé de fin de tour.
-- **RTK** (Rust Token Killer) : proxy CLI qui réécrit les commandes git/mvn
-  pour économiser 60-90 % de tokens en sortie.
+- **Language**: English required.
+- **Tone**: concise, no internal narration, no end-of-turn summaries.
+- **RTK** (Rust Token Killer): CLI proxy that rewrites git/mvn commands to
+  save 60–90 % of output tokens.
 
 ### 2.3 Context-mode MCP
 
-Tous les outils qui produisent >20 lignes (logs Maven, sortie `javap`,
-rapports TCK) passent par `ctx_batch_execute` / `ctx_execute_file`. Le résultat
-reste dans un sandbox indexé FTS5 ; Claude ne récupère que les lignes qu'il
-cherche via `ctx_search`. Sans ça, un seul `mvn test` du TCK officiel remplit
-le contexte à lui seul.
+All tools producing >20 lines (Maven logs, `javap` output, TCK reports) go
+through `ctx_batch_execute` / `ctx_execute_file`. The result stays in an
+FTS5-indexed sandbox; Claude only retrieves the lines it needs via `ctx_search`.
+Without this, a single official TCK `mvn test` run fills the context on its own.
 
 ---
 
-## 3. Méthodologie TCK-driven
+## 3. TCK-driven methodology
 
-La ligne directrice des 50 derniers commits :
+The guiding principle behind the last 50 commits:
 
 ```
-1. Lance le TCK officiel → récupère la liste des tests en échec
-2. Pour chaque test échoué :
+1. Run the official TCK → retrieve the list of failing tests
+2. For each failing test:
    a. `unzip -p servlet-tck-runtime.jar <TestClass>.class > /tmp/t.class`
-   b. `javap -p -c /tmp/t.class` → lit le bytecode du test
-   c. Identifie l'attente précise (status code, header, side-effect)
-   d. Corrige l'implémentation Chappe correspondante
-   e. Relance UNIQUEMENT la classe de test ciblée (`-Dtest=...`)
-3. Une fois un groupe cohérent passé → commit avec le delta chiffré
-   ("TCK Servlet 6.1 — 96,6 % → 98,5 % (+12 tests, total 604/613)")
+   b. `javap -p -c /tmp/t.class` → read the test bytecode
+   c. Identify the precise expectation (status code, header, side-effect)
+   d. Fix the corresponding Chappe implementation
+   e. Re-run ONLY the targeted test class (`-Dtest=...`)
+3. Once a coherent group passes → commit with the numeric delta
+   ("TCK Servlet 6.1 — 96.6 % → 98.5 % (+12 tests, total 604/613)")
 ```
 
-Cette boucle est **entièrement pilotée par Claude**. Mon intervention se
-limite à :
-- dire quel package TCK attaquer ensuite (`servletcontext30`, `cookie`, …),
-- arbitrer quand l'implémentation diverge du JSR (ex. `Max-Age=0` sur Cookie),
-- valider les commits.
+This loop is **entirely driven by Claude**. My involvement is limited to:
+- saying which TCK package to tackle next (`servletcontext30`, `cookie`, …),
+- arbitrating when the implementation diverges from the JSR (e.g. `Max-Age=0`
+  on Cookie),
+- validating commits.
 
 ---
 
-## 4. Mémoire persistante
+## 4. Persistent memory
 
-Claude maintient `~/.claude/projects/.../memory/MEMORY.md` où sont stockés :
+Claude maintains `~/.claude/projects/.../memory/MEMORY.md` which stores:
 
-- **user** : mon profil (Java 25 / CDI expert, rigoriste sur la spec).
-- **feedback** : corrections appliquées une fois (ex. "ne mock jamais la
-  ServletContext, utilise Chappe en vrai"), réutilisées ensuite.
-- **project** : pourquoi Chappe existe, pourquoi le TCK runner est hors reactor
-  (ShrinkWrap + Maven 4.1 incompatible), décisions d'archi.
-- **reference** : chemin du JAR TCK, script de lancement, etc.
+- **user**: my profile (Java 25 / CDI expert, rigorous about the spec).
+- **feedback**: corrections applied once (e.g. "never mock the
+  ServletContext, use real Chappe"), reused afterwards.
+- **project**: why Chappe exists, why the TCK runner is out-of-reactor
+  (ShrinkWrap + Maven 4.1 incompatible), architecture decisions.
+- **reference**: path to the TCK JAR, launch script, etc.
 
-Résultat concret : je relance une session trois jours plus tard, Claude sait
-déjà **où en est le TCK**, **quels bugs Vauban sont connus** (cf.
-`VAUBAN-BUGS.md`), et **quelle convention de commit** utiliser.
+Practical result: three days later I start a new session and Claude already
+knows **where the TCK stands**, **which Vauban bugs are known** (cf.
+`VAUBAN-BUGS.md`), and **which commit convention** to use.
 
 ---
 
-## 5. Outils externes branchés
+## 5. External tools connected
 
-| Outil | Rôle | Gain |
+| Tool | Role | Gain |
 |---|---|---|
-| **RTK** | Proxy CLI qui filtre git/mvn | -60 à -90 % de tokens sortie |
-| **context-mode MCP** | Sandbox + index FTS5 pour grosses sorties | Permet le TCK complet |
-| **ctx_fetch_and_index** | Remplace WebFetch pour la spec Servlet/Jersey | Lecture ciblée |
-| **Subagents (Explore, Plan)** | Exploration parallèle du code | Contexte principal préservé |
+| **RTK** | CLI proxy that filters git/mvn output | -60 to -90 % output tokens |
+| **context-mode MCP** | Sandbox + FTS5 index for large outputs | Enables full TCK run |
+| **ctx_fetch_and_index** | Replaces WebFetch for the Servlet/Jersey spec | Targeted reading |
+| **Subagents (Explore, Plan)** | Parallel code exploration | Main context preserved |
 
 ---
 
-## 6. Ce qui a *vraiment* fait la différence
+## 6. What *really* made the difference
 
-1. **Laisser Claude lire le bytecode du TCK.** C'est la seule source de vérité
-   fiable — la doc Jakarta est incomplète, Tomcat diverge sur des détails.
-2. **Commits granulaires en français avec métrique chiffrée.** Force à finir
-   un jalon avant d'en commencer un autre, évite le "grand refactor" qui
-   casse 40 tests d'un coup.
-3. **Whitelist Bash évolutive.** Chaque nouvelle permission est une décision
-   consciente — pas de `Bash(*)` paresseux.
-4. **Context-mode systématique.** Sans ça, le TCK noie le contexte en 2 runs.
-5. **Mémoire active.** Les bugs Vauban (`#1` à `#6`) identifiés par Claude ont
-   été remontés upstream avec le diagnostic bytecode complet.
-
----
-
-## 7. Ce que je ne fais PAS
-
-- ❌ Demander à Claude de "faire passer le TCK" en une fois. Toujours par
-  paquets de 5-15 tests.
-- ❌ Utiliser `--dangerously-skip-permissions`. Les prompts de permission
-  sont un signal : si Claude demande une commande que je n'avais pas prévue,
-  c'est qu'il y a une piste que je dois comprendre.
-- ❌ Laisser Claude écrire de la doc ou des README spontanément. Seulement
-  sur demande explicite (comme ce fichier).
-- ❌ Mélanger plusieurs jalons dans une conversation. `/clear` entre chaque
-  milestone majeur — la mémoire persistante prend le relais.
+1. **Letting Claude read the TCK bytecode.** It is the only reliable source of
+   truth — Jakarta docs are incomplete, Tomcat diverges on details.
+2. **Granular commits in English with numeric metrics.** Forces finishing a
+   milestone before starting the next, avoids the "grand refactor" that breaks
+   40 tests at once.
+3. **Evolving Bash whitelist.** Each new permission is a conscious decision —
+   no lazy `Bash(*)`.
+4. **Systematic context-mode.** Without it, the TCK drowns the context in 2 runs.
+5. **Active memory.** The Vauban bugs (`#1` to `#6`) identified by Claude were
+   reported upstream with the full bytecode diagnosis.
 
 ---
 
-## 8. Résultat chiffré
+## 7. What I do NOT do
 
-- **63 commits** sur `main`, tous signés et datés.
-- **0 → 99,2 % du TCK Servlet 6.1 officiel** (608/613).
-- **6 bugs Vauban** identifiés, documentés bytecode à l'appui, corrigés
+- ❌ Ask Claude to "make the TCK pass" in one go. Always in batches of 5–15 tests.
+- ❌ Use `--dangerously-skip-permissions`. Permission prompts are a signal:
+  if Claude asks for a command I hadn't planned, there is a lead I need to
+  understand.
+- ❌ Let Claude write docs or READMEs spontaneously. Only on explicit request
+  (like this file).
+- ❌ Mix several milestones in one conversation. `/clear` between each major
+  milestone — persistent memory takes over.
+
+---
+
+## 8. Measured outcome
+
+- **63 commits** on `main`, all signed and dated.
+- **0 → 99.2 % of the official Servlet 6.1 TCK** (608/613).
+- **6 Vauban bugs** identified, documented with bytecode evidence, fixed
   upstream (cf. `VAUBAN-BUGS.md`).
-- **~48 ms** de démarrage pour l'exemple servlet avec 3 servlets + filter +
-  listener, sur JDK 25 + Vauban CDI Lite.
+- **~48 ms** startup for the servlet example with 3 servlets + filter +
+  listener, on JDK 25 + Vauban CDI Lite.
 
 ---
 
-*Fichier rédigé par Claude sur demande — relu et validé par Yann Blazart.*
+*File written by Claude on request — reviewed and approved by Yann Blazart.*

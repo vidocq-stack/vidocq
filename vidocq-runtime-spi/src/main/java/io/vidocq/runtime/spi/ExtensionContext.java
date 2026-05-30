@@ -5,37 +5,33 @@ import io.vidocq.runtime.spi.config.VidocqConfig;
 import jakarta.enterprise.inject.spi.BeanManager;
 
 /**
- * Contexte fourni aux extensions lors de la phase {@link VidocqExtension#onStart}.
- * <p>
- * Donne accès au container CDI et à la configuration.
- * </p>
+ * Context provided to extensions during the {@link VidocqExtension#onStart} phase.
  *
- * <p><b>Context provided to extensions during the {@link VidocqExtension#onStart} phase.</b>
- * Provides access to the CDI container and configuration.</p>
+ * <p>Provides access to the CDI container and configuration.</p>
  */
 public interface ExtensionContext {
 
     /**
-     * Le container Vauban CDI initialisé.
-     * <p>The initialized Vauban CDI container.</p>
+     * The initialized Vauban CDI container.
      */
     VaubanContainer container();
 
     /**
-     * La configuration Vidocq (API historique, en cours de remplacement par {@link #config()}).
-     * <p>The legacy Vidocq configuration; prefer {@link #config()}.</p>
+     * The legacy Vidocq configuration.
+     *
+     * <p>Prefer {@link #config()} for the modern typed API.</p>
      */
     VidocqConfiguration configuration();
 
     /**
-     * La configuration Vidocq moderne (sources typées, alignée MicroProfile Config).
-     * <p>Modern Vidocq configuration (typed sources, MicroProfile Config aligned).</p>
+     * The modern Vidocq configuration.
+     *
+     * <p>Uses typed sources and aligns with MicroProfile Config concepts.</p>
      */
     VidocqConfig config();
 
     /**
-     * Raccourci vers le BeanManager CDI.
-     * <p>Shortcut to the CDI BeanManager.</p>
+     * Shortcut to the CDI {@link BeanManager}.
      */
     default BeanManager beanManager() {
         return container().getBeanManager();

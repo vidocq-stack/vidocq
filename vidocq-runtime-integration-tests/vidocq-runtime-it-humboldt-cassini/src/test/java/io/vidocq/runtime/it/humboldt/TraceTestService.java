@@ -5,10 +5,10 @@ import io.opentelemetry.instrumentation.annotations.WithSpan;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * Bean CDI cible — vérifie que la {@code BuildCompatibleExtension} de
- * {@code humboldt-cdi} ajoute bien le binding {@code @SpanBinding} sur les
- * méthodes annotées {@link WithSpan @WithSpan} OTel, ce qui active
- * {@code WithSpanInterceptor} à l'invocation.
+ * Target CDI bean — verifies that the {@code BuildCompatibleExtension} of
+ * {@code humboldt-cdi} adds the binding {@code @SpanBinding} on the
+ * annotated methods {@link WithSpan @WithSpan} OTel, which activates
+ * {@code WithSpanInterceptor} upon invocation.
  */
 @ApplicationScoped
 public class TraceTestService {
@@ -23,7 +23,7 @@ public class TraceTestService {
         throw new IllegalStateException("boom from traced.boom");
     }
 
-    /** Méthode SANS annotation — vérifie l'absence de span pour les non-annotées. */
+    /** NO annotation method — checks for absence of span for non-annotated ones. */
     public String plain() {
         return "plain-result";
     }

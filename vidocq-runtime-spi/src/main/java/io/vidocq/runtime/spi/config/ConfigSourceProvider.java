@@ -1,56 +1,48 @@
 package io.vidocq.runtime.spi.config;
 
 /**
- * Fournit un ensemble de {@link ConfigSource} au runtime Vidocq.
+ * Provides a set of {@link ConfigSource} instances to the Vidocq runtime.
  *
- * <p>Découvert via {@link java.util.ServiceLoader} au démarrage de
- * {@code VidocqConfigImpl}. Cette SPI permet de brancher un moteur de
- * configuration tiers (MicroProfile Config via Ravel, HashiCorp Consul,
- * Spring Cloud Config, etc.) sans coupler {@code vidocq-runtime-core} à
- * l'implémentation choisie.</p>
+ * <p>Discovered via {@link java.util.ServiceLoader} when
+ * {@code VidocqConfigImpl} starts. This SPI allows Vidocq to integrate a
+ * third-party configuration engine (MicroProfile Config via Ravel, HashiCorp Consul,
+ * Spring Cloud Config, etc.) without coupling {@code vidocq-runtime-core} to
+ * the chosen implementation.</p>
  *
- * <p><b>Sémantique de remplacement</b> — si <em>au moins un</em>
- * {@code ConfigSourceProvider} est enregistré au démarrage, ses sources
- * <b>remplacent intégralement</b> les {@link ConfigSource} natifs Vidocq
- * découverts via {@code ServiceLoader<ConfigSource>}. Le provider est donc
- * responsable d'apporter les substituts nécessaires (system properties,
- * environment variables, fichiers de propriétés, etc.) — Vidocq ne mixe pas
- * les deux pour éviter le double comptage et préserver la sémantique
- * d'ordinaux de l'écosystème externe (ex. priorités MP Config).</p>
+ * <p><b>Replacement semantics</b> — if <em>at least one</em>
+ * {@code ConfigSourceProvider} is registered at startup, its sources
+ * <b>completely replace</b> the native {@link ConfigSource} Vidocq
+ * discovered via {@code ServiceLoader<ConfigSource>}. The provider is therefore
+ * responsible for providing the necessary substitutes (system properties,
+ * environment variables, properties files, etc.) — Vidocq does not mix
+ * both to avoid double counting and preserve semantics
+ * of ordinals from the external ecosystem (e.g. MP Config priorities).</p>
  *
- * <p>Quand plusieurs providers sont présents, l'union de leurs sources est
- * utilisée, triée par {@link ConfigSource#getOrdinal()} décroissant.</p>
+ * <p>When several providers are present, the union of their sources is used,
+ * sorted by descending {@link ConfigSource#getOrdinal()}.</p>
  *
- * <p><b>Cas d'usage typique</b> — l'extension
- * {@code vidocq-runtime-ravel-extension} fournit un
- * {@code RavelConfigSourceProvider} qui itère sur les
- * {@code org.eclipse.microprofile.config.spi.ConfigSource} exposés par
- * {@code ConfigProvider.getConfig()} et les wrappe en {@link ConfigSource}
- * Vidocq. Quand l'extension est sur le module path, Ravel prend la main ; quand
- * elle est absente, les 4 sources natives Vidocq (Sys, Env, ExternalFile,
- * PropertiesFile) sont utilisées.</p>
- *
- * <p><b>Vidocq config source provider.</b>
- * Contributes a set of {@link ConfigSource} instances to the Vidocq runtime.
- * Discovered via {@link java.util.ServiceLoader}. If at least one provider is
- * registered, it fully replaces the native Vidocq ConfigSources — the provider
- * is responsible for supplying equivalent substitutes.</p>
+ * <p><b>Typical use case</b> — the extension
+ * {@code vidocq-runtime-ravel-extension} provides a
+ * {@code RavelConfigSourceProvider} which iterates over the
+ * {@code org.eclipse.microprofile.config.spi.ConfigSource} exposed by
+ * {@code ConfigProvider.getConfig()} and wraps them as Vidocq {@link ConfigSource}
+ * instances. When the extension is on the module path, Ravel takes control; when
+ * it is absent, the 4 native Vidocq sources (Sys, Env, ExternalFile,
+ * PropertiesFile) are used.</p>
  */
 public interface ConfigSourceProvider {
 
     /**
-     * Nom diagnostic du provider (utilisé pour les logs et l'introspection).
-     * <p>Provider's diagnostic name.</p>
+     * Diagnostic name of the provider, used for logs and introspection.
      */
     String getName();
 
     /**
-     * Sources contribuées par ce provider. Le {@link ClassLoader} courant est
-     * passé pour permettre aux moteurs externes (MP Config, Spring, etc.) de
-     * résoudre leur configuration dans le bon contexte de chargement.
+     * Sources contributed by this provider.
      *
-     * <p>Contributed sources. The current ClassLoader is passed so external
-     * engines can resolve their configuration in the proper loading context.</p>
+     * <p>The current {@link ClassLoader} is passed so external engines
+     * (MP Config, Spring, etc.) can resolve their configuration in the
+     * proper loading context.</p>
      */
     Iterable<ConfigSource> getConfigSources(ClassLoader cl);
 }

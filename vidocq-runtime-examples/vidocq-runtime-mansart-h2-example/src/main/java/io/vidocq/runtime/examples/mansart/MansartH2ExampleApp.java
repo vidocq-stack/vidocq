@@ -17,12 +17,12 @@ import io.vidocq.runtime.core.Vidocq;
  *
  * <p>Once running:
  * <pre>
- * curl http://localhost:8080/api/products              # initial seed: 3 coffees
- * curl http://localhost:8080/api/products/count        # → 3
+ * curl http://localhost:8080/api/products # initial seed: 3 coffees
+ * curl http://localhost:8080/api/products/count # → 3
  * curl -X POST -H 'content-type: application/json' \
  *      -d '{"name":"Mocha","price":4.5}' \
  *      http://localhost:8080/api/products
- * curl 'http://localhost:8080/api/products?name=%25at%25'   # findByNameLike
+ * curl 'http://localhost:8080/api/products?name=%25at%25' # findByNameLike
  * </pre>
  */
 public class MansartH2ExampleApp {

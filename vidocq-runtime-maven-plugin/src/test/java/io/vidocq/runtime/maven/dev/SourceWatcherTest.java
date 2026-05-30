@@ -80,7 +80,7 @@ class SourceWatcherTest {
             // or the watcher fired due to some other system event we cannot
             // control on macOS; in either case .log alone must never wake it.
             if (!t.isAlive()) {
-                // If it did wake up, the only legit reason would be a directory
+                // If it did wake up, the only legitimate reason would be a directory
                 // event that happened to carry an unrelated .java file — which
                 // does not happen in this tmp dir. So the result must be 0.
                 assertEquals(0, result.get(),

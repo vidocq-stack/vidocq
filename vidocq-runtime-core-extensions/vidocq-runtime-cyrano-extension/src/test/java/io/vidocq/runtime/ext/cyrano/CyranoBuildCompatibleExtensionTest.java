@@ -18,27 +18,27 @@ import java.util.ServiceLoader;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Test de non-régression M5 — le wrapper {@code vidocq-runtime-cyrano-extension}
- * doit republier la BCE Cyrano de façon à ce qu'elle reste découverte via
- * {@code ServiceLoader} et {@code provides ... with} JPMS.
+ * M5 non-regression test — the wrapper {@code vidocq-runtime-cyrano-extension}
+ * must republish ECB Cyrano so that it remains discoverable via
+ * {@code ServiceLoader} and {@code provides ... with} JPMS.
  *
- * <p>Objectif : confirmer que l'intégration Cyrano dans vidocq n'a pas
- * brisé la découverte de la BCE côté container CDI.</p>
+ * <p>Objective: to confirm that the Cyrano integration in vidocq has not
+ * broken the discovery of the ECB on the CDI container side.</p>
  */
 class CyranoBuildCompatibleExtensionTest {
 
     @Test
-    @DisplayName("M5 — le wrapper republiera la BCE Cyrano via ServiceLoader et JPMS provides")
+    @DisplayName("M5 - the wrapper republishes the Cyrano BCE via ServiceLoader and JPMS provides")
     void wrapper_republishes_cyrano_extension_via_service_loader_and_jpms() {
-        // Charger la classe de l'extension via réflexion
+        // Load extension class via reflection
         Class<?> extensionClass;
         try {
             extensionClass = Class.forName("io.vidocq.runtime.ext.cyrano.CyranoBuildCompatibleExtension");
         } catch (ClassNotFoundException e) {
-            throw new RuntimeException("Extension non trouvée : " + e.getMessage(), e);
+            throw new RuntimeException("Extension not found: " + e.getMessage(), e);
         }
 
-        // Valider que le module JPMS exporte la BCE
+        // Validate that the JPMS module exports the ECB
         Module module = extensionClass.getModule();
         ModuleDescriptor descriptor = module.getDescriptor();
         if (module.isNamed() && descriptor != null) {
@@ -47,7 +47,7 @@ class CyranoBuildCompatibleExtensionTest {
                             .equals(provides.service())
                             && provides.providers().contains(extensionClass.getName()));
             assertTrue(providesExtension,
-                    "Le module JPMS du wrapper doit publier BuildCompatibleExtension via provides ... with");
+                    "The wrapper JPMS module must publish BuildCompatibleExtension via provides ... with");
         }
     }
 }

@@ -4,7 +4,7 @@ import org.jboss.arquillian.container.spi.client.container.DeployableContainer;
 import org.jboss.arquillian.core.spi.LoadableExtension;
 
 /**
- * Extension Arquillian qui enregistre le container Vidocq embarque.
+ * Arquillian extension that registers the embedded Vidocq container.
  */
 public class VidocqLoadableExtension implements LoadableExtension {
 

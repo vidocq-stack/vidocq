@@ -9,25 +9,25 @@ import java.util.Properties;
 import java.util.Set;
 
 /**
- * MicroProfile {@link org.eclipse.microprofile.config.spi.ConfigSource} qui lit
- * {@code vidocq.properties} depuis le classpath.
+ * MicroProfile {@link org.eclipse.microprofile.config.spi.ConfigSource} which reads
+ * {@code vidocq.properties} from the classpath.
  *
- * <p>Historiquement, Vidocq lit en priorité {@code vidocq.properties} (nom
- * spécifique au runtime), avec {@code application.properties} comme fallback
- * (convention SE / MicroProfile-compatible). En mode Ravel — quand cette
- * extension est sur le module path — Ravel ne lit pas {@code vidocq.properties}
- * par défaut ; cette source restitue la compatibilité historique.</p>
+ * <p>Historically, Vidocq reads {@code vidocq.properties} (name
+ * runtime specific), with {@code application.properties} as fallback
+ * (SE/MicroProfile-compatible convention). In Ravel mode — when this
+ * extension is on the path module — Ravel does not read {@code vidocq.properties}
+ * default; this source restores historical compatibility.</p>
  *
- * <p><b>Ordinal 105</b> — légèrement supérieur à
- * {@link ApplicationPropertiesConfigSource} (100) et à
- * {@code MicroprofilePropertiesConfigSource} (100, valeur par défaut de la spec
- * MP Config 3.1 §3 pour {@code META-INF/microprofile-config.properties}). En
- * cas de collision sur une même clé, {@code vidocq.properties} gagne, ce qui
- * préserve la sémantique Vidocq antérieure à l'intégration Ravel.</p>
+ * <p><b>Ordinal 105</b> — slightly higher than
+ * {@link ApplicationPropertiesConfigSource} (100) and
+ * {@code MicroprofilePropertiesConfigSource} (100, default value of the spec
+ * MP Config 3.1 §3 for {@code META-INF/microprofile-config.properties}). In
+ * case of collision on the same key, {@code vidocq.properties} wins, which
+ * preserves Vidocq semantics prior to Ravel integration.</p>
  *
- * <p>Le fichier est lu une seule fois à l'instanciation (au démarrage). Pour
- * recharger la config sans redémarrer, il faudrait reconstruire le {@code Config}
- * via {@code ConfigProviderResolver} — non supporté nativement par MP Config.</p>
+ * <p>The file is read only once at instantiation (at startup). For
+ * reload the config without restarting, you would have to rebuild the {@code Config}
+ * via {@code ConfigProviderResolver} — not natively supported by MP Config.</p>
  */
 public final class VidocqPropertiesConfigSource
         implements org.eclipse.microprofile.config.spi.ConfigSource {

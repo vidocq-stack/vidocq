@@ -13,7 +13,7 @@ import java.util.List;
  *
  * <p>We deliberately <b>shell-out</b> rather than embedding Maven: Maven 4's
  * embedded API is still unstable, and a clean external invocation gives us
- * deterministic behaviour and proper isolation from the plugin classpath.</p>
+ * deterministic behavior and proper isolation from the plugin classpath.</p>
  *
  * <p>The runner inherits stdout/stderr so the user sees compiler errors in the
  * same terminal as the dev-mode banner.</p>

@@ -8,14 +8,14 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 
 /**
- * Resource JAX-RS de test pour les 4 scénarios humboldt :
+ * JAX-RS test resource for the 4 Humboldt scenarios:
  * <ul>
- *   <li>{@code GET /trace/work} — appelle un service annoté {@code @WithSpan}.
- *       Doit produire 2 spans : SERVER (filter humboldt-rest) + INTERNAL "traced.work" (BCE)</li>
- *   <li>{@code GET /trace/plain} — appelle un service non annoté.
- *       Doit produire 1 span SERVER + AUCUN span INTERNAL</li>
- *   <li>{@code GET /trace/boom} — appelle un service qui throw.
- *       Doit produire 2 spans avec status ERROR</li>
+ *   <li>{@code GET /trace/work} — calls a service annotated {@code @WithSpan}.
+ *       Must produce 2 spans: SERVER (filter humboldt-rest) + INTERNAL "traced.work" (BCE)</li>
+ *   <li>{@code GET /trace/plain} — calls an unannotated service.
+ *       Must produce 1 SERVER span + NO INTERNAL span</li>
+ *   <li>{@code GET /trace/boom} — calls a service that throw.
+ *       Must produce 2 spans with status ERROR</li>
  * </ul>
  */
 @Path("/trace")
@@ -41,6 +41,6 @@ public class TraceTestResource {
     @GET
     @Path("/boom")
     public String boom() {
-        return service.alwaysFails(); // throws → 500 → status ERROR sur span SERVER
+        return service.alwaysFails(); // throws → 500 → status ERROR on span SERVER
     }
 }

@@ -14,18 +14,18 @@ import java.util.List;
 import java.util.concurrent.CountDownLatch;
 
 /**
- * Orchestrateur du cycle de vie Vidocq.
+ * Vidocq lifecycle orchestrator.
  * <p>
- * Séquence de démarrage :
+ * Startup sequence:
  * <ol>
- *   <li>Chargement de la configuration</li>
- *   <li>Découverte des extensions (ServiceLoader, triées par priorité)</li>
+ *   <li>Loading configuration</li>
+ *   <li>Discovery of extensions (ServiceLoader, sorted by priority)</li>
  *   <li>{@code extension.configure(config)}</li>
- *   <li>Création du {@link VaubanContainerBuilder}, {@code extension.beforeStart(builder)}</li>
- *   <li>Build du {@link VaubanContainer} (boot CDI)</li>
+ *   <li>Creation of the {@link VaubanContainerBuilder}, {@code extension.beforeStart(builder)}</li>
+ *   <li>Build the {@link VaubanContainer} (CDI boot)</li>
  *   <li>{@code extension.onStart(context)}</li>
- *   <li>Enregistrement du shutdown hook</li>
- *   <li>Blocage sur {@link #awaitShutdown()}</li>
+ *   <li>Registering the shutdown hook</li>
+ *   <li>Block on {@link #awaitShutdown()}</li>
  * </ol>
  *
  * <p><b>Vidocq lifecycle orchestrator.</b></p>
@@ -42,23 +42,23 @@ public final class VidocqBootstrap {
     private List<String> additionalBeanClassNames;
     private VaubanContainer container;
     /**
-     * Top-chrono pris à la construction du bootstrap (= juste après l'entrée
-     * de {@code Vidocq.main()} via {@link #create()}). Comparable au {@code
-     * StopWatch} démarré par {@code SpringApplication.run()} de Spring Boot.
+     * Top-chrono taken during the construction of the bootstrap (= just after the entry
+     * from {@code Vidocq.main()} via {@link #create()}). Comparable to {@code
+     * StopWatch} started by {@code SpringApplication.run()} of Spring Boot.
      */
     private final long startTime = System.nanoTime();
 
     private VidocqBootstrap() {}
 
     /**
-     * Crée une nouvelle instance de bootstrap.
+     * Creates a new bootstrap instance.
      */
     public static VidocqBootstrap create() {
         return new VidocqBootstrap();
     }
 
     /**
-     * Phase 1 : charge la configuration et découvre les extensions.
+     * Phase 1: loads the configuration and discovers the extensions.
      */
     public VidocqBootstrap configure() {
         LOG.log(System.Logger.Level.INFO, "Vidocq - Configuration phase");
@@ -75,8 +75,8 @@ public final class VidocqBootstrap {
     }
 
     /**
-     * Phase 1 (variante) : configure avec des classes beans additionnelles.
-     * Utilisé par le container Arquillian pour injecter les classes du deployment.
+     * Phase 1 (variant): configure with additional bean classes.
+     * Used by the Arquillian container to inject deployment classes.
      */
     public VidocqBootstrap configure(java.util.List<String> additionalBeanClassNames) {
         configure();
@@ -85,7 +85,7 @@ public final class VidocqBootstrap {
     }
 
     /**
-     * Phase 2 : boot du container CDI et démarrage des extensions.
+     * Phase 2: booting the CDI container and starting the extensions.
      */
     public VidocqBootstrap start() {
         LOG.log(System.Logger.Level.INFO, "Vidocq - Starting");
@@ -133,7 +133,7 @@ public final class VidocqBootstrap {
     }
 
     /**
-     * Bloque le thread courant jusqu'à l'arrêt du serveur.
+     * Blocks the current thread until the server stops.
      */
     public void awaitShutdown() {
         try {

@@ -6,10 +6,10 @@ import io.vidocq.runtime.spi.config.VidocqConfig;
 import java.util.Optional;
 
 /**
- * Façade {@link VidocqConfiguration} déléguant à {@link VidocqConfig}.
+ * {@link VidocqConfiguration} facade delegating to {@link VidocqConfig}.
  * <p>
- * Conservée pour la rétrocompatibilité des extensions existantes ; les nouvelles
- * extensions devraient consommer directement {@link VidocqConfig}.
+ * Retained for backward compatibility of existing extensions; the news
+ * extensions should directly consume {@link VidocqConfig}.
  * </p>
  */
 final class VidocqConfigurationImpl implements VidocqConfiguration {

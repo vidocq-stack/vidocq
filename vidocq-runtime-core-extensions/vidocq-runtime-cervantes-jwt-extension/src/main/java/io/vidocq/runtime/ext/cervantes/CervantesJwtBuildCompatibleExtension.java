@@ -3,16 +3,16 @@ package io.vidocq.runtime.ext.cervantes;
 import io.vidocq.cervantes.cdi.CervantesClaimExtension;
 
 /**
- * Relais BCE local au module wrapper pour republier l'extension CDI Cervantes
- * (MicroProfile JWT 2.1) via ServiceLoader et provides JPMS, de la meme facon
- * que {@code vidocq-runtime-cyrano-extension} republie la BCE Cyrano.
+ * BCE relay local to wrapper module to republish CDI Cervantes extension
+ * (MicroProfile JWT 2.1) via ServiceLoader and provides JPMS, in the same way
+ * that {@code vidocq-runtime-cyrano-extension} republishes ECB Cyrano.
  *
- * <p>La BCE {@link CervantesClaimExtension} (cervantes-cdi-vauban) ajoute le
- * producteur {@code @RequestScoped JsonWebToken} et l'injection {@code @Claim}.
- * Les beans de securite JAX-RS (filtre d'authentification + DynamicFeature
- * {@code @RolesAllowed}) de cervantes-cassini sont des {@code @Provider}
- * decouverts par le {@code VaubanBeanProvider} de Cassini une fois cervantes-cassini
- * present sur le classpath du deploiement.</p>
+ * <p>The ECB {@link CervantesClaimExtension} (cervantes-cdi-vauban) adds the
+ * producer {@code @RequestScoped JsonWebToken} and injection {@code @Claim}.
+ * JAX-RS security beans (authentication filter + DynamicFeature
+ * {@code @RolesAllowed}) of cervantes-cassini are {@code @Provider}
+ * discovered by Cassini's {@code VaubanBeanProvider} once Cervantes-Cassini
+ * present on the deployment classpath.</p>
  */
 public final class CervantesJwtBuildCompatibleExtension extends CervantesClaimExtension {
 }

@@ -7,13 +7,13 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Source lisant les variables d'environnement.
+ * Source reading environment variables.
  * <p>
- * Résolution en trois passes (règles MicroProfile Config) :
+ * Three-pass resolution (MicroProfile Config rules):
  * <ol>
- *   <li>clé exacte</li>
- *   <li>remplace les caractères non alphanumériques par {@code _}</li>
- *   <li>idem + upper-case</li>
+ *   <li>exact key</li>
+ *   <li>replace non-alphanumeric characters with {@code _}</li>
+ *   <li>same + upper-case</li>
  * </ol>
  */
 public final class EnvConfigSource implements ConfigSource {

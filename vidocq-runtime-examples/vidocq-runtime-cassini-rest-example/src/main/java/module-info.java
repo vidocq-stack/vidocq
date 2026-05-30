@@ -14,11 +14,11 @@ module io.vidocq.runtime.examples.rest {
     requires io.vidocq.chappe.api;
     requires io.vidocq.vauban.core;
 
-    // JAX-RS et JSON-B font de la reflection sur ressources et records.
+    // JAX-RS and JSON-B reflect on resources and records.
     opens io.vidocq.runtime.examples.rest;
 
-    // java.util.logging.LogManager instancie StdoutHandler par réflexion via
-    // Class.newInstance() lors du load de logging.properties — requiert que
-    // le package soit exporté à java.logging.
+    // java.util.logging.LogManager instantiates StdoutHandler by reflection via
+    // Class.newInstance() when loading logging.properties — requires that
+    // the package is exported to java.logging.
     exports io.vidocq.runtime.logging to java.logging;
 }

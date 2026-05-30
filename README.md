@@ -5,7 +5,7 @@
 <h1 align="center">Vidocq</h1>
 
 <p align="center">
-  <strong>Runtime MicroProfile Java SE modulaire</strong><br>
+  <strong>Modular Java SE MicroProfile Runtime</strong><br>
   <a href="https://microprofile.io/">MicroProfile 7.1</a> | <a href="https://github.com/VidocqMP/vauban">Vauban CDI Lite</a> | JDK 25 | JPMS
 </p>
 
@@ -19,37 +19,35 @@
 
 ---
 
-> [English version](README_EN.md)
+## What is Vidocq?
 
-## Qu'est-ce que Vidocq ?
+Vidocq is a modular Java SE application runtime built on [Vauban](https://github.com/VidocqMP/vauban) (CDI 4.1 Lite). It progressively implements the MicroProfile 7.1 specifications via a lightweight extension system inspired by Quarkus.
 
-Vidocq est un runtime d'applications Java SE modulaire construit sur [Vauban](https://github.com/VidocqMP/vauban) (CDI 4.1 Lite). Il implemente progressivement les specifications MicroProfile 7.1 via un systeme d'extensions leger inspire de Quarkus.
-
-### Pourquoi Vidocq ?
+### Why Vidocq?
 
 | | Quarkus | Helidon | **Vidocq** |
 |---|---|---|---|
-| CDI | ArC (partiel) | Weld | **Vauban (CDI Lite natif JPMS)** |
-| Modules Java | Non | Partiel | **Natif (module-info.java)** |
-| Approche | Build-time + extensions | Microframework | **Extensions MicroProfile sur CDI Lite** |
-| JDK minimum | 17 | 21 | **25** |
+| CDI | ArC (partial) | Weld | **Vauban (native JPMS CDI Lite)** |
+| Java Modules | No | Partial | **Native (module-info.java)** |
+| Approach | Build-time + extensions | Microframework | **MicroProfile extensions on CDI Lite** |
+| Minimum JDK | 17 | 21 | **25** |
 
-### Philosophie
+### Philosophy
 
-- **CDI Lite first** : Vauban genere proxies et intercepteurs a la compilation via l'API Class-File du JDK 25
-- **Extensions MicroProfile** : chaque spec (REST, Config, Health, ...) est une extension independante
-- **JPMS natif** : chaque module declare un `module-info.java`
-- **Virtual threads ready** : `ScopedValue` (JEP 487) pour le contexte `@RequestScoped`
+- **CDI Lite first**: Vauban generates proxies and interceptors at compile time via the JDK 25 Class-File API
+- **MicroProfile extensions**: each spec (REST, Config, Health, ...) is an independent extension
+- **Native JPMS**: each module declares a `module-info.java`
+- **Virtual threads ready**: `ScopedValue` (JEP 487) for `@RequestScoped` context
 
-## Demarrage rapide
+## Quick Start
 
-### Prerequis
+### Prerequisites
 
 - JDK 25 (Temurin)
 - Maven 3.9.16
 
 ```bash
-# Avec SDKMAN!
+# With SDKMAN!
 sdk env install
 ```
 
@@ -78,9 +76,9 @@ public class HelloResource {
 }
 ```
 
-Pas besoin de `@RequestScoped` : la `RestScopeExtension` (Build Compatible Extension CDI) l'ajoute automatiquement aux classes `@Path` sans scope explicite.
+No need for `@RequestScoped`: the `RestScopeExtension` (CDI Build Compatible Extension) adds it automatically to `@Path` classes without an explicit scope.
 
-Point d'entree :
+Entry point:
 
 ```java
 public class App {
@@ -124,31 +122,31 @@ graph TB
 
 ```
 vidocq/
-├── vidocq-runtime-spi                   Interfaces d'extension (VidocqExtension, VidocqConfiguration)
-├── vidocq-runtime-core                  Bootstrap, decouverte d'extensions, cycle de vie
-├── vidocq-runtime-maven-plugin          Indexation des beans (vauban-beans.list) + packaging ZIP
-├── vidocq-runtime-core-extensions/      Extensions MicroProfile 7.1 core
-│   └── vidocq-runtime-cassini-rest-extension    JAX-RS 4.0 via Jersey 4 + Grizzly (bridge CDI/HK2)
-└── vidocq-runtime-examples/             Exemples
-    └── vidocq-runtime-cassini-rest-example      Application REST d'exemple
+├── vidocq-runtime-spi                   Extension interfaces (VidocqExtension, VidocqConfiguration)
+├── vidocq-runtime-core                  Bootstrap, extension discovery, lifecycle
+├── vidocq-runtime-maven-plugin          Bean indexing (vauban-beans.list) + ZIP packaging
+├── vidocq-runtime-core-extensions/      MicroProfile 7.1 core extensions
+│   └── vidocq-runtime-cassini-rest-extension    JAX-RS 4.0 via Jersey 4 + Grizzly (CDI/HK2 bridge)
+└── vidocq-runtime-examples/             Examples
+    └── vidocq-runtime-cassini-rest-example      Sample REST application
 ```
 
-## Mecanisme d'extensions
+## Extension Mechanism
 
-Les extensions implementent `VidocqExtension` et sont decouvertes via `ServiceLoader`.
+Extensions implement `VidocqExtension` and are discovered via `ServiceLoader`.
 
-Cycle de vie :
+Lifecycle:
 
-1. **configure** -- configuration avant le boot CDI
-2. **beforeStart** -- enrichissement du `VaubanContainerBuilder`
-3. **onStart** -- le container CDI est pret, demarrage des services
-4. **onStop** -- arret (ordre inverse des priorites)
+1. **configure** — configuration before CDI boot
+2. **beforeStart** — enrich the `VaubanContainerBuilder`
+3. **onStart** — CDI container is ready, start services
+4. **onStop** — shutdown (reverse priority order)
 
 ```java
-public class MonExtension implements VidocqExtension {
+public class MyExtension implements VidocqExtension {
 
     @Override
-    public String name() { return "mon-extension"; }
+    public String name() { return "my-extension"; }
 
     @Override
     public int priority() { return 1000; }
@@ -160,45 +158,45 @@ public class MonExtension implements VidocqExtension {
 }
 ```
 
-Enregistrement via `META-INF/services/io.vidocq.runtime.spi.VidocqExtension` ou `module-info.java` :
+Registration via `META-INF/services/io.vidocq.runtime.spi.VidocqExtension` or `module-info.java`:
 
 ```java
-provides VidocqExtension with MonExtension;
+provides VidocqExtension with MyExtension;
 ```
 
-## Extension REST (JAX-RS 4.0)
+## REST Extension (JAX-RS 4.0)
 
-L'extension REST integre Jersey 4 + Grizzly avec le container CDI Vauban :
+The REST extension integrates Jersey 4 + Grizzly with the Vauban CDI container:
 
-| Composant | Role |
+| Component | Role |
 |-----------|------|
-| `RestExtension` | Extension Vidocq — lifecycle du serveur HTTP |
-| `JerseyBridge` | Decouverte `@Path`/`@Provider` via `BeanManager`, factories HK2 delegant a CDI |
-| `EmbeddedServer` | Serveur Grizzly avec activation `@RequestScoped` via `ScopedValue` |
-| `RestScopeExtension` | BCE ajoutant `@RequestScoped` aux `@Path` sans scope |
+| `RestExtension` | Vidocq extension — HTTP server lifecycle |
+| `JerseyBridge` | `@Path`/`@Provider` discovery via `BeanManager`, HK2 factories delegating to CDI |
+| `EmbeddedServer` | Grizzly server with `@RequestScoped` activation via `ScopedValue` |
+| `RestScopeExtension` | BCE adding `@RequestScoped` to `@Path` classes without a scope |
 
 ### Configuration
 
-| Propriete | Defaut | Description |
+| Property | Default | Description |
 |-----------|--------|-------------|
-| `vidocq.rest.host` | `0.0.0.0` | Hote d'ecoute |
-| `vidocq.rest.port` | `8080` | Port d'ecoute |
+| `vidocq.rest.host` | `0.0.0.0` | Listen host |
+| `vidocq.rest.port` | `8080` | Listen port |
 
-### Integration CDI / Jersey
+### CDI / Jersey Integration
 
-Le bridge CDI-Jersey fonctionne ainsi :
+The CDI-Jersey bridge works as follows:
 
-1. Les **classes** `@Path` sont enregistrees dans Jersey pour le routing
-2. Des **factories HK2** delegent la creation d'instances au `BeanManager` CDI (`@Any`)
-3. Chaque requete HTTP est enveloppee dans `RequestContext.runInScope()` pour activer le contexte CDI `@RequestScoped` (via `ScopedValue` du JDK 25)
+1. `@Path` **classes** are registered in Jersey for routing
+2. **HK2 factories** delegate instance creation to the CDI `BeanManager` (`@Any`)
+3. Each HTTP request is wrapped in `RequestContext.runInScope()` to activate the CDI `@RequestScoped` context (via JDK 25 `ScopedValue`)
 
 ## Configuration
 
-Les proprietes sont resolues dans l'ordre :
+Properties are resolved in order:
 
-1. Proprietes systeme (`-Dkey=value`)
-2. Variables d'environnement (`KEY_NAME`)
-3. Fichier `vidocq.properties` du classpath
+1. System properties (`-Dkey=value`)
+2. Environment variables (`KEY_NAME`)
+3. `vidocq.properties` file on the classpath
 
 ## Packaging
 
@@ -217,16 +215,16 @@ Les proprietes sont resolues dans l'ordre :
 </plugin>
 ```
 
-Produit une distribution ZIP :
+Produces a ZIP distribution:
 
 ```
 myapp-1.0/
-  bin/myapp.sh    Lanceur Unix (module-path)
-  bin/myapp.cmd   Lanceur Windows
-  lib/*.jar       Application + dependances
+  bin/myapp.sh    Unix launcher (module-path)
+  bin/myapp.cmd   Windows launcher
+  lib/*.jar       Application + dependencies
 ```
 
-## Extensions MicroProfile 7.1
+## MicroProfile 7.1 Extensions
 
 | Spec | Extension | Status |
 |------|-----------|--------|
@@ -238,19 +236,19 @@ myapp-1.0/
 | MicroProfile OpenAPI | - | Planned |
 | MicroProfile JWT Auth | - | Planned |
 
-## TCK Jakarta Servlet 6.1
+## Jakarta Servlet 6.1 TCK
 
-L'extension `vidocq-servlet-chappe-extension` est validee contre le **TCK
-officiel Jakarta Servlet 6.1** (Eclipse Foundation), avec un taux de passage
-actuel de ~90% sur les packages `api.*`.
+The `vidocq-servlet-chappe-extension` is validated against the **official
+Jakarta Servlet 6.1 TCK** (Eclipse Foundation), with a current pass rate
+of ~90% on the `api.*` packages.
 
-> ⚠️ Le module TCK runner est volontairement **en dehors du reactor**
-> Maven principal : ShrinkWrap Maven Resolver (dependance transitive du TCK)
-> ne sait pas parser les POMs `Model 4.1.0`. Lance-le via le script dedie.
+> ⚠️ The TCK runner module is intentionally **outside the main Maven reactor**:
+> ShrinkWrap Maven Resolver (transitive dependency of the TCK) cannot parse
+> `Model 4.1.0` POMs. Launch it via the dedicated script.
 
-### Prerequis
+### Prerequisites
 
-Les artefacts TCK ne sont pas sur Maven Central. Installe-les une fois :
+The TCK artifacts are not on Maven Central. Install them once:
 
 ```bash
 curl -Lo /tmp/tck.zip \
@@ -265,21 +263,21 @@ mvn install:install-file \
   -DgroupId=jakarta.tck -DartifactId=servlet-tck-util -Dversion=6.1.0 -Dpackaging=jar
 ```
 
-### Lancement
+### Launch
 
-Depuis la racine du projet :
+From the project root:
 
 ```bash
 ./run-official-tck-servlet6.1.sh                     # smoke test
-./run-official-tck-servlet6.1.sh --all               # suite complete (~10 min)
-./run-official-tck-servlet6.1.sh -Dtest=ServletTests # une classe ciblee
+./run-official-tck-servlet6.1.sh --all               # full suite (~10 min)
+./run-official-tck-servlet6.1.sh -Dtest=ServletTests # a targeted class
 ```
 
-Le script installe les modules Vidocq en M2 local, se place dans le
-module TCK (cwd compatible ShrinkWrap) puis lance le profil `tck-official`.
+The script installs Vidocq modules into the local M2, changes to the
+TCK module (ShrinkWrap-compatible cwd), then runs the `tck-official` profile.
 
-Details dans [`vidocq-runtime-core-extensions/vidocq-runtime-servlet-chappe-tck-runner/README.md`](vidocq-runtime-core-extensions/vidocq-runtime-servlet-chappe-tck-runner/README.md).
+Details in [`vidocq-runtime-core-extensions/vidocq-runtime-servlet-chappe-tck-runner/README.md`](vidocq-runtime-core-extensions/vidocq-runtime-servlet-chappe-tck-runner/README.md).
 
-## Licence
+## License
 
 [Apache License 2.0](LICENSE)

@@ -11,13 +11,13 @@ import jakarta.ws.rs.core.MediaType;
 import org.eclipse.microprofile.jwt.JsonWebToken;
 
 /**
- * Resource JAX-RS de test pour la securite MicroProfile JWT 2.1 (Cervantes) dans Vidocq.
+ * JAX-RS test resource for MicroProfile JWT 2.1 security (Cervantes) in Vidocq.
  *
  * <ul>
- *   <li>{@code GET /secured/admin} — {@code @RolesAllowed("admin")} : 401 sans token,
- *       403 si token sans le groupe {@code admin}, 200 sinon. Renvoie le nom + groupes du JWT injecte.</li>
- *   <li>{@code GET /secured/public} — {@code @PermitAll} : 200 toujours, renvoie le nom
- *       du principal (anonyme si pas de token).</li>
+ *   <li>{@code GET /secured/admin} — {@code @RolesAllowed("admin")}: 401 without token,
+ *       403 if token without the group {@code admin}, 200 otherwise. Returns the name + groups of the injected JWT.</li>
+ *   <li>{@code GET /secured/public} — {@code @PermitAll}: 200 always, returns the name
+ *       of the principal (anonymous if no token).</li>
  * </ul>
  */
 @Path("/secured")

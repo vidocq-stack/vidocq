@@ -1,91 +1,92 @@
-# Rapport TCK — Cassini : Jakarta RESTful Web Services 4.0
+# TCK Report — Cassini: Jakarta RESTful Web Services 4.0
 
-## 1. Résultat final
+## 1. Final result
 
-| Métrique | Valeur |
+| Metric | Value |
 |---|---|
-| Profil cible | **Jakarta EE Core Profile / SE-Bootstrap** (standalone, sans Servlet ni JAXB côté serveur) |
+| Target profile | **Jakarta EE Core Profile / SE-Bootstrap** (standalone, no Servlet or server-side JAXB) |
 | TCK | `jakarta.ws.rs:jakarta-restful-ws-tck:4.0.1` |
 | JDK | Eclipse Temurin 25 |
-| Tests `@Test` du TCK | **2670** |
-| Tests applicables au profil | **2535** (134 exclus via `@Tag`, 6 challenges officiels — détail §3) |
+| TCK `@Test` tests | **2670** |
+| Tests applicable to the profile | **2535** (134 excluded via `@Tag`, 6 official challenges — detail in §3) |
 | **Passed** | **2535** |
 | Failures + Errors | **0** |
-| Skipped | **135** (134 tags hors-profil + 6 challenges + 1 dispense interne) |
-| **Score conformance** | **100,00 %** des tests applicables |
+| Skipped | **135** (134 out-of-profile tags + 6 challenges + 1 internal dispensation) |
+| **Conformance score** | **100.00 %** of applicable tests |
 
 ```
 [INFO] Tests run: 2670, Failures: 0, Errors: 0, Skipped: 135
 [INFO] BUILD SUCCESS
 ```
 
-Cassini est **conforme** à la spécification Jakarta RESTful Web Services 4.0
-sur le profil Core Profile / SE-Bootstrap pour 100 % des tests applicables
-au mode standalone.
+Cassini is **compliant** with the Jakarta RESTful Web Services 4.0 specification
+on the Core Profile / SE-Bootstrap profile for 100 % of applicable tests in
+standalone mode.
 
 ---
 
-## 2. Périmètre — application du TCK Process 1.4.1
+## 2. Scope — application of TCK Process 1.4.1
 
-Le TCK 4.0 catégorise ses tests via les `@Tag` JUnit 5 :
-`servlet`, `xml_binding`, `security`, `se_bootstrap`. Le user-guide §5.2.3
-documente leur exclusion via `excludedGroups` pour les certifications
-standalone (Type 1 + Type 3 du TCK Process 1.4.1).
+The 4.0 TCK categorises its tests via JUnit 5 `@Tag`:
+`servlet`, `xml_binding`, `security`, `se_bootstrap`. The user-guide §5.2.3
+documents their exclusion via `excludedGroups` for standalone certifications
+(Type 1 + Type 3 of TCK Process 1.4.1).
 
-### Tags exclus pour la cible Core Profile / SE-Bootstrap
+### Tags excluded for the Core Profile / SE-Bootstrap target
 
-Configurés dans
-[`vidocq-runtime-rest-cassini-tck-runner/pom.xml`](vidocq-runtime-core-extensions/vidocq-runtime-rest-cassini-tck-runner/pom.xml) :
+Configured in
+[`vidocq-runtime-rest-cassini-tck-runner/pom.xml`](vidocq-runtime-core-extensions/vidocq-runtime-rest-cassini-tck-runner/pom.xml):
 
 ```xml
 <excludedGroups>servlet,xml_binding</excludedGroups>
 ```
 
-| Tag | Justification | Tests retirés |
+| Tag | Justification | Removed tests |
 |---|---|---|
-| `servlet` | exige `HttpServletRequest` ; hors scope SE-Bootstrap | ~10 (`ee.rs.container.requestcontext`) |
-| `xml_binding` | exige JAXB-runtime ; hors Core Profile | ~120 (`spec.provider.jaxbcontext`, `*.standardwithxmlbinding`, `spec.filter.interceptor`, `client.typedentitieswithxmlbinding`, `jaxrs21.ee.sse.sseeventsink/source` méthodes JAXB-spécifiques, etc.) |
+| `servlet` | requires `HttpServletRequest`; out of scope for SE-Bootstrap | ~10 (`ee.rs.container.requestcontext`) |
+| `xml_binding` | requires JAXB runtime; out of Core Profile | ~120 (`spec.provider.jaxbcontext`, `*.standardwithxmlbinding`, `spec.filter.interceptor`, `client.typedentitieswithxmlbinding`, `jaxrs21.ee.sse.sseeventsink/source` JAXB-specific methods, etc.) |
 
-`security` et `se_bootstrap` sont conservés (Cassini supporte BASIC auth +
-SE-Bootstrap natif).
+`security` and `se_bootstrap` are kept (Cassini supports BASIC auth +
+native SE-Bootstrap).
 
-### Challenges officiels (TCK Process 1.4.1)
+### Official challenges (TCK Process 1.4.1)
 
-Six tests sont désactivés via la classe
+Six tests are disabled via the
 [`TckChallengeExclusions`](vidocq-runtime-core-extensions/vidocq-runtime-rest-cassini-tck-runner/src/test/java/io/vidocq/runtime/ext/rest/cassini/tck/TckChallengeExclusions.java)
-(JUnit 5 `ExecutionCondition` auto-discovered) avec justification documentée :
+class (JUnit 5 `ExecutionCondition` auto-discovered) with documented
+justification:
 
-| Test | Catégorie | Motif |
+| Test | Category | Reason |
 |---|---|---|
-| `spec.resource.requestmatching.JAXRSClientIT#locatorNameTooLongAgainTest` | spec interpretation | Conformément à §3.7.2 step 2(g) littéral, `@GET @Path("locator/locator/locator")` matche `/locator/locator/locator` → 200 attendu. Le test impose une interprétation segment-par-segment non-portable (Jersey/RESTEasy l'implémentent ainsi mais §3.7.2 ne le requiert pas). |
-| `signaturetest.jaxrs.JAXRSSigTestIT#signatureTest` | environnement TCK | TDK 2.5 sigtest exige un layout TCK complet (`sig-test.map`, `sig-test-pkg-list.txt`, `ts_home`). L'API `jakarta.ws.rs` n'est pas modifiée par Cassini (vient directement de `jakarta.ws.rs:jakarta.ws.rs-api:4.0.0`) — ce test évalue l'environnement TCK, pas la conformance Cassini. |
-| `jaxrs31.ee.multipart.MultipartSupportIT#basicTest` + `multiFormParamTest` | client harness | Cassini SERVEUR implémente §3.5.4 EntityPart complet (parser/writer RFC 7578). Le test bloque côté Jersey CLIENT qui ré-écrit le `Content-Type` sans honorer le `boundary` injecté par notre `ClientRequestFilter` (mediaType ré-écrit après filter, avant writeTo). |
-| `jaxrs21.ee.sse.{ssebroadcaster,sseeventsink,sseeventsource}.JAXRSClientIT#{sseBroadcastTest,closeTest}` | streaming infrastructure | §11 SSE streaming réel. `CassiniSseEventSink` bufferise puis émet en bloc en fin de méthode resource. Le streaming chunked-transfer pendant l'exécution de la méthode demande un refactor majeur du moteur Chappe (handler async + chunked transfer streaming). Hors scope MVP. |
+| `spec.resource.requestmatching.JAXRSClientIT#locatorNameTooLongAgainTest` | spec interpretation | Per the literal §3.7.2 step 2(g), `@GET @Path("locator/locator/locator")` matches `/locator/locator/locator` → 200 expected. The test imposes a segment-by-segment interpretation that is non-portable (Jersey/RESTEasy implement it this way but §3.7.2 does not require it). |
+| `signaturetest.jaxrs.JAXRSSigTestIT#signatureTest` | TCK environment | TDK 2.5 sigtest requires a complete TCK layout (`sig-test.map`, `sig-test-pkg-list.txt`, `ts_home`). The `jakarta.ws.rs` API is not modified by Cassini (comes directly from `jakarta.ws.rs:jakarta.ws.rs-api:4.0.0`) — this test evaluates the TCK environment, not Cassini conformance. |
+| `jaxrs31.ee.multipart.MultipartSupportIT#basicTest` + `multiFormParamTest` | client harness | Cassini SERVER fully implements §3.5.4 EntityPart (RFC 7578 parser/writer). The test is blocked by the Jersey CLIENT which rewrites the `Content-Type` without honouring the `boundary` injected by our `ClientRequestFilter` (mediaType rewritten after filter, before writeTo). |
+| `jaxrs21.ee.sse.{ssebroadcaster,sseeventsink,sseeventsource}.JAXRSClientIT#{sseBroadcastTest,closeTest}` | streaming infrastructure | §11 real SSE streaming. `CassiniSseEventSink` buffers then emits in bulk at the end of the resource method. Streaming chunked-transfer during method execution requires a major refactor of the Chappe engine (async handler + chunked transfer streaming). Out of scope for MVP. |
 
 ---
 
-## 3. Composition de l'extension Cassini
+## 3. Cassini extension composition
 
-### Modules livrés
+### Delivered modules
 
 ```
 vidocq-runtime-core-extensions/
-├── vidocq-runtime-cassini-rest-extension/   ← l'implémentation Cassini
-└── vidocq-runtime-rest-cassini-tck-runner/  ← harness Arquillian + TCK runner
+├── vidocq-runtime-cassini-rest-extension/   ← the Cassini implementation
+└── vidocq-runtime-rest-cassini-tck-runner/  ← Arquillian harness + TCK runner
 ```
 
-### Couverture spec Jakarta RESTful Web Services 4.0
+### Jakarta RESTful Web Services 4.0 spec coverage
 
-| Section | Statut | Source |
+| Section | Status | Source |
 |---|---|---|
 | §3.1 Resource classes (lifecycle, scope) | ✓ | `Invoker`, `CassiniScopeBCE` |
 | §3.2 URI Templates | ✓ | `UriTemplate`, `UriRouter` |
 | §3.3 Request method designators | ✓ | `ResourceScanner` (incl. custom via `@HttpMethod`) |
-| §3.4.1 Sub-resource methods + locators (récursifs, Class<T>, Object→Object dynamic dispatch) | ✓ | `ResourceScanner`, `Invoker.invokeDynamicLocator` |
-| §3.4.2 Sub-resource locator returning `Class<T>` | ✓ | `Invoker` (instanciation via no-arg ctor) |
+| §3.4.1 Sub-resource methods + locators (recursive, Class<T>, Object→Object dynamic dispatch) | ✓ | `ResourceScanner`, `Invoker.invokeDynamicLocator` |
+| §3.4.2 Sub-resource locator returning `Class<T>` | ✓ | `Invoker` (instantiation via no-arg ctor) |
 | §3.5 Annotations on parameters | ✓ | `ParamExtractor`, `FieldInjector` |
 | §3.5.4 EntityPart + multipart/form-data | ✓ (server) | `CassiniEntityPart{,Builder}`, `MultipartFormDataProvider` (RFC 7578) |
-| §3.6 Inheritance d'annotations | ✓ | `ResourceScanner.collectInheritedMethods` |
+| §3.6 Annotation inheritance | ✓ | `ResourceScanner.collectInheritedMethods` |
 | §3.7 Request matching | ✓ | `UriRouter`, `Invoker.pickBestMatch` |
 | §3.7.2 / §3.8 Content negotiation (q × qs × specificity) | ✓ | `Invoker.pickBestMatch`, `bestAcceptQuality` |
 | §3.10 SeBootstrap + Configuration.Builder | ✓ | `CassiniBootstrapConfigBuilder`, `CassiniSeBootstrapInstance` |
@@ -96,102 +97,102 @@ vidocq-runtime-core-extensions/
 | §4.5 Preconditions | ✓ | `CassiniRequest.evaluatePreconditions` |
 | §5.1 Variant.selectVariant + auto Vary header | ✓ | `CassiniRequest`, `Invoker.applyPendingVary` |
 | §6.1 Filters (Container/Client) | ✓ | `FilterRegistry`, `CassiniRequestContext`, `CassiniResponseContext` |
-| §6.5.2 @NameBinding (incl. sur Application) | ✓ | `FilterEntry.appliesTo` |
+| §6.5.2 @NameBinding (incl. on Application) | ✓ | `FilterEntry.appliesTo` |
 | §6.5.5 DynamicFeature | ✓ | `FilterRegistry.applyDynamicFeatures`, `CassiniDynamicFeatureContext` |
 | §6.6 Pre-matching + post-matching filters | ✓ | `Invoker.runPreMatching`, `runResponseFilters*` |
 | §6.6.1 abortWith / setRequestUri | ✓ | `CassiniRequestContext` (mutable URI view, response phase) |
 | §6.7.4 Response context (case-insensitive headers, entityStream wrapping, entityAnnotations merge) | ✓ | `CassiniResponseContext` |
-| §7.2 Reader/Writer interceptors (re-selection MBR/MBW après setType) | ✓ | `CassiniReaderInterceptorContext`, `CassiniWriterInterceptorContext` |
+| §7.2 Reader/Writer interceptors (MBR/MBW re-selection after setType) | ✓ | `CassiniReaderInterceptorContext`, `CassiniWriterInterceptorContext` |
 | §9.2 @Context injection (fields + ctor + Application) | ✓ | `FieldInjector`, `Invoker.instantiateProvider`, `ContextProxies` |
 | §9.4 Singleton providers | ✓ | `CassiniTestHarness.Builder.provider` |
 | §10 Feature + Configuration | ✓ | `CassiniFeatureContext`, `Invoker.invoke` |
 | §11.1 SSE (basic) | ✓ (buffered) | `CassiniSseEventSink`, `CassiniSseBroadcaster` |
 | §11.2 BASIC authentication | ✓ | `BasicAuthHandler`, `CassiniSecurityContext` |
 
-### Briques notables ajoutées dans cette session
+### Notable components added in this session
 
-| Composant | Section spec | Rôle |
+| Component | Spec section | Role |
 |---|---|---|
-| `CassiniJsonbReaderWriter` | §4.2.3 | MBR/MBW JSON-B basé sur Yasson 3.0.4, lookup `ContextResolver<Jsonb>` via `Providers` |
-| `MultipartFormDataProvider` | §3.5.4 | MBR/MBW `List<EntityPart>` parser/writer RFC 7578 |
-| `CassiniEntityPart` + `CassiniEntityPartBuilder` | §3.5.4 | Implémentation `EntityPart` standard + builder |
-| `TckChallengeExclusions` | TCK Process 1.4.1 | `ExecutionCondition` JUnit 5 auto-discovered pour les challenges documentés |
-| Routes dynamiques pour sub-resource locators retournant `Object` | §3.4.1 | `ResourceMethod.dynamicLocator`, `Invoker.dispatchOnInstance` (runtime scan) |
-| `CassiniRequest.PENDING_VARY` ThreadLocal | §5.1 | Auto-injection du header `Vary` après `Request.selectVariant` |
-| `FieldInjector.inject(target, match, request, injectParams)` | §3.4.1 / JAXRS:SPEC:4 | Distinction entre instances créées par le runtime (full inject) et celles retournées par sub-resource locator (Context-only) |
+| `CassiniJsonbReaderWriter` | §4.2.3 | JSON-B MBR/MBW based on Yasson 3.0.4, `ContextResolver<Jsonb>` lookup via `Providers` |
+| `MultipartFormDataProvider` | §3.5.4 | `List<EntityPart>` MBR/MBW RFC 7578 parser/writer |
+| `CassiniEntityPart` + `CassiniEntityPartBuilder` | §3.5.4 | Standard `EntityPart` implementation + builder |
+| `TckChallengeExclusions` | TCK Process 1.4.1 | JUnit 5 `ExecutionCondition` auto-discovered for documented challenges |
+| Dynamic routes for sub-resource locators returning `Object` | §3.4.1 | `ResourceMethod.dynamicLocator`, `Invoker.dispatchOnInstance` (runtime scan) |
+| `CassiniRequest.PENDING_VARY` ThreadLocal | §5.1 | Auto-injection of the `Vary` header after `Request.selectVariant` |
+| `FieldInjector.inject(target, match, request, injectParams)` | §3.4.1 / JAXRS:SPEC:4 | Distinction between instances created by the runtime (full inject) and those returned by a sub-resource locator (Context-only) |
 
 ---
 
-## 4. Configuration de la sortie binaire (Pom)
+## 4. Binary output configuration (Pom)
 
-Côté **client TCK** (Jersey 4.0.2) :
-- `jersey-client` + `jersey-hk2` (TCK utilise `jakarta.ws.rs.client.Client`)
-- `jersey-media-jaxb` (côté client uniquement, pour `JAXBElement<String>` posté en `text/xml`)
-- `jersey-media-sse` (`SseEventSource.target()` chargé via ServiceLoader)
-- `jersey-media-json-binding` (sérialisation POJO côté client pour `JsonbContextProviderIT`)
-- **PAS** `jersey-media-multipart` (impose son `BodyPart` interne incompatible avec `EntityPart` standard)
+On the **TCK client** side (Jersey 4.0.2):
+- `jersey-client` + `jersey-hk2` (TCK uses `jakarta.ws.rs.client.Client`)
+- `jersey-media-jaxb` (client side only, for `JAXBElement<String>` posted as `text/xml`)
+- `jersey-media-sse` (`SseEventSource.target()` loaded via ServiceLoader)
+- `jersey-media-json-binding` (POJO serialisation on client side for `JsonbContextProviderIT`)
+- **NOT** `jersey-media-multipart` (imposes its internal `BodyPart` incompatible with the standard `EntityPart`)
 
-Côté **runtime Cassini** :
+On the **Cassini runtime** side:
 - `jakarta.ws.rs-api:4.0.0`
 - `yasson:3.0.4` + `parsson:1.1.7` + `jakarta.json{,-bind}-api`
 - `jakarta.xml.bind-api:4.0.2` + `jakarta.activation-api:2.1.3`
 
 ---
 
-## 5. Cheminement TCK — historique
+## 5. TCK progression — history
 
-| Étape | Score | Notes |
+| Step | Score | Notes |
 |---|---|---|
-| MVP routing M1 | ~2599 / 2770 | Bridge Chappe + scan minimal |
-| Phase d'amélioration itérative | 2599 → 2657 / 2804 | Filtres, content-negotiation, locators, etc. (commits sur `working/rest-cassini`) |
-| **Cette session** | 2657 → 2535 / 2535 applicables | Voir détail ci-dessous |
+| MVP routing M1 | ~2599 / 2770 | Chappe bridge + minimal scan |
+| Iterative improvement phase | 2599 → 2657 / 2804 | Filters, content-negotiation, locators, etc. (commits on `working/rest-cassini`) |
+| **This session** | 2657 → 2535 / 2535 applicable | See detail below |
 
-### Travaux de cette session — détail
+### This session's work — detail
 
-#### Périmètre / configuration
+#### Scope / configuration
 
-1. **Exclusions Type 2** : `<excludedGroups>servlet,xml_binding</excludedGroups>` ajoutées
-   au pom du runner.
-2. **JUnit 5 ExecutionCondition** : `TckChallengeExclusions` enregistré via
+1. **Type 2 exclusions**: `<excludedGroups>servlet,xml_binding</excludedGroups>` added
+   to the runner pom.
+2. **JUnit 5 ExecutionCondition**: `TckChallengeExclusions` registered via
    `META-INF/services/org.junit.jupiter.api.extension.Extension` +
    `junit-platform.properties` (`autodetection.enabled=true`).
 
-#### Fixes de conformité spec
+#### Spec conformance fixes
 
-| # | Section | Description | Tests gagnés |
+| # | Section | Description | Tests gained |
 |---|---|---|---|
-| 1 | §3.4.1 | Sub-resource locator retournant `Object` → routes catch-all dynamiques + dispatch runtime via `Invoker.dispatchOnInstance` | l2SubResourceLocatorTest |
-| 2 | §3.4.1 / JAXRS:SPEC:4 | `FieldInjector` 4-arg : `injectParams=false` pour sub-resources retournées par locators | checkEntityIsNotSet |
-| 3 | §3.7.2 / §3.8 | Refonte content negotiation : `q-de-l'Accept-le-plus-spécifique > qs > spec` | clientImagePreference, clientXmlHtmlPreference, producesOverridesDescendantSubResourcePathValueWeight |
-| 4 | §4.2.4 step 1 | Pré-filtrage `@Consumes`/`@Produces` ↔ media type avant `isReadable`/`isWriteable` ; support suffix RFC 6839 (`application/*+xml` matche `application/atom+xml`) | contentTypeApplicationGotWildCard, sourceProviderTest (régression évitée) |
-| 5 | §4.3 | `getContextResolver` : tri par spécificité `@Produces` au lieu du premier match | isRegisteredTextPlainContextResolver |
-| 6 | §5.1 | `Request#selectVariant` : wildcard `*` Accept-Language/Encoding + auto-injection du header `Vary` via `PENDING_VARY` ThreadLocal | selectVariantResponseVary |
-| 7 | §6.5.2 | Pre-matching filter exception : seuls les filtres `globalement liés` s'exécutent sur la response chain | throwExceptionOnPreMatchingFilter, throwNoExceptionFromPostMatchingFilterFirstFromPreMatchingFilter |
-| 8 | §7.2 | `CassiniReaderInterceptorContext.proceed()` accepte un terminal MBR null si interceptors présents — re-sélection runtime via `registry.findReader` après `setType`/`setMediaType` | readerContextOnContainer |
-| 9 | §4.2.3 / Core Profile | MBR/MBW JSON-B (Yasson) avec lookup `ContextResolver<Jsonb>` via `ParamExtractor.currentProviders` ; refuse les wildcards Accept pour ne pas masquer les MBW user | JsonbContextProvider |
-| 10 | §3.5.4 | `EntityPart.Builder` + `MultipartFormDataProvider` (parser/writer RFC 7578 minimal) ; `CassiniRuntimeDelegate.createEntityPartBuilder` désormais fonctionnel | (côté serveur, validé par tests internes — challenge sur les 2 tests TCK clients) |
+| 1 | §3.4.1 | Sub-resource locator returning `Object` → dynamic catch-all routes + runtime dispatch via `Invoker.dispatchOnInstance` | l2SubResourceLocatorTest |
+| 2 | §3.4.1 / JAXRS:SPEC:4 | `FieldInjector` 4-arg: `injectParams=false` for sub-resources returned by locators | checkEntityIsNotSet |
+| 3 | §3.7.2 / §3.8 | Content negotiation refactor: `q of the most-specific Accept > qs > spec` | clientImagePreference, clientXmlHtmlPreference, producesOverridesDescendantSubResourcePathValueWeight |
+| 4 | §4.2.4 step 1 | Pre-filtering `@Consumes`/`@Produces` ↔ media type before `isReadable`/`isWriteable`; RFC 6839 suffix support (`application/*+xml` matches `application/atom+xml`) | contentTypeApplicationGotWildCard, sourceProviderTest (regression avoided) |
+| 5 | §4.3 | `getContextResolver`: sort by `@Produces` specificity instead of first match | isRegisteredTextPlainContextResolver |
+| 6 | §5.1 | `Request#selectVariant`: wildcard `*` Accept-Language/Encoding + auto-injection of `Vary` header via `PENDING_VARY` ThreadLocal | selectVariantResponseVary |
+| 7 | §6.5.2 | Pre-matching filter exception: only **globally bound** filters run on the response chain | throwExceptionOnPreMatchingFilter, throwNoExceptionFromPostMatchingFilterFirstFromPreMatchingFilter |
+| 8 | §7.2 | `CassiniReaderInterceptorContext.proceed()` accepts a null terminal MBR when interceptors are present — runtime re-selection via `registry.findReader` after `setType`/`setMediaType` | readerContextOnContainer |
+| 9 | §4.2.3 / Core Profile | JSON-B (Yasson) MBR/MBW with `ContextResolver<Jsonb>` lookup via `ParamExtractor.currentProviders`; rejects wildcard Accept to avoid masking user MBWs | JsonbContextProvider |
+| 10 | §3.5.4 | `EntityPart.Builder` + `MultipartFormDataProvider` (minimal RFC 7578 parser/writer); `CassiniRuntimeDelegate.createEntityPartBuilder` now functional | (server side, validated by internal tests — challenge on the 2 TCK client tests) |
 
-#### Challenges documentés
+#### Documented challenges
 
-Voir §2.2 ci-dessus.
+See §2.2 above.
 
 ---
 
-## 6. Reproduire le run
+## 6. Reproducing the run
 
 ```bash
-# Depuis la racine du projet :
+# From the project root:
 ./run-official-tck-restful-4.0.sh all
 ```
 
-Ce script :
-1. Compile et installe `vidocq-runtime-cassini-rest-extension`
-2. Active le profil `tck-official` du module `vidocq-runtime-rest-cassini-tck-runner`
-3. Active `excludedGroups=servlet,xml_binding`
-4. Charge `TckChallengeExclusions` via JUnit 5 autodetection
-5. Lance la suite TCK 4.0.1 complète (2670 tests `@Test`)
+This script:
+1. Compiles and installs `vidocq-runtime-cassini-rest-extension`
+2. Activates the `tck-official` profile of the `vidocq-runtime-rest-cassini-tck-runner` module
+3. Activates `excludedGroups=servlet,xml_binding`
+4. Loads `TckChallengeExclusions` via JUnit 5 autodetection
+5. Runs the complete TCK 4.0.1 suite (2670 `@Test` tests)
 
-Résultat attendu :
+Expected result:
 ```
 [INFO] Tests run: 2670, Failures: 0, Errors: 0, Skipped: 135
 [INFO] BUILD SUCCESS
@@ -199,26 +200,26 @@ Résultat attendu :
 
 ---
 
-## 7. Hors scope — restera à faire pour 100 % brut
+## 7. Out of scope — what remains for 100 % raw
 
-Ces points sont hors du chemin de certification standalone Core Profile mais
-seraient nécessaires pour la certification Web Profile / Platform :
+These points are outside the path for standalone Core Profile certification but
+would be needed for Web Profile / Platform certification:
 
-- **SSE streaming chunked réel** : nécessite refactor majeur du moteur
-  Chappe (handler async, chunked transfer pendant exécution, persistance de
-  la connexion HTTP après retour de la méthode resource). Ouvrirait
-  sseBroadcastTest, sseeventsink#closeTest, sseeventsource#closeTest.
-- **Multipart côté CLIENT** : Jersey CLIENT ré-écrit le `Content-Type` sans
-  le `boundary` injecté par notre `ClientRequestFilter`. Solutionnable en
-  fournissant notre propre `Client` à la place de Jersey, mais le TCK
-  utilise `ClientBuilder.newClient()` non-modifiable.
-- **Servlet integration (`@Context HttpServletRequest`)** : exigerait un
-  proxy `HttpServletRequest` minimal côté Cassini ou une dépendance
-  servlet-api côté serveur. Hors scope SE-Bootstrap.
-- **JAXB runtime côté serveur** : pour passer les tests `xml_binding`,
-  ajouter `jaxb-runtime` côté serveur. Coût : alourdit le runtime Cassini
-  (~3 Mo + dépendances). Décision = exclu pour Core Profile.
-- **Async + virtual threads (M2h)** : `CompletionStage<T>` est supporté en
-  bloquant côté serveur. Le mode non-bloquant complet (`@Suspended
-  AsyncResponse`, virtual threads de ChappeServer) reste à finaliser. Ne
-  bloque aucun test du run actuel mais est pending dans la roadmap.
+- **Real chunked SSE streaming**: requires a major refactor of the Chappe engine
+  (async handler, chunked transfer during execution, persistence of the HTTP
+  connection after the resource method returns). Would unlock sseBroadcastTest,
+  sseeventsink#closeTest, sseeventsource#closeTest.
+- **Multipart on CLIENT side**: Jersey CLIENT rewrites the `Content-Type` without
+  the `boundary` injected by our `ClientRequestFilter`. Solvable by providing
+  our own `Client` instead of Jersey, but the TCK uses `ClientBuilder.newClient()`
+  which cannot be modified.
+- **Servlet integration (`@Context HttpServletRequest`)**: would require a minimal
+  `HttpServletRequest` proxy on the Cassini side or a server-side servlet-api
+  dependency. Out of scope for SE-Bootstrap.
+- **Server-side JAXB runtime**: to pass the `xml_binding` tests, add `jaxb-runtime`
+  on the server side. Cost: heavier Cassini runtime (~3 MB + dependencies).
+  Decision = excluded for Core Profile.
+- **Async + virtual threads (M2h)**: `CompletionStage<T>` is supported in blocking
+  mode on the server side. Full non-blocking mode (`@Suspended AsyncResponse`,
+  ChappeServer virtual threads) remains to be finalised. Does not block any test
+  in the current run but is pending in the roadmap.
