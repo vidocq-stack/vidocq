@@ -279,7 +279,7 @@ All keys are read through `ConfigProvider.getConfig()` — provided by xref:rave
 
 == Compatibility
 
-* Java 25 (LTS), Maven 4.0.0-rc-5.
+* Java 25 (LTS), Maven 3.9.16.
 * JAX-RS 4.0 (xref:cassini::index.adoc[Cassini] or another compliant runtime).
 * CDI 4.1 Lite (xref:vauban::index.adoc[Vauban]) with BCE support.
 * MicroProfile Config 3.1+ (xref:ravel::index.adoc[Ravel]).

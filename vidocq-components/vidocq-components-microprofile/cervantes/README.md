@@ -25,7 +25,7 @@ via [Vauban](https://codeberg.org/Vidocq/vauban), sécurité JAX-RS via
 
 ## Prérequis
 
-**Java 25** (Temurin) + **Maven 4.0.0-rc-5** — pinés via `.sdkmanrc` : `sdk env`.
+**Java 25** (Temurin) + **Maven 3.9.16** — pinés via `.sdkmanrc` : `sdk env`.
 
 ## Build
 

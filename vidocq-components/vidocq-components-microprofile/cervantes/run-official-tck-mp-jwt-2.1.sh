@@ -10,9 +10,9 @@
 #   ./run-official-tck-mp-jwt-2.1.sh -Dtest=Foo   # test ciblé
 #
 # Prérequis:
-#   - Java 25 + Maven 4.0.0-rc-5 (sdk env dans le répertoire cervantes/)
+#   - Java 25 + Maven 3.9.16 (sdk env dans le répertoire cervantes/)
 #   - Le reactor cervantes installé en local :
-#       PATH="$HOME/.sdkman/candidates/maven/4.0.0-rc-5/bin:$PATH" ./mvnw -ntp install -DskipTests
+#       PATH="$HOME/.sdkman/candidates/maven/3.9.16/bin:$PATH" ./mvnw -ntp install -DskipTests
 #   - Les TCK artifacts sur Maven Central (téléchargés automatiquement) :
 #       org.eclipse.microprofile.jwt:microprofile-jwt-auth-tck:2.1
 #       org.eclipse.microprofile.jwt:microprofile-jwt-auth-tck:2.1:tests
@@ -23,7 +23,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TCK_DIR="$SCRIPT_DIR/cervantes-tck"
 
 # Force Maven 4
-export PATH="$HOME/.sdkman/candidates/maven/4.0.0-rc-5/bin:$PATH"
+export PATH="$HOME/.sdkman/candidates/maven/3.9.16/bin:$PATH"
 
 if [ ! -f "$TCK_DIR/pom.xml" ]; then
     echo "ERROR: $TCK_DIR/pom.xml not found. Run from the cervantes/ directory." >&2

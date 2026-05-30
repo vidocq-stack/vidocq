@@ -7,7 +7,7 @@ Cette page suppose une application Jakarta REST 4.0 déjà fonctionnelle sur xre
 == Prérequis
 
 * Java 25 (LTS) — Temurin recommandé.
-* Maven 4.0.0-rc-5 — épinglé par `.sdkmanrc` à la racine de Cervantes (`cd cervantes && sdk env`).
+* Maven 3.9.16 — épinglé par `.sdkmanrc` à la racine de Cervantes (`cd cervantes && sdk env`).
 * Une application JAX-RS 4.0 déjà déployée, avec au moins une classe `Application` et une ressource `@Path`.
 * xref:vauban::index.adoc[Vauban] activé comme container CDI 4.1 Lite.
 * xref:ravel::index.adoc[Ravel] activé comme implémentation MicroProfile Config (Cervantes lit les clés `mp.jwt.*` via la SPI standard).

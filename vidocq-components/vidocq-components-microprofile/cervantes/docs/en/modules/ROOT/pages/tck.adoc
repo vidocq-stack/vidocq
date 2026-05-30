@@ -34,7 +34,7 @@ The `org.eclipse.microprofile.jwt:microprofile-jwt-auth-tck:2.1` artefact (and i
 
 [source,bash]
 ----
-sdk env                              # Java 25 + Maven 4.0.0-rc-5
+sdk env                              # Java 25 + Maven 3.9.16
 ./mvnw -ntp install -DskipTests     # installs cervantes-core, cervantes-cassini, cervantes-cdi-vauban, …
 ----
 

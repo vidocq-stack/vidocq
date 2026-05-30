@@ -7,7 +7,7 @@ This page assumes a Jakarta REST 4.0 application already running on xref:cassini
 == Prerequisites
 
 * Java 25 (LTS) — Temurin recommended.
-* Maven 4.0.0-rc-5 — pinned through `.sdkmanrc` at the root of Cervantes (`cd cervantes && sdk env`).
+* Maven 3.9.16 — pinned through `.sdkmanrc` at the root of Cervantes (`cd cervantes && sdk env`).
 * A JAX-RS 4.0 application already deployed, with at least an `Application` class and a `@Path` resource.
 * xref:vauban::index.adoc[Vauban] active as the CDI 4.1 Lite container.
 * xref:ravel::index.adoc[Ravel] active as the MicroProfile Config implementation (Cervantes reads `mp.jwt.*` keys through the standard SPI).

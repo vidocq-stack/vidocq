@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.1.0"
+<project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.1.0 http://maven.apache.org/xsd/maven-4.1.0.xsd"
-         root="true">
-    <modelVersion>4.1.0</modelVersion>
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd"
+         >
+    <modelVersion>4.0.0</modelVersion>
 
     <parent>
         <groupId>io.vidocq</groupId>
         <artifactId>vidocq-parent</artifactId>
-        <version>1.0.0-SNAPSHOT</version>
+        <version>0.1.1-SNAPSHOT</version>
         <relativePath/>
     </parent>
 
@@ -65,15 +65,15 @@
         POMs Model 4.1.0. Il sera invoqué par run-official-tck-mp-jwt-2.1.sh après
         installation locale du reactor. Ne pas l'ajouter ici.
     -->
-    <subprojects>
-        <subproject>cervantes-mp-jwt-api</subproject>
-        <subproject>cervantes-api</subproject>
-        <subproject>cervantes-core</subproject>
-        <subproject>cervantes-cdi-vauban</subproject>
-        <subproject>cervantes-cassini</subproject>
-        <subproject>cervantes-bench</subproject>
-        <subproject>cervantes-examples</subproject>
-    </subprojects>
+    <modules>
+        <module>cervantes-mp-jwt-api</module>
+        <module>cervantes-api</module>
+        <module>cervantes-core</module>
+        <module>cervantes-cdi-vauban</module>
+        <module>cervantes-cassini</module>
+        <module>cervantes-bench</module>
+        <module>cervantes-examples</module>
+    </modules>
 
     <dependencyManagement>
         <dependencies>
