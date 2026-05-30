@@ -38,7 +38,7 @@ Implémentation **MicroProfile Fault Tolerance 4.1** dans l'écosystème Vidocq.
 ## Prérequis
 
 ```bash
-sdk env   # Java 25-tem + Maven 4.0.0-rc-5
+sdk env   # Java 25-tem + Maven 3.9.16
 ```
 
 ## Build

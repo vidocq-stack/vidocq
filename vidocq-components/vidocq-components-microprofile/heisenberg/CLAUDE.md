@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Prérequis
 
-- **Java 25** + **Maven 4.0.0-rc-5** (`.sdkmanrc` fourni — utiliser `sdk env`)
+- **Java 25** + **Maven 3.9.16** (`.sdkmanrc` fourni — utiliser `sdk env`)
 - Le TCK officiel `org.eclipse.microprofile.fault-tolerance:microprofile-fault-tolerance-tck:4.1`
   doit être installé dans le M2 local (artefact non-public — voir `heisenberg-tck/README.md`)
 

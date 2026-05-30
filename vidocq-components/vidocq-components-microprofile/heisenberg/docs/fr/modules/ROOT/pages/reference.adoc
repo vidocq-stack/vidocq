@@ -286,7 +286,7 @@ Interfaces publiques implémentables par un module tiers — par exemple un reco
 
 == Compatibilité
 
-* Java 25 (LTS), Maven 4.0.0-rc-5.
+* Java 25 (LTS), Maven 3.9.16.
 * CDI 4.1 Lite (Vauban) ou tout container CDI 4.1 Lite-compatible.
 * MicroProfile Config 3.1 (Ravel) en `provided`.
 * OpenTelemetry 1.39 (Humboldt) en `requires static` — facultatif.

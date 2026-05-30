@@ -7,12 +7,12 @@ Cette page suppose une application CDI 4.1 Lite déjà fonctionnelle sur xref:va
 == Prérequis
 
 * Java 25 (LTS) — Temurin recommandé.
-* Maven 4.0.0-rc-5 — épinglé par `.sdkmanrc` à la racine de Heisenberg.
+* Maven 3.9.16 — épinglé par `.sdkmanrc` à la racine de Heisenberg.
 * Une application CDI 4.1 déjà déployée, avec au moins un bean `@ApplicationScoped`.
 
 [source,bash]
 ----
-sdk env                              # Java 25 + Maven 4.0.0-rc-5
+sdk env                              # Java 25 + Maven 3.9.16
 ./mvnw -ntp install -DskipTests     # installe heisenberg-api, heisenberg-core, heisenberg-cdi-vauban
 ----
 

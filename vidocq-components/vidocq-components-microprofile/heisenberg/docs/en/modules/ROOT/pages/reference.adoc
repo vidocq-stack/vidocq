@@ -286,7 +286,7 @@ Public interfaces implementable by a third-party module — for instance an alte
 
 == Compatibility
 
-* Java 25 (LTS), Maven 4.0.0-rc-5.
+* Java 25 (LTS), Maven 3.9.16.
 * CDI 4.1 Lite (Vauban) or any CDI 4.1 Lite-compatible container.
 * MicroProfile Config 3.1 (Ravel) in `provided`.
 * OpenTelemetry 1.39 (Humboldt) in `requires static` — optional.
