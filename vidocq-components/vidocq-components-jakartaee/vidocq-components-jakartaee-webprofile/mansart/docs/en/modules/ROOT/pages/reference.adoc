@@ -185,7 +185,7 @@ Discovered via `ServiceLoader` (`provides DialectFactory with H2DialectFactory`)
 
 == Compatibility
 
-* Java 25 (LTS), Maven 4.0.0-rc-5.
+* Java 25 (LTS), Maven 3.9.16.
 * {spec-data-1}[Jakarta Data 1.0] (delivered), {spec-jpa-3-2}[Jakarta Persistence 3.2] (M7 pending), Jakarta Transactions 2.0.
 * {spec-cdi-4-1}[CDI 4.1 Lite] via xref:vauban::index.adoc[Vauban].
 * Virtual Threads for any JDBC execution.

@@ -14,7 +14,7 @@ Les deux premiers partagent la même SPI dialecte SQL et le même métamodèle s
 
 ## Prérequis
 
-- **Java 25** + **Maven 4.0.0-rc-5** (`.sdkmanrc` à venir dans ce dossier).
+- **Java 25** + **Maven 3.9.16** (`.sdkmanrc` à venir dans ce dossier).
 - Pour les TCK : artefacts officiels Jakarta non publics à installer dans le M2 local (procédure documentée dans le runner TCK).
 
 ## Contraintes d'architecture à respecter

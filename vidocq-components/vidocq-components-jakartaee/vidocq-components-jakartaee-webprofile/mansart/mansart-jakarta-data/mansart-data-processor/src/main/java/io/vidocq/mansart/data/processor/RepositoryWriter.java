@@ -80,6 +80,12 @@ final class RepositoryWriter {
         String simple    = repo.getSimpleName().toString();
         String implName  = simple + "Impl";
         String fqn       = pkg.isEmpty() ? implName : pkg + "." + implName;
+        // For nested repository interfaces (e.g. EnclosingTest.MyRepo), the simple name
+        // alone won't resolve from a top-level generated Impl class. We compute the
+        // access name relative to the package — for a top-level interface this is the
+        // simple name; for a nested interface it's "EnclosingType.MyRepo".
+        String repoFqn   = repo.getQualifiedName().toString();
+        String repoRef   = pkg.isEmpty() ? repoFqn : repoFqn.substring(pkg.length() + 1);
         TypeElement entityType = (TypeElement) args.entity.asElement();
         String entitySimple = entityType.getSimpleName().toString();
         String entityPkg = elements.getPackageOf(entityType).getQualifiedName().toString();
@@ -127,7 +133,7 @@ final class RepositoryWriter {
             if (classTransactional) {
                 emitTransactionalAnnotation(w, repo, "");
             }
-            w.println("public class " + implName + " implements " + simple + " {");
+            w.println("public class " + implName + " implements " + repoRef + " {");
             w.println();
             w.println("    private final RepositoryRuntime runtime;");
             w.println();

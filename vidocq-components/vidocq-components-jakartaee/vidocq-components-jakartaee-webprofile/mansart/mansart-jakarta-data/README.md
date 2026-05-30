@@ -35,7 +35,7 @@ Voir `PLAN.md` pour la roadmap complète et `BUG.md` pour les bugs ouverts/clos.
 ## Prérequis
 
 - **Java 25** (Temurin)
-- **Maven 4.0.0-rc-5**
+- **Maven 3.9.16**
 - (Optionnel) `sdkman` : `cd mansart-jakarta-data && sdk env`
 
 > Le `pom.xml` parent utilise Maven Model 4.1.0 — Maven 3.x ne sait pas le lire.

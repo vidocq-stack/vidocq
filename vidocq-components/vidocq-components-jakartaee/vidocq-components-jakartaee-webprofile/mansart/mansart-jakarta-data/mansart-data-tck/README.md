@@ -61,7 +61,7 @@ PG=1 ./run-official-tck-data-1.0.sh --full
 ```
 
 Prérequis :
-- **Java 25** + **Maven 4.0.0-rc-5** (`.sdkmanrc` du sous-projet ; `cd mansart-jakarta-data && sdk env`)
+- **Java 25** + **Maven 3.9.16** (`.sdkmanrc` du sous-projet ; `cd mansart-jakarta-data && sdk env`)
 - `mansart-jakarta-data` build et installé (`mvn install -DskipTests` depuis `mansart-jakarta-data/` — le script le fait automatiquement si nécessaire)
 - Pour `--pg` : **Docker** (Docker Desktop, OrbStack, colima…). Image `postgres:17-alpine` téléchargée au premier run.
 - TCK 1.0.1 résolu automatiquement depuis Maven Central (`jakarta.data:jakarta.data-tck:1.0.1`).

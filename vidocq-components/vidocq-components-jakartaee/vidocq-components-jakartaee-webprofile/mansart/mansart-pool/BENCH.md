@@ -15,7 +15,7 @@ correspondante ici, datée, avec hardware, JVM, commande exacte et résultats br
 
 - macOS Darwin 25.4.0
 - JDK 25 Temurin (`25-tem` via SDKMAN, `25+36-LTS`)
-- Maven 4.0.0-rc-5
+- Maven 3.9.16
 - HikariCP 6.2.1
 - JMH 1.37
 - H2 2.3.232 (in-memory, `jdbc:h2:mem:bench-<UUID>;DB_CLOSE_DELAY=-1`)

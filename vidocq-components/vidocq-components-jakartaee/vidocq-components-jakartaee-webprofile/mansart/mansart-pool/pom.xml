@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.1.0"
+<project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.1.0 https://maven.apache.org/xsd/maven-4.1.0.xsd">
-    <modelVersion>4.1.0</modelVersion>
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
 
     <parent>
         <groupId>io.vidocq</groupId>
         <artifactId>vidocq-parent</artifactId>
-        <version>1.0.0-SNAPSHOT</version>
+        <version>0.1.1-SNAPSHOT</version>
         <relativePath/>
     </parent>
 
@@ -27,12 +27,12 @@
         <shade.plugin.version>3.6.0</shade.plugin.version>
     </properties>
 
-    <subprojects>
-        <subproject>mansart-pool-api</subproject>
-        <subproject>mansart-pool-core</subproject>
-        <subproject>mansart-pool-tests</subproject>
-        <subproject>mansart-pool-bench</subproject>
-    </subprojects>
+    <modules>
+        <module>mansart-pool-api</module>
+        <module>mansart-pool-core</module>
+        <module>mansart-pool-tests</module>
+        <module>mansart-pool-bench</module>
+    </modules>
 
     <dependencyManagement>
         <dependencies>

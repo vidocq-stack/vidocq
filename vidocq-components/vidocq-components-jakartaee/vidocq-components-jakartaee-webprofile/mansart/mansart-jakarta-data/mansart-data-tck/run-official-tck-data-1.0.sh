@@ -6,7 +6,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
-# Activate the toolchain pinned by ../.sdkmanrc — Java 25 + Maven 4.0.0-rc-5
+# Activate the toolchain pinned by ../.sdkmanrc — Java 25 + Maven 3.9.16
 if [ -z "${SDKMAN_DIR:-}" ] && [ -d "$HOME/.sdkman" ]; then
     SDKMAN_DIR="$HOME/.sdkman"
 fi

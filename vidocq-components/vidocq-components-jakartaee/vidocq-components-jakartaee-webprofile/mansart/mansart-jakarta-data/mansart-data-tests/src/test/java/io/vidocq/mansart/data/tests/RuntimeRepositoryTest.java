@@ -48,7 +48,7 @@ class RuntimeRepositoryTest {
         java.util.List<Author>     findAllByOrderByNameAsc();
 
         // M7-3 — @Query JDQL on the runtime path. Uses ?N positional params because the
-        // -parameters flag isn't reliably honoured by maven-compiler-plugin 4.0.0-beta-4 yet.
+        // -parameters flag isn't reliably honoured by the compiler in this configuration.
         @jakarta.data.repository.Query("FROM Author WHERE name = ?1")
         java.util.List<Author> jdqlByName(String name);
 

@@ -6,7 +6,7 @@ This page shows how to lay the first stone: an entity, a Jakarta Data repository
 
 == Prerequisites
 
-* Java 25 (Temurin) + Maven 4.0.0-rc-5.
+* Java 25 (Temurin) + Maven 3.9.16.
 * JDBC driver provided by the application (`com.h2database:h2` or `org.postgresql:postgresql`).
 * `cd mansart && sdk env` (or equivalent `.sdkmanrc`) to pin the JVM and Maven.
 

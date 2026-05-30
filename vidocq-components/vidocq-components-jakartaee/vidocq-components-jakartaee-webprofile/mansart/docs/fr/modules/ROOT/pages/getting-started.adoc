@@ -6,7 +6,7 @@ Cette page montre comment poser la première pierre : une entité, un repository
 
 == Prérequis
 
-* Java 25 (Temurin) + Maven 4.0.0-rc-5.
+* Java 25 (Temurin) + Maven 3.9.16.
 * Driver JDBC fourni par l'application (`com.h2database:h2` ou `org.postgresql:postgresql`).
 * `cd mansart && sdk env` (ou `.sdkmanrc` équivalent) pour caler la JVM et Maven.
 

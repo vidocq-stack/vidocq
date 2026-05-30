@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.1.0"
+<project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.1.0 https://maven.apache.org/xsd/maven-4.1.0.xsd">
-    <modelVersion>4.1.0</modelVersion>
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
 
     <parent>
         <groupId>io.vidocq.mansart</groupId>
@@ -16,9 +16,9 @@
     <name>Mansart :: Data :: Dialects</name>
     <description>Aggregator for the dialect SPI and per-database implementations.</description>
 
-    <subprojects>
-        <subproject>mansart-data-dialect-spi</subproject>
-        <subproject>mansart-data-dialect-h2</subproject>
-        <subproject>mansart-data-dialect-postgresql</subproject>
-    </subprojects>
+    <modules>
+        <module>mansart-data-dialect-spi</module>
+        <module>mansart-data-dialect-h2</module>
+        <module>mansart-data-dialect-postgresql</module>
+    </modules>
 </project>
