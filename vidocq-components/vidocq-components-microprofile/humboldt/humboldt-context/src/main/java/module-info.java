@@ -1,16 +1,16 @@
 /**
- * Humboldt Context — fournit l'implémentation {@code ContextStorageProvider}
- * d'OpenTelemetry pour le runtime Humboldt.
+ * Humboldt Context — provides the OpenTelemetry {@code ContextStorageProvider}
+ * implementation for the Humboldt runtime.
  *
- * <p>Découvert par OTel via {@link java.util.ServiceLoader} (binding par
- * {@code provides} JPMS + fallback {@code META-INF/services} pour les
- * environnements classpath).</p>
+ * <p>Discovered by OTel via {@link java.util.ServiceLoader} (JPMS
+ * {@code provides} binding + {@code META-INF/services} fallback for
+ * classpath environments).</p>
  *
- * <p>L'implémentation s'appuie sur un {@link ThreadLocal} ; depuis JDK 21,
- * les {@code ThreadLocal} ne provoquent plus de pinning de carrier thread
- * pour les virtual threads sur le code Java pur (cf. JEP 444). L'ADR sur
- * une éventuelle migration vers {@code ScopedValue} (JEP 506) est reportée
- * en M8 (cf. PLAN.md §7 et §15.1).</p>
+ * <p>The implementation relies on a {@link ThreadLocal}; since JDK 21,
+ * {@code ThreadLocal} no longer causes carrier-thread pinning for virtual
+ * threads in pure Java code (see JEP 444). The ADR for a possible migration
+ * to {@code ScopedValue} (JEP 506) is postponed
+ * to M8 (see PLAN.md §7 and §15.1).</p>
  */
 module io.vidocq.humboldt.context {
 

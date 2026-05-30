@@ -14,10 +14,10 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Exporter OTLP/HTTP-JSON pour LogRecord — délègue le transport à
+ * OTLP/HTTP-JSON exporter for LogRecord — delegates transport to
  * {@link OtlpHttpJsonSender}.
  *
- * <p>Endpoint par défaut : {@code http://localhost:4318/v1/logs}.</p>
+ * <p>Default endpoint: {@code http://localhost:4318/v1/logs}.</p>
  */
 public final class OtlpHttpLogExporter implements LogRecordExporter {
 

@@ -1,14 +1,14 @@
 package io.vidocq.humboldt.spi;
 
 /**
- * SPI metric readers — découvert via {@link java.util.ServiceLoader}.
+ * SPI for metric readers — discovered via {@link java.util.ServiceLoader}.
  *
- * <p>Stub M0 — implémentation effective avec {@code humboldt-sdk-metric} en M4.</p>
+ * <p>M0 stub — effective implementation arrives with {@code humboldt-sdk-metric} in M4.</p>
  */
 public interface MetricReaderProvider {
 
     /**
-     * @return le nom logique du reader, matche {@code OTEL_METRICS_EXPORTER}.
+     * @return the logical reader name, matching {@code OTEL_METRICS_EXPORTER}.
      */
     String name();
 }

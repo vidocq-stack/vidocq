@@ -9,13 +9,13 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Implémentation minimale de {@link ConfigProperties} backée par une {@link Map}
- * — passée aux providers OTel SDK ({@link io.opentelemetry.sdk.autoconfigure.spi.traces.ConfigurableSpanExporterProvider})
- * pour qu'ils créent leur {@code SpanExporter}.
+ * Minimal {@link ConfigProperties} implementation backed by a {@link Map}
+ * — passed to OTel SDK providers ({@link io.opentelemetry.sdk.autoconfigure.spi.traces.ConfigurableSpanExporterProvider})
+ * so they can create their {@code SpanExporter}.
  *
- * <p>Sufficient pour le TCK MP Telemetry : la plupart des providers TCK
- * ({@code InMemorySpanExporterProvider}, etc.) n'utilisent que
- * {@code getString()} et ignorent la config.</p>
+ * <p>Sufficient for the MP Telemetry TCK: most TCK providers
+ * ({@code InMemorySpanExporterProvider}, etc.) only use
+ * {@code getString()} and ignore the config.</p>
  */
 final class MapConfigProperties implements ConfigProperties {
 

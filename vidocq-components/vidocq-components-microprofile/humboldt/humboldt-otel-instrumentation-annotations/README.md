@@ -1,8 +1,8 @@
 # humboldt-otel-instrumentation-annotations
 
-Repackage de `io.opentelemetry.instrumentation:opentelemetry-instrumentation-annotations` avec un `module-info.class` explicite (`io.opentelemetry.instrumentation_annotations`) pour usage JPMS/jlink.
+Repackaging of `io.opentelemetry.instrumentation:opentelemetry-instrumentation-annotations` with an explicit `module-info.class` (`io.opentelemetry.instrumentation_annotations`) for JPMS/jlink usage.
 
-## Vérification rapide
+## Quick verification
 
 ```zsh
 cd /Users/antoine/dev/vidocq/humboldt

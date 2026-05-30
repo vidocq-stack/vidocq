@@ -5,7 +5,7 @@ import io.opentelemetry.api.metrics.LongHistogram;
 import io.opentelemetry.context.Context;
 import io.vidocq.humboldt.sdk.metric.aggregation.ExplicitBucketHistogramAggregator;
 
-/** Histogram long-typé — délègue à ExplicitBucketHistogramAggregator (cast long→double). */
+/** Long-typed histogram — delegates to ExplicitBucketHistogramAggregator (long→double cast). */
 public final class SdkLongHistogram implements LongHistogram {
 
     private final ExplicitBucketHistogramAggregator aggregator;
@@ -16,7 +16,7 @@ public final class SdkLongHistogram implements LongHistogram {
 
     @Override
     public void record(long value, Attributes attributes) {
-        if (value < 0L) return; // alignement OTel : refuse négatif pour histogram
+        if (value < 0L) return; // OTel alignment: reject negatives for histograms
         aggregator.recordDouble((double) value, attributes != null ? attributes : Attributes.empty());
     }
 

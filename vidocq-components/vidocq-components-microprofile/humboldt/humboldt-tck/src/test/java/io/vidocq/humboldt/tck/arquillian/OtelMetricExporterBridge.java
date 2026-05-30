@@ -17,13 +17,13 @@ import java.util.ArrayList;
 import java.util.Collection;
 
 /**
- * Adapte un {@link io.opentelemetry.sdk.metrics.export.MetricExporter OTel MetricExporter}
- * en {@link MetricExporter humboldt MetricExporter}. Permet aux harness Arquillian de
- * récupérer leur {@code InMemoryMetricExporter} TCK (fourni via SPI
- * {@code ConfigurableMetricExporterProvider}) sans réimplémenter la collecte côté humboldt.
+ * Adapts an {@link io.opentelemetry.sdk.metrics.export.MetricExporter OTel MetricExporter}
+ * into a {@link MetricExporter humboldt MetricExporter}. This lets Arquillian harnesses
+ * retrieve their TCK {@code InMemoryMetricExporter} (provided through the
+ * {@code ConfigurableMetricExporterProvider} SPI) without re-implementing collection on the Humboldt side.
  *
- * <p>Symétrique à {@code OtelSpanExporterBridge} (M7b.4b.3). Le mapping humboldt
- * {@code MetricData} → OTel {@code MetricData} se fait via {@link MetricDataMapper}.</p>
+ * <p>Symmetric to {@code OtelSpanExporterBridge} (M7b.4b.3). Humboldt
+ * {@code MetricData} → OTel {@code MetricData} mapping is performed via {@link MetricDataMapper}.</p>
  */
 final class OtelMetricExporterBridge implements MetricExporter {
 
@@ -40,7 +40,7 @@ final class OtelMetricExporterBridge implements MetricExporter {
             try {
                 otelMetrics.add(MetricDataMapper.toOtel(m));
             } catch (RuntimeException ignored) {
-                // Skip metrics qui ne peuvent pas être mappés (types non supportés par le mapper)
+                // Skip metrics that cannot be mapped (types unsupported by the mapper)
             }
         }
         var otelResult = delegate.export(otelMetrics);
@@ -58,15 +58,15 @@ final class OtelMetricExporterBridge implements MetricExporter {
     }
 
     private static CompletableResultCode adapt(io.opentelemetry.sdk.common.CompletableResultCode otelResult) {
-        // Si l'OTel result est déjà completed (cas synchrone — InMemoryMetricExporter
-        // du TCK marshalle immédiatement), on shortcut sans wrapper async humboldt.
+        // If the OTel result is already completed (synchronous case — the TCK's InMemoryMetricExporter
+        // marshals immediately), take the shortcut without an async Humboldt wrapper.
         if (otelResult.isDone()) {
             return otelResult.isSuccess() ? CompletableResultCode.ofSuccess() : CompletableResultCode.ofFailure();
         }
-        // Sinon : on attache un whenComplete OTel qui propagera le résultat à un
-        // résultat humboldt initialement créé en "pending".
-        // L'API humboldt.CompletableResultCode n'expose pas de constructeur public pour
-        // un résultat pending — on retourne success/failure agrégé via join.
+        // Otherwise, attach an OTel whenComplete that would propagate the result to a
+        // Humboldt result initially created as "pending".
+        // The humboldt.CompletableResultCode API does not expose a public constructor for
+        // a pending result — so return aggregated success/failure via join.
         otelResult.join(10, java.util.concurrent.TimeUnit.SECONDS);
         return otelResult.isSuccess() ? CompletableResultCode.ofSuccess() : CompletableResultCode.ofFailure();
     }

@@ -57,7 +57,7 @@ class WithSpanInterceptorTest {
         assertEquals("OK:hello", result);
         SpanData s = exporter.getFinishedSpans().getFirst();
         assertEquals("Target.annotatedDefault", s.name(),
-                "défaut = ClassSimpleName + '.' + methodName");
+                "default = ClassSimpleName + '.' + methodName");
         assertEquals(SpanKind.INTERNAL, s.kind());
         assertEquals(StatusCode.UNSET, s.status().code());
         assertTrue(s.hasEnded());
@@ -84,7 +84,7 @@ class WithSpanInterceptorTest {
         assertEquals(StatusCode.ERROR, s.status().code());
         assertTrue(s.status().description().contains("IllegalStateException"));
         assertTrue(s.status().description().contains("boom!"));
-        // Un event "exception" est enregistré avec stacktrace
+        // An "exception" event is recorded with stacktrace
         assertEquals(1, s.events().size());
         assertEquals("exception", s.events().getFirst().name());
         assertEquals("java.lang.IllegalStateException",
@@ -100,11 +100,11 @@ class WithSpanInterceptorTest {
                 () -> {
                     Span s = Span.current();
                     assertSame(s, Span.fromContext(Context.current()),
-                            "span courant doit être attaché au Context");
+                            "current span must be attached to Context");
                     return "ok";
                 }));
         SpanData captured = exporter.getFinishedSpans().getFirst();
-        assertNull(seen[0]); // pas écrit, mais le span est bien créé
+        assertNull(seen[0]); // not written, but the span is still created
         assertEquals(captured.spanContext().getTraceId().length(), 32);
     }
 
@@ -123,31 +123,31 @@ class WithSpanInterceptorTest {
                 .filter(s -> s.name().equals("outer")).findFirst().orElseThrow();
 
         assertEquals(parent.spanContext().getTraceId(), child.spanContext().getTraceId(),
-                "le span enfant doit hériter du traceId du span outer");
+                "child span must inherit traceId from outer span");
         assertEquals(parent.spanContext().getSpanId(), child.parentSpanContext().getSpanId(),
-                "le parentSpanContext doit pointer le span outer");
+                "parentSpanContext must point to outer span");
     }
 
     @Test
     void defaults_used_when_method_lacks_annotation() throws Exception {
-        // L'annotation @WithSpan OTel ne cible que METHOD et CONSTRUCTOR
-        // (pas TYPE — vérifié sur opentelemetry-instrumentation-annotations:2.7.0).
-        // L'interceptor garde un fallback class-level pour les BCE exotiques
-        // qui ajouteraient @WithSpan via metaprogramming, mais en pratique on
-        // retombe sur les défauts.
+        // The OTel @WithSpan annotation only targets METHOD and CONSTRUCTOR
+        // (not TYPE — verified on opentelemetry-instrumentation-annotations:2.7.0).
+        // The interceptor keeps a class-level fallback for exotic BCEs
+        // that would add @WithSpan via metaprogramming, but in practice we
+        // fall back to the defaults.
         Method m = UnannotatedTarget.class.getMethod("plainMethod");
         interceptor.aroundInvoke(new TestInvocationContext(m, new Object[0], () -> "ok"));
         SpanData s = exporter.getFinishedSpans().getFirst();
         assertEquals("UnannotatedTarget.plainMethod", s.name());
         assertEquals(SpanKind.INTERNAL, s.kind(),
-                "défaut kind = INTERNAL en l'absence d'annotation");
+                "default kind = INTERNAL when annotation is missing");
     }
 
     // ----- helpers -----
 
     private InvocationContext invocationFor(String methodName, Object... args) throws Exception {
         return new TestInvocationContext(method(methodName), args, () -> {
-            // simule la méthode "OK:<arg>"
+            // simulates the method "OK:<arg>"
             return "OK:" + (args.length > 0 ? args[0] : "");
         });
     }
@@ -156,10 +156,10 @@ class WithSpanInterceptorTest {
         for (Method m : Target.class.getDeclaredMethods()) {
             if (m.getName().equals(name)) return m;
         }
-        throw new IllegalArgumentException("méthode introuvable : " + name);
+        throw new IllegalArgumentException("method not found: " + name);
     }
 
-    /** Cible annotée pour les tests — pas instanciée en CDI (pas de container ici). */
+    /** Target annotated for tests — not instantiated through CDI (no container here). */
     static class Target {
         @WithSpan
         public String annotatedDefault(String s) { return "OK:" + s; }
@@ -171,12 +171,12 @@ class WithSpanInterceptorTest {
         public String alwaysFail() { return "ne sera jamais atteint"; }
     }
 
-    /** Cible sans annotation @WithSpan — vérifie le fallback defaults. */
+    /** Target without an @WithSpan annotation — verifies the defaults fallback. */
     static class UnannotatedTarget {
         public String plainMethod() { return "ok"; }
     }
 
-    /** Interceptor instrumenté pour pointer notre SdkTracerProvider plutôt que GlobalOpenTelemetry. */
+    /** Instrumented interceptor that points to our SdkTracerProvider rather than GlobalOpenTelemetry. */
     static final class TestableInterceptor extends WithSpanInterceptor {
         private final OpenTelemetry otel;
 
@@ -191,7 +191,7 @@ class WithSpanInterceptorTest {
         @Override protected OpenTelemetry openTelemetry() { return otel; }
     }
 
-    /** InvocationContext minimal pour exercer l'interceptor hors container CDI. */
+    /** Minimal InvocationContext for exercising the interceptor outside a CDI container. */
     static final class TestInvocationContext implements InvocationContext {
         private final Method method;
         private final Object[] params;

@@ -1,143 +1,143 @@
-# M7b — Analyse architecturale (2026-05-21)
+# M7b — Architecture analysis (2026-05-21)
 
-## Finding clé de l'audit TCK
+## Key finding from the TCK audit
 
-Le TCK MicroProfile Telemetry 2.1 (`microprofile-telemetry-tracing-tck:2.1`)
-exige que l'implémentation supporte le **mécanisme d'extension OpenTelemetry SDK
-autoconfigure**. Évidence par décompilation des tests :
+The MicroProfile Telemetry 2.1 TCK (`microprofile-telemetry-tracing-tck:2.1`)
+requires the implementation to support the **OpenTelemetry SDK autoconfigure
+extension mechanism**. Evidence from decompiling the tests:
 
 ```java
-// ExporterSpiTest.createDeployment() — extrait javap -c
+// ExporterSpiTest.createDeployment() — javap -c extract
 ShrinkWrap.create(WebArchive.class)
     .addClasses(
         InMemorySpanExporter.class,                  // io.opentelemetry.sdk.trace.export.SpanExporter
         InMemorySpanExporterProvider.class,          // io.opentelemetry.sdk.autoconfigure.spi.traces.ConfigurableSpanExporterProvider
         TestCustomizer.class)
     .addAsServiceProvider(
-        ConfigurableSpanExporterProvider.class,       // ← SPI OTel SDK
+        ConfigurableSpanExporterProvider.class,       // ← OTel SDK SPI
         InMemorySpanExporterProvider.class)
     .addAsResource(
         new StringAsset("otel.sdk.disabled=false\notel.traces.exporter=in-memory"),
         "META-INF/microprofile-config.properties");
 ```
 
-Signatures clés :
+Key signatures:
 
 ```
 public class InMemorySpanExporter implements io.opentelemetry.sdk.trace.export.SpanExporter
 public class InMemorySpanExporterProvider implements io.opentelemetry.sdk.autoconfigure.spi.traces.ConfigurableSpanExporterProvider
 ```
 
-Et l'injection se fait via CDI :
+And injection happens through CDI:
 
 ```java
 @Inject InMemorySpanExporter exporter;
 exporter.assertSpanCount(1);
 ```
 
-## Conflit avec la contrainte d'archi Humboldt
+## Conflict with the Humboldt architecture constraint
 
-CLAUDE.md §"Contraintes d'architecture à ne pas violer" point 1 :
+CLAUDE.md §"Architecture constraints that must not be violated" item 1:
 
-> **Aucun `import io.opentelemetry.sdk.*`** dans humboldt — on réécrit ce code,
-> on ne le consomme pas.
+> **No `import io.opentelemetry.sdk.*`** in humboldt — we rewrite this code,
+> we do not consume it.
 
-Le TCK suppose que :
-- L'implémentation embarque OTel SDK autoconfigure
-- Les exporters utilisateur sont des `io.opentelemetry.sdk.trace.export.SpanExporter`
-- Le pipeline trace consomme des `io.opentelemetry.sdk.trace.data.SpanData`
-- La configuration passe par `io.opentelemetry.sdk.autoconfigure.spi.ConfigProperties`
+The TCK assumes that:
+- The implementation embeds OTel SDK autoconfigure
+- User exporters are `io.opentelemetry.sdk.trace.export.SpanExporter`
+- The trace pipeline consumes `io.opentelemetry.sdk.trace.data.SpanData`
+- Configuration goes through `io.opentelemetry.sdk.autoconfigure.spi.ConfigProperties`
 
-C'est **strictement incompatible** avec la philosophie Humboldt actuelle de
-re-implémenter le SDK sans le consommer.
+This is **strictly incompatible** with Humboldt's current philosophy of
+reimplementing the SDK without consuming it.
 
-## Options architecturales
+## Architectural options
 
-### Option A — Embarquer OTel SDK autoconfigure dans humboldt-runtime (refus de l'archi actuelle)
+### Option A — Embed OTel SDK autoconfigure in humboldt-runtime (rejected by current architecture)
 
-- Humboldt devient un wrapper du SDK OTel officiel
-- On peut viser TCK 100 % sans gymnastique
-- **Détruit la philosophie zéro-SDK-OTel** + 4 modules `humboldt-sdk-*` deviennent
-  morts ou doublons
-- Casse les ADRs et la valeur ajoutée Humboldt (codegen statique, VT-friendly,
-  HTTP exporter via chappe-client futur)
+- Humboldt becomes a wrapper around the official OTel SDK
+- We can target 100% TCK without gymnastics
+- **Destroys the zero-OTel-SDK philosophy** + 4 `humboldt-sdk-*` modules become
+  dead code or duplicates
+- Breaks the ADRs and Humboldt's value proposition (static codegen, VT-friendly,
+  future HTTP exporter via chappe-client)
 
-### Option B — Bridge SDK OTel ↔ Humboldt SDK (adapter complet)
+### Option B — OTel SDK ↔ Humboldt SDK bridge (full adapter)
 
-- humboldt-runtime intègre OTel SDK autoconfigure SPI uniquement comme **mécanisme
-  de discovery** (le SDK OTel n'est jamais utilisé pour traiter les spans)
-- Quand `otel.traces.exporter=<custom>` est configuré, on instancie le provider
-  OTel SDK, on obtient un `io.opentelemetry.sdk.trace.export.SpanExporter`
-- Un adapter `OtelSpanExporterBridge implements io.vidocq.humboldt.sdk.trace.SpanExporter`
-  l'enveloppe : pour chaque batch, convertit `humboldt.SpanData → opentelemetry.SpanData`
-  via le `io.opentelemetry.sdk.testing.trace.TestSpanData.builder()` ou impl
-  équivalent, puis délègue
-- L'`InMemorySpanExporter` du TCK reçoit donc les vrais spans Humboldt convertis
-  au format OTel SDK
-- Travail : ~600-800 lignes de code de conversion + 1 module nouveau (`humboldt-sdk-bridge-otel`)
-  + tests d'isomorphisme
-- Restera **OPTIONNEL** — non utilisé en prod, activé uniquement via une
-  dépendance explicite (et déclenché par autoconfigure quand l'env demande)
+- humboldt-runtime integrates the OTel SDK autoconfigure SPI only as a **discovery
+  mechanism** (the OTel SDK is never used to process spans)
+- When `otel.traces.exporter=<custom>` is configured, we instantiate the
+  OTel SDK provider and get an `io.opentelemetry.sdk.trace.export.SpanExporter`
+- An adapter `OtelSpanExporterBridge implements io.vidocq.humboldt.sdk.trace.SpanExporter`
+  wraps it: for each batch, it converts `humboldt.SpanData → opentelemetry.SpanData`
+  via `io.opentelemetry.sdk.testing.trace.TestSpanData.builder()` or an
+  equivalent impl, then delegates
+- The TCK's `InMemorySpanExporter` therefore receives the real Humboldt spans converted
+  to the OTel SDK format
+- Work: ~600-800 lines of conversion code + 1 new module (`humboldt-sdk-bridge-otel`)
+  + isomorphism tests
+- Will remain **OPTIONAL** — not used in prod, activated only via an
+  explicit dependency (and triggered by autoconfigure when the env requests it)
 
-### Option C — Adapter limité au runner TCK (hors-reactor)
+### Option C — Adapter limited to the TCK runner (out-of-reactor)
 
-- Tout le code de bridge SDK OTel vit dans `humboldt-tck/` (hors-reactor, déjà
-  isolé de la prod)
-- Pas de nouveau module dans le reactor
-- humboldt-runtime expose juste un **hook SPI** (déjà existant ? à créer) pour
-  injecter dynamiquement un `SpanExporter` "externe" dans le pipeline trace
-  au démarrage
-- Le runner TCK fournit le bridge `OtelSpanExporterBridge` + un harness Arquillian
-  qui sait :
-  1. Parser `META-INF/microprofile-config.properties` du war ShrinkWrap
-  2. Charger les `ConfigurableSpanExporterProvider` du war via ServiceLoader
-  3. Wrapper les OTel exporters en humboldt exporters via le bridge
-  4. Démarrer Vauban CDI + Cassini JAX-RS + Chappe HTTP + AutoConfiguredHumboldt
-     en in-process, avec le bean `InMemorySpanExporter` exposé dans le BeanManager
-- Travail : ~800-1200 lignes (adapter + container Arquillian custom)
-- **Avantage** : zéro pollution du runtime Humboldt. La philosophie est respectée.
-- **Risque** : code TCK assez complexe à maintenir, sensible aux évolutions
-  des specs (chaque montée de version TCK potentiellement painful).
+- All OTel SDK bridge code lives in `humboldt-tck/` (out-of-reactor, already
+  isolated from prod)
+- No new module in the reactor
+- humboldt-runtime exposes only an **SPI hook** (already existing? to create) to
+  dynamically inject an "external" `SpanExporter` into the trace pipeline
+  at startup
+- The TCK runner provides the `OtelSpanExporterBridge` + an Arquillian harness
+  that knows how to:
+  1. Parse `META-INF/microprofile-config.properties` from the ShrinkWrap war
+  2. Load `ConfigurableSpanExporterProvider`s from the war via ServiceLoader
+  3. Wrap OTel exporters into humboldt exporters through the bridge
+  4. Start Vauban CDI + Cassini JAX-RS + Chappe HTTP + AutoConfiguredHumboldt
+     in-process, with the `InMemorySpanExporter` bean exposed in the BeanManager
+- Work: ~800-1200 lines (adapter + custom Arquillian container)
+- **Advantage**: zero pollution of the Humboldt runtime. The philosophy is preserved.
+- **Risk**: TCK code fairly complex to maintain, sensitive to spec evolution
+  (each TCK version bump potentially painful).
 
-## Recommandation
+## Recommendation
 
-**Option C** — confiner le pont SDK OTel au runner TCK hors-reactor.
+**Option C** — confine the OTel SDK bridge to the out-of-reactor TCK runner.
 
-Justification :
-- Préserve la philosophie Humboldt (le runtime applicatif n'embarque pas SDK OTel)
-- Cohérent avec la décision déjà prise pour `humboldt-tck/` (pom standalone,
-  `opentelemetry-sdk` en scope test)
-- Permet de viser TCK 100 % sans compromettre l'archi
-- Si plus tard la maintenance devient trop lourde, on peut migrer vers
-  Option B (le bridge devient un module officiel optionnel) sans casser
-  la philo
+Justification:
+- Preserves the Humboldt philosophy (the application runtime does not embed the OTel SDK)
+- Consistent with the decision already taken for `humboldt-tck/` (standalone pom,
+  `opentelemetry-sdk` in test scope)
+- Allows aiming for 100% TCK without compromising the architecture
+- If maintenance later becomes too heavy, we can migrate toward
+  Option B (the bridge becomes an official optional module) without breaking
+  the philosophy
 
-## Décision attendue de Yann
+## Decision expected from Yann
 
-Avant de coder M7b.4 (container Arquillian) et M7b.3 (réenregistrement
-exporters), je dois savoir lequel des 3 chemins prendre. Le code, l'ampleur
-du runner, et les futures cassures de version diffèrent radicalement.
+Before coding M7b.4 (Arquillian container) and M7b.3 (re-registration of
+exporters), I need to know which of the 3 paths to take. The code, the scope
+of the runner, and future version breakages differ radically.
 
-## Plan d'exécution si Option C validée
+## Execution plan if Option C is validated
 
-1. **M7b.3-bis** — Définir/exposer un point d'extension dans humboldt-runtime
-   (probablement `HumboldtAutoConfigure.withExtraSpanExporter(humboldt.SpanExporter)`)
-   pour qu'un harness externe puisse injecter un exporter sans toucher aux env
+1. **M7b.3-bis** — Define/expose an extension point in humboldt-runtime
+   (probably `HumboldtAutoConfigure.withExtraSpanExporter(humboldt.SpanExporter)`)
+   so an external harness can inject an exporter without touching the env
    vars (~30 LOC)
 
-2. **M7b.4a** — Créer dans `humboldt-tck/` un `OtelSpanExporterBridge` qui
-   convertit `humboldt.SpanData → otel.SpanData` (réutiliser le record OTel
-   `io.opentelemetry.sdk.testing.trace.TestSpanData` qui est public)
-   (~250 LOC + tests d'isomorphisme)
+2. **M7b.4a** — Create in `humboldt-tck/` an `OtelSpanExporterBridge` that
+   converts `humboldt.SpanData → otel.SpanData` (reuse the public OTel record
+   `io.opentelemetry.sdk.testing.trace.TestSpanData`)
+   (~250 LOC + isomorphism tests)
 
-3. **M7b.4b** — Container Arquillian embedded Humboldt :
+3. **M7b.4b** — Embedded Humboldt Arquillian container:
    - `HumboldtDeployableContainer implements DeployableContainer<HumboldtContainerConfig>`
-   - À chaque `deploy(Archive)` : extract WAR en mémoire, ClassLoader isolé,
-     boot Vauban CDI Lite, register filters/providers Cassini, démarrer Chappe
-     sur port aléatoire, configurer AutoConfiguredHumboldt avec exporters bridgés
-   - Enregistrer le service via `META-INF/services/org.jboss.arquillian.container.spi.client.container.DeployableContainer`
+   - At each `deploy(Archive)`: extract WAR in memory, isolated ClassLoader,
+     boot Vauban CDI Lite, register Cassini filters/providers, start Chappe
+     on a random port, configure AutoConfiguredHumboldt with bridged exporters
+   - Register the service via `META-INF/services/org.jboss.arquillian.container.spi.client.container.DeployableContainer`
    - (~400-600 LOC)
 
-4. **M7b.5** — Activer `OpenTelemetryBeanTest` (un seul) et viser un START
-   sans crash (les assertions peuvent échouer, on cherche juste à valider la
-   chaîne).
+4. **M7b.5** — Enable `OpenTelemetryBeanTest` (just one) and target a START
+   without crashes (assertions may fail, we are only trying to validate the
+   chain).

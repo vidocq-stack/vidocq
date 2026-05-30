@@ -16,16 +16,16 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 
 /**
- * {@link TestEnricher} Arquillian Humboldt — injecte les champs {@code @Inject}
- * de la classe de test via le {@link VaubanContainer} courant.
+ * Humboldt Arquillian {@link TestEnricher} — injects {@code @Inject} fields
+ * on the test class through the current {@link VaubanContainer}.
  *
- * <p>Sans cet enricher, les TCK qui font {@code @Inject OpenTelemetry / Tracer /
- * InMemorySpanExporter} resteraient {@code null} après le {@code deploy()}.</p>
+ * <p>Without this enricher, TCK tests using {@code @Inject OpenTelemetry / Tracer /
+ * InMemorySpanExporter} would remain {@code null} after {@code deploy()}.</p>
  *
- * <p>Cas particulier : {@link OpenTelemetry} — résolu via
- * {@link GlobalOpenTelemetry#get()} car c'est le seul moyen propre d'exposer
- * l'instance configurée par le container (Humboldt n'enregistre pas
- * d'OpenTelemetry comme bean CDI managed).</p>
+ * <p>Special case: {@link OpenTelemetry} — resolved through
+ * {@link GlobalOpenTelemetry#get()} because that is the only clean way to expose
+ * the instance configured by the container (Humboldt does not register
+ * OpenTelemetry as a managed CDI bean).</p>
  */
 public class HumboldtCdiEnricher implements TestEnricher {
 
@@ -41,14 +41,14 @@ public class HumboldtCdiEnricher implements TestEnricher {
                 if (!f.isAnnotationPresent(Inject.class)) continue;
                 Object value = resolveValue(f, container);
                 if (value == null) {
-                    LOG.log(Level.WARNING, "  ⚠ @Inject non résolu : {0}.{1} (type={2})",
+                    LOG.log(Level.WARNING, "  ⚠ @Inject unresolved: {0}.{1} (type={2})",
                             cls.getSimpleName(), f.getName(), f.getType().getName());
                     continue;
                 }
                 try {
                     f.setAccessible(true);
                     f.set(testCase, value);
-                    LOG.log(Level.DEBUG, "  → @Inject résolu : {0}.{1} = {2}",
+                    LOG.log(Level.DEBUG, "  -> @Inject resolved: {0}.{1} = {2}",
                             cls.getSimpleName(), f.getName(), value.getClass().getSimpleName());
                 } catch (IllegalAccessException e) {
                     LOG.log(Level.WARNING, "  ⚠ set field failed : {0}.{1} — {2}",
@@ -61,16 +61,16 @@ public class HumboldtCdiEnricher implements TestEnricher {
 
     @Override
     public Object[] resolve(Method method) {
-        // M7b.4b.4 ne résout pas les arguments de méthodes — TestNG @Test ne
-        // les utilise pas pour les TCK Telemetry. À ajouter si une suite TCK
-        // future en a besoin.
+        // M7b.4b.4 does not resolve method arguments — TestNG @Test does not
+        // use them for the Telemetry TCKs. Add this if a future TCK suite
+        // needs it.
         return new Object[method.getParameterCount()];
     }
 
     private static Object resolveValue(Field f, VaubanContainer container) {
         Class<?> type = f.getType();
-        // Types OpenTelemetry résolus directement (cas où Vauban ne sait pas
-        // appeler les producers — limites CDI Lite + classpath isolation).
+        // OpenTelemetry types resolved directly (for cases where Vauban cannot
+        // call producers — CDI Lite limitations + classpath isolation).
         if (OpenTelemetry.class.equals(type)) {
             return GlobalOpenTelemetry.get();
         }
@@ -80,10 +80,10 @@ public class HumboldtCdiEnricher implements TestEnricher {
         if (Meter.class.equals(type)) {
             return GlobalOpenTelemetry.get().getMeter(f.getDeclaringClass().getName());
         }
-        // Span / Baggage : proxy dynamique qui delegate à .current() à chaque appel.
-        // Capturer .current() ici figerait la valeur au moment de l'enrich, alors que
-        // les TCK SpanBeanTest/BaggageBeanTest mutent le Context après l'injection et
-        // attendent que injectedSpan/injectedBaggage reflètent la valeur courante.
+        // Span / Baggage: dynamic proxy delegating to .current() on each call.
+        // Capturing .current() here would freeze the value at enrichment time, while
+        // the SpanBeanTest/BaggageBeanTest TCKs mutate the Context after injection and
+        // expect injectedSpan/injectedBaggage to reflect the current value.
         if (Span.class.equals(type)) {
             return java.lang.reflect.Proxy.newProxyInstance(
                     Span.class.getClassLoader(), new Class<?>[]{Span.class},
@@ -101,7 +101,7 @@ public class HumboldtCdiEnricher implements TestEnricher {
         try {
             return container.select(type);
         } catch (RuntimeException e) {
-            // bean non résolu : on laisse l'enricher remonter null (warning loggé)
+            // unresolved bean: let the enricher surface null (warning logged)
             return null;
         }
     }

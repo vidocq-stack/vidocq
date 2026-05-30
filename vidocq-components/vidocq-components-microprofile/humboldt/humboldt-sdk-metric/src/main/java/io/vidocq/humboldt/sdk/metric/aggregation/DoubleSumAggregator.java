@@ -9,10 +9,10 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.DoubleAdder;
 
 /**
- * Aggregation Sum cumulative pour DoubleCounter / DoubleUpDownCounter.
+ * Cumulative Sum aggregation for DoubleCounter / DoubleUpDownCounter.
  *
- * <p>Storage : {@link ConcurrentHashMap} keyé par {@link Attributes}, chaque valeur
- * est un {@link DoubleAdder} pour minimiser la contention sous écriture concurrente.</p>
+ * <p>Storage: {@link ConcurrentHashMap} keyed by {@link Attributes}; each value
+ * is a {@link DoubleAdder} to minimize contention under concurrent writes.</p>
  */
 public final class DoubleSumAggregator implements Aggregator<DoublePointData> {
 

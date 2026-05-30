@@ -1,9 +1,9 @@
 /**
  * Humboldt — MicroProfile Telemetry 2.1 implementation.
  *
- * <p>Module API : surface publique stable. Exporte la façade {@code Humboldt}
- * et les interfaces SPI consommées par les modules SDK (trace, metric, log)
- * et par les extensions Vidocq (chappe, cassini, vauban).</p>
+ * <p>API module: stable public surface. Exports the {@code Humboldt} facade
+ * and the SPI interfaces consumed by the SDK modules (trace, metric, log)
+ * and by Vidocq extensions (chappe, cassini, vauban).</p>
  */
 module io.vidocq.humboldt.api {
 

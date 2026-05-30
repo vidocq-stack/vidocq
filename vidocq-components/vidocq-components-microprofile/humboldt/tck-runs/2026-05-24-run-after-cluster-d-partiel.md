@@ -1,65 +1,65 @@
-# Run TCK MP Telemetry 2.1 — post Cluster D partiel (ResourceProvider SPI)
+# Run TCK MP Telemetry 2.1 — post partial Cluster D (ResourceProvider SPI)
 
 **Date** : 2026-05-24 01:25
-**Commande** : `./run-official-tck-telemetry-2.1.sh all`
+**Command** : `./run-official-tck-telemetry-2.1.sh all`
 
-## Résultat brut
+## Raw results
 
 ```
 <testng-results ignored="0" total="85" passed="24" failed="38" skipped="23">
 ```
 
-## Évolution
+## Progress
 
 | Run | total | PASS | FAIL | SKIP |
 |---|---|---|---|---|
 | post M7c.12 | 85 | 23 | 39 | 23 |
-| **post Cluster D (partiel)** | 85 | **24** | **38** | **23** |
+| **post Cluster D (partial)** | 85 | **24** | **38** | **23** |
 
 **+1 PASS** (23 → 24).
 
-## Item livré
+## Item delivered
 
 ### `HumboldtDeployableContainer.loadResourceProviderAttrs()`
-- Scanne `META-INF/services/io.opentelemetry.sdk.autoconfigure.spi.ResourceProvider` dans le WAR
-- Pour chaque provider, instancie et appelle `createResource(MapConfigProperties(mpProps))`
-- Extrait les attributes OTel sous forme de chaîne CSV `key1=val1,key2=val2`
-- Concatène à `OTEL_RESOURCE_ATTRIBUTES` de `envMap` → HumboldtAutoConfigure les fusionne avec le Resource humboldt
+- Scans `META-INF/services/io.opentelemetry.sdk.autoconfigure.spi.ResourceProvider` in the WAR
+- For each provider, instantiates and calls `createResource(MapConfigProperties(mpProps))`
+- Extracts OTel attributes as a CSV string `key1=val1,key2=val2`
+- Concatenates them to `envMap`'s `OTEL_RESOURCE_ATTRIBUTES` → HumboldtAutoConfigure merges them with the humboldt Resource
 
 ### `HumboldtDeployableContainer.resolveSpiSampler()`
-- Scanne `META-INF/services/io.opentelemetry.sdk.autoconfigure.spi.traces.ConfigurableSamplerProvider`
-- Si `otel.traces.sampler` matche le `getName()` d'un provider, instancie le Sampler OTel
-- **Heuristique de probe** : appelle `shouldSample()` avec contexte dummy → mappe `DROP` → `"always_off"`, autre → `"always_on"`
-- Limite : ne fonctionne que pour les samplers simples (always_off/always_on). Les samplers conditionnels (TestSampler du TCK qui sample selon attr `SAMPLE_ME`) nécessitent un vrai bridge OTel→humboldt (~60 LOC + modification HumboldtAutoConfigure.configure signature)
+- Scans `META-INF/services/io.opentelemetry.sdk.autoconfigure.spi.traces.ConfigurableSamplerProvider`
+- If `otel.traces.sampler` matches a provider `getName()`, instantiates the OTel Sampler
+- **Probe heuristic**: calls `shouldSample()` with a dummy context → maps `DROP` → `"always_off"`, otherwise → `"always_on"`
+- Limitation: only works for simple samplers (always_off/always_on). Conditional samplers (the TCK's TestSampler, which samples based on attr `SAMPLE_ME`) require a real OTel→humboldt bridge (~60 LOC + change to the HumboldtAutoConfigure.configure signature)
 
-## Tests Cluster D — statut détaillé
+## Cluster D tests — detailed status
 
-| Test | Statut | Cause |
+| Test | Status | Cause |
 |---|---|---|
-| ✅ `ExporterSpiTest.testExporter` | PASS (déjà depuis M7b.4b.3) | bridge OtelSpanExporterBridge existant |
-| ✅ `ResourceSpiTest.testResource` | **PASS (M7c.13a / cette session)** | attrs OTel mergés via OTEL_RESOURCE_ATTRIBUTES |
-| ❌ `SamplerSpiTest.testSampler` | FAIL | TestSampler est conditionnel (DROP par défaut, RECORD_AND_SAMPLE si attr `SAMPLE_ME=true`). L'heuristique probe-DROP capture le 1er cas mais pas le 2ème (`assertTrue(span2.isSampled())` échoue) |
-| ❌ `CustomizerSpiTest.testCustomizer` | FAIL | Requiert l'implémentation complète de `AutoConfigurationCustomizer` (6 méthodes `addXxxCustomizer` + chaînes Resource/Propagator/Properties/Sampler/SpanExporter/TracerProvider) |
-| ❌ `SPIPropagationTest.testSPIPropagator` | FAIL | Requiert le scan `META-INF/services/io.opentelemetry.context.propagation.TextMapPropagator` + injection dans le composite propagator humboldt |
+| ✅ `ExporterSpiTest.testExporter` | PASS (already since M7b.4b.3) | existing OtelSpanExporterBridge |
+| ✅ `ResourceSpiTest.testResource` | **PASS (M7c.13a / this session)** | OTel attrs merged via OTEL_RESOURCE_ATTRIBUTES |
+| ❌ `SamplerSpiTest.testSampler` | FAIL | TestSampler is conditional (DROP by default, RECORD_AND_SAMPLE if attr `SAMPLE_ME=true`). The probe-DROP heuristic captures the 1st case but not the 2nd (`assertTrue(span2.isSampled())` fails) |
+| ❌ `CustomizerSpiTest.testCustomizer` | FAIL | Requires a complete `AutoConfigurationCustomizer` implementation (6 `addXxxCustomizer` methods + Resource/Propagator/Properties/Sampler/SpanExporter/TracerProvider chains) |
+| ❌ `SPIPropagationTest.testSPIPropagator` | FAIL | Requires scanning `META-INF/services/io.opentelemetry.context.propagation.TextMapPropagator` + injection into the humboldt composite propagator |
 
-## Bilan cumulé session 2026-05-23+24
+## Cumulative session summary 2026-05-23+24
 
-| Run | PASS | Cumul vs baseline |
+| Run | PASS | Cumulative vs baseline |
 |---|---|---|
 | baseline M7c.1+2+4 | 5 | — |
 | post M7c.11 | 16 | +11 |
 | post HBT-1 | 19 | +14 |
 | post M7c.12 | 23 | +18 |
-| **post Cluster D partiel** | **24** | **+19** |
+| **post Cluster D partial** | **24** | **+19** |
 
-**Cumul session : 5 → 24 PASS (+380%)**, **60 → 38 FAIL (-37%)**.
+**Session cumulative: 5 → 24 PASS (+380%)**, **60 → 38 FAIL (-37%)**.
 
-## Prochaines étapes
+## Next steps
 
-| Step | Item | Gain estimé | Effort |
+| Step | Item | Estimated gain | Effort |
 |---|---|---|---|
-| 1 | **OtelSamplerBridge complet** + overload HumboldtAutoConfigure.configure(...Sampler) | +1 (testSampler) | Moyen (~80 LOC) |
-| 2 | **AutoConfigurationCustomizer adapter** | +1 (testCustomizer) | Gros (~300 LOC) |
-| 3 | **SPI Propagator scanning** | +1 (testSPIPropagator) | Petit-moyen (~50 LOC) |
-| 4 | **M4b** SDK metric complet | +24 | Très gros (~2-3j) |
-| 5 | Investigation tests RestSpan/SpanDefault qui restent FAIL | +3-5 | Moyen |
+| 1 | **Complete OtelSamplerBridge** + overload HumboldtAutoConfigure.configure(...Sampler) | +1 (testSampler) | Medium (~80 LOC) |
+| 2 | **AutoConfigurationCustomizer adapter** | +1 (testCustomizer) | Large (~300 LOC) |
+| 3 | **SPI Propagator scanning** | +1 (testSPIPropagator) | Small-medium (~50 LOC) |
+| 4 | **M4b** full SDK metric | +24 | Very large (~2-3d) |
+| 5 | Investigate RestSpan/SpanDefault tests that remain FAIL | +3-5 | Medium |

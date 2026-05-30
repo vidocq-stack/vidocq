@@ -5,13 +5,13 @@ import org.jboss.arquillian.core.spi.LoadableExtension;
 import org.jboss.arquillian.test.spi.TestEnricher;
 
 /**
- * Point d'entrée Arquillian — enregistre {@link HumboldtDeployableContainer}
- * via le mécanisme {@code META-INF/services/org.jboss.arquillian.core.spi.LoadableExtension}.
+ * Arquillian entry point — registers {@link HumboldtDeployableContainer}
+ * through the {@code META-INF/services/org.jboss.arquillian.core.spi.LoadableExtension} mechanism.
  *
- * <p>Au démarrage d'un test, Arquillian scanne le classpath pour
- * {@link LoadableExtension} via {@link java.util.ServiceLoader}, instancie chaque
- * extension et appelle {@link #register(ExtensionBuilder)} pour collecter les
- * services qu'elle fournit (containers, enrichers, protocols, etc.).</p>
+ * <p>When a test starts, Arquillian scans the classpath for
+ * {@link LoadableExtension} through {@link java.util.ServiceLoader}, instantiates each
+ * extension, and calls {@link #register(ExtensionBuilder)} to collect the
+ * services it provides (containers, enrichers, protocols, etc.).</p>
  */
 public class HumboldtLoadableExtension implements LoadableExtension {
 

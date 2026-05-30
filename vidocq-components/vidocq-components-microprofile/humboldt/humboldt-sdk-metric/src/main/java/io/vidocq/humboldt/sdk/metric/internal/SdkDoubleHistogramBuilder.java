@@ -10,8 +10,8 @@ import io.vidocq.humboldt.sdk.metric.data.InstrumentType;
 import java.util.List;
 
 /**
- * Builder pour {@link DoubleHistogram} — produit un {@link SdkDoubleHistogram}
- * backé par un {@link ExplicitBucketHistogramAggregator} (bornes par défaut OTel).
+ * Builder for {@link DoubleHistogram} — produces an {@link SdkDoubleHistogram}
+ * backed by an {@link ExplicitBucketHistogramAggregator} (default OTel boundaries).
  */
 public final class SdkDoubleHistogramBuilder implements DoubleHistogramBuilder {
 

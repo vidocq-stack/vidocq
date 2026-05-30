@@ -45,20 +45,20 @@ class SdkMeterProviderTest {
             c.add(2L, Attributes.of(ROUTE, "/b"));
             c.add(5L, Attributes.of(ROUTE, "/a"));
 
-            // Force flush au lieu d'attendre le scheduleDelay
+            // Force a flush instead of waiting for the scheduleDelay
             p.flush().join(2, TimeUnit.SECONDS);
         }
 
         List<MetricData> all = exporter.getCollected();
-        assertTrue(all.size() >= 1, "au moins un MetricData attendu");
+        assertTrue(all.size() >= 1, "at least one MetricData expected");
         MetricData last = all.getLast();
         assertEquals("http.requests", last.name());
         assertEquals(InstrumentType.COUNTER, last.instrumentType());
-        assertTrue(last.monotonic(), "Counter doit être monotonic");
+        assertTrue(last.monotonic(), "Counter must be monotonic");
         assertEquals("HTTP request count", last.description());
         assertEquals("1", last.unit());
 
-        // 2 points distincts par attribut-set
+        // 2 distinct points per attribute set
         assertEquals(2, last.points().size());
         long sumA = last.points().stream()
                 .filter(pt -> "/a".equals(((LongPointData) pt).attributes().get(ROUTE)))
@@ -66,8 +66,8 @@ class SdkMeterProviderTest {
         long sumB = last.points().stream()
                 .filter(pt -> "/b".equals(((LongPointData) pt).attributes().get(ROUTE)))
                 .mapToLong(pt -> ((LongPointData) pt).value()).sum();
-        assertEquals(8L, sumA, "route=/a doit accumuler 3+5");
-        assertEquals(2L, sumB, "route=/b doit accumuler 2");
+        assertEquals(8L, sumA, "route=/a must accumulate 3+5");
+        assertEquals(2L, sumB, "route=/b must accumulate 2");
     }
 
     @Test
@@ -85,7 +85,7 @@ class SdkMeterProviderTest {
         }
         MetricData m = exporter.getCollected().getLast();
         assertEquals(15L, ((LongPointData) m.points().getFirst()).value(),
-                "valeur négative doit être ignorée (counter monotonic)");
+                "negative value must be ignored (counter monotonic)");
     }
 
     @Test
@@ -97,7 +97,7 @@ class SdkMeterProviderTest {
                 .build()) {
             DoubleHistogram h = p.get("x").histogramBuilder("http.duration")
                     .setUnit("ms").build();
-            h.record(2.5);    // bucket 0 (≤ 0) ? NON — bucket 1 (> 0, ≤ 5)
+            h.record(2.5);    // bucket 0 (<= 0)? no -> bucket 1 (> 0, <= 5)
             h.record(15.0);   // bucket 3 (> 10, ≤ 25)
             h.record(150.0);  // bucket 7 (> 100, ≤ 250)
             h.record(7500.0); // bucket 13 (> 5000, ≤ 7500)
@@ -110,7 +110,7 @@ class SdkMeterProviderTest {
         assertEquals(2.5 + 15.0 + 150.0 + 7500.0, pt.sum(), 0.0001);
         assertEquals(2.5, pt.min(), 0.0001);
         assertEquals(7500.0, pt.max(), 0.0001);
-        // 15 bornes par défaut → 16 buckets
+        // 15 default boundaries → 16 buckets
         assertEquals(16, pt.bucketCounts().size());
     }
 

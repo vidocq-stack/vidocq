@@ -1,8 +1,8 @@
 package io.vidocq.humboldt.sdk.metric.data;
 
 /**
- * Type d'instrument OpenTelemetry — utilisé pour la sélection d'aggregation
- * et l'encodage OTLP (chaque type produit un sous-message OTLP différent).
+ * OpenTelemetry instrument type — used for aggregation selection
+ * and OTLP encoding (each type produces a different OTLP sub-message).
  */
 public enum InstrumentType {
     COUNTER,

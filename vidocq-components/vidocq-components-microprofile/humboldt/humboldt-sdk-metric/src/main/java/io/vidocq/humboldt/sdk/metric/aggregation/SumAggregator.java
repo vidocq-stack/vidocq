@@ -9,11 +9,11 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.LongAdder;
 
 /**
- * Aggregation Sum cumulative pour Counter / UpDownCounter long.
+ * Cumulative Sum aggregation for long Counter / UpDownCounter.
  *
- * <p>Storage : {@link ConcurrentHashMap} keyé par {@link Attributes}, chaque
- * valeur est un {@link LongAdder} pour minimiser la contention sous écriture
- * concurrente intensive.</p>
+ * <p>Storage: {@link ConcurrentHashMap} keyed by {@link Attributes}; each
+ * value is a {@link LongAdder} to minimize contention under heavy concurrent
+ * writes.</p>
  */
 public final class SumAggregator implements Aggregator<LongPointData> {
 

@@ -6,11 +6,11 @@ import io.opentelemetry.context.Context;
 import io.vidocq.humboldt.sdk.trace.ReadableSpan;
 
 /**
- * Hook appelé par le SDK à la création et à la fin d'un span enregistré.
+ * Hook called by the SDK when a recorded span starts and ends.
  *
- * <p>Implémentations standard :</p>
+ * <p>Standard implementations:</p>
  * <ul>
- *   <li>{@link io.vidocq.humboldt.sdk.trace.SimpleSpanProcessor} — export synchrone</li>
+ *   <li>{@link io.vidocq.humboldt.sdk.trace.SimpleSpanProcessor} — synchronous export</li>
  *   <li>{@link io.vidocq.humboldt.sdk.trace.BatchSpanProcessor} — batch + virtual thread</li>
  * </ul>
  */

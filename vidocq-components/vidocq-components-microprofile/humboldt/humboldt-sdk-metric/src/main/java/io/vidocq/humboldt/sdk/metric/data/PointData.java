@@ -3,8 +3,8 @@ package io.vidocq.humboldt.sdk.metric.data;
 import io.opentelemetry.api.common.Attributes;
 
 /**
- * Marqueur pour les points de données métriques (Sum, Histogram, etc.).
- * Sealed pour exhaustivité du switch côté encoder OTLP.
+ * Marker for metric data points (Sum, Histogram, etc.).
+ * Sealed for exhaustive switching on the OTLP encoder side.
  */
 public sealed interface PointData
         permits LongPointData, DoublePointData, HistogramPointData {

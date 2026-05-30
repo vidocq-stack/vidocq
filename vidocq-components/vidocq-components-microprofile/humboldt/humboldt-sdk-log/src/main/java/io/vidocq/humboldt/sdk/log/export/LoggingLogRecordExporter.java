@@ -21,25 +21,25 @@ import java.util.Collection;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
- * Exporter qui écrit chaque {@link LogRecordData} sur une ligne texte vers un
- * {@link OutputStream} (stdout par défaut, ou un fichier).
+ * Exporter that writes each {@link LogRecordData} as one text line to an
+ * {@link OutputStream} (stdout by default, or a file).
  * <p>
- * Format : {@code <YYYY-MM-DD HH:MM:SS.fffZ> <SEVERITY_TEXT> <body> scopeInfo:<scope>:<version>}
- * — compatible avec la fixture MP Telemetry Logs TCK ({@code JulTest})
- * qui matche les lignes via regex {@code .*INFO.*<msg>.*scopeInfo:.*}.
+ * Format: {@code <YYYY-MM-DD HH:MM:SS.fffZ> <SEVERITY_TEXT> <body> scopeInfo:<scope>:<version>}
+ * — compatible with the MP Telemetry Logs TCK fixture ({@code JulTest})
+ * which matches lines via the regex {@code .*INFO.*<msg>.*scopeInfo:.*}.
  *
- * <p>Utilisé quand la config {@code OTEL_LOGS_EXPORTER=logging} est active.
- * Le path du fichier peut être :
+ * <p>Used when {@code OTEL_LOGS_EXPORTER=logging} is active.
+ * The file path may be:
  * <ul>
- *   <li>fourni explicitement via {@link #toFile(Path)}</li>
- *   <li>résolu depuis la system property {@code mptelemetry.tck.log.file.path}
- *       (utilisée par le TCK)</li>
- *   <li>{@code System.out} en fallback ({@link #toStdout()})</li>
+ *   <li>provided explicitly via {@link #toFile(Path)}</li>
+ *   <li>resolved from the system property {@code mptelemetry.tck.log.file.path}
+ *       (used by the TCK)</li>
+ *   <li>{@code System.out} as a fallback ({@link #toStdout()})</li>
  * </ul>
  *
- * <p>Écritures synchronisées par {@link ReentrantLock} pour éviter les lignes
- * entrelacées en présence de plusieurs threads (le {@code SimpleLogRecordProcessor}
- * peut être appelé concurremment depuis des virtual threads applicatifs).
+ * <p>Writes are synchronized with {@link ReentrantLock} to avoid interleaved lines
+ * in the presence of multiple threads ({@code SimpleLogRecordProcessor}
+ * may be called concurrently from application virtual threads).
  */
 public final class LoggingLogRecordExporter implements LogRecordExporter {
 
@@ -56,14 +56,14 @@ public final class LoggingLogRecordExporter implements LogRecordExporter {
         this.closeOnShutdown = closeOnShutdown;
     }
 
-    /** Exporte vers {@link System#out}. */
+    /** Exports to {@link System#out}. */
     public static LoggingLogRecordExporter toStdout() {
         return new LoggingLogRecordExporter(stdoutWriter(), false);
     }
 
     /**
-     * Exporte vers un fichier. Crée le fichier s'il n'existe pas, ouvre en append sinon.
-     * Le parent doit exister.
+     * Exports to a file. Creates the file if it does not exist, otherwise opens it in append mode.
+     * The parent directory must exist.
      */
     public static LoggingLogRecordExporter toFile(Path path) {
         try {
@@ -78,11 +78,11 @@ public final class LoggingLogRecordExporter implements LogRecordExporter {
     }
 
     /**
-     * Construit l'exporter en lisant la system property {@code mptelemetry.tck.log.file.path} :
-     * si présente, écrit dans ce fichier ; sinon écrit sur {@link System#out}.
+     * Builds the exporter by reading the system property {@code mptelemetry.tck.log.file.path}:
+     * if present, writes to that file; otherwise writes to {@link System#out}.
      * <p>
-     * C'est la factory utilisée par {@code HumboldtAutoConfigure} pour le cas
-     * {@code OTEL_LOGS_EXPORTER=logging}.
+     * This is the factory used by {@code HumboldtAutoConfigure} for the
+     * {@code OTEL_LOGS_EXPORTER=logging} case.
      */
     public static LoggingLogRecordExporter create() {
         String path = System.getProperty("mptelemetry.tck.log.file.path");

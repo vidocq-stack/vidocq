@@ -6,9 +6,9 @@ import io.opentelemetry.context.Context;
 import io.vidocq.humboldt.sdk.metric.aggregation.SumAggregator;
 
 /**
- * Implémentation interne de {@link LongCounter} — délègue à {@link SumAggregator}.
+ * Internal implementation of {@link LongCounter} — delegates to {@link SumAggregator}.
  *
- * <p>Refuse les valeurs négatives (counter monotonic, alignement spec OTel).</p>
+ * <p>Rejects negative values (monotonic counter, aligned with the OTel spec).</p>
  */
 public final class SdkLongCounter implements LongCounter {
 
@@ -25,7 +25,7 @@ public final class SdkLongCounter implements LongCounter {
 
     @Override
     public void add(long value, Attributes attributes) {
-        if (value < 0L) return; // counter monotonic — ignore négatif (alignement OTel)
+        if (value < 0L) return; // monotonic counter — ignore negatives (OTel alignment)
         aggregator.recordLong(value, attributes != null ? attributes : Attributes.empty());
     }
 

@@ -24,25 +24,25 @@ import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertNotNull;
 
 /**
- * Test M7b.4b.3 — reproduit exactement le pattern utilisé par le TCK officiel
- * MP Telemetry (cf. décompilation {@code ExporterSpiTest.createDeployment()}) :
+ * Test M7b.4b.3 — reproduces exactly the pattern used by the official
+ * MP Telemetry TCK (see decompiled {@code ExporterSpiTest.createDeployment()}):
  *
  * <ol>
- *   <li>Inclut dans le war une implémentation de {@link SpanExporter} (in-memory)
- *       et de {@link ConfigurableSpanExporterProvider}</li>
- *   <li>Enregistre le provider via {@code addAsServiceProvider(ConfigurableSpanExporterProvider.class, ...)}</li>
- *   <li>Configure {@code otel.traces.exporter=in-memory} dans
+ *   <li>Includes in the WAR an implementation of {@link SpanExporter} (in-memory)
+ *       and of {@link ConfigurableSpanExporterProvider}</li>
+ *   <li>Registers the provider through {@code addAsServiceProvider(ConfigurableSpanExporterProvider.class, ...)}</li>
+ *   <li>Configures {@code otel.traces.exporter=in-memory} in
  *       {@code META-INF/microprofile-config.properties}</li>
- *   <li>Le container Arquillian Humboldt doit alors :
+ *   <li>The Humboldt Arquillian container must then:
  *     <ul>
- *       <li>Parser le microprofile-config.properties</li>
- *       <li>Charger {@link TckInMemorySpanExporterProvider} via le services file</li>
- *       <li>Instancier l'exporter, le wrapper dans {@code OtelSpanExporterBridge}</li>
- *       <li>L'attacher au pipeline Humboldt (via le hook M7b.3)</li>
+ *       <li>Parse microprofile-config.properties</li>
+ *       <li>Load {@link TckInMemorySpanExporterProvider} through the services file</li>
+ *       <li>Instantiate the exporter and wrap it in {@code OtelSpanExporterBridge}</li>
+ *       <li>Attach it to the Humboldt pipeline (through hook M7b.3)</li>
  *     </ul>
  *   </li>
- *   <li>Les spans produits par {@link GlobalOpenTelemetry#get()} doivent donc
- *       atterrir dans {@link TckInMemorySpanExporter#SPANS}</li>
+ *   <li>Spans produced by {@link GlobalOpenTelemetry#get()} must therefore
+ *       end up in {@link TckInMemorySpanExporter#SPANS}</li>
  * </ol>
  */
 public class HumboldtOtelBridgeDeployTest extends Arquillian {
@@ -69,11 +69,11 @@ public class HumboldtOtelBridgeDeployTest extends Arquillian {
         s.end();
 
         List<SpanData> captured = TckInMemorySpanExporter.SPANS;
-        assertEquals(captured.size(), 1, "Le span doit atterrir dans l'exporter TCK via le bridge");
+        assertEquals(captured.size(), 1, "The span must land in the TCK exporter through the bridge");
         SpanData first = captured.getFirst();
         assertNotNull(first);
         assertEquals(first.getName(), "hello-bridge");
-        // service.name vient bien de microprofile-config.properties
+        // service.name does come from microprofile-config.properties
         assertEquals(first.getResource().getAttribute(
                 io.opentelemetry.api.common.AttributeKey.stringKey("service.name")),
                 "humboldt-tck-bridge-test");

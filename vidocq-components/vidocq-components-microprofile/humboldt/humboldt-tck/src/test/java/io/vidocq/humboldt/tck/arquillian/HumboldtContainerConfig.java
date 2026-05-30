@@ -4,15 +4,15 @@ import org.jboss.arquillian.container.spi.ConfigurationException;
 import org.jboss.arquillian.container.spi.client.container.ContainerConfiguration;
 
 /**
- * Configuration du container Arquillian Humboldt — pour l'instant aucun paramètre
- * exposé (M7b.4b.1 : squelette). Les options sont prévues pour les étapes
- * suivantes : port HTTP (Chappe), classpath isolation, etc.
+ * Configuration for the Humboldt Arquillian container — currently no parameters
+ * exposed yet (M7b.4b.1: skeleton). Options are planned for later
+ * steps: HTTP port (Chappe), classpath isolation, etc.
  */
 public final class HumboldtContainerConfig implements ContainerConfiguration {
 
     @Override
     public void validate() throws ConfigurationException {
-        // M7b.4b.1 : aucune option à valider. Méthode laissée pour les étapes
-        // suivantes (M7b.4b.2+) qui ajouteront port HTTP, isolation, etc.
+        // M7b.4b.1: no options to validate. Method kept for later
+        // steps (M7b.4b.2+) that will add HTTP port, isolation, etc.
     }
 }

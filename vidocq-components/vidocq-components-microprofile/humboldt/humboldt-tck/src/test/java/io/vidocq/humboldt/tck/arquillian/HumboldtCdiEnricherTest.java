@@ -14,15 +14,15 @@ import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertNotNull;
 
 /**
- * Test M7b.4b.4 — vérifie l'injection {@code @Inject} sur la classe de test
- * via {@link HumboldtCdiEnricher} :
+ * Test M7b.4b.4 — verifies {@code @Inject} injection on the test class
+ * through {@link HumboldtCdiEnricher}:
  * <ul>
- *   <li>{@code @Inject OpenTelemetry} → résolu via {@code GlobalOpenTelemetry.get()}</li>
- *   <li>{@code @Inject MyCdiService} → résolu via le BeanManager Vauban</li>
+ *   <li>{@code @Inject OpenTelemetry} → resolved through {@code GlobalOpenTelemetry.get()}</li>
+ *   <li>{@code @Inject MyCdiService} → resolved through the Vauban BeanManager</li>
  * </ul>
  *
- * <p>C'est l'équivalent de ce que fait {@code OpenTelemetryBeanTest} du TCK
- * officiel — sans cet enricher, les champs resteraient {@code null}.</p>
+ * <p>This is equivalent to what the official TCK's {@code OpenTelemetryBeanTest}
+ * does — without this enricher, the fields would remain {@code null}.</p>
  */
 public class HumboldtCdiEnricherTest extends Arquillian {
 
@@ -41,7 +41,7 @@ public class HumboldtCdiEnricherTest extends Arquillian {
     @Test
     public void open_telemetry_is_injected() {
         assertNotNull(openTelemetry,
-                "@Inject OpenTelemetry doit être résolu par HumboldtCdiEnricher");
+                "@Inject OpenTelemetry must be resolved by HumboldtCdiEnricher");
 
         Tracer t = openTelemetry.getTracer("io.vidocq.tck.enricher");
         var span = t.spanBuilder("enriched").startSpan();
@@ -55,14 +55,14 @@ public class HumboldtCdiEnricherTest extends Arquillian {
     @Test
     public void cdi_bean_is_injected() {
         assertNotNull(cdiService,
-                "@Inject MyCdiService doit être résolu via le BeanManager Vauban");
-        assertEquals(cdiService.greet(), "salut depuis CDI");
+                "@Inject MyCdiService must be resolved via Vauban BeanManager");
+        assertEquals(cdiService.greet(), "hello from CDI");
     }
 
     @ApplicationScoped
     public static class MyCdiService {
         public String greet() {
-            return "salut depuis CDI";
+            return "hello from CDI";
         }
     }
 }

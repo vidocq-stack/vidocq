@@ -14,27 +14,27 @@ import jakarta.enterprise.inject.spi.InjectionPoint;
 import java.lang.reflect.Proxy;
 
 /**
- * Producers CDI pour les types OpenTelemetry standard exigés par la spec
- * MicroProfile Telemetry 2.1 §"Required CDI beans".
+ * CDI producers for the standard OpenTelemetry types required by the
+ * MicroProfile Telemetry 2.1 spec §"Required CDI beans".
  *
  * <ul>
- *   <li>{@link OpenTelemetry} — résolu via {@link GlobalOpenTelemetry#get()}</li>
- *   <li>{@link Tracer} — résolu via le scope name dérivé du point d'injection</li>
- *   <li>{@link Span} — {@link Span#current()} au moment de la résolution</li>
- *   <li>{@link Baggage} — {@link Baggage#current()} au moment de la résolution</li>
+ *   <li>{@link OpenTelemetry} — resolved via {@link GlobalOpenTelemetry#get()}</li>
+ *   <li>{@link Tracer} — resolved via the scope name derived from the injection point</li>
+ *   <li>{@link Span} — {@link Span#current()} at resolution time</li>
+ *   <li>{@link Baggage} — {@link Baggage#current()} at resolution time</li>
  * </ul>
  *
- * <p>Permet aux applications d'écrire simplement {@code @Inject Tracer tracer}
- * ou {@code @Inject Span current} sans déclarer leurs propres producers.</p>
+ * <p>Lets applications simply write {@code @Inject Tracer tracer}
+ * or {@code @Inject Span current} without declaring their own producers.</p>
  */
 @ApplicationScoped
 public class HumboldtTelemetryProducers {
 
     /**
-     * Producer {@link OpenTelemetry} — l'instance globale configurée par
-     * {@link io.vidocq.humboldt.runtime.HumboldtAutoConfigure} (ou
-     * {@link GlobalOpenTelemetry#set(OpenTelemetry)} si l'app n'utilise pas
-     * l'autoconfig).
+     * Producer for {@link OpenTelemetry} — the global instance configured by
+     * {@link io.vidocq.humboldt.runtime.HumboldtAutoConfigure} (or
+     * {@link GlobalOpenTelemetry#set(OpenTelemetry)} if the app does not use
+     * autoconfig).
      */
     @Produces
     public OpenTelemetry produceOpenTelemetry() {
@@ -42,8 +42,8 @@ public class HumboldtTelemetryProducers {
     }
 
     /**
-     * Producer {@link Tracer} — le nom du tracer est dérivé du point d'injection :
-     * classe déclarante par défaut. Convention OTel : {@code getTracer(scope)}.
+     * Producer for {@link Tracer} — the tracer name is derived from the injection point:
+     * declaring class by default. OTel convention: {@code getTracer(scope)}.
      */
     @Produces
     public Tracer produceTracer(InjectionPoint ip) {
@@ -54,12 +54,11 @@ public class HumboldtTelemetryProducers {
     }
 
     /**
-     * Producer {@link Span} — retourne un proxy dynamique qui délègue chaque
-     * appel de méthode à {@link Span#current()} au moment de l'invocation
-     * (pas au moment de l'injection). Spec MP Telemetry 2.1 §"Required CDI
-     * beans" : {@code SpanBeanTest.spanBeanChange} mute le Context après
-     * l'injection et attend que les accès subséquents à {@code injectedSpan}
-     * reflètent le nouveau span courant.
+     * Producer for {@link Span} — returns a dynamic proxy that delegates each method
+     * call to {@link Span#current()} at invocation time (not at injection time).
+     * MP Telemetry 2.1 spec §"Required CDI beans": {@code SpanBeanTest.spanBeanChange}
+     * mutates the Context after injection and expects subsequent accesses to
+     * {@code injectedSpan} to reflect the new current span.
      */
     @Produces
     public Span produceCurrentSpan() {
@@ -70,10 +69,10 @@ public class HumboldtTelemetryProducers {
     }
 
     /**
-     * Producer {@link Baggage} — proxy dynamique qui delegate à
-     * {@link Baggage#current()} à chaque appel. Pour
-     * {@code BaggageBeanTest.baggageBeanChange} qui mute le Context après
-     * l'injection (cf. {@link #produceCurrentSpan()} pour la même approche).
+     * Producer for {@link Baggage} — dynamic proxy that delegates to
+     * {@link Baggage#current()} on each call. For
+     * {@code BaggageBeanTest.baggageBeanChange} which mutates the Context after
+     * injection (see {@link #produceCurrentSpan()} for the same approach).
      */
     @Produces
     public Baggage produceCurrentBaggage() {
@@ -84,8 +83,8 @@ public class HumboldtTelemetryProducers {
     }
 
     /**
-     * Producer {@link Meter} — le nom du meter est dérivé du point d'injection :
-     * classe déclarante par défaut. Convention OTel : {@code getMeter(scope)}.
+     * Producer for {@link Meter} — the meter name is derived from the injection point:
+     * declaring class by default. OTel convention: {@code getMeter(scope)}.
      */
     @Produces
     public Meter produceMeter(InjectionPoint ip) {
@@ -96,8 +95,8 @@ public class HumboldtTelemetryProducers {
     }
 
     /**
-     * Producer {@link Logger} (logs OTel) — le nom du logger est dérivé du
-     * point d'injection.
+     * Producer for {@link Logger} (OTel logs) — the logger name is derived from
+     * the injection point.
      */
     @Produces
     public Logger produceLogger(InjectionPoint ip) {

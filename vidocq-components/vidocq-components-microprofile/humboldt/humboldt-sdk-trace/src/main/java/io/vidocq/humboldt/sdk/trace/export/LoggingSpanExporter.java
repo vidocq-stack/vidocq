@@ -11,8 +11,8 @@ import java.util.Collection;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Exporter qui logue chaque span via {@link System#getLogger(String)} — destiné
- * au développement et au debug local. Format human-readable, pas de structured logging.
+ * Exporter that logs each span via {@link System#getLogger(String)} — intended
+ * for development and local debugging. Human-readable format, no structured logging.
  */
 public final class LoggingSpanExporter implements SpanExporter {
 

@@ -7,18 +7,18 @@ import io.vidocq.humboldt.sdk.common.InstrumentationScope;
 import io.vidocq.humboldt.sdk.common.Resource;
 
 /**
- * Vue immutable d'un LogRecord — consommée par
+ * Immutable view of a LogRecord — consumed by
  * {@link io.vidocq.humboldt.sdk.log.export.LogRecordExporter}.
  *
- * @param resource              attributs de la source télémétrique
- * @param scope                 identité de la bibliothèque source
- * @param timestampEpochNanos   timestamp métier de l'événement (0 si non fourni)
- * @param observedEpochNanos    timestamp observé à l'émission par le SDK
- * @param spanContext           SpanContext courant à l'émission (valid() = false si hors trace)
- * @param severity              severity OTel ({@link Severity#UNDEFINED_SEVERITY_NUMBER} si non fourni)
- * @param severityText          texte libre (ex. {@code "INFO"}) — peut être vide
- * @param body                  corps du message (souvent un String, peut être vide)
- * @param attributes            attributs additionnels (jamais {@code null})
+ * @param resource              attributes of the telemetry source
+ * @param scope                 identity of the source library
+ * @param timestampEpochNanos   business timestamp of the event (0 if not provided)
+ * @param observedEpochNanos    timestamp observed by the SDK when emitting
+ * @param spanContext           current SpanContext at emission time ({@code valid() = false} if outside a trace)
+ * @param severity              OTel severity ({@link Severity#UNDEFINED_SEVERITY_NUMBER} if not provided)
+ * @param severityText          free-form text (for example {@code "INFO"}) — may be empty
+ * @param body                  message body (often a String, may be empty)
+ * @param attributes            additional attributes (never {@code null})
  */
 public record LogRecordData(
         Resource resource,

@@ -7,29 +7,29 @@ import io.vidocq.humboldt.sdk.trace.data.SpanData;
 import java.util.Collection;
 
 /**
- * Exporter de spans terminés vers une destination (in-memory pour tests,
- * stdout pour dev, OTLP HTTP/protobuf pour la prod en M3, etc.).
+ * Exporter of completed spans to a destination (in-memory for tests,
+ * stdout for development, OTLP HTTP/protobuf for production in M3, etc.).
  *
- * <p>Toutes les méthodes doivent être thread-safe — un même exporter peut être
- * partagé entre {@code SimpleSpanProcessor} et {@code BatchSpanProcessor}.</p>
+ * <p>All methods must be thread-safe — the same exporter may be shared
+ * between {@code SimpleSpanProcessor} and {@code BatchSpanProcessor}.</p>
  */
 public interface SpanExporter extends AutoCloseable {
 
     /**
-     * Export d'un batch de spans terminés.
+     * Exports a batch of completed spans.
      *
-     * @param spans collection immutable
-     * @return résultat asynchrone — succès si tous les spans ont été pris en charge
+     * @param spans immutable collection
+     * @return asynchronous result — successful if all spans were handled
      */
     CompletableResultCode export(Collection<SpanData> spans);
 
     /**
-     * Force le flush des buffers internes éventuels.
+     * Forces a flush of any internal buffers.
      */
     CompletableResultCode flush();
 
     /**
-     * Libère les ressources (sockets, threads, fichiers, etc.).
+     * Releases resources (sockets, threads, files, etc.).
      */
     CompletableResultCode shutdown();
 

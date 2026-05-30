@@ -25,20 +25,20 @@ import java.util.Collection;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
- * Exporter qui écrit chaque {@link MetricData} sur une ligne texte vers un
- * {@link OutputStream} (stdout par défaut, ou un fichier).
+ * Exporter that writes each {@link MetricData} as one text line to an
+ * {@link OutputStream} (stdout by default, or a file).
  *
- * <p>Format : {@code <name> <description> <unit> <instrumentType>} — compatible
- * avec la fixture MP Telemetry Metrics TCK ({@code JvmMemoryTest}, {@code JvmCpuTest},
- * etc.) qui matche les lignes via {@code String.contains(name+description+unit+type)}.</p>
+ * <p>Format: {@code <name> <description> <unit> <instrumentType>} — compatible
+ * with the MP Telemetry Metrics TCK fixture ({@code JvmMemoryTest}, {@code JvmCpuTest},
+ * etc.), which matches lines via {@code String.contains(name+description+unit+type)}.</p>
  *
- * <p>Utilisé quand la config {@code OTEL_METRICS_EXPORTER=logging} est active.
- * Le path du fichier peut être :</p>
+ * <p>Used when {@code OTEL_METRICS_EXPORTER=logging} is active.
+ * The file path may be:</p>
  * <ul>
- *   <li>fourni explicitement via {@link #toFile(Path)}</li>
- *   <li>résolu depuis la system property {@code mptelemetry.tck.log.file.path}
- *       (utilisée par le TCK Metrics)</li>
- *   <li>{@code System.out} en fallback ({@link #toStdout()})</li>
+ *   <li>provided explicitly via {@link #toFile(Path)}</li>
+ *   <li>resolved from the system property {@code mptelemetry.tck.log.file.path}
+ *       (used by the Metrics TCK)</li>
+ *   <li>{@code System.out} as a fallback ({@link #toStdout()})</li>
  * </ul>
  */
 public final class LoggingMetricExporter implements MetricExporter {
@@ -72,9 +72,9 @@ public final class LoggingMetricExporter implements MetricExporter {
     }
 
     /**
-     * Fabrique par défaut utilisée par {@code HumboldtAutoConfigure} quand
-     * {@code OTEL_METRICS_EXPORTER=logging}. Lit la system property
-     * {@code mptelemetry.tck.log.file.path} ; si absente, écrit sur stdout.
+     * Default factory used by {@code HumboldtAutoConfigure} when
+     * {@code OTEL_METRICS_EXPORTER=logging}. Reads the system property
+     * {@code mptelemetry.tck.log.file.path}; if absent, writes to stdout.
      */
     public static LoggingMetricExporter create() {
         String path = System.getProperty("mptelemetry.tck.log.file.path");
@@ -88,8 +88,8 @@ public final class LoggingMetricExporter implements MetricExporter {
         writeLock.lock();
         try {
             for (MetricData m : metrics) {
-                // Format aligné sur l'attente TCK MP Telemetry Metrics
-                // (MetricsReader.assertLogMessage cherche
+                // Format aligned with the MP Telemetry Metrics TCK expectation
+                // (MetricsReader.assertLogMessage looks for
                 // "name=X, description=Y, unit=Z, type=W" via String.contains).
                 String line = "name=" + m.name()
                         + ", description=" + m.description()
@@ -108,8 +108,8 @@ public final class LoggingMetricExporter implements MetricExporter {
     }
 
     /**
-     * Mappe humboldt InstrumentType vers le {@code MetricDataType.toString()} attendu
-     * par les fixtures TCK. Les noms OTel SDK : LONG_SUM, DOUBLE_SUM, HISTOGRAM,
+     * Maps humboldt InstrumentType to the {@code MetricDataType.toString()} expected
+     * by the TCK fixtures. OTel SDK names: LONG_SUM, DOUBLE_SUM, HISTOGRAM,
      * EXPONENTIAL_HISTOGRAM, SUMMARY, LONG_GAUGE, DOUBLE_GAUGE.
      */
     private static String toMetricDataType(MetricData m) {

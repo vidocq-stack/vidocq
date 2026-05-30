@@ -112,7 +112,7 @@ class SdkTracerProviderTest {
                 .filter(s -> s.name().equals("parent")).findFirst().orElseThrow();
 
         assertNotEquals(orphan.spanContext().getTraceId(), parentSpan.spanContext().getTraceId(),
-                "setNoParent() doit créer une nouvelle trace");
+                "setNoParent() must create a new trace");
         assertNull(orphan.parentSpanContext());
     }
 

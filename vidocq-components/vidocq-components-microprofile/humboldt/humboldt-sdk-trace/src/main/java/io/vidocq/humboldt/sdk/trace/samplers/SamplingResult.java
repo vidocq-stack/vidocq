@@ -3,8 +3,8 @@ package io.vidocq.humboldt.sdk.trace.samplers;
 import io.opentelemetry.api.common.Attributes;
 
 /**
- * Décision d'un {@link Sampler} : enregistré (et exporté) / enregistré uniquement / abandonné,
- * avec optionnellement des attributs additionnels et un override de trace state.
+ * Decision from a {@link Sampler}: recorded (and exported) / recorded only / dropped,
+ * optionally with additional attributes and a trace-state override.
  */
 public record SamplingResult(Decision decision, Attributes attributes) {
 

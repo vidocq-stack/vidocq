@@ -26,22 +26,22 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 /**
- * Implémentation {@link AutoConfigurationCustomizer} qui collecte les callbacks
- * enregistrés par les {@code AutoConfigurationCustomizerProvider} scannés depuis le
- * WAR ShrinkWrap. Les chaînes de callbacks sont appliquées au bon moment du pipeline
- * humboldt par {@link HumboldtDeployableContainer}.
+ * {@link AutoConfigurationCustomizer} implementation that collects callbacks
+ * registered by {@code AutoConfigurationCustomizerProvider}s scanned from the
+ * ShrinkWrap WAR. The callback chains are applied at the appropriate time in the
+ * Humboldt pipeline by {@link HumboldtDeployableContainer}.
  *
- * <p>Spec MP Telemetry 2.1 §3.2 + OTel SDK autoconfigure : chaque
- * {@code AutoConfigurationCustomizerProvider} découvert via
- * {@code ServiceLoader<AutoConfigurationCustomizerProvider>} a son {@code customize(this)}
- * invoqué. Le customizer accumule les callbacks ; ils sont ensuite appliqués dans
- * l'ordre lors de la construction d'humboldt.</p>
+ * <p>MP Telemetry 2.1 spec §3.2 + OTel SDK autoconfigure: each
+ * {@code AutoConfigurationCustomizerProvider} discovered via
+ * {@code ServiceLoader<AutoConfigurationCustomizerProvider>} has its {@code customize(this)}
+ * invoked. The customizer accumulates callbacks; they are then applied in order
+ * when building Humboldt.</p>
  *
- * <p>Limite humboldt-tck : seules les 6 méthodes utilisées par le TCK
- * {@code CustomizerSpiTest.TestCustomizer} sont effectivement câblées
+ * <p>humboldt-tck limitation: only the 6 methods used by the TCK
+ * {@code CustomizerSpiTest.TestCustomizer} are actually wired
  * (Resource/Propagator/Properties/Sampler/SpanExporter/TracerProvider).
- * Les autres méthodes héritées de l'interface restent en défaut (no-op).
- * Pour le runtime humboldt prod sans TCK, cet adapter n'est pas chargé.</p>
+ * The other inherited interface methods remain at their default (no-op).
+ * For the production humboldt runtime without the TCK, this adapter is not loaded.</p>
  */
 final class HumboldtAutoConfigurationCustomizer implements AutoConfigurationCustomizer {
 
@@ -101,12 +101,12 @@ final class HumboldtAutoConfigurationCustomizer implements AutoConfigurationCust
         return this;
     }
 
-    // ---- Application des chaînes au pipeline humboldt ------------------------------------
+    // ---- Applying callback chains to the Humboldt pipeline --------------------------------
 
     /**
-     * Applique tous les {@code addPropertiesSupplier} + {@code addPropertiesCustomizer}
-     * sur la map d'env vars d'entrée. Les valeurs retournées sont fusionnées dans
-     * l'ordre (les later overwrite les earlier).
+     * Applies all {@code addPropertiesSupplier} + {@code addPropertiesCustomizer}
+     * to the input env vars map. Returned values are merged in
+     * order (later values overwrite earlier ones).
      */
     Map<String, String> applyPropertyCustomizers(Map<String, String> baseEnvMap) {
         Map<String, String> merged = new LinkedHashMap<>(baseEnvMap);
@@ -123,9 +123,9 @@ final class HumboldtAutoConfigurationCustomizer implements AutoConfigurationCust
     }
 
     /**
-     * Applique les {@code addResourceCustomizer} sur le {@code Resource} OTel construit
-     * depuis le humboldt Resource, et retourne la chaîne CSV {@code key=val,key2=val2}
-     * des attributs résultants (à concaténer à {@code OTEL_RESOURCE_ATTRIBUTES}).
+     * Applies {@code addResourceCustomizer} to the OTel {@code Resource} built
+     * from the Humboldt Resource, and returns the CSV string {@code key=val,key2=val2}
+     * for the resulting attributes (to be appended to {@code OTEL_RESOURCE_ATTRIBUTES}).
      */
     String applyResourceCustomizersAsAttrs(Map<String, String> mpProps) {
         if (resourceCustomizers.isEmpty()) return "";
@@ -145,9 +145,9 @@ final class HumboldtAutoConfigurationCustomizer implements AutoConfigurationCust
     }
 
     /**
-     * Applique la chaîne {@code propagatorCustomizers} sur un {@link TextMapPropagator}
-     * d'entrée. Humboldt utilise directement les OTel {@code TextMapPropagator} (pas
-     * de bridge nécessaire — même interface).
+     * Applies the {@code propagatorCustomizers} chain to an input
+     * {@link TextMapPropagator}. Humboldt uses OTel {@code TextMapPropagator}s directly
+     * (no bridge required — same interface).
      */
     TextMapPropagator applyPropagatorCustomizers(TextMapPropagator base, Map<String, String> mpProps) {
         if (propagatorCustomizers.isEmpty()) return base;
@@ -160,10 +160,10 @@ final class HumboldtAutoConfigurationCustomizer implements AutoConfigurationCust
     }
 
     /**
-     * Invoque la chaîne {@code samplerCustomizers} pour son side-effect (LOGGED_EVENTS
-     * du TestCustomizer). Le sampler résultant est ignoré côté humboldt (le bridge
-     * humboldt → OTel Sampler complet nécessiterait un mapping bidirectionnel non encore
-     * implémenté — out of scope pour le seul TCK testCustomizer).
+     * Invokes the {@code samplerCustomizers} chain for its side effect (the TestCustomizer's
+     * LOGGED_EVENTS). The resulting sampler is ignored on the Humboldt side (a full
+     * Humboldt → OTel Sampler bridge would require bidirectional mapping that is not yet
+     * implemented — out of scope for the TCK testCustomizer alone).
      */
     void invokeSamplerCustomizers(Map<String, String> mpProps) {
         if (samplerCustomizers.isEmpty()) return;
@@ -175,7 +175,7 @@ final class HumboldtAutoConfigurationCustomizer implements AutoConfigurationCust
         }
     }
 
-    /** Idem pour {@code spanExporterCustomizers}. */
+    /** Same for {@code spanExporterCustomizers}. */
     void invokeSpanExporterCustomizers(Map<String, String> mpProps) {
         if (spanExporterCustomizers.isEmpty()) return;
         ConfigProperties cfg = new MapConfigProperties(mpProps);
@@ -186,7 +186,7 @@ final class HumboldtAutoConfigurationCustomizer implements AutoConfigurationCust
         }
     }
 
-    /** Idem pour {@code tracerProviderCustomizers} — invoque sur un builder OTel factice. */
+    /** Same for {@code tracerProviderCustomizers} — invokes them on a dummy OTel builder. */
     void invokeTracerProviderCustomizers(Map<String, String> mpProps) {
         if (tracerProviderCustomizers.isEmpty()) return;
         ConfigProperties cfg = new MapConfigProperties(mpProps);
@@ -214,7 +214,7 @@ final class HumboldtAutoConfigurationCustomizer implements AutoConfigurationCust
         return out;
     }
 
-    /** Placeholder pour le SpanExporter — n'est jamais utilisé en pratique. */
+    /** Placeholder for the SpanExporter — never actually used in practice. */
     private static final class NoOpSpanExporter implements SpanExporter {
         @Override
         public io.opentelemetry.sdk.common.CompletableResultCode export(

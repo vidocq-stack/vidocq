@@ -10,34 +10,34 @@ import java.lang.System.Logger;
 import java.lang.System.Logger.Level;
 
 /**
- * Extension CDI 4.x compatible Lite et Full — détecte au build time les classes
- * et méthodes portant {@link io.opentelemetry.instrumentation.annotations.WithSpan @WithSpan}
- * et leur ajoute automatiquement le marker {@link SpanBinding}, ce qui déclenche
- * l'activation de {@link WithSpanInterceptor} par le container CDI.
+ * CDI 4.x BuildCompatibleExtension compatible with both Lite and Full — detects at build
+ * time the classes and methods annotated with
+ * {@link io.opentelemetry.instrumentation.annotations.WithSpan @WithSpan}
+ * and automatically adds the {@link SpanBinding} marker to them, which triggers
+ * the activation of {@link WithSpanInterceptor} by the CDI container.
  *
- * <p>Résultat : l'utilisateur écrit uniquement {@code @WithSpan} (annotation
- * API publique OTel standardisée et attendue par le TCK MicroProfile Telemetry
- * 2.1). Pas de double annotation.</p>
+ * <p>Result: the user only writes {@code @WithSpan} (the standardised OTel public API
+ * annotation expected by the MicroProfile Telemetry 2.1 TCK). No double annotation.</p>
  *
- * <p>Découverte : via ServiceLoader CDI (entrée dans
+ * <p>Discovery: via CDI ServiceLoader (entry in
  * {@code META-INF/services/jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension}
- * et binding {@code provides} JPMS). Doit être appelée automatiquement par
- * tout container CDI 4.x conforme (Vauban CDI Lite, Weld 5+, etc.).</p>
+ * and JPMS {@code provides} binding). Must be called automatically by any conformant
+ * CDI 4.x container (Vauban CDI Lite, Weld 5+, etc.).</p>
  */
 public final class HumboldtBuildCompatibleExtension implements BuildCompatibleExtension {
 
     private static final Logger LOG = System.getLogger(HumboldtBuildCompatibleExtension.class.getName());
 
     /**
-     * Hook {@code @Enhancement} sur toute classe (et ses sous-types) portant
-     * {@code @WithSpan} quelque part (classe ou méthode).
+     * {@code @Enhancement} hook on every class (and its subtypes) carrying
+     * {@code @WithSpan} anywhere (class or method).
      *
-     * <p>Stratégie :</p>
+     * <p>Strategy:</p>
      * <ul>
-     *   <li>Si la classe est annotée {@code @WithSpan} → ajoute {@link SpanBinding} sur la classe
-     *       (toutes les méthodes deviennent interceptées)</li>
-     *   <li>Sinon, parcourt les méthodes : chaque méthode annotée {@code @WithSpan}
-     *       reçoit {@link SpanBinding}</li>
+     *   <li>If the class is annotated with {@code @WithSpan} → adds {@link SpanBinding} on the class
+     *       (all methods become intercepted)</li>
+     *   <li>Otherwise, iterates over methods: each method annotated with {@code @WithSpan}
+     *       receives {@link SpanBinding}</li>
      * </ul>
      */
     @Enhancement(types = Object.class, withSubtypes = true, withAnnotations = WithSpan.class)
@@ -45,13 +45,13 @@ public final class HumboldtBuildCompatibleExtension implements BuildCompatibleEx
         boolean classLevel = classConfig.info().hasAnnotation(WithSpan.class);
         if (classLevel) {
             classConfig.addAnnotation(SpanBinding.class);
-            LOG.log(Level.DEBUG, "Ajout @SpanBinding sur la classe {0}", classConfig.info().name());
+            LOG.log(Level.DEBUG, "Add @SpanBinding on class {0}", classConfig.info().name());
         }
         for (MethodConfig m : classConfig.methods()) {
             if (m.info().hasAnnotation(WithSpan.class)) {
                 m.addAnnotation(SpanBinding.class);
                 LOG.log(Level.DEBUG,
-                        "Ajout @SpanBinding sur {0}.{1}",
+                        "Add @SpanBinding on {0}.{1}",
                         classConfig.info().name(), m.info().name());
             }
         }

@@ -3,10 +3,10 @@ package io.vidocq.humboldt.sdk.trace.data;
 import io.opentelemetry.api.trace.StatusCode;
 
 /**
- * Statut d'un span — code + description optionnelle.
+ * Span status — code + optional description.
  *
  * @param code        OTel status code (UNSET / OK / ERROR)
- * @param description description du statut (peut être {@code null} ou vide)
+ * @param description status description (may be {@code null} or empty)
  */
 public record StatusData(StatusCode code, String description) {
 

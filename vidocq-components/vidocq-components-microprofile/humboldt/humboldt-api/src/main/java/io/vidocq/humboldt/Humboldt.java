@@ -4,10 +4,10 @@ import java.lang.System.Logger;
 import java.lang.System.Logger.Level;
 
 /**
- * Façade publique de Humboldt, point d'entrée du runtime MicroProfile Telemetry 2.1.
+ * Public facade of Humboldt, the entry point for the MicroProfile Telemetry 2.1 runtime.
  *
- * <p>Stub M0 — la surface fonctionnelle (Tracer/Meter/Logger fournis par les SDKs)
- * arrive en M1.</p>
+ * <p>M0 stub — the functional surface (Tracer/Meter/Logger provided by the SDKs)
+ * arrives in M1.</p>
  */
 public final class Humboldt {
 
@@ -15,21 +15,21 @@ public final class Humboldt {
     private static final String VERSION = "0.1.0-SNAPSHOT";
 
     private Humboldt() {
-        // façade statique
+        // static facade
     }
 
     /**
-     * @return la version du runtime Humboldt embarqué.
+     * @return the embedded Humboldt runtime version.
      */
     public static String version() {
         return VERSION;
     }
 
     /**
-     * Initialise le runtime Humboldt avec la configuration par défaut résolue depuis
-     * les variables d'environnement {@code OTEL_*} et {@code MP_TELEMETRY_*}.
+     * Initializes the Humboldt runtime with the default configuration resolved from
+     * the {@code OTEL_*} and {@code MP_TELEMETRY_*} environment variables.
      *
-     * <p>Stub M0 : émet juste un log d'init. L'implémentation effective est en M1.</p>
+     * <p>M0 stub: only emits an init log. The effective implementation arrives in M1.</p>
      */
     public static void start() {
         LOG.log(Level.INFO, "Humboldt {0} — init stub (M0)", VERSION);

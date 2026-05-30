@@ -9,8 +9,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * Aggregation LastValue pour DoubleGauge — conserve la dernière valeur double
- * enregistrée par set d'attributs.
+ * LastValue aggregation for DoubleGauge — keeps the latest double value
+ * recorded for each attribute set.
  */
 public final class DoubleLastValueAggregator implements Aggregator<DoublePointData> {
 

@@ -6,10 +6,10 @@ import io.opentelemetry.context.Context;
 import io.vidocq.humboldt.sdk.metric.aggregation.ExplicitBucketHistogramAggregator;
 
 /**
- * Implémentation interne de {@link DoubleHistogram} — délègue à
+ * Internal implementation of {@link DoubleHistogram} — delegates to
  * {@link ExplicitBucketHistogramAggregator}.
  *
- * <p>Refuse les valeurs négatives (histogram convention OTel pour durations/sizes).</p>
+ * <p>Rejects negative values (OTel histogram convention for durations/sizes).</p>
  */
 public final class SdkDoubleHistogram implements DoubleHistogram {
 

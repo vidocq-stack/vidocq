@@ -32,11 +32,11 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Tests sans container CDI/JAX-RS : on construit des {@link ContainerRequestContext}
- * et {@link ContainerResponseContext} via {@link Proxy java.lang.reflect.Proxy} pour
- * router seulement les ~6 méthodes effectivement consommées par les filters, sans
- * avoir à implémenter les ~40 autres méthodes abstraites de l'API JAX-RS 4.0
- * (qui changent entre versions, cf. lessons.md).
+ * Tests without a CDI/JAX-RS container: build {@link ContainerRequestContext}
+ * and {@link ContainerResponseContext} through {@link Proxy java.lang.reflect.Proxy} to
+ * route only the ~6 methods actually consumed by the filters, without
+ * having to implement the ~40 other abstract methods from the JAX-RS 4.0 API
+ * (which change between versions, see lessons.md).
  */
 class HumboldtServerFiltersTest {
 
@@ -88,9 +88,9 @@ class HumboldtServerFiltersTest {
 
         SpanData s = exporter.getFinishedSpans().getFirst();
         assertEquals(traceId, s.spanContext().getTraceId(),
-                "le span SERVER doit hériter du traceId du traceparent W3C");
+                "SERVER span must inherit traceId from W3C traceparent");
         assertEquals(spanId, s.parentSpanContext().getSpanId(),
-                "le parent doit pointer le span ID du traceparent");
+                "parent must point to traceparent span ID");
     }
 
     @Test
@@ -113,14 +113,14 @@ class HumboldtServerFiltersTest {
 
         SpanData s = exporter.getFinishedSpans().getFirst();
         assertEquals(io.opentelemetry.api.trace.StatusCode.UNSET, s.status().code(),
-                "4xx = client error, ne doit PAS marquer ERROR (alignement OTel HTTP semantic)");
+                "4xx = client error, must NOT mark ERROR (aligned with OTel HTTP semantic)");
         assertEquals(404L, s.attributes().get(AttributeKey.longKey("http.response.status_code")));
     }
 
     @Test
     void response_filter_is_idempotent_on_missing_span_property() {
         ContainerRequestContext req = req("GET", "/x", null);
-        respFilter.filter(req, resp(200)); // pas de reqFilter avant : ne doit pas exploser
+        respFilter.filter(req, resp(200)); // no reqFilter beforehand: must not blow up
         assertEquals(0, exporter.getFinishedSpans().size());
     }
 
@@ -129,14 +129,14 @@ class HumboldtServerFiltersTest {
         ContainerRequestContext req = req("GET", "/x", null);
         reqFilter.filter(req);
         assertTrue(req.getProperty(HumboldtServerRequestFilter.SPAN_PROPERTY) != null,
-                "request filter doit setter la propriété SPAN");
+                "request filter must set SPAN property");
         respFilter.filter(req, resp(200));
         assertNull(req.getProperty(HumboldtServerRequestFilter.SPAN_PROPERTY),
-                "response filter doit nettoyer la propriété");
+                "response filter must clean up property");
     }
 
     // ============================================================
-    //  Helpers : ContainerRequestContext / ResponseContext via Proxy
+    //  Helpers: ContainerRequestContext / ResponseContext via Proxy
     // ============================================================
 
     private ContainerRequestContext req(String method, String path, String traceparent) {
@@ -183,7 +183,7 @@ class HumboldtServerFiltersTest {
                 });
     }
 
-    /** Valeur par défaut sûre selon le type de retour — évite NPE sur les méthodes non couvertes. */
+    /** Safe default value based on the return type — avoids NPEs on uncovered methods. */
     private static Object defaultForReturnType(Method m) {
         Class<?> r = m.getReturnType();
         if (r == void.class) return null;
@@ -197,7 +197,7 @@ class HumboldtServerFiltersTest {
         return null;
     }
 
-    /** Sous-classe testable du filter — pointe SdkTracerProvider local + propagators W3C. */
+    /** Testable filter subclass — points to the local SdkTracerProvider + W3C propagators. */
     static final class TestableRequestFilter extends HumboldtServerRequestFilter {
         private final OpenTelemetry otel;
 

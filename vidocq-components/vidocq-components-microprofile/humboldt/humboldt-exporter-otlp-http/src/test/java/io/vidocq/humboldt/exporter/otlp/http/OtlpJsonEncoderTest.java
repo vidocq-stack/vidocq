@@ -44,10 +44,10 @@ class OtlpJsonEncoderTest {
         assertTrue(json.contains("\"traceId\":\"0123456789abcdef0123456789abcdef\""));
         assertTrue(json.contains("\"spanId\":\"0123456789abcdef\""));
         assertTrue(json.contains("\"name\":\"GET /api\""));
-        assertTrue(json.contains("\"kind\":2"), "SpanKind.SERVER doit être encodé en 2");
+        assertTrue(json.contains("\"kind\":2"), "SpanKind.SERVER must be encoded as 2");
         assertTrue(json.contains("\"startTimeUnixNano\":\"1000000000\""));
         assertTrue(json.contains("\"endTimeUnixNano\":\"1500000000\""));
-        assertTrue(json.contains("\"code\":1"), "StatusCode.OK doit être encodé en 1");
+        assertTrue(json.contains("\"code\":1"), "StatusCode.OK must be encoded as 1");
         assertTrue(json.contains("\"http.method\""));
         assertTrue(json.contains("\"stringValue\":\"GET\""));
         assertTrue(json.contains("\"service.name\""));
@@ -124,9 +124,9 @@ class OtlpJsonEncoderTest {
 
     @Test
     void encodes_array_attributes_as_otlp_arrayValue() {
-        // Régression : avant le refactor OtlpJsonCommon, seul l'encoder spans gérait
-        // les arrays — metrics/logs avaient un bug latent. Maintenant les 3 partagent
-        // la même logique writeAnyValue qui couvre STRING_ARRAY/LONG_ARRAY/etc.
+        // Regression: before the OtlpJsonCommon refactor, only the spans encoder handled
+        // arrays — metrics/logs had a latent bug. Now all 3 share
+        // the same writeAnyValue logic covering STRING_ARRAY/LONG_ARRAY/etc.
         SpanData s = new SpanData(
                 CTX, null, "array-test", SpanKind.INTERNAL, 1L, 2L,
                 Attributes.builder()
@@ -140,7 +140,7 @@ class OtlpJsonEncoderTest {
         String json = OtlpJsonEncoder.encode(List.of(s));
 
         assertTrue(json.contains("\"arrayValue\":{\"values\":["),
-                "array attribute doit être encodé en arrayValue : " + json);
+                "array attribute must be encoded as arrayValue: " + json);
         assertTrue(json.contains("\"stringValue\":\"ci\""));
         assertTrue(json.contains("\"stringValue\":\"ops\""));
         assertTrue(json.contains("\"intValue\":\"1\""));

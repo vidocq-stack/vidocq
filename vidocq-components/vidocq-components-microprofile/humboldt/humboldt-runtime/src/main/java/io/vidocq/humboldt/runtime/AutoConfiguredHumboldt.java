@@ -17,13 +17,13 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Handle produit par {@link HumboldtAutoConfigure#configure()}.
+ * Handle produced by {@link HumboldtAutoConfigure#configure()}.
  *
- * <p>Implémente {@link OpenTelemetry} pour pouvoir être passé directement à
- * {@code GlobalOpenTelemetry.set(...)} ou aux interceptors / filters Humboldt.</p>
+ * <p>Implements {@link OpenTelemetry} so it can be passed directly to
+ * {@code GlobalOpenTelemetry.set(...)} or to Humboldt interceptors / filters.</p>
  *
- * <p>Expose aussi les providers SDK concrets pour les tests E2E et pour les
- * exporters in-memory (récupération du contenu via {@link #inMemorySpanExporter()}
+ * <p>Also exposes the concrete SDK providers for E2E tests and for
+ * in-memory exporters (retrieve contents via {@link #inMemorySpanExporter()}
  * etc.).</p>
  */
 public final class AutoConfiguredHumboldt implements OpenTelemetry, AutoCloseable {
@@ -85,7 +85,7 @@ public final class AutoConfiguredHumboldt implements OpenTelemetry, AutoCloseabl
         return loggerProvider;
     }
 
-    /** @return l'exporter in-memory de spans si l'autoconfig en a installé un, sinon {@code null}. */
+    /** @return the in-memory span exporter if autoconfig installed one, otherwise {@code null}. */
     public InMemorySpanExporter inMemorySpanExporter() {
         return inMemorySpanExporter;
     }
@@ -98,7 +98,7 @@ public final class AutoConfiguredHumboldt implements OpenTelemetry, AutoCloseabl
         return inMemoryLogRecordExporter;
     }
 
-    /** Force le flush des 3 SDK providers (utile pour drainer avant export). */
+    /** Forces a flush of the 3 SDK providers (useful to drain before export). */
     public CompletableResultCode flush() {
         return CompletableResultCode.ofAll(List.of(
                 tracerProvider.flush(),

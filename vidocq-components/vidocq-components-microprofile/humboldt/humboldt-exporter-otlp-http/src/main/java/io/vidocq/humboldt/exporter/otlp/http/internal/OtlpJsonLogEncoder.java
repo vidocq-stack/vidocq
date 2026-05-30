@@ -17,11 +17,11 @@ import static io.vidocq.humboldt.exporter.otlp.http.internal.OtlpJsonCommon.writ
 import static io.vidocq.humboldt.exporter.otlp.http.internal.OtlpJsonCommon.writeScopeHeader;
 
 /**
- * Encode une collection de {@link LogRecordData} au format OTLP/HTTP-JSON.
+ * Encodes a collection of {@link LogRecordData} in OTLP/HTTP-JSON format.
  *
- * <p>Schéma : <a href="https://github.com/open-telemetry/opentelemetry-proto/blob/main/opentelemetry/proto/collector/logs/v1/logs_service.proto">logs_service.proto</a>.
- * Grouping par Resource puis par InstrumentationScope. Plumbing JSON commun
- * mutualisé via {@link OtlpJsonCommon} (escape, AnyValue array-aware,
+ * <p>Schema: <a href="https://github.com/open-telemetry/opentelemetry-proto/blob/main/opentelemetry/proto/collector/logs/v1/logs_service.proto">logs_service.proto</a>.
+ * Grouped by Resource then by InstrumentationScope. Common JSON plumbing
+ * shared via {@link OtlpJsonCommon} (escaping, array-aware AnyValue,
  * Attributes, Resource, Scope).</p>
  */
 public final class OtlpJsonLogEncoder {

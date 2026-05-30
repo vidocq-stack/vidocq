@@ -26,7 +26,7 @@ class SpanProcessorTest {
                 t.spanBuilder("dropped").startSpan().end();
             }
             assertEquals(0, exporter.getFinishedSpans().size(),
-                    "AlwaysOff doit empêcher tout export");
+                    "AlwaysOff must prevent all export");
         }
     }
 
@@ -51,7 +51,7 @@ class SpanProcessorTest {
                 Thread.sleep(20);
             }
             assertEquals(12, exporter.getFinishedSpans().size(),
-                    "BatchSpanProcessor doit exporter les 12 spans en quelques cycles");
+                    "BatchSpanProcessor must export 12 spans within a few cycles");
         }
     }
 
@@ -60,7 +60,7 @@ class SpanProcessorTest {
         InMemorySpanExporter exporter = InMemorySpanExporter.create();
         BatchSpanProcessor batch = BatchSpanProcessor.builder(exporter)
                 .setMaxExportBatchSize(100)
-                .setScheduleDelay(Duration.ofSeconds(60))   // gros délai pour forcer le drain via shutdown
+                .setScheduleDelay(Duration.ofSeconds(60))   // long delay to force draining via shutdown
                 .build();
         SdkTracerProvider p = SdkTracerProvider.builder()
                 .setSampler(Sampler.alwaysOn())
@@ -70,11 +70,11 @@ class SpanProcessorTest {
         for (int i = 0; i < 7; i++) {
             t.spanBuilder("s" + i).startSpan().end();
         }
-        // À ce stade, aucun flush n'est encore intervenu (queue size = 7 < 100, délai = 60s)
+        // At this point, no flush has happened yet (queue size = 7 < 100, delay = 60s)
         assertTrue(exporter.getFinishedSpans().size() <= 7,
-                "ne doit pas avoir exporté avant shutdown : " + exporter.getFinishedSpans().size());
+                "must not have exported before shutdown : " + exporter.getFinishedSpans().size());
         p.close();
         assertEquals(7, exporter.getFinishedSpans().size(),
-                "shutdown doit drainer la queue restante");
+                "shutdown must drain the remaining queue");
     }
 }

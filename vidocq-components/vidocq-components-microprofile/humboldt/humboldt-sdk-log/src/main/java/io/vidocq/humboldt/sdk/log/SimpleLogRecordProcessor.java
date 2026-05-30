@@ -9,11 +9,11 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Export synchrone — chaque {@code onEmit()} déclenche immédiatement
+ * Synchronous export — each {@code onEmit()} immediately triggers
  * {@code exporter.export([record])}.
  *
- * <p>Adapté aux exporters fiables et rapides (in-memory, logging stdout).
- * Pour les exporters réseau, préférer {@link BatchLogRecordProcessor}.</p>
+ * <p>Suitable for reliable, fast exporters (in-memory, logging stdout).
+ * For network exporters, prefer {@link BatchLogRecordProcessor}.</p>
  */
 public final class SimpleLogRecordProcessor implements LogRecordProcessor {
 

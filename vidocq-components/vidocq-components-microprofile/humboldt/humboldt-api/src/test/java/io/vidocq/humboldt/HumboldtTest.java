@@ -10,8 +10,8 @@ class HumboldtTest {
     @Test
     void version_is_published() {
         String v = Humboldt.version();
-        assertFalse(v.isBlank(), "version() doit retourner une chaîne non-vide");
-        assertTrue(v.startsWith("0.1.0"), "M0 doit publier 0.1.0-* : " + v);
+        assertFalse(v.isBlank(), "version() must return a non-empty string");
+        assertTrue(v.startsWith("0.1.0"), "M0 must publish 0.1.0-* : " + v);
     }
 
     @Test

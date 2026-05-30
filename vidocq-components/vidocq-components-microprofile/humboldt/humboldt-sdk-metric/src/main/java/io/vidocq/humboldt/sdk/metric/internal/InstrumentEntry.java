@@ -6,8 +6,8 @@ import io.vidocq.humboldt.sdk.metric.data.InstrumentType;
 import io.vidocq.humboldt.sdk.metric.data.PointData;
 
 /**
- * Entrée registered par un {@link io.vidocq.humboldt.sdk.metric.internal.SdkMeter}
- * pour chaque instrument créé — agrège descripteur + aggregator.
+ * Entry registered by an {@link io.vidocq.humboldt.sdk.metric.internal.SdkMeter}
+ * for each created instrument — aggregates descriptor + aggregator.
  */
 public record InstrumentEntry(
         String name,

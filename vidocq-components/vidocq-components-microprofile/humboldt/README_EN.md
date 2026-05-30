@@ -4,7 +4,7 @@
 
 **Humboldt** is the MicroProfile Telemetry 2.1 implementation of the [Vidocq](https://forge.vidocq.dev/vidocq) ecosystem. Distributed tracing, metrics and logs, on top of the [OpenTelemetry](https://opentelemetry.io/) public API — **without embedding `opentelemetry-sdk` or third-party exporters**.
 
-> 🇫🇷 Version française : [README.md](README.md)
+> 🇫🇷 French version: [README.md](README.md)
 
 ## Status
 
@@ -44,7 +44,7 @@ sdk env
 
 - 📖 [Detailed implementation plan](PLAN.md) (1190 lines — metaphor, scope, dep arbitrage, architecture, codegen, JPMS, milestones)
 - 🇬🇧 [English Antora documentation](docs/en/modules/ROOT/pages/index.adoc)
-- 🇫🇷 [Documentation Antora française](docs/fr/modules/ROOT/pages/index.adoc)
+- 🇫🇷 [French Antora documentation](docs/fr/modules/ROOT/pages/index.adoc)
 - 🐛 [Bugs](BUG.md)
 - 📊 [Benchmarks](BENCH.md)
 - 🎯 [TCK status](TCK.md)

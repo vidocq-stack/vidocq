@@ -9,13 +9,13 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Export synchrone — chaque {@code onEnd()} déclenche immédiatement
+ * Synchronous export — each {@code onEnd()} immediately triggers
  * {@code exporter.export([spanData])}.
  *
- * <p>Adapté aux exporters fiables et rapides (in-memory, logging). Pour les
- * exporters réseau, préférer {@link BatchSpanProcessor}.</p>
+ * <p>Suitable for reliable, fast exporters (in-memory, logging). For network
+ * exporters, prefer {@link BatchSpanProcessor}.</p>
  *
- * <p>N'exporte que les spans samplés ({@code SpanContext.isSampled() == true}).</p>
+ * <p>Exports only sampled spans ({@code SpanContext.isSampled() == true}).</p>
  */
 public final class SimpleSpanProcessor implements SpanProcessor {
 

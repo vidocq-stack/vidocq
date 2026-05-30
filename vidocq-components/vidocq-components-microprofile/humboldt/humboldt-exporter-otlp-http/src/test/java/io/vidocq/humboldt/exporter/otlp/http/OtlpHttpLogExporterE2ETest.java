@@ -75,7 +75,7 @@ class OtlpHttpLogExporterE2ETest {
             waitForCallCount(1);
         }
 
-        assertTrue(receivedBodies.size() >= 1, "au moins un POST attendu");
+        assertTrue(receivedBodies.size() >= 1, "at least one POST expected");
         String body = receivedBodies.getFirst();
         assertTrue(body.startsWith("{\"resourceLogs\":["), "format OTLP/JSON logs : " + body);
         assertTrue(body.contains("\"severityNumber\":9"), "INFO = 9 : " + body);

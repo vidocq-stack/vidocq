@@ -3,11 +3,11 @@ package io.vidocq.humboldt.sdk.trace.data;
 import io.opentelemetry.api.common.Attributes;
 
 /**
- * Événement attaché à un span, immutable.
+ * Event attached to a span, immutable.
  *
- * @param epochNanos timestamp en nanosecondes depuis epoch UTC
- * @param name       nom de l'événement (jamais {@code null})
- * @param attributes attributs (jamais {@code null}, peut être vide)
+ * @param epochNanos timestamp in nanoseconds since the UTC epoch
+ * @param name       event name (never {@code null})
+ * @param attributes attributes (never {@code null}, may be empty)
  */
 public record EventData(long epochNanos, String name, Attributes attributes) {
 

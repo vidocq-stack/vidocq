@@ -1,15 +1,15 @@
 /**
- * Humboldt SDK Trace — implémentation OpenTelemetry du signal {@code traces}.
+ * Humboldt SDK Trace — OpenTelemetry implementation of the {@code traces} signal.
  *
  * <ul>
- *   <li>{@link io.vidocq.humboldt.sdk.trace.SdkTracerProvider} — factory immutable de {@code Tracer}</li>
- *   <li>Samplers : always_on, always_off, parentbased, traceidratio</li>
- *   <li>Processors : {@code SimpleSpanProcessor} (synchrone), {@code BatchSpanProcessor} (virtual-thread)</li>
- *   <li>Exporters utilitaires : {@code InMemorySpanExporter}, {@code LoggingSpanExporter}</li>
+ *   <li>{@link io.vidocq.humboldt.sdk.trace.SdkTracerProvider} — immutable {@code Tracer} factory</li>
+ *   <li>Samplers: always_on, always_off, parentbased, traceidratio</li>
+ *   <li>Processors: {@code SimpleSpanProcessor} (synchronous), {@code BatchSpanProcessor} (virtual-thread)</li>
+ *   <li>Utility exporters: {@code InMemorySpanExporter}, {@code LoggingSpanExporter}</li>
  * </ul>
  *
- * <p>La sérialisation OTLP (HTTP/protobuf) est livrée par le module séparé
- * {@code humboldt-exporter-otlp-http} en M3.</p>
+ * <p>OTLP serialization (HTTP/protobuf) is provided by the separate
+ * {@code humboldt-exporter-otlp-http} module in M3.</p>
  */
 module io.vidocq.humboldt.sdk.trace {
 

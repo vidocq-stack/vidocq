@@ -10,11 +10,11 @@ import io.vidocq.humboldt.sdk.trace.data.LinkData;
 import java.util.List;
 
 /**
- * Sampler hiérarchique : si le parent existe et est sampled → recordAndSample,
- * sinon délègue au {@code rootSampler} pour les spans racines.
+ * Hierarchical sampler: if the parent exists and is sampled → recordAndSample,
+ * otherwise delegates to {@code rootSampler} for root spans.
  *
- * <p>Variante simplifiée de la version OTel — ne configure pas séparément
- * {@code remoteParentNotSampled} etc., suit le bit {@code SAMPLED} du parent.</p>
+ * <p>Simplified variant of the OTel version — it does not configure
+ * {@code remoteParentNotSampled}, etc. separately, and follows the parent's {@code SAMPLED} bit.</p>
  */
 public final class ParentBasedSampler implements Sampler {
 

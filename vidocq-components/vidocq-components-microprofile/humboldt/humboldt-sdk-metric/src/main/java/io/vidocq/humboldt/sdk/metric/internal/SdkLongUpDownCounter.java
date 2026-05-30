@@ -5,7 +5,7 @@ import io.opentelemetry.api.metrics.LongUpDownCounter;
 import io.opentelemetry.context.Context;
 import io.vidocq.humboldt.sdk.metric.aggregation.SumAggregator;
 
-/** UpDownCounter long-typé non-monotonic — accepte valeurs négatives. */
+/** Long-typed non-monotonic UpDownCounter — accepts negative values. */
 public final class SdkLongUpDownCounter implements LongUpDownCounter {
 
     private final SumAggregator aggregator;

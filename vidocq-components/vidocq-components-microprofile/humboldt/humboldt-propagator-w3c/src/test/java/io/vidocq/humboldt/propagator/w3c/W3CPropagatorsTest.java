@@ -44,9 +44,9 @@ class W3CPropagatorsTest {
     @Test
     void composite_advertises_both_field_sets() {
         Set<String> fields = Set.copyOf(propagator.fields());
-        assertTrue(fields.contains("traceparent"), "doit publier le header traceparent");
-        assertTrue(fields.contains("tracestate"), "doit publier le header tracestate");
-        assertTrue(fields.contains("baggage"), "doit publier le header baggage");
+        assertTrue(fields.contains("traceparent"), "must publish header traceparent");
+        assertTrue(fields.contains("tracestate"), "must publish header tracestate");
+        assertTrue(fields.contains("baggage"), "must publish header baggage");
     }
 
     @Test
@@ -61,7 +61,7 @@ class W3CPropagatorsTest {
         String tp = headers.get("traceparent");
         assertNotNull(tp);
         assertEquals("00-" + TRACE_ID + "-" + SPAN_ID + "-01", tp,
-                "W3C traceparent doit être version-traceid-spanid-flags (55 chars)");
+                "W3C traceparent must be version-traceid-spanid-flags (55 chars)");
     }
 
     @Test
@@ -74,7 +74,7 @@ class W3CPropagatorsTest {
         assertEquals(TRACE_ID, sc.getTraceId());
         assertEquals(SPAN_ID, sc.getSpanId());
         assertTrue(sc.isSampled());
-        assertTrue(sc.isRemote(), "le SpanContext extrait doit être marqué remote");
+        assertTrue(sc.isRemote(), "extracted SpanContext must be marked remote");
     }
 
     @Test

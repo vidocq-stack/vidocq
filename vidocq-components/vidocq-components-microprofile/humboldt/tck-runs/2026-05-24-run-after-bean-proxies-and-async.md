@@ -1,15 +1,15 @@
 # Run TCK MP Telemetry 2.1 — post bean proxies + AsyncInvoker (+2 PASS)
 
 **Date** : 2026-05-24 12:28
-**Commande** : `./run-official-tck-telemetry-2.1.sh all`
+**Command** : `./run-official-tck-telemetry-2.1.sh all`
 
-## Résultat brut
+## Raw results
 
 ```
 <testng-results ignored="0" total="85" passed="32" failed="30" skipped="23">
 ```
 
-## Évolution
+## Progress
 
 | Run | total | PASS | FAIL | SKIP |
 |---|---|---|---|---|
@@ -18,56 +18,56 @@
 
 **+2 PASS** (30 → 32), **-2 FAIL** (32 → 30).
 
-## Tests débloqués
+## Tests unblocked
 
-| Test | Bug corrigé |
+| Test | Fixed bug |
 |---|---|
-| ✅ `BaggageBeanTest.baggageBeanChange` | `HumboldtCdiEnricher.resolveValue()` capturait `Baggage.current()` au moment de l'enrich — figeait la valeur. Fix : proxy dynamique qui delegate à `Baggage.current()` à chaque appel |
-| ✅ `SpanBeanTest.spanBeanChange` | Idem côté Span — proxy dynamique au lieu de `Span.current()` capturée |
+| ✅ `BaggageBeanTest.baggageBeanChange` | `HumboldtCdiEnricher.resolveValue()` captured `Baggage.current()` at enrichment time — freezing the value. Fix: dynamic proxy delegating to `Baggage.current()` on each call |
+| ✅ `SpanBeanTest.spanBeanChange` | Same for Span — dynamic proxy instead of captured `Span.current()` |
 
-## Items livrés
+## Items delivered
 
-### 1. Proxies dynamiques pour Span/Baggage
-- `HumboldtCdiEnricher.resolveValue()` : retourne maintenant un `Proxy.newProxyInstance(...)` qui invoque `Span.current()` / `Baggage.current()` à **chaque** appel de méthode au lieu de capturer la valeur initiale
-- Same fix dans `HumboldtTelemetryProducers` (au cas où le producer est utilisé en runtime CDI normal, hors enricher)
-- Permet aux tests TCK de muter le Context après l'injection et obtenir la nouvelle valeur via l'instance injectée
+### 1. Dynamic proxies for Span/Baggage
+- `HumboldtCdiEnricher.resolveValue()`: now returns a `Proxy.newProxyInstance(...)` that invokes `Span.current()` / `Baggage.current()` on **every** method call instead of capturing the initial value
+- Same fix in `HumboldtTelemetryProducers` (in case the producer is used in normal CDI runtime, outside the enricher)
+- Allows TCK tests to mutate the Context after injection and obtain the new value through the injected instance
 
 ### 2. CassiniAsyncInvoker (cassini-client)
-- Implémentation complète de `jakarta.ws.rs.client.AsyncInvoker` (~34 méthodes)
-- Délègue chaque méthode async à la méthode sync correspondante de `CassiniInvocationBuilder` via `CompletableFuture.supplyAsync(..., virtualThreadExecutor)`
-- Le pipeline des filtres CLIENT (request/response) s'exécute entièrement dans le thread async — les spans `kind=CLIENT` posés par humboldt-rest sont bien créés et terminés
-- Remplace l'`UnsupportedOperationException` que `CassiniInvocationBuilder.async()` lançait précédemment
+- Full implementation of `jakarta.ws.rs.client.AsyncInvoker` (~34 methods)
+- Delegates each async method to the corresponding sync method of `CassiniInvocationBuilder` via `CompletableFuture.supplyAsync(..., virtualThreadExecutor)`
+- The CLIENT filter pipeline (request/response) runs entirely in the async thread — the `kind=CLIENT` spans created by humboldt-rest are properly created and ended
+- Replaces the `UnsupportedOperationException` previously thrown by `CassiniInvocationBuilder.async()`
 
-## Tests qui avancent mais ne passent pas encore
+## Tests that improve but do not pass yet
 
-| Test | État avant | État après |
+| Test | State before | State after |
 |---|---|---|
-| `testIntegrationWithJaxRsClientAsync` | `ConditionTimeoutException: expected [3] but found [1]` (AsyncInvoker UOE → pas d'appel HTTP → pas de spans) | `AssertionError: expected [0000000000000000] but found [...]` (3 spans collectés, mais assertion de parentage échoue) |
-| `testIntegrationWithJaxRsClientError` | idem | idem |
+| `testIntegrationWithJaxRsClientAsync` | `ConditionTimeoutException: expected [3] but found [1]` (AsyncInvoker UOE → no HTTP call → no spans) | `AssertionError: expected [0000000000000000] but found [...]` (3 spans collected, but parentage assertion fails) |
+| `testIntegrationWithJaxRsClientError` | same | same |
 
-L'AsyncInvoker fonctionne (les tests atteignent maintenant `readSpans()` avec 3 spans collectés), mais l'assertion `clientSpan.getSpanId() == serverSpan.getParentSpanId()` échoue. Probablement un problème de parentage CLIENT/SERVER lié à l'absence de Span.makeCurrent() autour de l'appel async, OU le span CLIENT humboldt-rest ne se ferme pas correctement avant que serverSpan extracts le contexte. À investiguer dans un item séparé.
+The AsyncInvoker works (the tests now reach `readSpans()` with 3 collected spans), but the assertion `clientSpan.getSpanId() == serverSpan.getParentSpanId()` fails. Likely a CLIENT/SERVER parentage issue related to the absence of `Span.makeCurrent()` around the async call, OR the humboldt-rest CLIENT span not closing correctly before serverSpan extracts the context. To investigate in a separate item.
 
-## Bilan cumulé session 2026-05-23+24
+## Cumulative session summary 2026-05-23+24
 
-| Run | PASS | Cumul vs baseline |
+| Run | PASS | Cumulative vs baseline |
 |---|---|---|
 | baseline | 5 | — |
 | post M7c.11 | 16 | +11 |
 | post HBT-1 | 19 | +14 |
 | post M7c.12 | 23 | +18 |
-| post Cluster D partiel | 24 | +19 |
+| post Cluster D partial | 24 | +19 |
 | post sampler-bridge + spi-propagator | 26 | +21 |
 | post b3+jaeger | 30 | +25 |
 | **post bean proxies + async** | **32** | **+27** |
 
-**Cumul session : 5 → 32 PASS (+540%)**, **60 → 30 FAIL (-50%)**.
+**Session cumulative: 5 → 32 PASS (+540%)**, **60 → 30 FAIL (-50%)**.
 
-## Restant — catégorisation finale
+## Remaining — final categorization
 
-| Catégorie | Tests | Effort estimé |
+| Category | Tests | Estimated effort |
 |---|---|---|
-| **Métriques** (M4b SDK metric complet) | 23 | Très gros (~2-3j) |
-| **Async server + Client async parentage** | 6 | Gros (cassini M2h + investigation parentage) |
-| **Customizer SPI** (AutoConfigurationCustomizer) | 1 | Gros (~300 LOC) |
+| **Metrics** (full M4b SDK metric) | 23 | Very large (~2-3d) |
+| **Async server + async client parentage** | 6 | Large (cassini M2h + parentage investigation) |
+| **Customizer SPI** (AutoConfigurationCustomizer) | 1 | Large (~300 LOC) |
 
-**Total restant : 30 FAIL**. Le gros morceau pour le gate 95% est M4b. Les 6 async dépendent en partie du livrable Cassini M2h (`@Suspended AsyncResponse` + `CompletionStage` server-side).
+**Total remaining: 30 FAIL**. The big chunk for the 95% gate is M4b. The 6 async failures depend in part on the Cassini M2h deliverable (`@Suspended AsyncResponse` + server-side `CompletionStage`).

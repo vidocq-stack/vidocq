@@ -1,8 +1,8 @@
 # humboldt-otel-context
 
-Repackage de `io.opentelemetry:opentelemetry-context` avec un `module-info.class` explicite (`io.opentelemetry.context`) pour usage JPMS/jlink.
+Repackaging of `io.opentelemetry:opentelemetry-context` with an explicit `module-info.class` (`io.opentelemetry.context`) for JPMS/jlink usage.
 
-## Vérification rapide
+## Quick verification
 
 ```zsh
 cd /Users/antoine/dev/vidocq/humboldt

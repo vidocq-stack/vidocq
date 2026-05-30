@@ -3,12 +3,12 @@ package io.vidocq.humboldt.sdk.metric.data;
 import io.opentelemetry.api.common.Attributes;
 
 /**
- * Point de données pour un Sum / Counter / Gauge double-typé.
+ * Data point for a double-typed Sum / Counter / Gauge.
  *
- * @param startEpochNanos timestamp de début de la fenêtre cumulative
- * @param epochNanos      timestamp de la collecte
- * @param attributes      labels du point
- * @param value           valeur (cumulée pour Sum, dernière valeur pour Gauge)
+ * @param startEpochNanos start timestamp of the cumulative window
+ * @param epochNanos      collection timestamp
+ * @param attributes      point labels
+ * @param value           value (cumulative for Sum, latest value for Gauge)
  */
 public record DoublePointData(
         long startEpochNanos,

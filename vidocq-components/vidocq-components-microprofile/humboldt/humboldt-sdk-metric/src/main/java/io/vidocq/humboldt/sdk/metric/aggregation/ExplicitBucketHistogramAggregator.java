@@ -8,14 +8,14 @@ import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Aggregation Histogram cumulative avec bornes explicites.
+ * Cumulative histogram aggregation with explicit boundaries.
  *
- * <p>Bornes par défaut alignées sur la spec OTel : 0, 5, 10, 25, 50, 75, 100,
- * 250, 500, 750, 1000, 2500, 5000, 7500, 10000 (15 bornes → 16 buckets).</p>
+ * <p>Default boundaries aligned with the OTel spec: 0, 5, 10, 25, 50, 75, 100,
+ * 250, 500, 750, 1000, 2500, 5000, 7500, 10000 (15 boundaries → 16 buckets).</p>
  *
- * <p>Storage : {@link ConcurrentHashMap} par {@link Attributes}, chaque entrée
- * est un {@link BucketAccumulator} protégé par {@code synchronized} (recordDouble
- * doit muter count, sum, min, max et bucketCounts atomiquement vis-à-vis de collect).</p>
+ * <p>Storage: {@link ConcurrentHashMap} keyed by {@link Attributes}; each entry
+ * is a {@link BucketAccumulator} protected by {@code synchronized} ({@code recordDouble}
+ * must mutate count, sum, min, max, and bucketCounts atomically with respect to collect).</p>
  */
 public final class ExplicitBucketHistogramAggregator implements Aggregator<HistogramPointData> {
 
@@ -48,7 +48,7 @@ public final class ExplicitBucketHistogramAggregator implements Aggregator<Histo
     }
 
     private int bucketIndex(double value) {
-        // Bucket linéaire : retourne i si value ≤ boundaries[i], sinon boundaries.length
+        // Linear bucket: returns i if value ≤ boundaries[i], otherwise boundaries.length
         for (int i = 0; i < boundaries.length; i++) {
             if (value <= boundaries[i]) return i;
         }

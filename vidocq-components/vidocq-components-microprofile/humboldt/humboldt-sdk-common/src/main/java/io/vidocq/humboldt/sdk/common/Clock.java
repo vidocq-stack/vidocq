@@ -3,32 +3,32 @@ package io.vidocq.humboldt.sdk.common;
 import java.time.Instant;
 
 /**
- * Source de temps utilisée par le SDK Humboldt pour horodater spans, metrics et logs.
+ * Time source used by the Humboldt SDK to timestamp spans, metrics, and logs.
  *
- * <p>Deux horloges distinctes :</p>
+ * <p>Two distinct clocks:</p>
  * <ul>
- *   <li>{@link #now()} — horloge wall clock en nanosecondes depuis epoch UTC,
- *       utilisée pour les timestamps de spans/metrics/logs publiés ;</li>
- *   <li>{@link #nanoTime()} — horloge monotone en nanosecondes, utilisée pour
- *       mesurer les durées (immune au saut d'heure NTP).</li>
+ *   <li>{@link #now()} — wall clock in nanoseconds since the UTC epoch,
+ *       used for timestamps of published spans/metrics/logs;</li>
+ *   <li>{@link #nanoTime()} — monotonic clock in nanoseconds, used to
+ *       measure durations (immune to NTP time jumps).</li>
  * </ul>
  */
 public interface Clock {
 
     /**
-     * @return l'horloge système par défaut.
+     * @return the default system clock.
      */
     static Clock system() {
         return SystemClock.INSTANCE;
     }
 
     /**
-     * @return l'instant courant en nanosecondes depuis epoch UTC.
+     * @return the current instant in nanoseconds since the UTC epoch.
      */
     long now();
 
     /**
-     * @return un compteur monotone en nanosecondes, voir {@link System#nanoTime()}.
+     * @return a monotonic counter in nanoseconds, see {@link System#nanoTime()}.
      */
     long nanoTime();
 

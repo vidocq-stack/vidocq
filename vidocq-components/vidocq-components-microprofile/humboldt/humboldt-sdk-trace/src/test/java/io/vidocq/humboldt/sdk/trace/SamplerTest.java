@@ -70,7 +70,7 @@ class SamplerTest {
         SamplingResult r2 = s.shouldSample(Context.root(), TRACE_ID, "b", SpanKind.INTERNAL,
                 Attributes.empty(), List.of());
         assertEquals(r1.decision(), r2.decision(),
-                "même traceId doit donner la même décision (consistance per-trace)");
+                "same traceId must yield the same decision (per-trace consistency)");
     }
 
     @Test

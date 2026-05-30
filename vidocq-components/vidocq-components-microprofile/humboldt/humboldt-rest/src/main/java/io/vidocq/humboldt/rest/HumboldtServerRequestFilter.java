@@ -24,28 +24,28 @@ import java.net.URI;
 import java.util.List;
 
 /**
- * {@link ContainerRequestFilter} qui démarre un span SERVER pour chaque requête
- * HTTP entrante, après extraction du {@code traceparent} W3C éventuel.
+ * {@link ContainerRequestFilter} that starts a SERVER span for each incoming HTTP
+ * request, after extracting any W3C {@code traceparent}.
  *
- * <p>Conventions OTel HTTP semantic conventions 1.27+ posées sur le span :</p>
+ * <p>OTel HTTP semantic conventions 1.27+ set on the span:</p>
  * <ul>
  *   <li>{@code http.request.method} — GET/POST/...</li>
- *   <li>{@code http.route} — template paramétré (ex. {@code /users/{id}}),
- *       reconstruit depuis {@link UriInfo#getMatchedTemplates()} et le base path</li>
- *   <li>{@code url.path} — path complet incluant le context root, sans query string</li>
- *   <li>{@code url.query} — query string sans le {@code ?} initial (si présent)</li>
+ *   <li>{@code http.route} — parameterized template (e.g. {@code /users/{id}}),
+ *       rebuilt from {@link UriInfo#getMatchedTemplates()} and the base path</li>
+ *   <li>{@code url.path} — full path including the context root, without query string</li>
+ *   <li>{@code url.query} — query string without the leading {@code ?} (if present)</li>
  *   <li>{@code url.scheme} — http/https</li>
- *   <li>{@code server.address} — host du request URI</li>
- *   <li>{@code server.port} — port du request URI (omis si port standard du scheme)</li>
+ *   <li>{@code server.address} — host of the request URI</li>
+ *   <li>{@code server.port} — port of the request URI (omitted if it is the scheme default)</li>
  * </ul>
  *
- * <p>Nom du span : {@code "<METHOD> <route>"} (e.g., {@code "GET /users/{id}"}),
- * conformément à la convention OTel HTTP server semconv.</p>
+ * <p>Span name: {@code "<METHOD> <route>"} (e.g. {@code "GET /users/{id}"}),
+ * in accordance with the OTel HTTP server semconv.</p>
  *
- * <p>Le {@link Span} créé est stocké dans la propriété {@link #SPAN_PROPERTY}
- * du {@link ContainerRequestContext} pour récupération par
- * {@link HumboldtServerResponseFilter}. Le {@link Scope} associé est stocké
- * dans {@link #SCOPE_PROPERTY} pour fermeture symétrique.</p>
+ * <p>The created {@link Span} is stored in the {@link #SPAN_PROPERTY} property of the
+ * {@link ContainerRequestContext} for later retrieval by
+ * {@link HumboldtServerResponseFilter}. The associated {@link Scope} is stored in
+ * {@link #SCOPE_PROPERTY} for symmetrical closing.</p>
  */
 @Provider
 public class HumboldtServerRequestFilter implements ContainerRequestFilter {
@@ -62,9 +62,9 @@ public class HumboldtServerRequestFilter implements ContainerRequestFilter {
     static final AttributeKey<Long> SERVER_PORT = AttributeKey.longKey("server.port");
 
     /**
-     * Injecté par JAX-RS pour récupérer la classe et la méthode de la ressource matchée
-     * (post-matching uniquement — ce filter n'est pas {@code @PreMatching}).
-     * Permet de reconstruire le {@code http.route} via introspection des {@code @Path}.
+     * Injected by JAX-RS to retrieve the class and method of the matched resource
+     * (post-matching only — this filter is not {@code @PreMatching}).
+     * Used to reconstruct {@code http.route} via introspection of {@code @Path} annotations.
      */
     @jakarta.ws.rs.core.Context
     ResourceInfo resourceInfo;
@@ -85,10 +85,10 @@ public class HumboldtServerRequestFilter implements ContainerRequestFilter {
 
     @Override
     public void filter(ContainerRequestContext requestContext) {
-        // Propagator du Humboldt global — permet l'utilisation de propagators custom
-        // déclarés via SPI ConfigurablePropagatorProvider (MP Telemetry §3.3, cluster D).
-        // Fallback W3CPropagators si GlobalOpenTelemetry n'est pas initialisé (test unitaire
-        // sans bootstrap MP Telemetry, ou tooling qui ne configure pas le runtime).
+        // Propagator from the Humboldt global — allows custom propagators declared
+        // via SPI ConfigurablePropagatorProvider (MP Telemetry §3.3, cluster D).
+        // Falls back to W3CPropagators if GlobalOpenTelemetry is not initialised (unit test
+        // without MP Telemetry bootstrap, or tooling that does not configure the runtime).
         OpenTelemetry otel = GlobalOpenTelemetry.get();
         TextMapPropagator propagator = otel.getPropagators().getTextMapPropagator();
         if (propagator == TextMapPropagator.noop()) {
@@ -101,16 +101,16 @@ public class HumboldtServerRequestFilter implements ContainerRequestFilter {
         URI requestUri = uriInfo.getRequestUri();
         URI baseUri = uriInfo.getBaseUri();
 
-        // url.path doit inclure le context root (base path) car la spec OTel HTTP attend
-        // le path complet vu par le client. Certains stacks (dont Cassini in-process)
-        // renvoient un requestUri stripped du context — on reconstruit depuis baseUri + getPath().
+        // url.path must include the context root (base path) because the OTel HTTP spec expects
+        // the full path as seen by the client. Some stacks (including in-process Cassini)
+        // return a requestUri stripped of the context — reconstruct from baseUri + getPath().
         String urlPath = buildFullPath(uriInfo);
-        String urlQuery = requestUri.getRawQuery(); // null si absent
+        String urlQuery = requestUri.getRawQuery(); // null if absent
         String scheme = (baseUri != null) ? baseUri.getScheme() : requestUri.getScheme();
         String serverAddress = (baseUri != null) ? baseUri.getHost() : requestUri.getHost();
         int serverPort = (baseUri != null) ? baseUri.getPort() : requestUri.getPort();
         String route = buildRoute(uriInfo, resourceInfo);
-        if (route == null) route = urlPath; // fallback non-templaté quand ResourceInfo absent
+        if (route == null) route = urlPath; // non-templated fallback when ResourceInfo is absent
         String spanName = method + " " + route;
 
         SpanBuilder builder = tracer().spanBuilder(spanName)
@@ -127,11 +127,11 @@ public class HumboldtServerRequestFilter implements ContainerRequestFilter {
         }
 
         Span span = builder.startSpan();
-        // IMPORTANT : utiliser parent.with(span).makeCurrent() — pas span.makeCurrent() —
-        // pour propager le baggage extrait du header HTTP au Context courant. Sans cela,
-        // Baggage.current() côté resource method retournerait Baggage.empty() même si
-        // le client a envoyé un header `baggage:` (cf. BaggageTest qui POST sur l'endpoint
-        // /baggage avec header baggage=user=naruto et attend que la resource lise
+        // IMPORTANT: use parent.with(span).makeCurrent() — not span.makeCurrent() —
+        // to propagate the baggage extracted from the HTTP header into the current Context.
+        // Without this, Baggage.current() in the resource method would return Baggage.empty()
+        // even when the client sent a `baggage:` header (see BaggageTest which POSTs to the
+        // /baggage endpoint with header baggage=user=naruto and expects the resource to read
         // baggage.getEntryValue("user") == "naruto").
         Scope scope = parent.with(span).makeCurrent();
         requestContext.setProperty(SPAN_PROPERTY, span);
@@ -141,27 +141,27 @@ public class HumboldtServerRequestFilter implements ContainerRequestFilter {
         if (scheme != null) requestContext.setProperty(URL_SCHEME_PROPERTY, scheme);
     }
 
-    /** Property route HTTP templaté — utilisée par {@link HumboldtServerResponseFilter} pour le Histogram. */
+    /** Templated HTTP route property — used by {@link HumboldtServerResponseFilter} for the Histogram. */
     public static final String HTTP_ROUTE_PROPERTY = "io.vidocq.humboldt.rest.httpRoute";
-    /** Property url.scheme — utilisée par {@link HumboldtServerResponseFilter} pour le Histogram. */
+    /** url.scheme property — used by {@link HumboldtServerResponseFilter} for the Histogram. */
     public static final String URL_SCHEME_PROPERTY = "io.vidocq.humboldt.rest.urlScheme";
 
-    /** Propriété utilisée par {@link HumboldtServerResponseFilter} pour calculer la duration HTTP. */
+    /** Property used by {@link HumboldtServerResponseFilter} to compute the HTTP duration. */
     public static final String START_NANOS_PROPERTY = "io.vidocq.humboldt.rest.startNanos";
 
     /**
-     * Reconstruit le {@code http.route} à partir des annotations {@link Path} de la
-     * resource class et de la resource method matchées (via {@link ResourceInfo}),
-     * préfixées par le base path du déploiement.
+     * Reconstructs the {@code http.route} from the {@link Path} annotations on the matched
+     * resource class and resource method (via {@link ResourceInfo}), prefixed with the
+     * deployment base path.
      * <p>
-     * Exemple : classe {@code @Path("/parent")} + méthode {@code @Path("/{id}")},
-     * appel {@code /context-root/parent/123} → route = {@code "/context-root/parent/{id}"}.
+     * Example: class {@code @Path("/parent")} + method {@code @Path("/{id}")},
+     * call {@code /context-root/parent/123} → route = {@code "/context-root/parent/{id}"}.
      * <p>
-     * Note : la spec JAX-RS standard n'expose pas {@code getMatchedTemplates()}
-     * (uniquement présent dans RestEasy), d'où l'introspection manuelle.
+     * Note: the standard JAX-RS spec does not expose {@code getMatchedTemplates()}
+     * (only present in RestEasy), hence the manual introspection.
      *
-     * @return le route templaté, ou {@code null} si aucune ressource n'a été matchée
-     *         (filter pré-matching ou erreur 404).
+     * @return the templated route, or {@code null} if no resource was matched
+     *         (pre-matching filter or 404 error).
      */
     private static String buildRoute(UriInfo uriInfo, ResourceInfo resourceInfo) {
         if (resourceInfo == null) return null;
@@ -187,8 +187,8 @@ public class HumboldtServerRequestFilter implements ContainerRequestFilter {
 
     private static void appendPathSegment(StringBuilder sb, String segment) {
         if (segment == null || segment.isEmpty()) return;
-        // Normalisation pour éviter les doubles slashes : par exemple @Path("/")
-        // sur la classe + @Path("/span") sur la méthode → "/ctx/" + "/span" = "/ctx//span".
+        // Normalisation to avoid double slashes: e.g. @Path("/")
+        // on the class + @Path("/span") on the method → "/ctx/" + "/span" = "/ctx//span".
         boolean sbEndsSlash = sb.length() > 0 && sb.charAt(sb.length() - 1) == '/';
         boolean segStartsSlash = segment.startsWith("/");
         if (sbEndsSlash && segStartsSlash) {
@@ -201,13 +201,13 @@ public class HumboldtServerRequestFilter implements ContainerRequestFilter {
     }
 
     /**
-     * Reconstruit le path absolu vu par le client : {@code baseUri.path + uriInfo.path}.
+     * Reconstructs the absolute path as seen by the client: {@code baseUri.path + uriInfo.path}.
      * <p>
-     * Évite la perte du context root sur certains stacks JAX-RS in-process qui renvoient
-     * un {@code requestUri} déjà stripped (Cassini, Helidon embedded).
+     * Avoids losing the context root on some in-process JAX-RS stacks that return
+     * an already-stripped {@code requestUri} (Cassini, Helidon embedded).
      */
     private static String buildFullPath(UriInfo uriInfo) {
-        String relative = uriInfo.getPath(); // sans slash initial
+        String relative = uriInfo.getPath(); // without leading slash
         URI base = uriInfo.getBaseUri();
         String basePath = (base != null) ? base.getRawPath() : "/";
         if (basePath == null || basePath.isEmpty()) basePath = "/";
@@ -237,14 +237,14 @@ public class HumboldtServerRequestFilter implements ContainerRequestFilter {
     }
 
     /**
-     * Hook test — surchargeable pour pointer un propagator custom.
-     * @return l'adapteur W3C par défaut.
+     * Test hook — overridable to point to a custom propagator.
+     * @return the default W3C adapter.
      */
     private W3CPropagatorsWrapper propagators() {
         return new W3CPropagatorsWrapper();
     }
 
-    /** Wrapper interne — exposition de {@code textMap()} de manière testable. */
+    /** Internal wrapper — exposes {@code textMap()} in a testable way. */
     static class W3CPropagatorsWrapper {
         TextMapPropagator textMap() {
             return W3CPropagators.textMap();

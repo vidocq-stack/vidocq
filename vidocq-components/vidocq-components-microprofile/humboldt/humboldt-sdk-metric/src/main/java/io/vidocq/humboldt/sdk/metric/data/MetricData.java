@@ -6,12 +6,12 @@ import io.vidocq.humboldt.sdk.common.InstrumentationScope;
 import java.util.List;
 
 /**
- * Métrique collectée (snapshot prêt à exporter) — vue immutable produite par
- * {@code MetricReader.collect()} et consommée par {@code MetricExporter.export()}.
+ * Collected metric (snapshot ready to export) — immutable view produced by
+ * {@code MetricReader.collect()} and consumed by {@code MetricExporter.export()}.
  *
- * <p>Pour M4 MVP, seuls Sum (Counter) et Histogram sont supportés (champ
- * {@code points} contient des {@link LongPointData} ou des
- * {@link HistogramPointData}). Le type est porté par {@link #instrumentType()}.</p>
+ * <p>For M4 MVP, only Sum (Counter) and Histogram are supported (the
+ * {@code points} field contains {@link LongPointData} or
+ * {@link HistogramPointData}). The type is carried by {@link #instrumentType()}.</p>
  */
 public record MetricData(
         Resource resource,

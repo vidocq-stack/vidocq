@@ -9,11 +9,11 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * Sampler probabiliste consistant : pour un même traceId, la décision est stable
- * (deux spans de la même trace seront soit tous deux samplés, soit tous deux drop).
+ * Consistent probabilistic sampler: for a given traceId, the decision is stable
+ * (two spans from the same trace will either both be sampled or both dropped).
  *
- * <p>Implémentation : on extrait les 8 derniers octets du traceId hex (64 bits),
- * on les compare au seuil {@code ratio × 2^63}. Aligné sur l'algo OTel de référence.</p>
+ * <p>Implementation: extracts the last 8 bytes of the hex traceId (64 bits),
+ * compares them to the {@code ratio × 2^63} threshold. Aligned with the reference OTel algorithm.</p>
  *
  * @see <a href="https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/trace/tracestate-probability-sampling.md">Spec OTel</a>
  */
@@ -25,7 +25,7 @@ public final class TraceIdRatioBasedSampler implements Sampler {
 
     TraceIdRatioBasedSampler(double ratio) {
         if (ratio < 0.0 || ratio > 1.0) {
-            throw new IllegalArgumentException("ratio doit être dans [0, 1] : " + ratio);
+            throw new IllegalArgumentException("ratio must be in [0, 1]: " + ratio);
         }
         this.ratio = ratio;
         if (ratio == 0.0) {
@@ -60,8 +60,8 @@ public final class TraceIdRatioBasedSampler implements Sampler {
     }
 
     private static long parseLast8BytesAsLong(String traceId) {
-        // Le traceId fait 32 chars hex. On prend les 16 derniers = 8 octets.
-        // Long.parseUnsignedLong tolère le bit haut → on cast en signed pour Math.abs.
+        // The traceId is 32 hex chars. We take the last 16 = 8 bytes.
+        // Long.parseUnsignedLong tolerates the high bit → cast to signed for Math.abs.
         return Long.parseUnsignedLong(traceId.substring(16, 32), 16);
     }
 }

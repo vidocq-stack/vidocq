@@ -8,11 +8,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * Résultat asynchrone d'une opération d'export ou de flush — équivalent fonctionnel
- * de {@code io.opentelemetry.sdk.common.CompletableResultCode} sans dépendance au
- * SDK OTel tiers.
+ * Asynchronous result of an export or flush operation — functional equivalent
+ * of {@code io.opentelemetry.sdk.common.CompletableResultCode} without a
+ * dependency on the third-party OTel SDK.
  *
- * <p>Trois états : en cours, succès, échec. Transitions atomiques, terminales.</p>
+ * <p>Three states: pending, success, failure. Atomic, terminal transitions.</p>
  */
 public final class CompletableResultCode {
 

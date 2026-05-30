@@ -4,10 +4,10 @@ import io.opentelemetry.context.ContextStorage;
 import io.opentelemetry.context.ContextStorageProvider;
 
 /**
- * Point d'entrée {@link java.util.ServiceLoader} consommé par OpenTelemetry au
- * premier appel à {@code Context.current()}.
+ * {@link java.util.ServiceLoader} entry point consumed by OpenTelemetry on the
+ * first call to {@code Context.current()}.
  *
- * <p>Renvoie systématiquement l'instance singleton {@link HumboldtContextStorage#INSTANCE}.</p>
+ * <p>Always returns the singleton instance {@link HumboldtContextStorage#INSTANCE}.</p>
  */
 public final class HumboldtContextStorageProvider implements ContextStorageProvider {
 

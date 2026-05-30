@@ -31,17 +31,17 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Harness minimaliste Cassini sur Chappe — version simplifiée du
- * {@code CassiniTestHarness} de cassini-tck, adaptée pour le runner
- * Arquillian Humboldt.
+ * Minimal Cassini-on-Chappe harness — a simplified version of
+ * cassini-tck's {@code CassiniTestHarness}, adapted for the
+ * Humboldt Arquillian runner.
  *
- * <p>Démarre un serveur Chappe sur un port libre, monte un dispatcher
- * Cassini sur les classes {@code @Path}/{@code @Provider} fournies, et
- * expose le {@code baseUrl} pour {@code @ArquillianResource URL url}.</p>
+ * <p>Starts a Chappe server on a free port, mounts a Cassini dispatcher
+ * on the provided {@code @Path}/{@code @Provider} classes, and
+ * exposes the {@code baseUrl} for {@code @ArquillianResource URL url}.</p>
  *
- * <p>Pas de réutilisation directe de cassini-tck (hors-reactor + pas
- * installé en M2 local). Code aligné mais réduit au strict nécessaire
- * pour les TCK MP Telemetry HTTP.</p>
+ * <p>No direct reuse of cassini-tck (out of reactor + not
+ * installed in the local M2). The code is aligned but reduced to the strict minimum
+ * for the MP Telemetry HTTP TCKs.</p>
  */
 public final class CassiniHarness implements AutoCloseable {
 
@@ -112,21 +112,21 @@ public final class CassiniHarness implements AutoCloseable {
             List<ResourceMethod> routes = ResourceScanner.discover(allClasses.toArray(Class<?>[]::new));
             filters.applyDynamicFeatures(routes);
             UriRouter router = new UriRouter(routes);
-            // Récupère le container Vauban courant (initialisé par
-            // HumboldtDeployableContainer.deploy()) pour passer par CDI lors de la
-            // résolution des ressources/providers — assure que les @Inject sur les
-            // champs des ressources (Tracer, Span, Baggage, OpenTelemetry...) sont
-            // câblés quand la classe est un bean Vauban.
+            // Retrieves the current Vauban container (initialized by
+            // HumboldtDeployableContainer.deploy()) so resolution of resources/providers
+            // goes through CDI — ensuring that @Inject on resource fields
+            // (Tracer, Span, Baggage, OpenTelemetry...) is wired when the class
+            // is a Vauban bean.
             //
-            // Limitation actuelle : la BCE Cassini (cassini-cdi-vauban
-            // CassiniScopeExtension) qui ajoute @RequestScoped aux classes @Path sans
-            // scope explicite ne s'applique PAS aux classes ajoutées via addBeanClass()
-            // en runtime — uniquement aux beans découverts à compile-time via APT.
-            // Conséquence : les ressources TCK comme BaggageResource (classe inner sans
-            // scope) tombent dans le fallback `new` et leurs @Inject restent null.
-            // Fix complet : appliquer les BCE en runtime côté Vauban (chantier séparé)
-            // ou pré-traiter les classes @Path dans HumboldtDeployableContainer pour
-            // ajouter @RequestScoped synthétique avant addBeanClass().
+            // Current limitation: the Cassini BCE (cassini-cdi-vauban
+            // CassiniScopeExtension) that adds @RequestScoped to @Path classes without
+            // an explicit scope does NOT apply to classes added through addBeanClass()
+            // at runtime — only to beans discovered at compile time via APT.
+            // Consequence: TCK resources such as BaggageResource (an inner class without
+            // scope) fall back to `new` and their @Inject fields stay null.
+            // Complete fix: apply BCEs at runtime on the Vauban side (separate work)
+            // or pre-process @Path classes in HumboldtDeployableContainer to
+            // add a synthetic @RequestScoped before addBeanClass().
             io.vidocq.vauban.core.container.VaubanContainer cdi =
                     io.vidocq.vauban.core.container.VaubanContainer.current();
             java.util.function.Function<Class<?>, Object> resolver = cls -> {
@@ -136,7 +136,7 @@ public final class CassiniHarness implements AutoCloseable {
                     try {
                         return cdi.select(cls);
                     } catch (RuntimeException ignored) {
-                        // Fallback si la classe n'est pas connue de Vauban (BCE non appliquée).
+                        // Fallback if the class is not known to Vauban (BCE not applied).
                     }
                 }
                 try {
@@ -153,10 +153,10 @@ public final class CassiniHarness implements AutoCloseable {
             Handler rootHandler = prefix.isEmpty()
                     ? bridge
                     : new ContextStrippingHandler(prefix, bridge);
-            // HBT-2 résolu côté cassini-cdi-vauban : le VaubanRequestScopeFilter
-            // s'auto-enregistre via VaubanBeanProvider.getResourceClasses() et active /
-            // désactive le RequestContext autour de chaque dispatch — plus besoin du
-            // RequestScopeActivatingHandler workaround ici.
+            // HBT-2 resolved in cassini-cdi-vauban: VaubanRequestScopeFilter
+            // self-registers through VaubanBeanProvider.getResourceClasses() and enables /
+            // disables the RequestContext around each dispatch — no need for the
+            // RequestScopeActivatingHandler workaround here anymore.
 
             RuntimeException last = null;
             for (int attempt = 0; attempt < 5; attempt++) {
@@ -177,7 +177,7 @@ public final class CassiniHarness implements AutoCloseable {
         }
     }
 
-    /** Strip du contextPath avant délégation au bridge Cassini. */
+    /** Strips the contextPath before delegating to the Cassini bridge. */
     private record ContextStrippingHandler(String prefix, Handler delegate) implements Handler {
         @Override public Response handle(Request request) throws Exception {
             String path = request.path();

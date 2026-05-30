@@ -1,22 +1,22 @@
 # Humboldt — Benchmarks
 
-> Tout chiffre de performance (JMH, wrk, comparatif vs SmallRye Telemetry / OTel SDK Java, etc.) doit être consigné ici. Pas de chiffre dans un README ou un commit message sans entrée correspondante. Cf. `CLAUDE.md` racine du workspace pour la convention.
+> Every performance number (JMH, wrk, comparison vs SmallRye Telemetry / OTel SDK Java, etc.) must be recorded here. No number in a README or commit message without a matching entry. See the workspace root `CLAUDE.md` for the convention.
 
-## Format d'une entrée
+## Entry format
 
 ```
 ### [HBT-BNCH-N] Titre court
 - **Date** : YYYY-MM-DD
-- **Hardware** : modèle CPU, RAM, OS
-- **JVM** : Java 25 Temurin / GraalVM CE 24 / …
-- **Commit** : SHA Humboldt + SHA des dépendances comparées
-- **Outil** : JMH / wrk / custom
-- **Commande exacte** : copier-coller reproductible
-- **Résultats bruts** : tableau ops/s, latence p50/p99, allocations, etc.
-- **Delta vs run précédent** : %
-- **Analyse** : interprétation, points chauds, ADR à créer
+- **Hardware**: CPU model, RAM, OS
+- **JVM**: Java 25 Temurin / GraalVM CE 24 / …
+- **Commit**: Humboldt SHA + compared dependency SHAs
+- **Tool**: JMH / wrk / custom
+- **Exact command**: reproducible copy/paste
+- **Raw results**: table ops/s, p50/p99 latency, allocations, etc.
+- **Delta vs previous run**: %
+- **Analysis**: interpretation, hotspots, ADR to create
 ```
 
 ---
 
-_Aucun benchmark exécuté à ce jour (M0)._
+_No benchmark has been run yet (M0)._

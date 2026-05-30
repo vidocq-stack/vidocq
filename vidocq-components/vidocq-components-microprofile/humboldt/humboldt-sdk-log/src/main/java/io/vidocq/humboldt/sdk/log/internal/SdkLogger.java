@@ -10,7 +10,7 @@ import io.vidocq.humboldt.sdk.log.export.LogRecordProcessor;
 import java.util.List;
 
 /**
- * Logger Humboldt — façade {@link Logger} qui produit des {@link SdkLogRecordBuilder}.
+ * Humboldt logger — {@link Logger} facade that produces {@link SdkLogRecordBuilder} instances.
  */
 public final class SdkLogger implements Logger {
 

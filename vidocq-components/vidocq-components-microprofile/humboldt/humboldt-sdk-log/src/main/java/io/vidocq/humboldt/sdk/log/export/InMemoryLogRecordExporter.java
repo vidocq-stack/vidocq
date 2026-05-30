@@ -7,8 +7,8 @@ import io.vidocq.humboldt.sdk.log.data.LogRecordData;
 import java.util.Collection;
 
 /**
- * Exporter qui accumule les LogRecord en mémoire — pour tests.
- * Délègue à {@link InMemoryExporterBase} le squelette mutualisé.
+ * Exporter that accumulates LogRecord instances in memory — for tests.
+ * Delegates the shared skeleton to {@link InMemoryExporterBase}.
  */
 public final class InMemoryLogRecordExporter extends InMemoryExporterBase<LogRecordData> implements LogRecordExporter {
 

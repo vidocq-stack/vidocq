@@ -52,7 +52,7 @@ class SdkLoggerProviderTest {
         assertEquals("u-42", r.attributes().get(AttributeKey.stringKey("user.id")));
         assertEquals("humboldt-log-test",
                 r.resource().attributes().get(AttributeKey.stringKey("service.name")));
-        assertTrue(r.observedEpochNanos() > 0L, "observed timestamp doit être set");
+        assertTrue(r.observedEpochNanos() > 0L, "observed timestamp must be set");
     }
 
     @Test
@@ -116,11 +116,11 @@ class SdkLoggerProviderTest {
         for (int i = 0; i < 5; i++) {
             l.logRecordBuilder().setBody("msg-" + i).emit();
         }
-        // À ce stade, aucun flush n'est encore intervenu
+        // At this point, no flush has happened yet
         assertTrue(exporter.getCollected().size() <= 5);
         p.close();
         assertEquals(5, exporter.getCollected().size(),
-                "shutdown doit drainer la queue restante");
+                "shutdown must drain the remaining queue");
     }
 
     @Test
@@ -131,7 +131,7 @@ class SdkLoggerProviderTest {
                 .build()) {
             p.get("x").logRecordBuilder().setBody("sync").emit();
             assertEquals(1, exporter.getCollected().size(),
-                    "SimpleLogRecordProcessor doit exporter sync, sans attendre");
+                    "SimpleLogRecordProcessor must export synchronously, without waiting");
         }
     }
 

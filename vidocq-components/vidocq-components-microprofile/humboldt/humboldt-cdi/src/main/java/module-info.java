@@ -1,17 +1,18 @@
 /**
- * Humboldt CDI — interception automatique de
+ * Humboldt CDI — automatic interception of
  * {@link io.opentelemetry.instrumentation.annotations.WithSpan @WithSpan}
- * (annotation API publique OpenTelemetry, alignée TCK MicroProfile Telemetry 2.1).
+ * (standard OpenTelemetry public API annotation, aligned with the MicroProfile
+ * Telemetry 2.1 TCK).
  *
- * <p>L'utilisateur écrit uniquement {@code @WithSpan}. La
+ * <p>The user only writes {@code @WithSpan}. The
  * {@link io.vidocq.humboldt.cdi.HumboldtBuildCompatibleExtension} (CDI 4.x
- * BuildCompatibleExtension) ajoute automatiquement le marker interne
- * {@link io.vidocq.humboldt.cdi.SpanBinding} au build time, ce qui active
+ * BuildCompatibleExtension) automatically adds the internal marker
+ * {@link io.vidocq.humboldt.cdi.SpanBinding} at build time, which activates
  * {@link io.vidocq.humboldt.cdi.WithSpanInterceptor}.</p>
  *
- * <p>Compatible CDI 4.1 Lite (Vauban) et CDI 4.1 Full (Weld) — la
- * BuildCompatibleExtension est le mécanisme standard CDI 4.x partagé entre
- * Lite et Full.</p>
+ * <p>Compatible with CDI 4.1 Lite (Vauban) and CDI 4.1 Full (Weld) — the
+ * BuildCompatibleExtension is the standard CDI 4.x mechanism shared between
+ * Lite and Full.</p>
  */
 module io.vidocq.humboldt.cdi {
 
@@ -19,8 +20,8 @@ module io.vidocq.humboldt.cdi {
     requires transitive io.vidocq.humboldt.sdk.trace;
     requires transitive io.opentelemetry.api;
     requires io.opentelemetry.context;
-    // OpenTelemetry instrumentation-annotations : module automatique
-    // (Automatic-Module-Name avec underscore, pas point).
+    // OpenTelemetry instrumentation-annotations: automatic module
+    // (Automatic-Module-Name with underscore, not dot).
     requires transitive io.opentelemetry.instrumentation_annotations;
     requires transitive jakarta.cdi;
     requires transitive jakarta.interceptor;

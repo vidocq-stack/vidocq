@@ -21,15 +21,15 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Adapte un {@link io.opentelemetry.sdk.trace.samplers.Sampler OTel Sampler} en
- * un {@link Sampler humboldt Sampler}. Permet aux harness Arquillian (humboldt-tck)
- * d'utiliser un sampler custom fourni via le SPI OTel
- * {@code ConfigurableSamplerProvider} dans le WAR sans réimplémenter la logique
- * de décision côté humboldt.
+ * Adapts an {@link io.opentelemetry.sdk.trace.samplers.Sampler OTel Sampler} into
+ * a {@link Sampler humboldt Sampler}. This allows Arquillian harnesses (humboldt-tck)
+ * to use a custom sampler provided through the OTel SPI
+ * {@code ConfigurableSamplerProvider} in the WAR without re-implementing Humboldt-side
+ * decision logic.
  *
- * <p>Les types {@code Sampler}, {@code SamplingResult.Decision}, {@code LinkData}
- * sont structurellement équivalents entre OTel SDK et humboldt-sdk-trace ; le bridge
- * est donc une délégation 1:1 avec mapping enum trivial.</p>
+ * <p>The {@code Sampler}, {@code SamplingResult.Decision}, and {@code LinkData} types
+ * are structurally equivalent between the OTel SDK and humboldt-sdk-trace; the bridge
+ * is therefore a 1:1 delegation with trivial enum mapping.</p>
  */
 final class OtelSamplerBridge implements Sampler {
 
@@ -62,7 +62,7 @@ final class OtelSamplerBridge implements Sampler {
         return "OtelSamplerBridge[" + delegate.getDescription() + "]";
     }
 
-    /** Helper pour vérifier le type (DROP/RECORD/etc.) lors du probe TCK. */
+    /** Helper for checking the type (DROP/RECORD/etc.) during the TCK probe. */
     SamplingDecision probe() {
         return delegate.shouldSample(Context.root(),
                 io.opentelemetry.api.trace.TraceId.fromLongs(0L, 1L),

@@ -14,11 +14,11 @@ import java.util.logging.LogRecord;
 /**
  * Bridge {@link java.util.logging} (JUL) → OTel {@link Logger}.
  * <p>
- * Chaque {@link LogRecord} reçu sur ce handler est transformé en LogRecord OTel
- * via {@link Logger#logRecordBuilder()} et émis vers le pipeline d'export configuré
- * dans le {@link LoggerProvider} fourni.
+ * Each {@link LogRecord} received by this handler is transformed into an OTel LogRecord
+ * via {@link Logger#logRecordBuilder()} and emitted to the export pipeline configured
+ * in the provided {@link LoggerProvider}.
  *
- * <p><b>Mapping severity</b> (JUL → OTel) :
+ * <p><b>Severity mapping</b> (JUL → OTel):
  * <ul>
  *   <li>SEVERE  → ERROR (17)</li>
  *   <li>WARNING → WARN (13)</li>
@@ -27,12 +27,12 @@ import java.util.logging.LogRecord;
  *   <li>FINE/FINER/FINEST → DEBUG (5)/DEBUG2 (6)/DEBUG3 (7)</li>
  * </ul>
  *
- * <p>Le nom de l'{@code instrumentation scope} est celui du {@link java.util.logging.Logger}
- * source (ex. {@code "jul-logger"}, {@code "my.app"}). Cache de {@link Logger} par
- * nom pour éviter le coût de résolution.
+ * <p>The {@code instrumentation scope} name is the source {@link java.util.logging.Logger}
+ * name (for example {@code "jul-logger"}, {@code "my.app"}). {@link Logger} instances are cached by
+ * name to avoid repeated resolution cost.
  *
- * <p>Usage typique : installation automatique sur le root JUL Logger par
- * {@code HumboldtAutoConfigure} quand le SDK logs est actif.
+ * <p>Typical usage: automatic installation on the root JUL Logger by
+ * {@code HumboldtAutoConfigure} when the logs SDK is active.
  */
 public final class HumboldtJulHandler extends Handler {
 
@@ -68,15 +68,15 @@ public final class HumboldtJulHandler extends Handler {
 
     @Override
     public void flush() {
-        // Pas-op : le LoggerProvider gère le flush côté processors.
+        // No-op: LoggerProvider handles flushing on the processor side.
     }
 
     @Override
     public void close() throws SecurityException {
-        // Pas-op : ne fermons pas le LoggerProvider partagé.
+        // No-op: do not close the shared LoggerProvider.
     }
 
-    /** Formate le message JUL en interpolant les paramètres (style {@link java.text.MessageFormat}). */
+    /** Formats the JUL message by interpolating parameters ({@link java.text.MessageFormat} style). */
     private static String formatMessage(LogRecord record) {
         String raw = record.getMessage();
         if (raw == null) return "";
@@ -90,8 +90,8 @@ public final class HumboldtJulHandler extends Handler {
     }
 
     /**
-     * Mapping JUL Level → OTel Severity selon les valeurs entières standard.
-     * Aligné sur les autres implémentations OTel (otel-java SDK extensions).
+     * Mapping from JUL Level → OTel Severity according to standard integer values.
+     * Aligned with other OTel implementations (otel-java SDK extensions).
      */
     static Severity mapSeverity(Level level) {
         if (level == null) return Severity.INFO;
@@ -107,9 +107,9 @@ public final class HumboldtJulHandler extends Handler {
     }
 
     /**
-     * Texte abrégé du level pour {@code severityText} — utilisé par
-     * {@code LoggingLogRecordExporter} pour produire des lignes lisibles
-     * type {@code "... INFO ..."}, {@code "... WARN ..."}.
+     * Short level text for {@code severityText} — used by
+     * {@code LoggingLogRecordExporter} to produce readable lines such as
+     * {@code "... INFO ..."}, {@code "... WARN ..."}.
      */
     static String severityText(Level level) {
         if (level == null) return "INFO";

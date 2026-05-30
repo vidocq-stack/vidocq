@@ -16,11 +16,11 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
- * Implémentation Humboldt de {@link Meter}.
+ * Humboldt implementation of {@link Meter}.
  *
- * <p>M4 MVP : {@link #counterBuilder(String)} et {@link #histogramBuilder(String)} fonctionnels.
- * Les autres builders ({@code upDownCounterBuilder}, {@code gaugeBuilder}, observables, batchCallback)
- * lancent {@code UnsupportedOperationException} — couverts en M4b.</p>
+ * <p>M4 MVP: {@link #counterBuilder(String)} and {@link #histogramBuilder(String)} are functional.
+ * The other builders ({@code upDownCounterBuilder}, {@code gaugeBuilder}, observables, batchCallback)
+ * throw {@code UnsupportedOperationException} — covered in M4b.</p>
  */
 public final class SdkMeter implements Meter {
 
@@ -60,7 +60,7 @@ public final class SdkMeter implements Meter {
         instruments.add(entry);
     }
 
-    /** Enregistre un callback observable invoqué à chaque {@link #collect(long, long)}. */
+    /** Registers an observable callback invoked on each {@link #collect(long, long)}. */
     void registerObservableCallback(Runnable callback) {
         observableCallbacks.add(callback);
     }
@@ -70,12 +70,12 @@ public final class SdkMeter implements Meter {
     }
 
     public Collection<MetricData> collect(long startEpochNanos, long epochNanos) {
-        // Invoque tous les callbacks observable AVANT de collecter — chaque callback
-        // met à jour son aggregator via le Measurement passé. Le snapshot ci-dessous
-        // reflète donc les valeurs les plus récentes.
+        // Invoke all observable callbacks BEFORE collecting — each callback
+        // updates its aggregator via the provided Measurement. The snapshot below
+        // therefore reflects the most recent values.
         for (Runnable cb : observableCallbacks) {
             try { cb.run(); }
-            catch (RuntimeException ignored) { /* observable callback erratique — on log silencieux */ }
+            catch (RuntimeException ignored) { /* erratic observable callback — silently ignored */ }
         }
         List<MetricData> out = new ArrayList<>(instruments.size());
         for (InstrumentEntry e : instruments) {

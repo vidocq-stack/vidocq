@@ -1,86 +1,86 @@
 # Run TCK MP Telemetry 2.1 — post OtelSamplerBridge + SPI Propagator (+2 PASS)
 
 **Date** : 2026-05-24 11:53
-**Commande** : `./run-official-tck-telemetry-2.1.sh all`
+**Command** : `./run-official-tck-telemetry-2.1.sh all`
 
-## Résultat brut
+## Raw results
 
 ```
 <testng-results ignored="0" total="85" passed="26" failed="36" skipped="23">
 ```
 
-## Évolution
+## Progress
 
 | Run | total | PASS | FAIL | SKIP |
 |---|---|---|---|---|
-| post Cluster D partiel | 85 | 24 | 38 | 23 |
+| post Cluster D partial | 85 | 24 | 38 | 23 |
 | **post sampler-bridge + spi-propagator** | 85 | **26** | **36** | **23** |
 
 **+2 PASS** (24 → 26), **-2 FAIL** (38 → 36).
 
-## Tests débloqués
+## Tests unblocked
 
-| Test | Mécanisme |
+| Test | Mechanism |
 |---|---|
-| ✅ `SamplerSpiTest.testSampler` | OtelSamplerBridge délègue à un OTel Sampler arbitraire (supporte les samplers conditionnels comme TestSampler qui sample selon attr `SAMPLE_ME`) |
-| ✅ `PropagatorSpiTest.testSPIPropagator` | Scan ConfigurablePropagatorProvider + composite avec W3C TraceContext/Baggage + fix architectural Humboldt*Filter (utilise GlobalOpenTelemetry.getPropagators() au lieu de W3CPropagators hardcodé) |
+| ✅ `SamplerSpiTest.testSampler` | OtelSamplerBridge delegates to an arbitrary OTel Sampler (supports conditional samplers like TestSampler that sample based on attr `SAMPLE_ME`) |
+| ✅ `PropagatorSpiTest.testSPIPropagator` | Scan ConfigurablePropagatorProvider + composite with W3C TraceContext/Baggage + Humboldt*Filter architectural fix (uses GlobalOpenTelemetry.getPropagators() instead of hardcoded W3CPropagators) |
 
-## Items livrés
+## Items delivered
 
 ### 1. OtelSamplerBridge (humboldt-tck)
-- Nouvelle classe `OtelSamplerBridge` qui adapte `io.opentelemetry.sdk.trace.samplers.Sampler` → `io.vidocq.humboldt.sdk.trace.samplers.Sampler`
-- Délégation 1:1 : mapping `LinkData` humboldt → OTel + appel `delegate.shouldSample()` + mapping `SamplingDecision` → `SamplingResult.Decision`
-- Permet d'utiliser n'importe quel Sampler OTel custom (conditionnel, ratio, parent-based, etc.) sans réimplémenter la logique côté humboldt
+- New `OtelSamplerBridge` class that adapts `io.opentelemetry.sdk.trace.samplers.Sampler` → `io.vidocq.humboldt.sdk.trace.samplers.Sampler`
+- 1:1 delegation: maps humboldt `LinkData` → OTel + calls `delegate.shouldSample()` + maps `SamplingDecision` → `SamplingResult.Decision`
+- Allows using any custom OTel Sampler (conditional, ratio, parent-based, etc.) without reimplementing the logic on the humboldt side
 
 ### 2. HumboldtAutoConfigure overloads
-- `configure(env, extraExporters, overrideSampler)` — passe un humboldt.Sampler override (utilise `parseSampler(env)` si null)
-- `configure(env, extraExporters, overrideSampler, overridePropagators)` — passe aussi un `ContextPropagators` override (utilise `W3CPropagators.get()` si null)
+- `configure(env, extraExporters, overrideSampler)` — passes a humboldt.Sampler override (uses `parseSampler(env)` if null)
+- `configure(env, extraExporters, overrideSampler, overridePropagators)` — also passes a `ContextPropagators` override (uses `W3CPropagators.get()` if null)
 
-### 3. resolveSpiSampler refactoré (HumboldtDeployableContainer)
-- Avant : heuristique probe-DROP qui retournait `"always_off"` ou `"always_on"` (string envvar)
-- Après : retourne directement un `humboldt.Sampler` (via OtelSamplerBridge) qui est passé à `HumboldtAutoConfigure.configure(...)`
+### 3. `resolveSpiSampler` refactored (HumboldtDeployableContainer)
+- Before: probe-DROP heuristic returning `"always_off"` or `"always_on"` (envvar string)
+- After: returns a `humboldt.Sampler` directly (via OtelSamplerBridge) passed to `HumboldtAutoConfigure.configure(...)`
 
-### 4. resolveSpiPropagators (HumboldtDeployableContainer)
-- Scanne `META-INF/services/io.opentelemetry.sdk.autoconfigure.spi.ConfigurablePropagatorProvider` dans le WAR
-- Si `otel.propagators` contient un nom (ex: "test-propagator"), instancie le provider et appelle `getPropagator(MapConfigProperties(mpProps))`
-- Compose un `ContextPropagators` final via `TextMapPropagator.composite(...)` avec les builtins (`tracecontext`, `baggage`) + les SPI custom
+### 4. `resolveSpiPropagators` (HumboldtDeployableContainer)
+- Scans `META-INF/services/io.opentelemetry.sdk.autoconfigure.spi.ConfigurablePropagatorProvider` in the WAR
+- If `otel.propagators` contains a name (e.g. "test-propagator"), instantiates the provider and calls `getPropagator(MapConfigProperties(mpProps))`
+- Composes a final `ContextPropagators` via `TextMapPropagator.composite(...)` with builtins (`tracecontext`, `baggage`) + custom SPI ones
 
-### 5. Fix architectural Humboldt*Filter (humboldt-rest)
-- `HumboldtServerRequestFilter` utilisait `W3CPropagators.textMap()` hardcodé via un wrapper privé → impossible d'utiliser un propagator custom
-- `HumboldtClientRequestFilter` utilisait aussi `W3CPropagators.textMap()` static
-- **Fix** : les deux filters utilisent maintenant `GlobalOpenTelemetry.get().getPropagators().getTextMapPropagator()` (côté server) et `otel.getPropagators().getTextMapPropagator()` (côté client)
-- Le comportement par défaut reste W3C (puisque humboldt set par défaut W3CPropagators dans GlobalOpenTelemetry), mais tout propagator custom configuré est désormais appliqué automatiquement
+### 5. Humboldt*Filter architectural fix (humboldt-rest)
+- `HumboldtServerRequestFilter` used hardcoded `W3CPropagators.textMap()` through a private wrapper → impossible to use a custom propagator
+- `HumboldtClientRequestFilter` also used static `W3CPropagators.textMap()`
+- **Fix**: both filters now use `GlobalOpenTelemetry.get().getPropagators().getTextMapPropagator()` (server side) and `otel.getPropagators().getTextMapPropagator()` (client side)
+- Default behavior remains W3C (since humboldt sets W3CPropagators by default in GlobalOpenTelemetry), but any configured custom propagator is now automatically applied
 
-## Validation non-régression
+## Non-regression validation
 
-- Tous les tests précédents PASS conservés
-- 0 FAIL nouvelle (les 36 FAIL restants étaient déjà FAIL avant)
+- All previously PASS tests preserved
+- 0 new FAIL (the remaining 36 FAIL were already FAIL before)
 
-## Bilan cumulé session 2026-05-23+24
+## Cumulative session summary 2026-05-23+24
 
-| Run | PASS | Cumul vs baseline |
+| Run | PASS | Cumulative vs baseline |
 |---|---|---|
 | baseline M7c.1+2+4 | 5 | — |
 | post M7c.11 | 16 | +11 |
 | post HBT-1 | 19 | +14 |
 | post M7c.12 | 23 | +18 |
-| post Cluster D partiel | 24 | +19 |
+| post Cluster D partial | 24 | +19 |
 | **post sampler-bridge + spi-propagator** | **26** | **+21** |
 
-**Cumul session : 5 → 26 PASS (+420%)**, **60 → 36 FAIL (-40%)**.
+**Session cumulative: 5 → 26 PASS (+420%)**, **60 → 36 FAIL (-40%)**.
 
-## Restant Cluster D
+## Remaining Cluster D
 
-| Test | Effort estimé |
+| Test | Estimated effort |
 |---|---|
-| ❌ `CustomizerSpiTest.testCustomizer` | Gros (~300 LOC) — implémenter `AutoConfigurationCustomizer` adapter complet (6 méthodes `addXxxCustomizer` + chaînes Resource/Propagator/Properties/Sampler/SpanExporter/TracerProvider) |
+| ❌ `CustomizerSpiTest.testCustomizer` | Large (~300 LOC) — implement full `AutoConfigurationCustomizer` adapter (6 `addXxxCustomizer` methods + Resource/Propagator/Properties/Sampler/SpanExporter/TracerProvider chains) |
 
-## Prochaines étapes ROI
+## Next steps ROI
 
-| Step | Item | Gain estimé | Effort |
+| Step | Item | Estimated gain | Effort |
 |---|---|---|---|
-| 1 | **M4b** SDK metric complet (Counter/Histogram/Observable Long+Double) | +24 | Très gros (~2-3j) |
-| 2 | Investigation tests `RestSpan*` qui restent FAIL malgré fixture OK | +3-5 | Moyen |
-| 3 | `testIntegrationWithJaxRsClientAsync` / `Error` qui restent FAIL (async non supporté en cassini-client MVP) | +2 | Moyen |
-| 4 | `b3*Propagation` / `jaegerPropagation` (propagateurs non-W3C optionnels) | +3 | Petit |
-| 5 | `CustomizerSpiTest` (AutoConfigurationCustomizer adapter) | +1 | Gros |
+| 1 | **M4b** full SDK metric (Counter/Histogram/Observable Long+Double) | +24 | Very large (~2-3d) |
+| 2 | Investigate `RestSpan*` tests still FAIL despite fixture OK | +3-5 | Medium |
+| 3 | `testIntegrationWithJaxRsClientAsync` / `Error` still FAIL (async unsupported in cassini-client MVP) | +2 | Medium |
+| 4 | `b3*Propagation` / `jaegerPropagation` (optional non-W3C propagators) | +3 | Small |
+| 5 | `CustomizerSpiTest` (AutoConfigurationCustomizer adapter) | +1 | Large |

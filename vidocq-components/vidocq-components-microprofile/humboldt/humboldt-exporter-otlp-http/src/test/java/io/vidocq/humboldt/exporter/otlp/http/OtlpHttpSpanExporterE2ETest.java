@@ -83,8 +83,8 @@ class OtlpHttpSpanExporterE2ETest {
             s.setAttribute("http.method", "GET");
             s.end();
 
-            // SimpleSpanProcessor exporte de manière synchrone ; le retour HTTP se fait
-            // sur un VT côté exporter — on attend que le fake server compte 1 call.
+            // SimpleSpanProcessor exports synchronously; the HTTP round-trip happens
+            // on an exporter-side VT — we wait until the fake server counts 1 call.
             waitForCallCount(1);
         }
 
@@ -114,7 +114,7 @@ class OtlpHttpSpanExporterE2ETest {
             Tracer t = p.get("io.vidocq.test");
             Span s = t.spanBuilder("retry-test").startSpan();
             s.end();
-            // Au moins 3 appels attendus (503 + 503 + 200)
+            // At least 3 expected calls (503 + 503 + 200)
             waitForCallCount(3);
         }
         assertTrue(callCount.get() >= 3, "callCount = " + callCount.get());
@@ -142,12 +142,12 @@ class OtlpHttpSpanExporterE2ETest {
 
     @Test
     void backoff_is_exponential_capped() {
-        // Sanity check de la fonction utilitaire (sans dépendre du timing E2E)
+        // Sanity check of the helper function (without depending on E2E timing)
         assertEquals(100L, OtlpHttpSpanExporter.computeBackoffMillis(0));
         assertEquals(200L, OtlpHttpSpanExporter.computeBackoffMillis(1));
         assertEquals(400L, OtlpHttpSpanExporter.computeBackoffMillis(2));
         assertEquals(5000L, OtlpHttpSpanExporter.computeBackoffMillis(10),
-                "plafond à 5s atteint pour les grands attempts");
+                "5s ceiling reached for large attempts");
     }
 
     private void waitForCallCount(int expected) {

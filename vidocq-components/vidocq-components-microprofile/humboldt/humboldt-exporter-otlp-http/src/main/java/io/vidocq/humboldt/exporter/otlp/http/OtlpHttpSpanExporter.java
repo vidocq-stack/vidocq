@@ -14,10 +14,10 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Exporter OTLP/HTTP-JSON pour spans — délègue le transport à
- * {@link OtlpHttpJsonSender} (mutualisé avec metrics et logs).
+ * OTLP/HTTP-JSON exporter for spans — delegates transport to
+ * {@link OtlpHttpJsonSender} (shared with metrics and logs).
  *
- * <p>Endpoint par défaut : {@code http://localhost:4318/v1/traces}.</p>
+ * <p>Default endpoint: {@code http://localhost:4318/v1/traces}.</p>
  */
 public final class OtlpHttpSpanExporter implements SpanExporter {
 
@@ -51,8 +51,8 @@ public final class OtlpHttpSpanExporter implements SpanExporter {
     }
 
     /**
-     * Backoff exponentiel borné — délégué à {@link OtlpHttpJsonSender#computeBackoffMillis(int)}.
-     * Conservé public pour rétro-compatibilité (utilisé par les tests E2E).
+     * Bounded exponential backoff — delegated to {@link OtlpHttpJsonSender#computeBackoffMillis(int)}.
+     * Kept public for backwards compatibility (used by E2E tests).
      */
     public static long computeBackoffMillis(int attempt) {
         return OtlpHttpJsonSender.computeBackoffMillis(attempt);

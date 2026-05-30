@@ -6,9 +6,9 @@ import io.vidocq.humboldt.sdk.common.CompletableResultCode;
 import java.util.Collection;
 
 /**
- * Exporter de métriques collectées (InMemory, Logging, OTLP/HTTP-JSON, ...).
+ * Exporter of collected metrics (InMemory, Logging, OTLP/HTTP-JSON, ...).
  *
- * <p>Thread-safe — peut être partagé entre plusieurs {@link MetricReader}.</p>
+ * <p>Thread-safe — can be shared by multiple {@link MetricReader} instances.</p>
  */
 public interface MetricExporter extends AutoCloseable {
 

@@ -9,9 +9,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Aggregation LastValue pour LongGauge (instrument synchrone) — conserve la dernière
- * valeur enregistrée par set d'attributs. Spec OTel : Gauge expose la valeur courante,
- * pas un cumul.
+ * LastValue aggregation for LongGauge (synchronous instrument) — keeps the latest
+ * value recorded for each attribute set. OTel spec: Gauge exposes the current value,
+ * not a cumulative total.
  */
 public final class LongLastValueAggregator implements Aggregator<LongPointData> {
 

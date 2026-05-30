@@ -9,9 +9,9 @@ import io.vidocq.humboldt.sdk.log.export.LogRecordProcessor;
 import java.time.Duration;
 
 /**
- * Batch log processor — délègue le squelette mutualisé à
- * {@link AbstractBatchProcessor}. Pas de filtre (contrairement à BatchSpanProcessor
- * qui ignore les non-samplés) — tous les LogRecord émis sont batchés.
+ * Batch log processor — delegates the shared skeleton to
+ * {@link AbstractBatchProcessor}. No filter (unlike BatchSpanProcessor,
+ * which ignores non-sampled spans) — all emitted LogRecord instances are batched.
  */
 public final class BatchLogRecordProcessor extends AbstractBatchProcessor<LogRecordData>
         implements LogRecordProcessor {

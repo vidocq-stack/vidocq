@@ -38,22 +38,22 @@ import java.util.List;
 import static io.opentelemetry.api.common.AttributeKey.stringKey;
 
 /**
- * Façade autoconfig — lit les env vars OTEL_* et assemble un
- * {@link AutoConfiguredHumboldt} prêt à l'emploi.
+ * Autoconfig facade — reads {@code OTEL_*} env vars and assembles a
+ * ready-to-use {@link AutoConfiguredHumboldt}.
  *
- * <p>Env vars supportées (M6c MVP) :</p>
+ * <p>Supported env vars (M6c MVP):</p>
  * <ul>
- *   <li>{@code OTEL_SERVICE_NAME} — défaut {@code "humboldt"}</li>
- *   <li>{@code OTEL_RESOURCE_ATTRIBUTES} — paires {@code key=value} séparées par virgule</li>
- *   <li>{@code OTEL_EXPORTER_OTLP_ENDPOINT} — défaut {@code http://localhost:4318}</li>
- *   <li>{@code OTEL_EXPORTER_OTLP_TRACES_ENDPOINT} / {@code _METRICS_ENDPOINT} / {@code _LOGS_ENDPOINT} — overrides per-signal</li>
- *   <li>{@code OTEL_TRACES_EXPORTER} / {@code OTEL_METRICS_EXPORTER} / {@code OTEL_LOGS_EXPORTER} — {@code otlp} | {@code none} | {@code in-memory} | {@code logging} (traces uniquement)</li>
+ *   <li>{@code OTEL_SERVICE_NAME} — default {@code "humboldt"}</li>
+ *   <li>{@code OTEL_RESOURCE_ATTRIBUTES} — comma-separated {@code key=value} pairs</li>
+ *   <li>{@code OTEL_EXPORTER_OTLP_ENDPOINT} — default {@code http://localhost:4318}</li>
+ *   <li>{@code OTEL_EXPORTER_OTLP_TRACES_ENDPOINT} / {@code _METRICS_ENDPOINT} / {@code _LOGS_ENDPOINT} — per-signal overrides</li>
+ *   <li>{@code OTEL_TRACES_EXPORTER} / {@code OTEL_METRICS_EXPORTER} / {@code OTEL_LOGS_EXPORTER} — {@code otlp} | {@code none} | {@code in-memory} | {@code logging} (traces only)</li>
  *   <li>{@code OTEL_TRACES_SAMPLER} — {@code always_on} | {@code always_off} | {@code traceidratio} | {@code parentbased_always_on}</li>
- *   <li>{@code OTEL_TRACES_SAMPLER_ARG} — ratio (double) pour {@code traceidratio}</li>
- *   <li>{@code OTEL_EXPORTER_OTLP_HEADERS} — paires {@code key=value} séparées par virgule</li>
+ *   <li>{@code OTEL_TRACES_SAMPLER_ARG} — ratio (double) for {@code traceidratio}</li>
+ *   <li>{@code OTEL_EXPORTER_OTLP_HEADERS} — comma-separated {@code key=value} pairs</li>
  * </ul>
  *
- * <p>Différé en M7 : {@code OTEL_EXPORTER_OTLP_TIMEOUT}, {@code OTEL_EXPORTER_OTLP_PROTOCOL},
+ * <p>Deferred to M7: {@code OTEL_EXPORTER_OTLP_TIMEOUT}, {@code OTEL_EXPORTER_OTLP_PROTOCOL},
  * {@code MP_TELEMETRY_SDK_DISABLED}, {@code MP_TELEMETRY_PROPAGATORS}.</p>
  */
 public final class HumboldtAutoConfigure {
@@ -72,12 +72,12 @@ public final class HumboldtAutoConfigure {
     }
 
     /**
-     * Variante avec exporters de spans additionnels — point d'extension pour
-     * harness externes (TCK Arquillian) qui doivent injecter dynamiquement
-     * un {@link SpanExporter} dans le pipeline trace sans passer par les env
-     * vars. Chaque exporter additionnel est attaché via un
-     * {@link SimpleSpanProcessor} (export synchrone, requis par les TCK qui
-     * font des assertions immédiates après {@code span.end()}).
+     * Variant with additional span exporters — extension point for external
+     * harnesses (Arquillian TCK) that need to inject a {@link SpanExporter}
+     * into the trace pipeline dynamically without going through env vars.
+     * Each additional exporter is attached via a
+     * {@link SimpleSpanProcessor} (synchronous export, required by TCKs that
+     * make immediate assertions after {@code span.end()}).
      */
     public static AutoConfiguredHumboldt configure(EnvConfig env, List<SpanExporter> extraSpanExporters) {
         return configure(env, extraSpanExporters, null);
@@ -89,7 +89,7 @@ public final class HumboldtAutoConfigure {
         return configure(env, extraSpanExporters, overrideSampler, null);
     }
 
-    /** Variante avec exporters de métriques additionnels (M4b — bridge OTel SDK). */
+    /** Variant with additional metric exporters (M4b — OTel SDK bridge). */
     public static AutoConfiguredHumboldt configure(EnvConfig env,
                                                     List<SpanExporter> extraSpanExporters,
                                                     Sampler overrideSampler,
@@ -104,22 +104,22 @@ public final class HumboldtAutoConfigure {
     }
 
     /**
-     * Slot ThreadLocal pour passer les extra MetricExporters depuis l'overload publique
-     * à 5 args jusqu'à la construction du SdkMeterProvider (qui se fait dans la méthode
-     * principale {@code configure(env, extras, sampler, propagators)}). Permet d'éviter
-     * une duplication du pipeline complet.
+     * ThreadLocal slot used to pass the extra MetricExporters from the 5-arg public
+     * overload down to the SdkMeterProvider construction (which happens inside the
+     * main {@code configure(env, extras, sampler, propagators)} method). Avoids
+     * duplicating the entire pipeline.
      */
     private static final ThreadLocal<List<io.vidocq.humboldt.sdk.metric.export.MetricExporter>>
             EXTRA_METRIC_EXPORTERS = ThreadLocal.withInitial(List::of);
 
     /**
-     * Variante complète avec sampler override + propagators override — pour les
-     * harness Arquillian qui chargent un {@code ConfigurableSamplerProvider} et/ou
-     * {@code ConfigurablePropagatorProvider} OTel via SPI du WAR.
+     * Full variant with sampler override + propagators override — for Arquillian
+     * harnesses that load a {@code ConfigurableSamplerProvider} and/or
+     * {@code ConfigurablePropagatorProvider} OTel SPI from the WAR.
      *
-     * @param overrideSampler     sampler à utiliser pour le tracer provider ; si {@code null},
-     *                            fallback sur le parsing standard de {@code OTEL_TRACES_SAMPLER}.
-     * @param overridePropagators propagators à utiliser ; si {@code null}, fallback sur
+     * @param overrideSampler     sampler to use for the tracer provider; if {@code null},
+     *                            falls back to standard parsing of {@code OTEL_TRACES_SAMPLER}.
+     * @param overridePropagators propagators to use; if {@code null}, falls back to
      *                            {@link W3CPropagators#get()} (W3C TraceContext + Baggage).
      */
     public static AutoConfiguredHumboldt configure(EnvConfig env,
@@ -128,17 +128,17 @@ public final class HumboldtAutoConfigure {
                                                     ContextPropagators overridePropagators) {
         Resource resource = buildResource(env);
 
-        // MP Telemetry 2.1 §3.1 : par défaut, le SDK OpenTelemetry est désactivé.
-        // L'application doit explicitement set OTEL_SDK_DISABLED=false pour activer
-        // l'export. Note : OTel SDK Java natif a le défaut inverse (enabled), mais
-        // pour conformité MP Telemetry et stabilité TCK on aligne sur la spec MP.
+        // MP Telemetry 2.1 §3.1: by default the OpenTelemetry SDK is disabled.
+        // The application must explicitly set OTEL_SDK_DISABLED=false to enable
+        // export. Note: the native OTel SDK Java has the opposite default (enabled),
+        // but for MP Telemetry conformance and TCK stability we align with the MP spec.
         boolean sdkDisabled = env.getBoolean("OTEL_SDK_DISABLED", true);
         if (sdkDisabled) {
             LOG.log(Level.INFO,
-                    "Humboldt : SDK disabled (OTEL_SDK_DISABLED=true ou non-spécifié, défaut MP Telemetry 2.1)");
-            // Providers construits sans aucun SpanProcessor/MetricReader/LogRecordProcessor
-            // → l'API OTel reste pleinement utilisable (Span.current(), Tracer.spanBuilder())
-            //   mais rien n'est jamais exporté ni accumulé en mémoire.
+                    "Humboldt: SDK disabled (OTEL_SDK_DISABLED=true or unset, MP Telemetry 2.1 default)");
+            // Providers built with no SpanProcessor/MetricReader/LogRecordProcessor
+            // → the OTel API remains fully usable (Span.current(), Tracer.spanBuilder())
+            //   but nothing is ever exported or accumulated in memory.
             return new AutoConfiguredHumboldt(
                     SdkTracerProvider.builder().setResource(resource).build(),
                     SdkMeterProvider.builder().setResource(resource).build(),
@@ -184,12 +184,12 @@ public final class HumboldtAutoConfigure {
             default -> buildOtlpMetricExporter(env);
         };
         if (metricExporter != null) {
-            // OTEL_METRIC_EXPORT_INTERVAL (en ms) — défaut 60s spec OTel ; 3s côté TCK
-            // MP Telemetry pour permettre les awaitility.until() en moins de 15s.
+            // OTEL_METRIC_EXPORT_INTERVAL (in ms) — default 60s per OTel spec; 3s for
+            // MP Telemetry TCK to allow awaitility.until() to complete within 15s.
             long intervalMs = env.getLong("OTEL_METRIC_EXPORT_INTERVAL", -1L);
             Duration interval;
             if ("in-memory".equals(metricsExporter)) {
-                interval = Duration.ofMinutes(60); // flush() explicite dans les tests
+                interval = Duration.ofMinutes(60); // explicit flush() in tests
             } else if (intervalMs > 0) {
                 interval = Duration.ofMillis(intervalMs);
             } else {
@@ -199,9 +199,9 @@ public final class HumboldtAutoConfigure {
                     .setInterval(interval)
                     .build());
         }
-        // Extra MetricExporters (M4b — bridge OTel SDK via humboldt-tck) passés via le
-        // ThreadLocal EXTRA_METRIC_EXPORTERS. Cas TCK : InMemoryMetricExporter du WAR.
-        // Interval court pour permettre les awaitility.until() des tests metric (10s timeout).
+        // Extra MetricExporters (M4b — OTel SDK bridge via humboldt-tck) passed via the
+        // EXTRA_METRIC_EXPORTERS ThreadLocal. TCK case: InMemoryMetricExporter from the WAR.
+        // Short interval to allow awaitility.until() in metric tests (10s timeout).
         for (var extra : EXTRA_METRIC_EXPORTERS.get()) {
             mpBuilder.registerMetricReader(PeriodicMetricReader.builder(extra)
                     .setInterval(Duration.ofMillis(200))
@@ -209,14 +209,14 @@ public final class HumboldtAutoConfigure {
         }
         SdkMeterProvider meterProvider = mpBuilder.build();
 
-        // M4b — JVM metrics OTel SemConv 1.27+ : binde des Observable instruments
-        // (memory, cpu, class, thread, gc) sur le Meter humboldt-runtime. Conformité
-        // MP Telemetry 2.1 §"Required JVM metrics". Skip si pas d'exporter (none).
+        // M4b — JVM metrics OTel SemConv 1.27+: binds Observable instruments
+        // (memory, cpu, class, thread, gc) on the humboldt-runtime Meter. Conformant
+        // with MP Telemetry 2.1 §"Required JVM metrics". Skipped if no exporter (none).
         if (metricExporter != null || !EXTRA_METRIC_EXPORTERS.get().isEmpty()) {
             try {
                 JvmMetricsBinder.bindAll(meterProvider.get("io.vidocq.humboldt.runtime.jvm"));
             } catch (RuntimeException ignored) {
-                // Si MXBean indisponible (env spécifique), on continue sans crasher le boot.
+                // If MXBean is unavailable (specific env), continue without crashing the boot.
             }
         }
 
@@ -232,9 +232,9 @@ public final class HumboldtAutoConfigure {
             default -> buildOtlpLogExporter(env);
         };
         if (logExporter != null) {
-            // Simple processor pour in-memory ET logging : la sortie doit être synchrone
-            // pour que les tests (TCK JulTest notamment) puissent lire le fichier sans
-            // attendre un flush différé.
+            // Simple processor for in-memory AND logging: output must be synchronous
+            // so that tests (especially TCK JulTest) can read the file without
+            // waiting for a deferred flush.
             boolean useSimple = "in-memory".equals(logsExporter) || "logging".equals(logsExporter);
             LogRecordProcessor lp = useSimple
                     ? SimpleLogRecordProcessor.create(logExporter)
@@ -243,10 +243,10 @@ public final class HumboldtAutoConfigure {
         }
         SdkLoggerProvider loggerProvider = lpBuilder.build();
 
-        // Bridge JUL → OTel : auto-installé sur le root logger quand le pipeline logs
-        // est en mode production (otlp ou logging). Pas en in-memory pour éviter que
-        // les logs internes du runtime polluent les InMemoryLogRecordExporter des tests.
-        // Idempotent : ne réinstalle pas si un HumboldtJulHandler est déjà présent.
+        // JUL → OTel bridge: auto-installed on the root logger when the log pipeline
+        // is in production mode (otlp or logging). Not in in-memory mode to avoid
+        // runtime-internal logs polluting the InMemoryLogRecordExporter in tests.
+        // Idempotent: does not re-install if a HumboldtJulHandler is already present.
         boolean installJulBridge = logExporter != null
                 && !"in-memory".equals(logsExporter)
                 && !"none".equals(logsExporter);
@@ -285,9 +285,9 @@ public final class HumboldtAutoConfigure {
     }
 
     /**
-     * Installe le {@link HumboldtJulHandler} sur le root JUL logger pour piper les
-     * {@code java.util.logging} vers le pipeline OTel humboldt. Idempotent : si un
-     * {@link HumboldtJulHandler} est déjà présent, ne rien faire.
+     * Installs {@link HumboldtJulHandler} on the root JUL logger to pipe
+     * {@code java.util.logging} into the OTel humboldt pipeline. Idempotent:
+     * if a {@link HumboldtJulHandler} is already present, does nothing.
      */
     private static void installJulBridge(SdkLoggerProvider loggerProvider) {
         java.util.logging.Logger root = java.util.logging.Logger.getLogger("");

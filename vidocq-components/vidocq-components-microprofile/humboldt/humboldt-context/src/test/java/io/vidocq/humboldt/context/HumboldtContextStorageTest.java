@@ -20,9 +20,9 @@ class HumboldtContextStorageTest {
 
     @Test
     void provider_is_resolved_via_serviceloader() {
-        // Si OTel n'avait pas trouvé notre provider, Context.current() retournerait
-        // l'impl ThreadLocal par défaut — fonctionnellement identique. On vérifie
-        // donc directement le binding ServiceLoader.
+        // If OTel had not found our provider, Context.current() would return
+        // the default ThreadLocal implementation — functionally identical. We
+        // therefore verify the ServiceLoader binding directly.
         assertSame(HumboldtContextStorage.INSTANCE,
                 new HumboldtContextStorageProvider().get());
     }
@@ -62,15 +62,15 @@ class HumboldtContextStorageTest {
         CountDownLatch done = new CountDownLatch(1);
 
         try (Scope ignored = parent.makeCurrent()) {
-            // Sans wrap explicite, un nouveau VT ne doit PAS hériter du Context parent.
+            // Without explicit wrapping, a new VT must NOT inherit the parent Context.
             Thread.ofVirtual().start(() -> {
                 seenInChild.set(Context.current().get(KEY));
                 done.countDown();
             });
-            assertTrue(done.await(2, TimeUnit.SECONDS), "VT n'a pas terminé à temps");
+            assertTrue(done.await(2, TimeUnit.SECONDS), "VT did not finish in time");
         }
         assertNull(seenInChild.get(),
-                "le VT ne doit PAS voir le Context parent sans wrap (isolation ThreadLocal)");
+                "VT must NOT see parent Context without wrap (ThreadLocal isolation)");
     }
 
     @Test
@@ -80,17 +80,17 @@ class HumboldtContextStorageTest {
         CountDownLatch done = new CountDownLatch(1);
 
         try (Scope ignored = parent.makeCurrent()) {
-            // Avec Context.wrap(Runnable), OTel ré-attache le Context capturé
-            // dans le VT enfant.
+            // With Context.wrap(Runnable), OTel reattaches the captured Context
+            // in the child VT.
             Runnable task = Context.current().wrap(() -> {
                 seenInChild.set(Context.current().get(KEY));
                 done.countDown();
             });
             Thread.ofVirtual().start(task);
-            assertTrue(done.await(2, TimeUnit.SECONDS), "VT wrap n'a pas terminé à temps");
+            assertTrue(done.await(2, TimeUnit.SECONDS), "VT wrap did not complete in time");
         }
         assertEquals("wrapped-value", seenInChild.get(),
-                "Context.wrap() doit propager le contexte capturé au VT");
+                "Context.wrap() must propagate captured context to VT");
     }
 
     @Test
@@ -98,7 +98,7 @@ class HumboldtContextStorageTest {
         Context ctx = Context.root().with(KEY, "x");
         Scope scope = ctx.makeCurrent();
         scope.close();
-        scope.close(); // ne doit pas planter ni double-pop
+        scope.close(); // must not fail or double-pop
         assertNull(Context.current().get(KEY));
     }
 }

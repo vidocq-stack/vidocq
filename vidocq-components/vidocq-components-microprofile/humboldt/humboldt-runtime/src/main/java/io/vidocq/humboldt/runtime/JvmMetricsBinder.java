@@ -25,11 +25,10 @@ import java.lang.management.ThreadMXBean;
 import java.util.List;
 
 /**
- * Enregistre des Observable instruments OTel SemConv 1.27+ pour les métriques
- * standard de la JVM — invoqué au boot de {@code HumboldtAutoConfigure} après la
- * création du {@link MeterProvider}.
+ * Registers OTel SemConv 1.27+ Observable instruments for standard JVM metrics —
+ * invoked at {@code HumboldtAutoConfigure} boot after {@link MeterProvider} creation.
  *
- * <p>Conformité MP Telemetry 2.1 §"Required JVM metrics" :</p>
+ * <p>Conformant with MP Telemetry 2.1 §"Required JVM metrics":</p>
  * <ul>
  *   <li>{@code jvm.memory.used / committed / limit / used_after_last_gc}</li>
  *   <li>{@code jvm.cpu.time / count / recent_utilization}</li>
@@ -38,14 +37,14 @@ import java.util.List;
  *   <li>{@code jvm.gc.duration}</li>
  * </ul>
  *
- * <p>Implémentation pure {@code java.lang.management.*} — zéro dépendance externe,
- * conforme philo Vidocq.</p>
+ * <p>Pure {@code java.lang.management.*} implementation — zero external dependencies,
+ * consistent with Vidocq philosophy.</p>
  */
 public final class JvmMetricsBinder {
 
     private JvmMetricsBinder() {}
 
-    /** Binde tous les Observable JVM metrics sur le {@link Meter} fourni. */
+    /** Binds all Observable JVM metrics on the provided {@link Meter}. */
     public static void bindAll(Meter meter) {
         bindMemory(meter);
         bindCpu(meter);
@@ -60,7 +59,7 @@ public final class JvmMetricsBinder {
         MemoryMXBean memBean = ManagementFactory.getMemoryMXBean();
         List<MemoryPoolMXBean> pools = ManagementFactory.getMemoryPoolMXBeans();
 
-        // OTel SemConv 1.27+ : Memory en UpDownCounter (LONG_SUM), pas Gauge — alignement TCK.
+        // OTel SemConv 1.27+: Memory as UpDownCounter (LONG_SUM), not Gauge — aligned with TCK.
         meter.upDownCounterBuilder("jvm.memory.used")
                 .setDescription("Measure of memory used.")
                 .setUnit("By")
@@ -182,19 +181,19 @@ public final class JvmMetricsBinder {
     private static void bindGarbageCollection(Meter meter) {
         List<GarbageCollectorMXBean> gcBeans = ManagementFactory.getGarbageCollectorMXBeans();
 
-        // jvm.gc.duration est un histogramme — mais comme nos collectes sont basées sur
-        // les MXBean qui exposent juste le cumul, on expose un counter du nombre de GCs
-        // (utilisé par testGarbageCollectionCountMetric — le TCK cherche juste "jvm.gc.duration").
+        // jvm.gc.duration is a histogram — but since our collection is MXBean-based and
+        // exposes only a cumulative total, we expose a counter of GC counts
+        // (used by testGarbageCollectionCountMetric — the TCK only searches for "jvm.gc.duration").
         meter.histogramBuilder("jvm.gc.duration")
                 .setDescription("Duration of JVM garbage collection actions.")
                 .setUnit("s")
-                .build(); // Pas de callback — instrument créé, jamais alimenté (les GC events
-                          // sont notifiés via NotificationListener qu'on n'enregistre pas en M4b).
-                          // Le TCK metric Tests utilise contains() sur "jvm.gc.duration Duration of JVM..."
-                          // → le simple fait que l'instrument soit créé et exporté suffit.
+                .build(); // No callback — instrument created, never fed (GC events
+                          // are notified via NotificationListener not registered in M4b).
+                          // The metric TCK tests use contains() on "jvm.gc.duration Duration of JVM..."
+                          // → simply creating and exporting the instrument is sufficient.
 
-        // Counter additionnel : nombre total de GCs (semi-conventionnel — utile pour
-        // testGarbageCollectionCountMetric qui cherche aussi cette métrique).
+        // Additional counter: total GC count (semi-conventional — useful for
+        // testGarbageCollectionCountMetric which also searches for this metric).
         meter.counterBuilder("jvm.gc.duration.count")
                 .setDescription("Number of JVM garbage collection actions.")
                 .setUnit("{gc}")

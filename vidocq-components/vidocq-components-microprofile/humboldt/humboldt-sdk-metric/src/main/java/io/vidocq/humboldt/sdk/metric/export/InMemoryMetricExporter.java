@@ -7,8 +7,8 @@ import io.vidocq.humboldt.sdk.metric.data.MetricData;
 import java.util.Collection;
 
 /**
- * Exporter qui accumule les {@link MetricData} en mémoire — pour tests.
- * Délègue à {@link InMemoryExporterBase} le squelette mutualisé.
+ * Exporter that accumulates {@link MetricData} in memory — for tests.
+ * Delegates the shared skeleton to {@link InMemoryExporterBase}.
  */
 public final class InMemoryMetricExporter extends InMemoryExporterBase<MetricData> implements MetricExporter {
 

@@ -4,9 +4,9 @@ import io.vidocq.humboldt.sdk.common.CompletableResultCode;
 import io.vidocq.humboldt.sdk.log.data.LogRecordData;
 
 /**
- * Hook appelé par le SDK à chaque émission d'un {@link LogRecordData}.
+ * Hook called by the SDK each time a {@link LogRecordData} is emitted.
  *
- * <p>Implémentations standard :</p>
+ * <p>Standard implementations:</p>
  * <ul>
  *   <li>{@link io.vidocq.humboldt.sdk.log.SimpleLogRecordProcessor}</li>
  *   <li>{@link io.vidocq.humboldt.sdk.log.BatchLogRecordProcessor}</li>

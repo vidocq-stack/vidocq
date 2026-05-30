@@ -12,8 +12,8 @@ import io.vidocq.humboldt.sdk.metric.data.InstrumentType;
 import java.util.function.Consumer;
 
 /**
- * Builder pour {@link LongCounter} — produit un {@link SdkLongCounter} backé
- * par un {@link SumAggregator} cumulative.
+ * Builder for {@link LongCounter} — produces an {@link SdkLongCounter} backed
+ * by a cumulative {@link SumAggregator}.
  */
 public final class SdkLongCounterBuilder implements LongCounterBuilder {
 

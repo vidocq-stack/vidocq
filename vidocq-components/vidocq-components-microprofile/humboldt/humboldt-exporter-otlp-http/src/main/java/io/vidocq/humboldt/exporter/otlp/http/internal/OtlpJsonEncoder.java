@@ -20,15 +20,15 @@ import static io.vidocq.humboldt.exporter.otlp.http.internal.OtlpJsonCommon.writ
 import static io.vidocq.humboldt.exporter.otlp.http.internal.OtlpJsonCommon.writeScopeHeader;
 
 /**
- * Encode une collection de {@link SpanData} au format OTLP/HTTP-JSON.
+ * Encodes a collection of {@link SpanData} in OTLP/HTTP-JSON format.
  *
- * <p>Schéma : <a href="https://github.com/open-telemetry/opentelemetry-proto/blob/main/opentelemetry/proto/collector/trace/v1/trace_service.proto">trace_service.proto</a>
- * et <a href="https://github.com/open-telemetry/opentelemetry-proto/blob/main/docs/specification.md#json-protobuf-encoding">JSON-proto encoding</a>.</p>
+ * <p>Schema: <a href="https://github.com/open-telemetry/opentelemetry-proto/blob/main/opentelemetry/proto/collector/trace/v1/trace_service.proto">trace_service.proto</a>
+ * and <a href="https://github.com/open-telemetry/opentelemetry-proto/blob/main/docs/specification.md#json-protobuf-encoding">JSON-proto encoding</a>.</p>
  *
- * <p>Grouping par Resource puis par InstrumentationScope, conforme au schéma
+ * <p>Grouped by Resource then by InstrumentationScope, conforming to the schema
  * {@code ExportTraceServiceRequest.resource_spans[].scope_spans[].spans[]}.
- * Plumbing JSON commun (escape, AnyValue, AttributesArray, Resource, Scope)
- * mutualisé via {@link OtlpJsonCommon}.</p>
+ * Common JSON plumbing (escaping, AnyValue, AttributesArray, Resource, Scope)
+ * shared via {@link OtlpJsonCommon}.</p>
  */
 public final class OtlpJsonEncoder {
 

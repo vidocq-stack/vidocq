@@ -13,11 +13,11 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Reader push-based — déclenche périodiquement {@code collectAllMetrics()} sur le
- * SdkMeterProvider qui l'a registered, puis envoie le résultat à l'{@link MetricExporter}.
+ * Push-based reader — periodically triggers {@code collectAllMetrics()} on the
+ * SdkMeterProvider it was registered with, then sends the result to the {@link MetricExporter}.
  *
- * <p>Worker sur virtual thread ({@code Thread.ofVirtual()}), pas de pinning de
- * carrier thread (cf. JEP 444). {@code scheduleDelay} configurable (défaut 60s).</p>
+ * <p>Worker on a virtual thread ({@code Thread.ofVirtual()}), no carrier-thread
+ * pinning (see JEP 444). Configurable {@code scheduleDelay} (default 60s).</p>
  */
 public final class PeriodicMetricReader implements MetricReader {
 
@@ -94,7 +94,7 @@ public final class PeriodicMetricReader implements MetricReader {
             doCollectAndExport(requested);
             lastCollectNanos = System.nanoTime();
         }
-        // Drain final
+        // Final drain
         doCollectAndExport(null);
     }
 
@@ -116,7 +116,7 @@ public final class PeriodicMetricReader implements MetricReader {
                 });
             }
         } catch (RuntimeException e) {
-            LOG.log(Level.WARNING, "Échec collect/export métriques", e);
+            LOG.log(Level.WARNING, "Failed to collect/export metrics", e);
             if (requested != null) requested.fail();
         }
     }

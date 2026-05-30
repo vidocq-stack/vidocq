@@ -1,10 +1,10 @@
 package io.vidocq.humboldt.sdk.metric.data;
 
 /**
- * Temporality OTel — {@link #CUMULATIVE} envoie l'état total depuis le
- * démarrage, {@link #DELTA} envoie le delta depuis la dernière collecte.
+ * OTel temporality — {@link #CUMULATIVE} sends the total state since startup,
+ * {@link #DELTA} sends the delta since the last collection.
  *
- * <p>M4 MVP : Humboldt n'émet que CUMULATIVE. DELTA = M4b.</p>
+ * <p>M4 MVP: Humboldt only emits CUMULATIVE. DELTA = M4b.</p>
  */
 public enum AggregationTemporality {
     DELTA,

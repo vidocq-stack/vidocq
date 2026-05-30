@@ -1,173 +1,173 @@
-# Humboldt — Leçons de session
+# Humboldt — Session lessons
 
-> Toute correction utilisateur ou validation non triviale doit être consignée ici. Calque sur `chappe/tasks/lessons.md`.
+> Any user correction or non-trivial validation must be recorded here. Modeled after `chappe/tasks/lessons.md`.
 
 ## M2 — SDK Trace (2026-05-20)
 
-### Locale.ROOT pour les format strings
+### Locale.ROOT for format strings
 
-`String.format("%.6f", 0.42)` retourne `"0,420000"` dans un environnement français.
-Les `description()` de Sampler / IdGenerator / etc. **doivent** utiliser
-`String.format(Locale.ROOT, ...)` pour garantir un point décimal portable —
-sinon les tests `contains("0.42")` échouent en CI selon la locale du runner.
+`String.format("%.6f", 0.42)` returns `"0,420000"` in a French environment.
+The `description()` methods of Sampler / IdGenerator / etc. **must** use
+`String.format(Locale.ROOT, ...)` to guarantee a portable decimal point —
+otherwise the `contains("0.42")` tests fail in CI depending on the runner locale.
 
-### InMemorySpanExporter.shutdown() ne purge pas
+### InMemorySpanExporter.shutdown() does not clear
 
-Convention Humboldt : `shutdown()` arrête l'export mais **conserve** les
-spans déjà collectés, pour permettre l'inspection après `provider.close()`
-dans les tests en try-with-resources. Utiliser `reset()` pour vider
-explicitement. Diffère de l'impl OTel de référence qui clear sur shutdown.
+Humboldt convention: `shutdown()` stops export but **preserves** the
+already collected spans, to allow inspection after `provider.close()`
+in try-with-resources tests. Use `reset()` to clear them
+explicitly. This differs from the reference OTel impl, which clears on shutdown.
 
-### SpanBuilder OTel 1.39 — 4 setAttribute primitifs abstract
+### OTel 1.39 SpanBuilder — 4 abstract primitive setAttribute methods
 
-Dans OpenTelemetry API 1.39.0, `SpanBuilder.setAttribute(String, boolean)`
-est ABSTRACT (et probablement les 3 autres primitifs). Il faut overrider
-les 4 par délégation `setAttribute(AttributeKey.{string|long|double|boolean}Key(key), value)`.
-Pareil pour `TracerProvider.get(String name, String version)` qui doit
-être implémenté (la simplification "cache by name only" est OK pour M2).
+In OpenTelemetry API 1.39.0, `SpanBuilder.setAttribute(String, boolean)`
+is ABSTRACT (and likely the other 3 primitives as well). The 4 must be
+overridden by delegating to `setAttribute(AttributeKey.{string|long|double|boolean}Key(key), value)`.
+Same for `TracerProvider.get(String name, String version)`, which must
+be implemented (the "cache by name only" simplification is OK for M2).
 
-## M3 — Exporter OTLP (2026-05-20)
+## M3 — OTLP Exporter (2026-05-20)
 
-### `requires static jdk.httpserver` pour les tests E2E
+### `requires static jdk.httpserver` for E2E tests
 
-Dans un module JPMS avec `module-info.java`, les tests Maven 4 + Surefire 3.5
-sont compilés en MODULEPATH (pas classpath). Un test qui utilise
-`com.sun.net.httpserver.HttpServer` (HttpServer du JDK pur, parfait pour les
-fake servers in-process) doit donc voir le module `jdk.httpserver`.
+In a JPMS module with `module-info.java`, Maven 4 + Surefire 3.5 tests
+are compiled on the MODULEPATH (not the classpath). A test that uses
+`com.sun.net.httpserver.HttpServer` (the pure JDK HttpServer, perfect for
+in-process fake servers) must therefore see the `jdk.httpserver` module.
 
-Solution propre : `requires static jdk.httpserver;` dans le module-info
-du main. `static` = compile-time uniquement, n'apparaît pas dans le graphe
-runtime. Aucun ajout de dep externe (le module est dans le JDK).
+Clean solution: `requires static jdk.httpserver;` in the main module-info.
+`static` = compile-time only, it does not appear in the runtime
+graph. No external dep added (the module is in the JDK).
 
-Alternative envisagée (rejetée) : test module-info séparé, argLine
-`--add-modules` côté surefire — plus complexe pour zéro gain.
+Alternative considered (rejected): separate test module-info, argLine
+`--add-modules` on the surefire side — more complex for zero gain.
 
-### Propagators W3C déjà concrets dans OTel API
+### W3C propagators are already concrete in the OTel API
 
-`W3CTraceContextPropagator.getInstance()` et `W3CBaggagePropagator.getInstance()`
-sont des classes concrètes dans `opentelemetry-api` (pas que des interfaces).
-Donc `humboldt-propagator-w3c` ne réimplémente pas — il fournit juste la
-composition canonique `ContextPropagators.create(TextMapPropagator.composite(...))`.
+`W3CTraceContextPropagator.getInstance()` and `W3CBaggagePropagator.getInstance()`
+are concrete classes in `opentelemetry-api` (not just interfaces).
+So `humboldt-propagator-w3c` does not reimplement them — it only provides the
+canonical composition `ContextPropagators.create(TextMapPropagator.composite(...))`.
 
 ## M4 — SDK Metric (2026-05-20)
 
-### `mvn clean` obligatoire après déplacement de package
+### `mvn clean` is mandatory after moving a package
 
-Symptôme : `LayerInstantiationException: Package X in both module A and module B`
-au démarrage du test JVM. Cause : un `.class` orphelin reste dans `target/`
-après qu'on a déplacé le `.java` vers un autre module (ou changé son
-`package`). Le JAR construit contient à la fois la classe à la nouvelle
-position ET la classe résiduelle à l'ancienne — JPMS détecte le doublon
-de package et refuse de monter la layer.
+Symptom: `LayerInstantiationException: Package X in both module A and module B`
+when starting the test JVM. Cause: an orphan `.class` remains in `target/`
+after moving the `.java` to another module (or changing its
+`package`). The built JAR contains both the class at the new
+location AND the leftover class at the old one — JPMS detects the duplicate
+package and refuses to mount the layer.
 
-Toujours faire `mvn clean install` après un déplacement de classe entre
-modules ou un changement de package declaration.
+Always run `mvn clean install` after moving a class between
+modules or changing a package declaration.
 
-### Couplage cross-SDK à éviter — placer les briques partagées en sdk-common
+### Cross-SDK coupling must be avoided — place shared building blocks in sdk-common
 
-`SpanData`, `MetricData`, `LogRecordData` partagent les mêmes briques :
-`Resource`, `InstrumentationScope`, `CompletableResultCode`. Si on les laisse
-dans le premier SDK qui les crée (humboldt-sdk-trace), les autres SDK
-finissent par devoir `requires` ce module — ce qui couple inutilement
-metric/log à trace.
+`SpanData`, `MetricData`, `LogRecordData` share the same building blocks:
+`Resource`, `InstrumentationScope`, `CompletableResultCode`. If they are left
+in the first SDK that creates them (humboldt-sdk-trace), the other SDKs
+eventually have to `requires` that module — which needlessly couples
+metric/log to trace.
 
-Règle : tout type partagé entre 2+ SDK doit vivre dans `humboldt-sdk-common`.
-Migration appliquée en M4 pour InstrumentationScope (trace → common) et
+Rule: any type shared by 2+ SDKs must live in `humboldt-sdk-common`.
+Migration applied in M4 for InstrumentationScope (trace → common) and
 CompletableResultCode (trace → common).
 
 ### OpenTelemetry API 1.39 — MeterBuilder.setInstrumentationAttributes absent
 
-Contrairement à ce qu'on pourrait croire, `MeterBuilder` dans OTel 1.39 n'a
-PAS `setInstrumentationAttributes(Attributes)`. Méthodes abstraites = juste
-`setInstrumentationVersion(String)`, `setSchemaUrl(String)` et `build()`.
-Toujours vérifier les overrides côté compilateur — chaque version OTel a
-des nuances dans ce qui est default vs abstract sur les builders.
+Contrary to what one might think, `MeterBuilder` in OTel 1.39 does
+NOT have `setInstrumentationAttributes(Attributes)`. Abstract methods = only
+`setInstrumentationVersion(String)`, `setSchemaUrl(String)` and `build()`.
+Always verify overrides through the compiler — each OTel version has
+subtle differences in what is default vs abstract on builders.
 
 ## M6b — humboldt-rest (2026-05-21)
 
-### `java.lang.reflect.Proxy` pour mocker une API JAX-RS sans Mockito
+### `java.lang.reflect.Proxy` to mock a JAX-RS API without Mockito
 
-Les interfaces `ContainerRequestContext` et `UriInfo` de JAX-RS 4.0 ont
-chacune ~40-50 méthodes abstraites (et la surface change entre versions :
-`MatchedResource` ajouté en 4.0, `getMatchedResourceTemplate()` nouveau,
-etc.). Implémenter ces interfaces à la main dans un test = boilerplate
-énorme et fragile à chaque upgrade JAX-RS.
+The JAX-RS 4.0 `ContainerRequestContext` and `UriInfo` interfaces each have
+~40-50 abstract methods (and the surface changes between versions:
+`MatchedResource` added in 4.0, `getMatchedResourceTemplate()` new,
+etc.). Implementing these interfaces by hand in a test = huge,
+fragile boilerplate on every JAX-RS upgrade.
 
-Solution Humboldt : `java.lang.reflect.Proxy.newProxyInstance` + switch sur
-`method.getName()` pour router uniquement les ~6 méthodes effectivement
-consommées par le filter, avec `defaultForReturnType(m)` qui retourne des
-valeurs sûres (`null`, `false`, `0`, `List.of()`, `Map.of()`,
-`MultivaluedHashMap`) pour tout le reste.
+Humboldt solution: `java.lang.reflect.Proxy.newProxyInstance` + switch on
+`method.getName()` to route only the ~6 methods actually
+consumed by the filter, with `defaultForReturnType(m)` returning
+safe values (`null`, `false`, `0`, `List.of()`, `Map.of()`,
+`MultivaluedHashMap`) for everything else.
 
-Avantage : robuste face aux ajouts d'abstract methods upstream — pas besoin
-de patcher le test à chaque release JAX-RS. Pas de dépendance Mockito.
+Advantage: robust against upstream additions of abstract methods — no need
+to patch the test on every JAX-RS release. No Mockito dependency.
 
-Pattern à réutiliser pour `ContainerResponseContext`, `SecurityContext`,
-`Application` etc. quand on testera M6c/M7.
+Pattern to reuse for `ContainerResponseContext`, `SecurityContext`,
+`Application`, etc. when testing M6c/M7.
 
-### `UriInfo.getPath()` ne contient PAS le '/' initial — normaliser
+### `UriInfo.getPath()` does NOT contain the leading '/' — normalize it
 
-Selon JAX-RS spec, `UriInfo.getPath()` retourne le path **relatif au base URI**,
-SANS '/' initial. Mais la convention OTel HTTP semantic conventions exige
-`url.path` AVEC '/' initial.
+According to the JAX-RS spec, `UriInfo.getPath()` returns the path **relative to the base URI**,
+WITHOUT a leading '/'. But the OTel HTTP semantic conventions require
+`url.path` WITH a leading '/'.
 
-Fix dans `HumboldtServerRequestFilter` :
-`path = raw.startsWith("/") ? raw : "/" + raw` **avant** de le poser dans
-l'attribut ET dans le span name. Sinon tests échouent avec
+Fix in `HumboldtServerRequestFilter`:
+`path = raw.startsWith("/") ? raw : "/" + raw` **before** setting it on
+the attribute AND on the span name. Otherwise tests fail with
 `expected: </users/42> but was: <users/42>`.
 
-## Refactor — OtlpHttpJsonSender mutualisé (2026-05-21)
+## Refactor — shared OtlpHttpJsonSender (2026-05-21)
 
-### Pattern à 3 exemplaires = signal pour refactor
+### A 3-copy pattern = signal for refactor
 
-Quand un pattern est dupliqué dans 3+ classes (M3 Span, M4 Metric, M5 Log
-exporters partageaient HttpClient + retry + headers + computeBackoffMillis
-quasi-identiques), c'est le bon moment pour extraire un utilitaire commun.
+When a pattern is duplicated in 3+ classes (M3 Span, M4 Metric, M5 Log
+exporters shared nearly identical HttpClient + retry + headers + computeBackoffMillis),
+it is the right time to extract a common utility.
 
-Solution Humboldt : `OtlpHttpJsonSender` interne (package `.internal.`) qui
-encapsule HttpClient + endpoint + headers + timeouts + retry. Les 3 exporters
-deviennent ~85 lignes chacun (vs ~170 avant) et délèguent juste l'encoding.
+Humboldt solution: internal `OtlpHttpJsonSender` (package `.internal.`) that
+encapsulates HttpClient + endpoint + headers + timeouts + retry. The 3 exporters
+become ~85 lines each (vs ~170 before) and only delegate the encoding.
 
-Bénéfice mesuré : -255 lignes de code (3 × -85), 1 seul endroit à modifier
-pour le retry/transport/protocol switch futur (M3b : passage à chappe-client,
-ajout de OTEL_EXPORTER_OTLP_TIMEOUT/PROTOCOL en M7).
+Measured benefit: -255 lines of code (3 × -85), a single place to modify
+for future retry/transport/protocol switching (M3b: move to chappe-client,
+add OTEL_EXPORTER_OTLP_TIMEOUT/PROTOCOL in M7).
 
-API publique inchangée — les builders `OtlpHttpXxxExporter.builder()`
-gardent exactement la même signature. Les tests E2E passent sans modification
-(109/109 toujours verts).
+Public API unchanged — the `OtlpHttpXxxExporter.builder()` builders
+keep exactly the same signature. E2E tests pass without modification
+(109/109 still green).
 
-### Rétro-compat avec wrapper static
+### Backward compatibility with static wrapper
 
-`OtlpHttpSpanExporter.computeBackoffMillis(int)` public static était utilisé
-par les 2 autres exporters ET par un test E2E. Au lieu de casser la
-rétrocompat, on garde la méthode et on la fait déléguer à
-`OtlpHttpJsonSender.computeBackoffMillis()`. Coût : 3 lignes. Bénéfice :
-pas de modification des appelants externes (et le test E2E continue de
-fonctionner sans patch).
+`OtlpHttpSpanExporter.computeBackoffMillis(int)` public static was used
+by the 2 other exporters AND by an E2E test. Instead of breaking
+backward compatibility, the method is kept and delegates to
+`OtlpHttpJsonSender.computeBackoffMillis()`. Cost: 3 lines. Benefit:
+no modification of external callers (and the E2E test keeps
+working without a patch).
 
-## Fix M6a — Adopter @WithSpan API publique OTel + BCE (2026-05-21)
+## Fix M6a — Adopt public OTel @WithSpan API + BCE (2026-05-21)
 
-### Erreur de design M6a corrigée
+### M6a design error corrected
 
-En M6a, j'ai créé `io.vidocq.humboldt.cdi.WithSpan` (annotation custom) en
-me trompant sur le périmètre du principe "zéro-dep". La règle correcte est :
-**API/SPI publiques OK, impl runtime non**.
+In M6a, I created `io.vidocq.humboldt.cdi.WithSpan` (custom annotation) by
+misunderstanding the scope of the "zero-dep" principle. The correct rule is:
+**public API/SPI OK, runtime impl not OK**.
 
-L'annotation `io.opentelemetry.instrumentation.annotations.WithSpan` est dans
-`opentelemetry-instrumentation-annotations` — un JAR qui ne contient QUE des
-annotations marqueurs (`@WithSpan`, `@SpanAttribute`, etc.), pas d'impl
-runtime. C'est exactement le type de dep qu'on accepte (comme
+The `io.opentelemetry.instrumentation.annotations.WithSpan` annotation is in
+`opentelemetry-instrumentation-annotations` — a JAR that contains ONLY
+marker annotations (`@WithSpan`, `@SpanAttribute`, etc.), no runtime
+implementation. That is exactly the kind of dep we accept (like
 `opentelemetry-api`, `opentelemetry-semconv`).
 
-Bonus immédiat : alignement automatique avec le TCK MicroProfile Telemetry
-2.1 qui attend cette annotation officielle.
+Immediate bonus: automatic alignment with the MicroProfile Telemetry
+2.1 TCK, which expects this official annotation.
 
-### BuildCompatibleExtension CDI 4.x pour activer l'interception
+### CDI 4.x BuildCompatibleExtension to enable interception
 
-Challenge : `@WithSpan` OTel **n'est pas** un `@InterceptorBinding` (et on
-ne peut pas modifier l'annotation tierce). Pour faire fonctionner l'interceptor
-CDI sans demander à l'utilisateur d'écrire 2 annotations, on utilise une
-`BuildCompatibleExtension` (CDI 4.x Lite + Full unifié) :
+Challenge: OTel `@WithSpan` **is not** an `@InterceptorBinding` (and we
+cannot modify the third-party annotation). To make the CDI interceptor work
+without asking the user to write 2 annotations, we use a
+`BuildCompatibleExtension` (CDI 4.x Lite + Full unified):
 
 ```java
 @Enhancement(types = Object.class, withSubtypes = true,
@@ -184,112 +184,112 @@ public void addSpanBinding(ClassConfig classConfig) {
 }
 ```
 
-Avantages BCE vs portable Extension :
-- Compatible CDI 4.1 **Lite** (Vauban) ET CDI 4.1 **Full** (Weld 5+) — un
-  seul mécanisme partagé
-- Build-time = pas de coût runtime
-- API standard CDI 4.x (vs Quarkus-spécifique)
+Advantages of BCE vs portable Extension:
+- Compatible with CDI 4.1 **Lite** (Vauban) AND CDI 4.1 **Full** (Weld 5+) — a
+  single shared mechanism
+- Build-time = no runtime cost
+- Standard CDI 4.x API (vs Quarkus-specific)
 
-Découverte : `META-INF/services/jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension`
-+ `provides` JPMS dans module-info.
+Discovery: `META-INF/services/jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension`
++ JPMS `provides` in module-info.
 
-### Automatic-Module-Name avec underscore
+### Automatic-Module-Name with underscore
 
-`opentelemetry-instrumentation-annotations:2.7.0` a `Automatic-Module-Name:
-io.opentelemetry.instrumentation_annotations` — **avec un underscore** au
-milieu, pas un point comme la convention habituelle. Erreur cryptique
-"module not found" si on écrit `io.opentelemetry.instrumentation.annotations`.
+`opentelemetry-instrumentation-annotations:2.7.0` has `Automatic-Module-Name:
+io.opentelemetry.instrumentation_annotations` — **with an underscore** in the
+middle, not a dot like the usual convention. Cryptic
+"module not found" error if you write `io.opentelemetry.instrumentation.annotations`.
 
-Toujours `unzip -p .../foo.jar META-INF/MANIFEST.MF | grep Automatic-Module-Name`
-quand on importe un JAR non explicitement modulé.
+Always run `unzip -p .../foo.jar META-INF/MANIFEST.MF | grep Automatic-Module-Name`
+when importing a JAR that is not explicitly modularized.
 
-### @WithSpan OTel ne cible QUE METHOD et CONSTRUCTOR
+### OTel @WithSpan targets ONLY METHOD and CONSTRUCTOR
 
-Contrairement à ce qu'on pourrait penser, `io.opentelemetry.instrumentation.annotations.WithSpan`
-**ne peut PAS être posée sur une classe** (TYPE absent du `@Target`).
-Conséquence : pas de "tracer toute la classe" en une annotation OTel — chaque
-méthode doit être annotée individuellement.
+Contrary to what one might think, `io.opentelemetry.instrumentation.annotations.WithSpan`
+**cannot** be placed on a class (`TYPE` is absent from `@Target`).
+Consequence: no "trace the whole class" with a single OTel annotation — each
+method must be annotated individually.
 
-Notre interceptor garde un fallback class-level défensif (pour les BCE
-exotiques qui ajouteraient @WithSpan via metaprogramming) mais c'est du
-code mort en pratique.
+Our interceptor keeps a defensive class-level fallback (for exotic BCEs
+that would add @WithSpan via metaprogramming) but in practice it is
+dead code.
 
-## Refactor P1 — OtlpJsonCommon mutualisé (2026-05-21)
+## Refactor P1 — shared OtlpJsonCommon (2026-05-21)
 
-### Bug latent révélé par le refactor
+### Latent bug revealed by the refactor
 
-Lors de l'audit de duplication entre les 3 encoders OTLP/JSON (spans M3,
-metrics M4, logs M5), constat : les versions de `writeAnyValue` dans
-OtlpJsonMetricEncoder et OtlpJsonLogEncoder ne supportaient PAS les
-attribute types array (STRING_ARRAY, LONG_ARRAY, BOOLEAN_ARRAY,
-DOUBLE_ARRAY). Bug latent : un metric ou log avec un attribute
-`tags=["a","b"]` aurait crashé avec une RuntimeException via le `default ->`.
+During the duplication audit across the 3 OTLP/JSON encoders (M3 spans,
+M4 metrics, M5 logs), it was observed that the `writeAnyValue` versions in
+OtlpJsonMetricEncoder and OtlpJsonLogEncoder did NOT support
+array attribute types (STRING_ARRAY, LONG_ARRAY, BOOLEAN_ARRAY,
+DOUBLE_ARRAY). Latent bug: a metric or log with an attribute
+`tags=["a","b"]` would have crashed with a RuntimeException via `default ->`.
 
-Cause : OtlpJsonEncoder (M3) avait été écrit en premier avec la version
-complète ; M4 et M5 ont copié-collé une version simplifiée par oubli.
-Le refactor en `OtlpJsonCommon.writeAnyValue` ne supportant qu'UNE seule
-version fixée — la plus complète — élimine le bug latent.
+Cause: OtlpJsonEncoder (M3) was written first with the complete
+version; M4 and M5 copy-pasted a simplified version by mistake.
+The refactor to `OtlpJsonCommon.writeAnyValue`, supporting only ONE
+fixed version — the most complete one — removes the latent bug.
 
-Test de régression ajouté (`encodes_array_attributes_as_otlp_arrayValue`)
-qui prouve que STRING_ARRAY + LONG_ARRAY se sérialisent en
-`arrayValue.values` selon la spec OTLP/JSON.
+Regression test added (`encodes_array_attributes_as_otlp_arrayValue`)
+proving that STRING_ARRAY + LONG_ARRAY serialize to
+`arrayValue.values` according to the OTLP/JSON spec.
 
-Pattern à retenir : **un refactor DRY révèle souvent des divergences**
-entre les copies — il faut les analyser une par une au lieu de prendre
-"la version la plus récente" par défaut.
+Pattern to remember: **a DRY refactor often reveals divergences**
+between copies — they must be analyzed one by one instead of taking
+"the most recent version" by default.
 
-### Mutualisation via héritage + callbacks fonctionnels (P2/P3)
+### Sharing via inheritance + functional callbacks (P2/P3)
 
-Pour les `InMemory{Span,Metric,LogRecord}Exporter` (P2) et les
-`Batch{Span,LogRecord}Processor` (P3), l'héritage classique fonctionne
-bien car les sous-classes implémentent des INTERFACES différentes
+For `InMemory{Span,Metric,LogRecord}Exporter` (P2) and
+`Batch{Span,LogRecord}Processor` (P3), classic inheritance works
+well because the subclasses implement DIFFERENT INTERFACES
 (SpanExporter/MetricExporter/LogRecordExporter, SpanProcessor/LogRecordProcessor).
 
-Pattern Humboldt :
-- `InMemoryExporterBase<T>` abstract : storage `CopyOnWriteArrayList<T>` +
-  helpers `addAll/flushBase/shutdownBase`. Sous-classes (~30 lignes) :
-  appellent les helpers depuis leur impl d'interface.
-- `AbstractBatchProcessor<T>` abstract : worker VT + queue + flush/shutdown.
-  Constructeur prend `Consumer<List<T>> exportBatch + Supplier<CompletableResultCode>
-  flushExporter + Runnable shutdownExporter` (callbacks fonctionnels qui
-  encapsulent l'interface exporter spécifique). Sous-classes appellent
-  `offer(T)` depuis leur callback (`onEnd` / `onEmit`).
+Humboldt pattern:
+- Abstract `InMemoryExporterBase<T>`: `CopyOnWriteArrayList<T>` storage +
+  `addAll/flushBase/shutdownBase` helpers. Subclasses (~30 lines):
+  call the helpers from their interface impl.
+- Abstract `AbstractBatchProcessor<T>`: VT worker + queue + flush/shutdown.
+  Constructor takes `Consumer<List<T>> exportBatch + Supplier<CompletableResultCode>
+  flushExporter + Runnable shutdownExporter` (functional callbacks that
+  encapsulate the specific exporter interface). Subclasses call
+  `offer(T)` from their callback (`onEnd` / `onEmit`).
 
-Avantages des callbacks fonctionnels (vs abstract methods côté processor) :
-- Pas besoin de templater Base avec `<X extends Exporter>` (couplage en moins)
-- Construction explicite côté sous-classe (le constructeur de Builder passe
-  les lambdas) — IDE lisibilité conservée
-- Réutilisable au-delà du couple Span/Log si on ajoute un BatchMetricProcessor
-  à signature différente
+Advantages of functional callbacks (vs abstract methods on the processor side):
+- No need to template Base with `<X extends Exporter>` (less coupling)
+- Explicit construction on the subclass side (the Builder constructor passes
+  the lambdas) — IDE readability preserved
+- Reusable beyond the Span/Log pair if a BatchMetricProcessor
+  with a different signature is added
 
-Mesures (refactor M-bloc P1+P2+P3) :
-- P1 : −74 lignes nettes (JSON encoders)
-- P2 : −90 lignes nettes (InMemory exporters)
-- P3 : −80 lignes nettes (Batch processors)
-- Total cleanup : **−244 lignes nettes** sur 12 modules, 0 régression
+Measurements (M-block refactor P1+P2+P3):
+- P1: −74 net lines (JSON encoders)
+- P2: −90 net lines (InMemory exporters)
+- P3: −80 net lines (Batch processors)
+- Total cleanup: **−244 net lines** across 12 modules, 0 regression
 
-### Java unicode preprocessor mange les `\u00XX` même dans les commentaires
+### Java unicode preprocessor eats `\u00XX` even in comments
 
-Surprenant mais documenté : Java exécute le préprocesseur unicode AVANT
-le parser, sur tout le source (commentaires inclus). Donc une séquence
-`\u00XX` dans un commentaire `/** ... */` est interprétée comme un vrai
-caractère unicode. Si le résultat casse la syntaxe (ex. un `*/` accidentel
-qui ferme prématurément un block comment), erreur compile
-"illegal unicode escape" — vraiment cryptique.
+Surprising but documented: Java runs the unicode preprocessor BEFORE
+the parser, on the whole source (comments included). So a `\u00XX`
+sequence in a `/** ... */` comment is interpreted as a real
+unicode character. If the result breaks syntax (e.g. an accidental `*/`
+that prematurely closes a block comment), you get the compile
+error "illegal unicode escape" — very cryptic.
 
-Solution Humboldt : éviter `\u` dans les commentaires (utiliser `u00XX`
-sans backslash, ou échapper le backslash en `\\u`).
+Humboldt solution: avoid `\u` in comments (use `u00XX`
+without the backslash, or escape the backslash as `\\u`).
 
-### OTLP/JSON encoding manuel par StringBuilder
+### Manual OTLP/JSON encoding with StringBuilder
 
-Pour M3 MVP, l'encoder OTLP/JSON est écrit à la main via StringBuilder (pas
-de champollion JSON-P, pas de Jackson). Le schéma OTLP est fixe et limité
-(~10 types de valeurs). Le surcoût d'apporter un parser JSON pour cet usage
-est disproportionné. La spec : <https://github.com/open-telemetry/opentelemetry-proto/blob/main/docs/specification.md#json-protobuf-encoding>
+For the M3 MVP, the OTLP/JSON encoder is handwritten with StringBuilder (no
+champollion JSON-P, no Jackson). The OTLP schema is fixed and limited
+(~10 value types). The overhead of bringing in a JSON parser for this use
+is disproportionate. The spec: <https://github.com/open-telemetry/opentelemetry-proto/blob/main/docs/specification.md#json-protobuf-encoding>
 
-Détails à retenir :
-- `traceId`/`spanId` sont en **hex string** dans OTLP/JSON (en bytes dans protobuf)
-- timestamps en `string` représentant un long nano (pas Number JSON)
-- `kind` int : INTERNAL=1, SERVER=2, CLIENT=3, PRODUCER=4, CONSUMER=5
-- `status.code` int : UNSET=0, OK=1, ERROR=2
-- AnyValue : `{"stringValue":"..."}`, `{"intValue":"..."}` (long → string!), etc.
+Details to remember:
+- `traceId`/`spanId` are **hex strings** in OTLP/JSON (bytes in protobuf)
+- timestamps are `string` values representing a nano long (not a JSON Number)
+- `kind` int: INTERNAL=1, SERVER=2, CLIENT=3, PRODUCER=4, CONSUMER=5
+- `status.code` int: UNSET=0, OK=1, ERROR=2
+- AnyValue: `{"stringValue":"..."}`, `{"intValue":"..."}` (long → string!), etc.

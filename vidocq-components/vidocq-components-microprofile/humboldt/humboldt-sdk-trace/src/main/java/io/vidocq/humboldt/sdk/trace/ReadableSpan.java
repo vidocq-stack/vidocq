@@ -4,9 +4,9 @@ import io.opentelemetry.api.trace.SpanContext;
 import io.vidocq.humboldt.sdk.trace.data.SpanData;
 
 /**
- * Vue lecture d'un span pendant et après sa vie — utilisée par les
+ * Read view of a span during and after its lifetime — used by
  * {@link io.vidocq.humboldt.sdk.trace.export.SpanProcessor SpanProcessor}
- * lors du callback {@code onStart}/{@code onEnd}.
+ * during the {@code onStart}/{@code onEnd} callbacks.
  */
 public interface ReadableSpan {
 
@@ -19,7 +19,7 @@ public interface ReadableSpan {
     boolean hasEnded();
 
     /**
-     * @return un snapshot immutable de l'état actuel du span.
+     * @return an immutable snapshot of the span's current state.
      */
     SpanData toSpanData();
 }

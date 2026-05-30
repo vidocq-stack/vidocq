@@ -9,10 +9,10 @@ import io.vidocq.humboldt.sdk.common.Resource;
 import java.util.List;
 
 /**
- * Vue immutable d'un span terminé, consommée par {@code SpanExporter}.
+ * Immutable view of a completed span, consumed by {@code SpanExporter}.
  *
- * <p>Image figée de l'état du span au moment de {@code end()} — ni le SDK ni
- * un exporter ne doivent en muter le contenu après création.</p>
+ * <p>Frozen picture of the span state at {@code end()} time — neither the SDK nor
+ * an exporter should mutate its contents after creation.</p>
  */
 public record SpanData(
         SpanContext spanContext,

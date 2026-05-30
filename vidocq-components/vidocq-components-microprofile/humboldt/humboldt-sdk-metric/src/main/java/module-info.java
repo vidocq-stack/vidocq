@@ -1,12 +1,12 @@
 /**
- * Humboldt SDK Metric — implémentation OpenTelemetry du signal {@code metrics}.
+ * Humboldt SDK Metric — OpenTelemetry implementation of the {@code metrics} signal.
  *
- * <p>M4 MVP : instruments synchrones (LongCounter, DoubleHistogram),
+ * <p>M4 MVP: synchronous instruments (LongCounter, DoubleHistogram),
  * aggregations CUMULATIVE (Sum, ExplicitBucketHistogram), PeriodicMetricReader
- * sur virtual thread, MetricExporter SPI.</p>
+ * on a virtual thread, MetricExporter SPI.</p>
  *
- * <p>Différé en M4b : instruments asynchrones (Observable*), variantes
- * Long/Double manquantes, ExponentialHistogram, ViewRegistry / advice,
+ * <p>Deferred to M4b: asynchronous instruments (Observable*), missing
+ * Long/Double variants, ExponentialHistogram, ViewRegistry / advice,
  * DELTA temporality.</p>
  */
 module io.vidocq.humboldt.sdk.metric {

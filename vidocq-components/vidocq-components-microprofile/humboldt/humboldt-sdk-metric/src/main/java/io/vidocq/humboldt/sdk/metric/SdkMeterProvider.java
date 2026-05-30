@@ -19,11 +19,11 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Implémentation Humboldt de {@link MeterProvider} — point d'entrée du SDK Metric.
+ * Humboldt implementation of {@link MeterProvider} — entry point for the Metric SDK.
  *
- * <p>Construit via {@link #builder()}. Immutable côté configuration. Les readers
- * sont enregistrés via {@code register(CollectionRegistration)} pour qu'ils puissent
- * déclencher la collecte sur tous les meters/instruments du provider.</p>
+ * <p>Built via {@link #builder()}. Immutable from a configuration standpoint. Readers
+ * are registered via {@code register(CollectionRegistration)} so they can trigger
+ * collection across all meters/instruments in the provider.</p>
  */
 public final class SdkMeterProvider implements MeterProvider, AutoCloseable {
 
@@ -56,8 +56,8 @@ public final class SdkMeterProvider implements MeterProvider, AutoCloseable {
 
     @Override
     public MeterBuilder meterBuilder(String instrumentationScopeName) {
-        // M4 MVP : la version, le schemaUrl et les attributs sont ignorés (un seul SdkMeter par nom).
-        // M6 ajoutera le support complet de l'InstrumentationScope versionné.
+        // M4 MVP: version, schemaUrl, and attributes are ignored (one SdkMeter per name).
+        // M6 will add full support for versioned InstrumentationScope.
         return new MeterBuilder() {
             @Override public MeterBuilder setInstrumentationVersion(String v) { return this; }
             @Override public MeterBuilder setSchemaUrl(String url) { return this; }

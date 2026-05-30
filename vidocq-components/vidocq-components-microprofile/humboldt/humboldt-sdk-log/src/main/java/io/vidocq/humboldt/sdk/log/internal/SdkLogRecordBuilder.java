@@ -19,10 +19,10 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Implémentation interne de {@link LogRecordBuilder}.
+ * Internal implementation of {@link LogRecordBuilder}.
  *
- * <p>Collect-then-emit : accumule severity/body/attrs/context jusqu'à {@link #emit()},
- * puis crée un {@link LogRecordData} immutable et notifie tous les processors.</p>
+ * <p>Collect-then-emit: accumulates severity/body/attrs/context until {@link #emit()},
+ * then creates an immutable {@link LogRecordData} and notifies all processors.</p>
  */
 public final class SdkLogRecordBuilder implements LogRecordBuilder {
 

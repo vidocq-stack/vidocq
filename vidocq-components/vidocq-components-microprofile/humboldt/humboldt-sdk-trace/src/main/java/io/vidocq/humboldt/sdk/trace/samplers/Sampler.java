@@ -8,8 +8,8 @@ import io.vidocq.humboldt.sdk.trace.data.LinkData;
 import java.util.List;
 
 /**
- * Décide pour chaque nouveau span s'il est échantillonné (enregistré + exporté),
- * enregistré uniquement (pas exporté), ou abandonné.
+ * Decides for each new span whether it is sampled (recorded + exported),
+ * recorded only (not exported), or dropped.
  */
 public interface Sampler {
 

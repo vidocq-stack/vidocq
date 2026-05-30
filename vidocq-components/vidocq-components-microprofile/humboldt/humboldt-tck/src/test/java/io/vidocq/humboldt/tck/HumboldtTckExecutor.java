@@ -13,18 +13,18 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 
 /**
- * Implémentation {@link Executor} requise par la SPI de "porting" du TCK MicroProfile
- * Telemetry 2.1 ({@code org.eclipse.microprofile.telemetry.tracing.tck.porting.PropertiesBasedConfigurationBuilder}).
+ * {@link Executor} implementation required by the MicroProfile Telemetry 2.1 TCK
+ * porting SPI ({@code org.eclipse.microprofile.telemetry.tracing.tck.porting.PropertiesBasedConfigurationBuilder}).
  *
- * <p>Le TCK lit la propriété {@code telemetry.tck.executor} (system property ou
- * resource bundle {@code META-INF/microprofile-telemetry-tck.properties}) pour
- * instancier un Executor utilisé par les endpoints {@code JaxRsServerAsyncTestEndpoint}
- * dans leurs méthodes {@code getCompletionStage*} et {@code getSuspend*}. Sans cette
- * classe et la property correspondante, l'instantiation de l'endpoint échoue avec
+ * <p>The TCK reads the {@code telemetry.tck.executor} property (system property or
+ * {@code META-INF/microprofile-telemetry-tck.properties} resource bundle) to
+ * instantiate an Executor used by the {@code JaxRsServerAsyncTestEndpoint}
+ * endpoints in their {@code getCompletionStage*} and {@code getSuspend*} methods. Without this
+ * class and the matching property, endpoint instantiation fails with
  * "Cannot find any implementations of Executor".</p>
  *
- * <p>Délègue à {@link Executors#newVirtualThreadPerTaskExecutor()} — aligné sur la
- * philosophie Vidocq Virtual Threads partout.</p>
+ * <p>Delegates to {@link Executors#newVirtualThreadPerTaskExecutor()} — aligned with the
+ * Vidocq philosophy of virtual threads everywhere.</p>
  */
 public final class HumboldtTckExecutor implements Executor {
 

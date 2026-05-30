@@ -1,15 +1,15 @@
 # Run TCK MP Telemetry 2.1 — post B3 + Jaeger propagators (+4 PASS)
 
 **Date** : 2026-05-24 11:55
-**Commande** : `./run-official-tck-telemetry-2.1.sh all`
+**Command** : `./run-official-tck-telemetry-2.1.sh all`
 
-## Résultat brut
+## Raw results
 
 ```
 <testng-results ignored="0" total="85" passed="30" failed="32" skipped="23">
 ```
 
-## Évolution
+## Progress
 
 | Run | total | PASS | FAIL | SKIP |
 |---|---|---|---|---|
@@ -18,55 +18,55 @@
 
 **+4 PASS** (26 → 30), **-4 FAIL** (36 → 32).
 
-## Tests débloqués
+## Tests unblocked
 
-| Test | Mécanisme |
+| Test | Mechanism |
 |---|---|
 | ✅ `B3PropagationTest.b3Propagation` | builtin `b3` → `B3Propagator.injectingSingleHeader()` |
 | ✅ `B3MultiPropagationTest.b3MultiPropagation` | builtin `b3multi` → `B3Propagator.injectingMultiHeaders()` |
 | ✅ `JaegerPropagationTest.jaegerPropagation` | builtin `jaeger` → `JaegerPropagator.getInstance()` |
-| ✅ `RestSpanTest.span` (bonus) | Le fix architectural précédent (filtres humboldt utilisant `GlobalOpenTelemetry.getPropagators()`) débloque aussi ce test |
+| ✅ `RestSpanTest.span` (bonus) | The previous architectural fix (humboldt filters using `GlobalOpenTelemetry.getPropagators()`) also unblocks this test |
 
-## Items livrés
+## Items delivered
 
 ### 1. Dep `opentelemetry-extension-trace-propagators` (humboldt-tck/pom.xml)
-- Version héritée du `opentelemetry-bom`
-- Fournit `B3Propagator` (single + multi headers) et `JaegerPropagator`
+- Version inherited from `opentelemetry-bom`
+- Provides `B3Propagator` (single + multi headers) and `JaegerPropagator`
 
-### 2. Builtins ajoutés dans `resolveSpiPropagators` (HumboldtDeployableContainer)
+### 2. Builtins added in `resolveSpiPropagators` (HumboldtDeployableContainer)
 - `case "b3"` → `B3Propagator.injectingSingleHeader()`
 - `case "b3multi"` → `B3Propagator.injectingMultiHeaders()`
 - `case "jaeger"` → `JaegerPropagator.getInstance()`
-- Combinable avec `tracecontext` et `baggage` via `TextMapPropagator.composite(...)`
+- Can be combined with `tracecontext` and `baggage` via `TextMapPropagator.composite(...)`
 
-### 3. Bugfix `resolveSpiPropagators`
-- Avant : retournait `null` si pas de SPI provider dans le WAR → impossible d'utiliser
-  les builtins seuls (B3/Jaeger sans SPI custom)
-- Après : scan SPI optionnel — si pas de provider scanné, le switch sur les builtins
-  est quand même évalué
+### 3. `resolveSpiPropagators` bugfix
+- Before: returned `null` if there was no SPI provider in the WAR → impossible to use
+  builtins alone (B3/Jaeger without custom SPI)
+- After: SPI scan optional — if no provider is scanned, the builtin switch
+  is still evaluated
 
-## Validation non-régression
+## Non-regression validation
 
-- Tous les tests précédents PASS conservés
-- 0 FAIL nouvelle (les 32 FAIL restants étaient déjà FAIL avant)
+- All previously PASS tests preserved
+- 0 new FAIL (the remaining 32 FAIL were already FAIL before)
 
-## Bilan cumulé session 2026-05-23+24
+## Cumulative session summary 2026-05-23+24
 
-| Run | PASS | Cumul vs baseline |
+| Run | PASS | Cumulative vs baseline |
 |---|---|---|
 | baseline M7c.1+2+4 | 5 | — |
 | post M7c.11 | 16 | +11 |
 | post HBT-1 | 19 | +14 |
 | post M7c.12 | 23 | +18 |
-| post Cluster D partiel | 24 | +19 |
+| post Cluster D partial | 24 | +19 |
 | post sampler-bridge + spi-propagator | 26 | +21 |
 | **post b3+jaeger** | **30** | **+25** |
 
-**Cumul session : 5 → 30 PASS (+500%)**, **60 → 32 FAIL (-47%)**.
+**Session cumulative: 5 → 30 PASS (+500%)**, **60 → 32 FAIL (-47%)**.
 
-## Tests Cluster D — statut final
+## Cluster D tests — final status
 
-| Test | Statut |
+| Test | Status |
 |---|---|
 | ✅ `ExporterSpiTest.testExporter` | PASS |
 | ✅ `ResourceSpiTest.testResource` | PASS |
@@ -77,12 +77,12 @@
 | ✅ `JaegerPropagationTest.jaegerPropagation` | PASS |
 | ❌ `CustomizerSpiTest.testCustomizer` | FAIL (AutoConfigurationCustomizer adapter ~300 LOC) |
 
-**7/8 tests SPI/Propagation passent maintenant.**
+**7/8 SPI/Propagation tests now pass.**
 
-## Prochaines étapes ROI
+## Next steps ROI
 
-| Step | Item | Gain estimé | Effort |
+| Step | Item | Estimated gain | Effort |
 |---|---|---|---|
-| 1 | **M4b** SDK metric complet (Counter/Histogram/Observable Long+Double) | +24 | Très gros (~2-3j) |
-| 2 | Investigation des FAIL restants (testIntegrationWithJaxRsClientAsync, Error, b3Propagation côté SERVER, RestSpan*) | +3-5 | Moyen |
-| 3 | `CustomizerSpiTest` (AutoConfigurationCustomizer adapter) | +1 | Gros |
+| 1 | **M4b** full SDK metric (Counter/Histogram/Observable Long+Double) | +24 | Very large (~2-3d) |
+| 2 | Investigate the remaining FAILs (testIntegrationWithJaxRsClientAsync, Error, b3Propagation on the SERVER side, RestSpan*) | +3-5 | Medium |
+| 3 | `CustomizerSpiTest` (AutoConfigurationCustomizer adapter) | +1 | Large |

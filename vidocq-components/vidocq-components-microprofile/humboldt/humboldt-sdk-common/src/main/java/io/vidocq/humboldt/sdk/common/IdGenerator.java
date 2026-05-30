@@ -3,31 +3,31 @@ package io.vidocq.humboldt.sdk.common;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
- * Générateur d'identifiants W3C TraceContext :
+ * W3C TraceContext identifier generator:
  * <ul>
- *   <li>{@code traceId} = 16 octets (128 bits), hex-encodé sur 32 caractères ASCII bas ;</li>
- *   <li>{@code spanId}  = 8 octets (64 bits), hex-encodé sur 16 caractères ASCII bas.</li>
+ *   <li>{@code traceId} = 16 bytes (128 bits), hex-encoded into 32 lowercase ASCII characters;</li>
+ *   <li>{@code spanId}  = 8 bytes (64 bits), hex-encoded into 16 lowercase ASCII characters.</li>
  * </ul>
  *
- * <p>L'implémentation par défaut {@link Random128} utilise {@link ThreadLocalRandom}
- * pour rester non-contendue sur les virtual threads sans embarquer SecureRandom
- * (les identifiants de trace ne portent aucune garantie cryptographique selon
- * la spec OpenTelemetry).</p>
+ * <p>The default {@link Random128} implementation uses {@link ThreadLocalRandom}
+ * to remain contention-free on virtual threads without embedding SecureRandom
+ * (trace identifiers carry no cryptographic guarantee according to the
+ * OpenTelemetry spec).</p>
  */
 public interface IdGenerator {
 
     /**
-     * @return un nouveau traceId (32 caractères hexadécimaux), jamais "tout-zéro".
+     * @return a new traceId (32 hexadecimal characters), never "all-zero".
      */
     String generateTraceId();
 
     /**
-     * @return un nouveau spanId (16 caractères hexadécimaux), jamais "tout-zéro".
+     * @return a new spanId (16 hexadecimal characters), never "all-zero".
      */
     String generateSpanId();
 
     /**
-     * @return l'implémentation par défaut basée sur {@link ThreadLocalRandom}.
+     * @return the default implementation based on {@link ThreadLocalRandom}.
      */
     static IdGenerator random128() {
         return Random128.INSTANCE;

@@ -28,13 +28,13 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Convertit un {@link MetricData humboldt MetricData} en
- * {@link io.opentelemetry.sdk.metrics.data.MetricData OTel MetricData} pour le passage
- * aux {@code InMemoryMetricExporter} TCK qui assertent sur le format OTel SDK.
+ * Converts a {@link MetricData humboldt MetricData} into
+ * {@link io.opentelemetry.sdk.metrics.data.MetricData OTel MetricData} for passing
+ * to TCK {@code InMemoryMetricExporter}s that assert on the OTel SDK format.
  *
- * <p>M4 supportés : Sum (COUNTER/UP_DOWN_COUNTER) avec PointData Long + Histogram avec
- * PointData Histogram. Les types Double/Gauge/Observable seront ajoutés au fur et à
- * mesure que humboldt-sdk-metric les supporte (M4b).</p>
+ * <p>M4 currently supports: Sum (COUNTER/UP_DOWN_COUNTER) with Long PointData + Histogram with
+ * Histogram PointData. Double/Gauge/Observable types will be added progressively
+ * as humboldt-sdk-metric supports them (M4b).</p>
  */
 final class MetricDataMapper {
 
@@ -54,7 +54,7 @@ final class MetricDataMapper {
 
         return switch (humboldt.instrumentType()) {
             case COUNTER, UP_DOWN_COUNTER, OBSERVABLE_COUNTER, OBSERVABLE_UP_DOWN_COUNTER -> {
-                // Détermine si Long ou Double selon le type des points effectifs
+                // Determine Long or Double based on the type of the actual points
                 boolean isDouble = !humboldt.points().isEmpty()
                         && humboldt.points().get(0) instanceof DoublePointData;
                 if (isDouble) {
@@ -120,7 +120,7 @@ final class MetricDataMapper {
             }
             default -> throw new UnsupportedOperationException(
                     "MetricDataMapper : instrumentType " + humboldt.instrumentType()
-                            + " pas encore supporté côté bridge OTel (Observable à venir)");
+                            + " not yet supported on OTel bridge side (Observable pending)");
         };
     }
 
@@ -133,7 +133,7 @@ final class MetricDataMapper {
         }
     }
 
-    /** Utility — non utilisé directement mais conservé pour symétrie d'API. */
+    /** Utility — not used directly but kept for API symmetry. */
     static List<io.opentelemetry.sdk.metrics.data.MetricData> toOtelAll(java.util.Collection<MetricData> humboldts) {
         var out = new ArrayList<io.opentelemetry.sdk.metrics.data.MetricData>(humboldts.size());
         for (MetricData m : humboldts) {

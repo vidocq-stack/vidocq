@@ -23,9 +23,9 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Implémentation interne de {@link SpanBuilder} — collecte parent/links/attrs/kind/start
- * jusqu'à {@link #startSpan()} qui consulte le sampler et instancie un {@link SdkSpan}
- * ou retourne un span no-op si le sampler décide {@code DROP}.
+ * Internal implementation of {@link SpanBuilder} — collects parent/links/attrs/kind/start
+ * until {@link #startSpan()}, which consults the sampler and instantiates an {@link SdkSpan}
+ * or returns a no-op span if the sampler decides {@code DROP}.
  */
 public final class SdkSpanBuilder implements SpanBuilder {
 
@@ -146,8 +146,8 @@ public final class SdkSpanBuilder implements SpanBuilder {
         SamplingResult.Decision decision = sampling.decision();
 
         if (decision == SamplingResult.Decision.DROP) {
-            // Span non enregistré : on retourne un wrap d'un SpanContext valide
-            // mais non-sampled (pour propagation), zéro-allocation côté SDK.
+            // Span not recorded: return a wrapper around a valid SpanContext
+            // but non-sampled (for propagation), with zero allocation on the SDK side.
             SpanContext ctx = SpanContext.create(
                     traceId, spanId,
                     TraceFlags.getDefault(),
@@ -161,7 +161,7 @@ public final class SdkSpanBuilder implements SpanBuilder {
         SpanContext newCtx = SpanContext.create(
                 traceId, spanId, flags, parentSpanContext.getTraceState());
 
-        // Merge des attrs builder + attrs additionnels du sampler (sampler gagne)
+        // Merge builder attrs + additional attrs from the sampler (the sampler wins)
         AttributesBuilder merged = attributes.build().toBuilder();
         merged.putAll(sampling.attributes());
 

@@ -6,33 +6,33 @@ import io.vidocq.humboldt.sdk.metric.data.PointData;
 import java.util.List;
 
 /**
- * Storage par instrument : reçoit les enregistrements à chaud
+ * Per-instrument storage: receives hot-path recordings
  * ({@link #recordLong(long, Attributes)} / {@link #recordDouble(double, Attributes)})
- * et produit un snapshot à la collecte ({@link #collect(long, long)}).
+ * and produces a snapshot at collection time ({@link #collect(long, long)}).
  *
- * <p>Implémentations CUMULATIVE — l'état accumulé persiste entre les collectes,
- * la valeur exportée est cumulée depuis le démarrage.</p>
+ * <p>CUMULATIVE implementations — accumulated state persists across collections,
+ * and the exported value is cumulative since startup.</p>
  *
- * @param <P> type de point produit (LongPointData pour Sum, HistogramPointData pour Histogram, ...)
+ * @param <P> produced point type (LongPointData for Sum, HistogramPointData for Histogram, ...)
  */
 public interface Aggregator<P extends PointData> {
 
-    /** Enregistre une valeur long avec les attributs associés. */
+    /** Records a long value with its associated attributes. */
     default void recordLong(long value, Attributes attributes) {
         recordDouble((double) value, attributes);
     }
 
-    /** Enregistre une valeur double avec les attributs associés. */
+    /** Records a double value with its associated attributes. */
     default void recordDouble(double value, Attributes attributes) {
         recordLong((long) value, attributes);
     }
 
     /**
-     * Produit un snapshot des points accumulés depuis le démarrage.
+     * Produces a snapshot of the points accumulated since startup.
      *
-     * @param startEpochNanos start time du SdkMeterProvider (fixe pour CUMULATIVE)
-     * @param epochNanos      timestamp de la collecte courante
-     * @return liste immutable des points par attribut-set
+     * @param startEpochNanos start time of the SdkMeterProvider (fixed for CUMULATIVE)
+     * @param epochNanos      timestamp of the current collection
+     * @return immutable list of points per attribute set
      */
     List<P> collect(long startEpochNanos, long epochNanos);
 }

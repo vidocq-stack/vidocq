@@ -86,8 +86,8 @@ class HumboldtAutoConfigureTest {
             Logger l = h.getLogsBridge().get("test.log");
             l.logRecordBuilder().setBody("autoconfig works").emit();
 
-            // Flush sync pour spans/logs (SimpleSpanProcessor + SimpleLogRecordProcessor),
-            // explicit flush nécessaire pour metrics (PeriodicMetricReader)
+            // Synchronous flush for spans/logs (SimpleSpanProcessor + SimpleLogRecordProcessor),
+            // explicit flush required for metrics (PeriodicMetricReader)
             h.flush().join(2, TimeUnit.SECONDS);
 
             assertNotNull(h.inMemorySpanExporter());
@@ -118,7 +118,7 @@ class HumboldtAutoConfigureTest {
             }
             h.flush().join(2, TimeUnit.SECONDS);
             assertEquals(0, h.inMemorySpanExporter().getFinishedSpans().size(),
-                    "always_off doit empêcher tout export");
+                    "always_off must prevent all export");
         }
     }
 
@@ -133,7 +133,7 @@ class HumboldtAutoConfigureTest {
                         "OTEL_TRACES_SAMPLER_ARG", "0.5"),
                 Map.of()))) {
             assertTrue(h.sdkTracerProvider().getSampler().description().contains("0.500000"),
-                    "Sampler description doit contenir le ratio 0.5");
+                    "Sampler description must contain ratio 0.5");
         }
     }
 
@@ -149,14 +149,14 @@ class HumboldtAutoConfigureTest {
             assertNull(h.inMemoryMetricExporter());
             assertNull(h.inMemoryLogRecordExporter());
             assertEquals(0, h.sdkTracerProvider().getSpanProcessors().size(),
-                    "exporter=none → aucun span processor");
+                    "exporter=none -> no span processor");
         }
     }
 
     @Test
     void extra_span_exporters_attached_via_simple_processor() {
-        // Point d'extension M7b.3 : harness externes (TCK Arquillian)
-        // peuvent injecter un SpanExporter additionnel sans toucher aux env vars.
+        // M7b.3 extension point: external harnesses (Arquillian TCK)
+        // can inject an additional SpanExporter without touching env vars.
         InMemorySpanExporter extra = InMemorySpanExporter.create();
         try (AutoConfiguredHumboldt h = HumboldtAutoConfigure.configure(EnvConfig.of(
                 Map.of("OTEL_SDK_DISABLED", "false",
@@ -172,10 +172,10 @@ class HumboldtAutoConfigureTest {
             h.flush().join(2, TimeUnit.SECONDS);
 
             assertEquals(1, extra.getFinishedSpans().size(),
-                    "L'exporter injecté via le hook doit recevoir les spans");
+                    "The exporter injected via the hook must receive spans");
             assertEquals("via-extra-exporter", extra.getFinishedSpans().getFirst().name());
             assertNull(h.inMemorySpanExporter(),
-                    "OTEL_TRACES_EXPORTER=none → pas d'inMemory géré par l'autoconfig");
+                    "OTEL_TRACES_EXPORTER=none → no in-memory exporter provided by autoconfig");
         }
     }
 
@@ -195,16 +195,16 @@ class HumboldtAutoConfigureTest {
 
     @Test
     void sdk_disabled_by_default_per_mp_telemetry_spec() {
-        // MP Telemetry 2.1 §3.1 : OTEL_SDK_DISABLED par défaut = true.
-        // Sans config explicite, providers construits sans processors -> 0 export.
+        // MP Telemetry 2.1 §3.1: OTEL_SDK_DISABLED defaults to true.
+        // Without explicit config, providers are built without processors -> 0 export.
         try (AutoConfiguredHumboldt h = HumboldtAutoConfigure.configure(EnvConfig.of(
                 Map.of("OTEL_TRACES_EXPORTER", "in-memory"),
                 Map.of()))) {
             assertNull(h.inMemorySpanExporter(),
-                    "SDK disabled par défaut -> pas d'in-memory exporter installé");
+                    "SDK disabled by default -> no in-memory exporter installed");
             h.getTracerProvider().get("x").spanBuilder("ignored").startSpan().end();
             assertEquals(0, h.sdkTracerProvider().getSpanProcessors().size(),
-                    "SDK disabled -> aucun span processor");
+                    "SDK disabled -> no span processor");
         }
     }
 

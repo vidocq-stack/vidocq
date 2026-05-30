@@ -17,10 +17,10 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Implémentation Humboldt de {@link LoggerProvider} — point d'entrée du SDK Log.
+ * Humboldt implementation of {@link LoggerProvider} — entry point for the Log SDK.
  *
- * <p>Construit via {@link #builder()}. Immutable côté configuration. Cache de
- * {@code Logger} par scope name.</p>
+ * <p>Built via {@link #builder()}. Immutable from a configuration standpoint. Cache of
+ * {@code Logger} per scope name.</p>
  */
 public final class SdkLoggerProvider implements LoggerProvider, AutoCloseable {
 
@@ -48,7 +48,7 @@ public final class SdkLoggerProvider implements LoggerProvider, AutoCloseable {
 
     @Override
     public LoggerBuilder loggerBuilder(String instrumentationScopeName) {
-        // M5 MVP : version/schemaUrl/attributes ignorés (un seul SdkLogger par nom).
+        // M5 MVP: version/schemaUrl/attributes ignored (one SdkLogger per name).
         return new LoggerBuilder() {
             @Override public LoggerBuilder setSchemaUrl(String url) { return this; }
             @Override public LoggerBuilder setInstrumentationVersion(String v) { return this; }

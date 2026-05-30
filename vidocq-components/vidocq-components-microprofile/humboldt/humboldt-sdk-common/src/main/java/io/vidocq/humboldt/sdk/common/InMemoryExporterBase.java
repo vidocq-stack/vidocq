@@ -6,16 +6,16 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Squelette d'exporter in-memory mutualisé pour les 3 signaux (spans, metrics, logs).
+ * Shared in-memory exporter skeleton for the 3 signals (spans, metrics, logs).
  *
- * <p>Les sous-classes concrètes implémentent l'interface SDK spécifique
+ * <p>Concrete subclasses implement the specific SDK interface
  * ({@code SpanExporter}, {@code MetricExporter}, {@code LogRecordExporter})
- * et délèguent {@code export(...)} à {@link #addAll(Collection)}.</p>
+ * and delegate {@code export(...)} to {@link #addAll(Collection)}.</p>
  *
- * <p>Volontairement, {@link #shutdown()} ne purge PAS {@link #collected} —
- * les tests qui inspectent l'exporter via try-with-resources sur le provider
- * peuvent ainsi lire les données drainées après {@code close()}. Utiliser
- * {@link #reset()} pour vider explicitement.</p>
+ * <p>Intentionally, {@link #shutdown()} does NOT clear {@link #collected} —
+ * tests that inspect the exporter via try-with-resources on the provider can
+ * therefore read the drained data after {@code close()}. Use
+ * {@link #reset()} to clear it explicitly.</p>
  */
 public abstract class InMemoryExporterBase<T> {
 
@@ -23,23 +23,23 @@ public abstract class InMemoryExporterBase<T> {
     private final AtomicBoolean stopped = new AtomicBoolean(false);
 
     /**
-     * @return un snapshot immutable des éléments collectés depuis le démarrage
-     *         (ou depuis le dernier {@link #reset()}).
+     * @return an immutable snapshot of the elements collected since startup
+     *         (or since the last {@link #reset()}).
      */
     public final List<T> getCollected() {
         return List.copyOf(collected);
     }
 
-    /** Vide la liste — n'affecte pas l'état {@code stopped}. */
+    /** Clears the list — does not affect the {@code stopped} state. */
     public final void reset() {
         collected.clear();
     }
 
     /**
-     * À appeler depuis {@code export(...)} des sous-classes.
+     * To be called from subclass {@code export(...)} implementations.
      *
-     * @return {@link CompletableResultCode#ofFailure()} si déjà shutdown,
-     *         sinon {@link CompletableResultCode#ofSuccess()}.
+     * @return {@link CompletableResultCode#ofFailure()} if already shut down,
+     *         otherwise {@link CompletableResultCode#ofSuccess()}.
      */
     protected final CompletableResultCode addAll(Collection<T> items) {
         if (stopped.get()) return CompletableResultCode.ofFailure();

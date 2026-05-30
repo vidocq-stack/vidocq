@@ -20,17 +20,17 @@ import static org.testng.Assert.assertNotNull;
 import static org.testng.Assert.assertTrue;
 
 /**
- * Smoke test M7 — vérifie que :
+ * Smoke test M7 — verifies that:
  * <ul>
- *   <li>les artefacts Humboldt (humboldt-runtime, humboldt-cdi, humboldt-rest)
- *       sont résolus dans le M2 local depuis le reactor parent ;</li>
- *   <li>les classes du TCK officiel MP Telemetry 2.1 sont sur le classpath ;</li>
- *   <li>{@code AutoConfiguredHumboldt} produit un {@code OpenTelemetry} valide
- *       qu'on peut enregistrer comme global et utiliser pour créer un span.</li>
+ *   <li>the Humboldt artifacts (humboldt-runtime, humboldt-cdi, humboldt-rest)
+ *       are resolved in the local M2 from the parent reactor;</li>
+ *   <li>the official MP Telemetry 2.1 TCK classes are on the classpath;</li>
+ *   <li>{@code AutoConfiguredHumboldt} produces a valid {@code OpenTelemetry}
+ *       that can be registered globally and used to create a span.</li>
  * </ul>
  *
- * <p>Ce test ne dépend PAS d'Arquillian (donc passe sans adapter container).
- * Les vrais tests TCK officiels nécessitent l'adapter en M7b.</p>
+ * <p>This test does NOT depend on Arquillian (so it passes without a container adapter).
+ * The real official TCK tests require that adapter in M7b.</p>
  */
 public class HumboldtTckSmokeTest {
 
@@ -51,7 +51,7 @@ public class HumboldtTckSmokeTest {
                         "OTEL_LOGS_EXPORTER", "none"),
                 Map.of()));
 
-        assertNotNull(humboldt, "AutoConfiguredHumboldt doit être instanciable");
+        assertNotNull(humboldt, "AutoConfiguredHumboldt must be instantiable");
         assertNotNull(humboldt.getTracerProvider());
         assertNotNull(humboldt.getMeterProvider());
         assertNotNull(humboldt.getLogsBridge());
@@ -74,38 +74,38 @@ public class HumboldtTckSmokeTest {
         Span span = t.spanBuilder("tck-smoke-span").startSpan();
         try (Scope ignored = span.makeCurrent()) {
             assertEquals(Span.current().getSpanContext().getTraceId().length(), 32,
-                    "traceId doit être hex 32 chars");
+                    "traceId must be 32-char hex");
         }
         span.end();
 
         List<SpanData> finished = humboldt.inMemorySpanExporter().getFinishedSpans();
-        assertEquals(finished.size(), 1, "1 span attendu");
+        assertEquals(finished.size(), 1, "1 span expected");
         assertEquals(finished.getFirst().name(), "tck-smoke-span");
     }
 
     @Test
     public void mp_telemetry_tracing_tck_classes_are_on_classpath() {
-        // Sanity check : si le TCK n'est pas résolu en dep, ces classes n'existent
-        // pas et ClassNotFoundException remonte
+        // Sanity check: if the TCK is not resolved as a dependency, these classes do not exist
+        // and ClassNotFoundException is thrown
         try {
             Class<?> tckBase = Class.forName(
                     "org.eclipse.microprofile.telemetry.tracing.tck.TestApplication");
             assertNotNull(tckBase);
         } catch (ClassNotFoundException e) {
-            throw new AssertionError("TCK tracing class introuvable — dependency manquante : " + e.getMessage());
+            throw new AssertionError("TCK tracing class not found - missing dependency: " + e.getMessage());
         }
     }
 
     @Test
     public void official_with_span_annotation_is_on_classpath() {
-        // Le TCK officiel utilise l'annotation @WithSpan d'OpenTelemetry
-        // instrumentation, PAS notre humboldt-cdi WithSpan. M6c+ devra aliaser.
+        // The official TCK uses OpenTelemetry instrumentation's @WithSpan
+        // annotation, NOT our humboldt-cdi WithSpan. M6c+ will need to alias it.
         try {
             Class<?> annot = Class.forName(
                     "io.opentelemetry.instrumentation.annotations.WithSpan");
             assertTrue(annot.isAnnotation());
         } catch (ClassNotFoundException e) {
-            throw new AssertionError("@WithSpan OTel official introuvable : " + e.getMessage());
+            throw new AssertionError("@WithSpan OTel official annotation not found: " + e.getMessage());
         }
     }
 }

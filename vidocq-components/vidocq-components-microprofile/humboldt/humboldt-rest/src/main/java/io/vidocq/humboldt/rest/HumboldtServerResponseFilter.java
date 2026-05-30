@@ -14,12 +14,12 @@ import jakarta.ws.rs.container.ContainerResponseFilter;
 import jakarta.ws.rs.ext.Provider;
 
 /**
- * {@link ContainerResponseFilter} symétrique à {@link HumboldtServerRequestFilter} —
- * récupère le span démarré côté request, ajoute {@code http.response.status_code},
- * met le statut ERROR si le code est ≥ 500, ferme {@link Scope} et span. Publie
- * également un Histogram {@code http.server.request.duration} (OTel SemConv 1.27+)
- * avec les attrs {@code http.request.method / http.response.status_code / http.route /
- * url.scheme} — conformité MP Telemetry 2.1 §"HTTP server metrics".
+ * {@link ContainerResponseFilter} symmetric to {@link HumboldtServerRequestFilter} —
+ * retrieves the span started on the request side, adds {@code http.response.status_code},
+ * sets ERROR status if code ≥ 500, closes the {@link Scope} and ends the span. Also
+ * records a Histogram {@code http.server.request.duration} (OTel SemConv 1.27+)
+ * with attrs {@code http.request.method / http.response.status_code / http.route /
+ * url.scheme} — conformant with MP Telemetry 2.1 §"HTTP server metrics".
  */
 @Provider
 public class HumboldtServerResponseFilter implements ContainerResponseFilter {
@@ -29,10 +29,10 @@ public class HumboldtServerResponseFilter implements ContainerResponseFilter {
     static final AttributeKey<String> HTTP_ROUTE = AttributeKey.stringKey("http.route");
     static final AttributeKey<String> URL_SCHEME = AttributeKey.stringKey("url.scheme");
 
-    // Pas de cache statique du Histogram — les harness Arquillian re-déploient et
-    // re-set GlobalOpenTelemetry entre les tests, donc un cache static figerait
-    // l'Histogram sur le 1er deployment. L'overhead du lookup par requête est
-    // négligeable côté server (~1µs) face au coût du Histogram lui-même.
+    // No static cache of the Histogram — Arquillian harnesses re-deploy and
+    // re-set GlobalOpenTelemetry between tests, so a static cache would freeze
+    // the Histogram on the first deployment. The per-request lookup overhead is
+    // negligible server-side (~1µs) relative to the Histogram cost itself.
 
     @Override
     public void filter(ContainerRequestContext requestContext, ContainerResponseContext responseContext) {
@@ -55,8 +55,8 @@ public class HumboldtServerResponseFilter implements ContainerResponseFilter {
                 AttributesBuilder b = Attributes.builder()
                         .put(HTTP_REQUEST_METHOD, requestContext.getMethod())
                         .put(HTTP_RESPONSE_STATUS_CODE, (long) status);
-                // OTel SemConv 1.27+ §HTTP : si status >= 400, ajouter error.type
-                // (string code statut ou nom d'exception). Conformité MP Telemetry.
+                // OTel SemConv 1.27+ §HTTP: if status >= 400, add error.type
+                // (status code string or exception name). MP Telemetry conformance.
                 if (status >= 400) {
                     b.put(AttributeKey.stringKey("error.type"), String.valueOf(status));
                 }
@@ -67,7 +67,7 @@ public class HumboldtServerResponseFilter implements ContainerResponseFilter {
                 double durationSec = (System.nanoTime() - startNanos) / 1_000_000_000.0;
                 h.record(durationSec, b.build());
             } catch (RuntimeException ignored) {
-                // Si MeterProvider pas encore prêt ou erreur — on continue sans histogramme.
+                // If MeterProvider is not ready yet or an error occurs — continue without histogram.
             }
         }
 

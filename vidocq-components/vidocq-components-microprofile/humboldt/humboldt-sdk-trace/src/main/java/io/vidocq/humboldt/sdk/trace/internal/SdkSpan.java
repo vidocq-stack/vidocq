@@ -22,11 +22,11 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Implémentation interne de {@link Span} + {@link ReadableSpan}.
- * Mutable jusqu'à {@link #end()} (verrou {@code synchronized}), immutable ensuite.
+ * Internal implementation of {@link Span} + {@link ReadableSpan}.
+ * Mutable until {@link #end()} ({@code synchronized} lock), immutable afterward.
  *
- * <p>Une fois {@code end()} appelé, toute mutation ultérieure est ignorée
- * silencieusement (alignement sur le comportement OTel de référence).</p>
+ * <p>Once {@code end()} has been called, any later mutation is silently ignored
+ * (aligned with the reference OTel behavior).</p>
  */
 public final class SdkSpan implements Span, ReadableSpan {
 
@@ -109,7 +109,7 @@ public final class SdkSpan implements Span, ReadableSpan {
     @Override
     public synchronized Span setStatus(StatusCode statusCode, String description) {
         if (ended || statusCode == null) return this;
-        // Règle OTel : on ne peut pas descendre depuis OK. ERROR > OK > UNSET.
+        // OTel rule: you cannot go down from OK. ERROR > OK > UNSET.
         if (this.status.code() == StatusCode.OK) return this;
         if (statusCode == StatusCode.OK) {
             this.status = StatusData.ok();

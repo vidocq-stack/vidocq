@@ -5,17 +5,17 @@ import io.opentelemetry.api.common.Attributes;
 import java.util.List;
 
 /**
- * Point de données pour un Histogram à buckets explicites.
+ * Data point for a histogram with explicit buckets.
  *
- * @param startEpochNanos       timestamp de début de la fenêtre cumulative
- * @param epochNanos            timestamp de la collecte
- * @param attributes            labels du point
- * @param sum                   somme cumulée des valeurs enregistrées
- * @param count                 nombre d'enregistrements
- * @param min                   minimum observé (NaN si jamais enregistré)
- * @param max                   maximum observé (NaN si jamais enregistré)
- * @param boundaries            bornes explicites (taille n)
- * @param bucketCounts          counts par bucket (taille n+1)
+ * @param startEpochNanos       start timestamp of the cumulative window
+ * @param epochNanos            collection timestamp
+ * @param attributes            point labels
+ * @param sum                   cumulative sum of recorded values
+ * @param count                 number of recorded values
+ * @param min                   observed minimum (NaN if nothing was ever recorded)
+ * @param max                   observed maximum (NaN if nothing was ever recorded)
+ * @param boundaries            explicit boundaries (size n)
+ * @param bucketCounts          counts per bucket (size n+1)
  */
 public record HistogramPointData(
         long startEpochNanos,
@@ -36,7 +36,7 @@ public record HistogramPointData(
         bucketCounts = List.copyOf(bucketCounts);
         if (bucketCounts.size() != boundaries.size() + 1) {
             throw new IllegalArgumentException(
-                    "bucketCounts.size() doit être boundaries.size()+1 : "
+                    "bucketCounts.size() must be boundaries.size()+1: "
                             + bucketCounts.size() + " vs " + boundaries.size());
         }
     }

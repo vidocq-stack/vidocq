@@ -10,11 +10,11 @@ import io.vidocq.humboldt.sdk.trace.export.SpanProcessor;
 import java.time.Duration;
 
 /**
- * Batch span processor — délègue le squelette (queue, worker VT, scheduleDelay,
- * flush, drain on shutdown) à {@link AbstractBatchProcessor}. La logique
- * spécifique aux spans = filtrer les non-samplés avant {@code offer}.
+ * Batch span processor — delegates the shared skeleton (queue, VT worker,
+ * scheduleDelay, flush, drain on shutdown) to {@link AbstractBatchProcessor}.
+ * Span-specific logic = filter out non-sampled spans before {@code offer}.
  *
- * <p>N'exporte que les spans samplés ({@code SpanContext.isSampled() == true}).</p>
+ * <p>Exports only sampled spans ({@code SpanContext.isSampled() == true}).</p>
  */
 public final class BatchSpanProcessor extends AbstractBatchProcessor<SpanData> implements SpanProcessor {
 

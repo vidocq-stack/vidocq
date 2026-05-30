@@ -20,15 +20,15 @@ import static io.vidocq.humboldt.exporter.otlp.http.internal.OtlpJsonCommon.writ
 import static io.vidocq.humboldt.exporter.otlp.http.internal.OtlpJsonCommon.writeScopeHeader;
 
 /**
- * Encode une collection de {@link MetricData} au format OTLP/HTTP-JSON.
+ * Encodes a collection of {@link MetricData} in OTLP/HTTP-JSON format.
  *
- * <p>Schéma : <a href="https://github.com/open-telemetry/opentelemetry-proto/blob/main/opentelemetry/proto/collector/metrics/v1/metrics_service.proto">metrics_service.proto</a>.
- * Grouping par Resource puis par InstrumentationScope. Plumbing JSON commun
- * mutualisé via {@link OtlpJsonCommon} (escape, AnyValue array-aware,
+ * <p>Schema: <a href="https://github.com/open-telemetry/opentelemetry-proto/blob/main/opentelemetry/proto/collector/metrics/v1/metrics_service.proto">metrics_service.proto</a>.
+ * Grouped by Resource then by InstrumentationScope. Common JSON plumbing
+ * shared via {@link OtlpJsonCommon} (escaping, array-aware AnyValue,
  * Attributes, Resource, Scope).</p>
  *
- * <p>M4 MVP : seuls Counter (sum/asInt) et Histogram (explicit buckets) sont
- * supportés. Gauge / ExponentialHistogram = M4b.</p>
+ * <p>M4 MVP: only Counter (sum/asInt) and Histogram (explicit buckets) are
+ * supported. Gauge / ExponentialHistogram = M4b.</p>
  */
 public final class OtlpJsonMetricEncoder {
 

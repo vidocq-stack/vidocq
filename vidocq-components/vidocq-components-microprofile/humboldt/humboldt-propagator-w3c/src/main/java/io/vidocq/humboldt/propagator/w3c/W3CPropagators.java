@@ -6,9 +6,9 @@ import io.opentelemetry.context.propagation.ContextPropagators;
 import io.opentelemetry.context.propagation.TextMapPropagator;
 
 /**
- * Composite canonique W3C TraceContext + Baggage utilisé par Humboldt.
+ * Canonical W3C TraceContext + Baggage composite used by Humboldt.
  *
- * <p>Équivalent à :</p>
+ * <p>Equivalent to:</p>
  * <pre>{@code
  * ContextPropagators.create(
  *     TextMapPropagator.composite(
@@ -16,23 +16,23 @@ import io.opentelemetry.context.propagation.TextMapPropagator;
  *         W3CBaggagePropagator.getInstance()));
  * }</pre>
  *
- * <p>Spec : <a href="https://www.w3.org/TR/trace-context/">W3C TraceContext</a>
- * et <a href="https://www.w3.org/TR/baggage/">W3C Baggage</a>.</p>
+ * <p>Spec: <a href="https://www.w3.org/TR/trace-context/">W3C TraceContext</a>
+ * and <a href="https://www.w3.org/TR/baggage/">W3C Baggage</a>.</p>
  */
 public final class W3CPropagators {
 
     private W3CPropagators() {}
 
     /**
-     * @return les propagators W3C composites (traceparent + tracestate + baggage).
+     * @return the composite W3C propagators (traceparent + tracestate + baggage).
      */
     public static ContextPropagators get() {
         return Holder.INSTANCE;
     }
 
     /**
-     * @return le {@link TextMapPropagator} composite sous-jacent, utile pour
-     *         l'enregistrer dans un autre {@code ContextPropagators}.
+     * @return the underlying composite {@link TextMapPropagator}, useful for
+     *         registering it in another {@code ContextPropagators}.
      */
     public static TextMapPropagator textMap() {
         return Holder.TEXT_MAP;

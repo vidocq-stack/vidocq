@@ -5,7 +5,7 @@ import io.opentelemetry.api.metrics.DoubleCounter;
 import io.opentelemetry.context.Context;
 import io.vidocq.humboldt.sdk.metric.aggregation.DoubleSumAggregator;
 
-/** Counter double-typé monotonic (ignore valeurs négatives, alignement OTel spec). */
+/** Double-typed monotonic counter (ignores negative values, aligned with the OTel spec). */
 public final class SdkDoubleCounter implements DoubleCounter {
 
     private final DoubleSumAggregator aggregator;

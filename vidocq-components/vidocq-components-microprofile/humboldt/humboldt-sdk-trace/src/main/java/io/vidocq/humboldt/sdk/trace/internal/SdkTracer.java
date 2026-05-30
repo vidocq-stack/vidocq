@@ -12,8 +12,8 @@ import io.vidocq.humboldt.sdk.trace.samplers.Sampler;
 import java.util.List;
 
 /**
- * Tracer Humboldt — façade interne entre l'API publique
- * {@link io.opentelemetry.api.trace.Tracer} et le pipeline SDK
+ * Humboldt tracer — internal facade between the public
+ * {@link io.opentelemetry.api.trace.Tracer} API and the SDK pipeline
  * (sampler + processors + exporter).
  */
 public final class SdkTracer implements Tracer {

@@ -8,23 +8,23 @@ import java.lang.System.Logger;
 import java.lang.System.Logger.Level;
 
 /**
- * Implémentation {@link ContextStorage} d'Humboldt — backing {@link ThreadLocal}.
+ * Humboldt {@link ContextStorage} implementation — backed by {@link ThreadLocal}.
  *
- * <p>Conforme au contrat OpenTelemetry :</p>
+ * <p>Compliant with the OpenTelemetry contract:</p>
  * <ul>
- *   <li>{@link #current()} retourne {@link Context#root()} si aucun contexte n'a été attaché ;</li>
- *   <li>{@link #attach(Context)} renvoie un {@link Scope} qui, à sa fermeture,
- *       restaure le contexte précédent (ou supprime l'entrée si racine) ;</li>
- *   <li>les attaches/détaches en désordre sont tolérées avec un log {@code WARNING}
- *       (alignement sur l'impl OTel de référence — pas d'exception levée).</li>
+ *   <li>{@link #current()} returns {@link Context#root()} if no context has been attached;</li>
+ *   <li>{@link #attach(Context)} returns a {@link Scope} that, when closed,
+ *       restores the previous context (or removes the entry if it was the root);</li>
+ *   <li>out-of-order attach/detach calls are tolerated with a {@code WARNING} log
+ *       (aligned with the reference OTel implementation — no exception is thrown).</li>
  * </ul>
  *
- * <p><strong>Virtual threads</strong> — depuis JDK 21 (JEP 444), les
- * {@link ThreadLocal} ne pinent plus la carrier thread lors d'opérations
- * bloquantes Java pures (sleep, IO NIO, etc.). Les seuls cas résiduels de
- * pinning concernent les {@code synchronized}, le code natif JNI, et certains
- * lockss legacy — aucun n'est introduit ici. Voir PLAN.md §7 pour le suivi
- * d'une éventuelle migration vers {@code ScopedValue} en M8.</p>
+ * <p><strong>Virtual threads</strong> — since JDK 21 (JEP 444),
+ * {@link ThreadLocal} no longer pins the carrier thread during pure Java
+ * blocking operations (sleep, NIO I/O, etc.). The only remaining pinning cases
+ * involve {@code synchronized}, JNI native code, and some
+ * legacy locks — none are introduced here. See PLAN.md §7 for the tracking
+ * of a potential migration to {@code ScopedValue} in M8.</p>
  */
 public final class HumboldtContextStorage implements ContextStorage {
 
@@ -60,8 +60,8 @@ public final class HumboldtContextStorage implements ContextStorage {
         Context actual = THREAD_LOCAL.get();
         if (actual != expected) {
             LOG.log(Level.WARNING,
-                    "Context attach/detach order mismatch — attendu {0}, trouvé {1}. "
-                            + "Possible cause : Scope.close() en désordre, ou contexte capturé via une lib tierce non instrumentée.",
+                    "Context attach/detach order mismatch — expected {0}, found {1}. "
+                            + "Possible cause: out-of-order Scope.close(), or context captured via an uninstrumented third-party library.",
                     expected, actual);
         }
         if (previous == null || previous == Context.root()) {

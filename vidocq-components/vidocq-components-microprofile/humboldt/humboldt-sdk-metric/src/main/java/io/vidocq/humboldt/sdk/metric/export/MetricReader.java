@@ -3,17 +3,17 @@ package io.vidocq.humboldt.sdk.metric.export;
 import io.vidocq.humboldt.sdk.common.CompletableResultCode;
 
 /**
- * Reader de métriques — pull-based ou push-based. Branché sur un
+ * Metrics reader — pull-based or push-based. Connected to an
  * {@link io.vidocq.humboldt.sdk.metric.SdkMeterProvider} via {@code register()}.
  *
- * <p>Implémentations standard : {@code PeriodicMetricReader}.</p>
+ * <p>Standard implementation: {@code PeriodicMetricReader}.</p>
  */
 public interface MetricReader extends AutoCloseable {
 
-    /** Le provider appelle ceci une fois pour permettre au reader d'invoquer {@code provider.collectMetrics()}. */
+    /** The provider calls this once so the reader can invoke {@code provider.collectMetrics()}. */
     void register(CollectionRegistration registration);
 
-    /** Force une collecte + export immédiats. */
+    /** Forces immediate collection + export. */
     CompletableResultCode flush();
 
     CompletableResultCode shutdown();
@@ -23,7 +23,7 @@ public interface MetricReader extends AutoCloseable {
         shutdown().join(10, java.util.concurrent.TimeUnit.SECONDS);
     }
 
-    /** Callback fourni par le SdkMeterProvider au reader (pour appeler la collecte). */
+    /** Callback provided by SdkMeterProvider to the reader (to trigger collection). */
     @FunctionalInterface
     interface CollectionRegistration {
         java.util.Collection<io.vidocq.humboldt.sdk.metric.data.MetricData> collectAllMetrics();

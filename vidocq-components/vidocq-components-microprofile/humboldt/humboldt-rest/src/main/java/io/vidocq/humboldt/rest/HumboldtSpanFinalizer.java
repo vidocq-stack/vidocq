@@ -15,35 +15,32 @@ import java.lang.System.Logger;
 import java.lang.System.Logger.Level;
 
 /**
- * {@link ExceptionMapper} fallback qui termine le span démarré par
- * {@link HumboldtServerRequestFilter} quand une exception remonte hors de
- * la méthode de ressource — cas où le {@link HumboldtServerResponseFilter}
- * n'est pas appelé par le container JAX-RS.
+ * {@link ExceptionMapper} fallback that terminates the span started by
+ * {@link HumboldtServerRequestFilter} when an exception propagates out of the
+ * resource method — a case where {@link HumboldtServerResponseFilter}
+ * is not called by the JAX-RS container.
  *
- * <p><b>Pourquoi nécessaire</b> : selon la spec JAX-RS §10.2.7 les
- * {@code ContainerResponseFilter} doivent être invoqués MÊME quand un
- * {@code ExceptionMapper} transforme l'exception en {@code Response}.
- * Certains containers (dont Cassini en cassini-core 0.1.0-SNAPSHOT — cf.
- * {@code Invoker.java:365}) court-circuitent ce flow et passent directement
- * de {@code ExceptionMapper.toResponse()} au marshalling sans appeler les
- * response filters. Sans ce mapper fallback, le span SERVER créé côté
- * request filter ne serait jamais {@code end()}'d et resterait invisible
- * dans l'exporter.</p>
+ * <p><b>Why necessary</b>: per JAX-RS spec §10.2.7, {@code ContainerResponseFilter}
+ * instances MUST be invoked EVEN when an {@code ExceptionMapper} transforms the
+ * exception into a {@code Response}. Certain containers (including Cassini in
+ * cassini-core 0.1.0-SNAPSHOT — see {@code Invoker.java:365}) short-circuit this
+ * flow and go directly from {@code ExceptionMapper.toResponse()} to marshalling
+ * without invoking the response filters. Without this fallback mapper the SERVER
+ * span created by the request filter would never be {@code end()}'d and would
+ * remain invisible in the exporter.</p>
  *
- * <p><b>Sélection JAX-RS</b> : {@code ExceptionMapper<Throwable>} est le plus
- * générique possible — il n'est sélectionné par le container que si AUCUN
- * mapper applicatif plus spécifique ne matche l'exception. Les apps peuvent
- * donc fournir leurs propres {@code ExceptionMapper<UserSpecificException>}
- * sans collision. Pour ce dernier cas (mapper user qui match), le span
- * sera (devrait être) terminé par le response filter normal — sauf si le
- * container a aussi le bug Cassini, auquel cas l'app devra explicitement
- * terminer le span elle-même.</p>
+ * <p><b>JAX-RS selection</b>: {@code ExceptionMapper<Throwable>} is as generic as
+ * possible — it is only selected by the container if NO more-specific application
+ * mapper matches the exception. Applications can therefore provide their own
+ * {@code ExceptionMapper<UserSpecificException>} without collision. For that case
+ * (a user mapper that matches), the span will (should) be terminated by the normal
+ * response filter — unless the container also has the Cassini bug, in which case
+ * the application must explicitly end the span itself.</p>
  *
- * <p>Quand le bug Cassini sera corrigé (response filters appelés après
- * ExceptionMapper), ce code devient redondant mais pas nocif — le span
- * a déjà été end()'d par le response filter, l'instanceof Span retournera
- * false (la propriété aura été removeProperty'd), et le mapper renvoie
- * juste une 500 générique.</p>
+ * <p>Once the Cassini bug is fixed (response filters called after ExceptionMapper),
+ * this code becomes redundant but harmless — the span has already been end()'d by
+ * the response filter, the {@code instanceof Span} check will return false (the
+ * property will have been removed), and the mapper simply returns a generic 500.</p>
  */
 @Provider
 @Priority(jakarta.ws.rs.Priorities.USER + 1000)
@@ -86,7 +83,7 @@ public class HumboldtSpanFinalizer implements ExceptionMapper<Throwable> {
         }
         requestContext.removeProperty(HumboldtServerRequestFilter.SPAN_PROPERTY);
         requestContext.removeProperty(HumboldtServerRequestFilter.SCOPE_PROPERTY);
-        LOG.log(Level.DEBUG, "Humboldt span SERVER terminé via ExceptionMapper fallback : {0}",
+        LOG.log(Level.DEBUG, "Humboldt SERVER span ended via ExceptionMapper fallback: {0}",
                 t.getClass().getSimpleName());
     }
 }

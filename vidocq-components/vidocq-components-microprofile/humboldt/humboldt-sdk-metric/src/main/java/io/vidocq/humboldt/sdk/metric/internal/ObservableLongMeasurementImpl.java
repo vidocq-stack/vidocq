@@ -4,7 +4,7 @@ import io.opentelemetry.api.common.Attributes;
 import io.opentelemetry.api.metrics.ObservableLongMeasurement;
 import io.vidocq.humboldt.sdk.metric.aggregation.Aggregator;
 
-/** Implémentation interne — délègue chaque {@code record(...)} à un {@link Aggregator}. */
+/** Internal implementation — delegates each {@code record(...)} to an {@link Aggregator}. */
 final class ObservableLongMeasurementImpl implements ObservableLongMeasurement {
 
     private final Aggregator<?> aggregator;

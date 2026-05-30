@@ -5,15 +5,15 @@ import io.opentelemetry.api.common.Attributes;
 import java.util.Objects;
 
 /**
- * Représente la source d'une donnée télémétrique — service, host, container, etc.
+ * Represents the source of telemetry data — service, host, container, etc.
  * Immutable.
  *
- * <p>Équivalent fonctionnel de {@code io.opentelemetry.sdk.resources.Resource} sans
- * dépendance au SDK OTel tiers (cf. PLAN.md §3 — Humboldt réimplémente le SDK).</p>
+ * <p>Functional equivalent of {@code io.opentelemetry.sdk.resources.Resource} without
+ * a dependency on the third-party OTel SDK (see PLAN.md §3 — Humboldt reimplements the SDK).</p>
  *
- * <p>Le {@link #schemaUrl()} est optionnel ; lorsqu'il est présent, il référence
- * l'URL d'un schéma de conventions sémantiques OpenTelemetry validant les clés
- * d'attributs portées par cette ressource.</p>
+ * <p>{@link #schemaUrl()} is optional; when present, it references
+ * the URL of an OpenTelemetry semantic conventions schema validating the
+ * attribute keys carried by this resource.</p>
  */
 public final class Resource {
 
@@ -28,24 +28,24 @@ public final class Resource {
     }
 
     /**
-     * @return la ressource vide (aucun attribut, aucun schema URL).
+     * @return the empty resource (no attributes, no schema URL).
      */
     public static Resource empty() {
         return EMPTY;
     }
 
     /**
-     * @param attributes attributs de la ressource
-     * @return une ressource sans schema URL
+     * @param attributes resource attributes
+     * @return a resource without a schema URL
      */
     public static Resource create(Attributes attributes) {
         return new Resource(attributes, null);
     }
 
     /**
-     * @param attributes attributs de la ressource
-     * @param schemaUrl  URL du schéma de conventions sémantiques (ou {@code null})
-     * @return une nouvelle ressource immutable
+     * @param attributes resource attributes
+     * @param schemaUrl  semantic conventions schema URL (or {@code null})
+     * @return a new immutable resource
      */
     public static Resource create(Attributes attributes, String schemaUrl) {
         return new Resource(attributes, schemaUrl);
@@ -60,12 +60,12 @@ public final class Resource {
     }
 
     /**
-     * Fusionne cette ressource avec une autre selon les règles OpenTelemetry :
-     * les attributs et le {@code schemaUrl} de {@code other} prennent le pas
-     * en cas de conflit.
+     * Merges this resource with another according to the OpenTelemetry rules:
+     * the attributes and {@code schemaUrl} of {@code other} take precedence
+     * in case of conflict.
      *
-     * @param other ressource à fusionner (peut être {@code null})
-     * @return une nouvelle ressource immutable
+     * @param other resource to merge (may be {@code null})
+     * @return a new immutable resource
      */
     public Resource merge(Resource other) {
         if (other == null || other.attributes.isEmpty() && other.schemaUrl == null) {

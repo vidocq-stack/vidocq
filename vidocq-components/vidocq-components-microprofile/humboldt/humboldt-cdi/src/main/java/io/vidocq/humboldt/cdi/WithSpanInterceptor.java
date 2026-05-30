@@ -19,28 +19,28 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 
 /**
- * Interceptor CDI qui enveloppe chaque méthode portant
+ * CDI interceptor that wraps each method annotated with
  * {@link io.opentelemetry.instrumentation.annotations.WithSpan @WithSpan}
- * (annotation API publique standard OpenTelemetry) dans un span OTel.
+ * (the standard OpenTelemetry public API annotation) in an OTel span.
  *
- * <p>Bindée via {@link SpanBinding} (marker interne ajouté automatiquement
- * par {@link HumboldtBuildCompatibleExtension} au build time CDI). L'utilisateur
- * final n'écrit donc qu'une seule annotation : {@code @WithSpan} d'OTel.</p>
+ * <p>Bound via {@link SpanBinding} (internal marker added automatically by
+ * {@link HumboldtBuildCompatibleExtension} at CDI build time). The end user
+ * therefore only writes one annotation: {@code @WithSpan} from OTel.</p>
  *
- * <p>Cycle de vie d'une invocation :</p>
+ * <p>Invocation lifecycle:</p>
  * <ol>
- *   <li>Résout l'annotation OTel sur la méthode (puis sur la classe en fallback)</li>
- *   <li>Dérive le nom du span — {@code @WithSpan.value()} si non vide,
- *       sinon {@code Class.simpleName + "." + methodName}</li>
- *   <li>Crée le span via {@link Tracer#spanBuilder(String)}</li>
+ *   <li>Resolves the OTel annotation on the method (then falls back to the class)</li>
+ *   <li>Derives the span name — {@code @WithSpan.value()} if non-empty,
+ *       otherwise {@code Class.simpleName + "." + methodName}</li>
+ *   <li>Creates the span via {@link Tracer#spanBuilder(String)}</li>
  *   <li>{@code try (Scope = span.makeCurrent()) { proceed(); }}</li>
- *   <li>Si exception : {@code span.recordException(t)} + statut ERROR, rethrow</li>
- *   <li>{@code span.end()} en finally</li>
+ *   <li>On exception: {@code span.recordException(t)} + ERROR status, rethrow</li>
+ *   <li>{@code span.end()} in finally</li>
  * </ol>
  *
- * <p>Priorité : {@link Interceptor.Priority#APPLICATION} + 1 — exécuté après
- * les interceptors plateforme (transaction, security) mais avant les
- * interceptors métier user-defined.</p>
+ * <p>Priority: {@link Interceptor.Priority#APPLICATION} + 1 — executed after
+ * platform interceptors (transaction, security) but before user-defined business
+ * interceptors.</p>
  */
 @Interceptor
 @SpanBinding
@@ -75,16 +75,16 @@ public class WithSpanInterceptor {
     }
 
     /**
-     * Surchargeable en sous-classe pour fournir un Tracer non global (typiquement
-     * via CDI {@code @Inject} dans une variante M6d).
+     * Overridable in a subclass to supply a non-global Tracer (typically
+     * via CDI {@code @Inject} in an M6d variant).
      */
     protected Tracer tracer() {
         return openTelemetry().getTracer("io.vidocq.humboldt.cdi");
     }
 
     /**
-     * Hook indirection vers {@link GlobalOpenTelemetry} — permet aux tests de
-     * surcharger en évitant l'init globale.
+     * Indirection hook to {@link GlobalOpenTelemetry} — allows tests to
+     * override and avoid global initialisation.
      */
     protected OpenTelemetry openTelemetry() {
         return GlobalOpenTelemetry.get();
@@ -101,11 +101,11 @@ public class WithSpanInterceptor {
     }
 
     /**
-     * Scan les paramètres de la méthode pour {@link SpanAttribute @SpanAttribute} et
-     * pose chaque valeur non-null sur le span. Si {@code @SpanAttribute.value()} est
-     * vide, utilise le nom du paramètre (nécessite compilation avec {@code -parameters}).
-     * Les valeurs sont converties via {@link String#valueOf(Object)} — conforme à la
-     * spec OTel instrumentation annotations qui requiert les attributs comme String.
+     * Scans the method parameters for {@link SpanAttribute @SpanAttribute} and
+     * sets each non-null value on the span. If {@code @SpanAttribute.value()} is
+     * empty, uses the parameter name (requires compilation with {@code -parameters}).
+     * Values are converted via {@link String#valueOf(Object)} — conformant with the
+     * OTel instrumentation annotations spec which requires attributes as Strings.
      */
     private static void applySpanAttributes(Span span, Method method, Object[] args) {
         if (args == null || args.length == 0) return;

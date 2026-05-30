@@ -12,21 +12,21 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Helpers OTLP/JSON mutualisés entre les 3 encoders (spans, metrics, logs).
+ * OTLP/JSON helpers shared among the 3 encoders (spans, metrics, logs).
  *
- * <p>Tout ce qui est trivialement identique entre {@code resourceSpans} /
- * {@code resourceMetrics} / {@code resourceLogs} : escape JSON,
- * {@code AnyValue}, {@code KeyValue} array, bloc {@code "resource"} et
- * en-tête de {@code "scope"}. La logique métier spécifique à chaque signal
- * (span fields, metric data points, log record fields) reste dans son encoder.</p>
+ * <p>Everything that is trivially identical across {@code resourceSpans} /
+ * {@code resourceMetrics} / {@code resourceLogs}: JSON escaping,
+ * {@code AnyValue}, {@code KeyValue} array, the {@code "resource"} block and
+ * the {@code "scope"} header. The signal-specific business logic
+ * (span fields, metric data points, log record fields) stays in its own encoder.</p>
  */
 final class OtlpJsonCommon {
 
     private OtlpJsonCommon() {}
 
     /**
-     * Échappement JSON minimal — RFC 8259 §7. Échappe le quote, l'antislash,
-     * et les chars de contrôle (b/f/n/r/t et autres en u00XX).
+     * Minimal JSON escaping — RFC 8259 §7. Escapes the quote, the backslash,
+     * and control characters (b/f/n/r/t and others as u00XX).
      */
     static void appendString(StringBuilder sb, String s) {
         sb.append('"');
@@ -54,7 +54,7 @@ final class OtlpJsonCommon {
     }
 
     /**
-     * Encode un {@link Attributes} en tableau JSON {@code [{"key":"k","value":AnyValue}, ...]}.
+     * Encodes an {@link Attributes} as a JSON array {@code [{"key":"k","value":AnyValue}, ...]}.
      */
     static void writeAttributesArray(StringBuilder sb, Attributes attrs) {
         sb.append('[');
@@ -74,9 +74,9 @@ final class OtlpJsonCommon {
     }
 
     /**
-     * Encode une valeur en {@code AnyValue} OTLP/JSON — supporte tous les
-     * {@link AttributeType} de l'API publique OTel, y compris les variantes
-     * array (encodées en {@code arrayValue.values}).
+     * Encodes a value as an OTLP/JSON {@code AnyValue} — supports all
+     * {@link AttributeType} variants from the OTel public API, including
+     * array variants (encoded as {@code arrayValue.values}).
      */
     static void writeAnyValue(StringBuilder sb, AttributeType type, Object v) {
         sb.append('{');
@@ -111,9 +111,9 @@ final class OtlpJsonCommon {
     }
 
     /**
-     * Encode le bloc {@code "resource":{"attributes":[...]}}.
-     * Le {@code schemaUrl} doit être écrit séparément par l'appelant (placement
-     * différent dans chaque signal selon le schéma OTLP).
+     * Encodes the {@code "resource":{"attributes":[...]}} block.
+     * The {@code schemaUrl} must be written separately by the caller (placement
+     * differs per signal in the OTLP schema).
      */
     static void writeResource(StringBuilder sb, Resource resource) {
         sb.append("\"resource\":{\"attributes\":");
@@ -122,9 +122,9 @@ final class OtlpJsonCommon {
     }
 
     /**
-     * Encode l'en-tête {@code "scope":{"name":...,"version":...,"attributes":...}}.
-     * <p>L'appelant doit fermer l'objet englobant {@code scope*} avec son propre
-     * tableau de spans/metrics/logRecords et son éventuel {@code schemaUrl}.</p>
+     * Encodes the {@code "scope":{"name":...,"version":...,"attributes":...}} header.
+     * <p>The caller must close the enclosing {@code scope*} object with its own
+     * spans/metrics/logRecords array and optional {@code schemaUrl}.</p>
      */
     static void writeScopeHeader(StringBuilder sb, InstrumentationScope scope) {
         sb.append("\"scope\":{\"name\":");

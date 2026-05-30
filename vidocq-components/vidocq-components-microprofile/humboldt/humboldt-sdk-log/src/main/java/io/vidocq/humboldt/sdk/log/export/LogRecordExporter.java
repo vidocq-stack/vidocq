@@ -6,9 +6,9 @@ import io.vidocq.humboldt.sdk.log.data.LogRecordData;
 import java.util.Collection;
 
 /**
- * Exporter de LogRecord (InMemory, Logging, OTLP/HTTP-JSON, ...).
+ * Exporter of LogRecord instances (InMemory, Logging, OTLP/HTTP-JSON, ...).
  *
- * <p>Thread-safe — peut être partagé entre plusieurs
+ * <p>Thread-safe — can be shared by multiple
  * {@link LogRecordProcessor}.</p>
  */
 public interface LogRecordExporter extends AutoCloseable {

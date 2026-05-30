@@ -3,12 +3,12 @@ package io.vidocq.humboldt.sdk.metric.data;
 import io.opentelemetry.api.common.Attributes;
 
 /**
- * Point de données pour un Sum / Counter long-typé.
+ * Data point for a long-typed Sum / Counter.
  *
- * @param startEpochNanos timestamp de début de la fenêtre cumulative
- * @param epochNanos      timestamp de la collecte
- * @param attributes      labels du point
- * @param value           valeur (cumulée si CUMULATIVE)
+ * @param startEpochNanos start timestamp of the cumulative window
+ * @param epochNanos      collection timestamp
+ * @param attributes      point labels
+ * @param value           value (cumulative if CUMULATIVE)
  */
 public record LongPointData(
         long startEpochNanos,

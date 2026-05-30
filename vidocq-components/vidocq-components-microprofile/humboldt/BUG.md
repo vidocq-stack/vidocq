@@ -1,110 +1,110 @@
-# Humboldt — Registre des bugs
+# Humboldt — Bug registry
 
-> Tout bug reproductible (issue interne, régression, comportement incorrect non encore corrigé) doit être tracé ici. Cf. `CLAUDE.md` racine du workspace pour la convention.
+> Every reproducible bug (internal issue, regression, incorrect behavior not yet fixed) must be tracked here. See the workspace root `CLAUDE.md` for the convention.
 
-## Format d'une entrée
+## Entry format
 
 ```
-### [HBT-N] Titre court
-- **Date** : YYYY-MM-DD
-- **Composant** : humboldt-api / humboldt-sdk-trace / …
-- **Statut** : OPEN / INVESTIGATING / FIXED / WONTFIX
-- **Affecté** : version(s) concernées (ex. 0.1.0-SNAPSHOT)
-- **Symptôme** : description de l'erreur observée
-- **Reproduction** : étapes minimales pour reproduire
-- **Hypothèse de cause** : diagnostic root cause (quand connu)
-- **Correction** : lien PR ou fix appliqué
+### [HBT-N] Short title
+- **Date**: YYYY-MM-DD
+- **Component**: humboldt-api / humboldt-sdk-trace / …
+- **Status**: OPEN / INVESTIGATING / FIXED / WONTFIX
+- **Affected**: affected version(s) (e.g. 0.1.0-SNAPSHOT)
+- **Symptom**: description of the observed error
+- **Reproduction**: minimal steps to reproduce
+- **Root-cause hypothesis**: root-cause diagnosis (when known)
+- **Fix**: PR link or applied fix
 ```
 
 ---
 
-### [HBT-2] cassini-cdi-vauban n'active jamais le RequestContext autour d'un dispatch HTTP
+### [HBT-2] cassini-cdi-vauban never activates RequestContext around an HTTP dispatch
 
-- **Date** : 2026-05-24
-- **Composant** : cassini-cdi-vauban
-- **Statut** : FIXED (cassini-cdi-vauban commit `00:53 2026-05-24`)
-- **Affecté** : cassini-cdi-vauban 0.1.0-SNAPSHOT
-- **Symptôme** : toute resource `@RequestScoped` (= toute classe `@Path` après BCE Cassini) throws `ContextNotActiveException: RequestScope is not active` lors de l'invocation d'une méthode resource.
-- **Reproduction** : cf. HBT-1 — déclencher BaggageTest avant le workaround.
-- **Cause** : `cassini-cdi-vauban` ne contient aucun appel à `VaubanContainer.requestContext().activate()` autour des dispatches HTTP. Les beans `@RequestScoped` ne peuvent donc jamais être instanciés.
-- **Correction appliquée** : nouveau `VaubanRequestScopeFilter` (`@Provider @PreMatching @Priority(Integer.MIN_VALUE)`)
-  qui implémente à la fois `ContainerRequestFilter` (activate) et `ContainerResponseFilter` (deactivate).
-  Auto-injecté côté production via `VaubanBeanProvider.getResourceClasses()` (singleton retourné
-  par `getBean()`). Pour les harness de test qui n'utilisent pas `CassiniStackBuilder.beanProvider(...)`
-  (cas de `humboldt-tck/CassiniHarness`), le constructor est public — enregistrer manuellement via
+- **Date**: 2026-05-24
+- **Component**: cassini-cdi-vauban
+- **Status**: FIXED (cassini-cdi-vauban commit `00:53 2026-05-24`)
+- **Affected**: cassini-cdi-vauban 0.1.0-SNAPSHOT
+- **Symptom**: any `@RequestScoped` resource (= any `@Path` class after the Cassini BCE) throws `ContextNotActiveException: RequestScope is not active` when invoking a resource method.
+- **Reproduction**: see HBT-1 — trigger BaggageTest before the workaround.
+- **Cause**: `cassini-cdi-vauban` contains no call to `VaubanContainer.requestContext().activate()` around HTTP dispatches. `@RequestScoped` beans therefore can never be instantiated.
+- **Applied fix**: new `VaubanRequestScopeFilter` (`@Provider @PreMatching @Priority(Integer.MIN_VALUE)`)
+  which implements both `ContainerRequestFilter` (activate) and `ContainerResponseFilter` (deactivate).
+  Auto-injected in production via `VaubanBeanProvider.getResourceClasses()` (singleton returned
+  by `getBean()`). For test harnesses that do not use `CassiniStackBuilder.beanProvider(...)`
+  (case of `humboldt-tck/CassiniHarness`), the constructor is public — register manually via
   `.provider(new VaubanRequestScopeFilter(container))`.
-- **Validation** : TCK Cassini Jakarta REST 4.0 = 2535/2535 PASS (contrat respecté, 0 régression).
-  TCK humboldt MP Telemetry 2.1 = 19/43/23 (équivalent au fix workaround précédent, mais maintenant
-  l'activation est portée par cassini-cdi-vauban et non plus par un Handler ad-hoc humboldt-tck).
+- **Validation** : Cassini Jakarta REST 4.0 TCK = 2535/2535 PASS (contract respected, 0 regression).
+  humboldt MP Telemetry 2.1 TCK = 19/43/23 (equivalent to the previous workaround fix, but now
+  activation is handled by cassini-cdi-vauban rather than by an ad-hoc humboldt-tck Handler).
 
 ---
 
-### [HBT-1] BCE Cassini @Path → @RequestScoped non appliquée aux beans ajoutés runtime via Vauban addBeanClass
+### [HBT-1] Cassini @Path → @RequestScoped BCE not applied to beans added at runtime via Vauban addBeanClass
 
-- **Date** : 2026-05-24
-- **Composant** : humboldt-tck (interaction Vauban runtime + cassini-cdi-vauban BCE)
+- **Date**: 2026-05-24
+- **Component**: humboldt-tck (Vauban runtime + cassini-cdi-vauban BCE interaction)
 - **Statut** : FIXED (humboldt-tck commit `00:25 2026-05-24`)
-- **Affecté** : humboldt-tck 0.1.0-SNAPSHOT, vauban 0.1.0-SNAPSHOT, cassini-cdi-vauban 0.1.0-SNAPSHOT
-- **Symptôme** : `cdi.select(BaggageResource.class)` throws `UnsatisfiedResolutionException:
-  No bean found for type: ...BaggageResource`. La classe a `@Path` mais pas de scope
-  CDI explicite — la BCE `CassiniScopeExtension.addDefaultScope()` censée ajouter
-  `@RequestScoped` n'est PAS exécutée pour les classes enregistrées via
-  `VaubanContainerBuilder.addBeanClass()` en runtime. Conséquence : les ressources
-  TCK avec `@Inject Baggage/Tracer/Span/...` reçoivent `null` → NPE → HTTP 500.
+- **Affected**: humboldt-tck 0.1.0-SNAPSHOT, vauban 0.1.0-SNAPSHOT, cassini-cdi-vauban 0.1.0-SNAPSHOT
+- **Symptom**: `cdi.select(BaggageResource.class)` throws `UnsatisfiedResolutionException:
+  No bean found for type: ...BaggageResource`. The class has `@Path` but no
+  explicit CDI scope — the BCE `CassiniScopeExtension.addDefaultScope()` expected to add
+  `@RequestScoped` is NOT executed for classes registered via
+  `VaubanContainerBuilder.addBeanClass()` en runtime. Consequence: TCK resources
+  TCK with `@Inject Baggage/Tracer/Span/...` receive `null` → NPE → HTTP 500.
 - **Reproduction** :
   1. `cd humboldt && ./run-official-tck-telemetry-2.1.sh -Dtest=BaggageTest`
-  2. Observer dans les logs stderr : `Baggage Resource Exception: NullPointerException
+  2. Observe in stderr logs: `Baggage Resource Exception: NullPointerException
      Cannot invoke "Baggage.getEntryValue" because "this.baggage" is null`
-  3. `cdi.select(BaggageResource.class)` (depuis CassiniHarness) confirme
+  3. `cdi.select(BaggageResource.class)` (from CassiniHarness) confirms
      `UnsatisfiedResolutionException`.
-- **Hypothèse de cause** : Vauban applique les BCE `@Enhancement` à compile-time via
-  APT processeur. Les classes ajoutées par `addBeanClass(Class)` en runtime sont
-  registered dans le BeanManager mais NE passent PAS par la phase
-  enhancement → leurs annotations ne sont pas mutées → les classes `@Path` sans
-  scope sont ignorées par la bean discovery (Vauban exige un scope CDI explicite
-  pour considérer une classe comme bean).
-- **Tests impactés (FAIL HTTP 500)** : BaggageTest, baggageBeanChange, et
-  probablement tout test qui POST/GET sur une resource TCK avec `@Inject` de type CDI
+- **Root-cause hypothesis**: Vauban applies `@Enhancement` BCEs at compile time via
+  APT processor. Classes added by `addBeanClass(Class)` at runtime are
+  registered in the BeanManager but do NOT go through the
+  enhancement phase → their annotations are not mutated → `@Path` classes without
+  scope are ignored by bean discovery (Vauban requires an explicit CDI scope
+  to consider a class a bean).
+- **Affected tests (FAIL HTTP 500)**: BaggageTest, baggageBeanChange, and
+  probably any test that POSTs/GETs a TCK resource with a CDI-typed `@Inject`
   (testIntegrationWithJaxRsClient*, testIntegrationWithMpRestClient*).
-- **Correction appliquée** : Vauban a déjà le mécanisme runtime pour appliquer les BCE
-  `@Enhancement` aux classes "unprocessed" (`BceProcessor.processEnhancementOnly` ligne 742
-  de `VaubanContainerBuilder`), mais SEULEMENT si la BCE est dans le bean classes set.
-  `addBeanClass()` ne scanne pas le ServiceLoader META-INF/services. Fix : ajout d'une
-  ligne dans `HumboldtDeployableContainer.deploy()` qui déclare explicitement
-  `CassiniScopeExtension.class` via `addBeanClass()`. La BCE devient discoverable et
-  applique son `@Enhancement` qui ajoute `@RequestScoped` synthétique aux classes `@Path`
-  du WAR.
-- **Validation** : `BaggageTest.baggage` PASS (vs FAIL avant). Run TCK passe de 16 → 19 PASS.
-- **Suivi** : un fix générique côté Vauban (scanner automatiquement les BCE via ServiceLoader
-  dans `build()` même si pas de `scanLocal()`) serait plus propre — chantier Vauban séparé.
+- **Applied fix**: Vauban already has the runtime mechanism to apply BCEs
+  `@Enhancement` to "unprocessed" classes (`BceProcessor.processEnhancementOnly` line 742
+  of `VaubanContainerBuilder`), but ONLY if the BCE is in the bean classes set.
+  `addBeanClass()` does not scan the ServiceLoader `META-INF/services`. Fix: add a
+   line in `HumboldtDeployableContainer.deploy()` that explicitly declares
+   `CassiniScopeExtension.class` via `addBeanClass()`. The BCE becomes discoverable and
+   applies its `@Enhancement`, which adds synthetic `@RequestScoped` to `@Path` classes
+  of the WAR.
+- **Validation**: `BaggageTest.baggage` PASS (vs FAIL before). TCK run goes from 16 → 19 PASS.
+- **Follow-up**: a generic Vauban fix (automatically scanning BCEs via ServiceLoader
+  in `build()` even without `scanLocal()`) would be cleaner — separate Vauban task.
 
 ---
 
-### [HBT-3] JPMS contourné dans `humboldt-rest` via copie manuelle des JARs compile-scope
+### [HBT-3] JPMS workaround in `humboldt-rest` via manual copying of compile-scope JARs
 
 - **Date** : 2026-05-25
-- **Composant** : humboldt-rest/pom.xml
-- **Statut** : ⚠️ OPEN — workaround actif
-- **Affecté** : humboldt 0.1.0-SNAPSHOT
-- **Symptôme** : `humboldt-rest/pom.xml` utilise `maven-dependency-plugin` (phase `initialize`)
-  pour copier les JARs compile-scope (`humboldt-propagator-w3c`, `humboldt-otel-api`,
-  `humboldt-otel-context`) dans `target/javamodules/`, puis passe
+- **Component**: humboldt-rest/pom.xml
+- **Status**: ⚠️ OPEN — workaround active
+- **Affected**: humboldt 0.1.0-SNAPSHOT
+- **Symptom**: `humboldt-rest/pom.xml` uses `maven-dependency-plugin` (phase `initialize`)
+  to copy compile-scope JARs (`humboldt-propagator-w3c`, `humboldt-otel-api`,
+  `humboldt-otel-context`) into `target/javamodules/`, then passes
   `--module-path ${project.build.directory}/javamodules` manuellement au compilateur javac.
-  Ce contournement est limité au sous-module `humboldt-rest` (les autres modules humboldt
-  ne semblent pas affectés).
+  This workaround is limited to the `humboldt-rest` submodule (the other Humboldt modules
+  do not seem affected).
 - **Reproduction** :
   ```bash
   grep -n "javamodules\|module-path" humboldt/humboldt-rest/pom.xml
-  # révèle maven-dependency-plugin + compilerArgs
+  # reveals maven-dependency-plugin + compilerArgs
   ```
-  Supprimer la config et recompiler `humboldt-rest` pour observer les erreurs `module not found`.
-- **Hypothèse de cause** : les modules OTel (`opentelemetry-api`, `opentelemetry-context`)
-  et les modules humboldt intermédiaires copiés n'ont pas de `module-info.class` reconnu par
-  `maven-compiler-plugin` 4.x. La copie dans `target/javamodules/` permet à javac de les
-  résoudre comme automatic modules depuis le nom de fichier JAR.
-- **Correction envisagée** : vérifier si `opentelemetry-api` 1.x publie un descripteur JPMS
-  explicite dans ses versions récentes ; wrapper si nécessaire. Investiguer pourquoi
-  `humboldt-propagator-w3c` et `humboldt-otel-*` (modules internes) ne sont pas résolus
-  nativement — ils devraient avoir leur propre `module-info.class`.
+  Remove the config and recompile `humboldt-rest` to observe `module not found` errors.
+- **Root-cause hypothesis**: the OTel modules (`opentelemetry-api`, `opentelemetry-context`)
+  and the copied intermediate Humboldt modules do not have a `module-info.class` recognized by
+  `maven-compiler-plugin` 4.x. Copying them into `target/javamodules/` allows javac to
+  resolve them as automatic modules from the JAR filename.
+- **Proposed fix**: check whether `opentelemetry-api` 1.x publishes a JPMS descriptor
+  explicitly in recent versions; wrap if needed. Investigate why
+  `humboldt-propagator-w3c` and `humboldt-otel-*` (internal modules) are not resolved
+  natively — they should have their own `module-info.class`.
 
 ---

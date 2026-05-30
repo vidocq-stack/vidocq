@@ -6,16 +6,17 @@ import java.util.Optional;
 import java.util.function.Function;
 
 /**
- * Lecteur de configuration env vars + system properties.
+ * Env vars + system properties configuration reader.
  *
- * <p>Convention OTel : la clé d'env est en {@code SCREAMING_SNAKE_CASE}, la clé
- * de system property est l'équivalent {@code lower.dot.case}. Exemple :
- * {@code OTEL_SERVICE_NAME} ↔ {@code otel.service.name}. Priorité aux env vars
- * (alignement avec l'impl OTel reference), fallback system property.</p>
+ * <p>OTel convention: the env key is in {@code SCREAMING_SNAKE_CASE}, the
+ * system property key is the {@code lower.dot.case} equivalent. Example:
+ * {@code OTEL_SERVICE_NAME} ↔ {@code otel.service.name}. Env vars take
+ * priority (aligned with the OTel reference implementation), falling back
+ * to system properties.</p>
  *
- * <p>Construit par défaut sur {@link System#getenv()} et
- * {@link System#getProperties()}, mais peut être instancié avec une map custom
- * pour tests (cf. {@link #of(Map, Map)}).</p>
+ * <p>Backed by default on {@link System#getenv()} and
+ * {@link System#getProperties()}, but can be instantiated with a custom map
+ * for tests (see {@link #of(Map, Map)}).</p>
  */
 public final class EnvConfig {
 
@@ -36,8 +37,8 @@ public final class EnvConfig {
     }
 
     /**
-     * @param envKey clé en SCREAMING_SNAKE_CASE (ex. {@code OTEL_SERVICE_NAME})
-     * @return la valeur résolue (env > prop), trimmée, ou empty si absente
+     * @param envKey key in SCREAMING_SNAKE_CASE (e.g. {@code OTEL_SERVICE_NAME})
+     * @return the resolved value (env &gt; prop), trimmed, or empty if absent
      */
     public Optional<String> get(String envKey) {
         String fromEnv = envLookup.apply(envKey);

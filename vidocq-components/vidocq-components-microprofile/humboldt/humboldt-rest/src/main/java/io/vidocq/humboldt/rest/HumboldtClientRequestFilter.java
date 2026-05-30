@@ -20,29 +20,29 @@ import jakarta.ws.rs.client.ClientRequestFilter;
 import java.net.URI;
 
 /**
- * {@link ClientRequestFilter} qui démarre un span {@link SpanKind#CLIENT} pour chaque
- * requête HTTP sortante, pose les attributs OTel HTTP semantic conventions 1.27+
- * applicables côté client, et injecte le {@code traceparent} W3C dans les headers
- * sortants pour propagation distribuée.
+ * {@link ClientRequestFilter} that starts a {@link SpanKind#CLIENT} span for each
+ * outgoing HTTP request, sets the OTel HTTP semantic conventions 1.27+ attributes
+ * applicable on the client side, and injects the W3C {@code traceparent} into the
+ * outgoing headers for distributed propagation.
  *
- * <p>Attributs posés sur le span :</p>
+ * <p>Attributes set on the span:</p>
  * <ul>
  *   <li>{@code http.request.method} — GET/POST/...</li>
- *   <li>{@code url.full} — URL complète de la requête (sans fragment)</li>
- *   <li>{@code server.address} — host du request URI</li>
- *   <li>{@code server.port} — port du request URI (omis si port standard du scheme)</li>
+ *   <li>{@code url.full} — full request URL (without fragment)</li>
+ *   <li>{@code server.address} — host from the request URI</li>
+ *   <li>{@code server.port} — port from the request URI (omitted if standard port for the scheme)</li>
  * </ul>
  *
- * <p>Nom du span : {@code "<METHOD>"} (e.g., {@code "GET"}), conformément à la convention
- * OTel HTTP client semconv qui ne template pas la route côté client (l'URL complète
- * suffit ; le pattern n'est connu que côté serveur via {@code @Path}).</p>
+ * <p>Span name: {@code "<METHOD>"} (e.g., {@code "GET"}), in line with the OTel HTTP
+ * client semconv which does not template the route on the client side (the full URL
+ * is sufficient; the pattern is only known server-side via {@code @Path}).</p>
  *
- * <p>Le span et le scope sont stockés dans les propriétés du {@link ClientRequestContext}
- * pour récupération symétrique par {@link HumboldtClientResponseFilter} qui les termine.</p>
+ * <p>The span and scope are stored in the {@link ClientRequestContext} properties
+ * for symmetric retrieval by {@link HumboldtClientResponseFilter} which ends them.</p>
  *
- * <p>Priorité {@link Priorities#HEADER_DECORATOR} (3000) — s'exécute après les filtres
- * d'authentification (1000) pour que le span englobe le coût des headers auth, mais avant
- * les filtres applicatifs USER (5000) qui pourraient muter l'URI.</p>
+ * <p>Priority {@link Priorities#HEADER_DECORATOR} (3000) — runs after authentication
+ * filters (1000) so that the span covers the auth header cost, but before USER
+ * application filters (5000) that might mutate the URI.</p>
  */
 @Priority(Priorities.HEADER_DECORATOR)
 public class HumboldtClientRequestFilter implements ClientRequestFilter {
@@ -56,10 +56,10 @@ public class HumboldtClientRequestFilter implements ClientRequestFilter {
     static final AttributeKey<Long> SERVER_PORT = AttributeKey.longKey("server.port");
 
     /**
-     * {@link TextMapSetter} qui écrit les headers W3C ({@code traceparent}, {@code tracestate},
-     * {@code baggage}) dans la {@link jakarta.ws.rs.core.MultivaluedMap} mutable du request
-     * context. Remplace toute valeur existante (putSingle) pour respecter la sémantique
-     * "one trace per request".
+     * {@link TextMapSetter} that writes the W3C headers ({@code traceparent}, {@code tracestate},
+     * {@code baggage}) into the mutable {@link jakarta.ws.rs.core.MultivaluedMap} of the request
+     * context. Replaces any existing value (putSingle) to honour the
+     * "one trace per request" semantics.
      */
     private static final TextMapSetter<ClientRequestContext> HEADER_SETTER = (carrier, key, value) -> {
         if (carrier != null) carrier.getHeaders().putSingle(key, value);
@@ -87,8 +87,8 @@ public class HumboldtClientRequestFilter implements ClientRequestFilter {
         Span span = spanBuilder.startSpan();
         Scope scope = Context.current().with(span).makeCurrent();
 
-        // Propagation : utilise le TextMapPropagator du Humboldt global. Inclut W3C
-        // (TraceContext + Baggage) par défaut + propagators custom déclarés via SPI
+        // Propagation: uses the Humboldt global TextMapPropagator. Includes W3C
+        // (TraceContext + Baggage) by default + custom propagators declared via SPI
         // ConfigurablePropagatorProvider (MP Telemetry §3.3 / cluster D).
         TextMapPropagator propagator = otel.getPropagators().getTextMapPropagator();
         propagator.inject(Context.current(), requestContext, HEADER_SETTER);
@@ -98,9 +98,9 @@ public class HumboldtClientRequestFilter implements ClientRequestFilter {
     }
 
     /**
-     * Renvoie l'URL débarrassée du fragment (jamais transmis côté wire) et du userinfo
-     * éventuel — bonnes pratiques OTel (RFC 7235 §5.1.2 + GDPR : pas de credentials
-     * en clair dans les attributs de trace).
+     * Returns the URL stripped of the fragment (never transmitted over the wire) and
+     * of any userinfo — OTel best practices (RFC 7235 §5.1.2 + GDPR: no credentials
+     * in plain text in trace attributes).
      */
     private String sanitize(URI uri) {
         if (uri.getUserInfo() == null && uri.getFragment() == null) {
@@ -120,7 +120,7 @@ public class HumboldtClientRequestFilter implements ClientRequestFilter {
                 || ("https".equalsIgnoreCase(scheme) && port == 443);
     }
 
-    /** Surchargeable pour tests sans GlobalOpenTelemetry. */
+    /** Overridable for tests without GlobalOpenTelemetry. */
     protected OpenTelemetry openTelemetry() {
         return GlobalOpenTelemetry.get();
     }

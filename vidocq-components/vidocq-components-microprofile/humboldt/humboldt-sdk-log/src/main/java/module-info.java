@@ -1,12 +1,12 @@
 /**
- * Humboldt SDK Log — implémentation OpenTelemetry du signal {@code logs}.
+ * Humboldt SDK Log — OpenTelemetry implementation of the {@code logs} signal.
  *
- * <p>M5 MVP : SdkLoggerProvider, SdkLogger, SdkLogRecordBuilder, processors
- * Simple + Batch (worker virtual thread).</p>
+ * <p>M5 MVP: SdkLoggerProvider, SdkLogger, SdkLogRecordBuilder, Simple + Batch
+ * processors (virtual-thread worker).</p>
  *
- * <p>Différé en M5b : bridges {@code java.util.logging} et {@code SLF4J},
- * appender-based source (pour capturer les logs d'applications existantes
- * sans réécrire les appels).</p>
+ * <p>Deferred to M5b: {@code java.util.logging} and {@code SLF4J} bridges,
+ * appender-based sources (to capture logs from existing applications without
+ * rewriting the calls).</p>
  */
 module io.vidocq.humboldt.sdk.log {
 

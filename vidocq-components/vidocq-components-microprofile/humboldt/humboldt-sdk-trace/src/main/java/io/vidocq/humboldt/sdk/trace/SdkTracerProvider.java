@@ -18,11 +18,11 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Implémentation Humboldt de {@link TracerProvider} — point d'entrée du SDK Trace.
+ * Humboldt implementation of {@link TracerProvider} — entry point for the Trace SDK.
  *
- * <p>Construit via {@link #builder()}. Immutable côté configuration ; la pool de
- * {@code Tracer} par scope est cachée pour éviter d'instancier 1 {@code SdkTracer}
- * par appel à {@code get(...)}.</p>
+ * <p>Built via {@link #builder()}. Immutable from a configuration standpoint; the
+ * per-scope {@code Tracer} pool is cached to avoid instantiating one
+ * {@code SdkTracer} per {@code get(...)} call.</p>
  */
 public final class SdkTracerProvider implements TracerProvider, AutoCloseable {
 
@@ -55,8 +55,8 @@ public final class SdkTracerProvider implements TracerProvider, AutoCloseable {
 
     @Override
     public Tracer get(String instrumentationScopeName, String instrumentationScopeVersion) {
-        // M2 : cache par scope name uniquement ; la version est portée dans l'InstrumentationScope
-        // une fois en M6 lorsque tracerBuilder() sera ajouté.
+        // M2: cache by scope name only; the version is carried in the InstrumentationScope
+        // once tracerBuilder() is added in M6.
         return get(instrumentationScopeName);
     }
 

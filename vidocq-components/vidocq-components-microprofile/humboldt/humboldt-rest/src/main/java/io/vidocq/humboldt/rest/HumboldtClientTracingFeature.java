@@ -4,15 +4,15 @@ import jakarta.ws.rs.core.Feature;
 import jakarta.ws.rs.core.FeatureContext;
 
 /**
- * {@link Feature} qui enregistre {@link HumboldtClientRequestFilter} et
- * {@link HumboldtClientResponseFilter} sur tout {@code Client} JAX-RS — découverte
- * via {@code META-INF/services/jakarta.ws.rs.core.Feature} pour auto-instrumentation
- * conforme MP Telemetry 2.1 §3.2 (les TCK font {@code ClientBuilder.newClient()}
- * sans {@code .register()} explicite et attendent que les spans CLIENT soient posés).
+ * {@link Feature} that registers {@link HumboldtClientRequestFilter} and
+ * {@link HumboldtClientResponseFilter} on any JAX-RS {@code Client} — discovered
+ * via {@code META-INF/services/jakarta.ws.rs.core.Feature} for auto-instrumentation
+ * conformant with MP Telemetry 2.1 §3.2 (the TCK does {@code ClientBuilder.newClient()}
+ * without an explicit {@code .register()} and expects CLIENT spans to be set).
  *
- * <p>Convention : retourne {@code true} pour signaler que le Feature s'est bien
- * configuré ; le caller (CassiniClientBuilder) ignore actuellement la valeur de retour
- * mais d'autres impls JAX-RS la lisent pour activer/désactiver le Feature.</p>
+ * <p>Convention: returns {@code true} to signal that the Feature has configured
+ * itself successfully; the caller (CassiniClientBuilder) currently ignores the
+ * return value, but other JAX-RS implementations read it to enable/disable the Feature.</p>
  */
 public class HumboldtClientTracingFeature implements Feature {
 

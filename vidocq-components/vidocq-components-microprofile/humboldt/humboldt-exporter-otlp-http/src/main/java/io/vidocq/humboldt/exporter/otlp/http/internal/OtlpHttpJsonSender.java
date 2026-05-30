@@ -15,15 +15,15 @@ import java.util.Map;
 import java.util.concurrent.Executors;
 
 /**
- * Sender HTTP/JSON mutualisé pour les 3 exporters OTLP (traces / metrics / logs).
+ * Shared HTTP/JSON sender for the 3 OTLP exporters (traces / metrics / logs).
  *
- * <p>Encapsule {@link HttpClient} + endpoint + headers + timeouts + retry
- * exponentiel borné. Les exporters spécifiques (span/metric/log) délèguent ici
- * pour envoyer un payload JSON déjà encodé.</p>
+ * <p>Encapsulates {@link HttpClient} + endpoint + headers + timeouts + bounded
+ * exponential retry. The signal-specific exporters (span/metric/log) delegate here
+ * to send an already-encoded JSON payload.</p>
  *
- * <p>Async : chaque {@link #send(String)} lance un virtual thread qui exécute
- * la requête HTTP + retry. Retourne un {@link CompletableResultCode} qui se
- * complète à la fin (succès / échec définitif après {@code maxRetries}).</p>
+ * <p>Async: each {@link #send(String)} launches a virtual thread that executes
+ * the HTTP request + retry. Returns a {@link CompletableResultCode} that completes
+ * at the end (success / definitive failure after {@code maxRetries}).</p>
  */
 public final class OtlpHttpJsonSender {
 
@@ -54,8 +54,8 @@ public final class OtlpHttpJsonSender {
     }
 
     /**
-     * @param jsonBody payload OTLP/JSON déjà encodé
-     * @return un résultat asynchrone — succès si statut 2xx (éventuellement après retry).
+     * @param jsonBody already-encoded OTLP/JSON payload
+     * @return an asynchronous result — success if status 2xx (possibly after retry).
      */
     public CompletableResultCode send(String jsonBody) {
         HttpRequest.Builder reqB = HttpRequest.newBuilder(endpoint)
@@ -78,20 +78,20 @@ public final class OtlpHttpJsonSender {
             if (sc >= 500 && attempt < maxRetries) {
                 long backoffMs = computeBackoffMillis(attempt);
                 LOG.log(Level.WARNING,
-                        "OTLP {0} HTTP {1} (tentative {2}/{3}) — retry dans {4}ms",
+                        "OTLP {0} HTTP {1} (attempt {2}/{3}) - retry in {4}ms",
                         signalLabel, sc, attempt + 1, maxRetries, backoffMs);
                 Thread.sleep(backoffMs);
                 sendWithRetry(req, result, attempt + 1);
                 return;
             }
-            LOG.log(Level.WARNING, "OTLP {0} HTTP rejet définitif : {1} — {2}",
+            LOG.log(Level.WARNING, "OTLP {0} HTTP permanent rejection: {1} — {2}",
                     signalLabel, sc, resp.body());
             result.fail();
         } catch (Exception e) {
             if (attempt < maxRetries) {
                 long backoffMs = computeBackoffMillis(attempt);
                 LOG.log(Level.WARNING,
-                        "OTLP {0} envoi échoué (tentative {1}/{2}) : {3} — retry dans {4}ms",
+                        "OTLP {0} send failed (attempt {1}/{2}): {3} — retrying in {4}ms",
                         signalLabel, attempt + 1, maxRetries, e.getMessage(), backoffMs);
                 try {
                     Thread.sleep(backoffMs);
@@ -102,14 +102,14 @@ public final class OtlpHttpJsonSender {
                 }
                 return;
             }
-            LOG.log(Level.ERROR, "OTLP " + signalLabel + " envoi définitivement échoué", e);
+            LOG.log(Level.ERROR, "OTLP " + signalLabel + " send permanently failed", e);
             result.fail();
         }
     }
 
     /**
-     * Backoff exponentiel borné : 100ms × 2^attempt, plafond 5s.
-     * Public pour permettre les sanity checks dans les tests.
+     * Bounded exponential backoff: 100ms × 2^attempt, capped at 5s.
+     * Public so tests can perform sanity checks.
      */
     public static long computeBackoffMillis(int attempt) {
         return Math.min(100L << attempt, 5_000L);
@@ -157,7 +157,7 @@ public final class OtlpHttpJsonSender {
             return this;
         }
 
-        /** Label utilisé pour les logs de retry (ex. {@code "traces"}, {@code "metrics"}, {@code "logs"}). */
+        /** Label used for retry log messages (e.g. {@code "traces"}, {@code "metrics"}, {@code "logs"}). */
         public Builder setSignalLabel(String label) {
             if (label != null) this.signalLabel = label;
             return this;

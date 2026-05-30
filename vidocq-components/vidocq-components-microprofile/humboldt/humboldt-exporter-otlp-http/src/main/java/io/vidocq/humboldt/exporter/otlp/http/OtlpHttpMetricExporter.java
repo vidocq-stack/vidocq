@@ -14,10 +14,10 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Exporter OTLP/HTTP-JSON pour métriques — délègue le transport à
+ * OTLP/HTTP-JSON exporter for metrics — delegates transport to
  * {@link OtlpHttpJsonSender}.
  *
- * <p>Endpoint par défaut : {@code http://localhost:4318/v1/metrics}.</p>
+ * <p>Default endpoint: {@code http://localhost:4318/v1/metrics}.</p>
  */
 public final class OtlpHttpMetricExporter implements MetricExporter {
 

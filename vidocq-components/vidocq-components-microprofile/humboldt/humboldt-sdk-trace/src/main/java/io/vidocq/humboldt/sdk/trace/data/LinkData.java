@@ -4,10 +4,10 @@ import io.opentelemetry.api.common.Attributes;
 import io.opentelemetry.api.trace.SpanContext;
 
 /**
- * Lien d'un span vers un autre span (potentiellement dans une autre trace), immutable.
+ * Immutable link from one span to another span (potentially in another trace).
  *
- * @param spanContext contexte du span cible
- * @param attributes  attributs descriptifs du lien
+ * @param spanContext target span context
+ * @param attributes  descriptive link attributes
  */
 public record LinkData(SpanContext spanContext, Attributes attributes) {
 

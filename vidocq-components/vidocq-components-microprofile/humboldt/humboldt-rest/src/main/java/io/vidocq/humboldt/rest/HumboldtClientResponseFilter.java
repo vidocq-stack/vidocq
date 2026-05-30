@@ -11,18 +11,18 @@ import jakarta.ws.rs.client.ClientResponseContext;
 import jakarta.ws.rs.client.ClientResponseFilter;
 
 /**
- * Symétrique à {@link HumboldtClientRequestFilter} — récupère le span démarré côté
- * request, pose {@code http.response.status_code} et passe le statut OTel à
- * {@link StatusCode#ERROR} si le code HTTP est ≥ 400.
+ * Symmetric counterpart to {@link HumboldtClientRequestFilter} — retrieves the span
+ * started on the request side, sets {@code http.response.status_code} and moves the
+ * OTel status to {@link StatusCode#ERROR} if the HTTP code is ≥ 400.
  *
- * <p><strong>Différence vs server</strong> : OTel HTTP semconv 1.27+ §4.3 dit qu'un
- * span CLIENT est en ERROR pour <em>tout</em> code 4xx ou 5xx (l'appelant a échoué à
- * obtenir une réponse correcte), alors qu'un span SERVER ne l'est qu'à partir de 5xx
- * (le serveur peut légitimement répondre 4xx sans que ce soit son erreur).</p>
+ * <p><strong>Difference vs server</strong>: OTel HTTP semconv 1.27+ §4.3 states that a
+ * CLIENT span is in ERROR for <em>any</em> 4xx or 5xx code (the caller failed to
+ * obtain a correct response), whereas a SERVER span is only in ERROR from 5xx
+ * (the server may legitimately respond with 4xx without it being its fault).</p>
  *
- * <p>Priorité {@link Priorities#HEADER_DECORATOR} — symétrique du request filter, tri
- * descendant côté response (JAX-RS §6.3) donc s'exécute APRÈS les filtres USER (5000),
- * juste avant de retourner la Response au caller.</p>
+ * <p>Priority {@link Priorities#HEADER_DECORATOR} — symmetric with the request filter,
+ * descending sort on the response side (JAX-RS §6.3) so it runs AFTER USER filters (5000),
+ * just before returning the Response to the caller.</p>
  */
 @Priority(Priorities.HEADER_DECORATOR)
 public class HumboldtClientResponseFilter implements ClientResponseFilter {

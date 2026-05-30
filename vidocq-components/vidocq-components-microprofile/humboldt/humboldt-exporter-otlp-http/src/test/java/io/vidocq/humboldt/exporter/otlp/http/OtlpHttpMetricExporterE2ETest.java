@@ -76,12 +76,12 @@ class OtlpHttpMetricExporterE2ETest {
                     .setUnit("ms").build();
             h.record(42.0);
 
-            // flush déclenche un cycle collect+export immédiat
+            // flush triggers an immediate collect+export cycle
             p.flush().join(3, TimeUnit.SECONDS);
             waitForCallCount(1);
         }
 
-        assertTrue(receivedBodies.size() >= 1, "au moins un POST attendu");
+        assertTrue(receivedBodies.size() >= 1, "at least one POST expected");
         String body = receivedBodies.getFirst();
         assertTrue(body.startsWith("{\"resourceMetrics\":["), "format OTLP/JSON metrics : " + body);
         assertTrue(body.contains("\"name\":\"requests\""));
@@ -89,7 +89,7 @@ class OtlpHttpMetricExporterE2ETest {
         assertTrue(body.contains("\"asInt\":\"7\""), "Counter value asInt string : " + body);
         assertTrue(body.contains("\"sum\":42.0"), "Histogram sum : " + body);
         assertTrue(body.contains("\"explicitBounds\""));
-        assertTrue(body.contains("\"isMonotonic\":true"), "Counter doit être monotonic");
+        assertTrue(body.contains("\"isMonotonic\":true"), "Counter must be monotonic");
         assertTrue(body.contains("\"aggregationTemporality\":2"), "CUMULATIVE = 2");
         assertTrue(body.contains("\"service.name\""));
     }

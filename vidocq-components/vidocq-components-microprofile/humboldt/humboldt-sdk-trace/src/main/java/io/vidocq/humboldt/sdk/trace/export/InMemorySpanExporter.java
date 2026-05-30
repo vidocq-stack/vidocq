@@ -8,8 +8,8 @@ import java.util.Collection;
 import java.util.List;
 
 /**
- * Exporter qui accumule les spans en mémoire — pour tests/debug.
- * Délègue à {@link InMemoryExporterBase} le squelette mutualisé.
+ * Exporter that accumulates spans in memory — for tests/debugging.
+ * Delegates the shared skeleton to {@link InMemoryExporterBase}.
  */
 public final class InMemorySpanExporter extends InMemoryExporterBase<SpanData> implements SpanExporter {
 
@@ -17,7 +17,7 @@ public final class InMemorySpanExporter extends InMemoryExporterBase<SpanData> i
         return new InMemorySpanExporter();
     }
 
-    /** Alias historique de {@link #getCollected()}, conservé pour rétro-compat des tests. */
+    /** Historical alias for {@link #getCollected()}, kept for test backward compatibility. */
     public List<SpanData> getFinishedSpans() {
         return getCollected();
     }

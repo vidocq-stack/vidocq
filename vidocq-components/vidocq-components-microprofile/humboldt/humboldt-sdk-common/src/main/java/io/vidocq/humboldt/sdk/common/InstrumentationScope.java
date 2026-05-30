@@ -3,13 +3,13 @@ package io.vidocq.humboldt.sdk.common;
 import io.opentelemetry.api.common.Attributes;
 
 /**
- * Identité de la bibliothèque qui produit un span / metric / log (cf. OpenTelemetry
+ * Identity of the library that produces a span / metric / log (see OpenTelemetry
  * "Instrumentation Scope").
  *
- * @param name       nom de la bibliothèque (jamais {@code null}, peut être vide)
- * @param version    version de la bibliothèque (peut être {@code null})
- * @param schemaUrl  URL du schéma de conventions sémantiques (peut être {@code null})
- * @param attributes attributs additionnels (jamais {@code null})
+ * @param name       library name (never {@code null}, may be empty)
+ * @param version    library version (may be {@code null})
+ * @param schemaUrl  semantic conventions schema URL (may be {@code null})
+ * @param attributes additional attributes (never {@code null})
  */
 public record InstrumentationScope(
         String name, String version, String schemaUrl, Attributes attributes) {

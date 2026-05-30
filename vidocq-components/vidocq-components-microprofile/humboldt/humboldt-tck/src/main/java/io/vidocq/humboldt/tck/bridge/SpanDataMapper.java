@@ -13,19 +13,19 @@ import io.vidocq.humboldt.sdk.common.InstrumentationScope;
 import java.util.List;
 
 /**
- * Convertit un {@link io.vidocq.humboldt.sdk.trace.data.SpanData Humboldt SpanData}
- * vers le format {@link SpanData OTel SDK SpanData} attendu par les exporters
- * fournis par le TCK MicroProfile Telemetry 2.1.
+ * Converts a {@link io.vidocq.humboldt.sdk.trace.data.SpanData Humboldt SpanData}
+ * to the {@link SpanData OTel SDK SpanData} format expected by the exporters
+ * provided by the MicroProfile Telemetry 2.1 TCK.
  *
- * <p>Confiné au runner TCK (jamais utilisé en prod) — c'est la couche d'adaptation
- * qui permet à Humboldt de réussir le TCK sans embarquer le SDK OTel dans
- * son runtime applicatif (cf. <code>tasks/m7b-architecture-analysis.md</code>
+ * <p>Confined to the TCK runner (never used in prod) — this is the adaptation layer
+ * that lets Humboldt pass the TCK without embedding the OTel SDK in
+ * its application runtime (see <code>tasks/m7b-architecture-analysis.md</code>
  * option C).</p>
  *
- * <p>L'API OTel publique (Attributes, SpanContext, SpanKind, StatusCode) est
- * partagée entre les deux SDKs : seuls les types <code>io.opentelemetry.sdk.*</code>
- * (Resource, EventData, LinkData, StatusData, InstrumentationScopeInfo) doivent
- * être traduits.</p>
+ * <p>The public OTel API (Attributes, SpanContext, SpanKind, StatusCode) is
+ * shared between the two SDKs: only the <code>io.opentelemetry.sdk.*</code> types
+ * (Resource, EventData, LinkData, StatusData, InstrumentationScopeInfo) need
+ * to be translated.</p>
  */
 public final class SpanDataMapper {
 

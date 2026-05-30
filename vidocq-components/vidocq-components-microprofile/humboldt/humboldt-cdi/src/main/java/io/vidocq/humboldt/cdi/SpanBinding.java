@@ -9,19 +9,19 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * {@link InterceptorBinding} interne — marker CDI utilisé par Humboldt pour
- * activer {@link WithSpanInterceptor}.
+ * Internal {@link InterceptorBinding} — CDI marker used by Humboldt to
+ * activate {@link WithSpanInterceptor}.
  *
- * <p>L'utilisateur final ne devrait JAMAIS écrire {@code @SpanBinding}
- * directement. C'est {@link HumboldtBuildCompatibleExtension} qui l'ajoute
- * automatiquement (au build time CDI) sur toute classe ou méthode portant
+ * <p>End users should NEVER write {@code @SpanBinding} directly. It is
+ * {@link HumboldtBuildCompatibleExtension} that adds it automatically
+ * (at CDI build time) on every class or method annotated with
  * {@link io.opentelemetry.instrumentation.annotations.WithSpan} —
- * l'annotation API publique standard d'OpenTelemetry attendue par le TCK
- * MicroProfile Telemetry 2.1.</p>
+ * the standard OpenTelemetry public API annotation expected by the
+ * MicroProfile Telemetry 2.1 TCK.</p>
  *
- * <p>L'annotation est exposée pour des raisons de visibilité technique
- * (l'extension BCE ne peut ajouter que des annotations publiquement
- * accessibles), pas pour usage applicatif.</p>
+ * <p>The annotation is exposed for technical visibility reasons
+ * (the BCE extension can only add publicly accessible annotations),
+ * not for application use.</p>
  */
 @InterceptorBinding
 @Inherited

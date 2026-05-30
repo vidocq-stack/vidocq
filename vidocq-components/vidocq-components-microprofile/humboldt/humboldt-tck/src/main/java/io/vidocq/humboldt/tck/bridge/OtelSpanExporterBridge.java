@@ -6,19 +6,19 @@ import io.vidocq.humboldt.sdk.common.CompletableResultCode;
 import java.util.Collection;
 
 /**
- * Adapte un {@link SpanExporter OTel SDK SpanExporter} (par exemple celui fourni
- * par {@code org.eclipse.microprofile.telemetry.tracing.tck.exporter.InMemorySpanExporter})
- * en un {@link io.vidocq.humboldt.sdk.trace.export.SpanExporter Humboldt SpanExporter}
- * compatible avec le pipeline trace Humboldt.
+ * Adapts an {@link SpanExporter OTel SDK SpanExporter} (for example the one provided
+ * by {@code org.eclipse.microprofile.telemetry.tracing.tck.exporter.InMemorySpanExporter})
+ * into an {@link io.vidocq.humboldt.sdk.trace.export.SpanExporter Humboldt SpanExporter}
+ * compatible with the Humboldt trace pipeline.
  *
- * <p>Pour chaque batch reçu de Humboldt, convertit les
- * {@link io.vidocq.humboldt.sdk.trace.data.SpanData} en
+ * <p>For each batch received from Humboldt, converts
+ * {@link io.vidocq.humboldt.sdk.trace.data.SpanData} into
  * {@link io.opentelemetry.sdk.trace.data.SpanData} via {@link SpanDataMapper}
- * puis délègue à l'exporter OTel sous-jacent.</p>
+ * and then delegates to the underlying OTel exporter.</p>
  *
- * <p>{@link CompletableResultCode} Humboldt et
+ * <p>Humboldt {@link CompletableResultCode} and OTel
  * {@link io.opentelemetry.sdk.common.CompletableResultCode CompletableResultCode}
- * OTel sont sémantiquement équivalents — la conversion est faite par
+ * are semantically equivalent — the conversion is performed by
  * {@link #toHumboldt(io.opentelemetry.sdk.common.CompletableResultCode)}.</p>
  */
 public final class OtelSpanExporterBridge implements io.vidocq.humboldt.sdk.trace.export.SpanExporter {
