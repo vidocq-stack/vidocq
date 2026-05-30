@@ -18,20 +18,20 @@ import io.vidocq.knock.spi.ProbeType;
 import java.util.Objects;
 
 /**
- * Façade runtime Knock — orchestre {@link KnockAggregator} et {@link KnockJsonSerializer}
- * pour produire un {@link HealthReport} (code HTTP + corps JSON) prêt à servir à un
- * transport HTTP (Jakarta REST via {@code knock-cassini}, ou autre).
+ * Knock runtime facade — orchestrates {@link KnockAggregator} and
+ * {@link KnockJsonSerializer} to produce a {@link HealthReport} (HTTP code + JSON body)
+ * ready to serve from an HTTP transport (Jakarta REST via {@code knock-cassini}, or other).
  *
- * <p>Spec MicroProfile Health 4.0 §3 : « The result of executing a health check procedure
+ * <p>MicroProfile Health 4.0 §3: "The result of executing a health check procedure
  * is a HealthCheckResponse. The result of the aggregation of these responses is reported
- * via an HTTP endpoint. »</p>
+ * via an HTTP endpoint."</p>
  *
- * <p>Cette classe est exportée (package {@code io.vidocq.knock.runtime}) et constitue
- * le point d'entrée stable pour les adaptateurs de transport. Les modules d'intégration
- * ne doivent pas dépendre directement de {@code io.vidocq.knock.internal}.</p>
+ * <p>This class is exported (package {@code io.vidocq.knock.runtime}) and serves as
+ * the stable entry point for transport adapters. Integration modules must not depend
+ * directly on {@code io.vidocq.knock.internal}.</p>
  *
- * <p>Thread-safe et virtual-thread-friendly : {@link KnockAggregator} parallélise les
- * appels {@code .call()} sur un {@code VirtualThreadPerTaskExecutor}.</p>
+ * <p>Thread-safe and virtual-thread-friendly: {@link KnockAggregator} parallelizes
+ * {@code .call()} invocations on a {@code VirtualThreadPerTaskExecutor}.</p>
  */
 public final class KnockHealthService {
 
@@ -40,9 +40,9 @@ public final class KnockHealthService {
     private final KnockJsonSerializer serializer;
 
     /**
-     * Crée un service adossé au registry donné.
+     * Creates a service backed by the given registry.
      *
-     * @param registry registry source (non null)
+     * @param registry source registry (non-null)
      */
     public KnockHealthService(HealthCheckRegistry registry) {
         this.registry = Objects.requireNonNull(registry, "registry");
@@ -51,13 +51,13 @@ public final class KnockHealthService {
     }
 
     /**
-     * Produit le rapport pour le {@link ProbeType} demandé.
+     * Produces the report for the requested {@link ProbeType}.
      *
-     * <p>Pour {@link ProbeType#ALL}, agrège LIVENESS + READINESS + STARTUP (spec §3).
-     * HTTP 200 si statut UP, 503 si DOWN (spec §3).</p>
+     * <p>For {@link ProbeType#ALL}, aggregates LIVENESS + READINESS + STARTUP (spec §3).
+     * HTTP 200 if status is UP, 503 if DOWN (spec §3).</p>
      *
-     * @param type type de probe à interroger
-     * @return rapport (httpStatus + JSON spec §3.1)
+     * @param type probe type to query
+     * @return report (httpStatus + JSON spec §3.1)
      */
     public HealthReport report(ProbeType type) {
         Objects.requireNonNull(type, "type");
@@ -65,4 +65,3 @@ public final class KnockHealthService {
         return new HealthReport(serializer.httpStatus(snapshot), serializer.serialize(snapshot));
     }
 }
-

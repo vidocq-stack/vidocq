@@ -18,9 +18,9 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * Sérialise un {@link HealthSnapshot} en JSON conforme à la spec MicroProfile Health 4.0 §3.1.
+ * Serializes a {@link HealthSnapshot} into JSON compliant with MicroProfile Health 4.0 §3.1.
  *
- * <p>Format attendu :</p>
+ * <p>Expected format:</p>
  * <pre>{@code
  * {
  *   "status": "UP",
@@ -34,20 +34,20 @@ import java.util.Optional;
  * }
  * }</pre>
  *
- * <p>Implémentation via Jakarta JSON-P ({@link Json#createObjectBuilder()}) —
- * champollion est l'implémentation runtime autorisée. Aucun {@code StringBuilder}
- * ni librairie JSON tierce.</p>
+ * <p>Implementation via Jakarta JSON-P ({@link Json#createObjectBuilder()}) —
+ * champollion is the allowed runtime implementation. No {@code StringBuilder}
+ * and no third-party JSON library.</p>
  *
- * <p>Spec §3.1 : {@code data} est omis si absent ({@link Optional#empty()}) ;
- * ne pas sérialiser {@code "data":null}.</p>
+ * <p>Spec §3.1: {@code data} is omitted if absent ({@link Optional#empty()}) ;
+ * do not serialize {@code "data":null}.</p>
  */
 public final class KnockJsonSerializer {
 
     /**
-     * Sérialise le snapshot en JSON string.
+     * Serializes the snapshot as a JSON string.
      *
-     * @param snapshot le résultat agrégé à sérialiser
-     * @return JSON string conforme spec §3.1
+     * @param snapshot the aggregated result to serialize
+     * @return JSON string compliant with spec §3.1
      */
     public String serialize(HealthSnapshot snapshot) {
         JsonArrayBuilder checksArray = Json.createArrayBuilder();
@@ -63,12 +63,12 @@ public final class KnockJsonSerializer {
     }
 
     /**
-     * Retourne le code HTTP approprié.
+     * Returns the appropriate HTTP code.
      *
-     * <p>Spec §3 : HTTP 200 si {@code status=UP}, HTTP 503 si {@code status=DOWN}.</p>
+     * <p>Spec §3: HTTP 200 if {@code status=UP}, HTTP 503 if {@code status=DOWN}.</p>
      *
-     * @param snapshot le résultat agrégé
-     * @return 200 ou 503
+     * @param snapshot the aggregated result
+     * @return 200 or 503
      */
     public int httpStatus(HealthSnapshot snapshot) {
         return switch (snapshot.status()) {

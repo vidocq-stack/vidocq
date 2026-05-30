@@ -1,73 +1,73 @@
 # Knock - Claude Code Guidelines
 
-> « Knock, ou le Triomphe de la Médecine » (Jules Romains, 1923) — un médecin qui
-> diagnostique tout et transforme chaque villageois en patient potentiel.
-> C'est exactement le rôle d'un système de health check : ausculter chaque composant
-> du système, diagnostiquer son état (UP/DOWN), et agréger ces diagnostics en un tableau
-> de santé consultable à tout instant.
+> "Knock, or the Triumph of Medicine" (Jules Romains, 1923) — a doctor who
+> diagnoses everything and transforms every villager into a potential patient.
+> This is exactly the role of a health check system: examine each component
+> of the system, diagnose its state (UP/DOWN), and aggregate these diagnoses into a
+> health dashboard consultable at any moment.
 
-## Prérequis
+## Prerequisites
 
-- **Java 25** + **Maven 3.9.16** (`.sdkmanrc` fourni — utiliser `sdk env`)
-- Le TCK MicroProfile Health 4.0 est un artefact **public Maven Central** :
+- **Java 25** + **Maven 3.9.16** (`.sdkmanrc` provided — use `sdk env`)
+- The MicroProfile Health 4.0 TCK is a **public Maven Central** artifact:
   `org.eclipse.microprofile.health:microprofile-health-tck:4.0`
-  (contrairement aux TCK Jakarta, pas besoin de l'installer manuellement).
+  (unlike Jakarta TCKs, no need to install manually).
 
-## Commandes essentielles
+## Essential Commands
 
 ```bash
-# Build du reactor (sans TCK)
+# Build reactor (without TCK)
 ./mvnw -ntp install -DskipTests
 
-# Tests unitaires
+# Unit tests
 ./mvnw test
 
-# TCK — smoke test seulement
+# TCK — smoke test only
 ./run-official-tck-mp-health-4.0.sh
 
-# TCK — suite complète
+# TCK — full suite
 ./run-official-tck-mp-health-4.0.sh all
 
-# TCK — test ciblé
-./run-official-tck-mp-health-4.0.sh -Dtest=NomDuTest
+# TCK — targeted test
+./run-official-tck-mp-health-4.0.sh -Dtest=TestName
 ```
 
-> `knock-tck` est **hors reactor** (POM Model 4.0.0 standalone) pour contourner
-> ShrinkWrap Maven Resolver 3.3 vs Model 4.1.0 — même contrainte que `cassini-tck`,
-> `foy-tck`, `champollion-tck` et `ravel-tck`. Ne pas changer ce modèle.
+> `knock-tck` is **out-of-reactor** (standalone POM Model 4.0.0) to work around
+> ShrinkWrap Maven Resolver 3.3 vs Model 4.1.0 — same constraint as `cassini-tck`,
+> `foy-tck`, `champollion-tck`, and `ravel-tck`. Do not change this model.
 
 ## Architecture
 
-Knock est une implémentation MicroProfile Health 4.0, **zéro librairie tierce**
-(pas de SmallRye Health, pas de Vert.x Health), uniquement des specs Jakarta EE /
-MicroProfile en dépendances, virtual threads, JPMS strict.
+Knock is a MicroProfile Health 4.0 implementation with **zero third-party libraries**
+(no SmallRye Health, no Vert.x Health), only Jakarta EE / MicroProfile specs as
+dependencies, virtual threads, strict JPMS.
 
 ```
-knock-api          ← Re-expose la spec org.eclipse.microprofile.health
+knock-api          ← Re-exposes the org.eclipse.microprofile.health spec
                      (HealthCheck, HealthCheckResponse, HealthCheckResponseBuilder,
                       @Liveness, @Readiness, @Startup)
-knock-core         ← Implémentation : HealthCheckRegistry, agrégation UP/DOWN,
-                     sérialisation JSON via champollion (Jakarta JSON-P/JSON-B)
-knock-cdi-vauban   ← Intégration CDI Vauban : BCE découvrant les beans
-                     @Liveness / @Readiness / @Startup, enregistrement auto dans le registry
-knock-cassini      ← Adapter Cassini (Jakarta REST) : ressources JAX-RS /health,
+knock-core         ← Implementation: HealthCheckRegistry, UP/DOWN aggregation,
+                     JSON serialization via champollion (Jakarta JSON-P/JSON-B)
+knock-cdi-vauban   ← CDI Vauban integration: BCE discovering
+                     @Liveness / @Readiness / @Startup beans, auto-registering in registry
+knock-cassini      ← Cassini adapter (Jakarta REST): JAX-RS resources /health,
                      /health/live, /health/ready, /health/started
-knock-tck          ← Runner TCK officiel MicroProfile Health 4.0 (HORS reactor)
+knock-tck          ← Official MicroProfile Health 4.0 TCK runner (OUT OF REACTOR)
 ```
 
-**Flux d'un health check :**
-Requête HTTP `GET /health/live` → `knock-cassini` (ressource JAX-RS `@Path("/health/live")`)
-→ `HealthCheckRegistry` → collecte de tous les `@Liveness HealthCheck` → appel `.call()`
-sur chaque instance → agrégation (DOWN si ≥ 1 DOWN) → sérialisation JSON via champollion
-→ réponse HTTP 200/503.
+**Health check flow:**
+HTTP `GET /health/live` → `knock-cassini` (JAX-RS resource `@Path("/health/live")`)
+→ `HealthCheckRegistry` → collect all `@Liveness HealthCheck` beans → call `.call()`
+on each instance → aggregation (DOWN if ≥ 1 DOWN) → JSON serialization via champollion
+→ HTTP 200/503 response.
 
-**Endpoints MicroProfile Health 4.0 :**
+**MicroProfile Health 4.0 endpoints:**
 - `GET /health/live`    — liveness probes (`@Liveness`)
 - `GET /health/ready`   — readiness probes (`@Readiness`)
 - `GET /health/started` — startup probes (`@Startup`)
-- `GET /health`         — agrégat de tous les checks
+- `GET /health`         — aggregate of all checks
 
-**Format de réponse (spec §3.1) :**
+**Response format (spec §3.1):**
 ```json
 {
   "status": "UP",
@@ -80,94 +80,94 @@ sur chaque instance → agrégation (DOWN si ≥ 1 DOWN) → sérialisation JSON
   ]
 }
 ```
-HTTP 200 si `status=UP`, HTTP 503 si `status=DOWN`.
+HTTP 200 if `status=UP`, HTTP 503 if `status=DOWN`.
 
-## Contraintes d'architecture à ne pas violer
+## Architecture Constraints Not to Violate
 
-1. **`knock-core` ne dépend que de `org.eclipse.microprofile.health` + `jakarta.json`**
-   (Jakarta JSON-P, fourni par champollion) — pas de CDI, pas de JAX-RS. Le registre,
-   l'agrégation et la sérialisation JSON fonctionnent en standalone SE.
-2. **`knock-cdi-vauban` dépend de `knock-core` + `jakarta.cdi`** mais jamais l'inverse —
-   la découverte CDI est un module optionnel invisible depuis le cœur.
-3. **`knock-cassini` dépend de `knock-core` + `jakarta.ws.rs`** (Jakarta REST, implémenté par
-   Cassini) — l'adaptation JAX-RS est optionnelle et découplée du cœur. Les endpoints
-   `/health*` sont des ressources JAX-RS standards, pas un handler Chappe brut.
-4. **champollion est l'implémentation Jakarta JSON-P/JSON-B de référence** : `knock-core`
-   déclare `requires jakarta.json` (API spec) ; champollion est fourni à l'exécution.
-   Jamais Jackson, Gson, ou toute autre lib JSON tierce.
-5. **JPMS strict** : tous les modules ont un `module-info.java`, packages `internal.*`
-   non exportés, SPI exposée uniquement via `provides ... with`.
-6. **Pas de `synchronized`, pas de `ThreadLocal`** — virtual-thread-friendly. Utiliser
-   `ConcurrentHashMap` pour le registry, `ScopedValue` si un contexte de propagation devient
-   nécessaire.
-7. **Pas de réflexion `setAccessible(true)`** — aucune raison fonctionnelle dans un
-   système de health check. Toute ouverture JPMS éventuelle doit être documentée.
-8. **TCK MicroProfile Health 4.0 PASS à 100 %** est un contrat avant tout merge structurel.
+1. **`knock-core` only depends on `org.eclipse.microprofile.health` + `jakarta.json`**
+   (Jakarta JSON-P, provided by champollion) — no CDI, no JAX-RS. The registry,
+   aggregation, and JSON serialization work in standalone SE.
+2. **`knock-cdi-vauban` depends on `knock-core` + `jakarta.cdi`** but never the reverse —
+   CDI discovery is an optional module invisible from the core.
+3. **`knock-cassini` depends on `knock-core` + `jakarta.ws.rs`** (Jakarta REST, implemented by
+   Cassini) — JAX-RS adaptation is optional and decoupled from the core. The `/health*`
+   endpoints are standard JAX-RS resources, not raw Chappe handlers.
+4. **champollion is the reference Jakarta JSON-P/JSON-B implementation**: `knock-core`
+   declares `requires jakarta.json` (spec API); champollion is provided at runtime.
+   Never Jackson, Gson, or any other third-party JSON library.
+5. **Strict JPMS**: all modules have a `module-info.java`, `internal.*` packages
+   not exported, SPI exposed only via `provides ... with`.
+6. **No `synchronized`, no `ThreadLocal`** — virtual-thread-friendly. Use
+   `ConcurrentHashMap` for the registry, `ScopedValue` if propagation context becomes needed.
+7. **No `setAccessible(true)` reflection** — no functional reason in a
+   health check system. Any eventual JPMS opening must be documented.
+8. **MicroProfile Health 4.0 TCK PASS at 100%** is a hard contract before any structural merge.
 
 ## Conventions
 
-- **Java modules explicites** : tous les modules ont un `module-info.java`.
-- **Packages** :
-  - `io.vidocq.knock.spi.*` = SPI public stable (extensions registry tierces)
-  - `io.vidocq.knock.internal.*` = code interne (peut casser entre versions)
-- **Maven groupId** : `io.vidocq.knock`.
-- **Records** pour les objets immuables (`HealthCheckResult`, `HealthSnapshot`) ;
-  **sealed interfaces** pour les hiérarchies fermées (status, types de probe).
-- **Pattern matching** exhaustif sur switch — pas de chaîne `if/else if`.
-- **JUnit 6** uniquement pour les tests (BOM `org.junit:junit-bom` 6.x).
+- **Explicit Java modules**: all modules have a `module-info.java`.
+- **Packages**:
+  - `io.vidocq.knock.spi.*` = stable public SPI (third-party registry extensions)
+  - `io.vidocq.knock.internal.*` = internal code (may break between versions)
+- **Maven groupId**: `io.vidocq.knock`.
+- **Records** for immutable objects (`HealthCheckResult`, `HealthSnapshot`);
+  **sealed interfaces** for closed hierarchies (status, probe types).
+- **Exhaustive pattern matching** on switch — no `if/else if` chains.
+- **JUnit 6** only for tests (BOM `org.junit:junit-bom` 6.x).
+- **Language** — commit messages, Javadoc, and all `.md` file content must be written in **English**.
 
-## TDD — Test-Driven Development (obligatoire)
+## TDD — Test-Driven Development (mandatory)
 
-Knock est développé en **TDD strict**, dans cet ordre :
+Knock is developed with **strict TDD**, in this order:
 
-1. **Red** — écrire le test qui décrit le comportement attendu (citation section spec
-   MicroProfile Health 4.0 en commentaire JavaDoc). Le test doit échouer pour la bonne
-   raison (compilation OK, assertion KO).
-2. **Green** — écrire le minimum de code pour faire passer le test.
-3. **Refactor** — nettoyer en gardant les tests verts. Lancer la suite complète du
-   module avant tout commit.
+1. **Red** — write the test describing the expected behavior (cite the MicroProfile Health 4.0
+   spec section in JavaDoc comments). The test must fail for the right reason
+   (compilation OK, assertion KO).
+2. **Green** — write the minimum code to make the test pass.
+3. **Refactor** — clean up while keeping tests green. Run the full module suite
+   before any commit.
 
-Règles concrètes :
+Concrete rules:
 
-- **Un test par classe publique**, nommé `<Classe>Test`, dans le même package (`src/test/java`).
-- **Pas de Mockito** — doubles écrits à la main ou implémentations `HealthCheck` inline.
-- **Tests par fixture spec** : pour chaque section de la spec MicroProfile Health 4.0
-  référencée, un test nommé `<methode>_spec_section<X>_<Y>()`.
+- **One test per public class**, named `<Class>Test`, in the same package (`src/test/java`).
+- **No Mockito** — hand-written doubles or inline `HealthCheck` implementations.
+- **Spec fixture tests**: for each MicroProfile Health 4.0 spec section referenced,
+  a test named `<method>_spec_section<X>_<Y>()`.
 
 ## TCK — Technology Compatibility Kit
 
-MicroProfile Health TCK — exécuté dans un module hors reactor (`knock-tck`, POM Model 4.0.0)
-pour contourner ShrinkWrap Maven Resolver 3.3 :
+MicroProfile Health TCK — run in an out-of-reactor module (`knock-tck`, POM Model 4.0.0)
+to work around ShrinkWrap Maven Resolver 3.3:
 
-| TCK | Artifact | Cible |
+| TCK | Artifact | Target |
 |---|---|---|
-| MicroProfile Health 4.0 | `org.eclipse.microprofile.health:microprofile-health-tck:4.0` | 100 % PASS (contrat) |
+| MicroProfile Health 4.0 | `org.eclipse.microprofile.health:microprofile-health-tck:4.0` | 100% PASS (hard contract) |
 
-Le script `run-official-tck-mp-health-4.0.sh` :
+The `run-official-tck-mp-health-4.0.sh` script:
 
-- supporte `smoke` (par défaut), `all`, et `-Dtest=NomDuTest` ciblé ;
-- installe le reactor en local (`mvn install -DskipTests`) avant invocation ;
-- produit un rapport `target/tck-report.txt` avec le score PASS/FAIL/SKIP.
+- supports `smoke` (default), `all`, and targeted `-Dtest=TestName`;
+- installs the reactor locally (`mvn install -DskipTests`) before invocation;
+- produces a `target/tck-report.txt` report with the PASS/FAIL/SKIP score.
 
-**Discipline de release :**
+**Release discipline:**
 
-- **Aucun merge structurel** sur `knock-core`/`knock-cdi-vauban` sans TCK PASS.
-- Les éventuels challenges (tests désactivés pour interprétation spec ou bug TCK) sont
-  documentés dans `TCK.md` avec citation spec, hash du test, et plan de réactivation.
+- **No structural merge** on `knock-core`/`knock-cdi-vauban` without TCK PASS.
+- Any challenges (disabled tests for spec interpretation or TCK bug) are
+  documented in `TCK.md` with spec citation, test hash, and reactivation plan.
 
-## Principes IA — collaboration sur ce dépôt
+## AI Principles — Collaboration on This Repository
 
-- **Plan mode par défaut** sur tout changement structurel (nouveau module, nouvelle SPI,
-  modification du registry ou des endpoints HTTP).
-- **Élégance équilibrée** : préférer un design simple qui passe le TCK à un design parfait
-  qui ne le passe pas. Documenter les arbitrages dans des ADR (`docs/adr/`).
-- **Pas de paresse sur les specs** : citer la section MicroProfile Health 4.0 dans les
-  commentaires de code quand l'implémentation y répond directement.
-- **Zéro librairie tierce** : les specs Jakarta EE et MicroProfile sont les seules
-  dépendances autorisées en scope `provided`/`compile`. Si une lib d'implémentation
-  semble nécessaire, c'est qu'on s'est trompé de découpe.
-- Utiliser les agents **`jpms-guardian`**, **`virtual-threads-reviewer`**,
-  **`dependency-gatekeeper`** proactivement sur toute modification de `module-info.java`,
-  code concurrent, ou `pom.xml`.
-- Si les règles de ce fichier doivent être mises à jour, penser à aligner `AGENTS.md` de la
-    même façon, pour que Copilot Code puisse s'y référer facilement.
+- **Plan mode by default** on any structural change (new module, new SPI,
+  modification of registry or HTTP endpoints).
+- **Balanced elegance**: prefer a simple design that passes the TCK over a perfect design
+  that does not. Document trade-offs in ADRs (`docs/adr/`).
+- **No laziness on specs**: cite the MicroProfile Health 4.0 section in code
+  comments when the implementation directly responds to it.
+- **Zero third-party libraries**: Jakarta EE and MicroProfile specs are the only
+  dependencies allowed in `provided`/`compile` scope. If an implementation library
+  seems necessary, the decomposition is wrong.
+- Use agents **`jpms-guardian`**, **`virtual-threads-reviewer`**,
+  **`dependency-gatekeeper`** proactively on any `module-info.java` modification,
+  concurrent code, or `pom.xml`.
+- If the rules in this file need updating, remember to align `AGENTS.md` accordingly
+  so Copilot Code can reference it easily.

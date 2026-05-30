@@ -1,54 +1,54 @@
 # Knock
 
-> *« Knock, ou le Triomphe de la Médecine »* — Jules Romains, 1923.
+> *"Knock, or the Triumph of Medicine"* — Jules Romains, 1923.
 
-Implémentation **MicroProfile Health 4.0** dans le style Vidocq :
-zéro librairie tierce, JDK 25, virtual threads, JPMS strict,
-intégration CDI via Vauban, endpoints Jakarta REST via Cassini,
-sérialisation JSON via Champollion.
+**MicroProfile Health 4.0** implementation in the Vidocq style:
+zero third-party libraries, JDK 25, virtual threads, strict JPMS,
+CDI integration via Vauban, Jakarta REST endpoints via Cassini,
+JSON serialisation via Champollion.
 
 ## Modules
 
-| Module | Rôle |
+| Module | Role |
 |---|---|
-| `knock-api` | Re-expose la spec `org.eclipse.microprofile.health` + SPI publique |
-| `knock-core` | Implémentation standalone : registry, agrégation, sérialisation JSON (Jakarta JSON-P) |
-| `knock-cdi-vauban` | BCE Vauban découvrant les beans `@Liveness`/`@Readiness`/`@Startup` |
-| `knock-cassini` | Endpoints Jakarta REST `/health*` via Cassini |
-| `knock-tck` | Runner TCK officiel MicroProfile Health 4.0 (hors reactor) |
+| `knock-api` | Re-exports the `org.eclipse.microprofile.health` spec + public SPI |
+| `knock-core` | Standalone implementation: registry, aggregation, JSON serialisation (Jakarta JSON-P) |
+| `knock-cdi-vauban` | Vauban BCE discovering `@Liveness`/`@Readiness`/`@Startup` beans |
+| `knock-cassini` | Jakarta REST `/health*` endpoints via Cassini |
+| `knock-tck` | Official MicroProfile Health 4.0 TCK runner (out-of-reactor) |
 
-## Prérequis
+## Prerequisites
 
 ```bash
 sdk env   # java=25-tem, maven=3.9.16
 ```
 
-## Commandes
+## Commands
 
 ```bash
-# Build complet (sans tests)
+# Full build (skip tests)
 ./mvnw -ntp install -DskipTests
 
-# Tests unitaires
+# Unit tests
 ./mvnw test
 
-# Smoke test TCK
+# TCK smoke test
 ./run-official-tck-mp-health-4.0.sh
 
-# Suite TCK complète
+# Full TCK suite
 ./run-official-tck-mp-health-4.0.sh all
 ```
 
 ## Endpoints
 
-| Endpoint | Probe | Code HTTP |
+| Endpoint | Probe | HTTP Status |
 |---|---|---|
-| `GET /health` | Tous les checks | 200 UP / 503 DOWN |
+| `GET /health` | All checks | 200 UP / 503 DOWN |
 | `GET /health/live` | `@Liveness` | 200 UP / 503 DOWN |
 | `GET /health/ready` | `@Readiness` | 200 UP / 503 DOWN |
 | `GET /health/started` | `@Startup` | 200 UP / 503 DOWN |
 
-## Exemple
+## Example
 
 ```java
 @Liveness
@@ -64,17 +64,17 @@ public class DatabaseCheck implements HealthCheck {
 }
 ```
 
-## Contraintes
+## Constraints
 
-- **Zéro librairie tierce** : specs Jakarta EE / MicroProfile uniquement
-- **JPMS strict** : `module-info.java` sur tous les modules
-- **Virtual threads** : pas de `synchronized`, pas de `ThreadLocal`
-- **TCK 100 % PASS** : contrat avant tout merge structurel
+- **Zero third-party libraries**: Jakarta EE / MicroProfile specs only
+- **Strict JPMS**: `module-info.java` on all modules
+- **Virtual threads**: no `synchronized`, no `ThreadLocal`
+- **TCK 100% PASS**: required contract before any structural merge
 
 ## Roadmap
 
-Voir [`ROADMAP.md`](ROADMAP.md) pour le plan détaillé (M0 → M5).
+See [`ROADMAP.md`](ROADMAP.md) for the detailed plan (M0 → M5).
 
-## Licence
+## License
 
-Apache License 2.0 — voir [`LICENSE`](LICENSE).
+Apache License 2.0 — see [`LICENSE`](LICENSE).

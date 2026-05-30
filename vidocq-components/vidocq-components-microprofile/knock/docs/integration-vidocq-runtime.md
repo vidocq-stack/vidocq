@@ -1,14 +1,14 @@
-# Intégration Knock ↔ vidocq
+# Knock ↔ Vidocq integration
 
-> Knock est le système de health check par défaut de vidocq. Cette page décrit
-> comment l'activer, comment il interagit avec les autres extensions, et comment
-> l'étendre dans une application MPS.
+> Knock is the default health check system for Vidocq. This page describes
+> how to enable it, how it interacts with the other extensions, and how
+> to extend it in an MPS application.
 
-## Activation : une seule dépendance
+## Activation: a single dependency
 
-L'agrégat `vidocq-runtime-knock-extension` regroupe les modules `knock-cdi-vauban` +
-`knock-cassini` + l'implémentation Jakarta JSON-P (`champollion-jsonp`).
-Ajouter cette dépendance suffit à exposer `/health*` :
+The `vidocq-runtime-knock-extension` aggregate groups the `knock-cdi-vauban` +
+`knock-cassini` + Jakarta JSON-P implementation (`champollion-jsonp`) modules.
+Adding this dependency is enough to expose `/health*`:
 
 ```xml
 <dependency>
@@ -17,59 +17,59 @@ Ajouter cette dépendance suffit à exposer `/health*` :
 </dependency>
 ```
 
-(la version est gérée par le BOM `vidocq-runtime-parent`.)
+(the version is managed by the `vidocq-runtime-parent` BOM.)
 
-Cet agrégat dépend transitivement de :
+This aggregate transitively depends on:
 
-- `vidocq-runtime-cassini-rest-extension` — l'extension qui scanne les `@Path` beans
-  via `BeanProvider` et construit le `CassiniStack` ;
-- `knock-cassini` — la ressource `KnockHealthResource` (`@ApplicationScoped`,
-  `@Path("/health")`) ;
-- `knock-cdi-vauban` — la BCE qui auto-découvre les `@Liveness/@Readiness/@Startup` ;
-- `knock-core` — registry, agrégateur, sérialisation JSON-P ;
-- `champollion-jsonp` — implémentation runtime de `jakarta.json`.
+- `vidocq-runtime-cassini-rest-extension` — the extension that scans `@Path` beans
+  via `BeanProvider` and builds the `CassiniStack`;
+- `knock-cassini` — the `KnockHealthResource` resource (`@ApplicationScoped`,
+  `@Path("/health")`);
+- `knock-cdi-vauban` — the BCE that auto-discovers `@Liveness/@Readiness/@Startup`;
+- `knock-core` — registry, aggregator, JSON-P serialization;
+- `champollion-jsonp` — runtime implementation of `jakarta.json`.
 
-## Cycle de vie au démarrage
+## Startup lifecycle
 
 ```
 VidocqBootstrap
- ├─ ChappeEngineExtension   (priorité 100) — moteur HTTP
- ├─ HealthCheckCdiExtension (BCE Knock)    — discover @Liveness/@Readiness/@Startup
- ├─ CassiniExtension        (priorité 500) — scanne @Path beans dont KnockHealthResource
- │     └─ mount(/) sur Chappe
- └─ ChappeServerBootstrap   — démarre le serveur HTTP
+ ├─ ChappeEngineExtension   (priority 100) — HTTP engine
+ ├─ HealthCheckCdiExtension (Knock BCE)    — discover @Liveness/@Readiness/@Startup
+ ├─ CassiniExtension        (priority 500) — scans @Path beans including KnockHealthResource
+ │     └─ mount(/) on Chappe
+ └─ ChappeServerBootstrap   — starts the HTTP server
 ```
 
-Au moment où `CassiniExtension.onStart()` interroge
-`VaubanBeanProvider.getResourceClasses()`, Vauban a déjà :
+When `CassiniExtension.onStart()` queries
+`VaubanBeanProvider.getResourceClasses()`, Vauban has already:
 
-1. Instancié les beans `HealthCheck` qualifiés (le bean utilisateur
-   `@Liveness DatabaseCheck` et la ressource `KnockHealthResource`) ;
-2. Validé le déploiement via `HealthCheckCdiExtension` (§4.2 spec MP Health 4.0) :
-   un bean qui implémente `HealthCheck` *sans* qualifier MP provoque une erreur
-   de validation (déploiement rejeté) ;
-3. Exposé `KnockCdiHealthCheckRegistry` (`@ApplicationScoped`) injectable dans
+1. Instantiated the qualified `HealthCheck` beans (the user bean
+   `@Liveness DatabaseCheck` and the `KnockHealthResource` resource);
+2. Validated deployment via `HealthCheckCdiExtension` (§4.2 MP Health 4.0 spec):
+   a bean that implements `HealthCheck` *without* an MP qualifier triggers a validation
+   error (deployment rejected);
+3. Exposed `KnockCdiHealthCheckRegistry` (`@ApplicationScoped`) injectable into
    `KnockHealthResource`.
 
-`KnockHealthResource` est donc disponible immédiatement après le démarrage du
-serveur Chappe, sans extension Vidocq Runtime dédiée — `CassiniExtension` la mount
-automatiquement comme n'importe quel `@Path` bean.
+`KnockHealthResource` is therefore available immediately after the Chappe
+server starts, without a dedicated Vidocq Runtime extension — `CassiniExtension`
+mounts it automatically like any other `@Path` bean.
 
-## Endpoints exposés
+## Exposed endpoints
 
-Avec un `vidocq.rest.context-path=/api` :
+With `vidocq.rest.context-path=/api`:
 
-| Verbe | URL                       | Probes        |
+| Verb | URL                       | Probes        |
 |-------|---------------------------|---------------|
-| GET   | `/api/health`             | tous          |
+| GET   | `/api/health`             | all           |
 | GET   | `/api/health/live`        | `@Liveness`   |
 | GET   | `/api/health/ready`       | `@Readiness`  |
 | GET   | `/api/health/started`     | `@Startup`    |
 
-Sans `vidocq.rest.context-path` (défaut `/`), les chemins sont `/health`,
+Without `vidocq.rest.context-path` (default `/`), the paths are `/health`,
 `/health/live`, etc.
 
-## Format de réponse (spec §3.1)
+## Response format (spec §3.1)
 
 ```json
 {
@@ -81,11 +81,11 @@ Sans `vidocq.rest.context-path` (défaut `/`), les chemins sont `/health`,
 }
 ```
 
-HTTP 200 si `status=UP`, HTTP 503 si `status=DOWN`. Si aucun check n'est
-enregistré pour une probe donnée, le statut est `UP` avec `checks: []` (cf.
-`NoProcedureSuccessfulTest` du TCK).
+HTTP 200 if `status=UP`, HTTP 503 if `status=DOWN`. If no check is
+registered for a given probe, the status is `UP` with `checks: []` (see
+`NoProcedureSuccessfulTest` from the TCK).
 
-## Écrire un check applicatif
+## Writing an application check
 
 ```java
 package com.example.shop.health;
@@ -112,41 +112,40 @@ public class StockServiceReadinessCheck implements HealthCheck {
 }
 ```
 
-`@Inject` dans une `HealthCheck` est supporté (cf. `CDIProducedProceduresTest` du
-TCK). L'exécution est en virtual thread, donc bloquer sur de l'I/O est sûr.
+`@Inject` in a `HealthCheck` is supported (see `CDIProducedProceduresTest` from the
+TCK). Execution happens on a virtual thread, so blocking on I/O is safe.
 
-## Configuration MP Config (optionnelle)
+## MP Config configuration (optional)
 
-Knock est *zero-config*. Aucune propriété `mp.health.*` n'est requise pour
-fonctionner. La spec §6 prévoit `mp.health.disable-default-procedures` (désactiver
-les checks par défaut) — Knock n'enregistre **aucun** check par défaut, donc
-cette propriété est sans effet (le TCK valide ce comportement via `ConfigTest`).
+Knock is *zero-config*. No `mp.health.*` property is required to
+function. Spec §6 defines `mp.health.disable-default-procedures` (disable
+default checks) — Knock does **not** register any default check, so
+this property has no effect (the TCK validates this behavior via `ConfigTest`).
 
-## Désactivation
+## Deactivation
 
-Retirer la dépendance `vidocq-runtime-knock-extension` suffit ; Knock n'expose aucun
-service `VidocqExtension` dédié, son intégration est purement passive (BCE CDI
-+ ressource JAX-RS scannée par Cassini).
+Removing the `vidocq-runtime-knock-extension` dependency is enough; Knock exposes no
+dedicated `VidocqExtension` service, its integration is purely passive (CDI BCE
++ JAX-RS resource scanned by Cassini).
 
-## Vérification
+## Verification
 
 ```bash
-# Démarrage de l'exemple
+# Starting the example
 cd vidocq-runtime-examples/vidocq-runtime-cassini-rest-example
 mvn -ntp -DskipTests package
 java -p target/modules -m my.app/com.example.Main &
 
-# Probes
+# Checks
 curl -i http://localhost:8080/health/live
 curl -i http://localhost:8080/health/ready
 curl -i http://localhost:8080/health
 ```
 
-## Référence TCK
+## TCK reference
 
-`./run-official-tck-mp-health-4.0.sh all` (depuis le repo `knock`) exécute le
-TCK officiel `microprofile-health-tck:4.0` contre la pile Knock complète :
-**28/28 PASS**. Le runner Arquillian (`KnockDeployableContainer`) reproduit le
-même chemin d'intégration que `vidocq-runtime-knock-extension` : Cassini + Vauban
-embedded + `KnockHealthResource` montée sur un endpoint Chappe local.
-
+`./run-official-tck-mp-health-4.0.sh all` (from the `knock` repo) runs the
+official `microprofile-health-tck:4.0` against the full Knock stack:
+**28/28 PASS**. The Arquillian runner (`KnockDeployableContainer`) reproduces the
+same integration path as `vidocq-runtime-knock-extension`: Cassini + Vauban
+embedded + `KnockHealthResource` mounted on a local Chappe endpoint.

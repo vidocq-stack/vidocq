@@ -23,26 +23,26 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
 /**
- * Exécute les {@link HealthCheck} enregistrés en parallèle et agrège les résultats.
+ * Executes registered {@link HealthCheck}s in parallel and aggregates the results.
  *
- * <p>Spec MicroProfile Health 4.0 §3.2 :</p>
+ * <p>MicroProfile Health 4.0 §3.2:</p>
  * <ul>
- *   <li>Le statut global est DOWN dès qu'au moins un check individuel est DOWN.</li>
- *   <li>Une liste de checks vide → statut global UP.</li>
- *   <li>Les exceptions levées par {@code call()} sont capturées et converties en check DOWN.</li>
+ *   <li>The global status is DOWN as soon as at least one individual check is DOWN.</li>
+ *   <li>An empty check list → global status UP.</li>
+ *   <li>Exceptions thrown by {@code call()} are caught and converted into a DOWN check.</li>
  * </ul>
  *
- * <p>Exécution parallèle via {@code VirtualThreadPerTaskExecutor} — virtual-thread-friendly,
- * aucun thread platform fixe, aucun {@code synchronized}.</p>
+ * <p>Parallel execution via {@code VirtualThreadPerTaskExecutor} — virtual-thread-friendly,
+ * no fixed platform threads, no {@code synchronized}.</p>
  */
 public final class KnockAggregator {
 
     /**
-     * Agrège tous les checks du type donné depuis le registry.
+     * Aggregates all checks of the given type from the registry.
      *
-     * @param registry le registry source
-     * @param type     le type de probe à agréger
-     * @return un {@link HealthSnapshot} avec le statut global et les réponses individuelles
+     * @param registry the source registry
+     * @param type     the probe type to aggregate
+     * @return a {@link HealthSnapshot} with the global status and individual responses
      */
     public HealthSnapshot aggregate(HealthCheckRegistry registry, ProbeType type) {
         List<HealthCheck> healthChecks = registry.getChecks(type);
@@ -85,7 +85,7 @@ public final class KnockAggregator {
     }
 
     /**
-     * Appelle un check et capture toute exception — spec §3.2 : « exceptions treated as DOWN ».
+     * Calls a check and captures any exception — spec §3.2: "exceptions treated as DOWN".
      */
     private HealthCheckResponse safeCall(HealthCheck check) {
         try {

@@ -1,44 +1,44 @@
-# Knock — Plan d'attaque
+# Knock — Implementation plan
 
-> Implémentation MicroProfile Health 4.0 dans le style Vidocq : zéro librairie tierce
-> (specs Jakarta EE / MicroProfile autorisées), JDK 25, virtual threads, JPMS strict,
-> intégration CDI optionnelle via Vauban, transport HTTP optionnel via Chappe.
+> MicroProfile Health 4.0 implementation in the Vidocq style: zero third-party libraries
+> (Jakarta EE / MicroProfile specs allowed), JDK 25, virtual threads, strict JPMS,
+> optional CDI integration via Vauban, optional HTTP transport via Chappe.
 
-## Principes directeurs
+## Design principles
 
-| Principe | Application concrète |
+| Principle | Concrete application |
 |---|---|
-| Zéro librairie tierce | Pas de SmallRye Health, Vert.x Health, Jackson, Gson dans `knock-core`. Seules les API specs sont compilées : `knock-mp-health-api` + `jakarta.json` (JSON-P spec, implémentée par champollion). |
-| Specs Jakarta / MicroProfile autorisées | `knock-cdi-vauban` peut dépendre de `jakarta.enterprise.cdi-api`, `jakarta.inject-api`, `jakarta.annotation-api`. `knock-cassini` peut dépendre de `jakarta.ws.rs` (Jakarta REST spec, implémentée par Cassini). Le cœur `knock-core` se limite à `knock-mp-health-api` + `jakarta.json`. |
-| Virtual threads | Pas de `synchronized`, pas de `ThreadLocal`. Le registry utilise des structures concurrentes (`ConcurrentHashMap`, `CopyOnWriteArrayList`). Les appels `HealthCheck.call()` peuvent être parallélisés sur un `VirtualThreadPerTaskExecutor`. |
-| JPMS strict | `module-info.java` partout, packages `internal.*` non exportés, SPI via `provides/uses`. Pas d'`opens` non justifié. |
-| TDD strict | Red → Green → Refactor. Tests écrits avant le code de prod. Citation systématique de la section spec MicroProfile Health 4.0 dans le JavaDoc des tests. |
-| TCK PASS 100 % | Contrat dur sur MicroProfile Health 4.0 TCK avant tout merge structurel. |
-| AOT-friendly | Pas de génération dynamique de proxy, pas de `setAccessible(true)`. Compatible GraalVM `native-image`. |
+| Zero third-party libraries | No SmallRye Health, Vert.x Health, Jackson, Gson in `knock-core`. Only the spec APIs are compiled: `knock-mp-health-api` + `jakarta.json` (JSON-P spec, implemented by Champollion). |
+| Jakarta / MicroProfile specs allowed | `knock-cdi-vauban` may depend on `jakarta.enterprise.cdi-api`, `jakarta.inject-api`, `jakarta.annotation-api`. `knock-cassini` may depend on `jakarta.ws.rs` (Jakarta REST spec, implemented by Cassini). The `knock-core` core is limited to `knock-mp-health-api` + `jakarta.json`. |
+| Virtual threads | No `synchronized`, no `ThreadLocal`. The registry uses concurrent structures (`ConcurrentHashMap`, `CopyOnWriteArrayList`). `HealthCheck.call()` invocations can be parallelized on a `VirtualThreadPerTaskExecutor`. |
+| JPMS strict | `module-info.java` everywhere, `internal.*` packages not exported, SPI via `provides/uses`. No unjustified `opens`. |
+| Strict TDD | Red → Green → Refactor. Tests written before production code. Systematic citation of the MicroProfile Health 4.0 spec section in test JavaDoc. |
+| TCK PASS 100 % | Hard contract on the MicroProfile Health 4.0 TCK before any structural merge. |
+| AOT-friendly | No dynamic proxy generation, no `setAccessible(true)`. Compatible with GraalVM `native-image`. |
 
-## Méthodologie : TDD + TCK comme garde-fous parallèles
+## Methodology: TDD + TCK as parallel safeguards
 
-Knock est développé en **TDD strict** (Red → Green → Refactor). Aucune ligne de production
-n'est écrite avant un test qui la justifie. Au-delà du cycle TDD interne :
+Knock is developed with **strict TDD** (Red → Green → Refactor). No production line
+is written before a test justifies it. Beyond the internal TDD cycle:
 
-- **Couche 1 — tests unitaires TDD** : pilotent la conception de chaque classe.
-- **Couche 2 — tests d'intégration `knock-core`** : scénarios multi-checks, agrégation
-  UP/DOWN, exécution concurrente. Indépendants du TCK et reproductibles sans Arquillian.
-- **Couche 3 — TCK officiel** (`microprofile-health-tck:4.0`) : contrat 100 % PASS avant
-  tout merge structurel. Module hors reactor (POM Model 4.0.0).
+- **Layer 1 — TDD unit tests**: drive the design of each class.
+- **Layer 2 — `knock-core` integration tests**: multi-check scenarios, UP/DOWN aggregation,
+  concurrent execution. Independent of the TCK and reproducible without Arquillian.
+- **Layer 3 — official TCK** (`microprofile-health-tck:4.0`) : 100% PASS contract before
+  any structural merge. Module outside the reactor (POM Model 4.0.0).
 
-## Rappel spec MicroProfile Health 4.0 — points clés
+## MicroProfile Health 4.0 spec recap — key points
 
-### Annotations de qualification (§2)
+### Qualification annotations (§2)
 
-| Annotation | Endpoint | Rôle |
+| Annotation | Endpoint | Role |
 |---|---|---|
-| `@Liveness` | `/health/live` | Le process est-il vivant ? (sinon redémarrer) |
-| `@Readiness` | `/health/ready` | Le process est-il prêt à recevoir du trafic ? |
-| `@Startup` | `/health/started` | L'initialisation est-elle terminée ? |
-| _(aucune)_ | `/health` | Agrégat de tous les checks |
+| `@Liveness` | `/health/live` | Is the process alive? (otherwise restart) |
+| `@Readiness` | `/health/ready` | Is the process ready to receive traffic? |
+| `@Startup` | `/health/started` | Is initialization complete? |
+| _(none)_ | `/health` | Aggregate of all checks |
 
-### Contrat `HealthCheck` (§3)
+### `HealthCheck` contract (§3)
 
 ```java
 @FunctionalInterface
@@ -47,7 +47,7 @@ public interface HealthCheck {
 }
 ```
 
-### Format de réponse JSON (§3.1)
+### JSON response format (§3.1)
 
 ```json
 {
@@ -62,16 +62,16 @@ public interface HealthCheck {
 }
 ```
 
-- HTTP **200** si `status = UP` (ou liste vide).
-- HTTP **503** si `status = DOWN` (au moins un check DOWN).
-- `data` est omis si absent (ne pas sérialiser `"data": null`).
+- HTTP **200** if `status = UP` (or empty list).
+- HTTP **503** if `status = DOWN` (at least one DOWN check).
+- `data` is omitted if absent (do not serialize `"data": null`).
 
-### Règle d'agrégation (§3.2)
+### Aggregation rule (§3.2)
 
-- Statut global = **DOWN** dès qu'au moins un check individuel est DOWN.
-- Liste de checks vide → statut global = **UP**.
-- Les exceptions levées par `call()` doivent être capturées et converties en check DOWN
-  (nom du check = nom de l'exception ou de la classe HealthCheck).
+- Global status = **DOWN** as soon as at least one individual check is DOWN.
+- Empty check list → global status = **UP**.
+- Exceptions thrown by `call()` must be caught and converted into a DOWN check
+  (check name = exception name or `HealthCheck` class name).
 
 ---
 
@@ -81,228 +81,228 @@ public interface HealthCheck {
 
 - ✅ `.sdkmanrc` (`java=25-tem`, `maven=3.9.16`)
 - ✅ `.gitignore`, `.mvn/maven.config`
-- ✅ `pom.xml` parent (Model 4.1.0, multi-module, dependency management Jakarta + MicroProfile Health)
+- ✅ parent `pom.xml` (Model 4.1.0, multi-module, Jakarta + MicroProfile Health dependency management)
 - ✅ `CLAUDE.md`
 - ✅ `AGENTS.md`
-- ✅ `ROADMAP.md` (ce fichier)
-- ✅ Création des 4 sous-modules avec `pom.xml` + `module-info.java` squelettes :
-      `knock-api`, `knock-core`, `knock-cdi-vauban`, `knock-cassini` + `knock-tck` (hors reactor)
+- ✅ `ROADMAP.md` (this file)
+- ✅ Creation of the 4 submodules with `pom.xml` + skeletal `module-info.java` files:
+      `knock-api`, `knock-core`, `knock-cdi-vauban`, `knock-cassini` + `knock-tck` (outside the reactor)
 - ✅ `run-official-tck-mp-health-4.0.sh`
-- ✅ Validation `mvn -ntp install -DskipTests` réussit (reactor + knock-tck standalone)
+- ✅ Validation that `mvn -ntp install -DskipTests` succeeds (reactor + standalone `knock-tck`)
 - ✅ Smoke test `KnockTckSmokeTest` : 3/3 PASS
 
-**Note JPMS :** `microprofile-health-api:4.0.1` upstream n'a pas de `module-info.class`.
-Knock embarque un fork modulaire `io.vidocq.knock:knock-mp-health-api` documente
-dans `docs/adr/ADR-001-jpms-workaround-microprofile-health.md` — resume :
-`module-info.java` ajoute le module explicite `microprofile.health.api`, les annotations OSGi
-`@Version` ont ete retirees des `package-info.java` pour eviter un module automatique, et le
-workaround `src/main/module-info/` reste en place pour `knock-core` afin d'eviter la detection
-JPMS en `testCompile`. `target/javamodules/` continue d'etre utilise pour aligner javac et jlink —
-**la compatibilite jlink est garantie sans modules automatiques** (voir ADR-001).
+**JPMS note:** upstream `microprofile-health-api:4.0.1` has no `module-info.class`.
+Knock ships a modular fork `io.vidocq.knock:knock-mp-health-api` documented
+in `docs/adr/ADR-001-jpms-workaround-microprofile-health.md` — summary:
+`module-info.java` adds the explicit `microprofile.health.api` module, the OSGi `@Version`
+annotations were removed from `package-info.java` to avoid an automatic module, and the
+`src/main/module-info/` workaround remains in place for `knock-core` to avoid JPMS detection
+in `testCompile`. `target/javamodules/` continues to be used to align javac and jlink —
+**jlink compatibility is guaranteed without automatic modules** (see ADR-001).
 
-**Livrable :** `mvn -ntp install -DskipTests` réussit sur le reactor (knock-api, knock-core,
-knock-cdi-vauban, knock-cassini) et compile aussi le projet hors-reactor `knock-tck`
-(POM Model 4.0.0). Tous les `module-info.java` sont en place avec les `requires` minimaux.
+**Deliverable:** `mvn -ntp install -DskipTests` succeeds on the reactor (`knock-api`, `knock-core`,
+`knock-cdi-vauban`, `knock-cassini`) and also compiles the out-of-reactor `knock-tck`
+project (POM Model 4.0.0). All `module-info.java` files are in place with minimal `requires`.
 Smoke test 3/3 PASS.
 
 ---
 
-### M1 — Core : registry + agrégation + sérialisation JSON ✅
+### M1 — Core: registry + aggregation + JSON serialization ✅
 
-**Scope spec :** §2 (HealthCheck interface), §3 (réponse), §3.1 (format JSON), §3.2 (agrégation).
+**Scope spec:** §2 (HealthCheck interface), §3 (response), §3.1 (JSON format), §3.2 (aggregation).
 
-| Tâche | Notes | État |
+| Task | Notes | Status |
 |---|---|---|
-| `KnockHealthCheckResponse` record (implémente `HealthCheckResponse`) | `name`, `Status`, `Optional<Map<String,Object>> data` | ✅ |
-| `KnockHealthCheckResponseBuilder` (implémente `HealthCheckResponseBuilder`) | Builder fluent : `up()`, `down()`, `withData(key, val)`, `build()` | ✅ |
-| `HealthCheckRegistry` interface (SPI interne) | `register(ProbeType, HealthCheck)`, `unregister(String name)`, `getChecks(ProbeType)` | ✅ |
-| `KnockHealthCheckRegistry` (implémentation ConcurrentHashMap thread-safe) | Classé par `ProbeType` (LIVENESS, READINESS, STARTUP, ALL) | ✅ |
-| `KnockAggregator` | Appelle tous les checks du type demandé, agrège (DOWN si ≥ 1 DOWN), capture les exceptions → DOWN | ✅ |
-| `KnockJsonSerializer` | Sérialise `HealthSnapshot` en JSON spec §3.1 via Jakarta JSON-P (`jakarta.json.Json.createObjectBuilder()`) — champollion en est l'implémentation runtime | ✅ |
-| Exécution parallèle via `VirtualThreadPerTaskExecutor` | Tous les `.call()` lancés en parallèle, résultats collectés via `Future<HealthCheckResponse>` | ✅ |
-| Tests unitaires `KnockHealthCheckResponseBuilderTest` | UP/DOWN, data key-val, serialization absente si data vide — 13/13 PASS | ✅ |
-| Tests unitaires `KnockAggregatorTest` | all UP → UP ; un DOWN → DOWN ; exception → DOWN ; liste vide → UP — 8/8 PASS | ✅ |
-| Tests unitaires `KnockJsonSerializerTest` | status UP/DOWN, checks présents/absents, data omis si null — 8/8 PASS | ✅ |
+| `KnockHealthCheckResponse` record (implements `HealthCheckResponse`) | `name`, `Status`, `Optional<Map<String,Object>> data` | ✅ |
+| `KnockHealthCheckResponseBuilder` (implements `HealthCheckResponseBuilder`) | Fluent builder: `up()`, `down()`, `withData(key, val)`, `build()` | ✅ |
+| `HealthCheckRegistry` interface (internal SPI) | `register(ProbeType, HealthCheck)`, `unregister(String name)`, `getChecks(ProbeType)` | ✅ |
+| `KnockHealthCheckRegistry` (thread-safe `ConcurrentHashMap` implementation) | Categorized by `ProbeType` (LIVENESS, READINESS, STARTUP, ALL) | ✅ |
+| `KnockAggregator` | Calls all checks of the requested type, aggregates (DOWN if ≥ 1 DOWN), captures exceptions → DOWN | ✅ |
+| `KnockJsonSerializer` | Serializes `HealthSnapshot` as spec §3.1 JSON via Jakarta JSON-P (`jakarta.json.Json.createObjectBuilder()`) — Champollion is the runtime implementation | ✅ |
+| Parallel execution via `VirtualThreadPerTaskExecutor` | All `.call()` invocations launched in parallel, results collected via `Future<HealthCheckResponse>` | ✅ |
+| Unit tests `KnockHealthCheckResponseBuilderTest` | UP/DOWN, data key-value, serialization absent if data empty — 13/13 PASS | ✅ |
+| Unit tests `KnockAggregatorTest` | all UP → UP; one DOWN → DOWN; exception → DOWN; empty list → UP — 8/8 PASS | ✅ |
+| Unit tests `KnockJsonSerializerTest` | UP/DOWN status, checks present/absent, data omitted if null — 8/8 PASS | ✅ |
 
-**Décisions M1 :**
+**M1 decisions:**
 - `ProbeType` enum : `LIVENESS`, `READINESS`, `STARTUP`, `ALL`.
 - `HealthSnapshot` record : `ProbeType type`, `HealthCheckResponse.Status status`, `List<HealthCheckResponse> checks`.
-- Sérialisation JSON **obligatoirement** via Jakarta JSON-P (`jakarta.json.Json.createObjectBuilder()`) — champollion est la seule implémentation autorisée ; aucun fallback `StringBuilder`.
+- JSON serialization **must** go through Jakarta JSON-P (`jakarta.json.Json.createObjectBuilder()`) — Champollion is the only allowed implementation; no `StringBuilder` fallback.
 
-**Livrable :** `HealthCheckResponse.named("db").up().withData("latency","12ms").build()` fonctionne ;
-agrégation correcte ; sérialisation JSON conforme §3.1.
-
----
-
-### M2 — Intégration CDI Vauban (`knock-cdi-vauban`) ✅
-
-**Scope spec :** §4 (CDI integration), §4.1 (discovery CDI beans), §4.2 (enregistrement automatique).
-
-| Tâche | Notes | État |
-|---|---|---|
-| BCE `HealthCheckCdiExtension` (Build Compatible Extension Vauban) | `@Registration(types = HealthCheck.class)` — valide la présence de `@Liveness`/`@Readiness`/`@Startup` | ✅ |
-| Enregistrement dans le `HealthCheckRegistry` au démarrage CDI | `HealthCheckRegistrar` `@ApplicationScoped` + `@Observes @Initialized(ApplicationScoped.class)` | ✅ |
-| Validation au déploiement | Bean `HealthCheck` sans qualifier de probe → `messages.error()` → `DeploymentException` (spec §4.2) | ✅ |
-| `@Inject HealthCheckRegistry` | `KnockCdiHealthCheckRegistry @ApplicationScoped` — bean CDI direct implémentant l'interface | ✅ |
-| Tests d'intégration avec container Vauban | 5/5 PASS — bootstrap Vauban SE, `@Liveness`/`@Readiness`/`@Startup` auto-enregistrés, DOWN agrégé, déploiement rejeté si pas de qualifier | ✅ |
-
-**Décisions M2 :**
-- `@Produces` évité pour le registry : Vauban retourne le proxy du producer au lieu du bean produit
-  lors de `select(HealthCheckRegistry.class)`. Solution : bean CDI direct `KnockCdiHealthCheckRegistry`
-  implémentant `HealthCheckRegistry` — le proxy Vauban implémente alors l'interface et le cast est propre.
-- BCE en validation seule (`@Registration`) — l'enregistrement est délégué à `HealthCheckRegistrar`
-  via injection CDI standard (plus lisible que `@Synthesis`).
-- `module-info.java` dans `src/main/module-info/` : même workaround que `knock-core` (vauban-core
-  test-scope, absent de `target/javamodules/`).
-
-**Livrable :** un bean `@Liveness HealthCheck` découvert automatiquement, enregistré, et
-interrogeable via le registry. 5/5 tests d'intégration PASS.
+**Deliverable:** `HealthCheckResponse.named("db").up().withData("latency","12ms").build()` works;
+correct aggregation; JSON serialization compliant with §3.1.
 
 ---
 
-### M3 — Endpoints Jakarta REST (`knock-cassini`) ✅
+### M2 — Vauban CDI integration (`knock-cdi-vauban`) ✅
 
-**Scope spec :** §3 (endpoints), §3.1 (format JSON), codes HTTP 200/503.
+**Scope spec:** §4 (CDI integration), §4.1 (discovery CDI beans), §4.2 (automatic registration).
 
-| Tâche | Notes | État |
+| Task | Notes | Status |
 |---|---|---|
-| `KnockHealthResource` ressource JAX-RS `@ApplicationScoped @Path("/health")` | 4 méthodes `@GET` : `/`, `/live`, `/ready`, `/started` ; délègue au registry via `KnockHealthService` | ✅ |
-| Mapping `ProbeType` ↔ chemin JAX-RS | `ALL` → `/health`, `LIVENESS` → `/health/live`, `READINESS` → `/health/ready`, `STARTUP` → `/health/started` | ✅ |
+| BCE `HealthCheckCdiExtension` (Vauban Build Compatible Extension) | `@Registration(types = HealthCheck.class)` — validates the presence of `@Liveness`/`@Readiness`/`@Startup` | ✅ |
+| Registration in `HealthCheckRegistry` at CDI startup | `HealthCheckRegistrar` `@ApplicationScoped` + `@Observes @Initialized(ApplicationScoped.class)` | ✅ |
+| Deployment validation | `HealthCheck` bean without a probe qualifier → `messages.error()` → `DeploymentException` (spec §4.2) | ✅ |
+| `@Inject HealthCheckRegistry` | `KnockCdiHealthCheckRegistry @ApplicationScoped` — direct CDI bean implementing the interface | ✅ |
+| Integration tests with Vauban container | 5/5 PASS — Vauban SE bootstrap, auto-registered `@Liveness`/`@Readiness`/`@Startup`, aggregated DOWN, deployment rejected if no qualifier | ✅ |
+
+**M2 decisions:**
+- `@Produces` avoided for the registry: Vauban returns the producer proxy instead of the produced bean
+  when calling `select(HealthCheckRegistry.class)`. Solution: direct CDI bean `KnockCdiHealthCheckRegistry`
+  implementing `HealthCheckRegistry` — the Vauban proxy then implements the interface and the cast is clean.
+- BCE validation only (`@Registration`) — registration is delegated to `HealthCheckRegistrar`
+  via standard CDI injection (clearer than `@Synthesis`).
+- `module-info.java` in `src/main/module-info/`: same workaround as `knock-core` (vauban-core
+  test scope, absent from `target/javamodules/`).
+
+**Deliverable:** an automatically discovered, registered, and registry-queryable
+`@Liveness HealthCheck` bean. 5/5 integration tests PASS.
+
+---
+
+### M3 — Jakarta REST endpoints (`knock-cassini`) ✅
+
+**Scope spec:** §3 (endpoints), §3.1 (JSON format), HTTP 200/503 codes.
+
+| Task | Notes | Status |
+|---|---|---|
+| `KnockHealthResource` JAX-RS resource `@ApplicationScoped @Path("/health")` | 4 `@GET` methods: `/`, `/live`, `/ready`, `/started`; delegates to the registry via `KnockHealthService` | ✅ |
+| `ProbeType` ↔ JAX-RS path mapping | `ALL` → `/health`, `LIVENESS` → `/health/live`, `READINESS` → `/health/ready`, `STARTUP` → `/health/started` | ✅ |
 | Code HTTP 200 / 503 via `jakarta.ws.rs.core.Response` | `Response.status(report.httpStatus()).type(APPLICATION_JSON_TYPE).entity(json).build()` | ✅ |
-| Content-Type `application/json` | `@Produces(MediaType.APPLICATION_JSON)` sur la ressource | ✅ |
-| `@Inject HealthCheckRegistry` dans la ressource | Injection champ + ctor public pour tests directs | ✅ |
-| Tests TDD `KnockHealthResourceTest` | 7/7 PASS (200 vide, 503 down, isolation par probe, exception → DOWN, content-type) | ✅ |
-| SPI runtime exportée `io.vidocq.knock.runtime.{HealthCheckRegistries, KnockHealthService, HealthReport}` | Frontière JPMS : `internal.*` reste non exporté ; les adaptateurs passent par cette SPI | ✅ |
+| Content-Type `application/json` | `@Produces(MediaType.APPLICATION_JSON)` on the resource | ✅ |
+| `@Inject HealthCheckRegistry` in the resource | Field injection + public ctor for direct tests | ✅ |
+| TDD tests `KnockHealthResourceTest` | 7/7 PASS (empty 200, 503 down, probe isolation, exception → DOWN, content-type) | ✅ |
+| Exported runtime SPI `io.vidocq.knock.runtime.{HealthCheckRegistries, KnockHealthService, HealthReport}` | JPMS boundary: `internal.*` remains non-exported; adapters go through this SPI | ✅ |
 
-**Décisions M3 :**
-- Façade `KnockHealthService(registry).report(probeType)` retournant un `HealthReport(httpStatus, json)` — point d'entrée unique pour les transports HTTP. Encapsule `KnockAggregator` + `KnockJsonSerializer`.
-- Frontière respectée : aucun import de classe interne Cassini ; `Response.type(MediaType.APPLICATION_JSON_TYPE)` (instance, pas string) pour éviter le passage par `RuntimeDelegate.HeaderDelegate.fromString` aux tests.
-- Tests sans container HTTP : un `TestRuntimeDelegate` minimal de test (zéro lib tierce, zéro classe interne Cassini) installé via `RuntimeDelegate.setInstance(...)`.
-- Refactor M2 collatéral : `KnockCdiHealthCheckRegistry` ne dépend plus de `io.vidocq.knock.internal.KnockHealthCheckRegistry` — elle passe par la factory exportée `HealthCheckRegistries.newRegistry()`.
+**M3 decisions:**
+- `KnockHealthService(registry).report(probeType)` facade returning a `HealthReport(httpStatus, json)` — single entry point for HTTP transports. Encapsulates `KnockAggregator` + `KnockJsonSerializer`.
+- Boundary respected: no internal Cassini class import; `Response.type(MediaType.APPLICATION_JSON_TYPE)` (instance, not string) to avoid `RuntimeDelegate.HeaderDelegate.fromString` during tests.
+- Tests without HTTP container: a minimal test `TestRuntimeDelegate` (zero third-party lib, zero internal Cassini class) installed via `RuntimeDelegate.setInstance(...)`.
+- Collateral M2 refactor: `KnockCdiHealthCheckRegistry` no longer depends on `io.vidocq.knock.internal.KnockHealthCheckRegistry` — it goes through the exported `HealthCheckRegistries.newRegistry()` factory.
 
-**Livrable :** `GET /health/live` retourne 200 `{ "status": "UP", "checks": [...] }` quand
-tous les checks liveness passent ; 503 sinon. Endpoints unitairement validés (7/7 PASS).
-Intégration end-to-end avec Cassini embedded reportée à M5.
+**Deliverable:** `GET /health/live` returns 200 `{ "status": "UP", "checks": [...] }` when
+all liveness checks pass; 503 otherwise. Endpoints unit-tested (7/7 PASS).
+End-to-end integration with embedded Cassini deferred to M5.
 
 ---
 
-### M4 — TCK MicroProfile Health 4.0 ✅
+### M4 — MicroProfile Health 4.0 TCK ✅
 
-**Scope :** validation officielle MicroProfile Health 4.0 + script reproductible.
+**Scope:** official MicroProfile Health 4.0 validation + reproducible script.
 
-| Tâche | Notes | État |
+| Task | Notes | Status |
 |---|---|---|
-| `knock-tck/pom.xml` Model 4.0.0 standalone | Idem `cassini-tck`/`foy-tck`/`ravel-tck` — hors reactor | ✅ |
-| Runner Arquillian + harness officiel `microprofile-health-tck:4.0.1` | Container Arquillian custom `KnockDeployableContainer` (zéro lib container tierce — pas de Weld embedded, pas d'Undertow) | ✅ |
-| Adapter Arquillian → Knock embedded | Réutilise `CassiniTestHarness` (cassini-tck) pour Jakarta REST + chappe-http pour le serveur HTTP ; mini-CDI maison (~30 LOC) pour l'injection des `@Inject HealthCheck` (pas de Weld) | ✅ |
-| `run-official-tck-mp-health-4.0.sh` | Modes : smoke / all / `-Dtest=NomTest` ; rapport `target/tck-report.txt` | ✅ |
-| **Score contrat : 100 % PASS** | **28 tests run / 28 PASS / 0 fails / 0 skipped** | ✅ |
+| `knock-tck/pom.xml` standalone Model 4.0.0 | Same as `cassini-tck`/`foy-tck`/`ravel-tck` — outside the reactor | ✅ |
+| Arquillian runner + official `microprofile-health-tck:4.0.1` harness | Custom Arquillian container `KnockDeployableContainer` (zero third-party container lib — no embedded Weld, no Undertow) | ✅ |
+| Arquillian → embedded Knock adapter | Reuses `CassiniTestHarness` (cassini-tck) for Jakarta REST + chappe-http for the HTTP server; homegrown mini-CDI (~30 LOC) for injecting `@Inject HealthCheck` (no Weld) | ✅ |
+| `run-official-tck-mp-health-4.0.sh` | Modes: smoke / all / `-Dtest=TestName`; `target/tck-report.txt` report | ✅ |
+| **Contract score: 100% PASS** | **28 tests run / 28 PASS / 0 fails / 0 skipped** | ✅ |
 
-**Décisions M4 :**
-- **Pas de Weld embedded** : la stack Arquillian/Weld embedded crashe sous JDK 25 et viole
-  l'engagement « zéro lib tierce d'implémentation ». À la place, un `KnockDeployableContainer`
-  custom (~250 LOC, test-scope only) reçoit chaque `WebArchive` Arquillian, scanne les classes
-  `HealthCheck` qualifiées, instancie un registry, attache un `KnockHealthResource` singleton
-  à une `Application` JAX-RS, et démarre `CassiniTestHarness` sur un port libre. L'URI est
-  exposée au TCK via `ProtocolMetaData(HTTPContext)`.
-- **Mini-CDI maison** : pour les tests TCK qui font `@Inject` dans une `HealthCheck`
-  (`DelegateHealthSuccessfulTest`), un mini-injecteur récursif instancie le type du champ via
-  `getDeclaredConstructor().newInstance()` et l'écrit via `MethodHandles.privateLookupIn`
-  (zéro `setAccessible(true)`). Pas de qualifiers, pas de scopes — strictement le minimum
-  pour faire passer le TCK sans embarquer Weld.
-- **Producers CDI** : `@Produces @Liveness/@Readiness/@Startup HealthCheck producer()` sont
-  invoqués via `MethodHandles.privateLookupIn` (méthodes package-private du TCK officiel).
-- **`microprofile-config.properties`** : lu depuis `/META-INF/microprofile-config.properties`
-  du WAR et reposté en system property pour `mp.health.default.{readiness,startup}.empty.response`.
-  Cleanup systématique entre déploiements pour éviter les fuites entre tests.
-- **Aucun `TCK.md`** créé : aucun challenge à documenter (pas de test désactivé,
-  pas d'interprétation spec divergente).
+**M4 decisions:**
+- **No embedded Weld**: the embedded Arquillian/Weld stack crashes under JDK 25 and violates
+  the "zero third-party implementation library" commitment. Instead, a custom `KnockDeployableContainer`
+  (~250 LOC, test scope only) receives each Arquillian `WebArchive`, scans qualified `HealthCheck`
+  classes, instantiates a registry, attaches a singleton `KnockHealthResource`
+  to a JAX-RS `Application`, and starts `CassiniTestHarness` on a free port. The URI is
+  exposed to the TCK via `ProtocolMetaData(HTTPContext)`.
+- **Homegrown mini-CDI**: for TCK tests that do `@Inject` in a `HealthCheck`
+  (`DelegateHealthSuccessfulTest`), a recursive mini-injector instantiates the field type via
+  `getDeclaredConstructor().newInstance()` and writes it via `MethodHandles.privateLookupIn`
+  (zero `setAccessible(true)`). No qualifiers, no scopes — strictly the minimum
+  needed to pass the TCK without bundling Weld.
+- **CDI producers**: `@Produces @Liveness/@Readiness/@Startup HealthCheck producer()` are
+  invoked via `MethodHandles.privateLookupIn` (package-private methods in the official TCK).
+- **`microprofile-config.properties`**: read from the WAR's `/META-INF/microprofile-config.properties`
+  and reposted as a system property for `mp.health.default.{readiness,startup}.empty.response`.
+  Systematic cleanup between deployments to avoid leaks between tests.
+- **No `TCK.md`** created: nothing to document (no disabled test,
+  no divergent spec interpretation).
 
-**Livrable :** TCK MicroProfile Health 4.0 **28/28 PASS** reproductible via
-`./run-official-tck-mp-health-4.0.sh all` (rapport `knock-tck/target/tck-report.txt`).
+**Deliverable:** MicroProfile Health 4.0 TCK **28/28 PASS** reproducible via
+`./run-official-tck-mp-health-4.0.sh all` (`knock-tck/target/tck-report.txt` report).
 
 ---
 
-### M5 — Intégration écosystème Vidocq ✅
+### M5 — Vidocq ecosystem integration ✅
 
-**Scope :** déployer Knock dans Cassini, et `vidocq` ; faire de Knock le système de
-health check par défaut de tout déploiement vidocq.
+**Scope:** deploy Knock into Cassini and `vidocq`; make Knock the default
+health check system of every Vidocq deployment.
 
-| Tâche | Notes | État |
+| Task | Notes | Status |
 |---|---|---|
-| Documentation `docs/integration-cassini.md` | Dépendances, JPMS, exemple ressource JAX-RS avec health check dédié | ✅ |
-| Documentation `docs/integration-vidocq-runtime.md` | Configuration health check dans vidocq, accès par défaut `/health` | ✅ |
-| ADR-002 stratégie d'intégration | Rationale, ordre de déploiement, risques (cf. `docs/adr/ADR-002-vidocq-runtime-integration-strategy.md`) | ✅ |
-| ServiceLoader BCE (`META-INF/services/jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension`) | `HealthCheckCdiExtension` exposée via le contrat CDI 4.1 standard | ✅ |
-| `module-info.java` `provides ... with` | Doublure JPMS pour les fichiers de services (cf. `knock-cdi-vauban` et `knock-core`) | ✅ |
-| `vidocq` : intégrer Knock comme système de health check | Module wrapper `vidocq-runtime-knock-extension` (Maven/JPMS, sans code Java) ajouté dans `vidocq-runtime-core-extensions/`. Active Knock via une seule dépendance, intégration zero-config (BCE + scanning JAX-RS Cassini). | ✅ |
+| `docs/integration-cassini.md` documentation | Dependencies, JPMS, JAX-RS resource example with dedicated health check | ✅ |
+| `docs/integration-vidocq-runtime.md` documentation | Health check configuration in Vidocq, default `/health` access | ✅ |
+| ADR-002 integration strategy | Rationale, deployment order, risks (see `docs/adr/ADR-002-vidocq-runtime-integration-strategy.md`) | ✅ |
+| ServiceLoader BCE (`META-INF/services/jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension`) | `HealthCheckCdiExtension` exposed through the standard CDI 4.1 contract | ✅ |
+| `module-info.java` `provides ... with` | JPMS counterpart for service files (see `knock-cdi-vauban` and `knock-core`) | ✅ |
+| `vidocq`: integrate Knock as the health check system | Wrapper module `vidocq-runtime-knock-extension` (Maven/JPMS, no Java code) added in `vidocq-runtime-core-extensions/`. Activates Knock via a single dependency, zero-config integration (BCE + Cassini JAX-RS scanning). | ✅ |
 
-**Décisions M5 :**
+**M5 decisions:**
 
-- **Wrapper Maven/JPMS plutôt que `VidocqExtension` dédiée** (ADR-002) : aucun code Java
-  côté vidocq. Knock s'auto-déploie via deux SPI standards — BCE de `knock-cdi-vauban`
-  pour découvrir `@Liveness/@Readiness/@Startup`, et scanning `@Path` de
-  `CassiniExtension` pour mount `KnockHealthResource`. Bénéfice : Knock reste utilisable
-  hors vidocq avec exactement les mêmes deps.
-- **`vidocq-runtime-knock-extension` `requires transitive`** les 4 modules Knock + dépend de
-  `vidocq-runtime-cassini-rest-extension`. champollion-jsonp est runtime-only.
-- **Même workaround JPMS que `knock-core`** appliqué au wrapper (module-info hors
-  `src/main/java/`, recompilation en `prepare-package`, `--module-path target/javamodules`)
-  pour aligner la compilation avec le fork modulaire `microprofile.health.api`.
+- **Maven/JPMS wrapper instead of a dedicated `VidocqExtension`** (ADR-002): no Java code
+  on the Vidocq side. Knock self-deploys through two standard SPIs — the `knock-cdi-vauban`
+  BCE to discover `@Liveness/@Readiness/@Startup`, and the `@Path` scanning of
+  `CassiniExtension` to mount `KnockHealthResource`. Benefit: Knock remains usable
+  outside Vidocq with exactly the same deps.
+- **`vidocq-runtime-knock-extension` `requires transitive`** the 4 Knock modules + depends on
+  `vidocq-runtime-cassini-rest-extension`. `champollion-jsonp` is runtime-only.
+- **Same JPMS workaround as `knock-core`** applied to the wrapper (module-info outside
+  `src/main/java/`, recompilation in `prepare-package`, `--module-path target/javamodules`)
+  to align compilation with the modular `microprofile.health.api` fork.
 
-**Livrable :** documentation complète (intégration Cassini + intégration vidocq + ADR-002),
-module wrapper `vidocq-runtime-knock-extension` installé et compilable dans le reactor vidocq,
-`/health*` disponible dans tout déploiement vidocq via une seule dépendance.
+**Deliverable:** complete documentation (Cassini integration + Vidocq integration + ADR-002),
+`vidocq-runtime-knock-extension` wrapper module installed and buildable in the Vidocq reactor,
+`/health*` available in every Vidocq deployment through a single dependency.
 
 ---
 
-## Ordre de priorité — pourquoi celui-ci ?
+## Priority order — why this one?
 
-1. **M1 (core)** d'abord : le registry, l'agrégateur, et la sérialisation JSON sont le
-   minimum vital. Rien d'autre ne peut être testé sans eux.
-2. **M2 (CDI)** avant M3 (Jakarta REST) : les endpoints n'ont de sens qu'avec des checks
-   découverts et enregistrés. Valider la découverte CDI avant de brancher le transport.
-3. **M3 (Jakarta REST via Cassini)** : `knock-cassini` dépend de `knock-cdi-vauban` pour
-   l'injection du registry ; peut être développé en parallèle de M2 une fois le registry
-   stabilisé. L'API JAX-RS standard suffit — aucune classe interne Cassini.
-4. **M4 (TCK)** : contrat de conformité. Activité continue dès M1/M2 sur les sections
-   couvertes ; 100 % PASS verrouillé avant M5.
-5. **M5 (intégration)** en dernier : on ne pollue pas les autres projets Vidocq avant que
-   Knock soit solide et TCK-validé.
+1. **M1 (core)** first: the registry, aggregator, and JSON serialization are the
+   vital minimum. Nothing else can be tested without them.
+2. **M2 (CDI)** before M3 (Jakarta REST): endpoints only make sense with discovered and
+   registered checks. Validate CDI discovery before wiring the transport.
+3. **M3 (Jakarta REST via Cassini)**: `knock-cassini` depends on `knock-cdi-vauban` for
+   registry injection; it can be developed in parallel with M2 once the registry is
+   stabilized. The standard JAX-RS API is enough — no internal Cassini class.
+4. **M4 (TCK)**: conformance contract. Ongoing activity from M1/M2 onward on the covered
+   sections; 100% PASS locked before M5.
+5. **M5 (integration)** last: we do not pollute the other Vidocq projects before Knock is
+   solid and TCK-validated.
 
-## Risques connus
+## Known risks
 
-| Risque | Mitigation |
+| Risk | Mitigation |
 |---|---|
-| Incompatibilité TCK Arquillian vs JDK 25 (comme `MalformedParameterizedTypeException` sur Ravel) | Identifier et patcher dès M4 ; documenter dans `TCK.md` |
-| Exécution parallèle des checks et timeout | Définir un timeout par check (configurable via `HealthCheckRegistry`) ; virtual threads permettent d'attendre sans bloquer |
-| Disponibilité de champollion en runtime pour JSON-P | Valider dès M1 que `champollion` est bien sur le module-path comme implémentation Jakarta JSON-P ; c'est une dépendance runtime obligatoire de `knock-core` |
-| Interaction entre checks de types différents sur `/health` | Tester agrégation ALL avec mix LIVENESS/READINESS/STARTUP dont certains DOWN |
-| JPMS et discovery ServiceLoader dans `knock-cdi-vauban` | Vérifier que les `provides` CDI ne nécessitent pas d'`opens` sur les modules utilisateur |
-| Version du TCK MicroProfile Health 4.0 disponible sur Maven Central | Vérifier la disponibilité de `org.eclipse.microprofile.health:microprofile-health-tck:4.0` |
+| Arquillian TCK incompatibility vs JDK 25 (like `MalformedParameterizedTypeException` on Ravel) | Identify and patch from M4 onward; document in `TCK.md` |
+| Parallel check execution and timeout | Define a timeout per check (configurable via `HealthCheckRegistry`); virtual threads let us wait without blocking |
+| Champollion availability at runtime for JSON-P | Validate from M1 onward that `champollion` is on the module-path as the Jakarta JSON-P implementation; it is a mandatory runtime dependency of `knock-core` |
+| Interaction between different check types on `/health` | Test ALL aggregation with a mix of LIVENESS/READINESS/STARTUP, some DOWN |
+| JPMS and ServiceLoader discovery in `knock-cdi-vauban` | Verify that CDI `provides` do not require `opens` on user modules |
+| Availability of the MicroProfile Health 4.0 TCK on Maven Central | Verify availability of `org.eclipse.microprofile.health:microprofile-health-tck:4.0` |
 
-## Décisions actées
+## Decided decisions
 
-- ✅ **Specs Jakarta / MicroProfile autorisées** : `knock-mp-health-api`, `jakarta.cdi-api`,
-  `jakarta.inject-api`, `jakarta.annotation-api`. Pas de SmallRye / Vert.x / Quarkus Health.
-- ✅ **`knock-core` standalone SE** : utilisable sans CDI, sans Jakarta REST, sans container.
-  Dépend de `jakarta.json` (JSON-P spec) avec champollion comme implémentation runtime.
-- ✅ **`knock-cdi-vauban` séparé** : module optionnel, non chargé si CDI absent.
-- ✅ **`knock-cassini` séparé** : module optionnel, expose les endpoints via Jakarta REST
-  (API spec `jakarta.ws.rs`) avec Cassini comme implémentation. Ne jamais importer de classes
-  internes Cassini — l'API JAX-RS standard suffit.
-- ✅ **TDD strict** sur tous les modules de production.
-- ✅ **TCK PASS 100 %** comme contrat dur.
-- ✅ **TCK hors reactor** (POM Model 4.0.0 standalone) — contrainte ShrinkWrap Maven Resolver 3.3.
-- ✅ **Exécution parallèle des checks** via `VirtualThreadPerTaskExecutor` — virtual-thread-friendly.
+- ✅ **Jakarta / MicroProfile specs allowed**: `knock-mp-health-api`, `jakarta.cdi-api`,
+  `jakarta.inject-api`, `jakarta.annotation-api`. No SmallRye / Vert.x / Quarkus Health.
+- ✅ **Standalone SE `knock-core`**: usable without CDI, without Jakarta REST, without a container.
+  Depends on `jakarta.json` (JSON-P spec) with Champollion as the runtime implementation.
+- ✅ **Separate `knock-cdi-vauban`**: optional module, not loaded if CDI is absent.
+- ✅ **Separate `knock-cassini`**: optional module, exposes endpoints via Jakarta REST
+  (`jakarta.ws.rs` spec API) with Cassini as the implementation. Never import internal Cassini classes —
+  the standard JAX-RS API is enough.
+- ✅ **Strict TDD** on all production modules.
+- ✅ **TCK PASS 100 %** as a hard contract.
+- ✅ **TCK outside the reactor** (standalone POM Model 4.0.0) — ShrinkWrap Maven Resolver 3.3 constraint.
+- ✅ **Parallel check execution** via `VirtualThreadPerTaskExecutor` — virtual-thread-friendly.
 
-## Décisions ouvertes
+## Open decisions
 
-- [ ] Faut-il un mécanisme de cache TTL pour les réponses health (éviter d'ausculter la DB
-      à chaque requête Jakarta REST) ? → Hors spec HP 4.0, à différer en extension post-M5.
-- [ ] Support d'un health check programmatique (sans CDI, via `ServiceLoader`) pour les
-      déploiements SE purs ? → Possible via `META-INF/services/HealthCheck` ; à évaluer en M2.
-- [ ] Stratégie de timeout par check : configurable via `@ConfigProperty` (Ravel) ?
-      → Cohérence avec l'écosystème Vidocq ; à confirmer en M3.
-- [ ] MicroProfile Health 4.1 ou 5.0 (quand released) — design-out pour faciliter le bump
-      de version sans refactoring profond.
+- [ ] Should we add a TTL cache mechanism for health responses (to avoid probing the DB
+      on every Jakarta REST request)? → Out of scope for HP 4.0, defer to a post-M5 extension.
+- [ ] Support a programmatic health check (without CDI, via `ServiceLoader`) for
+      pure SE deployments? → Possible via `META-INF/services/HealthCheck`; to be evaluated in M2.
+- [ ] Per-check timeout strategy: configurable via `@ConfigProperty` (Ravel)?
+      → Consistency with the Vidocq ecosystem; to be confirmed in M3.
+- [ ] MicroProfile Health 4.1 or 5.0 (when released) — design out to make version bumps
+      easier without deep refactoring.

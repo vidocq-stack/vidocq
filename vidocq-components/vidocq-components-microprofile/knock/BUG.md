@@ -1,21 +1,21 @@
 # BUG — Knock
 
-Suivi des bugs reproductibles dans `knock` (issues internes, régressions, comportements
-incorrects non encore corrigés). Convention workspace Vidocq : id court, date, symptôme,
-repro minimal, hypothèse de cause, statut.
+Tracking of reproducible bugs in `knock` (internal issues, regressions, incorrect behaviours
+not yet fixed). Vidocq workspace convention: short id, date, symptom,
+minimal repro, root cause hypothesis, status.
 
 ---
 
-## BUG-001 — `tck-mp-health` plante : `cassini-tck:0.1.0-SNAPSHOT` introuvable
+## BUG-001 — `tck-mp-health` crashes: `cassini-tck:0.1.0-SNAPSHOT` not found
 
-- **Date ouverture** : 2026-05-10
-- **Date résolution** : 2026-05-11
-- **Statut** : ✅ RÉSOLU
+- **Opened**: 2026-05-10
+- **Resolved**: 2026-05-11
+- **Status**: ✅ RESOLVED
 
-### Symptôme
+### Symptom
 
-Job `CI / tck-mp-health` du `ci.yml` de knock échoue systématiquement à la phase de
-résolution Maven :
+The `CI / tck-mp-health` job in knock's `ci.yml` consistently fails during the Maven
+resolution phase:
 
 ```
 [ERROR] Failed to execute goal on project knock-tck:
@@ -25,21 +25,21 @@ résolution Maven :
   → vidocq-snapshots: HTTP 404
 ```
 
-Côté run Forgejo : statut `CI / tck-mp-health (push) | failure | Failing after 37s` sur
-tous les push `main` antérieurs à 2026-05-11.
+On the Forgejo run side: status `CI / tck-mp-health (push) | failure | Failing after 37s` on
+all `main` pushes prior to 2026-05-11.
 
-### Repro minimal
+### Minimal Repro
 
 ```bash
 cd ~/projects/perso/vidocq/knock
 ./mvnw -ntp -pl knock-api,knock-core,knock-cdi-vauban,knock-cassini -am install -DskipTests
 ./run-official-tck-mp-health-4.0.sh all
-# → fail à la phase "mvn test -f knock-tck/pom.xml"
+# → fails at the "mvn test -f knock-tck/pom.xml" phase
 ```
 
-### Cause
+### Root Cause
 
-`knock-tck/pom.xml` (ligne 263) déclare en `<scope>test</scope>` :
+`knock-tck/pom.xml` (line 263) declares in `<scope>test</scope>`:
 
 ```xml
 <dependency>
@@ -50,96 +50,96 @@ cd ~/projects/perso/vidocq/knock
 </dependency>
 ```
 
-Or `cassini-tck` est lui-même un module **hors reactor** de cassini (POM Model 4.0.0
-standalone, contrainte ShrinkWrap Maven Resolver vs Model 4.1). Le `mvn deploy` du
-reactor cassini **ne le couvrait pas** → jamais publié sur Reposilite → résolution KO
-côté knock.
+However `cassini-tck` is itself an **out-of-reactor** module in cassini (standalone POM Model 4.0.0,
+ShrinkWrap Maven Resolver vs Model 4.1 constraint). The `mvn deploy` of the cassini
+reactor **did not include it** → never published to Reposilite → resolution fails
+on the knock side.
 
-### Workaround temporaire (avant fix)
+### Temporary Workaround (before fix)
 
-`deploy needs: build` (et **non** `needs: tck-mp-health`) dans `ci.yml` de knock pour
-permettre la publication des snapshots knock malgré le TCK rouge — knock devait rester
-consommable par `vidocq` même tant que le TCK plantait.
+`deploy needs: build` (and **not** `needs: tck-mp-health`) in knock's `ci.yml` to
+allow publishing knock snapshots despite the failing TCK — knock had to remain
+consumable by `vidocq` even while the TCK was red.
 
-### Fix appliqué
+### Applied Fix
 
-**Commit** : `cassini@1f9e6000` — ajout d'un step dédié au `ci.yml` de cassini, après
-le step `Deploy to Forgejo Maven registry` :
+**Commit**: `cassini@1f9e6000` — added a dedicated step to cassini's `ci.yml`, after
+the `Deploy to Forgejo Maven registry` step:
 
 ```yaml
-- name: Build et deploy cassini-tck (hors reactor)
+- name: Build and deploy cassini-tck (out-of-reactor)
   run: |
     mvn -B -ntp -f cassini-tck/pom.xml \
         deploy -Dmaven.test.skip=true \
         -DaltDeploymentRepository=vidocq-snapshots::https://repo.vidocq.dev/snapshots
 ```
 
-Points clés :
+Key points:
 
-- `-f cassini-tck/pom.xml` pointe sur le POM standalone (Model 4.0.0 reste inchangé)
-- `-Dmaven.test.skip=true` (pas `-DskipTests`) évite la résolution des deps test, dont
-  `jakarta-restful-ws-tck` (artefact Jakarta non-public)
-- `-DaltDeploymentRepository=id::url` redirige le deploy vers Reposilite sans modifier
-  le pom standalone (qui n'a pas de `<distributionManagement>`)
+- `-f cassini-tck/pom.xml` points to the standalone POM (Model 4.0.0 remains unchanged)
+- `-Dmaven.test.skip=true` (not `-DskipTests`) avoids resolution of test deps, including
+  `jakarta-restful-ws-tck` (non-public Jakarta artifact)
+- `-DaltDeploymentRepository=id::url` redirects the deploy to Reposilite without modifying
+  the standalone pom (which has no `<distributionManagement>`)
 
-**Deuxième commit** : `knock@6086572a` — rétablit `deploy needs: [build, tck-mp-health]`
-dans le `ci.yml` de knock (gate de release sur TCK PASS à 100%).
+**Second commit**: `knock@6086572a` — restores `deploy needs: [build, tck-mp-health]`
+in knock's `ci.yml` (release gate on TCK 100% PASS).
 
 ### Validation
 
-Pipeline complet `knock@6086572a` (2026-05-11 17:16-17:17) :
+Full pipeline `knock@6086572a` (2026-05-11 17:16-17:17):
 
-| Job | Statut | Durée |
+| Job | Status | Duration |
 | --- | --- | --- |
 | `build` | ✅ | 16s |
 | `tck-mp-health` | ✅ TCK PASS 100% | 33s |
-| `deploy` | ✅ (exécuté après tck-mp-health) | 17s |
+| `deploy` | ✅ (runs after tck-mp-health) | 17s |
 
-Total : 1m06s. Le gate `deploy needs: [build, tck-mp-health]` est respecté.
+Total: 1m06s. The `deploy needs: [build, tck-mp-health]` gate is enforced.
 
-### Référence externe
+### External References
 
-- `Forge-New/99-Annexes/Gotchas-Java-Maven.md` §2 (recette générique des TCK hors reactor)
-- `Forge-New/60-CICD-Cross-Repo/Workflow-ci.yml.md` (section "Publication des TCK out-of-reactor")
-- `cassini/.forgejo/workflows/ci.yml` (step ajouté ligne ~71)
+- `Forge-New/99-Annexes/Gotchas-Java-Maven.md` §2 (generic recipe for out-of-reactor TCKs)
+- `Forge-New/60-CICD-Cross-Repo/Workflow-ci.yml.md` (section "Publishing out-of-reactor TCKs")
+- `cassini/.forgejo/workflows/ci.yml` (step added at line ~71)
 
 ---
 
-## BUG-002 — JPMS contourné via copie manuelle des JARs compile-scope
+## BUG-002 — JPMS workaround via manual copy of compile-scope JARs
 
-- **Date ouverture** : 2026-05-25
-- **Statut** : ⚠️ OPEN — workaround actif
+- **Opened**: 2026-05-25
+- **Status**: ⚠️ OPEN — active workaround
 
-### Symptôme
+### Symptom
 
-Le `pom.xml` racine de knock utilise `maven-dependency-plugin` (phase `initialize`) pour
-vider puis repeupler `target/javamodules/` avec tous les JARs de scope compile, puis passe
-`--module-path ${project.build.directory}/javamodules` manuellement au compilateur.
+The root `pom.xml` of knock uses `maven-dependency-plugin` (phase `initialize`) to
+clean and repopulate `target/javamodules/` with all compile-scope JARs, then passes
+`--module-path ${project.build.directory}/javamodules` manually to the compiler.
 
-Ce contournement indique que la résolution JPMS native de Maven ne fonctionne pas pour
-certaines dépendances compile-scope de knock, notamment `champollion-jsonp`, `cassini-core`
-et `vauban-core`/`vauban-classloader-spi`.
+This workaround indicates that Maven's native JPMS resolution does not work for
+certain compile-scope dependencies of knock, notably `champollion-jsonp`, `cassini-core`
+and `vauban-core`/`vauban-classloader-spi`.
 
-### Repro minimal
+### Minimal Repro
 
 ```bash
 grep -n "javamodules\|module-path" knock/pom.xml
-# révèle maven-clean-plugin + maven-dependency-plugin + compilerArgs
+# reveals maven-clean-plugin + maven-dependency-plugin + compilerArgs
 ```
 
-Sans le workaround, `javac` échoue au moment de résoudre les modules `io.vidocq.champollion`
-ou `io.vidocq.cassini` depuis le `module-info.java` des sous-modules knock.
+Without the workaround, `javac` fails to resolve the `io.vidocq.champollion`
+or `io.vidocq.cassini` modules from the `module-info.java` of the knock sub-modules.
 
-### Hypothèse de cause
+### Root Cause Hypothesis
 
-Les JARs concernés ne disposent pas de `module-info.class` dans une version reconnue par
-`maven-compiler-plugin` 4.x pour placement automatique sur le `--module-path`. La copie
-dans `target/javamodules/` force javac à les traiter comme automatic modules. Le
-`maven-clean-plugin` en phase `initialize` évite des conflits de JAR périmés lors des
-builds incrémentaux.
+The affected JARs do not have a `module-info.class` in a version recognised by
+`maven-compiler-plugin` 4.x for automatic placement on `--module-path`. Copying
+to `target/javamodules/` forces javac to treat them as automatic modules. The
+`maven-clean-plugin` in phase `initialize` prevents stale JAR conflicts during
+incremental builds.
 
-### Piste de résolution
+### Resolution Path
 
-Vérifier module par module lesquels ont un descripteur JPMS explicite et lesquels
-n'ont qu'un `Automatic-Module-Name` — puis supprimer les entrées correspondantes du
-workaround au fur et à mesure que les modules amont sont corrigés.
+Check module by module which ones have an explicit JPMS descriptor and which ones
+only have an `Automatic-Module-Name` — then remove the corresponding entries from the
+workaround as upstream modules are fixed.

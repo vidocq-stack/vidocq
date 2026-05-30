@@ -80,12 +80,12 @@ class KnockHealthCheckResponseBuilderTest {
     }
 
     // -----------------------------------------------------------------------
-    // §3.1 — data présente (string, long, boolean)
+    // §3.1 — data present (string, long, boolean)
     // -----------------------------------------------------------------------
 
     @Test
     void withData_string_spec_section3_1() {
-        // Spec §3.1 : data key/value pairs de type String sont sérialisables
+        // Spec §3.1: String key/value data pairs are serializable
         HealthCheckResponse response = new KnockHealthCheckResponseBuilder()
                 .name("db")
                 .up()
@@ -93,7 +93,7 @@ class KnockHealthCheckResponseBuilderTest {
                 .build();
 
         Optional<Map<String, Object>> data = response.getData();
-        assertTrue(data.isPresent(), "data doit être présente");
+        assertTrue(data.isPresent(), "data must be present");
         assertEquals("12ms", data.get().get("latency"));
     }
 
@@ -139,28 +139,28 @@ class KnockHealthCheckResponseBuilderTest {
     }
 
     // -----------------------------------------------------------------------
-    // §3.1 — data absente si non fournie
+    // §3.1 — data absent when not provided
     // -----------------------------------------------------------------------
 
     @Test
     void data_absent_when_not_provided_spec_section3_1() {
-        // Spec §3.1 : « data is omitted if empty »
+        // Spec §3.1: "data is omitted if empty"
         HealthCheckResponse response = new KnockHealthCheckResponseBuilder()
                 .name("simple")
                 .up()
                 .build();
 
-        // data doit être Optional.empty() si aucun withData
-        assertTrue(response.getData().isEmpty(), "data doit être absent si non fourni");
+        // data must be Optional.empty() if no withData was provided
+        assertTrue(response.getData().isEmpty(), "data must be absent when not provided");
     }
 
     // -----------------------------------------------------------------------
-    // §3.1 — withData remplace la valeur existante pour la même clé
+    // §3.1 — withData overrides the existing value for the same key
     // -----------------------------------------------------------------------
 
     @Test
     void withData_overrides_existing_key_spec_section3_1() {
-        // Spec §3.1 : « Additional invocations with the same key override the key-value pair. »
+        // Spec §3.1: "Additional invocations with the same key override the key-value pair."
         HealthCheckResponse response = new KnockHealthCheckResponseBuilder()
                 .name("override")
                 .up()
@@ -168,16 +168,17 @@ class KnockHealthCheckResponseBuilderTest {
                 .withData("key", "second")
                 .build();
 
-        assertEquals("second", response.getData().get().get("key"));
+        Map<String, Object> data = response.getData().orElseThrow();
+        assertEquals("second", data.get("key"));
     }
 
     // -----------------------------------------------------------------------
-    // Intégration via HealthCheckResponse.named() (ServiceLoader SPI)
+    // Integration through HealthCheckResponse.named() (ServiceLoader SPI)
     // -----------------------------------------------------------------------
 
     @Test
     void healthCheckResponse_named_uses_knock_provider() {
-        // Valide que le ServiceLoader trouve KnockHealthCheckResponseProvider
+        // Validates that the ServiceLoader finds KnockHealthCheckResponseProvider
         HealthCheckResponse response = HealthCheckResponse.named("spi-check").up().build();
         assertEquals("spi-check", response.getName());
         assertEquals(HealthCheckResponse.Status.UP, response.getStatus());

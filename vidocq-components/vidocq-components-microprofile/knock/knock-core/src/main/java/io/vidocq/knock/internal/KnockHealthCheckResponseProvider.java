@@ -13,13 +13,13 @@ import org.eclipse.microprofile.health.HealthCheckResponseBuilder;
 import org.eclipse.microprofile.health.spi.HealthCheckResponseProvider;
 
 /**
- * SPI ServiceLoader — fournit le {@link KnockHealthCheckResponseBuilder} à
+ * ServiceLoader SPI — provides the {@link KnockHealthCheckResponseBuilder} to
  * {@link org.eclipse.microprofile.health.HealthCheckResponse#named(String)}.
  *
- * <p>Enregistrée via :</p>
+ * <p>Registered via:</p>
  * <ul>
  *   <li>{@code META-INF/services/org.eclipse.microprofile.health.spi.HealthCheckResponseProvider}</li>
- *   <li>{@code provides ... with} dans {@code module-info.java}</li>
+ *   <li>{@code provides ... with} in {@code module-info.java}</li>
  * </ul>
  */
 public final class KnockHealthCheckResponseProvider implements HealthCheckResponseProvider {

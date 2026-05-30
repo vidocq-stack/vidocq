@@ -22,19 +22,19 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
 /**
- * Ressource Jakarta REST exposant les endpoints MicroProfile Health 4.0 §3 :
+ * Jakarta REST resource exposing the MicroProfile Health 4.0 §3 endpoints:
  *
  * <ul>
- *   <li>{@code GET /health}         — agrégat de tous les checks ({@link ProbeType#ALL})</li>
+ *   <li>{@code GET /health}         — aggregate of all checks ({@link ProbeType#ALL})</li>
  *   <li>{@code GET /health/live}    — probes {@link ProbeType#LIVENESS}</li>
  *   <li>{@code GET /health/ready}   — probes {@link ProbeType#READINESS}</li>
  *   <li>{@code GET /health/started} — probes {@link ProbeType#STARTUP}</li>
  * </ul>
  *
- * <p>Spec §3 : HTTP 200 si statut UP, HTTP 503 si DOWN. Corps JSON conforme §3.1
- * produit par {@link KnockHealthService} (Jakarta JSON-P, champollion à l'exécution).</p>
+ * <p>Spec §3 : HTTP 200 if status is UP, HTTP 503 if DOWN. JSON body compliant with §3.1
+ * produced by {@link KnockHealthService} (Jakarta JSON-P, champollion at runtime).</p>
  *
- * <p>API JAX-RS standard uniquement — aucun import de classe interne Cassini.</p>
+ * <p>Standard JAX-RS API only — no internal Cassini class imports.</p>
  */
 @ApplicationScoped
 @Path("/health")
@@ -45,24 +45,24 @@ public class KnockHealthResource {
     HealthCheckRegistry registry;
 
     /**
-     * Constructeur sans-args requis par CDI pour les beans {@code @ApplicationScoped}
-     * (instanciation du proxy client).
+     * No-args constructor required by CDI for {@code @ApplicationScoped} beans
+     * (client proxy instantiation).
      */
     public KnockHealthResource() {
-        // CDI proxy ; le champ {@code registry} sera injecté ensuite.
+        // CDI proxy; the {@code registry} field will be injected later.
     }
 
     /**
-     * Constructeur d'injection / test — instanciation directe avec un registry donné.
+     * Injection / test constructor — direct instantiation with a given registry.
      *
-     * @param registry le registry à interroger (non null)
+     * @param registry the registry to query (non-null)
      */
     public KnockHealthResource(HealthCheckRegistry registry) {
         this.registry = registry;
     }
 
     /**
-     * {@code GET /health} — agrégat de tous les checks (§3, {@link ProbeType#ALL}).
+     * {@code GET /health} — aggregate of all checks (§3, {@link ProbeType#ALL}).
      */
     @GET
     public Response getHealth() {
@@ -104,4 +104,3 @@ public class KnockHealthResource {
                 .build();
     }
 }
-

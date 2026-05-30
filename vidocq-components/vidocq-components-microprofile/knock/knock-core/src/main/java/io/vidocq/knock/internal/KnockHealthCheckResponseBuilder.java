@@ -17,18 +17,18 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * Implémentation Knock du builder MicroProfile Health 4.0.
+ * Knock implementation of the MicroProfile Health 4.0 builder.
  *
- * <p>Spec §3 : « A builder to construct a health check procedure response. »
- * Produit un {@link HealthCheckResponse} via son constructeur public.</p>
+ * <p>Spec §3: "A builder to construct a health check procedure response."
+ * Produces a {@link HealthCheckResponse} via its public constructor.</p>
  *
- * <p>Instances créées par {@link KnockHealthCheckResponseProvider} via ServiceLoader.</p>
+ * <p>Instances created by {@link KnockHealthCheckResponseProvider} via ServiceLoader.</p>
  */
 public final class KnockHealthCheckResponseBuilder extends HealthCheckResponseBuilder {
 
     private String name;
     private HealthCheckResponse.Status status;
-    /** null tant qu'aucun withData n'est appelé — sérialisé comme Optional.empty(). */
+    /** null until any withData call occurs — serialized as Optional.empty(). */
     private Map<String, Object> data;
 
     @Override
@@ -74,13 +74,13 @@ public final class KnockHealthCheckResponseBuilder extends HealthCheckResponseBu
     }
 
     /**
-     * Construit la réponse.
+     * Builds the response.
      *
-     * <p>Spec §3.1 : {@code data} est {@link Optional#empty()} si aucun {@code withData}
-     * n'a été appelé ; sinon wrappé dans un {@link Optional} non vide.</p>
+     * <p>Spec §3.1: {@code data} is {@link Optional#empty()} if no {@code withData}
+     * call was made; otherwise it is wrapped in a non-empty {@link Optional}.</p>
      *
-     * @return une nouvelle {@link HealthCheckResponse} immuable
-     * @throws IllegalStateException si {@code name} ou {@code status} est absent
+     * @return a new immutable {@link HealthCheckResponse}
+     * @throws IllegalStateException if {@code name} or {@code status} is missing
      */
     @Override
     public HealthCheckResponse build() {

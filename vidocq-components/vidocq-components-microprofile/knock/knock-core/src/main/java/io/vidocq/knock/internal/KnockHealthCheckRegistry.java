@@ -18,22 +18,22 @@ import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Implémentation thread-safe du {@link HealthCheckRegistry}.
+ * Thread-safe implementation of {@link HealthCheckRegistry}.
  *
- * <p>Stocke les checks dans une {@link ConcurrentHashMap} par ({@link ProbeType}, name).
- * Virtual-thread-friendly : aucun {@code synchronized}, aucun {@code ThreadLocal}.</p>
+ * <p>Stores checks in a {@link ConcurrentHashMap} by ({@link ProbeType}, name).
+ * Virtual-thread-friendly: no {@code synchronized}, no {@code ThreadLocal}.</p>
  *
- * <p>Pour {@link ProbeType#ALL}, {@link #getChecks(ProbeType)} retourne l'union de
- * LIVENESS, READINESS et STARTUP.</p>
+ * <p>For {@link ProbeType#ALL}, {@link #getChecks(ProbeType)} returns the union of
+ * LIVENESS, READINESS, and STARTUP.</p>
  */
 public final class KnockHealthCheckRegistry implements HealthCheckRegistry {
 
-    /** Map<ProbeType, Map<name, HealthCheck>> — LIVENESS, READINESS, STARTUP uniquement. */
+    /** Map<ProbeType, Map<name, HealthCheck>> — LIVENESS, READINESS, STARTUP only. */
     private final ConcurrentHashMap<ProbeType, ConcurrentHashMap<String, HealthCheck>> checks =
             new ConcurrentHashMap<>();
 
     public KnockHealthCheckRegistry() {
-        // Pré-initialiser les trois types concrets
+        // Pre-initialize the three concrete types
         checks.put(ProbeType.LIVENESS, new ConcurrentHashMap<>());
         checks.put(ProbeType.READINESS, new ConcurrentHashMap<>());
         checks.put(ProbeType.STARTUP, new ConcurrentHashMap<>());
@@ -50,7 +50,7 @@ public final class KnockHealthCheckRegistry implements HealthCheckRegistry {
 
     @Override
     public void unregister(String name) {
-        // Parcourt LIVENESS, READINESS, STARTUP — retire le check si présent
+        // Iterate over LIVENESS, READINESS, STARTUP — remove the check if present
         checks.values().forEach(map -> map.remove(name));
     }
 

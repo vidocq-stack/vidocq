@@ -22,17 +22,17 @@ import jakarta.ws.rs.ext.RuntimeDelegate;
 import java.util.concurrent.CompletionStage;
 
 /**
- * Implémentation minimale de {@link RuntimeDelegate} pour les tests JUnit de
+ * Minimal {@link RuntimeDelegate} implementation for the JUnit tests of
  * {@link KnockHealthResource}.
  *
- * <p>Frontière respectée : <strong>aucun import de classe interne Cassini</strong>. Les
- * tests utilisent ce delegate isolé pour ne dépendre que de l'API JAX-RS standard.
- * En production, l'implémentation du {@link RuntimeDelegate} est fournie par
- * Cassini via son propre mécanisme de boot.</p>
+ * <p>Boundary respected: <strong>no internal Cassini class is imported</strong>. The
+ * tests use this isolated delegate so they depend only on the standard JAX-RS API.
+ * In production, the {@link RuntimeDelegate} implementation is provided by
+ * Cassini through its own boot mechanism.</p>
  *
- * <p>Seul {@link #createResponseBuilder()} est implémenté (via {@link TestResponseBuilder}) ;
- * les autres méthodes lèvent {@link UnsupportedOperationException} — non requises pour
- * tester {@code Response.status(...).type(...).entity(...).build()}.</p>
+ * <p>Only {@link #createResponseBuilder()} is implemented (via {@link TestResponseBuilder});
+ * the other methods throw {@link UnsupportedOperationException} — they are not required to
+ * test {@code Response.status(...).type(...).entity(...).build()}.</p>
  */
 final class TestRuntimeDelegate extends RuntimeDelegate {
 
@@ -58,7 +58,7 @@ final class TestRuntimeDelegate extends RuntimeDelegate {
 
     @Override
     public <T> HeaderDelegate<T> createHeaderDelegate(Class<T> type) {
-        // Support minimal pour MediaType : MediaType.toString() passe par RuntimeDelegate.
+        // Minimal support for MediaType: MediaType.toString() goes through RuntimeDelegate.
         return new HeaderDelegate<>() {
             @SuppressWarnings("unchecked")
             @Override public T fromString(String value) {

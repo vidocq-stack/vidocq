@@ -1,32 +1,32 @@
-# Intégration Knock ↔ Cassini
+# Knock ↔ Cassini Integration
 
-> Comment exposer les endpoints MicroProfile Health 4.0 d'une application Cassini
-> (Jakarta REST 4.0) via le module `knock-cassini`.
+> How to expose MicroProfile Health 4.0 endpoints from a Cassini application
+> (Jakarta REST 4.0) via the `knock-cassini` module.
 
-## Vue d'ensemble
+## Overview
 
-`knock-cassini` fournit une unique ressource JAX-RS, `KnockHealthResource`, annotée
-`@ApplicationScoped` + `@Path("/health")` (avec sous-chemins `/live`, `/ready`,
-`/started`). Aucune classe interne Cassini n'est importée — uniquement l'API
-`jakarta.ws.rs` standard.
+`knock-cassini` provides a single JAX-RS resource, `KnockHealthResource`, annotated
+`@ApplicationScoped` + `@Path("/health")` (with sub-paths `/live`, `/ready`,
+`/started`). No internal Cassini classes are imported — only the standard
+`jakarta.ws.rs` API.
 
 ```
 ┌────────────────────────────────────────────────┐
 │  Cassini (Jakarta REST 4.0)                    │
-│   └─ scanne les @Path beans CDI                │
+│   └─ scans @Path CDI beans                     │
 │      └─ KnockHealthResource (knock-cassini)    │
 │         └─ @Inject HealthCheckRegistry         │
 │            └─ KnockCdiHealthCheckRegistry      │
 │               (knock-cdi-vauban)               │
-│               └─ délègue à KnockHealthService  │
+│               └─ delegates to KnockHealthService │
 │                  (knock-core, JSON-P/champollion) │
 └────────────────────────────────────────────────┘
 ```
 
-## Dépendances Maven
+## Maven dependencies
 
 ```xml
-<!-- compile : ressource JAX-RS, BCE, registry -->
+<!-- compile: JAX-RS resource, BCE, registry -->
 <dependency>
     <groupId>io.vidocq.knock</groupId>
     <artifactId>knock-cassini</artifactId>
@@ -38,7 +38,7 @@
     <version>0.1.0-SNAPSHOT</version>
 </dependency>
 
-<!-- runtime : implémentation Jakarta JSON-P utilisée par knock-core -->
+<!-- runtime: Jakarta JSON-P implementation used by knock-core -->
 <dependency>
     <groupId>io.vidocq.champollion</groupId>
     <artifactId>champollion-jsonp</artifactId>
@@ -47,54 +47,51 @@
 </dependency>
 ```
 
-`knock-cassini` tire transitivement `knock-core` et `knock-api` (qui ré-exporte la
-spec MP Health 4.0). Aucune dépendance vers Cassini *runtime* : Knock dépend
-uniquement de `jakarta.ws.rs` (API) et fonctionne avec n'importe quelle implémentation
-JAX-RS 4.0 conforme.
+`knock-cassini` transitively pulls `knock-core` and `knock-api` (which re-exports the
+MP Health 4.0 spec). No dependency on Cassini *runtime*: Knock depends
+only on `jakarta.ws.rs` (API) and works with any conformant JAX-RS 4.0 implementation.
 
 ## JPMS
 
 ```java
 module my.app {
-    requires io.vidocq.knock.cassini;     // tire knock-core via transitive
-    requires io.vidocq.knock.cdi.vauban;  // BCE de découverte des @Liveness/@Readiness/@Startup
-    requires io.vidocq.cassini.api;       // bootstrap CassiniStack (côté hôte)
+    requires io.vidocq.knock.cassini;     // pulls knock-core transitively
+    requires io.vidocq.knock.cdi.vauban;  // BCE for @Liveness/@Readiness/@Startup discovery
+    requires io.vidocq.cassini.api;       // bootstrap CassiniStack (host side)
     requires jakarta.cdi;
     requires jakarta.ws.rs;
 }
 ```
 
-L'extension CDI Build-Compatible (`HealthCheckCdiExtension`) est exposée via
+The CDI Build-Compatible Extension (`HealthCheckCdiExtension`) is exposed via
 `provides jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension`
-dans `module-info` de `knock-cdi-vauban`, et également déclarée en
-`META-INF/services/...BuildCompatibleExtension` (pour les ClassLoader-based
-`ServiceLoader`).
+in the `module-info` of `knock-cdi-vauban`, and also declared in
+`META-INF/services/...BuildCompatibleExtension` (for ClassLoader-based `ServiceLoader`).
 
-## Découverte / déploiement
+## Discovery / deployment
 
-Sur Cassini bootstrappé via `CassiniStack.builder().beanProvider(vaubanBeanProvider)` :
+On Cassini bootstrapped via `CassiniStack.builder().beanProvider(vaubanBeanProvider)`:
 
-1. Vauban scanne le classpath et instancie `KnockHealthResource` comme
-   `@ApplicationScoped` (CDI 4.1 mode `annotated` — pas besoin de `beans.xml`).
-2. Cassini interroge `BeanProvider.getResourceClasses()` et y trouve
-   `KnockHealthResource`.
-3. Au premier `GET /health/live`, Cassini résout l'instance via Vauban, déclenche
-   `@Inject HealthCheckRegistry`, et invoque la méthode JAX-RS.
-4. `KnockHealthService` (façade SPI runtime de `knock-core`) appelle tous les
-   `HealthCheck` enregistrés en parallèle (virtual threads), agrège les statuts
-   selon la spec MP Health 4.0 §3 (DOWN si ≥ 1 DOWN), sérialise en JSON-P via
-   champollion, et la ressource construit la réponse `Response` avec HTTP 200/503.
+1. Vauban scans the classpath and instantiates `KnockHealthResource` as
+   `@ApplicationScoped` (CDI 4.1 `annotated` mode — no `beans.xml` needed).
+2. Cassini queries `BeanProvider.getResourceClasses()` and finds `KnockHealthResource`.
+3. On the first `GET /health/live`, Cassini resolves the instance via Vauban, triggers
+   `@Inject HealthCheckRegistry`, and invokes the JAX-RS method.
+4. `KnockHealthService` (SPI runtime facade from `knock-core`) calls all registered
+   `HealthCheck` instances in parallel (virtual threads), aggregates statuses per
+   MP Health 4.0 spec §3 (DOWN if ≥ 1 DOWN), serialises to JSON-P via
+   champollion, and the resource builds the `Response` with HTTP 200/503.
 
 ## Endpoints
 
-| Verbe | Chemin             | Probes                | HTTP UP | HTTP DOWN |
-|-------|--------------------|-----------------------|---------|-----------|
-| GET   | `/health`          | tous (`ProbeType.ALL`) | 200     | 503       |
-| GET   | `/health/live`     | `@Liveness`            | 200     | 503       |
-| GET   | `/health/ready`    | `@Readiness`           | 200     | 503       |
-| GET   | `/health/started`  | `@Startup`             | 200     | 503       |
+| Verb | Path               | Probes                | HTTP UP | HTTP DOWN |
+|------|--------------------|-----------------------|---------|-----------|
+| GET  | `/health`          | all (`ProbeType.ALL`) | 200     | 503       |
+| GET  | `/health/live`     | `@Liveness`           | 200     | 503       |
+| GET  | `/health/ready`    | `@Readiness`          | 200     | 503       |
+| GET  | `/health/started`  | `@Startup`            | 200     | 503       |
 
-## Exemple : déclarer un check applicatif
+## Example: declaring an application health check
 
 ```java
 package com.example.app.health;
@@ -119,28 +116,28 @@ public class DatabaseLivenessCheck implements HealthCheck {
 }
 ```
 
-Aucun enregistrement manuel : `HealthCheckCdiExtension` (BCE) découvre tous les beans
-qualifiés `@Liveness` / `@Readiness` / `@Startup` et les enregistre dans le registry
-au phase `Validation` du conteneur.
+No manual registration: `HealthCheckCdiExtension` (BCE) discovers all beans
+qualified `@Liveness` / `@Readiness` / `@Startup` and registers them in the registry
+at the `Validation` phase of the container.
 
 ## Configuration
 
-Knock est *zero-config* : aucune propriété MP Config n'est requise. Si l'application
-veut isoler les endpoints derrière un préfixe, c'est l'hôte JAX-RS (Cassini ou autre)
-qui décide via son `ApplicationPath` ou le mount Chappe (`vidocq.rest.context-path`
-côté `vidocq`).
+Knock is *zero-config*: no MP Config properties are required. If the application
+wants to isolate endpoints behind a prefix, it is up to the JAX-RS host (Cassini or other)
+to decide via its `ApplicationPath` or the Chappe mount (`vidocq.rest.context-path`
+on the `vidocq` side).
 
-## Vérification
+## Verification
 
-Un smoke test de la ressource (sans container HTTP) est fourni dans
-`KnockHealthResourceTest` (7/7 PASS) — il utilise un `TestRuntimeDelegate` minimal
-local pour bypasser tout import interne Cassini. Pour une vérification end-to-end
-contre Cassini réel, voir l'extension `vidocq-runtime-knock-extension`
+A smoke test of the resource (without an HTTP container) is provided in
+`KnockHealthResourceTest` (7/7 PASS) — it uses a minimal local `TestRuntimeDelegate`
+to bypass all internal Cassini imports. For an end-to-end check
+against real Cassini, see the `vidocq-runtime-knock-extension`
 (`docs/integration-vidocq-runtime.md`).
 
-## TCK MicroProfile Health 4.0
+## MicroProfile Health 4.0 TCK
 
-`./run-official-tck-mp-health-4.0.sh all` exécute le TCK officiel
-`microprofile-health-tck:4.0` contre la pile complète Knock + Cassini :
-**28/28 PASS** (cf. `knock-tck/target/tck-report.txt`).
+`./run-official-tck-mp-health-4.0.sh all` runs the official TCK
+`microprofile-health-tck:4.0` against the full Knock + Cassini stack:
+**28/28 PASS** (see `knock-tck/target/tck-report.txt`).
 

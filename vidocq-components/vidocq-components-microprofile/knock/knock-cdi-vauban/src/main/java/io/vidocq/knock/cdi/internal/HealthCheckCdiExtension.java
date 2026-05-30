@@ -21,18 +21,18 @@ import org.eclipse.microprofile.health.Startup;
 import jakarta.enterprise.inject.build.compatible.spi.BeanInfo;
 
 /**
- * Build Compatible Extension Knock — validation de la présence d'un qualifieur de probe
- * sur tout bean CDI implémentant {@link HealthCheck}.
+ * Knock Build Compatible Extension — validates the presence of a probe qualifier
+ * on every CDI bean implementing {@link HealthCheck}.
  *
- * <p>Spec MicroProfile Health 4.0 §4.2 : « Health check procedures that do not carry one
- * of the three qualifiers result in a deployment error. »</p>
+ * <p>MicroProfile Health 4.0 §4.2: "Health check procedures that do not carry one
+ * of the three qualifiers result in a deployment error."</p>
  *
- * <p>Cette BCE ne fait que valider — l'enregistrement dans le registry est délégué
- * à {@link HealthCheckRegistrar} via injection CDI standard.</p>
+ * <p>This BCE only validates — registration in the registry is delegated to
+ * {@link HealthCheckRegistrar} via standard CDI injection.</p>
  *
- * <p>Découverte via ServiceLoader :
+ * <p>Discovered via ServiceLoader:
  * {@code META-INF/services/jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension}
- * et {@code provides ... with} dans {@code module-info.java}.</p>
+ * and {@code provides ... with} in {@code module-info.java}.</p>
  */
 public class HealthCheckCdiExtension implements BuildCompatibleExtension {
 
@@ -41,11 +41,11 @@ public class HealthCheckCdiExtension implements BuildCompatibleExtension {
     private static final String STARTUP   = Startup.class.getName();
 
     /**
-     * Spec §4.2 : valide que tout bean {@link HealthCheck} porte au moins un des trois
-     * qualifieurs de probe. Signale une erreur de déploiement sinon.
+     * Spec §4.2: validates that every {@link HealthCheck} bean carries at least one of the
+     * three probe qualifiers. Reports a deployment error otherwise.
      *
-     * @param bean     le bean CDI à valider
-     * @param messages collecteur d'erreurs de déploiement
+     * @param bean     the CDI bean to validate
+     * @param messages deployment error collector
      */
     @Registration(types = HealthCheck.class)
     public void validateProbeQualifier(BeanInfo bean, Messages messages) {
@@ -58,9 +58,9 @@ public class HealthCheckCdiExtension implements BuildCompatibleExtension {
             ClassInfo declaring = bean.declaringClass();
             String className = declaring != null ? declaring.name() : "(unknown)";
             messages.error(
-                    "Knock CDI : le bean HealthCheck '" + className
-                    + "' n'a aucun qualifieur @Liveness, @Readiness ou @Startup"
-                    + " (spec MicroProfile Health 4.0 §4.2)",
+                    "Knock CDI: the HealthCheck bean '" + className
+                    + "' has no @Liveness, @Readiness, or @Startup qualifier"
+                    + " (MicroProfile Health 4.0 spec §4.2)",
                     bean);
         }
     }

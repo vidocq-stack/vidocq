@@ -27,19 +27,19 @@ import jakarta.enterprise.context.ApplicationScoped;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Tests d'intégration CDI — {@link HealthCheckCdiExtension}, {@link HealthCheckRegistrar},
- * {@link HealthCheckRegistryProducer}.
+ * CDI integration tests — {@link HealthCheckCdiExtension}, {@link HealthCheckRegistrar},
+ * {@link KnockCdiHealthCheckRegistry}.
  *
- * <p>Spec MicroProfile Health 4.0 §4.1 : « Health check procedures annotated with one
- * of the three qualifiers are automatically discovered and registered. »</p>
+ * <p>MicroProfile Health 4.0 spec §4.1: "Health check procedures annotated with one
+ * of the three qualifiers are automatically discovered and registered."</p>
  *
- * <p>Bootstrap via {@code VaubanContainer.builder().addBeanClass(...)} — container SE
- * minimal, tests sur classpath ({@code useModulePath=false}).</p>
+ * <p>Bootstrapped via {@code VaubanContainer.builder().addBeanClass(...)} — minimal SE
+ * container, tests on the classpath ({@code useModulePath=false}).</p>
  */
 class HealthCheckCdiIntegrationTest {
 
     // -----------------------------------------------------------------------
-    // Beans de test inline
+    // Inline test beans
     // -----------------------------------------------------------------------
 
     @Liveness @ApplicationScoped
@@ -70,7 +70,7 @@ class HealthCheckCdiIntegrationTest {
         }
     }
 
-    /** Bean sans qualifieur de probe — doit déclencher une erreur de déploiement. */
+    /** Bean without a probe qualifier — must trigger a deployment error. */
     @ApplicationScoped
     static class NoProbeCheck implements HealthCheck {
         @Override public HealthCheckResponse call() {
@@ -79,23 +79,23 @@ class HealthCheckCdiIntegrationTest {
     }
 
     // -----------------------------------------------------------------------
-    // §4.1 — découverte et enregistrement automatique @Liveness
+    // §4.1 — automatic discovery and registration of @Liveness
     // -----------------------------------------------------------------------
 
     @Test
     void liveness_check_auto_registered_spec_section4_1() {
-        // Spec §4.1 : bean @Liveness découvert et enregistré automatiquement
+        // Spec §4.1: @Liveness bean discovered and registered automatically
         try (var container = buildContainer(LivenessUpCheck.class)) {
             HealthCheckRegistry registry = container.select(HealthCheckRegistry.class);
             assertFalse(registry.getChecks(ProbeType.LIVENESS).isEmpty(),
-                    "Le check @Liveness doit être auto-enregistré");
+                    "The @Liveness check must be auto-registered");
             assertEquals(0, registry.getChecks(ProbeType.READINESS).size());
             assertEquals(0, registry.getChecks(ProbeType.STARTUP).size());
         }
     }
 
     // -----------------------------------------------------------------------
-    // §4.1 — découverte par type de probe (READINESS, STARTUP)
+    // §4.1 — discovery by probe type (READINESS, STARTUP)
     // -----------------------------------------------------------------------
 
     @Test
@@ -110,20 +110,20 @@ class HealthCheckCdiIntegrationTest {
     }
 
     // -----------------------------------------------------------------------
-    // §3.2 + §4.1 — agrégation depuis le registry peuplé par CDI
+    // §3.2 + §4.1 — aggregation from the registry populated by CDI
     // -----------------------------------------------------------------------
 
     @Test
     void liveness_down_yields_DOWN_aggregate_spec_section3_2() {
-        // Spec §3.2 : DOWN dès qu'un check est DOWN
+        // Spec §3.2: DOWN as soon as one check is DOWN
         try (var container = buildContainer(LivenessDownCheck.class)) {
             HealthCheckRegistry registry = container.select(HealthCheckRegistry.class);
             HealthReport report = new KnockHealthService(registry).report(ProbeType.LIVENESS);
             assertEquals(503, report.httpStatus(),
-                    "Spec §3 : status=DOWN → HTTP 503");
+                    "Spec §3: status=DOWN -> HTTP 503");
             assertTrue(report.json().contains("\"status\":\"DOWN\"")
                     || report.json().contains("\"status\": \"DOWN\""),
-                    "JSON doit contenir status DOWN, got: " + report.json());
+                    "JSON must contain status DOWN, got: " + report.json());
         }
     }
 
@@ -135,22 +135,26 @@ class HealthCheckCdiIntegrationTest {
     void registry_injectable_via_cdi_spec_section4_1() {
         try (var container = buildContainer(LivenessUpCheck.class)) {
             HealthCheckRegistry registry = container.select(HealthCheckRegistry.class);
-            assertNotNull(registry, "@Inject HealthCheckRegistry doit être satisfait par le producer");
+            assertNotNull(registry, "@Inject HealthCheckRegistry must be satisfied by the producer");
         }
     }
 
     // -----------------------------------------------------------------------
-    // §4.2 — bean HealthCheck sans qualifieur de probe → DeploymentException
+    // §4.2 — HealthCheck bean without a probe qualifier -> DeploymentException
     // -----------------------------------------------------------------------
 
     @Test
     void health_check_without_probe_annotation_fails_deployment_spec_section4_2() {
-        // Spec §4.2 : « Health check procedures that do not carry one of the three
-        // qualifiers result in a deployment error. »
+        // Spec §4.2: "Health check procedures that do not carry one of the three
+        // qualifiers result in a deployment error."
         assertThrows(
                 DeploymentException.class,
-                () -> buildContainer(NoProbeCheck.class),
-                "Un bean HealthCheck sans @Liveness/@Readiness/@Startup doit echouer au deploiement");
+                () -> {
+                    try (var container = buildContainer(NoProbeCheck.class)) {
+                        // The deployment is expected to fail before this container is used.
+                    }
+                },
+                "A HealthCheck bean without @Liveness/@Readiness/@Startup must fail deployment");
     }
 
     // -----------------------------------------------------------------------
@@ -158,8 +162,8 @@ class HealthCheckCdiIntegrationTest {
     // -----------------------------------------------------------------------
 
     /**
-     * Construit un container Vauban minimal avec l'infrastructure Knock CDI
-     * et les beans de check passés en argument.
+     * Builds a minimal Vauban container with the Knock CDI infrastructure
+     * and the provided check beans.
      */
     private static VaubanContainer buildContainer(Class<?>... checkBeans) {
         var builder = VaubanContainer.builder()

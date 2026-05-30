@@ -40,27 +40,27 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Container Arquillian Knock — déploie un {@link WebArchive} TCK MicroProfile Health 4.0
- * sur une instance {@link CassiniTestHarness} en y exposant {@link KnockHealthResource}.
+ * Knock Arquillian container — deploys a MicroProfile Health 4.0 {@link WebArchive}
+ * TCK on a {@link CassiniTestHarness} instance while exposing {@link KnockHealthResource}.
  *
- * <p>Stratégie :</p>
+ * <p>Strategy:</p>
  * <ol>
- *   <li>Scanner {@code /WEB-INF/classes/} du WAR pour les implémentations
- *       {@link HealthCheck} qualifiées {@link Liveness}/{@link Readiness}/{@link Startup}
- *       (spec §4.2 — un check non qualifié est ignoré).</li>
- *   <li>Scanner les méthodes {@code @Produces @Liveness/@Readiness/@Startup} retournant
- *       un {@code HealthCheck} (cas CDI producer — spec §4.1).</li>
- *   <li>Construire un {@link HealthCheckRegistry} peuplé et l'attacher à un
+ *   <li>Scan the WAR {@code /WEB-INF/classes/} directory for {@link HealthCheck}
+ *       implementations qualified with {@link Liveness}/{@link Readiness}/{@link Startup}
+ *       (spec §4.2 — an unqualified check is ignored).</li>
+ *   <li>Scan {@code @Produces @Liveness/@Readiness/@Startup} methods returning a
+ *       {@code HealthCheck} (CDI producer case — spec §4.1).</li>
+ *   <li>Build a populated {@link HealthCheckRegistry} and attach it to a
  *       {@link KnockHealthResource}.</li>
- *   <li>Démarrer un {@link CassiniTestHarness} sur un port libre, exposer la ressource,
- *       retourner {@link ProtocolMetaData} avec le baseUrl pour que le client TCK
- *       puisse cibler {@code <base>/health*}.</li>
+ *   <li>Start a {@link CassiniTestHarness} on a free port, expose the resource,
+ *       and return {@link ProtocolMetaData} with the baseUrl so the TCK client
+ *       can target {@code <base>/health*}.</li>
  * </ol>
  *
- * <p>Lecture de {@code microprofile-config.properties} (spec §6 — propriété
- * {@code mp.health.default.readiness.empty.response}) : honoré si le fichier est
- * présent dans {@code /META-INF/} du WAR. La valeur par défaut suit la spec
- * (DOWN pour readiness vide).</p>
+ * <p>Reading {@code microprofile-config.properties} (spec §6 — property
+ * {@code mp.health.default.readiness.empty.response}): honored if the file is
+ * present in the WAR {@code /META-INF/} directory. The default value follows the spec
+ * (DOWN for an empty readiness response).</p>
  */
 public class KnockDeployableContainer implements DeployableContainer<KnockContainerConfiguration> {
 
@@ -91,7 +91,7 @@ public class KnockDeployableContainer implements DeployableContainer<KnockContai
 
         ClassLoader cl = Thread.currentThread().getContextClassLoader();
 
-        // Étape 1 — collecter classes du WAR
+        // Step 1 — collect classes from the WAR
         List<Class<?>> classes = new ArrayList<>();
         for (Node node : war.getContent().values()) {
             String path = node.getPath().get();
@@ -99,14 +99,14 @@ public class KnockDeployableContainer implements DeployableContainer<KnockContai
             String cn = path.substring("/WEB-INF/classes/".length(),
                     path.length() - ".class".length()).replace('/', '.');
             try { classes.add(Class.forName(cn, true, cl)); }
-            catch (Throwable ignored) { /* classes manquantes — ignorées */ }
+            catch (Throwable ignored) { /* missing classes — ignored */ }
         }
 
-        // Étape 2 — peupler registry depuis les classes scannées
+        // Step 2 — populate the registry from scanned classes
         HealthCheckRegistry registry = HealthCheckRegistries.newRegistry();
         Set<String> registeredNames = new HashSet<>();
         for (Class<?> c : classes) {
-            // Cas direct : implémentation HealthCheck + qualifier MP Health
+            // Direct case: HealthCheck implementation + MP Health qualifier
             if (HealthCheck.class.isAssignableFrom(c)
                     && !c.isInterface()
                     && !Modifier.isAbstract(c.getModifiers())) {
@@ -132,8 +132,8 @@ public class KnockDeployableContainer implements DeployableContainer<KnockContai
                     Object owner = Modifier.isStatic(m.getModifiers())
                             ? null
                             : c.getDeclaredConstructor().newInstance();
-                    // Producer method en MP Health TCK : package-private. Accès via
-                    // MethodHandles.privateLookupIn pour rester JPMS-friendly.
+                    // Producer method in the MP Health TCK: package-private. Access via
+                    // MethodHandles.privateLookupIn to remain JPMS-friendly.
                     var lookup = java.lang.invoke.MethodHandles.privateLookupIn(
                             c, java.lang.invoke.MethodHandles.lookup());
                     var handle = lookup.unreflect(m);
@@ -147,10 +147,10 @@ public class KnockDeployableContainer implements DeployableContainer<KnockContai
             }
         }
 
-        // Étape 3 — lire microprofile-config.properties (§6) si présent
+        // Step 3 — read microprofile-config.properties (§6) if present
         applyConfig(war);
 
-        // Étape 4 — démarrer le harness Cassini avec KnockHealthResource singleton
+        // Step 4 — start the Cassini harness with a KnockHealthResource singleton
         KnockHealthResource resource = new KnockHealthResource(registry);
         Application app = new Application() {
             @Override public Set<Object> getSingletons() { return Set.of(resource); }
@@ -166,7 +166,7 @@ public class KnockDeployableContainer implements DeployableContainer<KnockContai
         }
         harnesses.put(archive.getName(), harness);
 
-        // Étape 5 — exposer baseUrl au TCK
+        // Step 5 — expose the baseUrl to the TCK
         URI base = URI.create(harness.baseUrl().isEmpty()
                 ? "http://" + config.getHost() + ":" + harness.port()
                 : harness.baseUrl().startsWith("http")
@@ -219,14 +219,14 @@ public class KnockDeployableContainer implements DeployableContainer<KnockContai
     }
 
     /**
-     * Mini-CDI : pour chaque champ {@link Inject} de {@code instance}, instancie
-     * le type déclaré avec son constructeur public no-arg et l'affecte. Récurse
-     * sur la chaîne des dépendances. Tolère le cycle via {@code seen} (identité).
+     * Mini-CDI: for each {@link Inject} field on {@code instance}, instantiate
+     * the declared type with its public no-arg constructor and assign it. Recurse
+     * through the dependency chain. Cycles are tolerated via {@code seen} (identity).
      *
-     * <p>Ce mini-CDI ne gère ni qualifiers, ni scopes, ni producers — il existe
-     * uniquement pour rendre les tests TCK MP Health 4.0 type
-     * {@code DelegateHealthSuccessfulTest} fonctionnels sans embarquer Weld.
-     * L'écosystème Vidocq utilise Vauban pour le CDI complet en production.</p>
+     * <p>This mini-CDI does not handle qualifiers, scopes, or producers — it exists
+     * solely to make the MP Health 4.0 TCK tests such as
+     * {@code DelegateHealthSuccessfulTest} work without embedding Weld.
+     * The Vidocq ecosystem uses Vauban for full CDI in production.</p>
      */
     private static void injectFields(Object instance, java.util.IdentityHashMap<Object, Object> seen) {
         if (instance == null || seen.put(instance, instance) != null) return;
@@ -254,17 +254,16 @@ public class KnockDeployableContainer implements DeployableContainer<KnockContai
     }
 
     /**
-     * §6 — Lit la propriété {@code mp.health.default.readiness.empty.response} depuis
-     * {@code /META-INF/microprofile-config.properties} si présent. La pose en system
-     * property pour que le runtime Knock la consomme.
+     * §6 — Reads the {@code mp.health.default.readiness.empty.response} property from
+     * {@code /META-INF/microprofile-config.properties} if present. Sets it as a system
+     * property so the Knock runtime can consume it.
      */
     private static void applyConfig(WebArchive war) {
         Node n = war.get("/META-INF/microprofile-config.properties");
         if (n == null || n.getAsset() == null) {
             n = war.get("/WEB-INF/classes/META-INF/microprofile-config.properties");
         }
-        // Reset systématique des propriétés Knock entre déploiements pour éviter
-        // les fuites entre tests TCK.
+        // Reset Knock properties between deployments to avoid leaks between TCK tests.
         System.clearProperty("mp.health.default.readiness.empty.response");
         System.clearProperty("mp.health.default.startup.empty.response");
         if (n == null || n.getAsset() == null) return;

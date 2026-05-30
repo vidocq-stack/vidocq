@@ -1,11 +1,11 @@
 /**
- * Intégration CDI Vauban de Knock — package public (vide en M2).
+ * Knock Vauban CDI integration — public package (empty in M2).
  *
- * <p>L'implémentation est dans {@code io.vidocq.knock.cdi.internal} (non exporté) :</p>
+ * <p>The implementation lives in {@code io.vidocq.knock.cdi.internal} (not exported):</p>
  * <ul>
- *   <li>{@code HealthCheckCdiExtension} — BCE CDI 4.1 (validation probe qualifier)</li>
- *   <li>{@code KnockCdiHealthCheckRegistry} — bean {@code @ApplicationScoped} injectable</li>
- *   <li>{@code HealthCheckRegistrar} — enregistrement automatique au démarrage CDI</li>
+ *   <li>{@code HealthCheckCdiExtension} — CDI 4.1 BCE (probe qualifier validation)</li>
+ *   <li>{@code KnockCdiHealthCheckRegistry} — injectable {@code @ApplicationScoped} bean</li>
+ *   <li>{@code HealthCheckRegistrar} — automatic registration at CDI startup</li>
  * </ul>
  */
 package io.vidocq.knock.cdi;

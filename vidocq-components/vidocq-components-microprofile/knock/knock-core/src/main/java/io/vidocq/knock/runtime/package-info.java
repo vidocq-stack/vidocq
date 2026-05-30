@@ -8,19 +8,18 @@
  *     https://www.apache.org/licenses/LICENSE-2.0
  */
 /**
- * SPI runtime exportée de Knock — point d'entrée stable pour les adaptateurs
- * d'intégration ({@code knock-cdi-vauban}, {@code knock-cassini}).
+ * Exported Knock runtime SPI — stable entry point for integration adapters
+ * ({@code knock-cdi-vauban}, {@code knock-cassini}).
  *
- * <p>Contient :</p>
+ * <p>Contains:</p>
  * <ul>
- *   <li>{@link io.vidocq.knock.runtime.HealthCheckRegistries} — factory de registries.</li>
- *   <li>{@link io.vidocq.knock.runtime.KnockHealthService} — façade agrégation + JSON.</li>
- *   <li>{@link io.vidocq.knock.runtime.HealthReport} — code HTTP + corps JSON.</li>
+ *   <li>{@link io.vidocq.knock.runtime.HealthCheckRegistries} — registry factory.</li>
+ *   <li>{@link io.vidocq.knock.runtime.KnockHealthService} — aggregation + JSON facade.</li>
+ *   <li>{@link io.vidocq.knock.runtime.HealthReport} — HTTP code + JSON body.</li>
  * </ul>
  *
- * <p>Frontière : ce package est <strong>exporté</strong>. Le package
- * {@code io.vidocq.knock.internal} reste non exporté ; les extensions doivent passer
- * exclusivement par cette SPI runtime.</p>
+ * <p>Boundary: this package is <strong>exported</strong>. The
+ * {@code io.vidocq.knock.internal} package remains unexported; extensions must go
+ * exclusively through this runtime SPI.</p>
  */
 package io.vidocq.knock.runtime;
-

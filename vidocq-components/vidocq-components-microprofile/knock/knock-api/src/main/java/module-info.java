@@ -1,13 +1,13 @@
 /**
- * API Knock : re-exposition contrôlée de la spec MicroProfile Health 4.0 et SPI publique
- * stable. Le contenu sera étoffé au fil des milestones.
+ * Knock API: controlled re-exposure of the MicroProfile Health 4.0 spec and a stable
+ * public SPI. The content will be expanded as milestones progress.
  *
- * <p><strong>Note JPMS — fork Vidocq du MicroProfile Health API</strong>
- * (voir {@code docs/adr/ADR-001-jpms-workaround-microprofile-health.md}) :</p>
+ * <p><strong>JPMS note — Vidocq fork of the MicroProfile Health API</strong>
+ * (see {@code docs/adr/ADR-001-jpms-workaround-microprofile-health.md}) :</p>
  *
- * <p>Knock dépend d'un fork `io.vidocq.knock:knock-mp-health-api` qui embarque
- * un {@code module-info.class}. Le nom de module reste {@code microprofile.health.api},
- * identique à l'upstream, ce qui assure la compatibilité des `requires`.</p>
+ * <p>Knock depends on a fork `io.vidocq.knock:knock-mp-health-api` that includes
+ * a {@code module-info.class}. The module name remains {@code microprofile.health.api},
+ * identical to upstream, which preserves {@code requires} compatibility.</p>
  */
 module io.vidocq.knock.api {
     requires transitive microprofile.health.api;

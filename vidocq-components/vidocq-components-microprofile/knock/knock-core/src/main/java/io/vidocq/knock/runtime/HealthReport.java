@@ -13,14 +13,14 @@ import io.vidocq.knock.spi.HealthCheckRegistry;
 import io.vidocq.knock.spi.ProbeType;
 
 /**
- * Rapport produit par {@link KnockHealthService} pour un {@link ProbeType} donné.
+ * Report produced by {@link KnockHealthService} for a given {@link ProbeType}.
  *
- * <p>Encapsule le résultat prêt à servir à un transport HTTP (Jakarta REST via
- * {@code knock-cassini}, ou autre) : code HTTP MicroProfile Health 4.0 (200 / 503,
- * spec §3) et corps JSON conforme à la spec §3.1.</p>
+ * <p>Encapsulates the result ready to serve to an HTTP transport (Jakarta REST via
+ * {@code knock-cassini}, or otherwise): MicroProfile Health 4.0 HTTP code (200 / 503,
+ * spec §3) and JSON body compliant with spec §3.1.</p>
  *
- * @param httpStatus code HTTP MicroProfile Health 4.0 (200 si UP, 503 si DOWN)
- * @param json       corps JSON spec §3.1 (jamais {@code null})
+ * @param httpStatus MicroProfile Health 4.0 HTTP code (200 if UP, 503 if DOWN)
+ * @param json       JSON body for spec §3.1 (never {@code null})
  */
 public record HealthReport(int httpStatus, String json) {
 
@@ -30,4 +30,3 @@ public record HealthReport(int httpStatus, String json) {
         }
     }
 }
-

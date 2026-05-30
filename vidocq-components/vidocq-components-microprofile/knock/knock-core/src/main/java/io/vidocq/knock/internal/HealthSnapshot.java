@@ -15,14 +15,14 @@ import org.eclipse.microprofile.health.HealthCheckResponse;
 import java.util.List;
 
 /**
- * Résultat agrégé d'un appel au registry pour un {@link ProbeType} donné.
+ * Aggregated result of a registry call for a given {@link ProbeType}.
  *
- * <p>Produit par {@link KnockAggregator} ; consommé par {@link KnockJsonSerializer}
- * pour produire la réponse JSON spec §3.1.</p>
+ * <p>Produced by {@link KnockAggregator}; consumed by {@link KnockJsonSerializer}
+ * to produce the spec §3.1 JSON response.</p>
  *
- * @param type   le type de probe agrégé
- * @param status le statut global (DOWN si ≥ 1 check DOWN)
- * @param checks la liste immuable des réponses individuelles
+ * @param type   the aggregated probe type
+ * @param status the global status (DOWN if at least 1 check is DOWN)
+ * @param checks the immutable list of individual responses
  */
 public record HealthSnapshot(
         ProbeType type,

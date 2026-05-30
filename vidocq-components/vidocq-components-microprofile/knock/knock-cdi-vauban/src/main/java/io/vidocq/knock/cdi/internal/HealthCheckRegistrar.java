@@ -23,22 +23,21 @@ import org.eclipse.microprofile.health.Readiness;
 import org.eclipse.microprofile.health.Startup;
 
 /**
- * Enregistre automatiquement les beans CDI {@link HealthCheck} dans le
- * {@link HealthCheckRegistry} au démarrage du contexte applicatif.
+ * Automatically registers CDI {@link HealthCheck} beans in the
+ * {@link HealthCheckRegistry} when the application context starts.
  *
- * <p>Spec MicroProfile Health 4.0 §4.1 : « Health check procedures that implement
- * the HealthCheck interface and are annotated with one of the three qualifiers are
- * automatically discovered and registered. »</p>
+ * <p>MicroProfile Health 4.0 §4.1: "Health check procedures that implement the
+ * HealthCheck interface and are annotated with one of the three qualifiers are
+ * automatically discovered and registered."</p>
  *
- * <p>L'enregistrement est déclenché par l'événement
- * {@code @Initialized(ApplicationScoped.class)}, qui est levé au démarrage du
- * contexte applicatif CDI — avant toute requête HTTP. Cela garantit que le registry
- * est peuplé avant que les endpoints {@code /health*} reçoivent du trafic.</p>
+ * <p>Registration is triggered by the
+ * {@code @Initialized(ApplicationScoped.class)} event, which is fired when the CDI
+ * application context starts — before any HTTP request. This ensures the registry is
+ * populated before the {@code /health*} endpoints receive traffic.</p>
  *
- * <p>Nom de clé dans le registry : {@code check.getClass().getName()}.
- * Pour les beans proxyfiés (sous-classes dynamiques Vauban), le nom inclut le suffixe
- * de proxy — ce suffixe est déterministe et unique par classe de bean, donc
- * la déduplication fonctionne correctement.</p>
+ * <p>Registry key name: {@code check.getClass().getName()}.
+ * For proxied beans (Vauban dynamic subclasses), the name includes the proxy suffix —
+ * that suffix is deterministic and unique per bean class, so deduplication works correctly.</p>
  */
 @ApplicationScoped
 class HealthCheckRegistrar {
@@ -56,11 +55,11 @@ class HealthCheckRegistrar {
     private Instance<HealthCheck> startupChecks;
 
     /**
-     * Enregistre tous les checks découverts au démarrage du contexte applicatif.
+     * Registers all checks discovered when the application context starts.
      *
-     * <p>Spec §4.1 : les beans qualifiés sont enregistrés par type de probe.</p>
+     * <p>Spec §4.1: qualified beans are registered by probe type.</p>
      *
-     * @param ignored l'événement CDI {@code @Initialized(ApplicationScoped.class)}
+     * @param ignored the CDI {@code @Initialized(ApplicationScoped.class)} event
      */
     void onApplicationStart(@Observes @Initialized(ApplicationScoped.class) Object ignored) {
         livenessChecks.forEach(c  -> registry.register(ProbeType.LIVENESS,  c.getClass().getName(), c));

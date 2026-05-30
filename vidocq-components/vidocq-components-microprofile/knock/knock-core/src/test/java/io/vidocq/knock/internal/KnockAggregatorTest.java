@@ -99,7 +99,7 @@ class KnockAggregatorTest {
     }
 
     // -----------------------------------------------------------------------
-    // §3 — ProbeType.ALL agrège LIVENESS + READINESS + STARTUP
+    // §3 — ProbeType.ALL aggregates LIVENESS + READINESS + STARTUP
     // -----------------------------------------------------------------------
 
     @Test
@@ -125,7 +125,7 @@ class KnockAggregatorTest {
     }
 
     // -----------------------------------------------------------------------
-    // ProbeType isolation — LIVENESS n'agrège pas READINESS
+    // ProbeType isolation — LIVENESS does not aggregate READINESS
     // -----------------------------------------------------------------------
 
     @Test
@@ -135,13 +135,13 @@ class KnockAggregatorTest {
 
         HealthSnapshot snapshot = aggregator.aggregate(registry, ProbeType.LIVENESS);
 
-        // Readiness DOWN ne doit pas contaminer Liveness
+        // Readiness DOWN must not contaminate Liveness
         assertEquals(HealthCheckResponse.Status.UP, snapshot.status());
         assertEquals(1, snapshot.checks().size());
     }
 
     // -----------------------------------------------------------------------
-    // unregister — check retiré n'est plus agrégé
+    // unregister — removed check is no longer aggregated
     // -----------------------------------------------------------------------
 
     @Test

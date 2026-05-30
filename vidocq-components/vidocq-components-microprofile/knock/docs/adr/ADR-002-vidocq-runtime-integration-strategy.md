@@ -1,117 +1,112 @@
-# ADR-002 — Stratégie d'intégration de Knock dans l'écosystème Vidocq
+# ADR-002 — Knock Integration Strategy in the Vidocq Ecosystem
 
-- Statut : **Accepté** (M5, mai 2026)
-- Décideur·euse·s : équipe Knock + équipe vidocq
-- Lié à : `ROADMAP.md` §M5, `docs/integration-cassini.md`, `docs/integration-vidocq-runtime.md`
+- Status: **Accepted** (M5, May 2026)
+- Deciders: Knock team + vidocq team
+- Related to: `ROADMAP.md` §M5, `docs/integration-cassini.md`, `docs/integration-vidocq-runtime.md`
 
-## Contexte
+## Context
 
-Knock est livré avec quatre artefacts (`knock-api`, `knock-core`, `knock-cdi-vauban`,
-`knock-cassini`) et un TCK officiel à 100 % PASS (28/28). Il faut maintenant
-décider *comment* Knock atterrit dans les applications Vidocq, sans imposer de
-boilerplate à l'utilisateur ni casser le découpage modulaire (knock-core
-standalone SE, adaptateurs CDI/JAX-RS optionnels).
+Knock is delivered with four artifacts (`knock-api`, `knock-core`, `knock-cdi-vauban`,
+`knock-cassini`) and an official TCK at 100% PASS (28/28). The decision now is
+*how* Knock lands in Vidocq applications, without imposing boilerplate on the user
+or breaking the modular separation (standalone SE `knock-core`, optional CDI/JAX-RS adapters).
 
-## Options envisagées
+## Considered Options
 
-### Option A — Extension `VidocqExtension` dédiée
+### Option A — Dedicated `VidocqExtension`
 
-Créer une `KnockExtension implements VidocqExtension` dans
-`vidocq-runtime-knock-extension`, qui démarre/arrête explicitement le registry et
-appelle Cassini pour mount la ressource.
+Create a `KnockExtension implements VidocqExtension` in
+`vidocq-runtime-knock-extension`, which explicitly starts/stops the registry and
+calls Cassini to mount the resource.
 
-- **+** Cycle de vie explicite, log de bootstrap dédié.
-- **−** Duplique ce que `CassiniExtension` fait déjà (scan `@Path` beans).
-- **−** Couple Knock à un détail d'API du SPI vidocq (priorité, ordre).
-- **−** Va à l'encontre du design *zero-config* de Knock (aucun bean, aucun
-  service, juste des annotations CDI standard).
+- **+** Explicit lifecycle, dedicated bootstrap log.
+- **−** Duplicates what `CassiniExtension` already does (`@Path` bean scanning).
+- **−** Couples Knock to a detail of the vidocq SPI API (priority, order).
+- **−** Goes against Knock's *zero-config* design (no beans, no services, just standard CDI annotations).
 
-### Option B — Wrapper Maven/JPMS uniquement (retenu)
+### Option B — Maven/JPMS wrapper only (chosen)
 
-`vidocq-runtime-knock-extension` n'est qu'un agrégat de dépendances + un
-`module-info` qui `requires transitive` les modules Knock + champollion.
-Aucune classe Java propre. L'intégration repose à 100 % sur les SPI **standards**
-qui existent déjà :
+`vidocq-runtime-knock-extension` is merely a dependency aggregate + a
+`module-info` that `requires transitive` the Knock + champollion modules.
+No own Java classes. The integration relies 100% on the **standard** SPIs that already exist:
 
-1. CDI 4.1 BCE (`HealthCheckCdiExtension` enregistré via
-   `META-INF/services/...BuildCompatibleExtension` + JPMS `provides`) — découvre
-   les `@Liveness/@Readiness/@Startup` ;
-2. JAX-RS scanning de `@Path` beans CDI (`CassiniExtension` interroge déjà
-   `VaubanBeanProvider.getResourceClasses()`) — mount `KnockHealthResource`.
+1. CDI 4.1 BCE (`HealthCheckCdiExtension` registered via
+   `META-INF/services/...BuildCompatibleExtension` + JPMS `provides`) — discovers
+   `@Liveness/@Readiness/@Startup` beans;
+2. JAX-RS scanning of CDI `@Path` beans (`CassiniExtension` already queries
+   `VaubanBeanProvider.getResourceClasses()`) — mounts `KnockHealthResource`.
 
-- **+** Zéro code Java à maintenir côté vidocq.
-- **+** Knock reste utilisable hors vidocq avec exactement les mêmes deps.
-- **+** Pas de couplage avec l'API `VidocqExtension` (priorité, hooks).
-- **+** Ajouter / retirer la dépendance suffit à activer / désactiver.
-- **−** Pas de log de bootstrap *Knock* dédié (les logs viennent de Cassini :
-  « `1 resource class(es)` »). Mitigeable par un `INFO` dans `KnockHealthResource`
-  côté `@PostConstruct` si nécessaire.
+- **+** Zero Java code to maintain on the vidocq side.
+- **+** Knock remains usable outside vidocq with the exact same deps.
+- **+** No coupling with the `VidocqExtension` API (priority, hooks).
+- **+** Adding / removing the dependency is enough to enable / disable.
+- **−** No dedicated *Knock* bootstrap log (logs come from Cassini:
+  "` 1 resource class(es)`"). Mitigable by an `INFO` in `KnockHealthResource`
+  on the `@PostConstruct` side if needed.
 
-### Option C — Inclusion directe dans `vidocq-runtime-core`
+### Option C — Direct inclusion in `vidocq-runtime-core`
 
-Pas modulaire. Forcerait `vidocq-runtime-core` à dépendre de `jakarta.ws.rs` et de
-Cassini, ce qui briserait le contrat *core peut tourner sans REST*.
+Not modular. Would force `vidocq-runtime-core` to depend on `jakarta.ws.rs` and
+Cassini, breaking the *core can run without REST* contract.
 
-## Décision
+## Decision
 
-**Option B** retenue : `vidocq-runtime-knock-extension` est un module Maven/JPMS
-*wrapper*, sans code Java. Il vit dans
-`vidocq/vidocq-runtime-core-extensions/vidocq-runtime-knock-extension/` et publie
-l'artefact `io.vidocq.runtime:vidocq-runtime-knock-extension`.
+**Option B** chosen: `vidocq-runtime-knock-extension` is a Maven/JPMS
+*wrapper* module, without Java code. It lives in
+`vidocq/vidocq-runtime-core-extensions/vidocq-runtime-knock-extension/` and publishes
+the artifact `io.vidocq.runtime:vidocq-runtime-knock-extension`.
 
 ```
 vidocq-runtime-knock-extension/
-├── pom.xml                         (deps : knock-cdi-vauban, knock-cassini,
+├── pom.xml                         (deps: knock-cdi-vauban, knock-cassini,
 │                                    vidocq-runtime-cassini-rest-extension,
 │                                    champollion-jsonp runtime)
 └── src/main/java/module-info.java  (requires transitive)
 ```
 
-## Conséquences
+## Consequences
 
-### Positives
+### Positive
 
-- L'utilisateur d'un projet vidocq active Knock en ajoutant **une seule**
-  dépendance ; les endpoints `/health*` apparaissent au démarrage suivant.
-- Knock peut être versionné et publié indépendamment de vidocq. Le wrapper
-  ne reflète que des coordonnées Maven, pas du code couplé.
-- Le TCK Knock reste *self-contained* : le runner Arquillian
-  (`KnockDeployableContainer`) reproduit exactement le même chemin d'intégration
-  (Cassini + Vauban embedded + `KnockHealthResource`), donc valider M4 valide
-  aussi le chemin M5.
+- A vidocq project user activates Knock by adding **a single**
+  dependency; the `/health*` endpoints appear at the next startup.
+- Knock can be versioned and published independently of vidocq. The wrapper
+  only reflects Maven coordinates, not coupled code.
+- The Knock TCK remains *self-contained*: the Arquillian runner
+  (`KnockDeployableContainer`) reproduces exactly the same integration path
+  (Cassini + Vauban embedded + `KnockHealthResource`), so validating M4 also validates
+  the M5 path.
 
-### Négatives / à surveiller
+### Negative / to monitor
 
-- Si `CassiniExtension` change la façon dont elle découvre les `@Path` beans,
-  Knock peut être impacté. → couvert par les TCK Cassini (continuous) et le TCK
-  Knock (continuous).
-- Pas de point d'extension *vidocq-runtime-côté* pour interposer un middleware avant
-  les probes (auth, rate limit). → si le besoin émerge, créer un module
-  optionnel `vidocq-runtime-knock-secure-extension` qui *en plus* du wrapper expose
-  un `ContainerRequestFilter`. Hors scope M5.
+- If `CassiniExtension` changes how it discovers `@Path` beans,
+  Knock may be impacted. → covered by Cassini TCK (continuous) and Knock TCK (continuous).
+- No *vidocq-runtime-side* extension point to interpose middleware before
+  probes (auth, rate limit). → if the need arises, create an optional module
+  `vidocq-runtime-knock-secure-extension` that *in addition* to the wrapper exposes
+  a `ContainerRequestFilter`. Out of scope for M5.
 
-## Ordre de déploiement
+## Deployment Order
 
 1. `mvn -pl knock-api,knock-core,knock-cdi-vauban,knock-cassini -am install -DskipTests`
-   dans le repo `knock` (déjà couvert par `run-official-tck-mp-health-4.0.sh`).
+   in the `knock` repo (already covered by `run-official-tck-mp-health-4.0.sh`).
 2. `mvn -pl vidocq-runtime-core-extensions/vidocq-runtime-knock-extension -am install -DskipTests`
-   dans le repo `vidocq`.
-3. Toute application qui dépend de `vidocq-runtime-knock-extension` récupère Knock
-   transitivement, sans rien d'autre.
+   in the `vidocq` repo.
+3. Any application that depends on `vidocq-runtime-knock-extension` gets Knock
+   transitively, without anything else.
 
-## Risques
+## Risks
 
-| Risque                                                                 | Mitigation                                                                                  |
+| Risk                                                                   | Mitigation                                                                                  |
 |------------------------------------------------------------------------|---------------------------------------------------------------------------------------------|
-| Conflit de version `jakarta.json-api` entre champollion et l'hôte      | `dependencyManagement` du parent vidocq fixe la version (alignée 2.1.x) ; champollion en runtime-only |
-| BCE Knock pas découverte (ServiceLoader) en JPMS strict                | Double déclaration : `META-INF/services/` + `provides` JPMS dans `module-info`              |
-| Cassini ne scanne pas `KnockHealthResource` si elle n'est pas en mode `annotated` | CDI 4.1 par défaut en mode `annotated` ; bean `@ApplicationScoped` explicitement annoté |
-| TCK Knock régresse à cause d'une nouvelle version Cassini             | Le TCK Knock tourne via le script `./run-official-tck-mp-health-4.0.sh all` à chaque PR    |
+| `jakarta.json-api` version conflict between champollion and the host   | Parent vidocq `dependencyManagement` fixes the version (aligned 2.1.x); champollion runtime-only |
+| Knock BCE not discovered (ServiceLoader) in strict JPMS                | Double declaration: `META-INF/services/` + JPMS `provides` in `module-info`                |
+| Cassini does not scan `KnockHealthResource` if not in `annotated` mode | CDI 4.1 defaults to `annotated` mode; bean explicitly annotated `@ApplicationScoped`       |
+| Knock TCK regresses due to a new Cassini version                       | Knock TCK runs via `./run-official-tck-mp-health-4.0.sh all` on every PR                  |
 
-## Références
+## References
 
 - MicroProfile Health 4.0 §3 (endpoints), §4 (qualifiers), §6 (config)
-- `ADR-001-jpms-workaround-microprofile-health.md` (workaround module-info pour testCompile)
+- `ADR-001-jpms-workaround-microprofile-health.md` (module-info workaround for testCompile)
 - `knock-tck/src/test/java/io/vidocq/knock/tck/arquillian/KnockDeployableContainer.java`
-  (runner Arquillian — reproduit le chemin d'intégration M5)
-
+  (Arquillian runner — reproduces the M5 integration path)

@@ -10,21 +10,21 @@
 package io.vidocq.knock.spi;
 
 /**
- * Métadonnées statiques de l'implémentation Knock.
+ * Static metadata for the Knock implementation.
  *
- * <p>Cette classe reste volontairement minimaliste à ce stade (M0).
- * La SPI sera étoffée au fil des milestones : registrar d'extensions,
- * hooks d'observabilité, intégration écosystème Vidocq.</p>
+ * <p>This class remains intentionally minimal at this stage (M0).
+ * The SPI will be expanded over the milestones: extension registrar,
+ * observability hooks, Vidocq ecosystem integration.</p>
  */
 public final class Knock {
 
-    /** Nom logique de l'implémentation. */
+    /** Logical name of the implementation. */
     public static final String IMPLEMENTATION_NAME = "knock";
 
-    /** Version de l'implémentation Knock. */
+    /** Knock implementation version. */
     public static final String IMPLEMENTATION_VERSION = "0.1.0-SNAPSHOT";
 
-    /** Version de la spec MicroProfile Health implémentée. */
+    /** Implemented MicroProfile Health spec version. */
     public static final String SPEC_VERSION = "4.0";
 
     private Knock() {

@@ -1,96 +1,96 @@
-# ADR-001 — Fork JPMS pour `knock-mp-health-api` (module explicite jlink)
+# ADR-001 — JPMS Fork for `knock-mp-health-api` (explicit jlink module)
 
-**Date :** 2026-05-10
-**Statut :** Accepté
-**Décideurs :** Équipe Vidocq
-
----
-
-## Contexte
-
-`microprofile-health-api:4.0.1` (Eclipse MicroProfile) est livré sans `module-info.class`.
-Ce JAR est donc un **module automatique**, ce qui bloque `jlink` (qui refuse les modules
-automatiques). En plus, les `package-info.java` upstream utilisent
-`@org.osgi.annotation.versioning.Version`, ce qui introduit une dépendance OSGi
-elle aussi non modulaire.
-
-Knock a besoin d'un module JPMS **explicite** pour `microprofile.health.api` afin que :
-
-- `requires microprofile.health.api` compile proprement ;
-- `jlink` puisse produire une image minimale sans modules automatiques ;
-- `knock-core` reste utilisable en SE pur (pas de dépendance CDI obligatoire).
+**Date:** 2026-05-10  
+**Status:** Accepted  
+**Deciders:** Vidocq Team
 
 ---
 
-## Problèmes identifiés
+## Context
 
-1. **`jlink` refuse les modules automatiques** → `microprofile-health-api` upstream bloque
-   la création d'une image dédiée.
-2. **Dépendance OSGi non modulaire** via `@org.osgi.annotation.versioning.Version` dans les
-   `package-info.java` → seconde source de module automatique.
-3. **`knock-core`** reste soumis au workaround `module-info` pour éviter la détection JPMS
-   en `testCompile` (voir section « Build Maven en trois temps » ci-dessous).
+`microprofile-health-api:4.0.1` (Eclipse MicroProfile) is shipped without `module-info.class`.
+This JAR is therefore an **automatic module**, which blocks `jlink` (which rejects automatic
+modules). Furthermore, the upstream `package-info.java` files use
+`@org.osgi.annotation.versioning.Version`, introducing an OSGi dependency that is also
+non-modular.
+
+Knock needs an **explicit** JPMS module for `microprofile.health.api` so that:
+
+- `requires microprofile.health.api` compiles cleanly;
+- `jlink` can produce a minimal image without automatic modules;
+- `knock-core` remains usable in pure SE (no mandatory CDI dependency).
 
 ---
 
-## Solution retenue
+## Identified Problems
+
+1. **`jlink` rejects automatic modules** → upstream `microprofile-health-api` blocks
+   the creation of a dedicated image.
+2. **Non-modular OSGi dependency** via `@org.osgi.annotation.versioning.Version` in the
+   `package-info.java` files → second source of automatic module.
+3. **`knock-core`** remains subject to the `module-info` workaround to avoid JPMS detection
+   during `testCompile` (see "Three-phase Maven build" section below).
+
+---
+
+## Chosen Solution
 
 ### Fork MicroProfile Health API
 
-Créer un fork minimal **dans le repo** sous le module Maven
-`io.vidocq.knock:knock-mp-health-api` :
+Create a minimal fork **within the repo** under the Maven module
+`io.vidocq.knock:knock-mp-health-api`:
 
-- Sources copiées depuis `microprofile-health-api:4.0.1` (JAR *sources*).
-- Ajout d'un `module-info.java` avec le nom **`microprofile.health.api`**.
-- Ajout de `uses org.eclipse.microprofile.health.spi.HealthCheckResponseProvider`.
-- Dépendances CDI déclarées en `requires static` pour conserver un usage SE pur.
-- Suppression des annotations `@org.osgi.annotation.versioning.Version` dans les
-  `package-info.java` pour éviter une dépendance OSGi non modulaire.
-- Inclusion de `META-INF/LICENSE` et `META-INF/NOTICE` upstream.
+- Sources copied from `microprofile-health-api:4.0.1` (sources JAR).
+- Added a `module-info.java` with the name **`microprofile.health.api`**.
+- Added `uses org.eclipse.microprofile.health.spi.HealthCheckResponseProvider`.
+- CDI dependencies declared as `requires static` to preserve pure SE usage.
+- Removed `@org.osgi.annotation.versioning.Version` annotations from
+  `package-info.java` files to avoid a non-modular OSGi dependency.
+- Included upstream `META-INF/LICENSE` and `META-INF/NOTICE`.
 
-### `module-info.java` de `knock-core` hors de `src/main/java`
+### `module-info.java` of `knock-core` outside `src/main/java`
 
-`knock-core` place son `module-info.java` dans un source root séparé : `src/main/module-info/`.
-La solution procède en trois temps, configurée dans `knock-core/pom.xml` :
+`knock-core` places its `module-info.java` in a separate source root: `src/main/module-info/`.
+The solution proceeds in three phases, configured in `knock-core/pom.xml`:
 
-1. **`default-compile`** (`src/main/java`) ne compile pas `module-info.java` → aucun
-   `module-info.class` dans `target/classes` → Maven ne détecte pas JPMS pour `testCompile`.
-2. **`maven-clean-plugin`** (`generate-test-sources`) supprime l'éventuel `module-info.class`
-   stale de `target/classes` (builds incrémentiaux : évite la détection JPMS sur une classe
-   résiduelle du cycle précédent).
-3. **`maven-compiler-plugin`** (`prepare-package`) recompile uniquement
-   `src/main/module-info/module-info.java` dans `target/classes` → le JAR final embarque
-   correctement `module-info.class`.
+1. **`default-compile`** (`src/main/java`) does not compile `module-info.java` → no
+   `module-info.class` in `target/classes` → Maven does not detect JPMS for `testCompile`.
+2. **`maven-clean-plugin`** (`generate-test-sources`) removes any stale `module-info.class`
+   from `target/classes` (incremental builds: avoids JPMS detection on a residual class
+   from the previous cycle).
+3. **`maven-compiler-plugin`** (`prepare-package`) recompiles only
+   `src/main/module-info/module-info.java` into `target/classes` → the final JAR correctly
+   embeds `module-info.class`.
 
-`maven-surefire` reçoit `<useModulePath>false</useModulePath>` : les tests de `knock-core`
-s'exécutent sur le **classpath**. Ce choix est intentionnel — les tests unitaires valident
-la logique métier ; le câblage JPMS est validé par le smoke test TCK (`knock-tck`).
+`maven-surefire` receives `<useModulePath>false</useModulePath>`: tests in `knock-core`
+run on the **classpath**. This is intentional — unit tests validate business logic;
+JPMS wiring is validated by the TCK smoke test (`knock-tck`).
 
-### Double registration SPI
+### Double SPI Registration
 
-`KnockHealthCheckResponseProvider` est déclaré **deux fois** :
+`KnockHealthCheckResponseProvider` is declared **twice**:
 
-| Mécanisme | Fichier | Consommé par |
+| Mechanism | File | Consumed by |
 |---|---|---|
-| `provides ... with` | `knock-core/src/main/module-info/module-info.java` | `ServiceLoader` JPMS (modules explicites) |
-| `META-INF/services/` | `knock-core/src/main/resources/META-INF/services/…HealthCheckResponseProvider` | `ServiceLoader` via ClassLoader (méthode de `HealthCheckResponse.named()`) |
+| `provides ... with` | `knock-core/src/main/module-info/module-info.java` | `ServiceLoader` JPMS (explicit modules) |
+| `META-INF/services/` | `knock-core/src/main/resources/META-INF/services/…HealthCheckResponseProvider` | `ServiceLoader` via ClassLoader (`HealthCheckResponse.named()` method) |
 
-La registration `META-INF/services/` est obligatoire parce que `HealthCheckResponse.named()`
-ne peut pas utiliser le mécanisme JPMS `ServiceLoader.load(…)` : il invoque
+The `META-INF/services/` registration is mandatory because `HealthCheckResponse.named()`
+cannot use the JPMS `ServiceLoader.load(…)` mechanism: it invokes
 `ServiceLoader.load(HealthCheckResponseProvider.class, Thread.currentThread().getContextClassLoader())`
-qui scanne les fichiers de services sur le classpath — y compris les `META-INF/services/`
-des modules nommés sur le module-path.
+which scans service files on the classpath — including `META-INF/services/` from
+named modules on the module-path.
 
 ---
 
-## Compatibilité jlink
+## jlink Compatibility
 
-**La solution retenue est compatible avec `jlink`.**
+**The chosen solution is compatible with `jlink`.**
 
-Le fork `io.vidocq.knock:knock-mp-health-api` est un **module explicite**
-(`microprofile.health.api`). L'image jlink ne contient donc **aucun module automatique**.
+The `io.vidocq.knock:knock-mp-health-api` fork is an **explicit module**
+(`microprofile.health.api`). The jlink image therefore contains **no automatic modules**.
 
-Exemple de commande :
+Example command:
 
 ```bash
 jlink \
@@ -101,24 +101,24 @@ jlink \
 
 ---
 
-## Conditions de révision
+## Revision Conditions
 
-Ce contournement doit être réévalué si :
+This workaround must be re-evaluated if:
 
-1. `microprofile-health-api` upstream publie un JAR avec `module-info.class`
-   → supprimer le fork, revenir à l'artefact officiel, garder `requires microprofile.health.api`.
-2. Les annotations OSGi cessent d'être nécessaires upstream
-   → possibilité de restaurer les `package-info.java` originaux.
-3. Maven Compiler Plugin améliore la détection JPMS pour `testCompile`
-   → réévaluer la nécessité du workaround `module-info` dans `knock-core`.
+1. Upstream `microprofile-health-api` publishes a JAR with `module-info.class`
+   → remove the fork, revert to the official artifact, keep `requires microprofile.health.api`.
+2. OSGi annotations are no longer needed upstream
+   → possibility of restoring the original `package-info.java` files.
+3. Maven Compiler Plugin improves JPMS detection for `testCompile`
+   → re-evaluate the necessity of the `module-info` workaround in `knock-core`.
 
 ---
 
-## Alternatives écartées
+## Rejected Alternatives
 
-| Alternative | Raison du rejet |
+| Alternative | Reason for rejection |
 |---|---|
-| Patcher le JAR `microprofile-health-api` (ajouter `Automatic-Module-Name` via `jar --update`) | Complexe dans un build multi-module ; risque de désynchronisation à chaque bump de version |
-| Créer un module wrapper JAR pour `microprofile.health.api` | Sur-ingénierie ; artefact supplémentaire à maintenir et aligner |
-| Exclure `microprofile-health-api` du module-path, tout sur le classpath | Abandonne JPMS strict — contraire aux principes Vidocq |
-| Attendre un release MicroProfile apportant `module-info.class` | Bloquant ; pas de date annoncée sur la roadmap MicroProfile |
+| Patch the `microprofile-health-api` JAR (add `Automatic-Module-Name` via `jar --update`) | Complex in a multi-module build; risk of desynchronization at each version bump |
+| Create a wrapper JAR module for `microprofile.health.api` | Over-engineering; additional artifact to maintain and align |
+| Exclude `microprofile-health-api` from module-path, everything on classpath | Abandons strict JPMS — contrary to Vidocq principles |
+| Wait for a MicroProfile release providing `module-info.class` | Blocking; no date announced on the MicroProfile roadmap |

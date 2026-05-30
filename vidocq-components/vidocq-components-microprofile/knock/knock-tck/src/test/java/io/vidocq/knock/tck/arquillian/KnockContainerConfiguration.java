@@ -9,7 +9,7 @@ package io.vidocq.knock.tck.arquillian;
 import org.jboss.arquillian.container.spi.ConfigurationException;
 import org.jboss.arquillian.container.spi.client.container.ContainerConfiguration;
 
-/** Configuration Arquillian du container Knock-Cassini (host par défaut 127.0.0.1). */
+/** Arquillian configuration for the Knock-Cassini container (default host 127.0.0.1). */
 public class KnockContainerConfiguration implements ContainerConfiguration {
 
     private String host = "127.0.0.1";

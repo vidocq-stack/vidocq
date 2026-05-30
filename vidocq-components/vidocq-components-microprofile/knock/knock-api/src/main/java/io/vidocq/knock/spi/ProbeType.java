@@ -10,14 +10,14 @@
 package io.vidocq.knock.spi;
 
 /**
- * Type de probe MicroProfile Health 4.0.
+ * MicroProfile Health 4.0 probe type.
  *
- * <p>Correspond aux quatre endpoints définis par la spec §3 :</p>
+ * <p>Corresponds to the four endpoints defined by spec §3 :</p>
  * <ul>
  *   <li>{@link #LIVENESS}  → {@code GET /health/live}</li>
  *   <li>{@link #READINESS} → {@code GET /health/ready}</li>
  *   <li>{@link #STARTUP}   → {@code GET /health/started}</li>
- *   <li>{@link #ALL}       → {@code GET /health} (agrégat de tous les checks)</li>
+ *   <li>{@link #ALL}       → {@code GET /health} (aggregate of all checks)</li>
  * </ul>
  *
  * @see <a href="https://download.eclipse.org/microprofile/microprofile-health-4.0/microprofile-health-spec-4.0.html#_health_endpoints">
@@ -34,6 +34,6 @@ public enum ProbeType {
     /** {@code @Startup} checks — endpoint {@code /health/started}. */
     STARTUP,
 
-    /** Agrégat de tous les checks — endpoint {@code /health}. */
+    /** Aggregate of all checks — endpoint {@code /health}. */
     ALL
 }

@@ -14,45 +14,45 @@ import org.eclipse.microprofile.health.HealthCheck;
 import java.util.List;
 
 /**
- * Registre des {@link HealthCheck} Knock.
+ * Registry of Knock {@link HealthCheck}s.
  *
- * <p>Chaque check est associé à un {@link ProbeType} (LIVENESS, READINESS, STARTUP) et
- * identifié par un nom unique. L'agrégat ALL expose l'ensemble des checks enregistrés.</p>
+ * <p>Each check is associated with a {@link ProbeType} (LIVENESS, READINESS, STARTUP) and
+ * identified by a unique name. The ALL aggregate exposes the full set of registered checks.</p>
  *
- * <p>Les implémentations doivent être thread-safe — le registry est accédé concurremment
- * par l'intégration CDI (enregistrement) et les endpoints JAX-RS (lecture). Aucun
- * {@code synchronized} ni {@code ThreadLocal} ne doit être utilisé — virtual-thread-friendly.</p>
+ * <p>Implementations must be thread-safe — the registry is accessed concurrently by the CDI
+ * integration (registration) and the JAX-RS endpoints (reads). No {@code synchronized} or
+ * {@code ThreadLocal} should be used — virtual-thread-friendly.</p>
  */
 public interface HealthCheckRegistry {
 
     /**
-     * Enregistre un {@link HealthCheck} pour le {@link ProbeType} donné.
+     * Registers a {@link HealthCheck} for the given {@link ProbeType}.
      *
-     * <p>Le nom est dérivé de {@code check.getClass().getName()} et sert de clé unique.
-     * Un second enregistrement avec le même nom remplace le précédent.</p>
+     * <p>The name is derived from {@code check.getClass().getName()} and serves as the unique
+     * key. A second registration with the same name replaces the previous one.</p>
      *
-     * @param type  le type de probe
-     * @param name  le nom unique du check (ex. : nom du bean CDI ou classe)
-     * @param check l'implémentation du check
+     * @param type  the probe type
+     * @param name  the unique check name (e.g. CDI bean name or class)
+     * @param check the check implementation
      */
     void register(ProbeType type, String name, HealthCheck check);
 
     /**
-     * Supprime le check identifié par {@code name}.
+     * Removes the check identified by {@code name}.
      *
-     * <p>Sans effet si aucun check portant ce nom n'est enregistré.</p>
+     * <p>Has no effect if no check with that name is registered.</p>
      *
-     * @param name le nom unique du check à supprimer
+     * @param name the unique check name to remove
      */
     void unregister(String name);
 
     /**
-     * Retourne tous les checks associés au {@link ProbeType} donné.
+     * Returns all checks associated with the given {@link ProbeType}.
      *
-     * <p>Pour {@link ProbeType#ALL}, retourne l'union de LIVENESS, READINESS et STARTUP.</p>
+     * <p>For {@link ProbeType#ALL}, returns the union of LIVENESS, READINESS, and STARTUP.</p>
      *
-     * @param type le type de probe
-     * @return liste immuable des checks enregistrés pour ce type
+     * @param type the probe type
+     * @return immutable list of checks registered for this type
      */
     List<HealthCheck> getChecks(ProbeType type);
 }

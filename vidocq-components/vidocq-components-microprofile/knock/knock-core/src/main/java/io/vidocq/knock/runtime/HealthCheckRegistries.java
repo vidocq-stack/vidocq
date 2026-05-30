@@ -13,14 +13,14 @@ import io.vidocq.knock.internal.KnockHealthCheckRegistry;
 import io.vidocq.knock.spi.HealthCheckRegistry;
 
 /**
- * Factory exportée des {@link HealthCheckRegistry} Knock.
+ * Exported factory for Knock {@link HealthCheckRegistry}s.
  *
- * <p>Point d'entrée stable pour les modules d'intégration Knock
- * ({@code knock-cdi-vauban}, {@code knock-cassini}) qui doivent obtenir une
- * instance de registry sans dépendre du package interne {@code io.vidocq.knock.internal}
- * (lequel reste non exporté — frontière JPMS du projet).</p>
+ * <p>Stable entry point for Knock integration modules
+ * ({@code knock-cdi-vauban}, {@code knock-cassini}) that need a registry instance
+ * without depending on the internal {@code io.vidocq.knock.internal} package
+ * (which remains unexported — project JPMS boundary).</p>
  *
- * <p>Implémentation : délègue à {@link KnockHealthCheckRegistry} (thread-safe,
+ * <p>Implementation: delegates to {@link KnockHealthCheckRegistry} (thread-safe,
  * virtual-thread-friendly).</p>
  */
 public final class HealthCheckRegistries {
@@ -30,12 +30,11 @@ public final class HealthCheckRegistries {
     }
 
     /**
-     * Crée un nouveau {@link HealthCheckRegistry} Knock vide.
+     * Creates a new empty Knock {@link HealthCheckRegistry}.
      *
-     * @return une instance neuve, thread-safe, prête à l'emploi
+     * @return a new thread-safe, ready-to-use instance
      */
     public static HealthCheckRegistry newRegistry() {
         return new KnockHealthCheckRegistry();
     }
 }
-

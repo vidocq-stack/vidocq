@@ -18,15 +18,15 @@ import org.eclipse.microprofile.health.HealthCheck;
 import java.util.List;
 
 /**
- * Bean CDI {@link HealthCheckRegistry} — singleton applicatif injectable via
+ * CDI {@link HealthCheckRegistry} bean — application singleton injectable via
  * {@code @Inject HealthCheckRegistry}.
  *
- * <p>Délègue à un registry obtenu par la factory SPI
- * {@link HealthCheckRegistries#newRegistry()} (le package interne
- * {@code io.vidocq.knock.internal} n'est pas exporté — frontière JPMS du projet).
- * Exposé en tant que bean {@code @ApplicationScoped} implémentant l'interface
- * {@link HealthCheckRegistry} pour que le proxy CDI implémente directement
- * l'interface et soit castable sans ambiguïté.</p>
+ * <p>Delegates to a registry obtained from the SPI factory
+ * {@link HealthCheckRegistries#newRegistry()} (the internal package
+ * {@code io.vidocq.knock.internal} is not exported — project JPMS boundary).
+ * Exposed as an {@code @ApplicationScoped} bean implementing the
+ * {@link HealthCheckRegistry} interface so that the CDI proxy directly implements
+ * the interface and can be cast without ambiguity.</p>
  */
 @ApplicationScoped
 class KnockCdiHealthCheckRegistry implements HealthCheckRegistry {

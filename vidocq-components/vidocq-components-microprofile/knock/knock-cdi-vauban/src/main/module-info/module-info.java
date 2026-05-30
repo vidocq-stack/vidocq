@@ -1,20 +1,20 @@
 /**
- * Intégration CDI de Knock pour le container Vauban — découverte automatique des beans
- * annotés {@code @Liveness}, {@code @Readiness}, {@code @Startup} via Build Compatible
- * Extension, enregistrement dans le {@code HealthCheckRegistry}.
+ * Knock CDI integration for the Vauban container — automatic discovery of beans
+ * annotated with {@code @Liveness}, {@code @Readiness}, and {@code @Startup} via a
+ * Build Compatible Extension, with registration in the {@code HealthCheckRegistry}.
  *
- * <p>Module optionnel : un déploiement standalone SE n'a pas besoin de ce module
- * et peut alimenter le registry directement via son API programmatique.</p>
+ * <p>Optional module: a standalone SE deployment does not need this module and can feed
+ * the registry directly through its programmatic API.</p>
  *
- * <p><strong>Note JPMS — workaround testCompile</strong>
- * (voir {@code docs/adr/ADR-001-jpms-workaround-microprofile-health.md}) :
- * {@code module-info.java} est dans {@code src/main/module-info/} pour éviter que
- * Maven Compiler Plugin détecte JPMS lors de {@code testCompile} (vauban-core est
- * test-scope, absent de {@code target/javamodules/}).</p>
+ * <p><strong>JPMS note — testCompile workaround</strong>
+ * (see {@code docs/adr/ADR-001-jpms-workaround-microprofile-health.md}) :
+ * {@code module-info.java} is in {@code src/main/module-info/} to prevent Maven Compiler
+ * Plugin from detecting JPMS during {@code testCompile} (vauban-core is test-scope,
+ * absent from {@code target/javamodules/}).</p>
  *
- * <p>Pour un déploiement JPMS strict en production, ajouter
- * {@code opens io.vidocq.knock.cdi.internal to io.vidocq.vauban.core} afin que
- * Vauban puisse instancier les beans CDI internes (reporté à M4/M5).</p>
+ * <p>For a strict JPMS production deployment, add
+ * {@code opens io.vidocq.knock.cdi.internal to io.vidocq.vauban.core} so that Vauban
+ * can instantiate the internal CDI beans (deferred to M4/M5).</p>
  */
 module io.vidocq.knock.cdi.vauban {
     requires transitive io.vidocq.knock.core;

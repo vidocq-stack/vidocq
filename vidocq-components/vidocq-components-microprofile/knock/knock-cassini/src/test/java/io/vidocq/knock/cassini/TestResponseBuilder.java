@@ -28,14 +28,14 @@ import java.util.Locale;
 import java.util.Set;
 
 /**
- * Mini {@link Response.ResponseBuilder} de test, utilisé par {@link TestRuntimeDelegate}.
+ * Minimal test {@link Response.ResponseBuilder} used by {@link TestRuntimeDelegate}.
  *
- * <p>Ne supporte que les opérations utilisées par {@code KnockHealthResource} :
+ * <p>Supports only the operations used by {@code KnockHealthResource}:
  * {@link #status(int)}, {@link #type(MediaType)}, {@link #entity(Object)},
  * {@link #build()}.</p>
  *
- * <p>Les autres méthodes {@code ResponseBuilder} sont implémentées par no-op /
- * {@code UnsupportedOperationException} — non utilisées par la ressource health.</p>
+ * <p>The other {@code ResponseBuilder} methods are implemented as no-op /
+ * {@code UnsupportedOperationException} — they are not used by the health resource.</p>
  */
 final class TestResponseBuilder extends Response.ResponseBuilder {
 
@@ -71,7 +71,7 @@ final class TestResponseBuilder extends Response.ResponseBuilder {
         return this;
     }
 
-    // ---- Méthodes non utilisées par KnockHealthResource ---------------------------------
+    // ---- Methods not used by KnockHealthResource ---------------------------------
     @Override public Response.ResponseBuilder allow(String... methods)            { return this; }
     @Override public Response.ResponseBuilder allow(Set<String> methods)          { return this; }
     @Override public Response.ResponseBuilder cacheControl(jakarta.ws.rs.core.CacheControl c) { return this; }
@@ -96,7 +96,7 @@ final class TestResponseBuilder extends Response.ResponseBuilder {
     @Override public Response.ResponseBuilder clone()                             { return this; }
 
     // ============================================================
-    // TestResponse — implémente uniquement getStatus / getMediaType / getEntity
+    // TestResponse — implements only getStatus / getMediaType / getEntity
     // ============================================================
     private static final class TestResponse extends Response {
         private final int status;
@@ -145,7 +145,7 @@ final class TestResponseBuilder extends Response.ResponseBuilder {
             return new UnsupportedOperationException("readEntity not supported by TestResponse");
         }
 
-        // GenericEntity / InputStream entity helpers — non utilisés
+        // GenericEntity / InputStream entity helpers — not used
         @SuppressWarnings("unused")
         private static GenericEntity<?> unusedGenericEntity() { return null; }
         @SuppressWarnings("unused")

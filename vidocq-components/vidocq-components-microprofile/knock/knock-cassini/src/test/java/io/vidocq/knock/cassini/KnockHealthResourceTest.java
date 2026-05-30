@@ -26,18 +26,18 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * TDD — {@link KnockHealthResource}.
  *
- * <p>Spec MicroProfile Health 4.0 §3 :
+ * <p>MicroProfile Health 4.0 spec §3:
  * <ul>
- *   <li>{@code GET /health}         — agrégat de tous les checks</li>
- *   <li>{@code GET /health/live}    — checks {@code @Liveness}</li>
- *   <li>{@code GET /health/ready}   — checks {@code @Readiness}</li>
- *   <li>{@code GET /health/started} — checks {@code @Startup}</li>
+ *   <li>{@code GET /health}         — aggregate of all checks</li>
+ *   <li>{@code GET /health/live}    — {@code @Liveness} checks</li>
+ *   <li>{@code GET /health/ready}   — {@code @Readiness} checks</li>
+ *   <li>{@code GET /health/started} — {@code @Startup} checks</li>
  * </ul>
- * HTTP 200 si statut UP, HTTP 503 si DOWN.</p>
+ * HTTP 200 when status is UP, HTTP 503 when DOWN.</p>
  *
- * <p>Tests directs sur la ressource (pas de container HTTP) : on instancie la ressource
- * avec un {@link HealthCheckRegistry} fabriqué via la SPI runtime, et on vérifie la
- * {@link Response} JAX-RS produite.</p>
+ * <p>Direct tests on the resource (no HTTP container): the resource is instantiated
+ * with a {@link HealthCheckRegistry} created through the runtime SPI, and the produced
+ * JAX-RS {@link Response} is asserted.</p>
  */
 class KnockHealthResourceTest {
 
@@ -46,8 +46,8 @@ class KnockHealthResourceTest {
 
     @BeforeAll
     static void installRuntimeDelegate() {
-        // Frontière respectée : pas d'import de classe interne Cassini ; le delegate
-        // de production sera fourni par Cassini en runtime, ici stub local de test.
+        // Boundary respected: no internal Cassini class is imported; the production
+        // delegate will be provided by Cassini at runtime, here via a local test stub.
         RuntimeDelegate.setInstance(new TestRuntimeDelegate());
     }
 
@@ -58,7 +58,7 @@ class KnockHealthResourceTest {
     }
 
     // -----------------------------------------------------------------------
-    // §3 — /health agrège tous les checks ; vide ⇒ UP / 200
+    // §3 — /health aggregates all checks; empty => UP / 200
     // -----------------------------------------------------------------------
 
     @Test
@@ -91,7 +91,7 @@ class KnockHealthResourceTest {
     }
 
     // -----------------------------------------------------------------------
-    // §3 — /health/live ne voit que les @Liveness
+    // §3 — /health/live sees only @Liveness checks
     // -----------------------------------------------------------------------
 
     @Test
@@ -101,7 +101,7 @@ class KnockHealthResourceTest {
 
         Response response = resource.getLiveness();
 
-        // Readiness DOWN ne doit pas contaminer Liveness
+        // Readiness DOWN must not contaminate Liveness
         assertEquals(200, response.getStatus());
         String body = (String) response.getEntity();
         assertTrue(body.contains("live-ok"));
@@ -110,7 +110,7 @@ class KnockHealthResourceTest {
     }
 
     // -----------------------------------------------------------------------
-    // §3 — /health/ready ne voit que les @Readiness
+    // §3 — /health/ready sees only @Readiness checks
     // -----------------------------------------------------------------------
 
     @Test
@@ -127,7 +127,7 @@ class KnockHealthResourceTest {
     }
 
     // -----------------------------------------------------------------------
-    // §3 — /health/started ne voit que les @Startup
+    // §3 — /health/started sees only @Startup checks
     // -----------------------------------------------------------------------
 
     @Test
@@ -144,7 +144,7 @@ class KnockHealthResourceTest {
     }
 
     // -----------------------------------------------------------------------
-    // §3.2 — exception dans call() traitée comme DOWN ⇒ 503
+    // §3.2 — exception in call() treated as DOWN => 503
     // -----------------------------------------------------------------------
 
     @Test
@@ -158,7 +158,7 @@ class KnockHealthResourceTest {
     }
 
     // -----------------------------------------------------------------------
-    // §3.1 — Content-Type application/json sur tous les endpoints
+    // §3.1 — Content-Type application/json on all endpoints
     // -----------------------------------------------------------------------
 
     @Test

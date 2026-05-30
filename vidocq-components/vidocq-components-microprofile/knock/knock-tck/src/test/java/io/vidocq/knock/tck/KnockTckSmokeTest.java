@@ -21,16 +21,16 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 /**
- * Smoke test du bootstrap Knock — vérifie que les modules knock-core et knock-api
- * sont correctement chargés sans Arquillian.
+ * Knock bootstrap smoke test — verifies that the `knock-core` and `knock-api`
+ * modules are loaded correctly without Arquillian.
  *
- * <p>À M0 (bootstrap), seul le chargement des classes spec est validé. La construction
- * de {@link HealthCheckResponse} via le builder nécessite un {@code HealthCheckResponseProvider}
- * (SPI) qui sera implémenté en M1. Les tests correspondants sont marqués {@code @Disabled}
- * jusqu'à M1.</p>
+ * <p>At M0 (bootstrap), only the loading of the spec classes is validated. Building
+ * {@link HealthCheckResponse} through the builder requires a {@code HealthCheckResponseProvider}
+ * (SPI) that will be implemented in M1. The corresponding tests are marked {@code @Disabled}
+ * until M1.</p>
  *
- * <p>Exécuté par le profil Maven {@code smoke} (actif par défaut) via le script
- * {@code run-official-tck-mp-health-4.0.sh}.</p>
+ * <p>Executed by the Maven {@code smoke} profile (active by default) via the
+ * {@code run-official-tck-mp-health-4.0.sh} script.</p>
  */
 class KnockTckSmokeTest {
 
@@ -43,8 +43,8 @@ class KnockTckSmokeTest {
 
     @Test
     void health_check_api_classes_are_loadable() {
-        // Vérifie que les classes MicroProfile Health 4.0 sont bien sur le module-path
-        // (ne nécessite pas de HealthCheckResponseProvider — vérification de chargement seul)
+        // Verifies that the MicroProfile Health 4.0 classes are on the module path
+        // (does not require a HealthCheckResponseProvider — load check only)
         assertNotNull(HealthCheck.class);
         assertNotNull(HealthCheckResponse.class);
         assertNotNull(HealthCheckResponse.Status.UP);
@@ -53,7 +53,7 @@ class KnockTckSmokeTest {
 
     @Test
     void health_probe_annotations_are_loadable() {
-        // Vérifie que les annotations de qualification sont bien chargées depuis le module
+        // Verifies that the probe qualifier annotations are loaded from the module
         assertNotNull(Liveness.class);
         assertNotNull(Readiness.class);
         assertNotNull(Startup.class);

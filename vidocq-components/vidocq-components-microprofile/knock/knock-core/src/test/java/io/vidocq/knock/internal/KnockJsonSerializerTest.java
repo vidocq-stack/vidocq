@@ -21,7 +21,7 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * TDD — {@link KnockJsonSerializer}.
  *
- * <p>Spec MicroProfile Health 4.0 §3.1 : format JSON de la réponse health check.</p>
+ * <p>MicroProfile Health 4.0 spec §3.1: JSON format for the health check response.</p>
  *
  * <pre>{@code
  * {
@@ -37,7 +37,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * }</pre>
  *
  * <p>HTTP 200 si {@code status=UP}, HTTP 503 si {@code status=DOWN}.</p>
- * <p>{@code data} est omis si absent (ne pas sérialiser {@code "data":null}).</p>
+ * <p>{@code data} is omitted when absent (do not serialize {@code "data":null}).</p>
  */
 class KnockJsonSerializerTest {
 
@@ -49,12 +49,12 @@ class KnockJsonSerializerTest {
     }
 
     // -----------------------------------------------------------------------
-    // §3.1 — snapshot UP, liste vide
+    // §3.1 — UP snapshot, empty list
     // -----------------------------------------------------------------------
 
     @Test
     void serialize_empty_checks_UP_spec_section3_1() {
-        // Spec §3.1 : liste vide → status UP
+        // Spec §3.1: empty list -> status UP
         HealthSnapshot snapshot = new HealthSnapshot(
                 ProbeType.ALL,
                 HealthCheckResponse.Status.UP,
@@ -63,13 +63,13 @@ class KnockJsonSerializerTest {
         String json = serializer.serialize(snapshot);
 
         assertTrue(json.contains("\"status\":\"UP\"") || json.contains("\"status\": \"UP\""),
-                "JSON doit contenir status UP, got: " + json);
+                "JSON must contain status UP, got: " + json);
         assertTrue(json.contains("\"checks\":[]") || json.contains("\"checks\": []"),
-                "JSON doit contenir checks vide, got: " + json);
+                "JSON must contain an empty checks array, got: " + json);
     }
 
     // -----------------------------------------------------------------------
-    // §3.1 — snapshot DOWN
+    // §3.1 — DOWN snapshot
     // -----------------------------------------------------------------------
 
     @Test
@@ -83,17 +83,17 @@ class KnockJsonSerializerTest {
         String json = serializer.serialize(snapshot);
 
         assertTrue(json.contains("\"status\":\"DOWN\"") || json.contains("\"status\": \"DOWN\""),
-                "JSON doit contenir status DOWN, got: " + json);
-        assertTrue(json.contains("failing-check"), "JSON doit contenir le nom du check, got: " + json);
+                "JSON must contain status DOWN, got: " + json);
+        assertTrue(json.contains("failing-check"), "JSON must contain the check name, got: " + json);
     }
 
     // -----------------------------------------------------------------------
-    // §3.1 — data omise si absente
+    // §3.1 — data omitted when absent
     // -----------------------------------------------------------------------
 
     @Test
     void serialize_data_absent_omitted_spec_section3_1() {
-        // Spec §3.1 : « data is omitted if empty »
+        // Spec §3.1: "data is omitted if empty"
         HealthCheckResponse check = HealthCheckResponse.up("simple-check");
         HealthSnapshot snapshot = new HealthSnapshot(
                 ProbeType.LIVENESS,
@@ -102,13 +102,13 @@ class KnockJsonSerializerTest {
 
         String json = serializer.serialize(snapshot);
 
-        assertFalse(json.contains("\"data\":null"), "data null ne doit pas apparaître, got: " + json);
-        // data peut être présent ou absent — s'il est absent c'est correct
-        // s'il est présent comme "{}" c'est aussi acceptable (pas de "null")
+        assertFalse(json.contains("\"data\":null"), "data null must not appear, got: " + json);
+        // data may be present or absent — if it is absent, that is correct
+        // if it is present as "{}", that is also acceptable (no "null")
     }
 
     // -----------------------------------------------------------------------
-    // §3.1 — data présente avec valeurs String
+    // §3.1 — data present with String values
     // -----------------------------------------------------------------------
 
     @Test
@@ -124,12 +124,12 @@ class KnockJsonSerializerTest {
 
         String json = serializer.serialize(snapshot);
 
-        assertTrue(json.contains("latency"), "JSON doit contenir la clé latency, got: " + json);
-        assertTrue(json.contains("12ms"), "JSON doit contenir la valeur 12ms, got: " + json);
+        assertTrue(json.contains("latency"), "JSON must contain the latency key, got: " + json);
+        assertTrue(json.contains("12ms"), "JSON must contain the 12ms value, got: " + json);
     }
 
     // -----------------------------------------------------------------------
-    // §3.1 — data présente avec valeurs Long et Boolean
+    // §3.1 — data present with Long and Boolean values
     // -----------------------------------------------------------------------
 
     @Test
@@ -146,12 +146,12 @@ class KnockJsonSerializerTest {
 
         String json = serializer.serialize(snapshot);
 
-        assertTrue(json.contains("42"), "JSON doit contenir la valeur numérique, got: " + json);
-        assertTrue(json.contains("true"), "JSON doit contenir la valeur booléenne, got: " + json);
+        assertTrue(json.contains("42"), "JSON must contain the numeric value, got: " + json);
+        assertTrue(json.contains("true"), "JSON must contain the boolean value, got: " + json);
     }
 
     // -----------------------------------------------------------------------
-    // §3.1 — structure JSON valide avec plusieurs checks
+    // §3.1 — valid JSON structure with multiple checks
     // -----------------------------------------------------------------------
 
     @Test
@@ -165,12 +165,12 @@ class KnockJsonSerializerTest {
 
         String json = serializer.serialize(snapshot);
 
-        assertTrue(json.contains("check-1"), "JSON doit contenir check-1, got: " + json);
-        assertTrue(json.contains("check-2"), "JSON doit contenir check-2, got: " + json);
+        assertTrue(json.contains("check-1"), "JSON must contain check-1, got: " + json);
+        assertTrue(json.contains("check-2"), "JSON must contain check-2, got: " + json);
     }
 
     // -----------------------------------------------------------------------
-    // httpStatus — 200 si UP, 503 si DOWN
+    // httpStatus — 200 if UP, 503 if DOWN
     // -----------------------------------------------------------------------
 
     @Test
