@@ -33,7 +33,7 @@ de l'écosystème [Vidocq](https://forge.vidocq.dev/vidocq).
 
 ```bash
 cd ravel
-sdk env                         # Java 25 + Maven 4.0.0-rc-5
+sdk env                         # Java 25 + Maven 3.9.16
 mvn -ntp install -DskipTests    # build du reactor
 mvn test                        # tests unitaires
 ```

@@ -51,7 +51,7 @@ echo "==> Étape 1/2 : install local des artefacts Ravel (mvn install -DskipTest
 echo "==> Étape 2/2 : exécution Maven sur ravel-tck (profil=${profile})"
 mkdir -p "${TCK_DIR}/target"
 
-# Le `mvn` système doit être Maven 4.0.0-rc-5 (cf. .sdkmanrc / sdk env, ou install Maven 4 dans la CI).
+# Le `mvn` système doit être Maven 3.9.16 (cf. .sdkmanrc / sdk env, ou install Maven 4 dans la CI).
 # Maven 3.x ne sait pas parser le Model 4.1.0 du reactor parent ; le ravel-tck reste en Model 4.0.0
 # standalone (contrainte ShrinkWrap, cf. CLAUDE.md), donc compatible 3.x ou 4.x.
 

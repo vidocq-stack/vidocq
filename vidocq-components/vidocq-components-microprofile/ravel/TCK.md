@@ -125,7 +125,7 @@ n'apparie un producer `Object` qu'avec des IPs typés exactement `Object`.
 Le script :
 1. installe en local `ravel-api` / `ravel-core` / `ravel-cdi-vauban` via `./mvnw install -DskipTests` ;
 2. invoque `./mvnw -f ravel-tck/pom.xml -P<profile> test` (le wrapper, pas `mvn` système, pour
-   garantir Maven 4.0.0-rc-5) ;
+   garantir Maven 3.9.16) ;
 3. produit un rapport résumé dans `ravel-tck/target/tck-report.txt`.
 
 ## Bug n°1 — `MalformedParameterizedTypeException` ✅ résolu
