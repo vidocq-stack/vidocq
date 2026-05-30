@@ -1,31 +1,31 @@
 # mansart-transactions-tck
 
-Adaptateur + harness pour le **TCK officiel Jakarta Transactions 2.0** contre l'implémentation Mansart.
+Adapter + harness for the **official Jakarta Transactions 2.0 TCK** against the Mansart implementation.
 
-> **HORS reactor** — pom.xml en `modelVersion 4.0.0` standalone (pas de `<parent>`). Cf. `CLAUDE.md`
-> racine du workspace : tant qu'upstream ShrinkWrap Maven Resolver ne supporte pas Maven Model 4.1.0,
-> ce module reste détaché et n'est jamais buildé via `mvn -pl …` depuis le parent reactor.
+> **OUTSIDE reactor** — pom.xml in standalone `modelVersion 4.0.0` (no `<parent>`). Cf. `CLAUDE.md`
+> at workspace root: as long as upstream ShrinkWrap Maven Resolver doesn't support Maven Model 4.1.0,
+> this module stays detached and is never built via `mvn -pl …` from the parent reactor.
 
-## Modes d'exécution
+## Execution modes
 
-| Mode | Commande | Ce que ça fait |
+| Mode | Command | What it does |
 |---|---|---|
-| **smoke** *(défaut)* | `./run-official-tck-transactions-2.0.sh` | 5 tests JUnit locaux qui vérifient le wiring Mansart (`MansartTckProvider`, `MansartUserTransaction`). N'a pas besoin du TCK officiel — runnable hors-ligne. |
-| **tsharness / all** | `./run-official-tck-transactions-2.0.sh tsharness` | Auto-télécharge le TCK depuis Eclipse si absent, le déballe sous `../.tck-cache/transactions-tck/`, puis imprime la procédure d'invocation tsant officielle (cf. ci-dessous). |
-| ciblé | `./run-official-tck-transactions-2.0.sh -Dtest=Foo` | Pass-through Surefire pour debug d'un smoke spécifique. |
+| **smoke** *(default)* | `./run-official-tck-transactions-2.0.sh` | 5 local JUnit tests verifying Mansart wiring (`MansartTckProvider`, `MansartUserTransaction`). Doesn't need official TCK — runnable offline. |
+| **tsharness / all** | `./run-official-tck-transactions-2.0.sh tsharness` | Auto-downloads TCK from Eclipse if absent, unpacks under `../.tck-cache/transactions-tck/`, then prints official tsant invocation procedure (cf. below). |
+| targeted | `./run-official-tck-transactions-2.0.sh -Dtest=Foo` | Surefire pass-through for debugging specific smoke. |
 
-Sortie : `target/tck-transactions-output.log` + `target/tck-report-transactions.txt`.
+Output: `target/tck-transactions-output.log` + `target/tck-report-transactions.txt`.
 
-## Auto-récupération du TCK
+## TCK auto-recovery
 
-Le runner appelle `../install-tck.sh` qui :
+The runner calls `../install-tck.sh` which:
 
-1. télécharge `https://download.eclipse.org/jakartaee/transactions/2.0/jakarta-transactions-tck-2.0.1.zip` ;
-2. dépaquette dans `mansart-transactions/.tck-cache/transactions-tck/` ;
-3. installe `lib/jtatck.jar` dans le M2 sous `jakarta.transaction:jakarta.transaction-tck:2.0.1` ;
-4. installe les jars annexes du harness (`tsharness.jar`, `sigtest.jar`, `javatest.jar`) sous `io.vidocq.mansart:mansart-tck-*`.
+1. downloads `https://download.eclipse.org/jakartaee/transactions/2.0/jakarta-transactions-tck-2.0.1.zip`;
+2. unpacks into `mansart-transactions/.tck-cache/transactions-tck/`;
+3. installs `lib/jtatck.jar` in M2 under `jakarta.transaction:jakarta.transaction-tck:2.0.1`;
+4. installs harness auxiliary jars (`tsharness.jar`, `sigtest.jar`, `javatest.jar`) under `io.vidocq.mansart:mansart-tck-*`.
 
-Idempotent (`--force` pour ré-installer, `--verify` pour vérifier seulement).
+Idempotent (`--force` to re-install, `--verify` to check only).
 
 ### Override
 
@@ -34,45 +34,45 @@ TCK_VER=2.0.1           ./run-official-tck-transactions-2.0.sh tsharness
 TCK_URL=file:///…/x.zip ../install-tck.sh --force
 ```
 
-## Architecture du harness
+## Harness architecture
 
-| Fichier | Rôle |
+| File | Role |
 |---|---|
-| `src/main/java/.../MansartTckProvider` | Singleton invoqué par le harness pour récupérer le `TransactionManager`. |
-| `src/main/java/.../MansartUserTransaction` | Façade `UserTransaction` au-dessus du `TransactionManager` Mansart. |
-| `src/test/java/.../MansartTckSmokeTest` | 5 tests JUnit qui vérifient le wiring (lookup → begin → commit/rollback). |
+| `src/main/java/.../MansartTckProvider` | Singleton invoked by harness to retrieve the `TransactionManager`. |
+| `src/main/java/.../MansartUserTransaction` | `UserTransaction` facade over Mansart `TransactionManager`. |
+| `src/test/java/.../MansartTckSmokeTest` | 5 JUnit tests verifying wiring (lookup → begin → commit/rollback). |
 
-## Pourquoi le TCK officiel n'est pas Surefire-scannable
+## Why the official TCK is not Surefire-scannable
 
-Le **TCK Jakarta Transactions 2.0** est un harness **Sun tsharness** historique :
+The **Jakarta Transactions 2.0 TCK** is a historical **Sun tsharness** harness:
 
 ```
 .tck-cache/transactions-tck/
-  bin/{tsant, ts.jte, build.xml, …}    ← scripts Ant + descripteur d'exécution
-  src/com/sun/ts/tests/jta/ee/…        ← sources des tests
-  lib/jtatck.jar                        ← classes de support (PAS les tests)
-  classes/                              ← compilés par tsant build
-  dist/                                 ← rapports HTML après tsant runclient
+  bin/{tsant, ts.jte, build.xml, …}    ← Ant scripts + execution descriptor
+  src/com/sun/ts/tests/jta/ee/…        ← test sources
+  lib/jtatck.jar                        ← support classes (NOT the tests)
+  classes/                              ← compiled by tsant build
+  dist/                                 ← HTML reports after tsant runclient
 ```
 
-Aucun runner JUnit ne peut le piloter directement. La suite officielle s'invoque via :
+No JUnit runner can pilot it directly. The official suite is invoked via:
 
 ```bash
 cd .tck-cache/transactions-tck/bin
-# 1. éditer ts.jte (JAVA_HOME, jta.classes, provider Mansart)
+# 1. edit ts.jte (JAVA_HOME, jta.classes, Mansart provider)
 ant build
 ant runclient
-# rapport : ../dist/
+# report: ../dist/
 ```
 
-La doc officielle est dépaquetée sous `.tck-cache/transactions-tck/docs/html-usersguide/`.
+Official doc is unpacked under `.tck-cache/transactions-tck/docs/html-usersguide/`.
 
-> Suivi upstream : un wrapper Maven/Surefire pour le TCK Transactions 2.0 n'existe pas
-> côté Eclipse. Tant qu'il n'arrive pas, le mode `tsharness` reste un guide manuel.
+> Upstream tracking: a Maven/Surefire wrapper for Transactions 2.0 TCK doesn't exist
+> Eclipse-side. Until it arrives, `tsharness` mode remains a manual guide.
 
-## État
+## Status
 
-- ✅ Auto-récupération du zip depuis Eclipse Foundation.
-- ✅ Adaptateur Mansart (`MansartTckProvider` + `MansartUserTransaction`).
-- ✅ Smoke wiring 5/5 vert (lancé par défaut, sans dépendance externe).
-- ⏳ Suite tsharness complète : configuration `ts.jte` à finaliser (M6b — voir `../PLAN.md`).
+- ✅ Zip auto-recovery from Eclipse Foundation.
+- ✅ Mansart adapter (`MansartTckProvider` + `MansartUserTransaction`).
+- ✅ Smoke wiring 5/5 green (launched by default, no external dependency).
+- ⏳ Complete tsharness suite: `ts.jte` configuration to finalize (M6b — see `../PLAN.md`).

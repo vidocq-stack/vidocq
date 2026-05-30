@@ -2,18 +2,18 @@
 
 ## Mission
 
-Implémentation **Jakarta Transactions 2.0** complète, mais montée par jalons utilisables seuls :
-1PC d'abord (la majorité des apps), puis 2PC + recovery (le reste). Virtual-thread-native depuis
-la première ligne. Réutilise `mansart-pool` pour les tests d'intégration JDBC.
+Complete **Jakarta Transactions 2.0** implementation, but built up by standalone usable milestones:
+1PC first (majority of apps), then 2PC + recovery (the rest). Virtual-thread-native from
+the first line. Reuses `mansart-pool` for JDBC integration tests.
 
-## Pourquoi un nouveau projet
+## Why a new project
 
-- Narayana (RedHat) et Atomikos sont massifs, hérités d'EE7 et d'EJB, design antérieur à Loom.
-- Bitronix est mort.
-- Aucun n'utilise `ScopedValue` — tous reposent sur `ThreadLocal`, source de pinning sous virtual
-  threads dès qu'on combine TX + JDBC.
-- Le besoin Mansart : un TM léger, qui fait juste ce que `mansart-jakarta-data` /
-  `mansart-persistence` consomment, et qui passe le TCK officiel.
+- Narayana (RedHat) and Atomikos are massive, inherited from EE7 and EJB, design predates Loom.
+- Bitronix is dead.
+- None use `ScopedValue` — all rely on `ThreadLocal`, source of pinning under virtual
+  threads as soon as we combine TX + JDBC.
+- The Mansart need: a lightweight TM, which just does what `mansart-jakarta-data` /
+  `mansart-persistence` consume, and which passes the official TCK.
 
 ## Modules
 
@@ -21,126 +21,126 @@ la première ligne. Réutilise `mansart-pool` pour les tests d'intégration JDBC
 mansart-transactions/
 ├── mansart-transactions-api/        ← re-exposition jakarta.transaction-api
 ├── mansart-transactions-core/       ← TM/UT/TSR + 2PC + recovery log
-├── mansart-transactions-cdi/        ← @Transactional + @TransactionScoped (BCE Vauban)
-├── mansart-transactions-jdbc/       ← ConnectionXAResource — adapte une Connection en XAResource (1PC)
-├── mansart-transactions-tests/      ← intégration cross-module + H2 réel
-└── mansart-transactions-tck/        ← TCK officiel — HORS reactor
+├── mansart-transactions-cdi/        ← @Transactional + @TransactionScoped (Vauban BCE)
+├── mansart-transactions-jdbc/       ← ConnectionXAResource — adapts a Connection to XAResource (1PC)
+├── mansart-transactions-tests/      ← cross-module integration + real H2
+└── mansart-transactions-tck/        ← official TCK — OUTSIDE reactor
 ```
 
 ## Roadmap
 
 ### M1 — Local single-thread (TM, UT, status)
 
-`MansartTransactionManager.begin/commit/rollback`. `getStatus()` reflète l'état
+`MansartTransactionManager.begin/commit/rollback`. `getStatus()` reflects the state
 (`STATUS_ACTIVE`, `STATUS_MARKED_ROLLBACK`, `STATUS_NO_TRANSACTION`).
-Contexte stocké dans `ScopedValue<TransactionContext>` ré-assigné autour de chaque opération.
-Tests TDD : `TransactionManagerSmokeTest` (déjà écrit, rouge).
+Context stored in `ScopedValue<TransactionContext>` re-assigned around each operation.
+TDD tests: `TransactionManagerSmokeTest` (already written, red).
 
-### M2 — Synchronisations
+### M2 — Synchronizations
 
-`Transaction.registerSynchronization(Synchronization)`. Ordre d'appel respecté
-(`beforeCompletion` AVANT le flush des resources, `afterCompletion(int)` APRÈS).
-Tests TDD : `SynchronizationOrderingTest`.
+`Transaction.registerSynchronization(Synchronization)`. Respected calling order
+(`beforeCompletion` BEFORE resource flush, `afterCompletion(int)` AFTER).
+TDD tests: `SynchronizationOrderingTest`.
 
 ### M3 — Suspend / resume
 
-`TransactionManager.suspend()` retourne le `Transaction` actuel et clear le contexte ;
-`resume(Transaction)` ré-installe. Permet `TxType.REQUIRES_NEW` plus tard.
-Tests TDD : `SuspendResumeTest` + scénarios threads parallèles.
+`TransactionManager.suspend()` returns the current `Transaction` and clears the context;
+`resume(Transaction)` re-installs it. Enables `TxType.REQUIRES_NEW` later.
+TDD tests: `SuspendResumeTest` + parallel thread scenarios.
 
-### M4 — Multi-resource (2PC dégénéré → 2PC vrai)
+### M4 — Multi-resource (degenerate 2PC → true 2PC)
 
-`Transaction.enlistResource(XAResource)`. En 1PC dégénéré (1 resource), le commit applique
-direct sans prepare. Dès qu'on enrôle 2+ resources, on bascule en vrai 2PC :
-prepare/commit/rollback en deux passes.
-Tests TDD : `TwoResourceCommitTest`, `TwoResourceRollbackOnPrepareTest`.
+`Transaction.enlistResource(XAResource)`. In degenerate 1PC (1 resource), commit applies
+directly without prepare. As soon as we enlist 2+ resources, we switch to true 2PC:
+prepare/commit/rollback in two passes.
+TDD tests: `TwoResourceCommitTest`, `TwoResourceRollbackOnPrepareTest`.
 
 ### M5 — Recovery log
 
-Journal append-only sur disque (`tx-recovery.log`). À chaque prepare, on persiste l'intent.
-Au démarrage, scan + replay : commit ou rollback selon l'état du journal.
-Tests TDD : `RecoveryAfterCrashIT` (kill -9 entre prepare et commit).
+Append-only disk journal (`tx-recovery.log`). On each prepare, we persist the intent.
+On startup, scan + replay: commit or rollback according to log state.
+TDD tests: `RecoveryAfterCrashIT` (kill -9 between prepare and commit).
 
-### M5b — Auto-recovery driver-side *(livré)*
+### M5b — Auto-recovery driver-side *(delivered)*
 
-- ✅ `MansartTransactionManager.recover(XAResource...)` — croise les in-doubt records du
-  journal Mansart avec les Xid remontés par `XAResource.recover(TMSTARTRSCAN|TMENDRSCAN)`
-  de chaque driver fourni.
-- ✅ COMMITTING + Xid présent côté driver → `commit(xid, false)` (replay du commit durable).
-- ✅ PREPARED + Xid présent côté driver → `rollback(xid)` (pas de décision durable).
-- ✅ Xid absent côté driver → reste dans `RecoveryReport.stillInDoubt` pour inspection humaine.
-- ✅ Tolère `XAException` (driver scan ou commit/rollback) — surface comme still-in-doubt.
-- ✅ Idempotent : un second appel résout ce que le premier n'avait pas pu (drivers reconnectés).
-- ✅ 6 tests TDD : COMMITTING→commit, PREPARED→rollback, Xid orphelin, multi-drivers
-  dispatch, COMPLETED ignoré, no-resources fallback.
+- ✅ `MansartTransactionManager.recover(XAResource...)` — crosses in-doubt records from
+  the Mansart journal with Xid returned by `XAResource.recover(TMSTARTRSCAN|TMENDRSCAN)`
+  from each provided driver.
+- ✅ COMMITTING + Xid present driver-side → `commit(xid, false)` (replay durable commit).
+- ✅ PREPARED + Xid present driver-side → `rollback(xid)` (no durable decision).
+- ✅ Xid absent driver-side → remains in `RecoveryReport.stillInDoubt` for human inspection.
+- ✅ Tolerates `XAException` (driver scan or commit/rollback) — surfaces as still-in-doubt.
+- ✅ Idempotent: a second call resolves what the first couldn't (drivers reconnected).
+- ✅ 6 TDD tests: COMMITTING→commit, PREPARED→rollback, orphaned Xid, multi-drivers
+  dispatch, COMPLETED ignored, no-resources fallback.
 
-### M6 — TCK officiel Jakarta Transactions 2.0 *(infra livrée)*
+### M6 — Official Jakarta Transactions 2.0 TCK *(infra delivered)*
 
-- ✅ `install-tck.sh` : auto-récupération depuis Eclipse Foundation, idempotent (verify/force/install).
-- ✅ Adaptateur Java (`MansartTckProvider`, `MansartUserTransaction`).
-- ✅ Smoke wiring 5/5 : `./run-official-tck-transactions-2.0.sh smoke` (lancé en CI).
-- ✅ **M6b** : wrapper Maven antrun pour la suite tsharness (profile `full-tck`). Templating
-  `ts.jte` Mansart-friendly (impl.vi=none, jta.classes pointant sur le M2), exec
-  `ant build.all.tests` qui compile toutes les fixtures TCK contre le classpath Mansart.
-  `BUILD SUCCESSFUL` validé sur les ~7 répertoires JTA EE + signature tests.
-- ⏳ **M6c** : pilotage de chaque `ant runclient` leaf-par-leaf (~40 tests JTA EE) +
-  parsing du rapport tsharness HTML pour résumer pass/fail dans
-  `target/tck-report-transactions.txt`. La cdi en M7 + jdbc en M8 fournissent déjà tout
-  le harness côté SUT — reste juste à itérer sur ts.jte par leaf et collecter.
+- ✅ `install-tck.sh`: auto-recovery from Eclipse Foundation, idempotent (verify/force/install).
+- ✅ Java adapter (`MansartTckProvider`, `MansartUserTransaction`).
+- ✅ Smoke wiring 5/5: `./run-official-tck-transactions-2.0.sh smoke` (launched in CI).
+- ✅ **M6b**: Maven antrun wrapper for tsharness suite (profile `full-tck`). Mansart-friendly
+  `ts.jte` templating (impl.vi=none, jta.classes pointing to M2), exec
+  `ant build.all.tests` which compiles all TCK fixtures against Mansart classpath.
+  `BUILD SUCCESSFUL` validated on all ~7 JTA EE directories + signature tests.
+- ⏳ **M6c**: piloting each `ant runclient` leaf-by-leaf (~40 JTA EE tests) +
+  parsing tsharness HTML report to summarize pass/fail in
+  `target/tck-report-transactions.txt`. The CDI in M7 + JDBC in M8 already provide all
+  the harness SUT-side — just need to iterate on ts.jte per leaf and collect.
 
-### M7 — CDI interceptor + TransactionScoped *(livré)*
+### M7 — CDI interceptor + TransactionScoped *(delivered)*
 
-- ✅ `MansartTransactionsProducer` (@ApplicationScoped) — produit `TransactionManager`,
-  `UserTransaction`, `TransactionSynchronizationRegistry` à partir d'un singleton TM partagé
-  avec l'extension portable.
-- ✅ `TransactionalInterceptor` + 5 sous-classes (`Required`/`RequiresNew`/`Mandatory`/`Never`/
-  `NotSupported`/`Supports`) — six bindings distincts requis car
-  `Transactional.value()` n'est PAS `@Nonbinding` dans jakarta.transaction-api 2.0.x. La logique
-  reste dans le parent ; les sous-classes ne portent que le binding + `@Priority`.
-  Couvre `rollbackOn` / `dontRollbackOn` (spec §3.7.1).
-- ✅ `TransactionScopedContext` (`AlterableContext`) — instance par TX, destruction via
-  `Synchronization.afterCompletion()`. Lance `ContextNotActiveException` hors TX.
-- ✅ `MansartTransactionsExtension` (BCE) — enregistre `@TransactionScoped` via
-  `MetaAnnotations.addContext(scope, isNormal, contextClass)` (API CDI 4.1 standard).
-  Vauban honore nativement cette API (`VaubanMetaAnnotations` ligne 51), pas besoin
-  d'`Extension` portable legacy ni de Weld.
-- ✅ Tests Vauban (CDI 4.1 Lite, container natif Vidocq) via `vauban-junit` :
-  14 tests interceptor + 4 tests scope = 18/18 verts.
+- ✅ `MansartTransactionsProducer` (@ApplicationScoped) — produces `TransactionManager`,
+  `UserTransaction`, `TransactionSynchronizationRegistry` from a shared singleton TM
+  with portable extension.
+- ✅ `TransactionalInterceptor` + 5 subclasses (`Required`/`RequiresNew`/`Mandatory`/`Never`/
+  `NotSupported`/`Supports`) — six distinct bindings required because
+  `Transactional.value()` is NOT `@Nonbinding` in jakarta.transaction-api 2.0.x. The logic
+  stays in the parent; subclasses only carry binding + `@Priority`.
+  Covers `rollbackOn` / `dontRollbackOn` (spec §3.7.1).
+- ✅ `TransactionScopedContext` (`AlterableContext`) — instance per TX, destruction via
+  `Synchronization.afterCompletion()`. Throws `ContextNotActiveException` outside TX.
+- ✅ `MansartTransactionsExtension` (BCE) — registers `@TransactionScoped` via
+  `MetaAnnotations.addContext(scope, isNormal, contextClass)` (standard CDI 4.1 API).
+  Vauban natively honors this API (`VaubanMetaAnnotations` line 51), no need for
+  legacy portable `Extension` nor Weld.
+- ✅ Vauban tests (CDI 4.1 Lite, native Vidocq container) via `vauban-junit`:
+  14 interceptor tests + 4 scope tests = 18/18 green.
 
-### M8 — JDBC adapter `ConnectionXAResource` *(livré)*
+### M8 — JDBC adapter `ConnectionXAResource` *(delivered)*
 
-- ✅ `mansart-transactions-jdbc/ConnectionXAResource` — wrappe une `java.sql.Connection`
-  en `XAResource` (1PC only). Permet à `@Transactional` de fonctionner avec n'importe
-  quel `DataSource` simple (pas besoin de `XADataSource`).
-- ✅ `start()` flippe `autoCommit=false`, `commit()/rollback()` délèguent à JDBC,
-  `autoCommit` original restauré au cleanup.
-- ✅ Tests H2 in-memory : COMMIT persiste, ROLLBACK annule, autoCommit pre-existant honoré.
-- ✅ `H2SingleResourceCommitTest` — débloqué (était `@Disabled` depuis M2).
-- ⏳ Pour vrai 2PC multi-resources : nécessite un driver `XADataSource` (out of scope
-  pour ce module ; le TM gère déjà le protocole).
+- ✅ `mansart-transactions-jdbc/ConnectionXAResource` — wraps a `java.sql.Connection`
+  as `XAResource` (1PC only). Enables `@Transactional` to work with any
+  simple `DataSource` (no need for `XADataSource`).
+- ✅ `start()` flips `autoCommit=false`, `commit()/rollback()` delegate to JDBC,
+  original `autoCommit` restored at cleanup.
+- ✅ H2 in-memory tests: COMMIT persists, ROLLBACK cancels, pre-existing autoCommit honored.
+- ✅ `H2SingleResourceCommitTest` — unblocked (was `@Disabled` since M2).
+- ⏳ For true multi-resource 2PC: requires an `XADataSource` driver (out of scope
+  for this module; the TM already handles the protocol).
 
-## Hors scope (pour le moment)
+## Out of scope (for now)
 
-- **JTS** (Java Transaction Service / CORBA OTS) — Jakarta Transactions 2.0 a déprécié l'API
-  liée au protocole CORBA. Pas d'investissement.
-- **Distribuées XA cross-process** — Mansart est in-process, le 2PC s'arrête à la frontière JVM.
-  Une JVM = un coordinator local.
-- **Last-resource commit optimization** (LLR) — peut s'ajouter en M4+ si besoin.
+- **JTS** (Java Transaction Service / CORBA OTS) — Jakarta Transactions 2.0 deprecated the API
+  related to CORBA protocol. No investment.
+- **Cross-process distributed XA** — Mansart is in-process, 2PC stops at the JVM boundary.
+  One JVM = one local coordinator.
+- **Last-resource commit optimization** (LLR) — can be added in M4+ if needed.
 
-## Dépendances inter-Mansart
+## Inter-Mansart dependencies
 
-- `mansart-transactions` → indépendant (peer de `mansart-pool` et `mansart-jakarta-data`).
-- `mansart-jakarta-data` consommera `mansart-transactions-core` via la SPI standard
-  `TransactionSynchronizationRegistry` pour participer aux TX actives (M3 du plan
-  `mansart-jakarta-data`).
-- `mansart-pool` reste agnostique — il expose juste un `DataSource`. L'enrôlement JDBC
-  dans une TX active est fait par un wrapper `XADataSource` adapter qu'on ajoutera à
-  `mansart-transactions-core` (sub-module ou utility).
+- `mansart-transactions` → independent (peer of `mansart-pool` and `mansart-jakarta-data`).
+- `mansart-jakarta-data` will consume `mansart-transactions-core` via standard SPI
+  `TransactionSynchronizationRegistry` to participate in active TX (M3 of the
+  `mansart-jakarta-data` plan).
+- `mansart-pool` stays agnostic — it only exposes a `DataSource`. JDBC enlistment
+  in an active TX is done by an `XADataSource` adapter wrapper we'll add to
+  `mansart-transactions-core` (sub-module or utility).
 
 ## Conventions
 
-- Zéro réflexion, zéro génération bytecode runtime — Class-File API si jamais nécessaire.
-- Zéro dep externe hors `jakarta.transaction-api`, `jakarta.cdi-api`, `jakarta.inject-api`,
-  `jakarta.interceptor-api`, `jakarta.annotation-api`. Pas d'Apache Commons, pas de SLF4J.
-- Tests d'intégration sur **vraie** DB H2 — pas de mock JDBC.
-- Bugs reproductibles → `BUG.md`. Mesures perf → `BENCH.md`.
+- Zero reflection, zero runtime bytecode generation — Class-File API if ever necessary.
+- Zero external dep except `jakarta.transaction-api`, `jakarta.cdi-api`, `jakarta.inject-api`,
+  `jakarta.interceptor-api`, `jakarta.annotation-api`. No Apache Commons, no SLF4J.
+- Integration tests on **real** H2 DB — no JDBC mocks.
+- Reproducible bugs → `BUG.md`. Perf measurements → `BENCH.md`.

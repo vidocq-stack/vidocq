@@ -81,7 +81,7 @@ class RecoveryLogTest {
         }
 
         try (var log = new FileRecoveryLog(file)) {
-            // 1PC : pas de risque de heuristic split (une seule resource), pas de log nécessaire.
+            // 1PC: no risk of heuristic split (single resource), no logging needed.
             assertThat(log.scan()).isEmpty();
         }
     }

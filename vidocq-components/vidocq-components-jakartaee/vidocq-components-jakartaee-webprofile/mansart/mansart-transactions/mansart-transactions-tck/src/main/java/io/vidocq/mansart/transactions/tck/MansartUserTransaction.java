@@ -9,9 +9,9 @@ import jakarta.transaction.TransactionManager;
 import jakarta.transaction.UserTransaction;
 
 /**
- * Thin {@link UserTransaction} façade over a {@link TransactionManager}. Pure delegation —
+ * Thin {@link UserTransaction} facade over a {@link TransactionManager}. Pure delegation —
  * {@code UserTransaction} is the application-facing subset of {@code TransactionManager}
- * (no resource enlistment, no suspend/resume, no synchronisation registration).
+ * (no resource enlistment, no suspend/resume, no synchronization registration).
  */
 final class MansartUserTransaction implements UserTransaction {
 

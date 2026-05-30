@@ -1,117 +1,116 @@
 # Mansart — Roadmap
 
-Stack Jakarta Data 1.0 + Jakarta Persistence 3.2 + pool JDBC virtual-thread-native,
-zéro dépendance hors specs Jakarta. Trois sous-projets indépendants en runtime.
+Stack Jakarta Data 1.0 + Jakarta Persistence 3.2 + virtual-thread-native JDBC pool,
+zero dependencies beyond Jakarta specs. Three independent runtime sub-projects.
 
-> Vision et décisions structurantes : voir [`PLAN.md`](PLAN.md). Vue produit : [`README.md`](README.md).
+> Vision and structural decisions: see [`PLAN.md`](PLAN.md). Product overview: [`README.md`](README.md).
 
-## Vue d'ensemble
+## Overview
 
-| Sous-projet | Spec | Statut |
+| Sub-project | Spec | Status |
 |---|---|---|
-| `mansart-jakarta-data` | Jakarta Data 1.0 (repositories) | ✅ M3-M4 livrés, intégré au runtime Vidocq |
-| `mansart-pool` | — (post-Loom JDBC pool) | ✅ M2 livré (H2), M5 PostgreSQL livré |
-| `mansart-dialect-spi` | — (SPI partagée) | ✅ M1 livré (H2 + PostgreSQL) |
-| `mansart-persistence` | Jakarta Persistence 3.2 (JPA) | ⏸️ **M7 suspendu** — mansart-data fait le job pour les besoins runtime actuels |
-| `mansart-transactions` | JTA minimal | ✅ extension livrée dans le runtime |
+| `mansart-jakarta-data` | Jakarta Data 1.0 (repositories) | ✅ M3-M4 delivered, integrated into the Vidocq runtime |
+| `mansart-pool` | — (post-Loom JDBC pool) | ✅ M2 delivered (H2), M5 PostgreSQL delivered |
+| `mansart-dialect-spi` | — (shared SPI) | ✅ M1 delivered (H2 + PostgreSQL) |
+| `mansart-persistence` | Jakarta Persistence 3.2 (JPA) | ⏸️ **M7 suspended** — mansart-data does the job for current runtime needs |
+| `mansart-transactions` | Minimal JTA | ✅ extension delivered in the runtime |
 
-## Phases livrées
+## Delivered phases
 
 ### M1 — Dialect SPI ✅
-- Interface `Dialect` + `DialectFactory` chargée via `ServiceLoader`
-- Implémentations H2 et PostgreSQL (génération SQL, types, paginated select,
+- `Dialect` + `DialectFactory` interface loaded via `ServiceLoader`
+- H2 and PostgreSQL implementations (SQL generation, types, paginated select,
   upsert/merge, identity)
-- SPI partagée par `mansart-jakarta-data` et `mansart-persistence` (interop format
-  proche du JPA static metamodel)
+- Shared SPI for `mansart-jakarta-data` and `mansart-persistence` (interop format
+  close to the JPA static metamodel)
 
 ### M2 — Mansart Pool MVP (H2) ✅
-- Pool JDBC virtual-thread-native (pas de ThreadLocal qui pin, pas de pool thread
-  classique en interne)
-- Configuration min/max, idle eviction, leak detection
-- Zéro dépendance, indépendant du reste de Mansart (utilisable hors Mansart avec
-  n'importe quel `DataSource`)
-- Voir `mansart-pool/PLAN.md` pour les détails d'architecture
+- Virtual-thread-native JDBC pool (no pinning ThreadLocal, no classic thread pool
+  internally)
+- Min/max configuration, idle eviction, leak detection
+- Zero dependencies, independent from the rest of Mansart (usable outside Mansart
+  with any `DataSource`)
+- See `mansart-pool/PLAN.md` for architecture details
 
 ### M3 — Mansart Jakarta Data backend JDBC + H2 ✅
-- Backend de référence : **JDBC pur**, pas JPA (évite la dépendance circulaire,
-  binaire minimal, démontre Jakarta Data sans ORM)
-- Génération statique des repositories via APT (`@Repository` → `XxxRepositoryImpl`
-  à compile time, pas de proxy `java.lang.reflect.Proxy`)
-- Métamodèle statique `_Book`, `_Author` produit par APT
+- Reference backend: **pure JDBC**, not JPA (avoids the circular dependency,
+  minimal binary, demonstrates Jakarta Data without ORM)
+- Static repository generation via APT (`@Repository` → `XxxRepositoryImpl`
+  at compile time, no `java.lang.reflect.Proxy` proxy)
+- Static `_Book`, `_Author` metamodel produced by APT
 - Query methods : findBy, countBy, deleteBy, BasicRepository, PageableRepository
 - Pagination, Sort, Limit, Order
 
 ### M4 — PostgreSQL dialect ✅
-- Adapter `Dialect` PostgreSQL complet
-- Tests d'intégration via testcontainers (out-of-band, pas de dep test sur Mansart core)
+- Complete PostgreSQL `Dialect` adapter
+- Integration tests via testcontainers (out-of-band, no test dep on Mansart core)
 
 ### M5 — Mansart Pool PostgreSQL ✅
-- Validation du pool avec PostgreSQL en charge
-- Métriques (connections active, waiters, eviction rate)
+- Pool validation under PostgreSQL load
+- Metrics (active connections, waiters, eviction rate)
 
-### Extension Vidocq ✅
-- `vidocq-runtime-mansart-data-extension` : intégration au runtime MicroProfile
-  via SPI Vidocq (cf. [vidocq runtime ROADMAP](../vidocq/ROADMAP.md))
+### Vidocq extension ✅
+- `vidocq-runtime-mansart-data-extension` : integration into the MicroProfile runtime
+  via Vidocq SPI (see [vidocq runtime ROADMAP](../vidocq/ROADMAP.md))
 - `vidocq-runtime-mansart-pool-extension`
 - `vidocq-runtime-mansart-transactions-extension`
-- Exemple : `vidocq-runtime-mansart-h2-example`
+- Example: `vidocq-runtime-mansart-h2-example`
 
-## Phases en cours / planifiées
+## Ongoing / planned phases
 
-### M6 — TCK Jakarta Data 1.0 ⏳
+### M6 — Jakarta Data 1.0 TCK ⏳
 
-**Objectif** : passer le TCK officiel Jakarta Data 1.0 sur les profils applicables.
+**Goal**: pass the official Jakarta Data 1.0 TCK on the applicable profiles.
 
-- [ ] `mansart-jakarta-data-tck/` **hors reactor** (POM Model 4.0.0 standalone) —
-      même contrainte ShrinkWrap que `cassini-tck` / `champollion-tck` / `humboldt-tck`
-- [ ] Script `run-official-tck-data-1.0.sh` à la racine
-- [ ] Catégoriser les expected failures et challenges officiels dans `TCK.md`
-- [ ] Cible : 100 % PASS sur les tests applicables au backend JDBC (les tests
-      dépendants d'un EntityManager seront en exclusion explicite tant que M7 est
-      suspendu)
+- [ ] `mansart-jakarta-data-tck/` **outside the reactor** (standalone POM Model 4.0.0) —
+      same ShrinkWrap constraint as `cassini-tck` / `champollion-tck` / `humboldt-tck`
+- [ ] `run-official-tck-data-1.0.sh` script at the root
+- [ ] Categorize the expected failures and official challenges in `TCK.md`
+- [ ] Target: 100% PASS on the tests applicable to the JDBC backend (tests
+      depending on an EntityManager will be explicitly excluded while M7 is
+      suspended)
 
-### M7 — Mansart Persistence (JPA 3.2) ⏸️ SUSPENDU
+### M7 — Mansart Persistence (JPA 3.2) ⏸️ SUSPENDED
 
-**Statut** : non démarré, suspendu jusqu'à un besoin concret côté runtime Vidocq
-(`vidocq-runtime-mansart-h2-example` fonctionne aujourd'hui avec `mansart-data`
-seul). Décision de priorisation revisitée si une extension MP ou un consommateur
-externe le réclame.
+**Status**: not started, suspended until a concrete need arises on the Vidocq runtime side
+(`vidocq-runtime-mansart-h2-example` currently works with `mansart-data`
+alone). The prioritization decision will be revisited if an MP extension or an
+external consumer requests it.
 
-Scope envisagé quand on démarrera :
+Planned scope when we start:
 - [ ] `EntityManager`, `EntityManagerFactory`, JPQL, Criteria API
-- [ ] Cycle de vie (`@PrePersist`, `@PostLoad`, etc.)
-- [ ] Relations `@OneToMany`/`@ManyToOne`/`@ManyToMany`, fetch lazy/eager
-- [ ] Cache L2 optionnel (intégration avec Caffeine ou implémentation maison)
-- [ ] TCK Jakarta Persistence 3.2 hors reactor
+- [ ] Lifecycle (`@PrePersist`, `@PostLoad`, etc.)
+- [ ] `@OneToMany`/`@ManyToOne`/`@ManyToMany` relations, lazy/eager fetch
+- [ ] Optional L2 cache (integration with Caffeine or homegrown implementation)
+- [ ] Jakarta Persistence 3.2 TCK outside the reactor
 
 ### M8 — Performance & footprint (TBD)
 - [ ] Benchmarks JMH `mansart-jakarta-data` vs Spring Data JDBC, Eclipselink, Hibernate
 - [ ] Benchmarks `mansart-pool` vs HikariCP, Agroal (focus virtual threads, pinning)
-- [ ] Footprint mémoire AOT GraalVM (zéro réflexion runtime déjà respecté côté APT)
+- [ ] AOT GraalVM memory footprint (zero runtime reflection already respected on the APT side)
 
-## Backlog technique transverse
+## Cross-cutting technical backlog
 
-- [ ] Dialectes additionnels : MySQL, Oracle, SQL Server, MariaDB (au besoin)
-- [ ] Migrations DDL : intégration Flyway ou implémentation maison minimale
-- [ ] Observability : intégration avec Humboldt (spans JDBC, métriques pool)
+- [ ] Additional dialects: MySQL, Oracle, SQL Server, MariaDB (as needed)
+- [ ] DDL migrations: Flyway integration or minimal homegrown implementation
+- [ ] Observability: integration with Humboldt (JDBC spans, pool metrics)
 
-## Hors scope (explicite — cf. PLAN.md)
+## Out of scope (explicit — see PLAN.md)
 
-- ❌ ORM lourd (lazy loading dynamique, dirty checking sophistiqué) → JPA dans
-      M7 si besoin, pas dans `mansart-data`
-- ❌ Cache L2 par défaut → opt-in via SPI quand M7
-- ❌ Reactive (Mutiny, R2DBC) → philosophie Vidocq = virtual threads, pas reactive
+- ❌ Heavy ORM (dynamic lazy loading, sophisticated dirty checking) → JPA in
+      M7 if needed, not in `mansart-data`
+- ❌ Default L2 cache → opt-in via SPI when M7
+- ❌ Reactive (Mutiny, R2DBC) → Vidocq philosophy = virtual threads, not reactive
 
 ## Bugs
 
-Pas de `BUG.md` aujourd'hui. Créer le fichier si une régression reproductible
-apparaît (suivre le pattern des autres sous-projets : id court, date, symptôme,
-repro, statut).
+No `BUG.md` today. Create the file if a reproducible regression appears (follow
+the pattern of the other sub-projects: short id, date, symptom, repro, status).
 
-## Conventions de tracking
+## Tracking conventions
 
-- **Cette roadmap** : milestones M-x, vision moyen terme.
-- **`PLAN.md`** : architecture, décisions structurantes, vision globale.
-- **`<sous-projet>/PLAN.md`** : architecture spécifique (existe pour `mansart-pool/`).
-- **`TCK.md`** : sera créé en M6 (statut conformité Jakarta Data).
-- **`BENCH.md`** : sera créé en M8 (chiffres JMH reproductibles).
+- **This roadmap** : M-x milestones, medium-term vision.
+- **`PLAN.md`** : architecture, structural decisions, overall vision.
+- **`<sous-projet>/PLAN.md`** : specific architecture (exists for `mansart-pool/`).
+- **`TCK.md`** : will be created in M6 (Jakarta Data conformance status).
+- **`BENCH.md`** : will be created in M8 (reproducible JMH numbers).

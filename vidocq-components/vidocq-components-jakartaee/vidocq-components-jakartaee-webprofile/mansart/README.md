@@ -4,33 +4,35 @@
   <img src="mansart-logo.png" alt="Mansart" width="300">
 </p>
 
-Implémentation Jakarta Data 1.0 + Jakarta Persistence 3.2 pour l'écosystème Vidocq.
+Jakarta Data 1.0 + Jakarta Persistence 3.2 implementation for the Vidocq ecosystem.
 
-Le nom rend hommage à **Jules Hardouin-Mansart**, architecte du XVIIᵉ siècle (Versailles, Invalides, place Vendôme) — l'idée de structures durables, modulaires et soigneusement assemblées colle au rôle de la couche persistance dans la stack.
+The name pays homage to **Jules Hardouin-Mansart**, 17th-century architect (Versailles, Invalides,
+Place Vendome) — the idea of durable, modular, carefully assembled structures matches the role of
+the persistence layer in the stack.
 
-## Sous-projets
+## Sub-projects
 
-| Sous-projet | Description |
+| Sub-project | Description |
 | --- | --- |
-| `mansart-jakarta-data` | Implémentation **Jakarta Data 1.0** (repositories, pagination, query methods). Backend JDBC direct, dialectes pluggables. |
-| `mansart-persistence`  | Implémentation **Jakarta Persistence 3.2** (JPA), réutilisée par `mansart-jakarta-data` pour les repositories typés entité quand l'app fournit déjà un `EntityManager`. |
-| `mansart-pool`         | Pool JDBC **virtual-thread-native** post-Loom, zéro dépendance, optionnel et indépendant. Utilisable hors Mansart. |
+| `mansart-jakarta-data` | **Jakarta Data 1.0** implementation (repositories, pagination, query methods). Direct JDBC backend, pluggable dialects. |
+| `mansart-persistence`  | **Jakarta Persistence 3.2** (JPA) implementation, reused by `mansart-jakarta-data` for entity-typed repositories when the app already provides an `EntityManager`. |
+| `mansart-pool`         | **Virtual-thread-native** JDBC connection pool, post-Loom, zero dependencies, optional and standalone. Usable outside Mansart. |
 
-## Philosophie (héritée de Vidocq)
+## Philosophy (inherited from Vidocq)
 
-- **JPMS strict**, pas de classpath.
-- **Class-File API (JEP 484) + APT** pour générer les implémentations de `@Repository` et le métamodèle statique à la compilation. Aucune réflexion runtime, aucun proxy dynamique.
-- **Zéro dépendance externe** hors specs Jakarta. JDBC natif, pas de Hibernate, pas de Spring Data, pas de QueryDSL.
-- **Virtual Threads** pour toutes les exécutions de requête.
-- **TDD + Arquillian** pour le harness TCK.
+- **Strict JPMS**, no classpath.
+- **Class-File API (JEP 484) + APT** to generate `@Repository` implementations and the static metamodel at compile time. No runtime reflection, no dynamic proxies.
+- **Zero external dependencies** beyond Jakarta specs. Native JDBC, no Hibernate, no Spring Data, no QueryDSL.
+- **Virtual Threads** for all query execution.
+- **TDD + Arquillian** for the TCK harness.
 
-## Statut
+## Status
 
-🚧 En conception — voir [`PLAN.md`](./PLAN.md) pour la vision globale et [`mansart-jakarta-data/PLAN.md`](./mansart-jakarta-data/PLAN.md) pour le plan détaillé du premier module.
+🚧 Under design — see [`PLAN.md`](./PLAN.md) for the overall vision and [`mansart-jakarta-data/PLAN.md`](./mansart-jakarta-data/PLAN.md) for the detailed plan of the first module.
 
-## Dialectes prioritaires
+## Priority dialects
 
-1. **H2** (mode embarqué — cible des tests unitaires et du TCK in-memory).
-2. **PostgreSQL** (cible production de référence).
+1. **H2** (embedded mode — target for unit tests and in-memory TCK).
+2. **PostgreSQL** (reference production target).
 
-Les autres (MySQL, MariaDB, Oracle, SQL Server, SQLite, DuckDB) viendront après stabilisation de la SPI dialecte.
+Others (MySQL, MariaDB, Oracle, SQL Server, SQLite, DuckDB) will follow once the dialect SPI stabilises.

@@ -1,5 +1,5 @@
 # mansart-transactions — Benchmarks
 
-> Tout chiffre de performance (JMH, comparatif vs Narayana / Atomikos) doit être consigné ici
-> avec : date, hardware/JVM, commande exacte, résultats bruts, delta vs run précédent.
-> Pas de chiffre de perf dans un README ou un commit message sans entrée correspondante ici.
+> Any performance figure (JMH, comparison vs Narayana / Atomikos) must be logged here
+> with: date, hardware/JVM, exact command, raw results, and delta vs previous run.
+> No perf figure in a README or commit message without a corresponding entry here.

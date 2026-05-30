@@ -9,7 +9,7 @@ import jakarta.transaction.TransactionManager;
 import jakarta.transaction.UserTransaction;
 
 /**
- * Thin {@link UserTransaction} façade over a {@link TransactionManager} — same delegation
+ * Thin {@link UserTransaction} facade over a {@link TransactionManager} — same delegation
  * pattern as the TCK adapter, kept in this package to avoid leaking a runtime dep on the
  * tck module.
  */

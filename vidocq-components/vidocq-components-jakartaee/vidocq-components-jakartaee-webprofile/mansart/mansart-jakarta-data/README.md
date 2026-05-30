@@ -1,10 +1,10 @@
 # mansart-jakarta-data
 
-**Implémentation Jakarta Data 1.0** pour l'écosystème Vidocq — JDBC, JPMS strict, zéro dépendance hors specs Jakarta, génération statique APT et bytecode runtime via Class-File API (JEP 484). Pas de réflexion runtime non bornée. Pas de proxy dynamique. AOT-friendly (GraalVM, Leyden).
+**Jakarta Data 1.0 implementation** for the Vidocq ecosystem — JDBC, strict JPMS, zero dependency outside Jakarta specs, static APT generation and runtime bytecode via Class-File API (JEP 484). No unbounded runtime reflection. No dynamic proxy. AOT-friendly (GraalVM, Leyden).
 
 ```
             ┌────────────────────────────────────────────┐
-            │   @Repository interface (votre code)       │
+            │   @Repository interface (your code)        │
             └────────────┬───────────────────────────────┘
                          │
        ┌─────────────────┴──────────────────┐
@@ -23,22 +23,22 @@
                 JDBC DataSource
 ```
 
-## État
+## Status
 
-- **Jakarta Data 1.0 TCK : 74/74 PASS** sur **H2** ✅ et **74/74 PASS** sur **PostgreSQL 17** ✅ (73 EntityTests + 1 SignatureTests, Testcontainers).
-- **Tests internes : 93/93 unit + 6/6 smoke Arquillian** — voir `mansart-data-tests/`.
-- Dialectes livrés : `H2`, `PostgreSQL`.
-- Mode bootstrap **standalone** (`MansartData.builder()`) ou **CDI 4.1 Lite** (BCE — Vauban / Weld / OpenWebBeans).
+- **Jakarta Data 1.0 TCK: 74/74 PASS** on **H2** ✅ and **74/74 PASS** on **PostgreSQL 17** ✅ (73 EntityTests + 1 SignatureTests, Testcontainers).
+- **Internal tests: 93/93 unit + 6/6 smoke Arquillian** — see `mansart-data-tests/`.
+- Delivered dialects: `H2`, `PostgreSQL`.
+- Bootstrap mode **standalone** (`MansartData.builder()`) or **CDI 4.1 Lite** (BCE — Vauban / Weld / OpenWebBeans).
 
-Voir `PLAN.md` pour la roadmap complète et `BUG.md` pour les bugs ouverts/clos.
+See `PLAN.md` for complete roadmap and `BUG.md` for open/closed bugs.
 
-## Prérequis
+## Prerequisites
 
 - **Java 25** (Temurin)
 - **Maven 3.9.16**
-- (Optionnel) `sdkman` : `cd mansart-jakarta-data && sdk env`
+- (Optional) `sdkman`: `cd mansart-jakarta-data && sdk env`
 
-> Le `pom.xml` parent utilise Maven Model 4.1.0 — Maven 3.x ne sait pas le lire.
+> The parent `pom.xml` uses Maven Model 4.1.0 — Maven 3.x cannot read it.
 
 ## Installation
 
@@ -49,21 +49,21 @@ Voir `PLAN.md` pour la roadmap complète et `BUG.md` pour les bugs ouverts/clos.
     <version>1.0.0-SNAPSHOT</version>
 </dependency>
 
-<!-- Au moins un dialecte -->
+<!-- At least one dialect -->
 <dependency>
     <groupId>io.vidocq.mansart</groupId>
     <artifactId>mansart-data-dialect-h2</artifactId>
     <version>1.0.0-SNAPSHOT</version>
 </dependency>
 
-<!-- Driver JDBC : à fournir par l'application (scope provided côté dialecte) -->
+<!-- JDBC driver: provided by application (provided scope dialect-side) -->
 <dependency>
     <groupId>com.h2database</groupId>
     <artifactId>h2</artifactId>
     <version>2.3.232</version>
 </dependency>
 
-<!-- Optionnel : génération compile-time des *RepositoryImpl + métamodèle -->
+<!-- Optional: compile-time generation of *RepositoryImpl + metamodel -->
 <dependency>
     <groupId>io.vidocq.mansart</groupId>
     <artifactId>mansart-data-processor</artifactId>
@@ -71,7 +71,7 @@ Voir `PLAN.md` pour la roadmap complète et `BUG.md` pour les bugs ouverts/clos.
     <scope>provided</scope>
 </dependency>
 
-<!-- Optionnel : bootstrap CDI 4.1 -->
+<!-- Optional: CDI 4.1 bootstrap -->
 <dependency>
     <groupId>io.vidocq.mansart</groupId>
     <artifactId>mansart-data-cdi</artifactId>
@@ -81,9 +81,9 @@ Voir `PLAN.md` pour la roadmap complète et `BUG.md` pour les bugs ouverts/clos.
 
 ## Quickstart
 
-### 1. Une entité
+### 1. An entity
 
-Annotations standard `jakarta.persistence.*` (Jakarta Persistence 3.2) — c'est une API spec, pas une implémentation, donc compatible avec la philosophie zéro-dep.
+Standard `jakarta.persistence.*` annotations (Jakarta Persistence 3.2) — it's a spec API, not an implementation, so compatible with the zero-dep philosophy.
 
 ```java
 package shop;
@@ -108,7 +108,7 @@ public class Author {
 }
 ```
 
-### 2. Un repository
+### 2. A repository
 
 ```java
 package shop;
@@ -149,7 +149,7 @@ public interface AuthorRepository extends BasicRepository<Author, Long> {
 }
 ```
 
-### 3. Bootstrap standalone
+### 3. Standalone bootstrap
 
 ```java
 import io.vidocq.mansart.data.core.MansartData;
@@ -160,8 +160,8 @@ ds.setURL("jdbc:h2:mem:demo;DB_CLOSE_DELAY=-1");
 ds.setUser("sa");
 
 MansartData md = MansartData.builder()
-        .dataSource(ds)             // requis
-        // .dialect(new H2Dialect()) // optionnel, sinon auto-détection
+        .dataSource(ds)             // required
+        // .dialect(new H2Dialect()) // optional, otherwise auto-detection
         .build();
 
 AuthorRepository repo = md.repository(AuthorRepository.class);
@@ -172,14 +172,14 @@ repo.findById(a.getId()).ifPresent(System.out::println);
 List<Author> hits = repo.findByNameLike("Vic%");
 ```
 
-`md.repository(itf)` cherche d'abord la classe `<itf>Impl` générée par l'APT. Si l'APT n'a pas tourné (ex. interfaces compilées dans un jar tiers comme le TCK), utilisez `md.runtimeRepository(itf)` qui passe par la **génération bytecode runtime via Class-File API**.
+`md.repository(itf)` first looks for the `<itf>Impl` class generated by APT. If APT hasn't run (e.g. interfaces compiled in a third-party jar like the TCK), use `md.runtimeRepository(itf)` which goes through **runtime bytecode generation via Class-File API**.
 
-### 4. Bootstrap CDI 4.1
+### 4. CDI 4.1 bootstrap
 
-Ajouter `mansart-data-cdi` au classpath. Le module fournit :
+Add `mansart-data-cdi` to classpath. The module provides:
 
-- `MansartDataExtension` (`BuildCompatibleExtension`) — découvre toutes les interfaces `@jakarta.data.repository.Repository` du déploiement, enregistre un bean synthétique `@Singleton` typé sur l'interface.
-- `MansartRuntimeProducer` — produit un `RepositoryRuntime` `@Singleton` à partir d'un `DataSource` injecté par l'application.
+- `MansartDataExtension` (`BuildCompatibleExtension`) — discovers all `@jakarta.data.repository.Repository` interfaces in the deployment, registers a synthetic `@Singleton` bean typed on the interface.
+- `MansartRuntimeProducer` — produces a `@Singleton` `RepositoryRuntime` from a `DataSource` injected by the application.
 
 ```java
 @ApplicationScoped
@@ -204,74 +204,74 @@ public class AuthorService {
 }
 ```
 
-Le BCE est standard CDI 4.1 Lite — compatible Vauban (Vidocq), Weld embedded, OpenWebBeans.
+The BCE is standard CDI 4.1 Lite — compatible with Vauban (Vidocq), Weld embedded, OpenWebBeans.
 
-## Annotations entité
+## Entity annotations
 
-Mansart utilise les annotations standard **`jakarta.persistence.*`** (Jakarta Persistence 3.2). C'est une **API spec**, pas une implémentation — l'engagement « zéro-dep externe » de Vidocq porte sur les implémentations, et la spec Jakarta est le standard officiel sur lequel s'aligner.
+Mansart uses standard **`jakarta.persistence.*`** annotations (Jakarta Persistence 3.2). It's a **spec API**, not an implementation — Vidocq's "zero external dep" commitment applies to implementations, and the Jakarta spec is the official standard to align with.
 
-| Annotation utilisée | Rôle |
+| Annotation used | Role |
 | --- | --- |
-| `@jakarta.persistence.Entity` | Marque une classe persistante. |
-| `@jakarta.persistence.Table(name, schema)` | Surcharge la convention pluriel snake_case. |
-| `@jakarta.persistence.Id` | Identifiant. |
+| `@jakarta.persistence.Entity` | Marks a persistent class. |
+| `@jakarta.persistence.Table(name, schema)` | Overrides plural snake_case convention. |
+| `@jakarta.persistence.Id` | Identifier. |
 | `@jakarta.persistence.GeneratedValue(strategy)` | `AUTO`, `IDENTITY`, `SEQUENCE`. |
-| `@jakarta.persistence.Column(name, nullable, unique, length)` | Surcharge nom de colonne. |
+| `@jakarta.persistence.Column(name, nullable, unique, length)` | Overrides column name. |
 | `@jakarta.persistence.Version` | Optimistic locking. |
-| `@jakarta.persistence.Enumerated(STRING\|ORDINAL)` | Persistance enum. |
-| `@jakarta.persistence.Transient` | Exclu du mapping. |
-| `@jakarta.persistence.ManyToOne(fetch)` | Relation propriétaire many-to-one. |
-| `@jakarta.persistence.OneToOne(fetch)` | Relation propriétaire one-to-one. |
-| `@jakarta.persistence.JoinColumn(name)` | Nom de la colonne FK (défaut `<attr>_id`). |
-| `@jakarta.persistence.Embedded` / `@Embeddable` | Mapping inline. |
-| `@jakarta.data.repository.Repository(dataStore = "name")` | Sélection multi-DataSource : Mansart résout la valeur comme un `@Named` CDI sur `DataSource` (préfixe `java:` → JNDI). Aucune annotation propriétaire. |
+| `@jakarta.persistence.Enumerated(STRING\|ORDINAL)` | Enum persistence. |
+| `@jakarta.persistence.Transient` | Excluded from mapping. |
+| `@jakarta.persistence.ManyToOne(fetch)` | Owning many-to-one relationship. |
+| `@jakarta.persistence.OneToOne(fetch)` | Owning one-to-one relationship. |
+| `@jakarta.persistence.JoinColumn(name)` | FK column name (default `<attr>_id`). |
+| `@jakarta.persistence.Embedded` / `@Embeddable` | Inline mapping. |
+| `@jakarta.data.repository.Repository(dataStore = "name")` | Multi-DataSource selection: Mansart resolves the value as a CDI `@Named` on `DataSource` (`java:` prefix → JNDI). No proprietary annotation. |
 
-Bénéfice secondaire : interop totale avec Hibernate, EclipseLink, Spring Data, et le futur `mansart-persistence` (JPA 3.2). Static metamodel JPA standard (`Author_.id`, `Author_.name`) généré en parallèle du métamodèle Mansart riche (`_Author.$MODEL`).
+Secondary benefit: total interop with Hibernate, EclipseLink, Spring Data, and the future `mansart-persistence` (JPA 3.2). Standard JPA static metamodel (`Author_.id`, `Author_.name`) generated in parallel with the rich Mansart metamodel (`_Author.$MODEL`).
 
-Conventions par défaut (sans `@Table` / `@Column`) :
-- Table = pluriel snake_case (`Book` → `books`, `OrderLine` → `order_lines`).
-- Colonne = snake_case (`publishedOn` → `published_on`).
+Default conventions (without `@Table` / `@Column`):
+- Table = plural snake_case (`Book` → `books`, `OrderLine` → `order_lines`).
+- Column = snake_case (`publishedOn` → `published_on`).
 - FK = `<attr>_id` (`@ManyToOne Author author` → `author_id`).
 
-## Repository — fonctionnalités supportées
+## Repository — supported features
 
-### Méthodes héritées
-- `BasicRepository<T,K>` : `save`, `saveAll`, `findById`, `findAll`, `delete`, `deleteById`, `deleteAll`.
-- `CrudRepository<T,K>` : idem + `insert`, `update`.
-- `DataRepository<T,K>` : marker.
+### Inherited methods
+- `BasicRepository<T,K>`: `save`, `saveAll`, `findById`, `findAll`, `delete`, `deleteById`, `deleteAll`.
+- `CrudRepository<T,K>`: same + `insert`, `update`.
+- `DataRepository<T,K>`: marker.
 
-### Annotations lifecycle
-- `@Insert`, `@Update`, `@Delete`, `@Save` typés (paramètre = entité, collection ou varargs ; retour `void`/`T`/`Iterable<T>`/`int`/`long`/`boolean`).
+### Lifecycle annotations
+- `@Insert`, `@Update`, `@Delete`, `@Save` typed (parameter = entity, collection or varargs; return `void`/`T`/`Iterable<T>`/`int`/`long`/`boolean`).
 
 ### `@Find`
-- Liaison nom de paramètre → attribut entité.
+- Parameter name → entity attribute binding.
 
-### Derived queries (par nom de méthode)
-- Préfixes : `findBy`, `findOneBy`, `existsBy`, `countBy`, `deleteBy`, `findAllBy`.
-- Opérateurs : `Equals`, `Between`, `In`, `LessThan`, `LessThanEqual`, `GreaterThan`, `GreaterThanEqual`, `Like`, `Contains`, `StartsWith`, `EndsWith`, `Null`, `NotNull`, `Empty`, `NotEmpty`, `True`, `False`, `IgnoreCase`, `Not`.
-- Tri : `OrderBy<Attr>Asc`/`Desc`, multi-attributs (`OrderByNameAscIdAsc`).
+### Derived queries (by method name)
+- Prefixes: `findBy`, `findOneBy`, `existsBy`, `countBy`, `deleteBy`, `findAllBy`.
+- Operators: `Equals`, `Between`, `In`, `LessThan`, `LessThanEqual`, `GreaterThan`, `GreaterThanEqual`, `Like`, `Contains`, `StartsWith`, `EndsWith`, `Null`, `NotNull`, `Empty`, `NotEmpty`, `True`, `False`, `IgnoreCase`, `Not`.
+- Sort: `OrderBy<Attr>Asc`/`Desc`, multi-attributes (`OrderByNameAscIdAsc`).
 
 ### `@Query` JDQL
-- `FROM <Entity>` (optionnel quand contexte clair).
-- `SELECT *`, projection scalaire (ex: `SELECT name FROM …`), agrégats (`COUNT`, `SUM`, `AVG`, `MIN`, `MAX`), `GROUP BY`, `HAVING`.
-- `WHERE` : opérateurs `=`, `<>`, `<`, `<=`, `>`, `>=`, `LIKE`, `IN (…)`, `BETWEEN`, `IS [NOT] NULL`, `IS [NOT] EMPTY`, `AND`/`OR`/`NOT`, `UPPER`/`LOWER`.
-- Arithmétique : `+ - * /` dans `SET` et `WHERE`.
-- Litéraux : `42`, `42L`, `0.5`, `0.5d`, `'string'`, `TRUE`, `FALSE`, `com.foo.MyEnum.VAL`.
-- Paramètres : nommés (`:name`) ou positionnels (`?1`).
-- `UPDATE … SET … WHERE …`, `DELETE FROM … WHERE …` — retour `long` (rows affectés) ou `boolean` (rows > 0).
-- `ORDER BY` (combinable avec `Sort`/`Order` runtime).
+- `FROM <Entity>` (optional when context is clear).
+- `SELECT *`, scalar projection (e.g.: `SELECT name FROM …`), aggregates (`COUNT`, `SUM`, `AVG`, `MIN`, `MAX`), `GROUP BY`, `HAVING`.
+- `WHERE`: operators `=`, `<>`, `<`, `<=`, `>`, `>=`, `LIKE`, `IN (…)`, `BETWEEN`, `IS [NOT] NULL`, `IS [NOT] EMPTY`, `AND`/`OR`/`NOT`, `UPPER`/`LOWER`.
+- Arithmetic: `+ - * /` in `SET` and `WHERE`.
+- Literals: `42`, `42L`, `0.5`, `0.5d`, `'string'`, `TRUE`, `FALSE`, `com.foo.MyEnum.VAL`.
+- Parameters: named (`:name`) or positional (`?1`).
+- `UPDATE … SET … WHERE …`, `DELETE FROM … WHERE …` — returns `long` (affected rows) or `boolean` (rows > 0).
+- `ORDER BY` (combinable with runtime `Sort`/`Order`).
 
 ### Pagination
-- `Page<T>`, `CursoredPage<T>`, `PageRequest` (offset + cursor multi-attributs), `Limit`, `Slice` (variante sans count).
-- `Sort` / `Order` passés au runtime — fusionnés avec `ORDER BY` statique.
+- `Page<T>`, `CursoredPage<T>`, `PageRequest` (offset + multi-attribute cursor), `Limit`, `Slice` (variant without count).
+- Runtime-passed `Sort` / `Order` — merged with static `ORDER BY`.
 
 ### Exceptions
-- `EmptyResultException` (méthode renvoie `T` mais 0 ligne).
-- `NonUniqueResultException` (méthode renvoie `T`/`Optional<T>` mais > 1 ligne).
-- `OptimisticLockingFailureException` (sur `@Version`).
+- `EmptyResultException` (method returns `T` but 0 rows).
+- `NonUniqueResultException` (method returns `T`/`Optional<T>` but > 1 rows).
+- `OptimisticLockingFailureException` (on `@Version`).
 - `EntityExists` (SQLState 23505).
 
-## Dialectes
+## Dialects
 
 ```java
 public interface DialectFactory {
@@ -280,79 +280,79 @@ public interface DialectFactory {
 }
 ```
 
-Découverte par `ServiceLoader` (déclaré `provides` dans le `module-info.java` du dialecte). Ajoutez un dialecte custom en publiant un `META-INF/services/io.vidocq.mansart.data.dialect.DialectFactory` (et/ou `provides` JPMS).
+Discovery via `ServiceLoader` (declared `provides` in dialect's `module-info.java`). Add a custom dialect by publishing a `META-INF/services/io.vidocq.mansart.data.dialect.DialectFactory` (and/or JPMS `provides`).
 
-| Dialecte | État | Spécificités |
+| Dialect | Status | Specifics |
 | --- | --- | --- |
-| `mansart-data-dialect-h2` | ✅ | `MERGE INTO … KEY(…)` pour upsert, `BIGINT GENERATED BY DEFAULT AS IDENTITY` pour `@GeneratedValue`. |
-| `mansart-data-dialect-postgresql` | ✅ | `INSERT … ON CONFLICT (…) DO UPDATE` pour upsert, `RETURNING id` pour les GENERATED KEY. |
+| `mansart-data-dialect-h2` | ✅ | `MERGE INTO … KEY(…)` for upsert, `BIGINT GENERATED BY DEFAULT AS IDENTITY` for `@GeneratedValue`. |
+| `mansart-data-dialect-postgresql` | ✅ | `INSERT … ON CONFLICT (…) DO UPDATE` for upsert, `RETURNING id` for GENERATED KEY. |
 
 ## JPMS
 
-Tous les modules sont JPMS-natifs. Exemple côté application :
+All modules are JPMS-native. Example application-side:
 
 ```java
 module shop {
     requires io.vidocq.mansart.data.api;
     requires io.vidocq.mansart.data.core;
     requires jakarta.data;
-    // pas de requires sur les dialectes — ils sont chargés par ServiceLoader
+    // no requires on dialects — they are loaded by ServiceLoader
 }
 ```
 
-`mansart-data-core` déclare `uses io.vidocq.mansart.data.dialect.DialectFactory` ; chaque dialecte déclare `provides`.
+`mansart-data-core` declares `uses io.vidocq.mansart.data.dialect.DialectFactory`; each dialect declares `provides`.
 
 ## Build, tests, TCK
 
 ```bash
-# Build complet (sauf TCK officiel)
+# Complete build (except official TCK)
 ./mvnw -ntp install -DskipTests
 
-# Tests unitaires + smoke
+# Unit tests + smoke
 ./mvnw test
 
-# TCK officiel Jakarta Data 1.0 (hors reactor — script dédié)
+# Official Jakarta Data 1.0 TCK (outside reactor — dedicated script)
 cd mansart-data-tck
-./run-official-tck-data-1.0.sh           # 73/73 EntityTests sur H2 in-memory
-./run-official-tck-data-1.0.sh --pg      # 73/73 EntityTests sur PostgreSQL 17 (Docker requis)
-./run-official-tck-data-1.0.sh --sig     # 1/1 SignatureTests sur H2
-./run-official-tck-data-1.0.sh --full    # 74/74 EntityTests + Signature sur H2
-PG=1 ./run-official-tck-data-1.0.sh --full   # 74/74 sur PostgreSQL
+./run-official-tck-data-1.0.sh           # 73/73 EntityTests on H2 in-memory
+./run-official-tck-data-1.0.sh --pg      # 73/73 EntityTests on PostgreSQL 17 (Docker required)
+./run-official-tck-data-1.0.sh --sig     # 1/1 SignatureTests on H2
+./run-official-tck-data-1.0.sh --full    # 74/74 EntityTests + Signature on H2
+PG=1 ./run-official-tck-data-1.0.sh --full   # 74/74 on PostgreSQL
 ```
 
-Le runner TCK est en `modelVersion 4.0.0` standalone, **volontairement détaché** du reactor parent (Maven Model 4.1.0 incompatible avec ShrinkWrap Maven Resolver 3.3 utilisé par le TCK). Voir `mansart-data-tck/README.md`.
+The TCK runner is in standalone `modelVersion 4.0.0`, **deliberately detached** from parent reactor (Maven Model 4.1.0 incompatible with ShrinkWrap Maven Resolver 3.3 used by TCK). See `mansart-data-tck/README.md`.
 
 ## Modules
 
 | Module | Description |
 | --- | --- |
-| [`mansart-data-dialects/mansart-data-dialect-spi`](mansart-data-dialects/mansart-data-dialect-spi/) | SPI : `Dialect`, `DialectFactory`, `EntityModel`, `Attribute` (sealed), `Where`, `OrderBy`, `Pagination`, `SqlFragment`. |
-| [`mansart-data-dialects/mansart-data-dialect-h2`](mansart-data-dialects/mansart-data-dialect-h2/) | Dialecte H2 (`provides DialectFactory`). |
-| [`mansart-data-dialects/mansart-data-dialect-postgresql`](mansart-data-dialects/mansart-data-dialect-postgresql/) | Dialecte PostgreSQL (`provides DialectFactory`). |
-| [`mansart-data-core`](mansart-data-core/) | Runtime : `MansartData`, `RepositoryRuntime`, JDQL parser/exécuteur, runtime `EntityModel`, **classes hidden via Class-File API**. |
-| [`mansart-data-processor`](mansart-data-processor/) | APT (`SourceVersion.RELEASE_25`) — génère `_<Entity>` (métamodèle Mansart riche) + `<Entity>_` (JPA static metamodel) + `<Repo>Impl`. |
-| [`mansart-data-cdi`](mansart-data-cdi/) | Bootstrap CDI 4.1 Lite — `BuildCompatibleExtension` qui découvre les `@Repository` et enregistre des beans synthétiques `@Singleton`. |
-| [`mansart-data-tests`](mansart-data-tests/) | Tests internes : CRUD, pagination, JDQL, virtual threads, lifecycle. |
-| [`mansart-data-tck`](mansart-data-tck/) | Runner TCK Jakarta Data 1.0 — **hors reactor**. |
+| [`mansart-data-dialects/mansart-data-dialect-spi`](mansart-data-dialects/mansart-data-dialect-spi/) | SPI: `Dialect`, `DialectFactory`, `EntityModel`, `Attribute` (sealed), `Where`, `OrderBy`, `Pagination`, `SqlFragment`. |
+| [`mansart-data-dialects/mansart-data-dialect-h2`](mansart-data-dialects/mansart-data-dialect-h2/) | H2 dialect (`provides DialectFactory`). |
+| [`mansart-data-dialects/mansart-data-dialect-postgresql`](mansart-data-dialects/mansart-data-dialect-postgresql/) | PostgreSQL dialect (`provides DialectFactory`). |
+| [`mansart-data-core`](mansart-data-core/) | Runtime: `MansartData`, `RepositoryRuntime`, JDQL parser/executor, runtime `EntityModel`, **hidden classes via Class-File API**. |
+| [`mansart-data-processor`](mansart-data-processor/) | APT (`SourceVersion.RELEASE_25`) — generates `_<Entity>` (rich Mansart metamodel) + `<Entity>_` (JPA static metamodel) + `<Repo>Impl`. |
+| [`mansart-data-cdi`](mansart-data-cdi/) | CDI 4.1 Lite bootstrap — `BuildCompatibleExtension` discovering `@Repository` and registering `@Singleton` synthetic beans. |
+| [`mansart-data-tests`](mansart-data-tests/) | Internal tests: CRUD, pagination, JDQL, virtual threads, lifecycle. |
+| [`mansart-data-tck`](mansart-data-tck/) | Jakarta Data 1.0 TCK runner — **outside reactor**. |
 
-## Philosophie
+## Philosophy
 
-- **Aucune réflexion runtime** sur les entités au-delà du `MethodHandle` initial obtenu par `MethodHandles.privateLookupIn` (un seul `Lookup` par entité, mis en cache).
-- **Aucun proxy dynamique** (`java.lang.reflect.Proxy`) : remplacé en M7-25 par des classes hidden générées via **Class-File API** (`java.lang.classfile`, JEP 484). Compatible AOT (GraalVM, Leyden CDS).
-- **Aucune génération de bytecode tierce** (pas d'ASM, Byte Buddy, cglib).
-- **Zéro dépendance externe** hors `jakarta.data-api`, `jakarta.persistence-api` (compile-only), `jakarta.cdi-api` / `jakarta.inject-api` (module CDI), `jakarta.transaction-api` (transactions futures).
-- **Virtual Threads** — toute exécution `PreparedStatement.execute*` se fait depuis un virtual thread ; pas de `synchronized` autour d'opérations bloquantes.
-- **JPMS strict** — `module-info.java` minimaliste sur tous les modules, pas de classpath.
+- **No runtime reflection** on entities beyond the initial `MethodHandle` obtained by `MethodHandles.privateLookupIn` (one `Lookup` per entity, cached).
+- **No dynamic proxy** (`java.lang.reflect.Proxy`): replaced in M7-25 by hidden classes generated via **Class-File API** (`java.lang.classfile`, JEP 484). AOT-compatible (GraalVM, Leyden CDS).
+- **No third-party bytecode generation** (no ASM, Byte Buddy, cglib).
+- **Zero external dependency** except `jakarta.data-api`, `jakarta.persistence-api` (compile-only), `jakarta.cdi-api` / `jakarta.inject-api` (CDI module), `jakarta.transaction-api` (future transactions).
+- **Virtual Threads** — all `PreparedStatement.execute*` execution happens from a virtual thread; no `synchronized` around blocking operations.
+- **Strict JPMS** — minimalist `module-info.java` on all modules, no classpath.
 
-## Liens
+## Links
 
-- [Spec Jakarta Data 1.0](https://jakarta.ee/specifications/data/1.0/)
-- [`PLAN.md`](PLAN.md) — roadmap détaillée des jalons M2 → M7-25 et au-delà.
-- [`BUG.md`](BUG.md) — bugs ouverts et résolus.
-- [`BENCH.md`](BENCH.md) — mesures de performance.
-- [`mansart-data-tck/README.md`](mansart-data-tck/README.md) — exécution TCK officiel.
-- Workspace Vidocq : voir `../../CLAUDE.md` pour la philosophie transverse.
+- [Jakarta Data 1.0 Spec](https://jakarta.ee/specifications/data/1.0/)
+- [`PLAN.md`](PLAN.md) — detailed roadmap of milestones M2 → M7-25 and beyond.
+- [`BUG.md`](BUG.md) — open and resolved bugs.
+- [`BENCH.md`](BENCH.md) — performance measurements.
+- [`mansart-data-tck/README.md`](mansart-data-tck/README.md) — official TCK execution.
+- Vidocq workspace: see `../../CLAUDE.md` for cross-cutting philosophy.
 
-## Licence
+## License
 
-Voir le fichier `LICENSE` à la racine du workspace Vidocq.
+See `LICENSE` file at the Vidocq workspace root.

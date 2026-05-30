@@ -1,22 +1,22 @@
 # mansart-data-processor
 
-Annotation processor (APT) Mansart — **`SourceVersion.RELEASE_25`**. Génère, à la compilation des modules utilisateur :
+Mansart annotation processor (APT) — **`SourceVersion.RELEASE_25`**. Generates, at user module compilation:
 
-1. Le **métamodèle Mansart riche** `_<Entity>` (attributs typés, `EntityModel<T>` statique).
-2. Le **métamodèle JPA standard** `<Entity>_` (uniquement si `jakarta.persistence-api` est sur le compile-classpath).
-3. L'**implémentation statique** `<Repo>Impl` pour chaque interface `@Repository` détectée.
-4. Le fichier `META-INF/mansart-repositories.list` (utilisé par le BCE CDI).
+1. The **rich Mansart metamodel** `_<Entity>` (typed attributes, static `EntityModel<T>`).
+2. The **standard JPA metamodel** `<Entity>_` (only if `jakarta.persistence-api` is on the compile-classpath).
+3. The **static implementation** `<Repo>Impl` for each detected `@Repository` interface.
+4. The `META-INF/mansart-repositories.list` file (used by the CDI BCE).
 
-## Quand l'utiliser
+## When to use it
 
-Cette voie est **optionnelle** depuis M7 : si l'APT n'a pas tourné sur le module qui déclare l'interface (cas typique : interfaces `@Repository` compilées dans un jar tiers, ou TCK officiel), `mansart-data-core` génère l'implémentation **à runtime** via Class-File API.
+This path is **optional** since M7: if the APT hasn't run on the module declaring the interface (typical case: `@Repository` interfaces compiled in a third-party jar, or official TCK), `mansart-data-core` generates the implementation **at runtime** via Class-File API.
 
-L'APT reste utile pour :
-- Validation à compile-time (détection précoce des erreurs : nom de méthode dérivable invalide, `@Query` JDQL syntaxiquement faux, attribut inexistant…).
-- Performance de bootstrap (pas de génération de bytecode au démarrage).
-- AOT / native image (GraalVM, Leyden) — bien que la génération runtime soit aussi AOT-compatible.
+The APT remains useful for:
+- Compile-time validation (early error detection: invalid derived method name, syntactically wrong JDQL `@Query`, non-existent attribute…).
+- Bootstrap performance (no bytecode generation at startup).
+- AOT / native image (GraalVM, Leyden) — although runtime generation is also AOT-compatible.
 
-## Configuration Maven
+## Maven configuration
 
 ```xml
 <dependency>
@@ -47,29 +47,29 @@ L'APT reste utile pour :
 </build>
 ```
 
-> Le plugin `maven-compiler-plugin` 3.13.0/3.14.0 ne lit pas les class files Java 25 (major 69). **Utiliser 4.0.0-beta-4**.
+> The `maven-compiler-plugin` 3.13.0/3.14.0 does not read Java 25 class files (major 69). **Use 4.0.0-beta-4**.
 
-## Sortie
+## Output
 
-`target/generated-sources/annotations/` :
+`target/generated-sources/annotations/`:
 
 ```
-shop/_Author.java       ← métamodèle Mansart riche
-shop/Author_.java       ← métamodèle JPA standard (si jakarta.persistence-api présent)
+shop/_Author.java       ← rich Mansart metamodel
+shop/Author_.java       ← standard JPA metamodel (if jakarta.persistence-api present)
 shop/AuthorRepositoryImpl.java
 META-INF/mansart-repositories.list
 ```
 
-## Validation à compile-time
+## Compile-time validation
 
-Erreurs émises par le processor :
-- Repository référence une entité sans `@Entity`.
-- Attribut sans `@Id` / plusieurs `@Id` non composite.
-- `@Find List<X> findByXyz(...)` avec `xyz` non attribut de `X`.
-- `@Query` JDQL syntaxiquement invalide.
-- Annotations Mansart **et** JPA mélangées sur la même entité.
+Errors emitted by the processor:
+- Repository references an entity without `@Entity`.
+- Attribute without `@Id` / multiple non-composite `@Id`.
+- `@Find List<X> findByXyz(...)` with `xyz` not an attribute of `X`.
+- Syntactically invalid JDQL `@Query`.
+- Mansart **and** JPA annotations mixed on the same entity.
 
-## Module JPMS
+## JPMS module
 
 ```java
 module io.vidocq.mansart.data.processor {

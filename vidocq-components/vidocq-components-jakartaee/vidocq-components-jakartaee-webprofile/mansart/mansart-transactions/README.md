@@ -1,66 +1,66 @@
 # mansart-transactions
 
-Implémentation **Jakarta Transactions 2.0** pour l'écosystème Vidocq — locale d'abord (1PC),
-puis multi-resource (2PC), virtual-thread-native, packaged en plusieurs jars légers.
+**Jakarta Transactions 2.0** implementation for the Vidocq ecosystem — local first (1PC),
+then multi-resource (2PC), virtual-thread-native, packaged in multiple lightweight jars.
 
 ## Modules
 
-| Module | Rôle |
+| Module | Role |
 | --- | --- |
-| `mansart-transactions-api` | Re-exposition `jakarta.transaction-api` 2.0 + helpers SPI Mansart. |
-| `mansart-transactions-core` | `TransactionManager` / `UserTransaction` / `TransactionSynchronizationRegistry` — implémentation `ScopedValue`. 1PC d'abord, 2PC plus tard. |
-| `mansart-transactions-cdi` | Bootstrap CDI 4.1 — interceptor `@Transactional` (REQUIRED, REQUIRES_NEW, MANDATORY, NEVER, NOT_SUPPORTED, SUPPORTS) + scope `@TransactionScoped`, plug via `BuildCompatibleExtension`. |
-| `mansart-transactions-tests` | Tests d'intégration H2 + `mansart-pool` (résolution résources, callbacks `Synchronization`, comportements de propagation). |
-| `mansart-transactions-tck` | Runner TCK officiel — **HORS reactor** (modelVersion 4.0.0 standalone, voir CLAUDE.md racine). |
+| `mansart-transactions-api` | Re-exposition `jakarta.transaction-api` 2.0 + Mansart SPI helpers. |
+| `mansart-transactions-core` | `TransactionManager` / `UserTransaction` / `TransactionSynchronizationRegistry` — `ScopedValue` implementation. 1PC first, 2PC later. |
+| `mansart-transactions-cdi` | CDI 4.1 bootstrap — `@Transactional` interceptor (REQUIRED, REQUIRES_NEW, MANDATORY, NEVER, NOT_SUPPORTED, SUPPORTS) + `@TransactionScoped` scope, plug via `BuildCompatibleExtension`. |
+| `mansart-transactions-tests` | H2 integration tests + `mansart-pool` (resource resolution, `Synchronization` callbacks, propagation behaviors). |
+| `mansart-transactions-tck` | Official TCK runner — **OUTSIDE reactor** (standalone modelVersion 4.0.0, see root CLAUDE.md). |
 
 ## Build
 
 ```bash
 cd mansart-transactions && sdk env
-./mvnw -ntp install -DskipTests   # ou : mvn -ntp install -DskipTests
-mvn test                          # tests unitaires + intégration
+./mvnw -ntp install -DskipTests   # or: mvn -ntp install -DskipTests
+mvn test                          # unit + integration tests
 ```
 
-## Architecture rapide
+## Quick architecture
 
-- **Contexte de transaction** porté par `ScopedValue<TransactionContext>` — un binding par virtual
-  thread. Pas de `ThreadLocal`, pas de pinning.
-- **Résources** enrôlées dynamiquement via `Transaction.enlistResource(XAResource)` ; en mode 1PC
-  une seule resource active à la fois, prepare/commit dégénèrent en `commit()` direct.
-- **Synchronisations** appelées à `beforeCompletion` (write-flush) et `afterCompletion`
-  (cleanup, callbacks utilisateur).
-- **2PC** (M4) : journal de recovery sur disque, restart-safe, tests de crash injectés.
+- **Transaction context** carried by `ScopedValue<TransactionContext>` — one binding per virtual
+  thread. No `ThreadLocal`, no pinning.
+- **Resources** dynamically enlisted via `Transaction.enlistResource(XAResource)`; in 1PC mode
+  only one active resource at a time, prepare/commit degenerate to direct `commit()`.
+- **Synchronizations** called at `beforeCompletion` (write-flush) and `afterCompletion`
+  (cleanup, user callbacks).
+- **2PC** (M4): disk recovery log, restart-safe, injected crash tests.
 
 ## Roadmap
 
-- **M1** — `MansartTransactionManager` : `begin/commit/rollback`, `STATUS_ACTIVE` /
-  `STATUS_NO_TRANSACTION`. Tests TDD : `TransactionManagerSmokeTest`.
-- **M2** — `Synchronization` : `registerSynchronization`, `beforeCompletion`,
+- **M1** — `MansartTransactionManager`: `begin/commit/rollback`, `STATUS_ACTIVE` /
+  `STATUS_NO_TRANSACTION`. TDD tests: `TransactionManagerSmokeTest`.
+- **M2** — `Synchronization`: `registerSynchronization`, `beforeCompletion`,
   `afterCompletion(int status)`.
 - **M3** — `suspend` / `resume` (TX inheritance via virtual threads).
-- **M4** — Multi-resource : `enlistResource(XAResource)`, `delistResource(XAResource, int)`,
-  prepare/commit/rollback à 2 phases.
-- **M5** — Recovery log + tests de crash.
-- **M6** — TCK Jakarta Transactions 2.0 (smoke puis full).
-- **M7** — CDI : interceptor `@Transactional`, scope `@TransactionScoped`, BCE Vauban.
+- **M4** — Multi-resource: `enlistResource(XAResource)`, `delistResource(XAResource, int)`,
+  2-phase prepare/commit/rollback.
+- **M5** — Recovery log + crash tests.
+- **M6** — Jakarta Transactions 2.0 TCK (smoke then full).
+- **M7** — CDI: `@Transactional` interceptor, `@TransactionScoped` scope, Vauban BCE.
 
 ## TDD
 
-Chaque jalon démarre par les tests qui décrivent le comportement attendu, puis l'implémentation
-les fait passer un à un. Le seed M1 est `mansart-transactions-core/src/test/java/.../TransactionManagerSmokeTest.java` —
-il échoue actuellement (squelette) pour amorcer le cycle rouge → vert → refactor.
+Each milestone starts with tests describing the expected behavior, then the implementation
+makes them pass one by one. The M1 seed is `mansart-transactions-core/src/test/java/.../TransactionManagerSmokeTest.java` —
+it currently fails (skeleton) to bootstrap the red → green → refactor cycle.
 
-## Intégration Vidocq
+## Vidocq integration
 
-Côté Vidocq Runtime, l'activation se fait via une seule dépendance — l'extension
+On the Vidocq Runtime side, activation is done via a single dependency — the
 [`vidocq-runtime-mansart-transactions-extension`](https://forge.vidocq.dev/vidocq/vidocq/src/branch/main/vidocq-runtime-core-extensions/vidocq-runtime-mansart-transactions-extension)
-qui tire `mansart-transactions-cdi` transitivement et fait un sanity-check
-`TransactionManager` au boot (priorité 250, entre `mansart-pool` et `mansart-data`).
-L'application n'a alors qu'à `requires jakarta.transaction;` dans son `module-info.java`
-pour utiliser `@Transactional` et `@TransactionScoped` — l'exemple de référence est
+extension which transitively pulls `mansart-transactions-cdi` and does a sanity-check
+`TransactionManager` at boot (priority 250, between `mansart-pool` and `mansart-data`).
+The application then only needs `requires jakarta.transaction;` in its `module-info.java`
+to use `@Transactional` and `@TransactionScoped` — the reference example is
 `vidocq-runtime-mansart-h2-example`.
 
 ## Bugs / Bench
 
-- `BUG.md` — bugs reproductibles (tracker interne).
-- `BENCH.md` — comparatif Narayana / Atomikos / JBoss TM (à venir).
+- `BUG.md` — reproducible bugs (internal tracker).
+- `BENCH.md` — Narayana / Atomikos / JBoss TM comparison (to come).

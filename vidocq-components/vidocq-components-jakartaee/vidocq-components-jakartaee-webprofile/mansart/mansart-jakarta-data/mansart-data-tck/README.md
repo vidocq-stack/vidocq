@@ -1,30 +1,30 @@
 # mansart-data-tck
 
-Runner pour le **TCK officiel Jakarta Data 1.0** (`jakarta.data:jakarta-data-tck:1.0.1`).
+Runner for the **official Jakarta Data 1.0 TCK** (`jakarta.data:jakarta-data-tck:1.0.1`).
 
-## Pourquoi ce module est hors du reactor principal
+## Why this module is outside the main reactor
 
-Module en `modelVersion 4.0.0` standalone (sans `<parent>`). Raison documentée dans le `CLAUDE.md` racine du workspace : ShrinkWrap Maven Resolver 3.3 (transitive du TCK) ne sait pas parser les POMs Maven Model 4.1.0. Tant qu'upstream ShrinkWrap ne supporte pas Model 4.1, ce module reste détaché.
+Module in standalone `modelVersion 4.0.0` (without `<parent>`). Reason documented in the workspace root `CLAUDE.md`: ShrinkWrap Maven Resolver 3.3 (transitive from the TCK) doesn't know how to parse Maven Model 4.1.0 POMs. As long as upstream ShrinkWrap doesn't support Model 4.1, this module remains detached.
 
-## État (à jour 2026-05-05)
+## Status (as of 2026-05-05)
 
-| Brique | État |
+| Component | Status |
 | --- | --- |
-| POM standalone Model 4.0.0 + deps Arquillian/TestNG/JUnit5 + TCK officiel | ✅ M6 |
-| Script `run-official-tck-data-1.0.sh` | ✅ M6 |
-| BCE Mansart (`mansart-data-cdi`) wire les `@Repository` dans Vauban | ✅ M6.1 |
-| Connecteur Arquillian Vauban (porté depuis `vauban-tck-runner`) | ✅ M6.2 |
-| Suite TCK officielle 1.0.1 — résolue depuis Maven Central + 73 EntityTests | ✅ M6.3 |
-| Runtime impl generation (Class-File API) → **73/73 EntityTests PASS sur H2** | ✅ M7-25 |
-| **Variante PostgreSQL via Testcontainers → 73/73 EntityTests PASS sur PG** | ✅ M6.5 |
-| **TCK SignatureTests → 1/1 PASS** (H2 et PG) | ✅ M7-26 |
-| TCK PersistenceTests / NoSQLTests | ⏳ hors scope (besoin `mansart-persistence`) |
+| Standalone POM Model 4.0.0 + Arquillian/TestNG/JUnit5 deps + official TCK | ✅ M6 |
+| `run-official-tck-data-1.0.sh` script | ✅ M6 |
+| Mansart BCE (`mansart-data-cdi`) wires `@Repository` in Vauban | ✅ M6.1 |
+| Arquillian Vauban connector (ported from `vauban-tck-runner`) | ✅ M6.2 |
+| Official TCK suite 1.0.1 — resolved from Maven Central + 73 EntityTests | ✅ M6.3 |
+| Runtime impl generation (Class-File API) → **73/73 EntityTests PASS on H2** | ✅ M7-25 |
+| **PostgreSQL variant via Testcontainers → 73/73 EntityTests PASS on PG** | ✅ M6.5 |
+| **TCK SignatureTests → 1/1 PASS** (H2 and PG) | ✅ M7-26 |
+| TCK PersistenceTests / NoSQLTests | ⏳ out of scope (needs `mansart-persistence`) |
 
-**Plus de blocage** : le BCE `MansartDataExtension` (`mansart-data-cdi`) découvre maintenant toutes les interfaces `@Repository` du déploiement TCK et enregistre des beans synthétiques `@Singleton` typés sur l'interface. Les implémentations sont **générées à runtime via Class-File API** (`mansart-data-core/RuntimeRepositoryClassGenerator`, M7-25) — aucun proxy dynamique, AOT-friendly.
+**No more blockers**: the `MansartDataExtension` BCE (`mansart-data-cdi`) now discovers all `@Repository` interfaces in the TCK deployment and registers synthetic `@Singleton` beans typed on the interface. Implementations are **generated at runtime via Class-File API** (`mansart-data-core/RuntimeRepositoryClassGenerator`, M7-25) — no dynamic proxy, AOT-friendly.
 
-## Installation des artefacts TCK
+## TCK artifact installation
 
-**Bonne nouvelle (M6.3)** : `jakarta.data:jakarta.data-tck:1.0.1` (note le **point**, pas le tiret, dans l'artifactId) **est sur Maven Central**. Aucun install manuel nécessaire — le profil `-Ptck-run` le télécharge automatiquement.
+**Good news (M6.3)**: `jakarta.data:jakarta.data-tck:1.0.1` (note the **dot**, not dash, in the artifactId) **is on Maven Central**. No manual install needed — the `-Ptck-run` profile downloads it automatically.
 
 ```xml
 <dependency>
@@ -37,85 +37,88 @@ Module en `modelVersion 4.0.0` standalone (sans `<parent>`). Raison documentée 
 ## Lancement
 
 ```bash
-# Smoke harness (Vauban + Mansart, 6 tests, défaut, sans le TCK)
+## Launch
+
+```bash
+# Smoke harness (Vauban + Mansart, 6 tests, default, without the TCK)
 ./run-official-tck-data-1.0.sh --smoke
 
-# Suite TCK officielle EntityTests sur H2 in-memory (défaut)
+# Official TCK EntityTests suite on H2 in-memory (default)
 ./run-official-tck-data-1.0.sh
 # = mvn -Ptck-run test
 
-# Suite TCK officielle EntityTests sur PostgreSQL (Testcontainers)
+# Official TCK EntityTests suite on PostgreSQL (Testcontainers)
 ./run-official-tck-data-1.0.sh --pg
 # = mvn -Ptck-run,tck-pg test
 
-# SignatureTests seul (sur H2)
+# SignatureTests only (on H2)
 ./run-official-tck-data-1.0.sh --sig
 # = mvn -Ptck-run,tck-sig test
 
-# Suite complète : EntityTests + SignatureTests (H2 par défaut, ou PG=1 pour PostgreSQL)
+# Full suite: EntityTests + SignatureTests (H2 by default, or PG=1 for PostgreSQL)
 ./run-official-tck-data-1.0.sh --full
 PG=1 ./run-official-tck-data-1.0.sh --full
 
-# Cibler un test précis
+# Target a specific test
 ./run-official-tck-data-1.0.sh -Dtest=EntityTests#testFindAll
 ```
 
-Prérequis :
-- **Java 25** + **Maven 3.9.16** (`.sdkmanrc` du sous-projet ; `cd mansart-jakarta-data && sdk env`)
-- `mansart-jakarta-data` build et installé (`mvn install -DskipTests` depuis `mansart-jakarta-data/` — le script le fait automatiquement si nécessaire)
-- Pour `--pg` : **Docker** (Docker Desktop, OrbStack, colima…). Image `postgres:17-alpine` téléchargée au premier run.
-- TCK 1.0.1 résolu automatiquement depuis Maven Central (`jakarta.data:jakarta.data-tck:1.0.1`).
+Prerequisites:
+- **Java 25** + **Maven 3.9.16** (sub-project `.sdkmanrc`; `cd mansart-jakarta-data && sdk env`)
+- `mansart-jakarta-data` built and installed (`mvn install -DskipTests` from `mansart-jakarta-data/` — the script does it automatically if needed)
+- For `--pg`: **Docker** (Docker Desktop, OrbStack, colima…). Image `postgres:17-alpine` downloaded on first run.
+- TCK 1.0.1 resolved automatically from Maven Central (`jakarta.data:jakarta.data-tck:1.0.1`).
 
-## Mode PostgreSQL (M6.5)
+## PostgreSQL mode (M6.5)
 
-Le profile Maven `tck-pg` (cumulable avec `tck-run`) substitue tout le wiring de DataSource :
+The Maven profile `tck-pg` (combinable with `tck-run`) substitutes all DataSource wiring:
 
-- Active `PostgresDataSourceProducer` (Testcontainers `postgres:17-alpine`) au lieu de `H2DataSourceProducer`.
-- Substitue `mansart-data-dialect-postgresql` à `mansart-data-dialect-h2` dans le déploiement ShrinkWrap (BCE découvre `PostgresqlDialectFactory` via `META-INF/services/io.vidocq.mansart.data.dialect.DialectFactory`).
-- Le système property `mansart.tck.dialect=pg` est positionné par le profile et lu par `MansartTckArchiveAppender`.
+- Activates `PostgresDataSourceProducer` (Testcontainers `postgres:17-alpine`) instead of `H2DataSourceProducer`.
+- Substitutes `mansart-data-dialect-postgresql` for `mansart-data-dialect-h2` in the ShrinkWrap deployment (BCE discovers `PostgresqlDialectFactory` via `META-INF/services/io.vidocq.mansart.data.dialect.DialectFactory`).
+- The system property `mansart.tck.dialect=pg` is set by the profile and read by `MansartTckArchiveAppender`.
 
-Le container PostgreSQL est démarré une fois par JVM (singleton statique, `Runtime.addShutdownHook` pour la propreté). Aucun setup manuel.
+The PostgreSQL container is started once per JVM (static singleton, `Runtime.addShutdownHook` for cleanup). No manual setup.
 
-**Score actuel :**
+**Current score:**
 
-| Plateforme | EntityTests | SignatureTests | Total | Run |
+| Platform | EntityTests | SignatureTests | Total | Run |
 | --- | --- | --- | --- | --- |
 | H2 in-memory | **73 / 73** ✅ | **1 / 1** ✅ | **74/74** | `./run-official-tck-data-1.0.sh --full` |
 | PostgreSQL 17 (Testcontainers) | **73 / 73** ✅ | **1 / 1** ✅ | **74/74** | `PG=1 ./run-official-tck-data-1.0.sh --full` |
 
-Aucun fix dialect-spécifique n'a été nécessaire : le `PostgresqlDialect` couvrait déjà tout ce que les EntityTests exercent (`MERGE`/`INSERT … ON CONFLICT`, `RETURNING id`, `LIMIT/OFFSET`, types temporels, `IDENTITY`, etc.).
+No dialect-specific fixes were needed: the `PostgresqlDialect` already covered everything the EntityTests exercise (`MERGE`/`INSERT … ON CONFLICT`, `RETURNING id`, `LIMIT/OFFSET`, temporal types, `IDENTITY`, etc.).
 
-## Mode SignatureTests (M7-26)
+## SignatureTests mode (M7-26)
 
-Le profile Maven `tck-sig` (cumulable avec `tck-run` et `tck-pg`) active la vérification des signatures binaires de tous les packages `jakarta.data.*`. Le runner officiel (héritage CTS / sigtest-maven-plugin) :
+The Maven profile `tck-sig` (combinable with `tck-run` and `tck-pg`) activates binary signature verification of all `jakarta.data.*` packages. The official runner (CTS heritage / sigtest-maven-plugin):
 
-- compare l'API présente sur le classpath du déploiement à la signature canonique `jakarta.data.sig_21` shippée dans le jar TCK 1.0.1 ;
-- nécessite un répertoire writable pour cacher les modules JDK (positionné automatiquement à `target/jimage-cache`).
+- compares the API present on the deployment classpath to the canonical signature `jakarta.data.sig_21` shipped in TCK jar 1.0.1;
+- requires a writable directory to cache JDK modules (automatically set to `target/jimage-cache`).
 
-**Configuration spécifique Java 25** (déjà au pom dans le profile `tck-sig`) :
+**Java 25-specific configuration** (already in the pom in the `tck-sig` profile):
 
-- `--add-exports java.base/jdk.internal.vm.annotation=ALL-UNNAMED` + `--add-opens` du même package : le runner sigtest fait `setAccessible` sur des annotations JDK internes (`@Stable`), refusé par défaut sur Java 25.
-- `-Djava.specification.version=21` : la TCK 1.0.1 ne ship que `jakarta.data.sig_17` et `jakarta.data.sig_21` ; sur Java 25 le runner cherche `jakarta.data.sig_25` (NPE). Forcer la version à 21 est sûr — Jakarta Data 1.0 a été figé sous Java 21, l'API n'a pas évolué depuis.
+- `--add-exports java.base/jdk.internal.vm.annotation=ALL-UNNAMED` + `--add-opens` of the same package: the sigtest runner does `setAccessible` on internal JDK annotations (`@Stable`), refused by default on Java 25.
+- `-Djava.specification.version=21`: TCK 1.0.1 only ships `jakarta.data.sig_17` and `jakarta.data.sig_21`; on Java 25 the runner looks for `jakarta.data.sig_25` (NPE). Forcing version to 21 is safe — Jakarta Data 1.0 was frozen under Java 21, the API hasn't evolved since.
 
-## Architecture du harness
+## Harness architecture
 
 ```
 ┌──────────────────────────────────────────────┐
-│  TCK officiel Jakarta Data 1.0 (TestNG)      │
-│  ─ scenarios annotés @Repository, @Find, etc.│
+│  Official TCK Jakarta Data 1.0 (TestNG)      │
+│  ─ scenarios annotated @Repository, @Find, etc.│
 └──────────────────────┬───────────────────────┘
                        │ Arquillian deployment
                        ▼
 ┌──────────────────────────────────────────────┐
 │  Weld embedded (CDI 4.1)                     │
-│  ─ découvre la BCE Mansart                   │
-│  ─ crée les beans synthétiques pour chaque   │
-│    @Repository scanné                        │
+│  ─ discovers Mansart BCE                     │
+│  ─ creates synthetic beans for each          │
+│    scanned @Repository                       │
 └──────────────────────┬───────────────────────┘
                        │ inject
                        ▼
 ┌──────────────────────────────────────────────┐
-│  RepositoryImpl généré (mansart-data-processor) │
+│  Generated RepositoryImpl (mansart-data-processor) │
 │  → RepositoryRuntime (mansart-data-core)     │
 │  → DialectFactory ServiceLoader              │
 │  → H2 in-memory                              │
@@ -124,8 +127,8 @@ Le profile Maven `tck-sig` (cumulable avec `tck-run` et `tck-pg`) active la vér
 
 ## Roadmap
 
-- **M6.1 — M6.4** ✅ livrés (voir tableau d'état ci-dessus).
-- **M7-1 → M7-25** ✅ livrés — runtime impl generation + 73/73 PASS sur H2.
-- **M6.5** ✅ livré — variante PostgreSQL via Testcontainers, 73/73 PASS sur PG.
-- **TCK SignatureTests** ✅ M7-26 — profile `tck-sig`, 1/1 PASS sur H2 et PG.
-- **TCK PersistenceTests / NoSQLTests** ⏳ — bloqué par l'absence de `mansart-persistence` (JPA 3.2) et hors scope NoSQL en v1.
+- **M6.1 — M6.4** ✅ delivered (see status table above).
+- **M7-1 → M7-25** ✅ delivered — runtime impl generation + 73/73 PASS on H2.
+- **M6.5** ✅ delivered — PostgreSQL variant via Testcontainers, 73/73 PASS on PG.
+- **TCK SignatureTests** ✅ M7-26 — profile `tck-sig`, 1/1 PASS on H2 and PG.
+- **TCK PersistenceTests / NoSQLTests** ⏳ — blocked by absence of `mansart-persistence` (JPA 3.2) and NoSQL out of scope in v1.

@@ -30,7 +30,7 @@ public final class MansartTckProvider {
     }
 
     /**
-     * The TCK occasionally asks for a {@link UserTransaction} façade — same underlying TM,
+     * The TCK occasionally asks for a {@link UserTransaction} facade — same underlying TM,
      * narrower API.
      */
     public static UserTransaction getUserTransaction() {

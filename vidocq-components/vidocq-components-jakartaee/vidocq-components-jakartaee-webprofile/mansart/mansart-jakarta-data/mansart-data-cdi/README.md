@@ -1,20 +1,20 @@
 # mansart-data-cdi
 
-Bootstrap **CDI 4.1 Lite** pour Mansart Data. Standard `jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension` — compatible avec **Vauban** (Vidocq), **Weld embedded**, **OpenWebBeans**.
+**CDI 4.1 Lite** bootstrap for Mansart Data. Standard `jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension` — compatible with **Vauban** (Vidocq), **Weld embedded**, **OpenWebBeans**.
 
-## Comportement
+## Behavior
 
-Au démarrage du conteneur CDI :
+At CDI container startup:
 
-1. `MansartDataExtension` (BCE) parcourt les classes scannées (`@Discovery` / `@Enhancement`) à la recherche d'interfaces annotées `@jakarta.data.repository.Repository`.
-2. Pour chacune, en `@Synthesis`, enregistre un **bean synthétique `@Singleton`** typé sur l'interface, dont la fonction `create` délègue à `MansartRuntimeRepoCreator` (qui passe par la **génération bytecode runtime** de `mansart-data-core`).
-3. Le `RepositoryRuntime` requis par chaque repository est produit par `MansartRuntimeProducer` à partir d'un `DataSource` injecté par l'application.
+1. `MansartDataExtension` (BCE) traverses scanned classes (`@Discovery` / `@Enhancement`) looking for interfaces annotated `@jakarta.data.repository.Repository`.
+2. For each one, in `@Synthesis`, registers a **synthetic `@Singleton` bean** typed on the interface, whose `create` function delegates to `MansartRuntimeRepoCreator` (which goes through **runtime bytecode generation** of `mansart-data-core`).
+3. The `RepositoryRuntime` required by each repository is produced by `MansartRuntimeProducer` from a `DataSource` injected by the application.
 
-L'application n'a qu'à exposer un `DataSource` (par exemple via un `@Produces`) et `@Inject` ses repositories.
+The application only needs to expose a `DataSource` (for example via a `@Produces`) and `@Inject` its repositories.
 
 ## Producer override
 
-Pour prendre la main sur le wiring du `RepositoryRuntime` (dialect explicite, multi-DataSource, pool custom), déclarer son propre `@Produces RepositoryRuntime` :
+To take control of the `RepositoryRuntime` wiring (explicit dialect, multi-DataSource, custom pool), declare your own `@Produces RepositoryRuntime`:
 
 ```java
 @ApplicationScoped
@@ -30,9 +30,9 @@ public class MyRuntime {
 }
 ```
 
-Le producer par défaut (`MansartRuntimeProducer`) peut être désactivé en l'excluant des classes scannées (selon le conteneur).
+The default producer (`MansartRuntimeProducer`) can be disabled by excluding it from scanned classes (depending on the container).
 
-## Module JPMS
+## JPMS module
 
 ```java
 module io.vidocq.mansart.data.cdi {
@@ -46,9 +46,9 @@ module io.vidocq.mansart.data.cdi {
 }
 ```
 
-Le `META-INF/services/jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension` est aussi fourni pour les conteneurs sans support JPMS.
+The `META-INF/services/jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension` is also provided for containers without JPMS support.
 
-## Dépendances
+## Dependencies
 
 - `mansart-data-core`
 - `jakarta.cdi-api` 4.1
