@@ -7,7 +7,7 @@ Cette page boot un service complet REST + DI + persistence H2 avec Vidocq Runtim
 == Pré-requis
 
 * **Java 25** (Temurin recommandé)
-* **Maven 4.0.0-rc-5** — pinné via `.sdkmanrc` (`sdk env`)
+* **Maven 3.9.16** — pinné via `.sdkmanrc` (`sdk env`)
 * Connaissance basique de Jakarta REST, CDI Lite et MicroProfile Config
 
 == Coordonnées Maven

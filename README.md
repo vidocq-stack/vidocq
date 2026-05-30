@@ -46,7 +46,7 @@ Vidocq est un runtime d'applications Java SE modulaire construit sur [Vauban](ht
 ### Prerequis
 
 - JDK 25 (Temurin)
-- Maven 4.0.0-rc-5
+- Maven 3.9.16
 
 ```bash
 # Avec SDKMAN!

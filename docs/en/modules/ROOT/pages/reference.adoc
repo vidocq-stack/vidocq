@@ -179,7 +179,7 @@ Source: `vidocq-runtime-spi/src/main/java/io/vidocq/runtime/spi/`.
 == Compatibility
 
 * **Java 25** minimum (LTS)
-* **Maven 4.0.0-rc-5** minimum
+* **Maven 3.9.16** minimum
 * **Strict JPMS** — one `module-info.java` per submodule
 * **No hidden classpath** — every dependency exposes a named module
 

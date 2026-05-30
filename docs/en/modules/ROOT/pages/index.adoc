@@ -28,7 +28,7 @@ The metaphor faithfully reflects the role of the module. Vidocq fused heterogene
 | 25 (LTS)
 
 | Build
-| Maven 4.0.0-rc-5
+| Maven 3.9.16
 
 | JPMS modules
 | `io.vidocq.runtime`, `io.vidocq.runtime.spi`, `io.vidocq.runtime.core`, `io.vidocq.runtime.maven`

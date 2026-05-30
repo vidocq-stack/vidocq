@@ -28,7 +28,7 @@ La métaphore est fidèle au rôle du module. Vidocq fédérait des indicateurs 
 | 25 (LTS)
 
 | Build
-| Maven 4.0.0-rc-5
+| Maven 3.9.16
 
 | Modules JPMS
 | `io.vidocq.runtime`, `io.vidocq.runtime.spi`, `io.vidocq.runtime.core`, `io.vidocq.runtime.maven`
