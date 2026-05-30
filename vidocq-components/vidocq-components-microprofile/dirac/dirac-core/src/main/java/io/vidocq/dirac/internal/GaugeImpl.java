@@ -8,7 +8,7 @@ import java.util.Objects;
 import java.util.function.Supplier;
 
 /**
- * Implémentation d'une gauge basée sur un {@link MethodHandle} résolu au démarrage.
+ * Gauge implementation based on a {@link MethodHandle} resolved at startup.
  */
 public final class GaugeImpl<T extends Number> implements Gauge<T> {
     private final MethodHandle methodHandle;
@@ -42,4 +42,3 @@ public final class GaugeImpl<T extends Number> implements Gauge<T> {
         }
     }
 }
-

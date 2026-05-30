@@ -14,11 +14,11 @@ import java.util.Objects;
 import java.util.TreeMap;
 
 /**
- * Sérialise un registre en format JSON spec MicroProfile Metrics §3.2.
+ * Serializes a registry in MicroProfile Metrics §3.2 JSON format.
  *
- * <p>Implémenté sans bibliothèque JSON externe — {@code StringBuilder} uniquement.
- * Clés des métriques : {@code metricName[;tagKey=tagVal]*} (tags triés par nom).
- * Toutes les durées des timers sont converties nanos → secondes.</p>
+ * <p>Implemented without an external JSON library — {@code StringBuilder} only.
+ * Metric keys: {@code metricName[;tagKey=tagVal]*} (tags sorted by name).
+ * All timer durations are converted from nanos → seconds.</p>
  */
 public final class JsonMetricsFormatter {
 

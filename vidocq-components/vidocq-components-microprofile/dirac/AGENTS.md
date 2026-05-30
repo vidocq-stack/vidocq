@@ -1,81 +1,81 @@
 # AGENTS.md
 
-> Ce fichier est le guide de contribution pour les agents IA (GitHub Copilot, Copilot Chat,
-> Copilot Workspace). Il doit rester synchrone avec `CLAUDE.md` — toute modification dans
-> l'un doit être reflétée dans l'autre.
+> This file is the contribution guide for AI agents (GitHub Copilot, Copilot Chat,
+> Copilot Workspace). It must remain in sync with `CLAUDE.md` — any modification in
+> one must be reflected in the other.
 
-## Mission du dépôt
+## Repository Mission
 
-- Dirac implémente **MicroProfile Metrics 5.1.1** en Java 25, avec **zéro librairie
-  d'implémentation tierce** : seules les API specs (`microprofile-metrics-api`,
-  `jakarta.enterprise.cdi-api`, `jakarta.interceptor-api`, `jakarta.annotation-api`) sont
-  compilées dans `dirac-core` et `dirac-cdi-vauban`.
-- Architecture JPMS stricte : `dirac-api` wrapping de la spec, `dirac-core` implémentations
-  pures Java 25 sans CDI, `dirac-cdi-vauban` intercepteurs CDI + BCE Vauban,
-  `dirac-rest` endpoint JAX-RS optionnel, `dirac-tck` hors reactor.
-- **Pas de Micrometer, Dropwizard Metrics, SmallRye Metrics** dans le code de production.
-- Virtual threads (Project Loom) pour les benchmarks concurrents et les tests de charge —
-  `Executors.newVirtualThreadPerTaskExecutor()`. Jamais de pool platform.
-- Utiliser `ROADMAP.md` pour suivre l'avancement des milestones (M0..M8).
-- Si les règles de ce fichier doivent être mises à jour, aligner `CLAUDE.md` dans la même
-  opération — les deux fichiers sont des miroirs destinés à des outils différents.
+- Dirac implements **MicroProfile Metrics 5.1.1** in Java 25 with **zero third-party
+  implementation libraries**: only the spec APIs (`microprofile-metrics-api`,
+  `jakarta.enterprise.cdi-api`, `jakarta.interceptor-api`, `jakarta.annotation-api`) are
+  compiled in `dirac-core` and `dirac-cdi-vauban`.
+- Strict JPMS architecture: `dirac-api` wraps the spec, `dirac-core` pure Java 25 implementations
+  without CDI, `dirac-cdi-vauban` CDI interceptors + BCE Vauban,
+  `dirac-rest` optional JAX-RS endpoint, `dirac-tck` out-of-reactor.
+- **No Micrometer, Dropwizard Metrics, SmallRye Metrics** in production code.
+- Virtual threads (Project Loom) for concurrent benchmarks and load tests —
+  `Executors.newVirtualThreadPerTaskExecutor()`. Never a platform pool.
+- Use `ROADMAP.md` to track milestone progress (M0..M8).
+- If the rules in this file need updating, align `CLAUDE.md` in the same
+  operation — both files are mirrors intended for different tools.
 
-## État réel du code à connaître avant de modifier
+## Actual Code State to Know Before Modifying
 
-- Consulter `ROADMAP.md` pour l'état détaillé de chaque milestone (M0..M8).
-- Les milestones marqués ✅ sont terminés ; ceux marqués 🚧 sont en cours.
-- **État réel actuel : M1 à M7 achevés.** Le dépôt contient un noyau fonctionnel
-  pour `Counter`, `MetricRegistry`, `Gauge`, `Histogram` (core), `Timer`, les composants CDI associés,
-  les formatters OpenMetrics et JSON (`OpenMetricsFormatter`, `JsonMetricsFormatter`), et l'endpoint REST
-  `MetricsResource` avec `ContentNegotiationFilter`. M8 (TCK officiel) est la prochaine étape.
-- Placeholders réellement présents à compléter avant de créer de nouvelles classes parallèles :
+- See `ROADMAP.md` for the detailed status of each milestone (M0..M8).
+- Milestones marked ✅ are complete; those marked 🚧 are in progress.
+- **Current actual state: M1 through M7 complete.** The repository contains a functional core
+  for `Counter`, `MetricRegistry`, `Gauge`, `Histogram` (core), `Timer`, associated CDI components,
+  OpenMetrics and JSON formatters (`OpenMetricsFormatter`, `JsonMetricsFormatter`), and the REST endpoint
+  `MetricsResource` with `ContentNegotiationFilter`. M8 (official TCK) is the next step.
+- Actual placeholders to complete before creating parallel classes:
   - `dirac-api/src/main/java/io/vidocq/dirac/api/DiracException.java`
-  (Note : `MetricsEndpoint.java` remplacé par `MetricsResource.java` en M7.)
-- Toute description ci-dessous d'une implémentation (`CounterImpl`, `TimerImpl`, etc.) reste la
-  **cible** tant que le fichier concret correspondant n'existe pas encore dans `src/main/java`.
-- Modules JPMS cibles :
+  (Note: `MetricsEndpoint.java` replaced by `MetricsResource.java` in M7.)
+- Any implementation description below (`CounterImpl`, `TimerImpl`, etc.) remains the
+  **target** as long as the corresponding concrete file doesn't yet exist in `src/main/java`.
+- Target JPMS modules:
   - `io.vidocq.dirac.api` (`dirac-api`)
   - `io.vidocq.dirac.core` (`dirac-core`)
   - `io.vidocq.dirac.cdi.vauban` (`dirac-cdi-vauban`)
-  - `io.vidocq.dirac.rest` (`dirac-rest`, optionnel)
+  - `io.vidocq.dirac.rest` (`dirac-rest`, optional)
   - `io.vidocq.dirac.bench` (`dirac-bench`)
   - `io.vidocq.dirac.examples` (`dirac-examples`)
-  - `io.vidocq.dirac.tck` (`dirac-tck`, hors reactor)
+  - `io.vidocq.dirac.tck` (`dirac-tck`, out-of-reactor)
 
-## Types de métriques MicroProfile Metrics 5.1.1
+## MicroProfile Metrics 5.1.1 Metric Types
 
-MicroProfile Metrics 5.x a simplifié la spec par rapport à 4.x :
+MicroProfile Metrics 5.x simplified the spec compared to 4.x:
 
-- **Supprimés en 5.0** : `Meter`, `@Metered`, `ConcurrentGauge`, `@ConcurrentGauge`,
-  `SimpleTimer`, `@SimplyTimed` — **ne pas les implémenter**.
-- **Présents en 5.1.1 (API de métriques)** :
-  - `Counter` / `@Counted` — compteur incrémental monotone (LongAdder)
-  - `Gauge<T>` / `@Gauge` — valeur instantanée exposée via une méthode annotée
-  - `Histogram` — distribution des valeurs (percentiles)
-  - `Timer` / `@Timed` — durée des appels (combine histogram + compteur)
-- **Point d'attention API concret** : le JAR `microprofile-metrics-api:5.1.1` présent dans ce
-  dépôt n'expose pas l'annotation `org.eclipse.microprofile.metrics.annotation.Histogram`.
-- **Scopes** : `APPLICATION` (par défaut, injectable), `BASE` (métriques JVM), `VENDOR`
-- **MetricID** : `(String name, SortedMap<String, String> tags)` — valeur immuable
-- **Tag** : `(String name, String value)` — pair immuable
+- **Removed in 5.0**: `Meter`, `@Metered`, `ConcurrentGauge`, `@ConcurrentGauge`,
+  `SimpleTimer`, `@SimplyTimed` — **do not implement these**.
+- **Present in 5.1.1 (metrics API)**:
+  - `Counter` / `@Counted` — monotonic incremental counter (LongAdder)
+  - `Gauge<T>` / `@Gauge` — instantaneous value exposed via an annotated method
+  - `Histogram` — value distribution (percentiles)
+  - `Timer` / `@Timed` — call duration (combines histogram + counter)
+- **Concrete API note**: the `microprofile-metrics-api:5.1.1` JAR in this repository does not
+  expose the annotation `org.eclipse.microprofile.metrics.annotation.Histogram`.
+- **Scopes**: `APPLICATION` (default, injectable), `BASE` (JVM metrics), `VENDOR`
+- **MetricID**: `(String name, SortedMap<String, String> tags)` — immutable value
+- **Tag**: `(String name, String value)` — immutable pair
 
-## Architecture cible des modules
+## Target Module Architecture
 
 ```
 dirac-api            io.vidocq.dirac.api
   exports io.vidocq.dirac.api
   requires microprofile.metrics.api
-  → SPI : MetricRegistryProducer, DiracContext, HistogramSnapshot, TimerSnapshot
+  → SPI: MetricRegistryProducer, DiracContext, HistogramSnapshot, TimerSnapshot
 
 dirac-core           io.vidocq.dirac.core
-  exports io.vidocq.dirac.core (pour cdi-vauban uniquement — export qualifié)
+  exports io.vidocq.dirac.core (for cdi-vauban only — qualified export)
   requires io.vidocq.dirac.api
   requires microprofile.metrics.api
-  → Implémentations : CounterImpl (LongAdder), GaugeImpl (MethodHandle),
-                       HistogramImpl (reservoir HDR), TimerImpl (nanoTime + HistogramImpl),
-                       MetricRegistryImpl (ConcurrentHashMap<MetricID, Metric>),
-                       OpenMetricsFormatter (format Prometheus text),
-                       BaseMetricsRegistrar (métriques JVM : GC, threads, heap, uptime)
+  → Implementations: CounterImpl (LongAdder), GaugeImpl (MethodHandle),
+                      HistogramImpl (HDR reservoir), TimerImpl (nanoTime + HistogramImpl),
+                      MetricRegistryImpl (ConcurrentHashMap<MetricID, Metric>),
+                      OpenMetricsFormatter (Prometheus text format),
+                      BaseMetricsRegistrar (JVM metrics: GC, threads, heap, uptime)
 
 dirac-cdi-vauban     io.vidocq.dirac.cdi.vauban
   requires io.vidocq.dirac.api
@@ -83,152 +83,153 @@ dirac-cdi-vauban     io.vidocq.dirac.cdi.vauban
   requires jakarta.enterprise.cdi
   requires jakarta.interceptor
   requires io.vidocq.vauban.api
-  → Implémentations : CountedInterceptor (@Interceptor @Counted),
-                       TimedInterceptor (@Interceptor @Timed),
-                       DiracExtension (BCE CDI 4.1, résout les @Gauge au démarrage),
-                       MetricRegistryProducerBean (@ApplicationScoped, 3 scopes),
-                       DiracAutoDiscovery (ServiceLoader)
+  → Implementations: CountedInterceptor (@Interceptor @Counted),
+                      TimedInterceptor (@Interceptor @Timed),
+                      DiracExtension (BCE CDI 4.1, resolves @Gauge at startup),
+                      MetricRegistryProducerBean (@ApplicationScoped, 3 scopes),
+                      DiracAutoDiscovery (ServiceLoader)
 
 dirac-rest           io.vidocq.dirac.rest
   requires io.vidocq.dirac.api
   requires io.vidocq.dirac.core
   requires jakarta.ws.rs
-  → Implémentations : MetricsResource (GET /metrics, GET /metrics/{scope},
-                       GET /metrics/{scope}/{name}), ContentNegotiationFilter
+  → Implementations: MetricsResource (GET /metrics, GET /metrics/{scope},
+                      GET /metrics/{scope}/{name}), ContentNegotiationFilter
 
 dirac-bench          io.vidocq.dirac.bench
   → JMH benchmarks vs Micrometer, SmallRye Metrics
 
-dirac-tck            (hors reactor — Model 4.0.0)
-  → TestNG + Arquillian + Vauban embedded + Chappe, runner TCK officiel MP Metrics 5.1.1
+dirac-tck            (out-of-reactor — Model 4.0.0)
+  → TestNG + Arquillian + embedded Vauban + Chappe, official MP Metrics 5.1.1 TCK runner
 
 dirac-examples       io.vidocq.dirac.examples
-  → Exemples standalone et avec vidocq-mps
+  → Standalone and vidocq-mps examples
 ```
 
-- **État concret à date :** `dirac-api` expose `DiracException`; `dirac-core` contient déjà
-  `CounterImpl`, `MetricRegistryImpl`, `GaugeImpl`, `HistogramImpl`, `TimerImpl` et `BaseMetricsRegistrar` ;
-  `dirac-cdi-vauban` contient `DiracExtension` (validation/résolution `@Gauge`), `MetricRegistryProducerBean`,
-  `CountedInterceptor`, `GaugeRegistrationBean` et `TimedInterceptor` ; `dirac-rest` contient encore le placeholder
+- **Current actual state**: `dirac-api` exposes `DiracException`; `dirac-core` already contains
+  `CounterImpl`, `MetricRegistryImpl`, `GaugeImpl`, `HistogramImpl`, `TimerImpl`, and `BaseMetricsRegistrar`;
+  `dirac-cdi-vauban` contains `DiracExtension` (validation/resolution of `@Gauge`), `MetricRegistryProducerBean`,
+  `CountedInterceptor`, `GaugeRegistrationBean`, and `TimedInterceptor`; `dirac-rest` still contains the placeholder
   `MetricsEndpoint`.
-- Les packages effectivement présents côté production sont `io.vidocq.dirac.api`,
-  `io.vidocq.dirac.internal`, `io.vidocq.dirac.cdi.internal` et `io.vidocq.dirac.rest`.
+- The packages actually present on the production side are `io.vidocq.dirac.api`,
+  `io.vidocq.dirac.internal`, `io.vidocq.dirac.cdi.internal`, and `io.vidocq.dirac.rest`.
 
-## Frontières à ne pas casser
+## Boundaries Not to Break
 
-- Ne jamais remettre `dirac-tck` dans le reactor : exclu volontairement à cause de
-  ShrinkWrap Maven Resolver / incompatibilité Model 4.0.0 vs 4.1.0 (contrainte commune
-  à tout l'écosystème Vidocq).
-- `dirac-core` ne doit importer **aucune** classe CDI (`jakarta.enterprise.*`,
-  `jakarta.inject.*`) — uniquement `microprofile-metrics-api`.
-- **Pas de `synchronized`** — utiliser `LongAdder`, `AtomicLong`, `AtomicReference`,
-  `ConcurrentHashMap`. Les `synchronized` pinent les virtual threads.
-- **Pas de `ThreadLocal`** — utiliser `ScopedValue` (JEP 506) pour propager le contexte
-  si nécessaire dans les intercepteurs.
-- **Pas de `java.lang.reflect.Proxy`** — résolution des `@Gauge` via
-  `MethodHandles.lookup().findVirtual(...)` au démarrage (BCE `DiracExtension`).
-- **Pas de `setAccessible(true)`** en production — ouvrir les packages dans le
-  `module-info.java` et documenter pourquoi.
-- **JUnit 6 minimum** (`org.junit:junit-bom` ≥ 6.0.3) pour les tests `dirac-core` et
-  `dirac-cdi-vauban`. Le TCK utilise **TestNG** (contrainte upstream).
-- Tout ajout de dépendance `<scope>compile|runtime</scope>` exige un passage par l'agent
-  `dependency-gatekeeper` et une justification explicite dans la PR.
-- **`dirac-rest` est optionnel** — sa présence ne doit jamais être requise par `dirac-core`
-  ou `dirac-cdi-vauban` (dépendance inversée ou SPI).
+- Never put `dirac-tck` back in the reactor: intentionally excluded due to
+  ShrinkWrap Maven Resolver / Model 4.0.0 vs 4.1.0 incompatibility (common constraint
+  across the entire Vidocq ecosystem).
+- `dirac-core` must not import **any** CDI class (`jakarta.enterprise.*`,
+  `jakarta.inject.*`) — only `microprofile-metrics-api`.
+- **No `synchronized`** — use `LongAdder`, `AtomicLong`, `AtomicReference`,
+  `ConcurrentHashMap`. `synchronized` pins virtual threads.
+- **No `ThreadLocal`** — use `ScopedValue` (JEP 506) to propagate context
+  if needed in interceptors.
+- **No `java.lang.reflect.Proxy`** — `@Gauge` resolution via
+  `MethodHandles.lookup().findVirtual(...)` at startup (BCE `DiracExtension`).
+- **No `setAccessible(true)`** in production — open packages in the
+  `module-info.java` and document why.
+- **JUnit 6 minimum** (`org.junit:junit-bom` ≥ 6.0.3) for `dirac-core` and
+  `dirac-cdi-vauban` tests. The TCK uses **TestNG** (upstream constraint).
+- Any `<scope>compile|runtime</scope>` dependency addition requires passing through the
+  `dependency-gatekeeper` agent and an explicit justification in the PR.
+- **`dirac-rest` is optional** — its presence must never be required by `dirac-core`
+  or `dirac-cdi-vauban` (inverted dependency or SPI).
+- **Language** — commit messages, Javadoc, and all `.md` file content must be written in **English**.
 
-## Convention JPMS — workaround `module-info` + `target/javamodules/`
+## JPMS Convention — `module-info` + `target/javamodules/` Workaround
 
-- Dans `dirac-core` et `dirac-cdi-vauban`, le `module-info.java` vit sous
-  `src/main/module-info/` (et **non** `src/main/java/`). C'est intentionnel : empêche
-  Maven Compiler Plugin de basculer en mode JPMS lors de `testCompile`. Le `module-info.class`
-  est compilé seul en phase `prepare-package`. Même contrainte que dans Heisenberg.
-- `dirac-api` garde actuellement son `module-info.java` sous `src/main/java/`.
-- `dirac-rest`, `dirac-bench` et `dirac-examples` n'ont pas encore de `module-info.java` dans
-  l'état courant ; leurs `pom.xml` neutralisent les `compilerArgs` hérités du parent via
-  `combine.self="override"` pour éviter un `--module-path` invalide.
-- `microprofile-metrics-api:5.1.1` : vérifier la présence ou non d'`Automatic-Module-Name`
-  dans le MANIFEST.MF avant de déclarer le `requires`. Si absent, le nom JPMS est dérivé
-  de l'artefact (`microprofile.metrics.api`).
-- Les tests s'exécutent en classpath (`useModulePath=false`) ; le câblage JPMS est validé
-  par le smoke TCK.
+- In `dirac-core` and `dirac-cdi-vauban`, the `module-info.java` lives under
+  `src/main/module-info/` (and **not** `src/main/java/`). This is intentional: prevents
+  Maven Compiler Plugin from switching to JPMS mode during `testCompile`. The `module-info.class`
+  is compiled alone in the `prepare-package` phase. Same constraint as in Heisenberg.
+- `dirac-api` currently keeps its `module-info.java` under `src/main/java/`.
+- `dirac-rest`, `dirac-bench`, and `dirac-examples` don't yet have a `module-info.java` in
+  the current state; their `pom.xml` neutralize inherited parent `compilerArgs` via
+  `combine.self="override"` to avoid an invalid `--module-path`.
+- `microprofile-metrics-api:5.1.1`: verify the presence or absence of `Automatic-Module-Name`
+  in the MANIFEST.MF before declaring the `requires`. If absent, the JPMS name is derived
+  from the artifact (`microprofile.metrics.api`).
+- Tests run on the classpath (`useModulePath=false`); JPMS wiring is validated
+  by the smoke TCK.
 
-## Workflows utiles
+## Useful Workflows
 
 ```bash
-# Initialiser l'environnement SDK
+# Initialize SDK environment
 sdk env
 
-# Build reactor complet
+# Full reactor build
 ./mvnw -ntp install -DskipTests
 
-# Tests unitaires
+# Unit tests
 ./mvnw test
 
 # TCK — smoke test
 ./run-official-tck-mp-metrics-5.1.sh
 
-# TCK — suite complète
+# TCK — full suite
 ./run-official-tck-mp-metrics-5.1.sh all
 
-# TCK — test ciblé (ex : CounterTest)
+# TCK — targeted test (e.g. CounterTest)
 ./run-official-tck-mp-metrics-5.1.sh -Dtest=CounterTest
 
-# Installation locale des seuls modules requis par le runner TCK hors reactor
+# Local install of only modules required by out-of-reactor TCK runner
 ./mvnw -ntp -pl dirac-api,dirac-core,dirac-cdi-vauban -am install -DskipTests
 
-# Rapport synthétique généré par le script TCK
+# Summary report generated by TCK script
 cat dirac-tck/target/tck-report.txt
 
-# Benchmarks JMH
+# JMH benchmarks
 ./mvnw -ntp -pl dirac-bench package
 java -jar dirac-bench/target/benchmarks.jar
 ```
 
-- Le TCK passe toujours par le script racine qui installe d'abord le reactor, puis invoque
+- The TCK always goes through the root script which first installs the reactor, then invokes
   `mvn -f dirac-tck/pom.xml -P<profile> test`.
-- Le script TCK écrit un résumé dans `dirac-tck/target/tck-report.txt`.
-- La configuration Arquillian réellement présente aujourd'hui est `dirac-tck/src/test/resources/arquillian.xml`.
+- The TCK script writes a summary in `dirac-tck/target/tck-report.txt`.
+- The Arquillian configuration currently present is `dirac-tck/src/test/resources/arquillian.xml`.
 
-## Conventions de contribution observées
+## Observed Contribution Conventions
 
-- **TDD strict** : Red → Green → Refactor. Aucune ligne de production sans test préalable.
-  Citer la section spec MicroProfile Metrics 5.1.1 dans les commentaires de test.
-- Tests unitaires dans le même package que la classe testée, nommés `<Classe>Test`.
-- Pas de Mockito — doubles manuels (`FakeMetricRegistry`, `FakeInvocationContext`, etc.).
-- La logique de chaque type de métrique (`CounterImpl`, `TimerImpl`, etc.) est testée
-  unitairement sans container CDI — c'est le but de la séparation `dirac-core` /
-  `dirac-cdi-vauban`.
-- Les placeholders M0 portent déjà le point d'extension attendu dans leur Javadoc ; compléter
-  d'abord `DiracExtension` ou `MetricsEndpoint` avant d'introduire un doublon fonctionnel ailleurs.
-- `BENCH.md`, `BUG.md`, `TCK.md` et `dirac-tck/README.md` ne sont pas encore présents dans ce
-  dépôt ; ne pas les utiliser comme références ou cibles de modification tant qu'ils ne sont
-  pas créés.
+- **Strict TDD**: Red → Green → Refactor. No production line without prior test.
+  Cite the MicroProfile Metrics 5.1.1 spec section in test comments.
+- Unit tests in the same package as the tested class, named `<Class>Test`.
+- No Mockito — manual doubles (`FakeMetricRegistry`, `FakeInvocationContext`, etc.).
+- Each metric type's logic (`CounterImpl`, `TimerImpl`, etc.) is unit-tested
+  without a CDI container — that is the purpose of the `dirac-core` /
+  `dirac-cdi-vauban` separation.
+- M0 placeholders already carry the expected extension point in their Javadoc; complete
+  `DiracExtension` or `MetricsEndpoint` first before introducing a functional duplicate elsewhere.
+- `BENCH.md`, `BUG.md`, `TCK.md`, and `dirac-tck/README.md` do not yet exist in this
+  repository; do not use them as references or modification targets until they are created.
+- **Language** — commit messages, Javadoc, and all `.md` file content must be written in **English**.
 
-## Ce qu'un agent doit supposer pour les prochaines tâches
+## What an Agent Should Assume for Upcoming Tasks
 
-- À date, ne pas supposer que `MetricsResource` ou `ContentNegotiationFilter` existent déjà :
-  la plupart des points ci-dessous décrivent encore la cible M5+.
-- `dirac-core` est la brique fondatrice :
-  - `CounterImpl` : incrémente via `LongAdder.increment()` / `add(long)`, lit via `sum()`
-  - `GaugeImpl<T>` : stocke un `MethodHandle` résolu au démarrage, lit via `invoke()`
-  - `HistogramImpl` : reservoir d'échantillons (HDR Histogram ou implémentation maison),
-    expose `HistogramSnapshot` (count, sum, min, max, percentiles)
-  - `TimerImpl` : `System.nanoTime()` delta → délègue à `HistogramImpl`
-  - `MetricRegistryImpl` : `ConcurrentHashMap<MetricID, Metric>` par scope, thread-safe
-  - `OpenMetricsFormatter` : sérialise en format Prometheus text (`# HELP`, `# TYPE`,
-    lignes `metric{tags} value timestamp`)
-  - `BaseMetricsRegistrar` : enregistre les métriques JVM obligatoires (spec §3.3) :
+- As of now, do not assume `MetricsResource` or `ContentNegotiationFilter` already exist:
+  most items below still describe the M5+ target.
+- `dirac-core` is the foundation:
+  - `CounterImpl`: increments via `LongAdder.increment()` / `add(long)`, reads via `sum()`
+  - `GaugeImpl<T>`: stores a `MethodHandle` resolved at startup, reads via `invoke()`
+  - `HistogramImpl`: sample reservoir (HDR Histogram or custom implementation),
+    exposes `HistogramSnapshot` (count, sum, min, max, percentiles)
+  - `TimerImpl`: `System.nanoTime()` delta → delegates to `HistogramImpl`
+  - `MetricRegistryImpl`: `ConcurrentHashMap<MetricID, Metric>` per scope, thread-safe
+  - `OpenMetricsFormatter`: serializes to Prometheus text format (`# HELP`, `# TYPE`,
+    `metric{tags} value timestamp` lines)
+  - `BaseMetricsRegistrar`: registers mandatory JVM metrics (spec §3.3):
     GC (`gc.time`, `gc.total`), threads, heap, uptime, class loading
-- `dirac-cdi-vauban` est le point d'entrée CDI :
-  - `CountedInterceptor` (priorité `4020`, `@Counted`)
-  - `TimedInterceptor` (priorité `4021`, `@Timed`)
-  - `DiracExtension` (BCE CDI 4.1 `BuildCompatibleExtension`) : résout les `@Gauge` au
-    démarrage, construit les `MethodHandle` mis en cache, valide les signatures
-  - `MetricRegistryProducerBean` : produit les trois registres (`APPLICATION`, `BASE`,
-    `VENDOR`) comme beans `@ApplicationScoped` avec qualifier `@RegistryScope`
-- `dirac-rest` ne doit pas être requis par `dirac-core` :
-  - `MetricsResource` : `@Path("/metrics")`, `@GET`, négociation de contenu
-    (`text/plain` OpenMetrics et `application/json` selon spec §3.0)
-  - Délègue à `OpenMetricsFormatter` (core) ou `JsonMetricsFormatter` (core)
-- Avant toute modification structurelle du `MetricRegistryImpl` ou des intercepteurs,
-  raisonner avec le contrat final : **TCK MicroProfile Metrics 5.1.1 à 100 % PASS**.
+- `dirac-cdi-vauban` is the CDI entry point:
+  - `CountedInterceptor` (priority `4020`, `@Counted`)
+  - `TimedInterceptor` (priority `4021`, `@Timed`)
+  - `DiracExtension` (BCE CDI 4.1 `BuildCompatibleExtension`): resolves `@Gauge` at
+    startup, builds cached `MethodHandle`s, validates signatures
+  - `MetricRegistryProducerBean`: produces the three registries (`APPLICATION`, `BASE`,
+    `VENDOR`) as `@ApplicationScoped` beans with `@RegistryScope` qualifier
+- `dirac-rest` must not be required by `dirac-core`:
+  - `MetricsResource`: `@Path("/metrics")`, `@GET`, content negotiation
+    (`text/plain` OpenMetrics and `application/json` per spec §3.0)
+  - Delegates to `OpenMetricsFormatter` (core) or `JsonMetricsFormatter` (core)
+- Before any structural modification to `MetricRegistryImpl` or interceptors,
+  reason against the final contract: **MicroProfile Metrics 5.1.1 TCK at 100% PASS**.

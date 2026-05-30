@@ -1,56 +1,56 @@
-# Dirac — Plan d'implémentation
+# Dirac — Implementation plan
 
-> Implémentation MicroProfile Metrics 5.1.1 dans le style Vidocq : zéro librairie tierce
-> d'implémentation (APIs Jakarta EE / MicroProfile autorisées), Java 25, virtual threads,
-> JPMS strict, CDI via Vauban, endpoint REST via Cassini, configuration via Ravel.
+> MicroProfile Metrics 5.1.1 implementation in the Vidocq style: zero third-party
+> implementation libraries (Jakarta EE / MicroProfile APIs allowed), Java 25, virtual threads,
+> strict JPMS, CDI via Vauban, REST endpoint via Cassini, configuration via Ravel.
 
-## Principes directeurs
+## Design principles
 
-| Principe | Application concrète |
+| Principle | Concrete application |
 |---|---|
-| Zéro librairie d'implémentation | Pas de Micrometer, Dropwizard Metrics, SmallRye Metrics dans `dirac-core`. Seules les API specs compilées. |
-| Séparation métriques / CDI | `dirac-core` contient les structures de données et les enregistrements ; `dirac-cdi-vauban` contient les intercepteurs CDI. |
-| Thread-safety sans contention | `LongAdder` pour les compteurs ; `AtomicReference` pour les états ; `ConcurrentHashMap` pour les registres. Pas de `synchronized`. |
-| JPMS strict | `module-info.java` partout, `internal.*` non exporté, SPI via `provides/uses`. Pas d'`opens` non justifié. |
-| TDD strict | Red → Green → Refactor. Test avant le code. Citation §spec dans les tests. |
-| TCK PASS 100 % | Contrat dur avant tout merge structurel. Score déclaré dans `TCK.md`. |
-| Performance mesurée | JMH dès M4, comparatif vs Micrometer et SmallRye Metrics, résultats dans `BENCH.md`. |
-| AOT-friendly | Pas de proxy dynamique. `@Gauge` résolu par `MethodHandle` au démarrage. Compatible GraalVM native-image. |
-| OpenMetrics standard | Format d'export conforme Prometheus text exposition format 0.0.4 + OpenMetrics 1.0. |
+| Zero implementation libraries | No Micrometer, Dropwizard Metrics, or SmallRye Metrics in `dirac-core`. Only compiled spec APIs. |
+| Metrics / CDI separation | `dirac-core` contains the data structures and registries; `dirac-cdi-vauban` contains the CDI interceptors. |
+| Thread-safety without contention | `LongAdder` for counters; `AtomicReference` for states; `ConcurrentHashMap` for registries. No `synchronized`. |
+| Strict JPMS | `module-info.java` everywhere, non-exported `internal.*`, SPI via `provides/uses`. No unjustified `opens`. |
+| Strict TDD | Red → Green → Refactor. Test before code. Spec section citations in tests. |
+| 100% PASS TCK | Hard contract before any structural merge. Score declared in `TCK.md`. |
+| Measured performance | JMH from M4, comparison vs Micrometer and SmallRye Metrics, results in `BENCH.md`. |
+| AOT-friendly | No dynamic proxy. `@Gauge` resolved by `MethodHandle` at startup. Compatible with GraalVM native-image. |
+| OpenMetrics standard | Export format compliant with Prometheus text exposition format 0.0.4 + OpenMetrics 1.0. |
 
-## Méthodologie : TDD + TCK comme garde-fous parallèles
+## Methodology: TDD + TCK as parallel safeguards
 
-Dirac est développé en **TDD strict** (Red → Green → Refactor). Aucune ligne de production
-n'est écrite avant un test qui la justifie. Au-delà du cycle TDD interne :
+Dirac is developed with **strict TDD** (Red → Green → Refactor). No production line
+is written before a test justifies it. Beyond the internal TDD cycle:
 
-- **Couche 1 — tests unitaires TDD** : pilotent la conception de chaque type de métrique
-  et du registre. Testables sans container CDI (c'est la raison d'être de `dirac-core`).
-- **Couche 2 — tests d'intégration CDI** : scénarios `@Counted`, `@Timed`, `@Gauge` avec
-  Vauban embedded. Vérifient la résolution des intercepteurs et des producers sans TCK.
-- **Couche 3 — TCK officiel** (`microprofile-metrics-tck:5.1.1`) : contrat 100 % PASS
-  avant tout merge structurel. Module hors reactor (POM Model 4.0.0).
-- **Couche 4 — Bench JMH** : `dirac-bench` compare throughput, overhead d'interception,
-  latence p99 vs Micrometer et SmallRye Metrics sur la même JVM.
+- **Layer 1 — TDD unit tests**: drive the design of each metric type
+  and the registry. Testable without a CDI container (that is the purpose of `dirac-core`).
+- **Layer 2 — CDI integration tests**: `@Counted`, `@Timed`, `@Gauge` scenarios with
+  embedded Vauban. Verify interceptor and producer resolution without the TCK.
+- **Layer 3 — official TCK** (`microprofile-metrics-tck:5.1.1`): 100% PASS contract
+  before any structural merge. Module outside the reactor (POM Model 4.0.0).
+- **Layer 4 — JMH Benchmarks**: `dirac-bench` compares throughput, interception overhead,
+  p99 latency vs Micrometer and SmallRye Metrics on the same JVM.
 
-## Architecture des modules
+## Module architecture
 
 ```
 dirac-mp-metrics-api io.vidocq.dirac.mp.metrics.api (artifact module: microprofile.metrics.api)
-  → Repackage local de microprofile-metrics-api avec module-info explicite
+  → Local repackage of microprofile-metrics-api with explicit module-info
 
 dirac-api            io.vidocq.dirac.api
   exports io.vidocq.dirac.api
   requires microprofile.metrics.api
-  → SPI publique : MetricRegistryProducer, DiracContext,
-                   HistogramSnapshot, TimerSnapshot
+  → Public SPI: MetricRegistryProducer, DiracContext,
+               HistogramSnapshot, TimerSnapshot
 
 dirac-core           io.vidocq.dirac.core
   exports io.vidocq.dirac.core to io.vidocq.dirac.cdi.vauban, io.vidocq.dirac.rest
   requires io.vidocq.dirac.api
   requires microprofile.metrics.api
-  → Implémentations : CounterImpl, GaugeImpl, HistogramImpl, TimerImpl,
-                       MetricRegistryImpl, OpenMetricsFormatter, JsonMetricsFormatter,
-                       BaseMetricsRegistrar
+  → Implementations: CounterImpl, GaugeImpl, HistogramImpl, TimerImpl,
+                     MetricRegistryImpl, OpenMetricsFormatter, JsonMetricsFormatter,
+                     BaseMetricsRegistrar
 
 dirac-cdi-vauban     io.vidocq.dirac.cdi.vauban
   requires io.vidocq.dirac.api
@@ -58,23 +58,23 @@ dirac-cdi-vauban     io.vidocq.dirac.cdi.vauban
   requires jakarta.enterprise.cdi
   requires jakarta.interceptor
   requires io.vidocq.vauban.api
-  → Implémentations : CountedInterceptor, TimedInterceptor, DiracExtension (BCE),
-                       MetricRegistryProducerBean, DiracAutoDiscovery
+  → Implementations: CountedInterceptor, TimedInterceptor, DiracExtension (BCE),
+                     MetricRegistryProducerBean, DiracAutoDiscovery
 
 dirac-rest           io.vidocq.dirac.rest
   requires io.vidocq.dirac.api
   requires io.vidocq.dirac.core
   requires jakarta.ws.rs
-  → Implémentations : MetricsResource, ContentNegotiationFilter
+  → Implementations: MetricsResource, ContentNegotiationFilter
 
 dirac-bench          io.vidocq.dirac.bench
   → JMH benchmarks vs Micrometer, SmallRye Metrics
 
-dirac-tck            (hors reactor — Model 4.0.0)
-  → TestNG + Arquillian + Vauban embedded + Chappe, runner TCK officiel MP Metrics 5.1.1
+dirac-tck            (outside reactor — Model 4.0.0)
+  → TestNG + Arquillian + Vauban embedded + Chappe, official MP Metrics 5.1.1 TCK runner
 
 dirac-examples       io.vidocq.dirac.examples
-  → Exemples standalone et avec vidocq-mps
+  → Standalone and vidocq-mps examples
 ```
 
 ## Phases
@@ -84,271 +84,269 @@ dirac-examples       io.vidocq.dirac.examples
 - [x] `.sdkmanrc` (`java=25-tem`, `maven=3.9.16`)
 - [x] `.gitignore`, `.mvn/maven.config`
 - [x] `pom.xml` parent (Model 4.1.0, multi-module, dependency management Jakarta + MicroProfile)
-- [x] `CLAUDE.md`, `AGENTS.md`, `ROADMAP.md` (ces fichiers)
-- [x] Création des sous-modules avec `pom.xml` + `module-info.java` squelettes :
+- [x] `CLAUDE.md`, `AGENTS.md`, `ROADMAP.md` (these files)
+- [x] Creation of submodules with skeleton `pom.xml` + `module-info.java`:
       `dirac-api`, `dirac-core`, `dirac-cdi-vauban`, `dirac-rest`,
-      `dirac-bench`, `dirac-examples`, `dirac-tck` (hors reactor)
+      `dirac-bench`, `dirac-examples`, `dirac-tck` (outside reactor)
 - [x] `LICENSE` (Apache 2.0)
 - [x] `README.md`
-- [x] `run-official-tck-mp-metrics-5.1.sh` (script TCK racine)
-- [x] Validation `./mvnw -ntp install -DskipTests` réussit sur le reactor
-- [x] Validation `mvn -f dirac-tck/pom.xml -DskipTests compile` réussit (hors reactor)
+- [x] `run-official-tck-mp-metrics-5.1.sh` (root TCK script)
+- [x] Validation `./mvnw -ntp install -DskipTests` succeeds on the reactor
+- [x] Validation `mvn -f dirac-tck/pom.xml -DskipTests compile` succeeds (outside reactor)
 
-**Note M0 :** `dirac-rest/module-info.java` est intentionnellement différé à M7 (module
-optionnel sans contenu à M0 — compiler args override incompatible avec JPMS sans sources).
+**M0 note:** `dirac-rest/module-info.java` is intentionally deferred to M7 (optional module
+with no content in M0 — compiler args override incompatible with JPMS without sources).
 
-**Livrable M0 ✅ :** Reactor compilable (7/7 BUILD SUCCESS), `module-info.java` squelettes
-cohérents sur `dirac-api`, `dirac-core`, `dirac-cdi-vauban`, TCK non-reactor compilable.
+**M0 deliverable ✅:** compilable reactor (7/7 BUILD SUCCESS), coherent skeleton `module-info.java`
+on `dirac-api`, `dirac-core`, `dirac-cdi-vauban`, non-reactor TCK compilable.
 
 ---
 
 ### M1 — MetricRegistry + Counter
 
-**Scope spec :** §2 (MetricRegistry), §3.1 (Counter), §4.1 (@Counted).
+**Scope spec:** §2 (MetricRegistry), §3.1 (Counter), §4.1 (@Counted).
 
-| Tâche | Notes | État |
+| Task | Notes | State |
 |---|---|---|
-| `MetricID` record | Utilisation du type `org.eclipse.microprofile.metrics.MetricID` (API spec) pour `(name, tags)` immuable | ☑ |
-| `Tag` record | Utilisation du type `org.eclipse.microprofile.metrics.Tag` (API spec) avec validation native | ☑ |
-| `MetricRegistryImpl` | `ConcurrentHashMap<MetricID, Metric>` ; méthodes `counter()`, `gauge()`, `histogram()`, `timer()`, `register()`, `remove()`, `getMetrics()` | ☑ |
-| `CounterImpl` | `LongAdder` ; `inc()`, `inc(long)`, `getCount()` | ☑ |
-| `MetricRegistryProducerBean` CDI | Produit `MetricRegistry` pour les scopes `APPLICATION`, `BASE`, `VENDOR` avec qualifier `@RegistryScope` | ☑ |
-| `DiracExtension` BCE — squelette | Implémente `BuildCompatibleExtension` sans logique | ☑ |
-| `CountedInterceptor` | Priorité `4020` ; résout le `MetricID` en cache (BeanClass, Method) → incrémente `Counter` APPLICATION | ☑ |
-| `@Counted` — champs `absolute`, `tags`, `description`, `unit`, `scope` | Lecture des attributs de l'annotation pour construire le `MetricID` et le `Metadata` | ☑ |
-| Tests unitaires `CounterImpl` | `inc()`, `inc(long)`, concurrence sous 200 virtual threads | ☑ |
-| Tests unitaires `MetricRegistryImpl` | Enregistrement, lookup, removal, unicité par MetricID | ☑ |
-| Tests d'intégration CDI | `@Counted` sur méthode simple avec Vauban embedded ; vérification du registre APPLICATION | ☑ |
+| `MetricID` record | Use the `org.eclipse.microprofile.metrics.MetricID` API type for immutable `(name, tags)` | ☑ |
+| `Tag` record | Use the `org.eclipse.microprofile.metrics.Tag` API type with native validation | ☑ |
+| `MetricRegistryImpl` | `ConcurrentHashMap<MetricID, Metric>`; methods `counter()`, `gauge()`, `histogram()`, `timer()`, `register()`, `remove()`, `getMetrics()` | ☑ |
+| `CounterImpl` | `LongAdder`; `inc()`, `inc(long)`, `getCount()` | ☑ |
+| `MetricRegistryProducerBean` CDI | Produces `MetricRegistry` for `APPLICATION`, `BASE`, `VENDOR` scopes with `@RegistryScope` qualifier | ☑ |
+| `DiracExtension` BCE — skeleton | Implements `BuildCompatibleExtension` with no logic | ☑ |
+| `CountedInterceptor` | Priority `4020`; resolves cached `MetricID` (BeanClass, Method) → increments APPLICATION `Counter` | ☑ |
+| `@Counted` — `absolute`, `tags`, `description`, `unit`, `scope` fields | Reads annotation attributes to build `MetricID` and `Metadata` | ☑ |
+| `CounterImpl` unit tests | `inc()`, `inc(long)`, concurrency under 200 virtual threads | ☑ |
+| `MetricRegistryImpl` unit tests | Registration, lookup, removal, uniqueness by `MetricID` | ☑ |
+| CDI integration tests | `@Counted` on a simple method with embedded Vauban; APPLICATION registry verification | ☑ |
 
-**Décisions M1 :**
-- `MetricID` utilise `TreeMap<String, String>` pour les tags (ordre stable pour le format OpenMetrics).
-- Le cache `(BeanClass, Method) → MetricID` est construit lors du premier appel intercepté
-  (pas au démarrage BCE, car le nom de métrique peut contenir le nom de classe canonique).
-- Un `Counter` enregistré deux fois avec le même `MetricID` retourne la même instance
-  (sémantique "get-or-create").
+**M1 decisions:**
+- `MetricID` uses `TreeMap<String, String>` for tags (stable order for OpenMetrics format).
+- The `(BeanClass, Method) → MetricID` cache is built on the first intercepted call
+  (not at BCE startup, because the metric name may contain the canonical class name).
+- A `Counter` registered twice with the same `MetricID` returns the same instance
+  (get-or-create semantics).
 
-**Livrable M1 ✅ :** `@Counted` fonctionnel, registre APPLICATION injectable via CDI. Tests unitaires + intégration CDI verts.
+**M1 deliverable ✅:** functional `@Counted`, APPLICATION registry injectable via CDI. Unit + CDI integration tests green.
 
 ---
 
 ### M2 — Gauge
 
-**Scope spec :** §3.2 (Gauge), §4.2 (@Gauge).
+**Scope spec:** §3.2 (Gauge), §4.2 (@Gauge).
 
-| Tâche | Notes | État |
+| Task | Notes | State |
 |---|---|---|
-| `GaugeImpl<T>` | Stocke un `MethodHandle` résolu au démarrage ; `getValue()` invoque le handle | ☑ |
-| `DiracExtension` BCE — résolution `@Gauge` | Parcourt les méthodes annotées `@Gauge` ; construit et met en cache les `MethodHandle` ; valide la signature (pas de paramètre, type de retour non-void) | ☑ |
-| `@Gauge` — enregistrement automatique | Le BCE enregistre chaque méthode `@Gauge` dans le registre ciblé par `scope` au démarrage du container | ☑ |
-| Validation négative | `@Gauge` sur méthode avec paramètres ou retour `void` → échec de validation au démarrage | ☑ |
-| Tests unitaires `GaugeImpl` | Lecture simple, mise à jour via la méthode sous-jacente | ☑ |
-| Tests d'intégration CDI | `@Gauge` sur méthode retournant une valeur métier ; vérification via `MetricRegistry.getGauges()` | ☑ |
+| `GaugeImpl<T>` | Stores a `MethodHandle` resolved at startup; `getValue()` invokes the handle | ☑ |
+| `DiracExtension` BCE — `@Gauge` resolution | Scans methods annotated `@Gauge`; builds and caches `MethodHandle`s; validates signature (no parameter, non-void return type) | ☑ |
+| `@Gauge` — automatic registration | The BCE registers each `@Gauge` method in the scope-targeted registry at container startup | ☑ |
+| Negative validation | `@Gauge` on a method with parameters or `void` return → validation failure at startup | ☑ |
+| `GaugeImpl` unit tests | Simple read, update through the underlying method | ☑ |
+| CDI integration tests | `@Gauge` on a method returning a business value; verification via `MetricRegistry.getGauges()` | ☑ |
 
-**Décisions M2 :**
-- `GaugeImpl` ne stocke pas la valeur — il invoque le `MethodHandle` à chaque appel de
-  `getValue()`. C'est la sémantique attendue : une gauge est une lecture instantanée.
-- `MethodHandle` résolu dans le BCE avec `MethodHandles.privateLookupIn(beanClass, lookup)`
-  pour accéder aux méthodes `protected` ou package-private si nécessaire.
+**M2 decisions:**
+- `GaugeImpl` does not store the value — it invokes the `MethodHandle` on every
+  `getValue()` call. That is the expected semantics: a gauge is an instantaneous read.
+- `MethodHandle` is resolved in the BCE with `MethodHandles.privateLookupIn(beanClass, lookup)`
+  to access `protected` or package-private methods if necessary.
 
-**Livrable M2 ✅ :** `@Gauge` enregistré automatiquement au démarrage. Tests verts.
+**M2 deliverable ✅:** `@Gauge` automatically registered at startup. Tests green.
 
 ---
 
 ### M3 — Histogram
 
-**Scope spec :** §3.3 (Histogram).
+**Scope spec:** §3.3 (Histogram).
 
-| Tâche | Notes | État |
+| Task | Notes | State |
 |---|---|---|
 | `HistogramSnapshot` record | `count`, `sum`, `min`, `max`, `mean`, percentiles (p50, p75, p95, p98, p99, p999) | ☑ |
-| `HistogramImpl` | Reservoir d'échantillons avec decay exponentiel (ou implémentation maison) ; thread-safe via `AtomicLongArray` ; expose `HistogramSnapshot` | ☑ |
-| Tests unitaires `HistogramImpl` | Distribution, percentiles, concurrence | ☑ |
+| `HistogramImpl` | Sample reservoir with exponential decay (or in-house implementation); thread-safe via `AtomicLongArray`; exposes `HistogramSnapshot` | ☑ |
+| `HistogramImpl` unit tests | Distribution, percentiles, concurrency | ☑ |
 
-**Décisions M3 :**
-- Le reservoir utilise un algorithme de decay exponentiel avec fenêtre de 5 minutes
-  (paramètres par défaut Prometheus : `alpha=0.015`, `size=1028`).
-- Thread-safety par `AtomicLong[]` + CAS sans `synchronized`.
-- Le `microprofile-metrics-api:5.1.1` actuellement consommé n'expose pas d'annotation
-  `@Histogram` dans `org.eclipse.microprofile.metrics.annotation` ; M3 couvre donc
-  uniquement l'implémentation `Histogram` côté core.
+**M3 decisions:**
+- The reservoir uses an exponential decay algorithm with a 5-minute window
+  (Prometheus default parameters: `alpha=0.015`, `size=1028`).
+- Thread-safety via `AtomicLong[]` + CAS without `synchronized`.
+- The currently consumed `microprofile-metrics-api:5.1.1` does not expose a
+  `@Histogram` annotation in `org.eclipse.microprofile.metrics.annotation`; M3 therefore covers
+  only the core-side `Histogram` implementation.
 
-**Livrable M3 ✅ :** Histogram fonctionnel côté core (`HistogramImpl` + snapshot + registry + tests).
-
----
-
-### M4 — Timer + Benchmarks JMH baseline
-
-**Scope spec :** §3.4 (Timer), §4.4 (@Timed).
-
-| Tâche | Notes | État |
-|---|---|---|
-| `TimerSnapshot` record | Étend `HistogramSnapshot` avec `elapsedTime` (durée totale) | ☑ |
-| `TimerImpl` | `System.nanoTime()` delta → délègue à `HistogramImpl` ; expose `TimerSnapshot` | ☑ |
-| `TimedInterceptor` CDI | Priorité `4021` ; démarre `nanoTime()` avant `ctx.proceed()`, enregistre le delta après | ☑ |
-| `@Timed` — attributs `absolute`, `tags`, `description` | Même pattern que `@Counted` | ☑ |
-| Benchmarks JMH — baseline | Overhead d'interception : méthode CDI baseline vs `@Counted` vs `@Timed` (`M4TimerBenchmarks`) | ☑ |
-| Charge JMH sous 1000 virtual threads | Throughput `Counter.increment()` et `Timer.update(Duration)` avec `Executors.newVirtualThreadPerTaskExecutor()` | ☑ |
-| Tests unitaires `TimerImpl` | Mesure de durée, concurrence, sous-milliseconde | ☑ |
-| Tests d'intégration CDI | `@Timed` sur méthode lente ; vérification `TimerSnapshot.mean()` | ☑ |
-
-**Décisions M4 :**
-- `TimerImpl` utilise `System.nanoTime()` uniquement — jamais `currentTimeMillis()`.
-- L'overhead du `TimedInterceptor` doit rester < 1 µs p99 sur JVM chauffée (objectif perf).
-- Benchmarks M4 implémentés dans `dirac-bench/src/main/java/io/vidocq/dirac/bench/M4TimerBenchmarks.java`.
-
-**Livrable M4 ✅ :** `@Timed` opérationnel (core + CDI) et baseline JMH disponible dans `dirac-bench`.
+**M3 deliverable ✅:** Histogram functional on the core side (`HistogramImpl` + snapshot + registry + tests).
 
 ---
 
-### M5 — Métriques BASE (JVM) et VENDOR
+### M4 — Timer + JMH baseline benchmarks
 
-**Scope spec :** §3.3 (Base Metrics), §3.4 (Vendor Metrics).
+**Scope spec:** §3.4 (Timer), §4.4 (@Timed).
 
-| Tâche | Notes | État |
+| Task | Notes | State |
 |---|---|---|
-| `BaseMetricsRegistrar` | Enregistre les métriques JVM obligatoires dans le registre BASE au démarrage | ☑ |
-| GC metrics | `gc.time`, `gc.total` via `ManagementFactory.getGarbageCollectorMXBeans()` (exposition gauge agrégée des compteurs MXBean) | ☑ |
+| `TimerSnapshot` record | Extends `HistogramSnapshot` with `elapsedTime` (total duration) | ☑ |
+| `TimerImpl` | `System.nanoTime()` delta → delegates to `HistogramImpl`; exposes `TimerSnapshot` | ☑ |
+| CDI `TimedInterceptor` | Priority `4021`; starts `nanoTime()` before `ctx.proceed()`, records delta after | ☑ |
+| `@Timed` — `absolute`, `tags`, `description` attributes | Same pattern as `@Counted` | ☑ |
+| JMH benchmarks — baseline | Interception overhead: baseline CDI method vs `@Counted` vs `@Timed` (`M4TimerBenchmarks`) | ☑ |
+| JMH load under 1000 virtual threads | `Counter.increment()` throughput and `Timer.update(Duration)` with `Executors.newVirtualThreadPerTaskExecutor()` | ☑ |
+| `TimerImpl` unit tests | Duration measurement, concurrency, sub-millisecond | ☑ |
+| CDI integration tests | `@Timed` on a slow method; `TimerSnapshot.mean()` verification | ☑ |
+
+**M4 decisions:**
+- `TimerImpl` uses `System.nanoTime()` only — never `currentTimeMillis()`.
+- `TimedInterceptor` overhead must remain < 1 µs p99 on a warmed JVM (performance target).
+- M4 benchmarks implemented in `dirac-bench/src/main/java/io/vidocq/dirac/bench/M4TimerBenchmarks.java`.
+
+**M4 deliverable ✅:** operational `@Timed` (core + CDI) and JMH baseline available in `dirac-bench`.
+
+---
+
+### M5 — BASE (JVM) and VENDOR metrics
+
+**Scope spec:** §3.3 (Base Metrics), §3.4 (Vendor Metrics).
+
+| Task | Notes | State |
+|---|---|---|
+| `BaseMetricsRegistrar` | Registers mandatory JVM metrics in the BASE registry at startup | ☑ |
+| GC metrics | `gc.time`, `gc.total` via `ManagementFactory.getGarbageCollectorMXBeans()` (aggregate gauge exposure of MXBean counters) | ☑ |
 | Thread metrics | `thread.count` (Gauge), `thread.daemon.count` (Gauge), `thread.max.count` (Gauge) via `ThreadMXBean` | ☑ |
 | Heap metrics | `memory.usedHeap` (Gauge), `memory.committedHeap` (Gauge), `memory.maxHeap` (Gauge) via `MemoryMXBean` | ☑ |
 | Uptime metrics | `jvm.uptime` (Gauge, ms) via `RuntimeMXBean` | ☑ |
 | Class loading metrics | `classloader.loadedClasses` (Gauge), `classloader.unloadedClasses` (Gauge) | ☑ |
 | CPU metrics | `cpu.availableProcessors` (Gauge), `cpu.systemLoadAverage` (Gauge) via `OperatingSystemMXBean` | ☑ |
-| Enregistrement au démarrage | `MetricRegistryProducerBean` appelle `BaseMetricsRegistrar.register(MetricRegistry base)` à l'initialisation | ☑ |
-| Tests unitaires | Vérification de l'enregistrement des métriques BASE attendues (`BaseMetricsRegistrarTest`) | ☑ |
-| Tests d'intégration | Registre BASE non-vide après démarrage Vauban embedded (`BaseMetricsCdiIntegrationTest`) | ☑ |
+| Startup registration | `MetricRegistryProducerBean` calls `BaseMetricsRegistrar.register(MetricRegistry base)` on initialization | ☑ |
+| Unit tests | Verification of the expected BASE metrics registration (`BaseMetricsRegistrarTest`) | ☑ |
+| Integration tests | Non-empty BASE registry after embedded Vauban startup (`BaseMetricsCdiIntegrationTest`) | ☑ |
 
-**Décisions M5 :**
-- Les valeurs JVM provenant des MXBeans sont exposées en lecture instantanée via `Gauge` pour garder un état live sans scheduler.
-- Le registre BASE est peuplé dans `MetricRegistryProducerBean` à l'initialisation de l'application.
+**M5 decisions:**
+- JVM values from MXBeans are exposed as instantaneous reads via `Gauge` to keep live state without a scheduler.
+- The BASE registry is populated in `MetricRegistryProducerBean` during application initialization.
 
-**Livrable M5 ✅ :** Registre BASE peuplé au démarrage avec métriques JVM principales et couverture de tests core + CDI.
-
----
-
-### M6 — Format OpenMetrics / Prometheus
-
-**Scope spec :** §3.0 (Exposition des métriques — format Prometheus text).
-
-| Tâche | Notes | État |
-|---|---|---|
-| `OpenMetricsFormatter` | Sérialise `MetricRegistry` en format Prometheus text (`text/plain;version=0.0.4`) | ☑ |
-| Format `# HELP` et `# TYPE` | Générés depuis `Metadata.description()` et le type de métrique | ☑ |
-| Format des lignes de métrique | `metric_name{tag1="v1",tag2="v2"} value [timestamp]` | ☑ |
-| Suffixes Prometheus par type | Counter : `_total` ; Histogram : `_bucket`, `_count`, `_sum` ; Timer : `_seconds_*` (conversion nanos→secondes) | ☑ |
-| Canonicalisation des noms | `.` → `_` ; caractères non alphanumériques → `_` (spec §3.1) | ☑ |
-| `JsonMetricsFormatter` | Sérialise en JSON (format spec MP Metrics §3.2) — sans bibliothèque JSON tierce (Champollion) | ☑ |
-| Tests unitaires `OpenMetricsFormatter` | Sortie exacte pour Counter, Gauge, Histogram, Timer avec et sans tags | ☑ |
-| Tests unitaires `JsonMetricsFormatter` | Structure JSON conforme spec pour chaque type | ☑ |
-
-**Décisions M6 :**
-- `OpenMetricsFormatter` construit le texte avec `StringBuilder` — pas de dépendance à
-  un moteur de template.
-- Le format Timer est actuellement exposé en série `_seconds` (`quantile`, `_count`, `_sum`) avec conversion nanos→secondes.
-- `JsonMetricsFormatter` : clés au format `metricName[;tagKey=tagValue]*` (tags triés). Counter/Gauge → scalaire JSON. Histogram → objet `{count, sum, p50…p999}`. Timer → objet `{count, elapsedTime, p50…p999}` (secondes). Implémenté avec `StringBuilder` — aucune dépendance.
-
-**Livrable :** OpenMetrics et JSON implémentés et testés (39 tests dirac-core verts). ✅
+**M5 deliverable ✅:** BASE registry populated at startup with main JVM metrics and core + CDI test coverage.
 
 ---
 
-### M7 — Endpoint REST /metrics (dirac-rest + Cassini)
+### M6 — OpenMetrics / Prometheus format
 
-**Scope spec :** §2.3 (REST API).
+**Scope spec:** §3.0 (metric exposition — Prometheus text format).
 
-| Tâche | Notes | État |
+| Task | Notes | State |
 |---|---|---|
-| `MetricsResource` JAX-RS | `@Path("/metrics")`, `@GET` → retourne tous les scopes | ☑ |
-| `GET /metrics/{scope}` | Scope = `application`, `base`, `vendor` ; 404 si scope inconnu | ☑ |
-| `GET /metrics/{scope}/{name}` | Métrique individuelle ; 404 si non trouvée | ☑ |
-| Négociation de contenu | `Accept: text/plain` → OpenMetrics ; `Accept: application/json` → JSON ; défaut → text/plain | ☑ |
-| `ContentNegotiationFilter` JAX-RS | Filtre `@Provider @PreMatching` — null/vide/`*/*` → `text/plain` | ☑ |
-| Intégration Cassini | `MetricsResource` est un bean `@ApplicationScoped` — découvert automatiquement par Cassini via CDI | ☑ |
-| Tests d'intégration REST | Couverts par le TCK officiel M8 (deploy Arquillian + Chappe) ; tests unitaires directs couvrent la logique de formatage | ☑ |
+| `OpenMetricsFormatter` | Serializes `MetricRegistry` in Prometheus text format (`text/plain;version=0.0.4`) | ☑ |
+| `# HELP` and `# TYPE` format | Generated from `Metadata.description()` and the metric type | ☑ |
+| Metric line format | `metric_name{tag1="v1",tag2="v2"} value [timestamp]` | ☑ |
+| Prometheus suffixes by type | Counter: `_total`; Histogram: `_bucket`, `_count`, `_sum`; Timer: `_seconds_*` (nanos→seconds conversion) | ☑ |
+| Name canonicalization | `.` → `_`; non-alphanumeric characters → `_` (spec §3.1) | ☑ |
+| `JsonMetricsFormatter` | Serializes to JSON (MP Metrics spec §3.2) — without any third-party JSON library (Champollion) | ☑ |
+| `OpenMetricsFormatter` unit tests | Exact output for Counter, Gauge, Histogram, Timer with and without tags | ☑ |
+| `JsonMetricsFormatter` unit tests | Spec-compliant JSON structure for each type | ☑ |
 
-**Décisions M7 :**
-- `dirac-rest` dépend de `jakarta.ws.rs-api` en `provided` — Cassini fournit l'implémentation.
-- La logique de formatage est extraite dans des méthodes package-visible (`formatAll`, `formatScope`, `formatMetric`)
-  testées directement sans RuntimeDelegate JAX-RS.
-- `@ApplicationScoped` sur `MetricsResource` → Cassini la découvre comme bean CDI sans code supplémentaire.
-- Les codes d'erreur HTTP suivent la spec : 200 OK, 404 Not Found si scope/métrique absents.
-- Format `GET /metrics` JSON : objet racine avec clés `application`, `base`, `vendor`.
-- `OpenMetricsFormatter` et `JsonMetricsFormatter` ont chacun une surcharge acceptant `Map<MetricID, Metric>`
-  pour le filtrage par nom (`GET /metrics/{scope}/{name}`).
-- `MetricsEndpoint` placeholder (M0) remplacé et supprimé.
-- Les tests d'intégration HTTP (Chappe embedded) sont différés à M8 — le TCK teste cet endpoint de bout en bout.
+**M6 decisions:**
+- `OpenMetricsFormatter` builds text with `StringBuilder` — no template engine dependency.
+- Timer format is currently exposed in `_seconds` series (`quantile`, `_count`, `_sum`) with nanos→seconds conversion.
+- `JsonMetricsFormatter`: keys in `metricName[;tagKey=tagValue]*` format (sorted tags). Counter/Gauge → JSON scalar. Histogram → `{count, sum, p50…p999}` object. Timer → `{count, elapsedTime, p50…p999}` object (seconds). Implemented with `StringBuilder` — no dependency.
 
-**Livrable ✅ :** `MetricsResource` + `ContentNegotiationFilter` implémentés et testés (21 tests dirac-rest verts).
+**Deliverable:** OpenMetrics and JSON implemented and tested (39 green `dirac-core` tests). ✅
 
 ---
 
-### M8 — TCK officiel MicroProfile Metrics 5.1.1
+### M7 — REST `/metrics` endpoint (dirac-rest + Cassini)
 
-**Scope :** Suite complète `microprofile-metrics-tck:5.1.1`.
+**Scope spec:** §2.3 (REST API).
 
-| Tâche | Notes | État |
+| Task | Notes | State |
 |---|---|---|
-| `dirac-tck/pom.xml` (Model 4.0.0) | Dépendances : TCK, Arquillian, Vauban embedded, Chappe ; **hors reactor** | ☑ |
-| `DiracDeployableContainer` | `DeployableContainer` Arquillian Local démarrant Vauban + Dirac embedded + Chappe | ☑ |
-| `VaubanDiracTckBootstrap` | Extraction classes de l'archive, démarrage Vauban (DiracExtension + intercepteurs + producers), activation RequestContext | ☑ |
-| `DiracTestEnricher` | Injection `@Inject` sur les classes de test TCK via `BeanManager` Vauban | ☑ |
-| `DiracArquillianExtension` + `arquillian.xml` | Découverte du container par Arquillian | ☑ |
-| `tck-suite.xml` | Sélection des packages TCK MP Metrics 5.1.1 | ☑ |
-| `run-official-tck-mp-metrics-5.1.sh` | Script racine : install reactor → invoke TCK + génération `tck-report.txt` | ☑ |
-| Passage TCK smoke test | `DiracTckSmokeTest` 1/1 PASS | ☑ |
-| Passage TCK complet | **127/127 PASS** sur le `tck-suite.xml` officiel | ☑ |
-| `TCK.md` | Documentation des challenges et tests exclus | ☐ |
-| `dirac-tck/README.md` | Procédure d'installation TCK + architecture du runner | ☐ |
+| JAX-RS `MetricsResource` | `@Path("/metrics")`, `@GET` → returns all scopes | ☑ |
+| `GET /metrics/{scope}` | Scope = `application`, `base`, `vendor`; 404 if scope is unknown | ☑ |
+| `GET /metrics/{scope}/{name}` | Individual metric; 404 if not found | ☑ |
+| Content negotiation | `Accept: text/plain` → OpenMetrics; `Accept: application/json` → JSON; default → text/plain | ☑ |
+| JAX-RS `ContentNegotiationFilter` | `@Provider @PreMatching` filter — null/empty/`*/*` → `text/plain` | ☑ |
+| Cassini integration | `MetricsResource` is an `@ApplicationScoped` bean — automatically discovered by Cassini through CDI | ☑ |
+| REST integration tests | Covered by the official M8 TCK (Arquillian deploy + Chappe); direct unit tests cover formatting logic | ☑ |
 
-**Décisions M8 :**
-- Le container Arquillian démarre Vauban (CDI), enregistre les beans du test, expose
-  l'endpoint `/metrics` via Chappe (port dynamique).
-- La propriété `mp.metrics.appName` est exposée dans le script pour les tests de scoping.
-- `RequestContext` Vauban activé au moment du déploiement de chaque archive TCK.
-- Contrat strict `aroundInvoke` requis par le TCK : sur métrique supprimée du registre,
-  `CountedInterceptor`/`TimedInterceptor` lèvent `IllegalStateException`
-  (test TCK `removeCounterFromRegistry` / `removeTimerFromRegistry` exigent ce comportement).
-  Les tests unitaires et d'intégration CDI Dirac pré-enregistrent donc les métriques
-  comme le fait `@AroundConstruct` en production.
+**M7 decisions:**
+- `dirac-rest` depends on `jakarta.ws.rs-api` as `provided` — Cassini supplies the implementation.
+- Formatting logic is extracted into package-visible methods (`formatAll`, `formatScope`, `formatMetric`)
+  tested directly without a JAX-RS `RuntimeDelegate`.
+- `@ApplicationScoped` on `MetricsResource` → Cassini discovers it as a CDI bean without additional code.
+- HTTP error codes follow the spec: 200 OK, 404 Not Found if scope/metric are absent.
+- JSON `GET /metrics` format: root object with `application`, `base`, `vendor` keys.
+- `OpenMetricsFormatter` and `JsonMetricsFormatter` each have an overload accepting `Map<MetricID, Metric>`
+  for name filtering (`GET /metrics/{scope}/{name}`).
+- `MetricsEndpoint` placeholder (M0) replaced and removed.
+- HTTP integration tests (embedded Chappe) are deferred to M8 — the TCK tests this endpoint end to end.
 
-**Livrable M8 ✅ :** TCK officiel MicroProfile Metrics 5.1.1 passé à 127/127 (0 failures, 0 errors, 0 skipped). Rapport reproductible via `./run-official-tck-mp-metrics-5.1.sh all` (cf. `dirac-tck/target/tck-report.txt`). Reste à produire `TCK.md` et `dirac-tck/README.md`.
+**Deliverable ✅:** `MetricsResource` + `ContentNegotiationFilter` implemented and tested (21 green `dirac-rest` tests).
 
 ---
 
-### M9 — Compatibilité JPMS complète + jlink
+### M8 — Official MicroProfile Metrics 5.1.1 TCK
 
-**Scope :** produire une image runtime custom via `jlink` pour un sous-ensemble Dirac
-strictement modulaire (aucun module automatique dans le graphe final).
+**Scope:** full `microprofile-metrics-tck:5.1.1` suite.
 
-| Tâche | Notes | État |
+| Task | Notes | State |
 |---|---|---|
-| Définir le périmètre `jlink` | Cible minimale : `dirac-api` + `dirac-core`; cible étendue : + `dirac-cdi-vauban` | ☐ |
-| Lever le blocker MP Metrics | Artefact reactor `dirac-mp-metrics-api` (repackage MP Metrics + `module-info.class`) utilisé par le smoke `jlink` | ☑ |
-| Option A — module bridge interne | Introduire un bridge explicitement modulaire qui évite l'automatic module dans l'image | ☐ |
-| Option A (prototype local M9.2) | POC validé: modularisation locale de `microprofile-metrics-api` via `jdeps`/`javac`/`jar` + image `jlink` générée (`run-jlink-smoke-m92.sh`) | ☑ |
-| Option B — artefact API modulaire | Industrialisée via le module reactor `dirac-mp-metrics-api` | ☑ |
-| Inventaire module-path | Documenter les modules explicites/automatiques (Dirac + Jakarta + MP) | ☑ |
-| `module-info` manquants | `dirac-rest`, `dirac-examples` et `dirac-bench` sont modularisés (workaround JPMS) | ☑ |
-| Profil Maven `jlink-smoke` | Profil parent `-Pjlink-smoke` ajouté (bloquant: échec si smoke `jlink` échoue) | ☑ |
-| Script `run-jlink-smoke.sh` | Smoke check M9 reproductible (JPMS OK + detection blocker `jlink`) | ☑ |
-| Smoke test image | Image `target/dirac-image-smoke` générée et validée (`--list-modules`) | ☑ |
-| CI gate `jlink` | Ajouter un job bloquant (`jlink-smoke`) | ☐ |
-| Documentation exploitation | Ajouter `JLINK.md` et lier depuis `README.md` | ☑ |
+| `dirac-tck/pom.xml` (Model 4.0.0) | Dependencies: TCK, Arquillian, embedded Vauban, Chappe; **outside reactor** | ☑ |
+| `DiracDeployableContainer` | Arquillian Local `DeployableContainer` starting embedded Vauban + Dirac + Chappe | ☑ |
+| `VaubanDiracTckBootstrap` | Archive class extraction, Vauban startup (DiracExtension + interceptors + producers), RequestContext activation | ☑ |
+| `DiracTestEnricher` | `@Inject` injection on TCK test classes via Vauban `BeanManager` | ☑ |
+| `DiracArquillianExtension` + `arquillian.xml` | Container discovery by Arquillian | ☑ |
+| `tck-suite.xml` | Selection of MP Metrics 5.1.1 TCK packages | ☑ |
+| `run-official-tck-mp-metrics-5.1.sh` | Root script: install reactor → invoke TCK + generate `tck-report.txt` | ☑ |
+| Smoke TCK pass | `DiracTckSmokeTest` 1/1 PASS | ☑ |
+| Full TCK pass | **127/127 PASS** on the official `tck-suite.xml` | ☑ |
+| `TCK.md` | Documentation of challenges and excluded tests | ☐ |
+| `dirac-tck/README.md` | TCK installation procedure + runner architecture | ☐ |
 
-**Décisions M9 (proposées) :**
-- Prioriser une image `jlink` pour `dirac-api`/`dirac-core` avant la variante CDI.
-- Refuser tout module automatique dans le graphe final `jlink`.
-- Conserver `dirac-rest` optionnel et hors cible minimale.
+**M8 decisions:**
+- The Arquillian container starts Vauban (CDI), registers test beans, exposes
+  the `/metrics` endpoint via Chappe (dynamic port).
+- `mp.metrics.appName` is exposed in the script for scoping tests.
+- Vauban `RequestContext` is activated when each TCK archive is deployed.
+- Strict `aroundInvoke` contract required by the TCK: on a metric removed from the registry,
+  `CountedInterceptor`/`TimedInterceptor` throw `IllegalStateException`
+  (TCK tests `removeCounterFromRegistry` / `removeTimerFromRegistry` require this behavior).
+  Dirac CDI unit and integration tests therefore pre-register metrics just like production `@AroundConstruct` does.
 
-**Validation technique (cible M9) :**
+**M8 deliverable ✅:** official MicroProfile Metrics 5.1.1 TCK passed at 127/127 (0 failures, 0 errors, 0 skipped). Reproducible report via `./run-official-tck-mp-metrics-5.1.sh all` (see `dirac-tck/target/tck-report.txt`). Remaining work: produce `TCK.md` and `dirac-tck/README.md`.
+
+---
+
+### M9 — Full JPMS compatibility + jlink
+
+**Scope:** produce a custom runtime image via `jlink` for a strictly modular Dirac subset
+(no automatic module in the final graph).
+
+| Task | Notes | State |
+|---|---|---|
+| Define the `jlink` scope | Minimum target: `dirac-api` + `dirac-core`; extended target: + `dirac-cdi-vauban` | ☐ |
+| Remove the MP Metrics blocker | Reactor artifact `dirac-mp-metrics-api` (repackage MP Metrics + `module-info.class`) used by the `jlink` smoke test | ☑ |
+| Option A — internal bridge module | Introduce an explicitly modular bridge that avoids the automatic module in the image | ☐ |
+| Option A (local prototype M9.2) | POC validated: local modularization of `microprofile-metrics-api` via `jdeps`/`javac`/`jar` + generated `jlink` image (`run-jlink-smoke-m92.sh`) | ☑ |
+| Option B — modular API artifact | Industrialized through the reactor module `dirac-mp-metrics-api` | ☑ |
+| Module-path inventory | Document explicit/automatic modules (Dirac + Jakarta + MP) | ☑ |
+| Missing `module-info` | `dirac-rest`, `dirac-examples` and `dirac-bench` are modularized (JPMS workaround) | ☑ |
+| `jlink-smoke` Maven profile | Parent profile `-Pjlink-smoke` added (blocking: fail if the `jlink` smoke test fails) | ☑ |
+| `run-jlink-smoke.sh` script | Reproducible M9 smoke check (JPMS OK + `jlink` blocker detection) | ☑ |
+| Image smoke test | `target/dirac-image-smoke` image generated and validated (`--list-modules`) | ☑ |
+| `jlink` CI gate | Add a blocking job (`jlink-smoke`) | ☐ |
+| Exploitation docs | Add `JLINK.md` and link it from `README.md` | ☑ |
+
+**M9 decisions (proposed):**
+- Prioritize a `jlink` image for `dirac-api`/`dirac-core` before the CDI variant.
+- Reject any automatic module in the final `jlink` graph.
+- Keep `dirac-rest` optional and outside the minimum target.
+
+**Technical validation (M9 target):**
 
 ```bash
-# Vérifier le statut des modules (explicite vs automatique)
+# Check module status (explicit vs automatic)
 jar --describe-module --file dirac-api/target/dirac-api-0.1.0-SNAPSHOT.jar
 jar --describe-module --file dirac-core/target/dirac-core-0.1.0-SNAPSHOT.jar
 
-# Vérifier la résolution JPMS
+# Check JPMS resolution
 java --module-path "<module-path>" --validate-modules
 
-# Construire l'image runtime (cible minimale)
+# Build the runtime image (minimum target)
 jlink --module-path "$JAVA_HOME/jmods:<module-path>" \
   --add-modules io.vidocq.dirac.api,io.vidocq.dirac.core \
   --output target/dirac-image
@@ -357,46 +355,46 @@ jlink --module-path "$JAVA_HOME/jmods:<module-path>" \
 target/dirac-image/bin/java --list-modules
 ```
 
-**Critères d'acceptation M9 :**
-- `jlink` termine sans erreur sur la cible minimale.
-- L'image démarre et exécute un smoke test simple.
-- Le graphe de modules final ne contient aucun module automatique.
-- Le job CI `jlink-smoke` est vert.
+**M9 acceptance criteria:**
+- `jlink` completes without error on the minimum target.
+- The image starts and runs a simple smoke test.
+- The final module graph contains no automatic module.
+- The `jlink-smoke` CI job is green.
 
 ---
 
-## Risques connus
+## Known risks
 
-| Risque | Impact | Mitigation |
+| Risk | Impact | Mitigation |
 |---|---|---|
-| Artefact TCK non-public | Blocage si l'artefact n'est pas dans le M2 local | Documentation dans `dirac-tck/README.md` ; script d'installation |
-| Reservoir HDR vs implémentation maison | Précision des percentiles, license HDR | Implémenter d'abord un reservoir EWMA maison ; HDR si les benchmarks montrent un écart |
-| Endpoint REST TCK | Le TCK teste l'endpoint HTTP — Chappe + Cassini doivent être opérationnels | Tester l'endpoint dès M7 avant le TCK |
-| `@Gauge` et types génériques | `MethodHandle` sur méthode générique peut nécessiter un cast | Tester avec `Gauge<Long>`, `Gauge<Integer>`, `Gauge<Double>` dès M2 |
-| Scoping des métriques | `APPLICATION` scope doit être réinitialisé entre les déploiements Arquillian | Nettoyer le registre dans `undeploy()` du container Arquillian |
-| Format OpenMetrics strict | Le TCK vérifie le format exact (espacements, suffixes) | Implémenter des tests de format caractère par caractère |
-| Concurrence registre | Enregistrement concurrent du même `MetricID` | `computeIfAbsent` dans `MetricRegistryImpl` — valider avec 500 virtual threads |
+| Non-public TCK artifact | Blocked if the artifact is not in the local M2 | Documentation in `dirac-tck/README.md`; installation script |
+| HDR reservoir vs in-house implementation | Percentile accuracy, HDR license | Implement an in-house EWMA reservoir first; HDR if benchmarks show a gap |
+| REST endpoint TCK | The TCK tests the HTTP endpoint — Chappe + Cassini must be operational | Test the endpoint from M7 before the TCK |
+| `@Gauge` and generic types | `MethodHandle` on a generic method may require a cast | Test with `Gauge<Long>`, `Gauge<Integer>`, `Gauge<Double>` from M2 |
+| Metric scoping | `APPLICATION` scope must be reset between Arquillian deployments | Clean the registry in the container `undeploy()` |
+| Strict OpenMetrics format | The TCK checks the exact format (spacing, suffixes) | Implement character-by-character format tests |
+| Registry concurrency | Concurrent registration of the same `MetricID` | `computeIfAbsent` in `MetricRegistryImpl` — validate with 500 virtual threads |
 
-## Décisions actées
+## Confirmed decisions
 
-- [x] Séparation `dirac-core` (implémentations pures) / `dirac-cdi-vauban` (intercepteurs CDI)
-- [x] `LongAdder` pour `Counter` (haute concurrence sans contention)
-- [x] `MethodHandle` pour `@Gauge` (résolution au démarrage, pas de réflexion runtime)
-- [x] `System.nanoTime()` pour `Timer` (jamais `currentTimeMillis()`)
-- [x] Reservoir EWMA maison pour `Histogram` (évite HDR Histogram comme dépendance tierce)
-- [x] Format OpenMetrics en priorité sur JSON (text/plain est le format par défaut)
-- [x] `dirac-rest` est optionnel (module séparé, pas de dépendance depuis `dirac-core`)
-- [x] `dirac-tck` hors reactor (contrainte commune à tout l'écosystème Vidocq — ShrinkWrap)
+- [x] Separation of `dirac-core` (pure implementations) / `dirac-cdi-vauban` (CDI interceptors)
+- [x] `LongAdder` for `Counter` (high concurrency without contention)
+- [x] `MethodHandle` for `@Gauge` (startup resolution, no runtime reflection)
+- [x] `System.nanoTime()` for `Timer` (never `currentTimeMillis()`)
+- [x] In-house EWMA reservoir for `Histogram` (avoids HDR Histogram as a third-party dependency)
+- [x] OpenMetrics format prioritized over JSON (text/plain is the default format)
+- [x] `dirac-rest` is optional (separate module, no dependency from `dirac-core`)
+- [x] `dirac-tck` outside the reactor (common constraint across the Vidocq ecosystem — ShrinkWrap)
 
-## Décisions ouvertes
+## Open decisions
 
-- **Reservoir HDR Histogram** : utiliser l'algorithme EWMA maison ou HdrHistogram (dépendance) ?
-  Décision à prendre après les premiers benchmarks M4.
-- **Timestamps OpenMetrics** : les inclure par défaut ou les rendre optionnels via MP Config ?
-  La spec MP Metrics 5.1 ne les impose pas.
-- **`mp.metrics.appName`** : préfixe optionnel pour le scope APPLICATION — implémenter dès M1
-  ou différer au TCK ?
-- **Intégration `vidocq-mps`** : définir l'extension MPS Dirac après que TCK soit vert.
-- **GraalVM native-image** : `@Gauge` utilise `MethodHandle` au démarrage — compatible AOT
-  uniquement si le `MethodHandle` est résolu à compile-time (via `classfile-codegen`).
-  Évaluer si une phase de génération statique est nécessaire.
+- **HDR Histogram reservoir**: use the in-house EWMA algorithm or HdrHistogram (dependency)?
+  Decision to be taken after the first M4 benchmarks.
+- **OpenMetrics timestamps**: include them by default or make them optional via MP Config?
+  The MP Metrics 5.1 spec does not require them.
+- **`mp.metrics.appName`**: optional prefix for the APPLICATION scope — implement from M1
+  or defer to the TCK?
+- **`vidocq-mps` integration**: define the Dirac MPS extension after the TCK is green.
+- **GraalVM native-image**: `@Gauge` uses `MethodHandle` at startup — AOT compatible
+  only if the `MethodHandle` is resolved at compile time (via `classfile-codegen`).
+  Evaluate whether a static generation phase is needed.

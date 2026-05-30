@@ -18,7 +18,7 @@
     <packaging>pom</packaging>
 
     <name>Dirac</name>
-    <description>Implémentation MicroProfile Metrics 5.1.1 — zéro librairie tierce, virtual threads, JPMS strict, CDI via Vauban, endpoint REST via Cassini</description>
+    <description>MicroProfile Metrics 5.1.1 implementation — zero third-party libraries, virtual threads, strict JPMS, CDI via Vauban, REST endpoint via Cassini</description>
     <url>https://codeberg.org/Vidocq/dirac</url>
 
     <licenses>
@@ -46,23 +46,23 @@
         <!-- Jakarta Interceptors 2.2 (Jakarta EE 11) -->
         <jakarta.interceptor.version>2.2.0</jakarta.interceptor.version>
 
-        <!-- Jakarta REST 4.0 (pour dirac-rest) -->
+        <!-- Jakarta REST 4.0 (for dirac-rest) -->
         <jakarta.rs.version>4.0.0</jakarta.rs.version>
 
-        <!-- Implémentations Vidocq upstream -->
+        <!-- Vidocq upstream implementations -->
         <vauban.version>0.1.0-SNAPSHOT</vauban.version>
         <ravel.version>0.1.0-SNAPSHOT</ravel.version>
         <cassini.version>0.1.0-SNAPSHOT</cassini.version>
 
-        <!-- JMH pour dirac-bench -->
+        <!-- JMH for dirac-bench -->
         <jmh.version>1.37</jmh.version>
     </properties>
 
     <!--
-        dirac-tck est volontairement HORS reactor (POM Model 4.0.0 standalone)
-        pour contourner ShrinkWrap Maven Resolver 3.3 qui ne sait pas parser les POMs
-        Model 4.1.0. Il sera invoqué par run-official-tck-mp-metrics-5.1.sh
-        après installation locale du reactor.
+        dirac-tck is intentionally OUT OF REACTOR (standalone POM Model 4.0.0)
+        to work around ShrinkWrap Maven Resolver 3.3 which cannot parse
+        Model 4.1.0 POMs. It will be invoked by run-official-tck-mp-metrics-5.1.sh
+        after local installation of the reactor.
     -->
     <modules>
         <module>dirac-mp-metrics-api</module>
@@ -107,14 +107,14 @@
                 <version>${jakarta.interceptor.version}</version>
             </dependency>
 
-            <!-- Jakarta REST 4.0 (dirac-rest uniquement) -->
+            <!-- Jakarta REST 4.0 (dirac-rest only) -->
             <dependency>
                 <groupId>jakarta.ws.rs</groupId>
                 <artifactId>jakarta.ws.rs-api</artifactId>
                 <version>${jakarta.rs.version}</version>
             </dependency>
 
-            <!-- Implémentations Vidocq (utilisées en test scope ou runtime) -->
+            <!-- Vidocq implementations (used in test scope or runtime) -->
             <dependency>
                 <groupId>io.vidocq.vauban</groupId>
                 <artifactId>vauban-core</artifactId>
@@ -143,7 +143,7 @@
                 <version>${jmh.version}</version>
             </dependency>
 
-            <!-- Modules internes Dirac -->
+            <!-- Internal Dirac modules -->
             <dependency>
                 <groupId>io.vidocq.dirac</groupId>
                 <artifactId>dirac-mp-metrics-api</artifactId>
@@ -169,13 +169,13 @@
 
     <build>
         <!--
-            JPMS workaround : microprofile-metrics-api:5.1.1 peut ne pas avoir
-            d'Automatic-Module-Name dans son MANIFEST.MF (à vérifier à l'install).
+            JPMS workaround: microprofile-metrics-api:5.1.1 may not have
+            Automatic-Module-Name in its MANIFEST.MF (to be verified on install).
 
-            Solution : maven-dependency-plugin copie tous les JARs compile-scope dans
-            target/javamodules/ en phase initialize. Le maven-compiler-plugin reçoit
-            l'argument module-path pointant vers target/javamodules ; javac dérive alors
-            le nom du module depuis le nom de fichier.
+            Solution: maven-dependency-plugin copies all compile-scope JARs to
+            target/javamodules/ in the initialize phase. The maven-compiler-plugin receives
+            the module-path argument pointing to target/javamodules; javac then derives
+            the module name from the file name.
         -->
         <plugins>
             <plugin>

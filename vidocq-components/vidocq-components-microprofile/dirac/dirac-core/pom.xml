@@ -12,7 +12,7 @@
 
     <artifactId>dirac-core</artifactId>
     <name>Dirac :: Core</name>
-    <description>Implémentations pures Java 25 — CounterImpl, GaugeImpl, HistogramImpl, TimerImpl, MetricRegistryImpl, OpenMetricsFormatter</description>
+    <description>Pure Java 25 implementations — CounterImpl, GaugeImpl, HistogramImpl, TimerImpl, MetricRegistryImpl, OpenMetricsFormatter</description>
 
     <dependencies>
         <dependency>
@@ -28,17 +28,17 @@
 
     <build>
         <plugins>
-            <!--
-                JPMS workaround dirac-core : microprofile-metrics-api peut ne pas avoir
-                d'Automatic-Module-Name. Si module-info.class est dans target/classes,
-                Maven active JPMS pour testCompile et ne trouve pas le module sur le module-path.
+             <!--
+                 JPMS workaround dirac-core: microprofile-metrics-api may not have
+                 Automatic-Module-Name. If module-info.class is in target/classes,
+                 Maven enables JPMS for testCompile and the module is not found on module-path.
 
-                Solution en trois temps :
-                1. module-info.java dans src/main/module-info/ (pas src/main/java/).
-                2. maven-clean-plugin supprime module-info.class avant testCompile.
-                3. maven-compiler-plugin recompile module-info.java seul à prepare-package.
-                Les tests s'exécutent sur le classpath (useModulePath=false).
-            -->
+                 Three-step solution:
+                 1. module-info.java in src/main/module-info/ (not src/main/java/).
+                 2. maven-clean-plugin removes module-info.class before testCompile.
+                 3. maven-compiler-plugin recompiles module-info.java alone at prepare-package.
+                 Tests run on classpath (useModulePath=false).
+             -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-clean-plugin</artifactId>

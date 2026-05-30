@@ -10,8 +10,8 @@ import jakarta.inject.Inject;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Relie les métriques découvertes par la BCE aux registres ciblés par leur scope au démarrage CDI.
- * Pré-enregistre les gauges, timers et compteurs avant tout appel de méthode.
+ * Connects the metrics discovered by the BCE to the registries targeted by their scope at CDI startup.
+ * Pre-registers gauges, timers, and counters before any method call.
  */
 @ApplicationScoped
 public class GaugeRegistrationBean {

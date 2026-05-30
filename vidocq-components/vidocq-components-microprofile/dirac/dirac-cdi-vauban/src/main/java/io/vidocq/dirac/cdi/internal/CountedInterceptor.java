@@ -87,7 +87,7 @@ public class CountedInterceptor {
     }
 
     /**
-     * Retourne toutes les méthodes déclarées dans la classe et ses superclasses (sauf Object).
+     * Returns all methods declared in the class and its superclasses (except Object).
      */
     private static Method[] getAllDeclaredMethods(Class<?> beanClass) {
         var methods = new java.util.HashSet<Method>();
@@ -262,5 +262,4 @@ public class CountedInterceptor {
     private record FoundCounted(Method sourceMethod, Counted counted) {
     }
 }
-
 

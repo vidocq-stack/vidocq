@@ -17,13 +17,13 @@ import java.util.Map;
 import java.util.Properties;
 
 /**
- * Gère le cycle de vie du container Vauban CDI dans le runner TCK Arquillian Dirac.
+ * Manages the lifecycle of the Vauban CDI container in the Dirac Arquillian TCK runner.
  *
- * <p>Chaque déploiement Arquillian (une ShrinkWrap archive par classe de test TCK) :</p>
+ * <p>For each Arquillian deployment (one ShrinkWrap archive per TCK test class):</p>
  * <ol>
- *   <li>arrête tout container existant ;</li>
- *   <li>collecte les classes applicatives de l'archive ;</li>
- *   <li>démarre un nouveau {@link VaubanContainer} avec les beans Dirac + les classes de l'archive.</li>
+ *   <li>stops any existing container;</li>
+ *   <li>collects application classes from the archive;</li>
+ *   <li>starts a new {@link VaubanContainer} with Dirac beans + archive classes.</li>
  * </ol>
  */
 final class VaubanDiracTckBootstrap {

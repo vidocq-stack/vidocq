@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 /**
- * Test d'intégration M2: découverte BCE + enregistrement des gauges dans le registre APPLICATION.
+ * M2 integration test: BCE discovery + gauge registration in APPLICATION registry.
  */
 class GaugeCdiIntegrationTest {
 

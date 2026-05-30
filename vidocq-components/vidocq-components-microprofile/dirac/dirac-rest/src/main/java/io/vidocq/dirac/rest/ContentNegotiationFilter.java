@@ -8,11 +8,11 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.ext.Provider;
 
 /**
- * Normalise l'en-tête Accept avant le routage JAX-RS.
+ * Normalizes the Accept header before JAX-RS routing.
  *
- * <p>Règle MP Metrics §2.3 : null / vide / wildcard ({@code *}{@code /*}) → {@code text/plain}
- * (format OpenMetrics par défaut). Les valeurs explicites ({@code application/json},
- * {@code text/plain}) sont transmises telles quelles.</p>
+ * <p>MP Metrics §2.3 rule: null / empty / wildcard ({@code *}{@code /*}) → {@code text/plain}
+ * (default OpenMetrics format). Explicit values ({@code application/json},
+ * {@code text/plain}) are passed through as-is.</p>
  */
 @Provider
 @PreMatching

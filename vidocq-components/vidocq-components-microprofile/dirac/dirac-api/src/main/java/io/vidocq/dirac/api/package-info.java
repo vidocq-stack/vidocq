@@ -1,9 +1,9 @@
 /**
- * SPI publique stable de Dirac — MicroProfile Metrics 5.1.1.
+ * Stable public SPI of Dirac — MicroProfile Metrics 5.1.1.
  *
- * <p>Ce package re-expose les types publics stables de l'implémentation :
+ * <p>This package re-exposes the implementation's stable public types:
  * {@code HistogramSnapshot}, {@code TimerSnapshot}, {@code DiracContext}.
- * Les annotations et interfaces spec sont accessibles via la dépendance transitive
+ * The spec annotations and interfaces are available through the transitive dependency
  * {@code microprofile-metrics-api}.</p>
  */
 package io.vidocq.dirac.api;

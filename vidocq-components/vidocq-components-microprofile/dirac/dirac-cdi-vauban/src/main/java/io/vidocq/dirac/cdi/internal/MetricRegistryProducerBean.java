@@ -20,11 +20,11 @@ import java.util.Arrays;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Producers CDI des registres MicroProfile Metrics et des instances de métriques injectables.
+ * CDI producers for MicroProfile Metrics registries and injectable metric instances.
  *
- * <p>Un seul producer {@code @RegistryScope} (via {@link InjectionPoint}) suffit car
- * {@code @RegistryScope.scope} est {@code @Nonbinding} — CDI ignore la valeur de scope
- * pour la résolution des beans. Le producer lit la valeur réelle à l'exécution.</p>
+ * <p>A single {@code @RegistryScope} producer (via {@link InjectionPoint}) is enough because
+ * {@code @RegistryScope.scope} is {@code @Nonbinding} — CDI ignores the scope value
+ * for bean resolution. The producer reads the real value at runtime.</p>
  */
 @ApplicationScoped
 public class MetricRegistryProducerBean {
@@ -38,13 +38,13 @@ public class MetricRegistryProducerBean {
     }
 
     // ------------------------------------------------------------------
-    // Producers pour MetricRegistry (par scope)
+    // Producers for MetricRegistry (by scope)
     // ------------------------------------------------------------------
 
     /**
-     * Producer unique pour {@code @RegistryScope} — résout le scope via l'InjectionPoint
-     * car {@code @RegistryScope.scope} est {@code @Nonbinding}.
-     * Crée un nouveau registre pour tout scope inconnu (ex : "customScope").
+     * Single producer for {@code @RegistryScope} — resolves the scope via the InjectionPoint
+     * because {@code @RegistryScope.scope} is {@code @Nonbinding}.
+     * Creates a new registry for any unknown scope (e.g. "customScope").
      */
     @Produces
     @RegistryScope
@@ -82,7 +82,7 @@ public class MetricRegistryProducerBean {
     }
 
     // ------------------------------------------------------------------
-    // Producers pour injection directe de métriques via @Inject
+    // Producers for direct metric injection via @Inject
     // ------------------------------------------------------------------
 
     @Produces
@@ -113,7 +113,7 @@ public class MetricRegistryProducerBean {
     }
 
     // ------------------------------------------------------------------
-    // Accès interne au registre par scope
+    // Internal access to the registry by scope
     // ------------------------------------------------------------------
 
     public MetricRegistry registry(String scope) {
@@ -133,7 +133,7 @@ public class MetricRegistryProducerBean {
     }
 
     // ------------------------------------------------------------------
-    // Helpers de résolution de noms / tags / scope
+    // Helpers for resolving names / tags / scope
     // ------------------------------------------------------------------
 
     private static String resolveMetricName(Member member, Metric ann) {

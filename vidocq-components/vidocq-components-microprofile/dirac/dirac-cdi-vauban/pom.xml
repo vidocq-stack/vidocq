@@ -12,7 +12,7 @@
 
     <artifactId>dirac-cdi-vauban</artifactId>
     <name>Dirac :: CDI Vauban Integration</name>
-    <description>Intercepteurs CDI Metrics (@Counted, @Timed) et BCE Vauban (DiracExtension, MetricRegistryProducerBean)</description>
+    <description>CDI interceptors for Metrics (@Counted, @Timed) and Vauban BCE (DiracExtension, MetricRegistryProducerBean)</description>
 
     <dependencies>
         <dependency>
@@ -39,17 +39,17 @@
             <artifactId>jakarta.interceptor-api</artifactId>
             <scope>provided</scope>
         </dependency>
-        <dependency>
-            <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <!-- Container CDI Vauban pour les tests d'intégration -->
-        <dependency>
-            <groupId>io.vidocq.vauban</groupId>
-            <artifactId>vauban-core</artifactId>
-            <scope>test</scope>
-        </dependency>
+         <dependency>
+             <groupId>org.junit.jupiter</groupId>
+             <artifactId>junit-jupiter</artifactId>
+             <scope>test</scope>
+         </dependency>
+         <!-- Vauban CDI container for integration tests -->
+         <dependency>
+             <groupId>io.vidocq.vauban</groupId>
+             <artifactId>vauban-core</artifactId>
+             <scope>test</scope>
+         </dependency>
         <dependency>
             <groupId>io.vidocq.vauban</groupId>
             <artifactId>vauban-classloader-spi</artifactId>
@@ -57,12 +57,12 @@
         </dependency>
     </dependencies>
 
-    <build>
-        <plugins>
-            <!--
-                JPMS workaround dirac-cdi-vauban : vauban-core est test-scope,
-                absent de target/javamodules/. Même solution en trois temps que dirac-core.
-            -->
+     <build>
+         <plugins>
+             <!--
+                 JPMS workaround dirac-cdi-vauban: vauban-core is test-scope,
+                 absent from target/javamodules/. Same three-step solution as dirac-core.
+             -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-clean-plugin</artifactId>

@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
 <!--
-    Suite de référence — non utilisée par Maven Surefire (qui utilise dependenciesToScan).
-    Conservée pour documentation et exécution manuelle éventuelle.
-    Le TCK MP Metrics 5.1.1 utilise JUnit 4 + Arquillian JUnit runner.
+    Reference test suite — not used by Maven Surefire (which uses dependenciesToScan).
+    Kept for documentation and potential manual execution.
+    The MP Metrics 5.1.1 TCK uses JUnit 4 + Arquillian JUnit runner.
 -->
 <suite name="microprofile-metrics-tck-5.1.1" verbose="1">
     <test name="microprofile-metrics-api-tck">

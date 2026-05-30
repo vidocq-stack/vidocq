@@ -6,14 +6,14 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 /**
- * Smoke test TCK — vérifie que les modules Dirac et la spec MP Metrics 5.1.1 sont
- * accessibles sur le classpath avant de lancer la suite Arquillian complète.
+ * TCK smoke test — verifies that Dirac modules and MicroProfile Metrics 5.1.1 spec
+ * are accessible on the classpath before launching the full Arquillian test suite.
  */
 class DiracTckSmokeTest {
 
     @Test
     void metricsApiOnClasspath() {
         assertNotNull(MetricRegistry.class.getName(),
-                "microprofile-metrics-api doit être sur le classpath");
+                "microprofile-metrics-api must be on the classpath");
     }
 }

@@ -1,21 +1,21 @@
 /**
- * API Dirac : re-exposition contrôlée de la spec MicroProfile Metrics 5.1.1
- * et SPI publique stable de l'implémentation Vidocq.
+ * Dirac API: controlled re-exposure of the MicroProfile Metrics 5.1.1 spec
+ * and stable public SPI of the Vidocq implementation.
  *
- * <p><strong>Note JPMS — module automatique éventuel sans {@code Automatic-Module-Name}</strong> :
- * Si {@code microprofile-metrics-api:5.1.1} n'a ni {@code Automatic-Module-Name} dans son
- * {@code MANIFEST.MF}, ni {@code module-info.class}, le nom JPMS utilisé est
- * {@code microprofile.metrics.api} (dérivé du nom d'artefact Maven par Java :
- * strip version + remplacement {@code -} par {@code .}).
- * Le POM parent force ce JAR sur le module-path via {@code target/javamodules/}
- * (voir {@code maven-dependency-plugin} en phase {@code initialize}).</p>
+ * <p><strong>JPMS note — possible automatic module without {@code Automatic-Module-Name}</strong> :
+ * If {@code microprofile-metrics-api:5.1.1} has neither {@code Automatic-Module-Name} in its
+ * {@code MANIFEST.MF} nor {@code module-info.class}, the JPMS name used is
+ * {@code microprofile.metrics.api} (derived from the Maven artifact name by Java:
+ * strip version + replace {@code -} with {@code .}).
+ * The parent POM forces this JAR onto the module-path via {@code target/javamodules/}
+ * (see {@code maven-dependency-plugin} in the {@code initialize} phase).</p>
  *
- * <p>Contenu prévu (cf. ROADMAP.md M1+) :</p>
+ * <p>Planned content (see ROADMAP.md M1+) :</p>
  * <ul>
- *   <li>Re-export transitif des annotations {@code @Counted}, {@code @Timed}, {@code @Gauge},
- *       {@code @Histogram} et du {@code MetricRegistry}.</li>
- *   <li>Types publics stables : {@code HistogramSnapshot}, {@code TimerSnapshot}.</li>
- *   <li>{@code DiracContext} — contexte d'initialisation exposé aux composants du core.</li>
+ *   <li>Transitive re-export of annotations {@code @Counted}, {@code @Timed}, {@code @Gauge},
+ *       {@code @Histogram} and {@code MetricRegistry}.</li>
+ *   <li>Stable public types: {@code HistogramSnapshot}, {@code TimerSnapshot}.</li>
+ *   <li>{@code DiracContext} — initialization context exposed to core components.</li>
  * </ul>
  */
 module io.vidocq.dirac.api {

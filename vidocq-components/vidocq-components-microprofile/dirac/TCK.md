@@ -1,66 +1,66 @@
-# Dirac — Statut TCK MicroProfile Metrics 5.1.1
+# Dirac — MicroProfile Metrics 5.1.1 TCK Status
 
-## Cible
+## Target
 
-100 % de conformité TCK officiel **MicroProfile Metrics 5.1.1** — compteurs, timers,
-gauges, histogrammes, endpoint `/metrics` OpenMetrics + JSON, intégration CDI.
+100% conformance to official **MicroProfile Metrics 5.1.1** TCK — counters, timers,
+gauges, histograms, `/metrics` endpoint OpenMetrics + JSON, CDI integration.
 
-## Coordonnées TCK
+## TCK Coordinates
 
-✅ **Public Maven Central** — pas d'install manuel requis :
+✅ **Public Maven Central** — no manual install required:
 
 | Artifact |
 |---|
 | `org.eclipse.microprofile.metrics:microprofile-metrics-tck:5.1.1` |
 
-## Exécution
+## Execution
 
 ```bash
-./run-official-tck-mp-metrics-5.1.sh           # smoke test (DiracTckSmokeTest, hors Arquillian)
-./run-official-tck-mp-metrics-5.1.sh all       # suite complète (TestNG + Arquillian)
-./run-official-tck-mp-metrics-5.1.sh -Dtest=NomDuTest
+./run-official-tck-mp-metrics-5.1.sh           # smoke test (DiracTckSmokeTest, outside Arquillian)
+./run-official-tck-mp-metrics-5.1.sh all       # full suite (TestNG + Arquillian)
+./run-official-tck-mp-metrics-5.1.sh -Dtest=TestName
 ```
 
-Rapport généré dans `dirac-tck/target/tck-report.txt`.
+Report generated in `dirac-tck/target/tck-report.txt`.
 
-## Architecture du runner
+## Runner Architecture
 
-| Composant | Rôle |
+| Component | Role |
 |---|---|
-| `DiracDeployableContainer` | Container Arquillian *embedded* — boot Vauban CDI + Cassini JAX-RS sur Chappe |
-| `DiracArquillianExtension` | SPI `LoadableExtension` — enregistre le container |
-| Vauban CDI | Résout `@Inject MetricRegistry`, intercepteurs `@Counted`/`@Timed`, BCE `DiracExtension` |
-| Cassini + Chappe | Expose `/metrics` (OpenMetrics + JSON) sur port aléatoire ; `@ArquillianResource URL` câblé |
+| `DiracDeployableContainer` | Arquillian *embedded* container — boots Vauban CDI + Cassini JAX-RS on Chappe |
+| `DiracArquillianExtension` | SPI `LoadableExtension` — registers the container |
+| Vauban CDI | Resolves `@Inject MetricRegistry`, `@Counted`/`@Timed` interceptors, BCE `DiracExtension` |
+| Cassini + Chappe | Exposes `/metrics` (OpenMetrics + JSON) on random port; `@ArquillianResource URL` wired |
 
-**Contrainte hors-reactor** : `dirac-tck` (POM Model 4.0.0 standalone, sans `<parent>`)
-pour contourner ShrinkWrap Maven Resolver 3.3 vs Model 4.1.0 — même contrainte que
-`cassini-tck`, `champollion-tck`, `foy-tck`, `humboldt-tck`. Ne pas réintégrer au reactor.
+**Out-of-reactor constraint**: `dirac-tck` (standalone POM Model 4.0.0, no `<parent>`)
+to work around ShrinkWrap Maven Resolver 3.3 vs Model 4.1.0 — same constraint as
+`cassini-tck`, `champollion-tck`, `foy-tck`, `humboldt-tck`. Do not reintegrate into reactor.
 
-## Score actuel
+## Current Score
 
 ```
 Tests run: 127, Failures: 0, Errors: 0, Skipped: 0
 ```
 
-**127/127 PASS — 100 %** (rapport du 2026-05-24, commit `48f125b`).
+**127/127 PASS — 100%** (report from 2026-05-24, commit `48f125b`).
 
 ```text
-# Tests réussis : 127/127
-RESULT : PASS
+# Tests passed: 127/127
+RESULT: PASS
 ```
 
-Résumé des travaux M8 qui ont conduit au 100 % :
+Summary of M8 work that led to 100%:
 
-- Résolution des intercepteurs `@Counted`/`@Timed` sur héritage, stéréotypes et méthodes bridge proxy
-- Comportement "removed metric" lors d'invocations interceptées (attendu par le TCK)
-- Bootstrap des déploiements Arquillian avec valeurs `microprofile-config.properties` scoped par archive
-- `DiracExtension` BCE : discovery auto des `@Gauge`, `@Counted`, `@Timed`, `@RegistryType`
+- Resolution of `@Counted`/`@Timed` interceptors on inheritance, stereotypes, and proxy bridge methods
+- "removed metric" behavior during intercepted invocations (expected by TCK)
+- Bootstrap of Arquillian deployments with `microprofile-config.properties` values scoped per archive
+- `DiracExtension` BCE: auto-discovery of `@Gauge`, `@Counted`, `@Timed`, `@RegistryType`
 
-## Challenges connus
+## Known Challenges
 
-Aucun — 100 % des tests applicables passent, aucun test désactivé.
+None — 100% of applicable tests pass, no disabled tests.
 
-## Contrainte d'architecture
+## Architecture Constraint
 
-`dirac-tck/pom.xml` reste en **Model 4.0.0** standalone (sans `<parent>`).
-Voir `CLAUDE.md` racine du workspace pour la justification (ShrinkWrap Maven Resolver 3.3).
+`dirac-tck/pom.xml` remains in **Model 4.0.0** standalone (without `<parent>`).
+See `CLAUDE.md` at workspace root for justification (ShrinkWrap Maven Resolver 3.3).

@@ -1,25 +1,25 @@
 /**
- * Implémentations pures Java 25 des métriques MicroProfile Metrics 5.1.1 — aucune dépendance CDI.
+ * Pure Java 25 implementations of the MicroProfile Metrics 5.1.1 metrics — no CDI dependency.
  *
- * <p>Composants prévus (cf. ROADMAP.md M1-M6) :</p>
+ * <p>Planned components (see ROADMAP.md M1-M6) :</p>
  * <ul>
- *   <li>{@code CounterImpl} — compteur incrémental via {@code LongAdder}.</li>
- *   <li>{@code GaugeImpl} — valeur instantanée via {@code MethodHandle} résolu au démarrage.</li>
- *   <li>{@code HistogramImpl} — reservoir EWMA avec percentiles, thread-safe via {@code AtomicLongArray}.</li>
- *   <li>{@code TimerImpl} — durée des appels via {@code System.nanoTime()} + {@code HistogramImpl}.</li>
- *   <li>{@code MetricRegistryImpl} — registre thread-safe par scope ({@code ConcurrentHashMap}).</li>
- *   <li>{@code OpenMetricsFormatter} — sérialisation format Prometheus text 0.0.4.</li>
- *   <li>{@code JsonMetricsFormatter} — sérialisation format JSON spec MP Metrics §3.2.</li>
- *   <li>{@code BaseMetricsRegistrar} — métriques JVM obligatoires (GC, threads, heap, uptime).</li>
+ *   <li>{@code CounterImpl} — incremental counter via {@code LongAdder}.</li>
+ *   <li>{@code GaugeImpl} — instant value via {@code MethodHandle} resolved at startup.</li>
+ *   <li>{@code HistogramImpl} — EWMA reservoir with percentiles, thread-safe via {@code AtomicLongArray}.</li>
+ *   <li>{@code TimerImpl} — call duration via {@code System.nanoTime()} + {@code HistogramImpl}.</li>
+ *   <li>{@code MetricRegistryImpl} — thread-safe registry by scope ({@code ConcurrentHashMap}).</li>
+ *   <li>{@code OpenMetricsFormatter} — Prometheus text 0.0.4 format serialization.</li>
+ *   <li>{@code JsonMetricsFormatter} — JSON serialization in MP Metrics spec §3.2 format.</li>
+ *   <li>{@code BaseMetricsRegistrar} — mandatory JVM metrics (GC, threads, heap, uptime).</li>
  * </ul>
  *
- * <p><strong>Note JPMS — workaround testCompile</strong> :
- * Ce {@code module-info.java} est dans {@code src/main/module-info/} (pas
- * {@code src/main/java/}) pour que Maven Compiler Plugin ne détecte pas JPMS lors de
- * {@code testCompile}. {@code maven-clean-plugin} supprime {@code module-info.class} avant
- * {@code testCompile} (builds incrémentaux). Une exécution {@code prepare-package}
- * recompile {@code module-info.java} seul. Les tests s'exécutent sur le classpath
- * ({@code useModulePath=false}) — le câblage JPMS est validé par le smoke TCK.</p>
+ * <p><strong>JPMS note — testCompile workaround</strong> :
+ * This {@code module-info.java} is in {@code src/main/module-info/} (not
+ * {@code src/main/java/}) so that Maven Compiler Plugin does not detect JPMS during
+ * {@code testCompile}. {@code maven-clean-plugin} deletes {@code module-info.class} before
+ * {@code testCompile} (incremental builds). A {@code prepare-package} execution
+ * recompiles {@code module-info.java} alone. Tests run on the classpath
+ * ({@code useModulePath=false}) — JPMS wiring is validated by the smoke TCK.</p>
  */
 module io.vidocq.dirac.core {
     requires transitive io.vidocq.dirac.api;

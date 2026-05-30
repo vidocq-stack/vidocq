@@ -5,7 +5,7 @@ import org.eclipse.microprofile.metrics.Counter;
 import java.util.concurrent.atomic.LongAdder;
 
 /**
- * Implémentation interne d'un {@link Counter} monotone.
+ * Internal implementation of a monotonic {@link Counter}.
  */
 final class CounterImpl implements Counter {
     private final LongAdder value = new LongAdder();
@@ -28,4 +28,3 @@ final class CounterImpl implements Counter {
         return value.sum();
     }
 }
-

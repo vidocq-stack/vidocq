@@ -1,51 +1,51 @@
 # BUG — Dirac
 
-Suivi des bugs reproductibles dans `dirac` (issues internes, régressions, comportements
-incorrects non encore corrigés). Convention workspace Vidocq : id court, date, symptôme,
-repro minimal, hypothèse de cause, statut.
+Tracking reproducible bugs in `dirac` (internal issues, regressions, incorrect behaviors
+not yet fixed). Vidocq workspace convention: short id, date, symptom,
+minimal repro, cause hypothesis, status.
 
 ---
 
-## DRC-001 — JPMS contourné via copie manuelle des JARs compile-scope
+## DRC-001 — JPMS bypassed via manual copy of compile-scope JARs
 
-- **Date ouverture** : 2026-05-25
-- **Statut** : ⚠️ OPEN — workaround actif
+- **Opening date**: 2026-05-25
+- **Status**: ⚠️ OPEN — active workaround
 
-### Symptôme
+### Symptom
 
-Le `pom.xml` racine de dirac utilise `maven-dependency-plugin` (phase `initialize`) pour
-copier tous les JARs de scope compile dans `target/javamodules/`, puis passe
-`--module-path ${project.build.directory}/javamodules` manuellement au compilateur.
+The dirac root `pom.xml` uses `maven-dependency-plugin` (`initialize` phase) to
+copy all compile-scope JARs to `target/javamodules/`, then passes
+`--module-path ${project.build.directory}/javamodules` manually to the compiler.
 
-Ce contournement indique que la résolution JPMS native de Maven ne fonctionne pas pour
-certaines dépendances compile-scope de dirac, notamment `microprofile-metrics-api` et
+This workaround indicates that Maven's native JPMS resolution doesn't work for
+some of dirac's compile-scope dependencies, notably `microprofile-metrics-api` and
 `vauban-core`/`vauban-classloader-spi`.
 
-### Repro minimal
+### Minimal repro
 
 ```bash
 grep -n "javamodules\|module-path" dirac/pom.xml
-# révèle les deux plugins configurés manuellement
+# reveals the two manually configured plugins
 ```
 
-Sans le workaround (suppression de la config `maven-dependency-plugin`), `javac` échoue avec :
+Without the workaround (removing the `maven-dependency-plugin` config), `javac` fails with:
 
 ```
 error: module not found: org.eclipse.microprofile.metrics
 ```
 
-### Hypothèse de cause
+### Cause hypothesis
 
-Les JARs concernés ne disposent pas de `module-info.class` propre — ils n'exposent qu'un
-`Automatic-Module-Name` dans leur `MANIFEST.MF`. La version 4.x du `maven-compiler-plugin`
-ne les place pas automatiquement sur le `--module-path` pour les projets ayant un
-`module-info.java` explicite. La copie dans `target/javamodules/` permet à javac de les
-résoudre comme automatic modules en dérivant leur nom depuis le nom de fichier JAR.
+The concerned JARs don't have their own `module-info.class` — they only expose an
+`Automatic-Module-Name` in their `MANIFEST.MF`. Version 4.x of `maven-compiler-plugin`
+doesn't automatically place them on the `--module-path` for projects having an
+explicit `module-info.java`. The copy to `target/javamodules/` allows javac to
+resolve them as automatic modules by deriving their name from the JAR file name.
 
-### Piste de résolution
+### Resolution path
 
-1. Vérifier si les versions amont de `microprofile-metrics-api` (3.x → 4.x ?) publient
-   un `module-info.class`. Si oui, bumper la version et supprimer le workaround.
-2. Contacter / PR upstream Eclipse MicroProfile pour ajouter un descripteur modulaire.
-3. À défaut, wrapper via un module Dirac interne (`dirac-mp-metrics-api`) qui fournit
-   le `module-info.class` manquant — pattern déjà utilisé pour `ravel-mp-config-api`.
+1. Check if upstream versions of `microprofile-metrics-api` (3.x → 4.x?) publish
+   a `module-info.class`. If yes, bump the version and remove the workaround.
+2. Contact / PR upstream Eclipse MicroProfile to add a modular descriptor.
+3. Failing that, wrap via an internal Dirac module (`dirac-mp-metrics-api`) that provides
+   the missing `module-info.class` — pattern already used for `ravel-mp-config-api`.

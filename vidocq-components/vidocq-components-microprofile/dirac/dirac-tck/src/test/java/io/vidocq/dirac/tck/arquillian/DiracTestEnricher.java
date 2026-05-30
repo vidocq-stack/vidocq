@@ -27,16 +27,16 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Arquillian {@link TestEnricher} — injecte les champs {@code @Inject} de chaque instance
- * de test TCK en utilisant le container Vauban CDI démarré par {@link VaubanDiracTckBootstrap}.
+ * Arquillian {@link TestEnricher} — injects {@code @Inject} fields of each TCK test instance
+ * using the Vauban CDI container started by {@link VaubanDiracTckBootstrap}.
  *
- * <p>Cas spéciaux :</p>
+ * <p>Special cases:</p>
  * <ul>
- *   <li>{@link MetricRegistry} + {@link RegistryScope} : {@code @Nonbinding} sur {@code scope} —
- *       on lit la valeur directement et on délègue à {@link MetricRegistryProducerBean#registry}.</li>
- *   <li>{@link Counter}/{@link Timer}/{@link Histogram}/{@link Gauge} : le producer CDI exige un
- *       {@code InjectionPoint} non disponible hors container — on résout directement via le registre.</li>
- *   <li>Paramètres de méthode de test : résolus par type + annotation {@link Metric}.</li>
+ *   <li>{@link MetricRegistry} + {@link RegistryScope} : {@code @Nonbinding} on {@code scope} —
+ *       reads the value directly and delegates to {@link MetricRegistryProducerBean#registry}.</li>
+ *   <li>{@link Counter}/{@link Timer}/{@link Histogram}/{@link Gauge} : CDI producer requires
+ *       {@code InjectionPoint} unavailable outside container — resolves directly via registry.</li>
+ *   <li>Test method parameters: resolved by type + {@link Metric} annotation.</li>
  * </ul>
  */
 public class DiracTestEnricher implements TestEnricher {

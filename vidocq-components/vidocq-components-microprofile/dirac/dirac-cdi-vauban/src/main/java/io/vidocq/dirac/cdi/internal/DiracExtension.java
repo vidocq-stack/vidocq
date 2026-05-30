@@ -30,8 +30,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
 /**
- * BCE CDI 4.1 de Dirac — découvre, valide et résout les {@code @Gauge}, {@code @Timed}
- * et {@code @Counted} au démarrage.
+ * Dirac CDI 4.1 BCE — discovers, validates, and resolves {@code @Gauge}, {@code @Timed}
+ * and {@code @Counted} at startup.
  */
 public class DiracExtension implements BuildCompatibleExtension {
     private static final Set<ResolvedGauge> DISCOVERED_GAUGES = ConcurrentHashMap.newKeySet();

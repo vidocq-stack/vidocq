@@ -12,10 +12,10 @@
 
     <artifactId>dirac-api</artifactId>
     <name>Dirac :: API</name>
-    <description>Re-exposition contrôlée de la spec MicroProfile Metrics 5.1.1 + SPI Dirac</description>
+    <description>Controlled re-export of MicroProfile Metrics 5.1.1 spec + Dirac SPI</description>
 
     <dependencies>
-        <!-- API MP Metrics repackagée localement avec module-info explicite -->
+        <!-- MP Metrics API repackaged locally with explicit module-info -->
         <dependency>
             <groupId>io.vidocq.dirac</groupId>
             <artifactId>dirac-mp-metrics-api</artifactId>

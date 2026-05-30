@@ -10,9 +10,9 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Tests unitaires M7 — logique de formatage du endpoint REST /metrics (§2.3).
- * Pas de container CDI ni de RuntimeDelegate JAX-RS requis : les méthodes
- * formatAll/formatScope/formatMetric sont testées directement.
+ * M7 unit tests — REST endpoint /metrics formatting logic (§2.3).
+ * No CDI container or JAX-RS RuntimeDelegate required: formatAll/formatScope/formatMetric
+ * methods are tested directly.
  */
 class MetricsResourceTest {
 

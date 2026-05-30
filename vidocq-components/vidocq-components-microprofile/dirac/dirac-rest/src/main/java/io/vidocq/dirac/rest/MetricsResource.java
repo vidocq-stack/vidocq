@@ -19,13 +19,13 @@ import org.eclipse.microprofile.metrics.annotation.RegistryScope;
 import java.util.List;
 
 /**
- * Endpoint REST /metrics — MicroProfile Metrics 5.1.1 §2.3.
+ * REST /metrics endpoint — MicroProfile Metrics 5.1.1 §2.3.
  *
- * <p>Produit OpenMetrics (text/plain) par défaut ou JSON (application/json)
- * selon l'en-tête {@code Accept} normalisé par {@link ContentNegotiationFilter}.</p>
+ * <p>Produces OpenMetrics (text/plain) by default or JSON (application/json)
+ * according to the {@code Accept} header normalized by {@link ContentNegotiationFilter}.</p>
  *
- * <p>Les méthodes {@code format*()} sont package-visible pour les tests unitaires
- * (injection directe des registres sans container JAX-RS).</p>
+ * <p>The {@code format*()} methods are package-visible for unit tests
+ * (direct injection of registries without a JAX-RS container).</p>
  */
 @Path("/metrics")
 @ApplicationScoped
@@ -64,7 +64,7 @@ public class MetricsResource {
     // JAX-RS endpoints
     // -------------------------------------------------------------------------
 
-    /** §2.3.1 — GET /metrics : toutes les métriques de tous les scopes. */
+    /** §2.3.1 — GET /metrics : all metrics from all scopes. */
     @GET
     @Produces({MediaType.TEXT_PLAIN, MediaType.APPLICATION_JSON})
     public Response getAllMetrics(@HeaderParam(HttpHeaders.ACCEPT) String accept) {
@@ -72,7 +72,7 @@ public class MetricsResource {
         return Response.ok(fmt.body(), fmt.mediaType()).build();
     }
 
-    /** §2.3.2 — GET /metrics/{scope} : métriques d'un scope (404 si scope inconnu). */
+    /** §2.3.2 — GET /metrics/{scope} : metrics for a scope (404 if the scope is unknown). */
     @GET
     @Path("/{scope}")
     @Produces({MediaType.TEXT_PLAIN, MediaType.APPLICATION_JSON})
@@ -85,7 +85,7 @@ public class MetricsResource {
         return Response.ok(fmt.body(), fmt.mediaType()).build();
     }
 
-    /** §2.3.3 — GET /metrics/{scope}/{name} : métrique unique par nom (404 si absente). */
+    /** §2.3.3 — GET /metrics/{scope}/{name} : single metric by name (404 if absent). */
     @GET
     @Path("/{scope}/{name}")
     @Produces({MediaType.TEXT_PLAIN, MediaType.APPLICATION_JSON})

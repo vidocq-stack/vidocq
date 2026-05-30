@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
- * Tests M2 — validation BCE des méthodes {@code @Gauge}, spec MicroProfile Metrics 5.1.1 §4.2.
+ * M2 tests — BCE validation of {@code @Gauge} methods, MicroProfile Metrics 5.1.1 spec §4.2.
  */
 class DiracExtensionTest {
 

@@ -13,7 +13,7 @@ import java.util.concurrent.atomic.LongAccumulator;
 import java.util.concurrent.atomic.LongAdder;
 
 /**
- * Implémentation M3 d'un histogramme en mémoire.
+ * M3 in-memory histogram implementation.
  */
 final class HistogramImpl implements Histogram {
     private static final double[] DEFAULT_PERCENTILES = {0.5d, 0.75d, 0.95d, 0.98d, 0.99d, 0.999d};
@@ -184,4 +184,3 @@ final class HistogramImpl implements Histogram {
         }
     }
 }
-

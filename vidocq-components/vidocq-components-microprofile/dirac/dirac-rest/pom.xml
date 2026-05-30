@@ -12,7 +12,7 @@
 
     <artifactId>dirac-rest</artifactId>
     <name>Dirac :: REST Endpoint</name>
-    <description>Endpoint JAX-RS GET /metrics (OpenMetrics / Prometheus text format) — module optionnel activé si Cassini est présent</description>
+    <description>JAX-RS GET /metrics endpoint (OpenMetrics / Prometheus text format) — optional module activated if Cassini is present</description>
 
     <dependencies>
         <dependency>
@@ -36,12 +36,12 @@
         </dependency>
     </dependencies>
 
-    <build>
-        <plugins>
-            <!--
-                JPMS workaround dirac-rest : on garde les tests en classpath, puis on
-                compile module-info.java séparément en phase prepare-package.
-            -->
+     <build>
+         <plugins>
+             <!--
+                 JPMS workaround dirac-rest: keep tests on classpath, then
+                 compile module-info.java separately in prepare-package phase.
+             -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-clean-plugin</artifactId>

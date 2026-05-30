@@ -26,10 +26,10 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 /**
- * Registre de métriques Dirac — implémentation interne.
+ * Dirac metric registry — internal implementation.
  *
- * <p>Implémentation M1 : registre thread-safe par scope, get-or-create pour les compteurs,
- * vues triées en lecture seule, metadata par nom de métrique.</p>
+ * <p>M1 implementation: thread-safe registry by scope, get-or-create for counters,
+ * read-only sorted views, metadata by metric name.</p>
  */
 public final class MetricRegistryImpl implements MetricRegistry {
     private final String scope;

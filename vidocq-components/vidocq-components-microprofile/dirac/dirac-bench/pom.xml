@@ -12,7 +12,7 @@
 
     <artifactId>dirac-bench</artifactId>
     <name>Dirac :: Benchmarks</name>
-    <description>Benchmarks JMH — overhead d'interception, comparatif vs Micrometer et SmallRye Metrics, latence par type de métrique</description>
+    <description>JMH benchmarks — interception overhead, comparison vs Micrometer and SmallRye Metrics, latency per metric type</description>
 
     <dependencies>
         <dependency>

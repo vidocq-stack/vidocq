@@ -1,21 +1,21 @@
 # Dirac
 
-> *Paul Dirac (1902–1984) a formulé l'équation de Dirac, prédit l'antimatière et posé les bases
-> des statistiques de Fermi-Dirac. Dirac le projet implémente **MicroProfile Metrics 5.1.1** :
-> il mesure avec précision l'état des applications, sans jamais altérer l'observable par
-> l'observation.*
+> *Paul Dirac (1902–1984) formulated the Dirac equation, predicted antimatter, and laid the
+> foundations of Fermi-Dirac statistics. Dirac the project implements **MicroProfile Metrics 5.1.1**:
+> it measures the state of applications with precision, without ever altering the observable
+> through observation.*
 
-Implémentation **MicroProfile Metrics 5.1.1** dans le style Vidocq :
+**MicroProfile Metrics 5.1.1** implementation in the Vidocq style:
 
-- **Zéro librairie tierce** — pas de Micrometer, Dropwizard Metrics, SmallRye Metrics.
-  Seule `microprofile-metrics-api` est compilée dans `dirac-core`.
-- **Java 25** + **JPMS strict** — chaque module a son `module-info.java`, exports minimaux.
-- **Virtual threads** — `LongAdder` pour les compteurs, `System.nanoTime()` pour les timers.
-  Pas de `synchronized`, pas de `ThreadLocal`.
-- **CDI via Vauban** — intercepteurs `@Counted`, `@Timed`, BCE `DiracExtension`.
-- **Endpoint REST optionnel** — `GET /metrics` (OpenMetrics / Prometheus text format) via Cassini.
+- **Zero third-party libraries** — no Micrometer, Dropwizard Metrics, SmallRye Metrics.
+  Only `microprofile-metrics-api` is compiled into `dirac-core`.
+- **Java 25** + **strict JPMS** — every module has its `module-info.java`, minimal exports.
+- **Virtual threads** — `LongAdder` for counters, `System.nanoTime()` for timers.
+  No `synchronized`, no `ThreadLocal`.
+- **CDI via Vauban** — `@Counted`, `@Timed` interceptors, `DiracExtension` BCE.
+- **Optional REST endpoint** — `GET /metrics` (OpenMetrics / Prometheus text format) via Cassini.
 
-## Prérequis
+## Prerequisites
 
 ```bash
 sdk env          # Java 25-tem + Maven 3.9.16
@@ -24,19 +24,19 @@ sdk env          # Java 25-tem + Maven 3.9.16
 ## Build
 
 ```bash
-./mvnw -ntp install -DskipTests   # build complet du reactor
-./mvnw test                        # tests unitaires
+./mvnw -ntp install -DskipTests   # full reactor build
+./mvnw test                        # unit tests
 ```
 
 ## TCK MicroProfile Metrics 5.1.1
 
 ```bash
 ./run-official-tck-mp-metrics-5.1.sh          # smoke test
-./run-official-tck-mp-metrics-5.1.sh all      # suite complète
+./run-official-tck-mp-metrics-5.1.sh all      # full suite
 ./run-official-tck-mp-metrics-5.1.sh -Dtest=CounterTest
 ```
 
-Le runner TCK installe d'abord les artefacts Dirac requis dans le M2 local via
+The TCK runner first installs the required Dirac artifacts into the local M2 via
 `run-official-tck-mp-metrics-5.1.sh`.
 
 ## JPMS / jlink (M9)
@@ -47,44 +47,44 @@ Le runner TCK installe d'abord les artefacts Dirac requis dans le M2 local via
 ./mvnw -ntp -N -Pjlink-smoke verify
 ```
 
-Le detail du smoke check M9 est documente dans
+The M9 smoke check is documented in
 [`JLINK.md`](JLINK.md).
 
-Le smoke M9 utilise l'artefact reactor `dirac-mp-metrics-api`, qui repackage
-`microprofile-metrics-api:5.1.1` avec un `module-info.class` explicite.
+The M9 smoke uses the reactor artifact `dirac-mp-metrics-api`, which repackages
+`microprofile-metrics-api:5.1.1` with an explicit `module-info.class`.
 
 ## Modules
 
 | Module | Description |
 |---|---|
-| `dirac-mp-metrics-api` | Repackage local de MP Metrics API avec `module-info.class` explicite pour JPMS/jlink |
-| `dirac-api` | Re-exposition contrôlée MP Metrics 5.1.1 + SPI Dirac |
-| `dirac-core` | Implémentations pures Java 25 (Counter, Gauge, Histogram, Timer, registre, formatters) |
-| `dirac-cdi-vauban` | Intercepteurs CDI + BCE Vauban (DiracExtension) |
-| `dirac-rest` | Endpoint JAX-RS `GET /metrics` — optionnel, activé si Cassini est présent |
-| `dirac-bench` | Benchmarks JMH vs Micrometer et SmallRye Metrics |
-| `dirac-tck` | Runner TCK officiel TestNG/Arquillian (hors reactor — Model 4.0.0) |
-| `dirac-examples` | Exemples d'utilisation standalone et avec vidocq-mps |
+| `dirac-mp-metrics-api` | Local repackage of MP Metrics API with an explicit `module-info.class` for JPMS/jlink |
+| `dirac-api` | Controlled re-export of MP Metrics 5.1.1 + Dirac SPI |
+| `dirac-core` | Pure Java 25 implementations (Counter, Gauge, Histogram, Timer, registry, formatters) |
+| `dirac-cdi-vauban` | CDI interceptors + Vauban BCE (DiracExtension) |
+| `dirac-rest` | JAX-RS `GET /metrics` endpoint — optional, enabled when Cassini is present |
+| `dirac-bench` | JMH benchmarks vs Micrometer and SmallRye Metrics |
+| `dirac-tck` | Official TestNG/Arquillian TCK runner (out-of-reactor — Model 4.0.0) |
+| `dirac-examples` | Standalone usage examples and integration with vidocq-mps |
 
-## Types de métriques supportés (MP Metrics 5.1.1)
+## Supported Metric Types (MP Metrics 5.1.1)
 
 | Type | Annotation | Description |
 |---|---|---|
-| `Counter` | `@Counted` | Compteur incrémental monotone (`LongAdder`) |
-| `Gauge<T>` | `@Gauge` | Valeur instantanée via `MethodHandle` |
-| `Histogram` | *(annotation non exposée dans l'API 5.1.1 utilisée)* | Distribution des valeurs (percentiles p50–p999) |
-| `Timer` | `@Timed` | Durée des appels (`System.nanoTime()` + histogram) |
+| `Counter` | `@Counted` | Monotonic incremental counter (`LongAdder`) |
+| `Gauge<T>` | `@Gauge` | Instantaneous value via `MethodHandle` |
+| `Histogram` | *(annotation not exposed in API 5.1.1)* | Value distribution (percentiles p50–p999) |
+| `Timer` | `@Timed` | Call duration (`System.nanoTime()` + histogram) |
 
-> **Note** : `Meter`, `ConcurrentGauge` et `SimpleTimer` ont été supprimés en MP Metrics 5.0
-> et ne sont pas implémentés.
+> **Note**: `Meter`, `ConcurrentGauge`, and `SimpleTimer` were removed in MP Metrics 5.0
+> and are not implemented.
 >
-> **Point d'attention API** : le JAR `microprofile-metrics-api:5.1.1` utilisé dans ce dépôt
-> n'expose pas `org.eclipse.microprofile.metrics.annotation.Histogram`.
+> **API note**: the `microprofile-metrics-api:5.1.1` JAR used in this repository
+> does not expose `org.eclipse.microprofile.metrics.annotation.Histogram`.
 
-## État du projet
+## Project Status
 
-Voir [ROADMAP.md](ROADMAP.md) pour l'avancement détaillé des milestones.
+See [ROADMAP.md](ROADMAP.md) for detailed milestone progress.
 
-## Licence
+## License
 
-Apache License, Version 2.0 — voir [LICENSE](LICENSE).
+Apache License, Version 2.0 — see [LICENSE](LICENSE).

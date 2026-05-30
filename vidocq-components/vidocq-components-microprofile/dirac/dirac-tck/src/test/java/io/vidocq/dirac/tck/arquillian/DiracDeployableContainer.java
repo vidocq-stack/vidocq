@@ -9,11 +9,11 @@ import org.jboss.shrinkwrap.api.Archive;
 import org.jboss.shrinkwrap.descriptor.api.Descriptor;
 
 /**
- * Container Arquillian Dirac — embedded local container dédié au TCK
+ * Dirac Arquillian Container — embedded local container dedicated to TCK
  * MicroProfile Metrics 5.1.1.
  *
- * <p>Protocole {@code Local} : les tests s'exécutent dans la JVM Arquillian,
- * pas dans un container distant.</p>
+ * <p>Protocol {@code Local} : tests execute in the Arquillian JVM,
+ * not in a remote container.</p>
  */
 public class DiracDeployableContainer implements DeployableContainer<DiracContainerConfiguration> {
 
@@ -29,12 +29,12 @@ public class DiracDeployableContainer implements DeployableContainer<DiracContai
 
     @Override
     public void setup(DiracContainerConfiguration configuration) {
-        // rien à initialiser.
+        // nothing to initialize.
     }
 
     @Override
     public void start() throws LifecycleException {
-        // no-op : Vauban démarre par déploiement.
+        // no-op: Vauban starts on deployment.
     }
 
     @Override

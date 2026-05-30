@@ -11,7 +11,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.LongAdder;
 
 /**
- * Implémentation M4 du timer basée sur nanoTime + histogramme.
+ * M4 timer implementation based on nanoTime + histogram.
  */
 final class TimerImpl implements Timer {
     private final HistogramImpl histogram;
@@ -99,4 +99,3 @@ final class TimerImpl implements Timer {
         return new TimerSnapshot(getCount(), getElapsedTime(), histogram.snapshot());
     }
 }
-

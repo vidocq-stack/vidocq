@@ -5,10 +5,10 @@ import org.jboss.arquillian.core.spi.LoadableExtension;
 import org.jboss.arquillian.test.spi.TestEnricher;
 
 /**
- * Enregistre {@link DiracDeployableContainer} et {@link DiracTestEnricher}
- * auprès du framework Arquillian via le SPI {@link LoadableExtension}.
+ * Registers {@link DiracDeployableContainer} and {@link DiracTestEnricher}
+ * with the Arquillian framework via the {@link LoadableExtension} SPI.
  *
- * <p>Découverte via {@code META-INF/services/org.jboss.arquillian.core.spi.LoadableExtension}.</p>
+ * <p>Discovery via {@code META-INF/services/org.jboss.arquillian.core.spi.LoadableExtension}.</p>
  */
 public class DiracArquillianExtension implements LoadableExtension {
 
