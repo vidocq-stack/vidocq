@@ -79,7 +79,7 @@ public interface HealthCheck {
 
 ### M0 — Bootstrap ✅
 
-- ✅ `.sdkmanrc` (`java=25-tem`, `maven=4.0.0-rc-5`)
+- ✅ `.sdkmanrc` (`java=25-tem`, `maven=3.9.16`)
 - ✅ `.gitignore`, `.mvn/maven.config`
 - ✅ `pom.xml` parent (Model 4.1.0, multi-module, dependency management Jakarta + MicroProfile Health)
 - ✅ `CLAUDE.md`
