@@ -73,7 +73,7 @@ grimm-examples          io.vidocq.grimm.examples
 
 ### M0 — Bootstrap
 
-- [x] `.sdkmanrc` (`java=25-tem`, `maven=4.0.0-rc-5`)
+- [x] `.sdkmanrc` (`java=25-tem`, `maven=3.9.16`)
 - [x] `.gitignore`, `.mvn/maven.config`
 - [x] Parent `pom.xml` (Model 4.1.0, multi-module, dependency management Jakarta + MicroProfile)
 - [x] `CLAUDE.md`, `AGENTS.md`, `ROADMAP.md` (these files)

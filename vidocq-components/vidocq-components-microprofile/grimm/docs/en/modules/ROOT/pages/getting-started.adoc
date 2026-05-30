@@ -7,7 +7,7 @@ This page assumes a Jakarta REST 4.0 application already running on xref:cassini
 == Prerequisites
 
 * Java 25 (LTS) — Temurin recommended.
-* Maven 4.0.0-rc-5 — pinned by `.sdkmanrc` at the Grimm root.
+* Maven 3.9.16 — pinned by `.sdkmanrc` at the Grimm root.
 * A JAX-RS 4.0 application already deployed, with at least one `@Path` resource.
 
 [source,bash]

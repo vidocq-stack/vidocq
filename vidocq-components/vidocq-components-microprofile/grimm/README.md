@@ -9,7 +9,7 @@ Core implementation and CDI integration are in place, with official MicroProfile
 ## Prerequisites
 
 - Java 25
-- Maven 4.0.0-rc-5
+- Maven 3.9.16
 
 ## Quick start
 

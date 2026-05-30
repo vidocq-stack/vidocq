@@ -7,7 +7,7 @@ Cette page suppose une application Jakarta REST 4.0 déjà fonctionnelle sur xre
 == Prérequis
 
 * Java 25 (LTS) — Temurin recommandé.
-* Maven 4.0.0-rc-5 — épinglé par `.sdkmanrc` à la racine de Grimm.
+* Maven 3.9.16 — épinglé par `.sdkmanrc` à la racine de Grimm.
 * Une application JAX-RS 4.0 déjà déployée, avec au moins une ressource `@Path`.
 
 [source,bash]

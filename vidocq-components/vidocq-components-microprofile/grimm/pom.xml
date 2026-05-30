@@ -1,12 +1,12 @@
-<project xmlns="http://maven.apache.org/POM/4.1.0"
+<project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.1.0 https://maven.apache.org/xsd/maven-4.1.0.xsd">
-  <modelVersion>4.1.0</modelVersion>
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
 
   <parent>
     <groupId>io.vidocq</groupId>
     <artifactId>vidocq-parent</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
+    <version>0.1.1-SNAPSHOT</version>
     <relativePath />
   </parent>
 
@@ -18,12 +18,12 @@
   <name>grimm-parent</name>
   <description>MicroProfile OpenAPI 4.1 implementation for Vidocq</description>
 
-  <subprojects>
-    <subproject>grimm-core</subproject>
-    <subproject>grimm-cdi-vauban</subproject>
-    <subproject>grimm-bench</subproject>
-    <subproject>grimm-examples</subproject>
-  </subprojects>
+  <modules>
+    <module>grimm-core</module>
+    <module>grimm-cdi-vauban</module>
+    <module>grimm-bench</module>
+    <module>grimm-examples</module>
+  </modules>
 
   <properties>
     <version.mp.openapi>4.1</version.mp.openapi>

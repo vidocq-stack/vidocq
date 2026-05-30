@@ -180,7 +180,7 @@ The `mp.openapi.application.path.disable` and `mp.openapi.extensions.path` keys 
 
 == Compatibility
 
-* Java 25 (LTS), Maven 4.0.0-rc-5.
+* Java 25 (LTS), Maven 3.9.16.
 * JAX-RS 4.0 (Cassini or any conformant runtime).
 * CDI 4.1 Lite (Vauban) or Lite-compatible.
 * No Jakarta EE Full Profile dependency.
