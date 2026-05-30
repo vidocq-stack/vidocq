@@ -170,7 +170,7 @@ MetricRegistry vendor;
 
 == Compatibilité
 
-* Java 25 (LTS), Maven 4.0.0-rc-5.
+* Java 25 (LTS), Maven 3.9.16.
 * CDI 4.1 Lite (Vauban) ou Lite-compatible — l'`Interceptor` standard et la `BuildCompatibleExtension` suffisent.
 * JAX-RS 4.0 (Cassini) — uniquement si `dirac-rest` est utilisé.
 * MicroProfile Config 3.1 (Ravel) — fortement recommandé pour `mp.metrics.tags` et `mp.metrics.distribution.*`.

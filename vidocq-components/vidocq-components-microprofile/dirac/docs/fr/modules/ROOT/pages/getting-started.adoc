@@ -7,7 +7,7 @@ Cette page suppose une application Jakarta CDI 4.1 déjà fonctionnelle sur xref
 == Prérequis
 
 * Java 25 (LTS) — Temurin recommandé.
-* Maven 4.0.0-rc-5 — épinglé par `.sdkmanrc` à la racine du dépôt Dirac.
+* Maven 3.9.16 — épinglé par `.sdkmanrc` à la racine du dépôt Dirac.
 * Une application CDI 4.1 déjà démarrée par Vauban (ou tout container Lite-compatible). Pour l'endpoint `/metrics`, ajouter aussi xref:cassini::index.adoc[Cassini].
 
 [source,bash]

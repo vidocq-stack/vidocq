@@ -18,7 +18,7 @@ Implémentation **MicroProfile Metrics 5.1.1** dans le style Vidocq :
 ## Prérequis
 
 ```bash
-sdk env          # Java 25-tem + Maven 4.0.0-rc-5
+sdk env          # Java 25-tem + Maven 3.9.16
 ```
 
 ## Build
