@@ -7,7 +7,7 @@ Cette page guide une première intégration : déclarer les artefacts, configure
 == Prérequis
 
 * Java 25 (Temurin) — `sdk env` depuis le repo (`.sdkmanrc` fourni).
-* Maven 4.0.0-rc-5 — si `mvn` échoue avec « modelVersion 4.1.0 not supported », `sdk use maven 4.0.0-rc-5`.
+* Maven 3.9.16 — si `mvn` échoue avec « modelVersion 4.1.0 not supported », `sdk use maven 3.9.16`.
 * Un OpenTelemetry Collector accessible en HTTP (ou un récepteur compatible OTLP/HTTP-JSON). Pour les essais : `docker run --rm -p 4318:4318 otel/opentelemetry-collector:latest`.
 
 == Déclarer les artefacts

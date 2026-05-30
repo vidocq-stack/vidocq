@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.1.0"
+<project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.1.0 http://maven.apache.org/xsd/maven-4.1.0.xsd"
-         root="true">
-    <modelVersion>4.1.0</modelVersion>
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd"
+         >
+    <modelVersion>4.0.0</modelVersion>
 
     <parent>
         <groupId>io.vidocq</groupId>
         <artifactId>vidocq-parent</artifactId>
-        <version>1.0.0-SNAPSHOT</version>
+        <version>0.1.1-SNAPSHOT</version>
         <relativePath/>
     </parent>
 
@@ -58,22 +58,22 @@
         <ravel.version>0.1.0-SNAPSHOT</ravel.version>
     </properties>
 
-    <subprojects>
-        <subproject>humboldt-api</subproject>
-        <subproject>humboldt-otel-context</subproject>
-        <subproject>humboldt-otel-api</subproject>
-        <subproject>humboldt-otel-instrumentation-annotations</subproject>
-        <subproject>humboldt-sdk-common</subproject>
-        <subproject>humboldt-context</subproject>
-        <subproject>humboldt-sdk-trace</subproject>
-        <subproject>humboldt-propagator-w3c</subproject>
-        <subproject>humboldt-exporter-otlp-http</subproject>
-        <subproject>humboldt-sdk-metric</subproject>
-        <subproject>humboldt-sdk-log</subproject>
-        <subproject>humboldt-cdi</subproject>
-        <subproject>humboldt-rest</subproject>
-        <subproject>humboldt-runtime</subproject>
-    </subprojects>
+    <modules>
+        <module>humboldt-api</module>
+        <module>humboldt-otel-context</module>
+        <module>humboldt-otel-api</module>
+        <module>humboldt-otel-instrumentation-annotations</module>
+        <module>humboldt-sdk-common</module>
+        <module>humboldt-context</module>
+        <module>humboldt-sdk-trace</module>
+        <module>humboldt-propagator-w3c</module>
+        <module>humboldt-exporter-otlp-http</module>
+        <module>humboldt-sdk-metric</module>
+        <module>humboldt-sdk-log</module>
+        <module>humboldt-cdi</module>
+        <module>humboldt-rest</module>
+        <module>humboldt-runtime</module>
+    </modules>
 
     <dependencyManagement>
         <dependencies>

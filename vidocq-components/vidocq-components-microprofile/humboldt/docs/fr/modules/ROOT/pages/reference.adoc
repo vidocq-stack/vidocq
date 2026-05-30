@@ -293,7 +293,7 @@ Pas de B3 par défaut (opt-in via clé `mp.telemetry.propagators=tracecontext,ba
 == Compatibilité
 
 * Java 25 LTS minimum (compilation et runtime).
-* Maven 4.0.0-rc-5 ou supérieur (Model 4.1.0 pour le reactor parent ; le runner TCK reste en 4.0.0).
+* Maven 3.9.16 ou supérieur (Model 4.1.0 pour le reactor parent ; le runner TCK reste en 4.0.0).
 * Compatible CDI 4.1 Lite (Vauban) et JAX-RS 4.0 (Cassini). CDI Full (Weld, OpenWebBeans) non testé.
 
 Suivant : xref:internals.adoc[Fonctionnement interne].

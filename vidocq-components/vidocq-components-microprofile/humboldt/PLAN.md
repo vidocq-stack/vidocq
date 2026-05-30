@@ -176,7 +176,7 @@ Item déposé dans `chappe/tasks/todo.md` en Phase 7 (préparation extensions Vi
 
 ```
 /Users/yblazart/projects/perso/vidocq/humboldt/
-├── .sdkmanrc                          # java=25-tem, maven=4.0.0-rc-5
+├── .sdkmanrc                          # java=25-tem, maven=3.9.16
 ├── .forgejo/workflows/
 │   ├── ci.yml                         # build + tests + deploy Forgejo
 │   ├── pr.yml                         # build PR
@@ -836,7 +836,7 @@ Aligné sur le pattern existant `cassini/.forgejo/workflows/` (vérifié `ci.yml
 
 Structure :
 1. `actions/setup-java@v4` Java 25 Temurin, cache maven
-2. Install Maven 4.0.0-rc-5 from CDN (pas dans `setup-java`)
+2. Install Maven 3.9.16 from CDN (pas dans `setup-java`)
 3. Configurer `~/.m2/settings.xml` avec secrets `MAVEN_DEPLOY_TOKEN`
 4. `mvn --no-transfer-progress verify` (reactor)
 5. `mvn -B -ntp deploy -DskipTests` vers `vidocq-snapshots`
@@ -1155,7 +1155,7 @@ Différenciation produit assumée : **moins de magie, plus de codegen, virtual-t
 À exécuter dans l'ordre après validation de ce plan :
 
 1. `mkdir /Users/yblazart/projects/perso/vidocq/humboldt && cd humboldt && git init`
-2. Copier `.sdkmanrc` (java=25-tem, maven=4.0.0-rc-5)
+2. Copier `.sdkmanrc` (java=25-tem, maven=3.9.16)
 3. Copier `mvnw`/`mvnw.cmd`/`.mvn/wrapper/` depuis `cassini/`
 4. Créer `pom.xml` parent Model 4.1.0 + `<subprojects>`
 5. Créer arborescence `humboldt-api/` avec `pom.xml` + `src/main/java/module-info.java` minimal

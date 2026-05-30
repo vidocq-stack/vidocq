@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Prérequis
 
-- **Java 25** + **Maven 4.0.0-rc-5** (`.sdkmanrc` fourni — utiliser `sdk env`)
+- **Java 25** + **Maven 3.9.16** (`.sdkmanrc` fourni — utiliser `sdk env`)
 - Pour le TCK officiel (M7+), l'artefact `org.eclipse.microprofile.telemetry:microprofile-telemetry-tck:2.1` devra être disponible (sur Central ou installé dans le M2 local — procédure documentée dans `TCK.md` quand le runner sera créé)
 
 ## Commandes essentielles

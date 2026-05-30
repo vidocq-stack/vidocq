@@ -35,7 +35,7 @@
 ## Getting started
 
 ```bash
-# Prerequisites: sdkman with Java 25 + Maven 4.0.0-rc-5
+# Prerequisites: sdkman with Java 25 + Maven 3.9.16
 sdk env
 ./mvnw -ntp install -DskipTests
 ```
