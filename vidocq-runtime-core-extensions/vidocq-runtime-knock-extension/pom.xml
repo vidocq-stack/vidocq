@@ -33,7 +33,7 @@
         -->
         <dependency>
             <groupId>io.vidocq.knock</groupId>
-            <artifactId>knock-cassini</artifactId>
+            <artifactId>knock-jaxrs</artifactId>
             <version>${knock.version}</version>
         </dependency>
         <dependency>

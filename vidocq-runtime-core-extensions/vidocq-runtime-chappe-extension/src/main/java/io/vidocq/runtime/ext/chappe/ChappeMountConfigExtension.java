@@ -102,10 +102,15 @@ public final class ChappeMountConfigExtension implements VidocqExtension {
                                 + "Available types: " + providers.keySet());
             }
             Handler handler = provider.create(m);
-            ChappeMountPoint.instance().mount(m.listener(), m.prefix(), handler);
+            // strip-prefix=false → routing-only mount: the handler sees the full path, so resources
+            // with absolute @Path (e.g. MicroProfile Health @Path("/health")) match at the prefix
+            // without the path doubling, while sibling prefixes (static /, /api) stay routable.
+            boolean stripPrefix = m.property("strip-prefix", Boolean.class, true);
+            ChappeMountPoint.instance().mount(m.listener(), m.prefix(), handler, stripPrefix);
             LOG.log(System.Logger.Level.INFO,
-                    "Mounted '{0}' (type={1}) on listener={2} prefix={3} priority={4}",
-                    m.name(), type, m.listener(), m.prefix().isEmpty() ? "/" : m.prefix(), m.priority());
+                    "Mounted '{0}' (type={1}) on listener={2} prefix={3} priority={4} strip-prefix={5}",
+                    m.name(), type, m.listener(), m.prefix().isEmpty() ? "/" : m.prefix(),
+                    m.priority(), stripPrefix);
         }
     }
 

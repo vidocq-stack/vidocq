@@ -26,9 +26,9 @@ module io.vidocq.runtime.ext.knock {
     requires transitive io.vidocq.knock.api;
     requires transitive io.vidocq.knock.core;
     requires transitive io.vidocq.knock.cdi.vauban;
-    requires transitive io.vidocq.knock.cassini;
+    requires transitive io.vidocq.knock.jaxrs;
 
-    // Cassini REST extension: it scans KnockHealthResource (@Path).
+    // Cassini REST extension: it scans the knock JAX-RS resource (@Path).
     requires io.vidocq.runtime.ext.rest.cassini;
 
     requires jakarta.cdi;

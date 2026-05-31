@@ -72,19 +72,28 @@ public final class ChappeMountPoint {
      * <p>Mount a handler on the default listener under the given prefix.</p>
      */
     public void mount(String prefix, Handler handler) {
-        mount(ChappeListener.DEFAULT, prefix, handler);
+        mount(ChappeListener.DEFAULT, prefix, handler, true);
     }
 
     /**
-     * Mounts a handler on a named listener.
+     * Mounts a handler on a named listener (path stripping).
      * <p>Mount a handler on a named listener.</p>
      */
     public void mount(String listenerName, String prefix, Handler handler) {
+        mount(listenerName, prefix, handler, true);
+    }
+
+    /**
+     * Mounts a handler on a named listener, controlling prefix stripping.
+     * With {@code stripPrefix=false} the prefix is used for routing only and the handler sees the
+     * full path (see {@link Router.Builder#mount(String, Handler, boolean)}).
+     */
+    public void mount(String listenerName, String prefix, Handler handler, boolean stripPrefix) {
         Objects.requireNonNull(listenerName, "listenerName");
         Objects.requireNonNull(prefix, "prefix");
         Objects.requireNonNull(handler, "handler");
         ensureOpen();
-        routers.computeIfAbsent(listenerName, n -> Router.builder()).mount(prefix, handler);
+        routers.computeIfAbsent(listenerName, n -> Router.builder()).mount(prefix, handler, stripPrefix);
     }
 
     /**
