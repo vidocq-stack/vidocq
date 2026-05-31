@@ -14,6 +14,11 @@
     <name>Dirac :: Benchmarks</name>
     <description>JMH benchmarks — interception overhead, comparison vs Micrometer and SmallRye Metrics, latency per metric type</description>
 
+    <properties>
+        <!-- Benchmark harness: never deployed to Maven Central. -->
+        <maven.deploy.skip>true</maven.deploy.skip>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>io.vidocq.dirac</groupId>

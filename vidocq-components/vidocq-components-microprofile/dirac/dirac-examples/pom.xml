@@ -14,6 +14,11 @@
     <name>Dirac :: Examples</name>
     <description>Exemples d'utilisation de MicroProfile Metrics 5.1.1 via Dirac</description>
 
+    <properties>
+        <!-- Example module: never deployed to Maven Central. -->
+        <maven.deploy.skip>true</maven.deploy.skip>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>io.vidocq.dirac</groupId>
