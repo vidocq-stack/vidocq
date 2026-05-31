@@ -3,6 +3,7 @@ package io.vidocq.mansart.data.core;
 import io.vidocq.mansart.data.dialect.Attribute;
 import io.vidocq.mansart.data.dialect.EntityModel;
 import io.vidocq.mansart.data.dialect.SqlNames;
+import io.vidocq.mansart.data.dialect.attribute.BooleanAttribute;
 import io.vidocq.mansart.data.dialect.attribute.EnumAttribute;
 import io.vidocq.mansart.data.dialect.attribute.IdAttribute;
 import io.vidocq.mansart.data.dialect.attribute.NumericAttribute;
@@ -214,6 +215,9 @@ public final class RuntimeEntityModelBuilder {
         }
         if (isTemporal(type)) {
             return new TemporalAttribute<>(name, columnName, type, entityClass, nullable, unique, getter, setter);
+        }
+        if (type == Boolean.class) {
+            return new BooleanAttribute<>(name, columnName, entityClass, nullable, unique, getter, setter);
         }
         if (isNumeric(type)) {
             return new NumericAttribute(name, columnName, type, entityClass,

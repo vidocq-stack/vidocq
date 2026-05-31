@@ -96,6 +96,7 @@ final class EntityScanner {
         else if (isManyToOne || isOneToOne) kind = AttributeKind.REFERENCE;
         else if (isEnum)                   kind = AttributeKind.ENUM;
         else if (isTextType(javaTypeFqn))  kind = AttributeKind.TEXT;
+        else if (isBoolean(javaTypeFqn))   kind = AttributeKind.BOOLEAN;
         else if (isTemporal(javaTypeFqn))  kind = AttributeKind.TEMPORAL;
         else if (isNumeric(javaTypeFqn))   kind = AttributeKind.NUMERIC;
         else                               kind = AttributeKind.NUMERIC; // fallback — refined later
@@ -196,6 +197,10 @@ final class EntityScanner {
         return "java.lang.String".equals(fqn);
     }
 
+    private boolean isBoolean(String fqn) {
+        return "boolean".equals(fqn) || "java.lang.Boolean".equals(fqn);
+    }
+
     private boolean isTemporal(String fqn) {
         return fqn.startsWith("java.time.") || "java.util.Date".equals(fqn) || "java.sql.Date".equals(fqn);
     }
@@ -222,7 +227,7 @@ final class EntityScanner {
 
     /* ----- DTOs ---- */
 
-    enum AttributeKind { ID, VERSION, TEXT, NUMERIC, TEMPORAL, REFERENCE, ENUM }
+    enum AttributeKind { ID, VERSION, TEXT, NUMERIC, BOOLEAN, TEMPORAL, REFERENCE, ENUM }
 
     record AttributeDescriptor(
             VariableElement element,

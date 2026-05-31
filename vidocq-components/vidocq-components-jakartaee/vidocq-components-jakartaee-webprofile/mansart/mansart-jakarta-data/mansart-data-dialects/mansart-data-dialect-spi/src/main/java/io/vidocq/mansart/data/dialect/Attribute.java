@@ -16,6 +16,7 @@ public sealed interface Attribute<E, V>
         permits io.vidocq.mansart.data.dialect.attribute.IdAttribute,
                 io.vidocq.mansart.data.dialect.attribute.TextAttribute,
                 io.vidocq.mansart.data.dialect.attribute.NumericAttribute,
+                io.vidocq.mansart.data.dialect.attribute.BooleanAttribute,
                 io.vidocq.mansart.data.dialect.attribute.TemporalAttribute,
                 io.vidocq.mansart.data.dialect.attribute.ReferenceAttribute,
                 io.vidocq.mansart.data.dialect.attribute.EnumAttribute,

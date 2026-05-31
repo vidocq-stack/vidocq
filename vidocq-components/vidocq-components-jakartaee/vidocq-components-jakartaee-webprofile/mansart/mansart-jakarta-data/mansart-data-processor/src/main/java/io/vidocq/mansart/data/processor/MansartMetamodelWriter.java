@@ -83,6 +83,10 @@ final class MansartMetamodelWriter {
                     + a.name() + " = new NumericAttribute<>(\"" + a.name() + "\", \"" + a.columnName() + "\", "
                     + boxed + ".class, " + entitySimple + ".class, " + a.nullable() + ", " + a.unique()
                     + ", 0, 0, " + getterMh + ", " + setterMh + ");");
+            case BOOLEAN -> w.println("    public static final BooleanAttribute<" + entitySimple + "> "
+                    + a.name() + " = new BooleanAttribute<>(\"" + a.name() + "\", \"" + a.columnName() + "\", "
+                    + entitySimple + ".class, " + a.nullable() + ", " + a.unique() + ", "
+                    + getterMh + ", " + setterMh + ");");
             case TEMPORAL -> w.println("    public static final TemporalAttribute<" + entitySimple + ", " + boxed + "> "
                     + a.name() + " = new TemporalAttribute<>(\"" + a.name() + "\", \"" + a.columnName() + "\", "
                     + boxed + ".class, " + entitySimple + ".class, " + a.nullable() + ", " + a.unique()
