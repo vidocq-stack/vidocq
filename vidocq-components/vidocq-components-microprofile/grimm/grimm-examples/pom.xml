@@ -11,5 +11,10 @@
 
   <artifactId>grimm-examples</artifactId>
   <name>grimm-examples</name>
+
+  <properties>
+    <!-- Example module: never deployed to Maven Central. -->
+    <maven.deploy.skip>true</maven.deploy.skip>
+  </properties>
 </project>
 
