@@ -5,4 +5,4 @@
  * endpoints {@code /health}, {@code /health/live}, {@code /health/ready},
  * {@code /health/started}).</p>
  */
-package io.vidocq.knock.cassini;
+package io.vidocq.knock.jaxrs;

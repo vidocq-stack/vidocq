@@ -11,7 +11,7 @@
 #   ./run-official-tck-mp-health-4.0.sh -Dtest=Foo      # test ciblé via le profil tck-official
 #
 # Comportement :
-#   1. Installe en local (./mvnw install -DskipTests) knock-api/knock-core/knock-cdi-vauban/knock-cassini
+#   1. Installe en local (./mvnw install -DskipTests) knock-api/knock-core/knock-cdi-vauban/knock-jaxrs
 #   2. Invoque mvn -f knock-tck/pom.xml -P<profile> test [args...]
 #   3. Génère target/tck-report.txt avec le résumé PASS/FAIL/SKIP
 #
@@ -49,7 +49,7 @@ case "${mode}" in
 esac
 
 echo "==> Étape 1/2 : install local des artefacts Knock (./mvnw install -DskipTests)"
-( cd "${ROOT_DIR}" && ./mvnw -ntp -pl knock-api,knock-core,knock-cdi-vauban,knock-cassini -am install -DskipTests )
+( cd "${ROOT_DIR}" && ./mvnw -ntp -pl knock-api,knock-core,knock-cdi-vauban,knock-jaxrs -am install -DskipTests )
 
 echo "==> Étape 2/2 : exécution Maven sur knock-tck (profil=${profile})"
 mkdir -p "${TCK_DIR}/target"

@@ -60,6 +60,24 @@
     <build>
         <plugins>
             <!--
+                Génère META-INF/vauban-beans.list + _ClientProxy/_Factory pour que les beans
+                @ApplicationScoped de ce module (KnockCdiHealthCheckRegistry, HealthCheckRegistrar)
+                soient découverts au runtime par scanClasspath() de Vauban dans une app JPMS
+                module-path. Outil de BUILD uniquement : n'ajoute aucune dépendance compile/runtime
+                sur Vauban, et la sortie reste inerte pour un conteneur CDI standard (Weld).
+            -->
+            <plugin>
+                <groupId>io.vidocq.vauban</groupId>
+                <artifactId>vauban-maven-plugin</artifactId>
+                <version>${vauban.version}</version>
+                <executions>
+                    <execution>
+                        <id>generate</id>
+                        <goals><goal>generate</goal></goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <!--
                 JPMS workaround knock-cdi-vauban : meme probleme que knock-core.
                 vauban-core est test-scope, absent de target/javamodules/ ; si
                 module-info.class est dans target/classes, Maven active JPMS pour

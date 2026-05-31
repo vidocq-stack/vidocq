@@ -7,7 +7,7 @@
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
  */
-package io.vidocq.knock.cassini;
+package io.vidocq.knock.jaxrs;
 
 import jakarta.ws.rs.core.EntityTag;
 import jakarta.ws.rs.core.GenericEntity;

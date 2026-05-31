@@ -3,7 +3,7 @@
             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
             xsi:schemaLocation="http://jboss.org/schema/arquillian http://jboss.org/schema/arquillian/arquillian_1_0.xsd">
 
-    <container qualifier="knock-cassini" default="true">
+    <container qualifier="knock-jaxrs" default="true">
         <configuration>
             <property name="host">127.0.0.1</property>
         </configuration>

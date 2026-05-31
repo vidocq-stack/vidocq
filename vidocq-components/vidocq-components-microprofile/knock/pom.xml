@@ -70,7 +70,7 @@
         <module>knock-api</module>
         <module>knock-core</module>
         <module>knock-cdi-vauban</module>
-        <module>knock-cassini</module>
+        <module>knock-jaxrs</module>
     </modules>
 
     <dependencyManagement>
