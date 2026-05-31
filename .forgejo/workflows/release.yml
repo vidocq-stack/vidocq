@@ -38,6 +38,10 @@ on:
         description: "io.vidocq.cervantes:* (all artifacts under io.vidocq.cervantes) — stable version (must be released on Central first)"
         type: string
         required: true
+      champollion_release:
+        description: "io.vidocq.champollion:* (all artifacts under io.vidocq.champollion) — stable version (must be released on Central first)"
+        type: string
+        required: true
       chappe_release:
         description: "io.vidocq.chappe:* (all artifacts under io.vidocq.chappe) — stable version (must be released on Central first)"
         type: string
@@ -49,6 +53,14 @@ on:
         required: true
       humboldt_release:
         description: "io.vidocq.humboldt:* (all artifacts under io.vidocq.humboldt) — stable version (must be released on Central first)"
+        type: string
+        required: true
+      knock_release:
+        description: "io.vidocq.knock:* (all artifacts under io.vidocq.knock) — stable version (must be released on Central first)"
+        type: string
+        required: true
+      mansart_release:
+        description: "io.vidocq.mansart:* (all artifacts under io.vidocq.mansart) — stable version (must be released on Central first)"
         type: string
         required: true
       ravel_release:
@@ -81,9 +93,12 @@ jobs:
             io.vidocq=${{ inputs.vidocq_parent_release }}
             io.vidocq.cassini=${{ inputs.cassini_release }}
             io.vidocq.cervantes=${{ inputs.cervantes_release }}
+            io.vidocq.champollion=${{ inputs.champollion_release }}
             io.vidocq.chappe=${{ inputs.chappe_release }}
             io.vidocq.cyrano=${{ inputs.cyrano_release }}
             io.vidocq.humboldt=${{ inputs.humboldt_release }}
+            io.vidocq.knock=${{ inputs.knock_release }}
+            io.vidocq.mansart=${{ inputs.mansart_release }}
             io.vidocq.ravel=${{ inputs.ravel_release }}
             io.vidocq.vauban=${{ inputs.vauban_release }}
           excluded-modules: |
