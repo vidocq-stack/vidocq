@@ -15,6 +15,11 @@
     <name>Vidocq :: Examples</name>
     <description>Example applications for Vidocq</description>
 
+    <properties>
+        <!-- Example aggregator: never deployed to Maven Central. -->
+        <maven.deploy.skip>true</maven.deploy.skip>
+    </properties>
+
     <modules>
         <module>vidocq-runtime-external-rest-lib</module>
         <module>vidocq-runtime-cassini-rest-example</module>
