@@ -9,10 +9,10 @@ import java.util.concurrent.Future;
 import org.junit.jupiter.api.Test;
 
 /**
- * Tests unitaires pour {@code @Asynchronous} — exécution en virtual thread.
+ * Unit tests for {@code @Asynchronous} — virtual-thread execution.
  *
- * <p>Spec MicroProfile FT 4.1 §8 : {@code @Asynchronous} exécute la méthode dans un
- * virtual thread et retourne un {@code CompletionStage<T>} ou {@code Future<T>}.</p>
+ * <p>MicroProfile FT 4.1 spec §8: {@code @Asynchronous} executes the method in a
+ * virtual thread and returns a {@code CompletionStage<T>} or {@code Future<T>}.</p>
  */
 class AsynchronousEngineTest {
 
@@ -67,15 +67,15 @@ class AsynchronousEngineTest {
 
     @Test
     void returnsCompletableFutureForAsyncComposition() throws Exception {
-        // §8 : si l'invocation retourne un CompletionStage<T>, le moteur unwrappe le stage
-        // imbriqué et le CompletionStage externe se complète avec la valeur T (pas le stage lui-même).
+        // §8: if the invocation returns a CompletionStage<T>, the engine unwraps the nested
+        // stage and the outer CompletionStage completes with the T value (not the stage itself).
         CompletableFuture<String> innerFuture = CompletableFuture.completedFuture("inner-value");
         PolicyComposer.Invocation invocation = () -> innerFuture;
 
         // Act
         CompletionStage<Object> result = AsynchronousEngine.executeAsync(invocation, THREAD_NAME);
 
-        // Assert : unwrapping du Future imbriqué — la valeur finale est "inner-value"
+        // Assert: unwrap the nested Future — the final value is "inner-value"
         Object resultValue = result.toCompletableFuture().get();
         assertEquals("inner-value", resultValue);
     }
@@ -104,14 +104,14 @@ class AsynchronousEngineTest {
         // Act
         AsynchronousEngine.executeAsync(invocation, "my-custom-method");
 
-        // Assert : attendez la complèttion
+        // Assert: wait for completion
         Thread.sleep(200); // allow virtual thread to complete
         assertTrue(capturedThreadName[0].contains("heisenberg-async"), "Should contain 'heisenberg-async' prefix");
     }
 
     @Test
     void doesNotBlockCallerThread() throws Exception {
-        // Arrange : invocation lente
+        // Arrange: slow invocation
         PolicyComposer.Invocation slowInvocation = () -> {
             Thread.sleep(500);
             return "delayed";
@@ -122,10 +122,10 @@ class AsynchronousEngineTest {
         CompletionStage<Object> result = AsynchronousEngine.executeAsync(slowInvocation, THREAD_NAME);
         long elapsedBeforeWait = System.nanoTime() - startNano;
 
-        // Assert : le caller a retourné immédiatement (< 100ms)
+        // Assert: the caller returned immediately (< 100 ms)
         assertTrue(elapsedBeforeWait < 100_000_000, "Should return immediately to caller");
 
-        // Vérifier que le résultat se complète correctement
+        // Verify that the result completes correctly
         assertEquals("delayed", result.toCompletableFuture().get());
     }
 }

@@ -15,11 +15,11 @@ import org.eclipse.microprofile.faulttolerance.Timeout;
 import org.junit.jupiter.api.Test;
 
 /**
- * M8 §9 — Tests d'intégration : la résolution effective passe par
- * {@code ConfigProvider.getConfig()} (Ravel) qui charge automatiquement le
- * fichier {@code META-INF/microprofile-config.properties} du classpath de test.
+ * M8 §9 — Integration tests: effective resolution goes through
+ * {@code ConfigProvider.getConfig()} (Ravel), which automatically loads the
+ * {@code META-INF/microprofile-config.properties} file from the test classpath.
  *
- * <p>Couvre les trois niveaux de précédence définis par la spec :
+ * <p>Covers the three precedence levels defined by the spec:
  * {@code <class>/<method>/<Annotation>/<param>} &gt; {@code <class>/<Annotation>/<param>}
  * &gt; {@code <Annotation>/<param>}.</p>
  */
@@ -27,7 +27,7 @@ class ConfigResolverIntegrationTest {
 
     @Test
     void retryGlobalOverrideFromPropertiesFile() throws Exception {
-        // <FQCN>/retryCall/Retry/maxRetries=5 (method-level pour ne pas polluer d'autres tests)
+        // <FQCN>/retryCall/Retry/maxRetries=5 (method-level so other tests are not polluted)
         Method method = DemoService.class.getDeclaredMethod("retryCall");
         RetryConfig resolved = ConfigResolver.retryConfig(method, method.getAnnotation(Retry.class));
         assertEquals(5, resolved.maxRetries(), "method-level override Retry/maxRetries=5 must apply");
@@ -35,8 +35,8 @@ class ConfigResolverIntegrationTest {
 
     @Test
     void timeoutClassLevelOverrideFromPropertiesFile() throws Exception {
-        // <FQCN>/Timeout/value=3000 dans microprofile-config.properties
-        // @Timeout est sur la classe DemoService → la clé class-level s'applique.
+        // <FQCN>/Timeout/value=3000 in microprofile-config.properties
+        // @Timeout is on the DemoService class → the class-level key applies.
         Method method = DemoService.class.getDeclaredMethod("genericCall");
         TimeoutConfig resolved = ConfigResolver.timeoutConfig(method, DemoService.class.getAnnotation(Timeout.class));
         assertEquals(3000L, resolved.value(), "class-level override must apply");
@@ -54,7 +54,7 @@ class ConfigResolverIntegrationTest {
 
     @Test
     void bulkheadGlobalOverrideFromPropertiesFile() throws Exception {
-        // method-level pour ne pas polluer d'autres tests
+        // method-level so other tests are not polluted
         Method method = DemoService.class.getDeclaredMethod("bulkheadCall");
         BulkheadConfig resolved = ConfigResolver.bulkheadConfig(
                 method, method.getAnnotation(Bulkhead.class));
@@ -71,7 +71,7 @@ class ConfigResolverIntegrationTest {
 
     @Test
     void fallbackGloballyDisabledFromPropertiesFile() throws Exception {
-        // Fallback/enabled=false → désactivé
+        // Fallback/enabled=false → disabled
         Method method = DemoService.class.getDeclaredMethod("fallbackCall");
         assertFalse(ConfigResolver.isFallbackEnabled(method));
     }
@@ -84,7 +84,7 @@ class ConfigResolverIntegrationTest {
 
     @Test
     void interceptorNotGloballyDisabledAtReasonablePriority() {
-        // 4500 < Integer.MAX_VALUE → intercepteur actif
+        // 4500 < Integer.MAX_VALUE → interceptor active
         assertFalse(ConfigResolver.isInterceptorGloballyDisabled());
     }
 
@@ -105,11 +105,11 @@ class ConfigResolverIntegrationTest {
 
     // --- Test service ---
 
-    // @Timeout au niveau classe → la clé <FQCN>/Timeout/value=3000 (class-level) s'applique.
+    // @Timeout at class level → the <FQCN>/Timeout/value=3000 (class-level) key applies.
     @Timeout
     static class DemoService {
         @Retry void retryCall() {}
-        void genericCall() {} // hérite @Timeout de la classe
+        void genericCall() {} // inherits @Timeout from the class
         @CircuitBreaker void criticalCall() {}
         @Bulkhead void bulkheadCall() {}
         @Fallback(fallbackMethod = "recover") void fallbackCall() {}

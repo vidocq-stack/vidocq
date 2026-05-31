@@ -11,8 +11,8 @@ import org.eclipse.microprofile.faulttolerance.exceptions.BulkheadException;
 import org.junit.jupiter.api.Test;
 
 /**
- * Tests d'intégration Bulkhead — M5.
- * MP FT 4.1 §7 — mode synchrone.
+ * Bulkhead integration tests — M5.
+ * MP FT 4.1 §7 — synchronous mode.
  */
 class BulkheadIntegrationTest {
 

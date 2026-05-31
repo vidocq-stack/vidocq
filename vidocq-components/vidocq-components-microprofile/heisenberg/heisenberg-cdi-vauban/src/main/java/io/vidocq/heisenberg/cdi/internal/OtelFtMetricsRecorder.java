@@ -18,14 +18,14 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * Enregistreur de mtriques MicroProfile Fault Tolerance 4.1 §10 (OpenTelemetry).
+ * MicroProfile Fault Tolerance 4.1 §10 metrics recorder (OpenTelemetry).
  *
- * <p>Publie les mtriques FT via {@link GlobalOpenTelemetry} avec le meter scope
- * {@code io.vidocq.heisenberg}. Tous les noms et units sont aligns avec le TCK
- * MP FT 4.1 (voir {@code TelemetryMetricDefinition} dans le TCK officiel) :</p>
+ * <p>Publishes FT metrics via {@link GlobalOpenTelemetry} with the meter scope
+ * {@code io.vidocq.heisenberg}. All names and units are aligned with the
+ * MP FT 4.1 TCK (see {@code TelemetryMetricDefinition} in the official TCK):</p>
  *
  * <ul>
- *   <li>{@code ft.invocations.total} (counter, sans unit)</li>
+ *   <li>{@code ft.invocations.total} (counter, no unit)</li>
  *   <li>{@code ft.retry.calls.total} (counter)</li>
  *   <li>{@code ft.retry.retries.total} (counter)</li>
  *   <li>{@code ft.timeout.calls.total} (counter)</li>
@@ -40,12 +40,12 @@ import java.util.concurrent.atomic.AtomicReference;
  *   <li>{@code ft.bulkhead.waitingDuration} (histogram, unit=seconds)</li>
  * </ul>
  *
- * <p><strong>Attribut commun {@code method}</strong> : valeur =
+ * <p><strong>Common {@code method} attribute</strong>: value =
  * {@code beanClass.getCanonicalName() + "." + method.getName()} — TCK §10.</p>
  *
- * <p>Coexiste avec {@link DiracFtMetricsRecorder} : les deux beans sont dispatchs en
- * parallle par {@link FaultToleranceInterceptor}. Active uniquement si OpenTelemetry
- * API est sur le classpath (sinon CDI silencieusement ignore la classe).</p>
+ * <p>Coexists with {@link DiracFtMetricsRecorder}: the two beans are dispatched in
+ * parallel by {@link FaultToleranceInterceptor}. Active only if the OpenTelemetry
+ * API is on the classpath (otherwise CDI silently ignores the class).</p>
  */
 @ApplicationScoped
 public class OtelFtMetricsRecorder implements FtMetricsRecorder {
@@ -68,25 +68,25 @@ public class OtelFtMetricsRecorder implements FtMetricsRecorder {
     private final ConcurrentHashMap<String, DoubleHistogram> histograms = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, LongUpDownCounter> upDowns = new ConcurrentHashMap<>();
 
-    // CB state trackers (par mthode) — accumule le temps pass dans chaque tat
+    // CB state trackers (per method) — accumulates the time spent in each state
     private final ConcurrentHashMap<String, CBStateTracker> cbStateTrackers = new ConcurrentHashMap<>();
 
-    // Bulkhead running/waiting tracking (par mthode) — pour delta des UpDownCounters
+    // Bulkhead running/waiting tracking (per method) — delta tracking for the UpDownCounters
     private final ConcurrentHashMap<String, AtomicLong> bulkheadRunning = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, AtomicLong> bulkheadWaiting = new ConcurrentHashMap<>();
 
     @PostConstruct
     void init() {
-        // Lazy : on rsout le meter au premier appel pour viter d'chouer
-        // si GlobalOpenTelemetry n'est pas encore configur au moment du bean creation.
+        // Lazy: resolve the meter on the first call to avoid failing if
+        // GlobalOpenTelemetry is not yet configured when the bean is created.
         warmupGlobalInstruments();
     }
 
     private void warmupGlobalInstruments() {
         if (!isMetricsEnabled() || meter() == null) return;
         Attributes global = Attributes.of(BOOTSTRAP_KEY, "global");
-        // Les tests `testMetricUnits` lisent uniquement le nom de métrique (pas les attrs).
-        // On matérialise donc une série interne pour garantir la présence de ces noms.
+        // The `testMetricUnits` tests read only the metric name (not the attrs).
+        // We therefore materialize an internal series to guarantee these names exist.
         counter("ft.timeout.calls.total").add(1L, global);
         counter("ft.circuitbreaker.calls.total").add(1L, global);
         counter("ft.circuitbreaker.state.total", "nanoseconds").add(1L, global);
@@ -182,7 +182,7 @@ public class OtelFtMetricsRecorder implements FtMetricsRecorder {
         return beanClass.getName() + "#" + method.getName();
     }
 
-    /** TCK §10 : {@code class.getCanonicalName() + "." + methodName}. */
+    /** TCK §10: {@code class.getCanonicalName() + "." + methodName}. */
     private static String methodTagValue(Class<?> beanClass, Method method) {
         String cn = beanClass.getCanonicalName();
         if (cn == null) cn = beanClass.getName();
@@ -236,9 +236,9 @@ public class OtelFtMetricsRecorder implements FtMetricsRecorder {
 
         if (hasTimeout) {
             LongCounter timeoutCalls = counter("ft.timeout.calls.total");
-            // Le reader OTel du TCK ne voit pas les instruments synchrones sans datapoint.
-            // On matérialise la métrique sur une série interne dédiée, qui ne pollue pas
-            // les séries attendues par le TCK (car sans attribut `method`).
+            // The TCK's OTel reader does not see synchronous instruments without a datapoint.
+            // We materialize the metric on a dedicated internal series that does not pollute
+            // the series expected by the TCK (because it lacks the `method` attribute).
             timeoutCalls.add(1L, Attributes.of(BOOTSTRAP_KEY, key));
             timeoutCalls.add(0L, Attributes.of(METHOD_KEY, mtag, TIMED_OUT_KEY, "false"));
             timeoutCalls.add(0L, Attributes.of(METHOD_KEY, mtag, TIMED_OUT_KEY, "true"));
@@ -253,11 +253,11 @@ public class OtelFtMetricsRecorder implements FtMetricsRecorder {
             cbCalls.add(0L, Attributes.of(METHOD_KEY, mtag, CB_RESULT_KEY, "circuitBreakerOpen"));
             counter("ft.circuitbreaker.opened.total").add(0L, methodOnly);
 
-            // ft.circuitbreaker.state.total — counter cumulatif nanoseconds par tat
-            // On utilise un counter + un tracker qui calcule le delta entre transitions.
+            // ft.circuitbreaker.state.total — cumulative nanoseconds counter per state.
+            // We use a counter plus a tracker that computes the delta between transitions.
             cbStateTrackers.computeIfAbsent(key, k -> new CBStateTracker());
             LongCounter cbState = counter("ft.circuitbreaker.state.total", "nanoseconds");
-            // Pr-enregistrer les 3 sries  0
+            // Pre-register the 3 zero-valued series.
             cbState.add(0L, Attributes.of(METHOD_KEY, mtag, CB_STATE_KEY, "closed"));
             cbState.add(0L, Attributes.of(METHOD_KEY, mtag, CB_STATE_KEY, "open"));
             cbState.add(0L, Attributes.of(METHOD_KEY, mtag, CB_STATE_KEY, "halfOpen"));
@@ -269,14 +269,14 @@ public class OtelFtMetricsRecorder implements FtMetricsRecorder {
             bhCalls.add(0L, Attributes.of(METHOD_KEY, mtag, BULKHEAD_RESULT_KEY, "accepted"));
             bhCalls.add(0L, Attributes.of(METHOD_KEY, mtag, BULKHEAD_RESULT_KEY, "rejected"));
 
-            // executionsRunning gauge — modlis en UpDownCounter (delta), tracking par mthode
+            // executionsRunning gauge — modeled as an UpDownCounter (delta), tracked per method.
             bulkheadRunning.computeIfAbsent(key, k -> new AtomicLong(0));
             upDown("ft.bulkhead.executionsRunning");
             histogram("ft.bulkhead.runningDuration", "seconds");
 
             if (asyncBulkhead) {
-                // Pour les bulkheads async, le TCK attend explicitement la présence des métriques
-                // `executionsWaiting` / `waitingDuration` même quand la queue est vide.
+                // For async bulkheads, the TCK explicitly expects the `executionsWaiting` /
+                // `waitingDuration` metrics even when the queue is empty.
                 bulkheadWaiting.computeIfAbsent(key, k -> new AtomicLong(0));
                 LongUpDownCounter waiting = upDown("ft.bulkhead.executionsWaiting");
                 if (waiting != null) {
@@ -350,7 +350,7 @@ public class OtelFtMetricsRecorder implements FtMetricsRecorder {
         counter("ft.circuitbreaker.calls.total").add(1L,
                 Attributes.of(METHOD_KEY, mtag, CB_RESULT_KEY, result.tagValue()));
 
-        // §10: le temps passé dans l'état courant doit progresser même sans transition.
+        // §10: the time spent in the current state must advance even without a transition.
         CBStateTracker tracker = cbStateTrackers.computeIfAbsent(key, k -> new CBStateTracker());
         StateTimeSample sample = tracker.sampleCurrentStateDuration();
         if (sample.deltaNanos() > 0L) {
@@ -438,8 +438,8 @@ public class OtelFtMetricsRecorder implements FtMetricsRecorder {
         }
 
         /**
-         * Effectue la transition vers {@code newState} et retourne le delta nanoseconds pass
-         * dans l'tat prcdent. Retourne 0 si aucune transition n'a lieu.
+         * Performs the transition to {@code newState} and returns the delta nanoseconds spent
+         * in the previous state. Returns 0 if no transition occurs.
          */
         StateTimeSample transition(CBState newState) {
             CBState prev = currentState.getAndSet(newState);

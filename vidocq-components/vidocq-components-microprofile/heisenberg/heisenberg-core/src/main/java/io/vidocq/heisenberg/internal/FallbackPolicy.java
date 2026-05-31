@@ -36,9 +36,9 @@ public final class FallbackPolicy {
                 throw failure;
             }
             Object result;
-            // MP FT 4.1 §6.2 : le fallback est considéré "applied" dès qu'il est invoqué,
-            // même si le handler lui-même lève une exception (la métrique correspond à la
-            // tentative, pas au succès du handler).
+            // MP FT 4.1 §6.2: the fallback is considered "applied" as soon as it is invoked,
+            // even if the handler itself throws an exception (the metric reflects the attempt,
+            // not the handler's success).
             onFallbackApplied.run();
             if (config.fallbackMethod() != null || config.fallbackHandlerClass() != null) {
                 result = resolver.resolve(config, target, guardedMethod, parameters, failure);

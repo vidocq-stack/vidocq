@@ -4,19 +4,19 @@ import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 
 /**
- * Configuration immuable pour la politique {@code @Bulkhead}.
+ * Immutable configuration for the {@code @Bulkhead} policy.
  *
- * <p>MP FT 4.1 §7 : bulkhead synchrone et asynchrone.</p>
+ * <p>MP FT 4.1 §7: synchronous and asynchronous bulkhead.</p>
  *
- * @param value              capacité max (default 10)
- * @param waitingTaskQueue   taille file attente mode async (default 10)
+ * @param value              maximum capacity (default 10)
+ * @param waitingTaskQueue   async-mode wait queue size (default 10)
  */
 public record BulkheadConfig(
         int value,
         int waitingTaskQueue
 ) {
 
-    /** Constantes défaut (spec MP FT 4.1 §7). */
+    /** Default constants (MP FT 4.1 spec §7). */
     public static final BulkheadConfig DEFAULT = new BulkheadConfig(10, 10);
 
     public BulkheadConfig {

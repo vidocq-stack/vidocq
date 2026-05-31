@@ -1,17 +1,17 @@
 /**
- * Descripteur de module explicite pour la spec MicroProfile Fault Tolerance 4.1.
+ * Explicit module descriptor for the MicroProfile Fault Tolerance 4.1 spec.
  *
- * <p>L'artefact officiel {@code org.eclipse.microprofile.fault-tolerance:microprofile-fault-tolerance-api}
- * publié par la fondation Eclipse ne fournit pas de {@code module-info.class} ; jlink refuse
- * ce type de module pour la composition d'un runtime image. Ce module-info l'érige en module
- * explicite, sans modifier le code de la spec, en conservant exactement le même nom de module
- * ({@code microprofile.fault.tolerance.api}) afin que tout {@code requires} existant continue
- * à fonctionner.
+ * <p>The official artifact {@code org.eclipse.microprofile.fault-tolerance:microprofile-fault-tolerance-api}
+ * published by the Eclipse Foundation does not provide a {@code module-info.class}; jlink refuses
+ * this type of module when composing a runtime image. This module-info turns it into an
+ * explicit module, without modifying the spec code, while preserving exactly the same module name
+ * ({@code microprofile.fault.tolerance.api}) so that any existing {@code requires} continues
+ * to work.
  *
- * <p>Le nom {@code microprofile.fault.tolerance.api} est celui que le JDK dérivait jusqu'ici
- * du nom de fichier {@code microprofile-fault-tolerance-api-4.1.jar} par la règle
- * JPMS "strip version + replace '-' with '.'" — il n'y a donc aucune migration nécessaire
- * dans les modules qui déclaraient déjà {@code requires microprofile.fault.tolerance.api}.
+ * <p>The name {@code microprofile.fault.tolerance.api} is the one the JDK had been deriving so far
+ * from the file name {@code microprofile-fault-tolerance-api-4.1.jar} using the
+ * JPMS rule "strip version + replace '-' with '.'" — so no migration is required
+ * in modules that already declared {@code requires microprofile.fault.tolerance.api}.
  */
 module microprofile.fault.tolerance.api {
     exports org.eclipse.microprofile.faulttolerance;

@@ -6,10 +6,10 @@ import java.util.concurrent.Semaphore;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * Registre d'état du Bulkhead global — bean CDI {@code @ApplicationScoped}.
+ * Global Bulkhead state registry — CDI {@code @ApplicationScoped} bean.
  *
- * <p>Stocke les sémaphores partagés pour tous les bulkheads
- * via une clé stable : {@code ClassName#methodName}.</p>
+ * <p>Stores the shared semaphores for all bulkheads
+ * using a stable key: {@code ClassName#methodName}.</p>
  */
 @ApplicationScoped
 public class BulkheadStateRegistryBean implements BulkheadStateRegistry {
@@ -18,7 +18,7 @@ public class BulkheadStateRegistryBean implements BulkheadStateRegistry {
     private final ConcurrentHashMap<String, Semaphore> waitingQueues = new ConcurrentHashMap<>();
 
     /**
-     * Clé stable pour un bulkhead.
+     * Stable key for a bulkhead.
      */
     private String key(String beanClass, String methodName) {
         return beanClass + "#" + methodName;

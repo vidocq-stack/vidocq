@@ -38,11 +38,7 @@ public final class FallbackResolver {
         boolean hasFallbackMethod = !fallback.fallbackMethod().isEmpty();
         boolean hasFallbackHandler = fallback.value() != Fallback.DEFAULT.class;
 
-        if (hasFallbackMethod == hasFallbackHandler) {
-            throw new FaultToleranceDefinitionException(
-                    "@Fallback must define exactly one strategy between fallbackMethod and value()"
-            );
-        }
+        ensureExactlyOneFallbackStrategy(hasFallbackMethod, hasFallbackHandler);
 
         if (hasFallbackMethod) {
             resolveFallbackMethodHandle(beanClass, guardedMethod, fallback.fallbackMethod());
@@ -59,11 +55,7 @@ public final class FallbackResolver {
         boolean hasFallbackMethod = fallbackMethod != null && !fallbackMethod.isEmpty();
         boolean hasFallbackHandler = fallbackHandler != null && fallbackHandler != Fallback.DEFAULT.class;
 
-        if (hasFallbackMethod == hasFallbackHandler) {
-            throw new FaultToleranceDefinitionException(
-                    "@Fallback must define exactly one strategy between fallbackMethod and value()"
-            );
-        }
+        ensureExactlyOneFallbackStrategy(hasFallbackMethod, hasFallbackHandler);
 
         if (hasFallbackMethod) {
             resolveFallbackMethodHandle(beanClass, guardedMethod, fallbackMethod);
@@ -349,7 +341,7 @@ public final class FallbackResolver {
                 return handler;
             }
         } catch (Throwable ignored) {
-            // CDI absent/inactif: fallback sur instanciation réflexive locale.
+            // CDI absent/inactive: fall back to local reflective instantiation.
         }
         return null;
     }
@@ -373,6 +365,14 @@ public final class FallbackResolver {
             throw new FaultToleranceDefinitionException(
                     "Fallback return type mismatch, expected " + expectedType.getName()
                             + " but got " + fallbackValue.getClass().getName()
+            );
+        }
+    }
+
+    private void ensureExactlyOneFallbackStrategy(boolean hasFallbackMethod, boolean hasFallbackHandler) {
+        if (hasFallbackMethod == hasFallbackHandler) {
+            throw new FaultToleranceDefinitionException(
+                    "@Fallback must define exactly one strategy between fallbackMethod and value()"
             );
         }
     }

@@ -18,7 +18,7 @@ class FaultToleranceInterceptorTest {
 
     @Test
     void delegatesToInvocationContextProceed() throws Exception {
-        // MP FT 4.1 §2.5: sans politique active, l'intercepteur exécute directement la cible.
+        // MP FT 4.1 §2.5: with no active policy, the interceptor invokes the target directly.
         FakeInvocationContext context = new FakeInvocationContext(() -> "ok");
 
         Object result = interceptor.around(context);

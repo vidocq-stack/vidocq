@@ -22,15 +22,15 @@ import org.eclipse.microprofile.faulttolerance.exceptions.BulkheadException;
 import org.junit.jupiter.api.Test;
 
 /**
- * Tests d'intégration {@code @Asynchronous @Bulkhead} — MP FT 4.1 §7.2 + §8.
+ * Integration tests for {@code @Asynchronous @Bulkhead} — MP FT 4.1 §7.2 + §8.
  *
- * <p>Vérifie que le bulkhead async :
+ * <p>Verifies that the async bulkhead:
  * <ul>
- *   <li>Laisse passer la fast-path quand des permits sont libres</li>
- *   <li>Met en file d'attente lorsqu'il n'y a pas de permit, puis débloque dès libération</li>
- *   <li>Renvoie un {@code CompletionStage} en erreur ({@code BulkheadException}) quand la
- *       file d'attente est pleine, conformément à §8.2</li>
- *   <li>Compose avec {@code @Fallback} pour récupérer sur saturation</li>
+ *   <li>Allows the fast-path when permits are free</li>
+ *   <li>Queues when no permit is available, then unblocks once one is released</li>
+ *   <li>Returns a failed {@code CompletionStage} ({@code BulkheadException}) when the
+ *       waiting queue is full, in accordance with §8.2</li>
+ *   <li>Composes with {@code @Fallback} to recover from saturation</li>
  * </ul>
  */
 class BulkheadAsyncIntegrationTest {
@@ -80,7 +80,7 @@ class BulkheadAsyncIntegrationTest {
             @SuppressWarnings("unchecked")
             CompletionStage<String> result = (CompletionStage<String>) interceptor.around(context);
 
-            // §8.2 : l'exception est portée par le stage
+            // §8.2: the exception is carried by the stage.
             ExecutionException ee = assertThrows(ExecutionException.class,
                     () -> result.toCompletableFuture().get(2, TimeUnit.SECONDS));
             assertInstanceOf(BulkheadException.class, ee.getCause());
@@ -122,15 +122,15 @@ class BulkheadAsyncIntegrationTest {
         @SuppressWarnings("unchecked")
         CompletionStage<String> first = (CompletionStage<String>) interceptor.around(ctx1);
 
-        // Attendre que le premier ait pris le permit
+        // Wait until the first call has acquired the permit.
         assertTrue(bean.entered.tryAcquire(2, TimeUnit.SECONDS));
 
-        // Second call: should be queued (permit pris, place dans la queue)
+        // Second call: should be queued (permit taken, room in the queue).
         InvocationContext ctx2 = new ReflectiveInvocationContext(bean, method, new Object[0]);
         @SuppressWarnings("unchecked")
         CompletionStage<String> second = (CompletionStage<String>) interceptor.around(ctx2);
 
-        // Libérer le premier : le second doit pouvoir progresser
+        // Release the first: the second should be able to proceed.
         bean.gate.release();
         bean.gate.release();
 
@@ -163,7 +163,7 @@ class BulkheadAsyncIntegrationTest {
         }
     }
 
-    /** Bean qui se bloque sur une grille jusqu'à libération externe. */
+    /** Bean that blocks on a gate until external release. */
     static class AsyncBulkheadGatedService {
         final Semaphore gate = new Semaphore(0);
         final Semaphore entered = new Semaphore(0);

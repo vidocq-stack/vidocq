@@ -12,7 +12,7 @@ import org.eclipse.microprofile.faulttolerance.exceptions.CircuitBreakerOpenExce
 import org.junit.jupiter.api.Test;
 
 /**
- * Tests d'intégration CircuitBreaker avec Fallback et Retry — M4.
+ * CircuitBreaker integration tests with Fallback and Retry — M4.
  * MP FT 4.1 §5 + §2.5 (composition).
  */
 class CircuitBreakerIntegrationTest {

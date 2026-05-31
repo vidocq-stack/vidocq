@@ -18,9 +18,9 @@ import org.eclipse.microprofile.faulttolerance.Retry;
 import org.junit.jupiter.api.Test;
 
 /**
- * M7 — Tests de désactivation de politiques via configuration externe.
+ * M7 — Policy-disablement tests via external configuration.
  *
- * <p>Précédence (§9 MP FT 4.1) :
+ * <p>Precedence (§9 MP FT 4.1):
  * {@code <class>/<method>/<Annotation>/enabled} &gt; {@code <class>/<Annotation>/enabled}
  * &gt; {@code <Annotation>/enabled}.</p>
  */
@@ -56,15 +56,15 @@ class ConfigResolverEnabledTest {
 
     @Test
     void asynchronousEnabledByDefault() {
-        // M7 §9.1 : @Asynchronous est sujet au flag enabled au même titre que les autres politiques
+        // M7 §9.1: @Asynchronous is subject to the enabled flag just like the other policies.
         assertTrue(ConfigResolver.isAsynchronousEnabled(AsyncService.class.getDeclaredMethods()[0]));
     }
 
-    // --- M7: désactivation par config externe (3 niveaux de précédence) ---
+    // --- M7: disablement via external config (3 precedence levels) ---
 
     @Test
     void retryDisabledAtMethodLevel() throws Exception {
-        // §9 : <class>/<method>/Retry/enabled=false → retry désactivé
+        // §9: <class>/<method>/Retry/enabled=false → retry disabled
         Method method = RetryService.class.getDeclaredMethod("method");
         String key = method.getDeclaringClass().getName() + "/" + method.getName() + "/Retry/enabled";
         Config config = new MockConfig().set(key, "false");
@@ -74,8 +74,8 @@ class ConfigResolverEnabledTest {
 
     @Test
     void retryDisabledAtClassLevel() throws Exception {
-        // §9 : <class>/Retry/enabled=false → retry désactivé pour toutes les méthodes
-        // Note: la clé class-level n'est consultée que si l'annotation est sur la classe (héritée).
+        // §9: <class>/Retry/enabled=false → retry disabled for all methods
+        // Note: the class-level key is consulted only if the annotation is on the class (inherited).
         Method method = ClassLevelRetryService.class.getDeclaredMethod("method");
         String key = method.getDeclaringClass().getName() + "/Retry/enabled";
         Config config = new MockConfig().set(key, "false");
@@ -85,7 +85,7 @@ class ConfigResolverEnabledTest {
 
     @Test
     void retryDisabledAtGlobalLevel() throws Exception {
-        // §9 : Retry/enabled=false → retry désactivé partout
+        // §9: Retry/enabled=false → retry disabled everywhere
         Method method = RetryService.class.getDeclaredMethod("method");
         Config config = new MockConfig().set("Retry/enabled", "false");
 
@@ -94,7 +94,7 @@ class ConfigResolverEnabledTest {
 
     @Test
     void methodLevelOverridesClassLevel() throws Exception {
-        // §9 : la clé method-level a la priorité la plus haute
+        // §9: the method-level key has the highest priority
         Method method = RetryService.class.getDeclaredMethod("method");
         String classKey = method.getDeclaringClass().getName() + "/Retry/enabled";
         String methodKey = method.getDeclaringClass().getName() + "/" + method.getName() + "/Retry/enabled";
@@ -108,8 +108,8 @@ class ConfigResolverEnabledTest {
 
     @Test
     void classLevelOverridesGlobal() throws Exception {
-        // MP FT 4.1 §9 : précédence method > class > global, indépendamment du placement
-        // effectif de l'annotation. Sans clé method-level, la clé class-level l'emporte.
+        // MP FT 4.1 §9: method > class > global precedence, regardless of the actual
+        // annotation placement. Without a method-level key, the class-level key wins.
         Method method = RetryService.class.getDeclaredMethod("method");
         String classKey = method.getDeclaringClass().getName() + "/Retry/enabled";
 
@@ -122,7 +122,7 @@ class ConfigResolverEnabledTest {
 
     @Test
     void classLevelAppliesWhenAnnotationIsOnClass() throws Exception {
-        // Cas annotation class-level : la clé class-level est consultée et prioritaire sur global.
+        // Class-level annotation case: the class-level key is consulted and takes precedence over global.
         Method method = ClassLevelRetryService.class.getDeclaredMethod("method");
         String classKey = method.getDeclaringClass().getName() + "/Retry/enabled";
 
@@ -135,7 +135,7 @@ class ConfigResolverEnabledTest {
 
     @Test
     void methodLevelOverridesGlobalDirectly() throws Exception {
-        // M7 : précédence method-level > global-level (sans class intermédiaire)
+        // M7: method-level precedence > global-level (without an intermediate class-level key)
         Method method = RetryService.class.getDeclaredMethod("method");
         String methodKey = method.getDeclaringClass().getName() + "/" + method.getName() + "/Retry/enabled";
 
@@ -148,25 +148,25 @@ class ConfigResolverEnabledTest {
 
     @Test
     void asynchronousCanBeDisabledViaConfig() throws Exception {
-        // M7 §9.1 : si Asynchronous/enabled=false, la méthode est traitée comme synchrone
+        // M7 §9.1: if Asynchronous/enabled=false, the method is treated as synchronous.
         Method method = AsyncService.class.getDeclaredMethod("method");
         Config config = new MockConfig().set("Asynchronous/enabled", "false");
 
         assertFalse(ConfigResolver.isEnabled(method, "Asynchronous", config));
     }
 
-    // --- M7: désactivation globale via mp.fault.tolerance.interceptor.priority ---
+    // --- M7: global disablement via mp.fault.tolerance.interceptor.priority ---
 
     @Test
     void interceptorEnabledByDefault() {
-        // Pas de config externe → l'intercepteur n'est PAS désactivé globalement
+        // No external config → the interceptor is NOT globally disabled.
         assertFalse(ConfigResolver.isInterceptorGloballyDisabled(null));
         assertFalse(ConfigResolver.isInterceptorGloballyDisabled(new MockConfig()));
     }
 
     @Test
     void interceptorDisabledWhenPriorityIsMaxInt() {
-        // M7 §9 : Integer.MAX_VALUE désactive l'intercepteur globalement
+        // M7 §9: Integer.MAX_VALUE disables the interceptor globally.
         Config config = new MockConfig()
                 .set("mp.fault.tolerance.interceptor.priority", String.valueOf(Integer.MAX_VALUE));
 
@@ -213,7 +213,7 @@ class ConfigResolverEnabledTest {
 
     @Test
     void allPolicyTypesSupportEnabledFlag() throws Exception {
-        // Vérifier que toutes les politiques supportent enabled=false
+        // Verify that all policies support enabled=false.
         Method method = AllPoliciesService.class.getDeclaredMethod("method");
         String prefix = method.getDeclaringClass().getName() + "/" + method.getName() + "/";
 
@@ -280,7 +280,7 @@ class ConfigResolverEnabledTest {
         void recover() {}
     }
 
-    /** Mock minimal pour Config — supporte uniquement getOptionalValue(String, Class). */
+    /** Minimal mock for Config — supports only getOptionalValue(String, Class). */
     private static final class MockConfig implements Config {
         private final Map<String, String> values = new HashMap<>();
 
@@ -304,7 +304,7 @@ class ConfigResolverEnabledTest {
 
         @Override
         public org.eclipse.microprofile.config.ConfigValue getConfigValue(String propertyName) {
-            // Stub minimal — non utilisé par ConfigResolver
+            // Minimal stub — not used by ConfigResolver.
             throw new UnsupportedOperationException("not used by ConfigResolver");
         }
 

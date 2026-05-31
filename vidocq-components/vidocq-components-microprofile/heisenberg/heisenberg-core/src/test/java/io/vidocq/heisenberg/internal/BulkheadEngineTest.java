@@ -12,8 +12,8 @@ import org.eclipse.microprofile.faulttolerance.exceptions.BulkheadException;
 import org.junit.jupiter.api.Test;
 
 /**
- * Tests BulkheadEngine — M5 TDD.
- * MP FT 4.1 §7 — mode synchrone.
+ * BulkheadEngine tests — M5 TDD.
+ * MP FT 4.1 §7 — synchronous mode.
  */
 class BulkheadEngineTest {
 
@@ -63,8 +63,8 @@ class BulkheadEngineTest {
         sem.release();
     }
 
-    /** §7.2 — En mode async, si tous les permits sont pris mais que la file d'attente
-     *  a de la place, la tâche est mise en attente et exécutée dès qu'un permit se libère. */
+    /** §7.2 — In async mode, if all permits are taken but the waiting queue
+     *  still has space, the task is queued and executed as soon as a permit is released. */
     @Test
     void bulkheadAsyncQueuesAndProceedsWhenPermitFreed() throws Exception {
         var config = new BulkheadConfig(1, 2);
@@ -72,7 +72,7 @@ class BulkheadEngineTest {
         var engine = new BulkheadEngine(config, registry);
 
         BulkheadStateRegistry.BulkheadState state = registry.getAsyncState("TestClass", "testMethod", 1, 2);
-        state.permits().acquire();   // tous les permits sont pris
+        state.permits().acquire();   // all permits are taken
 
         CountDownLatch started = new CountDownLatch(1);
         AtomicReference<Object> result = new AtomicReference<>();
@@ -88,19 +88,19 @@ class BulkheadEngineTest {
         });
 
         assertTrue(started.await(1, TimeUnit.SECONDS));
-        // laisser le waiter atteindre permits.acquire()
+        // Let the waiter reach permits.acquire()
         Thread.sleep(50);
-        // libère le permit → le waiter doit progresser
+        // Release the permit → the waiter should proceed
         state.permits().release();
 
         waiter.join(2000);
         assertEquals("queued-ok", result.get());
         org.junit.jupiter.api.Assertions.assertNull(error.get());
-        // file vidée : capacité 2 restaurée
+        // Queue emptied: capacity 2 restored
         assertEquals(2, state.waitingQueue().availablePermits());
     }
 
-    /** §7.2 — Quand permits ET file d'attente sont saturés, BulkheadException immédiate. */
+    /** §7.2 — When permits AND the waiting queue are saturated, BulkheadException is immediate. */
     @Test
     void bulkheadAsyncThrowsWhenQueueAndPermitsSaturated() throws Exception {
         var config = new BulkheadConfig(1, 1);
@@ -108,8 +108,8 @@ class BulkheadEngineTest {
         var engine = new BulkheadEngine(config, registry);
 
         BulkheadStateRegistry.BulkheadState state = registry.getAsyncState("TestClass", "testMethod", 1, 1);
-        state.permits().acquire();           // permits saturés
-        state.waitingQueue().acquire();      // file saturée
+        state.permits().acquire();           // permits saturated
+        state.waitingQueue().acquire();      // queue saturated
 
         BulkheadException ex = assertThrows(BulkheadException.class, () ->
                 engine.executeAsync(() -> "never", "TestClass", "testMethod")
@@ -120,7 +120,7 @@ class BulkheadEngineTest {
         state.permits().release();
     }
 
-    /** §7.2 — Le permit est libéré après exécution (fast-path). */
+    /** §7.2 — The permit is released after execution (fast-path). */
     @Test
     void bulkheadAsyncReleasesPermitAfterFastPath() throws Exception {
         var config = new BulkheadConfig(2, 2);
@@ -135,7 +135,7 @@ class BulkheadEngineTest {
         assertEquals(2, state.waitingQueue().availablePermits());
     }
 
-    /** §7.2 — Le permit est libéré même si l'invocation jette une exception. */
+    /** §7.2 — The permit is released even if the invocation throws an exception. */
     @Test
     void bulkheadAsyncReleasesPermitAfterException() {
         var config = new BulkheadConfig(2, 2);

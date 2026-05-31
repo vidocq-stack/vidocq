@@ -14,7 +14,7 @@ class PolicyComposerTest {
 
     @Test
     void delegatesToInvocationAndReturnsItsValue() throws Exception {
-        // MP FT 4.1 §2.5: sans politique active, la méthode cible est exécutée telle quelle.
+        // MP FT 4.1 §2.5: with no active policy, the target method executes as-is.
         Object result = PolicyComposer.invoke(() -> "ok");
 
         assertEquals("ok", result);
@@ -22,7 +22,7 @@ class PolicyComposerTest {
 
     @Test
     void propagatesInvocationException() {
-        // MP FT 4.1 §2.5: les couches externes verront l'exception de la couche interne.
+        // MP FT 4.1 §2.5: outer layers will see the inner-layer exception.
         IOException error = assertThrows(
                 IOException.class,
                 () -> PolicyComposer.invoke(() -> {
@@ -35,7 +35,7 @@ class PolicyComposerTest {
 
     @Test
     void appliesFallbackWhenMethodDeclaresFallbackPolicy() throws Exception {
-        // MP FT 4.1 §2.5: @Fallback est la couche la plus externe.
+        // MP FT 4.1 §2.5: @Fallback is the outermost layer.
         FallbackService service = new FallbackService();
         Method guardedMethod = FallbackService.class.getDeclaredMethod("guarded");
 

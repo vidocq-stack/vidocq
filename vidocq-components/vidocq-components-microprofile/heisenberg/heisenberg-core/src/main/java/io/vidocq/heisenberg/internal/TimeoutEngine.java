@@ -5,45 +5,45 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.eclipse.microprofile.faulttolerance.exceptions.TimeoutException;
 
 /**
- * Moteur {@code @Timeout} utilisant les virtual threads (Project Loom, finalisé Java 21+).
+ * {@code @Timeout} engine using virtual threads (Project Loom, finalized in Java 21+).
  *
- * <p>L'invocation est forkée dans un virtual thread dédié via {@code Thread.ofVirtual()}.
- * {@code Thread.join(Duration)} attend jusqu'à la deadline ; si le thread est encore actif,
- * il est interrompu (best-effort) et une {@code TimeoutException} MP FT est levée.
- * Aucun pool de threads platform n'est créé : chaque invocation fork un virtual thread
- * éphémère. MP FT 4.1 §4.</p>
+ * <p>The invocation is forked into a dedicated virtual thread via {@code Thread.ofVirtual()}.
+ * {@code Thread.join(Duration)} waits until the deadline; if the thread is still active,
+ * it is interrupted (best-effort) and an MP FT {@code TimeoutException} is thrown.
+ * No platform-thread pool is created: each invocation forks an ephemeral virtual thread.
+ * MP FT 4.1 §4.</p>
  *
- * <p><strong>Note :</strong> L'implémentation cible reste {@code StructuredTaskScope}
- * (JEP 505) qui garantit l'annulation des sous-threads à la fermeture du scope. Cette
- * implémentation sera migrée dès que l'API sortira de la période preview (Java 26+).</p>
+ * <p><strong>Note:</strong> The target implementation remains {@code StructuredTaskScope}
+ * (JEP 505), which guarantees cancellation of child threads when the scope is closed. This
+ * implementation will migrate as soon as the API leaves the preview period (Java 26+).</p>
  */
 public final class TimeoutEngine {
 
     private TimeoutEngine() {}
 
     /**
-     * Exécute l'invocation avec un timeout.
+     * Executes the invocation with a timeout.
      *
-     * @param invocation l'invocation à protéger
-     * @param config     la configuration du timeout
-     * @return le résultat de l'invocation
-     * @throws TimeoutException si la deadline est dépassée (MP FT {@code TimeoutException})
-     * @throws Exception        si l'invocation lève une exception avant la deadline
+     * @param invocation the invocation to protect
+     * @param config     the timeout configuration
+     * @return the invocation result
+     * @throws TimeoutException if the deadline is exceeded (MP FT {@code TimeoutException})
+     * @throws Exception        if the invocation throws an exception before the deadline
      */
     public static Object execute(PolicyComposer.Invocation invocation, TimeoutConfig config) throws Exception {
         return execute(invocation, config, false);
     }
 
     /**
-     * Exécute l'invocation avec un timeout.
+     * Executes the invocation with a timeout.
      *
-     * @param invocation     l'invocation à protéger
-     * @param config         la configuration du timeout
-     * @param asyncCall      {@code true} si appelé depuis le wrapper async (le caller
-     *                       a déjà rendu la main, on ne doit pas le bloquer au-delà du
-     *                       deadline). {@code false} = sync : §4.1.2 impose d'attendre
-     *                       la fin réelle de la méthode (uninterruptable) avant de lever
-     *                       la {@link TimeoutException}.
+     * @param invocation     the invocation to protect
+     * @param config         the timeout configuration
+     * @param asyncCall      {@code true} if called from the async wrapper (the caller
+     *                       has already returned, so it must not be blocked past the
+     *                       deadline). {@code false} = sync: §4.1.2 requires waiting for
+     *                       the method's actual completion (uninterruptible) before throwing
+     *                       the {@link TimeoutException}.
      */
     public static Object execute(PolicyComposer.Invocation invocation, TimeoutConfig config, boolean asyncCall) throws Exception {
         Duration timeout = config.duration();
@@ -63,14 +63,14 @@ public final class TimeoutEngine {
         boolean completed = vThread.join(timeout);
 
         if (!completed) {
-            // La deadline est dépassée : interrompre le virtual thread (best-effort).
-            // Les opérations bloquantes interruptibles (Thread.sleep, I/O NIO) seront annulées.
+            // The deadline has passed: interrupt the virtual thread (best effort).
+            // Interruptible blocking operations (Thread.sleep, NIO I/O) will be cancelled.
             vThread.interrupt();
 
-            // §4.1.2 (mode sync uniquement) : on attend la fin effective de la méthode avant
-            // de propager TimeoutException. Pour les méthodes uninterruptable, le caller reste
-            // bloqué jusqu'au retour réel. En mode async, on rend la main immédiatement (le
-            // virtual thread asynchrone porte déjà l'attente).
+            // §4.1.2 (sync mode only): wait for the method to actually finish before
+            // propagating TimeoutException. For uninterruptible methods, the caller remains
+            // blocked until the real return. In async mode, control is returned immediately
+            // (the asynchronous virtual thread already carries the wait).
             if (!asyncCall) {
                 vThread.join();
             }
@@ -80,7 +80,7 @@ public final class TimeoutEngine {
             );
         }
 
-        // Le thread a terminé dans les temps : Thread.join() fournit happens-before.
+        // The thread completed in time: Thread.join() provides happens-before.
         Throwable error = errorRef.get();
         if (error != null) {
             if (error instanceof Exception exception) {

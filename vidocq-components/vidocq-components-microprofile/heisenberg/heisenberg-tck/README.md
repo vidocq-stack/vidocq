@@ -1,82 +1,81 @@
 # Heisenberg TCK — MicroProfile Fault Tolerance 4.1
 
-Runner officiel **hors reactor** (POM Model 4.0.0) pour la suite TCK
+Official **outside-the-reactor** runner (POM Model 4.0.0) for the TCK suite
 `org.eclipse.microprofile.fault-tolerance:microprofile-fault-tolerance-tck:4.1`.
 
-## Lancement
+## Running
 
-Depuis la racine du dépôt :
+From the repository root:
 
 ```bash
-# Smoke test (JUnit, sans Arquillian — vérifie le classpath)
+# Smoke test (JUnit, without Arquillian — checks the classpath)
 ./run-official-tck-mp-fault-tolerance-4.1.sh
 
-# Suite TCK complète (TestNG + Arquillian + container Heisenberg embedded)
+# Full TCK suite (TestNG + Arquillian + embedded Heisenberg container)
 ./run-official-tck-mp-fault-tolerance-4.1.sh all
 
-# Test ciblé
+# Targeted test
 ./run-official-tck-mp-fault-tolerance-4.1.sh -Dtest=RetryTest
 ./run-official-tck-mp-fault-tolerance-4.1.sh -Dtest=FallbackTest
 ```
 
-Le script :
+The script:
 
-1. Installe `heisenberg-api`, `heisenberg-core`, `heisenberg-cdi-vauban` dans le
-   M2 local (`./mvnw install -DskipTests`).
-2. Invoque `mvn -f heisenberg-tck/pom.xml -Ptck-official test [args...]`.
-3. Produit `heisenberg-tck/target/tck-report.txt` (résumé PASS/FAIL).
+1. Installs `heisenberg-api`, `heisenberg-core`, `heisenberg-cdi-vauban` into the
+   local M2 (`./mvnw install -DskipTests`).
+2. Invokes `mvn -f heisenberg-tck/pom.xml -Ptck-official test [args...]`.
+3. Produces `heisenberg-tck/target/tck-report.txt` (PASS/FAIL summary).
 
-## Installation de l'artefact TCK
+## Installing the TCK artifact
 
-Le TCK est disponible sur Maven Central :
+The TCK is available on Maven Central:
 
 ```bash
 mvn dependency:get \
     -Dartifact=org.eclipse.microprofile.fault-tolerance:microprofile-fault-tolerance-tck:4.1
 ```
 
-Le script `run-official-tck-mp-fault-tolerance-4.1.sh` télécharge l'artefact à
-la demande via le profil Maven `tck-official` du POM.
+The `run-official-tck-mp-fault-tolerance-4.1.sh` script downloads the artifact
+on demand through the POM `tck-official` Maven profile.
 
-## Architecture du runner
+## Runner architecture
 
-- `HeisenbergDeployableContainer` — container Arquillian embedded local
-  (protocole `Local`, mode in-VM, pas de container distant).
-- `VaubanTckBootstrap` — par déploiement TCK : extrait les propriétés MP Config
-  de l'archive ShrinkWrap, démarre un container Vauban avec
+- `HeisenbergDeployableContainer` — local embedded Arquillian container
+  (protocol `Local`, in-VM mode, no remote container).
+- `VaubanTckBootstrap` — for each TCK deployment: extracts MP Config properties
+  from the ShrinkWrap archive, starts a Vauban container with
   `FaultToleranceInterceptor`, `HeisenbergExtension`, `StateRegistryBean`,
-  `BulkheadStateRegistryBean`, et toutes les classes de l'archive ; active le
-  `RequestContext` pour la durée du test.
-- `HeisenbergTestEnricher` — injection `@Inject` (et `@Inject Instance<T>`)
-  des champs des classes de test TCK via le `BeanManager` Vauban.
-- `HeisenbergArquillianExtension` — enregistre les services via
+  `BulkheadStateRegistryBean`, and all archive classes ; activates the
+  `RequestContext` for the duration of the test.
+- `HeisenbergTestEnricher` — injects `@Inject` (and `@Inject Instance<T>`)
+  into fields of TCK test classes through the Vauban `BeanManager`.
+- `HeisenbergArquillianExtension` — registers services through
   `META-INF/services/org.jboss.arquillian.core.spi.LoadableExtension`.
-- `arquillian.xml` — qualifier `heisenberg` (sélectionné par
+- `arquillian.xml` — qualifier `heisenberg` (selected by
   `arquillian.launch=heisenberg`).
-- `tck-suite.xml` — sélection des packages TCK
+- `tck-suite.xml` — selection of TCK packages
   (`org.eclipse.microprofile.fault.tolerance.tck.*`).
 
-## Multiplicateur de timeout
+## Timeout multiplier
 
-Pour les environnements CI lents, augmenter dans le profil `tck-official`
-du POM ou en ligne de commande :
+For slow CI environments, increase it in the `tck-official` profile
+of the POM or on the command line:
 
 ```bash
 ./run-official-tck-mp-fault-tolerance-4.1.sh all \
     -Dorg.eclipse.microprofile.fault.tolerance.tck.timeout.multiplier=2.0
 ```
 
-## État actuel
+## Current status
 
-Voir [`TCK.md`](../TCK.md) à la racine du projet pour le score TCK courant et
-la liste des tests exclus avec justification.
+See [`TCK.md`](../TCK.md) at the project root for the current TCK score and
+for the list of excluded tests with justification.
 
-## Pourquoi hors reactor
+## Why it stays outside the reactor
 
-`heisenberg-tck/pom.xml` reste en Model 4.0.0 et **hors du reactor** parce que
-ShrinkWrap Maven Resolver 3.3 (dépendance transitive Arquillian) utilise
-`maven-resolver` 1.9 / `maven-model` 3.9 qui ne savent pas parser les POMs
-Model 4.1.0 du reactor. Ne pas changer ce modèle tant que ShrinkWrap n'est pas
-mis à jour (contrainte commune à tout l'écosystème Vidocq — knock-tck,
+`heisenberg-tck/pom.xml` stays on Model 4.0.0 and **outside the reactor** because
+ShrinkWrap Maven Resolver 3.3 (a transitive Arquillian dependency) uses
+`maven-resolver` 1.9 / `maven-model` 3.9, which cannot parse the reactor
+Model 4.1.0 POMs. Do not change this model until ShrinkWrap is updated
+(common constraint across the whole Vidocq ecosystem — knock-tck,
 cassini-tck, cyrano-tck, heisenberg-tck).
-

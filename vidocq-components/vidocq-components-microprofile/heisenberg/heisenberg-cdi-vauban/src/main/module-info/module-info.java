@@ -1,21 +1,21 @@
 /**
- * Intégration CDI de Heisenberg pour le container Vauban.
+ * Heisenberg CDI integration for the Vauban container.
  *
- * <p>Composants prévus (cf. ROADMAP.md M1+) :</p>
+ * <p>Planned components (cf. ROADMAP.md M1+) :</p>
  * <ul>
- *   <li>{@code FaultToleranceInterceptor} — intercepteur CDI {@code @Interceptor} de priorité 4010
+ *   <li>{@code FaultToleranceInterceptor} — CDI {@code @Interceptor} with priority 4010
  *       (configurable via {@code mp.fault.tolerance.interceptor.priority}).</li>
- *   <li>{@code HeisenbergExtension} — BCE Vauban : valide les configurations FT au démarrage
- *       du container (méthodes fallback, types de retour async).</li>
- *   <li>{@code StateRegistryBean} — bean {@code @ApplicationScoped} portant l'état global
- *       des CircuitBreaker et Bulkhead (identifiés par {@code beanClass + method}).</li>
+ *   <li>{@code HeisenbergExtension} — Vauban BCE: validates FT configurations at container startup
+ *       (fallback methods, async return types).</li>
+ *   <li>{@code StateRegistryBean} — {@code @ApplicationScoped} bean carrying the global state
+ *       of CircuitBreaker and Bulkhead (identified by {@code beanClass + method}).</li>
  * </ul>
  *
- * <p><strong>Note JPMS — workaround testCompile</strong> :
- * {@code module-info.java} est dans {@code src/main/module-info/} pour éviter que Maven
- * Compiler Plugin détecte JPMS lors de {@code testCompile} (vauban-core et ravel-core
- * sont test-scope, absents de {@code target/javamodules/}).
- * Voir {@code heisenberg-core/pom.xml} pour la description complète du workaround.</p>
+ * <p><strong>JPMS note — testCompile workaround</strong>:
+ * {@code module-info.java} is in {@code src/main/module-info/} to prevent Maven
+ * Compiler Plugin from detecting JPMS during {@code testCompile} (vauban-core and ravel-core
+ * are test-scope, absent from {@code target/javamodules/}).
+ * See {@code heisenberg-core/pom.xml} for the complete description of the workaround.</p>
  */
 module io.vidocq.heisenberg.cdi.vauban {
     requires transitive io.vidocq.heisenberg.core;
@@ -30,7 +30,7 @@ module io.vidocq.heisenberg.cdi.vauban {
 
     exports io.vidocq.heisenberg.cdi.internal;
 
-    // BCE Heisenberg : validation des configurations FT au démarrage du container
+    // Heisenberg BCE: validate FT configurations at container startup
     provides jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension
             with io.vidocq.heisenberg.cdi.internal.HeisenbergExtension;
 

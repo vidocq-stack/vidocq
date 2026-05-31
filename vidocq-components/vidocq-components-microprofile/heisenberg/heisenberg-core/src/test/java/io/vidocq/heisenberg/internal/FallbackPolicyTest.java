@@ -13,7 +13,7 @@ class FallbackPolicyTest {
 
     @Test
     void appliesFallbackWhenExceptionMatchesApplyOn() throws Exception {
-        // MP FT 4.1 §6: fallback déclenché si exception dans applyOn et pas dans skipOn.
+        // MP FT 4.1 §6: fallback is triggered if the exception is in applyOn and not in skipOn.
         PolicyService service = new PolicyService();
         Method guardedMethod = PolicyService.class.getDeclaredMethod("guarded");
         Fallback fallback = guardedMethod.getAnnotation(Fallback.class);

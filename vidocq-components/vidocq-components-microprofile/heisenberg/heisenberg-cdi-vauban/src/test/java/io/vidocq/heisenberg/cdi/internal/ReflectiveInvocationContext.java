@@ -10,13 +10,13 @@ import java.util.Set;
 import jakarta.interceptor.InvocationContext;
 
 /**
- * Utilitaire de test partagé : implémente {@link InvocationContext} via reflection sur une méthode
- * réelle d'un bean cible. Permet d'invoquer {@link FaultToleranceInterceptor#around(InvocationContext)}
- * sans dépendre d'un container CDI complet.
+ * Shared test utility: implements {@link InvocationContext} via reflection on a real
+ * method of a target bean. Allows invoking {@link FaultToleranceInterceptor#around(InvocationContext)}
+ * without depending on a full CDI container.
  *
- * <p>Utilisé par tous les {@code *IntegrationTest} de {@code heisenberg-cdi-vauban}.
- * Conforme AGENTS.md : pas de {@code setAccessible(true)} — les méthodes interceptées doivent rester
- * accessibles depuis le package de test (package-private ou public).</p>
+ * <p>Used by all {@code *IntegrationTest} classes in {@code heisenberg-cdi-vauban}.
+ * Conforms to AGENTS.md: no {@code setAccessible(true)} — intercepted methods must remain
+ * accessible from the test package (package-private or public).</p>
  */
 final class ReflectiveInvocationContext implements InvocationContext {
 

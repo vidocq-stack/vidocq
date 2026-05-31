@@ -10,17 +10,17 @@ import org.jboss.arquillian.container.spi.ConfigurationException;
 import org.jboss.arquillian.container.spi.client.container.ContainerConfiguration;
 
 /**
- * Configuration Arquillian du container Heisenberg TCK — POJO sans propriété requise.
+ * Arquillian configuration for the Heisenberg TCK container — POJO with no required property.
  *
- * <p>Heisenberg est une implémentation MicroProfile Fault Tolerance 4.1 :
- * aucune ressource HTTP n'est nécessaire, le TCK est purement CDI in-VM
- * (protocole Arquillian {@code Local}).</p>
+ * <p>Heisenberg is a MicroProfile Fault Tolerance 4.1 implementation:
+ * no HTTP resource is required, the TCK is purely CDI in-VM
+ * (Arquillian {@code Local} protocol).</p>
  */
 public class HeisenbergContainerConfiguration implements ContainerConfiguration {
 
     @Override
     public void validate() throws ConfigurationException {
-        // rien à valider.
+        // Nothing to validate.
     }
 }
 

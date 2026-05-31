@@ -35,21 +35,21 @@ import java.util.List;
 import java.util.Properties;
 
 /**
- * Gère le cycle de vie du container Vauban CDI dans le runner TCK Arquillian Heisenberg.
+ * Manages the lifecycle of the Vauban CDI container in the Heisenberg Arquillian TCK runner.
  *
- * <p>Chaque déploiement Arquillian (une ShrinkWrap archive par classe de test TCK) :
+ * <p>Each Arquillian deployment (one ShrinkWrap archive per TCK test class):
  * <ol>
- *   <li>extrait {@code META-INF/microprofile-config.properties} de l'archive et l'exporte
- *       en system properties pour que Ravel/MP-Config les voie ;</li>
- *   <li>arrête tout container existant ;</li>
- *   <li>collecte les classes applicatives de l'archive ;</li>
- *   <li>démarre un nouveau {@link VaubanContainer} avec :
+ *   <li>extracts {@code META-INF/microprofile-config.properties} from the archive and exports it
+ *       as system properties so that Ravel/MP-Config can see it;</li>
+ *   <li>stops any existing container;</li>
+ *   <li>collects the application classes from the archive;</li>
+ *   <li>starts a new {@link VaubanContainer} with:
  *     <ul>
- *       <li>l'extension BCE {@link HeisenbergExtension} ;</li>
- *       <li>les intercepteurs {@link FaultToleranceInterceptor} et
- *           {@link FaultTolerancePriority3850Interceptor} ;</li>
- *       <li>les beans d'état {@link StateRegistryBean} et {@link BulkheadStateRegistryBean} ;</li>
- *       <li>toutes les classes de l'archive.</li>
+ *       <li>the BCE extension {@link HeisenbergExtension};</li>
+ *       <li>the interceptors {@link FaultToleranceInterceptor} and
+ *           {@link FaultTolerancePriority3850Interceptor};</li>
+ *       <li>the state beans {@link StateRegistryBean} and {@link BulkheadStateRegistryBean};</li>
+ *       <li>all classes from the archive.</li>
  *     </ul>
  *   </li>
  * </ol>
@@ -93,10 +93,9 @@ final class VaubanTckBootstrap {
         }
         builder.build();
 
-        // Active le RequestContext pour la durée du déploiement TCK : les tests
-        // MicroProfile Fault Tolerance utilisent des beans @RequestScoped et
-        // s'attendent à ce que le contexte soit actif pendant l'exécution
-        // des méthodes de test (sinon ContextNotActiveException).
+        // Activate the RequestContext for the duration of the TCK deployment: MicroProfile
+        // Fault Tolerance tests use @RequestScoped beans and expect the context to be active
+        // while the test methods run (otherwise ContextNotActiveException).
         VaubanContainer container = VaubanContainer.current();
         if (container != null) {
             container.requestContext().activate();
@@ -192,10 +191,10 @@ final class VaubanTckBootstrap {
     // -------------------------------------------------------------------
 
     /**
-     * Classes du TCK qu'on remplace par nos propres beans pour éviter les collisions
-     * (typiquement {@code @Inject @RegistryType(BASE)} dans des producers TCK qui ne
-     * fonctionnent pas avec la résolution Vauban des qualifiers à members). Notre
-     * {@link MetricRegistryProxyProducerBean} produit déjà tout ce qu'il faut.
+     * TCK classes that we replace with our own beans to avoid collisions
+     * (typically {@code @Inject @RegistryType(BASE)} in TCK producers that do not
+     * work with Vauban's resolution of qualifiers with members). Our
+     * {@link MetricRegistryProxyProducerBean} already produces everything needed.
      */
     private static final java.util.Set<String> EXCLUDED_TCK_CLASSES = java.util.Set.of(
             "org.eclipse.microprofile.fault.tolerance.tck.metrics.util.MetricRegistryProvider"

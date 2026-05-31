@@ -16,16 +16,16 @@ import org.jboss.shrinkwrap.descriptor.api.Descriptor;
 import org.eclipse.microprofile.faulttolerance.exceptions.FaultToleranceDefinitionException;
 
 /**
- * Container Arquillian Heisenberg — <strong>embedded local container</strong> dédié au TCK
- * MicroProfile Fault Tolerance 4.1.
+ * Heisenberg Arquillian container — <strong>embedded local container</strong> dedicated to the
+ * MicroProfile Fault Tolerance 4.1 TCK.
  *
- * <p>Pour chaque déploiement TCK, démarre un container Vauban CDI avec les classes de
- * l'archive ShrinkWrap, l'intercepteur {@code FaultToleranceInterceptor}, la BCE
- * {@code HeisenbergExtension} et les beans d'état CDI ({@code StateRegistryBean},
+ * <p>For each TCK deployment, starts a Vauban CDI container with the classes from
+ * the ShrinkWrap archive, the {@code FaultToleranceInterceptor}, the BCE
+ * {@code HeisenbergExtension}, and the CDI state beans ({@code StateRegistryBean},
  * {@code BulkheadStateRegistryBean}).</p>
  *
- * <p>Protocole {@code Local} : les tests s'exécutent dans la JVM Arquillian, pas dans
- * un container distant.</p>
+ * <p>{@code Local} protocol: tests run in the Arquillian JVM, not in
+ * a remote container.</p>
  */
 public class HeisenbergDeployableContainer implements DeployableContainer<HeisenbergContainerConfiguration> {
 
@@ -41,12 +41,12 @@ public class HeisenbergDeployableContainer implements DeployableContainer<Heisen
 
     @Override
     public void setup(HeisenbergContainerConfiguration configuration) {
-        // rien à initialiser.
+        // Nothing to initialize.
     }
 
     @Override
     public void start() throws LifecycleException {
-        // no-op : Vauban démarre par déploiement.
+        // no-op: Vauban starts on deployment.
     }
 
     @Override

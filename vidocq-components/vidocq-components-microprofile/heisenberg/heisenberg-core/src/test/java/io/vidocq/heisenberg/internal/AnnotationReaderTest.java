@@ -13,7 +13,7 @@ class AnnotationReaderTest {
 
     @Test
     void usesMethodAnnotationOverClassAnnotation() throws Exception {
-        // MP FT 4.1 §2: précédence méthode > classe.
+        // MP FT 4.1 §2: method > class precedence.
         Method method = MethodAnnotatedService.class.getDeclaredMethod("call");
 
         AnnotationReader.FaultToleranceAnnotations annotations = AnnotationReader.read(method);
@@ -24,7 +24,7 @@ class AnnotationReaderTest {
 
     @Test
     void fallsBackToClassAnnotationWhenMethodHasNone() throws Exception {
-        // MP FT 4.1 §2: les annotations de classe s'appliquent si la méthode n'en déclare pas.
+        // MP FT 4.1 §2: class annotations apply when the method declares none.
         Method method = ClassAnnotatedService.class.getDeclaredMethod("call");
 
         AnnotationReader.FaultToleranceAnnotations annotations = AnnotationReader.read(method);

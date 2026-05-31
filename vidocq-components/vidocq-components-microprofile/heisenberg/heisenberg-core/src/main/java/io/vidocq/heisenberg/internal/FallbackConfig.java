@@ -3,16 +3,16 @@ package io.vidocq.heisenberg.internal;
 import org.eclipse.microprofile.faulttolerance.FallbackHandler;
 
 /**
- * Configuration immuable pour la politique {@code @Fallback}.
+ * Immutable configuration for the {@code @Fallback} policy.
  *
- * <p>MP FT 4.1 §6 et §9 : seuls {@code applyOn} et {@code skipOn} sont surchargeables
- * via MicroProfile Config. Le {@code value} (handler class) et la {@code fallbackMethod}
- * sont fixés à la compilation pour permettre leur validation au démarrage du container.</p>
+ * <p>MP FT 4.1 §6 and §9: only {@code applyOn} and {@code skipOn} can be overridden
+ * through MicroProfile Config. The {@code value} (handler class) and {@code fallbackMethod}
+ * are fixed at compile time to allow their validation at container startup.</p>
  *
- * @param applyOn types d'exception qui déclenchent le fallback (défaut spec : {@link Throwable})
- * @param skipOn  types d'exception qui contournent le fallback et sont propagées telles quelles
- * @param fallbackMethod nom de fallbackMethod effectif (annotation ou override config)
- * @param fallbackHandlerClass type de FallbackHandler effectif (annotation ou override config)
+ * @param applyOn types of exception that trigger the fallback (spec default: {@link Throwable})
+ * @param skipOn  types of exception that bypass the fallback and are propagated as-is
+ * @param fallbackMethod name of the effective fallbackMethod (annotation or config override)
+ * @param fallbackHandlerClass type of the effective FallbackHandler (annotation or config override)
  */
 public record FallbackConfig(
         Class<? extends Throwable>[] applyOn,
@@ -31,7 +31,7 @@ public record FallbackConfig(
     }
 
     /**
-     * Indique si {@code failure} doit déclencher le fallback selon les règles {@code applyOn}/{@code skipOn}.
+     * Indicates whether {@code failure} should trigger the fallback according to the {@code applyOn}/{@code skipOn} rules.
      */
     public boolean shouldApplyFallback(Throwable failure) {
         for (Class<? extends Throwable> declaredType : skipOn) {

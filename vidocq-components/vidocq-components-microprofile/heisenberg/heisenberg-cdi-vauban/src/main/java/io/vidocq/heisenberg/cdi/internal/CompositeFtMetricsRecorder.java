@@ -6,15 +6,15 @@ import java.lang.reflect.Method;
 import java.util.List;
 
 /**
- * Recorder composite : fan-out vers une liste de recorders dlguent.
+ * Composite recorder: fan-out to a list of delegate recorders.
  *
- * <p>Permet de publier simultanment dans les deux registres dfinis par la spec :
- * §9 (MP Metrics via {@link DiracFtMetricsRecorder}) et §10 (OpenTelemetry via
+ * <p>Allows simultaneous publication to the two registries defined by the spec:
+ * §9 (MP Metrics via {@link DiracFtMetricsRecorder}) and §10 (OpenTelemetry via
  * {@link OtelFtMetricsRecorder}).</p>
  *
- * <p>Chaque dlgu est invoqu dans l'ordre de la liste. Une exception dans l'un
- * d'eux est attrape et ignore — l'instrumentation ne doit jamais propager un
- * chec dans le chemin d'excution mtier.</p>
+ * <p>Each delegate is invoked in list order. An exception in one of them
+ * is caught and ignored — instrumentation must never propagate a failure
+ * into the business execution path.</p>
  */
 final class CompositeFtMetricsRecorder implements FtMetricsRecorder {
 

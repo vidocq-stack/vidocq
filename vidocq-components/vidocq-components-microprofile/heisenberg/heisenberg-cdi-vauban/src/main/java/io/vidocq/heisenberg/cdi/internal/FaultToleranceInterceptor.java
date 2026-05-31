@@ -16,20 +16,20 @@ import jakarta.interceptor.Interceptor;
 import jakarta.interceptor.InvocationContext;
 
 /**
- * Intercepteur Fault Tolerance CDI — orchestre la chaîne de politiques M1-M7.
- * Dépend de StateRegistry (@ApplicationScoped) pour CircuitBreaker et Bulkhead.
+ * CDI Fault Tolerance interceptor — orchestrates the M1-M7 policy chain.
+ * Depends on StateRegistry (@ApplicationScoped) for CircuitBreaker and Bulkhead.
  *
- * <p><strong>Binding marqueur {@link FaultToleranceBinding}</strong> : per
- * Jakarta Interceptors §2.6, déclarer simultanément {@code @Retry @Timeout
- * @CircuitBreaker @Bulkhead @Asynchronous} signifierait que l'intercepteur ne
- * s'active qu'aux méthodes portant <em>toutes</em> ces annotations (ET logique).
- * On utilise donc un binding marqueur unique ({@code @FaultToleranceBinding})
- * que {@link HeisenbergExtension} ajoute via BCE sur toute classe/méthode FT.</p>
+ * <p><strong>Marker binding {@link FaultToleranceBinding}</strong>: per
+ * Jakarta Interceptors §2.6, declaring {@code @Retry @Timeout
+ * @CircuitBreaker @Bulkhead @Asynchronous} simultaneously would mean that the interceptor
+ * activates only on methods carrying <em>all</em> these annotations (logical AND).
+ * We therefore use a single marker binding ({@code @FaultToleranceBinding})
+ * that {@link HeisenbergExtension} adds via BCE on every FT class/method.</p>
  *
- * <p>M7 §9 : si {@code mp.fault.tolerance.interceptor.priority >= Integer.MAX_VALUE},
- * l'intercepteur est entièrement court-circuité (la méthode s'exécute sans politiques).
- * La logique est déléguée à {@link ConfigResolver#isInterceptorGloballyDisabled()}
- * pour permettre les tests unitaires avec un Config mock.</p>
+ * <p>M7 §9: if {@code mp.fault.tolerance.interceptor.priority >= Integer.MAX_VALUE},
+ * the interceptor is completely short-circuited (the method executes without policies).
+ * The logic is delegated to {@link ConfigResolver#isInterceptorGloballyDisabled()}
+ * to allow unit tests with a mock Config.</p>
  */
 @Interceptor
 @Priority(FaultToleranceInterceptor.BASE_PRIORITY)
@@ -51,13 +51,13 @@ public class FaultToleranceInterceptor {
 
     @AroundInvoke
     public Object around(InvocationContext context) throws Exception {
-        // TCK MP FT 4.1: lorsqu'une priorité custom 3850 est configurée,
-        // un intercepteur dédié (priorité 3850) devient l'intercepteur FT actif.
+        // TCK MP FT 4.1: when a custom 3850 priority is configured,
+        // a dedicated interceptor (priority 3850) becomes the active FT interceptor.
         if (ConfigResolver.interceptorPriority() == TCK_PRIORITY_3850) {
             return context.proceed();
         }
 
-        // M7 §9 : court-circuit si désactivation globale via config
+        // M7 §9: short-circuit if globally disabled via config
         if (ConfigResolver.isInterceptorGloballyDisabled()) {
             return context.proceed();
         }
@@ -71,18 +71,18 @@ public class FaultToleranceInterceptor {
     }
 
     /**
-     * MP FT 4.1 §9/§10 : pré-enregistre les métriques d'une méthode FT au plus tôt (lors
-     * de la première interception). Cela matérialise les compteurs OTel avec leur unité,
-     * de sorte que les tests TCK {@code testMetricUnits} qui inspectent les méta-données
-     * via {@code InMemoryMetricReader.getUnit(...)} retrouvent les métriques même quand
-     * aucune incrémentation n'a encore eu lieu pour certaines séries d'attributs.
+     * MP FT 4.1 §9/§10: pre-registers the metrics of an FT method as early as possible (on
+     * the first interception). This materializes the OTel counters with their unit,
+     * so that the TCK {@code testMetricUnits} tests that inspect metadata
+     * via {@code InMemoryMetricReader.getUnit(...)} can find the metrics even when
+     * no increment has yet occurred for certain attribute series.
      */
     private static final Set<String> REGISTERED = ConcurrentHashMap.newKeySet();
 
     private static void registerMetricsOnce(FtMetricsRecorder recorder, Object target, Method method) {
         if (recorder == null || method == null) return;
         Class<?> beanClass = target != null ? target.getClass() : method.getDeclaringClass();
-        // Démêler les classes intercepted (Vauban : $$Intercepted)
+        // Unwrap intercepted classes (Vauban: $$Intercepted)
         while (beanClass.getName().contains("$$Intercepted") && beanClass.getSuperclass() != null) {
             beanClass = beanClass.getSuperclass();
         }

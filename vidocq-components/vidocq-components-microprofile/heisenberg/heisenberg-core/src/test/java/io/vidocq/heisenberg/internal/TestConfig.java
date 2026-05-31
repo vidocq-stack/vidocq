@@ -11,8 +11,8 @@ import org.eclipse.microprofile.config.spi.ConfigSource;
 import org.eclipse.microprofile.config.spi.Converter;
 
 /**
- * Mock minimal de {@link Config} pour les tests unitaires du {@link ConfigResolver}.
- * Supporte uniquement {@code getOptionalValue(String, Class)} et conversions basiques
+ * Minimal mock of {@link Config} for {@link ConfigResolver} unit tests.
+ * Supports only {@code getOptionalValue(String, Class)} and basic conversions
  * (String, Integer, Long, Boolean, Double).
  */
 final class TestConfig implements Config {

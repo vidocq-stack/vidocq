@@ -1,12 +1,12 @@
 /**
- * Benchmarks JMH pour Heisenberg.
+ * JMH benchmarks for Heisenberg.
  *
- * <p>Contenu prévu (ROADMAP.md M3+) :</p>
+ * <p>Planned contents (ROADMAP.md M3+) :</p>
  * <ul>
- *   <li>{@code InterceptorOverheadBenchmark} — overhead d'interception sans politique active.</li>
- *   <li>{@code RetryBenchmark} — throughput sous retry vs SmallRye Fault Tolerance.</li>
- *   <li>{@code CircuitBreakerBenchmark} — latence p99 avec CB en état CLOSED vs OPEN.</li>
- *   <li>{@code BulkheadBenchmark} — contention sémaphore sous charge concurrente.</li>
+ *   <li>{@code InterceptorOverheadBenchmark} — interception overhead with no active policy.</li>
+ *   <li>{@code RetryBenchmark} — throughput under retry vs SmallRye Fault Tolerance.</li>
+ *   <li>{@code CircuitBreakerBenchmark} — p99 latency with CB in CLOSED vs OPEN state.</li>
+ *   <li>{@code BulkheadBenchmark} — semaphore contention under concurrent load.</li>
  * </ul>
  */
 package io.vidocq.heisenberg.bench;

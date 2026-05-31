@@ -1,11 +1,11 @@
 /**
- * Exemples d'utilisation de MicroProfile Fault Tolerance 4.1 via Heisenberg.
+ * Usage examples of MicroProfile Fault Tolerance 4.1 via Heisenberg.
  *
- * <p>Contenu prévu :</p>
+ * <p>Planned contents:</p>
  * <ul>
- *   <li>{@code RetryExample} — service avec @Retry sur une opération I/O instable.</li>
- *   <li>{@code CircuitBreakerExample} — service avec @CircuitBreaker et @Fallback.</li>
- *   <li>{@code BulkheadAsyncExample} — service @Bulkhead + @Asynchronous.</li>
+ *   <li>{@code RetryExample} — service with @Retry on an unstable I/O operation.</li>
+ *   <li>{@code CircuitBreakerExample} — service with @CircuitBreaker and @Fallback.</li>
+ *   <li>{@code BulkheadAsyncExample} — service with @Bulkhead + @Asynchronous.</li>
  * </ul>
  */
 package io.vidocq.heisenberg.examples;

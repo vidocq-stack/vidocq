@@ -10,7 +10,7 @@ import org.eclipse.microprofile.faulttolerance.Retry;
 import org.eclipse.microprofile.faulttolerance.Timeout;
 
 /**
- * Lecture des annotations Fault Tolerance avec précédence méthode > classe.
+ * Reads Fault Tolerance annotations with method > class precedence.
  */
 public final class AnnotationReader {
 

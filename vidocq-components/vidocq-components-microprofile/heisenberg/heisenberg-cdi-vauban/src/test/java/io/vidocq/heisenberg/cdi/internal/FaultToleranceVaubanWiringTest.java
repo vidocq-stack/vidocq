@@ -11,13 +11,13 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * Test d'intégration end-to-end : un bean CDI @RequestScoped avec une méthode
- * @Retry doit voir le {@link FaultToleranceInterceptor} déclenché par Vauban,
- * et la méthode doit être exécutée jusqu'au nombre de tentatives configuré.
+ * End-to-end integration test: a CDI @RequestScoped bean with a
+ * @Retry method must have the {@link FaultToleranceInterceptor} triggered by Vauban,
+ * and the method must be executed up to the configured number of attempts.
  *
- * <p>Reproduit le scénario qui échoue dans le TCK MicroProfile Fault Tolerance 4.1
- * ({@code RetryTest.testRetryMaxRetries}) avant le fix « class-level
- * @InterceptorBinding via BCE Enhancement ».</p>
+ * <p>Reproduces the scenario that fails in the MicroProfile Fault Tolerance 4.1 TCK
+ * ({@code RetryTest.testRetryMaxRetries}) before the "class-level
+ * @InterceptorBinding via BCE Enhancement" fix.</p>
  */
 class FaultToleranceVaubanWiringTest {
 
@@ -58,10 +58,10 @@ class FaultToleranceVaubanWiringTest {
         try {
             bean.call();
         } catch (RuntimeException expected) {
-            // attendu : épuisement des retries
+            // Expected: retries exhausted.
         }
 
-        // @Retry(maxRetries = 3) → 1 appel initial + 3 retries = 4 invocations
+        // @Retry(maxRetries = 3) → 1 initial call + 3 retries = 4 invocations
         assertEquals(4, RetryBean.CALLS.get(),
                 "Expected 4 invocations (1 + 3 retries); got " + RetryBean.CALLS.get()
                         + ". If 1, the FaultToleranceInterceptor is not being wired by Vauban.");

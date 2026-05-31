@@ -16,17 +16,17 @@ import org.eclipse.microprofile.faulttolerance.Timeout;
 import org.junit.jupiter.api.Test;
 
 /**
- * M8 §9 — Tests de surcharge complète des paramètres de politiques via MicroProfile Config.
+ * M8 §9 — Tests for complete policy-parameter override through MicroProfile Config.
  *
- * <p>Précédence (§9) : {@code <class>/<method>/<Annotation>/<param>}
+ * <p>Precedence (§9): {@code <class>/<method>/<Annotation>/<param>}
  * &gt; {@code <class>/<Annotation>/<param>} &gt; {@code <Annotation>/<param>}.</p>
  *
- * <p>Tous les paramètres de toutes les politiques sont surchargeables, excepté ceux
- * fixés au build-time pour {@code @Fallback} ({@code value} handler, {@code fallbackMethod}).</p>
+ * <p>All parameters of all policies can be overridden, except those
+ * fixed at build time for {@code @Fallback} ({@code value} handler, {@code fallbackMethod}).</p>
  */
 class ConfigResolverOverrideTest {
 
-    // --- @Retry : surcharge complète des 9 paramètres ---
+    // --- @Retry: complete override of the 9 parameters ---
 
     @Test
     void retryAllParametersOverridable() throws Exception {
@@ -106,7 +106,7 @@ class ConfigResolverOverrideTest {
         assertEquals(ChronoUnit.MILLIS, resolved.unit());
     }
 
-    // --- @CircuitBreaker : surcharge complète des 7 paramètres ---
+    // --- @CircuitBreaker: complete override of the 7 parameters ---
 
     @Test
     void circuitBreakerAllParametersOverridable() throws Exception {
@@ -148,7 +148,7 @@ class ConfigResolverOverrideTest {
         assertEquals(100, resolved.waitingTaskQueue());
     }
 
-    // --- @Fallback : applyOn et skipOn surchargeables (spec §9.1) ---
+    // --- @Fallback: applyOn and skipOn are overridable (spec §9.1) ---
 
     @Test
     void fallbackDefaultsFromAnnotation() throws Exception {
@@ -156,7 +156,7 @@ class ConfigResolverOverrideTest {
         FallbackConfig resolved = ConfigResolver.fallbackConfig(
                 method, method.getAnnotation(Fallback.class), new TestConfig());
 
-        // Défauts spec : applyOn = {Throwable.class}, skipOn = {}
+        // Spec defaults: applyOn = {Throwable.class}, skipOn = {}
         assertArrayEquals(new Class[] {Throwable.class}, resolved.applyOn());
         assertEquals(0, resolved.skipOn().length);
     }
@@ -207,7 +207,7 @@ class ConfigResolverOverrideTest {
                 "recover",
                 org.eclipse.microprofile.faulttolerance.Fallback.DEFAULT.class
         );
-        // skipOn match → pas de fallback même si applyOn match aussi
+        // skipOn match → no fallback even if applyOn also matches
         assertFalse(cfg.shouldApplyFallback(new IllegalArgumentException()));
         assertTrue(cfg.shouldApplyFallback(new IOException()));
     }

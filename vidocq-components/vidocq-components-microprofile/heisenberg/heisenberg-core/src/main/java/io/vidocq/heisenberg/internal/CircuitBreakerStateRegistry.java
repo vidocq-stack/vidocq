@@ -1,49 +1,49 @@
 package io.vidocq.heisenberg.internal;
 
 /**
- * Registre d'état du Circuit Breaker — interface pour isoler la gestion d'état.
+ * Circuit Breaker state registry — interface for isolating state management.
  *
- * <p>Implémentation produite dans heisenberg-cdi-vauban {@link io.vidocq.heisenberg.cdi.internal.StateRegistry}.</p>
+ * <p>Implementation produced in heisenberg-cdi-vauban {@link io.vidocq.heisenberg.cdi.internal.StateRegistry}.</p>
  */
 public interface CircuitBreakerStateRegistry {
 
     /**
-     * Récupère l'état actuel du circuit breaker pour une méthode donnée.
+     * Returns the current circuit-breaker state for a given method.
      */
     CircuitBreakerState getState(String beanClass, String methodName);
 
     /**
-     * Enregistre un succès en état HALF_OPEN.
+     * Records a success in HALF_OPEN state.
      */
     void recordSuccess(String beanClass, String methodName);
 
     /**
-     * Enregistre un échec (incrémente le compteur d'erreurs).
+     * Records a failure (increments the error counter).
      */
     void recordFailure(String beanClass, String methodName);
 
     /**
-     * Force le circuit à l'état OPEN (transition manuelle pour tests).
+     * Forces the circuit into OPEN state (manual transition for tests).
      */
     void setOpen(String beanClass, String methodName);
 
     /**
-     * Force le circuit à l'état CLOSED (réinitialization).
+     * Forces the circuit into CLOSED state (reset).
      */
     void setClosed(String beanClass, String methodName);
 
     /**
-     * Force le circuit à l'état HALF_OPEN.
+     * Forces the circuit into HALF_OPEN state.
      */
     void setHalfOpen(String beanClass, String methodName);
 
     /**
-     * Retourne le nombre de millisecondes écoulées depuis l'ouverture du circuit.
+     * Returns the number of milliseconds elapsed since the circuit opened.
      */
     long getMillisSinceOpen(String beanClass, String methodName);
 
     /**
-     * Retourne le nombre de succès enregistrés en HALF_OPEN.
+     * Returns the number of successes recorded in HALF_OPEN.
      */
     int getSuccessesInHalfOpen(String beanClass, String methodName);
 }

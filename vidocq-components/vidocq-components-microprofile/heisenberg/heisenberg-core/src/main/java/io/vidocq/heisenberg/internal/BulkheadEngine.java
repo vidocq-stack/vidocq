@@ -6,10 +6,10 @@ import java.util.concurrent.Semaphore;
 import org.eclipse.microprofile.faulttolerance.exceptions.BulkheadException;
 
 /**
- * Moteur {@code @Bulkhead} — mode synchrone.
+ * {@code @Bulkhead} engine — synchronous mode.
  *
- * <p>Utilise un {@link Semaphore} avec fairness=true pour limiter la concurrence.
- * Virtual threads sans pool platform. MP FT 4.1 §7.</p>
+ * <p>Uses a {@link Semaphore} with fairness=true to limit concurrency.
+ * Virtual threads without a platform-thread pool. MP FT 4.1 §7.</p>
  */
 public final class BulkheadEngine {
 
@@ -22,14 +22,14 @@ public final class BulkheadEngine {
     }
 
     /**
-     * Exécute l'invocation avec protection du bulkhead (mode synchrone).
+     * Executes the invocation with bulkhead protection (synchronous mode).
      *
-     * @param invocation   l'invocation à protéger
-     * @param beanClass    classe du bean
-     * @param methodName   nom de la méthode
-     * @return résultat de l'invocation
-     * @throws BulkheadException si le bulkhead est saturé (mode synchrone fail-fast)
-     * @throws Exception         si l'invocation échoue
+     * @param invocation   the invocation to protect
+     * @param beanClass    bean class
+     * @param methodName   method name
+     * @return invocation result
+     * @throws BulkheadException if the bulkhead is saturated (synchronous fail-fast mode)
+     * @throws Exception         if the invocation fails
      */
     public Object execute(PolicyComposer.Invocation invocation, String beanClass, String methodName) throws Exception {
         return execute(invocation, beanClass, methodName, FtMetricsRecorder.NOOP, null, null);
@@ -39,7 +39,7 @@ public final class BulkheadEngine {
                           FtMetricsRecorder recorder, Class<?> runtimeBeanClass, Method method) throws Exception {
         Semaphore semaphore = registry.getSemaphore(beanClass, methodName, config.value());
 
-        // Mode synchrone : try-acquire immédiat (non-bloquant)
+        // Synchronous mode: immediate try-acquire (non-blocking)
         if (!semaphore.tryAcquire()) {
             recorder.recordBulkheadRejected(runtimeBeanClass, method);
             throw new BulkheadException(
@@ -60,11 +60,11 @@ public final class BulkheadEngine {
     }
 
     /**
-     * Exécute l'invocation en mode async.
+     * Executes the invocation in async mode.
      *
-     * <p>En mode async, une file d'attente bornée est utilisée si {@code waitingTaskQueue > 0}.
-     * La méthode reste synchronique côté moteur mais elle est exécutée dans un virtual thread
-     * par {@link PolicyComposer} quand {@code @Asynchronous} est présent.</p>
+     * <p>In async mode, a bounded wait queue is used if {@code waitingTaskQueue > 0}.
+     * The method remains synchronous on the engine side, but it is executed in a virtual thread
+     * by {@link PolicyComposer} when {@code @Asynchronous} is present.</p>
      */
     public Object executeAsync(PolicyComposer.Invocation invocation, String beanClass, String methodName) throws Exception {
         return executeAsync(invocation, beanClass, methodName, FtMetricsRecorder.NOOP, null, null);

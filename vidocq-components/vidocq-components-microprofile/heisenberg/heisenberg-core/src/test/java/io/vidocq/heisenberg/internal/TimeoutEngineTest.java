@@ -12,7 +12,7 @@ class TimeoutEngineTest {
 
     @Test
     void executionCompletesBeforeDeadlineReturnsResult() throws Exception {
-        // §4 : si l'invocation se termine avant la deadline, le résultat est retourné normalement.
+        // §4: if the invocation finishes before the deadline, the result is returned normally.
         TimeoutConfig config = new TimeoutConfig(500, ChronoUnit.MILLIS);
 
         Object result = TimeoutEngine.execute(() -> "success", config);
@@ -22,7 +22,7 @@ class TimeoutEngineTest {
 
     @Test
     void executionExceedsDeadlineThrowsTimeoutException() {
-        // §4 : si l'invocation dépasse la valeur de timeout, TimeoutException (MP FT) est levée.
+        // §4: if the invocation exceeds the timeout value, the MP FT TimeoutException is thrown.
         TimeoutConfig config = new TimeoutConfig(100, ChronoUnit.MILLIS);
 
         assertThrows(TimeoutException.class, () ->
@@ -35,7 +35,7 @@ class TimeoutEngineTest {
 
     @Test
     void exceptionFromInvocationIsPropagatedBeforeDeadline() {
-        // §4 : les exceptions levées avant la deadline sont propagées telles quelles.
+        // §4: exceptions thrown before the deadline are propagated as-is.
         TimeoutConfig config = new TimeoutConfig(500, ChronoUnit.MILLIS);
 
         IOException ex = assertThrows(IOException.class, () ->
@@ -49,7 +49,7 @@ class TimeoutEngineTest {
 
     @Test
     void checkedExceptionFromInvocationIsPropagatedBeforeDeadline() throws Exception {
-        // §4 : une exception checked (autre que timeout) est propagée directement.
+        // §4: a checked exception (other than timeout) is propagated directly.
         TimeoutConfig config = new TimeoutConfig(500, ChronoUnit.MILLIS);
 
         assertThrows(IllegalStateException.class, () ->
@@ -61,7 +61,7 @@ class TimeoutEngineTest {
 
     @Test
     void timeoutConfigDefaultIs1000ms() {
-        // Vérification de la constante DEFAULT (valeur spec §4).
+        // Verify the DEFAULT constant (spec value §4).
         assertEquals(1_000L, TimeoutConfig.DEFAULT.value());
         assertEquals(ChronoUnit.MILLIS, TimeoutConfig.DEFAULT.unit());
     }

@@ -19,7 +19,7 @@ class TimeoutIntegrationTest {
 
     @Test
     void timeoutAnnotationTriggersTimeoutExceptionOnSlowMethod() throws Exception {
-        // §4 : une méthode qui dépasse la valeur @Timeout doit lever TimeoutException.
+        // §4: a method that exceeds the @Timeout value must throw TimeoutException.
         TimeoutService target = new TimeoutService();
         Method method = TimeoutService.class.getDeclaredMethod("slow");
         InvocationContext context = new ReflectiveInvocationContext(target, method, new Object[0]);
@@ -29,7 +29,7 @@ class TimeoutIntegrationTest {
 
     @Test
     void fastMethodCompletesWithinTimeoutWithoutException() throws Exception {
-        // §4 : une méthode qui se termine avant la deadline retourne normalement.
+        // §4: a method that finishes before the deadline returns normally.
         FastService target = new FastService();
         Method method = FastService.class.getDeclaredMethod("fast");
         InvocationContext context = new ReflectiveInvocationContext(target, method, new Object[0]);
@@ -41,20 +41,20 @@ class TimeoutIntegrationTest {
 
     @Test
     void timeoutAppliesPerRetryAttempt() throws Exception {
-        // §4.1 : le timeout s'applique à chaque tentative individuelle.
-        // Chaque tentative dépasse le timeout → maxRetries épuisés → TimeoutException.
+        // §4.1: timeout applies to each individual attempt.
+        // Each attempt exceeds the timeout → maxRetries exhausted → TimeoutException.
         TimeoutRetryService target = new TimeoutRetryService();
         Method method = TimeoutRetryService.class.getDeclaredMethod("call");
         InvocationContext context = new ReflectiveInvocationContext(target, method, new Object[0]);
 
         assertThrows(TimeoutException.class, () -> interceptor.around(context));
-        // 1 tentative originale + 2 retries = 3 appels au total
+        // 1 original attempt + 2 retries = 3 calls total
         assertEquals(3, target.attempts);
     }
 
     @Test
     void fallbackActivatesAfterTimeoutWhenFallbackIsDeclared() throws Exception {
-        // §4 + §6 : TimeoutException déclenche le fallback s'il est déclaré.
+        // §4 + §6: TimeoutException triggers the fallback if it is declared.
         TimeoutFallbackService target = new TimeoutFallbackService();
         Method method = TimeoutFallbackService.class.getDeclaredMethod("slow");
         InvocationContext context = new ReflectiveInvocationContext(target, method, new Object[0]);
@@ -64,7 +64,7 @@ class TimeoutIntegrationTest {
         assertEquals("fallback-on-timeout", result);
     }
 
-    // ---- Services de test ----
+    // ---- Test services ----
 
     static class TimeoutService {
         @Timeout(value = 100, unit = ChronoUnit.MILLIS)

@@ -1,196 +1,191 @@
 # AGENTS.md
 
-> Ce fichier est le guide de contribution pour les agents IA (GitHub Copilot, Copilot Chat,
-> Copilot Workspace). Il doit rester synchrone avec `CLAUDE.md` — toute modification dans
-> l'un doit être reflétée dans l'autre.
+> This file is the contribution guide for AI agents (GitHub Copilot, Copilot Chat,
+> Copilot Workspace). It must remain synchronized with `CLAUDE.md` — any change in
+> one must be reflected in the other.
 
-## Mission du dépôt
+## Repository mission
 
-- Heisenberg implémente **MicroProfile Fault Tolerance 4.1** en Java 25, avec **zéro librairie
-  d'implémentation tierce** : seules les API specs (`microprofile-fault-tolerance-api`,
-  `jakarta.enterprise.cdi-api`, `jakarta.interceptor-api`, `microprofile-config-api`) sont
-  compilées dans `heisenberg-core` et `heisenberg-cdi-vauban`.
-- Architecture JPMS stricte : `heisenberg-api` wrapping de la spec, `heisenberg-core` moteurs
-  purs Java 25 sans CDI, `heisenberg-cdi-vauban` intercepteur CDI + BCE Vauban,
-  `heisenberg-tck` hors reactor.
-- **Pas de SmallRye Fault Tolerance, Hystrix, Resilience4j** dans le code de production.
-- Virtual threads (Project Loom) pour `@Asynchronous` et `@Timeout` — `Thread.ofVirtual() + join(Duration)` (Java 21+, finalisé). `StructuredTaskScope` (JEP 505) est disponible depuis Java 25 mais n'est pas utilisé actuellement pour maximiser la compatibilité avec Java 21+.
-- Utiliser `ROADMAP.md` pour suivre l'avancement des milestones (M0..M9).
-- Si les règles de ce fichier doivent être mises à jour, aligner `CLAUDE.md` dans la même
-  opération — les deux fichiers sont des miroirs destinés à des outils différents.
+- Heisenberg implements **MicroProfile Fault Tolerance 4.1** in Java 25, with **zero third-party implementation libraries**: only the spec APIs (`microprofile-fault-tolerance-api`, `jakarta.enterprise.cdi-api`, `jakarta.interceptor-api`, `microprofile-config-api`) are compiled into `heisenberg-core` and `heisenberg-cdi-vauban`.
+- Strict JPMS architecture: `heisenberg-api` wraps the spec, `heisenberg-core` contains pure Java 25 engines without CDI, `heisenberg-cdi-vauban` contains the CDI interceptor + Vauban BCE, `heisenberg-tck` stays outside the reactor.
+- **No SmallRye Fault Tolerance, Hystrix, or Resilience4j** in production code.
+- Virtual threads (Project Loom) for `@Asynchronous` and `@Timeout` — `Thread.ofVirtual() + join(Duration)` (Java 21+, finalized). `StructuredTaskScope` (JEP 505) has been available since Java 25 but is not currently used to maximize compatibility with Java 21+.
+- Use `ROADMAP.md` to track milestone progress (M0..M9).
+- If this file rules must be updated, align `CLAUDE.md` in the same operation — both files are mirrors intended for different tools.
 
-## État réel du code à connaître avant de modifier
+## Actual code state to know before modifying
 
-- Consulter `ROADMAP.md` pour l'état détaillé de chaque milestone (M0..M9).
-- **État à date : M0–M9 terminés, TCK officiel à 100 % PASS.**
-  Dernier run `all` reproductible (2026-05-28T09:05:59Z, via
+- Consult `ROADMAP.md` for the detailed state of each milestone (M0..M9).
+- **Current state: M0–M9 completed, official TCK at 100% PASS.**
+  Latest reproducible `all` run (2026-05-28T09:05:59Z, via
   `run-official-tck-mp-fault-tolerance-4.1.sh all`) :
   `463 run / 463 PASS / 0 fail / 0 errors / 0 skip = 100 % PASS`
-  (reproduit le résultat 2026-05-24 consigné dans `ROADMAP.md` ; supersède
-  le run 2026-05-16 ~82 % de `TCK.md`).
-  **§9 MP Metrics (Dirac) : 100 % PASS. §10 OpenTelemetry (Humboldt) : 100 % PASS.**
-- Tous les moteurs existent et sont câblés dans `heisenberg-core` :
+  (reproduces the 2026-05-24 result recorded in `ROADMAP.md` ; supersedes
+  the ~82% 2026-05-16 run from `TCK.md`).
+  **§9 MP Metrics (Dirac): 100% PASS. §10 OpenTelemetry (Humboldt): 100% PASS.**
+- All engines exist and are wired in `heisenberg-core`:
   `RetryEngine`, `TimeoutEngine`, `CircuitBreakerEngine` (`CircuitBreakerState`
   CLOSED/OPEN/HALF_OPEN), `BulkheadEngine`, `BulkheadStateRegistry`,
   `CircuitBreakerStateRegistry`, `FallbackResolver`, `FallbackPolicy`,
   `PolicyComposer`, `AsynchronousEngine`, `AnnotationReader`, `ConfigResolver`,
-  configs immuables (`RetryConfig`, `TimeoutConfig`, `CircuitBreakerConfig`,
+  immutable configs (`RetryConfig`, `TimeoutConfig`, `CircuitBreakerConfig`,
   `BulkheadConfig`, `FallbackConfig`).
-- Dans `heisenberg-cdi-vauban` (intercepteur + BCE) :
-  `FaultToleranceInterceptor` (priorité 4010), `FaultTolerancePriority3850Interceptor`
-  (variante TCK pour la priorité 3850), `FaultToleranceBinding` (marqueur),
-  `HeisenbergExtension` (BCE CDI 4.1 — validations + ré-écriture `@Priority`),
+- In `heisenberg-cdi-vauban` (interceptor + BCE):
+  `FaultToleranceInterceptor` (priority 4010), `FaultTolerancePriority3850Interceptor`
+  (TCK variant for priority 3850), `FaultToleranceBinding` (marker),
+  `HeisenbergExtension` (CDI 4.1 BCE — validations + `@Priority` rewriting),
   `StateRegistryBean` + `BulkheadStateRegistryBean` (`@ApplicationScoped`),
-  `HeisenbergAutoDiscovery` (bridge ServiceLoader vers Ravel),
-  **recorders métriques §9 / §10** (`DiracFtMetricsRecorder` + `OtelFtMetricsRecorder`,
-  fan-out via `CompositeFtMetricsRecorder` et `MetricsRecorderResolver`).
-- Modules JPMS effectifs : `io.vidocq.heisenberg.api`, `io.vidocq.heisenberg.core`,
-  `io.vidocq.heisenberg.cdi.vauban` (note : suffixe `.vauban`, pas `.cdi` seul).
-- `heisenberg-core` exporte son package interne **en export qualifié** :
-  `exports io.vidocq.heisenberg.internal to io.vidocq.heisenberg.cdi.vauban;` — toute
-  nouvelle classe interne reste invisible hors `cdi-vauban` sans modification du
+  `HeisenbergAutoDiscovery` (ServiceLoader bridge to Ravel),
+  **§9 / §10 metrics recorders** (`DiracFtMetricsRecorder` + `OtelFtMetricsRecorder`,
+  fan-out via `CompositeFtMetricsRecorder` and `MetricsRecorderResolver`).
+- Effective JPMS modules: `io.vidocq.heisenberg.api`, `io.vidocq.heisenberg.core`,
+  `io.vidocq.heisenberg.cdi.vauban` (note: suffix `.vauban`, not just `.cdi`).
+- `heisenberg-core` exports its internal package **as a qualified export**:
+  `exports io.vidocq.heisenberg.internal to io.vidocq.heisenberg.cdi.vauban;` — any
+  new internal class remains invisible outside `cdi-vauban` without modifying
   `module-info.java`.
-- Le BCE est un **CDI 4.1 Build Compatible Extension**
-  (`jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension`) — pas
-  l'ancien `jakarta.enterprise.inject.spi.Extension` portable. Déclaré via
-  `provides … with io.vidocq.heisenberg.cdi.internal.HeisenbergExtension` dans le
-  `module-info` de `cdi-vauban`.
-- Le flux effectif dans `heisenberg-cdi-vauban` :
-  `@Retry @Timeout @CircuitBreaker @Bulkhead @Fallback` sur une méthode CDI →
+- The BCE is a **CDI 4.1 Build Compatible Extension**
+  (`jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension`) — not
+  the old portable `jakarta.enterprise.inject.spi.Extension`. Declared via
+  `provides … with io.vidocq.heisenberg.cdi.internal.HeisenbergExtension` in the
+  `cdi-vauban` module-info.
+- The effective flow in `heisenberg-cdi-vauban`:
+  `@Retry @Timeout @CircuitBreaker @Bulkhead @Fallback` on a CDI method →
   `FaultToleranceInterceptor.around(InvocationContext)` →
   `AnnotationReader.read(ctx)` → `PolicyComposer.invoke(...)` →
-  exécution de la chaîne : `FallbackPolicy` → `CircuitBreakerEngine` → `BulkheadEngine`
+  execution of the chain: `FallbackPolicy` → `CircuitBreakerEngine` → `BulkheadEngine`
   → `TimeoutEngine` → `RetryEngine` → `ctx.proceed()`.
-- `StateRegistryBean` / `BulkheadStateRegistryBean` (`@ApplicationScoped`) stockent
-  les états `CircuitBreakerState` et `BulkheadSemaphore` via
-  `ConcurrentHashMap<StateKey, ...>` où
+- `StateRegistryBean` / `BulkheadStateRegistryBean` (`@ApplicationScoped`) store
+  `CircuitBreakerState` and `BulkheadSemaphore` state through
+  `ConcurrentHashMap<StateKey, ...>` where
   `StateKey = (beanClass.getName() + "#" + method.getName() + descriptor)`.
-- La SPI exportée est `io.vidocq.heisenberg.api.*` :
-  `FaultToleranceException`, `FtMetricsRecorder` (avec `NOOP` et enums
+- The exported SPI is `io.vidocq.heisenberg.api.*`:
+  `FaultToleranceException`, `FtMetricsRecorder` (with `NOOP` and enums
   `RetryResult` / `CBCallResult` / `CBState`).
 
-## Frontières à ne pas casser
+## Boundaries not to break
 
-- Ne jamais remettre `heisenberg-tck` dans le reactor : exclu volontairement à cause de
-  ShrinkWrap Maven Resolver / incompatibilité Model 4.0.0 vs 4.1.0 (contrainte commune
-  à tout l'écosystème Vidocq).
-- `heisenberg-core` ne doit importer **aucune** classe CDI (`jakarta.enterprise.*`,
-  `jakarta.inject.*`) — uniquement `microprofile-fault-tolerance-api`,
-  `jakarta.interceptor-api` (pour `InvocationContext`) et `microprofile-config-api`.
-- **Pas de `synchronized`** — utiliser `ReentrantLock.tryLock(timeout)`, `Semaphore`,
-  `AtomicReference` pour l'état `CircuitBreaker`. Les `synchronized` pinent les virtual threads.
-- **Pas de `ThreadLocal`** — utiliser `ScopedValue` (JEP 506) pour propager le contexte
-  d'exécution à travers les appels virtuels.
-- **Pas de `java.lang.reflect.Proxy`** — toute résolution de `fallbackMethod` passe par
+- Never put `heisenberg-tck` back into the reactor: it is intentionally excluded because of
+  ShrinkWrap Maven Resolver / Model 4.0.0 vs 4.1.0 incompatibility (a common constraint
+  across the whole Vidocq ecosystem).
+- `heisenberg-core` must import **no** CDI class (`jakarta.enterprise.*`,
+  `jakarta.inject.*`) — only `microprofile-fault-tolerance-api`,
+  `jakarta.interceptor-api` (for `InvocationContext`), and `microprofile-config-api`.
+- **No `synchronized`** — use `ReentrantLock.tryLock(timeout)`, `Semaphore`,
+  `AtomicReference` for `CircuitBreaker` state. `synchronized` blocks pin virtual threads.
+- **No `ThreadLocal`** — use `ScopedValue` (JEP 506) to propagate execution context
+  across virtual calls.
+- **No `java.lang.reflect.Proxy`** — all `fallbackMethod` resolution must go through
   `MethodHandles.lookup().findVirtual(...)`.
-- **Pas de `setAccessible(true)`** en production — ouvrir les packages nécessaires dans le
-  `module-info.java` et documenter pourquoi.
-- **JUnit 6 minimum** (`org.junit:junit-bom` ≥ 6.0.3) pour les tests `heisenberg-core` et
-  `heisenberg-cdi-vauban`. Le TCK utilise **TestNG** (contrainte upstream).
-- Tout ajout de dépendance `<scope>compile|runtime</scope>` exige un passage par l'agent
-  `dependency-gatekeeper` et une justification explicite dans la PR.
+- **No `setAccessible(true)`** in production — open required packages in
+  `module-info.java` and document why.
+- **Minimum JUnit 6** (`org.junit:junit-bom` ≥ 6.0.3) for `heisenberg-core` and
+  `heisenberg-cdi-vauban` tests. The TCK uses **TestNG** (upstream constraint).
+- Any `<scope>compile|runtime</scope>` dependency addition requires a pass through the
+  `dependency-gatekeeper` agent and explicit justification in the PR.
 
-## Convention JPMS — workaround `module-info` + `target/javamodules/`
+## JPMS convention — `module-info` + `target/javamodules/` workaround
 
-- Dans `heisenberg-core` et `heisenberg-cdi-vauban`, le `module-info.java` vit sous
-  `src/main/module-info/` (et **non** `src/main/java/`). C'est intentionnel : empêche
-  Maven Compiler Plugin de basculer en mode JPMS lors de `testCompile` (les dépendances
-  test-scope comme Vauban/Ravel ne sont pas sur le module-path). Le `module-info.class`
-  est compilé seul en phase `prepare-package`, et `maven-clean-plugin` le supprime avant
-  les builds incrémentaux. `heisenberg-api` garde son `module-info.java` sous
-  `src/main/java/` (pas de test-scope CDI à isoler).
-- Les tests s'exécutent en classpath (`useModulePath=false`) ; le câblage JPMS est validé
-  par le smoke TCK uniquement.
-- Le module-path de compilation est construit via `maven-dependency-plugin` en phase
-  `initialize`, qui copie les JARs requis dans `target/javamodules/`. Tout ajout de
-  dépendance à mettre sur le module-path doit être référencé dans cette copie.
-- `microprofile-fault-tolerance-api:4.1` n'a ni `Automatic-Module-Name` ni
-  `module-info.class` : son nom JPMS est `microprofile.fault.tolerance.api` (dérivé du
-  nom d'artefact). C'est ce nom qui doit apparaître dans les `requires`, pas
+- In `heisenberg-core` and `heisenberg-cdi-vauban`, `module-info.java` lives under
+  `src/main/module-info/` (and **not** `src/main/java/`). This is intentional: it prevents
+  Maven Compiler Plugin from switching into JPMS mode during `testCompile` (test-scope
+  dependencies such as Vauban/Ravel are not on the module-path). `module-info.class`
+  is compiled on its own during `prepare-package`, and `maven-clean-plugin` deletes it before
+  incremental builds. `heisenberg-api` keeps its `module-info.java` under
+  `src/main/java/` (no CDI test-scope isolation required).
+- Tests run on the classpath (`useModulePath=false`) ; JPMS wiring is validated
+  only by the TCK smoke test.
+- The compilation module-path is built through `maven-dependency-plugin` during the
+  `initialize` phase, which copies required JARs into `target/javamodules/`. Any dependency added
+  to the module-path must be referenced in that copy step.
+- `microprofile-fault-tolerance-api:4.1` has neither `Automatic-Module-Name` nor
+  `module-info.class` : its JPMS name is `microprofile.fault.tolerance.api` (derived from the
+  artifact name). This is the name that must appear in `requires`, not
   `org.eclipse.microprofile.faulttolerance`.
-- `heisenberg-cdi-vauban` déclare les APIs Jakarta (`jakarta.cdi`, `jakarta.inject`,
-  `jakarta.annotation`, `jakarta.interceptor`) en `requires static` — fournies par
-  le container à l'exécution.
+- `heisenberg-cdi-vauban` declares Jakarta APIs (`jakarta.cdi`, `jakarta.inject`,
+  `jakarta.annotation`, `jakarta.interceptor`) as `requires static` — provided by
+  the container at runtime.
 
-## Workflows utiles
+## Useful workflows
 
 ```bash
-# Initialiser l'environnement SDK
+# Initialize the SDK environment
 sdk env
 
-# Build reactor complet
+# Build the full reactor
 ./mvnw -ntp install -DskipTests
 
-# Tests unitaires
+# Unit tests
 ./mvnw test
 
-# TCK — smoke test (installe le reactor puis lance le TCK)
+# TCK — smoke test (installs the reactor, then runs the TCK)
 ./run-official-tck-mp-fault-tolerance-4.1.sh
 
-# TCK — suite complète
+# TCK — full suite
 ./run-official-tck-mp-fault-tolerance-4.1.sh all
 
-# TCK — test ciblé (ex : RetryTest)
+# TCK — targeted test (e.g. RetryTest)
 ./run-official-tck-mp-fault-tolerance-4.1.sh -Dtest=RetryTest
 
-# Benchmarks JMH
+# JMH benchmarks
 ./mvnw -pl heisenberg-bench -Pbench package
 java -jar heisenberg-bench/target/benchmarks.jar
 ```
 
-- Le TCK passe toujours par le script racine qui installe d'abord le reactor, puis invoque
+- The TCK always goes through the root script, which first installs the reactor, then invokes
   `mvn -f heisenberg-tck/pom.xml -Ptck-official test`.
-- Le TCK nécessite que l'artefact non-public soit dans le M2 local — voir
-  `heisenberg-tck/README.md` pour la procédure d'installation.
+- The TCK requires the non-public artifact to be in the local M2 — see
+  `heisenberg-tck/README.md` for the installation procedure.
 
-## Conventions de contribution observées
+## Observed contribution conventions
 
-- **TDD strict** : Red → Green → Refactor. Aucune ligne de production sans test préalable.
-  Citer la section spec MicroProfile FT 4.1 dans les commentaires de test (ex : `// §2.5.3`).
-- Tests unitaires dans le même package que la classe testée, nommés `<Classe>Test`.
-- Pas de Mockito — doubles manuels (`FakeInvocationContext`, `FakeConfigSource`, etc.).
-- La logique de chaque moteur (`RetryEngine`, `CircuitBreakerEngine`, etc.) est testée
-  unitairement sans container CDI — c'est le but de la séparation `heisenberg-core` /
-  `heisenberg-cdi-vauban`.
-- Benchmarks JMH dans `heisenberg-bench` — comparatif vs SmallRye Fault Tolerance sur la
-  même JVM. Résultats consignés dans `BENCH.md` à la racine du projet.
-- Bugs reproductibles tracés dans `BUG.md` avec : id, date, symptôme, repro, hypothèse, statut.
+- **Strict TDD**: Red → Green → Refactor. No production line without a prior test.
+  Cite the MicroProfile FT 4.1 spec section in test comments (e.g. `// §2.5.3`).
+- Unit tests in the same package as the tested class, named `<Class>Test`.
+- No Mockito — manual doubles (`FakeInvocationContext`, `FakeConfigSource`, etc.).
+- The logic of each engine (`RetryEngine`, `CircuitBreakerEngine`, etc.) is tested
+  unit by unit without a CDI container — this is the purpose of the `heisenberg-core` /
+  `heisenberg-cdi-vauban` separation.
+- JMH benchmarks in `heisenberg-bench` — comparison vs SmallRye Fault Tolerance on the
+  same JVM. Results recorded in `BENCH.md` at the project root.
+- Reproducible bugs tracked in `BUG.md` with: id, date, symptom, repro, hypothesis, status.
+- **Language** — commit messages, Javadoc, and the content of all `.md` files must be written in **English**.
 
-## Ce qu'un agent doit supposer pour les prochaines tâches
+## What an agent should assume for upcoming tasks
 
-- `heisenberg-core` est la brique fondatrice : `RetryEngine`, `TimeoutEngine`,
-  `CircuitBreakerEngine` (avec `CircuitBreakerState` : CLOSED/OPEN/HALF_OPEN),
+- `heisenberg-core` is the foundational block: `RetryEngine`, `TimeoutEngine`,
+  `CircuitBreakerEngine` (with `CircuitBreakerState`: CLOSED/OPEN/HALF_OPEN),
   `BulkheadEngine`, `FallbackResolver`, `PolicyComposer`, `AsynchronousEngine`,
-  `ConfigResolver`. **Tous existent et sont testés** (108 tests unitaires verts).
-  Aucun n'importe de classe CDI.
-- `heisenberg-cdi-vauban` est le point d'entrée CDI : `FaultToleranceInterceptor`
-  (priorité de base 4010, configurable via `mp.fault.tolerance.interceptor.priority`),
-  `FaultTolerancePriority3850Interceptor` (variante TCK),
-  `HeisenbergExtension` (BCE CDI 4.1 `BuildCompatibleExtension` sous
-  `io.vidocq.heisenberg.cdi.internal`, qui valide les annotations au démarrage du container
-  et ré-écrit `@Priority` selon la config),
+  `ConfigResolver`. **All exist and are tested** (108 green unit tests).
+  None imports CDI classes.
+- `heisenberg-cdi-vauban` is the CDI entry point: `FaultToleranceInterceptor`
+  (base priority 4010, configurable via `mp.fault.tolerance.interceptor.priority`),
+  `FaultTolerancePriority3850Interceptor` (TCK variant),
+  `HeisenbergExtension` (CDI 4.1 BCE `BuildCompatibleExtension` under
+  `io.vidocq.heisenberg.cdi.internal`, which validates annotations at container startup
+  and rewrites `@Priority` according to config),
   `StateRegistryBean` + `BulkheadStateRegistryBean` (`@ApplicationScoped`),
-  `DiracFtMetricsRecorder` (§9 MP Metrics) et `OtelFtMetricsRecorder` (§10 OpenTelemetry)
-  qui coexistent via fan-out (`CompositeFtMetricsRecorder`, `MetricsRecorderResolver`).
-- La configuration externe suit la précédence MP FT 4.1 §9 :
+  `DiracFtMetricsRecorder` (§9 MP Metrics) and `OtelFtMetricsRecorder` (§10 OpenTelemetry)
+  which coexist through fan-out (`CompositeFtMetricsRecorder`, `MetricsRecorderResolver`).
+- External configuration follows MP FT 4.1 §9 precedence:
   `<className>/<methodName>/<AnnotationName>/<parameter>` >
   `<className>/<AnnotationName>/<parameter>` >
   `<AnnotationName>/<parameter>`.
-  Résolution via `ConfigProvider.getConfig()` (Ravel dans l'écosystème Vidocq).
-- L'ordre de composition des politiques (§2.5) de l'extérieur vers l'intérieur :
-  `@Fallback` → `@CircuitBreaker` → `@Bulkhead` → `@Timeout` → `@Retry` → méthode.
-  Respecter scrupuleusement cet ordre dans `PolicyComposer`.
-- `@Asynchronous` change le type de retour : `CompletionStage<T>` ou `Future<T>`.
-  L'exécution se fait via `Executors.newVirtualThreadPerTaskExecutor()` — pas de pool platform.
-- **Métriques §9 (MP Metrics) et §10 (OpenTelemetry)** : les deux APIs sont publiables
-  simultanément, le `Composite` fan-out chaque appel sur tous les recorders présents.
-  Pour ajouter une nouvelle métrique côté §10 : éditer `OtelFtMetricsRecorder` (noms et
-  attributs définis par le TCK `TelemetryMetricDefinition`, unités `seconds` pour les
-  durées, bucket boundaries explicites définies dans `histogram(name, "seconds")`).
-- **Test enricher Arquillian** (`heisenberg-tck/src/test/java/.../VaubanTckBootstrap.java`) :
-  la liste des beans enregistrés au container est **explicite**. Tout nouveau bean
-  `@ApplicationScoped` côté Heisenberg destiné à être visible dans le TCK doit y être
-  ajouté (sinon Vauban ne le découvre pas en mode TCK).
-- Avant toute modification structurelle du `PolicyComposer` ou des `*StateRegistryBean`,
-  raisonner avec le contrat final : **TCK MicroProfile Fault Tolerance 4.1 à 100 % PASS**
-  (à date : 463/463 = 100 % PASS — reproduit 2026-05-28T09:05:59Z).
+  Resolution through `ConfigProvider.getConfig()` (Ravel in the Vidocq ecosystem).
+- Policy composition order (§2.5) from outermost to innermost:
+  `@Fallback` → `@CircuitBreaker` → `@Bulkhead` → `@Timeout` → `@Retry` → method.
+  Follow this order strictly in `PolicyComposer`.
+- `@Asynchronous` changes the return type: `CompletionStage<T>` or `Future<T>`.
+  Execution is done through `Executors.newVirtualThreadPerTaskExecutor()` — no platform pool.
+- **Metrics §9 (MP Metrics) and §10 (OpenTelemetry)**: both APIs can be published
+  simultaneously, the `Composite` fans out each call to all present recorders.
+  To add a new §10-side metric: edit `OtelFtMetricsRecorder` (names and
+  attributes defined by the `TelemetryMetricDefinition` TCK, `seconds` units for
+  durations, explicit bucket boundaries defined in `histogram(name, "seconds")`).
+- **Arquillian test enricher** (`heisenberg-tck/src/test/java/.../VaubanTckBootstrap.java`) :
+  the list of beans registered with the container is **explicit**. Any new
+  `@ApplicationScoped` bean on the Heisenberg side intended to be visible in the TCK must be
+  added there (otherwise Vauban will not discover it in TCK mode).
+- Before any structural change to `PolicyComposer` or the `*StateRegistryBean`,
+  reason with the final contract: **MicroProfile Fault Tolerance 4.1 TCK at 100% PASS**
+  (current state: 463/463 = 100% PASS — reproduced 2026-05-28T09:05:59Z).

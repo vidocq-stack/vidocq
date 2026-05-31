@@ -1,13 +1,13 @@
 /**
- * SPI publique stable de Heisenberg — contrats entre {@code heisenberg-core}
- * et {@code heisenberg-cdi-vauban}, et entre Heisenberg et les adaptateurs externes.
+ * Stable public Heisenberg SPI — contracts between {@code heisenberg-core}
+ * and {@code heisenberg-cdi-vauban}, and between Heisenberg and external adapters.
  *
- * <p>Contenu prévu (ROADMAP.md M1+) :</p>
+ * <p>Planned contents (ROADMAP.md M1+) :</p>
  * <ul>
- *   <li>{@code PolicyContext} — contexte d'invocation enrichi (méthode, bean, annotations FT).</li>
+ *   <li>{@code PolicyContext} — enriched invocation context (method, bean, FT annotations).</li>
  *   <li>{@code RetryConfig}, {@code TimeoutConfig}, {@code CircuitBreakerConfig},
- *       {@code BulkheadConfig} — configurations immuables (records Java 25).</li>
- *   <li>{@code FaultToleranceException} — exception de base du projet.</li>
+ *       {@code BulkheadConfig} — immutable configurations (Java 25 records).</li>
+ *   <li>{@code FaultToleranceException} — the project's base exception.</li>
  * </ul>
  */
 package io.vidocq.heisenberg.api;

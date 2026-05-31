@@ -15,12 +15,12 @@ import org.eclipse.microprofile.faulttolerance.exceptions.CircuitBreakerOpenExce
 import org.eclipse.microprofile.faulttolerance.exceptions.TimeoutException;
 
 /**
- * Point d'entrée du moteur Heisenberg — construit et exécute la chaîne de politiques
- * dans l'ordre défini par la spec MicroProfile Fault Tolerance 4.1 §2.5 :
- * {@code @Fallback → @CircuitBreaker → @Bulkhead → @Timeout → @Retry → méthode}.
+ * Entry point of the Heisenberg engine — builds and executes the policy chain
+ * in the order defined by the MicroProfile Fault Tolerance 4.1 spec §2.5:
+ * {@code @Fallback → @CircuitBreaker → @Bulkhead → @Timeout → @Retry → method}.
  *
- * <p>Chaîne complète implémentée (M1-M7) : @Fallback → @CircuitBreaker → @Bulkhead → @Timeout → @Retry,
- * éventuellement enveloppée par @Asynchronous (virtual thread).</p>
+ * <p>Complete implemented chain (M1-M7): @Fallback → @CircuitBreaker → @Bulkhead → @Timeout → @Retry,
+ * optionally wrapped by @Asynchronous (virtual thread).</p>
  */
 public final class PolicyComposer {
 
@@ -42,7 +42,7 @@ public final class PolicyComposer {
     }
 
     /**
-     * Variante avec registries optionnels pour CircuitBreaker et Bulkhead (M4+).
+     * Variant with optional registries for CircuitBreaker and Bulkhead (M4+).
      */
     public static Object invoke(Invocation invocation, Object target, Method method, Object[] parameters,
                                 CircuitBreakerStateRegistry cbRegistry, BulkheadStateRegistry bhRegistry) throws Exception {
@@ -50,7 +50,7 @@ public final class PolicyComposer {
     }
 
     /**
-     * Variante complète avec recorder MP Metrics.
+     * Complete variant with an MP Metrics recorder.
      */
     public static Object invoke(Invocation invocation, Object target, Method method, Object[] parameters,
                                 CircuitBreakerStateRegistry cbRegistry, BulkheadStateRegistry bhRegistry,
@@ -68,7 +68,7 @@ public final class PolicyComposer {
         boolean completionStageSemantics = CompletionStage.class.isAssignableFrom(method.getReturnType());
         AtomicBoolean asyncInvocationStarted = asyncActive ? new AtomicBoolean(false) : null;
 
-        // Déballer le CompletionStage pour que les politiques voient l'exception (§8.2).
+        // Unwrap the CompletionStage so the policies can see the exception (§8.2).
         final Invocation effectiveInvocation;
         if (asyncActive) {
             final Invocation raw = invocation;
@@ -89,7 +89,7 @@ public final class PolicyComposer {
         String methodKey = method.toGenericString();
 
         // ------------------------------------------------------------------
-        // Lecture des annotations et enregistrement anticipé des métriques.
+        // Read the annotations and register the metrics upfront.
         // ------------------------------------------------------------------
         Retry retry = annotations.retry();
         Timeout timeout = annotations.timeout();
@@ -112,11 +112,11 @@ public final class PolicyComposer {
                 asyncActive && bulkheadEnabled);
 
         // ------------------------------------------------------------------
-        // Construction de la chaîne de l'intérieur vers l'extérieur.
+        // Build the chain from the inside out.
         // Outer→inner : Fallback → Retry → CB → Timeout → Bulkhead → method.
         // ------------------------------------------------------------------
 
-        // Couche 1 (la plus interne) : @Bulkhead
+        // Layer 1 (innermost): @Bulkhead
         Invocation base = effectiveInvocation;
         if (bulkheadEnabled) {
             BulkheadConfig bhConfig = ConfigResolver.bulkheadConfig(method, runtimeBeanClass, bulkhead);
@@ -131,7 +131,7 @@ public final class PolicyComposer {
             };
         }
 
-        // Couche 2 : @Timeout — enveloppe Bulkhead pour comptabiliser le temps en queue
+        // Layer 2: @Timeout — wraps Bulkhead to account for queue time
         Invocation withTimeout = base;
         if (timeoutEnabled) {
             TimeoutConfig timeoutConfig = ConfigResolver.timeoutConfig(method, runtimeBeanClass, timeout);
@@ -151,7 +151,7 @@ public final class PolicyComposer {
             };
         }
 
-        // Couche 3 : @CircuitBreaker — voit chaque tentative individuellement
+        // Layer 3: @CircuitBreaker — sees each attempt individually
         Invocation withCB = withTimeout;
         if (cbEnabled) {
             CircuitBreakerConfig cbConfig = ConfigResolver.circuitBreakerConfig(method, runtimeBeanClass, cb);
@@ -168,9 +168,9 @@ public final class PolicyComposer {
                     cbResult[0] = FtMetricsRecorder.CBCallResult.CIRCUIT_BREAKER_OPEN;
                     throw e;
                 } catch (Throwable t) {
-                    // MP FT 4.1 §5.1.1 : une exception non listée dans failOn (ou listée dans
-                    // skipOn) ne compte PAS comme un échec CB — elle doit être rapportée comme
-                    // SUCCESS dans la métrique ft.circuitbreaker.calls.total.
+                    // MP FT 4.1 §5.1.1: an exception not listed in failOn (or listed in
+                    // skipOn) does NOT count as a CB failure — it must be reported as
+                    // SUCCESS in the ft.circuitbreaker.calls.total metric.
                     cbResult[0] = isCircuitBreakerFailure(t, cbConfig)
                             ? FtMetricsRecorder.CBCallResult.FAILURE
                             : FtMetricsRecorder.CBCallResult.SUCCESS;
@@ -186,7 +186,7 @@ public final class PolicyComposer {
             };
         }
 
-        // Couche 4 : @Retry — plus externe pour rejouer CB/Bulkhead/Timeout
+        // Layer 4: @Retry — outermost so it can replay CB/Bulkhead/Timeout
         Invocation withRetry = withCB;
         if (retryEnabled) {
             RetryConfig retryConfig = ConfigResolver.retryConfig(method, runtimeBeanClass, retry);
@@ -195,7 +195,7 @@ public final class PolicyComposer {
         }
         final Invocation withRetryFinal = withRetry;
 
-        // Couche 5 : @Fallback + @Asynchronous
+        // Layer 5: @Fallback + @Asynchronous
         if (asyncActive) {
             final Fallback fallbackFinal = fallbackIfEnabled;
             final FallbackConfig fallbackConfigFinal = fallbackConfig;
@@ -240,7 +240,7 @@ public final class PolicyComposer {
             return AsynchronousEngine.executeAsync(withFallback, method.getName(), asyncInvocationStarted);
         }
 
-        // Chemin synchrone
+        // Synchronous path
         AtomicBoolean fallbackApplied = new AtomicBoolean(false);
         boolean succeeded = false;
         try {
@@ -267,13 +267,13 @@ public final class PolicyComposer {
     }
 
     /**
-     * MP FT 4.1 §5.1.1 : détermine si une exception levée par la méthode protégée doit
-     * être comptabilisée comme un échec du circuit breaker.
+     * MP FT 4.1 §5.1.1: determines whether an exception thrown by the protected method
+     * must be counted as a circuit-breaker failure.
      *
-     * <p>{@code skipOn} a priorité sur {@code failOn} ; une exception non listée dans
-     * {@code failOn} (ou listée dans {@code skipOn}) ne compte PAS comme un échec et doit
-     * être rapportée comme succès dans la métrique {@code ft.circuitbreaker.calls.total}
-     * (résultat {@code success}).</p>
+     * <p>{@code skipOn} takes precedence over {@code failOn}; an exception not listed in
+     * {@code failOn} (or listed in {@code skipOn}) does NOT count as a failure and must
+     * be reported as success in the {@code ft.circuitbreaker.calls.total} metric
+     * (result {@code success}).</p>
      */
     private static boolean isCircuitBreakerFailure(Throwable failure, CircuitBreakerConfig config) {
         if (matchesAny(failure, config.skipOn())) return false;
@@ -301,9 +301,9 @@ public final class PolicyComposer {
     }
 
     /**
-     * Déballe le résultat éventuellement asynchrone d'une invocation : si le résultat est un
-     * {@link CompletionStage} ou un {@link java.util.concurrent.Future}, attend sa complétion
-     * et propage l'exception causale telle quelle pour que les politiques la voient (§8.2).
+     * Unwraps the potentially asynchronous result of an invocation: if the result is a
+     * {@link CompletionStage} or a {@link java.util.concurrent.Future}, waits for its completion
+     * and propagates the causal exception as-is so the policies can see it (§8.2).
      */
     private static Object unwrapAsyncResult(Object result) throws Exception {
         if (result instanceof CompletionStage<?> stage) {

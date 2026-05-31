@@ -21,8 +21,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Arquillian {@link TestEnricher} — injecte les champs {@code @Inject} de chaque instance
- * de test TCK en utilisant le container Vauban CDI démarré par {@link VaubanTckBootstrap}.
+ * Arquillian {@link TestEnricher} — injects the {@code @Inject} fields of each TCK test
+ * instance using the Vauban CDI container started by {@link VaubanTckBootstrap}.
  */
 public class HeisenbergTestEnricher implements TestEnricher {
 
@@ -75,13 +75,13 @@ public class HeisenbergTestEnricher implements TestEnricher {
         try {
             resolved = bm.resolve(beans);
         } catch (jakarta.enterprise.inject.AmbiguousResolutionException ambiguous) {
-            // Vauban discrimine mal les members des qualifiers (ex. @RegistryType(type=BASE)
-            // vs @RegistryType(type=APPLICATION)) — on prend le premier bean pour débloquer
-            // l'injection dans les tests TCK.
+            // Vauban does not handle qualifier members well (e.g. @RegistryType(type=BASE)
+            // vs @RegistryType(type=APPLICATION)) — pick the first bean to keep the TCK
+            // injection working.
             resolved = beans.iterator().next();
         }
         if (resolved == null) {
-            // bm.resolve a renvoyé null silencieusement (ambiguïté non-throwante) — fallback.
+            // bm.resolve returned null silently (non-throwing ambiguity) — fallback.
             resolved = beans.iterator().next();
         }
         var ctx = bm.createCreationalContext(resolved);

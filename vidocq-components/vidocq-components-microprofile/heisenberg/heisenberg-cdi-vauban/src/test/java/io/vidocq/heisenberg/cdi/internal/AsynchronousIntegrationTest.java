@@ -14,12 +14,12 @@ import org.eclipse.microprofile.faulttolerance.Timeout;
 import org.junit.jupiter.api.Test;
 
 /**
- * Tests d'intégration CDI pour {@code @Asynchronous}.
+ * CDI integration tests for {@code @Asynchronous}.
  *
- * <p>Vérifie que :
- * - Les méthodes annotées {@code @Asynchronous} retournent un {@code CompletionStage<T>} ou {@code Future<T>}
- * - L'exécution se fait dans un virtual thread
- * - La composition avec {@code @Retry} et {@code @Timeout} fonctionne via l'intercepteur
+ * <p>Verifies that:
+ * - Methods annotated with {@code @Asynchronous} return a {@code CompletionStage<T>} or {@code Future<T>}
+ * - Execution happens in a virtual thread
+ * - Composition with {@code @Retry} and {@code @Timeout} works through the interceptor
  * </p>
  */
 class AsynchronousIntegrationTest {
@@ -58,8 +58,8 @@ class AsynchronousIntegrationTest {
         Method method = AsyncBean.class.getDeclaredMethod("asyncMethodFuture", String.class);
         InvocationContext context = new ReflectiveInvocationContext(bean, method, new Object[]{"test"});
 
-        // Note: la méthode retourne Future, mais la chaîne async retourne un CompletionStage
-        // qui se complète avec la valeur déballée — `Future.get()` fonctionne sur CompletableFuture.
+        // Note: the method returns Future, but the async chain returns a CompletionStage
+        // that completes with the unwrapped value — `Future.get()` works on CompletableFuture.
         Object raw = interceptor.around(context);
         assertNotNull(raw);
         @SuppressWarnings("unchecked")
@@ -81,7 +81,7 @@ class AsynchronousIntegrationTest {
 
     @Test
     void asyncWithRetryComposition() throws Exception {
-        // MP FT 4.1 §8.2 : un CompletionStage en erreur déclenche le retry
+        // MP FT 4.1 §8.2: a failing CompletionStage triggers retry.
         AsyncRetryBean bean = new AsyncRetryBean();
         Method method = AsyncRetryBean.class.getDeclaredMethod("asyncWithRetry");
         InvocationContext context = new ReflectiveInvocationContext(bean, method, new Object[0]);
@@ -90,7 +90,7 @@ class AsynchronousIntegrationTest {
         CompletionStage<String> result = (CompletionStage<String>) interceptor.around(context);
 
         assertEquals("retry-success", result.toCompletableFuture().get());
-        assertEquals(2, bean.attemptCount); // 1 échec + 1 succès
+        assertEquals(2, bean.attemptCount); // 1 failure + 1 success
     }
 
     @Test

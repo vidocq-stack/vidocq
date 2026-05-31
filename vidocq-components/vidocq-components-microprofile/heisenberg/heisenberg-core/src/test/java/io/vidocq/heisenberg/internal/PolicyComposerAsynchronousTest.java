@@ -13,11 +13,11 @@ import org.eclipse.microprofile.faulttolerance.Timeout;
 import org.junit.jupiter.api.Test;
 
 /**
- * Tests unitaires pour {@code PolicyComposer} avec {@code @Asynchronous}.
+ * Unit tests for {@code PolicyComposer} with {@code @Asynchronous}.
  *
- * <p>Teste que l'ordre de composition des politiques est respecté avec @Asynchronous :
- * @Fallback → @CircuitBreaker → @Bulkhead → @Timeout → @Retry → méthode,
- * exécutées dans un virtual thread.</p>
+ * <p>Tests that the policy-composition order is respected with @Asynchronous:
+ * @Fallback → @CircuitBreaker → @Bulkhead → @Timeout → @Retry → method,
+ * executed in a virtual thread.</p>
  */
 class PolicyComposerAsynchronousTest {
 

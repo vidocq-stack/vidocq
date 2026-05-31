@@ -1,26 +1,26 @@
 /**
- * Moteurs de politiques Fault Tolerance purs Java 25 — aucune dépendance CDI.
+ * Pure Java 25 Fault Tolerance policy engines — no CDI dependency.
  *
- * <p>Composants prévus (cf. ROADMAP.md M1-M7) :</p>
+ * <p>Planned components (cf. ROADMAP.md M1-M7) :</p>
  * <ul>
- *   <li>{@code RetryEngine} — automate de retry avec délai, jitter, maxDuration.</li>
-     *   <li>{@code TimeoutEngine} — timeout via {@code Thread.ofVirtual() + join(Duration)} (Java 21+, finalisé).</li>
- *   <li>{@code CircuitBreakerEngine} — disjoncteur CLOSED/OPEN/HALF_OPEN, fenêtre glissante.</li>
- *   <li>{@code BulkheadEngine} — isolation par {@code Semaphore} (sync) ou file (async).</li>
- *   <li>{@code FallbackResolver} — résolution {@code FallbackHandler} ou {@code fallbackMethod}
+ *   <li>{@code RetryEngine} — retry state machine with delay, jitter, maxDuration.</li>
+ *   <li>{@code TimeoutEngine} — timeout via {@code Thread.ofVirtual() + join(Duration)} (Java 21+, finalized).</li>
+ *   <li>{@code CircuitBreakerEngine} — CLOSED/OPEN/HALF_OPEN circuit breaker, sliding window.</li>
+ *   <li>{@code BulkheadEngine} — isolation via {@code Semaphore} (sync) or queue (async).</li>
+ *   <li>{@code FallbackResolver} — resolves {@code FallbackHandler} or {@code fallbackMethod}
  *       via {@code MethodHandle}.</li>
- *   <li>{@code PolicyComposer} — chaîne de politiques dans l'ordre spec §2.5.</li>
- *   <li>{@code AnnotationReader} — lecture des annotations FT sur méthode puis classe.</li>
- *   <li>{@code ConfigResolver} — précédence MP Config §9 (méthode > classe > global).</li>
+ *   <li>{@code PolicyComposer} — policy chain in spec §2.5 order.</li>
+ *   <li>{@code AnnotationReader} — reads FT annotations on method, then class.</li>
+ *   <li>{@code ConfigResolver} — MP Config §9 precedence (method > class > global).</li>
  * </ul>
  *
- * <p><strong>Note JPMS — workaround testCompile</strong> :
- * Ce {@code module-info.java} est dans {@code src/main/module-info/} (pas
- * {@code src/main/java/}) pour que Maven Compiler Plugin ne détecte pas JPMS lors de
- * {@code testCompile}. {@code maven-clean-plugin} supprime {@code module-info.class} avant
- * {@code testCompile} (builds incrémentaux). Une exécution {@code prepare-package}
- * recompile {@code module-info.java} seul. Les tests s'exécutent sur le classpath
- * ({@code useModulePath=false}) — le câblage JPMS est validé par le smoke TCK.</p>
+ * <p><strong>JPMS note — testCompile workaround</strong>:
+ * This {@code module-info.java} is in {@code src/main/module-info/} (not
+ * {@code src/main/java/}) so that Maven Compiler Plugin does not detect JPMS during
+ * {@code testCompile}. {@code maven-clean-plugin} deletes {@code module-info.class} before
+ * {@code testCompile} (incremental builds). A {@code prepare-package}
+ * execution recompiles only {@code module-info.java}. The tests run on the classpath
+ * ({@code useModulePath=false}) — JPMS wiring is validated by the TCK smoke test.</p>
  */
 module io.vidocq.heisenberg.core {
     requires transitive io.vidocq.heisenberg.api;

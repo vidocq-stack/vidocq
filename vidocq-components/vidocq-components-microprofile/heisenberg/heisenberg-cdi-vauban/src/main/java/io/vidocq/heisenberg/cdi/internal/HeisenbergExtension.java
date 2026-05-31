@@ -22,17 +22,17 @@ import org.eclipse.microprofile.faulttolerance.Timeout;
 import org.eclipse.microprofile.faulttolerance.exceptions.FaultToleranceDefinitionException;
 
 /**
- * Build Compatible Extension Vauban pour Heisenberg — valide au démarrage du container
- * la cohérence des annotations MicroProfile Fault Tolerance 4.1 :
+ * Vauban Build Compatible Extension for Heisenberg — validates at container startup
+ * the consistency of MicroProfile Fault Tolerance 4.1 annotations:
  * <ul>
- *   <li>{@code @Fallback(fallbackMethod=...)} : méthode existante avec signature compatible.</li>
- *   <li>{@code @Asynchronous} : type de retour {@code CompletionStage} ou {@code Future}.</li>
- *   <li>{@code @Bulkhead} + {@code @Asynchronous} : {@code waitingTaskQueue} ≥ 0.</li>
+ *   <li>{@code @Fallback(fallbackMethod=...)}: existing method with a compatible signature.</li>
+ *   <li>{@code @Asynchronous}: return type {@code CompletionStage} or {@code Future}.</li>
+ *   <li>{@code @Bulkhead} + {@code @Asynchronous}: {@code waitingTaskQueue} ≥ 0.</li>
  * </ul>
  *
- * <p>M8 §9 : lit une <strong>unique fois au démarrage</strong> la propriété MP Config
- * {@code mp.fault.tolerance.interceptor.priority} et l'applique au {@link FaultToleranceInterceptor}
- * via {@link Enhancement} (ré-écriture de l'annotation {@link Priority}).</p>
+ * <p>M8 §9: reads the MP Config property
+ * {@code mp.fault.tolerance.interceptor.priority} <strong>exactly once at startup</strong> and applies it to the {@link FaultToleranceInterceptor}
+ * via {@link Enhancement} (rewriting the {@link Priority} annotation).</p>
  */
 public class HeisenbergExtension implements BuildCompatibleExtension {
 
@@ -40,40 +40,40 @@ public class HeisenbergExtension implements BuildCompatibleExtension {
 	private final Set<String> bindingEnhancedClasses = ConcurrentHashMap.newKeySet();
 
 	/**
-	 * M8 §9 : applique au démarrage la priorité configurée via MP Config
-	 * (clé {@code mp.fault.tolerance.interceptor.priority}). La propriété est lue
-	 * une seule fois ; si elle est absente, la priorité par défaut
-	 * {@link ConfigResolver#DEFAULT_INTERCEPTOR_PRIORITY} (4010) reste effective.
+	 * M8 §9: applies at startup the priority configured through MP Config
+	 * (key {@code mp.fault.tolerance.interceptor.priority}). The property is read
+	 * only once; if it is absent, the default priority
+	 * {@link ConfigResolver#DEFAULT_INTERCEPTOR_PRIORITY} (4010) remains in effect.
 	 */
 	@Enhancement(types = FaultToleranceInterceptor.class)
 	public void configureInterceptorPriority(ClassConfig classConfig) {
 		int priority = ConfigResolver.interceptorPriority();
 		if (priority == ConfigResolver.DEFAULT_INTERCEPTOR_PRIORITY) {
-			return; // priorité par défaut déjà déclarée statiquement
+			return; // default priority already declared statically
 		}
 		classConfig.removeAnnotation(a -> Priority.class.getName().equals(a.name()));
 		classConfig.addAnnotation(new PriorityLiteral(priority));
 	}
 
 	/**
-	 * Ajoute le binding marqueur {@link FaultToleranceBinding} à toute classe portant
-	 * une annotation MicroProfile Fault Tolerance 4.1
+	 * Adds the marker binding {@link FaultToleranceBinding} to any class carrying
+	 * a MicroProfile Fault Tolerance 4.1 annotation
 	 * ({@code @Retry @Timeout @CircuitBreaker @Bulkhead @Asynchronous @Fallback}) —
-	 * directement ou sur une de ses méthodes. Sans cet enhancement, le
-	 * {@link FaultToleranceInterceptor} (qui ne déclare que
-	 * {@code @FaultToleranceBinding}) ne serait jamais sélectionné par CDI pour ces
-	 * beans : la spec Jakarta Interceptors §2.6 exige qu'<em>au moins un</em> binding
-	 * de l'intercepteur soit présent sur la cible.
+	 * directly or on one of its methods. Without this enhancement, the
+	 * {@link FaultToleranceInterceptor} (which declares only
+	 * {@code @FaultToleranceBinding}) would never be selected by CDI for these
+	 * beans: Jakarta Interceptors spec §2.6 requires that <em>at least one</em> interceptor
+	 * binding be present on the target.
 	 *
-	 * <p>L'ajout est effectué au niveau classe — l'intercepteur s'exécute donc sur
-	 * <em>toutes</em> les méthodes du bean ; {@code AnnotationReader} décide ensuite
-	 * par méthode quelles politiques appliquer (no-op si aucune annotation FT
-	 * pertinente n'est lue).</p>
+	 * <p>The addition is done at class level — the interceptor therefore executes on
+	 * <em>all</em> methods of the bean; {@code AnnotationReader} then decides, method by method,
+	 * which policies to apply (no-op if no relevant FT annotation
+	 * is read).</p>
 	 *
-	 * <p><strong>Pré-requis Vauban</strong> : exige le fix Vauban
-	 * « propagation des @InterceptorBinding ajoutés en class-level vers
-	 * BeanDescriptor.interceptorBindings » — sinon le binding ajouté ici est
-	 * silencieusement ignoré par le container.</p>
+	 * <p><strong>Vauban prerequisite</strong>: requires the Vauban fix
+	 * "propagation of class-level added @InterceptorBinding annotations to
+	 * BeanDescriptor.interceptorBindings" — otherwise the binding added here is
+	 * silently ignored by the container.</p>
 	 */
 	@Enhancement(
 			types = Object.class,
@@ -106,7 +106,7 @@ public class HeisenbergExtension implements BuildCompatibleExtension {
 		}
 	}
 
-	/** Implémentation portable de {@link Priority} (pattern CDI {@link AnnotationLiteral}). */
+	/** Portable implementation of {@link Priority} (CDI {@link AnnotationLiteral} pattern). */
 	private static final class PriorityLiteral extends AnnotationLiteral<Priority> implements Priority {
 		private static final long serialVersionUID = 1L;
 		private final int value;

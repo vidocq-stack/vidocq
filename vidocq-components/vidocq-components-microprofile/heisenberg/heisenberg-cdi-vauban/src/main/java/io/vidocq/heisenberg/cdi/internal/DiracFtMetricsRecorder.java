@@ -17,9 +17,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Enregistreur de métriques MicroProfile Fault Tolerance 4.1 §9 basé sur Dirac (MP Metrics).
+ * MicroProfile Fault Tolerance 4.1 §9 metrics recorder based on Dirac (MP Metrics).
  *
- * <p>Publie toutes les métriques FT dans le registre APPLICATION de Dirac :
+ * <p>Publishes all FT metrics in the Dirac APPLICATION registry:
  * {@code ft.invocations.total}, {@code ft.retry.calls.total}, {@code ft.retry.retries.total},
  * {@code ft.timeout.calls.total}, {@code ft.timeout.executionDuration},
  * {@code ft.circuitbreaker.calls.total}, {@code ft.circuitbreaker.state.total},
@@ -27,8 +27,8 @@ import java.util.concurrent.atomic.AtomicLong;
  * {@code ft.bulkhead.executionsRunning}, {@code ft.bulkhead.executionsWaiting},
  * {@code ft.bulkhead.runningDuration}, {@code ft.bulkhead.waitingDuration}.</p>
  *
- * <p>L'enregistrement est idempotent : un premier appel crée les métriques avec valeur 0,
- * les appels suivants réutilisent les mêmes instances.</p>
+ * <p>Registration is idempotent: a first call creates the metrics with value 0,
+ * subsequent calls reuse the same instances.</p>
  */
 @ApplicationScoped
 public class DiracFtMetricsRecorder implements FtMetricsRecorder {

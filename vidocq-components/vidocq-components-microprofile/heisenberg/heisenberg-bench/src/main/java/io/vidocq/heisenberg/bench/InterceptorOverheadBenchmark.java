@@ -17,19 +17,19 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Warmup;
 
 /**
- * Benchmarks JMH — overhead d'interception Heisenberg (baseline M3).
+ * JMH benchmarks — Heisenberg interception overhead (baseline M3).
  *
- * <p>Mesure la latence (p99) et le throughput pour :</p>
+ * <p>Measures latency (p99) and throughput for:</p>
  * <ol>
- *   <li>Appel direct sans FT (référence).</li>
- *   <li>{@code PolicyComposer.invoke} sans aucune annotation FT active.</li>
- *   <li>{@code PolicyComposer.invoke} avec {@code @Timeout} actif (méthode plus rapide que le timeout).</li>
+ *   <li>Direct call without FT (baseline).</li>
+ *   <li>{@code PolicyComposer.invoke} with no FT annotation active.</li>
+ *   <li>{@code PolicyComposer.invoke} with {@code @Timeout} active (method faster than the timeout).</li>
  * </ol>
  *
- * <p>Lancement : {@code java -jar heisenberg-bench/target/benchmarks.jar
+ * <p>Run: {@code java -jar heisenberg-bench/target/benchmarks.jar
  * InterceptorOverheadBenchmark}</p>
  *
- * <p>Résultats consignés dans {@code BENCH.md}.</p>
+ * <p>Results recorded in {@code BENCH.md}.</p>
  */
 @BenchmarkMode({Mode.Throughput, Mode.AverageTime})
 @OutputTimeUnit(TimeUnit.MICROSECONDS)
@@ -54,15 +54,15 @@ public class InterceptorOverheadBenchmark {
         timeoutMethod = TimeoutService.class.getDeclaredMethod("call");
     }
 
-    /** Référence : appel direct sans aucun framework FT. */
+    /** Baseline: direct call without any FT framework. */
     @Benchmark
     public Object directCall() {
         return "ok";
     }
 
     /**
-     * Overhead pur du {@code PolicyComposer} sans annotation FT.
-     * Mesure le coût fixe de lecture des annotations + dispatch.
+     * Pure overhead of {@code PolicyComposer} without any FT annotation.
+     * Measures the fixed cost of annotation reading + dispatch.
      */
     @Benchmark
     public Object noFtInterceptor() throws Exception {
@@ -70,15 +70,15 @@ public class InterceptorOverheadBenchmark {
     }
 
     /**
-     * {@code PolicyComposer} avec {@code @Timeout} actif — méthode dans les temps.
-     * Mesure l'overhead de {@code StructuredTaskScope} + fork virtual thread.
+     * {@code PolicyComposer} with {@code @Timeout} active — method within the time limit.
+     * Measures the overhead of {@code StructuredTaskScope} + virtual-thread fork.
      */
     @Benchmark
     public Object withTimeoutActive() throws Exception {
         return PolicyComposer.invoke(() -> "ok", timeoutTarget, timeoutMethod, NO_ARGS);
     }
 
-    // ---- Services de test intégrés ----
+    // ---- Embedded test services ----
 
     static class NoFtService {
         String call() {

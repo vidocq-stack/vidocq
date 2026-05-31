@@ -4,16 +4,16 @@ import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 
 /**
- * Configuration immuable pour la politique {@code @Timeout}.
+ * Immutable configuration for the {@code @Timeout} policy.
  *
- * <p>MP FT 4.1 §4 : le timeout s'applique à chaque tentative individuelle.</p>
+ * <p>MP FT 4.1 §4: the timeout applies to each individual attempt.</p>
  *
- * @param value durée du timeout (doit être &gt; 0)
- * @param unit  unité ChronoUnit (défaut spec : MILLIS)
+ * @param value timeout duration (must be &gt; 0)
+ * @param unit  ChronoUnit unit (spec default: MILLIS)
  */
 public record TimeoutConfig(long value, ChronoUnit unit) {
 
-    /** Valeur par défaut de la spec : 1 000 ms. */
+    /** Spec default value: 1,000 ms. */
     public static final TimeoutConfig DEFAULT = new TimeoutConfig(1_000L, ChronoUnit.MILLIS);
 
     public TimeoutConfig {
@@ -22,7 +22,7 @@ public record TimeoutConfig(long value, ChronoUnit unit) {
         }
     }
 
-    /** Convertit la configuration en {@link Duration}. */
+    /** Converts the configuration to {@link Duration}. */
     public Duration duration() {
         return Duration.of(value, unit);
     }

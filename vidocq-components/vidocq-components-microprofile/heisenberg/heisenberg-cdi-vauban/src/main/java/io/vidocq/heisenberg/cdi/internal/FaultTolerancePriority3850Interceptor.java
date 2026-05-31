@@ -13,10 +13,10 @@ import jakarta.interceptor.Interceptor;
 import jakarta.interceptor.InvocationContext;
 
 /**
- * Intercepteur FT dédié au scénario de priorité configurée à 3850 (TCK).
+ * FT interceptor dedicated to the scenario where the priority is configured to 3850 (TCK).
  *
- * <p>La priorité des intercepteurs étant statique en Jakarta Interceptors,
- * ce composant est activé uniquement quand
+ * <p>Since interceptor priority is static in Jakarta Interceptors,
+ * this component is activated only when
  * {@code mp.fault.tolerance.interceptor.priority=3850}.</p>
  */
 @Interceptor

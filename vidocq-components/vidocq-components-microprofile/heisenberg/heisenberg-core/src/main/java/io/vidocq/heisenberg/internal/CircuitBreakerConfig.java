@@ -4,17 +4,17 @@ import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 
 /**
- * Configuration immuable pour la politique {@code @CircuitBreaker}.
+ * Immutable configuration for the {@code @CircuitBreaker} policy.
  *
- * <p>MP FT 4.1 §5 : circuit breaker avec fenêtre glissante count-based.</p>
+ * <p>MP FT 4.1 §5: circuit breaker with a count-based sliding window.</p>
  *
- * @param requestVolumeThreshold nombre minimum de requêtes pour déclencher le calcul de ratio (défaut 20)
- * @param failureRatio           seuil de ratio d'échecs : failure_count / request_count (défaut 0.5)
- * @param delay                  délai avant transition OPEN → HALF_OPEN (défaut 5s)
- * @param delayUnit              unité du délai (défaut SECONDS)
- * @param successThreshold       nombre de succès requis en HALF_OPEN pour fermer (défaut 1)
- * @param failOn                 exceptions qui incrémentent les échecs (défaut Throwable.class)
- * @param skipOn                 exceptions ignorées (a priorité sur failOn)
+ * @param requestVolumeThreshold minimum number of requests required to trigger ratio calculation (default 20)
+ * @param failureRatio           failure-ratio threshold: failure_count / request_count (default 0.5)
+ * @param delay                  delay before the OPEN → HALF_OPEN transition (default 5s)
+ * @param delayUnit              delay unit (default SECONDS)
+ * @param successThreshold       number of successes required in HALF_OPEN to close (default 1)
+ * @param failOn                 exceptions that increment failures (default Throwable.class)
+ * @param skipOn                 ignored exceptions (takes precedence over failOn)
  */
 public record CircuitBreakerConfig(
         int requestVolumeThreshold,
@@ -26,7 +26,7 @@ public record CircuitBreakerConfig(
         Class<? extends Throwable>[] skipOn
 ) {
 
-    /** Constantes défaut (spec MP FT 4.1 §5). */
+    /** Default constants (MP FT 4.1 spec §5). */
     public static final CircuitBreakerConfig DEFAULT = new CircuitBreakerConfig(
             20, 0.5, 5, ChronoUnit.SECONDS, 1,
             new Class[]{Throwable.class}, new Class[0]
@@ -49,7 +49,7 @@ public record CircuitBreakerConfig(
         skipOn = skipOn == null ? new Class[0] : skipOn.clone();
     }
 
-    /** Convertit le délai en {@link Duration}. */
+    /** Converts the delay to {@link Duration}. */
     public Duration delayDuration() {
         return Duration.of(delay, delayUnit);
     }

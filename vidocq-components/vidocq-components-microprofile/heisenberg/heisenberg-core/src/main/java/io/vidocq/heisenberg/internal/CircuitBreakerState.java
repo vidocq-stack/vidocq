@@ -1,21 +1,21 @@
 package io.vidocq.heisenberg.internal;
 
 /**
- * États du Circuit Breaker — MP FT 4.1 §5.
+ * Circuit Breaker states — MP FT 4.1 §5.
  */
 public enum CircuitBreakerState {
     /**
-     * État normal — les invocations procèdent.
+     * Normal state — invocations proceed.
      */
     CLOSED,
 
     /**
-     * État d'erreur — les invocations lever immédiatement {@link org.eclipse.microprofile.faulttolerance.exceptions.CircuitBreakerOpenException}.
+     * Error state — invocations immediately throw {@link org.eclipse.microprofile.faulttolerance.exceptions.CircuitBreakerOpenException}.
      */
     OPEN,
 
     /**
-     * État test après le délai — quelques invocations passent pour tester la récupération.
+     * Test state after the delay — a few invocations are allowed through to test recovery.
      */
     HALF_OPEN
 }

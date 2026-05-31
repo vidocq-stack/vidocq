@@ -11,10 +11,10 @@ import org.jboss.arquillian.core.spi.LoadableExtension;
 import org.jboss.arquillian.test.spi.TestEnricher;
 
 /**
- * Enregistre {@link HeisenbergDeployableContainer} et {@link HeisenbergTestEnricher}
- * auprès du framework Arquillian via le SPI {@link LoadableExtension}.
+ * Registers {@link HeisenbergDeployableContainer} and {@link HeisenbergTestEnricher}
+ * with the Arquillian framework via the {@link LoadableExtension} SPI.
  *
- * <p>Découverte via {@code META-INF/services/org.jboss.arquillian.core.spi.LoadableExtension}.</p>
+ * <p>Discovered via {@code META-INF/services/org.jboss.arquillian.core.spi.LoadableExtension}.</p>
  */
 public class HeisenbergArquillianExtension implements LoadableExtension {
 

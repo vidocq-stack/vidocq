@@ -15,7 +15,7 @@ class ConfigResolverRetryTest {
 
     @Test
     void usesMethodLevelConfigBeforeClassAndGlobal() throws Exception {
-        // MP FT 4.1 §9: méthode > classe > global.
+        // MP FT 4.1 §9: method > class > global.
         Map<String, String> values = new HashMap<>();
         String className = ConfiguredService.class.getName();
         values.put("Retry/maxRetries", "1");

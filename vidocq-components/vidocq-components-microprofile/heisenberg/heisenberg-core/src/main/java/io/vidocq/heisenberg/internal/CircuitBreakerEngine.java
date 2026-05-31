@@ -6,10 +6,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.eclipse.microprofile.faulttolerance.exceptions.CircuitBreakerOpenException;
 
 /**
- * Moteur {@code @CircuitBreaker} — isolé des états globaux.
+ * {@code @CircuitBreaker} engine — isolated from global state.
  *
- * <p>Cette classe reçoit une {@link CircuitBreakerStateRegistry} pour gérer l'état
- * entre les invocations (état partagé par toutes les instances d'un bean).
+ * <p>This class receives a {@link CircuitBreakerStateRegistry} to manage state
+ * between invocations (state shared by all instances of a bean).
  * MP FT 4.1 §5.</p>
  */
 public final class CircuitBreakerEngine {
@@ -65,14 +65,14 @@ public final class CircuitBreakerEngine {
     }
 
     /**
-     * Exécute l'invocation avec protection du circuit breaker.
+     * Executes the invocation with circuit-breaker protection.
      *
-     * @param invocation   l'invocation à protéger
-     * @param beanClass    classe du bean
-     * @param methodName   nom de la méthode
-     * @return résultat de l'invocation
-     * @throws CircuitBreakerOpenException si le circuit est OPEN
-     * @throws Exception                   si l'invocation échoue
+     * @param invocation   the invocation to protect
+     * @param beanClass    bean class
+     * @param methodName   method name
+     * @return invocation result
+     * @throws CircuitBreakerOpenException if the circuit is OPEN
+     * @throws Exception                   if the invocation fails
      */
     public Object execute(PolicyComposer.Invocation invocation, String beanClass, String methodName) throws Exception {
         CircuitBreakerState state = registry.getState(beanClass, methodName);
@@ -112,7 +112,7 @@ public final class CircuitBreakerEngine {
     }
 
     private Object executeOpen(PolicyComposer.Invocation invocation, String beanClass, String methodName) throws Exception {
-        // État OPEN : vérifier si le délai a expiré
+        // OPEN state: check whether the delay has elapsed
         long millisSinceOpen = registry.getMillisSinceOpen(beanClass, methodName);
         long delayMillis = config.delayDuration().toMillis();
 
@@ -122,7 +122,7 @@ public final class CircuitBreakerEngine {
             return executeHalfOpen(invocation, beanClass, methodName);
         }
 
-        // Circuit est ouvert : fail-fast
+        // Circuit is open: fail fast
         throw new CircuitBreakerOpenException(
                 "Circuit breaker is OPEN for " + beanClass + "#" + methodName +
                         " (will retry in " + (delayMillis - millisSinceOpen) + " ms)"
@@ -132,10 +132,10 @@ public final class CircuitBreakerEngine {
     private Object executeHalfOpen(PolicyComposer.Invocation invocation, String beanClass, String methodName) throws Exception {
         try {
             Object result = invocation.proceed();
-            // Succès en HALF_OPEN
+            // Success in HALF_OPEN
             registry.recordSuccess(beanClass, methodName);
 
-            // Vérifier si successThreshold est atteint
+            // Check whether successThreshold has been reached
             int successes = registry.getSuccessesInHalfOpen(beanClass, methodName);
             if (successes >= config.successThreshold()) {
                 // Transition HALF_OPEN → CLOSED
@@ -146,7 +146,7 @@ public final class CircuitBreakerEngine {
             return result;
         } catch (Throwable failure) {
             if (shouldCountFailure(failure)) {
-                // Échec en HALF_OPEN → retour OPEN
+                // Failure in HALF_OPEN → back to OPEN
                 registry.setOpen(beanClass, methodName);
                 resetWindow(beanClass, methodName);
             }
@@ -180,11 +180,11 @@ public final class CircuitBreakerEngine {
     }
 
     private boolean shouldCountFailure(Throwable failure) {
-        // skipOn a priorité
+        // skipOn takes precedence
         if (matchesAny(failure, config.skipOn())) {
             return false;
         }
-        // Sinon, failOn
+        // Otherwise, failOn
         return matchesAny(failure, config.failOn());
     }
 

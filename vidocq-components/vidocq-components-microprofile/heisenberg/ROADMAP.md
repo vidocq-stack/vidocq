@@ -1,37 +1,37 @@
-# Heisenberg — Plan d'implémentation
+# Heisenberg — Implementation Plan
 
-> Implémentation MicroProfile Fault Tolerance 4.1 dans le style Vidocq : zéro librairie tierce
-> d'implémentation (APIs Jakarta EE / MicroProfile autorisées), Java 25, virtual threads,
-> JPMS strict, CDI via Vauban, configuration via Ravel.
+> MicroProfile Fault Tolerance 4.1 implementation in the Vidocq style: zero third-party
+> implementation libraries (Jakarta EE / MicroProfile APIs allowed), Java 25, virtual threads,
+> strict JPMS, CDI via Vauban, configuration via Ravel.
 
-## Principes directeurs
+## Guiding principles
 
-| Principe | Application concrète |
+| Principle | Concrete application |
 |---|---|
-| Zéro librairie d'implémentation | Pas de SmallRye FT, Hystrix, Resilience4j dans `heisenberg-core`. Seules les API specs compilées. |
-| Séparation politiques / CDI | `heisenberg-core` contient les moteurs purs Java ; `heisenberg-cdi-vauban` contient l'unique intercepteur CDI. |
-| Virtual threads | `@Asynchronous` via `VirtualThreadPerTaskExecutor` ; `@Timeout` via `Thread.ofVirtual() + join(Duration)` (Java 21+, finalisé). Pas de `synchronized`, pas de `ThreadLocal`. |
-| JPMS strict | `module-info.java` partout, `internal.*` non exporté, SPI via `provides/uses`. Pas d'`opens` non justifié. |
-| TDD strict | Red → Green → Refactor. Test avant le code. Citation §spec dans les tests. |
-| TCK PASS 100 % | Contrat dur avant tout merge structurel. Score déclaré dans `TCK.md`. |
-| Performance mesurée | JMH dès M3, comparatif vs SmallRye Fault Tolerance, résultats dans `BENCH.md`. |
-| AOT-friendly | Pas de proxy dynamique (`Proxy.newProxyInstance`). Résolution `fallbackMethod` via `MethodHandles`. Compatible GraalVM native-image. |
+| Zero implementation libraries | No SmallRye FT, Hystrix, or Resilience4j in `heisenberg-core`. Only compiled spec APIs. |
+| Policy / CDI separation | `heisenberg-core` contains the pure Java engines ; `heisenberg-cdi-vauban` contains the only CDI interceptor. |
+| Virtual threads | `@Asynchronous` via `VirtualThreadPerTaskExecutor` ; `@Timeout` via `Thread.ofVirtual() + join(Duration)` (Java 21+, finalized). No `synchronized`, no `ThreadLocal`. |
+| Strict JPMS | `module-info.java` everywhere, `internal.*` not exported, SPI via `provides/uses`. No unjustified `opens`. |
+| Strict TDD | Red → Green → Refactor. Test before code. Spec section citation in tests. |
+| TCK 100% PASS | Hard contract before any structural merge. Score declared in `TCK.md`. |
+| Measured performance | JMH from M3 onward, comparison vs SmallRye Fault Tolerance, results in `BENCH.md`. |
+| AOT-friendly | No dynamic proxy (`Proxy.newProxyInstance`). `fallbackMethod` resolution via `MethodHandles`. GraalVM native-image compatible. |
 
-## Méthodologie : TDD + TCK comme garde-fous parallèles
+## Methodology: TDD + TCK as parallel guardrails
 
-Heisenberg est développé en **TDD strict** (Red → Green → Refactor). Aucune ligne de production
-n'est écrite avant un test qui la justifie. Au-delà du cycle TDD interne :
+Heisenberg is developed with **strict TDD** (Red → Green → Refactor). No production line
+is written before a test justifies it. Beyond the internal TDD cycle:
 
-- **Couche 1 — tests unitaires TDD** : pilotent la conception de chaque moteur de politique.
-  Testables sans container CDI (c'est la raison d'être de `heisenberg-core`).
-- **Couche 2 — tests d'intégration CDI** : scénarios multi-politiques avec Vauban embedded.
-  Vérifient la composition et l'ordre des politiques sans TCK.
-- **Couche 3 — TCK officiel** (`microprofile-fault-tolerance-tck:4.1`) : contrat 100 % PASS
-  avant tout merge structurel. Module hors reactor (POM Model 4.0.0).
-- **Couche 4 — Bench JMH** : `heisenberg-bench` compare throughput, overhead d'interception,
-  latence p99 vs SmallRye Fault Tolerance sur la même JVM.
+- **Layer 1 — TDD unit tests**: drive the design of each policy engine.
+  Testable without a CDI container (this is the reason `heisenberg-core` exists).
+- **Layer 2 — CDI integration tests**: multi-policy scenarios with embedded Vauban.
+  Verify composition and policy order without the TCK.
+- **Layer 3 — official TCK** (`microprofile-fault-tolerance-tck:4.1`): 100% PASS contract
+  before any structural merge. Module outside the reactor (POM Model 4.0.0).
+- **Layer 4 — JMH benchmarks**: `heisenberg-bench` compares throughput, interception overhead,
+  and p99 latency vs SmallRye Fault Tolerance on the same JVM.
 
-## Architecture des modules
+## Module architecture
 
 ```
 heisenberg-api          io.vidocq.heisenberg.api
@@ -41,12 +41,12 @@ heisenberg-api          io.vidocq.heisenberg.api
            BulkheadConfig, TimeoutConfig, FaultToleranceException
 
 heisenberg-core         io.vidocq.heisenberg.core
-  exports io.vidocq.heisenberg.core (moteurs publics utilisés par cdi-vauban)
+  exports io.vidocq.heisenberg.core (public engines used by cdi-vauban)
   requires io.vidocq.heisenberg.api
   requires org.eclipse.microprofile.faulttolerance
-  requires jakarta.interceptor                    (InvocationContext uniquement)
+  requires jakarta.interceptor                    (InvocationContext only)
   requires org.eclipse.microprofile.config
-  → Implémentations : RetryEngine, TimeoutEngine, CircuitBreakerEngine,
+  → Implementations : RetryEngine, TimeoutEngine, CircuitBreakerEngine,
                        BulkheadEngine, FallbackResolver, PolicyComposer,
                        AnnotationReader, ConfigResolver, StateRegistry (interface)
 
@@ -56,19 +56,19 @@ heisenberg-cdi-vauban   io.vidocq.heisenberg.cdi
   requires jakarta.enterprise.cdi
   requires jakarta.interceptor
   requires io.vidocq.vauban.api
-  → Implémentations : FaultToleranceInterceptor (@Interceptor),
+  → Implementations : FaultToleranceInterceptor (@Interceptor),
                        HeisenbergExtension (BCE),
                        StateRegistryBean (@ApplicationScoped),
                        HeisenbergAutoDiscovery (ServiceLoader)
 
 heisenberg-bench        io.vidocq.heisenberg.bench
-  → JMH benchmarks vs SmallRye FT, latence/throughput par politique
+  → JMH benchmarks vs SmallRye FT, latency/throughput by policy
 
-heisenberg-tck          (hors reactor — Model 4.0.0)
-  → TestNG + Arquillian + Vauban embedded, runner TCK officiel MP FT 4.1
+heisenberg-tck          (outside the reactor — Model 4.0.0)
+  → TestNG + Arquillian + embedded Vauban, official MP FT 4.1 TCK runner
 
 heisenberg-examples     io.vidocq.heisenberg.examples
-  → Exemples standalone et avec vidocq
+  → Standalone examples and examples with vidocq
 ```
 
 ## Phases
@@ -77,337 +77,337 @@ heisenberg-examples     io.vidocq.heisenberg.examples
 
 - [x] `.sdkmanrc` (`java=25-tem`, `maven=3.9.16`)
 - [x] `.gitignore`, `.mvn/maven.config`
-- [x] `pom.xml` parent (Model 4.1.0, multi-module, dependency management Jakarta + MicroProfile)
-- [x] `CLAUDE.md`, `AGENTS.md`, `ROADMAP.md` (ces fichiers)
-- [x] Création des sous-modules avec `pom.xml` + `module-info.java` squelettes :
+- [x] Parent `pom.xml` (Model 4.1.0, multi-module, Jakarta + MicroProfile dependency management)
+- [x] `CLAUDE.md`, `AGENTS.md`, `ROADMAP.md` (these files)
+- [x] Creation of submodules with skeleton `pom.xml` + `module-info.java`:
       `heisenberg-api`, `heisenberg-core`, `heisenberg-cdi-vauban`,
-      `heisenberg-bench`, `heisenberg-examples`, `heisenberg-tck` (hors reactor)
+      `heisenberg-bench`, `heisenberg-examples`, `heisenberg-tck` (outside the reactor)
 - [x] `LICENSE` (Apache 2.0)
 - [x] `README.md`
-- [x] `run-official-tck-mp-fault-tolerance-4.1.sh` (script TCK racine)
-- [x] Validation `./mvnw -ntp install -DskipTests` réussit sur le reactor
-- [x] Validation `mvn -f heisenberg-tck/pom.xml -DskipTests compile` réussit (hors reactor)
+- [x] `run-official-tck-mp-fault-tolerance-4.1.sh` (root TCK script)
+- [x] Validation `./mvnw -ntp install -DskipTests` succeeds on the reactor
+- [x] Validation `mvn -f heisenberg-tck/pom.xml -DskipTests compile` succeeds (outside the reactor)
 
-**Livrable :** Reactor compilable, `module-info.java` squelettes cohérents, TCK non-reactor compilable.
+**Deliverable:** Buildable reactor, coherent skeleton `module-info.java`, buildable non-reactor TCK.
 
 ---
 
-### M1 — Intercepteur de base + @Fallback
+### M1 — Base interceptor + @Fallback
 
-**Scope spec :** §2 (Fault Tolerance interceptor), §6 (Fallback).
+**Spec scope:** §2 (Fault Tolerance interceptor), §6 (Fallback).
 
-| Tâche | Notes | État |
+| Task | Notes | Status |
 |---|---|---|
-| `FaultToleranceInterceptor` CDI `@Interceptor` | Priorité `4010` (base) ; configurable via `mp.fault.tolerance.interceptor.priority` évalué au démarrage uniquement | ☑ |
-| `AnnotationReader` | Lit les annotations FT sur la méthode puis sur la classe (précédence méthode > classe) | ☑ |
-| `PolicyComposer` — squelette | Chaîne vide délégant directement à `ctx.proceed()` | ☑ |
-| `HeisenbergExtension` BCE | Valide au démarrage du container que `@Fallback.fallbackMethod` existe sur la classe | ☑ |
-| `FallbackResolver` | Résolution `FallbackHandler.handle(ExecutionContext)` vs `fallbackMethod` par `MethodHandle` | ☑ |
-| `FallbackPolicy` | Wraps l'invocation ; capture les exceptions ; délègue au `FallbackResolver` | ☑ |
-| `PolicyComposer` — @Fallback activé | Insère `FallbackPolicy` en premier (couche la plus externe) | ☑ |
-| `HeisenbergAutoDiscovery` ServiceLoader | `META-INF/services` + `provides` JPMS pour le `ConfigProviderResolver` | ☑ |
-| Tests unitaires `FallbackResolver` | FallbackHandler, fallbackMethod, type incompatible → `FaultToleranceDefinitionException` | ☑ |
-| Tests d'intégration CDI | `@Fallback(FooHandler.class)` et `@Fallback(fallbackMethod="bar")` avec Vauban embedded | ☑ |
+| CDI `FaultToleranceInterceptor` `@Interceptor` | Priority `4010` (base) ; configurable via `mp.fault.tolerance.interceptor.priority` evaluated at startup only | ☑ |
+| `AnnotationReader` | Reads FT annotations on the method, then on the class (method > class precedence) | ☑ |
+| `PolicyComposer` — skeleton | Empty chain delegating directly to `ctx.proceed()` | ☑ |
+| `HeisenbergExtension` BCE | Validates at container startup that `@Fallback.fallbackMethod` exists on the class | ☑ |
+| `FallbackResolver` | Resolves `FallbackHandler.handle(ExecutionContext)` vs `fallbackMethod` through `MethodHandle` | ☑ |
+| `FallbackPolicy` | Wraps the invocation ; catches exceptions ; delegates to `FallbackResolver` | ☑ |
+| `PolicyComposer` — @Fallback enabled | Inserts `FallbackPolicy` first (outermost layer) | ☑ |
+| `HeisenbergAutoDiscovery` ServiceLoader | `META-INF/services` + JPMS `provides` for `ConfigProviderResolver` | ☑ |
+| `FallbackResolver` unit tests | FallbackHandler, fallbackMethod, incompatible type → `FaultToleranceDefinitionException` | ☑ |
+| CDI integration tests | `@Fallback(FooHandler.class)` and `@Fallback(fallbackMethod="bar")` with embedded Vauban | ☑ |
 
-**Décisions M1 :**
-- `fallbackMethod` résolu une fois au démarrage (BCE `HeisenbergExtension`), `MethodHandle` mis en cache.
-- `FaultToleranceDefinitionException` levée à la déployabilité (pas au premier appel) pour les configs invalides.
-- Le type de retour du fallback DOIT correspondre au type de retour de la méthode — validé à la déployabilité.
+**M1 decisions:**
+- `fallbackMethod` resolved once at startup (BCE `HeisenbergExtension`), `MethodHandle` cached.
+- `FaultToleranceDefinitionException` thrown at deployability time (not on the first call) for invalid configs.
+- The fallback return type MUST match the method return type — validated at deployability time.
 
-**Livrable :** `@Fallback` fonctionne dans les deux modes (handler + fallbackMethod). Tests verts.
+**Deliverable:** `@Fallback` works in both modes (handler + fallbackMethod). Green tests.
 
 ---
 
 ### M2 — @Retry
 
-**Scope spec :** §3 (Retry).
+**Spec scope:** §3 (Retry).
 
-| Tâche | Notes | État |
+| Task | Notes | Status |
 |---|---|---|
-| `RetryConfig` record | `maxRetries` (défaut 3), `delay` (0), `delayUnit`, `maxDuration` (180s), `jitter` (200ms), `jitterDelayUnit`, `retryOn` (Exception.class), `abortOn` ({}) | ☑ |
-| `RetryEngine` | Compteur d'essais, gestion `delay` + `jitter`, respect `maxDuration`, interruption via `Thread.currentThread().interrupt()` | ☑ |
-| Filtrage exceptions | `abortOn` a priorité sur `retryOn` (§3.3) ; traversal de la hiérarchie d'exceptions | ☑ |
-| Interaction avec `@Fallback` | `@Retry` exhauste ses tentatives → `@Fallback` s'active ; pas de retry si `@Fallback` déclenche | ☑ |
-| `ConfigResolver` — @Retry | Précédence : `<class>/<method>/Retry/<param>` > `<class>/Retry/<param>` > `Retry/<param>` | ☑ |
-| Tests unitaires `RetryEngine` | `retryOn`, `abortOn`, `maxRetries=0`, `maxDuration` exhausté, `jitter` ≥ 0 | ☑ |
-| Tests d'intégration | `@Retry(retryOn=IOException.class, maxRetries=2)` via `FaultToleranceInterceptor` + `InvocationContext` manuel | ☑ |
+| `RetryConfig` record | `maxRetries` (default 3), `delay` (0), `delayUnit`, `maxDuration` (180s), `jitter` (200ms), `jitterDelayUnit`, `retryOn` (Exception.class), `abortOn` ({}) | ☑ |
+| `RetryEngine` | Attempt counter, `delay` + `jitter` handling, `maxDuration` enforcement, interruption via `Thread.currentThread().interrupt()` | ☑ |
+| Exception filtering | `abortOn` has priority over `retryOn` (§3.3) ; exception hierarchy traversal | ☑ |
+| Interaction with `@Fallback` | `@Retry` exhausts its attempts → `@Fallback` activates ; no retry if `@Fallback` triggers | ☑ |
+| `ConfigResolver` — @Retry | Precedence: `<class>/<method>/Retry/<param>` > `<class>/Retry/<param>` > `Retry/<param>` | ☑ |
+| `RetryEngine` unit tests | `retryOn`, `abortOn`, `maxRetries=0`, exhausted `maxDuration`, `jitter` ≥ 0 | ☑ |
+| Integration tests | `@Retry(retryOn=IOException.class, maxRetries=2)` through `FaultToleranceInterceptor` + manual `InvocationContext` | ☑ |
 
-**Décisions M2 :**
-- `delay + jitter` calculé via `ThreadLocalRandom.current().nextLong(0, jitter)` — pas de `ThreadLocal` persistant (usage ponctuel, pas de contexte propagé).
-- Le thread virtuel exécutant la méthode est mis en attente via `Thread.sleep(delay)` — acceptable car virtual thread.
-- `abortOn` sur `Throwable` directement spécifié (changement MP FT 4.1 vs 4.0 : `Throwable.class` n'est plus ignoré).
+**M2 decisions:**
+- `delay + jitter` computed via `ThreadLocalRandom.current().nextLong(0, jitter)` — no persistent `ThreadLocal` (one-off use, no propagated context).
+- The virtual thread executing the method is delayed with `Thread.sleep(delay)` — acceptable because it is a virtual thread.
+- `abortOn` directly specified on `Throwable` (MP FT 4.1 vs 4.0 change: `Throwable.class` is no longer ignored).
 
-**Livrable :** `@Retry` seul et combiné `@Retry + @Fallback`. Tests verts.
+**Deliverable:** standalone `@Retry` and combined `@Retry + @Fallback`. Green tests.
 
 ---
 
 ### M3 — @Timeout
 
-**Scope spec :** §4 (Timeout).
+**Spec scope:** §4 (Timeout).
 
-| Tâche | Notes | État |
+| Task | Notes | Status |
 |---|---|---|
 | `TimeoutConfig` record | `value` (1000ms), `unit` (ChronoUnit.MILLIS) | ☑ |
-| `TimeoutEngine` via virtual threads | Fork via `Thread.ofVirtual()`, `join(Duration)` pour deadline (Java 21+, non-preview) ; subtask annulée si timeout | ☑ |
-| `TimeoutException` (MP FT) | Levée quand le délai est dépassé | ☑ |
-| Interaction `@Timeout` + `@Retry` | Le timeout s'applique à chaque tentative individuelle (§4.1) | ☑ |
-| Interaction `@Timeout` + `@Asynchronous` | Timeout appliqué dans le thread virtuel de l'exécution asynchrone | ☑ |
-| `ConfigResolver` — @Timeout | Précédence multi-niveaux (même pattern que @Retry) | ☑ |
-| Tests unitaires `TimeoutEngine` | Exécution dans les temps (pas de timeout), dépassement (TimeoutException), annulation propre | ☑ |
-| Tests d'intégration | `@Timeout(500)` sur méthode lente ; combiné `@Timeout + @Retry` | ☑ |
-| Benchmarks JMH — baseline | Overhead d'interception sans politique active vs avec @Timeout actif | ☑ |
+| `TimeoutEngine` via virtual threads | Fork via `Thread.ofVirtual()`, `join(Duration)` for the deadline (Java 21+, non-preview) ; subtask cancelled on timeout | ☑ |
+| `TimeoutException` (MP FT) | Thrown when the deadline is exceeded | ☑ |
+| Interaction `@Timeout` + `@Retry` | Timeout applies to each individual attempt (§4.1) | ☑ |
+| Interaction `@Timeout` + `@Asynchronous` | Timeout applied inside the virtual thread of the async execution | ☑ |
+| `ConfigResolver` — @Timeout | Multi-level precedence (same pattern as @Retry) | ☑ |
+| `TimeoutEngine` unit tests | In-time execution (no timeout), overrun (`TimeoutException`), clean cancellation | ☑ |
+| Integration tests | `@Timeout(500)` on a slow method ; combined `@Timeout + @Retry` | ☑ |
+| JMH benchmarks — baseline | Interception overhead with no active policy vs with active @Timeout | ☑ |
 
-**Décisions M3 :**
-- `TimeoutEngine` implémenté avec `Thread.ofVirtual() + join(Duration)` — **sans features preview**. Garantit la compatibilité dès Java 21+.
-- Future évolution (Java 26+) : migration vers `StructuredTaskScope` (JEP 505, finalisé Java 25) optionnelle si la performance le justifie. Actuellement, `Thread.join(Duration)` suffit et garde la compatibilité Java 21+.
-- Ajout des premiers benchmarks JMH dans `heisenberg-bench` : comparatif overhead interception
-  vs SmallRye FT (même méthode vide, même JVM, écart de latence p99 documenté dans `BENCH.md`).
+**M3 decisions:**
+- `TimeoutEngine` implemented with `Thread.ofVirtual() + join(Duration)` — **without preview features**. Guarantees compatibility from Java 21+.
+- Future evolution (Java 26+): optional migration to `StructuredTaskScope` (JEP 505, finalized in Java 25) if performance justifies it. At present, `Thread.join(Duration)` is sufficient and keeps Java 21+ compatibility.
+- Added first JMH benchmarks in `heisenberg-bench`: interception overhead comparison
+  vs SmallRye FT (same empty method, same JVM, p99 latency delta documented in `BENCH.md`).
 
-**Livrable :** `@Timeout` seul et combiné `@Timeout + @Retry + @Fallback`. Benchmarks baseline documentés. Migration vers `StructuredTaskScope` optionnelle pour futures optimisations.
+**Deliverable:** standalone `@Timeout` and combined `@Timeout + @Retry + @Fallback`. Baseline benchmarks documented. Migration to `StructuredTaskScope` optional for future optimizations.
 
 ---
 
 ### M4 — @CircuitBreaker
 
-**Scope spec :** §5 (Circuit Breaker).
+**Spec scope:** §5 (Circuit Breaker).
 
-| Tâche | Notes | État |
+| Task | Notes | Status |
 |---|---|---|
 | `CircuitBreakerConfig` record | `requestVolumeThreshold` (20), `failureRatio` (0.5), `delay` (5s), `successThreshold` (1), `failOn` (Throwable.class), `skipOn` ({}) | ☑ |
-| `CircuitBreakerState` enum | `CLOSED`, `OPEN`, `HALF_OPEN` — transitions atomiques via `AtomicReference` | ☑ |
-| `CircuitBreakerEngine` | État machine avec fenêtre glissante pour ratio d'échecs ; transitions CLOSED→OPEN→HALF_OPEN→CLOSED | ☑ |
-| `CircuitBreakerStateRegistry` interface | Contrat pour gérer l'état partag é entre invocations (implémentation CDI en M4+) | ☑ |
-| `CircuitBreakerOpenException` | Levée immédiatement quand OPEN (fail-fast, MP FT 4.1) | ☑ |
-| Interaction CB + @Fallback | `CircuitBreakerOpenException` déclenche le fallback (si présent) | 🚧 |
-| Interaction CB + @Retry | Retry ne relance pas sur `CircuitBreakerOpenException` par défaut (abortOn implicite) | 🚧 |
-| `ConfigResolver` — @CircuitBreaker | Précédence multi-niveaux ; support de failOn/skipOn en config externe | ☑ |
-| Tests unitaires `CircuitBreakerEngine` | Transitions `CLOSED→OPEN→HALF_OPEN→CLOSED`, fail-fast, `skipOn` prioritaire sur `failOn` | ☑ |
-| Tests d'intégration | Scénario complet avec méthode défaillante puis rétablie ; connexion au StateRegistry CDI | 🚧 |
+| `CircuitBreakerState` enum | `CLOSED`, `OPEN`, `HALF_OPEN` — atomic transitions through `AtomicReference` | ☑ |
+| `CircuitBreakerEngine` | State machine with sliding window for failure ratio ; CLOSED→OPEN→HALF_OPEN→CLOSED transitions | ☑ |
+| `CircuitBreakerStateRegistry` interface | Contract to manage shared state across invocations (CDI implementation in M4+) | ☑ |
+| `CircuitBreakerOpenException` | Thrown immediately when OPEN (fail-fast, MP FT 4.1) | ☑ |
+| Interaction CB + @Fallback | `CircuitBreakerOpenException` triggers fallback (if present) | 🚧 |
+| Interaction CB + @Retry | Retry does not retry on `CircuitBreakerOpenException` by default (implicit abortOn) | 🚧 |
+| `ConfigResolver` — @CircuitBreaker | Multi-level precedence ; support for failOn/skipOn in external config | ☑ |
+| `CircuitBreakerEngine` unit tests | `CLOSED→OPEN→HALF_OPEN→CLOSED` transitions, fail-fast, `skipOn` has priority over `failOn` | ☑ |
+| Integration tests | Full scenario with failing then recovered method ; wiring to CDI StateRegistry | 🚧 |
 
-**Décisions M4 :**
-- `CircuitBreakerEngine` implémenté sans dépendance à CDI — reçoit une `CircuitBreakerStateRegistry` injectable.
-- Fenêtre glissante count-based (time-based optionnel — reporter à post-M4).
-- Tests unitaires en `heisenberg-core` validant l'automate d'état ; implémentation complète du `StateRegistry` CDI en M4+ (actuellement stubs pour valider le moteur).
-- `skipOn` a priorité sur `failOn` (§5.3 spec).
+**M4 decisions:**
+- `CircuitBreakerEngine` implemented without CDI dependency — receives an injectable `CircuitBreakerStateRegistry`.
+- Count-based sliding window (time-based optional — defer until post-M4).
+- Unit tests in `heisenberg-core` validating the state machine ; complete CDI `StateRegistry` implementation in M4+ (currently stubs to validate the engine).
+- `skipOn` has priority over `failOn` (§5.3 spec).
 
-**Livrable M4 :** 
-- ✅ Moteur CircuitBreaker complet avec tests unitaires
-- ✅ Configuration externe via MP Config (@CircuitBreaker + ConfigResolver) 
-- 🚧 Intégration CDI StateRegistry (planifiée juste après M4)
-- 🚧 Tests d'intégration CDI (planifiés juste après M4)
+**M4 deliverable:** 
+- ✅ Complete CircuitBreaker engine with unit tests
+- ✅ External configuration via MP Config (@CircuitBreaker + ConfigResolver) 
+- 🚧 CDI StateRegistry integration (planned right after M4)
+- 🚧 CDI integration tests (planned right after M4)
 
 ---
 
 ### M5 — @Bulkhead
 
-**Scope spec :** §7 (Bulkhead).
+**Spec scope:** §7 (Bulkhead).
 
-| Tâche | Notes | État |
+| Task | Notes | Status |
 |---|---|---|
-| `BulkheadConfig` record | `value` (10), `waitingTaskQueue` (10 async mode) | ☑ |
-| `BulkheadEngine` — mode sync | `Semaphore(value, fair=true)` ; `tryAcquire(0)` immédiat → `BulkheadException` si saturé | ☑ |
-| `BulkheadEngine` — mode async | Permits + waiting-queue partagés via `BulkheadStateRegistry.BulkheadState` ; fast-path, enqueue puis acquire bloquant sur permit ; `BulkheadException` quand permits + queue saturés (porté dans le `CompletionStage` côté `@Asynchronous` §8.2) | ☑ |
-| `BulkheadException` | Levée quand le bulkhead est saturé | ☑ |
-| Bulkhead + @Fallback | `BulkheadException` déclenche le fallback | ☑ |
-| `BulkheadStateRegistry` interface | `ConcurrentHashMap<StateKey, Semaphore>` partagé | ☑ |
-| `BulkheadStateRegistryBean` CDI | Implémentation @ApplicationScoped dans heisenberg-cdi-vauban | ☑ |
-| `ConfigResolver` — @Bulkhead | Précédence multi-niveaux ; support `value` et `waitingTaskQueue` | ☑ |
-| PolicyComposer — intégration | Ordre complet : @Fallback → @CB → @Bulkhead → @Timeout → @Retry | ☑ |
-| Tests unitaires `BulkheadEngine` | Concurrence max, dépassement → BulkheadException | ☑ |
-| Tests d'intégration | Mode synchrone : saturation + fallback | ☑ |
+| `BulkheadConfig` record | `value` (10), `waitingTaskQueue` (10 in async mode) | ☑ |
+| `BulkheadEngine` — sync mode | `Semaphore(value, fair=true)` ; immediate `tryAcquire(0)` → `BulkheadException` if saturated | ☑ |
+| `BulkheadEngine` — async mode | Shared permits + waiting-queue through `BulkheadStateRegistry.BulkheadState` ; fast-path, then enqueue then blocking acquire on permit ; `BulkheadException` when permits + queue are saturated (propagated in the `CompletionStage` on the `@Asynchronous` side §8.2) | ☑ |
+| `BulkheadException` | Thrown when the bulkhead is saturated | ☑ |
+| Bulkhead + @Fallback | `BulkheadException` triggers the fallback | ☑ |
+| `BulkheadStateRegistry` interface | Shared `ConcurrentHashMap<StateKey, Semaphore>` | ☑ |
+| `BulkheadStateRegistryBean` CDI | `@ApplicationScoped` implementation in heisenberg-cdi-vauban | ☑ |
+| `ConfigResolver` — @Bulkhead | Multi-level precedence ; support for `value` and `waitingTaskQueue` | ☑ |
+| PolicyComposer — integration | Full order: @Fallback → @CB → @Bulkhead → @Timeout → @Retry | ☑ |
+| `BulkheadEngine` unit tests | Max concurrency, overrun → BulkheadException | ☑ |
+| Integration tests | Synchronous mode: saturation + fallback | ☑ |
 
-**Décisions M5 :**
-- `Semaphore` avec `fair=true` pour éviter la famine sous contention de virtual threads.
-- Mode synchrone implémenté et complètement testé.
-- Mode asynchrone implémenté : `BulkheadEngine.executeAsync` partage `permits` + `waitingQueue`
-  via `BulkheadStateRegistry.BulkheadState` (override de `getAsyncState` dans
-  `BulkheadStateRegistryBean` pour garantir que la file d'attente est partagée par clé bulkhead).
-  Le bloquage sur `permits.acquire()` se fait dans le virtual thread `@Asynchronous`, donc
-  pas de pinning. `BulkheadException` levée synchroniquement par le moteur et capturée par
-  `AsynchronousEngine` qui la wrap dans le `CompletionStage` retourné (§8.2).
+**M5 decisions:**
+- `Semaphore` with `fair=true` to avoid starvation under virtual-thread contention.
+- Synchronous mode implemented and fully tested.
+- Asynchronous mode implemented: `BulkheadEngine.executeAsync` shares `permits` + `waitingQueue`
+  through `BulkheadStateRegistry.BulkheadState` (override of `getAsyncState` in
+  `BulkheadStateRegistryBean` to guarantee that the waiting queue is shared by bulkhead key).
+  Blocking on `permits.acquire()` happens in the `@Asynchronous` virtual thread, so there is
+  no pinning. `BulkheadException` is thrown synchronously by the engine and caught by
+  `AsynchronousEngine`, which wraps it in the returned `CompletionStage` (§8.2).
 
-**Livrable M5 :** 
-- ✅ Mode synchrone complet avec tous les tests (unitaires + intégration)
-- ✅ Intégration dans PolicyComposer avec ordre complet §2.5
-- ✅ Configuration externe via MP Config
-- ✅ Mode asynchrone (M5+) : engine + 4 tests unitaires + 4 tests d'intégration CDI couvrant
-   fast-path, file d'attente, saturation queue, composition `@Fallback`
+**M5 deliverable:** 
+- ✅ Complete synchronous mode with all tests (unit + integration)
+- ✅ Integration into PolicyComposer with full §2.5 ordering
+- ✅ External configuration via MP Config
+- ✅ Asynchronous mode (M5+) : engine + 4 unit tests + 4 CDI integration tests covering
+   fast-path, waiting queue, queue saturation, `@Fallback` composition
 
 ---
 
 ### M6 — @Asynchronous
 
-**Scope spec :** §8 (Asynchronous).
+**Spec scope:** §8 (Asynchronous).
 
-| Tâche | Notes | État |
+| Task | Notes | Status |
 |---|---|---|
-| Détection `@Asynchronous` | Présence sur la méthode ou la classe — valider au démarrage (BCE) | ☐ |
-| Retour `CompletionStage<T>` | Wrapping de l'invocation dans un virtual thread ; `CompletableFuture.supplyAsync(supplier, vtExecutor)` | ☐ |
-| Retour `Future<T>` | Idem ; `CompletableFuture.get()` exposé comme `Future` | ☐ |
-| Composition avec `@Retry` | Retry s'applique à l'intérieur du virtual thread (pas au level CompletionStage) | ☐ |
-| Composition avec `@Timeout` | Timeout dans le virtual thread enfant | ☐ |
-| Composition avec `@Bulkhead` | Mode async : file d'attente + sémaphore dans le virtual thread | ☐ |
-| Exception propagation async | Exceptions wrappées dans `CompletionStage.exceptionally()` ; `@Fallback` appliqué dans le virtual thread | ☐ |
-| Tests unitaires | Appels async avec CompletionStage et Future, vérification du thread de retour (virtual) | ☐ |
-| Tests d'intégration | `@Asynchronous @Retry @Timeout` combinés | ☐ |
+| `@Asynchronous` detection | Present on method or class — validate at startup (BCE) | ☐ |
+| `CompletionStage<T>` return | Wrap invocation in a virtual thread ; `CompletableFuture.supplyAsync(supplier, vtExecutor)` | ☐ |
+| `Future<T>` return | Same ; `CompletableFuture.get()` exposed as `Future` | ☐ |
+| Composition with `@Retry` | Retry applies inside the virtual thread (not at CompletionStage level) | ☐ |
+| Composition with `@Timeout` | Timeout inside the child virtual thread | ☐ |
+| Composition with `@Bulkhead` | Async mode: waiting queue + semaphore in the virtual thread | ☐ |
+| Async exception propagation | Exceptions wrapped in `CompletionStage.exceptionally()` ; `@Fallback` applied inside the virtual thread | ☐ |
+| Unit tests | Async calls with CompletionStage and Future, return-thread verification (virtual) | ☐ |
+| Integration tests | Combined `@Asynchronous @Retry @Timeout` | ☐ |
 
-**Décisions M6 :**
-- `Executors.newVirtualThreadPerTaskExecutor()` — créé une fois par contexte d'application
-  dans `HeisenbergExtension`, exposé via `StateRegistryBean`.
-- Pas de pool platform — chaque invocation async crée un virtual thread éphémère.
-- Le `CompletionStage` retourné à l'appelant n'est jamais bloquant.
+**M6 decisions:**
+- `Executors.newVirtualThreadPerTaskExecutor()` — created once per application context
+  in `HeisenbergExtension`, exposed through `StateRegistryBean`.
+- No platform pool — each async invocation creates an ephemeral virtual thread.
+- The `CompletionStage` returned to the caller is never blocking.
 
-**Livrable :** `@Asynchronous` seul et en composition complète avec les autres politiques.
+**Deliverable:** standalone `@Asynchronous` and complete composition with the other policies.
 
 ---
 
-### M7 — Composition et ordre des politiques
+### M7 — Composition and policy order
 
-**Scope spec :** §2.5 (Interactions between policies), §8.2 (Asynchronous CompletionStage failures).
+**Spec scope:** §2.5 (Interactions between policies), §8.2 (Asynchronous CompletionStage failures).
 
-| Tâche | Notes | État |
+| Task | Notes | Status |
 |---|---|---|
-| `PolicyComposer` — ordre complet | `@Fallback` → `@CircuitBreaker` → `@Bulkhead` → `@Timeout` → `@Retry` → méthode | ☑ |
-| Propagation d'exceptions entre couches | Chaque politique voit l'exception de la couche intérieure ; `@Fallback` voit l'exception finale | ☑ |
-| `@Asynchronous` + ensemble des politiques | Toutes les politiques s'exécutent dans le virtual thread asynchrone | ☑ |
-| Unwrap `CompletionStage` en mode async (§8.2) | Un stage retourné en erreur déclenche retry/fallback/CB — déballé dans `PolicyComposer` | ☑ |
-| Désactivation globale | `mp.fault.tolerance.interceptor.priority` = `Integer.MAX_VALUE` → intercepteur désactivé | ☑ |
-| Désactivation par politique | `<AnnotationName>/enabled=false` via Config (3 niveaux de précédence) | ☑ |
-| Scénarios de composition exhaustifs | `@Retry + @Timeout`, `@CB + @Retry`, `@CB + @Fallback`, `@Bulkhead + @Async`, combinaison complète | ☑ |
-| Tests d'intégration — composition | 8 scénarios couvrant §2.5 + 6 scénarios CDI async (intercepteur + ReflectiveInvocationContext) | ☑ |
+| `PolicyComposer` — full order | `@Fallback` → `@CircuitBreaker` → `@Bulkhead` → `@Timeout` → `@Retry` → method | ☑ |
+| Exception propagation between layers | Each policy sees the exception from the inner layer ; `@Fallback` sees the final exception | ☑ |
+| `@Asynchronous` + full policy set | All policies execute inside the async virtual thread | ☑ |
+| Unwrap `CompletionStage` in async mode (§8.2) | An exceptionally completed stage triggers retry/fallback/CB — unwrapped in `PolicyComposer` | ☑ |
+| Global disabling | `mp.fault.tolerance.interceptor.priority` = `Integer.MAX_VALUE` → interceptor disabled | ☑ |
+| Per-policy disabling | `<AnnotationName>/enabled=false` via Config (3 precedence levels) | ☑ |
+| Exhaustive composition scenarios | `@Retry + @Timeout`, `@CB + @Retry`, `@CB + @Fallback`, `@Bulkhead + @Async`, full combination | ☑ |
+| Integration tests — composition | 8 scenarios covering §2.5 + 6 async CDI scenarios (interceptor + ReflectiveInvocationContext) | ☑ |
 
-**Livrable M7 :** Tous les scénarios de composition de la spec couverts. **Tests : 92/92 verts** (65 core + 27 CDI).
+**M7 deliverable:** All composition scenarios from the spec covered. **Tests: 92/92 green** (65 core + 27 CDI).
 
 ---
 
-### M8 — Configuration externe via MicroProfile Config ✅
+### M8 — External configuration via MicroProfile Config ✅
 
-**Scope spec :** §9 (Configuration via MicroProfile Config).
+**Spec scope:** §9 (Configuration via MicroProfile Config).
 
-| Tâche | Notes | État |
+| Task | Notes | Status |
 |---|---|---|
-| `ConfigResolver` complet | Précédence : `<class>/<method>/<Annotation>/<param>` > `<class>/<Annotation>/<param>` > `<Annotation>/<param>` — couvre Retry (9 params), Timeout (2), CircuitBreaker (7), Bulkhead (2), Fallback (applyOn/skipOn) | ✅ |
-| Désactivation par clé Config | `Retry/enabled=false`, `<class>/CircuitBreaker/enabled=false`, etc. (déjà M7) | ✅ |
-| `mp.fault.tolerance.interceptor.priority` | Lu une seule fois au démarrage du container via `HeisenbergExtension.@Enhancement` (BCE CDI 4.1) qui ré-écrit `@Priority` sur `FaultToleranceInterceptor` | ✅ |
-| `mp.fault.tolerance.metrics.enabled` | Flag exposé par `ConfigResolver.isMetricsEnabled()` ; stub no-op si MicroProfile Metrics absent (intégration effective différée — pas requise pour TCK) | ✅ |
-| Résolution depuis Ravel | `ConfigProvider.getConfig()` → Ravel ; chargement automatique de `META-INF/microprofile-config.properties` | ✅ |
-| `FallbackConfig` record | Nouveau record immuable + `shouldApplyFallback(Throwable)` ; `FallbackPolicy` câblé dessus | ✅ |
-| Tests d'intégration Config | `ConfigResolverIntegrationTest` (10 tests) via vrai `ConfigProvider` Ravel + `META-INF/microprofile-config.properties` — couvre niveaux global / class / method | ✅ |
+| Complete `ConfigResolver` | Precedence: `<class>/<method>/<Annotation>/<param>` > `<class>/<Annotation>/<param>` > `<Annotation>/<param>` — covers Retry (9 params), Timeout (2), CircuitBreaker (7), Bulkhead (2), Fallback (applyOn/skipOn) | ✅ |
+| Disabling through Config key | `Retry/enabled=false`, `<class>/CircuitBreaker/enabled=false`, etc. (already in M7) | ✅ |
+| `mp.fault.tolerance.interceptor.priority` | Read only once at container startup through `HeisenbergExtension.@Enhancement` (CDI 4.1 BCE) which rewrites `@Priority` on `FaultToleranceInterceptor` | ✅ |
+| `mp.fault.tolerance.metrics.enabled` | Flag exposed through `ConfigResolver.isMetricsEnabled()` ; no-op stub if MicroProfile Metrics absent (effective integration deferred — not required for TCK) | ✅ |
+| Resolution through Ravel | `ConfigProvider.getConfig()` → Ravel ; automatic loading of `META-INF/microprofile-config.properties` | ✅ |
+| `FallbackConfig` record | New immutable record + `shouldApplyFallback(Throwable)` ; `FallbackPolicy` wired on top of it | ✅ |
+| Config integration tests | `ConfigResolverIntegrationTest` (10 tests) via real Ravel `ConfigProvider` + `META-INF/microprofile-config.properties` — covers global / class / method levels | ✅ |
 
-**Livrable :** Configuration externe fonctionnelle. Tous les paramètres surchargeables de toutes les politiques (selon spec §9.1) le sont via MP Config — global, class-level, method-level — avec précédence correcte.
+**Deliverable:** External configuration working. All overridable parameters of all policies (per spec §9.1) are exposed through MP Config — global, class-level, method-level — with correct precedence.
 
-**Décisions M8 :**
-- `@Fallback.value` (handler class) et `@Fallback.fallbackMethod` ne sont **pas** surchargeables : ils nécessitent la validation au démarrage via le BCE et un changement runtime briserait l'invariant de typage.
-- `mp.fault.tolerance.interceptor.priority` est appliqué via le hook `@Enhancement` du BCE — la valeur est lue une seule fois, l'annotation `@Priority` est ré-écrite sur `FaultToleranceInterceptor` (pattern `AnnotationLiteral` CDI 4.1).
-- Variables d'environnement : la résolution depuis l'environnement est gérée transparente par `ConfigProvider` (Ravel), avec la convention MP Config (`MP_FAULT_TOLERANCE_*` → `mp.fault.tolerance.*`). Pas de logique propre à Heisenberg.
+**M8 decisions:**
+- `@Fallback.value` (handler class) and `@Fallback.fallbackMethod` are **not** overridable: they require startup validation through the BCE and a runtime change would break the type-safety invariant.
+- `mp.fault.tolerance.interceptor.priority` is applied through the BCE `@Enhancement` hook — the value is read only once, the `@Priority` annotation is rewritten on `FaultToleranceInterceptor` (CDI 4.1 `AnnotationLiteral` pattern).
+- Environment variables: environment resolution is transparently handled by `ConfigProvider` (Ravel), with the MP Config convention (`MP_FAULT_TOLERANCE_*` → `mp.fault.tolerance.*`). No Heisenberg-specific logic.
 
 ---
 
-### M9 — TCK officiel MicroProfile Fault Tolerance 4.1
+### M9 — Official MicroProfile Fault Tolerance 4.1 TCK
 
-**Scope :** Suite complète `microprofile-fault-tolerance-tck:4.1`.
+**Scope:** Full `microprofile-fault-tolerance-tck:4.1` suite.
 
-| Tâche | Notes | État |
+| Task | Notes | Status |
 |---|---|---|
-| `heisenberg-tck/pom.xml` (Model 4.0.0) | Dépendances : TCK, Arquillian, Vauban embedded ; **hors reactor** | ☑ |
-| `HeisenbergDeployableContainer` | `DeployableContainer` Arquillian Local démarrant Vauban + Heisenberg embedded ; cycle deploy/undeploy par archive ShrinkWrap | ☑ |
-| `VaubanTckBootstrap` | Extraction MP Config + classes de l'archive, démarrage Vauban (HeisenbergExtension + FaultToleranceInterceptor + StateRegistryBean + BulkheadStateRegistryBean), activation du `RequestContext` | ☑ |
-| `HeisenbergTestEnricher` | Injection `@Inject` (+ `Instance<T>`) sur les classes de test TCK via `BeanManager` Vauban | ☑ |
-| `HeisenbergArquillianExtension` + `arquillian.xml` + service SPI | Découverte du container par Arquillian (qualifier `heisenberg`, défaut) | ☑ |
-| `tck-suite.xml` | Sélection des packages TCK ; multiplier exposé via `tck-official` du pom | ☑ |
-| `run-official-tck-mp-fault-tolerance-4.1.sh` | Script racine : install reactor → invoke TCK ; modes `smoke` / `all` / `-Dtest=…` | ☑ |
-| Passage TCK smoke test | `HeisenbergTckSmokeTest` vert (1/1) | ☑ |
-| Activation des intercepteurs CDI dans Vauban | Verrou levé (binding marqueur BCE + résolution Vauban corrigée) ; `RetryTest` validé à 8/8 PASS | ☑ |
-| Passage TCK complet | 100 % PASS sur l'ensemble du `tck-suite.xml` (463/463, reconfirmé 2026-05-28T09:05:59Z) | ☑ |
-| `TCK.md` | Documentation des challenges et tests exclus (baseline initial documenté) | ☑ |
-| `heisenberg-tck/README.md` | Procédure d'installation TCK + architecture du runner | ☑ |
+| `heisenberg-tck/pom.xml` (Model 4.0.0) | Dependencies: TCK, Arquillian, embedded Vauban ; **outside the reactor** | ☑ |
+| `HeisenbergDeployableContainer` | Local Arquillian `DeployableContainer` starting embedded Vauban + Heisenberg ; deploy/undeploy cycle per ShrinkWrap archive | ☑ |
+| `VaubanTckBootstrap` | Extracts MP Config + classes from the archive, starts Vauban (`HeisenbergExtension` + `FaultToleranceInterceptor` + `StateRegistryBean` + `BulkheadStateRegistryBean`), activates `RequestContext` | ☑ |
+| `HeisenbergTestEnricher` | `@Inject` (+ `Instance<T>`) injection into TCK test classes through Vauban `BeanManager` | ☑ |
+| `HeisenbergArquillianExtension` + `arquillian.xml` + SPI service | Container discovery by Arquillian (qualifier `heisenberg`, default) | ☑ |
+| `tck-suite.xml` | Selection of TCK packages ; multiplier exposed through pom `tck-official` | ☑ |
+| `run-official-tck-mp-fault-tolerance-4.1.sh` | Root script: install reactor → invoke TCK ; modes `smoke` / `all` / `-Dtest=…` | ☑ |
+| Smoke TCK run | `HeisenbergTckSmokeTest` green (1/1) | ☑ |
+| Activation of CDI interceptors in Vauban | Blocker removed (BCE marker binding + corrected Vauban resolution) ; `RetryTest` validated at 8/8 PASS | ☑ |
+| Full TCK pass | 100% PASS on the entire `tck-suite.xml` (463/463, reconfirmed 2026-05-28T09:05:59Z) | ☑ |
+| `TCK.md` | Documentation of challenges and excluded tests (initial baseline documented) | ☑ |
+| `heisenberg-tck/README.md` | TCK installation procedure + runner architecture | ☑ |
 
-**Décisions M9 :**
-- Le container Arquillian est minimal : démarre Vauban (CDI), enregistre les beans du test,
-  exécute les méthodes via l'intercepteur Heisenberg.
-- La propriété `org.eclipse.microprofile.fault.tolerance.tck.timeout.multiplier` est exposée
-  dans le script pour les environnements CI lents.
-- Le `RequestContext` Vauban est activé au moment du déploiement de chaque archive TCK pour
-  éviter les `ContextNotActiveException` sur les beans `@RequestScoped` du TCK.
+**M9 decisions:**
+- The Arquillian container is minimal: starts Vauban (CDI), registers test beans,
+  executes methods through the Heisenberg interceptor.
+- The `org.eclipse.microprofile.fault.tolerance.tck.timeout.multiplier` property is exposed
+  in the script for slow CI environments.
+- The Vauban `RequestContext` is activated when each TCK archive is deployed to
+  avoid `ContextNotActiveException` on TCK `@RequestScoped` beans.
 
-**État M9 (ATTEINT — reconfirmé 2026-05-28T09:05:59Z, dernier rafraîchissement majeur 2026-05-24T15:36Z) :**
-- ✅ Infrastructure Arquillian complète : container, bootstrap, test enricher, descripteurs.
-- ✅ TCK officiel téléchargé et exécutable contre Heisenberg.
-- ✅ Smoke TCK (`HeisenbergTckSmokeTest`) : `1/1 PASS`.
-- ✅ Tests unitaires reactor : `110/110` core (+ 2 nouveaux `maxRetries=-1`) + `cdi-vauban` verts.
-- ✅ **Dernier run global (`all`) confirmé 2026-05-24T15:36Z** :
+**M9 state (ACHIEVED — reconfirmed 2026-05-28T09:05:59Z, latest major refresh 2026-05-24T15:36Z):**
+- ✅ Complete Arquillian infrastructure: container, bootstrap, test enricher, descriptors.
+- ✅ Official TCK downloaded and runnable against Heisenberg.
+- ✅ Smoke TCK (`HeisenbergTckSmokeTest`): `1/1 PASS`.
+- ✅ Reactor unit tests: `110/110` core (+ 2 new `maxRetries=-1`) + `cdi-vauban` green.
+- ✅ **Latest global run (`all`) confirmed 2026-05-24T15:36Z**:
   **463 run / 463 PASS / 0 fail / 0 skip = 100 % PASS**
-  (gain net +7 PASS sur cette itération §9 Dirac :
-   (a) `RetryConfig` accepte `maxRetries = -1` (spec §3.4 « retry indefinitely »),
-       `RetryEngine` interprète `-1` comme infini → débloque
-       `RetryMetricTest.testRetryMetricMaxDuration{,NoRetries}` et leur jumeaux Telemetry ;
-   (b) `MetricRegistryProxyProducerBean` expose désormais
-       `@Produces @RegistryType(BASE) MetricRegistryProxy` ET
-       `@Produces @RegistryType(BASE) MetricRegistry` pour satisfaire
-       `AllMetricsTest.testMetricUnits` qui injecte explicitement le registre BASE ;
-   (c) `VaubanTckBootstrap` filtre désormais
+  (net gain +7 PASS on this §9 Dirac iteration:
+   (a) `RetryConfig` now accepts `maxRetries = -1` (spec §3.4 “retry indefinitely”),
+       `RetryEngine` interprets `-1` as infinity → unblocks
+       `RetryMetricTest.testRetryMetricMaxDuration{,NoRetries}` and their Telemetry twins ;
+   (b) `MetricRegistryProxyProducerBean` now exposes
+       `@Produces @RegistryType(BASE) MetricRegistryProxy` AND
+       `@Produces @RegistryType(BASE) MetricRegistry` to satisfy
+       `AllMetricsTest.testMetricUnits`, which explicitly injects the BASE registry ;
+   (c) `VaubanTckBootstrap` now filters out
        `org.eclipse.microprofile.fault.tolerance.tck.metrics.util.MetricRegistryProvider`
-       de l'archive Arquillian — ce provider TCK appelle
-       `CDI.current().select(MetricRegistry.class, RegistryTypeLiteral.BASE)` qui collide
-       avec notre producer ;
-   (d) `HeisenbergTestEnricher` gère désormais l'ambiguïté de résolution
-       (`AmbiguousResolutionException` + `resolve()` retournant `null`) en sélectionnant
-       le premier bean — contournement du fait que Vauban discrimine mal les *members*
-       des qualifiers à valeurs comme `@RegistryType(type=BASE)`).
-- ✅ **§9 MP Metrics (Dirac) : 100 % PASS.**
-- ✅ **§10 OpenTelemetry (Humboldt) : 100 % PASS**.
-- 🎯 **Score actuel = 100 % (463/463)**.
+       from the Arquillian archive — this TCK provider calls
+       `CDI.current().select(MetricRegistry.class, RegistryTypeLiteral.BASE)` which collides
+       with our producer ;
+   (d) `HeisenbergTestEnricher` now handles resolution ambiguity
+       (`AmbiguousResolutionException` + `resolve()` returning `null`) by selecting
+       the first bean — a workaround for the fact that Vauban does not discriminate *members*
+       well on value-bearing qualifiers such as `@RegistryType(type=BASE)`).
+- ✅ **§9 MP Metrics (Dirac): 100% PASS.**
+- ✅ **§10 OpenTelemetry (Humboldt): 100% PASS**.
+- 🎯 **Current score = 100% (463/463)**.
 
-**Livrable :** score TCK mesurable/reproductible à chaque lot ; objectif final = 100 % PASS.
+**Deliverable:** TCK score measurable/reproducible for every batch ; final objective = 100% PASS.
 
 ---
 
-## Risques connus
+## Known risks
 
-| Risque | Impact | Mitigation |
+| Risk | Impact | Mitigation |
 |---|---|---|
-| `StructuredTaskScope` (finalisé Java 25) | API alternative (non utilisée actuellement) | M3 implémenté avec `Thread.ofVirtual() + join(Duration)` (Java 21+). `StructuredTaskScope` pourrait offrir des avantages futurs mais `Thread.join(Duration)` est stable et plus compatible. |
-| Concurrence du `CircuitBreakerEngine` | Races sur les transitions d'état sous forte charge | Tests de concurrence avec 100+ virtual threads dès M4 ; `AtomicReference` + CAS |
-| TCK TestNG vs JUnit 6 | Framework de test différent pour le TCK | Modules de test séparés ; TCK hors reactor avec son propre BOM TestNG |
-| Artefact TCK non-public | Blocage si l'artefact n'est pas dans le M2 local | Documentation dans `heisenberg-tck/README.md` ; CI script d'installation |
-| Interaction `@Asynchronous` + `CompletionStage` côté TCK | Timing-sensitive, peut nécessiter le multiplier timeout | Exposer `org.eclipse.microprofile.fault.tolerance.tck.timeout.multiplier=2.0` en CI |
-| Désactivation globale FT | `mp.fault.tolerance.interceptor.priority=MAX_INT` contourne tout | Tester explicitement le mode désactivé dès M7 |
+| `StructuredTaskScope` (finalized in Java 25) | Alternative API (not currently used) | M3 implemented with `Thread.ofVirtual() + join(Duration)` (Java 21+). `StructuredTaskScope` could offer future benefits, but `Thread.join(Duration)` is stable and more compatible. |
+| `CircuitBreakerEngine` concurrency | Races on state transitions under heavy load | Concurrency tests with 100+ virtual threads from M4 onward ; `AtomicReference` + CAS |
+| TCK TestNG vs JUnit 6 | Different test framework for the TCK | Separate test modules ; TCK outside the reactor with its own TestNG BOM |
+| Non-public TCK artifact | Blocker if the artifact is not in the local M2 | Documentation in `heisenberg-tck/README.md` ; CI installation script |
+| TCK-side `@Asynchronous` + `CompletionStage` interaction | Timing-sensitive, may require the timeout multiplier | Expose `org.eclipse.microprofile.fault.tolerance.tck.timeout.multiplier=2.0` in CI |
+| Global FT disabling | `mp.fault.tolerance.interceptor.priority=MAX_INT` bypasses everything | Explicitly test disabled mode from M7 onward |
 
-## Décisions actées
+## Ratified decisions
 
-- [x] Séparation `heisenberg-core` (moteurs purs) / `heisenberg-cdi-vauban` (intercepteur CDI)
-- [x] Ordre de composition : `@Fallback → @CB → @Bulkhead → @Timeout → @Retry → méthode` (§2.5)
-- [x] Virtual threads pour `@Asynchronous` et `@Timeout` : implémentation M3 via `Thread.ofVirtual() + join(Duration)` (Java 21+, finalisé). `StructuredTaskScope` (JEP 505, finalisé Java 25) reste une alternative optionnelle pour futures optimisations de performance.
+- [x] Separation `heisenberg-core` (pure engines) / `heisenberg-cdi-vauban` (CDI interceptor)
+- [x] Composition order: `@Fallback → @CB → @Bulkhead → @Timeout → @Retry → method` (§2.5)
+- [x] Virtual threads for `@Asynchronous` and `@Timeout`: M3 implementation via `Thread.ofVirtual() + join(Duration)` (Java 21+, finalized). `StructuredTaskScope` (JEP 505, finalized in Java 25) remains an optional alternative for future performance optimizations.
 - [x] `StateKey` = `beanClass.getName() + "#" + methodName`
-- [x] Fenêtre glissante count-based uniquement pour le CircuitBreaker (time-based = optionnel spec)
-- [x] Configuration via `ConfigProvider.getConfig()` (Ravel) — pas de dépendance directe à Ravel
-- [x] M1-M5 complètement implémentés et testés (unitaire + intégration CDI)
-- [x] **M6 — @Asynchronous** : `AsynchronousEngine` implémenté, `PolicyComposer` intégré, tests complets (46 tests au total)
-- [x] **M7 — Composition et ordre des politiques** :
-  - Désactivation par politique : `ConfigResolver.isXyzEnabled(method)` avec précédence `<class>/<method>/<Annotation>/enabled > <class>/<Annotation>/enabled > <Annotation>/enabled` — couvert pour Retry/Timeout/CircuitBreaker/Bulkhead/Fallback **et Asynchronous** (§9.1 traite la méthode comme synchrone si désactivé)
-  - Désactivation globale : `ConfigResolver.isInterceptorGloballyDisabled()` testable unitairement, délégué par `FaultToleranceInterceptor.around()` via la clé `mp.fault.tolerance.interceptor.priority >= Integer.MAX_VALUE`
-  - **Async §8.2** : un `CompletionStage` retourné en erreur déclenche maintenant retry/fallback/CB (unwrap synchrone dans `PolicyComposer` pour le mode async)
-  - `AsynchronousIntegrationTest` réécrit pour passer par l'intercepteur via `ReflectiveInvocationContext` (utilitaire de test partagé, suppression de 6 copies dupliquées)
-  - **Score tests M7 : 98/98 verts** (71 core + 27 CDI), aucun test exclu
-  - Bug latent documenté dans `BUG.md` (BUG-001 : fuite virtual thread sous `@Asynchronous + @Timeout` avec stage long-running — acceptable)
-- [x] **M8 — Configuration externe via MicroProfile Config** :
-  - `ConfigResolver` étendu : `fallbackConfig(...)` ajoute la surcharge `applyOn`/`skipOn` ; tous les paramètres surchargeables des 5 politiques sont couverts
-  - Nouveau record `FallbackConfig` ; `FallbackPolicy.execute(...)` câblé dessus (l'ancienne logique `applyOn`/`skipOn` est portée par le record)
-  - `mp.fault.tolerance.interceptor.priority` appliqué au démarrage via le hook `@Enhancement` du BCE (`HeisenbergExtension.configureInterceptorPriority`) qui ré-écrit l'annotation `@Priority` sur `FaultToleranceInterceptor` (pattern `AnnotationLiteral`)
-  - `mp.fault.tolerance.metrics.enabled` exposé via `ConfigResolver.isMetricsEnabled()` — stub no-op tant que l'intégration MP Metrics n'est pas requise
-  - Tests d'intégration via `META-INF/microprofile-config.properties` + Ravel (`ConfigResolverIntegrationTest` — 10 tests)
-  - **Score tests M8 : 118/118 verts** (91 core + 27 CDI), aucun test exclu
-- [x] **Recorders métriques §9 + §10 (MP Metrics + OpenTelemetry)** :
-  - SPI : `io.vidocq.heisenberg.api.FtMetricsRecorder` (interface) + `FtMetricsRecorder.NOOP`
-  - §9 (MP Metrics) : `DiracFtMetricsRecorder` (`@ApplicationScoped`) câblé sur le registre Dirac via `@RegistryType` ; counters / histograms / gauges aux noms `ft.invocations.total`, `ft.retry.*`, `ft.timeout.*`, `ft.circuitbreaker.*`, `ft.bulkhead.*`
-  - §10 (OpenTelemetry) : `OtelFtMetricsRecorder` (`@ApplicationScoped`) câblé sur `GlobalOpenTelemetry.get().getMeter("io.vidocq.heisenberg")` ; mêmes noms, attributs `method = beanClass.getCanonicalName() + "." + methodName`, unités `seconds` pour histograms de durée, `nanoseconds` pour `ft.circuitbreaker.state.total` ; bucket boundaries explicites `[0.005, 0.01, 0.025, …, 10.0]` via `setExplicitBucketBoundariesAdvice` (TCK §10 default OTel-seconds)
-  - **Fan-out CDI** : `FaultToleranceInterceptor` (et l'interceptor 3850 TCK) injectent `@Any Instance<FtMetricsRecorder>` et délèguent à `MetricsRecorderResolver.resolve()` qui retourne soit le seul recorder présent, soit un `CompositeFtMetricsRecorder` qui appelle tous les délégués en fan-out ; évite l'`AmbiguousResolutionException` quand §9 et §10 coexistent
-  - Dépendances : `io.opentelemetry:opentelemetry-api:1.39.0` (provided) sur `heisenberg-cdi-vauban`, AMBN = `io.opentelemetry.api`, `requires static io.opentelemetry.api` dans le `module-info` ; CDI ignore silencieusement le bean si OTel absent à l'exécution
-  - **Impact TCK** : +16 PASS (28 → 12 fails) sur `tck-official` ; les 12 résiduels sont des bugs CB/Fallback symétriques §9/§10 (donc côté moteur) + 4 bugs TCK upstream JDK 25 + 2 manques mineurs (cf. § M9)
+- [x] Count-based sliding window only for CircuitBreaker (time-based = optional spec)
+- [x] Configuration via `ConfigProvider.getConfig()` (Ravel) — no direct dependency on Ravel
+- [x] M1-M5 fully implemented and tested (unit + CDI integration)
+- [x] **M6 — @Asynchronous**: `AsynchronousEngine` implemented, `PolicyComposer` integrated, complete tests (46 tests total)
+- [x] **M7 — Composition and policy order**:
+  - Per-policy disabling: `ConfigResolver.isXyzEnabled(method)` with precedence `<class>/<method>/<Annotation>/enabled > <class>/<Annotation>/enabled > <Annotation>/enabled` — covered for Retry/Timeout/CircuitBreaker/Bulkhead/Fallback **and Asynchronous** (§9.1 treats the method as synchronous when disabled)
+  - Global disabling: `ConfigResolver.isInterceptorGloballyDisabled()` unit-testable, delegated by `FaultToleranceInterceptor.around()` through key `mp.fault.tolerance.interceptor.priority >= Integer.MAX_VALUE`
+  - **Async §8.2**: an exceptionally completed `CompletionStage` now triggers retry/fallback/CB (synchronous unwrap in `PolicyComposer` for async mode)
+  - `AsynchronousIntegrationTest` rewritten to go through the interceptor via `ReflectiveInvocationContext` (shared test utility, removal of 6 duplicated copies)
+  - **M7 test score: 98/98 green** (71 core + 27 CDI), no excluded test
+  - Latent bug documented in `BUG.md` (BUG-001: virtual thread leak under `@Asynchronous + @Timeout` with a long-running stage — acceptable)
+- [x] **M8 — External configuration via MicroProfile Config**:
+  - Extended `ConfigResolver`: `fallbackConfig(...)` adds `applyOn`/`skipOn` overrides ; all overridable parameters of the 5 policies are covered
+  - New `FallbackConfig` record ; `FallbackPolicy.execute(...)` wired on top of it (the former `applyOn`/`skipOn` logic is now carried by the record)
+  - `mp.fault.tolerance.interceptor.priority` applied at startup through the BCE `@Enhancement` hook (`HeisenbergExtension.configureInterceptorPriority`) which rewrites the `@Priority` annotation on `FaultToleranceInterceptor` (`AnnotationLiteral` pattern)
+  - `mp.fault.tolerance.metrics.enabled` exposed via `ConfigResolver.isMetricsEnabled()` — no-op stub until MP Metrics integration is required
+  - Integration tests via `META-INF/microprofile-config.properties` + Ravel (`ConfigResolverIntegrationTest` — 10 tests)
+  - **M8 test score: 118/118 green** (91 core + 27 CDI), no excluded test
+- [x] **§9 + §10 metrics recorders (MP Metrics + OpenTelemetry)**:
+  - SPI: `io.vidocq.heisenberg.api.FtMetricsRecorder` (interface) + `FtMetricsRecorder.NOOP`
+  - §9 (MP Metrics): `DiracFtMetricsRecorder` (`@ApplicationScoped`) wired to the Dirac registry through `@RegistryType` ; counters / histograms / gauges named `ft.invocations.total`, `ft.retry.*`, `ft.timeout.*`, `ft.circuitbreaker.*`, `ft.bulkhead.*`
+  - §10 (OpenTelemetry): `OtelFtMetricsRecorder` (`@ApplicationScoped`) wired to `GlobalOpenTelemetry.get().getMeter("io.vidocq.heisenberg")` ; same names, attributes `method = beanClass.getCanonicalName() + "." + methodName`, `seconds` units for duration histograms, `nanoseconds` for `ft.circuitbreaker.state.total` ; explicit bucket boundaries `[0.005, 0.01, 0.025, …, 10.0]` via `setExplicitBucketBoundariesAdvice` (TCK §10 default OTel-seconds)
+  - **CDI fan-out**: `FaultToleranceInterceptor` (and the 3850 TCK interceptor) inject `@Any Instance<FtMetricsRecorder>` and delegate to `MetricsRecorderResolver.resolve()` which returns either the single recorder present or a `CompositeFtMetricsRecorder` that calls all delegates in fan-out ; avoids `AmbiguousResolutionException` when §9 and §10 coexist
+  - Dependencies: `io.opentelemetry:opentelemetry-api:1.39.0` (provided) on `heisenberg-cdi-vauban`, AMBN = `io.opentelemetry.api`, `requires static io.opentelemetry.api` in `module-info` ; CDI silently ignores the bean if OTel is absent at runtime
+  - **TCK impact**: +16 PASS (28 → 12 fails) on `tck-official` ; the remaining 12 were symmetric CB/Fallback bugs in §9/§10 (engine-side) + 4 upstream TCK bugs on JDK 25 + 2 minor missing pieces (see § M9)
 
-## Décisions ouvertes
+## Open decisions
 
-- **Virtual threads implementation (M3)** : implémentation via `Thread.ofVirtual() + join(Duration)` (Java 21+, finalisé). Cette approche est stable, compatible Java 21+, et offre les mêmes garanties de timeout que `StructuredTaskScope` (finalisé Java 25). Une migration vers `StructuredTaskScope` pourrait être envisagée en M10 si les benchmarks montrent un gain significatif, mais n'est pas prioritaire.
-- **Fenêtre glissante time-based** : la spec la mentionne mais ne l'impose pas. Inclure dès M4 ou exclure (possible exclusion TCK à documenter) ?
-- **`@CircuitBreaker` + delay** : utiliser un virtual thread dormant ou un `ScheduledExecutorService` (platform) pour la transition OPEN → HALF_OPEN ?
-- **intégration `vidocq`** : définir l'extension MPS Heisenberg après que TCK soit vert.
+- **Virtual threads implementation (M3)** : implementation via `Thread.ofVirtual() + join(Duration)` (Java 21+, finalized). This approach is stable, Java 21+ compatible, and offers the same timeout guarantees as `StructuredTaskScope` (finalized in Java 25). A migration to `StructuredTaskScope` could be considered in M10 if benchmarks show a significant gain, but it is not a priority.
+- **Time-based sliding window** : the spec mentions it but does not mandate it. Include it from M4 or exclude it (possible TCK exclusion to document)?
+- **`@CircuitBreaker` + delay** : use a sleeping virtual thread or a `ScheduledExecutorService` (platform) for the OPEN → HALF_OPEN transition?
+- **`vidocq` integration** : define the Heisenberg MPS extension after the TCK turns green.

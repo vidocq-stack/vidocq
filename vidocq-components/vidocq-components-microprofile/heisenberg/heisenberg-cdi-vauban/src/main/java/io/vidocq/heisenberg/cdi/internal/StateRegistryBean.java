@@ -7,10 +7,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * Registre d'état du Circuit Breaker global — bean CDI {@code @ApplicationScoped}.
+ * Global Circuit Breaker state registry — CDI {@code @ApplicationScoped} bean.
  *
- * <p>Stocke les états CLOSED/OPEN/HALF_OPEN + compteurs de succès pour tous les circuits breakers
- * via une clé stable : {@code ClassName#methodName}.</p>
+ * <p>Stores the CLOSED/OPEN/HALF_OPEN states + success counters for all circuit breakers
+ * using a stable key: {@code ClassName#methodName}.</p>
  */
 @ApplicationScoped
 public class StateRegistryBean implements CircuitBreakerStateRegistry {
@@ -25,7 +25,7 @@ public class StateRegistryBean implements CircuitBreakerStateRegistry {
     private final ConcurrentHashMap<String, CircuitBreakerSnapshot> states = new ConcurrentHashMap<>();
 
     /**
-     * Clé stable pour un circuit breaker.
+     * Stable key for a circuit breaker.
      */
     private String key(String beanClass, String methodName) {
         return beanClass + "#" + methodName;

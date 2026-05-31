@@ -135,7 +135,7 @@ public final class ConfigResolver {
     }
 
     /**
-     * M8 §9.1 : configuration {@code @Fallback}.
+     * M8 §9.1: {@code @Fallback} configuration.
      */
     public static FallbackConfig fallbackConfig(Method method, Fallback fallback) {
         return fallbackConfig(method, method.getDeclaringClass(), fallback, loadConfig());
@@ -161,7 +161,7 @@ public final class ConfigResolver {
         return new FallbackConfig(applyOn, skipOn, fallbackMethod, fallbackHandlerClass);
     }
 
-    // M7: Désactivation par politique via config externe
+    // M7: policy-based disablement via external configuration
     public static boolean isRetryEnabled(Method method) {
         return isEnabled(method, method.getDeclaringClass(), "Retry");
     }
@@ -211,7 +211,7 @@ public final class ConfigResolver {
     }
 
     /**
-     * M7 §9 : désactivation globale via {@code mp.fault.tolerance.interceptor.priority}.
+     * M7 §9: global disablement via {@code mp.fault.tolerance.interceptor.priority}.
      */
     public static boolean isInterceptorGloballyDisabled() {
         return isInterceptorGloballyDisabled(loadConfig());
@@ -225,7 +225,7 @@ public final class ConfigResolver {
     }
 
     /**
-     * M8 §9 : valeur de la priorité de l'intercepteur Fault Tolerance.
+     * M8 §9: Fault Tolerance interceptor priority value.
      */
     public static int interceptorPriority() {
         return interceptorPriority(loadConfig());
@@ -238,8 +238,8 @@ public final class ConfigResolver {
                 return fromConfig.get();
             }
         }
-        // Bootstrap fallback: pendant l'initialisation BCE, MP Config peut ne pas être
-        // complètement initialisé alors que le microprofile-config.properties est déjà sur le classpath.
+        // Bootstrap fallback: during BCE initialization, MP Config may not be fully
+        // initialized yet even though microprofile-config.properties is already on the classpath.
         return interceptorPriorityFromClasspath().orElse(DEFAULT_INTERCEPTOR_PRIORITY);
     }
 
@@ -272,7 +272,7 @@ public final class ConfigResolver {
         return Optional.empty();
     }
 
-    /** Défaut spec MP FT 4.1 : Platform.AFTER (4000) + 10. */
+    /** MP FT 4.1 spec default: Platform.AFTER (4000) + 10. */
     public static final int DEFAULT_INTERCEPTOR_PRIORITY = 4010;
 
     public static boolean isMetricsEnabled() {
@@ -454,7 +454,7 @@ public final class ConfigResolver {
     }
 
     /**
-     * MP FT 4.1 §9 : précédence de résolution des propriétés.
+     * MP FT 4.1 §9: property-resolution precedence.
      * <ul>
      *   <li>{@code <class>/<method>/<Annotation>/<param>}</li>
      *   <li>{@code <class>/<Annotation>/<param>}</li>

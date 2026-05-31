@@ -17,12 +17,12 @@ import org.eclipse.microprofile.metrics.annotation.RegistryType;
 import java.lang.reflect.Proxy;
 
 /**
- * Produit un bean {@link MetricRegistryProxy} {@code @Default} qui enveloppe le registre
- * Dirac APPLICATION, requis par les tests TCK MicroProfile Fault Tolerance metrics.
+ * Produces a {@code @Default} {@link MetricRegistryProxy} bean that wraps the
+ * Dirac APPLICATION registry, required by the MicroProfile Fault Tolerance metrics TCK tests.
  *
- * <p>Les métriques FT sont publiées dans le registre APPLICATION par {@code DiracFtMetricsRecorder}.
- * Ce producer expose ce registre via l'interface TCK {@code MetricRegistryProxy} avec
- * qualificateur {@code @Default} (les tests TCK injectent sans qualificateur).</p>
+ * <p>FT metrics are published in the APPLICATION registry by {@code DiracFtMetricsRecorder}.
+ * This producer exposes that registry through the TCK {@code MetricRegistryProxy} interface with
+ * qualifier {@code @Default} (the TCK tests inject without a qualifier).</p>
  */
 @ApplicationScoped
 public class MetricRegistryProxyProducerBean {
@@ -38,13 +38,13 @@ public class MetricRegistryProxyProducerBean {
     }
 
     /**
-     * Producer qualifié pour les tests TCK qui injectent
+     * Qualified producer for TCK tests that inject
      * {@code @Inject @RegistryType(type=Type.BASE) MetricRegistryProxy} (cf.
      * {@code AllMetricsTest.testMetricUnits}).
      *
-     * <p>En MP Metrics 5, la distinction BASE/APPLICATION/VENDOR est dépréciée — toutes
-     * les métriques cohabitent dans le même registre. On expose donc le même registre
-     * Dirac sous le qualificateur attendu par le TCK.</p>
+     * <p>In MP Metrics 5, the BASE/APPLICATION/VENDOR distinction is deprecated — all
+     * metrics coexist in the same registry. We therefore expose the same Dirac registry
+     * under the qualifier expected by the TCK.</p>
      */
     @SuppressWarnings("deprecation")
     @Produces
@@ -54,12 +54,12 @@ public class MetricRegistryProxyProducerBean {
     }
 
     /**
-     * Producer de {@link MetricRegistry} qualifié {@code @RegistryType(BASE)} — requis par
-     * le bean {@code MetricRegistryProvider} du TCK qui fait
-     * {@code CDI.current().select(MetricRegistry.class, RegistryTypeLiteral.BASE)} pour
-     * construire son propre {@code MetricRegistryProxy}. Dirac n'expose que le registre
-     * {@code @RegistryType()} (par défaut Type.APPLICATION) — on réexpose la même
-     * instance avec le qualifier BASE attendu par la spec MP Metrics 4.x.
+     * Producer of {@link MetricRegistry} qualified with {@code @RegistryType(BASE)} — required by
+     * the TCK {@code MetricRegistryProvider} bean, which uses
+     * {@code CDI.current().select(MetricRegistry.class, RegistryTypeLiteral.BASE)} to
+     * build its own {@code MetricRegistryProxy}. Dirac exposes only the
+     * {@code @RegistryType()} registry (Type.APPLICATION by default) — we re-expose the same
+     * instance with the BASE qualifier expected by the MP Metrics 4.x spec.
      */
     @SuppressWarnings("deprecation")
     @Produces

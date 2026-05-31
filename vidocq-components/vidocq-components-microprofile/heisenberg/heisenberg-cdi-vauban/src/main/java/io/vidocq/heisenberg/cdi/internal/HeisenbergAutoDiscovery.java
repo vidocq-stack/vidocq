@@ -6,15 +6,15 @@ import org.eclipse.microprofile.config.spi.ConfigBuilder;
 import org.eclipse.microprofile.config.spi.ConfigProviderResolver;
 
 /**
- * Pont ServiceLoader vers le resolver MP Config réellement présent sur le classpath (Ravel).
+ * ServiceLoader bridge to the MP Config resolver actually present on the classpath (Ravel).
  */
 public final class HeisenbergAutoDiscovery extends ConfigProviderResolver {
 
     private ConfigProviderResolver delegate;
 
-    // Constructeur public par défaut requis par ServiceLoader
+    // Public no-arg constructor required by ServiceLoader
     public HeisenbergAutoDiscovery() {
-        // Lazy initialization pour éviter les appels circulaires ServiceLoader
+        // Lazy initialization to avoid circular ServiceLoader calls
     }
 
     @Override

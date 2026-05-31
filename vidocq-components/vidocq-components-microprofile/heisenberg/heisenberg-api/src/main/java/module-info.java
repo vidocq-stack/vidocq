@@ -1,21 +1,21 @@
 /**
- * API Heisenberg : re-exposition contrôlée de la spec MicroProfile Fault Tolerance 4.1
- * et SPI publique stable de l'implémentation Vidocq.
+ * Heisenberg API: controlled re-export of the MicroProfile Fault Tolerance 4.1 spec
+ * and stable public SPI of the Vidocq implementation.
  *
- * <p><strong>Note JPMS — module automatique éventuel sans {@code Automatic-Module-Name}</strong> :
- * Si {@code microprofile-fault-tolerance-api:4.1} n'a ni {@code Automatic-Module-Name} dans son
- * {@code MANIFEST.MF}, ni {@code module-info.class}, le nom JPMS utilisé est
- * {@code microprofile.fault.tolerance.api} (dérivé du nom d'artefact Maven par Java :
- * strip version + remplacement {@code -} par {@code .}).
- * Le POM parent force ce JAR sur le module-path via {@code target/javamodules/}
- * (voir {@code maven-dependency-plugin} en phase {@code initialize}).</p>
+ * <p><strong>JPMS note — possible automatic module without {@code Automatic-Module-Name}</strong>:
+ * If {@code microprofile-fault-tolerance-api:4.1} has neither {@code Automatic-Module-Name} in its
+ * {@code MANIFEST.MF} nor a {@code module-info.class}, the JPMS name used is
+ * {@code microprofile.fault.tolerance.api} (derived by Java from the Maven artifact name:
+ * strip version + replace {@code -} with {@code .}).
+ * The parent POM forces this JAR onto the module path via {@code target/javamodules/}
+ * (see {@code maven-dependency-plugin} in the {@code initialize} phase).</p>
  *
- * <p>Contenu prévu (cf. ROADMAP.md M1+) :</p>
+ * <p>Planned contents (cf. ROADMAP.md M1+) :</p>
  * <ul>
- *   <li>Re-export transitif des annotations {@code @Retry}, {@code @Timeout},
- *       {@code @CircuitBreaker}, {@code @Bulkhead}, {@code @Fallback}, {@code @Asynchronous}.</li>
- *   <li>{@code PolicyContext} — contexte d'invocation enrichi exposé aux moteurs du core.</li>
- *   <li>Configs immuables : {@code RetryConfig}, {@code TimeoutConfig},
+ *   <li>Transitive re-export of the {@code @Retry}, {@code @Timeout},
+ *       {@code @CircuitBreaker}, {@code @Bulkhead}, {@code @Fallback}, {@code @Asynchronous} annotations.</li>
+ *   <li>{@code PolicyContext} — enriched invocation context exposed to the core engines.</li>
+ *   <li>Immutable configs: {@code RetryConfig}, {@code TimeoutConfig},
  *       {@code CircuitBreakerConfig}, {@code BulkheadConfig} (records).</li>
  * </ul>
  */

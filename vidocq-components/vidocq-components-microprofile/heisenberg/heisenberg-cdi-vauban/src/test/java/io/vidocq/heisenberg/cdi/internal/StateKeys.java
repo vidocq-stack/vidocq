@@ -3,10 +3,10 @@ package io.vidocq.heisenberg.cdi.internal;
 import java.lang.reflect.Method;
 
 /**
- * Utilitaire de tests — reproduit le format de clé canonique utilisé par
- * {@code PolicyComposer} pour identifier l'état partagé d'un bulkhead/CB.
+ * Test utility — reproduces the canonical key format used by
+ * {@code PolicyComposer} to identify the shared state of a bulkhead/CB.
  *
- * <p>Doit rester synchrone avec {@code PolicyComposer.invoke(...)} :
+ * <p>Must stay in sync with {@code PolicyComposer.invoke(...)}:
  * <pre>
  *   beanKey   = beanClass.getName() + "@" + System.identityHashCode(beanClass.getClassLoader())
  *   methodKey = method.toGenericString()

@@ -1,41 +1,41 @@
 # Heisenberg
 
-> *Werner Heisenberg (1901–1976) formula le principe d'incertitude — on ne peut mesurer
-> simultanément la position et la quantité de mouvement d'une particule avec une précision
-> arbitraire. Heisenberg le projet encapsule l'incertitude inhérente aux appels réseau et
-> aux services distants, et y répond avec ordre, mesure et résilience.*
+> *Werner Heisenberg (1901–1976) formulated the uncertainty principle — one cannot measure
+> simultaneously the position and momentum of a particle with arbitrary precision.
+> The Heisenberg project encapsulates the uncertainty inherent in network calls and
+> remote services, and responds to it with order, measure, and resilience.*
 
-Implémentation **MicroProfile Fault Tolerance 4.1** dans l'écosystème Vidocq.
+Implementation of **MicroProfile Fault Tolerance 4.1** in the Vidocq ecosystem.
 
-- **Zéro librairie tierce** — seules les API specs Jakarta EE / MicroProfile sont compilées.
-- **Java 25** — virtual threads pour `@Asynchronous` et `@Timeout` (`Thread.ofVirtual() + join(Duration)`).
-- **JPMS strict** — chaque module a son `module-info.java`, exports minimaux.
-- **CDI via Vauban** — `heisenberg-cdi-vauban` fournit l'intercepteur CDI et la BCE.
-- **Config via Ravel** — surcharge des paramètres via MicroProfile Config.
+- **Zero third-party libraries** — only Jakarta EE / MicroProfile spec APIs are compiled.
+- **Java 25** — virtual threads for `@Asynchronous` and `@Timeout` (`Thread.ofVirtual() + join(Duration)`).
+- **Strict JPMS** — each module has its own `module-info.java`, with minimal exports.
+- **CDI via Vauban** — `heisenberg-cdi-vauban` provides the CDI interceptor and BCE.
+- **Config via Ravel** — parameter overrides through MicroProfile Config.
 
-## Politiques implémentées
+## Implemented policies
 
 | Annotation | Description |
 |---|---|
-| `@Retry` | Ré-essais automatiques avec délai, jitter, retryOn/abortOn |
-| `@Timeout` | Délai maximal d'exécution par tentative (virtual threads + `join(Duration)`) |
-| `@CircuitBreaker` | Disjoncteur (CLOSED/OPEN/HALF_OPEN), fenêtre glissante |
-| `@Bulkhead` | Isolation par sémaphore (sync) ou file (async) |
-| `@Fallback` | Alternative en cas d'échec (FallbackHandler ou méthode de la classe) |
-| `@Asynchronous` | Exécution sur virtual thread, retour CompletionStage/Future |
+| `@Retry` | Automatic retries with delay, jitter, retryOn/abortOn |
+| `@Timeout` | Maximum execution time per attempt (virtual threads + `join(Duration)`) |
+| `@CircuitBreaker` | Circuit breaker (CLOSED/OPEN/HALF_OPEN), sliding window |
+| `@Bulkhead` | Isolation by semaphore (sync) or queue (async) |
+| `@Fallback` | Alternative on failure (FallbackHandler or class method) |
+| `@Asynchronous` | Execution on a virtual thread, CompletionStage/Future return |
 
 ## Modules
 
 | Module | Description |
 |---|---|
-| `heisenberg-api` | Re-exposition de la spec MP FT 4.1 + SPI Vidocq |
-| `heisenberg-core` | Moteurs de politiques purs Java 25 (sans CDI) |
-| `heisenberg-cdi-vauban` | Intercepteur CDI + BCE Vauban |
-| `heisenberg-bench` | Benchmarks JMH vs SmallRye Fault Tolerance |
-| `heisenberg-tck` | Runner TCK officiel (hors reactor, TestNG/Arquillian) |
-| `heisenberg-examples` | Exemples d'utilisation |
+| `heisenberg-api` | Re-exposes the MP FT 4.1 spec + Vidocq SPI |
+| `heisenberg-core` | Pure Java 25 policy engines (without CDI) |
+| `heisenberg-cdi-vauban` | CDI interceptor + Vauban BCE |
+| `heisenberg-bench` | JMH benchmarks vs SmallRye Fault Tolerance |
+| `heisenberg-tck` | Official TCK runner (outside the reactor, TestNG/Arquillian) |
+| `heisenberg-examples` | Usage examples |
 
-## Prérequis
+## Prerequisites
 
 ```bash
 sdk env   # Java 25-tem + Maven 3.9.16
@@ -44,20 +44,20 @@ sdk env   # Java 25-tem + Maven 3.9.16
 ## Build
 
 ```bash
-./mvnw -ntp install -DskipTests   # reactor complet
-./mvnw test                        # tests unitaires
+./mvnw -ntp install -DskipTests   # full reactor
+./mvnw test                        # unit tests
 ```
 
-## TCK MicroProfile Fault Tolerance 4.1
+## MicroProfile Fault Tolerance 4.1 TCK
 
 ```bash
 ./run-official-tck-mp-fault-tolerance-4.1.sh        # smoke test
-./run-official-tck-mp-fault-tolerance-4.1.sh all    # suite complète
-./run-tck-no-observability.sh                       # smoke test sans observabilité
-./run-tck-no-observability.sh all                   # suite complète sans observabilité
-./run-tck-no-observability.sh -Dtest=RetryTest      # test ciblé sans observabilité
+./run-official-tck-mp-fault-tolerance-4.1.sh all    # full suite
+./run-tck-no-observability.sh                       # smoke test without observability
+./run-tck-no-observability.sh all                   # full suite without observability
+./run-tck-no-observability.sh -Dtest=RetryTest      # targeted test without observability
 ```
 
-## Licence
+## License
 
-Apache License, Version 2.0 — voir [LICENSE](LICENSE).
+Apache License, Version 2.0 — see [LICENSE](LICENSE).

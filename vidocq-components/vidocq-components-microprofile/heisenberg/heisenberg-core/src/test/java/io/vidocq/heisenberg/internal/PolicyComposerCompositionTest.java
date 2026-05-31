@@ -16,15 +16,15 @@ import org.eclipse.microprofile.faulttolerance.Bulkhead;
 import org.junit.jupiter.api.Test;
 
 /**
- * MP FT 4.1 §2.5 — Composition exhaustive de toutes les politiques.
- * Tests des interactions et de la propagation d'exceptions entre couches.
+ * MP FT 4.1 §2.5 — Exhaustive composition of all policies.
+ * Tests interactions and exception propagation between layers.
  */
 class PolicyComposerCompositionTest {
 
     // Test 1: @Retry + @Timeout
     @Test
     void retryAppliesBeforeTimeout() throws Exception {
-        // MP FT §2.5: @Timeout s'applique à chaque tentative individuelle
+        // MP FT §2.5: @Timeout applies to each individual attempt.
         RetryTimeoutService service = new RetryTimeoutService();
         Method method = RetryTimeoutService.class.getDeclaredMethod("guarded");
         AtomicInteger calls = new AtomicInteger();
@@ -49,13 +49,13 @@ class PolicyComposerCompositionTest {
     // Test 2: @CircuitBreaker + @Fallback
     @Test
     void circuitBreakerOpenTriggeredFallback() throws Exception {
-        // MP FT §2.5: CircuitBreakerOpenException déclenche le fallback
-        // Simulation : lancer directement une CircuitBreakerOpenException
+        // MP FT §2.5: CircuitBreakerOpenException triggers the fallback.
+        // Simulation: throw a CircuitBreakerOpenException directly.
         CBFallbackService service = new CBFallbackService();
         Method method = CBFallbackService.class.getDeclaredMethod("guarded");
 
-        // Pas de StateRegistry fourni, donc CB inactif — fallback reste noop
-        // Pour ce test, on simule l'exception du CB
+        // No StateRegistry is provided, so CB is inactive — fallback remains a noop.
+        // For this test, we simulate the CB exception.
         Object result = PolicyComposer.invoke(
                 () -> {
                     throw new CircuitBreakerOpenException();
@@ -67,18 +67,18 @@ class PolicyComposerCompositionTest {
                 null  // bhRegistry
         );
 
-        // Fallback s'active
+        // Fallback activates.
         assertEquals("fallback-after-cb", result);
     }
 
     // Test 3: @Bulkhead + @Fallback
     @Test
     void bulkheadSaturationTriggeredFallback() throws Exception {
-        // MP FT §5: BulkheadException déclenche le fallback
+        // MP FT §5: BulkheadException triggers the fallback.
         BulkheadFallbackService service = new BulkheadFallbackService();
         Method method = BulkheadFallbackService.class.getDeclaredMethod("guarded");
 
-        // Simulation d'une BulkheadException
+        // Simulate a BulkheadException.
         Object result = PolicyComposer.invoke(
                 () -> {
                     throw new BulkheadException();
@@ -96,7 +96,7 @@ class PolicyComposerCompositionTest {
     // Test 4: @Retry + @CircuitBreaker (sans Fallback)
     @Test
     void retrySendsToCBAndPropagatesException() throws Exception {
-        // MP FT §2.5: Exception remonte de Retry vers CB
+        // MP FT §2.5: the exception propagates from Retry to CB.
         RetryCBService service = new RetryCBService();
         Method method = RetryCBService.class.getDeclaredMethod("guarded");
         AtomicInteger calls = new AtomicInteger();
@@ -117,13 +117,13 @@ class PolicyComposerCompositionTest {
         );
 
         assertEquals("always fails", error.getMessage());
-        assertEquals(3, calls.get()); // 1 initial + 2 retries
+        assertEquals(3, calls.get()); // 1 initial call + 2 retries
     }
 
     // Test 5: Full composition with @Fallback → @CircuitBreaker → @Bulkhead → @Timeout → @Retry
     @Test
     void fullChainWithAllPolicies() throws Exception {
-        // MP FT §2.5: ordre complet de l'extérieur vers l'intérieur
+        // MP FT §2.5: full outside-to-inside order.
         FullChainService service = new FullChainService();
         Method method = FullChainService.class.getDeclaredMethod("guarded");
         AtomicInteger calls = new AtomicInteger();
@@ -139,8 +139,8 @@ class PolicyComposerCompositionTest {
                 service,
                 method,
                 new Object[0],
-                null, // cbRegistry (absent, donc CB désactivé)
-                null  // bhRegistry (absent, donc BH désactivé)
+                null, // cbRegistry (absent, so CB disabled)
+                null  // bhRegistry (absent, so BH disabled)
         );
 
         assertEquals("success-full-chain", result);
@@ -150,7 +150,7 @@ class PolicyComposerCompositionTest {
     // Test 6: Exception propagation through all layers
     @Test
     void exceptionPropagatesThroughAllLayers() throws Exception {
-        // MP FT §2.5: Exception de la méthode remonte à travers toutes les couches
+        // MP FT §2.5: the method exception propagates through all layers.
         NoFallbackFullChainService service = new NoFallbackFullChainService();
         Method method = NoFallbackFullChainService.class.getDeclaredMethod("guarded");
 
@@ -174,7 +174,7 @@ class PolicyComposerCompositionTest {
     // Test 7: @Retry with @Fallback - fallback runs after retries exhausted
     @Test
     void retryFallbackInteraction() throws Exception {
-        // MP FT §2.5: après épuisement des tentatives, fallback s'active
+        // MP FT §2.5: after retries are exhausted, fallback activates.
         RetryFallbackChainService service = new RetryFallbackChainService();
         Method method = RetryFallbackChainService.class.getDeclaredMethod("guarded");
         AtomicInteger calls = new AtomicInteger();
@@ -192,15 +192,15 @@ class PolicyComposerCompositionTest {
         );
 
         assertEquals("fallback-after-exhausted-retries", result);
-        assertEquals(3, calls.get()); // 1 initial + 2 retries
+        assertEquals(3, calls.get()); // 1 initial call + 2 retries
     }
 
     // Test 8: Disabled policy should be skipped
     @Test
     void disabledPolicyShouldBeSkipped() throws Exception {
-        // M7: Retry désactivé par config → pas de retry, l'exception remonte directement
-        // Ceci est testé via un mock Config dans le test intégration CDI
-        // Ici on teste simplement que si la politique n'est pas déclarée, elle n'a pas d'effet.
+        // M7: Retry disabled by config → no retry, the exception propagates directly.
+        // This is tested via a mock Config in the CDI integration test.
+        // Here we simply verify that an undeclared policy has no effect.
         DisabledRetryService service = new DisabledRetryService();
         Method method = DisabledRetryService.class.getDeclaredMethod("guarded");
 
@@ -219,7 +219,7 @@ class PolicyComposerCompositionTest {
         assertEquals("no-retry", error.getMessage());
     }
 
-    // Service classes with annotations matching test scenarios
+    // Service classes with annotations matching the test scenarios
 
     static class RetryTimeoutService {
         @Retry(maxRetries = 1)
@@ -276,7 +276,7 @@ class PolicyComposerCompositionTest {
         }
     }
 
-    // Idem FullChainService, mais sans @Fallback, pour tester la propagation d'exceptions
+    // Same as FullChainService, but without @Fallback, to test exception propagation.
     static class NoFallbackFullChainService {
         @CircuitBreaker
         @Bulkhead
@@ -299,7 +299,7 @@ class PolicyComposerCompositionTest {
         }
     }
 
-    // Service sans @Retry — politique non déclarée
+    // Service without @Retry — undeclared policy.
     static class DisabledRetryService {
         String guarded() {
             return "unreachable";

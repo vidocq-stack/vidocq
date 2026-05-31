@@ -8,7 +8,7 @@ import org.eclipse.microprofile.faulttolerance.exceptions.CircuitBreakerOpenExce
 import org.junit.jupiter.api.Test;
 
 /**
- * Tests CircuitBreakerEngine — M4 TDD.
+ * CircuitBreakerEngine tests — M4 TDD.
  * MP FT 4.1 §5.
  */
 class CircuitBreakerEngineTest {

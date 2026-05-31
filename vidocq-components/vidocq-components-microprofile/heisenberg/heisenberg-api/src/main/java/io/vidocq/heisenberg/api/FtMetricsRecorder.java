@@ -3,92 +3,92 @@ package io.vidocq.heisenberg.api;
 import java.lang.reflect.Method;
 
 /**
- * SPI d'instrumentation des métriques MicroProfile Fault Tolerance 4.1 §9.
+ * Instrumentation SPI for MicroProfile Fault Tolerance 4.1 §9 metrics.
  *
- * <p>Les implémentations sont découvertes par CDI ; si aucune n'est disponible,
- * {@link #NOOP} est utilisé. {@code DiracFtMetricsRecorder} (heisenberg-cdi-vauban) est
- * l'implémentation standard basée sur Dirac (MP Metrics).</p>
+ * <p>Implementations are discovered through CDI; if none is available,
+ * {@link #NOOP} is used. {@code DiracFtMetricsRecorder} (heisenberg-cdi-vauban) is
+ * the standard implementation based on Dirac (MP Metrics).</p>
  *
- * <p>Toutes les méthodes sont idempotentes et thread-safe.</p>
+ * <p>All methods are idempotent and thread-safe.</p>
  */
 public interface FtMetricsRecorder {
 
     /**
-     * Enregistre les métriques pour une méthode annotée FT.
-     * Appelé une seule fois par méthode (au premier appel). Idempotent.
+     * Registers metrics for an FT-annotated method.
+     * Called only once per method (on first call). Idempotent.
      *
-     * @param asyncBulkhead {@code true} si @Bulkhead est en mode async (@Asynchronous présent)
+     * @param asyncBulkhead {@code true} if @Bulkhead is in async mode (@Asynchronous present)
      */
     void register(Class<?> beanClass, Method method,
                   boolean hasRetry, boolean hasTimeout, boolean hasCircuitBreaker,
                   boolean hasBulkhead, boolean hasFallback, boolean asyncBulkhead);
 
     /**
-     * Enregistre le résultat global d'une invocation FT (après tous les politiques).
+     * Records the overall result of an FT invocation (after all policies).
      *
-     * @param succeeded      {@code true} si la méthode a retourné une valeur (éventuellement via fallback)
-     * @param fallbackApplied {@code true} si le fallback a été invoqué et a retourné avec succès
-     * @param fallbackDefined {@code true} si @Fallback est présent sur la méthode
+     * @param succeeded      {@code true} if the method returned a value (possibly via fallback)
+     * @param fallbackApplied {@code true} if the fallback was invoked and returned successfully
+     * @param fallbackDefined {@code true} if @Fallback is present on the method
      */
     void recordInvocation(Class<?> beanClass, Method method,
                           boolean succeeded, boolean fallbackApplied, boolean fallbackDefined);
 
     /**
-     * Enregistre le résultat de la politique @Retry.
+     * Records the outcome of the @Retry policy.
      *
-     * @param retryCount nombre de tentatives de retry (0 = pas de retry)
-     * @param result     comment la politique s'est terminée
+     * @param retryCount number of retry attempts (0 = no retry)
+     * @param result     how the policy completed
      */
     void recordRetry(Class<?> beanClass, Method method, int retryCount, RetryResult result);
 
     /**
-     * Enregistre le résultat de la politique @Timeout.
+     * Records the outcome of the @Timeout policy.
      *
-     * @param timedOut      {@code true} si le timeout a été déclenché
-     * @param durationNanos durée d'exécution en nanosecondes
+     * @param timedOut      {@code true} if the timeout was triggered
+     * @param durationNanos execution duration in nanoseconds
      */
     void recordTimeout(Class<?> beanClass, Method method, boolean timedOut, long durationNanos);
 
     /**
-     * Enregistre le résultat d'un appel au niveau du @CircuitBreaker.
+     * Records the result of a call at the @CircuitBreaker level.
      */
     void recordCircuitBreakerCall(Class<?> beanClass, Method method, CBCallResult result);
 
     /**
-     * Notifie d'une transition d'état du circuit breaker.
-     * Appelé chaque fois que l'état change (CLOSED→OPEN, OPEN→HALF_OPEN, HALF_OPEN→CLOSED).
+     * Notifies a circuit breaker state transition.
+     * Called whenever the state changes (CLOSED→OPEN, OPEN→HALF_OPEN, HALF_OPEN→CLOSED).
      */
     void notifyCircuitBreakerStateChange(Class<?> beanClass, Method method, CBState from, CBState to);
 
     /**
-     * Enregistre une invocation acceptée par le @Bulkhead.
+     * Records an invocation accepted by the @Bulkhead.
      *
-     * @param waitNanos temps passé en file d'attente (0 pour le mode sync ou permit immédiat)
-     * @param runNanos  temps d'exécution
+     * @param waitNanos time spent in the wait queue (0 for sync mode or an immediate permit)
+     * @param runNanos  execution time
      */
     void recordBulkheadAccepted(Class<?> beanClass, Method method, long waitNanos, long runNanos);
 
     /**
-     * Enregistre un rejet par le @Bulkhead.
+     * Records a rejection by the @Bulkhead.
      */
     void recordBulkheadRejected(Class<?> beanClass, Method method);
 
     /**
-     * Met à jour la jauge "invocations en cours" du @Bulkhead.
+     * Updates the @Bulkhead "running invocations" gauge.
      *
-     * @param delta +1 quand une invocation démarre, -1 quand elle se termine
+     * @param delta +1 when an invocation starts, -1 when it ends
      */
     void bulkheadRunningDelta(Class<?> beanClass, Method method, int delta);
 
     /**
-     * Met à jour la jauge "invocations en attente" du @Bulkhead (mode async uniquement).
+     * Updates the @Bulkhead "waiting invocations" gauge (async mode only).
      *
-     * @param delta +1 quand une invocation entre en file, -1 quand elle en sort
+     * @param delta +1 when an invocation enters the queue, -1 when it leaves it
      */
     void bulkheadWaitingDelta(Class<?> beanClass, Method method, int delta);
 
     // ------------------------------------------------------------------
-    // Enums de résultats
+    // Result enums
     // ------------------------------------------------------------------
 
     enum RetryResult {
@@ -132,7 +132,7 @@ public interface FtMetricsRecorder {
     }
 
     // ------------------------------------------------------------------
-    // Implémentation nulle (aucune instrumentation)
+    // No-op implementation (no instrumentation)
     // ------------------------------------------------------------------
 
     FtMetricsRecorder NOOP = new FtMetricsRecorder() {

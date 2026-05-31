@@ -7,13 +7,13 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Rsout l'ensemble des {@link FtMetricsRecorder} CDI disponibles et les compose si plusieurs.
+ * Resolves all available CDI {@link FtMetricsRecorder} implementations and composes them if several exist.
  *
- * <p>MicroProfile Fault Tolerance §9 (MP Metrics) et §10 (OpenTelemetry) sont des APIs de
- * mtriques distinctes mais simultanment publiables. Quand plusieurs recorders sont
- * prsents ({@link DiracFtMetricsRecorder} + {@link OtelFtMetricsRecorder}), tous sont
- * invoqus en fan-out via {@link CompositeFtMetricsRecorder}, en vitant l'erreur
- * {@code AmbiguousResolutionException} qu'aurait dclenche {@code Instance.get()}.</p>
+ * <p>MicroProfile Fault Tolerance §9 (MP Metrics) and §10 (OpenTelemetry) are distinct
+ * metrics APIs but can be published simultaneously. When several recorders are
+ * present ({@link DiracFtMetricsRecorder} + {@link OtelFtMetricsRecorder}), all are
+ * invoked in fan-out via {@link CompositeFtMetricsRecorder}, avoiding the
+ * {@code AmbiguousResolutionException} that {@code Instance.get()} would have triggered.</p>
  */
 final class MetricsRecorderResolver {
 

@@ -7,15 +7,15 @@ import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * Moteur {@code @Asynchronous} — exécution en virtual thread.
+ * {@code @Asynchronous} engine — virtual-thread execution.
  *
- * <p>Spec MicroProfile FT 4.1 §8 : une méthode annotée {@code @Asynchronous} exécute l'invocation
- * complète (avec toutes les politiques englobantes) dans un virtual thread créé via
- * {@code Thread.ofVirtual()}. Le caller obtient immédiatement un {@code CompletionStage<T>}
- * ou {@code Future<T>} qui se complète asynchronement.</p>
+ * <p>MicroProfile FT 4.1 spec §8: a method annotated with {@code @Asynchronous} executes the
+ * complete invocation (with all surrounding policies) in a virtual thread created via
+ * {@code Thread.ofVirtual()}. The caller immediately gets a {@code CompletionStage<T>}
+ * or {@code Future<T>} that completes asynchronously.</p>
  *
- * <p>L'ordre de composition reste strictement §2.5 : @Fallback → @CB → @Bulkhead → @Timeout → @Retry → méthode,
- * mais toute la chaîne s'exécute dans le virtual thread asynchrone.</p>
+ * <p>The composition order remains strictly §2.5: @Fallback → @CB → @Bulkhead → @Timeout → @Retry → method,
+ * but the whole chain executes in the asynchronous virtual thread.</p>
  */
 public final class AsynchronousEngine {
 
@@ -29,15 +29,15 @@ public final class AsynchronousEngine {
     }
 
     /**
-     * Exécute l'invocation dans un virtual thread et retourne un {@code CompletionStage<Object>}.
+     * Executes the invocation in a virtual thread and returns a {@code CompletionStage<Object>}.
      *
-     * <p>L'invocation complète (avec toutes les politiques) est exécutée dans le virtual thread.
-     * Le caller reçoit immédiatement le {@code CompletionStage} qui se complète asynchronement.</p>
+     * <p>The complete invocation (with all policies) is executed in the virtual thread.
+     * The caller immediately receives the {@code CompletionStage}, which completes asynchronously.</p>
      *
-     * @param invocation  l'invocation à exécuter (avec toutes les politiques)
-     * @param threadName  base pour le nom du virtual thread (e.g., "myMethod")
-     * @return un {@code CompletionStage<Object>} se complétant avec le résultat ou l'exception
-     * @throws Exception jamais lancée directement — les erreurs sont propagées dans le stage
+     * @param invocation  the invocation to execute (with all policies)
+     * @param threadName  base for the virtual-thread name (e.g., "myMethod")
+     * @return a {@code CompletionStage<Object>} completing with the result or exception
+     * @throws Exception never thrown directly — errors are propagated in the stage
      */
     public static CompletionStage<Object> executeAsync(
             PolicyComposer.Invocation invocation,

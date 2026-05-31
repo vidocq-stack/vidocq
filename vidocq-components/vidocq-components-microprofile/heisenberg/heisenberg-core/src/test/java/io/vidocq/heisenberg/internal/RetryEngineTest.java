@@ -14,7 +14,7 @@ class RetryEngineTest {
 
     @Test
     void retriesOnMatchingExceptionUntilSuccess() throws Exception {
-        // MP FT 4.1 §3: retryOn pilote les tentatives supplémentaires.
+        // MP FT 4.1 §3: retryOn drives the additional attempts.
         AtomicInteger calls = new AtomicInteger();
         RetryConfig config = config(2, 0, 5_000, 0, new Class[]{IOException.class}, new Class[0]);
 
@@ -31,7 +31,7 @@ class RetryEngineTest {
 
     @Test
     void abortOnHasPriorityOverRetryOn() {
-        // MP FT 4.1 §3.3: abortOn est prioritaire sur retryOn.
+        // MP FT 4.1 §3.3: abortOn takes precedence over retryOn.
         AtomicInteger calls = new AtomicInteger();
         RetryConfig config = config(
                 3,
@@ -53,7 +53,7 @@ class RetryEngineTest {
 
     @Test
     void maxRetriesMinusOneMeansRetryIndefinitelyUntilSuccess() throws Exception {
-        // MP FT 4.1 §3.4 : maxRetries = -1 signifie « retry indefinitely ».
+        // MP FT 4.1 §3.4: maxRetries = -1 means "retry indefinitely".
         AtomicInteger calls = new AtomicInteger();
         RetryConfig config = config(-1, 0, 5_000, 0, new Class[]{IOException.class}, new Class[0]);
 
@@ -70,7 +70,7 @@ class RetryEngineTest {
 
     @Test
     void maxRetriesMinusOneStopsOnMaxDuration() {
-        // MP FT 4.1 §3.4 : maxRetries = -1 + maxDuration borne le total dans le temps.
+        // MP FT 4.1 §3.4: maxRetries = -1 + maxDuration bounds the total time window.
         AtomicInteger calls = new AtomicInteger();
         RetryConfig config = config(-1, 0, 50, 0, new Class[]{IOException.class}, new Class[0]);
 
@@ -122,7 +122,7 @@ class RetryEngineTest {
 
     @Test
     void maxDurationBoundaryIsInclusive() {
-        // MP FT 4.1 §3.4: maxDuration borne la fenêtre totale de retry.
+        // MP FT 4.1 §3.4: maxDuration bounds the total retry window.
         boolean shouldStop = RetryEngine.reachesOrExceedsMaxDuration(
                 Duration.ofSeconds(1),
                 Duration.ofSeconds(1),
@@ -135,7 +135,7 @@ class RetryEngineTest {
 
     @Test
     void projectedAttemptDurationContributesToMaxDurationLimit() {
-        // MP FT 4.1 §3.4: la tentative suivante ne doit pas démarrer hors fenêtre maxDuration.
+        // MP FT 4.1 §3.4: the next attempt must not start outside the maxDuration window.
         boolean shouldStop = RetryEngine.reachesOrExceedsMaxDuration(
                 Duration.ofMillis(900),
                 Duration.ofSeconds(1),
