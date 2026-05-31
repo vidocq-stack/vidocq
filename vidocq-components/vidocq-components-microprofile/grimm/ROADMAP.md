@@ -136,7 +136,7 @@ ServiceLoader.
 | `JsonDeserializer` | Parses JSON `OpenAPI` document (for static file reading); JSON-P streaming | ☑ |
 | `YamlDeserializer` | Parses YAML `OpenAPI` document (for static file reading) | ☑ |
 | Round-trip unit tests | Serialize → deserialize → verify equality for all model objects | ☑ |
-| `format` query parameter | `?format=json` vs `?format=yaml` (implémenté dans `OpenApiResource`, validé sur tests HTTP + TCK) | ☑ |
+| `format` query parameter | `?format=json` vs `?format=yaml` (implemented in `OpenApiResource`, validated on HTTP tests + TCK) | ☑ |
 
 **Decisions M2:**
 - JSON serialization delegates to Champollion (Jakarta JSON-P 2.1) — already in the Vidocq
@@ -201,7 +201,7 @@ ServiceLoader.
 | Response inference | Infer 200 response with return type schema when no explicit `@APIResponse` | ☑ |
 | `@Callback` / `@Callbacks` | Maps callbacks on operations | ☑ |
 | Unit tests | JAX-RS resources with various annotation combinations; verify generated `PathItem` / `Operation` | ☑ |
-| First JMH benchmark baseline | Scanning throughput on un set de 50 ressources vs SmallRye OpenAPI (reporté en backlog M11, non bloquant pour M10) | ↻ |
+| First JMH benchmark baseline | Scanning throughput on a set of 50 resources vs SmallRye OpenAPI (deferred to backlog M11, non-blocking for M10) | ↻ |
 
 **Deliverable:** Fully annotated JAX-RS resources produce correct `paths` in the model.
 
@@ -224,7 +224,7 @@ JSON Schema dialect.
 | `@Schema(ref=…)` | `$ref` resolution to `#/components/schemas/…` | ☑ |
 | Recursive / circular types | Detect cycles; emit `$ref` to `components/schemas` | ☑ |
 | `SchemaRegistry` | Shared registry for named schemas → `components/schemas`; avoids duplication | ☑ |
-| `mp.openapi.schema.<FQCN>` | Config-driven schema override for a fully-qualified class name (livré via `ConfigApplier` en M8) | ☑ |
+| `mp.openapi.schema.<FQCN>` | Config-driven schema override for a fully-qualified class name (delivered via `ConfigApplier` in M8) | ☑ |
 | Unit tests | All Java-to-schema mappings; circular reference detection; `@Schema` override | ☑ |
 
 **Deliverable:** Schema generation from Java types; `components/schemas` populated correctly.
@@ -301,17 +301,17 @@ endpoint, integrated with Vauban (CDI) and Cassini (JAX-RS).
 
 | Task | Notes | Status |
 |---|---|---|
-| `grimm-tck/pom.xml` (Model 4.0.0) | Dépendances TCK/Arquillian + Vauban/Cassini/Chappe, **out-of-reactor** maintenu | ☑ |
-| `GrimmDeployableContainer` | Container Arquillian custom démarrant Vidocq+Grimm et gérant deploy/undeploy ShrinkWrap | ☑ |
-| Bootstrap du déploiement TCK | Chargement classes/config + bridge CDI via `TckDeploymentContext`/`TckGrimmSupportProducer` | ☑ |
-| Intégration Arquillian | `GrimmArquillianExtension` + `arquillian.xml` (`qualifier=grimm`, default) | ☑ |
-| Découverte des tests officiels | Profil `tck-official` via `dependenciesToScan` (pas de `tck-suite.xml` dédié) | ☑ |
-| `run-official-tck-mp-openapi-4.1.sh` | Script root: `smoke` / `all` / `matrix` / ciblé `-Dtest=...` | ☑ |
+| `grimm-tck/pom.xml` (Model 4.0.0) | TCK/Arquillian + Vauban/Cassini/Chappe dependencies, **out-of-reactor** maintained | ☑ |
+| `GrimmDeployableContainer` | Custom Arquillian container starting Vidocq+Grimm and managing ShrinkWrap deploy/undeploy | ☑ |
+| TCK deployment bootstrap | Class/config loading + CDI bridge via `TckDeploymentContext`/`TckGrimmSupportProducer` | ☑ |
+| Arquillian integration | `GrimmArquillianExtension` + `arquillian.xml` (`qualifier=grimm`, default) | ☑ |
+| Official test discovery | `tck-official` profile via `dependenciesToScan` (no dedicated `tck-suite.xml`) | ☑ |
+| `run-official-tck-mp-openapi-4.1.sh` | Root script: `smoke` / `all` / `matrix` / targeted `-Dtest=...` | ☑ |
 | Smoke TCK green | `GrimmTckSmokeTest` PASS | ☑ |
-| Progressive TCK pass | Itérations réalisées et consignées dans `TCK.md` | ☑ |
-| TCK 100% PASS | Suite officielle complète verte (349 tests) | ☑ |
-| `TCK.md` | Score courant + exclusions documentées (aucune exclusion active) | ☑ |
-| `grimm-tck/README.md` | Procédure d'installation locale + architecture runner documentées | ☑ |
+| Progressive TCK pass | Iterative runs recorded in `TCK.md` | ☑ |
+| TCK 100% PASS | Full official suite green (349 tests) | ☑ |
+| `TCK.md` | Current score + documented exclusions (no active exclusions) | ☑ |
+| `grimm-tck/README.md` | Local install procedure + runner architecture documented | ☑ |
 
 **Decisions M10:**
 - Arquillian container is minimal: start Vauban (CDI) + Grimm BCE + Cassini/Chappe HTTP server;
@@ -376,8 +376,7 @@ endpoint, integrated with Vauban (CDI) and Cassini (JAX-RS).
       `OpenApiResource` bound to `/openapi`; verified with embedded Vauban injection test
       (`GrimmVaubanIntegrationTest`) and real HTTP transport test through Cassini+Chappe
       (`OpenApiHttpChappeTest`) covering YAML default and JSON `format` override.
-- [x] M10 completed: harness TCK stable (`grimm-tck` out-of-reactor, container Arquillian
-      custom, smoke + runs ciblés + full run) avec score officiel **349/349 PASS**.
+- [x] M10 completed: harness TCK stable (`grimm-tck` out-of-reactor, custom Arquillian container, smoke + targeted runs + full run) with official score **349/349 PASS**.
 - [x] M10 infra hardening: custom Arquillian container supports a runtime matrix
       (`default-readiness` / `extended-readiness` / `no-readiness-probe`) with
       configurable `grimm.tck.*` overrides and `/openapi` readiness probing to
@@ -389,10 +388,9 @@ endpoint, integrated with Vauban (CDI) and Cassini (JAX-RS).
 
 ## Backlog Post-M10 (M11+)
 
-- [x] Ajouter un premier benchmark JMH de reference (scanner throughput) vs SmallRye OpenAPI,
-      puis publier les resultats dans `BENCH.md`.
-- [ ] Ajouter un profil de publication benchmark (iterations/forks longs) et historiser les sorties brutes.
-- [ ] Ajouter des benchmarks de comparaison SmallRye OpenAPI sur la meme JVM et les memes parametres JMH.
+- [x] Add a first JMH reference benchmark (scanner throughput) vs SmallRye OpenAPI, then publish the results in `BENCH.md`.
+- [ ] Add a benchmark publication profile (long iterations/forks) and archive raw output.
+- [ ] Add SmallRye OpenAPI comparison benchmarks on the same JVM and same JMH parameters.
 
 ## Open Decisions
 

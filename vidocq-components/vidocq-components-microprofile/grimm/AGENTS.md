@@ -141,6 +141,7 @@ java -jar grimm-bench/target/benchmarks.jar
   mode and record architectural decisions in `ROADMAP.md` (section "Actioned Decisions").
 - Use `virtual-threads-reviewer` for concurrent code changes, `jpms-guardian` after
   `module-info.java`/package changes, and `tck-runner` to diagnose TCK failures.
+- **Language**: Commit messages, Javadoc, and the content of all `.md` files must be written in **English**.
 
 ## What an Agent Should Assume for Upcoming Tasks
 

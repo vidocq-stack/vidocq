@@ -104,6 +104,7 @@ reads from `GrimmModelCache` and serves the document as `application/json` or `a
 - **Pattern matching**: use `switch` on sealed types in `ModelMerger` and `FilterInvoker`
 - **Virtual threads**: if any parallel scanning is introduced, use
   `Executors.newVirtualThreadPerTaskExecutor()`
+- **Language**: Commit messages, Javadoc, and the content of all `.md` files must be written in **English**.
 
 ## TDD Methodology
 
