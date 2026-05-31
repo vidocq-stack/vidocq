@@ -26,14 +26,13 @@ import java.util.Set;
 import java.util.function.Supplier;
 
 /**
- * Logique de résolution d'un point d'injection {@code @ConfigProperty}.
+ * Resolution logic for a {@code @ConfigProperty} injection point.
  *
- * <p>Partagée entre le producteur CDI legacy {@code RavelConfigProducer} (utilisé
- * par les tests unitaires non-CDI) et la {@code SyntheticBeanCreator} de la
- * Build Compatible Extension (utilisée par Weld au runtime du TCK).</p>
+ * <p>Shared by the legacy CDI producer {@code RavelConfigProducer} (used by
+ * non-CDI unit tests) and the BCE synthetic creator (used by Weld at TCK runtime).</p>
  *
- * <p>Spec MicroProfile Config 3.1 §6.1 : un container CDI doit supporter
- * l'injection de tout type pour lequel un {@code Converter} existe.</p>
+ * <p>MicroProfile Config 3.1 §6.1: a CDI container must support injection of
+ * any type for which a {@code Converter} exists.</p>
  */
 public final class RavelConfigPropertyResolver {
 
@@ -41,11 +40,11 @@ public final class RavelConfigPropertyResolver {
     }
 
     /**
-     * Résout la valeur correspondant au point d'injection {@code @ConfigProperty}.
+     * Resolves the value for a {@code @ConfigProperty} injection point.
      *
-     * @param injectionPoint point d'injection courant fourni par CDI
-     * @return la valeur convertie ({@code String}, scalaire, {@code Optional<T>},
-     *         {@code Provider<T>} ou {@code Supplier<T>})
+     * @param injectionPoint current CDI-provided injection point
+     * @return converted value ({@code String}, scalar, {@code Optional<T>},
+     *         {@code Provider<T>}, or {@code Supplier<T>})
      */
     public static Object resolve(InjectionPoint injectionPoint) {
         ConfigProperty metadata = injectionPoint.getAnnotated().getAnnotation(ConfigProperty.class);
@@ -68,28 +67,26 @@ public final class RavelConfigPropertyResolver {
             Class<?> wrapped = wrappedType(targetType);
             return (Supplier<?>) () -> resolveRequired(key, wrapped, metadata.defaultValue());
         }
-        // Spec §5.4 — List<T>, Set<T> : split par virgule + conversion élément par élément.
+        // Spec §5.4: List<T>, Set<T> use comma split + element-wise conversion.
         if (isList(targetType) || isSet(targetType)) {
             Class<?> element = wrappedType(targetType);
             return resolveCollection(key, element, isSet(targetType), metadata.defaultValue());
         }
         Class<?> clazz = rawClass(targetType);
-        // Spec §6.3 : injection directe d'un ConfigValue — pas de Converter,
-        // on utilise Config.getConfigValue(...) qui exclut les conversions.
+        // Spec §6.3: direct ConfigValue injection, no Converter involved.
         if (clazz == ConfigValue.class) {
             ConfigValue cv = ConfigProvider.getConfig().getConfigValue(key);
             if (cv != null && cv.getValue() != null) {
                 return cv;
             }
-            // Propriété absente : applique defaultValue dans une instance synthétique.
+            // Missing property: apply defaultValue in a synthetic ConfigValue instance.
             if (!ConfigProperty.UNCONFIGURED_VALUE.equals(metadata.defaultValue())) {
                 return new DefaultedConfigValue(key, metadata.defaultValue());
             }
             return cv != null ? cv : new DefaultedConfigValue(key, null);
         }
-        // OptionalInt/Long/Double : le converter built-in retourne déjà
-        // Optional{Int,Long,Double}.empty() si la propriété est absente — pas
-        // d'exception au déploiement.
+        // OptionalInt/Long/Double: built-in converter already returns empty when
+        // the property is missing, so no deployment error.
         if (clazz == OptionalInt.class || clazz == OptionalLong.class || clazz == OptionalDouble.class) {
             return resolvePrimitiveOptional(key, clazz, metadata.defaultValue());
         }
@@ -99,8 +96,8 @@ public final class RavelConfigPropertyResolver {
     private static Object resolvePrimitiveOptional(String key, Class<?> type, String defaultValue) {
         Config config = ConfigProvider.getConfig();
         if (rawValuePresent(config, key)) {
-            // §5.3 — propriété présente : on retourne la conversion ou un empty
-            // primitif (sans appliquer defaultValue).
+            // §5.3: property is present; return conversion result or primitive empty,
+            // without applying defaultValue.
             Optional<?> value = config.getOptionalValue(key, type);
             if (value.isPresent()) {
                 return value.get();
@@ -126,8 +123,8 @@ public final class RavelConfigPropertyResolver {
             if (value.isPresent()) {
                 return value.get();
             }
-            // §5.3 — converter renvoie null sur une valeur présente : c'est une
-            // erreur de déploiement pour une injection obligatoire.
+            // §5.3: converter returned null for a present value -> deployment error
+            // for required injection.
             throw new DeploymentException(
                     "Cannot convert config property '" + key + "' to " + type.getName()
                             + " (converter returned null)");
@@ -150,7 +147,7 @@ public final class RavelConfigPropertyResolver {
     private static Optional<?> resolveOptional(String key, Class<?> wrappedType, String defaultValue) {
         Config config = ConfigProvider.getConfig();
         if (rawValuePresent(config, key)) {
-            // §5.3 — propriété présente : conversion stricte, pas de fallback default.
+            // §5.3: property is present; strict conversion, no default fallback.
             return config.getOptionalValue(key, wrappedType);
         }
         if (!ConfigProperty.UNCONFIGURED_VALUE.equals(defaultValue)) {
@@ -160,12 +157,8 @@ public final class RavelConfigPropertyResolver {
     }
 
     /**
-     * §5.3 — la sémantique « propriété trouvée mais convertisseur renvoie null »
-     * doit être différenciée de « propriété absente de toutes les sources ». On
-     * inspecte la valeur résolue ({@code getValue()}) du {@link ConfigValue} :
-     * non-null ⇒ propriété présente avec une valeur convertible exposée à la
-     * conversion ; null ⇒ absente (raw absent, expression non résolvable
-     * §7.2 ou valeur vide §2.1.4) — on autorise alors le {@code defaultValue}.
+     * §5.3: distinguishes "property found but converter returns null" from
+     * "property absent from all sources".
      */
     private static boolean rawValuePresent(Config config, String key) {
         ConfigValue cv = config.getConfigValue(key);
@@ -176,9 +169,8 @@ public final class RavelConfigPropertyResolver {
     }
 
     /**
-     * {@link ConfigValue} synthétique pour les injections {@code @ConfigProperty
-     * ConfigValue} dont la propriété est absente : on renvoie la
-     * {@code defaultValue} dans {@link ConfigValue#getValue()} sans nom de source.
+     * Synthetic {@link ConfigValue} for {@code @ConfigProperty ConfigValue}
+     * injections when property is missing.
      */
     private record DefaultedConfigValue(String name, String value) implements ConfigValue {
         @Override public String getName() { return name; }
@@ -226,9 +218,8 @@ public final class RavelConfigPropertyResolver {
         } else {
             throw new DeploymentException("Missing required config property '" + key + "'");
         }
-        // §5.4 — split par virgule, échappement par backslash. On délègue à
-        // {@link io.vidocq.ravel.internal.ArraySplitter} via la conversion en
-        // tableau de l'élément, puis on copie dans la collection cible.
+        // §5.4: comma split with backslash escaping, delegated through element
+        // array conversion and then copied into the target collection.
         Object[] arr = (Object[]) config.getConverter(arrayClass(elementType))
                 .orElseThrow(() -> new DeploymentException("No converter for " + elementType.getName() + "[]"))
                 .convert(raw);
@@ -266,7 +257,7 @@ public final class RavelConfigPropertyResolver {
                 && !ConfigProperty.UNCONFIGURED_VALUE.equals(configured)) {
             return configured;
         }
-        // §6.1 — par défaut, le nom est {@code <FQN classe déclarante>.<nom membre>}.
+        // §6.1: default name is {@code <declaring-class-FQN>.<member-name>}.
         Class<?> declaring = member.getDeclaringClass();
         return declaring.getCanonicalName() + "." + member.getName();
     }

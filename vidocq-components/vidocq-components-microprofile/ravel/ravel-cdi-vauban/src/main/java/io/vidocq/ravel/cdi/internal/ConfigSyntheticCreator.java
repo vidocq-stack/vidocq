@@ -10,10 +10,10 @@ import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.ConfigProvider;
 
 /**
- * {@link SyntheticBeanCreator} pour le bean {@link Config} {@code @Default}.
+ * {@link SyntheticBeanCreator} for the {@link Config} {@code @Default} bean.
  *
- * <p>Délègue à {@link ConfigProvider#getConfig()} qui résout dynamiquement
- * la {@code Config} associée au {@code TCCL} du container.</p>
+ * <p>Delegates to {@link ConfigProvider#getConfig()} which resolves the
+ * {@code Config} bound to the container TCCL.</p>
  */
 public class ConfigSyntheticCreator implements SyntheticBeanCreator<Config> {
     @Override

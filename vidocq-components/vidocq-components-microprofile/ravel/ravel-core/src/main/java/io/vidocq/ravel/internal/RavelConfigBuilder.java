@@ -20,17 +20,15 @@ import java.util.Objects;
 import java.util.ServiceLoader;
 
 /**
- * Implémentation MP Config 3.1 §3 — builder fluent pour produire un {@link RavelConfig}.
+ * MicroProfile Config 3.1 §3 implementation of a fluent builder creating
+ * {@link RavelConfig} instances.
  *
- * <p>Comportement par défaut : tous les converters built-in (§5.1, §5.2 types
- * automatiques scalaires) sont pré-enregistrés à la <b>priorité 1</b> ; tout converter
- * applicatif (priorité par défaut 100, §5.3) les écrase automatiquement.</p>
+ * <p>Default behavior: all built-in converters are pre-registered with
+ * priority 1; application converters (default priority 100, §5.3) override
+ * them automatically.</p>
  *
- * <p>Ordre de précédence des converters (§5.3) :</p>
- * <ol>
- *   <li>celui avec la <b>plus haute</b> priorité {@code @jakarta.annotation.Priority}</li>
- *   <li>en cas d'égalité, le dernier enregistré gagne (LIFO d'écriture).</li>
- * </ol>
+ * <p>Converter precedence (§5.3): highest priority wins; on ties, the last
+ * registered converter wins.</p>
  */
 public final class RavelConfigBuilder implements ConfigBuilder {
 
@@ -39,7 +37,7 @@ public final class RavelConfigBuilder implements ConfigBuilder {
     private ClassLoader classLoader;
 
     public RavelConfigBuilder() {
-        // §5.1 / §5.2 — pré-enregistrement des built-in à la priorité 1.
+        // §5.1 / §5.2: pre-register built-ins with priority 1.
         for (Map.Entry<Class<?>, Converter<?>> e : BuiltInConverters.all().entrySet()) {
             converters.put(e.getKey(),
                     new PrioritizedConverter(BuiltInConverters.BUILT_IN_PRIORITY, e.getValue()));
@@ -49,7 +47,7 @@ public final class RavelConfigBuilder implements ConfigBuilder {
 
     @Override
     public ConfigBuilder addDefaultSources() {
-        // §3.4 — 3 sources canoniques.
+        // §3.4: three standard sources.
         sources.add(new SystemPropertiesConfigSource());
         sources.add(new EnvironmentVariablesConfigSource());
         sources.addAll(MicroprofilePropertiesConfigSource.loadAll(resolveClassLoader()));
@@ -58,7 +56,7 @@ public final class RavelConfigBuilder implements ConfigBuilder {
 
     @Override
     public ConfigBuilder addDiscoveredSources() {
-        // §3.5 — ServiceLoader sur ConfigSource ET ConfigSourceProvider.
+        // §3.5: ServiceLoader over both ConfigSource and ConfigSourceProvider.
         ClassLoader cl = resolveClassLoader();
         ServiceLoader.load(ConfigSource.class, cl).forEach(sources::add);
         ServiceLoader.load(ConfigSourceProvider.class, cl)
@@ -103,7 +101,7 @@ public final class RavelConfigBuilder implements ConfigBuilder {
     public <T> ConfigBuilder withConverter(Class<T> type, int priority, Converter<T> converter) {
         Objects.requireNonNull(type, "type");
         Objects.requireNonNull(converter, "converter");
-        // La priorité est explicite : on l'utilise telle quelle.
+        // Explicit priority is used as provided.
         registerConverter(type, priority, converter);
         return this;
     }
@@ -123,7 +121,7 @@ public final class RavelConfigBuilder implements ConfigBuilder {
             // {@code META-INF/microprofile-config-{profile}.properties} (ordinal 110).
             var withProfile = new ArrayList<>(effectiveSources);
             withProfile.addAll(MicroprofilePropertiesConfigSource.loadProfile(resolveClassLoader(), profile));
-            // §7.5 — wrapper profiled en ordinal +1 pour masquer la clé non profilée.
+            // §7.5: profiled wrapper uses ordinal +1 to shadow non-profiled keys.
             var profiled = new ArrayList<ConfigSource>(withProfile.size() * 2);
             for (ConfigSource s : withProfile) {
                 profiled.add(new ProfiledConfigSource(s, profile));
@@ -158,14 +156,13 @@ public final class RavelConfigBuilder implements ConfigBuilder {
         if (target != null) {
             registerConverter(target, priority, converter);
         }
-        // Si l'inférence échoue (converter générique brut), on ignore silencieusement.
+        // If inference fails (raw generic converter), ignore silently.
     }
 
     private <T> void registerConverter(Class<T> type, int priority, Converter<?> converter) {
         registerConverterEntry(type, priority, converter);
-        // §5.1 — un converter applicatif sur le type boxé (ex. Integer) doit
-        // également écraser le built-in primitif (int) afin que
-        // {@code config.getValue("k", int.class)} respecte la priorité utilisateur.
+        // §5.1: an application converter on boxed type (e.g., Integer) must also
+        // override primitive built-in (int) so user priority is respected.
         Class<?> twin = primitiveBoxingTwin(type);
         if (twin != null) {
             registerConverterEntry(twin, priority, converter);
@@ -200,7 +197,7 @@ public final class RavelConfigBuilder implements ConfigBuilder {
     }
 
     private static Class<?> inferConverterTargetType(Class<?> converterClass) {
-        // Cherche dans la chaîne d'interfaces le Converter<T> et extrait T.
+        // Walk the interface chain to find Converter<T> and extract T.
         for (Type genericInterface : converterClass.getGenericInterfaces()) {
             if (genericInterface instanceof ParameterizedType pt
                     && pt.getRawType() == Converter.class
@@ -209,8 +206,7 @@ public final class RavelConfigBuilder implements ConfigBuilder {
                 return targetClass;
             }
         }
-        // Remonte vers la superclasse : un Converter peut hériter d'une classe
-        // qui implémente déjà Converter<T>.
+        // Walk superclasses too: a converter may inherit Converter<T> from a base class.
         Class<?> superClass = converterClass.getSuperclass();
         if (superClass != null && superClass != Object.class) {
             return inferConverterTargetType(superClass);

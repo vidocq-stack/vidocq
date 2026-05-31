@@ -19,22 +19,22 @@ import java.util.Properties;
 import java.util.Set;
 
 /**
- * {@link ConfigSource} adossée à un fichier {@code META-INF/microprofile-config.properties}
- * — ordinal 100 par défaut (MP Config 3.1 §3.4).
+ * {@link ConfigSource} backed by a {@code META-INF/microprofile-config.properties}
+ * file — default ordinal 100 (MP Config 3.1 §3.4).
  *
- * <p>Une instance par URL trouvée sur le {@link ClassLoader} : un classpath qui contient
- * plusieurs JARs avec ce fichier produit autant de sources distinctes (cf. spec §3.4 :
+ * <p>One instance per URL found on the {@link ClassLoader}: a classpath containing
+ * multiple JARs with this file produces as many distinct sources (see spec §3.4:
  * <em>"There can be multiple of these files, e.g. one per JAR."</em>).</p>
  *
- * <p>Snapshot figé au chargement — pas de hot-reload (hors spec MP Config 3.1).</p>
+ * <p>Snapshot frozen at load time — no hot-reload (outside MP Config 3.1 spec).</p>
  */
 public final class MicroprofilePropertiesConfigSource implements ConfigSource {
 
-    /** Chemin canonique du fichier de propriétés MP Config (§3.4). */
+    /** Canonical path of the MP Config properties file (§3.4). */
     public static final String RESOURCE_PATH = "META-INF/microprofile-config.properties";
 
     private static final int ORDINAL = 100;
-    /** §7.5 — ordinal des fichiers profil-aware {@code microprofile-config-{profile}.properties}. */
+    /** §7.5 — ordinal for profile-aware {@code microprofile-config-{profile}.properties} files. */
     private static final int PROFILED_ORDINAL = 110;
 
     private final String name;
@@ -48,18 +48,18 @@ public final class MicroprofilePropertiesConfigSource implements ConfigSource {
     }
 
     /**
-     * Énumère toutes les URLs {@code META-INF/microprofile-config.properties} accessibles
-     * depuis {@code classLoader} et produit une source par URL.
+     * Enumerates all {@code META-INF/microprofile-config.properties} URLs accessible
+     * from {@code classLoader} and produces one source per URL.
      *
-     * @return liste immuable, jamais {@code null}
+     * @return immutable list, never {@code null}
      */
     public static List<MicroprofilePropertiesConfigSource> loadAll(ClassLoader classLoader) {
         return loadFromPath(classLoader, RESOURCE_PATH, ORDINAL);
     }
 
     /**
-     * §7.5 — charge les fichiers profil-aware {@code META-INF/microprofile-config-{profile}.properties}
-     * (ordinal par défaut 110, écrasant le fichier non profilé).
+     * §7.5 — loads profile-aware {@code META-INF/microprofile-config-{profile}.properties}
+     * files (default ordinal 110, overriding the non-profiled file).
      */
     public static List<MicroprofilePropertiesConfigSource> loadProfile(ClassLoader classLoader, String profile) {
         Objects.requireNonNull(profile, "profile");
@@ -123,14 +123,14 @@ public final class MicroprofilePropertiesConfigSource implements ConfigSource {
 
     @Override
     public int getOrdinal() {
-        // §3.4 — un éventuel {@code config_ordinal} dans le fichier remplace
-        // l'ordinal par défaut.
+        // §3.4 — an optional {@code config_ordinal} entry in the file overrides
+        // the default ordinal.
         String override = data.get("config_ordinal");
         if (override != null) {
             try {
                 return Integer.parseInt(override.trim());
             } catch (NumberFormatException ignored) {
-                // valeur non parsable → ordinal par défaut
+                // unparseable value → fall back to default ordinal
             }
         }
         return defaultOrdinal;

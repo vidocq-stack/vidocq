@@ -14,37 +14,37 @@ import java.lang.reflect.Modifier;
 /**
  * MP Config 3.1 §5.2 — implicit (automatic) converter.
  *
- * <p>Algorithme officiel (dans cet ordre) :</p>
+ * <p>Official algorithm (in this order):</p>
  * <ol>
- *   <li>une méthode {@code public static T of(String)}</li>
- *   <li>une méthode {@code public static T valueOf(String)}</li>
- *   <li>une méthode {@code public static T parse(CharSequence)}</li>
- *   <li>un constructeur {@code public T(String)}</li>
- *   <li>les types {@code Enum} bénéficient également de {@code valueOf(String)}
- *       (déjà capturé par l'étape 2).</li>
+ *   <li>a {@code public static T of(String)} method</li>
+ *   <li>a {@code public static T valueOf(String)} method</li>
+ *   <li>a {@code public static T parse(CharSequence)} method</li>
+ *   <li>a {@code public T(String)} constructor</li>
+ *   <li>{@code Enum} types also benefit from {@code valueOf(String)}
+ *       (already covered by step 2).</li>
  * </ol>
  *
- * <p>Tout est <b>strictement public</b> ; pas de {@code setAccessible(true)} —
- * conforme aux contraintes d'architecture du projet.</p>
+ * <p>Everything is <b>strictly public</b>; no {@code setAccessible(true)} —
+ * consistent with the project's architecture constraints.</p>
  */
 final class ImplicitConverter {
 
     private ImplicitConverter() {
-        // utilitaire
+        // utility class
     }
 
     /**
-     * Construit un converter pour le type cible si l'un des patterns §5.2 est détecté.
+     * Builds a converter for the target type if one of the §5.2 patterns is detected.
      *
-     * @return le converter, ou {@code null} si aucun pattern n'est applicable.
+     * @return the converter, or {@code null} if no pattern is applicable.
      */
     static <T> Converter<T> create(Class<T> type) {
         if (type == null) return null;
-        if (type.isPrimitive()) return null; // les primitives sont built-in
-        if (type.isArray()) return null;     // arrays gérés ailleurs
+        if (type.isPrimitive()) return null; // primitives are built-in
+        if (type.isArray()) return null;     // arrays handled elsewhere
 
-        // 1. enum est traité explicitement : valueOf(String) existe en Java mais
-        //    sa signature renvoie Enum<?>, plus pratique de passer par un converter dédié.
+        // 1. Enums are handled explicitly: valueOf(String) exists in Java but
+        //    its signature returns Enum<?>, so a dedicated converter is more practical.
         if (type.isEnum()) {
             return enumConverter(type);
         }

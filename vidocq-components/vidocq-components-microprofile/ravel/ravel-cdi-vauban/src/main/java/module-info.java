@@ -1,9 +1,9 @@
 /**
- * Intégration CDI de Ravel pour le container Vauban — fournit le support
- * {@code @Inject @ConfigProperty} via une Build Compatible Extension.
+ * CDI integration module for Vauban, providing {@code @Inject @ConfigProperty}
+ * support through a Build Compatible Extension.
  *
- * <p>Module optionnel : un déploiement standalone SE n'a pas besoin de ce module
- * et peut consommer {@code ravel-core} directement via {@code ConfigProvider.getConfig()}.</p>
+ * <p>This module is optional: standalone Java SE deployments can use
+ * {@code ravel-core} directly through {@code ConfigProvider.getConfig()}.</p>
  */
 module io.vidocq.ravel.cdi.vauban {
     requires transitive io.vidocq.ravel.core;

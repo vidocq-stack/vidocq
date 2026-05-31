@@ -1,8 +1,8 @@
 /**
- * Implémentation interne de Ravel — non exportée depuis le module.
+ * Internal Ravel implementation package, not exported by the module.
  *
- * <p><b>API non stable :</b> les classes de ce package peuvent changer entre versions
- * mineures sans préavis. Pour étendre Ravel, utiliser les SPI publiques exposées
- * par {@code io.vidocq.ravel.api / io.vidocq.ravel.spi}.</p>
+ * <p><b>Non-stable API:</b> classes in this package may change between minor
+ * versions without notice. To extend Ravel, use public SPI from
+ * {@code io.vidocq.ravel.api / io.vidocq.ravel.spi}.</p>
  */
 package io.vidocq.ravel.internal;

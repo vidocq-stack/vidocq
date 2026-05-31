@@ -11,18 +11,15 @@ import java.util.Set;
 import java.util.function.Function;
 
 /**
- * {@link ConfigSource} adossée à {@link System#getenv()} — ordinal 300 par défaut
+ * {@link ConfigSource} backed by {@link System#getenv()} with default ordinal 300
  * (MP Config 3.1 §3.4 / §7.6).
  *
- * <p>La spec §7.6 définit 3 formes de clé essayées dans l'ordre :</p>
+ * <p>Spec §7.6 defines three key forms tried in order:</p>
  * <ol>
- *   <li>Match exact (clé telle quelle).</li>
- *   <li>Caractères non-alphanumériques (sauf {@code _}) remplacés par {@code _}.</li>
- *   <li>Étape 2 puis conversion en majuscules.</li>
+ *   <li>Exact match.</li>
+ *   <li>Non-alphanumeric characters (except {@code _}) replaced by {@code _}.</li>
+ *   <li>Step 2 converted to uppercase.</li>
  * </ol>
- *
- * <p>Ainsi {@code "com.ACME.size"} cherche successivement {@code "com.ACME.size"},
- * {@code "com_ACME_size"}, puis {@code "COM_ACME_SIZE"}.</p>
  */
 public final class EnvironmentVariablesConfigSource implements ConfigSource {
 
@@ -56,33 +53,29 @@ public final class EnvironmentVariablesConfigSource implements ConfigSource {
 
     @Override
     public int getOrdinal() {
-        // §3.4 — la valeur de la propriété {@code config_ordinal} dans la source
-        // elle-même remplace l'ordinal par défaut.
+        // §3.4: source-local {@code config_ordinal} overrides default ordinal.
         String override = System.getenv("config_ordinal");
         if (override != null) {
             try {
                 return Integer.parseInt(override.trim());
             } catch (NumberFormatException ignored) {
-                // valeur non parsable → ordinal par défaut
+                // Non-parsable value: keep default ordinal.
             }
         }
         return ORDINAL;
     }
 
     /**
-     * Implémentation testable du mapping §7.6 — délègue le lookup réel via
-     * la {@link Function} {@code env}.
-     *
-     * <p>Visible package-private pour les tests unitaires sans dépendance à
-     * l'environnement système réel.</p>
+     * Testable §7.6 mapping implementation using the {@link Function} lookup.
+     * Package-private for unit tests without relying on real process environment.
      */
     static String lookup(String propertyName, Function<String, String> env) {
-        // Forme 1 : exact
+        // Form 1: exact
         String value = env.apply(propertyName);
         if (value != null) {
             return value;
         }
-        // Forme 2 : non-alphanum → _, casse préservée
+        // Form 2: non-alphanumeric -> _, original case preserved
         String envFormat = toEnvFormat(propertyName);
         if (!envFormat.equals(propertyName)) {
             value = env.apply(envFormat);
@@ -90,7 +83,7 @@ public final class EnvironmentVariablesConfigSource implements ConfigSource {
                 return value;
             }
         }
-        // Forme 3 : forme 2 + UPPER
+        // Form 3: form 2 + uppercase
         String upper = envFormat.toUpperCase(Locale.ROOT);
         if (!upper.equals(envFormat)) {
             value = env.apply(upper);
@@ -102,8 +95,8 @@ public final class EnvironmentVariablesConfigSource implements ConfigSource {
     }
 
     /**
-     * Remplace tout caractère non alphanumérique (et différent de {@code _})
-     * par {@code _}. Visible package-private pour testabilité.
+     * Replaces any non-alphanumeric character (except {@code _}) with {@code _}.
+     * Package-private for testability.
      */
     static String toEnvFormat(String propertyName) {
         var sb = new StringBuilder(propertyName.length());

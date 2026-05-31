@@ -15,16 +15,16 @@ import java.util.Map;
 import java.util.ServiceLoader;
 
 /**
- * Sélecteur d'implémentation MicroProfile Config pour les benchmarks JMH.
+ * MicroProfile Config implementation selector for JMH benchmarks.
  *
- * <p>Construit un {@link Config} équivalent côté Ravel et côté Smallrye à partir
- * du même jeu de propriétés, en évitant volontairement les sources discoverables
- * (system properties / env vars) pour ne mesurer que le coût de la cascade locale.</p>
+ * <p>Builds an equivalent {@link Config} on the Ravel side and the Smallrye side from
+ * the same set of properties, deliberately avoiding discoverable sources
+ * (system properties / env vars) to measure only the cost of the local cascade.</p>
  *
- * <p><b>Important</b> : Ravel et Smallrye sont tous deux sur le classpath du bench.
- * Pour ne pas dépendre de l'ordre de découverte du {@code ServiceLoader}, on instancie
- * explicitement le {@link ConfigProviderResolver} de chaque implémentation par nom
- * qualifié (réflexion uniquement au {@code @Setup}, jamais dans un {@code @Benchmark}).</p>
+ * <p><b>Important</b>: Ravel and Smallrye are both on the bench classpath.
+ * To avoid depending on {@code ServiceLoader} discovery order, the
+ * {@link ConfigProviderResolver} of each implementation is instantiated explicitly
+ * by fully-qualified name (reflection only in {@code @Setup}, never in a {@code @Benchmark}).</p>
  */
 public enum ConfigImpl {
     RAVEL("io.vidocq.ravel.internal.RavelConfigProviderResolver") {
@@ -38,7 +38,7 @@ public enum ConfigImpl {
     SMALLRYE(null) {
         @Override
         public Config build(Map<String, String> properties) {
-            // SmallRyeConfigBuilder n'a pas besoin du resolver pour être instancié.
+            // SmallRyeConfigBuilder does not need the resolver to be instantiated.
             ConfigSource source = new PropertiesConfigSource(new HashMap<>(properties), "bench-smallrye", 1000);
             return new SmallRyeConfigBuilder().withSources(source).build();
         }
@@ -52,7 +52,7 @@ public enum ConfigImpl {
 
     public abstract Config build(Map<String, String> properties);
 
-    /** Charge le resolver de l'implémentation par nom qualifié, en ignorant les autres providers. */
+    /** Loads the implementation's resolver by fully-qualified name, ignoring other providers. */
     private static ConfigProviderResolver locateResolver(ConfigImpl impl) {
         ClassLoader cl = Thread.currentThread().getContextClassLoader();
         for (ConfigProviderResolver candidate : ServiceLoader.load(ConfigProviderResolver.class, cl)) {
@@ -61,7 +61,7 @@ public enum ConfigImpl {
             }
         }
         throw new IllegalStateException(
-                "ConfigProviderResolver introuvable pour " + impl + " (fqn=" + impl.resolverFqn + ")");
+                "No ConfigProviderResolver found for " + impl + " (fqn=" + impl.resolverFqn + ")");
     }
 }
 

@@ -1,16 +1,15 @@
 /**
- * Descripteur de module explicite pour la spec MicroProfile Config 3.1.
+ * Explicit module descriptor for MicroProfile Config 3.1.
  *
- * <p>L'artefact officiel {@code org.eclipse.microprofile.config:microprofile-config-api}
- * publié par la fondation Eclipse ne fournit qu'un {@code Automatic-Module-Name} dans
- * son manifest ; jlink refuse ce type de module pour la composition d'un runtime image.
- * Ce module-info l'érige en module explicite, sans modifier le code de la spec, en
- * conservant exactement le même nom de module ({@code org.eclipse.microprofile.config})
- * afin que tout {@code requires} existant continue à fonctionner.
+ * <p>The official artifact
+ * {@code org.eclipse.microprofile.config:microprofile-config-api} only declares
+ * {@code Automatic-Module-Name} in its manifest. This module-info turns it into
+ * an explicit module without modifying spec classes, while keeping the exact
+ * same module name ({@code org.eclipse.microprofile.config}) so existing
+ * {@code requires} statements keep working.
  *
- * <p>Le {@code uses ConfigProviderResolver} reflète le mécanisme défini par
- * {@code ConfigProvider#getConfig()} qui résout son resolver via {@link java.util.ServiceLoader}
- * (cf. MicroProfile Config 3.1 §3, classe {@code org.eclipse.microprofile.config.spi.ConfigProviderResolver}).
+ * <p>The {@code uses ConfigProviderResolver} declaration mirrors the mechanism
+ * used by {@code ConfigProvider#getConfig()} through {@link java.util.ServiceLoader}.
  */
 module org.eclipse.microprofile.config {
     exports org.eclipse.microprofile.config;

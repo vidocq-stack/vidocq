@@ -37,41 +37,41 @@ import java.util.OptionalInt;
 import java.util.OptionalLong;
 
 /**
- * BCE CDI qui (1) valide les points d'injection {@code @ConfigProperty} au
- * déploiement et (2) synthétise un bean par type d'IP rencontré pour répondre
- * aux résolutions Weld typées (cf. spec MicroProfile Config 3.1 §6.1).
+ * CDI Build Compatible Extension that (1) validates {@code @ConfigProperty} injection
+ * points at deployment time and (2) synthesises one bean per IP type encountered to
+ * satisfy Weld typed resolutions (see MicroProfile Config 3.1 §6.1).
  *
- * <p>Implémentée en {@code @Registration(types = Object.class)} (et non
- * {@code @Validation}) car CDI Lite 4.1 (§Build Compatible Extensions) interdit
- * {@code BeanInfo} comme paramètre des méthodes {@code @Validation} :
+ * <p>Implemented as {@code @Registration(types = Object.class)} (rather than
+ * {@code @Validation}) because CDI Lite 4.1 (§Build Compatible Extensions) forbids
+ * {@code BeanInfo} as a parameter of {@code @Validation} methods:
  * {@code LITE-EXTENSION-TRANSLATOR-000002}. {@code @Registration(types=Object.class)}
- * est invoqué une fois par {@link BeanInfo} (tous les beans héritent de
- * {@code Object}) et accepte {@link Messages} pour reporter les erreurs.</p>
+ * is invoked once per {@link BeanInfo} (all beans extend {@code Object}) and accepts
+ * {@link Messages} to report errors.</p>
  *
- * <p>Phase {@code @Synthesis} : pour chaque type collecté pendant la phase
- * {@code @Registration}, un {@code SyntheticBean} qualifié {@code @ConfigProperty}
- * est enregistré avec {@link ConfigPropertySyntheticCreator} comme creator.
- * Les membres {@code name}/{@code defaultValue} de {@code @ConfigProperty} sont
- * marqués {@code @Nonbinding} dans la spec MP Config, donc un seul bean par
- * type couvre toutes les variantes au site d'injection.</p>
+ * <p>{@code @Synthesis} phase: for each type collected during the {@code @Registration}
+ * phase, a {@code SyntheticBean} qualified with {@code @ConfigProperty} is registered
+ * using {@link ConfigPropertySyntheticCreator} as its creator.
+ * The {@code name}/{@code defaultValue} members of {@code @ConfigProperty} are marked
+ * {@code @Nonbinding} in the MP Config spec, so a single bean per type covers all
+ * injection-site variants.</p>
  */
 public class ConfigCdiExtension implements BuildCompatibleExtension {
 
     /**
-     * Types collectés pendant {@code @Registration} pour synthèse en
-     * {@code @Synthesis}. Dédupliqués par représentation textuelle car
-     * {@link Type} ne garantit pas {@code equals}/{@code hashCode}.
+     * Types collected during {@code @Registration} for synthesis in
+     * {@code @Synthesis}. Deduplicated by textual representation because
+     * {@link Type} does not guarantee {@code equals}/{@code hashCode}.
      */
     private final Map<String, Type> collectedTypes = new LinkedHashMap<>();
 
     /**
-     * Types annotés avec @ConfigProperties collectés pendant {@code @Registration}.
-     * Clé = type string, Valeur = (type, prefix) pair
+     * Types annotated with @ConfigProperties collected during {@code @Registration}.
+     * Key = type string, Value = (type, prefix) pair.
      */
     private final Map<String, ConfigPropertiesEntry> configPropertiesTypes = new LinkedHashMap<>();
 
     /**
-     * Entry pour stocker un type @ConfigProperties avec son préfixe.
+     * Entry to store a @ConfigProperties type together with its prefix.
      */
     private static class ConfigPropertiesEntry {
         final Type type;
@@ -84,19 +84,19 @@ public class ConfigCdiExtension implements BuildCompatibleExtension {
     }
 
     /**
-     * Fase d'exclusion (@Discovery) qui marque les classes avec @ConfigProperties
-     * pour exclure leur découverte en tant que beans managés.
+     * Exclusion phase (@Discovery) that marks classes annotated with @ConfigProperties
+     * to prevent them from being discovered as managed beans.
      *
-     * <p>Les classes @ConfigProperties ne doivent être injectées que via notre
-     * synthetic beans (avec le qualifiant @ConfigProperties), pas via une découverte automatique.</p>
+     * <p>@ConfigProperties classes should only be injected via our synthetic beans
+     * (qualified with @ConfigProperties), not via automatic bean discovery.</p>
      */
-    // Note: L'API CDI 4.1 BC n'expose pas directement d'API pour @Exclude les classes.
-    // Cette fonctionnalité doit être gérée via une autre extension.
+    // Note: CDI 4.1 BC API does not expose a direct API to @Exclude classes.
+    // This feature must be handled through another extension.
 
     @Registration(types = Object.class)
     public void registerConfigPropertyInjectionPoints(BeanInfo beanInfo, Messages messages) {
         for (InjectionPointInfo injectionPoint : beanInfo.injectionPoints()) {
-            // Cas 1 : @ConfigProperty
+            // Case 1: @ConfigProperty
             AnnotationInfo configPropertyQual = findConfigPropertyQualifier(injectionPoint);
             if (configPropertyQual != null) {
                 DeclarationInfo declaration = injectionPoint.declaration();
@@ -110,7 +110,7 @@ public class ConfigCdiExtension implements BuildCompatibleExtension {
                 continue;
             }
 
-            // Cas 2 : @ConfigProperties
+            // Case 2: @ConfigProperties
             AnnotationInfo configPropertiesQual = findConfigPropertiesQualifier(injectionPoint);
             if (configPropertiesQual != null) {
                 Type ipType = injectionPoint.type();
@@ -129,30 +129,30 @@ public class ConfigCdiExtension implements BuildCompatibleExtension {
     }
 
     /**
-     * Collecte les classes {@code @ConfigProperties} du contexte de build.
-     * Appelé avant {@code @Synthesis}.
+     * Collects {@code @ConfigProperties} classes from the build context.
+     * Called before {@code @Synthesis}.
      */
     @Registration(types = Object.class)
     public void registerConfigPropertiesClasses(BeanInfo beanInfo, Messages messages) {
-        // Cette méthode pourrait être utilisée pour collecter des classes avec @ConfigProperties,
-        // mais pour le moment cette logique est déjà gérée dans registerConfigPropertyInjectionPoints
+        // This method could be used to collect classes with @ConfigProperties,
+        // but for now this logic is already handled in registerConfigPropertyInjectionPoints
     }
 
     @Synthesis
     public void synthesizeConfigPropertyBeans(SyntheticComponents components, Types types) {
-        // Bean Config @Default — beaucoup de tests TCK injectent simplement
-        // {@code @Inject Config config} sans @ConfigProperty, et le producer
-        // RavelConfigProducer n'est pas embarqué dans les archives ShrinkWrap.
+        // @Default Config bean — many TCK tests simply inject
+        // {@code @Inject Config config} without @ConfigProperty, and the
+        // RavelConfigProducer is not included in ShrinkWrap archives.
         components.addBean(org.eclipse.microprofile.config.Config.class)
                 .type(org.eclipse.microprofile.config.Config.class)
                 .scope(Dependent.class)
                 .createWith(ConfigSyntheticCreator.class);
 
-        // Synthétiser les beans @ConfigProperty.
-        // Pour les types non paramétrés (Class, Class[], primitives boxés),
-        // on utilise la {@code Class<?>} runtime — Weld bind les array types sans
-        // problème via {@code .type(Class<?>)} alors que {@code .type(ArrayType lang-model)}
-        // peut être ignoré silencieusement (cf. WELD-001408 sur OffsetDateTime[]).
+        // Synthesise @ConfigProperty beans.
+        // For non-parameterized types (Class, Class[], boxed primitives),
+        // use the runtime {@code Class<?>} — Weld binds array types without
+        // issue via {@code .type(Class<?>)}, whereas {@code .type(ArrayType lang-model)}
+        // may be silently ignored (see WELD-001408 for OffsetDateTime[]).
         var registered = new java.util.HashSet<String>();
         for (Type ipType : collectedTypes.values()) {
             Type effectiveType = ipType instanceof jakarta.enterprise.lang.model.types.PrimitiveType pt
@@ -163,12 +163,12 @@ public class ConfigCdiExtension implements BuildCompatibleExtension {
                 continue;
             }
 
-            // Pour les arrays et class types simples, on utilise la {@code Class<?>}
-            // runtime — Weld bind les array types correctement par cette voie alors que
-            // {@code .type(ArrayType lang-model)} peut être ignoré (cf. WELD-001408
-            // sur OffsetDateTime[]). Pour les types paramétrés (List<X>, Provider<T>,
-            // Optional<T>, etc.) on conserve la {@code Type} lang-model — sinon on
-            // perd le paramètre générique et plusieurs beans entrent en conflit.
+            // For arrays and simple class types, use the runtime {@code Class<?>}
+            // — Weld binds array types correctly this way, whereas
+            // {@code .type(ArrayType lang-model)} may be silently ignored (see WELD-001408
+            // for OffsetDateTime[]). For parameterized types (List<X>, Provider<T>,
+            // Optional<T>, etc.) keep the lang-model {@code Type} — otherwise the
+            // generic parameter is lost and multiple beans conflict.
             boolean isParameterized = effectiveType instanceof ParameterizedType;
             Class<?> runtimeClass = isParameterized ? null : toRuntimeClassOrNull(effectiveType);
             if (runtimeClass != null) {
@@ -182,10 +182,10 @@ public class ConfigCdiExtension implements BuildCompatibleExtension {
             }
         }
 
-        // Synthétiser les beans @ConfigProperties.
-        // Spec MP Config 3.1 : @ConfigProperties.prefix est @Nonbinding — donc
-        // un seul SyntheticBean par BeanType qualifié @ConfigProperties suffit
-        // (le préfixe effectif est résolu à runtime par le creator depuis l'IP).
+        // Synthesize @ConfigProperties beans.
+        // MP Config 3.1 spec: @ConfigProperties.prefix is @Nonbinding — so
+        // a single SyntheticBean per BeanType qualified with @ConfigProperties suffices
+        // (the effective prefix is resolved at runtime by the creator from the IP).
         var registeredConfigProperties = new java.util.HashSet<String>();
         for (ConfigPropertiesEntry entry : configPropertiesTypes.values()) {
             String typeStr = entry.type.toString();
@@ -201,18 +201,18 @@ public class ConfigCdiExtension implements BuildCompatibleExtension {
     }
 
     /**
-     * Phase placeholder pour future intégration.
+     * Placeholder phase for future integration.
      */
     @Synthesis
     public void synthesizeAdditional(SyntheticComponents components, Types types) {
-        // Placeholder pour d'autres besoins de synthèse
+        // Placeholder for additional synthesis needs
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     private static void addSyntheticConfigPropertyBean(SyntheticComponents components, Class<?> beanClass) {
-        // Cast nécessaire car {@code SyntheticComponents.addBean(Class<T>)} renvoie
-        // {@code SyntheticBeanBuilder<T>} et le {@code createWith} attend
-        // {@code Class<? extends SyntheticBeanCreator<T>>} avec le même T.
+        // Cast required because {@code SyntheticComponents.addBean(Class<T>)} returns
+        // {@code SyntheticBeanBuilder<T>} and {@code createWith} expects
+        // {@code Class<? extends SyntheticBeanCreator<T>>} with the same T.
         ((jakarta.enterprise.inject.build.compatible.spi.SyntheticBeanBuilder) components.addBean(beanClass))
                 .type(beanClass)
                 .qualifier(ConfigProperty.class)
@@ -261,10 +261,10 @@ public class ConfigCdiExtension implements BuildCompatibleExtension {
     }
 
     /**
-     * Préfixe brut du @ConfigProperties — peut être {@link ConfigProperties#UNCONFIGURED_PREFIX}
-     * (membre absent ⇒ valeur par défaut), {@code ""} (override explicite "pas de préfixe"),
-     * ou un préfixe applicatif. Distinguer ces 3 cas est nécessaire pour décider du
-     * fallback class-level (§6.4).
+     * Raw prefix of @ConfigProperties — may be {@link ConfigProperties#UNCONFIGURED_PREFIX}
+     * (member absent ⇒ default value), {@code ""} (explicit override "no prefix"),
+     * or an application prefix. Distinguishing these 3 cases is necessary to decide
+     * the class-level fallback (§6.4).
      */
     static String extractRawPrefix(AnnotationInfo configPropertiesQual) {
         AnnotationMember prefixMember = configPropertiesQual.members().get("prefix");
@@ -275,23 +275,23 @@ public class ConfigCdiExtension implements BuildCompatibleExtension {
     }
 
     /**
-     * Validation déploiement pour {@code @ConfigProperties} (§6.4) — vérifie que
-     * toutes les propriétés requises sont présentes. Une propriété est dite
-     * requise si elle ne dispose d'aucun fallback :
+     * Deployment validation for {@code @ConfigProperties} (§6.4) — verifies that
+     * all required properties are present. A property is considered required if it
+     * has no fallback:
      * <ul>
-     *   <li>pas de {@code @ConfigProperty(defaultValue=...)} sur le champ ;</li>
-     *   <li>pas de type {@code Optional} / {@code OptionalInt/Long/Double} ;</li>
-     *   <li>pas d'initialiseur Java (ex. {@code int port = 9080;}) — détecté en
-     *       instanciant le bean et en comparant la valeur à la "zero-value" du
-     *       type.</li>
+     *   <li>no {@code @ConfigProperty(defaultValue=...)} on the field;</li>
+     *   <li>not an {@code Optional} / {@code OptionalInt/Long/Double} type;</li>
+     *   <li>no Java initializer (e.g. {@code int port = 9080;}) — detected by
+     *       instantiating the bean and comparing the value to the zero-value of
+     *       the type.</li>
      * </ul>
-     * Cible {@link org.eclipse.microprofile.config.tck.broken.ConfigPropertiesMissingPropertyInjectionTest}.
+     * Targets {@link org.eclipse.microprofile.config.tck.broken.ConfigPropertiesMissingPropertyInjectionTest}.
      */
     private static void validateConfigPropertiesDeployment(
             ClassType beanType, String fieldRawPrefix, DeclarationInfo declaration, Messages messages) {
         Class<?> beanClass = loadClass(beanType.declaration().name());
         if (beanClass == null) {
-            // Classe non chargeable au déploiement — on laisse la validation runtime gérer.
+        // Class not loadable at deployment time — let runtime validation handle it.
             return;
         }
         String resolvedPrefix = resolveConfigPropertiesPrefix(beanClass, fieldRawPrefix);
@@ -375,8 +375,8 @@ public class ConfigCdiExtension implements BuildCompatibleExtension {
     }
 
     static boolean isSupportedType(Type type) {
-        // Primitives (int, long, boolean, ...) sont valides §6.1 — Weld les
-        // résoudra via l'auto-boxing du synthetic bean (bean type primitif).
+        // Primitives (int, long, boolean, ...) are valid §6.1 — Weld resolves them
+        // via auto-boxing of the synthetic bean (primitive bean type).
         if (type instanceof jakarta.enterprise.lang.model.types.PrimitiveType) {
             return true;
         }
@@ -388,22 +388,22 @@ public class ConfigCdiExtension implements BuildCompatibleExtension {
                 return false;
             }
             if (!isDeferredOrOptionalWrapperName(classType.declaration().name())) {
-                // Types paramétrés génériques (List<X>, Set<X>, Map<K,V>, etc.)
-                // sont également valides en tant que bean type — la conversion
-                // se fait à runtime via Converter<T>. On accepte tout PT.
+                // Generic parameterized types (List<X>, Set<X>, Map<K,V>, etc.)
+                // are also valid as bean types — conversion happens at runtime via
+                // Converter<T>. Accept all PT.
                 return true;
             }
             return pt.typeArguments().size() == 1;
         }
-        // Array types (jakarta.enterprise.lang.model.types.ArrayType) supportés
-        // pour String[], Duration[], etc. (spec §5.4).
+        // Array types (jakarta.enterprise.lang.model.types.ArrayType) supported
+        // for String[], Duration[], etc. (spec §5.4).
         return type instanceof jakarta.enterprise.lang.model.types.ArrayType;
     }
 
     /**
-     * Vrai si le type est un "wrapper" qui rend la propriété sous-jacente
-     * non requise au déploiement : {@link java.util.Optional}, {@code jakarta.inject.Provider}
-     * (lookup paresseux), {@code java.util.function.Supplier} (lookup paresseux).
+     * True when type is a wrapper making the underlying property non-required
+     * at deployment time: {@link java.util.Optional}, {@code jakarta.inject.Provider}
+     * (lazy lookup), and {@code java.util.function.Supplier} (lazy lookup).
      */
     static boolean isDeferredOrOptionalWrapper(Type type) {
         return type instanceof ParameterizedType pt
@@ -433,8 +433,8 @@ public class ConfigCdiExtension implements BuildCompatibleExtension {
         if (configured != null && !configured.isBlank() && !ConfigProperty.UNCONFIGURED_VALUE.equals(configured)) {
             return configured;
         }
-        // §6.1 — par défaut le nom est <FQN classe déclarante>.<nom membre>
-        // (canonical name, donc '.' au lieu de '$' pour les classes imbriquées).
+        // §6.1: default name is <declaring-class-FQN>.<member-name>
+        // (canonical name, so '.' instead of '$' for nested classes).
         return switch (declaration.kind()) {
             case FIELD -> {
                 var fi = declaration.asField();
@@ -450,7 +450,7 @@ public class ConfigCdiExtension implements BuildCompatibleExtension {
     }
 
     private static String canonicalize(String binaryName) {
-        // Convertit le nom binaire (FQN avec '$' pour classes imbriquées) en nom canonique.
+        // Converts binary name (FQN with '$' for nested classes) to canonical name.
         return binaryName == null ? "" : binaryName.replace('$', '.');
     }
 
@@ -479,8 +479,8 @@ public class ConfigCdiExtension implements BuildCompatibleExtension {
         if (targetType == null || targetType == ConfigValue.class || targetType.isArray()) {
             return;
         }
-        // OptionalInt/Long/Double : sémantiquement "absent" si la propriété est
-        // manquante — pas d'échec au déploiement (cf. Optional<T> §6.1).
+        // OptionalInt/Long/Double are semantically "absent" when property is
+        // missing, so no deployment failure (see Optional<T> §6.1).
         if (targetType == OptionalInt.class
                 || targetType == OptionalLong.class
                 || targetType == OptionalDouble.class) {
@@ -538,9 +538,8 @@ public class ConfigCdiExtension implements BuildCompatibleExtension {
     }
 
     /**
-     * Variante non lança-exception de {@link #toRuntimeClass(Type)} pour le cas
-     * où on veut tester si un type peut être exprimé en {@code Class<?>}
-     * (utilisé par {@link #synthesizeConfigPropertyBeans}).
+     * Non-throwing variant of {@link #toRuntimeClass(Type)} used to test whether
+     * a type can be represented as {@code Class<?>}.
      */
     private static Class<?> toRuntimeClassOrNull(Type type) {
         try {

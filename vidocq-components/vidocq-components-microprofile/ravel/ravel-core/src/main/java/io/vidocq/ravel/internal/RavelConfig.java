@@ -22,32 +22,25 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
 /**
- * Implémentation MP Config 3.1 §2.1 — cascade des {@link ConfigSource} par ordinal
- * décroissant, premier match gagne. Tie-breaking sur l'ordre d'enregistrement.
+ * MicroProfile Config 3.1 §2.1 implementation: cascades {@link ConfigSource}s by
+ * descending ordinal, first match wins. Ties are resolved by registration order.
  *
- * <p>Résolution des converters (§5) :</p>
- * <ol>
- *   <li>lookup direct dans la table {@code type → Converter<?>} (built-in + applicatifs)</li>
- *   <li>type tableau {@code T[]} → {@link ArrayConverter} construit dynamiquement
- *       à partir du converter pour {@code T}</li>
- *   <li>type {@code enum} ou classe avec {@code of/valueOf/parse/(String)} →
- *       {@link ImplicitConverter} (§5.2)</li>
- *   <li>sinon → {@link IllegalArgumentException}</li>
- * </ol>
+ * <p>Converter resolution (§5): direct converter table lookup, then dynamic array
+ * converter creation, then implicit conversion (§5.2), else
+ * {@link IllegalArgumentException}.</p>
  *
- * <p><b>Thread-safety</b> : immutable après construction ; cache des converters
- * dérivés (arrays, implicits) en {@link ConcurrentHashMap}. Pas de
- * {@code synchronized}, pas de {@code ThreadLocal} — virtual-thread-friendly.</p>
+ * <p><b>Thread-safety</b>: immutable after construction; derived converter cache
+ * (arrays, implicit converters) uses {@link ConcurrentHashMap}. No
+ * {@code synchronized} and no {@code ThreadLocal}.</p>
  */
 public final class RavelConfig implements Config, java.io.Serializable {
 
     private static final long serialVersionUID = 1L;
 
     /**
-     * Sérialisation : Config est marqué Serializable par la spec MP Config 3.1
-     * §6.1 (les beans CDI {@code @Dependent Config} doivent l'être). On
-     * sérialise un proxy léger qui re-lookup la {@code Config} courante au
-     * désérialiser.
+     * Serialization hook: Config is required to be Serializable by MP Config 3.1
+     * §6.1. A lightweight proxy is serialized and resolves the current
+     * {@code Config} instance on deserialization.
      */
     private Object writeReplace() {
         return new SerializedRavelConfig();
@@ -67,7 +60,7 @@ public final class RavelConfig implements Config, java.io.Serializable {
     private final ClassLoader classLoader;
     private final boolean expressionsEnabled;
 
-    /** Cache des converters dérivés (arrays, implicits) — résolus à la première lookup. */
+    /** Cache for derived converters (arrays, implicit), resolved on first lookup. */
     private final ConcurrentMap<Class<?>, Converter<?>> derivedConverters = new ConcurrentHashMap<>();
 
     public RavelConfig(List<ConfigSource> sources,
@@ -82,7 +75,7 @@ public final class RavelConfig implements Config, java.io.Serializable {
                        boolean expressionsEnabled) {
         Objects.requireNonNull(sources, "sources");
         Objects.requireNonNull(converters, "converters");
-        // tri stable : ordinal décroissant ; en cas d'égalité, ordre d'enregistrement préservé.
+        // Stable sort: descending ordinal, preserving registration order on ties.
         var sorted = new ArrayList<>(sources);
         sorted.sort(Comparator.comparingInt(ConfigSource::getOrdinal).reversed());
         this.sources = List.copyOf(sorted);
@@ -99,7 +92,7 @@ public final class RavelConfig implements Config, java.io.Serializable {
         try {
             raw = lookupRaw(propertyName);
         } catch (UnresolvedExpressionException e) {
-            // §7.2 — expression non résolvable sans défaut : propriété absente.
+            // §7.2: unresolved expression without default means missing property.
             throw new NoSuchElementException("Property '" + propertyName + "' not found");
         }
         if (raw == null || raw.isEmpty()) {
@@ -108,9 +101,7 @@ public final class RavelConfig implements Config, java.io.Serializable {
         Converter<T> converter = findConverter(propertyType);
         T value = converter.convert(raw);
         if (value == null) {
-            // §5.3 — un Converter qui retourne null indique que la valeur ne peut
-            // pas être convertie : la propriété est traitée comme absente
-            // (NoSuchElementException côté getValue, Optional.empty côté getOptionalValue).
+            // §5.3: a Converter returning null means conversion failed; treat as missing.
             throw new NoSuchElementException(
                     "Property '" + propertyName + "' converter returned null for type "
                             + propertyType.getName());
@@ -127,8 +118,8 @@ public final class RavelConfig implements Config, java.io.Serializable {
             try {
                 resolved = resolveRawValue(propertyName, raw.value());
             } catch (UnresolvedExpressionException e) {
-                // §7.2 — expression non résolvable : la valeur est null mais on
-                // conserve le rawValue + métadonnées de la source d'origine
+                // §7.2: unresolved expression keeps null value but preserves raw value
+                // and source metadata.
                 // (TCK PropertyExpressionsTest.noExpressionButConfigValue).
                 return new RavelConfigValue(
                         propertyName, null, raw.value(), raw.sourceName(), raw.sourceOrdinal());
@@ -147,7 +138,7 @@ public final class RavelConfig implements Config, java.io.Serializable {
         try {
             raw = lookupRaw(propertyName);
         } catch (UnresolvedExpressionException e) {
-            // §7.2 — expression non résolvable sans défaut : propriété absente.
+            // §7.2: unresolved expression without default means missing property.
             return Optional.empty();
         }
         if (raw == null || raw.isEmpty()) {
@@ -160,7 +151,7 @@ public final class RavelConfig implements Config, java.io.Serializable {
 
     @Override
     public Iterable<String> getPropertyNames() {
-        // Union ordonnée par cascade (ordinal décroissant), pas de duplicate.
+        // Ordered union following cascade precedence (descending ordinal), no duplicates.
         var names = new LinkedHashSet<String>();
         for (ConfigSource source : sources) {
             names.addAll(source.getPropertyNames());
@@ -170,7 +161,7 @@ public final class RavelConfig implements Config, java.io.Serializable {
 
     @Override
     public Iterable<ConfigSource> getConfigSources() {
-        return sources;  // déjà immutable via List.copyOf
+        return sources;  // already immutable via List.copyOf
     }
 
     @Override
@@ -181,7 +172,7 @@ public final class RavelConfig implements Config, java.io.Serializable {
         if (direct != null) return Optional.of((Converter<T>) direct);
         Converter<?> derived = derivedConverters.get(forType);
         if (derived != null) return Optional.of((Converter<T>) derived);
-        // Tente une résolution dynamique sans la stocker en cache : lookup pur.
+        // Attempt dynamic resolution without caching it.
         Converter<T> resolved = resolveConverter(forType);
         return Optional.ofNullable(resolved);
     }
@@ -196,7 +187,7 @@ public final class RavelConfig implements Config, java.io.Serializable {
                 "Cannot unwrap " + RavelConfig.class.getName() + " to " + type.getName());
     }
 
-    /** ClassLoader associé — utilisé par le ProviderResolver pour le registre per-CL. */
+    /** Associated ClassLoader used by ProviderResolver for the per-ClassLoader registry. */
     ClassLoader getClassLoader() {
         return classLoader;
     }
@@ -298,11 +289,9 @@ public final class RavelConfig implements Config, java.io.Serializable {
     }
 
     /**
-     * Levée par {@link #resolveExpression(String)} lorsqu'une expression
-     * {@code ${key}} n'est pas résolvable et qu'aucune valeur par défaut n'a
-     * été fournie. Spec MicroProfile Config 3.1 §7.2 : la propriété est alors
-     * traitée comme absente. Capturée par {@link #getOptionalValue} et
-     * {@link #getConfigValue}.
+     * Raised by {@link #resolveExpression(String)} when a {@code ${key}}
+     * expression cannot be resolved and no default value is provided.
+     * Per MP Config 3.1 §7.2, the property is then treated as missing.
      */
     static final class UnresolvedExpressionException extends RuntimeException {
         UnresolvedExpressionException(String expression) {
@@ -353,11 +342,11 @@ public final class RavelConfig implements Config, java.io.Serializable {
     }
 
     /**
-     * Résout dynamiquement un converter pour un type non pré-enregistré :
-     * tableaux (§5.4) → {@link ArrayConverter}, enums + types automatiques (§5.2)
-     * → {@link ImplicitConverter}.
+     * Dynamically resolves a converter for a non pre-registered type:
+     * arrays (§5.4) via {@link ArrayConverter}, enums and implicit types (§5.2)
+     * via {@link ImplicitConverter}.
      *
-     * @return le converter résolu, ou {@code null} si aucune stratégie ne s'applique.
+     * @return resolved converter, or {@code null} when no strategy applies.
      */
     @SuppressWarnings({"unchecked", "rawtypes"})
     private <T> Converter<T> resolveConverter(Class<T> type) {

@@ -8,11 +8,11 @@ import org.eclipse.microprofile.config.ConfigValue;
 import java.util.Objects;
 
 /**
- * Implémentation immuable de {@link ConfigValue} (MP Config 3.1 §2.1.5).
+ * Immutable {@link ConfigValue} implementation (MP Config 3.1 §2.1.5).
  *
- * <p>Pour une clé absente, {@code Config.getConfigValue(name)} doit retourner un
- * {@code ConfigValue} non-null dont seul le {@code name} est renseigné — utiliser
- * {@link #absent(String)} pour obtenir cette instance sentinelle.</p>
+ * <p>For a missing key, {@code Config.getConfigValue(name)} must return a
+ * non-null {@code ConfigValue} where only {@code name} is set. Use
+ * {@link #absent(String)} for that sentinel instance.</p>
  */
 public record RavelConfigValue(
         String name,
@@ -48,9 +48,9 @@ public record RavelConfigValue(
     }
 
     /**
-     * Sentinelle pour une clé absente — value/rawValue/sourceName=null, sourceOrdinal=0.
+     * Sentinel for a missing key: value/rawValue/sourceName=null, sourceOrdinal=0.
      *
-     * @param name nom de la propriété recherchée (jamais {@code null})
+     * @param name looked-up property name (never {@code null})
      */
     public static RavelConfigValue absent(String name) {
         Objects.requireNonNull(name, "name");

@@ -1,7 +1,7 @@
 /**
- * API Ravel : re-exposition contrôlée de la spec MicroProfile Config 3.1 et SPI publique
- * stable pour les extensions tierces (sources de configuration, converters custom, hooks
- * d'observabilité). Le contenu sera étoffé au fil des versions du projet.
+ * Ravel API module: controlled re-export of the MicroProfile Config 3.1 spec and
+ * stable public SPI for third-party extensions (configuration sources, custom
+ * converters, observability hooks).
  */
 module io.vidocq.ravel.api {
     requires transitive org.eclipse.microprofile.config;

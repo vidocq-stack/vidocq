@@ -1,24 +1,24 @@
-# Intégration Ravel dans Chappe (Serveur HTTP)
+# Ravel Integration in Chappe (HTTP Server)
 
-> Guide d'intégration pour configurer le serveur HTTP Chappe via MicroProfile Config 3.1
-> avec Ravel comme implémentation.
+> Integration guide for configuring the Chappe HTTP server via MicroProfile Config 3.1
+> with Ravel as the implementation.
 
-## Présentation
+## Overview
 
-Chappe est le serveur HTTP Vidocq. Ravel permet de lire la configuration du serveur
-(port, TLS, timeouts, etc.) depuis des sources de configuration standard MicroProfile.
+Chappe is the Vidocq HTTP server. Ravel reads server configuration
+(port, TLS, timeouts, etc.) from standard MicroProfile configuration sources.
 
-## Dépendances Maven
+## Maven Dependencies
 
 ```xml
 <dependencies>
-    <!-- Ravel core (sans CDI, pour contexte standalone) -->
+    <!-- Ravel core (no CDI, for standalone context) -->
     <dependency>
         <groupId>io.vidocq.ravel</groupId>
         <artifactId>ravel-core</artifactId>
         <version>0.1.0-SNAPSHOT</version>
     </dependency>
-    <!-- API MicroProfile Config -->
+    <!-- MicroProfile Config API -->
     <dependency>
         <groupId>io.vidocq.ravel</groupId>
         <artifactId>ravel-api</artifactId>
@@ -27,7 +27,7 @@ Chappe est le serveur HTTP Vidocq. Ravel permet de lire la configuration du serv
 </dependencies>
 ```
 
-Avec CDI (Vauban) :
+With CDI (Vauban):
 
 ```xml
 <dependencies>
@@ -39,16 +39,16 @@ Avec CDI (Vauban) :
 </dependencies>
 ```
 
-## Configuration JPMS
+## JPMS Configuration
 
 ```java
 module io.vidocq.chappe.server {
-    requires io.vidocq.ravel.api;   // ou ravel.core si sans CDI
+    requires io.vidocq.ravel.api;   // or ravel.core if without CDI
     // ...
 }
 ```
 
-## Utilisation programmatique (sans CDI)
+## Programmatic Usage (without CDI)
 
 ```java
 import org.eclipse.microprofile.config.Config;
@@ -83,7 +83,7 @@ public class ChappeServerConfig {
 }
 ```
 
-## Fichier de configuration recommandé
+## Recommended Configuration File
 
 ```properties
 # META-INF/microprofile-config.properties
@@ -92,64 +92,63 @@ chappe.http.host=0.0.0.0
 chappe.http.max-connections=1000
 chappe.http.idle-timeout=PT30S
 
-# TLS (désactivé par défaut)
+# TLS (disabled by default)
 chappe.tls.enabled=false
 chappe.tls.keystore=/etc/chappe/keystore.jks
 chappe.tls.keystore-password=changeit
 
-# Profils
+# Profiles
 %prod.chappe.http.port=443
 %prod.chappe.tls.enabled=true
 %dev.chappe.http.port=8081
 ```
 
-## Configuration via variables d'environnement
+## Configuration via Environment Variables
 
-MicroProfile Config (et Ravel) mappe automatiquement les variables d'environnement :
+MicroProfile Config (and Ravel) automatically maps environment variables:
 
-| Propriété | Variable d'environnement |
+| Property | Environment variable |
 |---|---|
 | `chappe.http.port` | `CHAPPE_HTTP_PORT` |
 | `chappe.tls.enabled` | `CHAPPE_TLS_ENABLED` |
 | `chappe.tls.keystore-password` | `CHAPPE_TLS_KEYSTORE_PASSWORD` |
 
-## Activation d'un profil de déploiement
+## Activating a Deployment Profile
 
 ```bash
-# Démarrage en mode production
+# Start in production mode
 java -Dmp.config.profile=prod -jar chappe.jar
 
-# Via variable d'environnement
+# Via environment variable
 MP_CONFIG_PROFILE=prod java -jar chappe.jar
 ```
 
-## Expressions de configuration
+## Configuration Expressions
 
-Utilisez des expressions pour éviter la duplication :
+Use expressions to avoid duplication:
 
 ```properties
 chappe.base-url=http://localhost:${chappe.http.port}
 chappe.health-endpoint=${chappe.base-url}/health
 ```
 
-## Sources de configuration externes
+## External Configuration Sources
 
-Pour des configurations dynamiques (ex: via un service de configuration centralisé) :
+For dynamic configurations (e.g., from a centralised configuration service):
 
 ```java
 public class RemoteConfigSource implements ConfigSource {
 
     @Override
     public Map<String, String> getProperties() {
-        // Lecture depuis un endpoint HTTP, Redis, etc.
+        // Read from an HTTP endpoint, Redis, etc.
         return fetchFromRemote();
     }
 
     @Override
-    public int getOrdinal() { return 350; } // Entre system props (400) et env vars (300)
+    public int getOrdinal() { return 350; } // Between system props (400) and env vars (300)
 
     @Override
     public String getName() { return "remote-config"; }
 }
 ```
-

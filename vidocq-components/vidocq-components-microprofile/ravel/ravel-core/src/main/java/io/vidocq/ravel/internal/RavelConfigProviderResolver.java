@@ -13,15 +13,15 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
 /**
- * Implémentation MP Config 3.1 §3.5 — singleton (un par {@link ClassLoader}).
+ * MP Config 3.1 §3.5 implementation of ConfigProviderResolver; one registry entry
+ * per {@link ClassLoader}.
  *
- * <p>Découvert via {@link java.util.ServiceLoader} grâce au descripteur
- * {@code META-INF/services/org.eclipse.microprofile.config.spi.ConfigProviderResolver}
- * et au {@code provides ... with} dans {@code module-info.java}.</p>
+ * <p>Discovered through {@link java.util.ServiceLoader} using both
+ * {@code META-INF/services/...ConfigProviderResolver} and the JPMS
+ * {@code provides ... with} declaration.</p>
  *
- * <p><b>Thread-safety</b> : registre {@link ConcurrentHashMap}, build atomique via
- * {@code computeIfAbsent}. Aucun {@code synchronized}, aucun {@code ThreadLocal} —
- * compatible virtual threads.</p>
+ * <p><b>Thread-safety</b>: uses {@link ConcurrentHashMap} and atomic
+ * {@code computeIfAbsent}; no {@code synchronized} and no {@code ThreadLocal}.</p>
  */
 public final class RavelConfigProviderResolver extends ConfigProviderResolver {
 
@@ -57,14 +57,14 @@ public final class RavelConfigProviderResolver extends ConfigProviderResolver {
     @Override
     public void releaseConfig(Config config) {
         Objects.requireNonNull(config, "config");
-        // Suppression par identité de la valeur, indépendamment du ClassLoader.
+        // Remove by value identity, independent of ClassLoader key.
         for (Map.Entry<ClassLoader, Config> entry : registry.entrySet()) {
             if (entry.getValue() == config) {
                 registry.remove(entry.getKey(), config);
                 return;
             }
         }
-        // No-op silencieux si la config n'est pas dans le registre.
+        // Silent no-op if config is not found in the registry.
     }
 
     // -------- internals --------

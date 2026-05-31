@@ -7,26 +7,23 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * MP Config 3.1 §5.4 — découpage d'une chaîne brute en éléments par séparateur
- * virgule, avec échappement {@code \,}.
+ * MP Config 3.1 §5.4 string splitting by comma separator with {@code \,} escaping.
  *
- * <p>Règles spec :</p>
+ * <p>Rules:</p>
  * <ul>
- *   <li>Le séparateur est la virgule {@code ,}.</li>
- *   <li>Une virgule littérale s'échappe avec {@code \,}.</li>
- *   <li>Les éléments vides (résultat du split) sont <b>ignorés</b>.</li>
- *   <li>Toute autre séquence d'échappement {@code \X} est conservée verbatim
- *       (la spec ne définit pas {@code \\} ; un anti-slash isolé en fin de chaîne
- *       est conservé tel quel).</li>
+ *   <li>Separator is comma {@code ,}.</li>
+ *   <li>A literal comma is escaped with {@code \,}.</li>
+ *   <li>Empty split elements are ignored.</li>
+ *   <li>Any other escape sequence {@code \X} is kept verbatim.</li>
  * </ul>
  */
 final class ArraySplitter {
 
     private ArraySplitter() {
-        // utilitaire
+        // Utility class
     }
 
-    /** Découpe la chaîne brute en éléments, en honorant {@code \,}. */
+    /** Splits raw text into elements while honoring {@code \,}. */
     static List<String> split(String raw) {
         var out = new ArrayList<String>();
         var sb = new StringBuilder();

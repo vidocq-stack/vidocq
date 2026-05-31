@@ -9,28 +9,28 @@ import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 
 /**
- * Tuple {priorité, converter} — usage interne pour la résolution MP Config 3.1 §5.3.
+ * Internal pair {priority, converter} for MP Config 3.1 §5.3 resolution.
  *
- * <p>Le converter avec la priorité <b>la plus haute</b> gagne ; en cas d'égalité,
- * le dernier enregistré écrase le précédent.</p>
+ * <p>The highest-priority converter wins; on ties, the last registered one
+ * overrides the previous converter.</p>
  *
- * <p>La priorité par défaut applicative est <b>100</b> (spec §5.3) ; les built-in
- * sont à <b>1</b> ({@link BuiltInConverters#BUILT_IN_PRIORITY}).</p>
+ * <p>Default application priority is <b>100</b> (§5.3); built-ins use <b>1</b>
+ * ({@link BuiltInConverters#BUILT_IN_PRIORITY}).</p>
  */
 record PrioritizedConverter(int priority, Converter<?> converter) {
 
-    /** Priorité par défaut MP §5.3 si {@code @Priority} est absent. */
+    /** MP §5.3 default priority when {@code @Priority} is absent. */
     static final int DEFAULT_PRIORITY = 100;
 
     /**
-     * Lit la priorité d'un converter selon §5.3 :
+     * Reads converter priority according to §5.3:
      * <ul>
-     *   <li>{@code @jakarta.annotation.Priority(value)} → cette valeur</li>
-     *   <li>sinon → {@link #DEFAULT_PRIORITY}</li>
+     *   <li>{@code @jakarta.annotation.Priority(value)} -> that value</li>
+     *   <li>otherwise -> {@link #DEFAULT_PRIORITY}</li>
      * </ul>
      *
-     * <p>Implémentation par réflexion sur le nom qualifié pour ne pas imposer
-     * {@code jakarta.annotation} en dépendance compile de {@code ravel-core}.</p>
+     * <p>Uses qualified-name reflection to avoid compile-time dependency on
+     * {@code jakarta.annotation} in {@code ravel-core}.</p>
      */
     static int readPriority(Converter<?> converter) {
         for (Annotation a : converter.getClass().getAnnotations()) {
@@ -44,7 +44,7 @@ record PrioritizedConverter(int priority, Converter<?> converter) {
                         return i;
                     }
                 } catch (ReflectiveOperationException ignored) {
-                    // pas d'accesseur value() — annotation atypique, on retombe au défaut
+                    // No value() accessor: fallback to default priority.
                 }
             }
         }

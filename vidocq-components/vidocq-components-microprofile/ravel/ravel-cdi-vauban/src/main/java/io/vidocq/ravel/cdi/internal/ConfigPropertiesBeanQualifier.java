@@ -9,25 +9,23 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 
 /**
- * Qualifiant interne pour distinguer les synthetic beans @ConfigProperties
- * de leurs instances managées découvertes.
+ * Internal qualifier used to distinguish synthetic {@code @ConfigProperties}
+ * beans from discovered managed instances.
  *
- * <p>Utilise un qualifiant distinct avec des attributes BINDABLE (non-Nonbinding)
- * pour éviter les ambiguités CDI et assurer une résolution unique par (type, prefix).</p>
+ * <p>Uses a dedicated qualifier with BINDABLE attributes to avoid CDI
+ * ambiguity and ensure unique resolution per (type, prefix).</p>
  */
 @Qualifier
 @Documented
 @Retention(RetentionPolicy.RUNTIME)
 public @interface ConfigPropertiesBeanQualifier {
     /**
-     * Préfixe unique pour cette instance du bean.
-     * Cet attribut est BINDABLE (utilisé pour la résolution CDI).
+     * Unique prefix for this bean instance.
+     * This attribute is BINDABLE (used for CDI resolution).
      */
     String prefix() default "";
 
-    /**
-     * Classe helper pour les littéraux.
-     */
+    /** Helper class for qualifier literals. */
     final class Literal {
         private Literal() {
         }

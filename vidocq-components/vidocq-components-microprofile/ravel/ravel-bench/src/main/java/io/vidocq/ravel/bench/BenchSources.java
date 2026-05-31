@@ -9,22 +9,22 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Sources synthétiques partagées par tous les benchmarks.
+ * Synthetic sources shared by all benchmarks.
  *
- * <p>Toutes les implémentations (Ravel, Smallrye) sont initialisées avec
- * <b>les mêmes propriétés</b> pour garantir la comparabilité des mesures.</p>
+ * <p>All implementations (Ravel, SmallRye) are initialized with
+ * <b>the same properties</b> for fair comparison.</p>
  */
 final class BenchSources {
 
     private BenchSources() {}
 
-    /** Jeu de propriétés "scalaires" : 64 clés, valeurs simples (entiers, booléens, chaînes). */
+    /** Scalar property set: 64 keys with simple values (integers, booleans, strings). */
     static final Map<String, String> SCALARS;
 
-    /** Jeu de propriétés avec expressions imbriquées (3 niveaux de ${...}). */
+    /** Property set with nested expressions (3 levels of ${...}). */
     static final Map<String, String> EXPRESSIONS;
 
-    /** Jeu de propriétés pour conversions typées (Integer, Duration, Boolean, List). */
+    /** Property set for typed conversions (Integer, Duration, Boolean, List). */
     static final Map<String, String> TYPED;
 
     static {
@@ -54,7 +54,7 @@ final class BenchSources {
         );
     }
 
-    /** Source MicroProfile minimaliste basée sur une {@code Map} immuable. */
+    /** Minimal MicroProfile source backed by an immutable {@code Map}. */
     static final class InMemorySource implements ConfigSource {
         private final String name;
         private final Map<String, String> values;

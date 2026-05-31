@@ -1,6 +1,6 @@
 /**
- * Implémentation MicroProfile Config 3.1 standalone — utilisable en SE pur,
- * sans CDI ni container. Les sources, converters et resolver sont contribués
+ * Standalone MicroProfile Config 3.1 implementation, usable in pure Java SE
+ * without CDI or a container. Sources, converters, and resolver are provided
  * via ServiceLoader.
  */
 module io.vidocq.ravel.core {

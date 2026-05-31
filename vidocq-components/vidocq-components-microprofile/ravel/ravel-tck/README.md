@@ -1,31 +1,31 @@
 # Ravel TCK Runner
 
-Harness Arquillian pour la suite officielle **MicroProfile Config 3.1 TCK**
+Arquillian harness for the official **MicroProfile Config 3.1 TCK**
 (`org.eclipse.microprofile.config:microprofile-config-tck:3.1`).
 
-## ⚠ Hors reactor
+## ⚠ Out-of-reactor
 
-Ce module est volontairement **hors du reactor Ravel** et utilise un POM
-`Model 4.0.0` standalone — voir le commentaire en tête de `pom.xml`.
+This module is intentionally **excluded from the Ravel reactor** and uses a standalone
+`Model 4.0.0` POM — see the comment at the top of `pom.xml`.
 
-Ne pas réintégrer dans `<subprojects>` de `ravel/pom.xml` tant que
-ShrinkWrap Maven Resolver ne supporte pas Maven Model 4.1.0.
+Do not re-add to `<subprojects>` in `ravel/pom.xml` until ShrinkWrap Maven Resolver
+supports Maven Model 4.1.0.
 
-## Lancement
+## Running
 
-Toujours via le script à la racine de Ravel :
+Always via the script at the Ravel root:
 
 ```bash
 cd ravel
 ./run-official-tck-mp-config-3.1.sh         # smoke test
-./run-official-tck-mp-config-3.1.sh all     # suite complète
-./run-official-tck-mp-config-3.1.sh -Dtest=NomDuTest
+./run-official-tck-mp-config-3.1.sh all     # full suite
+./run-official-tck-mp-config-3.1.sh -Dtest=TestName
 ```
 
-Le script installe d'abord le reactor (`mvn install -DskipTests`) puis
-invoque `mvn -f ravel-tck/pom.xml -Ptck-official test`.
+The script first installs the reactor (`mvn install -DskipTests`) then
+invokes `mvn -f ravel-tck/pom.xml -Ptck-official test`.
 
-## Statut
+## Status
 
-Phase M0 : squelette ; le harness Arquillian sera implémenté en M5
-(cf. `ROADMAP.md`).
+Phase M0: skeleton; the Arquillian harness will be implemented in M5
+(see `ROADMAP.md`).

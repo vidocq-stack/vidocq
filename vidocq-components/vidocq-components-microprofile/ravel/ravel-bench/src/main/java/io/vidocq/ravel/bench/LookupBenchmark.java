@@ -21,10 +21,10 @@ import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Bench JMH §M5 — coût d'une lookup {@code Config.getValue(String, String.class)}
- * sur un cache hot (clé toujours présente) et froid (clé absente → Optional.empty).
+ * JMH M5 benchmark for {@code Config.getValue(String, String.class)} lookup cost
+ * on hot cache (key always present) and cold path (missing key -> Optional.empty).
  *
- * <p>Comparaison Ravel ↔ Smallrye avec exactement les mêmes propriétés.</p>
+ * <p>Compares Ravel and SmallRye with identical properties.</p>
  */
 @BenchmarkMode({Mode.AverageTime, Mode.Throughput})
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
@@ -49,7 +49,7 @@ public class LookupBenchmark {
 
     @Benchmark
     public String hit_String() {
-        // Round-robin sur 64 clés pour éviter le constant-folding du JIT.
+        // Round-robin on 64 keys to avoid JIT constant folding.
         String key = hotKeys[(cursor++ & 63)];
         return config.getValue(key, String.class);
     }

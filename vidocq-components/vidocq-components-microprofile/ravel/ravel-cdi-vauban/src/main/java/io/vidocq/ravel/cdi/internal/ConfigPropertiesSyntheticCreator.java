@@ -21,16 +21,11 @@ import java.util.OptionalInt;
 import java.util.OptionalLong;
 
 /**
- * Creator pour les synthetic beans {@code @ConfigProperties} (spec MP Config 3.1 §6.4).
+ * Creator for {@code @ConfigProperties} synthetic beans (MP Config 3.1 §6.4).
  *
- * <p>Le préfixe effectif est résolu depuis le point d'injection courant :
- * <ol>
- *   <li>préfixe {@code @ConfigProperties} sur l'IP — sauf si {@link ConfigProperties#UNCONFIGURED_PREFIX}</li>
- *   <li>préfixe {@code @ConfigProperties} de classe sur le bean — sauf si {@code UNCONFIGURED_PREFIX}</li>
- *   <li>chaîne vide ⇒ pas de préfixe</li>
- * </ol>
- * Pour chaque champ non-static, on lookup {@code <prefix>.<fieldName>} (ou
- * {@code @ConfigProperty.name()} si défini) et on assigne la valeur convertie.
+ * <p>The effective prefix is resolved from current injection point:
+ * field-level {@code @ConfigProperties} first, then class-level annotation,
+ * otherwise empty prefix.</p>
  */
 public class ConfigPropertiesSyntheticCreator implements SyntheticBeanCreator<Object> {
 
@@ -57,8 +52,7 @@ public class ConfigPropertiesSyntheticCreator implements SyntheticBeanCreator<Ob
     }
 
     private static String resolveFieldPrefix(InjectionPoint ip) {
-        // Cas 1 : lookup CDI standard (champ annoté) — l'AnnotatedField expose
-        // l'annotation @ConfigProperties.
+        // Case 1: standard CDI lookup (annotated field) exposes @ConfigProperties.
         var annotated = ip.getAnnotated();
         if (annotated != null) {
             ConfigProperties direct = annotated.getAnnotation(ConfigProperties.class);
@@ -66,9 +60,8 @@ public class ConfigPropertiesSyntheticCreator implements SyntheticBeanCreator<Ob
                 return direct.prefix();
             }
         }
-        // Cas 2 : lookup programmatique via {@code CDI.current().select(BeanX.class,
-        // ConfigProperties.Literal.of("foo"))} — getAnnotated() peut être null,
-        // l'annotation est passée comme qualifiant au lieu d'être attachée à un membre.
+        // Case 2: programmatic lookup via CDI.current().select(..., Literal.of(...)).
+        // getAnnotated() may be null and annotation is passed as qualifier.
         for (var qualifier : ip.getQualifiers()) {
             if (qualifier instanceof ConfigProperties cp) {
                 return cp.prefix();

@@ -10,22 +10,22 @@
 package io.vidocq.ravel.spi;
 
 /**
- * Métadonnées statiques de l'implémentation Ravel — utilisé par {@code ConfigSource}
- * pour le tracing et par les benchmarks.
+ * Static metadata for the Ravel implementation — used by {@code ConfigSource}
+ * for tracing and by benchmarks.
  *
- * <p>Le contenu de la SPI sera étoffé au fil des versions :
- * sources de configuration, converters tiers, hooks d'observabilité. Cette classe
- * reste volontairement minimaliste à ce stade.</p>
+ * <p>The SPI content will be expanded over versions:
+ * configuration sources, third-party converters, observability hooks. This class
+ * is intentionally kept minimal at this stage.</p>
  */
 public final class Ravel {
 
-    /** Nom logique de l'implémentation, exposé via {@code Config.getConfigSources()}. */
+    /** Logical name of the implementation, exposed via {@code Config.getConfigSources()}. */
     public static final String IMPLEMENTATION_NAME = "ravel";
 
-    /** Version de l'implémentation Ravel. */
+    /** Version of the Ravel implementation. */
     public static final String IMPLEMENTATION_VERSION = "0.1.0-SNAPSHOT";
 
-    /** Version de la spec MicroProfile Config implémentée. */
+    /** Version of the MicroProfile Config spec implemented. */
     public static final String SPEC_VERSION = "3.1";
 
     private Ravel() {

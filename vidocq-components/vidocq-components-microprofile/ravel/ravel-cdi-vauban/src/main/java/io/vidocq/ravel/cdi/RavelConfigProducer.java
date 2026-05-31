@@ -11,15 +11,13 @@ import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.ConfigProvider;
 
 /**
- * Producers CDI legacy : conserve {@code @Produces Config} et un point d'entrée
- * unitaire {@link #produceConfigProperty(InjectionPoint)} pour les tests qui
- * appellent la résolution {@code @ConfigProperty} sans démarrer un container CDI.
+ * Legacy CDI producers: keeps {@code @Produces Config} and provides
+ * {@link #produceConfigProperty(InjectionPoint)} for unit tests resolving
+ * {@code @ConfigProperty} without starting a CDI container.
  *
- * <p>En production CDI le résolveur de {@code @ConfigProperty} passe désormais
- * par les <em>synthetic beans</em> enregistrés par {@link ConfigCdiExtension}
- * (phase {@code @Synthesis}) qui délèguent à {@link RavelConfigPropertyResolver}.
- * Le {@code @Produces @ConfigProperty Object} historique a été retiré pour
- * éviter toute ambiguïté de résolution Weld.</p>
+ * <p>In production CDI, {@code @ConfigProperty} resolution is handled by
+ * synthetic beans registered by {@link ConfigCdiExtension} and delegated to
+ * {@link RavelConfigPropertyResolver}.</p>
  */
 @Dependent
 public class RavelConfigProducer {
@@ -30,10 +28,7 @@ public class RavelConfigProducer {
         return ConfigProvider.getConfig();
     }
 
-    /**
-     * Point d'entrée non-CDI utilisé par les tests unitaires pour valider la
-     * logique de résolution. Délègue à {@link RavelConfigPropertyResolver}.
-     */
+    /** Non-CDI entry point used by unit tests, delegating to resolver logic. */
     public Object produceConfigProperty(InjectionPoint injectionPoint) {
         return RavelConfigPropertyResolver.resolve(injectionPoint);
     }

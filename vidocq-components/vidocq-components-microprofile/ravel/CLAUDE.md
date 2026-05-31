@@ -1,180 +1,181 @@
 # Ravel - Claude Code Guidelines
 
-> Maurice Ravel (1875–1937) était maître de l'orchestration — il savait tisser des sources
-> disparates (cordes, vents, percussions) en un tout cohérent et hiérarchisé.
-> C'est exactement ce que fait un système de configuration : agréger des sources hétérogènes
-> (fichiers, variables d'environnement, propriétés système) en une configuration unifiée.
+> Maurice Ravel (1875–1937) was a master of orchestration — he knew how to weave disparate
+> sources (strings, winds, percussion) into a coherent and hierarchical whole.
+> This is exactly what a configuration system does: aggregate heterogeneous sources
+> (files, environment variables, system properties) into a unified configuration.
 
-## Prérequis
+## Prerequisites
 
-- **Java 25** + **Maven 3.9.16** (`.sdkmanrc` fourni — utiliser `sdk env`)
-- **JUnit 6 minimum** (`org.junit:junit-bom` ≥ 6.0.3) — la version est pinnée dans
-  `pom.xml` parent via `<junit.version>` et dans `ravel-tck/pom.xml` (POM standalone).
-  Pas de retour à JUnit 5 : tout nouveau test cible `org.junit.jupiter.api.*` /
-  JUnit Platform 2.x. La JVM cible (Java 25) couvre largement le minimum
-  requis par JUnit 6 (Java 17+).
-- Le TCK MicroProfile Config 3.1 est un artefact **public Maven Central** :
+- **Java 25** + **Maven 3.9.16** (`.sdkmanrc` provided — use `sdk env`)
+- **JUnit 6 minimum** (`org.junit:junit-bom` ≥ 6.0.3) — the version is pinned in the
+  parent `pom.xml` via `<junit.version>` and in `ravel-tck/pom.xml` (standalone POM).
+  No downgrade to JUnit 5: all new tests target `org.junit.jupiter.api.*` /
+  JUnit Platform 2.x. The target JVM (Java 25) easily covers the minimum
+  required by JUnit 6 (Java 17+).
+- The MicroProfile Config 3.1 TCK is a **public Maven Central** artifact:
   `org.eclipse.microprofile.config:microprofile-config-tck:3.1.1`
-  (contrairement aux TCK Jakarta, pas besoin de l'installer manuellement).
-  Note : la version d'artefact `3.1.1` est une re-release de la spec 3.1 publiée le
-  2026-04-22 qui ajoute `Automatic-Module-Name` au manifest — contenu fonctionnel identique
-  à la 3.1 mais utilisable en JPMS strict. La version 3.1 originale (sans descripteur
-  modulaire) ne doit pas être utilisée.
+  (unlike Jakarta TCKs, no manual installation needed).
+  Note: artifact version `3.1.1` is a re-release of spec 3.1 published on
+  2026-04-22 that adds `Automatic-Module-Name` to the manifest — functionally identical
+  to 3.1 but usable with strict JPMS. The original 3.1 version (without modular descriptor)
+  must not be used.
 
-## Commandes essentielles
+## Essential commands
 
 ```bash
-# Build du reactor (sans TCK)
+# Reactor build (without TCK)
 ./mvnw -ntp install -DskipTests
 
-# Tests unitaires
+# Unit tests
 ./mvnw test
 
-# Benchmarks JMH
+# JMH benchmarks
 ./mvnw -pl ravel-bench -am package
 java -jar ravel-bench/target/benchmarks.jar
 
-# TCK — smoke test seulement
+# TCK — smoke test only
 ./run-official-tck-mp-config-3.1.sh
 
-# TCK — suite complète
+# TCK — full suite
 ./run-official-tck-mp-config-3.1.sh all
 
-# TCK — test ciblé
-./run-official-tck-mp-config-3.1.sh -Dtest=NomDuTest
+# TCK — targeted test
+./run-official-tck-mp-config-3.1.sh -Dtest=TestName
 ```
 
-> `ravel-tck` est **hors reactor** (POM Model 4.0.0 standalone) pour contourner
-> ShrinkWrap Maven Resolver 3.3 vs Model 4.1.0 — même contrainte que `cassini-tck`,
-> `foy-tck`, et `champollion-tck`. Ne pas changer ce modèle.
+> `ravel-tck` is **out of reactor** (standalone POM Model 4.0.0) to work around
+> ShrinkWrap Maven Resolver 3.3 vs Model 4.1.0 — same constraint as `cassini-tck`,
+> `foy-tck`, and `champollion-tck`. Do not change this model.
 
 ## Architecture
 
-Ravel est une implémentation MicroProfile Config 3.1, **zéro librairie tierce** (pas de Smallrye,
-Guava, etc.), uniquement des specs Jakarta EE / MicroProfile en dépendances, virtual threads, JPMS strict.
+Ravel is a MicroProfile Config 3.1 implementation with **zero third-party libraries** (no Smallrye,
+Guava, etc.), only Jakarta EE / MicroProfile specs as dependencies, virtual threads, strict JPMS.
 
 ```
-ravel-api          ← Re-expose la spec org.eclipse.microprofile.config (ConfigProvider, Config,
+ravel-api          ← Re-exports the org.eclipse.microprofile.config spec (ConfigProvider, Config,
                      ConfigSource, ConfigSourceProvider, Converter, ConfigBuilder)
-ravel-core         ← Implémentation : ConfigSources (SysProps/EnvVars/Properties),
-                     type converters built-in et SPI, property expressions, config profiles
-ravel-cdi-vauban   ← Intégration CDI Vauban : @Inject @ConfigProperty, BCE, Optional injection
-ravel-bench        ← JMH : comparatif Smallrye Config / Helidon Config, throughput lookup, overhead
-ravel-tck          ← Runner TCK officiel MicroProfile Config 3.1 (HORS reactor)
+ravel-core         ← Implementation: ConfigSources (SysProps/EnvVars/Properties),
+                     built-in and SPI type converters, property expressions, config profiles
+ravel-cdi-vauban   ← CDI Vauban integration: @Inject @ConfigProperty, BCE, Optional injection
+ravel-bench        ← JMH: comparison Smallrye Config / Helidon Config, lookup throughput, overhead
+ravel-tck          ← Official MicroProfile Config 3.1 TCK runner (OUT of reactor)
 ```
 
-**Flux d'une lookup :**
-`ConfigProvider.getConfig()` → `RavelConfig` → cascade des `ConfigSource` par ordinal décroissant
-→ résolution des expressions (`${key}`) → conversion via `Converter<T>` → valeur typée.
+**Lookup flow:**
+`ConfigProvider.getConfig()` → `RavelConfig` → `ConfigSource` cascade by descending ordinal
+→ expression resolution (`${key}`) → conversion via `Converter<T>` → typed value.
 
-**Sources de configuration (ordinal spec MicroProfile) :**
+**Configuration sources (MicroProfile spec ordinal):**
 - `SystemPropertiesConfigSource` — ordinal 400, `-Dkey=val`
-- `EnvironmentVariablesConfigSource` — ordinal 300, mapping tirets/points/casse
+- `EnvironmentVariablesConfigSource` — ordinal 300, dash/dot/case mapping
 - `MicroprofilePropertiesConfigSource` — ordinal 100, `META-INF/microprofile-config.properties`
-- Sources tierces via `ConfigSourceProvider` SPI (ServiceLoader)
+- Third-party sources via `ConfigSourceProvider` SPI (ServiceLoader)
 
-**Deux niveaux de conversion :**
-- **Built-in** : `String`, primitifs Java, `OptionalInt/Long/Double`, `URL`, `URI`, `InetAddress`,
-  `Duration`, `LocalDate/Time/DateTime`, énumérations, tableaux et `List`/`Set` (séparateur virgule)
-- **Custom** : `Converter<T>` via ServiceLoader ou `ConfigBuilder.withConverter()`
+**Two levels of conversion:**
+- **Built-in**: `String`, Java primitives, `OptionalInt/Long/Double`, `URL`, `URI`, `InetAddress`,
+  `Duration`, `LocalDate/Time/DateTime`, enumerations, arrays and `List`/`Set` (comma separator)
+- **Custom**: `Converter<T>` via ServiceLoader or `ConfigBuilder.withConverter()`
 
-## Contraintes d'architecture à ne pas violer
+## Architecture constraints not to violate
 
-1. **`ravel-core` ne dépend que de `org.eclipse.microprofile.config`** — pas de CDI, pas de Servlet,
-   pas d'autres specs Jakarta. Le cœur config doit fonctionner en standalone SE sans aucun container.
-2. **`ravel-cdi-vauban` dépend de `ravel-core` + `jakarta.cdi`** mais jamais l'inverse — l'intégration
-   CDI est un module optionnel qui n'est pas visible depuis le cœur.
-3. **JPMS strict** : tous les modules ont un `module-info.java`, packages `internal.*` non exportés,
-   SPI exposée uniquement via `provides ... with`.
-4. **Pas de `synchronized`, pas de `ThreadLocal`** — virtual-thread-friendly. Utiliser `ScopedValue`
-   pour tout contexte propagé (ex. résolution cyclique détectée dans `ExpressionResolver.STACK`).
-5. **Pas de réflexion `setAccessible(true)`** sauf pour l'implicit converter (constructeur `String`,
-   méthode `valueOf`/`parse`) — documenter toute ouverture JPMS nécessaire dans le `module-info`.
-6. **Détection de cycle dans les property expressions** : une expression qui se référence elle-même
-   (directement ou indirectement) doit lever `IllegalArgumentException`, pas boucler infiniment.
-7. **TCK MicroProfile Config 3.1 PASS à 100 %** est un contrat avant tout merge structurel.
-8. **jlink-ready** : aucune dépendance Ravel (hors `ravel-tck`) ne référence directement
-   `org.eclipse.microprofile.config:microprofile-config-api`. Le repackage `ravel-mp-config-api`
-   est l'unique source modulaire de la spec — il fournit un `module-info.class` explicite
-   (nom `org.eclipse.microprofile.config`) que jlink sait intégrer dans un runtime image,
-   contrairement au jar d'origine qui n'a qu'un `Automatic-Module-Name`.
+1. **`ravel-core` only depends on `org.eclipse.microprofile.config`** — no CDI, no Servlet,
+   no other Jakarta specs. The config core must work standalone SE without any container.
+2. **`ravel-cdi-vauban` depends on `ravel-core` + `jakarta.cdi`** but never the reverse — the
+   CDI integration is an optional module not visible from the core.
+3. **Strict JPMS**: all modules have a `module-info.java`, `internal.*` packages unexported,
+   SPI exposed only via `provides ... with`.
+4. **No `synchronized`, no `ThreadLocal`** — virtual-thread-friendly. Use `ScopedValue`
+   for any propagated context (e.g., cyclic resolution detected in `ExpressionResolver.STACK`).
+5. **No `setAccessible(true)` reflection** except for the implicit converter (String constructor,
+   `valueOf`/`parse` method) — document any required JPMS opening in `module-info`.
+6. **Cycle detection in property expressions**: an expression that references itself
+   (directly or indirectly) must throw `IllegalArgumentException`, not loop indefinitely.
+7. **TCK MicroProfile Config 3.1 100% PASS** is a hard contract before any structural merge.
+8. **jlink-ready**: no Ravel dependency (except `ravel-tck`) directly references
+   `org.eclipse.microprofile.config:microprofile-config-api`. The `ravel-mp-config-api` repackage
+   is the sole modular source of the spec — it provides an explicit `module-info.class`
+   (name `org.eclipse.microprofile.config`) that jlink can include in a runtime image,
+   unlike the original jar which only has an `Automatic-Module-Name`.
 
 ## Conventions
 
-- **Java modules explicites** : tous les modules ont un `module-info.java`.
-- **Packages** :
-  - `io.vidocq.ravel.spi.*` = SPI public stable (extensions ConfigSource tierces)
-  - `io.vidocq.ravel.internal.*` = code interne (peut casser entre versions)
-- **Maven groupId** : `io.vidocq.ravel`.
-- **Records** pour les objets immuables (`ConfigValue`, `ConfigEntry`) ;
-  **sealed interfaces** pour les hiérarchies fermées (types d'expressions, résultats de lookup).
-- **Pattern matching** exhaustif sur switch — pas de chaîne `if/else if`.
-- **JUnit 6** uniquement pour les tests (BOM `org.junit:junit-bom` 6.x). Ne pas
-  réintroduire JUnit 5 ; ne pas mixer Vintage. Bumper la propriété
-  `<junit.version>` dans le parent `pom.xml` pour toute mise à jour.
+- **Explicit Java modules**: all modules have a `module-info.java`.
+- **Packages**:
+  - `io.vidocq.ravel.spi.*` = stable public SPI (third-party ConfigSource extensions)
+  - `io.vidocq.ravel.internal.*` = internal code (may break between versions)
+- **Maven groupId**: `io.vidocq.ravel`.
+- **Records** for immutable objects (`ConfigValue`, `ConfigEntry`);
+  **sealed interfaces** for closed hierarchies (expression types, lookup results).
+- **Exhaustive pattern matching** on switch — no `if/else if` chains.
+- **JUnit 6** only for tests (BOM `org.junit:junit-bom` 6.x). Do not
+  reintroduce JUnit 5; do not mix Vintage. Bump the
+  `<junit.version>` property in the parent `pom.xml` for any update.
+- **Language** — commit messages, Javadoc, and the content of all `.md` files must be written in **English**.
 
 ## Roadmap
 
-Voir `ROADMAP.md` pour le plan détaillé phase par phase (M0..M5).
+See `ROADMAP.md` for the detailed phase-by-phase plan (M0..M5).
 
-- **M0** — Bootstrap reactor Maven, JPMS, `.sdkmanrc`
-- **M1** — `ravel-api` + `ravel-core` : 3 sources built-in, converters primitifs, `ConfigProvider`
-- **M2** — Converters avancés (tableaux, collections, types temporels), implicit converters
+- **M0** — Bootstrap Maven reactor, JPMS, `.sdkmanrc`
+- **M1** — `ravel-api` + `ravel-core`: 3 built-in sources, primitive converters, `ConfigProvider`
+- **M2** — Advanced converters (arrays, collections, temporal types), implicit converters
 - **M3** — Config Profiles (`%dev.`, `%prod.`, `%test.`), property expressions (`${key}`)
-- **M4** — `ravel-cdi-vauban` : `@ConfigProperty`, CDI BCE, injection `Optional<T>`
-- **M5** — TCK runner + script, score 100 %, `ravel-bench`
+- **M4** — `ravel-cdi-vauban`: `@ConfigProperty`, CDI BCE, `Optional<T>` injection
+- **M5** — TCK runner + script, 100% score, `ravel-bench`
 
-## TDD — Test-Driven Development (obligatoire)
+## TDD — Test-Driven Development (mandatory)
 
-Ravel est développé en **TDD strict**, dans cet ordre :
+Ravel is developed using **strict TDD**, in this order:
 
-1. **Red** — écrire le test qui décrit le comportement attendu (citation section spec MicroProfile
-   Config 3.1 ou lien vers le paragraphe concerné en commentaire JavaDoc). Le test doit échouer
-   pour la bonne raison (compilation OK, assertion KO).
-2. **Green** — écrire le minimum de code pour faire passer le test. Pas d'optimisation, pas
-   d'abstraction qui anticipe un test futur.
-3. **Refactor** — nettoyer en gardant les tests verts. Lancer la suite complète du module avant
-   tout commit.
+1. **Red** — write the test that describes the expected behaviour (cite the MicroProfile Config 3.1
+   spec section or link to the relevant paragraph in a JavaDoc comment). The test must fail
+   for the right reason (compilation OK, assertion KO).
+2. **Green** — write the minimum code to make the test pass. No optimization, no
+   abstraction that anticipates a future test.
+3. **Refactor** — clean up while keeping tests green. Run the full module suite before
+   any commit.
 
-Règles concrètes :
+Concrete rules:
 
-- **Un test par classe publique**, nommé `<Classe>Test`, dans le même package (`src/test/java`).
-- **Pas de Mockito** — doubles écrits à la main ou `MapConfigSource` de test inline.
-- **Tests par fixture spec** : pour chaque section de la spec MicroProfile Config 3.1 référencée,
-  un test nommé `<methode>_spec_section<X>_<Y>()`. Traçabilité spec ↔ test.
-- **Coverage mesurée** mais pas érigée en gate ; la qualité du test prime sur le pourcentage.
+- **One test per public class**, named `<Class>Test`, in the same package (`src/test/java`).
+- **No Mockito** — hand-written doubles or inline `MapConfigSource` test stubs.
+- **Spec fixture tests**: for each referenced MicroProfile Config 3.1 spec section,
+  a test named `<method>_spec_section<X>_<Y>()`. Spec ↔ test traceability.
+- **Coverage measured** but not enforced as a gate; test quality takes priority over percentage.
 
 ## TCK — Technology Compatibility Kit
 
-MicroProfile Config TCK — exécuté dans un module hors reactor (`ravel-tck`, POM Model 4.0.0)
-pour contourner ShrinkWrap Maven Resolver 3.3 :
+MicroProfile Config TCK — run in an out-of-reactor module (`ravel-tck`, POM Model 4.0.0)
+to work around ShrinkWrap Maven Resolver 3.3:
 
-| TCK | Artifact | Cible |
+| TCK | Artifact | Target |
 |---|---|---|
-| MicroProfile Config 3.1 | `org.eclipse.microprofile.config:microprofile-config-tck:3.1.1` | 100 % PASS (contrat) |
+| MicroProfile Config 3.1 | `org.eclipse.microprofile.config:microprofile-config-tck:3.1.1` | 100% PASS (contract) |
 
-Le script `run-official-tck-mp-config-3.1.sh` :
+The `run-official-tck-mp-config-3.1.sh` script:
 
-- supporte `smoke` (par défaut), `all`, et `-Dtest=NomDuTest` ciblé ;
-- installe le reactor en local (`mvn install -DskipTests`) avant invocation ;
-- produit un rapport `target/tck-report.txt` avec le score PASS/FAIL/SKIP.
+- supports `smoke` (default), `all`, and targeted `-Dtest=TestName`;
+- installs the reactor locally (`mvn install -DskipTests`) before invocation;
+- produces a `target/tck-report.txt` report with the PASS/FAIL/SKIP score.
 
-**Discipline de release :**
+**Release discipline:**
 
-- **Aucun merge structurel** sur `ravel-core`/`ravel-cdi-vauban` sans TCK PASS.
-- Les éventuels challenges (tests désactivés pour interprétation spec ou bug TCK) sont documentés
-  dans `TCK.md` avec citation spec, hash du test, et plan de réactivation.
+- **No structural merge** on `ravel-core`/`ravel-cdi-vauban` without TCK PASS.
+- Any challenges (tests disabled for spec interpretation or TCK bug) are documented
+  in `TCK.md` with spec citation, test hash, and reactivation plan.
 
-## Principes IA — collaboration sur ce dépôt
+## AI principles — collaboration on this repository
 
-- **Plan mode par défaut** sur tout changement structurel (nouveau module, nouvelle SPI,
-  modification d'un `ConfigSource` built-in).
-- **Élégance équilibrée** : préférer un design simple qui passe le TCK à un design parfait qui
-  ne le passe pas. Documenter les arbitrages dans des ADR (`docs/adr/`).
-- **Pas de paresse sur les specs** : citer la section MicroProfile Config 3.1 dans les commentaires
-  de code quand l'implémentation y répond directement.
-- **Zéro librairie tierce** : les specs Jakarta EE et MicroProfile sont les seules dépendances
-  autorisées en scope `provided`/`compile` (CDI, Annotations, etc.). Si une lib d'implémentation
-  semble nécessaire, c'est qu'on s'est trompé de découpe.
-- Utiliser les agents **`jpms-guardian`**, **`virtual-threads-reviewer`**, **`dependency-gatekeeper`**
-  proactivement sur toute modification de `module-info.java`, code concurrent, ou `pom.xml`.
+- **Plan mode by default** for any structural change (new module, new SPI,
+  modification of a built-in `ConfigSource`).
+- **Balanced elegance**: prefer a simple design that passes the TCK over a perfect design that
+  does not. Document trade-offs in ADRs (`docs/adr/`).
+- **No laziness on specs**: cite the MicroProfile Config 3.1 section in code comments when
+  the implementation directly addresses it.
+- **Zero third-party libraries**: Jakarta EE and MicroProfile specs are the only dependencies
+  allowed in `provided`/`compile` scope (CDI, Annotations, etc.). If an implementation library
+  seems necessary, the modular decomposition is wrong.
+- Use agents **`jpms-guardian`**, **`virtual-threads-reviewer`**, **`dependency-gatekeeper`**
+  proactively on any modification to `module-info.java`, concurrent code, or `pom.xml`.

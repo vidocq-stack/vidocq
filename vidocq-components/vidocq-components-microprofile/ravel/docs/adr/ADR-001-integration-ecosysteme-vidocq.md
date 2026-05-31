@@ -1,66 +1,65 @@
-# ADR-001 : Stratégie d'intégration Ravel dans l'écosystème Vidocq
+# ADR-001: Ravel Integration Strategy in the Vidocq Ecosystem
 
-**Date** : 2026-05-09  
-**Statut** : Accepté  
-**Auteurs** : Équipe Vidocq
+**Date**: 2026-05-09  
+**Status**: Accepted  
+**Authors**: Vidocq Team
 
-## Contexte
+## Context
 
-Ravel (implémentation MicroProfile Config 3.1) est maintenant complet et TCK-compliant
-(349/349 PASS). L'objectif M6 est de déployer Ravel dans les projets Vidocq existants
-(Cassini, Chappe, Vauban, vidocq) pour remplacer Smallrye Config.
+Ravel (MicroProfile Config 3.1 implementation) is now complete and TCK-compliant
+(349/349 PASS). The M6 objective is to deploy Ravel in the existing Vidocq projects
+(Cassini, Chappe, Vauban, vidocq) to replace Smallrye Config.
 
-## Décision
+## Decision
 
-### Stratégie d'intégration « drop-in »
+### "Drop-in" integration strategy
 
-Ravel remplace Smallrye Config comme implémentation `ConfigProviderResolver` via
-le mécanisme standard ServiceLoader. Aucune modification du code applicatif n'est requise :
+Ravel replaces Smallrye Config as the `ConfigProviderResolver` implementation via
+the standard ServiceLoader mechanism. No application code changes are required:
 
 ```
-# Supprimez
+# Remove
 io.smallrye.config:smallrye-config
 
-# Ajoutez
-io.vidocq.ravel:ravel-cdi-vauban  # avec CDI (Cassini, Vauban)
-io.vidocq.ravel:ravel-core        # sans CDI (Chappe standalone)
+# Add
+io.vidocq.ravel:ravel-cdi-vauban  # with CDI (Cassini, Vauban)
+io.vidocq.ravel:ravel-core        # without CDI (standalone Chappe)
 ```
 
-### Ordre de déploiement
+### Deployment Order
 
-1. **Vauban** : enregistrement de `Config` comme bean CDI (via `ConfigCdiExtension` existant)
-2. **Cassini** : injection `@ConfigProperty` dans les ressources REST (via `cassini-cdi-vauban`)
-3. **Chappe** : lecture de configuration du serveur via API programmatique `ConfigProvider`
-4. **vidocq** : mise à jour de l'assembly pour inclure `ravel-cdi-vauban`
+1. **Vauban**: register `Config` as a CDI bean (via existing `ConfigCdiExtension`)
+2. **Cassini**: `@ConfigProperty` injection in REST resources (via `cassini-cdi-vauban`)
+3. **Chappe**: read server configuration via programmatic API `ConfigProvider`
+4. **vidocq**: update the assembly to include `ravel-cdi-vauban`
 
-### Ce qui N'EST PAS modifié
+### What is NOT changed
 
-- Les APIs publiques des projets (JAX-RS, CDI, etc.) restent identiques
-- Les fichiers `microprofile-config.properties` existants sont compatibles
-- Les annotations `@ConfigProperty` et `@ConfigProperties` restent identiques
-- Les variables d'environnement et propriétés système sont lues de la même manière
+- The public APIs of the projects (JAX-RS, CDI, etc.) remain identical
+- Existing `microprofile-config.properties` files are compatible
+- `@ConfigProperty` and `@ConfigProperties` annotations remain identical
+- Environment variables and system properties are read the same way
 
-## Conséquences
+## Consequences
 
-### Positives
+### Positive
 
-- **Zéro dépendance tierce** dans la pile de configuration (Ravel est autocontenu)
-- **Performance JMH améliorée** sur les conversions (~20-37% selon le type)
-- **TCK 100 % PASS** certifié — conformité spec garantie
-- **JPMS strict** — pas de problèmes d'encapsulation au runtime
-- **Virtual threads friendly** — pas de `synchronized`, pas de `ThreadLocal`
+- **Zero third-party dependency** in the configuration stack (Ravel is self-contained)
+- **Improved JMH performance** on conversions (~20-37% depending on type)
+- **Certified TCK 100% PASS** — guaranteed spec compliance
+- **Strict JPMS** — no encapsulation issues at runtime
+- **Virtual threads friendly** — no `synchronized`, no `ThreadLocal`
 
-### Risques identifiés
+### Identified Risks
 
-| Risque | Mitigation |
+| Risk | Mitigation |
 |---|---|
-| Différences de comportement subtiles | TCK 349/349 PASS couvre les edge cases |
-| Expressions de configuration avec comportements Smallrye-specific | Documenter dans `TCK.md` |
-| Performances des expressions (63-88× plus lentes que Smallrye) | Cache d'expressions prévu en M6+ |
+| Subtle behavioural differences | TCK 349/349 PASS covers edge cases |
+| Configuration expressions with Smallrye-specific behaviour | Document in `TCK.md` |
+| Expression performance (63-88× slower than Smallrye) | Expression cache planned for M6+ |
 
-## Alternatives considérées
+## Alternatives Considered
 
-1. **Wrapper Smallrye** : injecter des adapteurs autour de Smallrye — rejeté car ajoute la complexité de la dualité.
-2. **Fork Smallrye** : partir du code Smallrye — rejeté car viole « zéro librairie tierce ».
-3. **Intégration progressive** : migrer module par module — accepté comme plan de déploiement.
-
+1. **Smallrye wrapper**: inject adapters around Smallrye — rejected as it adds duality complexity.
+2. **Smallrye fork**: start from Smallrye's code — rejected as it violates "zero third-party library".
+3. **Progressive integration**: migrate module by module — accepted as the deployment plan.

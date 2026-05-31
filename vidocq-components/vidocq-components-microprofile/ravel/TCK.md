@@ -1,136 +1,135 @@
-# Ravel — TCK MicroProfile Config 3.1
+# Ravel — MicroProfile Config 3.1 TCK
 
-## État actuel — M5
+## Current Status — M5
 
-| Élément | Statut |
+| Item | Status |
 |---|---|
-| Module `ravel-tck` (POM Model 4.0.0 hors reactor) | ✅ |
-| Profil Maven `tck-official` avec `microprofile-config-tck:3.1.1` | ✅ |
-| Provider Surefire TestNG forcé via plugin dependency `surefire-testng:3.5.5` | ✅ |
-| Container Arquillian Weld embedded 4.0.0 + Weld 6.0.2 (CDI 4.1) | ✅ |
-| `arquillian-container-spi/impl-base/core-impl-base` épinglés à 1.10.1 (vs 1.8.0 transitive) | ✅ |
-| Smoke test `RavelTckSmokeTest` (JUnit 6, hors Arquillian) | ✅ 2/2 PASS |
+| `ravel-tck` module (POM Model 4.0.0 out-of-reactor) | ✅ |
+| Maven profile `tck-official` with `microprofile-config-tck:3.1.1` | ✅ |
+| Surefire TestNG provider forced via plugin dependency `surefire-testng:3.5.5` | ✅ |
+| Arquillian Weld embedded container 4.0.0 + Weld 6.0.2 (CDI 4.1) | ✅ |
+| `arquillian-container-spi/impl-base/core-impl-base` pinned to 1.10.1 (vs transitive 1.8.0) | ✅ |
+| Smoke test `RavelTckSmokeTest` (JUnit 6, outside Arquillian) | ✅ 2/2 PASS |
 | Script `run-official-tck-mp-config-3.1.sh` (smoke / all / `-Dtest=...`) | ✅ |
-| Bootstrap Arquillian sous JDK 25 | ✅ **résolu (bump 1.10.1 + dep mgmt)** |
-| Découverte du TCK officiel (`dependenciesToScan`) | ✅ |
-| Score TCK courant | **349 PASS / 0 FAIL / 0 SKIP** sur 349 tests |
-| Score 100 % PASS | ✅ **atteint** — voir J2 ci-dessous |
+| Arquillian bootstrap under JDK 25 | ✅ **resolved (bump to 1.10.1 + dep mgmt)** |
+| Official TCK discovery (`dependenciesToScan`) | ✅ |
+| Current TCK score | **349 PASS / 0 FAIL / 0 SKIP** out of 349 tests |
+| 100% PASS | ✅ **achieved** — see J2 below |
 
-## J2 — Closure des fails résiduels → 100 % PASS
+## J2 — Closing remaining failures → 100% PASS
 
-Après J1 (synthetic beans), il restait 40 fails / 160 skips. Les correctifs livrés
-dans cette session ont fermé les six gaps suivants pour atteindre **349/349 PASS** :
+After J1 (synthetic beans), 40 failures / 160 skips remained. The fixes delivered
+in this session closed the following six gaps to reach **349/349 PASS**:
 
 1. **OptionalInt / OptionalLong / OptionalDouble** (CDIPropertyExpressionsTest,
-   CdiOptionalInjectionTest) : la validation au déploiement traitait ces types
-   comme requis. Ils sont désormais explicitement reconnus comme "wrappers
-   absent-friendly" dans `validateDeploymentContract`.
-2. **Nom de propriété par défaut FQN** (CDIPlainInjectionTest) : la BCE résolvait
-   le nom par défaut comme `field.name()` au lieu de
-   `<canonicalName(declaringClass)>.<member>` exigé par §6.1. Fix dans
-   `ConfigCdiExtension.resolvePropertyName` (avec `canonicalize` qui remplace
-   `$` par `.`).
-3. **Synthetic beans pour les array types** (ArrayConverterTest, ClassConverterTest) :
-   `addBean(Object.class).type(arrayLangModelType)` était silencieusement ignoré
-   par Weld (WELD-001408). On utilise désormais directement la `Class<?>` runtime
-   pour les types non-paramétrés ; les types paramétrés (`Provider<T>`,
-   `Optional<T>`, `List<T>`, etc.) conservent la `Type` lang-model pour ne pas
-   perdre leur paramètre générique.
-4. **`@ConfigProperties` synthetic creator + résolution prefix** (ConfigPropertiesTest) :
-   - Refactor : un seul `SyntheticBean` par `BeanType` qualifié `@ConfigProperties`
-     (`prefix` est `@Nonbinding`, donc plusieurs préfixes ne peuvent coexister sur
-     un même type).
-   - Le creator résout le préfixe effectif depuis l'`InjectionPoint` (annotation
-     directe sur le champ + qualifiants pour les lookups programmatiques via
+   CdiOptionalInjectionTest): deployment validation treated these types
+   as required. They are now explicitly recognised as "absent-friendly wrappers"
+   in `validateDeploymentContract`.
+2. **Default FQN property name** (CDIPlainInjectionTest): the BCE resolved
+   the default name as `field.name()` instead of
+   `<canonicalName(declaringClass)>.<member>` required by §6.1. Fixed in
+   `ConfigCdiExtension.resolvePropertyName` (with `canonicalize` replacing
+   `$` with `.`).
+3. **Synthetic beans for array types** (ArrayConverterTest, ClassConverterTest):
+   `addBean(Object.class).type(arrayLangModelType)` was silently ignored
+   by Weld (WELD-001408). The runtime `Class<?>` is now used directly for
+   non-parameterised types; parameterised types (`Provider<T>`,
+   `Optional<T>`, `List<T>`, etc.) retain the lang-model `Type` to preserve
+   their generic parameter.
+4. **`@ConfigProperties` synthetic creator + prefix resolution** (ConfigPropertiesTest):
+   - Refactored: a single `SyntheticBean` per `BeanType` qualified `@ConfigProperties`
+     (`prefix` is `@Nonbinding`, so multiple prefixes cannot coexist on the same type).
+   - The creator resolves the effective prefix from the `InjectionPoint` (annotation
+     directly on the field + qualifiers for programmatic lookups via
      `CDI.current().select(BeanX.class, ConfigProperties.Literal.of("foo"))`),
-     fallback vers `@ConfigProperties` au niveau classe puis chaîne vide.
-5. **Validation `@ConfigProperties` au déploiement** (ConfigPropertiesMissingPropertyInjectionTest) :
-   `ConfigPropertiesExclusionExtension` collecte les classes annotées
-   `@ConfigProperties` au niveau type pendant `ProcessAnnotatedType` et lève
-   `addDeploymentProblem(...)` à `AfterDeploymentValidation` pour toute propriété
-   requise absente. Les fields avec `@ConfigProperty(defaultValue=...)`,
-   `Optional[Int|Long|Double]`, ou un initialiseur Java (`int port = 9080;`,
-   détecté en comparant à la valeur zéro après instanciation) sont exemptés.
-6. **`ArrayConverter` pour primitifs + `List<T>`/`Set<T>`** (ArrayConverterTest, etc.) :
-   - `(T[]) Array.newInstance(int.class, n)` lève `ClassCastException [I → [Ljava.lang.Object;`.
-     Refactor en `Converter<T>` générique qui retourne `Object` (cast au site
-     d'appel) — supporte `int[]`, `boolean[]`, `Boolean[]`, etc. uniformément.
-   - `RavelConfigPropertyResolver.resolveCollection(...)` détecte
-     `List<T>`/`Set<T>` au point d'injection, délègue au converter array du
-     type composant pour le split + conversion, et retourne une
+     falling back to `@ConfigProperties` at class level then empty string.
+5. **`@ConfigProperties` deployment validation** (ConfigPropertiesMissingPropertyInjectionTest):
+   `ConfigPropertiesExclusionExtension` collects `@ConfigProperties`-annotated type-level
+   classes during `ProcessAnnotatedType` and raises `addDeploymentProblem(...)` at
+   `AfterDeploymentValidation` for any missing required property. Fields with
+   `@ConfigProperty(defaultValue=...)`, `Optional[Int|Long|Double]`, or a Java
+   initialiser (`int port = 9080;`, detected by comparing to the zero value
+   after instantiation) are exempt.
+6. **`ArrayConverter` for primitives + `List<T>`/`Set<T>`** (ArrayConverterTest, etc.):
+   - `(T[]) Array.newInstance(int.class, n)` throws `ClassCastException [I → [Ljava.lang.Object;`.
+     Refactored to a generic `Converter<T>` that returns `Object` (cast at call site)
+     — supports `int[]`, `boolean[]`, `Boolean[]`, etc. uniformly.
+   - `RavelConfigPropertyResolver.resolveCollection(...)` detects
+     `List<T>`/`Set<T>` at the injection point, delegates to the array converter of the
+     component type for splitting + conversion, and returns an
      `ArrayList`/`LinkedHashSet`.
 
-Score progressif sur la session J2 :
+Progressive score during J2:
 
-| Étape | PASS | FAIL | SKIP |
+| Step | PASS | FAIL | SKIP |
 |---|---|---|---|
-| Avant J2 | 169 | 40 | 160 |
-| Après fix Optional* + FQN | 191 | 7 | 165 |
-| Après fix `@ConfigProperties` (creator + missing) | 353 | 2 | 143 |
-| Après fix arrays primitifs + `List<T>`/`Set<T>` | **349** | **0** | **0** |
+| Before J2 | 169 | 40 | 160 |
+| After Optional* + FQN fix | 191 | 7 | 165 |
+| After `@ConfigProperties` (creator + missing) fix | 353 | 2 | 143 |
+| After primitive array + `List<T>`/`Set<T>` fix | **349** | **0** | **0** |
 
-## J1 — Synthetic beans `@ConfigProperty` (livré)
+## J1 — Synthetic beans `@ConfigProperty` (delivered)
 
-Cause racine du blocage initial (332 SKIP) : le producer CDI `@Produces @ConfigProperty
-Object` n'était pas embarqué dans les archives ShrinkWrap du TCK et même s'il l'avait été, Weld
-n'apparie un producer `Object` qu'avec des IPs typés exactement `Object`.
+Root cause of the initial blockage (332 SKIP): the CDI producer `@Produces @ConfigProperty Object`
+was not bundled in the TCK ShrinkWrap archives and even if it had been, Weld only matches an
+`Object` producer with injection points typed exactly `Object`.
 
-**Fix livré** :
+**Fix delivered**:
 
-- `ConfigCdiExtension` ajoute une phase `@Synthesis` qui enregistre, pour chaque type d'IP
-  `@ConfigProperty` collecté pendant `@Registration`, un `SyntheticBean` avec le creator
-  `ConfigPropertySyntheticCreator` (cf. `ravel-cdi-vauban/src/main/java/io/vidocq/ravel/cdi`).
-- Un synthetic bean `Config @Default` est aussi enregistré pour les `@Inject Config` du TCK
-  (l'archive ShrinkWrap n'embarque pas `RavelConfigProducer`).
-- Les types primitifs sont auto-boxés (`int → Integer`, etc.) pour éviter `WELD-001409`.
-- La résolution `@ConfigProperty` a été extraite dans `RavelConfigPropertyResolver`
-  (package `io.vidocq.ravel.cdi.internal`) consommé par le producer legacy ET le
+- `ConfigCdiExtension` adds a `@Synthesis` phase that registers, for each `@ConfigProperty` IP type
+  collected during `@Registration`, a `SyntheticBean` with the creator
+  `ConfigPropertySyntheticCreator` (see `ravel-cdi-vauban/src/main/java/io/vidocq/ravel/cdi`).
+- A synthetic `Config @Default` bean is also registered for `@Inject Config` in the TCK
+  (the ShrinkWrap archive does not bundle `RavelConfigProducer`).
+- Primitive types are auto-boxed (`int → Integer`, etc.) to avoid `WELD-001409`.
+- `@ConfigProperty` resolution was extracted into `RavelConfigPropertyResolver`
+  (package `io.vidocq.ravel.cdi.internal`) consumed by both the legacy producer and the
   synthetic creator.
-- Support spécifique `ConfigValue`, `OptionalInt/Long/Double`, `Optional<T>`, `Provider<T>`,
+- Specific support for `ConfigValue`, `OptionalInt/Long/Double`, `Optional<T>`, `Provider<T>`,
   `Supplier<T>`.
-- `RavelConfig implements Serializable` via `writeReplace` → proxy qui délègue à
-  `ConfigProvider.getConfig()` au `readResolve` (test `testInjectedConfigSerializable`).
-- Sémantique §7.2 : `${absent}` sans défaut → propriété absente (`Optional.empty()` /
-  `NoSuchElementException`) au lieu de `IllegalArgumentException`. Les cycles d'expressions
-  conservent `IllegalArgumentException`.
-- Sémantique §5.3 : `Converter` qui retourne `null` sur input non-null → `NullPointerException`
-  côté `getValue` (au lieu de `NoSuchElementException`).
-- Variable d'environnement `config_ordinal=45` injectée via Surefire `<environmentVariables>`
-  pour `DefaultConfigSourceOrdinalTest`.
+- `RavelConfig implements Serializable` via `writeReplace` → proxy that delegates to
+  `ConfigProvider.getConfig()` at `readResolve` (test `testInjectedConfigSerializable`).
+- §7.2 semantics: `${absent}` without a default → absent property (`Optional.empty()` /
+  `NoSuchElementException`) instead of `IllegalArgumentException`. Expression cycles
+  still throw `IllegalArgumentException`.
+- §5.3 semantics: `Converter` that returns `null` on non-null input → `NullPointerException`
+  from `getValue` (instead of `NoSuchElementException`).
+- Environment variable `config_ordinal=45` injected via Surefire `<environmentVariables>`
+  for `DefaultConfigSourceOrdinalTest`.
 
-**Alignement de versions critiques** (sans quoi la phase BCE @Synthesis crashe) :
+**Critical version alignment** (required to prevent BCE @Synthesis from crashing):
 
-- `weld-lite-extension-translator:6.0.1.Final` (force vs transitive `6.0.0.Alpha1` qui
-  appelle `AfterBeanDiscoveryImpl.addBean(Class)` retiré dans Weld 6.0.2).
-- `jakarta.enterprise.cdi-api:4.1.0` final (force vs transitive `4.1.0-M1` qui ne contient
-  pas `InvokerFactory`).
-- `jakarta.enterprise.lang-model:4.1.0` aligné.
+- `weld-lite-extension-translator:6.0.1.Final` (forced vs transitive `6.0.0.Alpha1` which
+  calls `AfterBeanDiscoveryImpl.addBean(Class)` removed in Weld 6.0.2).
+- `jakarta.enterprise.cdi-api:4.1.0` final (forced vs transitive `4.1.0-M1` which does not
+  contain `InvokerFactory`).
+- `jakarta.enterprise.lang-model:4.1.0` aligned.
 
-**Progression mesurée** :
+**Measured progress**:
 
-| Étape | PASS | FAIL | SKIP |
+| Step | PASS | FAIL | SKIP |
 |---|---|---|---|
-| Avant J1 | 25 | 34 | 332 |
-| Après J1 (synthetic beans) | 162 | 40 | 173 |
-| Après corrections sémantique + Config bean | **169** | 40 | 160 |
+| Before J1 | 25 | 34 | 332 |
+| After J1 (synthetic beans) | 162 | 40 | 173 |
+| After semantics + Config bean fixes | **169** | 40 | 160 |
 
-## Comment lancer
+## How to Run
 
 ```bash
-./run-official-tck-mp-config-3.1.sh           # smoke (2 tests JUnit, vérifie le ServiceLoader)
-./run-official-tck-mp-config-3.1.sh all       # suite TCK officielle complète
+./run-official-tck-mp-config-3.1.sh           # smoke (2 JUnit tests, verifies ServiceLoader)
+./run-official-tck-mp-config-3.1.sh all       # full official TCK suite
 ./run-official-tck-mp-config-3.1.sh -Dtest=ConfigProviderTest
 ```
 
-Le script :
-1. installe en local `ravel-api` / `ravel-core` / `ravel-cdi-vauban` via `./mvnw install -DskipTests` ;
-2. invoque `./mvnw -f ravel-tck/pom.xml -P<profile> test` (le wrapper, pas `mvn` système, pour
-   garantir Maven 3.9.16) ;
-3. produit un rapport résumé dans `ravel-tck/target/tck-report.txt`.
+The script:
+1. Installs `ravel-api` / `ravel-core` / `ravel-cdi-vauban` locally via `./mvnw install -DskipTests`;
+2. Invokes `./mvnw -f ravel-tck/pom.xml -P<profile> test` (the wrapper, not system `mvn`, to
+   guarantee Maven 3.9.16);
+3. Produces a summary report in `ravel-tck/target/tck-report.txt`.
 
-## Bug n°1 — `MalformedParameterizedTypeException` ✅ résolu
+## Bug #1 — `MalformedParameterizedTypeException` ✅ resolved
 
-Symptôme observé sous JDK 25 :
+Symptom observed under JDK 25:
 
 ```
 Caused by: java.lang.reflect.MalformedParameterizedTypeException:
@@ -139,84 +138,80 @@ Caused by: java.lang.reflect.MalformedParameterizedTypeException:
     0 formal argument(s) 1 actual argument(s)
 ```
 
-### Cause racine
+### Root Cause
 
-`arquillian-weld-embedded:4.0.0.Final` tire transitivement
-`arquillian-container-spi:1.8.0.Final` dans laquelle l'interface `Container`
-n'est **pas** générique. Sous JDK 23+ la validation stricte de `ParameterizedTypeImpl`
-refuse le mismatch et lève `MalformedParameterizedTypeException`.
+`arquillian-weld-embedded:4.0.0.Final` transitively pulls
+`arquillian-container-spi:1.8.0.Final` in which the `Container` interface
+is **not** generic. Under JDK 23+ the strict validation of `ParameterizedTypeImpl`
+rejects the mismatch and throws `MalformedParameterizedTypeException`.
 
-À partir de `1.10.1.Final`, l'interface est correctement déclarée
-`Container<T extends ContainerConfiguration>` :
+Starting from `1.10.1.Final`, the interface is correctly declared
+`Container<T extends ContainerConfiguration>`:
 
 ```text
 $ javap -p arquillian-container-spi-1.10.1.Final.jar (Container.class)
 public interface org.jboss.arquillian.container.spi.Container<T extends ContainerConfiguration>
 ```
 
-### Correctif appliqué
+### Applied Fix
 
-`<dependencyManagement>` dans `ravel-tck/pom.xml` épingle explicitement le trio :
+`<dependencyManagement>` in `ravel-tck/pom.xml` explicitly pins the trio:
 
 - `arquillian-container-spi:1.10.1.Final`
 - `arquillian-container-impl-base:1.10.1.Final`
 - `arquillian-core-impl-base:1.10.1.Final`
 
-(Le BOM Arquillian seul ne suffit pas car Maven 4 applique « nearest wins »
-sur les transitives non managées par le BOM importé depuis le profil.)
+(The Arquillian BOM alone is not sufficient because Maven 4 applies "nearest wins"
+to transitives not managed by the imported BOM from the profile.)
 
-## Bug n°2 — `LITE-EXTENSION-TRANSLATOR-000002` ✅ résolu
+## Bug #2 — `LITE-EXTENSION-TRANSLATOR-000002` ✅ resolved
 
-CDI Lite 4.1 (BCE spec §16.1) interdit `BeanInfo` comme paramètre d'une méthode
-`@Validation`. La méthode `ConfigCdiExtension.validateConfigPropertyInjectionPoints`
-a été migrée de `@Validation` vers `@Registration(types = Object.class)`. Cette
-phase est invoquée pour chaque `BeanInfo` (tous les beans héritent d'`Object`)
-et accepte légitimement `(BeanInfo, Messages)`.
+CDI Lite 4.1 (BCE spec §16.1) forbids `BeanInfo` as a parameter of a `@Validation` method.
+`ConfigCdiExtension.validateConfigPropertyInjectionPoints` was migrated from `@Validation`
+to `@Registration(types = Object.class)`. This phase is invoked for each `BeanInfo` (all beans
+extend `Object`) and legitimately accepts `(BeanInfo, Messages)`.
 
-Effet immédiat : le TCK passe de **0 test exécuté effectivement** (toutes les
-classes failed at `arquillianBeforeClass`) à **391 tests run / 357 PASS**.
+Immediate effect: TCK went from **0 tests actually executed** (all classes failed at
+`arquillianBeforeClass`) to **391 tests run / 357 PASS**.
 
-## Bug n°3 — Synthetic beans `@ConfigProperty` ✅ résolu
+## Bug #3 — Synthetic beans `@ConfigProperty` ✅ resolved
 
-Détaillé dans la section J1 ci-dessus. Le BCE expose désormais
-`@Registration` (collecte des types d'IP `@ConfigProperty`) +
-`@Synthesis` (un `SyntheticBean` par type, plus un bean `Config @Default`).
+Detailed in the J1 section above. The BCE now exposes
+`@Registration` (collecting `@ConfigProperty` IP types) +
+`@Synthesis` (one `SyntheticBean` per type, plus one `Config @Default` bean).
 
-Reste exposé après ce fix : `@ConfigProperties` (Bug n°4 ci-dessous) et un
-résiduel listé en fin de doc.
+Still exposed after this fix: `@ConfigProperties` (Bug #4 below) and a
+residual listed at the end of the doc.
 
-## Bug n°4 — `@ConfigProperties` non supporté (6 fails) 🔥 actif
+## Bug #4 — `@ConfigProperties` not supported (6 failures) 🔥 active
 
-`ConfigPropertiesTest.testConfigPropertiesPlainInjection` et 5 autres :
-MP Config 3.1 §6 introduit l'annotation `@ConfigProperties` (préfixe sur un
-POJO entier, distinct de `@ConfigProperty`). Ravel ne l'implémente pas
-encore — gap connu, planifié J3.
+`ConfigPropertiesTest.testConfigPropertiesPlainInjection` and 5 others:
+MP Config 3.1 §6 introduces the `@ConfigProperties` annotation (prefix on an
+entire POJO, distinct from `@ConfigProperty`). Ravel does not implement this
+yet — known gap, planned for J3.
 
-## Résiduel après J1 — historique (résolu en J2, 0 fail restant)
+## Residual After J1 — history (resolved in J2, 0 failures remaining)
 
-> Ces items étaient le plan-action pour J2. Tous résolus, conservés pour la
-> traçabilité.
+> These items were the action plan for J2. All resolved; retained for traceability.
 
-| Catégorie | # | Statut |
+| Category | # | Status |
 |---|---|---|
-| `ArrayConverterTest` (arrays divers, primitives) | ~1 cls | ✅ J2.3 + J2.6 |
+| `ArrayConverterTest` (various arrays, primitives) | ~1 cls | ✅ J2.3 + J2.6 |
 | `ClassConverterTest` (`Class[]`) | 1 cls | ✅ J2.3 |
 | `CDIPlainInjectionTest.canInjectDefaultPropertyPath` | 1 | ✅ J2.2 |
 | `ConfigPropertiesTest.*` (6 tests) | 6 | ✅ J2.4 |
 | `ConfigPropertiesMissingPropertyInjectionTest` | 1 | ✅ J2.5 |
 | `CDIPropertyExpressionsTest.badExpansion`, `CdiOptionalInjectionTest` | 2 | ✅ J2.1 |
 
-## Tests désactivés / challenges spec
+## Disabled Tests / Spec Challenges
 
-Aucun pour l'instant. Cette section sera enrichie quand de vrais écarts
-spec/impl émergeront après les fix M5 successifs.
+None at this time. This section will be enriched when genuine spec/impl
+divergences emerge after successive M5 fixes.
 
-## Références
+## References
 
-- MicroProfile Config 3.1 spec : `https://microprofile.io/specifications/microprofile-config/3.1/`
-- TCK artefact : `org.eclipse.microprofile.config:microprofile-config-tck:3.1.1`
-- Arquillian core : `https://github.com/arquillian/arquillian-core`
-- Weld SE : `https://docs.jboss.org/weld/reference/latest/en-US/html/environments.html#weld-se`
-- CDI Lite spec — Build Compatible Extensions : §`jakarta.enterprise.inject.build.compatible.spi`
-
-
+- MicroProfile Config 3.1 spec: `https://microprofile.io/specifications/microprofile-config/3.1/`
+- TCK artifact: `org.eclipse.microprofile.config:microprofile-config-tck:3.1.1`
+- Arquillian core: `https://github.com/arquillian/arquillian-core`
+- Weld SE: `https://docs.jboss.org/weld/reference/latest/en-US/html/environments.html#weld-se`
+- CDI Lite spec — Build Compatible Extensions: §`jakarta.enterprise.inject.build.compatible.spi`

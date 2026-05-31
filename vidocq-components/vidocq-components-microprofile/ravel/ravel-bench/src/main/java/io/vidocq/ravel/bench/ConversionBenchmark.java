@@ -20,8 +20,8 @@ import java.time.Duration;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Bench JMH §M5 — coût des converters built-in (Integer, Long, Boolean, Duration)
- * et tableau (§5.4).
+ * JMH M5 benchmark for built-in converter cost (Integer, Long, Boolean,
+ * Duration) and array conversion (§5.4).
  */
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)

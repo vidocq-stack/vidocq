@@ -25,14 +25,11 @@ import java.util.OptionalInt;
 import java.util.OptionalLong;
 
 /**
- * Extension portable (standard CDI) qui :
+ * Portable CDI extension that:
  * <ol>
- *   <li>veto les beans annotés {@code @ConfigProperties} au niveau classe pour
- *       laisser la BCE les synthétiser ;</li>
- *   <li>collecte ces classes pour valider, à {@link AfterDeploymentValidation},
- *       que toutes leurs propriétés requises sont disponibles dans la
- *       {@link Config} courante (cf.
- *       {@link org.eclipse.microprofile.config.tck.broken.ConfigPropertiesMissingPropertyInjectionTest}).</li>
+ *   <li>vetoes type-level {@code @ConfigProperties} beans so BCE can synthesize them;</li>
+ *   <li>collects those classes and validates at {@link AfterDeploymentValidation}
+ *       that all required properties are available in current {@link Config}.</li>
  * </ol>
  */
 public class ConfigPropertiesExclusionExtension implements Extension {
@@ -40,10 +37,8 @@ public class ConfigPropertiesExclusionExtension implements Extension {
     private final List<Class<?>> configPropertiesClasses = new ArrayList<>();
 
     /**
-     * Veto les classes annotées {@code @ConfigProperties} au niveau type pour
-     * laisser la BCE les synthétiser. Ne veto pas les classes qui utilisent
-     * {@code @ConfigProperties} uniquement comme qualifiant à un point d'injection
-     * (ex. {@code InjectingBean} du TCK).
+     * Vetoes type-level {@code @ConfigProperties} classes to let BCE synthesize them.
+     * Does not veto classes using {@code @ConfigProperties} only as an IP qualifier.
      */
     public <T> void vetoConfigPropertiesBeans(
             @Observes @WithAnnotations(ConfigProperties.class) ProcessAnnotatedType<T> event) {
@@ -54,10 +49,9 @@ public class ConfigPropertiesExclusionExtension implements Extension {
     }
 
     /**
-     * Validation des classes {@code @ConfigProperties} déployées : pour chaque
-     * classe collectée, on vérifie que tous les champs requis disposent d'une
-     * source de valeur (propriété config, defaultValue, type Optional, ou
-     * initialiseur Java).
+     * Validates deployed {@code @ConfigProperties} classes: each required field
+     * must have a value source (config property, defaultValue, Optional type,
+     * or Java initializer).
      */
     public void validateConfigProperties(@Observes AfterDeploymentValidation event) {
         Config config = ConfigProvider.getConfig();

@@ -1,62 +1,62 @@
 # Ravel
 
-> Maurice Ravel (1875–1937) était maître de l'orchestration — il savait tisser des sources
-> disparates en un tout cohérent. C'est exactement ce que fait un système de configuration.
+> Maurice Ravel (1875–1937) was a master of orchestration — he knew how to weave disparate
+> sources into a coherent whole. This is exactly what a configuration system does.
 
-**Ravel** est une implémentation [MicroProfile Config 3.1](https://download.eclipse.org/microprofile/microprofile-config-3.1/microprofile-config-spec-3.1.html)
-de l'écosystème [Vidocq](https://forge.vidocq.dev/vidocq).
+**Ravel** is a [MicroProfile Config 3.1](https://download.eclipse.org/microprofile/microprofile-config-3.1/microprofile-config-spec-3.1.html)
+implementation for the [Vidocq](https://forge.vidocq.dev/vidocq) ecosystem.
 
-## Principes
+## Principles
 
-- **Zéro librairie tierce** — uniquement les specs Jakarta EE et MicroProfile sont autorisées
-  en dépendance compile/runtime. Pas de Smallrye Config, pas de Helidon Config, pas d'Apache
+- **Zero third-party libraries** — only Jakarta EE and MicroProfile specs are allowed
+  as compile/runtime dependencies. No Smallrye Config, no Helidon Config, no Apache
   Commons Config.
-- **Java 25 + Maven 4** — pinés via `.sdkmanrc`.
-- **JPMS strict** — chaque module a son `module-info.java`, packages `internal.*` non exportés,
+- **Java 25 + Maven 4** — pinned via `.sdkmanrc`.
+- **Strict JPMS** — each module has its `module-info.java`, `internal.*` packages unexported,
   SPI via `provides/uses`.
-- **Virtual threads friendly** — pas de `synchronized`, pas de `ThreadLocal`. `ScopedValue` pour
-  la propagation contextuelle (détection de cycles dans les expressions notamment).
-- **TDD strict** — Red → Green → Refactor, citation systématique de la spec dans le JavaDoc des tests.
-- **TCK 100 % PASS** — contrat dur sur `microprofile-config-tck:3.1.1` avant tout merge structurel.
+- **Virtual threads friendly** — no `synchronized`, no `ThreadLocal`. `ScopedValue` for
+  contextual propagation (cycle detection in expressions in particular).
+- **Strict TDD** — Red → Green → Refactor, systematic spec citation in test JavaDoc.
+- **TCK 100% PASS** — hard contract on `microprofile-config-tck:3.1.1` before any structural merge.
 
 ## Modules
 
 | Module | Description |
 |---|---|
-| `ravel-api` | Re-export de la spec `org.eclipse.microprofile.config` |
-| `ravel-core` | Implémentation `Config` standalone : sources built-in, converters, profiles, expressions |
-| `ravel-cdi-vauban` | Intégration CDI Vauban : `@ConfigProperty`, BCE, injection `Optional<T>` |
-| `ravel-bench` | Benchmarks JMH — comparatif vs Smallrye Config |
-| `ravel-tck` | Runner TCK officiel MicroProfile Config 3.1 (**hors reactor**, POM Model 4.0.0) |
+| `ravel-api` | Re-export of the `org.eclipse.microprofile.config` spec |
+| `ravel-core` | Standalone `Config` implementation: built-in sources, converters, profiles, expressions |
+| `ravel-cdi-vauban` | CDI Vauban integration: `@ConfigProperty`, BCE, `Optional<T>` injection |
+| `ravel-bench` | JMH benchmarks — comparison vs Smallrye Config |
+| `ravel-tck` | Official MicroProfile Config 3.1 TCK runner (**out of reactor**, POM Model 4.0.0) |
 
-## Démarrage
+## Getting started
 
 ```bash
 cd ravel
 sdk env                         # Java 25 + Maven 3.9.16
-mvn -ntp install -DskipTests    # build du reactor
-mvn test                        # tests unitaires
+mvn -ntp install -DskipTests    # reactor build
+mvn test                        # unit tests
 ```
 
-## TCK officiel
+## Official TCK
 
-L'artefact `org.eclipse.microprofile.config:microprofile-config-tck:3.1.1` est public sur Maven
-Central — pas d'installation manuelle nécessaire (la 3.1.1 est une re-release JPMS-friendly de
-la spec 3.1, contenu identique).
+The `org.eclipse.microprofile.config:microprofile-config-tck:3.1.1` artifact is public on Maven
+Central — no manual installation needed (3.1.1 is a JPMS-friendly re-release of
+spec 3.1, identical content).
 
 ```bash
 ./run-official-tck-mp-config-3.1.sh             # smoke
-./run-official-tck-mp-config-3.1.sh all         # suite complète
-./run-official-tck-mp-config-3.1.sh -Dtest=...  # ciblé
+./run-official-tck-mp-config-3.1.sh all         # full suite
+./run-official-tck-mp-config-3.1.sh -Dtest=...  # targeted
 ```
 
 ## Documentation
 
-- [`CLAUDE.md`](CLAUDE.md) — guide développement (contraintes, conventions, TDD)
-- [`ROADMAP.md`](ROADMAP.md) — plan de phase M0 → M6
-- [`BUG.md`](BUG.md) — bugs ouverts (créé au premier rapport)
-- [`BENCH.md`](BENCH.md) — résultats JMH datés (créé au premier run)
+- [`CLAUDE.md`](CLAUDE.md) — development guide (constraints, conventions, TDD)
+- [`ROADMAP.md`](ROADMAP.md) — phase plan M0 → M6
+- [`BUG.md`](BUG.md) — open bugs (created on first report)
+- [`BENCH.md`](BENCH.md) — dated JMH results (created on first run)
 
-## Licence
+## License
 
-Apache License 2.0 — voir [`LICENSE`](LICENSE).
+Apache License 2.0 — see [`LICENSE`](LICENSE).

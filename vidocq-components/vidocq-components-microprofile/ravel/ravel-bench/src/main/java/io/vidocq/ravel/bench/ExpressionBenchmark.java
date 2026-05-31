@@ -19,8 +19,8 @@ import org.openjdk.jmh.annotations.Warmup;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Bench JMH §M5 — coût de la résolution des property expressions (§7.2)
- * sur 3 niveaux d'imbrication.
+ * JMH M5 benchmark for property expression resolution cost (§7.2)
+ * across three nesting levels.
  */
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
@@ -40,19 +40,19 @@ public class ExpressionBenchmark {
         this.config = impl.build(BenchSources.EXPRESSIONS);
     }
 
-    /** Référence : valeur sans expression — pure cascade lookup. */
+    /** Baseline: value without expression, pure cascade lookup. */
     @Benchmark
     public String literal() {
         return config.getValue("bench.literal", String.class);
     }
 
-    /** 1 niveau : ${bench.env}. */
+    /** 1 level: ${bench.env}. */
     @Benchmark
     public String oneLevel() {
         return config.getValue("bench.url", String.class);
     }
 
-    /** 2-3 niveaux : ${bench.host.${bench.env}} → ${bench.url}. */
+    /** 2-3 levels: ${bench.host.${bench.env}} -> ${bench.url}. */
     @Benchmark
     public String deep() {
         return config.getValue("bench.deep", String.class);

@@ -11,17 +11,14 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Converter générique pour les arrays {@code T[]} (MP Config 3.1 §5.4) — délègue
- * la conversion de chaque élément au converter du type composant après split
- * par virgule.
+ * Generic converter for arrays {@code T[]} (MP Config 3.1 §5.4), delegating each
+ * element conversion to the component type converter after comma splitting.
  *
- * <p>Utilise {@link Array#newInstance(Class, int)} et {@link Array#set} pour
- * supporter à la fois les arrays de référence ({@code Boolean[]},
- * {@code Duration[]}, etc.) <b>et</b> les arrays primitifs ({@code int[]},
- * {@code boolean[]}, etc.) — un cast {@code (T[]) Array.newInstance(int.class, n)}
- * échoue avec {@code ClassCastException [I → [Ljava.lang.Object;}.</p>
+ * <p>Uses {@link Array#newInstance(Class, int)} and {@link Array#set} to support
+ * both reference arrays ({@code Boolean[]}, {@code Duration[]}, ...) and
+ * primitive arrays ({@code int[]}, {@code boolean[]}, ...).</p>
  *
- * @param <T> type cible (le type d'array, ex. {@code int[]} ou {@code Boolean[]}).
+ * @param <T> target type (array type, e.g. {@code int[]} or {@code Boolean[]}).
  */
 final class ArrayConverter<T> implements Converter<T> {
 

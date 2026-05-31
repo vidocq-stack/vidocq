@@ -10,11 +10,11 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Wrapper de profil MP Config 3.1 §7.5.
+ * MP Config 3.1 §7.5 profile wrapper.
  *
- * <p>Pour un profil actif {@code dev}, la clé logique {@code app.url} lit
- * {@code %dev.app.url}. Le wrapper expose un ordinal {@code delegate + 1}
- * pour que les propriétés profilées masquent la clé non profilée de la même source.</p>
+ * <p>For active profile {@code dev}, logical key {@code app.url} resolves to
+ * {@code %dev.app.url}. The wrapper exposes ordinal {@code delegate + 1} so
+ * profiled keys shadow non-profiled keys from the same source.</p>
  */
 final class ProfiledConfigSource implements ConfigSource {
 

@@ -1,14 +1,14 @@
-# Intégration Ravel dans Vauban (Conteneur CDI)
+# Ravel Integration in Vauban (CDI Container)
 
-> Guide d'intégration pour enregistrer `Config` comme bean CDI dans le conteneur
-> Vauban et permettre l'injection de propriétés de configuration.
+> Integration guide for registering `Config` as a CDI bean in the Vauban container
+> and enabling configuration property injection.
 
-## Présentation
+## Overview
 
-Vauban est le conteneur CDI Vidocq. Avec `ravel-cdi-vauban`, Vauban obtient le support
-complet de MicroProfile Config 3.1 : `@Inject Config`, `@ConfigProperty`, `@ConfigProperties`.
+Vauban is the Vidocq CDI container. With `ravel-cdi-vauban`, Vauban gains full
+MicroProfile Config 3.1 support: `@Inject Config`, `@ConfigProperty`, `@ConfigProperties`.
 
-## Architecture de l'intégration
+## Integration Architecture
 
 ```
 Application
@@ -16,19 +16,19 @@ Application
     ▼
 Vauban (CDI container)
     │  ├── ravel-cdi-vauban (BCE + producers)
-    │  │       └── ConfigCdiExtension (synthétise les beans @ConfigProperty)
-    │  │       └── ConfigSyntheticCreator (injecte le Config complet)
-    │  │       └── RavelConfigPropertyResolver (résout à runtime)
-    │  └── ravel-core (implémentation Config)
+    │  │       └── ConfigCdiExtension (synthesises @ConfigProperty beans)
+    │  │       └── ConfigSyntheticCreator (injects the full Config)
+    │  │       └── RavelConfigPropertyResolver (resolves at runtime)
+    │  └── ravel-core (Config implementation)
     │           └── RavelConfigProviderResolver
     │           └── SystemPropertiesConfigSource (400)
     │           └── EnvironmentVariablesConfigSource (300)
     │           └── MicroprofilePropertiesConfigSource (100)
 ```
 
-## Dépendances Maven
+## Maven Dependencies
 
-Dans le `pom.xml` parent de Vauban ou dans les modules applicatifs :
+In the Vauban parent `pom.xml` or in application modules:
 
 ```xml
 <dependencyManagement>
@@ -43,7 +43,7 @@ Dans le `pom.xml` parent de Vauban ou dans les modules applicatifs :
 </dependencyManagement>
 ```
 
-Dans les modules qui ont besoin de MP Config :
+In modules that need MP Config:
 
 ```xml
 <dependencies>
@@ -54,7 +54,7 @@ Dans les modules qui ont besoin de MP Config :
 </dependencies>
 ```
 
-## Configuration JPMS
+## JPMS Configuration
 
 ```java
 module io.vidocq.vauban.mymodule {
@@ -65,9 +65,9 @@ module io.vidocq.vauban.mymodule {
 }
 ```
 
-## Utilisation dans des beans Vauban
+## Usage in Vauban Beans
 
-### Injection du Config complet
+### Injecting the full Config
 
 ```java
 import jakarta.enterprise.context.ApplicationScoped;
@@ -86,7 +86,7 @@ public class MyService {
 }
 ```
 
-### Injection de propriétés individuelles
+### Injecting individual properties
 
 ```java
 import jakarta.enterprise.context.Dependent;
@@ -112,7 +112,7 @@ public class ServerConfig {
 }
 ```
 
-### Groupes de propriétés avec `@ConfigProperties`
+### Property groups with `@ConfigProperties`
 
 ```java
 import jakarta.enterprise.context.ApplicationScoped;
@@ -130,44 +130,44 @@ public class DatabaseConfig {
     @ConfigProperty(defaultValue = "5432")
     public int poolSize;         // db.poolSize
 
-    public java.util.Optional<String> schema;  // db.schema (optionnel)
+    public java.util.Optional<String> schema;  // db.schema (optional)
 }
 ```
 
-Injection :
+Injection:
 
 ```java
 @Inject
 @ConfigProperties
 private DatabaseConfig dbConfig;
 
-// Avec un préfixe différent (ex: base de données secondaire)
+// With a different prefix (e.g., secondary database)
 @Inject
 @ConfigProperties(prefix = "db.secondary")
 private DatabaseConfig secondaryDbConfig;
 ```
 
-## Enregistrement de la BCE dans Vauban
+## Registering the BCE in Vauban
 
-La BCE `ConfigCdiExtension` est enregistrée automatiquement via ServiceLoader :
+The `ConfigCdiExtension` BCE is automatically registered via ServiceLoader:
 
 ```
 META-INF/services/jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension
     → io.vidocq.ravel.cdi.ConfigCdiExtension
 ```
 
-Si vous utilisez Vauban avec scanning classpath, aucune configuration supplémentaire n'est requise.
-Si vous utilisez `SeContainerInitializer.disableDiscovery()`, ajoutez explicitement la BCE :
+If you use Vauban with classpath scanning, no additional configuration is required.
+If you use `SeContainerInitializer.disableDiscovery()`, add the BCE explicitly:
 
 ```java
 SeContainerInitializer initializer = SeContainerInitializer.newInstance()
         .disableDiscovery()
         .addBeanClasses(MyService.class, ServerConfig.class)
-        // ravel-cdi-vauban ajoute automatiquement sa BCE si le JAR est sur le classpath
+        // ravel-cdi-vauban automatically adds its BCE if the JAR is on the classpath
         ;
 ```
 
-## Sources de configuration personnalisées pour Vauban
+## Custom Configuration Sources for Vauban
 
 ```java
 import org.eclipse.microprofile.config.spi.ConfigSource;
@@ -195,48 +195,48 @@ public class VaubanInternalConfigSource implements ConfigSource {
     public String getName() { return "vauban-internal"; }
 
     @Override
-    public int getOrdinal() { return 250; } // Priorité entre env vars et properties file
+    public int getOrdinal() { return 250; } // Priority between env vars and properties file
 
     private Map<String, String> readVaubanConfiguration() {
-        // Lire la configuration interne de Vauban
+        // Read Vauban's internal configuration
         return new HashMap<>();
     }
 }
 ```
 
-Enregistrement via ServiceLoader :
+Registration via ServiceLoader:
 
 ```
 META-INF/services/org.eclipse.microprofile.config.spi.ConfigSource
     → io.vidocq.vauban.VaubanInternalConfigSource
 ```
 
-## Lookup programmatique
+## Programmatic Lookup
 
-En dehors de l'injection CDI :
+Outside CDI injection:
 
 ```java
 import org.eclipse.microprofile.config.ConfigProvider;
 
-// Lookup programmatique (sans CDI)
+// Programmatic lookup (without CDI)
 Config config = ConfigProvider.getConfig();
 String host = config.getValue("server.host", String.class);
 
-// Avec Optional
+// With Optional
 Optional<Integer> port = config.getOptionalValue("server.port", Integer.class);
 ```
 
-## Validation au déploiement
+## Deployment Validation
 
-`ravel-cdi-vauban` valide les propriétés **requises** (sans `defaultValue`) au démarrage.
-Si une propriété requise est absente, Vauban refuse de démarrer avec un `DeploymentException` :
+`ravel-cdi-vauban` validates **required** properties (without `defaultValue`) at startup.
+If a required property is absent, Vauban refuses to start with a `DeploymentException`:
 
 ```
 DeploymentException: Missing required config property 'db.host' for type String
   at injection point @Inject @ConfigProperty private ServerConfig.dbHost
 ```
 
-Pour les propriétés optionnelles, utilisez `Optional<T>` ou `defaultValue` :
+For optional properties, use `Optional<T>` or `defaultValue`:
 
 ```java
 @Inject
@@ -248,13 +248,12 @@ private boolean featureXEnabled;
 private Optional<String> optionalFeature;
 ```
 
-## Intégration avec `vidocq`
+## Integration with `vidocq`
 
-Pour remplacer Smallrye Config dans `vidocq` :
+To replace Smallrye Config in `vidocq`:
 
-1. Supprimer la dépendance `io.smallrye.config:smallrye-config`
-2. Ajouter `io.vidocq.ravel:ravel-cdi-vauban`
-3. Rebuilder — aucune modification du code applicatif n'est requise
+1. Remove the `io.smallrye.config:smallrye-config` dependency
+2. Add `io.vidocq.ravel:ravel-cdi-vauban`
+3. Rebuild — no application code changes required
 
-Le `ServiceLoader` remplacera automatiquement l'implémentation `ConfigProviderResolver`.
-
+The `ServiceLoader` will automatically replace the `ConfigProviderResolver` implementation.

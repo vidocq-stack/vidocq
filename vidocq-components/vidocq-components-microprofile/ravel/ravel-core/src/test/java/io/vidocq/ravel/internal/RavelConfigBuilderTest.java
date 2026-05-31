@@ -35,8 +35,8 @@ class RavelConfigBuilderTest {
 
     @Test
     void build_without_sources_yields_empty_config() {
-        // Pas de source → toute lookup échoue ; le converter String est tout de
-        // même présent (built-in).
+        // No source → all lookups fail; the String converter is still
+        // present (built-in).
         Config cfg = new RavelConfigBuilder().build();
         assertTrue(cfg.getOptionalValue("anything", String.class).isEmpty());
         assertTrue(cfg.getConverter(String.class).isPresent());
@@ -54,10 +54,10 @@ class RavelConfigBuilderTest {
         }
         assertTrue(names.contains("SystemPropertiesConfigSource"));
         assertTrue(names.contains("EnvironmentVariablesConfigSource"));
-        // MicroprofilePropertiesConfigSource[<url>] — préfixée
+        // MicroprofilePropertiesConfigSource[<url>] — prefixed
         boolean hasMpProps = names.stream().anyMatch(n -> n.startsWith("MicroprofilePropertiesConfigSource"));
         assertTrue(hasMpProps,
-                "La fixture src/test/resources/META-INF/microprofile-config.properties doit être détectée");
+                "The fixture src/test/resources/META-INF/microprofile-config.properties must be detected");
     }
 
     // -------- withSources --------
@@ -77,7 +77,7 @@ class RavelConfigBuilderTest {
                 .withSources(custom)
                 .build();
         assertEquals("X", cfg.getValue("x", String.class));
-        // Vérifier que les sources built-in sont aussi présentes.
+        // Verify that the built-in sources are also present.
         boolean hasSysProps = false;
         for (ConfigSource s : cfg.getConfigSources()) {
             if ("SystemPropertiesConfigSource".equals(s.getName())) {
@@ -113,8 +113,8 @@ class RavelConfigBuilderTest {
 
     @Test
     void without_converter_unsupported_type_throws() {
-        // Object n'a ni built-in (§5.1) ni pattern §5.2 (of/valueOf/parse/(String))
-        // → IllegalArgumentException attendu.
+        // Object has neither a built-in converter (§5.1) nor the §5.2 pattern (of/valueOf/parse/(String))
+        // → IllegalArgumentException expected.
         Config cfg = new RavelConfigBuilder()
                 .withSources(MapConfigSource.of("s", 100, Map.of("k", "42")))
                 .build();
@@ -136,8 +136,8 @@ class RavelConfigBuilderTest {
 
     @Test
     void addDiscoveredSources_is_safe_when_no_service_registered() {
-        // Aucun META-INF/services/...ConfigSource fourni dans ravel-core test
-        // → addDiscoveredSources ne doit rien ajouter et ne doit pas lancer.
+        // No META-INF/services/...ConfigSource provided in ravel-core test
+        // → addDiscoveredSources must add nothing and must not throw.
         Config cfg = new RavelConfigBuilder().addDiscoveredSources().build();
         assertFalse(cfg.getConfigSources().iterator().hasNext());
     }

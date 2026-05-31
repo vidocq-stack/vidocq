@@ -25,24 +25,24 @@ import java.util.OptionalInt;
 import java.util.OptionalLong;
 
 /**
- * Catalogue des converters built-in MP Config 3.1 §5.1 / §5.2 (types automatiques).
+ * Catalogue of built-in converters for MP Config 3.1 §5.1 / §5.2 (automatic types).
  *
- * <p>Tous les built-in ont une <b>priorité 1</b> (la plus basse) afin que tout converter
- * applicatif (priorité par défaut 100) puisse les écraser, conformément à §5.3.</p>
+ * <p>All built-in converters have <b>priority 1</b> (the lowest) so that any
+ * application converter (default priority 100) can override them, as required by §5.3.</p>
  *
- * <p>Tous les converters levent {@link IllegalArgumentException} si la chaîne n'est
- * pas convertible — la spec exige cette exception (cf. §5).</p>
+ * <p>All converters throw {@link IllegalArgumentException} if the string cannot be
+ * converted — the spec mandates this exception (see §5).</p>
  */
 final class BuiltInConverters {
 
-    /** Priorité MP §5.3 attribuée à un converter built-in (la plus basse). */
+    /** MP §5.3 priority assigned to a built-in converter (the lowest). */
     static final int BUILT_IN_PRIORITY = 1;
 
     private BuiltInConverters() {
-        // utilitaire
+        // utility class
     }
 
-    /** Renvoie la table immutable {type → converter} de tous les built-in. */
+    /** Returns the immutable {type → converter} map for all built-in converters. */
     static Map<Class<?>, Converter<?>> all() {
         return Map.ofEntries(
                 Map.entry(String.class, IdentityStringConverter.INSTANCE),
@@ -87,7 +87,7 @@ final class BuiltInConverters {
 
     /**
      * §5.1.1 — {@code true}, {@code 1}, {@code yes}, {@code y}, {@code on}
-     * (case-insensitive) sont vrais ; tout le reste est {@code false}.
+     * (case-insensitive) are truthy; everything else is {@code false}.
      */
     static final class BooleanConverter implements Converter<Boolean> {
         @Serial private static final long serialVersionUID = 1L;
@@ -203,7 +203,7 @@ final class BuiltInConverters {
     }
 
     // ---------------------------------------------------------------------
-    //  Optional* (boîtes primitives)
+    //  Optional* (boxed primitives)
     // ---------------------------------------------------------------------
 
     static final class OptionalIntConverter implements Converter<OptionalInt> {

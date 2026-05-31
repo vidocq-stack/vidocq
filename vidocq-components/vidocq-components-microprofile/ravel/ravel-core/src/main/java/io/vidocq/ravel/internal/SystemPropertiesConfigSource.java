@@ -11,11 +11,11 @@ import java.util.Properties;
 import java.util.Set;
 
 /**
- * {@link ConfigSource} adossée à {@link System#getProperties()} — ordinal 400 par défaut
- * (MP Config 3.1 §3.4).
+ * {@link ConfigSource} backed by {@link System#getProperties()} with default ordinal
+ * 400 (MP Config 3.1 §3.4).
  *
- * <p>Aucun cache local : les System properties sont mutables runtime, et chaque appel
- * à {@code getValue}/{@code getPropertyNames}/{@code getProperties} relit l'état courant.</p>
+ * <p>No local cache: system properties are mutable at runtime, so each call to
+ * {@code getValue}/{@code getPropertyNames}/{@code getProperties} reads current state.</p>
  */
 public final class SystemPropertiesConfigSource implements ConfigSource {
 
@@ -38,8 +38,7 @@ public final class SystemPropertiesConfigSource implements ConfigSource {
 
     @Override
     public Map<String, String> getProperties() {
-        // Snapshot défensif : éviter de retourner directement la Properties
-        // mutable du système.
+        // Defensive snapshot: do not return mutable system Properties directly.
         Properties sys = System.getProperties();
         var copy = new HashMap<String, String>(sys.size());
         for (String name : sys.stringPropertyNames()) {
@@ -58,14 +57,13 @@ public final class SystemPropertiesConfigSource implements ConfigSource {
 
     @Override
     public int getOrdinal() {
-        // §3.4 — la valeur du système {@code config_ordinal} (s'il y en a une)
-        // remplace l'ordinal par défaut.
+        // §3.4: system property {@code config_ordinal} overrides default ordinal.
         String override = System.getProperty("config_ordinal");
         if (override != null) {
             try {
                 return Integer.parseInt(override.trim());
             } catch (NumberFormatException ignored) {
-                // valeur non parsable → ordinal par défaut
+                // Non-parsable value: keep default ordinal.
             }
         }
         return ORDINAL;

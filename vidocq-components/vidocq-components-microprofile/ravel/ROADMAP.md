@@ -1,34 +1,34 @@
-# Ravel — Plan d'attaque
+# Ravel — Roadmap
 
-> Implémentation MicroProfile Config 3.1 dans le style Vidocq : zéro librairie tierce
-> (specs Jakarta EE / MicroProfile autorisées), JDK 25, virtual threads, JPMS strict,
-> intégration CDI optionnelle via Vauban.
+> MicroProfile Config 3.1 implementation in the Vidocq style: zero third-party libraries
+> (Jakarta EE / MicroProfile specs allowed), JDK 25, virtual threads, strict JPMS,
+> optional CDI integration via Vauban.
 
-## Principes directeurs
+## Guiding Principles
 
-| Principe | Application concrète |
+| Principle | Concrete application |
 |---|---|
-| Zéro librairie tierce | Pas de Smallrye Config, Helidon Config, Apache Commons Config dans `ravel-core`. Seules les API specs (`microprofile-config-api`, `jakarta.inject`, `jakarta.cdi-api`, `jakarta.annotation-api`) sont compilées. |
-| Specs Jakarta / MicroProfile autorisées | `ravel-cdi-vauban` peut dépendre de `jakarta.enterprise.cdi-api`, `jakarta.inject-api`, `jakarta.annotation-api`. Le cœur `ravel-core` reste limité à `microprofile-config-api`. |
-| Virtual threads | Pas de `synchronized`, pas de `ThreadLocal`. Caches `ConcurrentHashMap`/`ClassValue`. Détection de cycle d'expressions via `ScopedValue`. |
-| JPMS strict | `module-info.java` partout, packages `internal.*` non exportés, SPI via `provides/uses`. Pas d'`opens` non justifié. |
-| TDD strict | Red → Green → Refactor. Tests écrits avant le code de prod. Citation systématique de la section spec MicroProfile Config 3.1 dans le JavaDoc des tests. |
-| TCK PASS 100 % | Contrat dur sur MicroProfile Config 3.1 TCK avant tout merge structurel. |
-| Performance mesurée | JMH dès M1, comparatif systématique avec Smallrye Config (référence MP), baseline ratchet. |
-| AOT-friendly | Pas de génération dynamique de proxy, pas de `setAccessible(true)` à chaud sauf pour les implicit converters (constructeur `String` / `valueOf` / `parse`). Compatible GraalVM `native-image`. |
+| Zero third-party libraries | No Smallrye Config, Helidon Config, Apache Commons Config in `ravel-core`. Only spec APIs (`microprofile-config-api`, `jakarta.inject`, `jakarta.cdi-api`, `jakarta.annotation-api`) are compiled. |
+| Jakarta / MicroProfile specs allowed | `ravel-cdi-vauban` may depend on `jakarta.enterprise.cdi-api`, `jakarta.inject-api`, `jakarta.annotation-api`. The core `ravel-core` is limited to `microprofile-config-api`. |
+| Virtual threads | No `synchronized`, no `ThreadLocal`. `ConcurrentHashMap`/`ClassValue` caches. Expression cycle detection via `ScopedValue`. |
+| Strict JPMS | `module-info.java` everywhere, `internal.*` packages not exported, SPI via `provides/uses`. No unjustified `opens`. |
+| Strict TDD | Red → Green → Refactor. Tests written before production code. Systematic citation of the MicroProfile Config 3.1 spec section in test Javadoc. |
+| TCK 100% PASS | Hard contract on the MicroProfile Config 3.1 TCK before any structural merge. |
+| Measured performance | JMH from M1, systematic comparison with Smallrye Config (MP reference), baseline ratchet. |
+| AOT-friendly | No dynamic proxy generation, no `setAccessible(true)` at runtime except for implicit converters (`String` constructor / `valueOf` / `parse`). Compatible with GraalVM `native-image`. |
 
-## Méthodologie : TDD + TCK comme garde-fous parallèles
+## Methodology: TDD + TCK as parallel guardrails
 
-Ravel est développé en **TDD strict** (Red → Green → Refactor). Aucune ligne de production n'est
-écrite avant un test qui la justifie. Au-delà du cycle TDD interne :
+Ravel is developed with **strict TDD** (Red → Green → Refactor). No production line is
+written before a test that justifies it. Beyond the internal TDD cycle:
 
-- **Couche 1 — tests unitaires TDD** : pilotent la conception de chaque classe.
-- **Couche 2 — tests d'intégration `ravel-core`** : scénarios multi-sources, cascade d'ordinals,
-  expressions imbriquées, profils combinés. Indépendants du TCK et reproductibles sans Arquillian.
-- **Couche 3 — TCK officiel** (`microprofile-config-tck:3.1.1`) : contrat 100 % PASS avant tout merge
-  structurel. Module hors reactor (POM Model 4.0.0).
-- **Couche 4 — Bench JMH** : `ravel-bench` compare lookup throughput, expression resolution overhead,
-  conversion cost vs Smallrye Config sur la même JVM.
+- **Layer 1 — TDD unit tests**: drive the design of each class.
+- **Layer 2 — `ravel-core` integration tests**: multi-source scenarios, ordinal cascades,
+  nested expressions, combined profiles. Independent of the TCK and reproducible without Arquillian.
+- **Layer 3 — Official TCK** (`microprofile-config-tck:3.1.1`): 100% PASS contract before any
+  structural merge. Out-of-reactor module (POM Model 4.0.0).
+- **Layer 4 — JMH benchmarks**: `ravel-bench` compares lookup throughput, expression resolution
+  overhead, conversion cost vs Smallrye Config on the same JVM.
 
 ## Phases
 
@@ -36,248 +36,261 @@ Ravel est développé en **TDD strict** (Red → Green → Refactor). Aucune lig
 
 - [x] `.sdkmanrc` (`java=25-tem`, `maven=3.9.16`)
 - [x] `.gitignore`, `.mvn/maven.config`
-- [x] `pom.xml` parent (Model 4.1.0, multi-module, dependency management Jakarta + MicroProfile)
+- [x] Parent `pom.xml` (Model 4.1.0, multi-module, Jakarta + MicroProfile dependency management)
 - [x] `CLAUDE.md`
-- [x] `ROADMAP.md` (ce fichier)
-- [x] Création des 5 sous-modules avec `pom.xml` + `module-info.java` squelettes :
-      `ravel-api`, `ravel-core`, `ravel-cdi-vauban`, `ravel-bench`, `ravel-tck` (hors reactor)
+- [x] `ROADMAP.md` (this file)
+- [x] Created 5 sub-modules with skeleton `pom.xml` + `module-info.java`:
+      `ravel-api`, `ravel-core`, `ravel-cdi-vauban`, `ravel-bench`, `ravel-tck` (out-of-reactor)
 - [x] `LICENSE` (Apache 2.0)
 - [x] `README.md`
-- [x] Validation `mvn -ntp install -DskipTests` réussit (reactor + ravel-tck standalone)
+- [x] `mvn -ntp install -DskipTests` succeeds (reactor + standalone ravel-tck)
 
-**Livrable :** `mvn -ntp install -DskipTests` réussit sur le reactor (ravel-api, ravel-core,
-ravel-cdi-vauban, ravel-bench) et compile aussi le projet hors-reactor `ravel-tck` (POM Model 4.0.0).
-Tous les `module-info.java` peuvent `requires org.eclipse.microprofile.config` grâce à la version
-**3.1.1** (publiée 2026-04-22) qui ajoute `Automatic-Module-Name: org.eclipse.microprofile.config`
-dans le manifest du JAR API — la 3.1 originale (publiée 2023) n'avait ni descripteur ni nom auto.
-
----
-
-### M1 — Sources built-in + lookup de base ✅
-
-**Scope spec :** §3 (ConfigSource), §4 (Built-in ConfigSources), §2.1 (Config lookup).
-
-| Tâche | Notes | État |
-|---|---|---|
-| `RavelConfig` implémente `org.eclipse.microprofile.config.Config` | `getValue`, `getOptionalValue`, `getValues`, `getOptionalValues`, `getPropertyNames`, `getConfigSources`, `getConfigValue`, `getConverter`, `unwrap` | ✅ |
-| `RavelConfigBuilder` implémente `ConfigBuilder` | `addDefaultSources`, `addDiscoveredSources`, `addDiscoveredConverters`, `withSources`, `withConverter(s)`, `forClassLoader`, `build` | ✅ |
-| `RavelConfigProviderResolver` extends `ConfigProviderResolver` | Singleton via ServiceLoader, un `Config` par `ClassLoader`, `ConcurrentHashMap` + `computeIfAbsent` atomique (testé sous 100 virtual threads concurrents) | ✅ |
-| `META-INF/services/org.eclipse.microprofile.config.spi.ConfigProviderResolver` + `provides` JPMS | Double compatibilité classpath/module-path | ✅ |
-| `SystemPropertiesConfigSource` (ordinal 400) | Lecture `System.getProperty/getProperties` à chaque appel (mutable runtime, pas de cache local) | ✅ |
-| `EnvironmentVariablesConfigSource` (ordinal 300) | Mapping spec §7.6 : 3 formes essayées (exact / non-alphanum→`_` / +UPPER). Helper `toEnvFormat` extrait pour testabilité | ✅ |
-| `MicroprofilePropertiesConfigSource` (ordinal 100) | Une instance par URL `META-INF/microprofile-config.properties` du `ClassLoader`, snapshot figé | ✅ |
-| `ConfigSourceProvider` SPI via ServiceLoader | `addDiscoveredSources` charge sources directes + providers | ✅ |
-| `RavelConfigValue` record avec metadata | §2.1.5 — factory `absent(name)` pour clé manquante | ✅ |
-| Tests unitaires + intégration | **80 tests verts** sur 8 classes + 1 fixture `MapConfigSource` | ✅ |
-
-**Décisions M1 documentées** : converter `String` identity uniquement (M2 ajoutera primitives, types automatiques, implicit converters) ; pas de `synchronized`, pas de `ThreadLocal`, pas de `setAccessible` (audit clean) ; cascade ordinals stable avec tie-breaking sur l'ordre d'enregistrement.
-
-**Livrable :** `ConfigProvider.getConfig().getValue("key", String.class)` fonctionne avec les 3 sources canoniques. Reactor + tests unitaires verts.
+**Deliverable:** `mvn -ntp install -DskipTests` succeeds on the reactor (ravel-api, ravel-core,
+ravel-cdi-vauban, ravel-bench) and also compiles the out-of-reactor project `ravel-tck` (POM Model 4.0.0).
+All `module-info.java` files can `requires org.eclipse.microprofile.config` thanks to version
+**3.1.1** (published 2026-04-22) which adds `Automatic-Module-Name: org.eclipse.microprofile.config`
+to the API JAR manifest — the original 3.1 (published 2023) had neither a descriptor nor an
+automatic name.
 
 ---
 
-### M2 — Converters de types ✅
+### M1 — Built-in sources + basic lookup ✅
 
-**Scope spec :** §5 (Converter), §5.1 (Built-in converters), §5.1.1 (Boolean), §5.2 (Automatic / Implicit converters), §5.3 (Custom converters), §5.4 (Arrays).
+**Spec scope:** §3 (ConfigSource), §4 (Built-in ConfigSources), §2.1 (Config lookup).
 
-| Tâche | Notes | État |
+| Task | Notes | Status |
 |---|---|---|
-| Built-in stricts (§5.1) | `boolean`/`Boolean`, `int`/`Integer`, `long`/`Long`, `float`/`Float`, `double`/`Double`, `short`/`Short`, `byte`/`Byte`, `char`/`Character`, `String`, `Class<?>` — tous au même converter pour boxed/primitive | ✅ |
-| Built-in étendus | `OptionalInt`, `OptionalLong`, `OptionalDouble`, `URI`, `URL`, `InetAddress`, `Duration`, `Period`, `LocalDate`, `LocalTime`, `LocalDateTime`, `OffsetTime`, `OffsetDateTime`, `ZonedDateTime`, `Instant` | ✅ |
-| Énumérations | Via `ImplicitConverter` (pattern `valueOf` traité comme cas dédié pour la sécurité de typage) | ✅ |
-| Convertisseur `Boolean` §5.1.1 | `true`/`1`/`yes`/`y`/`on` (case-insensitive, après `trim()`) → `true` ; tout le reste → `false` | ✅ |
-| Conversion tableaux §5.4 | `ArraySplitter` + `ArrayConverter<T>` — séparateur `,`, échappement `\,`, segments vides ignorés ; `getValue(name, T[].class)` et `getValues(name, T.class)` (via default Config) | ✅ |
-| `Converter<T>` SPI via ServiceLoader | `addDiscoveredConverters` charge + lit `@jakarta.annotation.Priority` (défaut **100**) | ✅ |
-| Implicit converters §5.2 | Détection ordonnée : `static of(String)` > `valueOf(String)` > `parse(CharSequence)` > ctor `(String)`. **Strictement public**, pas de `setAccessible(true)` | ✅ |
-| `ConfigBuilder.withConverter(Class<T>, int priority, Converter<T>)` | Priorité explicite respectée ; un converter de priorité plus basse n'écrase pas un plus haut | ✅ |
-| `ConfigBuilder.withConverters(Converter<?>...)` | Lit `@Priority` (défaut 100) via réflexion FQN — pas de dépendance compile sur `jakarta.annotation` | ✅ |
-| Cache thread-safe des converters dérivés | `ConcurrentHashMap` sur `RavelConfig.derivedConverters` ; pas de `synchronized`, virtual-thread-friendly | ✅ |
-| Tests par converter + cas limites | Boolean truthy/falsy, numériques avec espaces, char.length≠1, URL/URI invalides, enum unknown, array escape `\,`, segments vides, type incompatible → `IllegalArgumentException` | ✅ |
+| `RavelConfig` implements `org.eclipse.microprofile.config.Config` | `getValue`, `getOptionalValue`, `getValues`, `getOptionalValues`, `getPropertyNames`, `getConfigSources`, `getConfigValue`, `getConverter`, `unwrap` | ✅ |
+| `RavelConfigBuilder` implements `ConfigBuilder` | `addDefaultSources`, `addDiscoveredSources`, `addDiscoveredConverters`, `withSources`, `withConverter(s)`, `forClassLoader`, `build` | ✅ |
+| `RavelConfigProviderResolver` extends `ConfigProviderResolver` | Singleton via ServiceLoader, one `Config` per `ClassLoader`, `ConcurrentHashMap` + atomic `computeIfAbsent` (tested under 100 concurrent virtual threads) | ✅ |
+| `META-INF/services/org.eclipse.microprofile.config.spi.ConfigProviderResolver` + JPMS `provides` | Dual classpath/module-path compatibility | ✅ |
+| `SystemPropertiesConfigSource` (ordinal 400) | Reads `System.getProperty/getProperties` on each call (mutable runtime, no local cache) | ✅ |
+| `EnvironmentVariablesConfigSource` (ordinal 300) | Spec §7.6 mapping: 3 forms tried (exact / non-alphanumeric→`_` / +UPPER). `toEnvFormat` helper extracted for testability | ✅ |
+| `MicroprofilePropertiesConfigSource` (ordinal 100) | One instance per `META-INF/microprofile-config.properties` URL from `ClassLoader`, frozen snapshot | ✅ |
+| `ConfigSourceProvider` SPI via ServiceLoader | `addDiscoveredSources` loads direct sources + providers | ✅ |
+| `RavelConfigValue` record with metadata | §2.1.5 — `absent(name)` factory for missing keys | ✅ |
+| Unit + integration tests | **80 green tests** across 8 classes + 1 `MapConfigSource` fixture | ✅ |
 
-**Décisions M2 documentées** :
-- Le contrat MP §5.3 « priorité par défaut 100 » est lu **par nom qualifié** (`jakarta.annotation.Priority` ou `javax.annotation.Priority`) en évitant toute dépendance compile sur `jakarta.annotation` dans `ravel-core` (test scope uniquement, conforme à la règle « zéro tierce »).
-- Les built-in sont enregistrés à **priorité 1** ; tout converter applicatif (priorité 100 par défaut) les écrase automatiquement.
-- Les patterns `§5.2` n'utilisent **que** des méthodes/constructeurs `public` — aucun `setAccessible(true)`, conformément aux contraintes JPMS / AOT-friendly.
-- `getOptionalValue(name, X[].class)` traite la chaîne vide comme « absent » (§2.1.4), `,,` ou `\\` non suivi de `,` sont normalisés selon `ArraySplitter`.
+**M1 documented decisions**: `String` identity converter only (M2 will add primitives, automatic types,
+implicit converters); no `synchronized`, no `ThreadLocal`, no `setAccessible` (clean audit); stable
+ordinal cascade with tie-breaking on registration order.
 
-**Livrable :** `config.getValue("timeout", Duration.class)`, `config.getValue("hosts", String[].class)`, `config.getValues("colors", Status.class)` et un `Converter<UUID>` custom annoté `@Priority(500)` fonctionnent. **131 tests verts** (80 M1 + 51 M2) sur 12 classes.
+**Deliverable:** `ConfigProvider.getConfig().getValue("key", String.class)` works with all 3 canonical
+sources. Reactor + unit tests green.
+
+---
+
+### M2 — Type converters ✅
+
+**Spec scope:** §5 (Converter), §5.1 (Built-in converters), §5.1.1 (Boolean), §5.2 (Automatic / Implicit
+converters), §5.3 (Custom converters), §5.4 (Arrays).
+
+| Task | Notes | Status |
+|---|---|---|
+| Strict built-ins (§5.1) | `boolean`/`Boolean`, `int`/`Integer`, `long`/`Long`, `float`/`Float`, `double`/`Double`, `short`/`Short`, `byte`/`Byte`, `char`/`Character`, `String`, `Class<?>` — all using the same converter for boxed/primitive | ✅ |
+| Extended built-ins | `OptionalInt`, `OptionalLong`, `OptionalDouble`, `URI`, `URL`, `InetAddress`, `Duration`, `Period`, `LocalDate`, `LocalTime`, `LocalDateTime`, `OffsetTime`, `OffsetDateTime`, `ZonedDateTime`, `Instant` | ✅ |
+| Enumerations | Via `ImplicitConverter` (`valueOf` pattern treated as a dedicated case for type safety) | ✅ |
+| `Boolean` converter §5.1.1 | `true`/`1`/`yes`/`y`/`on` (case-insensitive, after `trim()`) → `true`; everything else → `false` | ✅ |
+| Array conversion §5.4 | `ArraySplitter` + `ArrayConverter<T>` — `,` separator, `\,` escaping, empty segments ignored; `getValue(name, T[].class)` and `getValues(name, T.class)` (via default Config) | ✅ |
+| `Converter<T>` SPI via ServiceLoader | `addDiscoveredConverters` loads + reads `@jakarta.annotation.Priority` (default **100**) | ✅ |
+| Implicit converters §5.2 | Ordered detection: `static of(String)` > `valueOf(String)` > `parse(CharSequence)` > ctor `(String)`. **Strictly public**, no `setAccessible(true)` | ✅ |
+| `ConfigBuilder.withConverter(Class<T>, int priority, Converter<T>)` | Explicit priority respected; a lower-priority converter does not override a higher one | ✅ |
+| `ConfigBuilder.withConverters(Converter<?>...)` | Reads `@Priority` (default 100) via FQN reflection — no compile dependency on `jakarta.annotation` | ✅ |
+| Thread-safe cache of derived converters | `ConcurrentHashMap` on `RavelConfig.derivedConverters`; no `synchronized`, virtual-thread-friendly | ✅ |
+| Tests per converter + edge cases | Boolean truthy/falsy, numerics with spaces, char.length≠1, invalid URL/URI, unknown enum, array `\,` escaping, empty segments, incompatible type → `IllegalArgumentException` | ✅ |
+
+**M2 documented decisions**:
+- The MP §5.3 contract "default priority 100" is read **by qualified name** (`jakarta.annotation.Priority`
+  or `javax.annotation.Priority`) avoiding any compile dependency on `jakarta.annotation` in
+  `ravel-core` (test scope only, compliant with the "zero third-party" rule).
+- Built-ins are registered at **priority 1**; any application converter (default priority 100)
+  automatically overrides them.
+- §5.2 patterns use **only** `public` methods/constructors — no `setAccessible(true)`, compliant
+  with JPMS / AOT-friendly constraints.
+- `getOptionalValue(name, X[].class)` treats an empty string as "absent" (§2.1.4); `,,` or
+  `\\` not followed by `,` are normalised by `ArraySplitter`.
+
+**Deliverable:** `config.getValue("timeout", Duration.class)`, `config.getValue("hosts", String[].class)`,
+`config.getValues("colors", Status.class)` and a custom `Converter<UUID>` annotated `@Priority(500)` work.
+**131 green tests** (80 M1 + 51 M2) across 12 classes.
 
 ---
 
 ### M3 — Config Profiles + Property Expressions ✅
 
-**Scope spec :** §7.5 (Configuration profile), §7.2 (Configuration property expression).
+**Spec scope:** §7.5 (Configuration profile), §7.2 (Configuration property expression).
 
-| Tâche | Notes | État |
+| Task | Notes | Status |
 |---|---|---|
-| Lecture `mp.config.profile` au démarrage du `Config` | Valeur résolue avant build final ; profil appliqué via sources enveloppées | ✅ |
-| Préfixe `%<profile>.` sur toute source | Wrapping `ProfiledConfigSource` qui réécrit les clés et hérite ordinal + 1 | ✅ |
-| Activation des profils en cascade | `mp.config.profile=dev` → `%dev.app.url` masque `app.url` (ordinal +1) | ✅ |
-| Expression `${key}` (§7.2) | Resolver récursif sur le raw value lu depuis le `ConfigSource` | ✅ |
-| Expression `${key:default}` | Default value si la clé n'est pas trouvée | ✅ |
-| Imbrication `${${env}.url}` | Resolver récursif, profondeur testée | ✅ |
-| Échappement `\$` | Pas d'interpolation | ✅ |
-| Détection de cycle | Via `ScopedValue<Set<String>>` (pas `ThreadLocal`), `IllegalArgumentException` levée | ✅ |
-| Désactivation possible via `mp.config.property.expressions.enabled=false` | Section §7.2 spec | ✅ |
-| Tests : profil absent / présent / multiple, cycle direct, cycle indirect, échappement | Couverture exhaustive sur tests dédiés + intégration | ✅ |
+| Read `mp.config.profile` at `Config` build time | Value resolved before final build; profile applied via wrapped sources | ✅ |
+| `%<profile>.` prefix on any source | `ProfiledConfigSource` wrapping that rewrites keys and inherits ordinal + 1 | ✅ |
+| Cascaded profile activation | `mp.config.profile=dev` → `%dev.app.url` shadows `app.url` (ordinal +1) | ✅ |
+| `${key}` expression (§7.2) | Recursive resolver on the raw value read from the `ConfigSource` | ✅ |
+| `${key:default}` expression | Default value if the key is not found | ✅ |
+| Nested `${${env}.url}` | Recursive resolver, depth tested | ✅ |
+| `\$` escaping | No interpolation | ✅ |
+| Cycle detection | Via `ScopedValue<Set<String>>` (not `ThreadLocal`), `IllegalArgumentException` thrown | ✅ |
+| Disable via `mp.config.property.expressions.enabled=false` | Spec §7.2 section | ✅ |
+| Tests: absent/present/multiple profile, direct cycle, indirect cycle, escaping | Exhaustive coverage in dedicated + integration tests | ✅ |
 
-**Décisions M3 documentées** :
-- La résolution des expressions se fait sur la valeur brute avant conversion typée.
-- `ConfigValue` conserve `rawValue` (chaîne d'origine) et expose `value` résolue.
-- Le profil actif est sélectionné via la cascade d'ordinals au moment du build, puis appliqué à toutes les sources via wrapping.
+**M3 documented decisions**:
+- Expression resolution happens on the raw value before typed conversion.
+- `ConfigValue` preserves `rawValue` (original string) and exposes resolved `value`.
+- The active profile is selected via the ordinal cascade at build time, then applied to all
+  sources via wrapping.
 
-**Livrable :** `config.getValue("database.url", String.class)` bascule vers `%dev.database.url` avec `mp.config.profile=dev` ; expressions `${key}` / `${key:default}` / `${${env}.url}` résolues ; cycles détectés. **155 tests verts** sur `ravel-core`.
+**Deliverable:** `config.getValue("database.url", String.class)` switches to `%dev.database.url`
+with `mp.config.profile=dev`; `${key}` / `${key:default}` / `${${env}.url}` expressions resolved;
+cycles detected. **155 green tests** on `ravel-core`.
 
 ---
 
-### M4 — Intégration CDI (`ravel-cdi-vauban`)
+### M4 — CDI integration (`ravel-cdi-vauban`)
 
-**Scope spec :** §6 (CDI integration), §6.1 (`@ConfigProperty`), §6.2 (`Config` injection), §6.3 (Optional injection).
+**Spec scope:** §6 (CDI integration), §6.1 (`@ConfigProperty`), §6.2 (`Config` injection), §6.3 (Optional injection).
 
-| Tâche | Notes | État |
+| Task | Notes | Status |
 |---|---|---|
-| `ConfigCdiExtension` (Build Compatible Extension Vauban) | BCE ajoutée + validation des points `@ConfigProperty` (type supporté, propriété requise manquante) | ✅ |
-| Génération de producers `@Produces @ConfigProperty` par type | Producer unique paramétrique via `InjectionPoint` (déduplication par design) | ✅ |
-| Support `Optional<T>` (§6.3) | Si la propriété est absente → `Optional.empty()` | ✅ |
-| Support `Provider<T>` / `Supplier<T>` | Lookup à chaque `get()` (dynamic injection) | ✅ |
-| `@Inject Config config` | Injection du `Config` complet via producer dédié | ✅ |
-| `@ConfigProperty(defaultValue=…)` | Valeur par défaut convertie avec le converter cible | ✅ |
-| Validation au déploiement (§6.4) | BCE signale les injections requises manquantes (sans `defaultValue`) | ✅ |
-| Tests d'intégration avec container Vauban | Smoke test de bootstrap CDI SE Vauban + injection `Config` dans un conteneur réel (`SeContainerInitializer`) | ✅ |
-| Pas d'opens JPMS sur les beans utilisateurs | BCE + producers sans réflexion sur classes applicatives | ✅ |
+| `ConfigCdiExtension` (Vauban Build Compatible Extension) | BCE added + validation of `@ConfigProperty` injection points (supported type, missing required property) | ✅ |
+| `@Produces @ConfigProperty` producer generation per type | Single parametric producer via `InjectionPoint` (deduplication by design) | ✅ |
+| `Optional<T>` support (§6.3) | If the property is absent → `Optional.empty()` | ✅ |
+| `Provider<T>` / `Supplier<T>` support | Lookup on each `get()` (dynamic injection) | ✅ |
+| `@Inject Config config` | Full `Config` injection via dedicated producer | ✅ |
+| `@ConfigProperty(defaultValue=…)` | Default value converted with the target converter | ✅ |
+| Deployment validation (§6.4) | BCE reports missing required injections (without `defaultValue`) | ✅ |
+| Integration tests with Vauban container | CDI SE bootstrap smoke test + `Config` injection in a real container (`SeContainerInitializer`) | ✅ |
+| No JPMS `opens` on user beans | BCE + producers without reflection on application classes | ✅ |
 
-**Livrable (incrément actuel) :** `@Inject @ConfigProperty(name="app.name", defaultValue="vidocq") String name;` + `Optional<T>`/`Provider<T>`/`Supplier<T>` validés par tests de module. **20 tests verts** sur `ravel-cdi-vauban` (165 au total avec `ravel-core`).
+**Deliverable (current increment):** `@Inject @ConfigProperty(name="app.name", defaultValue="vidocq") String name;`
++ `Optional<T>`/`Provider<T>`/`Supplier<T>` validated by module tests. **20 green tests** on
+`ravel-cdi-vauban` (165 total with `ravel-core`).
 
 ---
 
 ### M5 — TCK + Bench ✅
 
-**Scope :** validation officielle MicroProfile Config 3.1 + benchmarks comparatifs.
+**Scope:** official MicroProfile Config 3.1 validation + comparative benchmarks.
 
-| Tâche | Notes | État |
+| Task | Notes | Status |
 |---|---|---|
-| `ravel-tck/pom.xml` Model 4.0.0 standalone | Idem `cassini-tck`/`foy-tck`/`champollion-tck` — hors reactor | ✅ |
-| Runner Arquillian + harness officiel `microprofile-config-tck:3.1.1` | Arquillian 1.10.1 (BOM + dep mgmt sur `container-spi/impl-base/core-impl-base`) + Weld 6.0.2 + TestNG 7.10.2 ; bug `MalformedParameterizedTypeException` JDK 25 résolu | ✅ |
-| Adapter Arquillian → Ravel embedded | Weld SE embedded ; `arquillian.xml` + `META-INF/beans.xml` (CDI 4.1) en place | ✅ |
-| `run-official-tck-mp-config-3.1.sh` | Modes : smoke (défaut, 2/2 PASS) / all / `-Dtest=NomTest` ; rapport `target/tck-report.txt` | ✅ |
-| BCE `@Validation` → `@Registration(types=Object.class)` | CDI Lite 4.1 §16.1 interdit `BeanInfo` en `@Validation` ; commit `8d80958` | ✅ |
-| `TCK.md` | État final + journal J1/J2 des 6 gaps fermés (Optional*, FQN, arrays, `@ConfigProperties`, validation déploiement, primitifs/collections) | ✅ |
-| **Score contrat : 100 % PASS** | **349 tests run / 349 PASS / 0 fails / 0 skipped** — atteint en J2 (commit `f5603bb`) | ✅ |
-| Synthetic beans `@ConfigProperty` via `@Synthesis` BCE | Un `SyntheticBean` par type d'IP collecté à `@Registration`, qualifié `@ConfigProperty`. Pour types non-paramétrés (incl. arrays) on utilise la `Class<?>` runtime — Weld ignore silencieusement les `ArrayType` lang-model (WELD-001408) ; pour types paramétrés (`Provider<T>`, `Optional<T>`, `List<T>`, `Set<T>`) on conserve la `Type` lang-model | ✅ |
-| Support `@ConfigProperties` (MP Config 3.1 §6.4) | Un `SyntheticBean` par BeanType (prefix `@Nonbinding`). Résolution prefix depuis l'IP (annotation directe + qualifiants pour lookups programmatiques `CDI.current().select(BeanX.class, ConfigProperties.Literal.of("foo"))`), fallback class-level. Validation déploiement via `ConfigPropertiesExclusionExtension.validateConfigProperties` à `AfterDeploymentValidation` (détection des initialiseurs Java par comparaison à la valeur zéro après instanciation) | ✅ |
-| Expressions raw / lookup non-strict (§7.2) | `getOptionalValue` retourne `Optional.empty()` et `getConfigValue` retourne un `ConfigValue` partiel (raw conservé) sur `${missing}` non résolu | ✅ |
-| Sémantique `Converter` retournant `null` (§5.3) | `getValue` lève `NoSuchElementException` ; `getOptionalValue` retourne `Optional.empty()` | ✅ |
-| `ArrayConverter` primitifs + `List<T>`/`Set<T>` (§5.4) | `Array.set` au lieu du cast `(T[])` (résout `ClassCastException [I → [Ljava.lang.Object;` pour `int[]`, `boolean[]`, etc.) ; `RavelConfigPropertyResolver.resolveCollection` détecte `List<T>`/`Set<T>` au point d'injection et délègue au converter array du type composant | ✅ |
-| `ravel-bench` JMH | `LookupBenchmark` (cache hit/miss) + `ExpressionBenchmark` (literal/1/3 niveaux) + `ConversionBenchmark` (Integer/Long/Boolean/Duration/String[]) ; `@Param` Ravel/Smallrye | ✅ |
-| Comparatif JMH vs Smallrye Config | Run formel publié dans `BENCH.md` (run #1, 2026-05-09) — Ravel devance Smallrye sur les conversions (`bool` −37 %, `integer` −19 %, `String[]` −27 %), rattrape sur les lookups simples (~+8…30 %), retard significatif sur les expressions résolues (`oneLevel` 63×, `deep` 88× — gap caching documenté) | ✅ baseline publiée |
+| `ravel-tck/pom.xml` Model 4.0.0 standalone | Same as `cassini-tck`/`foy-tck`/`champollion-tck` — out-of-reactor | ✅ |
+| Arquillian runner + official `microprofile-config-tck:3.1.1` harness | Arquillian 1.10.1 (BOM + dep mgmt on `container-spi/impl-base/core-impl-base`) + Weld 6.0.2 + TestNG 7.10.2; JDK 25 `MalformedParameterizedTypeException` bug resolved | ✅ |
+| Arquillian → Ravel embedded adapter | Weld SE embedded; `arquillian.xml` + `META-INF/beans.xml` (CDI 4.1) in place | ✅ |
+| `run-official-tck-mp-config-3.1.sh` | Modes: smoke (default, 2/2 PASS) / all / `-Dtest=TestName`; report `target/tck-report.txt` | ✅ |
+| BCE `@Validation` → `@Registration(types=Object.class)` | CDI Lite 4.1 §16.1 forbids `BeanInfo` in `@Validation`; commit `8d80958` | ✅ |
+| `TCK.md` | Final status + J1/J2 journal of the 6 closed gaps (Optional*, FQN, arrays, `@ConfigProperties`, deployment validation, primitives/collections) | ✅ |
+| **Contract score: 100% PASS** | **349 tests run / 349 PASS / 0 failures / 0 skipped** — achieved in J2 (commit `f5603bb`) | ✅ |
+| Synthetic beans `@ConfigProperty` via `@Synthesis` BCE | One `SyntheticBean` per IP type collected at `@Registration`, qualified `@ConfigProperty`. For non-parameterised types (incl. arrays) the runtime `Class<?>` is used — Weld silently ignores lang-model `ArrayType` (WELD-001408); for parameterised types (`Provider<T>`, `Optional<T>`, `List<T>`, `Set<T>`) the lang-model `Type` is preserved | ✅ |
+| `@ConfigProperties` support (MP Config 3.1 §6.4) | One `SyntheticBean` per BeanType (prefix `@Nonbinding`). Prefix resolution from IP (direct annotation + qualifiers for programmatic lookups `CDI.current().select(BeanX.class, ConfigProperties.Literal.of("foo"))`), class-level fallback. Deployment validation via `ConfigPropertiesExclusionExtension.validateConfigProperties` at `AfterDeploymentValidation` (Java initialisers detected by comparing to zero value after instantiation) | ✅ |
+| Raw expressions / non-strict lookup (§7.2) | `getOptionalValue` returns `Optional.empty()` and `getConfigValue` returns a partial `ConfigValue` (raw preserved) on unresolved `${missing}` | ✅ |
+| `Converter` returning `null` semantics (§5.3) | `getValue` throws `NoSuchElementException`; `getOptionalValue` returns `Optional.empty()` | ✅ |
+| `ArrayConverter` primitives + `List<T>`/`Set<T>` (§5.4) | `Array.set` instead of `(T[])` cast (resolves `ClassCastException [I → [Ljava.lang.Object;` for `int[]`, `boolean[]`, etc.); `RavelConfigPropertyResolver.resolveCollection` detects `List<T>`/`Set<T>` at the injection point and delegates to the component type's array converter | ✅ |
+| `ravel-bench` JMH | `LookupBenchmark` (cache hit/miss) + `ExpressionBenchmark` (literal/1/3 levels) + `ConversionBenchmark` (Integer/Long/Boolean/Duration/String[]); `@Param` Ravel/Smallrye | ✅ |
+| JMH comparison vs Smallrye Config | Formal run published in `BENCH.md` (run #1, 2026-05-09) — Ravel outperforms Smallrye on conversions (`bool` −37%, `integer` −19%, `String[]` −27%), is close on simple lookups (~+8…30%), has a significant lag on resolved expressions (`oneLevel` 63×, `deep` 88× — caching gap documented) | ✅ baseline published |
 
-**Livrable :** TCK MicroProfile Config 3.1 **349/349 PASS** reproductible via
-`./run-official-tck-mp-config-3.1.sh all` (rapport `ravel-tck/target/tck-report.txt`).
-Bench JMH baseline publiée dans `BENCH.md` (commande de reproduction et
-résultats bruts inclus).
+**Deliverable:** MicroProfile Config 3.1 TCK **349/349 PASS** reproducible via
+`./run-official-tck-mp-config-3.1.sh all` (report `ravel-tck/target/tck-report.txt`).
+JMH baseline published in `BENCH.md` (reproduction command and raw results included).
 
 ---
 
-### M6 — Intégration écosystème Vidocq ✅
+### M6 — Vidocq ecosystem integration ✅
 
-**Scope :** déployer Ravel dans Cassini, Chappe, Vauban et `vidocq` ; remplacer
-Smallrye Config comme implémentation par défaut. Documenté dans
+**Scope:** deploy Ravel in Cassini, Chappe, Vauban, and `vidocq`; replace
+Smallrye Config as the default implementation. Documented in
 [ADR-001](docs/adr/ADR-001-integration-ecosysteme-vidocq.md).
 
-| Tâche | État | Notes |
+| Task | Status | Notes |
 |---|---|---|
-| Documentation [`docs/integration-cassini.md`](docs/integration-cassini.md) | ✅ | 198 lignes — dépendances, JPMS, exemple `@Path` + `@ConfigProperty`, profils, `@ConfigProperties`, comparatif Ravel/Smallrye |
-| Documentation [`docs/integration-chappe.md`](docs/integration-chappe.md) | ✅ | 155 lignes — usage programmatique sans CDI (`ConfigProvider.getConfig()` pour port/TLS/timeouts) |
-| Documentation [`docs/integration-vauban.md`](docs/integration-vauban.md) | ✅ | 260 lignes — bean `Config` injectable, BCE auto-discoverable via ServiceLoader, `@ConfigProperties` POJO |
-| ADR-001 stratégie d'intégration | ✅ | Rationale "drop-in" + ordre de déploiement + risques |
-| ServiceLoader BCE (`META-INF/services/jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension`) | ✅ | `ConfigCdiExtension` exposée via le contrat CDI 4.1 standard |
-| ServiceLoader Extension portable (`jakarta.enterprise.inject.spi.Extension`) | ✅ | `ConfigPropertiesExclusionExtension` exposée |
-| `META-INF/vauban-beans.list` (fallback JPMS-strict) | ✅ | Complément à ServiceLoader pour les chemins de discovery non-portables |
-| `module-info.java` `provides ... with` | ✅ | Doublure JPMS pour les deux fichiers de services |
-| Adapter `cassini-cdi-vauban` : `ravel-cdi-vauban` en dépendance optionnelle | ✅ (côté Cassini) | `<optional>true</optional>` — la BCE est auto-découverte si le JAR est sur le classpath |
-| Exemple `cassini-examples-vauban/ConfigDemoResource` | ✅ (code écrit) | Ressource JAX-RS `@ApplicationScoped @Path("/config")` avec 3 `@ConfigProperty` (greeting/version/Optional env) |
-| Test end-to-end `cassini-examples-vauban/ConfigDemoResourceTest` | ✅ | 2/2 PASS après rebuild Cassini sur snapshot Vauban corrigé (VAU-BCE-001) |
-| Test BCE Vauban dans `ravel-cdi-vauban` (`resolves_config_property_injection_through_bce_pipeline`) | ✅ | Réactivé après fix VAU-BCE-001. Couvre `@Registration` qui lit `BeanInfo.injectionPoints()`, `@Synthesis` qui synthétise un `SyntheticBean<String>` (scalaire) + un `SyntheticBean<Optional<String>>` (paramétré). Suite ravel-cdi-vauban : 21/21 PASS, 0 skip |
-| Bench end-to-end Cassini + Ravel vs Cassini + Smallrye Config | ⏳ | À déclencher dans une session dédiée |
-| `vidocq` : intégrer Ravel comme implémentation MicroProfile Config 3.1 | ✅ | `ravel-cdi-vauban` ajouté à `vidocq-runtime-core` ; `requires transitive io.vidocq.ravel.cdi.vauban` dans module-info ; `RavelConfigPropertyIntegrationTest` 1/1 PASS (String, Integer, Optional<String>) — toutes les apps vidocq accèdent à `@ConfigProperty` sans dépendance supplémentaire |
+| Documentation [`docs/integration-cassini.md`](docs/integration-cassini.md) | ✅ | 198 lines — dependencies, JPMS, `@Path` + `@ConfigProperty` example, profiles, `@ConfigProperties`, Ravel/Smallrye comparison |
+| Documentation [`docs/integration-chappe.md`](docs/integration-chappe.md) | ✅ | 155 lines — programmatic usage without CDI (`ConfigProvider.getConfig()` for port/TLS/timeouts) |
+| Documentation [`docs/integration-vauban.md`](docs/integration-vauban.md) | ✅ | 260 lines — injectable `Config` bean, auto-discoverable BCE via ServiceLoader, `@ConfigProperties` POJO |
+| ADR-001 integration strategy | ✅ | "Drop-in" rationale + deployment order + risks |
+| ServiceLoader BCE (`META-INF/services/jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension`) | ✅ | `ConfigCdiExtension` exposed via the standard CDI 4.1 contract |
+| Portable extension ServiceLoader (`jakarta.enterprise.inject.spi.Extension`) | ✅ | `ConfigPropertiesExclusionExtension` exposed |
+| `META-INF/vauban-beans.list` (strict-JPMS fallback) | ✅ | Complement to ServiceLoader for non-portable discovery paths |
+| `module-info.java` `provides ... with` | ✅ | JPMS mirror for both service files |
+| `cassini-cdi-vauban` adapter: `ravel-cdi-vauban` as optional dependency | ✅ (Cassini side) | `<optional>true</optional>` — BCE auto-discovered if the JAR is on the classpath |
+| `cassini-examples-vauban/ConfigDemoResource` example | ✅ (code written) | JAX-RS resource `@ApplicationScoped @Path("/config")` with 3 `@ConfigProperty` (greeting/version/Optional env) |
+| `cassini-examples-vauban/ConfigDemoResourceTest` end-to-end test | ✅ | 2/2 PASS after rebuilding Cassini on corrected Vauban snapshot (VAU-BCE-001) |
+| BCE Vauban test in `ravel-cdi-vauban` (`resolves_config_property_injection_through_bce_pipeline`) | ✅ | Re-enabled after fix VAU-BCE-001. Covers `@Registration` reading `BeanInfo.injectionPoints()`, `@Synthesis` synthesising a `SyntheticBean<String>` (scalar) + `SyntheticBean<Optional<String>>` (parameterised). ravel-cdi-vauban suite: 21/21 PASS, 0 skip |
+| End-to-end bench Cassini + Ravel vs Cassini + Smallrye Config | ⏳ | To be triggered in a dedicated session |
+| `vidocq`: integrate Ravel as MicroProfile Config 3.1 implementation | ✅ | `ravel-cdi-vauban` added to `vidocq-runtime-core`; `requires transitive io.vidocq.ravel.cdi.vauban` in module-info; `RavelConfigPropertyIntegrationTest` 1/1 PASS (String, Integer, Optional<String>) — all vidocq apps can use `@ConfigProperty` without additional dependencies |
 
-**Livrable :** documentation complète, artefacts de discovery (ServiceLoader +
-JPMS + `vauban-beans.list`) packagés, intégration Cassini opérationnelle
-(`ConfigDemoResourceTest` 2/2 PASS), swap Ravel dans vidocq validé
-(`RavelConfigPropertyIntegrationTest` 1/1 PASS). Conformité spec via TCK
-349/349 PASS (Weld) ; bridge `vauban-core ↔ ravel-cdi-vauban` débloqué par
-`fix/vau-bce-001-bce-not-invoked` (cf. `vauban/BUG.md#VAU-BCE-001`).
+**Deliverable:** complete documentation, discovery artifacts (ServiceLoader +
+JPMS + `vauban-beans.list`) packaged, Cassini integration operational
+(`ConfigDemoResourceTest` 2/2 PASS), Ravel swap in vidocq validated
+(`RavelConfigPropertyIntegrationTest` 1/1 PASS). Spec conformance via TCK
+349/349 PASS (Weld); `vauban-core ↔ ravel-cdi-vauban` bridge unblocked by
+`fix/vau-bce-001-bce-not-invoked` (see `vauban/BUG.md#VAU-BCE-001`).
 
-#### Résiduel M6 — bug intégration BCE Vauban ✅ résolu (VAU-BCE-001)
+#### M6 Residual — Vauban BCE integration bug ✅ resolved (VAU-BCE-001)
 
-Initialement diagnostiqué comme « les phases `@Registration` / `@Synthesis` ne
-sont pas invoquées » (preuve par instrumentation println muet). Investigation
-fine côté `vauban-core` (branche `fix/vau-bce-001-bce-not-invoked`) :
-**les phases étaient bien dispatchées par `BceProcessor`** ; six défauts cumulés
-sur le pipeline en aval dégradaient silencieusement le résultat — d'où la
-désertion apparente de l'extension :
+Initially diagnosed as "the `@Registration` / `@Synthesis` phases are not invoked"
+(evidence: silent println instrumentation). Detailed investigation on the `vauban-core`
+side (branch `fix/vau-bce-001-bce-not-invoked`):
+**the phases were correctly dispatched by `BceProcessor`**; six cumulative defects
+in the downstream pipeline silently degraded the result — hence the apparent
+dropout of the extension:
 
-1. `VaubanBceBeanInfo.injectionPoints()` retournait `List.of()` en dur ;
-2. `VaubanAnnotationInfo` n'overridait pas `name()` (default API → `declaration()` → crash sur classes hors-index, ex. `@ConfigProperty` qui vit dans `microprofile-config-api`) ;
-3. `VaubanClassType.declaration()` crashait sur tout type JDK / tiers absent du scan ;
-4. `VaubanSyntheticBeanBuilder.type(Type)` était un no-op (`return this; // simplified`) — `Optional<T>`, `List<T>`, `Provider<T>` silencieusement dropés ;
-5. `VaubanTypes.ofClass(String)` retournait `null` hors-index → NPE en aval dans `types.parameterized(...)` ;
-6. `BceProcessor.toBeanDescriptor` perdait les membres du qualifier (`Map.of()`) — `@Tagged("scalar")` ne matchait plus la même IP.
+1. `VaubanBceBeanInfo.injectionPoints()` returned `List.of()` hard-coded;
+2. `VaubanAnnotationInfo` did not override `name()` (default API → `declaration()` → crash on classes outside the index, e.g. `@ConfigProperty` living in `microprofile-config-api`);
+3. `VaubanClassType.declaration()` crashed on any JDK / third-party type absent from the scan;
+4. `VaubanSyntheticBeanBuilder.type(Type)` was a no-op (`return this; // simplified`) — `Optional<T>`, `List<T>`, `Provider<T>` silently dropped;
+5. `VaubanTypes.ofClass(String)` returned `null` for out-of-index types → downstream NPE in `types.parameterized(...)`;
+6. `BceProcessor.toBeanDescriptor` lost qualifier members (`Map.of()`) — `@Tagged("scalar")` no longer matched the same IP.
 
-Détails et test de régression dans `vauban/BUG.md#VAU-BCE-001`. Effet mesuré :
-- vauban-core : 269/269 PASS (266 baseline + 3 nouveaux ciblés sur les 6 défauts) ;
-- ravel-cdi-vauban : 21/21 PASS, 0 skip (vs 20/0/1 avant).
+Details and regression test in `vauban/BUG.md#VAU-BCE-001`. Measured effect:
+- vauban-core: 269/269 PASS (266 baseline + 3 new tests targeting the 6 defects);
+- ravel-cdi-vauban: 21/21 PASS, 0 skip (vs 20/0/1 before).
 
 ---
 
-## Ordre de priorité — pourquoi celui-ci ?
+## Priority Order — Rationale
 
-1. **M1 (sources + lookup)** d'abord parce que tout le reste s'y appuie : pas de converter sans
-   valeur brute, pas de profil sans source. Le minimum vital de la spec tient en ce milestone.
-2. **M2 (converters)** avant M3 (profils/expressions) : les profils et expressions opèrent sur le
-   *raw value* avant conversion ; la conversion est la couche feuille. Tester M3 sans M2 forcerait
-   tout à passer par `String`, ce qui masquerait des bugs de conversion.
-3. **M4 (CDI)** après M1+M2+M3 : l'intégration CDI est un *adapter* sur le `Config` complet. Tant
-   que `Config` n'est pas conforme à la spec, l'injection CDI ne peut pas être validée.
-4. **M5 (TCK)** est une activité continue dès M2/M3 (les premiers tests TCK doivent déjà passer
-   sur les sections couvertes), mais l'objectif "100 % PASS" ne devient un contrat qu'à la fin
-   du milestone M5.
-5. **M6 (intégration)** vient en dernier : on ne polluera pas Cassini / Chappe / Vauban avant
-   que Ravel soit solide. Le swap se fera derrière une PR dédiée par projet client.
+1. **M1 (sources + lookup)** first because everything else depends on it: no converter without
+   a raw value, no profile without a source. The essential minimum of the spec fits in this milestone.
+2. **M2 (converters)** before M3 (profiles/expressions): profiles and expressions operate on the
+   *raw value* before conversion; conversion is the leaf layer. Testing M3 without M2 would force
+   everything through `String`, masking conversion bugs.
+3. **M4 (CDI)** after M1+M2+M3: CDI integration is an *adapter* on the complete `Config`. Until
+   `Config` is spec-compliant, CDI injection cannot be validated.
+4. **M5 (TCK)** is a continuous activity from M2/M3 (the first TCK tests must already pass for
+   covered sections), but the "100% PASS" objective only becomes a contract at the end of M5.
+5. **M6 (integration)** comes last: Cassini / Chappe / Vauban will not be polluted until
+   Ravel is solid. The swap will be done behind a dedicated PR per client project.
 
-## Risques connus
+## Known Risks
 
-| Risque | Mitigation |
+| Risk | Mitigation |
 |---|---|
-| Mapping env vars (§7.6) avec règles de fallback complexes (3 formes essayées dans l'ordre) | Tests exhaustifs dès M1 sur la matrice (`MY_VAR` / `my.var` / `my-var`) ; le TCK couvre ces cas |
-| Cycles d'expressions (`${a}` → `${b}` → `${a}`) | `ScopedValue<Set<String>>` lit-thread-safe ; pas de `ThreadLocal` qui pinerait les virtual threads |
-| Conversion automatique (implicit) avec `setAccessible` requis sur `valueOf`/`parse` privés ou packagés | N'autoriser que les méthodes `public static` ; sinon documenter le module ouvert ; pas d'`addOpens` global |
-| TCK Arquillian : containerless vs embedded Vauban | Deux profiles Maven dans `ravel-tck` ; tests `@Tag("cdi")` exclus en mode standalone |
-| Interaction profils + expressions | Combinatoire testée explicitement : `%dev.url=${base}/dev` doit résoudre `${base}` *après* sélection du profil |
-| GraalVM AOT compatibility | Tester `native-image` sur un exemple `ravel-examples` dès M3 ; les implicit converters via réflexion sont le point sensible |
-| ServiceLoader + JPMS dans `ravel-cdi-vauban` | Vérifier que les `@Provides` CDI ne nécessitent pas d'`opens` sur les modules utilisateur |
+| Env var mapping (§7.6) with complex fallback rules (3 forms tried in order) | Exhaustive tests from M1 on the matrix (`MY_VAR` / `my.var` / `my-var`); TCK covers these cases |
+| Expression cycles (`${a}` → `${b}` → `${a}`) | `ScopedValue<Set<String>>` read-thread-safe; no `ThreadLocal` that would pin virtual threads |
+| Automatic (implicit) conversion with `setAccessible` required on private or package-private `valueOf`/`parse` | Only allow `public static` methods; otherwise document the open module; no global `addOpens` |
+| TCK Arquillian: containerless vs embedded Vauban | Two Maven profiles in `ravel-tck`; `@Tag("cdi")` tests excluded in standalone mode |
+| Profiles + expressions interaction | Combinatorics explicitly tested: `%dev.url=${base}/dev` must resolve `${base}` *after* profile selection |
+| GraalVM AOT compatibility | Test `native-image` on a `ravel-examples` example from M3; implicit converters via reflection are the sensitive point |
+| ServiceLoader + JPMS in `ravel-cdi-vauban` | Verify that CDI `@Provides` does not require `opens` on user modules |
 
-## Décisions actées
+## Actioned Decisions
 
-- ✅ **Specs Jakarta / MicroProfile autorisées** : `microprofile-config-api`, `jakarta.cdi-api`,
-  `jakarta.inject-api`, `jakarta.annotation-api`. Pas de Smallrye / Helidon / Apache Commons Config.
-- ✅ **`ravel-core` standalone SE** : utilisable sans CDI, sans Servlet, sans Vauban.
-- ✅ **`ravel-cdi-vauban` séparé** : module optionnel, n'est pas chargé si CDI absent.
-- ✅ **TDD strict** sur tous les modules de production.
-- ✅ **TCK PASS 100 %** comme contrat dur.
-- ✅ **TCK hors reactor** (POM Model 4.0.0 standalone) — contrainte ShrinkWrap Maven Resolver 3.3.
-- ✅ **Détection de cycle via `ScopedValue`** (pas `ThreadLocal`) — virtual-thread-friendly.
+- ✅ **Jakarta / MicroProfile specs allowed**: `microprofile-config-api`, `jakarta.cdi-api`,
+  `jakarta.inject-api`, `jakarta.annotation-api`. No Smallrye / Helidon / Apache Commons Config.
+- ✅ **`ravel-core` standalone SE**: usable without CDI, without Servlet, without Vauban.
+- ✅ **`ravel-cdi-vauban` separate**: optional module, not loaded if CDI is absent.
+- ✅ **Strict TDD** on all production modules.
+- ✅ **TCK 100% PASS** as a hard contract.
+- ✅ **TCK out-of-reactor** (POM Model 4.0.0 standalone) — ShrinkWrap Maven Resolver 3.3 constraint.
+- ✅ **Cycle detection via `ScopedValue`** (not `ThreadLocal`) — virtual-thread-friendly.
 
-## Décisions ouvertes
+## Open Decisions
 
-- [ ] Faut-il exposer un mode "watch" pour les sources fichiers (`microprofile-config.properties`
-      rechargé sur `WatchService`) ? → Hors spec MP Config 3.1, à différer en M6+ comme extension.
-- [ ] `ConfigProperty` sur méthode `@Produces` utilisateur — supporté par la spec ? → Vérifier §6
-      avant M4.
-- [ ] Stratégie pour les `Provider<T>` / `Supplier<T>` : lookup à chaque `get()` ou cache TTL
-      configurable ? → Lookup à chaque `get()` par défaut (conformité spec) ; cache TTL en option
-      futur.
-- [ ] Expression resolver : tolérer les références en avant (`${b}` défini après `${a}`) ?
-      → Oui, pas d'ordre déclaratif, résolution lazy à la lecture.
-- [ ] Intégration future MicroProfile Config 4.0 (quand released) — design-out pour faciliter
-      le bump de version sans refactoring profond.
+- [ ] Should a "watch" mode be exposed for file sources (`microprofile-config.properties` reloaded
+      via `WatchService`)? → Out of MP Config 3.1 spec, defer to M6+ as an extension.
+- [ ] `ConfigProperty` on a user `@Produces` method — supported by the spec? → Verify §6 before M4.
+- [ ] Strategy for `Provider<T>` / `Supplier<T>`: lookup on each `get()` or configurable TTL cache?
+      → Lookup on each `get()` by default (spec compliance); TTL cache as a future option.
+- [ ] Expression resolver: tolerate forward references (`${b}` defined after `${a}`)? → Yes, no
+      declarative ordering, lazy resolution at read time.
+- [ ] Future MicroProfile Config 4.0 integration (when released) — design-out to facilitate a
+      version bump without deep refactoring.
