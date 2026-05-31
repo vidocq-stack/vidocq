@@ -27,7 +27,7 @@
         <ravel.version>0.1.0-SNAPSHOT</ravel.version>
         <champollion.version>0.1.0-SNAPSHOT</champollion.version>
         <cassini.version>0.1.0-SNAPSHOT</cassini.version>
-        <chappe.version>0.1.0-SNAPSHOT</chappe.version>
+        <chappe.version>0.2.0-SNAPSHOT</chappe.version>
     </properties>
 
     <repositories>
