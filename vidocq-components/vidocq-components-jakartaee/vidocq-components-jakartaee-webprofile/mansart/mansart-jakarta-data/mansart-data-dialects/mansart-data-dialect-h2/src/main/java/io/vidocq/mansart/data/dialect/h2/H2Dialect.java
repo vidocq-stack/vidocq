@@ -19,6 +19,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.UUID;
 
 /**
@@ -179,6 +180,11 @@ public final class H2Dialect implements Dialect {
         }
         if (value instanceof Character ch) {
             ps.setString(idx, String.valueOf(ch));
+            return;
+        }
+        if (value instanceof Instant instant) {
+            // Bind an OffsetDateTime: setObject(Instant, TIMESTAMP_WITH_TIMEZONE) is rejected by some drivers.
+            ps.setObject(idx, instant.atOffset(ZoneOffset.UTC), Types.TIMESTAMP_WITH_TIMEZONE);
             return;
         }
         ps.setObject(idx, value, sqlType(javaType));

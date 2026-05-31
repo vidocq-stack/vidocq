@@ -67,6 +67,34 @@ Regression test: `mansart-data-tests` — new entity `BooleanFlag` (primitive `b
 fields as `BooleanAttribute`.
 
 ### Historical workaround (no longer required)
-Before the fix, the flag had to be modelled as a String-backed enum. Arago's `Speaker` still uses
-`SpeakerStatus { ACTIVE, DISABLED }` (`vidocq-tools/arago`, commit `7b357ae`) — it can now use a plain
-`boolean` if desired, but the enum is kept for its clearer semantics.
+Before the fix, the flag had to be modelled as a String-backed enum. Arago's `Speaker` initially used
+an enum, then moved back to a plain `boolean` once this was fixed.
+
+---
+
+## MANSART-002 — `java.time.Instant` field fails to INSERT on PostgreSQL
+
+- **Date**: 2026-05-31
+- **Status**: FIXED 2026-05-31 (regression test `PostgresqlCrudIntegrationTest#instantFieldRoundTripsThroughTimestamptz`)
+- **Severity**: high (any entity with an `Instant` column fails to persist on PostgreSQL)
+
+### Symptom
+Saving an entity with a `java.time.Instant` field mapped to `TIMESTAMPTZ` fails on PostgreSQL:
+
+```
+org.postgresql.util.PSQLException: Cannot convert an instance of java.time.Instant to type Types.TIMESTAMP_WITH_TIMEZONE
+```
+
+Not caught earlier because the unit tests run on H2 and the existing test entities use `LocalDate`,
+not `Instant`. Surfaced by Arago (`Speaker.invitedAt` is an `Instant`).
+
+### Cause
+`PostgresqlDialect.bind` (and `H2Dialect.bind`) bound the value with
+`ps.setObject(idx, value, Types.TIMESTAMP_WITH_TIMEZONE)`. The PG JDBC driver cannot convert a raw
+`Instant` for `TIMESTAMP_WITH_TIMEZONE` — it expects an `OffsetDateTime` (or `Timestamp`).
+
+### Fix (implemented 2026-05-31)
+In both dialects' `bind`, add an `Instant` branch that binds
+`instant.atOffset(ZoneOffset.UTC)` instead of the raw `Instant`. The read path (`extract`) already
+converted `OffsetDateTime → Instant`, so only writes were affected. Regression: new `Event` entity
+(an `Instant` column) + a PG round-trip test under the `pg-it` tag.
