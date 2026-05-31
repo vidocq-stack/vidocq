@@ -43,10 +43,7 @@ on:
         description: "io.vidocq.ravel:* (all artifacts under io.vidocq.ravel) — stable version (must be released on Central first)"
         type: string
         required: true
-      runtime_release:
-        description: "io.vidocq.runtime:* (all artifacts under io.vidocq.runtime) — stable version (must be released on Central first)"
-        type: string
-        required: true
+        default:     "0.1.0"
       vauban_release:
         description: "io.vidocq.vauban:* (all artifacts under io.vidocq.vauban) — stable version (must be released on Central first)"
         type: string
@@ -74,7 +71,6 @@ jobs:
             io.vidocq.cassini=${{ inputs.cassini_release }}
             io.vidocq.chappe=${{ inputs.chappe_release }}
             io.vidocq.ravel=${{ inputs.ravel_release }}
-            io.vidocq.runtime=${{ inputs.runtime_release }}
             io.vidocq.vauban=${{ inputs.vauban_release }}
           excluded-modules: |
             grimm-bench
