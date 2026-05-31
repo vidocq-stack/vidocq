@@ -17,7 +17,10 @@
     <properties>
         <!-- Module de bench : jamais déployé ni javadocé, run on classpath (pas de module-info). -->
         <maven.deploy.skip>true</maven.deploy.skip>
+        <maven.install.skip>true</maven.install.skip>
         <maven.javadoc.skip>true</maven.javadoc.skip>
+        <maven.source.skip>true</maven.source.skip>
+        <gpg.skip>true</gpg.skip>
         <smallrye.jwt.version>4.6.1</smallrye.jwt.version>
         <build-helper.version>3.6.0</build-helper.version>
     </properties>
@@ -56,6 +59,13 @@
     <build>
         <finalName>benchmarks</finalName>
         <plugins>
+            <plugin>
+                <groupId>org.sonatype.central</groupId>
+                <artifactId>central-publishing-maven-plugin</artifactId>
+                <configuration>
+                    <skipPublishing>true</skipPublishing>
+                </configuration>
+            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
