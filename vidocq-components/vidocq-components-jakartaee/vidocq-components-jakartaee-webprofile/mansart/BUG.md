@@ -98,3 +98,34 @@ In both dialects' `bind`, add an `Instant` branch that binds
 `instant.atOffset(ZoneOffset.UTC)` instead of the raw `Instant`. The read path (`extract`) already
 converted `OffsetDateTime → Instant`, so only writes were affected. Regression: new `Event` entity
 (an `Instant` column) + a PG round-trip test under the `pg-it` tag.
+
+---
+
+## MANSART-003 — `@Enumerated` is parsed but ignored; `EnumStorage.ORDINAL` is dead config
+
+- **Date**: 2026-06-01 (surfaced by the Arago app — room `status`/`mode` enums)
+- **Status**: OPEN, low severity (no functional impact today — see below)
+- **Severity**: low (every current entity wants STRING storage, which is what they get)
+
+### Symptom
+`MansartMetamodelWriter` always emits `EnumStorage.ORDINAL` for an enum attribute
+(`MansartMetamodelWriter.java:102`), regardless of the entity's `@Enumerated(EnumType.STRING|ORDINAL)`.
+Independently, both dialects bind/read enums **by name only**, unconditionally:
+`PostgresqlDialect.bind` → `ps.setString(idx, e.name())` (and `H2Dialect` likewise), and `extract` →
+`Enum.valueOf(type, s)`. So:
+- `@Enumerated(EnumType.STRING)` works **by accident** — the dialect's name() path matches the intent,
+  even though the metamodel says `ORDINAL`.
+- `@Enumerated(EnumType.ORDINAL)` would be **silently mis-stored** as the constant name, not the index.
+- The `EnumStorage` flag on `EnumAttribute` is never consulted at bind/read time — it is dead config.
+
+### Minimal repro
+Any `@Entity` with an enum field: the generated `_Entity` shows `EnumStorage.ORDINAL`; the row stores
+the name string. (Arago `Room.status` is `@Enumerated(STRING)` + `VARCHAR(16)` and round-trips fine,
+which is why this went unnoticed — the partial index `status IN ('DRAFT','ACTIVE')` only works because
+the dialect happens to store names.)
+
+### Cause hypothesis / fix sketch
+Two aligned changes: (1) `MansartMetamodelWriter` should read `@Enumerated` and emit the matching
+`EnumStorage`; (2) the dialects' `bind`/`extract` should honor `EnumAttribute.storage` — `name()`/
+`valueOf` for STRING, `ordinal()`/`values()[i]` for ORDINAL. Add a regression entity with an
+`@Enumerated(ORDINAL)` column. Not urgent: no current Vidocq entity needs ORDINAL.
