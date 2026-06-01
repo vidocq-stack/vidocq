@@ -39,7 +39,7 @@
         <maven.compiler.release>25</maven.compiler.release>
         <dirac.version>0.1.0-SNAPSHOT</dirac.version>
         <microprofile.metrics.version>5.1.1</microprofile.metrics.version>
-        <vauban.version>0.1.0-SNAPSHOT</vauban.version>
+        <vauban.version>0.2.0-SNAPSHOT</vauban.version>
     </properties>
 
     <repositories>
