@@ -39,7 +39,7 @@
         <maven.compiler.release>25</maven.compiler.release>
         <heisenberg.version>0.1.0-SNAPSHOT</heisenberg.version>
         <microprofile.fault.tolerance.version>4.1</microprofile.fault.tolerance.version>
-        <vauban.version>0.1.0-SNAPSHOT</vauban.version>
+        <vauban.version>0.2.0-SNAPSHOT</vauban.version>
         <ravel.version>0.1.0-SNAPSHOT</ravel.version>
         <humboldt.version>0.1.0-SNAPSHOT</humboldt.version>
     </properties>
