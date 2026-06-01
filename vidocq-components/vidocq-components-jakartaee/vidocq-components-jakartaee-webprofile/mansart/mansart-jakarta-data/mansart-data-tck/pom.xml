@@ -27,7 +27,7 @@
         <jakarta.cdi.version>4.1.0</jakarta.cdi.version>
 
         <mansart.version>0.1.0-SNAPSHOT</mansart.version>
-        <vauban.version>0.1.0-SNAPSHOT</vauban.version>
+        <vauban.version>0.2.0-SNAPSHOT</vauban.version>
 
         <arquillian.version>1.9.1.Final</arquillian.version>
         <shrinkwrap.version>1.2.6</shrinkwrap.version>
