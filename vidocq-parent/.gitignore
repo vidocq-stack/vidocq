@@ -2,3 +2,4 @@ target/
 
 # Claude Code / tooling local
 .claude/
+.idea/
