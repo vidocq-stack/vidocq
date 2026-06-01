@@ -40,7 +40,7 @@ public final class MansartProcessor extends AbstractProcessor {
                 ? new JpaMetamodelWriter(env.getFiler()) : null;
         this.entityRegistry   = new EntityRegistry();
         this.repositoryWriter = new RepositoryWriter(env.getFiler(),
-                env.getElementUtils(), env.getTypeUtils(), entityRegistry);
+                env.getElementUtils(), env.getTypeUtils(), entityRegistry, env.getMessager());
     }
 
     @Override

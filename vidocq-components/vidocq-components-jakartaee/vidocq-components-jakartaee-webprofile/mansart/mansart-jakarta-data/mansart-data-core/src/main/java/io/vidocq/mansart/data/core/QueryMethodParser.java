@@ -228,28 +228,49 @@ public final class QueryMethodParser {
 
     private static boolean containsToken(String s, String token, Set<String> attributeNames,
                                          PathResolver pathResolver) {
-        int i = -1;
-        while ((i = s.indexOf(token, i + 1)) >= 0) {
-            String left  = s.substring(0, i);
-            String right = s.substring(i + token.length());
-            if (chunkLooksValid(left, attributeNames, pathResolver)
-                    && chunkLooksValid(right, attributeNames, pathResolver)) return true;
-        }
-        return false;
+        List<String> parts = splitAll(s, token, attributeNames, pathResolver);
+        return parts != null && parts.size() >= 2;
     }
 
     private static String[] splitOnToken(String s, String token, Set<String> attributeNames,
                                          PathResolver pathResolver) {
+        List<String> parts = splitAll(s, token, attributeNames, pathResolver);
+        return parts == null ? new String[] { s } : parts.toArray(new String[0]);
+    }
+
+    /**
+     * Decomposes {@code s} into the run of single-predicate chunks separated by {@code token}
+     * ({@code "RoomIdAndSeatRowAndReleased"} on {@code "And"} → {@code [RoomId, SeatRow, Released]}).
+     * Earlier versions split on only the first valid {@code And}/{@code Or} and returned two chunks,
+     * so any 3+ condition chain mis-parsed and fell through to an unsupported-method stub (MANSART-002).
+     *
+     * <p>Strategy: a chunk that is itself one valid predicate is returned as-is; otherwise take the
+     * shortest valid left predicate and recurse on the right, backtracking to a longer left chunk
+     * when the remainder cannot be decomposed (so attribute names that embed the token still parse).
+     * Returns {@code null} when {@code s} cannot be fully decomposed into valid predicates.</p>
+     */
+    private static List<String> splitAll(String s, String token, Set<String> attributeNames,
+                                         PathResolver pathResolver) {
+        if (chunkLooksValid(s, attributeNames, pathResolver)) {
+            List<String> single = new ArrayList<>(1);
+            single.add(s);
+            return single;
+        }
         int i = -1;
         while ((i = s.indexOf(token, i + 1)) >= 0) {
-            String left  = s.substring(0, i);
-            String right = s.substring(i + token.length());
-            if (chunkLooksValid(left, attributeNames, pathResolver)
-                    && chunkLooksValid(right, attributeNames, pathResolver)) {
-                return new String[] { left, right };
+            String left = s.substring(0, i);
+            if (!chunkLooksValid(left, attributeNames, pathResolver)) {
+                continue;
+            }
+            List<String> rest = splitAll(s.substring(i + token.length()), token, attributeNames, pathResolver);
+            if (rest != null) {
+                List<String> parts = new ArrayList<>(rest.size() + 1);
+                parts.add(left);
+                parts.addAll(rest);
+                return parts;
             }
         }
-        return new String[] { s };
+        return null;
     }
 
     private static boolean chunkLooksValid(String chunk, Set<String> attributeNames, PathResolver pathResolver) {

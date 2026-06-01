@@ -3,6 +3,7 @@ package io.vidocq.mansart.data.processor;
 import io.vidocq.mansart.data.core.QueryMethodParser;
 
 import javax.annotation.processing.Filer;
+import javax.annotation.processing.Messager;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.DeclaredType;
@@ -10,6 +11,7 @@ import javax.lang.model.type.ExecutableType;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
+import javax.tools.Diagnostic;
 import javax.tools.JavaFileObject;
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -33,12 +35,15 @@ final class RepositoryWriter {
     private final Elements elements;
     private final Types    types;
     private final EntityRegistry entityRegistry;
+    private final Messager messager;
 
-    RepositoryWriter(Filer filer, Elements elements, Types types, EntityRegistry entityRegistry) {
+    RepositoryWriter(Filer filer, Elements elements, Types types, EntityRegistry entityRegistry,
+                     Messager messager) {
         this.filer = filer;
         this.elements = elements;
         this.types = types;
         this.entityRegistry = entityRegistry;
+        this.messager = messager;
     }
 
     /**
@@ -211,6 +216,14 @@ final class RepositoryWriter {
             }
         }
         if (body == null) {
+            // MANSART-002: never emit a runtime-throwing stub silently — surface it at build time so an
+            // unresolved derived query (typo, unsupported keyword) is seen now, not on first invocation.
+            if (messager != null) {
+                messager.printMessage(Diagnostic.Kind.WARNING,
+                        "Mansart could not derive a query for '" + name
+                                + "'; the generated method will throw UnsupportedOperationException at runtime."
+                                + " Check the method name and attribute spelling.", m);
+            }
             w.println("        throw new UnsupportedOperationException(\""
                     + name + ": no matching CRUD or derived-query rule. Check method name and attribute spelling.\");");
         } else {

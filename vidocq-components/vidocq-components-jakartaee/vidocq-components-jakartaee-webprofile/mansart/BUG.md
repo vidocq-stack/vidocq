@@ -5,6 +5,35 @@ short id, date, symptom, minimal repro, cause hypothesis, status. Update on each
 
 ---
 
+## MANSART-002 — derived query with 3+ `And`/`Or` conditions silently mis-parsed
+
+- **Date**: 2026-06-01
+- **Status**: FIXED 2026-06-01 (see "Fix"; new `NaryDerivedQueryTest`, full data reactor 147 tests green)
+- **Severity**: medium (any repository method with ≥3 conditions; surfaced from Arago, cf. arago `ARAGO-007`)
+- **Symptom**: a derived query like
+  `List<Seat> findByRoomIdAndSeatRowAndSeatBlockIndexAndReleased(String, int, int, boolean)` **compiled
+  fine** but threw `UnsupportedOperationException` at runtime on first call. The 2-condition form
+  (`findByRoomIdAndReleased`) worked. Worse, the build was green: the failure only showed at runtime.
+- **Cause**: `QueryMethodParser.splitOnToken`/`containsToken` split on only the FIRST valid `And`/`Or`
+  and returned exactly two chunks. With 3+ conditions the remainder
+  (`SeatRowAndSeatBlockIndexAndReleased`) was bundled into one token, `parsePredicate` could not resolve
+  it as a single attribute, the whole parse returned `null`, and `RepositoryWriter` emitted a
+  `throw new UnsupportedOperationException(...)` stub **without any compiler diagnostic**.
+- **Fix**:
+  1. `QueryMethodParser` — new recursive `splitAll` (shortest-valid-left + backtracking) decomposes a
+     pure-`And` or pure-`Or` chain into N predicates; `splitOnToken`/`containsToken` delegate to it.
+     Mixed `And`/`Or` remains the documented limitation (unchanged).
+  2. `RepositoryWriter` — when a method still cannot be derived, emit a `Diagnostic.Kind.WARNING` (via
+     `Messager`, plumbed from `MansartProcessor`) so an unresolved query is visible at build time instead
+     of only at runtime. (Not an ERROR: a test fixture, `findByTitleSensitive`, intentionally relies on
+     the stub to assert `@Transactional` propagation without ever being called.)
+- **Note (separate, pre-existing)**: the official Jakarta Data 1.0 TCK runner currently fails to bootstrap
+  in this environment — every `EntityTests` case errors in `@BeforeEach` with the Vauban TCK enricher
+  injecting `null` (`expected: not <null>`). Verified by baseline comparison (stash the fix → identical
+  73 errors), so it is **independent of MANSART-002**. `SignatureTests` passes. The runner also needs
+  Maven 4 (its pom pins `maven-compiler-plugin:4.0.0-beta-4`) and the `run-official-tck-data-1.0.sh`
+  `sdk env` step aborts under `set -u` (`ZSH_VERSION: unbound variable`). Tracked for a TCK-harness fix.
+
 ## MANSART-001 — `boolean`/`Boolean` entity field breaks metamodel generation
 
 - **Date**: 2026-05-31
