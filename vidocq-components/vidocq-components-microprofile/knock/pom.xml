@@ -54,7 +54,7 @@
         <jakarta.annotation.version>3.0.0</jakarta.annotation.version>
 
         <!-- Vidocq upstreams (référencés via property pour overridabilité PR cross-repo) -->
-        <vauban.version>0.1.0-SNAPSHOT</vauban.version>
+        <vauban.version>0.2.0-SNAPSHOT</vauban.version>
         <champollion.version>0.1.0-SNAPSHOT</champollion.version>
         <cassini.version>0.1.0-SNAPSHOT</cassini.version>
     </properties>
