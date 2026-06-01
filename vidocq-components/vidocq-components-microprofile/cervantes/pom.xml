@@ -52,7 +52,7 @@
         <!-- Implémentations Vidocq upstream -->
         <champollion.version>0.1.0-SNAPSHOT</champollion.version>
         <ravel.version>0.1.0-SNAPSHOT</ravel.version>
-        <vauban.version>0.1.0-SNAPSHOT</vauban.version>
+        <vauban.version>0.2.0-SNAPSHOT</vauban.version>
         <cassini.version>0.1.0-SNAPSHOT</cassini.version>
 
         <!-- JMH pour cervantes-bench -->

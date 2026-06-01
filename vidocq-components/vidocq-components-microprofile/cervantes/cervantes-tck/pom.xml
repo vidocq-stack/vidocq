@@ -23,7 +23,7 @@
         <maven.compiler.release>25</maven.compiler.release>
         <cervantes.version>0.1.0-SNAPSHOT</cervantes.version>
         <microprofile.jwt.version>2.1</microprofile.jwt.version>
-        <vauban.version>0.1.0-SNAPSHOT</vauban.version>
+        <vauban.version>0.2.0-SNAPSHOT</vauban.version>
         <ravel.version>0.1.0-SNAPSHOT</ravel.version>
         <champollion.version>0.1.0-SNAPSHOT</champollion.version>
         <cassini.version>0.1.0-SNAPSHOT</cassini.version>
