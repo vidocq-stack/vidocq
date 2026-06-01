@@ -55,6 +55,24 @@
 
     <build>
         <plugins>
+            <!--
+                Vauban codegen : génère META-INF/vauban-beans.list + _ClientProxy/_Factory pour que le
+                runtime Vidocq (scanClasspath) découvre la BCE @ConfigProperty + le producteur de Config.
+                Sortie inerte pour un conteneur CDI standard (Weld-safe), comme knock-cdi-vauban. Pas d'opens
+                module-info : la BCE (ConfigCdiExtension) est dans un package EXPORTÉ et les beans sont
+                instanciés via la _Factory générée (même package) — aucune réflexion cross-module.
+            -->
+            <plugin>
+                <groupId>io.vidocq.vauban</groupId>
+                <artifactId>vauban-maven-plugin</artifactId>
+                <version>${vauban.version}</version>
+                <executions>
+                    <execution>
+                        <id>generate</id>
+                        <goals><goal>generate</goal></goals>
+                    </execution>
+                </executions>
+            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
