@@ -60,6 +60,21 @@
      <build>
          <plugins>
              <!--
+                 Vauban codegen: META-INF/vauban-beans.list + _ClientProxy/_Factory for runtime
+                 discovery (scanClasspath). BCE in an exported package → no opens. Weld-safe (cf. knock).
+             -->
+             <plugin>
+                 <groupId>io.vidocq.vauban</groupId>
+                 <artifactId>vauban-maven-plugin</artifactId>
+                 <version>${vauban.version}</version>
+                 <executions>
+                     <execution>
+                         <id>generate</id>
+                         <goals><goal>generate</goal></goals>
+                     </execution>
+                 </executions>
+             </plugin>
+             <!--
                  JPMS workaround dirac-cdi-vauban: vauban-core is test-scope,
                  absent from target/javamodules/. Same three-step solution as dirac-core.
              -->
