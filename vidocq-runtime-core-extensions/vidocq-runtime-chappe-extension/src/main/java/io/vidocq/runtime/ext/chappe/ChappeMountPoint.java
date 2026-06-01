@@ -2,6 +2,7 @@ package io.vidocq.runtime.ext.chappe;
 
 import io.vidocq.chappe.api.Handler;
 import io.vidocq.chappe.api.Router;
+import io.vidocq.chappe.api.WebSocketHandler;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -94,6 +95,19 @@ public final class ChappeMountPoint {
         Objects.requireNonNull(handler, "handler");
         ensureOpen();
         routers.computeIfAbsent(listenerName, n -> Router.builder()).mount(prefix, handler, stripPrefix);
+    }
+
+    /**
+     * Registers a WebSocket endpoint (RFC 6455) on a named listener at the given path pattern
+     * (e.g. {@code /ws/rooms/{pin}}). Thin convenience over {@link #router(String)}.webSocket(…);
+     * used by {@code ChappeMountConfigExtension} for declarative {@code type=websocket} mounts.
+     */
+    public void webSocket(String listenerName, String pattern, WebSocketHandler handler) {
+        Objects.requireNonNull(listenerName, "listenerName");
+        Objects.requireNonNull(pattern, "pattern");
+        Objects.requireNonNull(handler, "handler");
+        ensureOpen();
+        routers.computeIfAbsent(listenerName, n -> Router.builder()).webSocket(pattern, handler);
     }
 
     /**

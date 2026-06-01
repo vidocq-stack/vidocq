@@ -1,6 +1,7 @@
 package io.vidocq.runtime.ext.chappe;
 
 import io.vidocq.chappe.api.Handler;
+import io.vidocq.chappe.api.WebSocketHandler;
 import io.vidocq.runtime.ext.chappe.spi.MountConfig;
 import io.vidocq.runtime.ext.chappe.spi.MountHandlerProvider;
 import io.vidocq.runtime.spi.ExtensionContext;
@@ -39,6 +40,10 @@ import java.util.Set;
  * vidocq.http.mount.legacy.type = servlet # standard Jakarta Servlet
  * vidocq.http.mount.legacy.priority = 200 # optional overload
  * vidocq.http.mount.legacy.listener = secured # default: "default"
+ *
+ * vidocq.http.mount.roomws.path = /ws/rooms/{pin} # WebSocket pattern (RFC 6455)
+ * vidocq.http.mount.roomws.type = websocket # built-in; .handler is a WebSocketHandler CDI bean
+ * vidocq.http.mount.roomws.handler = com.example.RoomSocket
  * }</pre>
  *
  * <p>The values ​​​​of {@code .type} describe the <b>standard contract</b>
@@ -58,6 +63,13 @@ public final class ChappeMountConfigExtension implements VidocqExtension {
 
     private static final String PREFIX = "vidocq.http.mount.";
     private static final String SUFFIX_PATH = ".path";
+
+    /**
+     * Built-in mount type handled here (not via a {@link MountHandlerProvider}, since a WebSocket
+     * is registered with {@code router.webSocket(pattern, handler)} rather than mounted as an HTTP
+     * {@link Handler}). The handler is a CDI bean named by {@code .handler}, resolved from Vauban.
+     */
+    private static final String TYPE_WEBSOCKET = "websocket";
 
     @Override
     public String name() {
@@ -94,6 +106,10 @@ public final class ChappeMountConfigExtension implements VidocqExtension {
             String type = m.property("type")
                     .orElseThrow(() -> new IllegalStateException(
                             "Mount '" + m.name() + "' is missing required " + PREFIX + m.name() + ".type"));
+            if (TYPE_WEBSOCKET.equals(type)) {
+                mountWebSocket(m);
+                continue;
+            }
             MountHandlerProvider provider = providers.get(type);
             if (provider == null) {
                 throw new IllegalStateException(
@@ -112,6 +128,36 @@ public final class ChappeMountConfigExtension implements VidocqExtension {
                     m.name(), type, m.listener(), m.prefix().isEmpty() ? "/" : m.prefix(),
                     m.priority(), stripPrefix);
         }
+    }
+
+    /**
+     * Registers a declarative {@code type=websocket} mount: resolves the {@link WebSocketHandler}
+     * CDI bean named by {@code .handler} from the Vauban container and binds it to the {@code .path}
+     * pattern (e.g. {@code /ws/rooms/{pin}}) on the mount's listener via {@code router.webSocket()}.
+     */
+    private static void mountWebSocket(MountConfig m) {
+        String pattern = m.prefix();
+        String handlerClass = m.property("handler")
+                .orElseThrow(() -> new IllegalStateException(
+                        "Mount '" + m.name() + "' (type=websocket) requires " + PREFIX + m.name()
+                                + ".handler=<fully-qualified WebSocketHandler bean>"));
+        var container = m.extensionContext().container();
+        Class<?> beanClass;
+        try {
+            beanClass = Class.forName(handlerClass, false, container.classLoader());
+        } catch (ClassNotFoundException e) {
+            throw new IllegalStateException("Mount '" + m.name()
+                    + "': WebSocket handler class not found: " + handlerClass, e);
+        }
+        Object bean = container.select(beanClass);
+        if (!(bean instanceof WebSocketHandler ws)) {
+            throw new IllegalStateException("Mount '" + m.name() + "': " + handlerClass
+                    + " must implement " + WebSocketHandler.class.getName());
+        }
+        ChappeMountPoint.instance().webSocket(m.listener(), pattern, ws);
+        LOG.log(System.Logger.Level.INFO,
+                "Mounted '{0}' (type=websocket) on listener={1} pattern={2} handler={3}",
+                m.name(), m.listener(), pattern, handlerClass);
     }
 
     private static Set<String> collectMountNames(VidocqConfig config) {
