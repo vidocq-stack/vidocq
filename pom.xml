@@ -49,7 +49,7 @@
     </modules>
 
     <properties>
-        <vauban.version>0.1.0-SNAPSHOT</vauban.version>
+        <vauban.version>0.2.0-SNAPSHOT</vauban.version>
         <chappe.version>0.2.0-SNAPSHOT</chappe.version>
         <cassini.version>0.1.0-SNAPSHOT</cassini.version>
         <ravel.version>0.1.0-SNAPSHOT</ravel.version>
