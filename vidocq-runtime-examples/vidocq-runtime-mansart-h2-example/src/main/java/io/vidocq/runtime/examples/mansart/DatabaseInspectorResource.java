@@ -34,7 +34,6 @@ public class DatabaseInspectorResource {
     @GET
     @Path("/products")
     public List<Map<String, Object>> rawProducts() {
-        System.out.println("OOOO");
         DataSource ds = dataSourceInstance.get();
         List<Map<String, Object>> rows = new ArrayList<>();
         try (Connection c = ds.getConnection();
