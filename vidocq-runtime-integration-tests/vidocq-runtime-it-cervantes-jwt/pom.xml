@@ -54,7 +54,7 @@
         </dependency>
         <dependency>
             <groupId>io.vidocq.cervantes</groupId>
-            <artifactId>cervantes-cassini</artifactId>
+            <artifactId>cervantes-jaxrs</artifactId>
         </dependency>
 
         <!-- Jakarta APIs -->

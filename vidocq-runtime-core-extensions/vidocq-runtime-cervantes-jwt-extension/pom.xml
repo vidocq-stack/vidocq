@@ -29,7 +29,7 @@
         </dependency>
         <dependency>
             <groupId>io.vidocq.cervantes</groupId>
-            <artifactId>cervantes-cassini</artifactId>
+            <artifactId>cervantes-jaxrs</artifactId>
         </dependency>
 
         <!-- Repackaged MicroProfile JWT 2.1 spec (module org.eclipse.microprofile.jwt). -->
@@ -49,7 +49,7 @@
             <artifactId>vidocq-runtime-ravel-extension</artifactId>
         </dependency>
 
-        <!-- Needed to compile cervantes-cassini's module-info requires (jakarta.ws.rs). -->
+        <!-- Needed to compile cervantes-jaxrs's module-info requires (jakarta.ws.rs). -->
         <dependency>
             <groupId>jakarta.ws.rs</groupId>
             <artifactId>jakarta.ws.rs-api</artifactId>

@@ -11,7 +11,7 @@ module io.vidocq.runtime.ext.cervantes.jwt {
     requires transitive io.vidocq.cervantes.api;
     requires transitive io.vidocq.cervantes.core;
     requires transitive io.vidocq.cervantes.cdi.vauban;
-    requires transitive io.vidocq.cervantes.cassini;
+    requires transitive io.vidocq.cervantes.jaxrs;
 
     // MP JWT 2.1 §6.1 — the spec requires reading mp.jwt.verify.* keys via
     // MicroProfile Config. Cervantes-core uses @ConfigProperty for this, so

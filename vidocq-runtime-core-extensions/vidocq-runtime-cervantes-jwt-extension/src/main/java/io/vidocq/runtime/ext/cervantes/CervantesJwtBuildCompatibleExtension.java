@@ -10,7 +10,7 @@ import io.vidocq.cervantes.cdi.CervantesClaimExtension;
  * <p>The ECB {@link CervantesClaimExtension} (cervantes-cdi-vauban) adds the
  * producer {@code @RequestScoped JsonWebToken} and injection {@code @Claim}.
  * JAX-RS security beans (authentication filter + DynamicFeature
- * {@code @RolesAllowed}) of cervantes-cassini are {@code @Provider}
+ * {@code @RolesAllowed}) of cervantes-jaxrs are {@code @Provider}
  * discovered by Cassini's {@code VaubanBeanProvider} once Cervantes-Cassini
  * present on the deployment classpath.</p>
  */

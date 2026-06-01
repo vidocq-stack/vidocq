@@ -25,7 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * E2E tests that validate the full Cervantes integration (MicroProfile JWT 2.1) in Vidocq:
  * <ol>
  *   <li><b>JAX-RS Authentication + Authorization</b> — {@code @RolesAllowed("admin")} via
- *       {@code RolesAllowedDynamicFeature} + {@code JwtAuthenticationFilter} (cervantes-cassini,
+ *       {@code RolesAllowedDynamicFeature} + {@code JwtAuthenticationFilter} (cervantes-jaxrs,
  *       @Provider beans discovered by Cassini's VaubanBeanProvider).</li>
  *   <li><b>CDI Injection {@code @Inject JsonWebToken}</b> — {@code @RequestScoped} producer
  *       from cervantes-cdi-vauban, republished by the BCE exposed by
@@ -36,7 +36,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * </ol>
  *
  * <p>Stack started by Arquillian: Chappe (HTTP) → Cassini (JAX-RS) → Vauban (CDI) →
- * cervantes-jwt-extension (BCE @Claim/@RequestScoped JsonWebToken) + cervantes-cassini (security).</p>
+ * cervantes-jwt-extension (BCE @Claim/@RequestScoped JsonWebToken) + cervantes-jaxrs (security).</p>
  *
  * <p>Key assertions:
  * <ul>
@@ -82,8 +82,8 @@ class CervantesJwtIntegrationTest {
                 // the isolated Arquillian deployment (they are on the classpath via Maven deps,
                 // but Vidocq Arquillian scoping requires their explicit presence —
                 // same pattern as vidocq-runtime-it-humboldt-cassini).
-                .addClass(io.vidocq.cervantes.cassini.JwtAuthenticationFilter.class)
-                .addClass(io.vidocq.cervantes.cassini.RolesAllowedDynamicFeature.class)
+                .addClass(io.vidocq.cervantes.jaxrs.JwtAuthenticationFilter.class)
+                .addClass(io.vidocq.cervantes.jaxrs.RolesAllowedDynamicFeature.class)
                 .addClass(io.vidocq.cervantes.cdi.JsonWebTokenContext.class)
                 .addClass(io.vidocq.cervantes.cdi.internal.JsonWebTokenProducer.class)
                 .addClass(io.vidocq.cervantes.cdi.internal.JwtAuthConfigProducer.class);
