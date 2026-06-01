@@ -87,6 +87,23 @@
                     <useModulePath>false</useModulePath>
                 </configuration>
             </plugin>
+            <!--
+                Ship META-INF/vauban-beans.list so a Vidocq runtime discovers MetricsResource
+                (@Path("/metrics")) via the Vauban container (CassiniExtension queries
+                VaubanBeanProvider.getResourceClasses()). Inert / Weld-safe in plain CDI containers.
+                Mirrors knock-jaxrs (ARAGO-003 pattern).
+            -->
+            <plugin>
+                <groupId>io.vidocq.vauban</groupId>
+                <artifactId>vauban-maven-plugin</artifactId>
+                <version>${vauban.version}</version>
+                <executions>
+                    <execution>
+                        <id>generate</id>
+                        <goals><goal>generate</goal></goals>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
     </build>
 </project>
