@@ -27,7 +27,7 @@ This page consolidates the public surface of Cervantes: artefacts to declare, ex
 | `@RequestScoped JsonWebToken` producer, `CervantesClaimExtension` BCE for `@Claim`, `JwtAuthConfigProducer` producing the `JwtValidator`.
 
 | `io.vidocq.cervantes`
-| `cervantes-cassini`
+| `cervantes-jaxrs`
 | `JwtAuthenticationFilter` (`@PreMatching`, `AUTHENTICATION`), `RolesAllowedDynamicFeature` + `RolesAllowedRequestFilter`, `JwtSecurityContext`.
 
 | `io.vidocq.cervantes`
@@ -63,8 +63,8 @@ All versions at `0.1.0-SNAPSHOT` at the time of writing. Shared parent `io.vidoc
 | `io.vidocq.cervantes.cdi.vauban`
 | `io.vidocq.cervantes.cdi.*` — `JsonWebTokenContext`, `CervantesClaimExtension`. `provides BuildCompatibleExtension`.
 
-| `io.vidocq.cervantes.cassini`
-| `io.vidocq.cervantes.cassini.*` — filters, `SecurityContext`, `DynamicFeature`.
+| `io.vidocq.cervantes.jaxrs`
+| `io.vidocq.cervantes.jaxrs.*` — filters, `SecurityContext`, `DynamicFeature`.
 |===
 
 `io.vidocq.cervantes.internal.*` is never exported. Any application class depending on it signals a regression to be fixed.

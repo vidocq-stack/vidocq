@@ -20,7 +20,7 @@ sdk env
 
 == Maven dependencies
 
-For a standard JAX-RS application, declaring the two integration modules (`cervantes-cdi-vauban` + `cervantes-cassini`) is enough: they transitively pull in `cervantes-core`, `cervantes-api` and `cervantes-mp-jwt-api`.
+For a standard JAX-RS application, declaring the two integration modules (`cervantes-cdi-vauban` + `cervantes-jaxrs`) is enough: they transitively pull in `cervantes-core`, `cervantes-api` and `cervantes-mp-jwt-api`.
 
 [source,xml]
 ----
@@ -32,7 +32,7 @@ For a standard JAX-RS application, declaring the two integration modules (`cerva
     </dependency>
     <dependency>
         <groupId>io.vidocq.cervantes</groupId>
-        <artifactId>cervantes-cassini</artifactId>
+        <artifactId>cervantes-jaxrs</artifactId>
         <version>0.1.0-SNAPSHOT</version>
     </dependency>
 </dependencies>

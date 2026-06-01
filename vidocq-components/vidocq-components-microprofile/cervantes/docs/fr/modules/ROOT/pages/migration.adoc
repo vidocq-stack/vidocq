@@ -80,12 +80,12 @@ SmallRye JWT est l'implémentation de référence chez Quarkus et chez certains 
 | `smallrye-jwt`, `jose4j`, `parsson` (ou `jackson-databind`), `microprofile-jwt-auth-api`. Indirectement : `commons-logging`, parfois `bouncycastle`.
 
 | Cervantes
-| `cervantes-core`, `cervantes-cdi-vauban`, `cervantes-cassini`, `cervantes-api`, `cervantes-mp-jwt-api`, `champollion-impl` (JSON-P 2.1, ~120 Ko), `ravel-impl` (MP Config). *Aucune* lib crypto/JWT tierce.
+| `cervantes-core`, `cervantes-cdi-vauban`, `cervantes-jaxrs`, `cervantes-api`, `cervantes-mp-jwt-api`, `champollion-impl` (JSON-P 2.1, ~120 Ko), `ravel-impl` (MP Config). *Aucune* lib crypto/JWT tierce.
 |===
 
 == Checklist de portage
 
-. Remplacer la dépendance SmallRye JWT par `cervantes-cdi-vauban` + `cervantes-cassini` (ou simplement le wrapper `vidocq-runtime-cervantes-jwt-extension` si vous packagez via xref:vidocq::index.adoc[Vidocq Runtime]).
+. Remplacer la dépendance SmallRye JWT par `cervantes-cdi-vauban` + `cervantes-jaxrs` (ou simplement le wrapper `vidocq-runtime-cervantes-jwt-extension` si vous packagez via xref:vidocq::index.adoc[Vidocq Runtime]).
 . Auditer les annotations applicatives : doivent toutes être issues de `org.eclipse.microprofile.jwt.*` et `jakarta.annotation.security.*`. Remplacer toute annotation `io.smallrye.jwt.*`.
 . Migrer les propriétés `smallrye.jwt.*` vers leurs équivalents `mp.jwt.*` standard.
 . Vérifier que les claims attendus existent bien sur les tokens : `iss`, `aud`, `exp`, `groups`. Pas de remapping path-based exotique.

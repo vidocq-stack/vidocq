@@ -35,7 +35,7 @@ L'artefact `org.eclipse.microprofile.jwt:microprofile-jwt-auth-tck:2.1` (et son 
 [source,bash]
 ----
 sdk env                              # Java 25 + Maven 3.9.16
-./mvnw -ntp install -DskipTests     # installe cervantes-core, cervantes-cassini, cervantes-cdi-vauban, …
+./mvnw -ntp install -DskipTests     # installe cervantes-core, cervantes-jaxrs, cervantes-cdi-vauban, …
 ----
 
 == Exécution du runner
@@ -75,7 +75,7 @@ Stack assemblée par le runner :
 | `microprofile-jwt-auth-api` 2.1, `microprofile-jwt-auth-tck` 2.1 (+ classifier `tests`)
 
 | Implémentation MP JWT
-| `cervantes-mp-jwt-api`, `cervantes-api`, `cervantes-core`, `cervantes-cdi-vauban`, `cervantes-cassini`
+| `cervantes-mp-jwt-api`, `cervantes-api`, `cervantes-core`, `cervantes-cdi-vauban`, `cervantes-jaxrs`
 
 | Container CDI
 | Vauban (`io.vidocq.vauban.core`) en mode embarqué — instancié par déploiement Arquillian
@@ -149,7 +149,7 @@ Deux fixes externes ont été nécessaires pour atteindre 206/206 :
 
 == Contrat qualité
 
-Toute modification structurelle de `cervantes-core`, `cervantes-cdi-vauban` ou `cervantes-cassini` doit préserver le score 206 / 206 avant merge. Une régression TCK est bloquante au sens CI : la PR ne passe pas.
+Toute modification structurelle de `cervantes-core`, `cervantes-cdi-vauban` ou `cervantes-jaxrs` doit préserver le score 206 / 206 avant merge. Une régression TCK est bloquante au sens CI : la PR ne passe pas.
 
 == Pour aller plus loin
 

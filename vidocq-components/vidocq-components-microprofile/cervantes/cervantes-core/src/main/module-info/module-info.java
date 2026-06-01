@@ -9,7 +9,7 @@
  * Recompile {@code module-info.java} alone. JPMS wiring is validated by TCK (M6).</p>
  *
  * <p>{@code io.vidocq.cervantes.internal} will be exported qualifiedly to
- * {@code io.vidocq.cervantes.cdi.vauban} and {@code io.vidocq.cervantes.cassini} from M3/M4.ZZPH2ZZ
+ * {@code io.vidocq.cervantes.cdi.vauban} and {@code io.vidocq.cervantes.jaxrs} from M3/M4.ZZPH2ZZ
  */
 module io.vidocq.cervantes.core {
     requires transitive io.vidocq.cervantes.api;

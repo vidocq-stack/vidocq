@@ -1,4 +1,4 @@
-package io.vidocq.cervantes.cassini;
+package io.vidocq.cervantes.jaxrs;
 
 import jakarta.ws.rs.container.ResourceInfo;
 import jakarta.ws.rs.core.Configuration;

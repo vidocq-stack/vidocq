@@ -2,7 +2,7 @@
 :description: Pipeline de validation pur dans cervantes-core, filtre d'auth Cassini, BCE Vauban pour @Claim, cache JWKS thread-safe, threading virtuel, choix d'implémentation.
 
 [.lead]
-Cervantes sépare strictement le moteur de validation (`cervantes-core`, Java pur, sans HTTP ni CDI) des couches d'intégration (`cervantes-cassini` pour JAX-RS, `cervantes-cdi-vauban` pour CDI). Cette page détaille la séquence de validation, le filtre d'auth JAX-RS, la BCE de synthèse `@Claim`, le cache JWKS thread-safe, et les invariants de threading.
+Cervantes sépare strictement le moteur de validation (`cervantes-core`, Java pur, sans HTTP ni CDI) des couches d'intégration (`cervantes-jaxrs` pour JAX-RS, `cervantes-cdi-vauban` pour CDI). Cette page détaille la séquence de validation, le filtre d'auth JAX-RS, la BCE de synthèse `@Claim`, le cache JWKS thread-safe, et les invariants de threading.
 
 == Séparation `cervantes-core` / intégrations
 
@@ -10,7 +10,7 @@ Cervantes sépare strictement le moteur de validation (`cervantes-core`, Java pu
 
 `cervantes-cdi-vauban` branche le moteur sur CDI : producer `@RequestScoped JsonWebToken`, BCE de synthèse pour `@Claim`, producer `JwtValidator` configuré depuis MP-Config.
 
-`cervantes-cassini` branche le moteur sur JAX-RS : `ContainerRequestFilter` d'auth, `DynamicFeature` pour `@RolesAllowed`, `SecurityContext` adossé au token validé. **Aucune modification de Cassini n'a été nécessaire** — Cervantes utilise l'API JAX-RS standard (`setSecurityContext`, `@PreMatching`, `@Priority(AUTHENTICATION)`, `DynamicFeature`).
+`cervantes-jaxrs` branche le moteur sur JAX-RS : `ContainerRequestFilter` d'auth, `DynamicFeature` pour `@RolesAllowed`, `SecurityContext` adossé au token validé. **Aucune modification de Cassini n'a été nécessaire** — Cervantes utilise l'API JAX-RS standard (`setSecurityContext`, `@PreMatching`, `@Priority(AUTHENTICATION)`, `DynamicFeature`).
 
 == Pipeline de validation (`cervantes-core`)
 
@@ -51,7 +51,7 @@ flowchart LR
 
 Le résultat est un `JsonWebToken` validé ou une `JwtValidationException` typée. Aucune étape n'est court-circuitée — un échec à `n` interrompt toute la chaîne avant `n+1`.
 
-== Filtre d'auth JAX-RS (`cervantes-cassini`)
+== Filtre d'auth JAX-RS (`cervantes-jaxrs`)
 
 `JwtAuthenticationFilter` est un `ContainerRequestFilter` `@PreMatching` `@Priority(AUTHENTICATION)`.
 

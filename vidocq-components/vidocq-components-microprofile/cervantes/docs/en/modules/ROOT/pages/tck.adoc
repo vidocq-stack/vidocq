@@ -35,7 +35,7 @@ The `org.eclipse.microprofile.jwt:microprofile-jwt-auth-tck:2.1` artefact (and i
 [source,bash]
 ----
 sdk env                              # Java 25 + Maven 3.9.16
-./mvnw -ntp install -DskipTests     # installs cervantes-core, cervantes-cassini, cervantes-cdi-vauban, …
+./mvnw -ntp install -DskipTests     # installs cervantes-core, cervantes-jaxrs, cervantes-cdi-vauban, …
 ----
 
 == Runner execution
@@ -75,7 +75,7 @@ Stack assembled by the runner:
 | `microprofile-jwt-auth-api` 2.1, `microprofile-jwt-auth-tck` 2.1 (+ `tests` classifier)
 
 | MP JWT implementation
-| `cervantes-mp-jwt-api`, `cervantes-api`, `cervantes-core`, `cervantes-cdi-vauban`, `cervantes-cassini`
+| `cervantes-mp-jwt-api`, `cervantes-api`, `cervantes-core`, `cervantes-cdi-vauban`, `cervantes-jaxrs`
 
 | CDI container
 | Vauban (`io.vidocq.vauban.core`) in embedded mode — instantiated per Arquillian deployment
@@ -149,7 +149,7 @@ Two external fixes were necessary to reach 206/206:
 
 == Quality contract
 
-Any structural change to `cervantes-core`, `cervantes-cdi-vauban` or `cervantes-cassini` must preserve the 206 / 206 score before merge. A TCK regression is a CI blocker: the PR does not pass.
+Any structural change to `cervantes-core`, `cervantes-cdi-vauban` or `cervantes-jaxrs` must preserve the 206 / 206 score before merge. A TCK regression is a CI blocker: the PR does not pass.
 
 == Further reading
 

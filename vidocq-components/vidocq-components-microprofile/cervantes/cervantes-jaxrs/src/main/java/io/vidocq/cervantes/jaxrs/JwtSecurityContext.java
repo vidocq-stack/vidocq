@@ -1,4 +1,4 @@
-package io.vidocq.cervantes.cassini;
+package io.vidocq.cervantes.jaxrs;
 
 import jakarta.ws.rs.core.SecurityContext;
 import org.eclipse.microprofile.jwt.JsonWebToken;

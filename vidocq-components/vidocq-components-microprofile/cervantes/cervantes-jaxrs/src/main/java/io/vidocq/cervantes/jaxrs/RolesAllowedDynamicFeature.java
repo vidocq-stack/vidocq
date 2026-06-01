@@ -1,4 +1,4 @@
-package io.vidocq.cervantes.cassini;
+package io.vidocq.cervantes.jaxrs;
 
 import jakarta.annotation.security.DenyAll;
 import jakarta.annotation.security.PermitAll;

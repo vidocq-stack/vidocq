@@ -1,7 +1,7 @@
-package io.vidocq.cervantes.cassini;
+package io.vidocq.cervantes.jaxrs;
 
-import io.vidocq.cervantes.cassini.CassiniTestDoubles.CapturingFeatureContext;
-import io.vidocq.cervantes.cassini.CassiniTestDoubles.FakeRequestContext;
+import io.vidocq.cervantes.jaxrs.CassiniTestDoubles.CapturingFeatureContext;
+import io.vidocq.cervantes.jaxrs.CassiniTestDoubles.FakeRequestContext;
 import jakarta.annotation.security.DenyAll;
 import jakarta.annotation.security.PermitAll;
 import jakarta.annotation.security.RolesAllowed;

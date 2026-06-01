@@ -1,8 +1,8 @@
-package io.vidocq.cervantes.cassini;
+package io.vidocq.cervantes.jaxrs;
 
 import io.vidocq.cervantes.api.JwtValidationException;
 import io.vidocq.cervantes.api.JwtValidator;
-import io.vidocq.cervantes.cassini.CassiniTestDoubles.FakeRequestContext;
+import io.vidocq.cervantes.jaxrs.CassiniTestDoubles.FakeRequestContext;
 import io.vidocq.cervantes.cdi.JsonWebTokenContext;
 import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.junit.jupiter.api.Test;

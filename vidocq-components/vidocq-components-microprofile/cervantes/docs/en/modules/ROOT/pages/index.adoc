@@ -50,8 +50,8 @@ A JWT is exactly that: a bearer token that presents a signed identity on every H
 | Implemented spec | {spec-mp-jwt}
 | Repo | {repo-cervantes}
 | Java | 25 (LTS)
-| JPMS modules | `io.vidocq.cervantes.api`, `io.vidocq.cervantes.core`, `io.vidocq.cervantes.cdi.vauban`, `io.vidocq.cervantes.cassini`, `org.eclipse.microprofile.jwt` (repackaging)
-| Public packages | `io.vidocq.cervantes.api.*` (stable SPI), `io.vidocq.cervantes.cdi.*` (CDI integration), `io.vidocq.cervantes.cassini.*` (JAX-RS integration)
+| JPMS modules | `io.vidocq.cervantes.api`, `io.vidocq.cervantes.core`, `io.vidocq.cervantes.cdi.vauban`, `io.vidocq.cervantes.jaxrs`, `org.eclipse.microprofile.jwt` (repackaging)
+| Public packages | `io.vidocq.cervantes.api.*` (stable SPI), `io.vidocq.cervantes.cdi.*` (CDI integration), `io.vidocq.cervantes.jaxrs.*` (JAX-RS integration)
 | Runtime dependencies | `microprofile-jwt-auth-api` 2.1, `jakarta.json-api` (via Champollion), `jakarta.enterprise.cdi-api` 4.1, `jakarta.ws.rs-api` 4.0, `jakarta.annotation-api` 3.0, `io.vidocq.ravel:ravel-mp-config-api`
 | Crypto | `java.security` (`Signature`, `KeyFactory`), `javax.crypto` (JWE) — *no* third-party library
 | jlink-ready | ✅ — every sub-module ships its own `module-info.java`, no `Automatic-Module-Name` fallback
@@ -70,7 +70,7 @@ A JWT is exactly that: a bearer token that presents a signed identity on every H
 ....
 flowchart LR
   Client["HTTP client<br/>Authorization: Bearer ey…"]
-  Filter["JwtAuthenticationFilter<br/>(cervantes-cassini)<br/>@PreMatching @Priority(AUTHENTICATION)"]
+  Filter["JwtAuthenticationFilter<br/>(cervantes-jaxrs)<br/>@PreMatching @Priority(AUTHENTICATION)"]
   Validator["DefaultJwtValidator<br/>(cervantes-core)<br/>signature + claims + key"]
   Keys["KeyResolver<br/>inline PEM / file PEM / JWKS URL / JWKS file"]
   Holder["JsonWebTokenContext<br/>(@RequestScoped, cervantes-cdi-vauban)"]

@@ -1,4 +1,4 @@
-package io.vidocq.cervantes.cassini;
+package io.vidocq.cervantes.jaxrs;
 
 import io.vidocq.cervantes.api.JwtValidationException;
 import io.vidocq.cervantes.api.JwtValidator;
@@ -63,8 +63,11 @@ public class JwtAuthenticationFilter implements ContainerRequestFilter {
     @Override
     public void filter(ContainerRequestContext requestContext) {
         String rawToken = extractToken(requestContext);
-        if (rawToken == null) {
-            return; // pas de token → requête anonyme
+        if (rawToken == null || validator == null) {
+            // No token, or MP-JWT not configured (no JwtValidator) → leave the request anonymous.
+            // Without the validator-null guard, an app that ships cervantes but configures no
+            // mp.jwt.verify.* (e.g. a second, non-OIDC Bearer issuer) would NPE on every Bearer.
+            return;
         }
         try {
             JsonWebToken jwt = validator.validate(rawToken);

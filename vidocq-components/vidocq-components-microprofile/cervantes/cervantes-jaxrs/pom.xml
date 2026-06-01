@@ -10,7 +10,7 @@
         <version>0.1.0-SNAPSHOT</version>
     </parent>
 
-    <artifactId>cervantes-cassini</artifactId>
+    <artifactId>cervantes-jaxrs</artifactId>
     <name>Cervantes :: Cassini (JAX-RS security)</name>
     <description>Sécurité JAX-RS MicroProfile JWT 2.1 : JwtAuthenticationFilter (auth bearer + SecurityContext), RolesAllowedDynamicFeature (@RolesAllowed/@PermitAll/@DenyAll). API JAX-RS standard — validé contre Cassini mais impl-agnostique.</description>
 
@@ -72,6 +72,22 @@
 
     <build>
         <plugins>
+            <!--
+                Vauban codegen : META-INF/vauban-beans.list pour que le runtime Vidocq découvre les
+                @Provider CDI (JwtAuthenticationFilter, RolesAllowedDynamicFeature) — dans un package
+                exporté → pas d'opens. Sortie inerte (Weld-safe), comme knock-jaxrs.
+            -->
+            <plugin>
+                <groupId>io.vidocq.vauban</groupId>
+                <artifactId>vauban-maven-plugin</artifactId>
+                <version>${vauban.version}</version>
+                <executions>
+                    <execution>
+                        <id>generate</id>
+                        <goals><goal>generate</goal></goals>
+                    </execution>
+                </executions>
+            </plugin>
             <!-- JPMS workaround (cf. cervantes-core) : nettoyage lié à process-sources. -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

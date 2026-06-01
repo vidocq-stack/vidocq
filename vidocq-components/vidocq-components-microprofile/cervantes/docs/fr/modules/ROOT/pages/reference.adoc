@@ -27,7 +27,7 @@ Cette page consolide la surface publique de Cervantes : artefacts à déclarer, 
 | Producteur `@RequestScoped JsonWebToken`, BCE `CervantesClaimExtension` pour `@Claim`, `JwtAuthConfigProducer` qui produit le `JwtValidator`.
 
 | `io.vidocq.cervantes`
-| `cervantes-cassini`
+| `cervantes-jaxrs`
 | `JwtAuthenticationFilter` (`@PreMatching`, `AUTHENTICATION`), `RolesAllowedDynamicFeature` + `RolesAllowedRequestFilter`, `JwtSecurityContext`.
 
 | `io.vidocq.cervantes`
@@ -63,8 +63,8 @@ Toutes les versions à `0.1.0-SNAPSHOT` au moment de la rédaction. Parent commu
 | `io.vidocq.cervantes.cdi.vauban`
 | `io.vidocq.cervantes.cdi.*` — `JsonWebTokenContext`, `CervantesClaimExtension`. `provides BuildCompatibleExtension`.
 
-| `io.vidocq.cervantes.cassini`
-| `io.vidocq.cervantes.cassini.*` — filtres, `SecurityContext`, `DynamicFeature`.
+| `io.vidocq.cervantes.jaxrs`
+| `io.vidocq.cervantes.jaxrs.*` — filtres, `SecurityContext`, `DynamicFeature`.
 |===
 
 `io.vidocq.cervantes.internal.*` n'est jamais exporté. Toute classe applicative qui en dépend signale une régression à corriger.

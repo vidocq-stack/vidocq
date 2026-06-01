@@ -3,7 +3,7 @@ package io.vidocq.cervantes.tck;
 import io.vidocq.cervantes.api.JwtValidator;
 import io.vidocq.cervantes.cdi.JsonWebTokenContext;
 import io.vidocq.cervantes.cdi.internal.JwtAuthConfigProducer;
-import io.vidocq.cervantes.cassini.JwtAuthenticationFilter;
+import io.vidocq.cervantes.jaxrs.JwtAuthenticationFilter;
 import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.eclipse.microprofile.jwt.Claims;
 import org.junit.jupiter.api.Test;
@@ -34,6 +34,6 @@ class CervantesJwtTckSmokeTest {
         assertNotNull(JwtValidator.class, "JwtValidator (cervantes-api) must be on classpath");
         assertNotNull(JsonWebTokenContext.class, "JsonWebTokenContext (cervantes-cdi-vauban) must be on classpath");
         assertNotNull(JwtAuthConfigProducer.class, "JwtAuthConfigProducer must be on classpath");
-        assertNotNull(JwtAuthenticationFilter.class, "JwtAuthenticationFilter (cervantes-cassini) must be on classpath");
+        assertNotNull(JwtAuthenticationFilter.class, "JwtAuthenticationFilter (cervantes-jaxrs) must be on classpath");
     }
 }

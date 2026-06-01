@@ -21,7 +21,7 @@ import java.util.Set;
  * <p>Demonstrates the two halves of MP JWT in a JAX-RS resource:</p>
  * <ul>
  *   <li><b>Authorization</b> — {@code @RolesAllowed}/{@code @PermitAll}/{@code @DenyAll} are enforced
- *       by Cervantes' {@code RolesAllowedDynamicFeature} (cervantes-cassini): the verified token's
+ *       by Cervantes' {@code RolesAllowedDynamicFeature} (cervantes-jaxrs): the verified token's
  *       {@code groups} claim becomes the caller's roles, checked before the method runs.</li>
  *   <li><b>Identity</b> — {@code @Inject @Claim} pulls typed claims of the current request's token
  *       into the (request-scoped) resource, resolved by Cervantes' CDI integration

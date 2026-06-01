@@ -11,7 +11,7 @@
  * <p>Note JPMS — workaround testCompile : {@code module-info.java} dans {@code src/main/module-info/}.
  * Voir {@code cervantes-core/pom.xml}.</p>
  */
-module io.vidocq.cervantes.cassini {
+module io.vidocq.cervantes.jaxrs {
     requires transitive io.vidocq.cervantes.api;
     requires io.vidocq.cervantes.cdi.vauban;
     requires jakarta.ws.rs;
@@ -21,5 +21,5 @@ module io.vidocq.cervantes.cassini {
     requires static jakarta.inject;
     requires static org.eclipse.microprofile.config; // mp.jwt.token.header / mp.jwt.token.cookie
 
-    exports io.vidocq.cervantes.cassini;
+    exports io.vidocq.cervantes.jaxrs;
 }

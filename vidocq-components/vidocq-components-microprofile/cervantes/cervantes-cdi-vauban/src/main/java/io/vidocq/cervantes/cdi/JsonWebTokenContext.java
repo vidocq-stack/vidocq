@@ -8,7 +8,7 @@ import java.util.Optional;
 /**
  * Query context with {@link JsonWebToken} validated from the current query.
  *
- * <p>Posted by JAX-RS authentication filter (module {@code cervantes-cassini}, M4) after
+ * <p>Posted by JAX-RS authentication filter (module {@code cervantes-jaxrs}, M4) after
  * validation du bearer token, puis lu par {@link io.vidocq.cervantes.cdi.internal.JsonWebTokenProducer}
  * to produce the main injection. {@code @RequestScoped}: one instance per query, isolated
  * between competing requests by the Vauban.ZZPH0ZZ query context

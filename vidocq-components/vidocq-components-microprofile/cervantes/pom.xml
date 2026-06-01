@@ -70,7 +70,7 @@
         <module>cervantes-api</module>
         <module>cervantes-core</module>
         <module>cervantes-cdi-vauban</module>
-        <module>cervantes-cassini</module>
+        <module>cervantes-jaxrs</module>
         <module>cervantes-bench</module>
         <module>cervantes-examples</module>
     </modules>
@@ -108,7 +108,7 @@
             </dependency>
             <dependency>
                 <groupId>io.vidocq.cervantes</groupId>
-                <artifactId>cervantes-cassini</artifactId>
+                <artifactId>cervantes-jaxrs</artifactId>
                 <version>${project.version}</version>
             </dependency>
 
@@ -176,7 +176,7 @@
                 <artifactId>cassini-api</artifactId>
                 <version>${cassini.version}</version>
             </dependency>
-            <!-- Adaptateur Chappe : fournit un RuntimeDelegate JAX-RS (tests de cervantes-cassini) -->
+            <!-- Adaptateur Chappe : fournit un RuntimeDelegate JAX-RS (tests de cervantes-jaxrs) -->
             <dependency>
                 <groupId>io.vidocq.cassini</groupId>
                 <artifactId>cassini-chappe</artifactId>
