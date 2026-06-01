@@ -28,6 +28,7 @@
         <module>vidocq-runtime-mansart-transactions-extension</module>
         <module>vidocq-runtime-mansart-transactions-extension-codegen</module>
         <module>vidocq-runtime-knock-extension</module>
+        <module>vidocq-runtime-dirac-extension</module>
         <module>vidocq-runtime-ravel-extension</module>
     </modules>
 

@@ -55,6 +55,7 @@
         <ravel.version>0.1.0-SNAPSHOT</ravel.version>
         <mansart.version>0.1.0-SNAPSHOT</mansart.version>
         <knock.version>0.1.0-SNAPSHOT</knock.version>
+        <dirac.version>0.1.0-SNAPSHOT</dirac.version>
         <cyrano.version>0.1.0-SNAPSHOT</cyrano.version>
         <cervantes.version>0.1.0-SNAPSHOT</cervantes.version>
         <humboldt.version>0.1.0-SNAPSHOT</humboldt.version>
@@ -125,6 +126,11 @@
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-knock-extension</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.runtime</groupId>
+                <artifactId>vidocq-runtime-dirac-extension</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
@@ -350,6 +356,11 @@
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-knock-extension</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.runtime</groupId>
+                <artifactId>vidocq-runtime-dirac-extension</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
