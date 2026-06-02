@@ -49,3 +49,50 @@ resolve them as automatic modules by deriving their name from the JAR file name.
 2. Contact / PR upstream Eclipse MicroProfile to add a modular descriptor.
 3. Failing that, wrap via an internal Dirac module (`dirac-mp-metrics-api`) that provides
    the missing `module-info.class` — pattern already used for `ravel-mp-config-api`.
+
+---
+
+## DRC-002 — @Gauge resolution + BASE registry fail on the module path (strict JPMS)
+
+- **Opening date**: 2026-06-02
+- **Status**: ✅ FIXED 2026-06-02
+
+### Symptom
+
+On a strict module-path deployment (e.g. the Vidocq runtime / Arago Docker image), boot or the
+first `/metrics` scrape fails. Two distinct failures:
+
+1. `DiracException: Unable to resolve @Gauge method handle for 'public long App.activeRooms()'`
+   (cause `IllegalAccessException`) — application `@Gauge` beans cannot be wired.
+2. `DeploymentException: Failed to create client proxy for ... MetricRegistryProducerBean`
+   → `IllegalAccessError: class io.vidocq.dirac.internal.BaseMetricsRegistrar cannot access
+   ManagementFactory because module io.vidocq.dirac.core does not read module java.management`.
+
+Neither reproduces on the class-path (unnamed module reads everything / is open), so unit tests
+and the Arquillian TCK (which run class-path) stay green — the bug only bites under strict JPMS.
+
+### Minimal repro
+
+Deploy a Dirac-enabled app on the module path with an application `@Gauge` bean in another module.
+
+### Cause
+
+1. `DiracExtension.resolveMethodHandle` did `MethodHandles.privateLookupIn(beanClass, lookup())`.
+   `privateLookupIn` requires the caller (Dirac) module to **read** the bean's module; the app opens
+   its package for reflection but Dirac does not read the app module, so the lookup is denied.
+2. `dirac-core` uses `java.lang.management.ManagementFactory` (BASE JVM metrics) without
+   `requires java.management`, and `dirac-cdi-vauban` exported but did not **open** its
+   `io.vidocq.dirac.cdi.internal` package to `io.vidocq.vauban.core` (vauban instantiates the BCE +
+   producer/interceptor beans by deep reflection — `exports` is not enough).
+
+### Fix
+
+- `DiracExtension.resolveMethodHandle`: add the readability edge
+  `DiracExtension.class.getModule().addReads(beanClass.getModule())` before `privateLookupIn`
+  (no-op on the class-path / unnamed modules).
+- `dirac-core/module-info`: `requires java.management;`.
+- `dirac-cdi-vauban/module-info`: `opens io.vidocq.dirac.cdi.internal to io.vidocq.vauban.core;`
+  (qualified — internal package stays unexported as API; mirrors `knock-cdi-vauban`).
+
+Verified: dirac unit tests + **MP-Metrics 5.1 TCK 127/127 PASS**; Arago Docker `/metrics` 200 with
+`arago_active_rooms` exposed.

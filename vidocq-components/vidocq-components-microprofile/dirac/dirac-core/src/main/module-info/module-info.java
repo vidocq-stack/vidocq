@@ -23,6 +23,8 @@
  */
 module io.vidocq.dirac.core {
     requires transitive io.vidocq.dirac.api;
+    // BaseMetricsRegistrar reads the JVM MXBeans (GC, threads, heap, uptime) for the BASE registry.
+    requires java.management;
 
     exports io.vidocq.dirac.internal to io.vidocq.dirac.cdi.vauban, io.vidocq.dirac.rest;
 }

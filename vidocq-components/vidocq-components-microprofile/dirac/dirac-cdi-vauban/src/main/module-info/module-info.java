@@ -30,6 +30,11 @@ module io.vidocq.dirac.cdi.vauban {
     requires static jakarta.interceptor;
 
     exports io.vidocq.dirac.cdi.internal;
+    // The BCE + producer/interceptor beans (DiracExtension, MetricRegistryProducerBean,
+    // GaugeRegistrationBean, CountedInterceptor, TimedInterceptor) are instantiated by vauban-core
+    // via deep reflection (getDeclaredConstructor + setAccessible / privateLookupIn); `exports` is
+    // not enough. Qualified open to vauban-core only (mirrors knock-cdi-vauban). No-op on class-path.
+    opens io.vidocq.dirac.cdi.internal to io.vidocq.vauban.core;
 
     // Dirac BCE: @Gauge resolution + BASE registry population at startup
     provides jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension

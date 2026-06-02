@@ -343,6 +343,15 @@ public class DiracExtension implements BuildCompatibleExtension {
 
     private static MethodHandle resolveMethodHandle(Class<?> beanClass, Method method) {
         try {
+            // The bean lives in the application module, which opens its package for reflection
+            // (CDI/JAX-RS) but is not read by the Dirac module. privateLookupIn additionally
+            // requires the caller (Dirac) module to read the bean's module, so add that
+            // readability edge here. No-op on the class-path / unnamed modules.
+            var diracModule = DiracExtension.class.getModule();
+            var beanModule = beanClass.getModule();
+            if (diracModule.isNamed() && beanModule != diracModule && !diracModule.canRead(beanModule)) {
+                diracModule.addReads(beanModule);
+            }
             var lookup = MethodHandles.privateLookupIn(beanClass, MethodHandles.lookup());
             var methodType = MethodType.methodType(method.getReturnType());
             return Modifier.isStatic(method.getModifiers())
