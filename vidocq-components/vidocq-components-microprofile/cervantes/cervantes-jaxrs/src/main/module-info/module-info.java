@@ -22,4 +22,8 @@ module io.vidocq.cervantes.jaxrs {
     requires static org.eclipse.microprofile.config; // mp.jwt.token.header / mp.jwt.token.cookie
 
     exports io.vidocq.cervantes.jaxrs;
+    // The @Provider beans (auth filter, @RolesAllowed DynamicFeature) are instantiated by the CDI
+    // container via MethodHandles.privateLookupIn; `exports` grants public access but not deep
+    // reflection, so open the package to vauban-core. On the class-path (TCK) this is a no-op.
+    opens io.vidocq.cervantes.jaxrs to io.vidocq.vauban.core;
 }

@@ -44,6 +44,13 @@ public class JwtAuthConfigProducer {
     @Dependent
     public JwtValidator jwtValidator() {
         Config config = ConfigProvider.getConfig();
+        if (!isVerificationKeyConfigured(config)) {
+            // MP-JWT not configured (no verification key at all): produce a null validator so the
+            // JAX-RS authentication filter stays inert (requests remain anonymous) instead of failing.
+            // This is the documented "ship cervantes but configure no mp.jwt.*" path. A deployment that
+            // DOES set a key but gets it wrong still surfaces an IllegalStateException below.
+            return null;
+        }
         try {
             return new DefaultJwtValidator(
                     buildKeyResolver(config),
@@ -53,6 +60,12 @@ public class JwtAuthConfigProducer {
         } catch (JwtValidationException e) {
             throw new IllegalStateException("invalid MicroProfile JWT configuration (mp.jwt.verify.* / mp.jwt.decrypt.*)", e);
         }
+    }
+
+    /** True if a verification key is configured (inline PEM or location); otherwise MP-JWT is off. */
+    private static boolean isVerificationKeyConfigured(Config config) {
+        return config.getOptionalValue("mp.jwt.verify.publickey", String.class).isPresent()
+                || config.getOptionalValue("mp.jwt.verify.publickey.location", String.class).isPresent();
     }
 
     /**
