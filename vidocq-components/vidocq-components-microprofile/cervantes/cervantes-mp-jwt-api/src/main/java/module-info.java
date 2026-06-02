@@ -15,6 +15,21 @@
  * cervantes-core, cervantes-cdi-vauban), qui en ont besoin à la compilation de leur propre code.
  */
 module org.eclipse.microprofile.jwt {
+    // The repackaged spec classes reference types from these modules in their OWN bytecode, so this
+    // module must READ them at runtime (readability is per-module of the referencing class — consumers
+    // reading these modules is not enough). `static`: mandatory only when compiling THIS module-info
+    // (resolved via the three provided deps in the pom), NOT forced onto consumers — cervantes-api/core
+    // use no CDI and must not have to put jakarta.cdi/inject on their path. At runtime the read edge
+    // activates whenever the target is present, which it always is in a real MP-JWT deployment (the
+    // Vidocq runtime / Arago resolve jakarta.json/cdi/inject via champollion + vauban). Invisible on the
+    // class-path (TCK); only the module path enforces it — see cervantes BUG.md CERV-003.
+    //   - jakarta.json   : Claims / JsonWebToken expose jakarta.json types.
+    //   - jakarta.cdi    : @Claim is @Nonbinding; ClaimLiteral extends AnnotationLiteral.
+    //   - jakarta.inject : @Claim is a @Qualifier.
+    requires static jakarta.json;
+    requires static jakarta.cdi;
+    requires static jakarta.inject;
+
     exports org.eclipse.microprofile.auth;
     exports org.eclipse.microprofile.jwt;
     exports org.eclipse.microprofile.jwt.config;

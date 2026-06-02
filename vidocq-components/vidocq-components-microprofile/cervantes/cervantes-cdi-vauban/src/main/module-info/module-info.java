@@ -22,9 +22,11 @@ module io.vidocq.cervantes.cdi.vauban {
 
     exports io.vidocq.cervantes.cdi;
     exports io.vidocq.cervantes.cdi.internal;
-    // The producer beans (JsonWebTokenProducer, JwtAuthConfigProducer, ClaimResolver) are
-    // instantiated by vauban-core via deep reflection (privateLookupIn / setAccessible); `exports`
-    // is not enough for that. Qualified open to vauban-core only (mirrors knock-cdi-vauban). No-op
-    // on the class-path (TCK).
+    // The producer/context beans (JsonWebTokenContext in this package; JsonWebTokenProducer,
+    // JwtAuthConfigProducer, ClaimResolver in .internal) are instantiated by vauban-core via deep
+    // reflection (privateLookupIn / setAccessible); `exports` is not enough for that. Qualified open
+    // to vauban-core only (mirrors knock-cdi-vauban). No-op on the class-path (TCK), so this defect is
+    // invisible there and only surfaces on the module path (docker compose).
+    opens io.vidocq.cervantes.cdi to io.vidocq.vauban.core;
     opens io.vidocq.cervantes.cdi.internal to io.vidocq.vauban.core;
 }

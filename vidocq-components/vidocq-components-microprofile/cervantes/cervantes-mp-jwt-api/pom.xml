@@ -31,6 +31,31 @@
             <artifactId>microprofile-jwt-auth-api</artifactId>
             <scope>provided</scope>
         </dependency>
+
+        <!--
+            The repackaged API classes reference types from these modules in their OWN bytecode, so the
+            explicit module-info must `requires` them (the read edge is mandatory at runtime on the module
+            path). Provided: only needed to resolve those module names when compiling module-info; the
+            consumers and the Vidocq runtime already supply these modules at runtime.
+              - jakarta.json   : Claims / JsonWebToken expose jakarta.json types (via champollion-api).
+              - jakarta.cdi    : @Claim is @Nonbinding, ClaimLiteral extends AnnotationLiteral.
+              - jakarta.inject : @Claim is @Qualifier.
+        -->
+        <dependency>
+            <groupId>io.vidocq.champollion</groupId>
+            <artifactId>champollion-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.inject</groupId>
+            <artifactId>jakarta.inject-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
     </dependencies>
 
     <build>
