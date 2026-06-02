@@ -21,6 +21,11 @@ module io.vidocq.runtime.ext.cervantes.jwt {
 
     requires jakarta.cdi;
 
+    // vauban-core instantiates the BCE reflectively (getDeclaredConstructor + setAccessible +
+    // newInstance in BceProcessor) — `provides ... with` alone is not enough. The BCE lives in this
+    // wrapper's internal, non-exported package, so open it to vauban-core for that reflective access.
+    opens io.vidocq.runtime.ext.cervantes to io.vidocq.vauban.core;
+
     provides jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension
             with io.vidocq.runtime.ext.cervantes.CervantesJwtBuildCompatibleExtension;
 }
