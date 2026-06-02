@@ -18,6 +18,7 @@ import java.util.Optional;
  * vidocq.http.mount.<name>.classpath = static # base classpath (mutually exclusive with filesystem)
  * vidocq.http.mount.<name>.filesystem = /var/www/ui # base filesystem (mutually exclusive with classpath)
  * vidocq.http.mount.<name>.index = index.html # index name (default: index.html)
+ * vidocq.http.mount.<name>.clean-urls = true # extensionless URLs -> .html sibling (default: false)
  * vidocq.http.mount.<name>.cache-control = max-age=3600 # header Cache-Control (optional)
  * vidocq.http.mount.<name>.cache-in-memory= true # default: false
  * }</pre>
@@ -32,7 +33,8 @@ public final class StaticMountHandlerProvider implements MountHandlerProvider {
     @Override
     public Handler create(MountConfig cfg) {
         StaticFileHandler.Builder b = StaticFileHandler.builder()
-                .indexFile(cfg.property("index", String.class, "index.html"));
+                .indexFile(cfg.property("index", String.class, "index.html"))
+                .cleanUrls(cfg.property("clean-urls", Boolean.class, Boolean.FALSE));
 
         Optional<String> classpath = cfg.property("classpath");
         Optional<String> filesystem = cfg.property("filesystem");
