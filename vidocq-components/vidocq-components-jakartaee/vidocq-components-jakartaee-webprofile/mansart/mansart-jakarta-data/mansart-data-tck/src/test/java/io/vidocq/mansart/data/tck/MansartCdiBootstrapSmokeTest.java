@@ -37,6 +37,13 @@ public class MansartCdiBootstrapSmokeTest {
                 .addBeanClass(MansartDataExtension.class)   // Mansart BCE — registered explicitly
                 .addBeanClass(MansartRuntimeProducer.class) // CDI producer for RepositoryRuntime
                 .addBeanClass(H2DataSourceProducer.class)   // user-supplied DataSource bean
+                // The APT-generated *RepositoryImpl is a managed @Singleton bean: it must be in the
+                // container for the BCE to honour it (the @Synthesis phase intentionally defers to a
+                // managed impl rather than registering a duplicate synthetic bean). The entity is its
+                // mapped type. Mirrors what MansartArquillianSmokeTest adds via its package sweep.
+                .addBeanClass(io.vidocq.mansart.data.tests.Author.class)
+                .addBeanClass(io.vidocq.mansart.data.tests.AuthorRepository.class)
+                .addBeanClass(io.vidocq.mansart.data.tests.AuthorRepositoryImpl.class)
                 .build();
         authors    = container.select(AuthorRepository.class);
         dataSource = container.select(DataSource.class);

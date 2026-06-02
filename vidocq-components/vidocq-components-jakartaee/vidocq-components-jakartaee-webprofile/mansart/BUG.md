@@ -5,6 +5,38 @@ short id, date, symptom, minimal repro, cause hypothesis, status. Update on each
 
 ---
 
+## MANSART-004 — Jakarta Data 1.0 TCK harness fully green (root cause was upstream in Vauban)
+- **Date**: 2026-06-02 — **Status**: FIXED
+- **Severity**: high (the official TCK could not run at all — it is the conformance contract)
+
+### Symptom
+`run-official-tck-data-1.0.sh` (and `-Ptck-run test`) reported `EntityTests` 73/73 ERROR, each failing
+in the TCK's `@BeforeEach setup()` with `expected: not <null>` on an injected read-only repository.
+The Vauban TCK enricher returns `null` when bean resolution fails, so the injected `null` was a
+**symptom**, not the cause.
+
+### Cause
+Two layers, neither in Mansart production code:
+1. **Upstream (the real cause) — Vauban `VAU-DISC-001`.** The harness bootstraps Vauban with
+   `beanArchive(false)`; `MansartDataExtension` adds the runtime producer via `ScannedClasses.add(...)`.
+   Vauban then restricted **all** bean discovery to the scanned set, dropping the test's
+   `@Singleton @Produces DataSource` (`H2DataSourceProducer`). `MansartRuntimeProducer` saw an
+   unsatisfied `Instance<DataSource>` → threw "No @Default DataSource bean found" → every
+   `@Repository`'s `RepositoryRuntime` was unsatisfied → enricher injected `null`. Fixed in Vauban.
+2. **Test-only — `MansartCdiBootstrapSmokeTest` under-specified.** It hand-built a container with just
+   3 bean classes and expected `AuthorRepository` injectable, but never added the APT-generated
+   `AuthorRepositoryImpl` (a managed `@Singleton`). The BCE `@Synthesis` correctly defers to a managed
+   impl instead of registering a duplicate synthetic bean, so with the impl absent the repo resolved to
+   nothing. Product behaviour is correct; the test now adds `Author`/`AuthorRepository`/`AuthorRepositoryImpl`
+   (mirroring `MansartArquillianSmokeTest`'s package sweep).
+
+### Fix / verification
+Vauban `VAU-DISC-001` (relaxed `BeanDiscovery` scanned-classes filter to never hide annotated beans) +
+the smoke-test correction above. Official TCK now **74/74** (EntityTests 73 + SignatureTests 1, H2 in
+memory, Maven 4.0.0-rc-5); module smoke suite 9/9. The earlier "pre-existing/environmental" diagnosis
+(baseline-confirmed 73 errors) was correct that it was independent of MANSART-002, but the cause was a
+real Vauban discovery bug, not the environment.
+
 ## MANSART-002 — derived query with 3+ `And`/`Or` conditions silently mis-parsed
 
 - **Date**: 2026-06-01
@@ -27,12 +59,11 @@ short id, date, symptom, minimal repro, cause hypothesis, status. Update on each
      `Messager`, plumbed from `MansartProcessor`) so an unresolved query is visible at build time instead
      of only at runtime. (Not an ERROR: a test fixture, `findByTitleSensitive`, intentionally relies on
      the stub to assert `@Transactional` propagation without ever being called.)
-- **Note (separate, pre-existing)**: the official Jakarta Data 1.0 TCK runner currently fails to bootstrap
-  in this environment — every `EntityTests` case errors in `@BeforeEach` with the Vauban TCK enricher
-  injecting `null` (`expected: not <null>`). Verified by baseline comparison (stash the fix → identical
-  73 errors), so it is **independent of MANSART-002**. `SignatureTests` passes. The runner also needs
-  Maven 4 (its pom pins `maven-compiler-plugin:4.0.0-beta-4`) and the `run-official-tck-data-1.0.sh`
-  `sdk env` step aborts under `set -u` (`ZSH_VERSION: unbound variable`). Tracked for a TCK-harness fix.
+- **Note (separate, was pre-existing — now FIXED, see MANSART-004)**: the official Jakarta Data 1.0 TCK
+  runner used to fail to bootstrap (all `EntityTests` errored in `@BeforeEach` with the enricher injecting
+  `null`). The `null` was a symptom; the root cause was upstream in Vauban (`VAU-DISC-001`). Fixed —
+  the suite is now 74/74. Runner still needs Maven 4 (pom pins `maven-compiler-plugin:4.0.0-beta-4`) and
+  the `run-official-tck-data-1.0.sh` `sdk env` step still aborts under `set -u`; invoke mvn directly.
 
 ## MANSART-001 — `boolean`/`Boolean` entity field breaks metamodel generation
 
