@@ -16,6 +16,7 @@
     <maven.compiler.release>25</maven.compiler.release>
     <grimm.version>0.1.0-SNAPSHOT</grimm.version>
     <microprofile.openapi.version>4.1</microprofile.openapi.version>
+    <ravel.mp.config.version>0.1.0-SNAPSHOT</ravel.mp.config.version>
   </properties>
 
   <dependencies>
@@ -34,6 +35,15 @@
       <groupId>org.eclipse.microprofile.openapi</groupId>
       <artifactId>microprofile-openapi-api</artifactId>
       <version>${microprofile.openapi.version}</version>
+    </dependency>
+
+    <!-- MicroProfile Config API (Vidocq repackage) — used by TckGrimmSupportProducer
+         to read `org.eclipse.microprofile.config.Config` / `ConfigProvider`. -->
+    <dependency>
+      <groupId>io.vidocq.ravel</groupId>
+      <artifactId>ravel-mp-config-api</artifactId>
+      <version>${ravel.mp.config.version}</version>
+      <scope>test</scope>
     </dependency>
 
     <dependency>
