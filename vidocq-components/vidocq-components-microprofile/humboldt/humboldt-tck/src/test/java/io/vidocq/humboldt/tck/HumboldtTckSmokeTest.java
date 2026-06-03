@@ -60,8 +60,11 @@ public class HumboldtTckSmokeTest {
 
     @Test
     public void humboldt_can_be_set_as_global_open_telemetry() {
+        // MP Telemetry 2.1 §3.1 default = SDK disabled; the smoke explicitly
+        // enables it so that the in-memory pipeline is actually wired.
         humboldt = HumboldtAutoConfigure.configure(EnvConfig.of(
-                Map.of("OTEL_TRACES_EXPORTER", "in-memory",
+                Map.of("OTEL_SDK_DISABLED", "false",
+                        "OTEL_TRACES_EXPORTER", "in-memory",
                         "OTEL_METRICS_EXPORTER", "none",
                         "OTEL_LOGS_EXPORTER", "none"),
                 Map.of()));
