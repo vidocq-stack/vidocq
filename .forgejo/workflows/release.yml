@@ -42,6 +42,7 @@ on:
         description: "io.vidocq.champollion:* (all artifacts under io.vidocq.champollion) — stable version (must be released on Central first)"
         type: string
         required: true
+        default:     "0.1.0"
       chappe_release:
         description: "io.vidocq.chappe:* (all artifacts under io.vidocq.chappe) — stable version (must be released on Central first)"
         type: string
@@ -49,6 +50,10 @@ on:
         default:     "0.1.0"
       cyrano_release:
         description: "io.vidocq.cyrano:* (all artifacts under io.vidocq.cyrano) — stable version (must be released on Central first)"
+        type: string
+        required: true
+      dirac_release:
+        description: "io.vidocq.dirac:* (all artifacts under io.vidocq.dirac) — stable version (must be released on Central first)"
         type: string
         required: true
       humboldt_release:
@@ -97,6 +102,7 @@ jobs:
             io.vidocq.champollion=${{ inputs.champollion_release }}
             io.vidocq.chappe=${{ inputs.chappe_release }}
             io.vidocq.cyrano=${{ inputs.cyrano_release }}
+            io.vidocq.dirac=${{ inputs.dirac_release }}
             io.vidocq.humboldt=${{ inputs.humboldt_release }}
             io.vidocq.knock=${{ inputs.knock_release }}
             io.vidocq.mansart=${{ inputs.mansart_release }}
