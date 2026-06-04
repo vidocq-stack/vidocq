@@ -29,7 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** SecurityContext adossé au JsonWebToken (rôles = claim groups). */
+/** SecurityContext backed by a JsonWebToken (roles = groups claim). */
 class JwtSecurityContextTest {
 
     @Test

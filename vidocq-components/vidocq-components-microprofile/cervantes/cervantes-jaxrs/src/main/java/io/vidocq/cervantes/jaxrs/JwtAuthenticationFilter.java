@@ -40,19 +40,19 @@ import org.eclipse.microprofile.jwt.JsonWebToken;
 import java.util.Map;
 
 /**
- * Filtre d'authentification MicroProfile JWT : extrait le bearer token depuis :
+ * MicroProfile JWT authentication filter: extracts the bearer token from:
  * <ol>
- *   <li>l'en-tête {@code Authorization: Bearer …} (comportement par défaut) ;</li>
- *   <li>un cookie nommé par {@code mp.jwt.token.cookie} quand {@code mp.jwt.token.header=Cookie}.</li>
+ *   <li>the {@code Authorization: Bearer …} header (default behaviour);</li>
+ *   <li>a cookie named by {@code mp.jwt.token.cookie} when {@code mp.jwt.token.header=Cookie}.</li>
  * </ol>
  *
- * <p>{@code @PreMatching} (requis pour pouvoir appeler {@code setSecurityContext}, JAX-RS §6.6) et
- * priorité {@link Priorities#AUTHENTICATION} (s'exécute avant l'autorisation). Un échec de
- * validation interrompt la requête en {@code 401}. En l'absence de token, la requête reste anonyme
- * — c'est l'autorisation ({@code @RolesAllowed}, etc.) qui tranchera.</p>
+ * <p>{@code @PreMatching} (required to call {@code setSecurityContext}, JAX-RS §6.6) and
+ * priority {@link Priorities#AUTHENTICATION} (runs before authorization). A validation failure
+ * aborts the request with {@code 401}. When no token is present the request remains anonymous
+ * — authorization ({@code @RolesAllowed}, etc.) will decide.</p>
  *
- * <p>Pose aussi le token sur le {@link JsonWebTokenContext} (portée requête) pour rendre le
- * principal injectable en CDI ({@code @Inject JsonWebToken}).</p>
+ * <p>Also sets the token on the {@link JsonWebTokenContext} (request scope) to make the
+ * principal injectable via CDI ({@code @Inject JsonWebToken}).</p>
  */
 @Provider
 @PreMatching
@@ -71,7 +71,7 @@ public class JwtAuthenticationFilter implements ContainerRequestFilter {
     JsonWebTokenContext tokenContext;
 
     public JwtAuthenticationFilter() {
-        // requis par CDI (bean à portée normale)
+        // required by CDI (normal-scoped bean)
     }
 
     JwtAuthenticationFilter(JwtValidator validator, JsonWebTokenContext tokenContext) {
@@ -100,8 +100,8 @@ public class JwtAuthenticationFilter implements ContainerRequestFilter {
     }
 
     /**
-     * Extrait le token brut depuis la requête.
-     * MP JWT spec §9.2.3 :
+     * Extracts the raw token from the request.
+     * MP JWT spec §9.2.3:
      * - {@code mp.jwt.token.header=Authorization} (default) → {@code Authorization: Bearer <token>}
      * - {@code mp.jwt.token.header=Cookie} → cookie named by {@code mp.jwt.token.cookie} (default "Bearer")
      * Returns {@code null} if no token is present (anonymous request).

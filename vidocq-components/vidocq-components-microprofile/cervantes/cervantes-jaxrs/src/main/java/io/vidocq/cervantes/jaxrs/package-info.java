@@ -18,18 +18,18 @@
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
 /**
- * Sécurité JAX-RS de Cervantes (MicroProfile JWT 2.1) : authentification par bearer token et
- * autorisation par rôles.
+ * Cervantes JAX-RS security (MicroProfile JWT 2.1): bearer token authentication and role-based
+ * authorization.
  *
  * <ul>
- *   <li>{@link io.vidocq.cervantes.jaxrs.JwtAuthenticationFilter} — valide le token et pose le
- *       {@link io.vidocq.cervantes.jaxrs.JwtSecurityContext}.</li>
+ *   <li>{@link io.vidocq.cervantes.jaxrs.JwtAuthenticationFilter} — validates the token and sets
+ *       the {@link io.vidocq.cervantes.jaxrs.JwtSecurityContext}.</li>
  *   <li>{@link io.vidocq.cervantes.jaxrs.RolesAllowedDynamicFeature} +
- *       {@link io.vidocq.cervantes.jaxrs.RolesAllowedRequestFilter} — appliquent
+ *       {@link io.vidocq.cervantes.jaxrs.RolesAllowedRequestFilter} — enforce
  *       {@code @RolesAllowed}/{@code @PermitAll}/{@code @DenyAll}.</li>
  * </ul>
  *
- * <p>N'utilise que l'API JAX-RS standard (impl-agnostique) ; les filtres sont des beans CDI
- * {@code @Provider} découverts par le {@code BeanProvider} de Cassini.</p>
+ * <p>Uses only the standard JAX-RS API (impl-agnostic); filters are CDI {@code @Provider} beans
+ * discovered by the Cassini {@code BeanProvider}.</p>
  */
 package io.vidocq.cervantes.jaxrs;

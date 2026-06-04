@@ -44,8 +44,8 @@ import java.util.Objects;
  * Decrypt an encrypted JWT (JWE compact, 5 parts) in its nested JWS (MicroProfile JWT 2.1:
  * <em>sign-then-encrypt</em>). Zero third-party cryptic dependency — {@code javax.crypto} only.
  *
- * <p>Key Management: {@code RSA-OAEP} (SHA-1) and {@code RSA-OAEP-256} (SHA-256). Encryption of
- * contenu : {@code A256GCM} (AES-256-GCM, IV 96 bits, tag 128 bits, AAD = ASCII(base64url(header))).
+ * <p>Key Management: {@code RSA-OAEP} (SHA-1) and {@code RSA-OAEP-256} (SHA-256). Content encryption:
+ * {@code A256GCM} (AES-256-GCM, 96-bit IV, 128-bit tag, AAD = ASCII(base64url(header))).
  * The clear text obtained is a compact JWS, then validated by ZZPH0ZZ.ZZPH1ZZ
  */
 public final class JweDecryptor {
@@ -69,7 +69,7 @@ public final class JweDecryptor {
         this.requiredAlgorithm = requiredAlgorithm; // nullable
     }
 
-    /** @return le JWS compact imbriqué (à valider ensuite). */
+    /** @return the nested compact JWS (to validate afterwards). */
     public String decryptToCompactJws(String jwe) throws JwtValidationException {
         String[] parts = jwe.split("\\.", -1);
         if (parts.length != 5) {

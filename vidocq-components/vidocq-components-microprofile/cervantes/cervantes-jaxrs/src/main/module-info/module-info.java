@@ -18,23 +18,23 @@
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
 /**
- * Sécurité JAX-RS de Cervantes pour MicroProfile JWT 2.1.
+ * Cervantes JAX-RS security for MicroProfile JWT 2.1.
  *
- * <p>API JAX-RS standard uniquement (filtres, {@code DynamicFeature}, {@code SecurityContext}) :
- * le filtre d'authentification valide le bearer token et pose un {@code SecurityContext} adossé au
- * {@code JsonWebToken} (via {@code setSecurityContext}, pre-matching), et une {@code DynamicFeature}
- * applique {@code @RolesAllowed}/{@code @PermitAll}/{@code @DenyAll} par méthode. Impl-agnostique
- * (validé contre Cassini). Les filtres sont des beans CDI {@code @Provider} découverts par le
- * {@code BeanProvider} de Cassini.</p>
+ * <p>Standard JAX-RS API only (filters, {@code DynamicFeature}, {@code SecurityContext}):
+ * the authentication filter validates the bearer token and sets a {@code SecurityContext} backed by
+ * the {@code JsonWebToken} (via {@code setSecurityContext}, pre-matching), and a {@code DynamicFeature}
+ * applies {@code @RolesAllowed}/{@code @PermitAll}/{@code @DenyAll} per method. Impl-agnostic
+ * (validated against Cassini). Filters are CDI {@code @Provider} beans discovered by the
+ * Cassini {@code BeanProvider}.</p>
  *
- * <p>Note JPMS — workaround testCompile : {@code module-info.java} dans {@code src/main/module-info/}.
- * Voir {@code cervantes-core/pom.xml}.</p>
+ * <p>JPMS note — testCompile workaround: {@code module-info.java} placed in {@code src/main/module-info/}.
+ * See {@code cervantes-core/pom.xml}.</p>
  */
 module io.vidocq.cervantes.jaxrs {
     requires transitive io.vidocq.cervantes.api;
     requires io.vidocq.cervantes.cdi.vauban;
     requires jakarta.ws.rs;
-    requires jakarta.annotation; // @RolesAllowed/@PermitAll/@DenyAll + @Priority lus à l'exécution
+    requires jakarta.annotation; // @RolesAllowed/@PermitAll/@DenyAll + @Priority read at runtime
 
     requires static jakarta.cdi;
     requires static jakarta.inject;

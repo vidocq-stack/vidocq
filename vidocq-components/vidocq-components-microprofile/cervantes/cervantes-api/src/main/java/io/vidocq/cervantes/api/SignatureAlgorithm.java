@@ -27,8 +27,8 @@ import java.util.Optional;
  * <p>Each value combines the name JOSE ({@code "RS256"},...) with its JCA algorithm name
  * ({@code java.security.Signature}) and the expected key family. For EC algorithms,
  * {@code ecCoordinateOctets} is the size (in bytes) of each coordinate {@code R}/{@code S}
- * of the signature JOSE concatenee (P-256 → 32, P-384 → 48, P-521 → 66), necessary for transcoding
- * JOSE {@code R‖S} 
+ * of the concatenated JOSE signature (P-256 → 32, P-384 → 48, P-521 → 66), required for transcoding
+ * JOSE {@code R‖S}
  */
 public enum SignatureAlgorithm {
     RS256("SHA256withRSA", Family.RSA, 0),
@@ -51,13 +51,13 @@ public enum SignatureAlgorithm {
         this.ecCoordinateOctets = ecCoordinateOctets;
     }
 
-    /** Nom d'algorithme {@code java.security.Signature} (ex. {@code "SHA256withRSA"}). */
+    /** {@code java.security.Signature} algorithm name (e.g. {@code "SHA256withRSA"}). */
     public String jcaName() { return jcaName; }
 
     /** Public key family ({@code RSA} or {@code EC}). */
     public Family family() { return family; }
 
-    /** Taille en octets d'une coordonnée {@code R}/{@code S} (algorithmes EC), 0 sinon. */
+    /** Size in bytes of one {@code R}/{@code S} coordinate (EC algorithms), 0 otherwise. */
     public int ecCoordinateOctets() { return ecCoordinateOctets; }
 
     /**

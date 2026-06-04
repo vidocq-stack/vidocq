@@ -180,7 +180,7 @@ final class JwkParser {
                 .generatePrivate(new java.security.spec.RSAPrivateKeySpec(n, d));
     }
 
-    /** Entier non signé big-endian depuis un membre base64url du JWK. */
+    /** Unsigned big-endian integer from a base64url member of the JWK. */
     private static BigInteger uint(JsonObject jwk, String member) {
         String s = string(jwk, member);
         if (s == null) throw new IllegalArgumentException("missing JWK member '" + member + "'");

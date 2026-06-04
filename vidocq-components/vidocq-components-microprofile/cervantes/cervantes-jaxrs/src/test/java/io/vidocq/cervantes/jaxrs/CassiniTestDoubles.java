@@ -40,12 +40,12 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-/** Doubles de test JAX-RS (sans Mockito) : juste ce qu'exigent les filtres/feature de Cervantes. */
+/** JAX-RS test doubles (no Mockito): just what Cervantes filters/features require. */
 final class CassiniTestDoubles {
 
     private CassiniTestDoubles() {}
 
-    /** Construit un JsonWebToken de test (claims sub/upn/groups) via l'impl du core. */
+    /** Builds a test JsonWebToken (claims sub/upn/groups) via the core implementation. */
     static org.eclipse.microprofile.jwt.JsonWebToken token(String subject, java.util.Set<String> groups) {
         jakarta.json.JsonArrayBuilder g = jakarta.json.Json.createArrayBuilder();
         groups.forEach(g::add);
@@ -64,7 +64,7 @@ final class CassiniTestDoubles {
         };
     }
 
-    /** {@link FeatureContext} qui capture les composants enregistrés. */
+    /** {@link FeatureContext} that captures registered components. */
     static final class CapturingFeatureContext implements FeatureContext {
         final List<Object> registered = new ArrayList<>();
 
@@ -104,7 +104,7 @@ final class CassiniTestDoubles {
         @Override public void setSecurityContext(SecurityContext context) { this.securityContext = context; }
         @Override public void abortWith(Response response) { this.abortedWith = response; }
 
-        // --- non utilisés ---
+        // --- unused ---
         @Override public Object getProperty(String name) { throw new UnsupportedOperationException(); }
         @Override public Collection<String> getPropertyNames() { throw new UnsupportedOperationException(); }
         @Override public void setProperty(String name, Object object) { throw new UnsupportedOperationException(); }

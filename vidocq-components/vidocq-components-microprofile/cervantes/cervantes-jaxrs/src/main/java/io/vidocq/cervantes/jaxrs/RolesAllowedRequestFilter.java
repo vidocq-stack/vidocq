@@ -30,15 +30,15 @@ import java.security.Principal;
 import java.util.Set;
 
 /**
- * Applique l'autorisation d'une méthode de ressource (enregistré par
- * {@link RolesAllowedDynamicFeature}). Priorité {@link Priorities#AUTHORIZATION} : s'exécute après
- * le {@link JwtAuthenticationFilter}, donc {@code getSecurityContext()} reflète déjà le token validé.
+ * Enforces authorization for a resource method (registered by
+ * {@link RolesAllowedDynamicFeature}). Priority {@link Priorities#AUTHORIZATION}: runs after
+ * the {@link JwtAuthenticationFilter}, so {@code getSecurityContext()} already reflects the validated token.
  *
  * <ul>
- *   <li>{@code @DenyAll} → toujours {@code 403}.</li>
- *   <li>{@code @RolesAllowed} → {@code 401} si non authentifié, {@code 403} si aucun rôle ne correspond.</li>
+ *   <li>{@code @DenyAll} → always {@code 403}.</li>
+ *   <li>{@code @RolesAllowed} → {@code 401} if not authenticated, {@code 403} if no role matches.</li>
  * </ul>
- * ({@code @PermitAll} et les méthodes sans annotation ne font enregistrer aucun filtre.)
+ * ({@code @PermitAll} and unannotated methods register no filter.)
  */
 @Priority(Priorities.AUTHORIZATION)
 public final class RolesAllowedRequestFilter implements ContainerRequestFilter {
@@ -68,12 +68,12 @@ public final class RolesAllowedRequestFilter implements ContainerRequestFilter {
         SecurityContext security = requestContext.getSecurityContext();
         Principal user = security == null ? null : security.getUserPrincipal();
         if (user == null) {
-            abort(requestContext, Response.Status.UNAUTHORIZED); // non authentifié
+            abort(requestContext, Response.Status.UNAUTHORIZED); // not authenticated
             return;
         }
         boolean granted = rolesAllowed.stream().anyMatch(security::isUserInRole);
         if (!granted) {
-            abort(requestContext, Response.Status.FORBIDDEN); // authentifié mais rôle absent
+            abort(requestContext, Response.Status.FORBIDDEN); // authenticated but role missing
         }
     }
 

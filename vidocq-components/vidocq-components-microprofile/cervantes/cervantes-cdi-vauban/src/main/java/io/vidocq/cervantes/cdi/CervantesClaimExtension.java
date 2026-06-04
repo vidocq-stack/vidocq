@@ -43,11 +43,11 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Build Compatible Extension synthesizing one bean by type encountered at the injection site
- * {@code @Claim} (MicroProfile JWT 2.1). Les membres {@code value}/{@code standard} de
+ * Build Compatible Extension synthesizing one bean per type encountered at a {@code @Claim}
+ * injection point (MicroProfile JWT 2.1). The {@code value}/{@code standard} members of
  * {@code @Claim} being {@code @Nonbinding}, one {@code SyntheticBean} qualified {@code @Claim}
- * by type covers all sites — the actual claim name is solved at runtime by
- * {@link ClaimSyntheticCreator} depuis l'{@code InjectionPoint}.
+ * per type covers all sites — the actual claim name is resolved at runtime by
+ * {@link ClaimSyntheticCreator} from the {@code InjectionPoint}.
  *
  * <p> Implemented in {@code @Registration(types = Object.class)} (not {@code @Validation}) because
  * CDI Lite 4.1 prohibits {@code BeanInfo} as a parameter of {@code @Validation} methods. Layer
@@ -55,7 +55,7 @@ import java.util.Set;
  */
 public class CervantesClaimExtension implements BuildCompatibleExtension {
 
-    /** Types {@code @Claim} collectés en {@code @Registration}, dédupliqués par représentation textuelle. */
+    /** {@code @Claim} types collected in {@code @Registration}, deduplicated by textual representation. */
     private final Map<String, Type> claimTypes = new LinkedHashMap<>();
 
     @Registration(types = Object.class)

@@ -29,20 +29,20 @@ import java.util.Set;
  * {@code mp.jwt.verify.*} relevant for validating claims).
  *
  * <ul>
- * <li>{@code issuer} — {@code mp.jwt.verify.issuer}: expected transmitter ({@code iss}). If present,
- * token claim {@code iss} must match exactement.ZZPH1ZZ
- * <li>{@code audiences} — {@code mp.jwt.verify.audiences}: hearings accepted. If not empty,
- * the intersection with the {@code aud} claim of the token must be no vide.ZZPH1ZZ
- * ZZPH3Z{@code clockSkew} — clock tolerance applied to {@code exp} and ZZPH2ZZ.ZZPH4ZZ
- * ZZPH2Z{@code requireExpiration} — if true, the absence of {@code exp} is a failure (default spec).</li>
+ * <li>{@code issuer} — {@code mp.jwt.verify.issuer}: expected issuer ({@code iss}). If present,
+ * the token's {@code iss} claim must match exactly.
+ * <li>{@code audiences} — {@code mp.jwt.verify.audiences}: accepted audiences. If not empty,
+ * the intersection with the token's {@code aud} claim must be non-empty.
+ * <li>{@code clockSkew} — clock tolerance applied to {@code exp} and {@code nbf}.
+ * <li>{@code requireExpiration} — if true, the absence of {@code exp} is a failure (spec default).</li>
  * <li>{@code tokenAge} — {@code mp.jwt.verify.token.age}: maximum token age in seconds
- * ({@code now - iat <= tokenAge}). No age limit.</li>
+ * ({@code now - iat <= tokenAge}). No age limit if absent.</li>
  * <li>{@code encryptionRequired} — if true (when {@code mp.jwt.decrypt.key*} is configured),
- * Unencrypted JWS should be rejected with 401.</li>
+ * unencrypted JWS must be rejected with 401.</li>
  * </ul>
  *
- * <p>Unchangeable record; {@code audiences} is defensively copied. Construction since
- * MicroProfile Config (Ravel) is connected to the M3.ZZPH0ZZ milestone
+ * <p>Immutable record; {@code audiences} is defensively copied. Construction from
+ * MicroProfile Config (Ravel) is wired at the M3 milestone.
  */
 public record JwtConfig(
         Optional<String> issuer,
@@ -63,13 +63,13 @@ public record JwtConfig(
         audiences = audiences == null ? Set.of() : Set.copyOf(audiences);
     }
 
-    /** Configuration n'exigeant qu'un émetteur (audiences libres, skew par défaut, exp requise). */
+    /** Configuration requiring only an issuer (free audiences, default skew, expiration required). */
     public static JwtConfig forIssuer(String issuer) {
         return new JwtConfig(Optional.ofNullable(issuer), Set.of(), DEFAULT_CLOCK_SKEW, true,
                 Optional.empty(), false);
     }
 
-    /** Configuration émetteur + audiences (skew par défaut, exp requise). */
+    /** Configuration with issuer + audiences (default skew, expiration required). */
     public static JwtConfig of(String issuer, Set<String> audiences) {
         return new JwtConfig(Optional.ofNullable(issuer), audiences, DEFAULT_CLOCK_SKEW, true,
                 Optional.empty(), false);

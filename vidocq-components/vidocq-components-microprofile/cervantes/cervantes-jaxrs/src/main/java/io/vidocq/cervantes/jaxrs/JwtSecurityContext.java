@@ -26,17 +26,17 @@ import java.security.Principal;
 import java.util.Set;
 
 /**
- * {@link SecurityContext} JAX-RS adossé à un {@link JsonWebToken} validé (MicroProfile JWT 2.1 §7).
+ * JAX-RS {@link SecurityContext} backed by a validated {@link JsonWebToken} (MicroProfile JWT 2.1 §7).
  *
  * <ul>
- *   <li>{@link #getUserPrincipal()} → le {@code JsonWebToken} lui-même (qui est un {@link Principal}).</li>
- *   <li>{@link #isUserInRole(String)} → vrai si le rôle figure dans le claim {@code groups}.</li>
+ *   <li>{@link #getUserPrincipal()} → the {@code JsonWebToken} itself (which is a {@link Principal}).</li>
+ *   <li>{@link #isUserInRole(String)} → true if the role is present in the {@code groups} claim.</li>
  *   <li>{@link #getAuthenticationScheme()} → {@value #MP_JWT}.</li>
  * </ul>
  */
 public final class JwtSecurityContext implements SecurityContext {
 
-    /** Schéma d'authentification exposé pour un token MicroProfile JWT. */
+    /** Authentication scheme exposed for a MicroProfile JWT token. */
     public static final String MP_JWT = "MP-JWT";
 
     private final JsonWebToken token;

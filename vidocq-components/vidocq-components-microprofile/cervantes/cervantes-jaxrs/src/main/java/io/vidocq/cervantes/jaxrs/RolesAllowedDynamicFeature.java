@@ -32,13 +32,13 @@ import java.lang.reflect.Method;
 import java.util.Set;
 
 /**
- * Applique les annotations d'autorisation JSR-250 sur les méthodes de ressources JAX-RS
- * (MicroProfile JWT 2.1 §1.1). Pour chaque méthode, enregistre un {@link RolesAllowedRequestFilter}
- * selon l'annotation effective.
+ * Applies JSR-250 authorization annotations on JAX-RS resource methods
+ * (MicroProfile JWT 2.1 §1.1). For each method, registers a {@link RolesAllowedRequestFilter}
+ * according to the effective annotation.
  *
- * <p>Précédence : les annotations au niveau <em>méthode</em> l'emportent sur celles au niveau
- * <em>classe</em>. Sur une cible donnée, ordre {@code @DenyAll} &gt; {@code @RolesAllowed} &gt;
- * {@code @PermitAll}. Une méthode sans annotation effective reste ouverte (aucun filtre).</p>
+ * <p>Precedence: annotations at <em>method</em> level override those at <em>class</em> level.
+ * On a given target, order is {@code @DenyAll} &gt; {@code @RolesAllowed} &gt;
+ * {@code @PermitAll}. A method with no effective annotation remains open (no filter).</p>
  */
 @Provider
 @ApplicationScoped
@@ -48,7 +48,7 @@ public class RolesAllowedDynamicFeature implements DynamicFeature {
     public void configure(ResourceInfo resourceInfo, FeatureContext context) {
         Method method = resourceInfo.getResourceMethod();
 
-        // Niveau méthode (prioritaire).
+        // Method level (takes precedence).
         if (method.isAnnotationPresent(DenyAll.class)) {
             context.register(RolesAllowedRequestFilter.denyAll());
             return;
@@ -59,10 +59,10 @@ public class RolesAllowedDynamicFeature implements DynamicFeature {
             return;
         }
         if (method.isAnnotationPresent(PermitAll.class)) {
-            return; // @PermitAll explicite : aucune contrainte
+            return; // explicit @PermitAll: no constraint
         }
 
-        // Repli niveau classe.
+        // Fall back to class level.
         Class<?> resourceClass = resourceInfo.getResourceClass();
         if (resourceClass.isAnnotationPresent(DenyAll.class)) {
             context.register(RolesAllowedRequestFilter.denyAll());
@@ -72,6 +72,6 @@ public class RolesAllowedDynamicFeature implements DynamicFeature {
         if (classRoles != null) {
             context.register(RolesAllowedRequestFilter.rolesAllowed(Set.of(classRoles.value())));
         }
-        // Sinon : aucune annotation de sécurité → endpoint ouvert.
+        // Otherwise: no security annotation → open endpoint.
     }
 }

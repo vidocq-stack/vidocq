@@ -50,7 +50,7 @@ public final class CdiTestSupport {
         return g.generateKeyPair();
     }
 
-    /** Clé publique encodée X.509 en base64 — valeur attendue de {@code mp.jwt.verify.publickey}. */
+    /** X.509 base64-encoded public key — expected value of {@code mp.jwt.verify.publickey}. */
     public static String publicKeyBase64(PublicKey key) {
         return Base64.getEncoder().encodeToString(key.getEncoded());
     }

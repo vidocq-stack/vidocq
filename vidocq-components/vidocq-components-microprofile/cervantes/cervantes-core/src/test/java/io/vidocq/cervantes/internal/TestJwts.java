@@ -58,7 +58,7 @@ final class TestJwts {
         return g.generateKeyPair();
     }
 
-    /** Forge un JWT compact signé. */
+    /** Forges a signed compact JWT. */
     static String sign(JsonObject header, JsonObject claims, PrivateKey key, SignatureAlgorithm alg) throws Exception {
         String h = B64URL.encodeToString(toJsonBytes(header));
         String p = B64URL.encodeToString(toJsonBytes(claims));
@@ -74,7 +74,7 @@ final class TestJwts {
         return h + '.' + p + '.' + B64URL.encodeToString(jose);
     }
 
-    /** En-tête JOSE minimal {@code {"alg":..., "typ":"JWT"}} (+ kid optionnel). */
+    /** Minimal JOSE header {@code {"alg":..., "typ":"JWT"}} (+ optional kid). */
     static JsonObject header(SignatureAlgorithm alg, String kid) {
         var b = Json.createObjectBuilder().add("alg", alg.name()).add("typ", "JWT");
         if (kid != null) b.add("kid", kid);

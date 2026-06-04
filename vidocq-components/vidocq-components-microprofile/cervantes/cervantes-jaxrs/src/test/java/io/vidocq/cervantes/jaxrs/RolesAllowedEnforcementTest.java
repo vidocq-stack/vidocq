@@ -35,12 +35,12 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 /**
- * Application de {@code @RolesAllowed}/{@code @PermitAll}/{@code @DenyAll} (MicroProfile JWT 2.1 §1.1) :
- * précédence méthode > classe et codes 200/401/403.
+ * Application of {@code @RolesAllowed}/{@code @PermitAll}/{@code @DenyAll} (MicroProfile JWT 2.1 §1.1):
+ * method-over-class precedence and 200/401/403 status codes.
  */
 class RolesAllowedEnforcementTest {
 
-    // --- ressources de test ---
+    // --- test resources ---
 
     static class OpenResource {
         @RolesAllowed("admin") public void adminOnly() {}
@@ -68,7 +68,7 @@ class RolesAllowedEnforcementTest {
     private static int statusFor(ContainerRequestFilter filter, SecurityContext sc) throws Exception {
         FakeRequestContext rc = new FakeRequestContext();
         if (sc != null) rc.securityContext(sc);
-        filter.filter(rc); // ContainerRequestFilter#filter déclare throws IOException
+        filter.filter(rc); // ContainerRequestFilter#filter declares throws IOException
         return rc.isAborted() ? rc.abortedStatus() : 200;
     }
 
@@ -76,15 +76,15 @@ class RolesAllowedEnforcementTest {
         return new JwtSecurityContext(CassiniTestDoubles.token(name, Set.of(roles)), false);
     }
 
-    // --- méthode niveau ---
+    // --- method level ---
 
     @Test
     void rolesAllowed_grantsMatchingRole_rejectsOthers() throws Exception {
         ContainerRequestFilter filter = filterFor(OpenResource.class, "adminOnly");
         assertNotNull(filter);
         assertEquals(200, statusFor(filter, user("alice", "admin")));
-        assertEquals(403, statusFor(filter, user("bob", "user")));   // authentifié, mauvais rôle
-        assertEquals(401, statusFor(filter, null));                   // non authentifié
+        assertEquals(403, statusFor(filter, user("bob", "user")));   // authenticated, wrong role
+        assertEquals(401, statusFor(filter, null));                   // not authenticated
     }
 
     @Test
@@ -96,7 +96,7 @@ class RolesAllowedEnforcementTest {
     void denyAll_alwaysForbidden() throws Exception {
         ContainerRequestFilter filter = filterFor(OpenResource.class, "forbidden");
         assertNotNull(filter);
-        assertEquals(403, statusFor(filter, user("alice", "admin"))); // même un admin est refusé
+        assertEquals(403, statusFor(filter, user("alice", "admin"))); // even an admin is denied
     }
 
     @Test
@@ -104,7 +104,7 @@ class RolesAllowedEnforcementTest {
         assertNull(filterFor(OpenResource.class, "unannotated"));
     }
 
-    // --- précédence classe ---
+    // --- class precedence ---
 
     @Test
     void classLevelRolesAllowed_appliesToUnannotatedMethod() throws Exception {
@@ -124,6 +124,6 @@ class RolesAllowedEnforcementTest {
         ContainerRequestFilter filter = filterFor(SecuredResource.class, "elevated");
         assertNotNull(filter);
         assertEquals(200, statusFor(filter, user("alice", "admin")));
-        assertEquals(403, statusFor(filter, user("carol", "user"))); // le rôle classe "user" ne suffit plus
+        assertEquals(403, statusFor(filter, user("carol", "user"))); // class role "user" is no longer sufficient
     }
 }

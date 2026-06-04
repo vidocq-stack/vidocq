@@ -24,7 +24,7 @@ import java.util.Arrays;
 
 /**
  * Transcoding ECDSA signatures between the JOSE form (concatenation {@code R‖S}, RFC 7518 §3.4)
- * et la forme DER {@code SEQUENCE(INTEGER r, INTEGER s)} attendue par {@code java.security.Signature}.
+ * and the DER form {@code SEQUENCE(INTEGER r, INTEGER s)} expected by {@code java.security.Signature}.
  *
  * <p>JWS {@code ES256/384/512} bear a gross signature of {@code 2·n} bytes ({@code n} =
  * 32/48/66 according to the curve), while JCA produces and consumes DER. Without this transcoding,
@@ -34,7 +34,7 @@ final class EcdsaSignatures {
 
     private EcdsaSignatures() {}
 
-    /** JOSE {@code R‖S} (chaque coordonnée sur {@code n} octets) → DER {@code SEQUENCE(INTEGER, INTEGER)}. */
+    /** JOSE {@code R‖S} (each coordinate over {@code n} bytes) → DER {@code SEQUENCE(INTEGER, INTEGER)}. */
     static byte[] joseToDer(byte[] jose, int n) {
         if (jose.length != 2 * n) {
             throw new IllegalArgumentException(
@@ -50,7 +50,7 @@ final class EcdsaSignatures {
         return out.toByteArray();
     }
 
-    /** DER {@code SEQUENCE(INTEGER r, INTEGER s)} → JOSE {@code R‖S} (chaque coordonnée sur {@code n} octets). */
+    /** DER {@code SEQUENCE(INTEGER r, INTEGER s)} → JOSE {@code R‖S} (each coordinate over {@code n} bytes). */
     static byte[] derToJose(byte[] der, int n) {
         int p = 0;
         if (der[p++] != 0x30) throw new IllegalArgumentException("not a DER SEQUENCE");
@@ -89,7 +89,7 @@ final class EcdsaSignatures {
         byte[] v = Arrays.copyOfRange(der, p, p + len);
         cur[0] = p + len;
         int start = 0;
-        while (start < v.length - 1 && v[start] == 0) start++; // strip 0x00 de signe
+        while (start < v.length - 1 && v[start] == 0) start++; // strip sign 0x00
         return Arrays.copyOfRange(v, start, v.length);
     }
 

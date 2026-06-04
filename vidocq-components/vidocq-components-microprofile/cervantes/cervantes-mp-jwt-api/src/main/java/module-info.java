@@ -18,20 +18,20 @@
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
 /**
- * Descripteur de module explicite pour la spec MicroProfile JWT 2.1.
+ * Explicit module descriptor for the MicroProfile JWT 2.1 spec.
  *
- * <p>L'artefact officiel {@code org.eclipse.microprofile.jwt:microprofile-jwt-auth-api:2.1}
- * publié par la fondation Eclipse ne fournit NI {@code module-info.class} NI
- * {@code Automatic-Module-Name} ; jlink refuse ce type de module pour la composition d'un
- * runtime image. Ce module-info l'érige en module explicite, sans modifier le code de la spec.
+ * <p>The official artifact {@code org.eclipse.microprofile.jwt:microprofile-jwt-auth-api:2.1}
+ * published by the Eclipse Foundation provides NEITHER a {@code module-info.class} NOR an
+ * {@code Automatic-Module-Name}; jlink refuses such a module when composing a runtime image.
+ * This module-info promotes it to an explicit module without modifying the spec code.
  *
- * <p>Nom de module choisi : {@code org.eclipse.microprofile.jwt} (aligné sur le package
- * principal). Comme heisenberg-mp-ft-api, ce descripteur ne déclare que des {@code exports}
- * et aucun {@code requires} : la compilation de ce seul {@code module-info} (via
- * {@code --patch-module}) ne valide que l'existence des packages exportés (fournis par les
- * {@code .class} dépaquetés). Les dépendances réelles de la spec ({@code jakarta.json},
- * {@code jakarta.cdi}) sont déclarées par les modules consommateurs (cervantes-api,
- * cervantes-core, cervantes-cdi-vauban), qui en ont besoin à la compilation de leur propre code.
+ * <p>Module name chosen: {@code org.eclipse.microprofile.jwt} (aligned with the main package).
+ * Like heisenberg-mp-ft-api, this descriptor only declares {@code exports} and no {@code requires}:
+ * compiling this single {@code module-info} (via {@code --patch-module}) only validates the
+ * existence of the exported packages (provided by the unpacked {@code .class} files). The actual
+ * dependencies of the spec ({@code jakarta.json}, {@code jakarta.cdi}) are declared by the
+ * consuming modules (cervantes-api, cervantes-core, cervantes-cdi-vauban), which need them to
+ * compile their own code.
  */
 module org.eclipse.microprofile.jwt {
     // The repackaged spec classes reference types from these modules in their OWN bytecode, so this
