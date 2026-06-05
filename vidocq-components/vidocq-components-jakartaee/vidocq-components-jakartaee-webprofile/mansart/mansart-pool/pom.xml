@@ -17,7 +17,34 @@
     <packaging>pom</packaging>
 
     <name>Mansart :: Pool</name>
-    <description>JDBC connection pool, virtual-thread-native, zero-dep — peer of mansart-jakarta-data and mansart-persistence.</description>
+    <description>JDBC connection pool, virtual-thread-native, zero-dep — peer of mansart-jakarta-data and mansart-transactions.</description>
+    <url>https://codeberg.org/Vidocq/mansart</url>
+
+    <scm>
+        <connection>scm:git:https://codeberg.org/Vidocq/mansart.git</connection>
+        <developerConnection>scm:git:ssh://git@codeberg.org/Vidocq/mansart.git</developerConnection>
+        <url>https://codeberg.org/Vidocq/mansart</url>
+        <tag>HEAD</tag>
+    </scm>
+
+    <developers>
+        <developer>
+            <name>Yann Blazart</name>
+            <email>yann.blazart@gmail.com</email>
+        </developer>
+        <developer>
+            <name>Antoine Sabot-Durand</name>
+            <email>antoine@sabot-durand.net</email>
+        </developer>
+    </developers>
+
+    <licenses>
+        <license>
+            <name>Apache License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0</url>
+        </license>
+    </licenses>
+
     <properties>
         <assertj.version>3.27.0</assertj.version>
         <h2.version>2.3.232</h2.version>
