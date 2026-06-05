@@ -14,7 +14,7 @@
 
     <groupId>io.vidocq.humboldt</groupId>
     <artifactId>humboldt-parent</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>0.2.0-SNAPSHOT</version>
     <packaging>pom</packaging>
 
     <name>Humboldt</name>
