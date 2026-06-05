@@ -16,7 +16,7 @@
 
     <properties>
         <maven.deploy.skip>true</maven.deploy.skip>
-        <vauban.version>0.2.0-SNAPSHOT</vauban.version>
+        <vauban.version>0.1.1</vauban.version>
     </properties>
 
     <dependencies>
