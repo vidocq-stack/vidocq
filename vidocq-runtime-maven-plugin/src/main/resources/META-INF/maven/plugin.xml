@@ -4,7 +4,7 @@
     <description>Build-time bean indexing and application packaging for Vidocq</description>
     <groupId>io.vidocq.runtime</groupId>
     <artifactId>vidocq-runtime-maven-plugin</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>@project.version@</version>
     <goalPrefix>vidocq</goalPrefix>
     <isolatedRealm>false</isolatedRealm>
     <inheritedByDefault>true</inheritedByDefault>
