@@ -44,6 +44,7 @@
                         <configuration>
                             <createDependencyReducedPom>true</createDependencyReducedPom>
                             <shadedArtifactAttached>false</shadedArtifactAttached>
+                            <createSourcesJar>true</createSourcesJar>
                             <artifactSet>
                                 <includes>
                                     <include>io.opentelemetry:opentelemetry-context</include>
@@ -70,6 +71,25 @@
                                     </manifestEntries>
                                 </transformer>
                             </transformers>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- Empty javadoc jar: Maven Central requires -javadoc.jar even for shade-only modules. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>empty-javadoc-jar</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>jar</goal>
+                        </goals>
+                        <configuration>
+                            <classifier>javadoc</classifier>
+                            <classesDirectory>${project.build.outputDirectory}</classesDirectory>
                         </configuration>
                     </execution>
                 </executions>
