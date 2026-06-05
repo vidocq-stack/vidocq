@@ -63,6 +63,11 @@
         </license>
     </licenses>
 
+    <properties>
+        <!-- Pure aggregator — never deployed to Maven Central. -->
+        <maven.deploy.skip>true</maven.deploy.skip>
+    </properties>
+
     <modules>
         <module>mansart-pool</module>
         <module>mansart-jakarta-data</module>
