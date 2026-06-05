@@ -34,6 +34,7 @@ on:
         description: "io.vidocq.cassini:* (all artifacts under io.vidocq.cassini) — stable version (must be released on Central first)"
         type: string
         required: true
+        default:     "0.1.1"
       cervantes_release:
         description: "io.vidocq.cervantes:* (all artifacts under io.vidocq.cervantes) — stable version (must be released on Central first)"
         type: string
