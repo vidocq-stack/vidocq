@@ -14,6 +14,10 @@
     <name>Mansart :: Data :: Integration tests</name>
     <description>Compile-time + integration tests. Drives the APT processor against sample entities.</description>
 
+    <properties>
+        <maven.deploy.skip>true</maven.deploy.skip>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>jakarta.persistence</groupId>
