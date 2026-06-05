@@ -1,22 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-    Pom racine "agrégateur" — il NE FAIT PAS office de parent pour les sous-reactors.
-    Les trois sous-projets (mansart-pool, mansart-jakarta-data, mansart-transactions) sont
-    des reactors Maven INDÉPENDANTS, chacun avec son propre groupId/version/distributionManagement
-    et build/deploy lifecycle (chacun parente vidocq-parent directement, jamais ce workspace).
-    Ce pom existe uniquement pour :
-      * permettre à IntelliJ d'importer le workspace en un seul "Maven project"
-      * permettre `mvn -ntp install` à la racine de builder les trois reactors en cascade
+    POM racine agrégateur ET parent des trois sous-réactors.
+    Les trois sous-projets (mansart-pool, mansart-jakarta-data, mansart-transactions) parentent
+    ce POM (qui lui-même parente vidocq-parent), formant ainsi un réacteur Maven UNIFIÉ.
+    Cela permet à `mvn versions:set` de versionner les 21 modules en une seule passe,
+    condition nécessaire au bon fonctionnement du CI de release.
+
+    Ce POM agrégateur est exclu du déploiement Maven Central (maven.deploy.skip=true).
+    Les trois sous-réactors overrident cette propriété (<maven.deploy.skip>false</maven.deploy.skip>)
+    pour activer leur propre déploiement.
 
     Pattern : Maven 4 <modules> + packaging=pom, sans dependencyManagement ni
-    pluginManagement propres (chaque reactor a le sien, calibré à ses besoins).
-
-    Il hérite tout de même de vidocq-parent : ce pom agrégateur est lui-même déployé en
-    tête du reactor par `mvn -Psnapshot deploy` (CI), et a donc besoin du
-    distributionManagement (central-snapshots) + du profil snapshot fournis par le parent.
-    Sans parent, le deploy de ce pom échouait ("repository element was not specified"),
-    faisant avorter tout le deploy → aucun artefact mansart publié. L'héritage n'affecte
-    QUE ce pom (les sous-reactors ne le parentent pas), donc n'altère pas leurs builds.
+    pluginManagement propres (chaque sous-réacteur a le sien, calibré à ses besoins).
 -->
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"

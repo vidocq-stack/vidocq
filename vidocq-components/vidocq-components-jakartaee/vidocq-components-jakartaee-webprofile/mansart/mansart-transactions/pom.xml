@@ -5,10 +5,10 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>io.vidocq</groupId>
-        <artifactId>vidocq-parent</artifactId>
-        <version>0.1.1-SNAPSHOT</version>
-        <relativePath/>
+        <groupId>io.vidocq.mansart</groupId>
+        <artifactId>mansart-root</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
     </parent>
 
     <groupId>io.vidocq.mansart</groupId>
@@ -46,6 +46,7 @@
     </licenses>
 
     <properties>
+        <maven.deploy.skip>false</maven.deploy.skip>
         <jakarta.transaction.version>2.0.1</jakarta.transaction.version>
         <jakarta.cdi.version>4.1.0</jakarta.cdi.version>
         <jakarta.inject.version>2.0.1</jakarta.inject.version>
