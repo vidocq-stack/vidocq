@@ -19,6 +19,18 @@
         <vauban.version>0.2.0-SNAPSHOT</vauban.version>
     </properties>
 
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.sonatype.central</groupId>
+                <artifactId>central-publishing-maven-plugin</artifactId>
+                <configuration>
+                    <skip>true</skip>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
     <dependencies>
         <dependency>
             <groupId>io.vidocq.mansart</groupId>
