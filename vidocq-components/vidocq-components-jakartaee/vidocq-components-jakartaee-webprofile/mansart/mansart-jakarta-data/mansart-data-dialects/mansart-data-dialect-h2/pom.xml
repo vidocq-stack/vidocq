@@ -6,8 +6,9 @@
 
     <parent>
         <groupId>io.vidocq.mansart</groupId>
-        <artifactId>mansart-data-dialects</artifactId>
+        <artifactId>mansart-jakarta-data</artifactId>
         <version>0.1.0-SNAPSHOT</version>
+        <relativePath>../../pom.xml</relativePath>
     </parent>
 
     <artifactId>mansart-data-dialect-h2</artifactId>
