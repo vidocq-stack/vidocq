@@ -8,13 +8,13 @@
     <parent>
         <groupId>io.vidocq</groupId>
         <artifactId>vidocq-parent</artifactId>
-        <version>0.1.1-SNAPSHOT</version>
+        <version>0.1.1</version>
         <relativePath/>
     </parent>
 
     <groupId>io.vidocq.runtime</groupId>
     <artifactId>vidocq-runtime-parent</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>0.1.1</version>
     <packaging>pom</packaging>
 
     <name>Vidocq Runtime</name>
@@ -49,17 +49,17 @@
     </modules>
 
     <properties>
-        <vauban.version>0.2.0-SNAPSHOT</vauban.version>
-        <chappe.version>0.2.0-SNAPSHOT</chappe.version>
-        <cassini.version>0.1.0-SNAPSHOT</cassini.version>
-        <ravel.version>0.1.0-SNAPSHOT</ravel.version>
-        <mansart.version>0.1.0-SNAPSHOT</mansart.version>
-        <knock.version>0.1.0-SNAPSHOT</knock.version>
-        <dirac.version>0.1.0-SNAPSHOT</dirac.version>
-        <cyrano.version>0.1.0-SNAPSHOT</cyrano.version>
-        <cervantes.version>0.1.0-SNAPSHOT</cervantes.version>
-        <humboldt.version>0.1.0-SNAPSHOT</humboldt.version>
-        <champollion.version>0.1.0-SNAPSHOT</champollion.version>
+        <vauban.version>0.1.1</vauban.version>
+        <chappe.version>0.1.1</chappe.version>
+        <cassini.version>0.1.1</cassini.version>
+        <ravel.version>0.1.1</ravel.version>
+        <mansart.version>0.1.1</mansart.version>
+        <knock.version>0.1.1</knock.version>
+        <dirac.version>0.1.1</dirac.version>
+        <cyrano.version>0.1.1</cyrano.version>
+        <cervantes.version>0.1.1</cervantes.version>
+        <humboldt.version>0.1.1</humboldt.version>
+        <champollion.version>0.1.1</champollion.version>
         <microprofile.config.version>3.1.1</microprofile.config.version>
         <jakarta.cdi.version>4.1.0</jakarta.cdi.version>
         <jakarta.annotation.version>3.0.0</jakarta.annotation.version>
