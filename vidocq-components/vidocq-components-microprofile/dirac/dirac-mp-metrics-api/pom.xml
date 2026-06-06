@@ -20,6 +20,12 @@
             <artifactId>microprofile-metrics-api</artifactId>
             <scope>provided</scope>
         </dependency>
+        <!-- Module-path readability for the @InterceptorBinding meta-annotation on @Counted/@Timed. -->
+        <dependency>
+            <groupId>jakarta.interceptor</groupId>
+            <artifactId>jakarta.interceptor-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
     </dependencies>
 
     <build>
