@@ -35,6 +35,9 @@ module io.vidocq.cervantes.cdi.vauban {
     // reflection (privateLookupIn / setAccessible); `exports` is not enough for that. Qualified open
     // to vauban-core only (mirrors knock-cdi-vauban). No-op on the class-path (TCK), so this defect is
     // invisible there and only surfaces on the module path (docker compose).
-    opens io.vidocq.cervantes.cdi to io.vidocq.vauban.core;
+    // No `opens io.vidocq.cervantes.cdi`: the BCE is loaded via ServiceLoader (provides above) and
+    // JsonWebTokenContext is instantiated in-module by the generated _VaubanComponents provider.
+    // The .internal package stays open: producer methods (@Produces) are still invoked reflectively
+    // (producer-invoker generation not done yet), which needs deep access.
     opens io.vidocq.cervantes.cdi.internal to io.vidocq.vauban.core;
 }

@@ -29,8 +29,7 @@ module io.vidocq.cervantes.jaxrs {
             with io.vidocq.cervantes.jaxrs._VaubanComponents;
 
     exports io.vidocq.cervantes.jaxrs;
-    // The @Provider beans (auth filter, @RolesAllowed DynamicFeature) are instantiated by the CDI
-    // container via MethodHandles.privateLookupIn; `exports` grants public access but not deep
-    // reflection, so open the package to vauban-core. On the class-path (TCK) this is a no-op.
-    opens io.vidocq.cervantes.jaxrs to io.vidocq.vauban.core;
+    // No `opens … to io.vidocq.vauban.core`: the @Provider beans (auth filter, @RolesAllowed
+    // DynamicFeature) are instantiated in-module by the generated _VaubanComponents provider
+    // (declared above), so the container needs no deep reflection into this package.
 }
