@@ -7,7 +7,7 @@
     <parent>
         <groupId>io.vidocq.runtime</groupId>
         <artifactId>vidocq-runtime-core-extensions</artifactId>
-        <version>0.1.0-SNAPSHOT</version>
+        <version>0.2.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>vidocq-runtime-humboldt-extension</artifactId>
