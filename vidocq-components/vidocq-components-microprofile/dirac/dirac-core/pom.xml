@@ -19,6 +19,14 @@
             <groupId>io.vidocq.dirac</groupId>
             <artifactId>dirac-api</artifactId>
         </dependency>
+        <!-- metrics.api (pulled in transitively via dirac-api) `requires transitive
+             jakarta.interceptor`, so this module's module path needs jakarta.interceptor resolvable
+             when its module-info is compiled. -->
+        <dependency>
+            <groupId>jakarta.interceptor</groupId>
+            <artifactId>jakarta.interceptor-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
