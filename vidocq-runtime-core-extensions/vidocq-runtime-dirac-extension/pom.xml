@@ -75,6 +75,44 @@
         </dependency>
     </dependencies>
 
+    <profiles>
+        <!--
+            Both release and snapshot profiles (declared in vidocq-parent) call
+            maven-javadoc-plugin:jar. This module has no src/main/java — only
+            src/main/module-info/module-info.java. Override the sourcepath in both
+            profiles so javadoc processes the module declaration and produces a
+            non-empty javadoc jar (required by Maven Central validation).
+        -->
+        <profile>
+            <id>release</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-javadoc-plugin</artifactId>
+                        <configuration>
+                            <sourcepath>${project.basedir}/src/main/module-info</sourcepath>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <profile>
+            <id>snapshot</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-javadoc-plugin</artifactId>
+                        <configuration>
+                            <sourcepath>${project.basedir}/src/main/module-info</sourcepath>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+
     <build>
         <plugins>
             <!--
