@@ -46,6 +46,13 @@
             <artifactId>cassini-core</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- Compile-only (optional at runtime): supplies the VaubanComponentProvider service type
+             named in module-info `provides`. Non-transitive; absent under non-Vauban containers. -->
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
         <dependency>
             <groupId>io.vidocq.vauban</groupId>
             <artifactId>vauban-core</artifactId>

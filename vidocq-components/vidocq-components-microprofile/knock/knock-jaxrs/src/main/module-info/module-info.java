@@ -22,12 +22,20 @@ module io.vidocq.knock.jaxrs {
     requires jakarta.ws.rs;
     requires static jakarta.cdi;
     requires static jakarta.inject;
+    // Compile-only (optional at runtime): supplies the VaubanComponentProvider service type.
+    requires static io.vidocq.vauban.api;
+
+    // In-module instantiation AND field injection of the JAX-RS resource bean (generated as
+    // _VaubanComponents): the container creates it with `new KnockHealthResource()` and writes its
+    // @Inject field with an in-package `putfield` through this provider, so it needs no reflection
+    // and no `opens … to io.vidocq.vauban.core` into this package.
+    provides io.vidocq.vauban.api.VaubanComponentProvider
+            with io.vidocq.knock.jaxrs._VaubanComponents;
 
     // Exposed JAX-RS resource — discovered as a CDI bean (Vauban index) and mounted by the runtime
     exports io.vidocq.knock.jaxrs;
 
-    // The resource ships as a Vauban-discovered bean; Vauban instantiates it reflectively, which
-    // requires the package opened to vauban.core. Qualified open (no dependency, no import) — inert
-    // for non-Vauban CDI containers (Weld) and for non-Cassini JAX-RS runtimes (RESTEasy, Jersey).
-    opens io.vidocq.knock.jaxrs to io.vidocq.vauban.core;
+    // No `opens … to io.vidocq.vauban.core`: KnockHealthResource is instantiated and field-injected
+    // in-module by the generated _VaubanComponents provider (declared above). Its @Inject field is
+    // package-private, so the co-located provider can assign it without deep reflection.
 }
