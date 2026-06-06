@@ -49,6 +49,13 @@
             <artifactId>jakarta.annotation-api</artifactId>
             <scope>provided</scope>
         </dependency>
+        <!-- Vauban SPI (compile-only, non-transitive): lets module-info declare the
+             VaubanComponentProvider service. Absent under Weld (requires static + provided). -->
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
 
         <!-- Tests -->
         <dependency>

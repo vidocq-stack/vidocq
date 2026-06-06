@@ -20,6 +20,13 @@ module io.vidocq.cervantes.jaxrs {
     requires static jakarta.cdi;
     requires static jakarta.inject;
     requires static org.eclipse.microprofile.config; // mp.jwt.token.header / mp.jwt.token.cookie
+    // Compile-only (optional at runtime): supplies the VaubanComponentProvider service type.
+    requires static io.vidocq.vauban.api;
+
+    // In-module instantiation of the no-arg @Provider beans (generated as _VaubanComponents),
+    // so the container needs no reflection for them.
+    provides io.vidocq.vauban.api.VaubanComponentProvider
+            with io.vidocq.cervantes.jaxrs._VaubanComponents;
 
     exports io.vidocq.cervantes.jaxrs;
     // The @Provider beans (auth filter, @RolesAllowed DynamicFeature) are instantiated by the CDI
