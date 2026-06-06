@@ -67,23 +67,15 @@
     <build>
         <plugins>
             <!--
-                Génère META-INF/vauban-beans.list + _ClientProxy/_Factory pour que les beans
-                @ApplicationScoped de ce module (KnockCdiHealthCheckRegistry, HealthCheckRegistrar)
-                soient découverts au runtime par scanClasspath() de Vauban dans une app JPMS
-                module-path. Outil de BUILD uniquement : n'ajoute aucune dépendance compile/runtime
-                sur Vauban, et la sortie reste inerte pour un conteneur CDI standard (Weld).
+                Vauban codegen runs as an ANNOTATION PROCESSOR on this module's own beans (the Maven
+                plugin is reserved for freezing external, non-APT-processed dependency jars). During
+                the main compile it generates _ClientProxy/_Factory (so @ApplicationScoped beans —
+                KnockCdiHealthCheckRegistry, HealthCheckRegistrar — are proxied), META-INF/
+                vauban-beans.list (runtime discovery on the module path), and one _VaubanComponents
+                per package (in-module instantiation/field-injection/observer invocation, no `opens`).
+                Build-time only: adds no compile/runtime dependency on Vauban, and the output stays
+                inert for a standard CDI container (Weld).
             -->
-            <plugin>
-                <groupId>io.vidocq.vauban</groupId>
-                <artifactId>vauban-maven-plugin</artifactId>
-                <version>${vauban.version}</version>
-                <executions>
-                    <execution>
-                        <id>generate</id>
-                        <goals><goal>generate</goal></goals>
-                    </execution>
-                </executions>
-            </plugin>
             <!--
                 JPMS workaround knock-cdi-vauban : meme probleme que knock-core.
                 vauban-core est test-scope, absent de target/javamodules/ ; si
@@ -116,12 +108,25 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <!-- Vauban APT processes this module's own beans at compile time. -->
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>io.vidocq.vauban</groupId>
+                            <artifactId>vauban-processor</artifactId>
+                            <version>${vauban.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
                 <executions>
                     <execution>
                         <id>compile-module-info</id>
                         <phase>prepare-package</phase>
                         <goals><goal>compile</goal></goals>
                         <configuration>
+                            <!-- No annotation processing on the separate module-info compile
+                                 (the beans were already processed in the main compile). -->
+                            <proc>none</proc>
                             <compileSourceRoots>
                                 <compileSourceRoot>${project.basedir}/src/main/module-info</compileSourceRoot>
                             </compileSourceRoots>
