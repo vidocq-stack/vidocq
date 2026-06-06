@@ -30,11 +30,18 @@ module io.vidocq.knock.cdi.vauban {
     requires static jakarta.cdi;
     requires static jakarta.inject;
     requires static jakarta.annotation;
+    // Compile-only (optional at runtime): supplies the VaubanComponentProvider service type.
+    requires static io.vidocq.vauban.api;
 
     provides jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension
             with io.vidocq.knock.cdi.internal.HealthCheckCdiExtension;
 
-    // Qualified open so Vauban's BceProcessor can reflectively instantiate the BCE on the
-    // module path, without exporting the internal package as public API.
-    opens io.vidocq.knock.cdi.internal to io.vidocq.vauban.core;
+    // In-module instantiation, field injection AND method invocation of this package's beans
+    // (HealthCheckRegistrar, KnockCdiHealthCheckRegistry), generated as _VaubanComponents co-located
+    // in io.vidocq.knock.cdi.internal: the container creates them, injects their package-private
+    // @Inject fields and fires the @Observes @Initialized observer through this provider — so it
+    // needs no deep reflection and no `opens … to io.vidocq.vauban.core`. The BCE itself is loaded
+    // via the ServiceLoader `provides` above, not by reflection.
+    provides io.vidocq.vauban.api.VaubanComponentProvider
+            with io.vidocq.knock.cdi.internal._VaubanComponents;
 }
