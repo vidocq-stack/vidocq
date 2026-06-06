@@ -28,6 +28,7 @@
         <module>vidocq-runtime-external-rest-lib</module>
         <module>vidocq-runtime-cassini-rest-example</module>
         <module>vidocq-runtime-cervantes-jwt-example</module>
+        <module>vidocq-runtime-knock-health-example</module>
         <module>vidocq-runtime-mansart-h2-example</module>
     </modules>
 
