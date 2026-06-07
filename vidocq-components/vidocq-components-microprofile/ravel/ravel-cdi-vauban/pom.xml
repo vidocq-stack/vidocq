@@ -34,6 +34,14 @@
             <artifactId>jakarta.annotation-api</artifactId>
             <scope>provided</scope>
         </dependency>
+        <!-- Compile-only (optional at runtime): supplies the VaubanComponentProvider service type
+             named in module-info `provides`. Non-transitive; absent under non-Vauban containers. -->
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-api</artifactId>
+            <version>${vauban.version}</version>
+            <scope>provided</scope>
+        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
@@ -56,20 +64,77 @@
     <build>
         <plugins>
             <!--
-                Vauban codegen : génère META-INF/vauban-beans.list + _ClientProxy/_Factory pour que le
-                runtime Vidocq (scanClasspath) découvre la BCE @ConfigProperty + le producteur de Config.
-                Sortie inerte pour un conteneur CDI standard (Weld-safe), comme knock-cdi-vauban. Pas d'opens
-                module-info : la BCE (ConfigCdiExtension) est dans un package EXPORTÉ et les beans sont
-                instanciés via la _Factory générée (même package) — aucune réflexion cross-module.
+                Vauban codegen runs as an ANNOTATION PROCESSOR on this module's own beans (the Maven
+                plugin is reserved for freezing external, non-APT-processed dependency jars). During
+                the main compile it generates _ClientProxy/_Factory, META-INF/vauban-beans.list
+                (runtime discovery on the module path), and one _VaubanComponents per package
+                (in-module instantiation / field-injection / producer & observer invocation, no
+                `opens … to io.vidocq.vauban.core`). Build-time only: adds no compile/runtime
+                dependency on Vauban, and the output stays inert for a standard CDI container (Weld).
+
+                The module-info lives in src/main/module-info/ and is compiled in a separate step
+                (vauban-core is test-scope, absent from target/javamodules/; keeping module-info.class
+                out of target/classes during testCompile prevents Maven from activating JPMS and
+                failing to resolve the test modules — same workaround as knock-cdi-vauban).
             -->
             <plugin>
-                <groupId>io.vidocq.vauban</groupId>
-                <artifactId>vauban-maven-plugin</artifactId>
-                <version>${vauban.version}</version>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-clean-plugin</artifactId>
                 <executions>
                     <execution>
-                        <id>generate</id>
-                        <goals><goal>generate</goal></goals>
+                        <id>remove-module-info-before-testcompile</id>
+                        <phase>generate-test-sources</phase>
+                        <goals><goal>clean</goal></goals>
+                        <configuration>
+                            <excludeDefaultDirectories>true</excludeDefaultDirectories>
+                            <filesets>
+                                <fileset>
+                                    <directory>${project.build.outputDirectory}</directory>
+                                    <includes>
+                                        <include>module-info.class</include>
+                                    </includes>
+                                </fileset>
+                            </filesets>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <!-- Vauban APT processes this module's own beans at compile time. -->
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>io.vidocq.vauban</groupId>
+                            <artifactId>vauban-processor</artifactId>
+                            <version>${vauban.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+                <executions>
+                    <!-- Test fixtures are not application beans: the integration test bootstraps a
+                         container on the class path (useModulePath=false) and the container resolves
+                         its (often nested) test beans reflectively. Running the APT over them would
+                         emit a provider for nested fixtures (bogus package / cannot find symbol). -->
+                    <execution>
+                        <id>default-testCompile</id>
+                        <configuration>
+                            <proc>none</proc>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>compile-module-info</id>
+                        <phase>prepare-package</phase>
+                        <goals><goal>compile</goal></goals>
+                        <configuration>
+                            <!-- No annotation processing on the separate module-info compile
+                                 (the beans were already processed in the main compile). -->
+                            <proc>none</proc>
+                            <compileSourceRoots>
+                                <compileSourceRoot>${project.basedir}/src/main/module-info</compileSourceRoot>
+                            </compileSourceRoots>
+                        </configuration>
                     </execution>
                 </executions>
             </plugin>
@@ -77,13 +142,7 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
-                    <!--
-                      Test scope only: Vauban inspecte par réflexion les classes producer
-                      du module pour résoudre les beans CDI 4.x. L'opens cible explicitement
-                      le module Vauban (pas un bean utilisateur), conformément à la règle
-                      "pas d'opens JPMS sur les beans applicatifs" (cf. AGENTS.md).
-                    -->
-                    <argLine>--add-opens io.vidocq.ravel.cdi.vauban/io.vidocq.ravel.cdi=io.vidocq.vauban.core</argLine>
+                    <useModulePath>false</useModulePath>
                 </configuration>
             </plugin>
         </plugins>
