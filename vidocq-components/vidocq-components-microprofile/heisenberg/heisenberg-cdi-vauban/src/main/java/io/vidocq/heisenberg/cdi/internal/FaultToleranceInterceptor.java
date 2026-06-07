@@ -39,15 +39,18 @@ public class FaultToleranceInterceptor {
     public static final int BASE_PRIORITY = 4010;
     static final int TCK_PRIORITY_3850 = 3850;
 
+    // Package-private (not private): the APT-generated _VaubanComponents.injectField writes these
+    // with an in-package putfield, so the container needs no `opens … to io.vidocq.vauban.core` on
+    // the strict module path. Proven by heisenberg-cdi-vauban-jpms-it.
     @Inject
-    private StateRegistryBean stateRegistry;
+    StateRegistryBean stateRegistry;
 
     @Inject
-    private BulkheadStateRegistryBean bulkheadRegistry;
+    BulkheadStateRegistryBean bulkheadRegistry;
 
     @Inject
     @Any
-    private Instance<FtMetricsRecorder> recorderInstance;
+    Instance<FtMetricsRecorder> recorderInstance;
 
     @AroundInvoke
     public Object around(InvocationContext context) throws Exception {

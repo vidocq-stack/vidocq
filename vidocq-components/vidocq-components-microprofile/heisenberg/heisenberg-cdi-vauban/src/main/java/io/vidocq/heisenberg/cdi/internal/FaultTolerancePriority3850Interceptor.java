@@ -24,15 +24,17 @@ import jakarta.interceptor.InvocationContext;
 @FaultToleranceBinding
 public class FaultTolerancePriority3850Interceptor {
 
+    // Package-private (not private): see FaultToleranceInterceptor — in-package putfield by the
+    // generated _VaubanComponents, no `opens` needed on the module path.
     @Inject
-    private StateRegistryBean stateRegistry;
+    StateRegistryBean stateRegistry;
 
     @Inject
-    private BulkheadStateRegistryBean bulkheadRegistry;
+    BulkheadStateRegistryBean bulkheadRegistry;
 
     @Inject
     @Any
-    private Instance<FtMetricsRecorder> recorderInstance;
+    Instance<FtMetricsRecorder> recorderInstance;
 
     @AroundInvoke
     public Object around(InvocationContext context) throws Exception {
