@@ -29,6 +29,14 @@
             <artifactId>jakarta.enterprise.cdi-api</artifactId>
             <scope>provided</scope>
         </dependency>
+        <!-- Compile-only (optional at runtime): supplies the VaubanComponentProvider service type
+             named in module-info `provides`. Non-transitive; absent under non-Vauban containers. -->
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-api</artifactId>
+            <version>${vauban.version}</version>
+            <scope>provided</scope>
+        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
@@ -64,15 +72,45 @@
                     </execution>
                 </executions>
             </plugin>
+            <!--
+                Vauban codegen runs as an ANNOTATION PROCESSOR on this module's own beans (the Maven
+                plugin is reserved for freezing external, non-APT dependency jars). It generates
+                _ClientProxy/_Factory, META-INF/vauban-beans.list (so a Vidocq runtime discovers
+                MetricsResource via the Vauban container) and _VaubanComponents (in-module
+                instantiation + field injection of the package-private @Inject MetricRegistry fields,
+                no opens). Inert / Weld-safe in plain CDI containers.
+            -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>io.vidocq.vauban</groupId>
+                            <artifactId>vauban-processor</artifactId>
+                            <version>${vauban.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                    <!-- Library module, not a complete deployment: MetricsResource injects
+                         MetricRegistry beans produced in dirac-cdi-vauban (cross-module, absent from
+                         the APT index); deployment validation runs at the Vidocq runtime assembly. -->
+                    <compilerArgs>
+                        <arg>-Avauban.validation=false</arg>
+                    </compilerArgs>
+                </configuration>
                 <executions>
+                    <execution>
+                        <id>default-testCompile</id>
+                        <configuration>
+                            <proc>none</proc>
+                        </configuration>
+                    </execution>
                     <execution>
                         <id>compile-module-info</id>
                         <phase>prepare-package</phase>
                         <goals><goal>compile</goal></goals>
                         <configuration>
+                            <proc>none</proc>
                             <compileSourceRoots>
                                 <compileSourceRoot>${project.basedir}/src/main/module-info</compileSourceRoot>
                             </compileSourceRoots>
@@ -86,23 +124,6 @@
                 <configuration>
                     <useModulePath>false</useModulePath>
                 </configuration>
-            </plugin>
-            <!--
-                Ship META-INF/vauban-beans.list so a Vidocq runtime discovers MetricsResource
-                (@Path("/metrics")) via the Vauban container (CassiniExtension queries
-                VaubanBeanProvider.getResourceClasses()). Inert / Weld-safe in plain CDI containers.
-                Mirrors knock-jaxrs (ARAGO-003 pattern).
-            -->
-            <plugin>
-                <groupId>io.vidocq.vauban</groupId>
-                <artifactId>vauban-maven-plugin</artifactId>
-                <version>${vauban.version}</version>
-                <executions>
-                    <execution>
-                        <id>generate</id>
-                        <goals><goal>generate</goal></goals>
-                    </execution>
-                </executions>
             </plugin>
         </plugins>
     </build>
