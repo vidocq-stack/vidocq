@@ -13,6 +13,7 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
+import io.vidocq.runtime.examples.rest.model.Todo;
 import java.util.List;
 
 @ApplicationScoped

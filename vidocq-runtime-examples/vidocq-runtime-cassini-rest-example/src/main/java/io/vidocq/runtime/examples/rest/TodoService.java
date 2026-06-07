@@ -2,6 +2,7 @@ package io.vidocq.runtime.examples.rest;
 
 import jakarta.enterprise.context.ApplicationScoped;
 
+import io.vidocq.runtime.examples.rest.model.Todo;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;

@@ -1,4 +1,4 @@
-package io.vidocq.runtime.examples.rest;
+package io.vidocq.runtime.examples.rest.model;
 
 import jakarta.json.bind.annotation.JsonbCreator;
 import jakarta.json.bind.annotation.JsonbProperty;
