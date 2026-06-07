@@ -22,15 +22,10 @@ module io.vidocq.mansart.transactions.cdi {
 
     exports io.vidocq.mansart.transactions.cdi;
 
-    // The producer and the @TransactionScoped context are instantiated, field-injected and have their
-    // producer methods invoked in-module by the APT-generated _VaubanComponents provider below (no
-    // reflection). The six @Transactional *interceptors*, however, are NOT yet emitted into that
-    // provider: the Vauban APT excludes @Interceptor classes from its component set, so on the module
-    // path the container still instantiates them reflectively. This qualified opens is therefore the
-    // single residual reflection surface — see mansart-transactions-cdi-jpms-it and the Vauban gap
-    // "interceptors not emitted into _VaubanComponents" (BUG.md). It collapses to zero once the APT
-    // emits @Interceptor beans as components.
-    opens io.vidocq.mansart.transactions.cdi to io.vidocq.vauban.core;
+    // No `opens`: the producer, the @TransactionScoped context AND the six @Transactional interceptors
+    // are all instantiated and field-injected in-module by the APT-generated _VaubanComponents provider
+    // below. The interceptors' public @AroundInvoke methods are reachable without opens (exported
+    // package, public member). Proven on the strict module path by mansart-transactions-cdi-jpms-it.
 
     // In-module instantiation, field injection and producer invocation of this package's beans (the
     // six @Transactional interceptors, the TM/UT/TSR producer and the @TransactionScoped context),

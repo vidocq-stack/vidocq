@@ -19,15 +19,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * so nothing reflects into the test class and the module needs no {@code opens}.
  *
  * <p>What this proves, that a class-path test cannot: the {@code @Transactional} interception fires
- * on a strict module path with a BUILD-TIME generated {@code $$Intercepted} subclass, where the
- * application bean ({@link TxService}, in <em>this</em> module) is instantiated and field-injected by
- * its generated {@code VaubanComponentProvider} with no {@code opens} at all.</p>
- *
- * <p><strong>Known residual:</strong> the {@code @Transactional} interceptor classes (in
- * mansart-transactions-cdi) are still instantiated reflectively — the Vauban APT does not yet emit
- * {@code @Interceptor} classes into {@code _VaubanComponents} — so that module keeps a single
- * qualified {@code opens … to io.vidocq.vauban.core}. This test passes through that residual; it
- * becomes a true end-to-end zero-opens proof once the APT emits interceptors as components.</p>
+ * on a strict module path with a BUILD-TIME generated {@code $$Intercepted} subclass, with
+ * <strong>zero {@code opens} anywhere</strong>. The application bean ({@link TxService}, in this
+ * module) AND the {@code @Transactional} interceptors (in mansart-transactions-cdi) are all
+ * instantiated and field-injected in-module by their generated {@code VaubanComponentProvider}s; the
+ * interceptors' public {@code @AroundInvoke} methods are reachable without opens. (This became a full
+ * zero-opens proof once the APT emitted {@code @Interceptor} classes into {@code _VaubanComponents} —
+ * VAU-INT-004.)</p>
  */
 class TxModulePathTest {
 
