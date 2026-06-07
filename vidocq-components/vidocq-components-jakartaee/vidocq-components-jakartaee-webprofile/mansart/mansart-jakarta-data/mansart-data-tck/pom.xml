@@ -41,7 +41,7 @@
              weld.version (5.1.5.Final), arquillian.weld.version (4.0.1.Final).
              We use Vauban as the CDI runtime and a ported Vauban Arquillian connector. -->
 
-        <maven.compiler.plugin.version>4.0.0-beta-4</maven.compiler.plugin.version>
+        <maven.compiler.plugin.version>3.13.0</maven.compiler.plugin.version>
         <maven.surefire.plugin.version>3.5.2</maven.surefire.plugin.version>
     </properties>
 
