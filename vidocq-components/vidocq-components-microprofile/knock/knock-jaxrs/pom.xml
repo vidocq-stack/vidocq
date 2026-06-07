@@ -79,8 +79,12 @@
                 <artifactId>maven-clean-plugin</artifactId>
                 <executions>
                     <execution>
-                        <id>remove-module-info-before-testcompile</id>
-                        <phase>generate-test-sources</phase>
+                        <!-- process-resources (just before `compile`), NOT generate-test-sources:
+                             removes a stale module-info.class left in target/classes by a prior
+                             prepare-package `compile-module-info`, so a non-clean install/deploy
+                             (e.g. CI cache) doesn't trip default-compile into module mode. -->
+                        <id>remove-stale-module-info-before-compile</id>
+                        <phase>process-resources</phase>
                         <goals><goal>clean</goal></goals>
                         <configuration>
                             <excludeDefaultDirectories>true</excludeDefaultDirectories>
