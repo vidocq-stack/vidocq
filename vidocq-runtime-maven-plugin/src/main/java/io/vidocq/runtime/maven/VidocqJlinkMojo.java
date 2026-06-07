@@ -70,6 +70,7 @@ public class VidocqJlinkMojo extends AbstractMojo {
     @Parameter(defaultValue = "${project.build.directory}/jlink-mods", readonly = true)
     private File modsDir;
 
+
     @Parameter(defaultValue = "${project.build.directory}", readonly = true)
     private File buildDir;
 
@@ -130,8 +131,17 @@ public class VidocqJlinkMojo extends AbstractMojo {
         for (var artifact : project.getArtifacts()) {
             File f = artifact.getFile();
             if (f != null && f.getName().endsWith(".jar")) {
-                Path src = f.toPath();
-                Files.copy(src, stage.resolve(src.getFileName()), StandardCopyOption.REPLACE_EXISTING);
+                // Prefer a sealed/repackaged copy (cassini-maven-plugin) when one exists for this
+                // artifact: same module name, but the resource package is closed and the adapters are
+                // published via `provides`. Staged under the ORIGINAL filename for consistency.
+                File sealed = new File(new File(project.getBuild().getDirectory(), "cassini-repackaged"),
+                        artifact.getArtifactId() + "-" + artifact.getVersion() + "-cassini.jar");
+                Path src = sealed.isFile() ? sealed.toPath() : f.toPath();
+                if (sealed.isFile()) {
+                    getLog().info("Staging sealed copy of " + artifact.getArtifactId()
+                            + " (resource package closed, adapters via provides)");
+                }
+                Files.copy(src, stage.resolve(f.getName()), StandardCopyOption.REPLACE_EXISTING);
             }
         }
 

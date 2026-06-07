@@ -102,6 +102,33 @@
                     </execution>
                 </executions>
             </plugin>
+            <!-- Brique D: weave the Cassini adapter into a SEALED copy of the impl-agnostic
+                 knock-jaxrs wrapper (resource package closed, adapters published via
+                 `provides ResourceAdapter/RouteProvider`). The jlink staging then prefers this
+                 sealed copy, so the deployed JAX-RS wrapper needs no exports/opens. -->
+            <plugin>
+                <groupId>io.vidocq.cassini</groupId>
+                <artifactId>cassini-maven-plugin</artifactId>
+                <version>${cassini.version}</version>
+                <executions>
+                    <execution>
+                        <id>seal-jaxrs-wrappers</id>
+                        <phase>process-classes</phase>
+                        <goals><goal>generate</goal></goals>
+                        <configuration>
+                            <scope>dependencies</scope>
+                            <repackageModularDependencies>true</repackageModularDependencies>
+                            <sealModules>true</sealModules>
+                            <!-- Only seal the application's JAX-RS wrapper. cassini's own infra
+                                 modules (e.g. cassini-cdi-vauban, which carries a BCE that vauban.core
+                                 must read) must keep their exports. -->
+                            <includeArtifacts>
+                                <includeArtifact>io.vidocq.knock:knock-jaxrs</includeArtifact>
+                            </includeArtifacts>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
     </build>
 
