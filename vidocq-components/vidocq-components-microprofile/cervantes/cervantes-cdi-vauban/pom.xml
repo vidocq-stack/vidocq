@@ -83,22 +83,6 @@
     <build>
         <plugins>
             <!--
-                Vauban codegen : META-INF/vauban-beans.list + _ClientProxy/_Factory pour que le runtime
-                Vidocq (scanClasspath) découvre la BCE @Claim + le producteur JsonWebToken/JwtValidator.
-                BCE (CervantesClaimExtension) dans un package exporté → pas d'opens. Weld-safe (cf. knock).
-            -->
-            <plugin>
-                <groupId>io.vidocq.vauban</groupId>
-                <artifactId>vauban-maven-plugin</artifactId>
-                <version>${vauban.version}</version>
-                <executions>
-                    <execution>
-                        <id>generate</id>
-                        <goals><goal>generate</goal></goals>
-                    </execution>
-                </executions>
-            </plugin>
-            <!--
                 JPMS workaround (cf. cervantes-core) : module-info.java dans src/main/module-info/.
                 Nettoyage lié à process-sources (avant compile) pour les builds incrémentaux.
             -->
@@ -127,12 +111,43 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <!--
+                        Vauban codegen now runs as an ANNOTATION PROCESSOR on this module's own beans
+                        (the Maven plugin is reserved for freezing external, non-APT-processed jars).
+                        The main compile generates _ClientProxy/_Factory, META-INF/vauban-beans.list
+                        (runtime discovery for the Vidocq scanClasspath) and one in-module
+                        _VaubanComponents per package (instantiation, field injection and producer
+                        invocation of the @Claim BCE-backed beans, the JsonWebToken context and the
+                        JsonWebToken/JwtValidator producers — no `opens … to io.vidocq.vauban.core`).
+                        Build-time only: no compile/runtime dependency on Vauban, inert under Weld.
+                    -->
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>io.vidocq.vauban</groupId>
+                            <artifactId>vauban-processor</artifactId>
+                            <version>${vauban.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
                 <executions>
+                    <!-- Test fixtures are not application beans (the embedded-Vauban CDI tests
+                         resolve their nested fixtures reflectively). Running the APT over them would
+                         emit a provider for nested test classes (bogus package / cannot find symbol). -->
+                    <execution>
+                        <id>default-testCompile</id>
+                        <configuration>
+                            <proc>none</proc>
+                        </configuration>
+                    </execution>
                     <execution>
                         <id>compile-module-info</id>
                         <phase>prepare-package</phase>
                         <goals><goal>compile</goal></goals>
                         <configuration>
+                            <!-- No annotation processing on the separate module-info compile
+                                 (the beans were already processed in the main compile). -->
+                            <proc>none</proc>
                             <compileSourceRoots>
                                 <compileSourceRoot>${project.basedir}/src/main/module-info</compileSourceRoot>
                             </compileSourceRoots>

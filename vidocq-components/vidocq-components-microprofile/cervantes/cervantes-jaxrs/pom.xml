@@ -79,22 +79,6 @@
 
     <build>
         <plugins>
-            <!--
-                Vauban codegen : META-INF/vauban-beans.list pour que le runtime Vidocq découvre les
-                @Provider CDI (JwtAuthenticationFilter, RolesAllowedDynamicFeature) — dans un package
-                exporté → pas d'opens. Sortie inerte (Weld-safe), comme knock-jaxrs.
-            -->
-            <plugin>
-                <groupId>io.vidocq.vauban</groupId>
-                <artifactId>vauban-maven-plugin</artifactId>
-                <version>${vauban.version}</version>
-                <executions>
-                    <execution>
-                        <id>generate</id>
-                        <goals><goal>generate</goal></goals>
-                    </execution>
-                </executions>
-            </plugin>
             <!-- JPMS workaround (cf. cervantes-core) : nettoyage lié à process-sources. -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -121,12 +105,47 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <!--
+                        Vauban codegen now runs as an ANNOTATION PROCESSOR on this module's own
+                        @Provider beans (the Maven plugin is reserved for freezing external jars).
+                        The main compile generates META-INF/vauban-beans.list (Vidocq scanClasspath
+                        discovery) and an in-module _VaubanComponents that instantiates the no-arg
+                        @Provider beans and field-injects their cross-module dependencies (JwtValidator,
+                        JsonWebTokenContext, both produced in cervantes-cdi-vauban) — no
+                        `opens … to io.vidocq.vauban.core`. Build-time only, inert under Weld.
+                    -->
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>io.vidocq.vauban</groupId>
+                            <artifactId>vauban-processor</artifactId>
+                            <version>${vauban.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                    <compilerArgs>
+                        <!-- The @Provider beans inject JwtValidator / JsonWebTokenContext, which are
+                             produced in cervantes-cdi-vauban (another module). The APT cannot see beans
+                             from dependency modules, so its compile-time bean-resolution check would
+                             fail here; full validation happens at runtime assembly (Vidocq). -->
+                        <arg>-Avauban.validation=false</arg>
+                    </compilerArgs>
+                </configuration>
                 <executions>
+                    <!-- Test fixtures are not application beans. Running the APT over them would
+                         emit a provider for nested test classes (bogus package / cannot find symbol). -->
+                    <execution>
+                        <id>default-testCompile</id>
+                        <configuration>
+                            <proc>none</proc>
+                        </configuration>
+                    </execution>
                     <execution>
                         <id>compile-module-info</id>
                         <phase>prepare-package</phase>
                         <goals><goal>compile</goal></goals>
                         <configuration>
+                            <!-- No annotation processing on the separate module-info compile. -->
+                            <proc>none</proc>
                             <compileSourceRoots>
                                 <compileSourceRoot>${project.basedir}/src/main/module-info</compileSourceRoot>
                             </compileSourceRoots>
