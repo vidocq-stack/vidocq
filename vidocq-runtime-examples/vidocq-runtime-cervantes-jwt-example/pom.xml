@@ -99,6 +99,27 @@
                     </execution>
                 </executions>
             </plugin>
+            <!-- Brique D: weave the Cassini adapter into a SEALED copy of the impl-agnostic
+                 cervantes-jaxrs wrapper (package closed, adapters via `provides`). No includeArtifacts:
+                 the seal auto-skips cassini's own infra modules (requires io.vidocq.cassini.*). The
+                 jlink staging then prefers the sealed copy. -->
+            <plugin>
+                <groupId>io.vidocq.cassini</groupId>
+                <artifactId>cassini-maven-plugin</artifactId>
+                <version>${cassini.version}</version>
+                <executions>
+                    <execution>
+                        <id>seal-jaxrs-wrappers</id>
+                        <phase>process-classes</phase>
+                        <goals><goal>generate</goal></goals>
+                        <configuration>
+                            <scope>dependencies</scope>
+                            <repackageModularDependencies>true</repackageModularDependencies>
+                            <sealModules>true</sealModules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
     </build>
 
