@@ -49,6 +49,14 @@
             <groupId>jakarta.enterprise</groupId>
             <artifactId>jakarta.enterprise.cdi-api</artifactId>
         </dependency>
+        <!-- Compile-only: supplies the VaubanComponentProvider service type referenced by the
+             APT-generated _VaubanComponents. Provided scope: no runtime dependency on Vauban. -->
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-api</artifactId>
+            <version>${vauban.version}</version>
+            <scope>provided</scope>
+        </dependency>
 
         <dependency>
             <groupId>org.junit.jupiter</groupId>
@@ -60,20 +68,91 @@
     <build>
         <plugins>
             <!--
-                Vauban codegen : META-INF/vauban-beans.list + _ClientProxy/_Factory pour la découverte
-                runtime (scanClasspath). BCE (HumboldtBuildCompatibleExtension) dans un package exporté
-                → pas d'opens. Sortie inerte (Weld-safe), comme knock-cdi-vauban.
+                Vauban codegen runs as an ANNOTATION PROCESSOR on this module's own beans (the Maven
+                plugin is reserved for freezing external, non-APT-processed dependency jars). During
+                the main compile it generates _ClientProxy/_Factory, META-INF/vauban-beans.list
+                (runtime discovery, both class path and module path), and one _VaubanComponents per
+                package (in-module instantiation / field-injection / producer invocation, no
+                `opens … to io.vidocq.vauban.core`). Build-time only: adds no compile/runtime
+                dependency on Vauban, and the output stays inert for a standard CDI container (Weld).
+
+                The module-info lives in src/main/module-info/ and is compiled in a separate step
+                (vauban is not on this module's runtime path; keeping module-info.class out of
+                target/classes during testCompile prevents Maven from activating JPMS and failing
+                to resolve the test modules — same workaround as ravel-cdi-vauban / knock-cdi-vauban).
             -->
             <plugin>
-                <groupId>io.vidocq.vauban</groupId>
-                <artifactId>vauban-maven-plugin</artifactId>
-                <version>${vauban.version}</version>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-clean-plugin</artifactId>
                 <executions>
+                    <!-- Runs before default-compile (process-resources is the phase right before
+                         compile): removes any module-info.class left in target/classes by a prior
+                         build's compile-module-info (prepare-package) step. Without this, a no-clean
+                         `mvn install` (as the TCK runner does) would let javac detect the stale
+                         module descriptor and switch default-compile to module mode, failing to
+                         resolve the dependency modules. -->
                     <execution>
-                        <id>generate</id>
-                        <goals><goal>generate</goal></goals>
+                        <id>remove-stale-module-info</id>
+                        <phase>process-resources</phase>
+                        <goals><goal>clean</goal></goals>
+                        <configuration>
+                            <excludeDefaultDirectories>true</excludeDefaultDirectories>
+                            <filesets>
+                                <fileset>
+                                    <directory>${project.build.outputDirectory}</directory>
+                                    <includes>
+                                        <include>module-info.class</include>
+                                    </includes>
+                                </fileset>
+                            </filesets>
+                        </configuration>
                     </execution>
                 </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <!-- Vauban APT processes this module's own beans at compile time. -->
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>io.vidocq.vauban</groupId>
+                            <artifactId>vauban-processor</artifactId>
+                            <version>${vauban.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+                <executions>
+                    <!-- Test fixtures are not application beans (the unit test exercises the
+                         interceptor directly, no container). Running the APT over them would emit
+                         a provider for nested test classes (bogus package / cannot find symbol). -->
+                    <execution>
+                        <id>default-testCompile</id>
+                        <configuration>
+                            <proc>none</proc>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>compile-module-info</id>
+                        <phase>prepare-package</phase>
+                        <goals><goal>compile</goal></goals>
+                        <configuration>
+                            <!-- No annotation processing on the separate module-info compile
+                                 (the beans were already processed in the main compile). -->
+                            <proc>none</proc>
+                            <compileSourceRoots>
+                                <compileSourceRoot>${project.basedir}/src/main/module-info</compileSourceRoot>
+                            </compileSourceRoots>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <useModulePath>false</useModulePath>
+                </configuration>
             </plugin>
         </plugins>
     </build>

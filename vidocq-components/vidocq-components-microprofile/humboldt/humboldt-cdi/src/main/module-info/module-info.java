@@ -26,9 +26,18 @@ module io.vidocq.humboldt.cdi {
     requires transitive jakarta.cdi;
     requires transitive jakarta.interceptor;
     requires java.logging;
+    // Compile-only (optional at runtime): supplies the VaubanComponentProvider service type.
+    requires static io.vidocq.vauban.api;
 
     exports io.vidocq.humboldt.cdi;
 
     provides jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension
             with io.vidocq.humboldt.cdi.HumboldtBuildCompatibleExtension;
+
+    // In-module instantiation and producer invocation of this package's beans (the @Produces in
+    // HumboldtTelemetryProducers and the WithSpanInterceptor), generated as _VaubanComponents
+    // co-located in io.vidocq.humboldt.cdi — so the container needs no `opens … to
+    // io.vidocq.vauban.core`. APT-generated, inert under Weld.
+    provides io.vidocq.vauban.api.VaubanComponentProvider
+            with io.vidocq.humboldt.cdi._VaubanComponents;
 }
