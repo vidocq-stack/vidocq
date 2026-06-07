@@ -68,23 +68,6 @@
     <build>
         <plugins>
             <!--
-                Génère META-INF/vauban-beans.list + _ClientProxy/_Factory pour que la ressource
-                @ApplicationScoped KnockHealthResource soit un bean découvrable au runtime
-                (scanClasspath() de Vauban). Outil de BUILD (Vauban) uniquement : n'ajoute aucune
-                dépendance compile/runtime sur Cassini, sortie inerte pour Weld.
-            -->
-            <plugin>
-                <groupId>io.vidocq.vauban</groupId>
-                <artifactId>vauban-maven-plugin</artifactId>
-                <version>${vauban.version}</version>
-                <executions>
-                    <execution>
-                        <id>generate</id>
-                        <goals><goal>generate</goal></goals>
-                    </execution>
-                </executions>
-            </plugin>
-            <!--
                 JPMS workaround knock-jaxrs : meme probleme que knock-core et
                 knock-cdi-vauban. cassini-core est test-scope, absent de
                 target/javamodules/ ; si module-info.class est dans target/classes,
@@ -113,15 +96,46 @@
                     </execution>
                 </executions>
             </plugin>
+            <!--
+                Vauban codegen runs as an ANNOTATION PROCESSOR on this module's own beans (the Maven
+                plugin is reserved for freezing external, non-APT dependency jars). It generates
+                _ClientProxy/_Factory, META-INF/vauban-beans.list and one _VaubanComponents per
+                package (in-module instantiation/field-injection, no opens). Build-time only.
+            -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>io.vidocq.vauban</groupId>
+                            <artifactId>vauban-processor</artifactId>
+                            <version>${vauban.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                    <!-- Library module, not a complete deployment: KnockHealthResource injects
+                         HealthCheckRegistry, produced in knock-cdi-vauban. Cross-module beans are
+                         not on the APT index, so deployment validation runs at the Vidocq runtime
+                         assembly, not here. -->
+                    <compilerArgs>
+                        <arg>-Avauban.validation=false</arg>
+                    </compilerArgs>
+                </configuration>
                 <executions>
+                    <!-- Test fixtures are not application beans (resolved reflectively on the class
+                         path); do not run the APT over them. -->
+                    <execution>
+                        <id>default-testCompile</id>
+                        <configuration>
+                            <proc>none</proc>
+                        </configuration>
+                    </execution>
                     <execution>
                         <id>compile-module-info</id>
                         <phase>prepare-package</phase>
                         <goals><goal>compile</goal></goals>
                         <configuration>
+                            <proc>none</proc>
                             <compileSourceRoots>
                                 <compileSourceRoot>${project.basedir}/src/main/module-info</compileSourceRoot>
                             </compileSourceRoots>
