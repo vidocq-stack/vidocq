@@ -69,6 +69,7 @@
         <module>dirac-api</module>
         <module>dirac-core</module>
         <module>dirac-cdi-vauban</module>
+        <module>dirac-cdi-vauban-jpms-it</module>
         <module>dirac-rest</module>
         <module>dirac-bench</module>
         <module>dirac-examples</module>
