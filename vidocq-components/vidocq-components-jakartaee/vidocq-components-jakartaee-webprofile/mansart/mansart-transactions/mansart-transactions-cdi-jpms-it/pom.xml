@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.mansart</groupId>
+        <artifactId>mansart-transactions</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>mansart-transactions-cdi-jpms-it</artifactId>
+    <name>Mansart :: Transactions :: CDI JPMS module-path IT</name>
+    <description>Module-path proof vehicle: a @Transactional bean intercepted with a build-time
+        $$Intercepted subclass and the generated VaubanComponentProvider, with no `opens` to vauban.core.</description>
+
+    <properties>
+        <vauban.version>0.2.0-SNAPSHOT</vauban.version>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.mansart</groupId>
+            <artifactId>mansart-transactions-cdi</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.transaction</groupId>
+            <artifactId>jakarta.transaction-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.inject</groupId>
+            <artifactId>jakarta.inject-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.interceptor</groupId>
+            <artifactId>jakarta.interceptor-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.annotation</groupId>
+            <artifactId>jakarta.annotation-api</artifactId>
+        </dependency>
+        <!--
+            Vauban container as a REAL (compile) dependency: this vehicle boots a container, and the
+            build-time TxService$$Intercepted subclass references io.vidocq.vauban.core.interceptor.*.
+            This is legitimate here (a JPMS proof vehicle), unlike the production wrapper modules which
+            keep vauban out of their runtime path.
+        -->
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-core</artifactId>
+            <version>${vauban.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-classloader-spi</artifactId>
+            <version>${vauban.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!--
+                The Vauban APT processes the @Transactional fixture bean at compile time: it generates
+                TxService$$Intercepted, the TxService_ClientProxy/_Factory and the in-module
+                _VaubanComponents provider declared in module-info. That is the whole point of this
+                vehicle: a build-time interceptor subclass + generated provider, instantiated on the
+                module path with no opens.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>io.vidocq.vauban</groupId>
+                            <artifactId>vauban-processor</artifactId>
+                            <version>${vauban.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                    <compilerArgs>
+                        <!-- TxService injects TransactionManager, produced by mansart-transactions-cdi
+                             (another module); the APT cannot resolve beans from dependency modules. -->
+                        <arg>-Avauban.validation=false</arg>
+                    </compilerArgs>
+                </configuration>
+                <executions>
+                    <!-- No annotation processing on the test sources (the IT is not a bean). -->
+                    <execution>
+                        <id>default-testCompile</id>
+                        <configuration>
+                            <proc>none</proc>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

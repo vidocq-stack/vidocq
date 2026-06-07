@@ -61,6 +61,7 @@
         <module>mansart-transactions-api</module>
         <module>mansart-transactions-core</module>
         <module>mansart-transactions-cdi</module>
+        <module>mansart-transactions-cdi-jpms-it</module>
         <module>mansart-transactions-jdbc</module>
         <module>mansart-transactions-tests</module>
         <!-- mansart-transactions-tck est volontairement HORS reactor (pom.xml standalone en
