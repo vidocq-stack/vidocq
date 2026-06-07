@@ -58,6 +58,14 @@
             <scope>provided</scope>
         </dependency>
 
+        <!-- Compile-only (optional at runtime): supplies the VaubanComponentProvider service type
+             named in module-info `provides`. Non-transitive; absent under non-Vauban containers. -->
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-api</artifactId>
+            <version>${vauban.version}</version>
+            <scope>provided</scope>
+        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
@@ -84,21 +92,6 @@
 
     <build>
         <plugins>
-            <!--
-                Vauban codegen : META-INF/vauban-beans.list + _ClientProxy/_Factory pour la découverte
-                runtime (scanClasspath). BCE dans un package exporté → pas d'opens. Weld-safe (cf. knock).
-            -->
-            <plugin>
-                <groupId>io.vidocq.vauban</groupId>
-                <artifactId>vauban-maven-plugin</artifactId>
-                <version>${vauban.version}</version>
-                <executions>
-                    <execution>
-                        <id>generate</id>
-                        <goals><goal>generate</goal></goals>
-                    </execution>
-                </executions>
-            </plugin>
             <!--
                 Copie supplmentaire pour opentelemetry-api (scope=provided) dans
                 target/javamodules/ : le plugin parent ne copie que compile-scope, mais OTel
@@ -162,15 +155,43 @@
                     </execution>
                 </executions>
             </plugin>
+            <!--
+                Vauban codegen runs as an ANNOTATION PROCESSOR on this module's own beans (the Maven
+                plugin is reserved for freezing external, non-APT dependency jars). It generates
+                _ClientProxy/_Factory, META-INF/vauban-beans.list and _VaubanComponents (in-module
+                instantiation + field injection of the FT interceptors and recorder beans, no opens).
+            -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>io.vidocq.vauban</groupId>
+                            <artifactId>vauban-processor</artifactId>
+                            <version>${vauban.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                    <!-- Library module, not a complete deployment: the FT interceptors inject
+                         @Any Instance<FtMetricsRecorder> and config beans resolved across the
+                         deployment; deployment validation runs at the Vidocq runtime assembly. -->
+                    <compilerArgs>
+                        <arg>-Avauban.validation=false</arg>
+                    </compilerArgs>
+                </configuration>
                 <executions>
+                    <execution>
+                        <id>default-testCompile</id>
+                        <configuration>
+                            <proc>none</proc>
+                        </configuration>
+                    </execution>
                     <execution>
                         <id>compile-module-info</id>
                         <phase>prepare-package</phase>
                         <goals><goal>compile</goal></goals>
                         <configuration>
+                            <proc>none</proc>
                             <compileSourceRoots>
                                 <compileSourceRoot>${project.basedir}/src/main/module-info</compileSourceRoot>
                             </compileSourceRoots>

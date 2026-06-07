@@ -27,12 +27,21 @@ module io.vidocq.heisenberg.cdi.vauban {
     requires static jakarta.interceptor;
     requires static microprofile.metrics.api;
     requires static io.opentelemetry.api;
+    // Compile-only (optional at runtime): supplies the VaubanComponentProvider service type.
+    requires static io.vidocq.vauban.api;
 
     exports io.vidocq.heisenberg.cdi.internal;
 
     // Heisenberg BCE: validate FT configurations at container startup
     provides jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension
             with io.vidocq.heisenberg.cdi.internal.HeisenbergExtension;
+
+    // In-module instantiation and field injection of the FT interceptors and recorder/state beans
+    // (@Inject fields are package-private, assigned by an in-package putfield) through the generated
+    // _VaubanComponents — so Vauban needs no `opens … to io.vidocq.vauban.core`. The @AroundInvoke
+    // methods live in this exported package and are public (invoked without opens).
+    provides io.vidocq.vauban.api.VaubanComponentProvider
+            with io.vidocq.heisenberg.cdi.internal._VaubanComponents;
 
     provides org.eclipse.microprofile.config.spi.ConfigProviderResolver
             with io.vidocq.heisenberg.cdi.internal.HeisenbergAutoDiscovery;

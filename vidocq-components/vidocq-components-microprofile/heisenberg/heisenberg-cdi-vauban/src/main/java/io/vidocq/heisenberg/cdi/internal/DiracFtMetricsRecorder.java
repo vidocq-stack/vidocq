@@ -33,10 +33,12 @@ import java.util.concurrent.atomic.AtomicLong;
 @ApplicationScoped
 public class DiracFtMetricsRecorder implements FtMetricsRecorder {
 
+    // Package-private (not private): the co-located _VaubanComponents provider assigns it with an
+    // in-package putfield, so Vauban needs no `opens … to io.vidocq.vauban.core` for field injection.
     @SuppressWarnings("deprecation")
     @Inject
     @RegistryType
-    private MetricRegistry registry;
+    MetricRegistry registry;
 
     // Idempotency guard: method tag → registered
     private final ConcurrentHashMap<String, Boolean> registered = new ConcurrentHashMap<>();
