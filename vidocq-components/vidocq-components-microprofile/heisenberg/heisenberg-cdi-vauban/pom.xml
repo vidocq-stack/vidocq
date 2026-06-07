@@ -137,9 +137,14 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-clean-plugin</artifactId>
                 <executions>
+                    <!-- process-resources runs before default-compile: removes any module-info.class
+                         left in target/classes by a prior build's compile-module-info (prepare-package).
+                         Without this, a no-clean `mvn install` (as the TCK runner does) lets javac
+                         detect the stale descriptor and switch the main compile to module mode, failing
+                         to resolve the dependency modules. -->
                     <execution>
-                        <id>remove-module-info-before-testcompile</id>
-                        <phase>generate-test-sources</phase>
+                        <id>remove-stale-module-info</id>
+                        <phase>process-resources</phase>
                         <goals><goal>clean</goal></goals>
                         <configuration>
                             <excludeDefaultDirectories>true</excludeDefaultDirectories>
