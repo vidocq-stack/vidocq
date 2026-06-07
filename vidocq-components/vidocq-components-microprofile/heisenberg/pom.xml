@@ -80,6 +80,7 @@
         <module>heisenberg-api</module>
         <module>heisenberg-core</module>
         <module>heisenberg-cdi-vauban</module>
+        <module>heisenberg-cdi-vauban-jpms-it</module>
         <module>heisenberg-bench</module>
         <module>heisenberg-examples</module>
     </modules>

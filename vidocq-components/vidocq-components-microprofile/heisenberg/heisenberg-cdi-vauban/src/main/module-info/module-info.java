@@ -24,12 +24,7 @@ module io.vidocq.heisenberg.cdi.vauban {
     requires static jakarta.cdi;
     requires static jakarta.inject;
     requires static jakarta.annotation;
-    // Transitive (not static): the @FaultToleranceBinding marker this module declares is itself a
-    // jakarta.interceptor @InterceptorBinding and the HeisenbergExtension @Enhancement stamps it onto
-    // application beans. A downstream module-path consumer must therefore read jakarta.interceptor to
-    // complete that meta-annotation; a `requires static` edge is absent from a consumer's module graph,
-    // so it is transitive here (jakarta.interceptor is always present in a CDI container at runtime).
-    requires transitive jakarta.interceptor;
+    requires static jakarta.interceptor;
     requires static microprofile.metrics.api;
     requires static io.opentelemetry.api;
     // Compile-only (optional at runtime): supplies the VaubanComponentProvider service type.
