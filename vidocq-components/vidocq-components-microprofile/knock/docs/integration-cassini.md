@@ -132,7 +132,7 @@ on the `vidocq` side).
 A smoke test of the resource (without an HTTP container) is provided in
 `KnockHealthResourceTest` (7/7 PASS) — it uses a minimal local `TestRuntimeDelegate`
 to bypass all internal Cassini imports. For an end-to-end check
-against real Cassini, see the `vidocq-runtime-knock-extension`
+against real Cassini, see the `vidocq-runtime-knock-health-extension`
 (`docs/integration-vidocq-runtime.md`).
 
 ## MicroProfile Health 4.0 TCK

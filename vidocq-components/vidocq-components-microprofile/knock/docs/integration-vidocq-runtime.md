@@ -6,14 +6,14 @@
 
 ## Activation: a single dependency
 
-The `vidocq-runtime-knock-extension` aggregate groups the `knock-cdi-vauban` +
+The `vidocq-runtime-knock-health-extension` aggregate groups the `knock-cdi-vauban` +
 `knock-cassini` + Jakarta JSON-P implementation (`champollion-jsonp`) modules.
 Adding this dependency is enough to expose `/health*`:
 
 ```xml
 <dependency>
     <groupId>io.vidocq.runtime</groupId>
-    <artifactId>vidocq-runtime-knock-extension</artifactId>
+    <artifactId>vidocq-runtime-knock-health-extension</artifactId>
 </dependency>
 ```
 
@@ -124,7 +124,7 @@ this property has no effect (the TCK validates this behavior via `ConfigTest`).
 
 ## Deactivation
 
-Removing the `vidocq-runtime-knock-extension` dependency is enough; Knock exposes no
+Removing the `vidocq-runtime-knock-health-extension` dependency is enough; Knock exposes no
 dedicated `VidocqExtension` service, its integration is purely passive (CDI BCE
 + JAX-RS resource scanned by Cassini).
 
@@ -147,5 +147,5 @@ curl -i http://localhost:8080/health
 `./run-official-tck-mp-health-4.0.sh all` (from the `knock` repo) runs the
 official `microprofile-health-tck:4.0` against the full Knock stack:
 **28/28 PASS**. The Arquillian runner (`KnockDeployableContainer`) reproduces the
-same integration path as `vidocq-runtime-knock-extension`: Cassini + Vauban
+same integration path as `vidocq-runtime-knock-health-extension`: Cassini + Vauban
 embedded + `KnockHealthResource` mounted on a local Chappe endpoint.

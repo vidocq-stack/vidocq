@@ -235,7 +235,7 @@ health check system of every Vidocq deployment.
 | ADR-002 integration strategy | Rationale, deployment order, risks (see `docs/adr/ADR-002-vidocq-runtime-integration-strategy.md`) | ✅ |
 | ServiceLoader BCE (`META-INF/services/jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension`) | `HealthCheckCdiExtension` exposed through the standard CDI 4.1 contract | ✅ |
 | `module-info.java` `provides ... with` | JPMS counterpart for service files (see `knock-cdi-vauban` and `knock-core`) | ✅ |
-| `vidocq`: integrate Knock as the health check system | Wrapper module `vidocq-runtime-knock-extension` (Maven/JPMS, no Java code) added in `vidocq-runtime-core-extensions/`. Activates Knock via a single dependency, zero-config integration (BCE + Cassini JAX-RS scanning). | ✅ |
+| `vidocq`: integrate Knock as the health check system | Wrapper module `vidocq-runtime-knock-health-extension` (Maven/JPMS, no Java code) added in `vidocq-runtime-core-extensions/`. Activates Knock via a single dependency, zero-config integration (BCE + Cassini JAX-RS scanning). | ✅ |
 
 **M5 decisions:**
 
@@ -244,14 +244,14 @@ health check system of every Vidocq deployment.
   BCE to discover `@Liveness/@Readiness/@Startup`, and the `@Path` scanning of
   `CassiniExtension` to mount `KnockHealthResource`. Benefit: Knock remains usable
   outside Vidocq with exactly the same deps.
-- **`vidocq-runtime-knock-extension` `requires transitive`** the 4 Knock modules + depends on
+- **`vidocq-runtime-knock-health-extension` `requires transitive`** the 4 Knock modules + depends on
   `vidocq-runtime-cassini-rest-extension`. `champollion-jsonp` is runtime-only.
 - **Same JPMS workaround as `knock-core`** applied to the wrapper (module-info outside
   `src/main/java/`, recompilation in `prepare-package`, `--module-path target/javamodules`)
   to align compilation with the modular `microprofile.health.api` fork.
 
 **Deliverable:** complete documentation (Cassini integration + Vidocq integration + ADR-002),
-`vidocq-runtime-knock-extension` wrapper module installed and buildable in the Vidocq reactor,
+`vidocq-runtime-knock-health-extension` wrapper module installed and buildable in the Vidocq reactor,
 `/health*` available in every Vidocq deployment through a single dependency.
 
 ---

@@ -16,7 +16,7 @@ or breaking the modular separation (standalone SE `knock-core`, optional CDI/JAX
 ### Option A — Dedicated `VidocqExtension`
 
 Create a `KnockExtension implements VidocqExtension` in
-`vidocq-runtime-knock-extension`, which explicitly starts/stops the registry and
+`vidocq-runtime-knock-health-extension`, which explicitly starts/stops the registry and
 calls Cassini to mount the resource.
 
 - **+** Explicit lifecycle, dedicated bootstrap log.
@@ -26,7 +26,7 @@ calls Cassini to mount the resource.
 
 ### Option B — Maven/JPMS wrapper only (chosen)
 
-`vidocq-runtime-knock-extension` is merely a dependency aggregate + a
+`vidocq-runtime-knock-health-extension` is merely a dependency aggregate + a
 `module-info` that `requires transitive` the Knock + champollion modules.
 No own Java classes. The integration relies 100% on the **standard** SPIs that already exist:
 
@@ -51,13 +51,13 @@ Cassini, breaking the *core can run without REST* contract.
 
 ## Decision
 
-**Option B** chosen: `vidocq-runtime-knock-extension` is a Maven/JPMS
+**Option B** chosen: `vidocq-runtime-knock-health-extension` is a Maven/JPMS
 *wrapper* module, without Java code. It lives in
-`vidocq/vidocq-runtime-core-extensions/vidocq-runtime-knock-extension/` and publishes
-the artifact `io.vidocq.runtime:vidocq-runtime-knock-extension`.
+`vidocq/vidocq-runtime-core-extensions/vidocq-runtime-knock-health-extension/` and publishes
+the artifact `io.vidocq.runtime:vidocq-runtime-knock-health-extension`.
 
 ```
-vidocq-runtime-knock-extension/
+vidocq-runtime-knock-health-extension/
 ├── pom.xml                         (deps: knock-cdi-vauban, knock-cassini,
 │                                    vidocq-runtime-cassini-rest-extension,
 │                                    champollion-jsonp runtime)
@@ -90,9 +90,9 @@ vidocq-runtime-knock-extension/
 
 1. `mvn -pl knock-api,knock-core,knock-cdi-vauban,knock-cassini -am install -DskipTests`
    in the `knock` repo (already covered by `run-official-tck-mp-health-4.0.sh`).
-2. `mvn -pl vidocq-runtime-core-extensions/vidocq-runtime-knock-extension -am install -DskipTests`
+2. `mvn -pl vidocq-runtime-core-extensions/vidocq-runtime-knock-health-extension -am install -DskipTests`
    in the `vidocq` repo.
-3. Any application that depends on `vidocq-runtime-knock-extension` gets Knock
+3. Any application that depends on `vidocq-runtime-knock-health-extension` gets Knock
    transitively, without anything else.
 
 ## Risks
