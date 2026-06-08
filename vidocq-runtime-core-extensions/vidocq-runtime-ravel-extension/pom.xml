@@ -55,6 +55,26 @@
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <executions>
+                    <!-- Test fixtures are not application beans: this module's integration
+                         test bootstraps a real CDI container (SeContainerInitializer) and
+                         relies on reflective field injection (see the surefire add-opens
+                         below), not on generated metadata. Running the Vauban APT over the
+                         test sources would emit _VaubanComponents for the test's NESTED
+                         @Dependent bean into a package named after the enclosing test class,
+                         which clashes with the test class itself. Disable APT on testCompile;
+                         main-compile codegen (inherited from the root pom) is untouched. -->
+                    <execution>
+                        <id>default-testCompile</id>
+                        <configuration>
+                            <proc>none</proc>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
                     <!-- Vauban needs reflective access to the test package for
