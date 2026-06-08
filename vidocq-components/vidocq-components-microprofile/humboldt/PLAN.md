@@ -191,7 +191,7 @@ Item filed in `chappe/tasks/todo.md` in Phase 7 (preparing extended Vidocq exten
 ├── BENCH.md                           # initialized empty (Vidocq template)
 ├── TCK.md                             # official TCK challenge log
 ├── ROADMAP.md                         # M0..M9
-├── LICENSE                            # Apache-2.0
+├── LICENSE                            # EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
 ├── docs/
 │   ├── en/                            # Antora EN
 │   │   ├── antora.yml                 # name: humboldt
@@ -1162,7 +1162,7 @@ To execute in order after validating this plan :
 6. Create `.forgejo/workflows/{ci.yml,pr.yml,notify-slack.yml,update-dep-graph.yml}` (copy cassini + adapt groupId/artifactId)
 7. Create `CLAUDE.md` (layered from chappe/CLAUDE.md + Telemetry-specific section)
 8. Create `README.md` FR and `README_EN.md` (layered from vidocq)
-9. Initialize `BUG.md`, `BENCH.md`, `TCK.md`, `ROADMAP.md`, `LICENSE` Apache-2.0
+9. Initialize `BUG.md`, `BENCH.md`, `TCK.md`, `ROADMAP.md`, `LICENSE` EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
 10. Create `docs/{en,fr}/antora.yml` + `modules/ROOT/nav.adoc` + `pages/index.adoc` (name & metaphor Humboldt)
 11. Create empty `tasks/todo.md` and `tasks/lessons.md`
 12. First commit signed by Yann Blazart (without Co-Authored-By per workspace convention)
