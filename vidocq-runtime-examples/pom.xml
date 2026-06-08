@@ -30,6 +30,8 @@
         <module>vidocq-runtime-cervantes-jwt-example</module>
         <module>vidocq-runtime-knock-health-example</module>
         <module>vidocq-runtime-mansart-h2-example</module>
+        <module>vidocq-runtime-h2-module</module>
+        <module>vidocq-runtime-petstore-example</module>
     </modules>
 
     <build>

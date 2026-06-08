@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <title>Vidocq · Petstore demo</title>
+    <style>
+        :root { color-scheme: light dark; }
+        body { font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+               margin: 0; padding: 2rem; max-width: 1000px; margin-inline: auto;
+               line-height: 1.45; }
+        h1 { margin-top: 0; }
+        p.lede { opacity: .75; max-width: 64ch; }
+        .pane { border: 1px solid color-mix(in oklab, currentColor 20%, transparent);
+                border-radius: 8px; padding: 1rem; margin-top: 1rem; }
+        .pane h3 { margin-top: 0; display: flex; justify-content: space-between; align-items: center; }
+        .pane h3 .src { font-size: .75rem; opacity: .6; font-weight: normal;
+                        font-family: ui-monospace, monospace; }
+        table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+        th, td { padding: .35rem .5rem; text-align: left;
+                 border-bottom: 1px solid color-mix(in oklab, currentColor 12%, transparent);
+                 vertical-align: top; }
+        th { font-size: .8rem; opacity: .65; font-weight: 500; }
+        td.num { text-align: right; }
+        .actions { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; margin: 1rem 0; }
+        button, select { font: inherit; padding: .4rem .9rem; border-radius: 6px;
+                 border: 1px solid color-mix(in oklab, currentColor 25%, transparent);
+                 background: color-mix(in oklab, currentColor 6%, transparent);
+                 cursor: pointer; color: inherit; }
+        button:hover { background: color-mix(in oklab, currentColor 12%, transparent); }
+        button.primary { border-color: #3b82f6; background: #3b82f6; color: white; }
+        button.danger  { border-color: #ef4444; color: #ef4444; }
+        button.danger:hover { background: #ef4444; color: white; }
+        input { font: inherit; padding: .35rem .5rem; border-radius: 6px;
+                border: 1px solid color-mix(in oklab, currentColor 25%, transparent);
+                background: transparent; color: inherit; }
+        input[type=number] { width: 6rem; }
+        .status { font-size: .85rem; opacity: .7; margin-left: auto; }
+        .status.ok  { color: #10b981; }
+        .status.err { color: #ef4444; }
+        .empty { opacity: .5; text-align: center; padding: 1rem 0; font-style: italic; }
+        .pill { display: inline-block; font-size: .75rem; padding: .1rem .5rem; border-radius: 999px;
+                background: color-mix(in oklab, currentColor 10%, transparent); margin: 0 .15rem .15rem 0; }
+        .badge { font-size: .75rem; padding: .1rem .5rem; border-radius: 4px; }
+        .badge.available { background: #10b98122; color: #10b981; }
+        .badge.pending   { background: #f59e0b22; color: #f59e0b; }
+        .badge.sold      { background: #ef444422; color: #ef4444; }
+        code { background: color-mix(in oklab, currentColor 8%, transparent);
+               padding: .1rem .35rem; border-radius: 3px;
+               font-family: ui-monospace, monospace; font-size: .9em; }
+    </style>
+</head>
+<body>
+    <h1>Vidocq · Petstore</h1>
+    <p class="lede">
+        Démo bout-en-bout : Cassini REST + Mansart Data 1.0 sur H2, JSON via Champollion.
+        Les entités <code>Pet</code>, <code>Category</code> et <code>Tag</code> sont plates ;
+        leurs relations sont recomposées dans <code>PetService</code>, pas par JPA.
+    </p>
+
+    <form id="addForm" class="actions" onsubmit="addPet(event)">
+        <input id="name"     type="text"   placeholder="Nom"      required>
+        <input id="category" type="text"   placeholder="Catégorie">
+        <input id="tags"     type="text"   placeholder="tags, séparés, par, virgules">
+        <input id="price"    type="number" placeholder="Prix" step="0.01" min="0" required>
+        <select id="newStatus">
+            <option value="available">available</option>
+            <option value="pending">pending</option>
+            <option value="sold">sold</option>
+        </select>
+        <button class="primary" type="submit">Ajouter</button>
+        <span id="status" class="status"></span>
+    </form>
+
+    <div class="pane">
+        <h3>
+            <span>Pets <span class="src">GET /api/pets</span></span>
+            <span class="actions" style="margin:0">
+                <label style="font-size:.85rem;opacity:.7">filtre&nbsp;
+                    <select id="statusFilter" onchange="refresh()">
+                        <option value="">tous</option>
+                        <option value="available">available</option>
+                        <option value="pending">pending</option>
+                        <option value="sold">sold</option>
+                    </select>
+                </label>
+                <button type="button" onclick="refresh()">↻</button>
+            </span>
+        </h3>
+        <table>
+            <thead><tr>
+                <th>id</th><th>nom</th><th>catégorie</th><th>statut</th>
+                <th class="num">prix</th><th>tags</th><th></th>
+            </tr></thead>
+            <tbody id="tbody"><tr><td colspan="7" class="empty">…</td></tr></tbody>
+        </table>
+    </div>
+
+    <script>
+        const $ = (id) => document.getElementById(id);
+        const status = $('status');
+
+        function flash(msg, kind) {
+            status.textContent = msg;
+            status.className = 'status ' + kind;
+            setTimeout(() => { status.textContent = ''; status.className = 'status'; }, 2500);
+        }
+
+        function fmtMoney(p) {
+            return Number(p).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        async function fetchJson(url, options) {
+            const r = await fetch(url, options);
+            if (!r.ok && r.status !== 204) {
+                throw new Error('HTTP ' + r.status + ' on ' + url);
+            }
+            if (r.status === 204) return null;
+            const ct = r.headers.get('content-type') || '';
+            return ct.includes('json') ? r.json() : r.text();
+        }
+
+        function render(rows) {
+            const tbody = $('tbody');
+            if (!rows || rows.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="empty">Aucun pet</td></tr>';
+                return;
+            }
+            tbody.innerHTML = rows.map(p => `
+                <tr>
+                    <td>${p.id}</td>
+                    <td>${p.name ?? ''}</td>
+                    <td>${p.category ?? '—'}</td>
+                    <td><span class="badge ${p.status}">${p.status}</span></td>
+                    <td class="num">${fmtMoney(p.price)} €</td>
+                    <td>${(p.tags || []).map(t => `<span class="pill">${t}</span>`).join('') || '—'}</td>
+                    <td><button class="danger" onclick="del(${p.id})">×</button></td>
+                </tr>`).join('');
+        }
+
+        async function refresh() {
+            try {
+                const filter = $('statusFilter').value;
+                const url = filter ? '/api/pets?status=' + encodeURIComponent(filter) : '/api/pets';
+                render(await fetchJson(url));
+                flash('Rafraîchi', 'ok');
+            } catch (e) {
+                flash(e.message, 'err');
+            }
+        }
+
+        async function addPet(evt) {
+            evt.preventDefault();
+            const tags = $('tags').value.split(',').map(t => t.trim()).filter(Boolean);
+            const body = {
+                name:     $('name').value.trim(),
+                category: $('category').value.trim(),
+                status:   $('newStatus').value,
+                price:    parseFloat($('price').value),
+                tags,
+            };
+            try {
+                await fetchJson('/api/pets', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                });
+                $('addForm').reset();
+                flash('Ajouté', 'ok');
+                refresh();
+            } catch (e) {
+                flash(e.message, 'err');
+            }
+        }
+
+        async function del(id) {
+            try {
+                await fetchJson('/api/pets/' + id, { method: 'DELETE' });
+                flash('Supprimé', 'ok');
+                refresh();
+            } catch (e) {
+                flash(e.message, 'err');
+            }
+        }
+
+        refresh();
+    </script>
+</body>
+</html>

@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.runtime</groupId>
+        <artifactId>vidocq-runtime-examples</artifactId>
+        <version>0.2.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vidocq-runtime-h2-module</artifactId>
+    <name>Vidocq :: Examples :: H2 (modularised)</name>
+    <description>
+        Re-package of com.h2database:h2 with an explicit module-info.class (module name:
+        com.h2database). The official artifact only declares Automatic-Module-Name, which
+        jlink rejects — this module turns it into an explicit JPMS module without touching any
+        H2 class, so examples that embed H2 (e.g. the petstore) can be jlink'd / jpackage'd.
+        The module-info was generated with `jdeps --generate-module-info` and requires JDK
+        modules only.
+    </description>
+
+    <properties>
+        <h2.version>2.3.232</h2.version>
+    </properties>
+
+    <dependencies>
+        <!--
+            The official jar is pulled in 'provided' only so its .class files can be unpacked
+            into target/classes. It is NOT exposed transitively: consumers depend on this module
+            instead and receive the repackaged jar carrying the explicit module-info.
+        -->
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <version>${h2.version}</version>
+            <scope>provided</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- 1) Unpack the H2 .class files (base release) into target/classes. The
+                 META-INF/versions/** overrides are dropped so a single root module-info governs;
+                 the base classes are a complete, runnable set on Java 25. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <version>3.8.1</version>
+                <executions>
+                    <execution>
+                        <id>unpack-h2</id>
+                        <phase>generate-resources</phase>
+                        <goals>
+                            <goal>unpack</goal>
+                        </goals>
+                        <configuration>
+                            <artifactItems>
+                                <artifactItem>
+                                    <groupId>com.h2database</groupId>
+                                    <artifactId>h2</artifactId>
+                                    <version>${h2.version}</version>
+                                    <outputDirectory>${project.build.outputDirectory}</outputDirectory>
+                                    <!-- Drop the original manifest (Automatic-Module-Name is now
+                                         superfluous), the Maven metadata, and the multi-release
+                                         overrides. maven-jar-plugin rewrites a clean manifest. -->
+                                    <excludes>META-INF/MANIFEST.MF,META-INF/maven/**,META-INF/versions/**</excludes>
+                                </artifactItem>
+                            </artifactItems>
+                            <overWriteReleases>true</overWriteReleases>
+                            <overWriteSnapshots>true</overWriteSnapshots>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- 2) Compile only our module-info.java, patched into the 'com.h2database' module
+                 (the unpacked .class files above supply every exported package). -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <release>25</release>
+                    <compilerArgs combine.children="append">
+                        <arg>--patch-module</arg>
+                        <arg>com.h2database=${project.build.outputDirectory}</arg>
+                    </compilerArgs>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

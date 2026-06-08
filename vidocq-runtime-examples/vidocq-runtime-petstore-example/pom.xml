@@ -1,0 +1,231 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.runtime</groupId>
+        <artifactId>vidocq-runtime-examples</artifactId>
+        <version>0.2.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vidocq-runtime-petstore-example</artifactId>
+    <name>Vidocq :: Examples :: Petstore (Cassini + Mansart + Champollion + H2)</name>
+    <description>Swagger-style petstore demo: Vidocq + Cassini REST + Mansart Data 1.0 on H2,
+        JSON via Champollion (JSON-B/JSON-P), packaged as a native jpackage app-image.</description>
+
+    <!--
+        Vidocq main-module coordinates — consumed by every Vidocq goal that needs to know how to
+        launch the app (vidocq:dev, vidocq:jlink, vidocq:jpackage, vidocq:docker).
+    -->
+    <properties>
+        <vidocq.mainModule>io.vidocq.runtime.examples.petstore</vidocq.mainModule>
+        <vidocq.mainClass>io.vidocq.runtime.examples.petstore.PetstoreApp</vidocq.mainClass>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-core</artifactId>
+        </dependency>
+
+        <!-- HTTP transport + JAX-RS -->
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-cassini-rest-extension</artifactId>
+        </dependency>
+
+        <!-- MicroProfile Config 3.1 (opt-in): activates @ConfigProperty and routes
+             vidocq.properties through the MP ConfigSource pipeline. -->
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-ravel-extension</artifactId>
+        </dependency>
+
+        <!-- Mansart pool + Jakarta Data + transactions extensions -->
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-mansart-pool-extension</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-mansart-data-extension</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-mansart-transactions-extension</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- User picks the dialect — H2 here. -->
+        <dependency>
+            <groupId>io.vidocq.mansart</groupId>
+            <artifactId>mansart-data-dialect-h2</artifactId>
+            <version>${mansart.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- JDBC driver (runtime only). We depend on the modularised repackage of H2
+             (named module com.h2database) rather than the upstream automatic-module jar,
+             so jlink/jpackage accept it. -->
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-h2-module</artifactId>
+            <version>${project.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>io.vidocq.chappe</groupId>
+            <artifactId>chappe-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.chappe</groupId>
+            <artifactId>chappe-core</artifactId>
+        </dependency>
+
+        <!-- JAX-RS API (compile) -->
+        <dependency>
+            <groupId>jakarta.ws.rs</groupId>
+            <artifactId>jakarta.ws.rs-api</artifactId>
+            <version>4.0.0</version>
+        </dependency>
+
+        <!-- JSON-B / JSON-P via Champollion (workspace impl, zero external deps).
+             champollion-api brings jakarta.json-api + jakarta.json.bind-api transitively;
+             champollion-jsonb provides the JsonbProvider and pulls champollion-jsonp
+             (JsonProvider) at runtime. Discovered through ServiceLoader — replaces the
+             Yasson + Parsson stack used by the other examples. -->
+        <dependency>
+            <groupId>io.vidocq.champollion</groupId>
+            <artifactId>champollion-api</artifactId>
+            <version>${champollion.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.champollion</groupId>
+            <artifactId>champollion-jsonb</artifactId>
+            <version>${champollion.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- jakarta.persistence-api: @Entity, @Id, etc. (annotations only, no JPA runtime) -->
+        <dependency>
+            <groupId>jakarta.persistence</groupId>
+            <artifactId>jakarta.persistence-api</artifactId>
+            <version>3.2.0</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-indexer</artifactId>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <!-- One codegen bundle per vidocq-runtime-<X>-extension on the path.
+                         vidocq-runtime-core-codegen (Vauban indexer) is inherited from the
+                         parent pluginManagement; combine.children="append" preserves it. -->
+                    <annotationProcessorPaths combine.children="append">
+                        <path>
+                            <groupId>io.vidocq.runtime</groupId>
+                            <artifactId>vidocq-runtime-cassini-rest-extension-codegen</artifactId>
+                            <version>${project.version}</version>
+                            <type>pom</type>
+                        </path>
+                        <path>
+                            <groupId>io.vidocq.runtime</groupId>
+                            <artifactId>vidocq-runtime-mansart-data-extension-codegen</artifactId>
+                            <version>${project.version}</version>
+                            <type>pom</type>
+                        </path>
+                        <path>
+                            <groupId>io.vidocq.runtime</groupId>
+                            <artifactId>vidocq-runtime-mansart-transactions-extension-codegen</artifactId>
+                            <version>${project.version}</version>
+                            <type>pom</type>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>io.vidocq.runtime</groupId>
+                <artifactId>vidocq-runtime-maven-plugin</artifactId>
+                <version>${project.version}</version>
+                <executions>
+                    <execution>
+                        <id>generate</id>
+                        <goals>
+                            <goal>generate</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+    <profiles>
+        <!-- Native packaging (jlink + jpackage + docker) — active by default.
+             Short-circuit with -P!dist or -Dvidocq.jlink.skip=true for a fast compile+test cycle. -->
+        <profile>
+            <id>dist</id>
+            <activation>
+                <activeByDefault>true</activeByDefault>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>io.vidocq.runtime</groupId>
+                        <artifactId>vidocq-runtime-maven-plugin</artifactId>
+                        <version>${project.version}</version>
+                        <executions>
+                            <execution>
+                                <id>jlink</id>
+                                <goals>
+                                    <goal>jlink</goal>
+                                </goals>
+                                <configuration>
+                                    <mainModule>io.vidocq.runtime.examples.petstore</mainModule>
+                                    <mainClass>io.vidocq.runtime.examples.petstore.PetstoreApp</mainClass>
+                                    <launcher>petstore-app</launcher>
+                                </configuration>
+                            </execution>
+                            <execution>
+                                <id>jpackage</id>
+                                <goals>
+                                    <goal>jpackage</goal>
+                                </goals>
+                                <configuration>
+                                    <mainModule>io.vidocq.runtime.examples.petstore</mainModule>
+                                    <mainClass>io.vidocq.runtime.examples.petstore.PetstoreApp</mainClass>
+                                    <appName>petstore-app</appName>
+                                    <!-- macOS app-image rejects 0.x.y → pin 1.0.0; bump per release. -->
+                                    <appVersion>1.0.0</appVersion>
+                                    <type>app-image</type>
+                                </configuration>
+                            </execution>
+                            <execution>
+                                <id>docker</id>
+                                <goals>
+                                    <goal>docker</goal>
+                                </goals>
+                                <configuration>
+                                    <launcher>petstore-app</launcher>
+                                    <imageTag>vidocq/petstore-app:0.1.0-SNAPSHOT</imageTag>
+                                    <!-- build=false by default: only the Dockerfile is generated.
+                                         Set -Dvidocq.docker.build=true to invoke 'docker build'. -->
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+</project>
