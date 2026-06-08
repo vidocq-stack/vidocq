@@ -47,6 +47,10 @@ module io.vidocq.runtime.examples.mansart {
     // activates @ConfigProperty via the transitive BCE ravel-cdi-vauban.
     requires io.vidocq.runtime.ext.ravel;
 
+    // OpenAPI document (/openapi) + Swagger UI (/openapi/ui).
+    requires io.vidocq.runtime.ext.grimm.openapi;
+    requires io.vidocq.runtime.ext.grimm.openapi.ui;
+
     requires io.vidocq.chappe.api;
     requires io.vidocq.vauban.core;
 

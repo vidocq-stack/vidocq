@@ -28,6 +28,8 @@
         <module>vidocq-runtime-mansart-transactions-extension</module>
         <module>vidocq-runtime-mansart-transactions-extension-codegen</module>
         <module>vidocq-runtime-knock-extension</module>
+        <module>vidocq-runtime-grimm-openapi-extension</module>
+        <module>vidocq-runtime-grimm-openapi-ui-extension</module>
         <module>vidocq-runtime-dirac-extension</module>
         <module>vidocq-runtime-ravel-extension</module>
     </modules>

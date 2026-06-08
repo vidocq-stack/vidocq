@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.runtime</groupId>
+        <artifactId>vidocq-runtime-core-extensions</artifactId>
+        <version>0.2.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vidocq-runtime-grimm-openapi-extension</artifactId>
+    <name>Vidocq :: Core Extensions :: OpenAPI (Grimm)</name>
+    <description>Activates Grimm (MicroProfile OpenAPI 4.1) in a vidocq deployment and serves the
+        assembled document at /openapi over the Chappe engine. The model is built by grimm-cdi-vauban's
+        CDI BCE at startup; this extension looks up the OpenApiResource bean and renders it through a
+        Chappe handler (so the document is served on the same engine/origin as the Swagger UI).</description>
+
+    <!--
+        Why a Chappe handler rather than relying on Cassini to mount grimm's @Path resource:
+        Cassini dispatch in the runtime is driven by build-time generated route metadata
+        (ServiceLoader RouteRegistry), produced by the cassini codegen APT from *source* @Path
+        classes. Grimm's OpenApiResource lives in a dependency jar (grimm-cdi-vauban) and is never
+        seen by any codegen compilation, so Cassini cannot dispatch it. We therefore reuse grimm's
+        own OpenApiResource.render(...) logic and expose it via a thin Chappe handler — identical
+        output, no dependency on the REST layer.
+    -->
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-spi</artifactId>
+        </dependency>
+        <!-- ChappeMountPoint to attach the handler. -->
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-chappe-extension</artifactId>
+        </dependency>
+        <!-- Handler / Request / Response / Body. -->
+        <dependency>
+            <groupId>io.vidocq.chappe</groupId>
+            <artifactId>chappe-api</artifactId>
+        </dependency>
+        <!-- VaubanContainer.select(OpenApiResource.class). -->
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-core</artifactId>
+        </dependency>
+        <!--
+            Grimm — MicroProfile OpenAPI 4.1 implementation (zero third-party libs).
+            grimm-cdi-vauban carries the BCE that builds the model at startup plus OpenApiResource
+            (which exposes render(format, accept)); it pulls grimm-core + microprofile-openapi-api.
+        -->
+        <dependency>
+            <groupId>io.vidocq.grimm</groupId>
+            <artifactId>grimm-cdi-vauban</artifactId>
+            <version>${grimm.version}</version>
+        </dependency>
+        <!-- grimm-cdi-vauban requires org.eclipse.microprofile.config (provided there). -->
+        <dependency>
+            <groupId>io.vidocq.ravel</groupId>
+            <artifactId>ravel-mp-config-api</artifactId>
+            <version>${ravel.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

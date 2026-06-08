@@ -101,6 +101,21 @@
         </div>
     </div>
 
+    <h2>Documentation &amp; service de test</h2>
+    <p>
+        📖 <a href="/openapi/ui/">Swagger UI</a> —
+        📄 <a href="/openapi?format=json">OpenAPI (JSON)</a> —
+        🕒 <a href="/api/date">GET /api/date</a> (DateService) —
+        <code id="date-now">…</code>
+    </p>
+
+    <script>
+        // Show the DateService output inline as a tiny liveness ping.
+        fetch('/api/date').then(r => r.json())
+            .then(d => { document.getElementById('date-now').textContent = d.iso; })
+            .catch(() => { document.getElementById('date-now').textContent = '(date service unavailable)'; });
+    </script>
+
     <script>
         const $ = (id) => document.getElementById(id);
         const status = $('status');

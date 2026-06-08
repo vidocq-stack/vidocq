@@ -39,6 +39,19 @@
             <artifactId>vidocq-runtime-cassini-rest-extension</artifactId>
         </dependency>
 
+        <!-- OpenAPI document (Grimm, MicroProfile OpenAPI 4.1) served at /openapi,
+             plus Swagger UI served at /openapi/ui. -->
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-grimm-openapi-extension</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-grimm-openapi-ui-extension</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
         <!-- MicroProfile Config 3.1 (opt-in). Quand cette extension est sur le
              module path, RavelConfigSourceProvider remplace les ConfigSource
              natifs du core ; vidocq.properties est lu via la MP ConfigSource
