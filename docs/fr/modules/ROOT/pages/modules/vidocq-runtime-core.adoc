@@ -22,7 +22,7 @@
 . **Config** — résolution MicroProfile Config.
 . **Extensions init** — invocation des `RUNTIME_INIT` recorders.
 . **CDI start** — délégation à xref:vauban::index.adoc[Vauban] (`Vauban.bootstrap()`).
-. **Transport bind** — délégation à xref:chappe::index.adoc[Chappe] via l'extension `vidocq-runtime-chappe-extension`.
+. **Transport bind** — délégation à xref:chappe::index.adoc[Chappe] via l'extension `vidocq-runtime-chappe-webserver-extension`.
 . **Routes register** — délégation à xref:cassini::index.adoc[Cassini], xref:foy::index.adoc[Foy] et xref:mansart::index.adoc[Mansart] selon les extensions actives.
 
 * Gérer le cycle d'arrêt — `SIGTERM` propage dans l'ordre inverse, drainage propre des virtual threads.

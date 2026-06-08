@@ -16,22 +16,22 @@
     <description>MicroProfile 7.1 core extensions for Vidocq</description>
 
     <modules>
-        <module>vidocq-runtime-chappe-extension</module>
+        <module>vidocq-runtime-chappe-webserver-extension</module>
         <module>vidocq-runtime-cassini-rest-extension</module>
         <module>vidocq-runtime-cassini-rest-extension-codegen</module>
-        <module>vidocq-runtime-cyrano-extension</module>
+        <module>vidocq-runtime-cyrano-rest-client-extension</module>
         <module>vidocq-runtime-cervantes-jwt-extension</module>
-        <module>vidocq-runtime-humboldt-extension</module>
+        <module>vidocq-runtime-humboldt-telemetry-extension</module>
         <module>vidocq-runtime-mansart-pool-extension</module>
         <module>vidocq-runtime-mansart-data-extension</module>
         <module>vidocq-runtime-mansart-data-extension-codegen</module>
         <module>vidocq-runtime-mansart-transactions-extension</module>
         <module>vidocq-runtime-mansart-transactions-extension-codegen</module>
-        <module>vidocq-runtime-knock-extension</module>
+        <module>vidocq-runtime-knock-health-extension</module>
         <module>vidocq-runtime-grimm-openapi-extension</module>
         <module>vidocq-runtime-grimm-openapi-ui-extension</module>
-        <module>vidocq-runtime-dirac-extension</module>
-        <module>vidocq-runtime-ravel-extension</module>
+        <module>vidocq-runtime-dirac-metrics-extension</module>
+        <module>vidocq-runtime-ravel-config-extension</module>
     </modules>
 
     <build>

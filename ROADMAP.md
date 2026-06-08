@@ -11,9 +11,9 @@ SPI, lifecycle, packaging (fat jar / jlink via `vidocq-runtime-maven-plugin`).
 
 | MicroProfile spec | Implementation | Vidocq extension | Status |
 |---|---|---|---|
-| **Rest Client 4.0** | [cyrano](../cyrano) | `vidocq-runtime-cyrano-extension` | ✅ delivered |
-| **Telemetry 2.1** | [humboldt](../humboldt) | `vidocq-runtime-humboldt-extension` | ✅ delivered (M7 TCK in progress) |
-| **Health 4.0** | [knock](../knock) | `vidocq-runtime-knock-extension` | ✅ delivered |
+| **Rest Client 4.0** | [cyrano](../cyrano) | `vidocq-runtime-cyrano-rest-client-extension` | ✅ delivered |
+| **Telemetry 2.1** | [humboldt](../humboldt) | `vidocq-runtime-humboldt-telemetry-extension` | ✅ delivered (M7 TCK in progress) |
+| **Health 4.0** | [knock](../knock) | `vidocq-runtime-knock-health-extension` | ✅ delivered |
 | **Config 3.1** | _smallrye config_ | — | ❌ to package as an extension |
 | **Fault Tolerance 4.1** | _smallrye fault tolerance_ | — | ❌ to package as an extension |
 | **JWT Auth 2.1** | — | — | ❌ TODO (heisenberg?) |
@@ -26,7 +26,7 @@ Additional infrastructure bricks delivered as Vidocq extensions, useful to the e
 
 | Brick | Vidocq extension | Status |
 |---|---|---|
-| HTTP/1.1+H2+WS+gRPC server | [chappe](../chappe) | `vidocq-runtime-chappe-extension` ✅ |
+| HTTP/1.1+H2+WS+gRPC server | [chappe](../chappe) | `vidocq-runtime-chappe-webserver-extension` ✅ |
 | JAX-RS 4.0 (transport via Chappe) | [cassini](../cassini) | `vidocq-runtime-cassini-rest-extension` ✅ |
 | Jakarta Data 1.0 (repositories) | [mansart-jakarta-data](../mansart) | `vidocq-runtime-mansart-data-extension` ✅ |
 | Virtual-thread-native JDBC pool | [mansart-pool](../mansart) | `vidocq-runtime-mansart-pool-extension` ✅ |

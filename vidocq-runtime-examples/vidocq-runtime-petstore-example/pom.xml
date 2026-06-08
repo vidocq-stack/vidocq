@@ -40,7 +40,7 @@
              vidocq.properties through the MP ConfigSource pipeline. -->
         <dependency>
             <groupId>io.vidocq.runtime</groupId>
-            <artifactId>vidocq-runtime-ravel-extension</artifactId>
+            <artifactId>vidocq-runtime-ravel-config-extension</artifactId>
         </dependency>
 
         <!-- Mansart pool + Jakarta Data + transactions extensions -->

@@ -220,7 +220,7 @@ here):
   `ExtensionContext`).
 - **`vidocq-runtime-maven-plugin`**: new **`VidocqDevMojo`** (`vidocq:dev`) — watcher + incremental
   recompile + control of the child JVM (A) or in-VM loop (B).
-- **`vidocq-runtime-chappe-extension`**: atomic `Handler`/Router swap (mainly needed for B; for A, the
+- **`vidocq-runtime-chappe-webserver-extension`**: atomic `Handler`/Router swap (mainly needed for B; for A, the
   server restarts from scratch).
 - **CLI**: standalone `vidocq dev` modeled after `chappe-cli` (post-MVP, with the Mojo remaining the
   delegate).

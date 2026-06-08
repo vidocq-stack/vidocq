@@ -36,7 +36,7 @@
         </dependency>
         <dependency>
             <groupId>io.vidocq.runtime</groupId>
-            <artifactId>vidocq-runtime-humboldt-extension</artifactId>
+            <artifactId>vidocq-runtime-humboldt-telemetry-extension</artifactId>
         </dependency>
         <dependency>
             <groupId>io.vidocq.vauban</groupId>

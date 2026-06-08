@@ -10,50 +10,28 @@
         <version>0.2.0-SNAPSHOT</version>
     </parent>
 
-    <artifactId>vidocq-runtime-cervantes-jwt-extension</artifactId>
-    <name>Vidocq :: Core Extensions :: JWT (Cervantes)</name>
-    <description>Wrapper Maven/JPMS qui active Cervantes (MicroProfile JWT 2.1) dans un deploiement vidocq.</description>
+    <artifactId>vidocq-runtime-cyrano-rest-client-extension</artifactId>
+    <name>Vidocq :: Core Extensions :: Rest Client (Cyrano)</name>
+    <description>Wrapper Maven/JPMS qui active Cyrano (MicroProfile Rest Client 4.0) dans un deploiement vidocq.</description>
 
     <dependencies>
         <dependency>
-            <groupId>io.vidocq.cervantes</groupId>
-            <artifactId>cervantes-api</artifactId>
+            <groupId>io.vidocq.cyrano</groupId>
+            <artifactId>cyrano-api</artifactId>
         </dependency>
         <dependency>
-            <groupId>io.vidocq.cervantes</groupId>
-            <artifactId>cervantes-core</artifactId>
+            <groupId>io.vidocq.cyrano</groupId>
+            <artifactId>cyrano-core</artifactId>
         </dependency>
         <dependency>
-            <groupId>io.vidocq.cervantes</groupId>
-            <artifactId>cervantes-cdi-vauban</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.vidocq.cervantes</groupId>
-            <artifactId>cervantes-jaxrs</artifactId>
+            <groupId>io.vidocq.cyrano</groupId>
+            <artifactId>cyrano-cdi-vauban</artifactId>
         </dependency>
 
-        <!-- Repackaged MicroProfile JWT 2.1 spec (module org.eclipse.microprofile.jwt). -->
         <dependency>
-            <groupId>io.vidocq.cervantes</groupId>
-            <artifactId>cervantes-mp-jwt-api</artifactId>
-        </dependency>
-
-        <!-- MP JWT 2.1 §6.1 mandates that the runtime exposes configuration via
-             MicroProfile Config (mp.jwt.verify.publickey, mp.jwt.verify.issuer,
-             mp.jwt.token.header, etc.). Cervantes-core reads them via
-             @ConfigProperty, so we must opt-in to vidocq-runtime-ravel-config-extension
-             which brings ravel-cdi-vauban (the BCE that wires @ConfigProperty)
-             and routes the runtime config through Ravel. -->
-        <dependency>
-            <groupId>io.vidocq.runtime</groupId>
-            <artifactId>vidocq-runtime-ravel-config-extension</artifactId>
-        </dependency>
-
-        <!-- Needed to compile cervantes-jaxrs's module-info requires (jakarta.ws.rs). -->
-        <dependency>
-            <groupId>jakarta.ws.rs</groupId>
-            <artifactId>jakarta.ws.rs-api</artifactId>
-            <version>4.0.0</version>
+            <groupId>org.eclipse.microprofile.rest.client</groupId>
+            <artifactId>microprofile-rest-client-api</artifactId>
+            <version>4.0</version>
         </dependency>
 
         <dependency>
@@ -128,8 +106,13 @@
                 Le pattern `src/main/module-info` separe maintient `target/classes`
                 sans `module-info.class` pendant `test-compile`, ce qui evite que
                 maven-compiler-plugin 4.x ne bascule en mode patch-module et n'exige
-                la resolution JPMS de specs sans Automatic-Module-Name. On supprime
-                l'artefact `module-info.class` avant chaque `test-compile`.
+                la resolution JPMS de `microprofile.rest.client.api` (jar sans
+                Automatic-Module-Name place sur classpath, donc introuvable cote
+                module-path). `compile-module-info` (phase prepare-package) ecrit
+                ensuite `module-info.class` dans `target/classes` pour le packaging,
+                ce qui pollue la sortie pour un eventuel second `mvn` sans `clean`
+                (ex : CI Forgejo qui chaine `mvn verify` puis `mvn deploy`).
+                On supprime donc cet artefact avant chaque `test-compile`.
             -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -157,3 +140,4 @@
         </plugins>
     </build>
 </project>
+

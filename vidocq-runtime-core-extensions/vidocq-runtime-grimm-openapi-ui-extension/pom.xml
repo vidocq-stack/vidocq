@@ -24,7 +24,7 @@
         <!-- ChappeMountPoint lives here; provides the shared mount point at onStart. -->
         <dependency>
             <groupId>io.vidocq.runtime</groupId>
-            <artifactId>vidocq-runtime-chappe-extension</artifactId>
+            <artifactId>vidocq-runtime-chappe-webserver-extension</artifactId>
         </dependency>
         <!-- StaticFileHandler + Handler. -->
         <dependency>

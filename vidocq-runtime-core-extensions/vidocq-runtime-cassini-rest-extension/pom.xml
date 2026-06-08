@@ -45,7 +45,7 @@
         </dependency>
         <dependency>
             <groupId>io.vidocq.runtime</groupId>
-            <artifactId>vidocq-runtime-chappe-extension</artifactId>
+            <artifactId>vidocq-runtime-chappe-webserver-extension</artifactId>
         </dependency>
         <dependency>
             <groupId>io.vidocq.vauban</groupId>

@@ -40,7 +40,7 @@ Verified: Arago Docker boots; cervantes MP-JWT 2.1 TCK 206/206 PASS.
 
 ### Related — latent, NOT yet fixed
 
-`vidocq-runtime-cyrano-extension` has the **same** shape (own BCE
+`vidocq-runtime-cyrano-rest-client-extension` has the **same** shape (own BCE
 `io.vidocq.runtime.ext.cyrano.CyranoBuildCompatibleExtension` in a non-opened package) and will fail
 the same way once a Cyrano-enabled app boots on the module path. The one-line `opens ... to
 io.vidocq.vauban.core` fix additionally needs `io.vidocq.vauban.core` reachable in the wrapper's

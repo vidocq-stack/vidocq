@@ -35,7 +35,7 @@
         <!-- ChappeMountPoint to attach the handler. -->
         <dependency>
             <groupId>io.vidocq.runtime</groupId>
-            <artifactId>vidocq-runtime-chappe-extension</artifactId>
+            <artifactId>vidocq-runtime-chappe-webserver-extension</artifactId>
         </dependency>
         <!-- Handler / Request / Response / Body. -->
         <dependency>

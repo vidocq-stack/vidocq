@@ -18,7 +18,7 @@
 |===
 | Extension | Statut | Rôle
 
-| `vidocq-runtime-chappe-extension`
+| `vidocq-runtime-chappe-webserver-extension`
 | Livrée
 | Branche xref:chappe::index.adoc[Chappe] comme transport HTTP/1.1, H2, H3. Configure le bind via `vidocq.http.host` / `vidocq.http.port`.
 
@@ -69,7 +69,7 @@
 
 == Cycle de vie type — exemple Chappe
 
-L'extension `vidocq-runtime-chappe-extension` illustre le pattern. Quatre points d'ancrage :
+L'extension `vidocq-runtime-chappe-webserver-extension` illustre le pattern. Quatre points d'ancrage :
 
 [cols="1,2,1,3"]
 |===

@@ -41,7 +41,7 @@ package io.vidocq.runtime.spi.config;
  * sorted by descending {@link ConfigSource#getOrdinal()}.</p>
  *
  * <p><b>Typical use case</b> — the extension
- * {@code vidocq-runtime-ravel-extension} provides a
+ * {@code vidocq-runtime-ravel-config-extension} provides a
  * {@code RavelConfigSourceProvider} which iterates over the
  * {@code org.eclipse.microprofile.config.spi.ConfigSource} exposed by
  * {@code ConfigProvider.getConfig()} and wraps them as Vidocq {@link ConfigSource}

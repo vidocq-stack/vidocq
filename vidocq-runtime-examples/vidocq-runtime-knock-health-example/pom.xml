@@ -31,7 +31,7 @@
         <!-- Health: pulls knock (api/core/cdi-vauban/jaxrs) transitively. -->
         <dependency>
             <groupId>io.vidocq.runtime</groupId>
-            <artifactId>vidocq-runtime-knock-extension</artifactId>
+            <artifactId>vidocq-runtime-knock-health-extension</artifactId>
         </dependency>
 
         <dependency>

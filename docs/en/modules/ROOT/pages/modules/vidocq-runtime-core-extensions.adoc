@@ -18,7 +18,7 @@
 |===
 | Extension | Status | Role
 
-| `vidocq-runtime-chappe-extension`
+| `vidocq-runtime-chappe-webserver-extension`
 | Shipped
 | Wires xref:chappe::index.adoc[Chappe] as HTTP/1.1, H2, H3 transport. Configures bind via `vidocq.http.host` / `vidocq.http.port`.
 
@@ -69,7 +69,7 @@
 
 == Typical lifecycle — Chappe example
 
-The `vidocq-runtime-chappe-extension` extension illustrates the pattern. Four hook points:
+The `vidocq-runtime-chappe-webserver-extension` extension illustrates the pattern. Four hook points:
 
 [cols="1,2,1,3"]
 |===

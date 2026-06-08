@@ -39,7 +39,7 @@ import java.util.ServiceLoader;
  * <ol>
  *   <li>{@link ServiceLoader} on {@link ConfigSourceProvider} — if <em>at least
  *       a</em>provider is registered (typically
- *       {@code vidocq-runtime-ravel-extension} which provides MicroProfile Config),
+ *       {@code vidocq-runtime-ravel-config-extension} which provides MicroProfile Config),
  *       the union of their sources is used, and the native {@link ConfigSource}
  *       Vidocq are <b>ignored</b>. It is the responsibility of the provider to provide
  *       equivalent substitutes (sys, env, files) — Vidocq does not mix for

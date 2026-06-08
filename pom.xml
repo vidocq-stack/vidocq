@@ -91,12 +91,12 @@
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
-                <artifactId>vidocq-runtime-chappe-extension</artifactId>
+                <artifactId>vidocq-runtime-chappe-webserver-extension</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
-                <artifactId>vidocq-runtime-ravel-extension</artifactId>
+                <artifactId>vidocq-runtime-ravel-config-extension</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
@@ -111,7 +111,7 @@
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
-                <artifactId>vidocq-runtime-cyrano-extension</artifactId>
+                <artifactId>vidocq-runtime-cyrano-rest-client-extension</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
@@ -121,17 +121,17 @@
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
-                <artifactId>vidocq-runtime-humboldt-extension</artifactId>
+                <artifactId>vidocq-runtime-humboldt-telemetry-extension</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
-                <artifactId>vidocq-runtime-knock-extension</artifactId>
+                <artifactId>vidocq-runtime-knock-health-extension</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
-                <artifactId>vidocq-runtime-dirac-extension</artifactId>
+                <artifactId>vidocq-runtime-dirac-metrics-extension</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
@@ -341,7 +341,7 @@
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
-                <artifactId>vidocq-runtime-chappe-extension</artifactId>
+                <artifactId>vidocq-runtime-chappe-webserver-extension</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
@@ -356,17 +356,17 @@
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
-                <artifactId>vidocq-runtime-knock-extension</artifactId>
+                <artifactId>vidocq-runtime-knock-health-extension</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
-                <artifactId>vidocq-runtime-dirac-extension</artifactId>
+                <artifactId>vidocq-runtime-dirac-metrics-extension</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
-                <artifactId>vidocq-runtime-cyrano-extension</artifactId>
+                <artifactId>vidocq-runtime-cyrano-rest-client-extension</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
@@ -376,7 +376,7 @@
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
-                <artifactId>vidocq-runtime-humboldt-extension</artifactId>
+                <artifactId>vidocq-runtime-humboldt-telemetry-extension</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

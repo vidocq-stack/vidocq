@@ -28,7 +28,7 @@ module io.vidocq.runtime.core {
     uses io.vidocq.runtime.spi.VidocqExtension;
     uses io.vidocq.runtime.spi.config.ConfigSource;
     // When a ConfigSourceProvider is registered (e.g. via
-    // vidocq-runtime-ravel-extension), it replaces the native sources below.
+    // vidocq-runtime-ravel-config-extension), it replaces the native sources below.
     uses io.vidocq.runtime.spi.config.ConfigSourceProvider;
 
     provides io.vidocq.runtime.spi.config.ConfigSource with

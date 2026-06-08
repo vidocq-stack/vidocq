@@ -97,7 +97,7 @@ Vidocq Runtime n'invente aucun runtime ; il **compose** les six briques fondatri
 
 * consomme `CdiBeanIndexBuildItem` produit par `vidocq-runtime-vauban-extension` ;
 * déclenche la génération du routage statique de xref:cassini::index.adoc[Cassini] ;
-* produit `HttpRouteBuildItem` consommé par `vidocq-runtime-chappe-extension`.
+* produit `HttpRouteBuildItem` consommé par `vidocq-runtime-chappe-webserver-extension`.
 
 C'est cette grammaire de `BuildItem` qui rend l'écosystème homogène alors que chaque brique reste autonome dans son propre repo.
 
