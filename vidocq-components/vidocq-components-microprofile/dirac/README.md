@@ -87,4 +87,4 @@ See [ROADMAP.md](ROADMAP.md) for detailed milestone progress.
 
 ## License
 
-Apache License, Version 2.0 — see [LICENSE](LICENSE).
+EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later — see [LICENSE](LICENSE).
