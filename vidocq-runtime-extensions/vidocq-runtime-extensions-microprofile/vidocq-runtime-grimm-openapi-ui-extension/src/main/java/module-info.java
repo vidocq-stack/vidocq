@@ -20,13 +20,13 @@
 /**
  * Serves Swagger UI for the Grimm-produced OpenAPI document, mounted at {@code /openapi/ui}
  * on the Chappe engine. See
- * {@link io.vidocq.runtime.ext.grimm.openapi.ui.GrimmOpenApiUiExtension}.
+ * {@link io.vidocq.runtime.extensions.microprofile.grimm.openapi.ui.GrimmOpenApiUiExtension}.
  */
-module io.vidocq.runtime.ext.grimm.openapi.ui {
+module io.vidocq.runtime.extensions.microprofile.grimm.openapi.ui {
     requires io.vidocq.runtime.spi;
-    requires io.vidocq.runtime.ext.chappe;
+    requires io.vidocq.runtime.extensions.essentials.chappe;
     requires io.vidocq.chappe.api;
 
     provides io.vidocq.runtime.spi.VidocqExtension
-            with io.vidocq.runtime.ext.grimm.openapi.ui.GrimmOpenApiUiExtension;
+            with io.vidocq.runtime.extensions.microprofile.grimm.openapi.ui.GrimmOpenApiUiExtension;
 }

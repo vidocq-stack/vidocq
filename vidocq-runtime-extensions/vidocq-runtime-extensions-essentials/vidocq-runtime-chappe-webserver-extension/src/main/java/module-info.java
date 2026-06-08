@@ -17,22 +17,22 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
-module io.vidocq.runtime.ext.chappe {
+module io.vidocq.runtime.extensions.essentials.chappe {
     requires transitive io.vidocq.runtime.spi;
     requires io.vidocq.vauban.core;
     requires transitive io.vidocq.chappe.api;
     requires static java.net.http;
 
-    exports io.vidocq.runtime.ext.chappe;
-    exports io.vidocq.runtime.ext.chappe.spi;
+    exports io.vidocq.runtime.extensions.essentials.chappe;
+    exports io.vidocq.runtime.extensions.essentials.chappe.spi;
 
     provides io.vidocq.runtime.spi.VidocqExtension
-            with io.vidocq.runtime.ext.chappe.ChappeEngineExtension,
-                 io.vidocq.runtime.ext.chappe.ChappeMountConfigExtension,
-                 io.vidocq.runtime.ext.chappe.ChappeServerBootstrap;
+            with io.vidocq.runtime.extensions.essentials.chappe.ChappeEngineExtension,
+                 io.vidocq.runtime.extensions.essentials.chappe.ChappeMountConfigExtension,
+                 io.vidocq.runtime.extensions.essentials.chappe.ChappeServerBootstrap;
 
-    uses io.vidocq.runtime.ext.chappe.spi.MountHandlerProvider;
+    uses io.vidocq.runtime.extensions.essentials.chappe.spi.MountHandlerProvider;
 
-    provides io.vidocq.runtime.ext.chappe.spi.MountHandlerProvider
-            with io.vidocq.runtime.ext.chappe.StaticMountHandlerProvider;
+    provides io.vidocq.runtime.extensions.essentials.chappe.spi.MountHandlerProvider
+            with io.vidocq.runtime.extensions.essentials.chappe.StaticMountHandlerProvider;
 }

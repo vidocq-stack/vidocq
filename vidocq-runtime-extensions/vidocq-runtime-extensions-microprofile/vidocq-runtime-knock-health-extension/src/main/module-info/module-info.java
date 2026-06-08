@@ -38,7 +38,7 @@
  * {@code /health}, {@code /health/live}, {@code /health/ready},
  * {@code /health/started}.</p>
  */
-module io.vidocq.runtime.ext.knock {
+module io.vidocq.runtime.extensions.microprofile.knock {
     // Knock modules — transitively re-exposed to consuming applications
     // so that user @Liveness/@Readiness/@Startup beans can
     // implement HealthCheck without manually declaring requires Knock.
@@ -48,7 +48,7 @@ module io.vidocq.runtime.ext.knock {
     requires transitive io.vidocq.knock.jaxrs;
 
     // Cassini REST extension: it scans the knock JAX-RS resource (@Path).
-    requires io.vidocq.runtime.ext.rest.cassini;
+    requires io.vidocq.runtime.extensions.jakartaee.core.cassini;
 
     requires jakarta.cdi;
     requires jakarta.ws.rs;

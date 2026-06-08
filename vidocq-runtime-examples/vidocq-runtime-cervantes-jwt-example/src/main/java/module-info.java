@@ -27,10 +27,10 @@ module io.vidocq.runtime.examples.jwt {
 
     requires io.vidocq.runtime.core;
     requires io.vidocq.runtime.spi;
-    requires io.vidocq.runtime.ext.rest.cassini;
+    requires io.vidocq.runtime.extensions.jakartaee.core.cassini;
     // Pulls all of cervantes transitively (api/core/cdi-vauban/jaxrs + ravel) and registers the
     // JWT BuildCompatibleExtension.
-    requires io.vidocq.runtime.ext.cervantes.jwt;
+    requires io.vidocq.runtime.extensions.microprofile.cervantes;
     requires org.eclipse.microprofile.jwt;  // JsonWebToken injected in the resource
 
     requires io.vidocq.cassini.api;

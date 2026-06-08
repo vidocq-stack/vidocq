@@ -17,9 +17,9 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
-import io.vidocq.runtime.ext.ravel.ApplicationPropertiesConfigSource;
-import io.vidocq.runtime.ext.ravel.RavelConfigSourceProvider;
-import io.vidocq.runtime.ext.ravel.VidocqPropertiesConfigSource;
+import io.vidocq.runtime.extensions.microprofile.ravel.ApplicationPropertiesConfigSource;
+import io.vidocq.runtime.extensions.microprofile.ravel.RavelConfigSourceProvider;
+import io.vidocq.runtime.extensions.microprofile.ravel.VidocqPropertiesConfigSource;
 
 /**
  * Vidocq Runtime extension that plugs Ravel (MicroProfile Config 3.1) as the
@@ -32,13 +32,13 @@ import io.vidocq.runtime.ext.ravel.VidocqPropertiesConfigSource;
  * including the user's MP custom sources, profiles, and {@code ${}}
  * expressions.</p>
  */
-module io.vidocq.runtime.ext.ravel {
+module io.vidocq.runtime.extensions.microprofile.ravel {
     requires io.vidocq.runtime.spi;
     // Transitive so downstream modules can use @Inject @ConfigProperty without
     // re-declaring the Ravel CDI module themselves.
     requires transitive io.vidocq.ravel.cdi.vauban;
 
-    exports io.vidocq.runtime.ext.ravel;
+    exports io.vidocq.runtime.extensions.microprofile.ravel;
 
     // Vidocq runtime SPI: discovered by VidocqConfigImpl at boot. When this
     // provider is registered, the native ConfigSource ServiceLoader of

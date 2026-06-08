@@ -22,7 +22,7 @@
  * application's {@code @Default} JDBC {@link javax.sql.DataSource}, configured from
  * {@code vidocq.pool.*} properties.
  */
-module io.vidocq.runtime.ext.mansart.pool {
+module io.vidocq.runtime.extensions.jakartaee.web.mansart.pool {
     requires transitive io.vidocq.runtime.spi;
     requires io.vidocq.vauban.core;
     requires io.vidocq.mansart.pool.api;
@@ -33,9 +33,9 @@ module io.vidocq.runtime.ext.mansart.pool {
 
     // CDI scans MansartPoolHolder for @Produces; the package needs to be opened so the
     // generated bean factory can construct it.
-    exports io.vidocq.runtime.ext.mansart.pool;
-    opens   io.vidocq.runtime.ext.mansart.pool;
+    exports io.vidocq.runtime.extensions.jakartaee.web.mansart.pool;
+    opens   io.vidocq.runtime.extensions.jakartaee.web.mansart.pool;
 
     provides io.vidocq.runtime.spi.VidocqExtension
-            with io.vidocq.runtime.ext.mansart.pool.MansartPoolExtension;
+            with io.vidocq.runtime.extensions.jakartaee.web.mansart.pool.MansartPoolExtension;
 }

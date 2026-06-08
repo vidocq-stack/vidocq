@@ -1,1 +1,1 @@
-io.vidocq.runtime.ext.grimm.openapi.ui.GrimmOpenApiUiExtension
+io.vidocq.runtime.extensions.microprofile.grimm.openapi.ui.GrimmOpenApiUiExtension

@@ -19,11 +19,11 @@
  */
 /**
  * Serves the Grimm-assembled OpenAPI document at {@code /openapi} on the Chappe engine. See
- * {@link io.vidocq.runtime.ext.grimm.openapi.GrimmOpenApiExtension}.
+ * {@link io.vidocq.runtime.extensions.microprofile.grimm.openapi.GrimmOpenApiExtension}.
  */
-module io.vidocq.runtime.ext.grimm.openapi {
+module io.vidocq.runtime.extensions.microprofile.grimm.openapi {
     requires io.vidocq.runtime.spi;
-    requires io.vidocq.runtime.ext.chappe;
+    requires io.vidocq.runtime.extensions.essentials.chappe;
     requires io.vidocq.chappe.api;
     requires io.vidocq.vauban.core;
     // Grimm currently ships as an AUTOMATIC module (its module-info sources are not compiled into the
@@ -37,5 +37,5 @@ module io.vidocq.runtime.ext.grimm.openapi {
     requires transitive org.eclipse.microprofile.openapi;
 
     provides io.vidocq.runtime.spi.VidocqExtension
-            with io.vidocq.runtime.ext.grimm.openapi.GrimmOpenApiExtension;
+            with io.vidocq.runtime.extensions.microprofile.grimm.openapi.GrimmOpenApiExtension;
 }

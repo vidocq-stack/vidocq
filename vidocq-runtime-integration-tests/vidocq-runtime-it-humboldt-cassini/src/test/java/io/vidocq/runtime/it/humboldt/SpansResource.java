@@ -21,7 +21,7 @@ package io.vidocq.runtime.it.humboldt;
 
 import io.vidocq.humboldt.runtime.AutoConfiguredHumboldt;
 import io.vidocq.humboldt.sdk.trace.data.SpanData;
-import io.vidocq.runtime.ext.humboldt.HumboldtHolder;
+import io.vidocq.runtime.extensions.microprofile.humboldt.HumboldtHolder;
 import jakarta.enterprise.context.RequestScoped;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;

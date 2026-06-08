@@ -17,12 +17,12 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
-import io.vidocq.runtime.ext.rest.cassini.CassiniExtension;
-import io.vidocq.runtime.ext.rest.cassini.CassiniMountHandlerProvider;
+import io.vidocq.runtime.extensions.jakartaee.core.cassini.CassiniExtension;
+import io.vidocq.runtime.extensions.jakartaee.core.cassini.CassiniMountHandlerProvider;
 
-module io.vidocq.runtime.ext.rest.cassini {
+module io.vidocq.runtime.extensions.jakartaee.core.cassini {
     requires transitive io.vidocq.runtime.spi;
-    requires io.vidocq.runtime.ext.chappe;
+    requires io.vidocq.runtime.extensions.essentials.chappe;
     requires io.vidocq.vauban.core;
 
     requires io.vidocq.cassini.api;
@@ -33,11 +33,11 @@ module io.vidocq.runtime.ext.rest.cassini {
     requires jakarta.cdi;
     requires jakarta.annotation;
 
-    exports io.vidocq.runtime.ext.rest.cassini;
+    exports io.vidocq.runtime.extensions.jakartaee.core.cassini;
 
     provides io.vidocq.runtime.spi.VidocqExtension
             with CassiniExtension;
 
-    provides io.vidocq.runtime.ext.chappe.spi.MountHandlerProvider
+    provides io.vidocq.runtime.extensions.essentials.chappe.spi.MountHandlerProvider
             with CassiniMountHandlerProvider;
 }

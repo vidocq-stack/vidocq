@@ -1,1 +1,1 @@
-io.vidocq.runtime.ext.mansart.pool.MansartPoolExtension
+io.vidocq.runtime.extensions.jakartaee.web.mansart.pool.MansartPoolExtension

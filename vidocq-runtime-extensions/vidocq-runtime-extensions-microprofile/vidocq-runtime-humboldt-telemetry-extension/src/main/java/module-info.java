@@ -26,7 +26,7 @@
  *
  * <p>Discovery via ServiceLoader (META-INF/services + {@code provides} JPMS).</p>
  */
-module io.vidocq.runtime.ext.humboldt {
+module io.vidocq.runtime.extensions.microprofile.humboldt {
 
     requires io.vidocq.runtime.spi;
     requires io.vidocq.humboldt.runtime;
@@ -39,8 +39,8 @@ module io.vidocq.runtime.ext.humboldt {
 
     // Export package to enable @Inject AutoConfiguredHumboldt from apps/tests
     // (HumboldtHolder must be accessible to the CDI Vauban container).
-    exports io.vidocq.runtime.ext.humboldt;
+    exports io.vidocq.runtime.extensions.microprofile.humboldt;
 
     provides io.vidocq.runtime.spi.VidocqExtension
-            with io.vidocq.runtime.ext.humboldt.HumboldtExtension;
+            with io.vidocq.runtime.extensions.microprofile.humboldt.HumboldtExtension;
 }

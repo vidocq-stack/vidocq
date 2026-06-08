@@ -1,1 +1,1 @@
-io.vidocq.runtime.ext.ravel.RavelConfigSourceProvider
+io.vidocq.runtime.extensions.microprofile.ravel.RavelConfigSourceProvider

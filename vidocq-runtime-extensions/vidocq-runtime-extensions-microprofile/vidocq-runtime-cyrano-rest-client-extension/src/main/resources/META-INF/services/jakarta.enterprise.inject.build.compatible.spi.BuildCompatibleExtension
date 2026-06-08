@@ -1,2 +1,2 @@
-io.vidocq.runtime.ext.cyrano.CyranoBuildCompatibleExtension
+io.vidocq.runtime.extensions.microprofile.cyrano.CyranoBuildCompatibleExtension
 

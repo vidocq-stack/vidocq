@@ -1,2 +1,2 @@
-io.vidocq.runtime.ext.ravel.VidocqPropertiesConfigSource
-io.vidocq.runtime.ext.ravel.ApplicationPropertiesConfigSource
+io.vidocq.runtime.extensions.microprofile.ravel.VidocqPropertiesConfigSource
+io.vidocq.runtime.extensions.microprofile.ravel.ApplicationPropertiesConfigSource

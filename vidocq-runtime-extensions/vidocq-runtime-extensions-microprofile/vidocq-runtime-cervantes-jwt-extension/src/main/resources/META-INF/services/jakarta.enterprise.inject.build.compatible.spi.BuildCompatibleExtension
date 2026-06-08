@@ -1,1 +1,1 @@
-io.vidocq.runtime.ext.cervantes.CervantesJwtBuildCompatibleExtension
+io.vidocq.runtime.extensions.microprofile.cervantes.CervantesJwtBuildCompatibleExtension

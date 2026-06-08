@@ -37,7 +37,7 @@
  * <p>Exposed endpoint (prefixed by the configured mount): {@code /metrics} (OpenMetrics
  * text by default, JSON on {@code Accept: application/json}).</p>
  */
-module io.vidocq.runtime.ext.dirac {
+module io.vidocq.runtime.extensions.microprofile.dirac {
     // Dirac modules — transitively re-exposed so consuming apps can use @Counted/@Timed/@Gauge
     // and inject MetricRegistry without manually declaring requires on Dirac.
     requires transitive io.vidocq.dirac.api;
@@ -46,7 +46,7 @@ module io.vidocq.runtime.ext.dirac {
     requires transitive io.vidocq.dirac.rest;
 
     // Cassini REST extension: it scans the dirac JAX-RS resource (@Path("/metrics")).
-    requires io.vidocq.runtime.ext.rest.cassini;
+    requires io.vidocq.runtime.extensions.jakartaee.core.cassini;
 
     requires jakarta.cdi;
     requires jakarta.ws.rs;

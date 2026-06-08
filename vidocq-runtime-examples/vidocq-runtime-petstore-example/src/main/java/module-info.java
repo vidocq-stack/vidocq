@@ -36,15 +36,15 @@ module io.vidocq.runtime.examples.petstore {
 
     requires io.vidocq.runtime.core;
     requires io.vidocq.runtime.spi;
-    requires io.vidocq.runtime.ext.rest.cassini;
+    requires io.vidocq.runtime.extensions.jakartaee.core.cassini;
     // Required by cassini-processor APT output: $$CassiniAdapter implements
     // io.vidocq.cassini.spi.gen.ResourceAdapter and uses InjectionSupport/ParamKind.
     requires io.vidocq.cassini.api;
-    requires io.vidocq.runtime.ext.mansart.pool;
-    requires io.vidocq.runtime.ext.mansart.data;
-    requires io.vidocq.runtime.ext.mansart.transactions;
+    requires io.vidocq.runtime.extensions.jakartaee.web.mansart.pool;
+    requires io.vidocq.runtime.extensions.jakartaee.web.mansart.data;
+    requires io.vidocq.runtime.extensions.jakartaee.web.mansart.transactions;
     // MicroProfile Config (opt-in).
-    requires io.vidocq.runtime.ext.ravel;
+    requires io.vidocq.runtime.extensions.microprofile.ravel;
 
     requires io.vidocq.chappe.api;
     requires io.vidocq.vauban.core;

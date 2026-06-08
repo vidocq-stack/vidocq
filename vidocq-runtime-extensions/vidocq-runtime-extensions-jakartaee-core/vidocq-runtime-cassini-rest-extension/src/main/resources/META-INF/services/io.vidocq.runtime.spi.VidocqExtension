@@ -1,1 +1,1 @@
-io.vidocq.runtime.ext.rest.cassini.CassiniExtension
+io.vidocq.runtime.extensions.jakartaee.core.cassini.CassiniExtension

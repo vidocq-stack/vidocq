@@ -79,7 +79,7 @@
                 <configuration>
                     <!-- Vauban needs reflective access to the test package for
                          @ConfigProperty injection points in beans. -->
-                    <argLine>--add-opens io.vidocq.runtime.ext.ravel/io.vidocq.runtime.ext.ravel=io.vidocq.vauban.core</argLine>
+                    <argLine>--add-opens io.vidocq.runtime.extensions.microprofile.ravel/io.vidocq.runtime.extensions.microprofile.ravel=io.vidocq.vauban.core</argLine>
                 </configuration>
             </plugin>
         </plugins>

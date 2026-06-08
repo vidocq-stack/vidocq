@@ -325,7 +325,7 @@ module com.example.myapp {
     requires jakarta.ws.rs;
     requires jakarta.json.bind;
     requires io.vidocq.runtime.core;
-    requires io.vidocq.runtime.ext.rest.cassini;
+    requires io.vidocq.runtime.extensions.jakartaee.core.cassini;
 
     opens com.example.myapp;       // JAX-RS + JSON-B reflection
 }

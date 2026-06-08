@@ -1,1 +1,1 @@
-io.vidocq.runtime.ext.mansart.data.MansartDataIntegrationExtension
+io.vidocq.runtime.extensions.jakartaee.web.mansart.data.MansartDataIntegrationExtension

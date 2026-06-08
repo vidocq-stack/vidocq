@@ -26,7 +26,7 @@
  * Vidocq, and republishes the {@code BuildCompatibleExtension} from cervantes-cdi-vauban
  * under the name of this module so that ServiceLoader discovers it.</p>
  */
-module io.vidocq.runtime.ext.cervantes.jwt {
+module io.vidocq.runtime.extensions.microprofile.cervantes {
     requires transitive io.vidocq.cervantes.api;
     requires transitive io.vidocq.cervantes.core;
     requires transitive io.vidocq.cervantes.cdi.vauban;
@@ -36,15 +36,15 @@ module io.vidocq.runtime.ext.cervantes.jwt {
     // MicroProfile Config. Cervantes-core uses @ConfigProperty for this, so
     // we transitively draw the Ravel extension (which brings ravel-cdi-vauban +
     // the RavelConfigSourceProvider).
-    requires transitive io.vidocq.runtime.ext.ravel;
+    requires transitive io.vidocq.runtime.extensions.microprofile.ravel;
 
     requires jakarta.cdi;
 
     // vauban-core instantiates the BCE reflectively (getDeclaredConstructor + setAccessible +
     // newInstance in BceProcessor) — `provides ... with` alone is not enough. The BCE lives in this
     // wrapper's internal, non-exported package, so open it to vauban-core for that reflective access.
-    opens io.vidocq.runtime.ext.cervantes to io.vidocq.vauban.core;
+    opens io.vidocq.runtime.extensions.microprofile.cervantes to io.vidocq.vauban.core;
 
     provides jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension
-            with io.vidocq.runtime.ext.cervantes.CervantesJwtBuildCompatibleExtension;
+            with io.vidocq.runtime.extensions.microprofile.cervantes.CervantesJwtBuildCompatibleExtension;
 }

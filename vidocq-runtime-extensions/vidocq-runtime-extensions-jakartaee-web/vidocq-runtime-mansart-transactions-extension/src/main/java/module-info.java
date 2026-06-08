@@ -26,12 +26,12 @@
  * {@code META-INF/services/jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension}.
  * This extension does not register the BCE itself; it only validates wiring at boot.
  */
-module io.vidocq.runtime.ext.mansart.transactions {
+module io.vidocq.runtime.extensions.jakartaee.web.mansart.transactions {
     requires transitive io.vidocq.runtime.spi;
     requires io.vidocq.vauban.core;
     requires transitive io.vidocq.mansart.transactions.cdi;
     requires jakarta.cdi;
 
     provides io.vidocq.runtime.spi.VidocqExtension
-            with io.vidocq.runtime.ext.mansart.transactions.MansartTransactionsIntegrationExtension;
+            with io.vidocq.runtime.extensions.jakartaee.web.mansart.transactions.MansartTransactionsIntegrationExtension;
 }
