@@ -6,23 +6,50 @@
 
     <parent>
         <groupId>io.vidocq.runtime</groupId>
-        <artifactId>vidocq-runtime-examples</artifactId>
+        <artifactId>vidocq-runtime-core-extensions</artifactId>
         <version>0.2.0-SNAPSHOT</version>
     </parent>
 
-    <artifactId>vidocq-runtime-h2-module</artifactId>
-    <name>Vidocq :: Examples :: H2 (modularised)</name>
+    <!-- Distinct groupId: this artifact bundles third-party (H2) bytecode, so it must not sit
+         under the io.vidocq.runtime namespace as if Vidocq authored it. Only module-info.java
+         is contributed by Vidocq; every other class is H2's, under its own license (see below). -->
+    <groupId>io.vidocq.runtime.thirdparty</groupId>
+    <artifactId>vidocq-runtime-h2-jpms-repackaged</artifactId>
+    <name>Vidocq :: Third-party :: H2 (JPMS repackaged)</name>
     <description>
-        Re-package of com.h2database:h2 with an explicit module-info.class (module name:
-        com.h2database). The official artifact only declares Automatic-Module-Name, which
-        jlink rejects — this module turns it into an explicit JPMS module without touching any
-        H2 class, so examples that embed H2 (e.g. the petstore) can be jlink'd / jpackage'd.
-        The module-info was generated with `jdeps --generate-module-info` and requires JDK
-        modules only.
+        Verbatim repackage of com.h2database:h2 with an added explicit module-info.class (module
+        name: com.h2database, generated with `jdeps --generate-module-info`). The official artifact
+        only declares Automatic-Module-Name, which jlink rejects — this turns it into an explicit
+        JPMS module WITHOUT modifying any H2 class, so runtimes/examples embedding H2 can be
+        jlink'd / jpackage'd. The H2 class files retain their original license (MPL 2.0 / EPL 1.0);
+        only the added module-info.java is Vidocq's, under the project license.
     </description>
+
+    <!--
+        License of the BUNDLED H2 class files. H2 is dual-licensed; we redistribute under these
+        terms unchanged. The added module-info.java is separately licensed under the Vidocq
+        project license (EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later) — see META-INF/NOTICE.txt.
+    -->
+    <licenses>
+        <license>
+            <name>MPL 2.0</name>
+            <url>https://www.mozilla.org/en-US/MPL/2.0/</url>
+            <distribution>repo</distribution>
+            <comments>Mozilla Public License 2.0 — license of the bundled H2 Database Engine.</comments>
+        </license>
+        <license>
+            <name>EPL 1.0</name>
+            <url>https://www.eclipse.org/legal/epl-v10.html</url>
+            <distribution>repo</distribution>
+            <comments>Eclipse Public License 1.0 — alternative license of the bundled H2 Database Engine.</comments>
+        </license>
+    </licenses>
 
     <properties>
         <h2.version>2.3.232</h2.version>
+        <!-- This module ships third-party bytecode, not Vidocq source: no source/javadoc jars. -->
+        <maven.source.skip>true</maven.source.skip>
+        <maven.javadoc.skip>true</maven.javadoc.skip>
     </properties>
 
     <dependencies>
@@ -43,7 +70,8 @@
         <plugins>
             <!-- 1) Unpack the H2 .class files (base release) into target/classes. The
                  META-INF/versions/** overrides are dropped so a single root module-info governs;
-                 the base classes are a complete, runnable set on Java 25. -->
+                 the base classes are a complete, runnable set on Java 25. The original
+                 META-INF/services/java.sql.Driver is preserved. -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-dependency-plugin</artifactId>
@@ -64,7 +92,9 @@
                                     <outputDirectory>${project.build.outputDirectory}</outputDirectory>
                                     <!-- Drop the original manifest (Automatic-Module-Name is now
                                          superfluous), the Maven metadata, and the multi-release
-                                         overrides. maven-jar-plugin rewrites a clean manifest. -->
+                                         overrides. maven-jar-plugin rewrites a clean manifest. Our
+                                         own LICENSE/NOTICE under src/main/resources/META-INF are
+                                         copied afterwards by maven-resources. -->
                                     <excludes>META-INF/MANIFEST.MF,META-INF/maven/**,META-INF/versions/**</excludes>
                                 </artifactItem>
                             </artifactItems>

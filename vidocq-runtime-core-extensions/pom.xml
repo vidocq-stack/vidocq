@@ -32,6 +32,9 @@
         <module>vidocq-runtime-grimm-openapi-ui-extension</module>
         <module>vidocq-runtime-dirac-metrics-extension</module>
         <module>vidocq-runtime-ravel-config-extension</module>
+        <!-- Not an SPI extension: a JPMS repackage of the H2 driver (named module
+             com.h2database) so examples embedding H2 can be jlink'd / jpackage'd. -->
+        <module>vidocq-runtime-h2-jpms-repackaged</module>
     </modules>
 
     <build>

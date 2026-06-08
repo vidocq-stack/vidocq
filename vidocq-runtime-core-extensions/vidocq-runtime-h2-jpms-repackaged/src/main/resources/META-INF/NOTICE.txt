@@ -1,0 +1,35 @@
+vidocq-runtime-h2-jpms-repackaged
+=================================
+
+This artifact is a VERBATIM repackage of the H2 Database Engine. Every class file it
+contains is unmodified H2 bytecode; the only file added by the Vidocq project is the
+explicit JPMS descriptor `module-info.class` (source: `src/main/java/module-info.java`),
+generated with `jdeps --generate-module-info`. No H2 class is altered.
+
+Bundled software
+----------------
+  H2 Database Engine, version 2.3.232
+  Copyright (c) 2004-2024 H2 Group. All rights reserved.
+  Project home : https://h2database.com
+  Source code  : https://github.com/h2database/h2database (tag `version-2.3.232`)
+
+  H2 is dual-licensed under:
+    - Mozilla Public License, version 2.0 (MPL 2.0)
+        https://www.mozilla.org/en-US/MPL/2.0/
+    - Eclipse Public License, version 1.0 (EPL 1.0)
+        https://www.eclipse.org/legal/epl-v10.html
+
+  The H2 class files in this jar are redistributed unchanged under those terms. The full
+  text of the MPL 2.0 is included alongside this notice as `META-INF/LICENSE-H2-MPL-2.0.txt`.
+  In accordance with MPL 2.0 §3.2, the corresponding Source Code Form is available at the
+  H2 source repository referenced above.
+
+Added by Vidocq
+---------------
+  `module-info.java` (the only Vidocq-authored file in this artifact) is licensed under the
+  Vidocq project license:
+    EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+  It declares the module `com.h2database` and `provides java.sql.Driver with org.h2.Driver`,
+  so the driver is discoverable through the modular ServiceLoader. This descriptor is a
+  factual, non-creative interface declaration over the bundled H2 API and does not relicense
+  any H2 code.

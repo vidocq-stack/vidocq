@@ -52,12 +52,15 @@ goals de packaging :
 
 ## Build
 
-Depuis l'agrégateur des exemples (le module H2 modularisé doit être construit d'abord — `-am`
-s'en charge) :
+Comme tout exemple, le petstore résout le runtime (et l'extension H2 ci-dessous) depuis le
+dépôt local : construire d'abord le workspace runtime, puis l'exemple.
 
 ```bash
-cd vidocq-runtime-examples
-../mvnw -ntp -DskipTests -pl vidocq-runtime-petstore-example -am clean package
+# depuis la racine du sous-projet vidocq/ : installe core + extensions (dont le repackage H2)
+./mvnw -ntp -DskipTests install
+
+# puis l'exemple seul
+./mvnw -ntp -DskipTests -pl vidocq-runtime-examples/vidocq-runtime-petstore-example clean package
 ```
 
 Le profil `dist` (actif par défaut) produit :
@@ -68,11 +71,14 @@ Le profil `dist` (actif par défaut) produit :
 
 Pour un cycle rapide compile + tests sans packaging natif : `-P'!dist'`.
 
-> **Pourquoi un `vidocq-runtime-h2-module` séparé ?** H2 n'est qu'un *module automatique*
-> (manifest `Automatic-Module-Name`, pas de `module-info`), ce que `jlink` refuse. Le module
-> frère `vidocq-runtime-h2-module` republie H2 en module JPMS nommé `com.h2database`
-> (`module-info` généré par `jdeps`, `provides java.sql.Driver with org.h2.Driver`), ce qui
-> permet de produire le jpackage. Le petstore en dépend à la place du `com.h2database:h2` brut.
+> **Pourquoi `vidocq-runtime-h2-jpms-repackaged` ?** H2 n'est qu'un *module automatique*
+> (manifest `Automatic-Module-Name`, pas de `module-info`), ce que `jlink` refuse. L'artefact
+> `io.vidocq.runtime.thirdparty:vidocq-runtime-h2-jpms-repackaged` (dans
+> `vidocq-runtime-core-extensions/`) republie H2 **à l'identique** en module JPMS nommé
+> `com.h2database` (`module-info` généré par `jdeps`, `provides java.sql.Driver with
+> org.h2.Driver`), ce qui permet de produire le jpackage. Le petstore en dépend à la place du
+> `com.h2database:h2` brut. Les classes H2 restent sous leur licence d'origine (MPL 2.0 / EPL 1.0,
+> cf. `META-INF/NOTICE.txt`) ; seul le `module-info` ajouté est sous licence Vidocq.
 
 ## Lancer
 
