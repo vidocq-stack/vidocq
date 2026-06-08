@@ -4,7 +4,7 @@
 
     <groupId>io.vidocq</groupId>
     <artifactId>vidocq-parent</artifactId>
-    <version>0.1.1-SNAPSHOT</version>
+    <version>0.1.2-SNAPSHOT</version>
     <packaging>pom</packaging>
 
     <name>Vidocq :: Parent</name>
@@ -18,10 +18,28 @@
       <tag>HEAD</tag>
   </scm>
 
+    <!--
+        Disjunctive triple license: a recipient may use this software under
+        ANY ONE of the three licences below, at their option. EPL-2.0 is the
+        anchor (see the LICENSE file); per EPL-2.0 section 1, GPL-2.0-or-later
+        is offered as a Secondary License.
+        SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+    -->
     <licenses>
         <license>
-            <name>Apache License, Version 2.0</name>
-            <url>https://www.apache.org/licenses/LICENSE-2.0</url>
+            <name>EPL-2.0</name>
+            <url>https://www.eclipse.org/legal/epl-2.0/</url>
+            <distribution>repo</distribution>
+        </license>
+        <license>
+            <name>EUPL-1.2</name>
+            <url>https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12</url>
+            <distribution>repo</distribution>
+        </license>
+        <license>
+            <name>GPL-2.0-or-later</name>
+            <url>https://www.gnu.org/licenses/old-licenses/gpl-2.0.html</url>
+            <distribution>repo</distribution>
         </license>
     </licenses>
 
@@ -88,6 +106,11 @@
              le script de release lorsque la dep upstream est exprimée via property. -->
         <versions.plugin.version>2.18.0</versions.plugin.version>
         <jacoco.version>0.8.13</jacoco.version>
+        <!-- mycila license-maven-plugin: build-time only, no runtime dependency.
+             Manages the triple-license SPDX header on every .java source file.
+             Header template lives at <repo-root>/etc/license-header.txt. -->
+        <license.maven.plugin.version>4.6</license.maven.plugin.version>
+        <license.year>2026</license.year>
 
         <!--
             central-publishing-maven-plugin's autoPublish flag, exposed as a
@@ -210,6 +233,60 @@
                 </plugin>
             </plugins>
         </pluginManagement>
+
+        <plugins>
+            <!--
+                License header enforcement, inherited and ACTIVE in every child
+                reactor. `check` is bound to the verify phase so a missing or
+                stale SPDX header fails the build (and the CI). Run
+                `mvn license:format` once after a relicensing to (re)write all
+                headers. The header path uses ${maven.multiModuleProjectDirectory}
+                so it resolves to each repository's own root etc/ directory,
+                whether the project is single- or multi-module.
+            -->
+            <plugin>
+                <groupId>com.mycila</groupId>
+                <artifactId>license-maven-plugin</artifactId>
+                <version>${license.maven.plugin.version}</version>
+                <configuration>
+                    <licenseSets>
+                        <licenseSet>
+                            <header>${maven.multiModuleProjectDirectory}/etc/license-header.txt</header>
+                            <excludes>
+                                <exclude>**/target/**</exclude>
+                                <exclude>**/.claude/**</exclude>
+                                <exclude>**/*.adoc</exclude>
+                                <exclude>**/*.md</exclude>
+                                <exclude>**/*.txt</exclude>
+                                <exclude>**/*.xml</exclude>
+                                <exclude>**/*.yml</exclude>
+                                <exclude>**/*.yaml</exclude>
+                                <exclude>**/*.json</exclude>
+                                <exclude>**/*.properties</exclude>
+                                <exclude>LICENSE</exclude>
+                                <exclude>NOTICE</exclude>
+                                <exclude>**/*.sh</exclude>
+                            </excludes>
+                        </licenseSet>
+                    </licenseSets>
+                    <properties>
+                        <year>${license.year}</year>
+                    </properties>
+                    <mapping>
+                        <java>SLASHSTAR_STYLE</java>
+                    </mapping>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>check-license-headers</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
     </build>
 
     <profiles>
