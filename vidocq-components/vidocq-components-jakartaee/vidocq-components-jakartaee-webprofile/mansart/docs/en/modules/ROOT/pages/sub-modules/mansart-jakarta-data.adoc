@@ -26,6 +26,9 @@
 | `mansart-data-processor`
 | APT — static metamodel (`_Book`, `Book_`) + `*RepositoryImpl` + `META-INF/mansart-repositories.list`.
 
+| `mansart-data-maven-plugin`
+| Maven plugin — generates, at build time, the `*RepositoryImpl` for `@Repository` interfaces coming from **dependency jars** (where the APT never ran), indexed in `META-INF/mansart-repositories-external.list`.
+
 | `mansart-data-dialect-spi`
 | SPI: `Dialect`, `DialectFactory`, neutral query AST.
 
@@ -36,7 +39,7 @@
 | PostgreSQL dialect (production target).
 
 | `mansart-data-cdi`
-| CDI 4.1 bootstrap — BCE that reads `META-INF/mansart-repositories.list` and declares `@ApplicationScoped` beans.
+| CDI 4.1 bootstrap — BCE that reads `META-INF/mansart-repositories.list` (and `…-external.list` produced by the plugin) and declares the repository beans.
 
 | `mansart-data-tests`
 | H2 in-memory unit tests.
@@ -110,6 +113,56 @@ flowchart TB
 * Connection: borrowed from the injected `DataSource`; released at the end of the method (unless a TX is active → the TX connection).
 
 See xref:internals.adoc[Internals] for codegen and mapping details.
+
+== Repositories from external jars (AOT generation, Maven plugin)
+
+By default, only the `@Repository` interfaces present in the application's **sources** are
+materialized by the APT. A `@Repository` shipped by an **already-compiled dependency** (a library
+that did not run the APT) therefore has no implementation: at runtime the BCE falls back to a
+**reflective** path (a proxy generated at startup via the Class-File API).
+
+`mansart-data-maven-plugin` removes that fallback for application builds. Its
+`generate-external-repositories` goal (phase `generate-sources`):
+
+. scans the compile classpath (JDK Class-File API) for `@Repository` interfaces with no
+  implementation (deduplicated against the `mansart-repositories*.list` indices already present);
+. reuses **the very same emitters as the APT** through a source-less `javac` task — no duplicated
+  codegen;
+. generates the `*RepositoryImpl` (and any missing `_Entity` metamodels) into an
+  **application-owned package**, referring to the external types by fully-qualified name → **no JPMS
+  split package** with the originating jar;
+. writes the `META-INF/mansart-repositories-external.list` index, read by the `mansart-data-cdi` BCE
+  alongside the APT index.
+
+The result: beans for library-provided repositories are wired **statically** (zero reflection), just
+like the application's own. The reflective path remains the safety net for archives you do not build
+(TCK suites, opaque jars).
+
+[source,xml]
+----
+<plugin>
+  <groupId>io.vidocq.mansart</groupId>
+  <artifactId>mansart-data-maven-plugin</artifactId>
+  <version>${mansart.version}</version>
+  <executions>
+    <execution>
+      <goals><goal>generate-external-repositories</goal></goals>
+    </execution>
+  </executions>
+  <!-- Optional: target package for the generated classes (default: derived from project coordinates). -->
+  <configuration>
+    <targetPackage>com.acme.app.mansart.generated</targetPackage>
+  </configuration>
+</plugin>
+----
+
+[NOTE]
+====
+The generated metamodel reads the entity's private fields via `MethodHandles.privateLookupIn`, so an
+entity provided by an external jar must remain **reflectively accessible** (classpath, or an open
+module). A sealed module-path entity requires an `opens`. If the library was itself compiled with the
+APT (it already ships its `_Entity`), the plugin reuses that metamodel instead of regenerating one.
+====
 
 == Dialects
 
