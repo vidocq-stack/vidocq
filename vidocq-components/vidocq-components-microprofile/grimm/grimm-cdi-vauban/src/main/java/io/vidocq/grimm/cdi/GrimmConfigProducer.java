@@ -20,7 +20,6 @@
 package io.vidocq.grimm.cdi;
 
 import io.vidocq.grimm.internal.config.GrimmConfig;
-import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.inject.Produces;
 import org.eclipse.microprofile.config.Config;
@@ -38,7 +37,7 @@ import org.eclipse.microprofile.config.ConfigProvider;
 public class GrimmConfigProducer {
 
     @Produces
-    @ApplicationScoped
+    @Dependent
     public GrimmConfig produceGrimmConfig() {
         try {
             Config config = ConfigProvider.getConfig();
@@ -52,7 +51,7 @@ public class GrimmConfigProducer {
 
     /** Bridges the BCE-discovered {@code @Path} classes into the CDI runtime. */
     @Produces
-    @ApplicationScoped
+    @Dependent
     public ScannedTypes produceScannedTypes() {
         return ScannedTypes.of(GrimmExtension.discoveredTypes());
     }

@@ -44,6 +44,19 @@
       <scope>provided</scope>
     </dependency>
 
+    <!--
+      Vauban API (provided): referenced only by the Vauban APT-generated infrastructure
+      (_Factory / _ClientProxy / _VaubanComponents). Build-time only — no runtime coupling to
+      a specific Vauban version beyond the stable component SPI. Pinned to the runtime line (0.2.x)
+      so the generated metadata is consumed correctly by the Vidocq runtime.
+    -->
+    <dependency>
+      <groupId>io.vidocq.vauban</groupId>
+      <artifactId>vauban-api</artifactId>
+      <version>0.2.0-SNAPSHOT</version>
+      <scope>provided</scope>
+    </dependency>
+
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter</artifactId>
@@ -75,5 +88,46 @@
       <scope>test</scope>
     </dependency>
   </dependencies>
+
+  <build>
+    <plugins>
+      <!--
+        Vauban codegen runs as an ANNOTATION PROCESSOR on this module's own beans, so the jar ships
+        as a functional Vauban bean archive (META-INF/vauban-beans.list + _Factory / _ClientProxy /
+        _VaubanComponents). Combined with META-INF/services BCE registration and META-INF/beans.xml,
+        this lets any Vidocq runtime discover grimm's beans and run GrimmExtension (which synthesises
+        GrimmModelCache) without scanning the dependency from the consumer. Build-time only; the
+        output is inert for a standard CDI container (Weld). module-info stays uncompiled here (the
+        jar remains an automatic module) — consistent with the rest of grimm.
+      -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <executions>
+          <!-- Vauban APT on MAIN sources only: produces the bean infrastructure shipped in the jar. -->
+          <execution>
+            <id>default-compile</id>
+            <configuration>
+              <annotationProcessorPaths>
+                <path>
+                  <groupId>io.vidocq.vauban</groupId>
+                  <artifactId>vauban-processor</artifactId>
+                  <version>0.2.0-SNAPSHOT</version>
+                </path>
+              </annotationProcessorPaths>
+            </configuration>
+          </execution>
+          <!-- No annotation processing on tests: grimm's CDI test fixtures (nested producers) are
+               not vauban-APT-shaped and are exercised via vauban's embedded runtime discovery. -->
+          <execution>
+            <id>default-testCompile</id>
+            <configuration>
+              <proc>none</proc>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
 </project>
 
