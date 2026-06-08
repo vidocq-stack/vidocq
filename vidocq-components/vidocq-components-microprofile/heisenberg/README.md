@@ -60,4 +60,4 @@ sdk env   # Java 25-tem + Maven 3.9.16
 
 ## License
 
-Apache License, Version 2.0 — see [LICENSE](LICENSE).
+EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later — see [LICENSE](LICENSE).
