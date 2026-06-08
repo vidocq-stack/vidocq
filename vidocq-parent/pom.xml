@@ -266,6 +266,22 @@
                                 <exclude>LICENSE</exclude>
                                 <exclude>NOTICE</exclude>
                                 <exclude>**/*.sh</exclude>
+                                <!-- Web/binary assets (e.g. vendored swagger-ui-dist under
+                                     META-INF/resources): never carry a source header. -->
+                                <exclude>**/*.js</exclude>
+                                <exclude>**/*.css</exclude>
+                                <exclude>**/*.html</exclude>
+                                <exclude>**/*.htm</exclude>
+                                <exclude>**/*.map</exclude>
+                                <exclude>**/*.png</exclude>
+                                <exclude>**/*.ico</exclude>
+                                <exclude>**/*.gif</exclude>
+                                <exclude>**/*.jpg</exclude>
+                                <exclude>**/*.svg</exclude>
+                                <exclude>**/*.woff</exclude>
+                                <exclude>**/*.woff2</exclude>
+                                <exclude>**/*.ttf</exclude>
+                                <exclude>**/*.eot</exclude>
                             </excludes>
                         </licenseSet>
                     </licenseSets>
