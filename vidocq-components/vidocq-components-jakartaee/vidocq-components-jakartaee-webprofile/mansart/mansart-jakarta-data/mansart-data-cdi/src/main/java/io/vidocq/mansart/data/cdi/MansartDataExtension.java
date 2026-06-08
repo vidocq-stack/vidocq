@@ -78,26 +78,34 @@ public final class MansartDataExtension implements BuildCompatibleExtension {
         scanned.add(MansartRuntimeProducer.class.getName());
 
         ClassLoader cl = currentClassLoader();
-        Enumeration<URL> resources;
-        try {
-            resources = cl.getResources("META-INF/mansart-repositories.list");
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
-        while (resources.hasMoreElements()) {
-            URL url = resources.nextElement();
-            try (BufferedReader r = new BufferedReader(
-                    new InputStreamReader(url.openStream(), StandardCharsets.UTF_8))) {
-                String line;
-                while ((line = r.readLine()) != null) {
-                    line = line.trim();
-                    if (line.isEmpty() || line.startsWith("#")) continue;
-                    int eq = line.indexOf('=');
-                    if (eq < 0) continue;
-                    entries.add(new RepoEntry(line.substring(0, eq).trim(), line.substring(eq + 1).trim()));
-                }
+        // Two compile-time indices, identical format (itf=impl): the APT-produced list (repositories
+        // in the application's own sources) and the mansart-data-maven-plugin list (repositories from
+        // pre-compiled dependency jars, generated ahead of time into an app-owned package). Both map
+        // to a @Singleton *Impl with an (RepositoryRuntime) constructor → MansartRepoCreator path.
+        for (String resource : new String[]{
+                "META-INF/mansart-repositories.list",
+                "META-INF/mansart-repositories-external.list"}) {
+            Enumeration<URL> resources;
+            try {
+                resources = cl.getResources(resource);
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
+            }
+            while (resources.hasMoreElements()) {
+                URL url = resources.nextElement();
+                try (BufferedReader r = new BufferedReader(
+                        new InputStreamReader(url.openStream(), StandardCharsets.UTF_8))) {
+                    String line;
+                    while ((line = r.readLine()) != null) {
+                        line = line.trim();
+                        if (line.isEmpty() || line.startsWith("#")) continue;
+                        int eq = line.indexOf('=');
+                        if (eq < 0) continue;
+                        entries.add(new RepoEntry(line.substring(0, eq).trim(), line.substring(eq + 1).trim()));
+                    }
+                } catch (IOException e) {
+                    throw new UncheckedIOException(e);
+                }
             }
         }
     }

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.mansart</groupId>
+        <artifactId>mansart-jakarta-data</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>mansart-data-external-lib</artifactId>
+    <name>Mansart :: Data :: IT :: External Library (fixture)</name>
+    <description>Test fixture: a jar exposing a @Entity and a @Repository, compiled WITHOUT the
+        mansart-data-processor — i.e. a pre-compiled dependency for which no repository
+        implementation exists. Consumed by mansart-data-external-it through the Maven plugin.</description>
+
+    <dependencies>
+        <!-- Spec APIs only; compile scope so they are transitive to the IT that compiles the
+             ahead-of-time generated sources referencing this entity / repository. -->
+        <dependency>
+            <groupId>jakarta.data</groupId>
+            <artifactId>jakarta.data-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.persistence</groupId>
+            <artifactId>jakarta.persistence-api</artifactId>
+        </dependency>
+    </dependencies>
+</project>

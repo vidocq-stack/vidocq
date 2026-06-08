@@ -81,8 +81,11 @@
         <module>mansart-data-dialects</module>
         <module>mansart-data-core</module>
         <module>mansart-data-processor</module>
+        <module>mansart-data-maven-plugin</module>
         <module>mansart-data-cdi</module>
         <module>mansart-data-tests</module>
+        <module>mansart-data-external-lib</module>
+        <module>mansart-data-external-it</module>
     </modules>
 
     <dependencyManagement>
@@ -126,6 +129,11 @@
             <dependency>
                 <groupId>io.vidocq.mansart</groupId>
                 <artifactId>mansart-data-processor</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.mansart</groupId>
+                <artifactId>mansart-data-maven-plugin</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

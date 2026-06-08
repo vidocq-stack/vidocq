@@ -22,8 +22,6 @@ package io.vidocq.mansart.data.processor;
 import io.vidocq.mansart.data.processor.EntityScanner.AttributeDescriptor;
 import io.vidocq.mansart.data.processor.EntityScanner.EntityDescriptor;
 
-import javax.annotation.processing.Filer;
-import javax.tools.JavaFileObject;
 import java.io.IOException;
 import java.io.PrintWriter;
 
@@ -33,9 +31,9 @@ import java.io.PrintWriter;
  */
 final class JpaMetamodelWriter {
 
-    private final Filer filer;
+    private final SourceSink sink;
 
-    JpaMetamodelWriter(Filer filer) { this.filer = filer; }
+    JpaMetamodelWriter(SourceSink sink) { this.sink = sink; }
 
     void write(EntityDescriptor e) throws IOException {
         String pkg = packageOf(e.type().getQualifiedName().toString());
@@ -43,8 +41,7 @@ final class JpaMetamodelWriter {
         String className = simple + "_";
         String fqn = pkg.isEmpty() ? className : pkg + "." + className;
 
-        JavaFileObject file = filer.createSourceFile(fqn, e.type());
-        try (PrintWriter w = new PrintWriter(file.openWriter())) {
+        try (PrintWriter w = new PrintWriter(sink.createSource(fqn))) {
             if (!pkg.isEmpty()) {
                 w.println("package " + pkg + ";");
                 w.println();

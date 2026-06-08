@@ -19,6 +19,7 @@
  */
 package io.vidocq.mansart.data.processor;
 
+import javax.annotation.processing.Messager;
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.AnnotationValue;
@@ -31,6 +32,7 @@ import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.Elements;
+import javax.lang.model.util.Types;
 import javax.tools.Diagnostic;
 import java.util.ArrayList;
 import java.util.List;
@@ -48,10 +50,18 @@ import java.util.Map;
  */
 final class EntityScanner {
 
-    private final ProcessingEnvironment env;
+    private final Elements elements;
+    private final Types    types;
+    private final Messager messager; // nullable — null in the Maven-plugin path
 
     EntityScanner(ProcessingEnvironment env) {
-        this.env = env;
+        this(env.getElementUtils(), env.getTypeUtils(), env.getMessager());
+    }
+
+    EntityScanner(Elements elements, Types types, Messager messager) {
+        this.elements = elements;
+        this.types = types;
+        this.messager = messager;
     }
 
     EntityDescriptor scan(TypeElement type) {
@@ -155,8 +165,8 @@ final class EntityScanner {
 
     /* ----- helpers ---- */
 
-    static boolean isJpaPresent(ProcessingEnvironment env) {
-        return env.getElementUtils().getTypeElement("jakarta.persistence.Entity") != null;
+    boolean isJpaPresent() {
+        return elements.getTypeElement("jakarta.persistence.Entity") != null;
     }
 
     private boolean hasAnnotation(Element e, String fqn) {
@@ -171,7 +181,6 @@ final class EntityScanner {
     private Map<String, ? extends AnnotationValue> annotationValues(Element e, String fqn) {
         for (AnnotationMirror a : e.getAnnotationMirrors()) {
             if (((TypeElement) a.getAnnotationType().asElement()).getQualifiedName().contentEquals(fqn)) {
-                Elements elements = env.getElementUtils();
                 @SuppressWarnings("unchecked")
                 Map<String, ? extends AnnotationValue> values =
                         (Map<String, ? extends AnnotationValue>)
@@ -236,12 +245,14 @@ final class EntityScanner {
 
     private boolean isEnumType(TypeMirror t) {
         if (t.getKind() != TypeKind.DECLARED) return false;
-        Element el = env.getTypeUtils().asElement(t);
+        Element el = types.asElement(t);
         return el != null && el.getKind() == ElementKind.ENUM;
     }
 
     private void error(Element element, String message) {
-        env.getMessager().printMessage(Diagnostic.Kind.ERROR, "[mansart-data] " + message, element);
+        if (messager != null) {
+            messager.printMessage(Diagnostic.Kind.ERROR, "[mansart-data] " + message, element);
+        }
     }
 
     /* ----- DTOs ---- */

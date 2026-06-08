@@ -21,7 +21,6 @@ package io.vidocq.mansart.data.processor;
 
 import io.vidocq.mansart.data.core.QueryMethodParser;
 
-import javax.annotation.processing.Filer;
 import javax.annotation.processing.Messager;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.TypeElement;
@@ -31,7 +30,6 @@ import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
 import javax.tools.Diagnostic;
-import javax.tools.JavaFileObject;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.List;
@@ -50,15 +48,15 @@ final class RepositoryWriter {
     private static final String CRUD_REPOSITORY  = "jakarta.data.repository.CrudRepository";
     private static final String DATA_REPOSITORY  = "jakarta.data.repository.DataRepository";
 
-    private final Filer    filer;
+    private final SourceSink sink;
     private final Elements elements;
     private final Types    types;
     private final EntityRegistry entityRegistry;
-    private final Messager messager;
+    private final Messager messager; // nullable — null in the Maven-plugin path
 
-    RepositoryWriter(Filer filer, Elements elements, Types types, EntityRegistry entityRegistry,
+    RepositoryWriter(SourceSink sink, Elements elements, Types types, EntityRegistry entityRegistry,
                      Messager messager) {
-        this.filer = filer;
+        this.sink = sink;
         this.elements = elements;
         this.types = types;
         this.entityRegistry = entityRegistry;
@@ -95,15 +93,27 @@ final class RepositoryWriter {
         return null;
     }
 
-    /** @return true if {@code repo} is a {@code @Repository} interface and an Impl was emitted. */
-    boolean writeIfRepository(TypeElement repo) throws IOException {
+    /** @return the entity {@link TypeElement} backing {@code repo}, or {@code null} when it is not
+     *  a {@code @Repository} extending {@code BasicRepository<E, K>} / {@code CrudRepository<E, K>}. */
+    TypeElement entityTypeOf(TypeElement repo) {
         TypeArgs args = findEntityAndKey(repo);
-        if (args == null) return false;
+        return args == null ? null : (TypeElement) args.entity.asElement();
+    }
+
+    /**
+     * In-place emission (APT): the {@code Impl} is written in the repository's own package and
+     * refers to the entity metamodel by its package-qualified name relative to that package.
+     *
+     * @return the fully-qualified name of the generated {@code Impl}, or {@code null} when
+     *         {@code repo} is not a {@code @Repository}.
+     */
+    String writeIfRepository(TypeElement repo) throws IOException {
+        TypeArgs args = findEntityAndKey(repo);
+        if (args == null) return null;
 
         String pkg       = elements.getPackageOf(repo).getQualifiedName().toString();
         String simple    = repo.getSimpleName().toString();
         String implName  = simple + "Impl";
-        String fqn       = pkg.isEmpty() ? implName : pkg + "." + implName;
         // For nested repository interfaces (e.g. EnclosingTest.MyRepo), the simple name
         // alone won't resolve from a top-level generated Impl class. We compute the
         // access name relative to the package — for a top-level interface this is the
@@ -114,6 +124,33 @@ final class RepositoryWriter {
         String entitySimple = entityType.getSimpleName().toString();
         String entityPkg = elements.getPackageOf(entityType).getQualifiedName().toString();
         String metamodel = entityPkg.isEmpty() ? "_" + entitySimple : entityPkg + "._" + entitySimple;
+        return emit(repo, args, pkg, implName, repoRef, metamodel);
+    }
+
+    /**
+     * Relocated emission (Maven plugin / {@link ExternalRepositoryCodegen}): the {@code Impl} is
+     * written into an application-owned package and refers to the (external) repository interface
+     * and metamodel by their fully-qualified names, so it never shares a package with the
+     * dependency jar that owns the {@code @Repository} (no JPMS split package).
+     *
+     * @param targetPkg     application-owned package the {@code Impl} is emitted into
+     * @param implName      simple name of the generated {@code Impl} class (collision-free)
+     * @param metamodelFqn  fully-qualified name of the relocated metamodel (e.g. {@code app.gen._Book})
+     * @return the fully-qualified name of the generated {@code Impl}, or {@code null} when
+     *         {@code repo} is not a {@code @Repository}.
+     */
+    String writeRelocated(TypeElement repo, String targetPkg, String implName, String metamodelFqn)
+            throws IOException {
+        TypeArgs args = findEntityAndKey(repo);
+        if (args == null) return null;
+        String repoRef = repo.getQualifiedName().toString();
+        return emit(repo, args, targetPkg, implName, repoRef, metamodelFqn);
+    }
+
+    private String emit(TypeElement repo, TypeArgs args, String pkg, String implName,
+                        String repoRef, String metamodel) throws IOException {
+        String fqn = pkg.isEmpty() ? implName : pkg + "." + implName;
+        TypeElement entityType = (TypeElement) args.entity.asElement();
         String entityFqn = entityType.getQualifiedName().toString();
         String idFqn     = args.idBoxedFqn();
 
@@ -122,8 +159,7 @@ final class RepositoryWriter {
         QueryMethodParser.PathResolver pathResolver =
                 buildPathResolver(entityType.getQualifiedName().toString());
 
-        JavaFileObject file = filer.createSourceFile(fqn, repo);
-        try (PrintWriter w = new PrintWriter(file.openWriter())) {
+        try (PrintWriter w = new PrintWriter(sink.createSource(fqn))) {
             if (!pkg.isEmpty()) {
                 w.println("package " + pkg + ";");
                 w.println();
@@ -174,7 +210,7 @@ final class RepositoryWriter {
 
             w.println("}");
         }
-        return true;
+        return fqn;
     }
 
     private void writeMethod(PrintWriter w, ExecutableElement m, TypeElement repo, DeclaredType repoType,

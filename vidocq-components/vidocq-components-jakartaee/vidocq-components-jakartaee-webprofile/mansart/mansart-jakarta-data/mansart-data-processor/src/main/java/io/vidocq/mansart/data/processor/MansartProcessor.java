@@ -49,16 +49,17 @@ public final class MansartProcessor extends AbstractProcessor {
     @Override
     public synchronized void init(ProcessingEnvironment env) {
         super.init(env);
+        FilerSourceSink sink  = new FilerSourceSink(env.getFiler());
         this.scanner          = new EntityScanner(env);
-        this.mansartWriter    = new MansartMetamodelWriter(env.getFiler());
+        this.mansartWriter    = new MansartMetamodelWriter(sink);
         // M7-29 — JPA static metamodel emission only when the SingularAttribute SPI is present
         // on the user's classpath (jakarta.persistence-api 3.2 ships it). Always-on otherwise
         // would force the dep on every consumer.
         this.jpaWriter        = env.getElementUtils()
                 .getTypeElement("jakarta.persistence.metamodel.SingularAttribute") != null
-                ? new JpaMetamodelWriter(env.getFiler()) : null;
+                ? new JpaMetamodelWriter(sink) : null;
         this.entityRegistry   = new EntityRegistry();
-        this.repositoryWriter = new RepositoryWriter(env.getFiler(),
+        this.repositoryWriter = new RepositoryWriter(sink,
                 env.getElementUtils(), env.getTypeUtils(), entityRegistry, env.getMessager());
     }
 
@@ -99,12 +100,9 @@ public final class MansartProcessor extends AbstractProcessor {
 
         for (TypeElement repo : repositories) {
             try {
-                if (repositoryWriter.writeIfRepository(repo)) {
-                    String pkg = processingEnv.getElementUtils().getPackageOf(repo)
-                            .getQualifiedName().toString();
-                    String simple = repo.getSimpleName().toString();
-                    String itfFqn  = repo.getQualifiedName().toString();
-                    String implFqn = pkg.isEmpty() ? simple + "Impl" : pkg + "." + simple + "Impl";
+                String implFqn = repositoryWriter.writeIfRepository(repo);
+                if (implFqn != null) {
+                    String itfFqn = repo.getQualifiedName().toString();
                     repoEntries.add(itfFqn + "=" + implFqn);
                 }
             } catch (IOException ex) {
