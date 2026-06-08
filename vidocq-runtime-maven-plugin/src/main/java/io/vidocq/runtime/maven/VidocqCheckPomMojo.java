@@ -125,7 +125,8 @@ public class VidocqCheckPomMojo extends AbstractMojo {
             return;
         }
 
-        Map<String, String> extensions = collectExtensions();
+        Map<String, String> extensionGroups = new LinkedHashMap<>();
+        Map<String, String> extensions = collectExtensions(extensionGroups);
         Map<String, String> codegenPaths = collectCodegenPaths();
 
         // A module that has no extension in its deps and no codegen bundle beyond the
@@ -138,7 +139,7 @@ public class VidocqCheckPomMojo extends AbstractMojo {
         }
 
         List<String> issues = new ArrayList<>();
-        issues.addAll(findMissingCodegens(extensions, codegenPaths));
+        issues.addAll(findMissingCodegens(extensions, extensionGroups, codegenPaths));
         issues.addAll(findOrphanCodegens(extensions, codegenPaths));
         issues.addAll(findVersionDrifts(extensions, codegenPaths));
 
@@ -161,6 +162,7 @@ public class VidocqCheckPomMojo extends AbstractMojo {
     // ---- Check 1: Extension declared, codegen missing ----
 
     private List<String> findMissingCodegens(Map<String, String> extensions,
+                                             Map<String, String> extensionGroups,
                                              Map<String, String> codegenPaths) {
         List<String> result = new ArrayList<>();
         for (Map.Entry<String, String> ext : extensions.entrySet()) {
@@ -171,8 +173,9 @@ public class VidocqCheckPomMojo extends AbstractMojo {
             String codegenName = "vidocq-runtime-" + m.group(1) + "-extension-codegen";
             if (codegenPaths.containsKey(codegenName)) continue;
 
-            // Silent-skip if the extension has no published codegen artifact.
-            if (!codegenArtifactExists(codegenName, extVer)) {
+            // Silent-skip if the extension has no published codegen artifact. The codegen
+            // bundle lives under the same group as its runtime extension, so resolve it there.
+            if (!codegenArtifactExists(codegenName, extensionGroups.get(extName), extVer)) {
                 getLog().debug("Vidocq checkpom: '" + extName + "' has no companion codegen artifact, skipping.");
                 continue;
             }
@@ -228,15 +231,27 @@ public class VidocqCheckPomMojo extends AbstractMojo {
 
     // ---- Extraction helpers ----
 
-    private Map<String, String> collectExtensions() {
+    /**
+     * Vidocq runtime extensions and their codegen bundles live either under the legacy
+     * {@code io.vidocq.runtime} group or under any {@code io.vidocq.runtime.extensions.*}
+     * sub-group introduced by the domain-based reorganization (essentials, jakartaee.core,
+     * jakartaee.web, microprofile, jpms.repackaged). Recognise the whole family.
+     */
+    static boolean isVidocqRuntimeGroup(String groupId) {
+        return groupId != null
+                && (groupId.equals(VIDOCQ_RUNTIME_GROUP) || groupId.startsWith(VIDOCQ_RUNTIME_GROUP + "."));
+    }
+
+    Map<String, String> collectExtensions(Map<String, String> groupsOut) {
         Map<String, String> result = new LinkedHashMap<>();
         for (Dependency d : project.getDependencies()) {
-            if (!VIDOCQ_RUNTIME_GROUP.equals(d.getGroupId())) continue;
+            if (!isVidocqRuntimeGroup(d.getGroupId())) continue;
             String aid = d.getArtifactId();
             // -codegen also contains "-extension-" — exclude explicitly.
             if (CODEGEN_PATTERN.matcher(aid).matches()) continue;
             if (!EXTENSION_PATTERN.matcher(aid).matches()) continue;
             result.put(aid, d.getVersion());
+            groupsOut.put(aid, d.getGroupId());
         }
         return result;
     }
@@ -260,7 +275,7 @@ public class VidocqCheckPomMojo extends AbstractMojo {
                 String gid = childText(path, "groupId");
                 String aid = childText(path, "artifactId");
                 String ver = childText(path, "version");
-                if (VIDOCQ_RUNTIME_GROUP.equals(gid) && aid != null) {
+                if (isVidocqRuntimeGroup(gid) && aid != null) {
                     result.putIfAbsent(aid, ver);
                 }
             }
@@ -273,11 +288,12 @@ public class VidocqCheckPomMojo extends AbstractMojo {
         return c != null ? c.getValue() : null;
     }
 
-    private boolean codegenArtifactExists(String artifactId, String version) {
+    private boolean codegenArtifactExists(String artifactId, String groupId, String version) {
         if (version == null) version = project.getVersion();
+        if (groupId == null) groupId = VIDOCQ_RUNTIME_GROUP;
         try {
             ArtifactRequest req = new ArtifactRequest();
-            req.setArtifact(new DefaultArtifact(VIDOCQ_RUNTIME_GROUP, artifactId, "pom", version));
+            req.setArtifact(new DefaultArtifact(groupId, artifactId, "pom", version));
             req.setRepositories(remoteRepos);
             repoSystem.resolveArtifact(repoSession, req);
             return true;

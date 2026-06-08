@@ -25,12 +25,12 @@
         </dependency>
 
         <dependency>
-            <groupId>io.vidocq.runtime</groupId>
+            <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
             <artifactId>vidocq-runtime-cassini-rest-extension</artifactId>
         </dependency>
         <!-- Health: pulls knock (api/core/cdi-vauban/jaxrs) transitively. -->
         <dependency>
-            <groupId>io.vidocq.runtime</groupId>
+            <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
             <artifactId>vidocq-runtime-knock-health-extension</artifactId>
         </dependency>
 
@@ -81,7 +81,7 @@
                 <configuration>
                     <annotationProcessorPaths combine.children="append">
                         <path>
-                            <groupId>io.vidocq.runtime</groupId>
+                            <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
                             <artifactId>vidocq-runtime-cassini-rest-extension-codegen</artifactId>
                             <version>${project.version}</version>
                             <type>pom</type>

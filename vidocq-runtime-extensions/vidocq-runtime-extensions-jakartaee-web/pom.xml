@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.runtime.extensions</groupId>
+        <artifactId>vidocq-runtime-extensions</artifactId>
+        <version>0.2.0-SNAPSHOT</version>
+    </parent>
+
+    <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+    <artifactId>vidocq-runtime-extensions-jakartaee-web</artifactId>
+    <packaging>pom</packaging>
+    <name>Vidocq :: Extensions :: Jakarta EE Web</name>
+    <description>Jakarta EE web/data extensions (Mansart Data, Persistence, connection pool)</description>
+
+    <modules>
+        <module>vidocq-runtime-mansart-pool-extension</module>
+        <module>vidocq-runtime-mansart-data-extension</module>
+        <module>vidocq-runtime-mansart-data-extension-codegen</module>
+        <module>vidocq-runtime-mansart-transactions-extension</module>
+        <module>vidocq-runtime-mansart-transactions-extension-codegen</module>
+    </modules>
+
+    <build>
+        <plugins>
+            <!-- Inherits the execution from vidocq-runtime-parent/pluginManagement.
+                 Re-declaring the <plugin> here (without restating <executions>) is
+                 enough to *activate* the bound checkpom execution on every child. -->
+            <plugin>
+                <groupId>io.vidocq.runtime</groupId>
+                <artifactId>vidocq-runtime-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+</project>

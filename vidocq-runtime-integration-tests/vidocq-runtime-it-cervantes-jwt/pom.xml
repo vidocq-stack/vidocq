@@ -30,11 +30,11 @@
             <artifactId>vidocq-runtime-core</artifactId>
         </dependency>
         <dependency>
-            <groupId>io.vidocq.runtime</groupId>
+            <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
             <artifactId>vidocq-runtime-cassini-rest-extension</artifactId>
         </dependency>
         <dependency>
-            <groupId>io.vidocq.runtime</groupId>
+            <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
             <artifactId>vidocq-runtime-cervantes-jwt-extension</artifactId>
         </dependency>
         <dependency>
@@ -103,7 +103,7 @@
                 <configuration>
                     <annotationProcessorPaths combine.children="append">
                         <path>
-                            <groupId>io.vidocq.runtime</groupId>
+                            <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
                             <artifactId>vidocq-runtime-cassini-rest-extension-codegen</artifactId>
                             <version>${project.version}</version>
                             <type>pom</type>

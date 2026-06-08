@@ -38,7 +38,7 @@ Additional infrastructure bricks delivered as Vidocq extensions, useful to the e
 ```
 vidocq-runtime-spi/                       Public extension SPI (Extension, Phase)
 vidocq-runtime-core/                      Lifecycle orchestrator, ServiceLoader, scan
-vidocq-runtime-core-extensions/           Delivered extensions (see table above)
+vidocq-runtime-extensions/                Delivered extensions, grouped by domain (see table above)
 vidocq-runtime-maven-plugin/              Maven plugin: fat-jar + jlink packaging
 vidocq-runtime-examples/                  Examples (cassini-rest, mansart-h2, external-rest-lib)
 vidocq-runtime-integration-tests/         Arquillian ITs + cross-extension (humboldt+cassini)

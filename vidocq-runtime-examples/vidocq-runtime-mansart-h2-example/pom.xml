@@ -35,19 +35,19 @@
 
         <!-- HTTP transport + JAX-RS -->
         <dependency>
-            <groupId>io.vidocq.runtime</groupId>
+            <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
             <artifactId>vidocq-runtime-cassini-rest-extension</artifactId>
         </dependency>
 
         <!-- OpenAPI document (Grimm, MicroProfile OpenAPI 4.1) served at /openapi,
              plus Swagger UI served at /openapi/ui. -->
         <dependency>
-            <groupId>io.vidocq.runtime</groupId>
+            <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
             <artifactId>vidocq-runtime-grimm-openapi-extension</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>io.vidocq.runtime</groupId>
+            <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
             <artifactId>vidocq-runtime-grimm-openapi-ui-extension</artifactId>
             <version>${project.version}</version>
         </dependency>
@@ -59,23 +59,23 @@
              l'extension. @ConfigProperty devient également disponible côté
              user. -->
         <dependency>
-            <groupId>io.vidocq.runtime</groupId>
+            <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
             <artifactId>vidocq-runtime-ravel-config-extension</artifactId>
         </dependency>
 
         <!-- Mansart pool + Jakarta Data extensions -->
         <dependency>
-            <groupId>io.vidocq.runtime</groupId>
+            <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
             <artifactId>vidocq-runtime-mansart-pool-extension</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>io.vidocq.runtime</groupId>
+            <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
             <artifactId>vidocq-runtime-mansart-data-extension</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>io.vidocq.runtime</groupId>
+            <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
             <artifactId>vidocq-runtime-mansart-transactions-extension</artifactId>
             <version>${project.version}</version>
         </dependency>
@@ -155,19 +155,19 @@
                          keeping combine.children="append" preserves it. -->
                     <annotationProcessorPaths combine.children="append">
                         <path>
-                            <groupId>io.vidocq.runtime</groupId>
+                            <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
                             <artifactId>vidocq-runtime-cassini-rest-extension-codegen</artifactId>
                             <version>${project.version}</version>
                             <type>pom</type>
                         </path>
                         <path>
-                            <groupId>io.vidocq.runtime</groupId>
+                            <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                             <artifactId>vidocq-runtime-mansart-data-extension-codegen</artifactId>
                             <version>${project.version}</version>
                             <type>pom</type>
                         </path>
                         <path>
-                            <groupId>io.vidocq.runtime</groupId>
+                            <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                             <artifactId>vidocq-runtime-mansart-transactions-extension-codegen</artifactId>
                             <version>${project.version}</version>
                             <type>pom</type>

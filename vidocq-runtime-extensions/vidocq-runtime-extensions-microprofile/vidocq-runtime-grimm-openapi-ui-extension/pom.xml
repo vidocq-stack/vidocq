@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
+        <artifactId>vidocq-runtime-extensions-microprofile</artifactId>
+        <version>0.2.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vidocq-runtime-grimm-openapi-ui-extension</artifactId>
+    <name>Vidocq :: Core Extensions :: OpenAPI UI (Swagger UI)</name>
+    <description>Serves Swagger UI (vendored swagger-ui-dist, Apache-2.0) over the Chappe engine at
+        /openapi/ui, pointed at the Grimm-served /openapi document (same origin, no CORS). The UI is
+        mounted programmatically by a VidocqExtension via ChappeMountPoint + StaticFileHandler.</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-spi</artifactId>
+        </dependency>
+        <!-- ChappeMountPoint lives here; provides the shared mount point at onStart. -->
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.essentials</groupId>
+            <artifactId>vidocq-runtime-chappe-webserver-extension</artifactId>
+        </dependency>
+        <!-- StaticFileHandler + Handler. -->
+        <dependency>
+            <groupId>io.vidocq.chappe</groupId>
+            <artifactId>chappe-api</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

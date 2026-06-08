@@ -109,4 +109,4 @@ public class GreetingRecorder {
 
 * xref:concepts.adoc[Concepts] — vocabulaire formel
 * xref:reference.adoc[Référence] — table des SPI publiques
-* xref:modules/vidocq-runtime-core-extensions.adoc[Extensions built-in] — exemples concrets de SPI consommée
+* xref:modules/vidocq-runtime-extensions.adoc[Extensions built-in] — exemples concrets de SPI consommée

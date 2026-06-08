@@ -42,7 +42,7 @@
         <module>vidocq-runtime-spi</module>
         <module>vidocq-runtime-core</module>
         <module>vidocq-runtime-core-codegen</module>
-        <module>vidocq-runtime-core-extensions</module>
+        <module>vidocq-runtime-extensions</module>
         <module>vidocq-runtime-maven-plugin</module>
         <module>vidocq-runtime-integration-tests</module>
         <module>vidocq-runtime-examples</module>
@@ -90,72 +90,72 @@
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>io.vidocq.runtime</groupId>
+                <groupId>io.vidocq.runtime.extensions.essentials</groupId>
                 <artifactId>vidocq-runtime-chappe-webserver-extension</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>io.vidocq.runtime</groupId>
+                <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-ravel-config-extension</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>io.vidocq.runtime</groupId>
+                <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
                 <artifactId>vidocq-runtime-cassini-rest-extension</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>io.vidocq.runtime</groupId>
+                <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
                 <artifactId>vidocq-runtime-cassini-rest-extension-codegen</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>io.vidocq.runtime</groupId>
+                <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-cyrano-rest-client-extension</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>io.vidocq.runtime</groupId>
+                <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-cervantes-jwt-extension</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>io.vidocq.runtime</groupId>
+                <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-humboldt-telemetry-extension</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>io.vidocq.runtime</groupId>
+                <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-knock-health-extension</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>io.vidocq.runtime</groupId>
+                <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-dirac-metrics-extension</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>io.vidocq.runtime</groupId>
+                <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-mansart-data-extension</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>io.vidocq.runtime</groupId>
+                <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-mansart-data-extension-codegen</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>io.vidocq.runtime</groupId>
+                <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-mansart-pool-extension</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>io.vidocq.runtime</groupId>
+                <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-mansart-transactions-extension</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>io.vidocq.runtime</groupId>
+                <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-mansart-transactions-extension-codegen</artifactId>
                 <version>${project.version}</version>
             </dependency>
@@ -340,7 +340,7 @@
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>io.vidocq.runtime</groupId>
+                <groupId>io.vidocq.runtime.extensions.essentials</groupId>
                 <artifactId>vidocq-runtime-chappe-webserver-extension</artifactId>
                 <version>${project.version}</version>
             </dependency>
@@ -350,32 +350,32 @@
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>io.vidocq.runtime</groupId>
+                <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
                 <artifactId>vidocq-runtime-cassini-rest-extension</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>io.vidocq.runtime</groupId>
+                <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-knock-health-extension</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>io.vidocq.runtime</groupId>
+                <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-dirac-metrics-extension</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>io.vidocq.runtime</groupId>
+                <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-cyrano-rest-client-extension</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>io.vidocq.runtime</groupId>
+                <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-cervantes-jwt-extension</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>io.vidocq.runtime</groupId>
+                <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-humboldt-telemetry-extension</artifactId>
                 <version>${project.version}</version>
             </dependency>
@@ -397,19 +397,19 @@
                 <type>pom</type>
             </dependency>
             <dependency>
-                <groupId>io.vidocq.runtime</groupId>
+                <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
                 <artifactId>vidocq-runtime-cassini-rest-extension-codegen</artifactId>
                 <version>${project.version}</version>
                 <type>pom</type>
             </dependency>
             <dependency>
-                <groupId>io.vidocq.runtime</groupId>
+                <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-mansart-data-extension-codegen</artifactId>
                 <version>${project.version}</version>
                 <type>pom</type>
             </dependency>
             <dependency>
-                <groupId>io.vidocq.runtime</groupId>
+                <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-mansart-transactions-extension-codegen</artifactId>
                 <version>${project.version}</version>
                 <type>pom</type>

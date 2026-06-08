@@ -19,8 +19,8 @@ Operational reference for Vidocq Runtime — Maven coordinates, MicroProfile Con
 | `io.vidocq.runtime:vidocq-runtime-core:0.1.0-SNAPSHOT`
 | Runtime engine (boot orchestrator, lifecycle)
 
-| `io.vidocq.runtime:vidocq-runtime-core-extensions:0.1.0-SNAPSHOT`
-| Shipped extension pack (REST, CDI, Servlet, Mansart, Config…)
+| `io.vidocq.runtime.extensions:vidocq-runtime-extensions:0.1.0-SNAPSHOT`
+| Aggregator of the shipped extensions, grouped by domain (essentials, jakartaee-core, jakartaee-web, microprofile, jpms-repackaged)
 
 | `io.vidocq.runtime:vidocq-runtime-maven-plugin:0.1.0-SNAPSHOT`
 | Maven plugin — `build`, `jlink`, `jpackage`, `docker`

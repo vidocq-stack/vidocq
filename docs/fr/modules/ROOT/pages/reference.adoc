@@ -19,8 +19,8 @@ Référence opérationnelle de Vidocq Runtime — coordonnées Maven, clés Micr
 | `io.vidocq.runtime:vidocq-runtime-core:0.1.0-SNAPSHOT`
 | Moteur d'exécution (boot orchestrator, lifecycle)
 
-| `io.vidocq.runtime:vidocq-runtime-core-extensions:0.1.0-SNAPSHOT`
-| Pack d'extensions livrées (REST, CDI, Servlet, Mansart, Config…)
+| `io.vidocq.runtime.extensions:vidocq-runtime-extensions:0.1.0-SNAPSHOT`
+| Agrégateur des extensions livrées, groupées par domaine (essentials, jakartaee-core, jakartaee-web, microprofile, jpms-repackaged)
 
 | `io.vidocq.runtime:vidocq-runtime-maven-plugin:0.1.0-SNAPSHOT`
 | Plugin Maven — `build`, `jlink`, `jpackage`, `docker`

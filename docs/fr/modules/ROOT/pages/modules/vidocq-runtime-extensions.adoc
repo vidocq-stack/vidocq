@@ -1,0 +1,118 @@
+= vidocq-runtime-extensions
+:description: Extensions built-in fournies avec Vidocq Runtime.
+
+[.lead]
+`vidocq-runtime-extensions` est l'ensemble des extensions livrées d'office, regroupées par domaine sous cinq agrégateurs (`essentials`, `jakartaee-core`, `jakartaee-web`, `microprofile`, `jpms-repackaged`). Chaque feuille est un artefact Maven indépendant, activé par simple ajout en dépendance par l'application utilisateur.
+
+== Coordonnées
+
+[cols="1,3"]
+|===
+| Artefact parent | `io.vidocq.runtime.extensions:vidocq-runtime-extensions:0.1.0-SNAPSHOT`
+| Source | `vidocq-runtime-extensions/`
+|===
+
+== Catalogue
+
+[cols="2,1,3"]
+|===
+| Extension | Statut | Rôle
+
+| `vidocq-runtime-chappe-webserver-extension`
+| Livrée
+| Branche xref:chappe::index.adoc[Chappe] comme transport HTTP/1.1, H2, H3. Configure le bind via `vidocq.http.host` / `vidocq.http.port`.
+
+| `vidocq-runtime-vauban-extension`
+| Livrée
+| Branche xref:vauban::index.adoc[Vauban] comme moteur CDI 4.1 Lite. Indexe les beans au build via APT.
+
+| `vidocq-runtime-cassini-rest-extension`
+| Livrée
+| Branche xref:cassini::index.adoc[Cassini] pour Jakarta REST 4.0. Génère le routage statique au build, bridge CDI via Vauban.
+
+| `vidocq-runtime-servlet-chappe-extension`
+| Livrée (~90 % TCK Servlet 6.1)
+| Branche xref:foy::index.adoc[Foy] sur xref:chappe::index.adoc[Chappe] pour Jakarta Servlet 6.1.
+
+| `vidocq-runtime-champollion-extension`
+| Livrée
+| Branche xref:champollion::index.adoc[Champollion] pour JSON-P 2.1 et JSON-B 3.0. Déclenche la génération APT au build.
+
+| `vidocq-runtime-mansart-extension`
+| Livrée
+| Branche xref:mansart::index.adoc[Mansart] (Jakarta Data 1.0 + JDBC). Initialise le pool, scanne les `@Repository`, génère les implémentations APT.
+
+| `vidocq-runtime-mansart-transactions-extension`
+| Livrée
+| Gère `@Transactional` via `mansart-transactions`.
+
+| `vidocq-runtime-config-extension`
+| Planifié
+| {spec-mp-config} — sources externes, profils, conversion typée.
+
+| `vidocq-runtime-health-extension`
+| Planifié
+| {spec-mp-health} — endpoints `/q/health/{live,ready,started}`.
+
+| `vidocq-runtime-metrics-extension`
+| Planifié
+| {spec-mp-metrics} — endpoint Prometheus.
+
+| `vidocq-runtime-openapi-extension`
+| Planifié
+| {spec-mp-openapi} — génération du document à la compilation.
+
+| `vidocq-runtime-jwt-extension`
+| Planifié
+| MicroProfile JWT Auth.
+|===
+
+== Cycle de vie type — exemple Chappe
+
+L'extension `vidocq-runtime-chappe-webserver-extension` illustre le pattern. Quatre points d'ancrage :
+
+[cols="1,2,1,3"]
+|===
+| Phase | Acteur | Priorité | Action
+
+| `configure`
+| `ChappeEngineExtension`
+| 100
+| installe `ChappeMountPoint`
+
+| `onStart`
+| Contributeurs (REST, Servlet)
+| 500–9999
+| appellent `mount(...)`
+
+| `onStart`
+| `ChappeServerBootstrap`
+| 10000
+| démarre un `Server` par listener
+
+| `onStop`
+| `ChappeServerBootstrap`
+| 10000
+| arrête les serveurs proprement
+|===
+
+Les autres extensions suivent une logique d'ordonnancement comparable, avec leurs propres priorités.
+
+== Activation par dépendance
+
+Une extension est activée dès qu'elle est présente sur le module-path. Aucune annotation `@EnableX` n'est requise — l'index APT détecte le `provides VidocqExtension` JPMS.
+
+[source,xml]
+----
+<dependency>
+    <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
+    <artifactId>vidocq-runtime-cassini-rest-extension</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+</dependency>
+----
+
+== Pour aller plus loin
+
+* xref:modules/vidocq-runtime-spi.adoc[SPI] — comment écrire une nouvelle extension
+* xref:tck.adoc[État TCK] — couverture par extension
+* xref:concepts.adoc[Concepts] — vocabulaire d'extension

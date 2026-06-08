@@ -109,4 +109,4 @@ public class GreetingRecorder {
 
 * xref:concepts.adoc[Concepts] — formal vocabulary
 * xref:reference.adoc[Reference] — public SPI table
-* xref:modules/vidocq-runtime-core-extensions.adoc[Built-in extensions] — concrete SPI consumption examples
+* xref:modules/vidocq-runtime-extensions.adoc[Built-in extensions] — concrete SPI consumption examples

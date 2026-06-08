@@ -28,13 +28,13 @@
         </dependency>
         <!-- Grimm: serves /openapi via a Chappe handler (no Cassini needed). -->
         <dependency>
-            <groupId>io.vidocq.runtime</groupId>
+            <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
             <artifactId>vidocq-runtime-grimm-openapi-extension</artifactId>
             <version>${project.version}</version>
         </dependency>
         <!-- Swagger UI: serves /openapi/ui -->
         <dependency>
-            <groupId>io.vidocq.runtime</groupId>
+            <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
             <artifactId>vidocq-runtime-grimm-openapi-ui-extension</artifactId>
             <version>${project.version}</version>
         </dependency>

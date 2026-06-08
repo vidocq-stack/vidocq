@@ -35,7 +35,7 @@ documents their exclusion via `excludedGroups` for standalone certifications
 ### Tags excluded for the Core Profile / SE-Bootstrap target
 
 Configured in
-[`vidocq-runtime-rest-cassini-tck-runner/pom.xml`](vidocq-runtime-core-extensions/vidocq-runtime-rest-cassini-tck-runner/pom.xml):
+[`vidocq-runtime-rest-cassini-tck-runner/pom.xml`](vidocq-runtime-extensions/vidocq-runtime-rest-cassini-tck-runner/pom.xml):
 
 ```xml
 <excludedGroups>servlet,xml_binding</excludedGroups>
@@ -52,7 +52,7 @@ native SE-Bootstrap).
 ### Official challenges (TCK Process 1.4.1)
 
 Six tests are disabled via the
-[`TckChallengeExclusions`](vidocq-runtime-core-extensions/vidocq-runtime-rest-cassini-tck-runner/src/test/java/io/vidocq/runtime/ext/rest/cassini/tck/TckChallengeExclusions.java)
+[`TckChallengeExclusions`](vidocq-runtime-extensions/vidocq-runtime-rest-cassini-tck-runner/src/test/java/io/vidocq/runtime/ext/rest/cassini/tck/TckChallengeExclusions.java)
 class (JUnit 5 `ExecutionCondition` auto-discovered) with documented
 justification:
 
@@ -70,7 +70,7 @@ justification:
 ### Delivered modules
 
 ```
-vidocq-runtime-core-extensions/
+vidocq-runtime-extensions/vidocq-runtime-extensions-jakartaee-core/
 ├── vidocq-runtime-cassini-rest-extension/   ← the Cassini implementation
 └── vidocq-runtime-rest-cassini-tck-runner/  ← Arquillian harness + TCK runner
 ```

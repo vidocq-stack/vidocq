@@ -48,7 +48,7 @@ graph TB
     subgraph "Vidocq Runtime — orchestrator"
         MPS[vidocq-runtime-core<br/>Bootstrap + lifecycle]
         SPI[vidocq-runtime-spi<br/>BuildStep + BuildItem]
-        EXT[vidocq-runtime-core-extensions<br/>Built-in extensions]
+        EXT[vidocq-runtime-extensions<br/>Built-in extensions]
         PLUGIN[vidocq-runtime-maven-plugin<br/>jlink / jpackage / docker]
     end
 

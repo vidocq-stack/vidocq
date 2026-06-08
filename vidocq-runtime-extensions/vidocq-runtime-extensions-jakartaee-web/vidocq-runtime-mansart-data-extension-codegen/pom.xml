@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+        <artifactId>vidocq-runtime-extensions-jakartaee-web</artifactId>
+        <version>0.2.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vidocq-runtime-mansart-data-extension-codegen</artifactId>
+    <packaging>pom</packaging>
+    <name>Vidocq :: Core Extensions :: Mansart Data :: Codegen Bundle</name>
+    <description>
+        Companion codegen bundle for vidocq-runtime-mansart-data-extension.
+        Declare this artifact in &lt;annotationProcessorPaths&gt; whenever the
+        application depends on the Mansart Data extension.
+
+        Pulls in:
+          - mansart-data-processor : generates _Entity metamodel + *RepositoryImpl
+            stubs + META-INF/mansart-repositories.list.
+          - mansart-data-cdi       : hosts the BuildCompatibleExtension and the
+            @Produces RepositoryRuntime. The APT classloader (isolated by Maven)
+            must see the BCE; without it, the DeploymentValidator rejects every
+            @Inject of a repository or of RepositoryRuntime.
+    </description>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.mansart</groupId>
+            <artifactId>mansart-data-processor</artifactId>
+            <version>${mansart.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.mansart</groupId>
+            <artifactId>mansart-data-cdi</artifactId>
+            <version>${mansart.version}</version>
+        </dependency>
+    </dependencies>
+</project>

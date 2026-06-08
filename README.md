@@ -104,7 +104,7 @@ graph TB
         BOOT[VidocqBootstrap<br/><i>Lifecycle orchestrator</i>]
         LOADER[ExtensionLoader<br/><i>ServiceLoader</i>]
     end
-    subgraph "vidocq-runtime-core-extensions"
+    subgraph "vidocq-runtime-extensions"
         REST[vidocq-runtime-cassini-rest-extension<br/><i>JAX-RS 4.0 + Grizzly</i>]
     end
     subgraph "Build tools"
@@ -125,8 +125,12 @@ vidocq/
 ├── vidocq-runtime-spi                   Extension interfaces (VidocqExtension, VidocqConfiguration)
 ├── vidocq-runtime-core                  Bootstrap, extension discovery, lifecycle
 ├── vidocq-runtime-maven-plugin          Bean indexing (vauban-beans.list) + ZIP packaging
-├── vidocq-runtime-core-extensions/      MicroProfile 7.1 core extensions
-│   └── vidocq-runtime-cassini-rest-extension    JAX-RS 4.0 via Jersey 4 + Grizzly (CDI/HK2 bridge)
+├── vidocq-runtime-extensions/           Runtime extensions, grouped by domain
+│   ├── vidocq-runtime-extensions-essentials/       Chappe HTTP transport
+│   ├── vidocq-runtime-extensions-jakartaee-core/   Cassini JAX-RS 4.0
+│   ├── vidocq-runtime-extensions-jakartaee-web/    Mansart Data / Persistence / pool
+│   ├── vidocq-runtime-extensions-microprofile/     Config, Rest Client, JWT, Metrics, OpenAPI, Telemetry, Health
+│   └── vidocq-runtime-extensions-jpms-repackaged/  Third-party JPMS repackages (H2)
 └── vidocq-runtime-examples/             Examples
     └── vidocq-runtime-cassini-rest-example      Sample REST application
 ```
@@ -276,7 +280,7 @@ From the project root:
 The script installs Vidocq modules into the local M2, changes to the
 TCK module (ShrinkWrap-compatible cwd), then runs the `tck-official` profile.
 
-Details in [`vidocq-runtime-core-extensions/vidocq-runtime-servlet-chappe-tck-runner/README.md`](vidocq-runtime-core-extensions/vidocq-runtime-servlet-chappe-tck-runner/README.md).
+Details in [`vidocq-runtime-extensions/vidocq-runtime-servlet-chappe-tck-runner/README.md`](vidocq-runtime-extensions/vidocq-runtime-servlet-chappe-tck-runner/README.md).
 
 ## License
 
