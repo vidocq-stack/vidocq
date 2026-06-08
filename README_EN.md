@@ -101,4 +101,4 @@ myapp-1.0/
 
 ## License
 
-Apache License 2.0
+EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
