@@ -20,7 +20,9 @@
 package io.vidocq.grimm.cdi;
 
 import io.vidocq.grimm.internal.config.GrimmConfig;
+import jakarta.annotation.Priority;
 import jakarta.enterprise.context.Dependent;
+import jakarta.enterprise.inject.Alternative;
 import jakarta.enterprise.inject.Produces;
 import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.ConfigProvider;
@@ -33,7 +35,14 @@ import java.util.Properties;
 /**
  * TCK-only producers used by the Arquillian harness to wire Grimm beans without
  * relying on the full runtime producer chain.
+ *
+ * <p>Declared {@link Alternative @Alternative} with {@link Priority @Priority} so that, now that
+ * {@code grimm-cdi-vauban} ships as a functional bean archive (its {@code GrimmConfigProducer} is a
+ * discoverable default), this harness producer <b>overrides</b> the default {@code GrimmConfig} /
+ * {@code ScannedTypes} per TCK deployment instead of clashing with it (ambiguous dependency).</p>
  */
+@Alternative
+@Priority(100)
 @Dependent
 public class TckGrimmSupportProducer {
 
