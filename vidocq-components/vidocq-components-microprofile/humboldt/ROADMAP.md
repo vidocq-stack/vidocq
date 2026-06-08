@@ -91,7 +91,7 @@ Detailed plan: [`PLAN.md`](PLAN.md) (§13 milestones). This page is the short ve
 
 ### M6d — MPS extension + Vauban runtime validation _(structure delivered 2026-05-21)_
 
-- [x] `vidocq-runtime-humboldt-extension` extension created in `vidocq` (commit `0274a62`) :
+- [x] `vidocq-runtime-humboldt-telemetry-extension` extension created in `vidocq` (commit `0274a62`) :
   * Maven module with pom inherited from `vidocq-runtime-core-extensions`, humboldt-runtime/cdi/rest + vauban-core + vidocq-runtime-spi deps
   * `HumboldtExtension implements VidocqExtension` priority 100 — configure() reads OTel env vars via VidocqConfiguration bridge, beforeStart() = AutoConfiguredHumboldt.configure + GlobalOpenTelemetry.set, onStop() flush + shutdown 5s
   * 13 OTel/MP_TELEMETRY_* keys bridged (SCREAMING_SNAKE + lower.dot.case)

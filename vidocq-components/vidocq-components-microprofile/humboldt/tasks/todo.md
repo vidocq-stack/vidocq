@@ -96,7 +96,7 @@ To be started when chappe-client is mature enough AND protobuf necessity is prov
 
 ## M6d — MPS extension + Vauban runtime validation _(completed 2026-05-21)_
 
-See ROADMAP.md M6d.1 → M6d.7-bis (vidocq-runtime-humboldt-extension out-of-reactor from humboldt, Vauban CDI Lite validation for @WithSpan, E2E REST via cassini+chappe+humboldt, SERVER span fix on exception, Cassini BCE `@Provider`/`@Path` fix).
+See ROADMAP.md M6d.1 → M6d.7-bis (vidocq-runtime-humboldt-telemetry-extension out-of-reactor from humboldt, Vauban CDI Lite validation for @WithSpan, E2E REST via cassini+chappe+humboldt, SERVER span fix on exception, Cassini BCE `@Provider`/`@Path` fix).
 
 ## M7 — Official MicroProfile Telemetry 2.1 TCK
 
