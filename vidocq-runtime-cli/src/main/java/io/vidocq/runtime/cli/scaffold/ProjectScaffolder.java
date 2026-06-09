@@ -1,0 +1,156 @@
+package io.vidocq.runtime.cli.scaffold;
+
+import io.vidocq.runtime.cli.Command;
+import io.vidocq.runtime.cli.VidocqCli;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Set;
+
+/**
+ * Generates a minimal Vidocq Maven project on disk from a {@link Command.Create} descriptor.
+ *
+ * <pre>
+ * &lt;name&gt;/
+ *   pom.xml
+ *   src/main/java/
+ *     module-info.java
+ *     &lt;package&gt;/
+ *       &lt;ClassName&gt;App.java
+ *   src/main/resources/
+ *     vidocq.properties
+ * </pre>
+ */
+public final class ProjectScaffolder {
+
+    private ProjectScaffolder() {}
+
+    public static void scaffold(Command.Create create) throws IOException {
+        Path root     = Path.of(create.name());
+        Path javaRoot = root.resolve("src/main/java");
+        Path srcPkg   = javaRoot.resolve(packageToPath(create.pkg()));
+        Path res      = root.resolve("src/main/resources");
+
+        if (Files.exists(root)) {
+            throw new IllegalStateException("Directory '" + create.name() + "' already exists.");
+        }
+        Files.createDirectories(srcPkg);
+        Files.createDirectories(res);
+
+        write(root.resolve("pom.xml"),                               buildPom(create));
+        write(javaRoot.resolve("module-info.java"),                  buildModuleInfo(create));
+        write(srcPkg.resolve(appClassName(create.name()) + ".java"), buildApp(create));
+        write(res.resolve("vidocq.properties"),                      buildProperties());
+    }
+
+    // -------------------------------------------------------------------------
+    // Template builders
+    // -------------------------------------------------------------------------
+
+    private static String buildPom(Command.Create c) {
+        return """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <project xmlns="http://maven.apache.org/POM/4.0.0"
+                         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+                    <modelVersion>4.0.0</modelVersion>
+
+                    <parent>
+                        <groupId>io.vidocq.runtime</groupId>
+                        <artifactId>vidocq-runtime-parent</artifactId>
+                        <version>%s</version>
+                        <relativePath/>
+                    </parent>
+
+                    <groupId>%s</groupId>
+                    <artifactId>%s</artifactId>
+                    <name>%s</name>
+
+                    <dependencies>
+                        <dependency>
+                            <groupId>io.vidocq.runtime</groupId>
+                            <artifactId>vidocq-runtime-core</artifactId>
+                        </dependency>
+                %s
+                    </dependencies>
+                </project>
+                """.formatted(VidocqCli.VERSION, c.groupId(), c.name(), c.name(),
+                extensionDeps(c.extensions()));
+    }
+
+    private static String extensionDeps(Set<String> ids) {
+        if (ids.isEmpty()) return "";
+        var sb = new StringBuilder();
+        for (String id : ids) {
+            sb.append("        <dependency>\n")
+              .append("            <groupId>io.vidocq.runtime</groupId>\n")
+              .append("            <artifactId>vidocq-runtime-").append(id).append("-extension</artifactId>\n")
+              .append("        </dependency>\n");
+        }
+        return sb.toString();
+    }
+
+    private static String buildModuleInfo(Command.Create c) {
+        String moduleName = c.pkg().replace('-', '.');
+        return """
+                module %s {
+                    requires io.vidocq.runtime.core;
+                }
+                """.formatted(moduleName);
+    }
+
+    private static String buildApp(Command.Create c) {
+        String className = appClassName(c.name());
+        return """
+                package %s;
+
+                import io.vidocq.runtime.core.VidocqBootstrap;
+
+                public final class %s {
+
+                    public static void main(String[] args) {
+                        VidocqBootstrap.create()
+                                .configure()
+                                .start()
+                                .awaitShutdown();
+                    }
+                }
+                """.formatted(c.pkg(), className);
+    }
+
+    private static String buildProperties() {
+        return """
+                # Vidocq application configuration
+                vidocq.http.port=8080
+                """;
+    }
+
+    // -------------------------------------------------------------------------
+    // Utilities
+    // -------------------------------------------------------------------------
+
+    private static String packageToPath(String pkg) {
+        return pkg.replace('.', '/');
+    }
+
+    /**
+     * Converts kebab/snake names to PascalCase: "my-cool-app" → "MyCoolApp".
+     */
+    static String appClassName(String name) {
+        String[] parts = name.split("[-_]");
+        var sb = new StringBuilder();
+        for (String p : parts) {
+            if (!p.isEmpty()) {
+                sb.append(Character.toUpperCase(p.charAt(0)));
+                if (p.length() > 1) sb.append(p.substring(1));
+            }
+        }
+        sb.append("App");
+        return sb.toString();
+    }
+
+    private static void write(Path path, String content) throws IOException {
+        Files.writeString(path, content);
+    }
+}

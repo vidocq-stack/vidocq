@@ -1,0 +1,216 @@
+package io.vidocq.runtime.cli;
+
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
+
+/**
+ * Converts a raw {@code String[]} argv into a typed {@link Command}.
+ * No external dependency — hand-rolled to stay zero-dep.
+ */
+public final class CliParser {
+
+    private CliParser() {}
+
+    public static Command parse(String[] args) {
+        return switch (args[0]) {
+            case "version", "--version", "-V" -> new Command.Version();
+            case "info"                       -> new Command.Info();
+            case "help", "--help", "-h"       -> new Command.Help(args.length > 1 ? args[1] : null);
+            case "start"                      -> parseStart(args, 1);
+            case "dev"                        -> parseDev(args, 1);
+            case "create"                     -> parseCreate(args, 1);
+            case "extension", "ext"           -> parseExtension(args, 1);
+            default -> throw new CliException(
+                    "Unknown command '" + args[0] + "'. Run 'vidocq help' for usage.");
+        };
+    }
+
+    // -------------------------------------------------------------------------
+    // Sub-parsers
+    // -------------------------------------------------------------------------
+
+    private static Command.Start parseStart(String[] args, int from) {
+        int port = 8080;
+        Path config = null;
+        boolean debug = false;
+        for (int i = from; i < args.length; i++) {
+            switch (args[i]) {
+                case "--port", "-p"   -> port   = parseInt(args, ++i, "--port");
+                case "--config", "-c" -> config = Path.of(value(args, ++i, "--config"));
+                case "--debug"        -> debug  = true;
+                default               -> unknownOpt(args[i], "start");
+            }
+        }
+        return new Command.Start(port, config, debug);
+    }
+
+    private static Command.Dev parseDev(String[] args, int from) {
+        int port = 8080;
+        boolean debug = false;
+        for (int i = from; i < args.length; i++) {
+            switch (args[i]) {
+                case "--port", "-p" -> port  = parseInt(args, ++i, "--port");
+                case "--debug"      -> debug = true;
+                default             -> unknownOpt(args[i], "dev");
+            }
+        }
+        return new Command.Dev(port, debug);
+    }
+
+    private static Command.Create parseCreate(String[] args, int from) {
+        String name = null, groupId = null, pkg = null;
+        Set<String> extensions = new LinkedHashSet<>();
+        for (int i = from; i < args.length; i++) {
+            switch (args[i]) {
+                case "--name", "-n"     -> name    = value(args, ++i, "--name");
+                case "--group-id", "-g" -> groupId = value(args, ++i, "--group-id");
+                case "--package"        -> pkg     = value(args, ++i, "--package");
+                case "--extension", "-x"-> extensions.add(value(args, ++i, "--extension"));
+                default                 -> unknownOpt(args[i], "create");
+            }
+        }
+        if (name == null) throw new CliException("'create' requires --name <app-name>.");
+        String gid = groupId != null ? groupId : "io.example";
+        String p   = pkg != null ? pkg : gid + "." + name.replace('-', '.');
+        return new Command.Create(name, gid, p, Set.copyOf(extensions));
+    }
+
+    private static Command parseExtension(String[] args, int from) {
+        if (from >= args.length) return Command.Extension.Listing.defaults();
+        return switch (args[from]) {
+            case "list", "ls"   -> parseExtensionList(args, from + 1);
+            case "add"          -> parseExtensionIds(args, from + 1, true);
+            case "remove", "rm" -> parseExtensionIds(args, from + 1, false);
+            default -> throw new CliException(
+                    "Unknown extension sub-command '" + args[from] + "'. Available: list, add, remove.");
+        };
+    }
+
+    private static Command.Extension.Listing parseExtensionList(String[] args, int from) {
+        boolean installed = true, available = false;
+        for (int i = from; i < args.length; i++) {
+            switch (args[i]) {
+                case "--installed" -> installed = true;
+                case "--available" -> { available = true; installed = false; }
+                case "--all"       -> { installed = true; available = true; }
+                default            -> unknownOpt(args[i], "extension list");
+            }
+        }
+        return new Command.Extension.Listing(installed, available);
+    }
+
+    private static Command parseExtensionIds(String[] args, int from, boolean add) {
+        List<String> ids = new ArrayList<>();
+        for (int i = from; i < args.length; i++) {
+            if (args[i].startsWith("-")) unknownOpt(args[i], add ? "extension add" : "extension remove");
+            ids.add(args[i]);
+        }
+        if (ids.isEmpty()) throw new CliException(
+                (add ? "'extension add'" : "'extension remove'") + " requires at least one extension id.");
+        return add ? new Command.Extension.Add(List.copyOf(ids))
+                   : new Command.Extension.Remove(List.copyOf(ids));
+    }
+
+    // -------------------------------------------------------------------------
+    // Help text
+    // -------------------------------------------------------------------------
+
+    static void printHelp(String topic) {
+        if (topic != null) { printTopicHelp(topic); return; }
+
+        CliOutput.println(CliOutput.bold("Vidocq CLI " + VidocqCli.VERSION));
+        CliOutput.println();
+        CliOutput.println("Usage: " + CliOutput.cyan("vidocq") + " <command> [options]");
+        CliOutput.println();
+        CliOutput.println(CliOutput.bold("Commands:"));
+        cmd("version",          "Print the CLI and runtime version.");
+        cmd("info",             "Display runtime, JVM, and extension information.");
+        cmd("start",            "Start the Vidocq runtime.");
+        cmd("dev",              "Start in development mode (live reload — roadmap M2).");
+        cmd("create",           "Scaffold a new Vidocq Maven application.");
+        cmd("extension list",   "List installed (and optionally available) extensions.");
+        cmd("extension add",    "Add extensions to the current project's pom.xml.");
+        cmd("extension remove", "Remove extensions from the current project's pom.xml.");
+        cmd("help [command]",   "Show detailed help for a specific command.");
+        CliOutput.println();
+        CliOutput.println(CliOutput.dim("Run 'vidocq help <command>' for per-command options."));
+    }
+
+    private static void printTopicHelp(String topic) {
+        switch (topic) {
+            case "start" -> {
+                CliOutput.println(CliOutput.bold("vidocq start") + " — Start the Vidocq runtime");
+                CliOutput.println();
+                CliOutput.println("Options:");
+                opt("--port, -p <n>",     "HTTP listening port (default: 8080)");
+                opt("--config, -c <file>","Path to an external vidocq.properties file");
+                opt("--debug",            "Print debug info; attach a remote debugger on port 5005");
+            }
+            case "dev" -> {
+                CliOutput.println(CliOutput.bold("vidocq dev") + " — Development mode");
+                CliOutput.println();
+                CliOutput.println("Options:");
+                opt("--port, -p <n>", "HTTP listening port (default: 8080)");
+                opt("--debug",        "Enable remote debug on port 5005");
+                CliOutput.println();
+                CliOutput.println(CliOutput.dim("Live class-reload is planned for roadmap milestone M2."));
+            }
+            case "create" -> {
+                CliOutput.println(CliOutput.bold("vidocq create") + " — Scaffold a new Vidocq project");
+                CliOutput.println();
+                CliOutput.println("Options:");
+                opt("--name, -n <name>",         "Project / artifact name (required)");
+                opt("--group-id, -g <groupId>",  "Maven groupId            (default: io.example)");
+                opt("--package <pkg>",            "Root Java package        (default: <groupId>.<name>)");
+                opt("--extension, -x <id>",       "Extension to enable, repeatable");
+                CliOutput.println();
+                CliOutput.println("Example:");
+                CliOutput.println("  " + CliOutput.cyan(
+                        "vidocq create --name my-api -g com.acme -x rest -x health"));
+            }
+            case "extension" -> {
+                CliOutput.println(CliOutput.bold("vidocq extension") + " — Manage extensions");
+                CliOutput.println();
+                CliOutput.println("Sub-commands:");
+                cmd("list [--installed|--available|--all]", "List extensions");
+                cmd("add <id...>",                          "Add extensions to pom.xml (roadmap M3)");
+                cmd("remove <id...>",                      "Remove extensions from pom.xml (roadmap M3)");
+            }
+            default -> CliOutput.warning("No detailed help for '" + topic + "'. Run 'vidocq help'.");
+        }
+    }
+
+    private static void cmd(String name, String desc) {
+        System.out.printf("  %-30s %s%n", CliOutput.cyan(name), desc);
+    }
+
+    private static void opt(String name, String desc) {
+        System.out.printf("  %-34s %s%n", CliOutput.yellow(name), desc);
+    }
+
+    // -------------------------------------------------------------------------
+    // Utilities
+    // -------------------------------------------------------------------------
+
+    private static int parseInt(String[] args, int idx, String opt) {
+        String raw = value(args, idx, opt);
+        try {
+            return Integer.parseInt(raw);
+        } catch (NumberFormatException e) {
+            throw new CliException("Option " + opt + " expects an integer, got: " + raw);
+        }
+    }
+
+    private static String value(String[] args, int idx, String opt) {
+        if (idx >= args.length) throw new CliException("Option " + opt + " requires a value.");
+        return args[idx];
+    }
+
+    private static void unknownOpt(String flag, String cmd) {
+        throw new CliException(
+                "Unknown option '" + flag + "' for '" + cmd + "'. Run 'vidocq help " + cmd.split(" ")[0] + "'.");
+    }
+}

@@ -46,6 +46,7 @@
         <module>vidocq-runtime-extensions</module>
         <module>vidocq-runtime-devservices</module>
         <module>vidocq-runtime-maven-plugin</module>
+        <module>vidocq-runtime-cli</module>
         <module>vidocq-runtime-integration-tests</module>
         <module>vidocq-runtime-examples</module>
     </modules>
@@ -204,6 +205,11 @@
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-mansart-transactions-extension-codegen</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.runtime</groupId>
+                <artifactId>vidocq-runtime-cli</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
