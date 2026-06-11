@@ -19,7 +19,7 @@
             <groupId>io.vidocq.knock</groupId>
             <artifactId>knock-api</artifactId>
         </dependency>
-        <!-- JSON-P API (implémentation runtime : champollion) -->
+        <!-- JSON-P API (runtime implementation: champollion) -->
         <dependency>
             <groupId>jakarta.json</groupId>
             <artifactId>jakarta.json-api</artifactId>
@@ -29,7 +29,7 @@
             <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
-        <!-- Implémentation JSON-P pour les tests -->
+        <!-- JSON-P implementation for tests -->
         <dependency>
             <groupId>io.vidocq.champollion</groupId>
             <artifactId>champollion-jsonp</artifactId>
@@ -40,35 +40,35 @@
     <build>
         <plugins>
             <!--
-                JPMS workaround knock-core — module-info isole pour eviter la detection JPMS
-                lors de testCompile (voir docs/adr/ADR-001-jpms-workaround-microprofile-health.md).
+                JPMS workaround for knock-core - module-info is isolated to avoid JPMS
+                detection during testCompile (see docs/adr/ADR-001-jpms-workaround-microprofile-health.md).
 
-                Probleme specifique a knock-core : Maven Compiler Plugin 4.0.0-beta-4 detecte
-                le mode JPMS des que module-info.class est present dans target/classes. En mode
-                JPMS pour testCompile, il reconstruit un module-path qui ne contient pas les
-                dependances test-scope, ce qui casse la compilation des tests.
+                knock-core-specific issue: Maven Compiler Plugin 4.0.0-beta-4 detects
+                JPMS mode as soon as module-info.class is present in target/classes. In
+                JPMS mode for testCompile, it rebuilds a module path that excludes
+                test-scope dependencies, which breaks test compilation.
 
-                Solution en trois temps :
+                Three-step solution:
 
-                1. module-info.java hors de src/main/java (dans src/main/module-info) :
-                   default-compile ne le voit pas → pas de module-info.class dans
-                   target/classes → Maven ne detecte pas JPMS pour testCompile.
+                1. module-info.java outside src/main/java (in src/main/module-info):
+                   default-compile does not see it -> no module-info.class in
+                   target/classes -> Maven does not detect JPMS for testCompile.
 
-                2. maven-clean-plugin (generate-test-sources) supprime l'eventuel
-                   module-info.class stale de target/classes avant testCompile (builds
-                   incrementaux : evite la detection JPMS sur une classe residuelle).
+                2. maven-clean-plugin (generate-test-sources) removes any stale
+                   module-info.class from target/classes before testCompile (incremental
+                   builds: avoids JPMS detection from a leftover class file).
 
-                3. maven-compiler-plugin (prepare-package) recompile module-info.java seul
-                   dans target/classes avant l'assemblage du JAR — le JAR final embarque
-                   bien module-info.class.
+                3. maven-compiler-plugin (prepare-package) recompiles module-info.java only
+                   into target/classes before JAR assembly - the final JAR still includes
+                   module-info.class.
 
-                Consequence : les tests de knock-core s'executent sur le classpath
-                (useModulePath=false). C'est intentionnel : les tests unitaires valident la
-                logique metier ; le cablage JPMS (ServiceLoader, module graph) est valide par
-                le smoke test TCK dans knock-tck.
+                Consequence: knock-core tests run on the class path
+                (useModulePath=false). This is intentional: unit tests validate business
+                logic; JPMS wiring (ServiceLoader, module graph) is validated by the
+                knock-tck smoke test.
 
-                Compatibilite jlink : le fork io.vidocq.knock:knock-mp-health-api
-                embarque un module-info et ne requiert pas de module automatique.
+                jlink compatibility: the io.vidocq.knock:knock-mp-health-api fork
+                includes a module-info and does not require an automatic module.
             -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

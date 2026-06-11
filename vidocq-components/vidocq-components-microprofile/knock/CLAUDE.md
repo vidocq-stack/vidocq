@@ -16,7 +16,7 @@
 ## Essential Commands
 
 ```bash
-# Build reactor (without TCK)
+# Build reactor (includes knock-tck)
 ./mvnw -ntp install -DskipTests
 
 # Unit tests
@@ -32,9 +32,10 @@
 ./run-official-tck-mp-health-4.0.sh -Dtest=TestName
 ```
 
-> `knock-tck` is **out-of-reactor** (standalone POM Model 4.0.0) to work around
-> ShrinkWrap Maven Resolver 3.3 vs Model 4.1.0 — same constraint as `cassini-tck`,
-> `foy-tck`, `champollion-tck`, and `ravel-tck`. Do not change this model.
+> `knock-tck` is now **part of the main reactor**, but its POM stays at **Model 4.0.0**
+> and remains **standalone-capable** to work around ShrinkWrap Maven Resolver 3.3 vs
+> Model 4.1.0 — same constraint as `cassini-tck`, `foy-tck`, `champollion-tck`, and
+> `ravel-tck`. Do not upgrade it to Model 4.1.0 nor make it depend on reactor-only features.
 
 ## Architecture
 
@@ -52,7 +53,8 @@ knock-cdi-vauban   ← CDI Vauban integration: BCE discovering
                      @Liveness / @Readiness / @Startup beans, auto-registering in registry
 knock-cassini      ← Cassini adapter (Jakarta REST): JAX-RS resources /health,
                      /health/live, /health/ready, /health/started
-knock-tck          ← Official MicroProfile Health 4.0 TCK runner (OUT OF REACTOR)
+knock-tck          ← Official MicroProfile Health 4.0 TCK runner
+                     (in the reactor, standalone-capable POM Model 4.0.0)
 ```
 
 **Health check flow:**
@@ -136,8 +138,8 @@ Concrete rules:
 
 ## TCK — Technology Compatibility Kit
 
-MicroProfile Health TCK — run in an out-of-reactor module (`knock-tck`, POM Model 4.0.0)
-to work around ShrinkWrap Maven Resolver 3.3:
+MicroProfile Health TCK — run from the `knock-tck` module (POM Model 4.0.0, included in the
+reactor but kept standalone-capable to work around ShrinkWrap Maven Resolver 3.3):
 
 | TCK | Artifact | Target |
 |---|---|---|

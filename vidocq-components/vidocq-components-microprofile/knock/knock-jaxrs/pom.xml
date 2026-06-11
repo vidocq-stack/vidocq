@@ -19,7 +19,7 @@
             <groupId>io.vidocq.knock</groupId>
             <artifactId>knock-cdi-vauban</artifactId>
         </dependency>
-        <!-- Jakarta REST API uniquement — implémentation fournie par Cassini à l'exécution -->
+        <!-- Jakarta REST API only - implementation provided by Cassini at runtime -->
         <dependency>
             <groupId>jakarta.ws.rs</groupId>
             <artifactId>jakarta.ws.rs-api</artifactId>
@@ -40,7 +40,7 @@
             <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
-        <!-- Runtime pour les tests d'intégration : Cassini + Weld -->
+        <!-- Runtime for integration tests: Cassini + Weld -->
         <dependency>
             <groupId>io.vidocq.cassini</groupId>
             <artifactId>cassini-core</artifactId>
@@ -68,11 +68,11 @@
     <build>
         <plugins>
             <!--
-                JPMS workaround knock-jaxrs : meme probleme que knock-core et
-                knock-cdi-vauban. cassini-core est test-scope, absent de
-                target/javamodules/ ; si module-info.class est dans target/classes,
-                Maven active JPMS pour testCompile et ne trouve pas les modules test
-                sur le module-path. Meme solution en trois temps (voir ADR-001).
+                JPMS workaround for knock-jaxrs: same issue as knock-core and
+                knock-cdi-vauban. cassini-core is test-scope and absent from
+                target/javamodules/; if module-info.class is in target/classes,
+                Maven enables JPMS for testCompile and cannot resolve test modules
+                on the module path. Same three-step solution (see ADR-001).
             -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

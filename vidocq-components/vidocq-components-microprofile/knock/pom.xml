@@ -54,16 +54,16 @@
 
     <properties>
         <!--
-            MicroProfile Health API 4.0.1 — fork Vidocq avec module-info
-            pour JPMS/jlink. La version upstream est gardee a titre indicatif.
+            MicroProfile Health API 4.0.1 - Vidocq fork with module-info
+            for JPMS/jlink. The upstream version is kept for reference.
         -->
         <microprofile.health.api.version>${project.version}</microprofile.health.api.version>
         <microprofile.health.upstream.version>4.0.1</microprofile.health.upstream.version>
 
-        <!-- Jakarta JSON-P — implémentation fournie par champollion -->
+        <!-- Jakarta JSON-P - implementation provided by champollion -->
         <jakarta.json.version>2.1.3</jakarta.json.version>
 
-        <!-- Jakarta REST — implémentation fournie par Cassini -->
+        <!-- Jakarta REST - implementation provided by Cassini -->
         <jakarta.ws.rs.version>4.0.0</jakarta.ws.rs.version>
 
         <!-- CDI -->
@@ -71,43 +71,39 @@
         <jakarta.inject.version>2.0.1</jakarta.inject.version>
         <jakarta.annotation.version>3.0.0</jakarta.annotation.version>
 
-        <!-- Vidocq upstreams (référencés via property pour overridabilité PR cross-repo) -->
+        <!-- Vidocq upstreams (referenced via properties to allow cross-repo PR overrides) -->
         <vauban.version>0.2.0-SNAPSHOT</vauban.version>
         <champollion.version>0.1.0-SNAPSHOT</champollion.version>
         <cassini.version>0.1.0-SNAPSHOT</cassini.version>
     </properties>
 
-    <!--
-        knock-tck est volontairement HORS reactor (POM Model 4.0.0 standalone)
-        pour contourner ShrinkWrap Maven Resolver 3.3 qui ne sait pas parser
-        les POMs Model 4.1.0. Il sera invoqué par run-official-tck-mp-health-4.0.sh
-        après installation locale du reactor.
-    -->
+    <!-- Main reactor modules -->
     <modules>
         <module>knock-mp-health-api</module>
         <module>knock-api</module>
         <module>knock-core</module>
         <module>knock-cdi-vauban</module>
         <module>knock-jaxrs</module>
+        <module>knock-tck</module>
     </modules>
 
     <dependencyManagement>
         <dependencies>
-            <!-- MicroProfile Health API (fork Vidocq avec module-info) -->
+            <!-- MicroProfile Health API (Vidocq fork with module-info) -->
             <dependency>
                 <groupId>io.vidocq.knock</groupId>
                 <artifactId>knock-mp-health-api</artifactId>
                 <version>${microprofile.health.api.version}</version>
             </dependency>
 
-            <!-- Jakarta JSON-P (implémentation : champollion) -->
+            <!-- Jakarta JSON-P (implementation: champollion) -->
             <dependency>
                 <groupId>jakarta.json</groupId>
                 <artifactId>jakarta.json-api</artifactId>
                 <version>${jakarta.json.version}</version>
             </dependency>
 
-            <!-- Jakarta REST (implémentation : Cassini) -->
+            <!-- Jakarta REST (implementation: Cassini) -->
             <dependency>
                 <groupId>jakarta.ws.rs</groupId>
                 <artifactId>jakarta.ws.rs-api</artifactId>
@@ -131,8 +127,8 @@
                 <version>${jakarta.annotation.version}</version>
             </dependency>
 
-            <!-- Implémentations runtime (Vidocq) — versions via property pour
-                 que le mécanisme cross-repo PR puisse les overrider. -->
+            <!-- Runtime implementations (Vidocq) - versions via properties so
+                 the cross-repo PR mechanism can override them. -->
             <dependency>
                 <groupId>io.vidocq.champollion</groupId>
                 <artifactId>champollion-jsonp</artifactId>
@@ -159,7 +155,7 @@
                 <version>${vauban.version}</version>
             </dependency>
 
-            <!-- Modules internes Knock -->
+            <!-- Internal Knock modules -->
             <dependency>
                 <groupId>io.vidocq.knock</groupId>
                 <artifactId>knock-api</artifactId>
@@ -180,9 +176,9 @@
 
     <build>
         <!--
-            JPMS : le fork knock-mp-health-api embarque un module-info et peut
-            etre place sur le module-path. On conserve target/javamodules pour
-            aligner la resolution javac/jlink et les builds multi-modules.
+            JPMS: the knock-mp-health-api fork includes a module-info and can
+            be placed on the module path. We keep target/javamodules to align
+            javac/jlink resolution and multi-module builds.
         -->
         <plugins>
             <plugin>

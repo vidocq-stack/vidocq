@@ -8,7 +8,8 @@
 - Strict JPMS architecture: `knock-api` re-exports the spec, `knock-core` stays standalone SE
   (depends on `jakarta.json` / champollion for JSON serialization), `knock-cdi-vauban` is
   an optional CDI adapter, `knock-cassini` is the optional Jakarta REST adapter
-  (JAX-RS `/health*` resources via Cassini), `knock-tck` remains out-of-reactor.
+  (JAX-RS `/health*` resources via Cassini), `knock-tck` is now part of the main reactor
+  (standalone-capable Model 4.0.0 POM, also runnable on its own via the TCK script).
 - Prefer `ROADMAP.md` to track project progress rather than updating this file,
   which is intended as a contribution guide for agents.
 - If the rules in this file need updating, remember to align `CLAUDE.md` accordingly
@@ -44,8 +45,11 @@
 
 ## Boundaries Not to Break
 
-- Never put `knock-tck` back in the reactor: the parent `pom.xml` intentionally excludes it
-  due to ShrinkWrap Maven Resolver / Model 4.0.0 vs 4.1.0.
+- `knock-tck` is included in the main reactor (parent `pom.xml` lists it as a `<module>`).
+  Keep its POM at Model 4.0.0 and standalone-capable: ShrinkWrap Maven Resolver 3.3
+  (Arquillian transitive dependency) uses maven-resolver 1.9 / maven-model 3.9 and cannot
+  parse Model 4.1.0 reactor POMs, so `knock-tck` must never rely on Model 4.1.0 features
+  (e.g. implicit parent versions) and must stay buildable in isolation via the TCK script.
 - `knock-core` depends on `org.eclipse.microprofile.health` + `jakarta.json` (JSON-P spec API)
   at compile scope; champollion is provided at runtime. CDI and Jakarta REST stay in their
   dedicated modules. `jakarta.annotation` is allowed **in test scope only**.

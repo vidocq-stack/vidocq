@@ -192,7 +192,7 @@ End-to-end integration with embedded Cassini deferred to M5.
 
 | Task | Notes | Status |
 |---|---|---|
-| `knock-tck/pom.xml` standalone Model 4.0.0 | Same as `cassini-tck`/`foy-tck`/`ravel-tck` — outside the reactor | ✅ |
+| `knock-tck/pom.xml` standalone-capable Model 4.0.0 | Same model as `cassini-tck`/`foy-tck`/`ravel-tck`, but included in the reactor | ✅ |
 | Arquillian runner + official `microprofile-health-tck:4.0.1` harness | Custom Arquillian container `KnockDeployableContainer` (zero third-party container lib — no embedded Weld, no Undertow) | ✅ |
 | Arquillian → embedded Knock adapter | Reuses `CassiniTestHarness` (cassini-tck) for Jakarta REST + chappe-http for the HTTP server; homegrown mini-CDI (~30 LOC) for injecting `@Inject HealthCheck` (no Weld) | ✅ |
 | `run-official-tck-mp-health-4.0.sh` | Modes: smoke / all / `-Dtest=TestName`; `target/tck-report.txt` report | ✅ |

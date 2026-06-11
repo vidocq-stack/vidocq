@@ -1,47 +1,49 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-    Projet Maven STANDALONE en Model Version 4.0.0, volontairement EN DEHORS
-    du reactor Knock.
+    Standalone-capable Maven project using Model Version 4.0.0, now also included
+    in the Knock main reactor.
 
-    Pourquoi : ShrinkWrap Maven Resolver 3.3 (dép. transitive Arquillian) utilise
-    maven-resolver 1.9 / maven-model 3.9 qui ne savent pas parser les POMs
-    Model 4.1.0 du reactor. Son ClasspathWorkspaceReader crasherait sur tout POM
-    Knock (version implicite via parent).
+    Historical context: ShrinkWrap Maven Resolver 3.3 (Arquillian transitive
+    dependency) uses maven-resolver 1.9 / maven-model 3.9, which cannot parse
+    Model 4.1.0 reactor POMs. Its ClasspathWorkspaceReader would crash on Knock
+    POMs that rely on implicit parent versions.
 
-    Dépendances internes (knock-core, knock-cdi-vauban) sont gelées sur la
-    version 0.1.0-SNAPSHOT installée dans le repository Maven local.
+    Internal dependencies (knock-core, knock-cdi-vauban) are pinned to
+    version 0.1.0-SNAPSHOT from the local Maven repository.
 
-    Le lancement passe par le script :
+    Launch through the script:
         ./run-official-tck-mp-health-4.0.sh                      (smoke test)
-        ./run-official-tck-mp-health-4.0.sh all                  (suite complète)
-        ./run-official-tck-mp-health-4.0.sh -Dtest=SomeTest      (classe ciblée)
+        ./run-official-tck-mp-health-4.0.sh all                  (full suite)
+        ./run-official-tck-mp-health-4.0.sh -Dtest=SomeTest      (targeted class)
 
-    Note TCK : l'artefact microprofile-health-tck:4.0.x n'était pas disponible
-    dans le M2 local au moment du bootstrap M0. Vérifier la disponibilité sur
-    Maven Central avant d'activer le profil tck-official.
-    Commande de vérification :
+    TCK note: microprofile-health-tck:4.0.x was not available in the local M2
+    during M0 bootstrap. Check availability on Maven Central before enabling
+    the tck-official profile.
+    Verification command:
         mvn dependency:get -Dartifact=org.eclipse.microprofile.health:microprofile-health-tck:4.0.1
 -->
-<project xmlns="http://maven.apache.org/POM/4.0.0"
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>io.vidocq.knock</groupId>
+    <parent>
+        <groupId>io.vidocq.knock</groupId>
+        <artifactId>knock-parent</artifactId>
+        <version>0.2.0-SNAPSHOT</version>
+    </parent>
+
     <artifactId>knock-tck</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
     <packaging>jar</packaging>
 
     <name>Knock :: TCK Runner</name>
-    <description>Harness de conformance MicroProfile Health 4.0 — point d'entrée pour le TCK officiel</description>
+    <description>MicroProfile Health 4.0 conformance harness — entry point for the official TCK</description>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.release>25</maven.compiler.release>
-        <knock.version>0.1.0-SNAPSHOT</knock.version>
-        <microprofile.health.api.version>0.1.0-SNAPSHOT</microprofile.health.api.version>
+        <knock.version>0.2.0-SNAPSHOT</knock.version>
+        <microprofile.health.api.version>0.2.0-SNAPSHOT</microprofile.health.api.version>
         <microprofile.health.tck.version>4.0.1</microprofile.health.tck.version>
-        <cassini.version>0.1.0-SNAPSHOT</cassini.version>
+        <cassini.version>0.2.0-SNAPSHOT</cassini.version>
         <chappe.version>0.2.0-SNAPSHOT</chappe.version>
     </properties>
 
@@ -57,9 +59,9 @@
     <dependencyManagement>
         <dependencies>
             <!--
-                Aligner arquillian-container-spi/impl-base/core-impl-base sur 1.10.1
-                pour éviter MalformedParameterizedTypeException sous JDK 25 (même
-                contournement que ravel-tck et cassini-tck).
+                Align arquillian-container-spi/impl-base/core-impl-base to 1.10.1
+                to avoid MalformedParameterizedTypeException on JDK 25 (same
+                workaround as ravel-tck and cassini-tck).
             -->
             <dependency>
                 <groupId>org.jboss.arquillian.container</groupId>
@@ -76,7 +78,7 @@
                 <artifactId>arquillian-core-impl-base</artifactId>
                 <version>1.10.1.Final</version>
             </dependency>
-            <!-- Force CDI API 4.1.0 finale (le TCK MP Health peut tirer un Milestone) -->
+            <!-- Force final CDI API 4.1.0 (MP Health TCK may pull a milestone build) -->
             <dependency>
                 <groupId>jakarta.enterprise</groupId>
                 <artifactId>jakarta.enterprise.cdi-api</artifactId>
@@ -87,7 +89,7 @@
                 <artifactId>jakarta.enterprise.lang-model</artifactId>
                 <version>4.1.0</version>
             </dependency>
-            <!-- Aligner weld-lite-extension-translator si nécessaire (cf. ravel-tck) -->
+            <!-- Align weld-lite-extension-translator if needed (see ravel-tck) -->
             <dependency>
                 <groupId>org.jboss.weld</groupId>
                 <artifactId>weld-lite-extension-translator</artifactId>
@@ -100,12 +102,10 @@
         <dependency>
             <groupId>io.vidocq.knock</groupId>
             <artifactId>knock-core</artifactId>
-            <version>${knock.version}</version>
         </dependency>
         <dependency>
             <groupId>io.vidocq.knock</groupId>
             <artifactId>knock-cdi-vauban</artifactId>
-            <version>${knock.version}</version>
         </dependency>
         <dependency>
             <groupId>io.vidocq.knock</groupId>
@@ -115,12 +115,10 @@
         <dependency>
             <groupId>io.vidocq.knock</groupId>
             <artifactId>knock-mp-health-api</artifactId>
-            <version>${microprofile.health.api.version}</version>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
-            <version>6.0.3</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
@@ -152,8 +150,8 @@
 
     <profiles>
         <!--
-            Profil par défaut : smoke test JUnit — vérifie le bootstrap minimal
-            (chargement des modules knock-core et knock-cdi-vauban) sans Arquillian.
+            Default profile: JUnit smoke test - verifies minimal bootstrap
+            (loading knock-core and knock-cdi-vauban modules) without Arquillian.
         -->
         <profile>
             <id>smoke</id>
@@ -161,12 +159,12 @@
                 <activeByDefault>true</activeByDefault>
             </activation>
             <!--
-                En mode smoke, seules les classes hors `arquillian/` sont compilées
-                et exécutées : les sources Arquillian/ShrinkWrap dépendent de jars
-                (arquillian-container-spi, shrinkwrap-api, cassini-tck, weld…) qui
-                ne sont tirés que dans le profil `tck-official`. Sans cette exclusion,
-                `./run-official-tck-mp-health-4.0.sh` (smoke) ne compile même pas
-                à cause de `package org.jboss.arquillian.container.spi.* does not exist`.
+                In smoke mode, only classes outside `arquillian/` are compiled
+                and executed: Arquillian/ShrinkWrap sources depend on jars
+                (arquillian-container-spi, shrinkwrap-api, cassini-tck, weld...)
+                that are only pulled by the `tck-official` profile. Without this
+                exclusion, `./run-official-tck-mp-health-4.0.sh` (smoke) would not
+                compile because `package org.jboss.arquillian.container.spi.* does not exist`.
             -->
             <build>
                 <plugins>
@@ -193,9 +191,9 @@
         </profile>
 
         <!--
-            Profil TCK officiel : Arquillian TestNG + Weld SE embedded.
-            À activer quand microprofile-health-tck:4.0.x sera disponible sur Maven Central.
-            Cible : 100 % PASS (contrat M4).
+            Official TCK profile: Arquillian TestNG + embedded Weld SE.
+            Enable when microprofile-health-tck:4.0.x is available on Maven Central.
+            Target: 100% PASS (M4 contract).
         -->
         <profile>
             <id>tck-official</id>
@@ -236,7 +234,7 @@
             </build>
             <dependencies>
                 <!--
-                    TCK MicroProfile Health 4.0 — à vérifier disponibilité sur Maven Central.
+                    MicroProfile Health 4.0 TCK - verify availability on Maven Central.
                     mvn dependency:get -Dartifact=org.eclipse.microprofile.health:microprofile-health-tck:4.0.1
                 -->
                 <dependency>
@@ -259,11 +257,11 @@
                     <scope>test</scope>
                 </dependency>
                 <!--
-                    Container Arquillian custom : démarre Cassini (Jakarta REST) + KnockHealthResource
-                    par-déploiement, en exposant l'URI au TCK via @ArquillianResource. Réutilise
-                    CassiniTestHarness (cassini-tck) déjà éprouvé pour l'écosystème Vidocq.
-                    Aucun container "weld embedded" ni "managed servlet" tiers — Knock embarque
-                    son propre runner conforme à la spec MP Health 4.0 §3.
+                    Custom Arquillian container: starts Cassini (Jakarta REST) + KnockHealthResource
+                    per deployment and exposes the URI to the TCK through @ArquillianResource.
+                    Reuses CassiniTestHarness (cassini-tck), already proven in the Vidocq ecosystem.
+                    No third-party "weld embedded" or "managed servlet" container - Knock ships
+                    its own runner compliant with MP Health 4.0 spec section 3.
                 -->
                 <dependency>
                     <groupId>io.vidocq.cassini</groupId>
@@ -301,7 +299,7 @@
                     <version>${chappe.version}</version>
                     <scope>test</scope>
                 </dependency>
-                <!-- champollion : impl Jakarta JSON-P utilisée par knock-core à l'exécution -->
+                <!-- champollion: Jakarta JSON-P implementation used by knock-core at runtime -->
                 <dependency>
                     <groupId>io.vidocq.champollion</groupId>
                     <artifactId>champollion-jsonp</artifactId>

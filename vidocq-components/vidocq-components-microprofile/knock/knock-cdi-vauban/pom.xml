@@ -39,7 +39,7 @@
             <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
-        <!-- Container CDI pour les tests d'intégration -->
+        <!-- CDI container for integration tests -->
         <!-- Compile-only (optional at runtime): supplies the VaubanComponentProvider service type
              named in module-info `provides`. Non-transitive; absent under non-Vauban containers. -->
         <dependency>
@@ -77,11 +77,11 @@
                 inert for a standard CDI container (Weld).
             -->
             <!--
-                JPMS workaround knock-cdi-vauban : meme probleme que knock-core.
-                vauban-core est test-scope, absent de target/javamodules/ ; si
-                module-info.class est dans target/classes, Maven active JPMS pour
-                testCompile et ne trouve pas les modules test sur le module-path.
-                Meme solution en trois temps (voir ADR-001 et knock-core/pom.xml).
+                JPMS workaround for knock-cdi-vauban: same issue as knock-core.
+                vauban-core is test-scope, absent from target/javamodules/; if
+                module-info.class is in target/classes, Maven enables JPMS for
+                testCompile and cannot resolve test modules on the module path.
+                Same three-step solution (see ADR-001 and knock-core/pom.xml).
             -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
