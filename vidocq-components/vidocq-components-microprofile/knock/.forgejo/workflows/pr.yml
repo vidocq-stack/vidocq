@@ -24,7 +24,7 @@ on:
 
 jobs:
   checks:
-    uses: vidocq/governance/.forgejo/workflows/contribution-checks.yml
+    uses: vidocq/governance/.forgejo/workflows/contribution-checks.yml@main
     with:
       pr-author: ${{ github.event.pull_request.user.login }}
   pr-validate:
