@@ -85,6 +85,11 @@
 
         <!-- Versions des plugins Maven — overridables par propriété dans les enfants -->
         <maven.compiler.plugin.version>3.13.0</maven.compiler.plugin.version>
+        <maven.dependency.plugin.version>3.8.1</maven.dependency.plugin.version>
+        <!-- Hook for the managed copy-compile-deps-to-module-path execution: repos that
+             repackage upstream non-modular APIs (e.g. heisenberg) exclude the originals
+             here to avoid duplicate module names on the module path. Empty = no exclusion. -->
+        <vidocq.javamodules.excludes></vidocq.javamodules.excludes>
         <maven.surefire.plugin.version>3.5.5</maven.surefire.plugin.version>
         <!-- Pinné explicitement pour les modules *-maven-plugin de l'écosystème
              (cassini, chappe, vauban, vidocq, champollion×2) ; sinon Maven 3.9 utilise
@@ -152,6 +157,36 @@
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-surefire-plugin</artifactId>
                     <version>${maven.surefire.plugin.version}</version>
+                </plugin>
+                <!--
+                    JPMS workaround shared by the MicroProfile repos (heisenberg, knock,
+                    dirac, the vidocq runtime wrappers, ...): upstream MicroProfile API
+                    jars are not modular, so the compile-scope dependencies are copied to
+                    target/javamodules/ and that directory is fed to javac's module path
+                    (the repackaged, module-info'd API forks win over the originals).
+
+                    Declaring <plugin><artifactId>maven-dependency-plugin</artifactId></plugin>
+                    in a child activates this execution. Children that use the dependency
+                    plugin for OTHER purposes (unpack-*) and do not want the copy must
+                    neutralize it: <execution><id>copy-compile-deps-to-module-path</id>
+                    <phase>none</phase></execution>.
+                -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-dependency-plugin</artifactId>
+                    <version>${maven.dependency.plugin.version}</version>
+                    <executions>
+                        <execution>
+                            <id>copy-compile-deps-to-module-path</id>
+                            <phase>initialize</phase>
+                            <goals><goal>copy-dependencies</goal></goals>
+                            <configuration>
+                                <outputDirectory>${project.build.directory}/javamodules</outputDirectory>
+                                <includeScope>compile</includeScope>
+                                <excludeArtifactIds>${vidocq.javamodules.excludes}</excludeArtifactIds>
+                            </configuration>
+                        </execution>
+                    </executions>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
