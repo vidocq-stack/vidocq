@@ -21,6 +21,7 @@
         <module>vidocq-runtime-it-humboldt-cassini</module>
         <module>vidocq-runtime-it-cervantes-jwt</module>
         <module>vidocq-runtime-it-grimm-openapi</module>
+        <module>vidocq-runtime-it-cyrano-jpms</module>
     </modules>
 
     <build>

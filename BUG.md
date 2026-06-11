@@ -38,13 +38,17 @@ via `provides ... with`. vauban-core's `BceProcessor` instantiates BCEs by direc
 
 Verified: Arago Docker boots; cervantes MP-JWT 2.1 TCK 206/206 PASS.
 
-### Related — latent, NOT yet fixed
+### Related — cyrano wrapper: ✅ FIXED 2026-06-11
 
-`vidocq-runtime-cyrano-rest-client-extension` has the **same** shape (own BCE
-`io.vidocq.runtime.ext.cyrano.CyranoBuildCompatibleExtension` in a non-opened package) and will fail
-the same way once a Cyrano-enabled app boots on the module path. The one-line `opens ... to
-io.vidocq.vauban.core` fix additionally needs `io.vidocq.vauban.core` reachable in the wrapper's
-compile module graph (it is not today — compiling the open emits "module not found: io.vidocq.vauban.core"),
-so the wrapper likely needs `requires io.vidocq.runtime.spi`/the vauban module on its path first. Left
-unfixed here because no current app exercises Cyrano on the module path and it could not be verified
-end-to-end; track and fix when Cyrano is first deployed under strict JPMS.
+`vidocq-runtime-cyrano-rest-client-extension` had the **same** shape (own BCE in a non-opened
+package). Fixed with the same one-line `opens io.vidocq.runtime.extensions.microprofile.cyrano to
+io.vidocq.vauban.core` — the compile-graph concern recorded earlier did not materialize:
+`io.vidocq.vauban.core` is reachable transitively through `io.vidocq.cyrano.cdi.vauban`, exactly as
+in the cervantes wrapper, and the opens compiles as-is.
+
+**Verified end-to-end this time**: new reactor module `vidocq-runtime-it-cyrano-jpms` boots the
+Vidocq runtime with the wrapper ON THE MODULE PATH (main module-info → surefire module path, plus a
+named-module sentinel against silent class-path degradation). The vehicle was proven by mutation:
+without the opens the boot test fails with the exact VID-001 symptom; with it, green. This also
+gives the runtime its first module-path IT — every other integration test runs on the class path,
+where this whole bug class is invisible.
