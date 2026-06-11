@@ -28,6 +28,14 @@ module io.vidocq.runtime.extensions.microprofile.cyrano {
 
     requires jakarta.cdi;
 
+    // VID-001 (same shape as the cervantes wrapper): vauban-core instantiates the BCE
+    // reflectively (getDeclaredConstructor + setAccessible + newInstance in BceProcessor) —
+    // `provides ... with` alone only grants ServiceLoader access. The BCE lives in this
+    // wrapper's internal, non-exported package, so open it to vauban-core for that
+    // reflective access. io.vidocq.vauban.core is reachable transitively through
+    // io.vidocq.cyrano.cdi.vauban.
+    opens io.vidocq.runtime.extensions.microprofile.cyrano to io.vidocq.vauban.core;
+
     provides jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension
             with io.vidocq.runtime.extensions.microprofile.cyrano.CyranoBuildCompatibleExtension;
 }
