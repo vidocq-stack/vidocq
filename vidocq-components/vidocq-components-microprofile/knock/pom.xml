@@ -207,25 +207,6 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-dependency-plugin</artifactId>
-                <version>3.8.1</version>
-                <executions>
-                    <!--
-                        Copie toutes les dependances compile et provided dans target/javamodules.
-                        Cela inclut knock-mp-health-api (fork avec module-info),
-                        knock-api, jakarta.json, etc. Notre argument javac module-path prend
-                        precedence car javac utilise le premier module-path rencontre.
-                        includeScope=compile : compile et provided, pas test ni runtime.
-                    -->
-                    <execution>
-                        <id>copy-compile-deps-to-module-path</id>
-                        <phase>initialize</phase>
-                        <goals><goal>copy-dependencies</goal></goals>
-                        <configuration>
-                            <outputDirectory>${project.build.directory}/javamodules</outputDirectory>
-                            <includeScope>compile</includeScope>
-                        </configuration>
-                    </execution>
-                </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
