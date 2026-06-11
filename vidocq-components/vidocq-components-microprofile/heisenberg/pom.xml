@@ -53,6 +53,7 @@
     </scm>
 
     <properties>
+        <vidocq.javamodules.excludes>microprofile-fault-tolerance-api,microprofile-config-api,microprofile-metrics-api</vidocq.javamodules.excludes>
         <!--
             MicroProfile Fault Tolerance 4.1 API.
             ATTENTION : microprofile-fault-tolerance-api:4.1 peut ne pas avoir d'Automatic-Module-Name
@@ -224,30 +225,13 @@
             supprimé (les JARs avec AMBN sont résolus normalement par Maven Compiler Plugin).
         -->
         <plugins>
+            <!-- copy-compile-deps-to-module-path: managed by vidocq-parent (declaring the
+                 plugin activates it). The MicroProfile originals replaced by the modular
+                 repackages (heisenberg-mp-ft-api, ravel-mp-config-api, dirac-mp-metrics-api)
+                 are excluded via the vidocq.javamodules.excludes property below. -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-dependency-plugin</artifactId>
-                <version>3.8.1</version>
-                <executions>
-                    <execution>
-                        <id>copy-compile-deps-to-module-path</id>
-                        <phase>initialize</phase>
-                        <goals><goal>copy-dependencies</goal></goals>
-                        <configuration>
-                            <outputDirectory>${project.build.directory}/javamodules</outputDirectory>
-                            <includeScope>compile</includeScope>
-                            <!--
-                                Exclure les APIs MicroProfile originales qui sont remplacées par
-                                leurs équivalents modularisés (heisenberg-mp-ft-api et
-                                ravel-mp-config-api). Les deux repackages sont des named modules
-                                que Maven Compiler Plugin 4.0 gère automatiquement sur le
-                                module-path ; copier les originaux provoquerait un conflit de
-                                noms de modules (duplicate module on module path).
-                            -->
-                            <excludeArtifactIds>microprofile-fault-tolerance-api,microprofile-config-api,microprofile-metrics-api</excludeArtifactIds>
-                        </configuration>
-                    </execution>
-                </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
