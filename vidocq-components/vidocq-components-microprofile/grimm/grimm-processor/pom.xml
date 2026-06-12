@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.grimm</groupId>
+        <artifactId>grimm-parent</artifactId>
+        <version>0.2.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>grimm-processor</artifactId>
+    <name>Grimm :: APT Processor</name>
+    <description>Annotation processor generating $$GrimmModel companion sources at compile time for JAX-RS resources (APT-first rule, codegen audit CG-06). Builds the real model objects inside javac (grimm-core) and embeds the serialized fragment.</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.grimm</groupId>
+            <artifactId>grimm-core</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- JAX-RS annotations read by the processor (provided, like in grimm-core). -->
+        <dependency>
+            <groupId>jakarta.ws.rs</groupId>
+            <artifactId>jakarta.ws.rs-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- module-info.java stays uncompiled (src/main/module-info) — the jar ships
+                 as an automatic module, consistent with the rest of grimm. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <!-- Disable annotation processing during the processor's own compilation
+                         to avoid circular bootstrap issues. -->
+                    <proc>none</proc>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <useModulePath>false</useModulePath>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>

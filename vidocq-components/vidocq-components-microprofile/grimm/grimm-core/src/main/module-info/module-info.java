@@ -28,6 +28,9 @@ module io.vidocq.grimm.core {
   exports io.vidocq.grimm.internal.merger to io.vidocq.grimm.cdi.vauban;
   exports io.vidocq.grimm.internal.schema to io.vidocq.grimm.cdi.vauban;
   exports io.vidocq.grimm.internal.reader;
+  // CG-06 — compile-time OpenAPI contributions ($$GrimmModel companions).
+  exports io.vidocq.grimm.spi.gen;
+  uses io.vidocq.grimm.spi.gen.OpenApiContribution;
 
   provides org.eclipse.microprofile.openapi.spi.OASFactoryResolver
       with io.vidocq.grimm.internal.factory.GrimmOASFactoryResolver;

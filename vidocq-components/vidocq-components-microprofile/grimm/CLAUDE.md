@@ -48,7 +48,12 @@ only the MicroProfile OpenAPI API, required Jakarta specs, and the Vidocq modula
 `io.vidocq.ravel:ravel-mp-config-api` are compiled.
 
 ```
-grimm-core         ← Scanner, OASFactory impl, model POJOs, JSON/YAML serializer, model merger
+grimm-core         ← Scanner, OASFactory impl, model POJOs, JSON/YAML serializer, model merger,
+                     spi.gen (OpenApiContribution) + ContributionRegistry (CG-06)
+grimm-processor    ← APT processor (CG-06 M1): generates $$GrimmModel companions embedding the
+                     per-class OpenAPI fragment as JSON (built with the real grimm-core model
+                     objects inside javac) — primary path for the structural JAX-RS subset;
+                     the runtime scan is the fallback AND the behavioural oracle of its tests
 grimm-cdi-vauban   ← CDI BCE (model built at startup) + /openapi JAX-RS endpoint
 grimm-tck          ← TestNG + Arquillian + official MP OpenAPI 4.1 TCK runner (out-of-reactor)
 grimm-bench        ← JMH benchmarks vs SmallRye OpenAPI
@@ -63,7 +68,8 @@ JAX-RS resource class.
 **Model build pipeline** (executed once at container startup, result cached):
 1. Read static file (`META-INF/openapi.yaml` / `.json` / `.yml`) — `StaticFileReader`
 2. Invoke `OASModelReader` if configured (`mp.openapi.model.reader`) — `ModelReaderInvoker`
-3. Scan JAX-RS resource classes + MP OpenAPI annotations — `AnnotationScanner`
+3. Annotation source: compile-time `$$GrimmModel` fragments first (ContributionRegistry,
+   CG-06), then scan of the remaining classes — `AnnotationScanner` (fallback + oracle)
 4. Merge all three sources — `ModelMerger`
 5. Apply `OASFilter` if configured (`mp.openapi.filter`) — `FilterInvoker`
 6. Cache the final `OpenAPI` document — `GrimmModelCache`

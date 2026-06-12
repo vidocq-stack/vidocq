@@ -92,13 +92,30 @@ public final class ModelBuilder {
             sources.add(new ReaderSource(readerModel));
         }
 
-        // Step 3 — annotation scanning (spec §3)
+        // Step 3 — annotation source: compile-time $$GrimmModel contributions first
+        // (CG-06, APT-first rule), reflective scan as documented fallback for the rest.
+        java.util.List<Class<?>> toScan = new ArrayList<>(annotatedTypes.size());
+        java.util.List<OpenAPI> fragments = new ArrayList<>();
+        var fragmentReader = new io.vidocq.grimm.internal.serialization.JsonDeserializer();
+        for (Class<?> annotatedType : annotatedTypes) {
+            var contribution = ContributionRegistry.resolve(annotatedType);
+            if (contribution != null) {
+                fragments.add(fragmentReader.deserialize(contribution.openApiJson()));
+            } else {
+                ContributionRegistry.noteScanFallback();
+                toScan.add(annotatedType);
+            }
+        }
+
         AnnotationScanner scanner = new AnnotationScanner(config.scan());
 
         // Register schema overrides before scan so generator can resolve scalar refs (e.g. Instant).
         ConfigApplier.applySchemaOverrides(scanner.schemaRegistry(), config);
 
-        OpenAPI annotationModel = scanner.scanClasses(annotatedTypes);
+        OpenAPI annotationModel = scanner.scanClasses(toScan);
+        for (OpenAPI fragment : fragments) {
+            io.vidocq.grimm.internal.merger.FragmentMerger.mergeInto(annotationModel, fragment);
+        }
         sources.add(new AnnotationSource(annotationModel));
 
         // Step 4 — merge with spec priority (§4.4)
