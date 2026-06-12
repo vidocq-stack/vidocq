@@ -30,4 +30,5 @@ module io.vidocq.cyrano.api {
     requires transitive jakarta.ws.rs;
 
     exports io.vidocq.cyrano.spi;
+    exports io.vidocq.cyrano.spi.gen;
 }
