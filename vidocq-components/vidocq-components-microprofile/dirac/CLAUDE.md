@@ -53,7 +53,11 @@ dependencies: only the specified Jakarta EE and MicroProfile APIs are used.
 
 ```
 dirac-api            ← MP Metrics 5.1.1 spec wrapper + Vidocq SPI (MetricRegistryProducer,
-                       DiracContext); stable public types: MetricID, Tag, Snapshot
+                       DiracContext); stable public types: MetricID, Tag, Snapshot;
+                       spi.gen (MetricsCompanion descriptors for APT-generated companions)
+dirac-processor      ← APT processor (CG-05): generates $$DiracMetrics companion sources
+                       (names/units/tags/scopes resolved at compile time, gauges as direct
+                       functional accessors) — primary metadata path; startup scan = fallback
 dirac-core           ← Pure Java 25 implementations without CDI (CounterImpl, GaugeImpl,
                        HistogramImpl, TimerImpl, MetricRegistryImpl, OpenMetricsFormatter,
                        JsonMetricsFormatter)
@@ -119,8 +123,10 @@ delegates to `ctx.proceed()`.
    Use `LongAdder`, `AtomicLong`, `AtomicReference`, `ConcurrentHashMap`.
 3. **No `setAccessible(true)` in production** — use `MethodHandles.privateLookupIn`
    if internal access is needed; document any `opens` in `module-info`.
-4. **No `java.lang.reflect.Proxy`** for `@Gauge` resolution — resolution via
-   `MethodHandle` at container startup (BCE `DiracExtension`).
+4. **No `java.lang.reflect.Proxy`** for `@Gauge` resolution — primary path is the
+   compile-time `$$DiracMetrics` companion (direct functional accessor, no opens);
+   fallback is `MethodHandle` resolution at container startup (BCE `DiracExtension`,
+   CompanionRegistry chain with hit counters — CG-05).
 5. **`dirac-tck/pom.xml` stays at Model 4.0.0** — do not move to 4.1.0 until
    ShrinkWrap is updated (constraint common to the entire Vidocq ecosystem).
 6. **TCK 100% PASS is a hard contract** — any structural modification to `dirac-core`

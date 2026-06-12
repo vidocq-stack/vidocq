@@ -74,6 +74,15 @@ public class DiracExtension implements BuildCompatibleExtension {
         var beanClassName = classInfo.name();
         try {
             var beanClass = Class.forName(beanClassName, false, Thread.currentThread().getContextClassLoader());
+            // CG-05: compile-time $$DiracMetrics companion first; the reflective
+            // annotation scan below stays as the documented fallback for classes
+            // compiled without the dirac-processor.
+            var companion = CompanionRegistry.resolve(beanClass);
+            if (companion != null) {
+                ingestCompanion(companion);
+                return;
+            }
+            CompanionRegistry.noteScanFallback();
             scanGaugeMethods(beanClass);
             scanTimedMethods(beanClass);
             scanCountedMethods(beanClass);
@@ -111,6 +120,43 @@ public class DiracExtension implements BuildCompatibleExtension {
 
     static Set<PreRegisteredMetric> discoveredCounters() {
         return Collections.unmodifiableSet(DISCOVERED_COUNTERS);
+    }
+
+    /** Ingests fully-resolved compile-time metadata — no annotation is read. */
+    static void ingestCompanion(io.vidocq.dirac.spi.gen.MetricsCompanion companion) {
+        for (var spec : companion.timers()) {
+            DISCOVERED_TIMERS.add(toPreRegistered(spec));
+        }
+        for (var spec : companion.counters()) {
+            DISCOVERED_COUNTERS.add(toPreRegistered(spec));
+        }
+        for (var gauge : companion.gauges()) {
+            var tags = parseTags(gauge.tags().toArray(new String[0]));
+            DISCOVERED_GAUGES.add(new ResolvedGauge(
+                    companion.beanClass(),
+                    null,
+                    gauge.staticMethod(),
+                    new MetricID(gauge.name(), tags),
+                    Metadata.builder()
+                            .withName(gauge.name())
+                            .withDescription(gauge.description())
+                            .withUnit(gauge.unit())
+                            .build(),
+                    tags,
+                    normalizeScope(gauge.scope()),
+                    gauge.invoker()));
+        }
+    }
+
+    private static PreRegisteredMetric toPreRegistered(io.vidocq.dirac.spi.gen.MetricsCompanion.MetricSpec spec) {
+        return new PreRegisteredMetric(
+                Metadata.builder()
+                        .withName(spec.name())
+                        .withDescription(spec.description())
+                        .withUnit(spec.unit())
+                        .build(),
+                parseTags(spec.tags().toArray(new String[0])),
+                normalizeScope(spec.scope()));
     }
 
     static void scanGaugeMethods(Class<?> beanClass) {
@@ -230,7 +276,15 @@ public class DiracExtension implements BuildCompatibleExtension {
         }
     }
 
-    private static GaugeImpl<Number> toGaugeMetric(ResolvedGauge resolved, Function<Class<?>, Object> beanResolver) {
+    private static org.eclipse.microprofile.metrics.Gauge<Number> toGaugeMetric(
+            ResolvedGauge resolved, Function<Class<?>, Object> beanResolver) {
+        if (resolved.invoker() != null) {
+            // CG-05 companion path: direct functional accessor, no MethodHandle.
+            return resolved.staticMethod()
+                    ? new io.vidocq.dirac.internal.FunctionalGaugeImpl<Number>(resolved.invoker())
+                    : new io.vidocq.dirac.internal.FunctionalGaugeImpl<Number>(
+                            () -> beanResolver.apply(resolved.beanClass()), resolved.invoker());
+        }
         return resolved.staticMethod()
                 ? new GaugeImpl<Number>(resolved.methodHandle())
                 : new GaugeImpl<Number>(() -> beanResolver.apply(resolved.beanClass()), resolved.methodHandle());
@@ -251,7 +305,8 @@ public class DiracExtension implements BuildCompatibleExtension {
                         .withUnit(gauge.unit())
                         .build(),
                 tags,
-                normalizeScope(gauge.scope())
+                normalizeScope(gauge.scope()),
+                null
         );
     }
 
@@ -422,7 +477,8 @@ public class DiracExtension implements BuildCompatibleExtension {
                          MetricID metricID,
                          Metadata metadata,
                          Tag[] tags,
-                         String scope) {
+                         String scope,
+                         Function<Object, Number> invoker) {
     }
 
     record PreRegisteredMetric(Metadata metadata, Tag[] tags, String scope) {

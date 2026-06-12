@@ -41,4 +41,7 @@ module io.vidocq.dirac.api {
     requires transitive microprofile.metrics.api;
 
     exports io.vidocq.dirac.api;
+    //CG-05 — compile-time metric descriptors implemented by generated
+    //$$DiracMetrics companions (consumed by user modules and dirac-cdi-vauban).
+    exports io.vidocq.dirac.spi.gen;
 }

@@ -82,6 +82,7 @@
     <modules>
         <module>dirac-mp-metrics-api</module>
         <module>dirac-api</module>
+        <module>dirac-processor</module>
         <module>dirac-core</module>
         <module>dirac-cdi-vauban</module>
         <module>dirac-cdi-vauban-jpms-it</module>
