@@ -23,114 +23,19 @@ on:
     branches: [main]
 
 jobs:
-  cla-check:
-    name: CLA signature check
+  # CLA + GPG-signature + Signed-off-by gate, mutualised in a composite action
+  # (https://codeberg.org/Vidocq/ci/governance-checks). Codeberg does not resolve
+  # cross-repo reusable workflows, so the shared logic ships as a step-level action.
+  # fetch-depth: 0 is required so the action can read the BASE_REF..HEAD commit range.
+  governance-checks:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout governance repository
-        uses: actions/checkout@v4
-        with:
-          repository: vidocq/governance
-          ref: main
-          path: governance
-
-      - name: Check CLA signature
-        run: |
-          AUTHOR="${{ inputs.pr-author }}"
-          if grep -qi "$AUTHOR" governance/CLA-signatures/individuals.md; then
-            echo "✅ CLA signed by $AUTHOR"
-          else
-            echo "❌ $AUTHOR has not signed the Vidocq CLA."
-            echo ""
-            echo "Please open a separate pull request on vidocq/governance"
-            echo "adding your name to CLA-signatures/individuals.md."
-            echo "See https://codeberg.org/vidocq/governance/src/branch/main/CONTRIBUTING.md"
-            exit 1
-          fi
-
-  gpg-check:
-    name: GPG signature check
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout calling repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Checkout governance repository (for GPG keys)
-        uses: actions/checkout@v4
+      - uses: https://codeberg.org/Vidocq/ci/governance-checks@main
         with:
-          repository: vidocq/governance
-          ref: main
-          path: governance
-
-      - name: Import contributors GPG public keys
-        run: |
-          for keyfile in governance/.forgejo/keys/*.asc; do
-            [ -f "$keyfile" ] || continue
-            gpg --import "$keyfile" 2>/dev/null && \
-              echo "Imported: $keyfile" || true
-          done
-
-      - name: Check GPG signatures on all commits
-        run: |
-          if [ -n "${GITHUB_BASE_REF:-}" ]; then
-            BASE_REF="origin/$GITHUB_BASE_REF"
-          elif git show-ref --verify --quiet refs/remotes/origin/HEAD; then
-            BASE_REF="$(git symbolic-ref --short refs/remotes/origin/HEAD)"
-          else
-            BASE_REF="origin/main"
-          fi
-
-          UNSIGNED=$(git log "$BASE_REF"..HEAD --format="%H %ae" | \
-            while read -r hash email; do
-              git verify-commit "$hash" 2>/dev/null || echo "  $hash ($email)"
-            done)
-          if [ -n "$UNSIGNED" ]; then
-            echo "❌ The following commits are not GPG-signed or have invalid signatures:"
-            echo "$UNSIGNED"
-            echo ""
-            echo "All commits must be GPG-signed."
-            echo "See https://codeberg.org/vidocq/governance/src/branch/main/CONTRIBUTING.md#set-up-gpg-commit-signing"
-            exit 1
-          else
-            echo "✅ All commits are correctly GPG-signed"
-          fi
-
-  signoff-check:
-    name: Signed-off-by check
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout calling repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Check Signed-off-by on all commits
-        run: |
-          if [ -n "${GITHUB_BASE_REF:-}" ]; then
-            BASE_REF="origin/$GITHUB_BASE_REF"
-          elif git show-ref --verify --quiet refs/remotes/origin/HEAD; then
-            BASE_REF="$(git symbolic-ref --short refs/remotes/origin/HEAD)"
-          else
-            BASE_REF="origin/main"
-          fi
-
-          MISSING=$(git log "$BASE_REF"..HEAD --format="%H" | \
-            while read -r hash; do
-              body=$(git log -1 --format="%B" "$hash")
-              echo "$body" | grep -q "^Signed-off-by:" || echo "  $hash"
-            done)
-          if [ -n "$MISSING" ]; then
-            echo "❌ The following commits are missing a Signed-off-by trailer:"
-            echo "$MISSING"
-            echo ""
-            echo "Use: git config --local format.signoff true"
-            echo "Or:  git commit --signoff"
-            exit 1
-          else
-            echo "✅ All commits have a Signed-off-by trailer"
-          fi
+          pr-author: ${{ github.event.pull_request.user.login }}
 
   pr-validate:
     runs-on: ubuntu-latest
