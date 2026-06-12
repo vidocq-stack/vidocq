@@ -134,6 +134,37 @@
           <version>0.2.0-SNAPSHOT</version>
           <scope>test</scope>
         </dependency>
+        <!-- WORKAROUND: the 0.2.0-SNAPSHOT pom of vidocq-runtime-cassini-rest-extension
+             published on central-snapshots (timestamp 20260608.152249-5) is INVALID
+             (unmanaged dependency version) — the resolver prefers it over the locally
+             installed snapshot and silently drops its transitive dependencies
+             (ClassNotFoundException: io.vidocq.cassini.spi.bean.BeanProvider). Until a
+             fixed snapshot is republished by the vidocq CI, the lost transitives are
+             declared explicitly below. Tracked in vidocq/BUG.md. -->
+        <dependency>
+          <groupId>io.vidocq.cassini</groupId>
+          <artifactId>cassini-api</artifactId>
+          <version>0.2.0-SNAPSHOT</version>
+          <scope>test</scope>
+        </dependency>
+        <dependency>
+          <groupId>io.vidocq.cassini</groupId>
+          <artifactId>cassini-core</artifactId>
+          <version>0.2.0-SNAPSHOT</version>
+          <scope>test</scope>
+        </dependency>
+        <dependency>
+          <groupId>io.vidocq.cassini</groupId>
+          <artifactId>cassini-cdi-vauban</artifactId>
+          <version>0.2.0-SNAPSHOT</version>
+          <scope>test</scope>
+        </dependency>
+        <dependency>
+          <groupId>io.vidocq.cassini</groupId>
+          <artifactId>cassini-chappe</artifactId>
+          <version>0.2.0-SNAPSHOT</version>
+          <scope>test</scope>
+        </dependency>
         <dependency>
           <groupId>jakarta.ws.rs</groupId>
           <artifactId>jakarta.ws.rs-api</artifactId>
