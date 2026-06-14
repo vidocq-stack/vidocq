@@ -1,10 +1,8 @@
 = Dirac
 :description: MicroProfile Metrics 5.1.1 implementation — counters, gauges, histograms, timers exposed in OpenMetrics / Prometheus and JSON, zero third-party library, zero contention, strict JPMS, jlink-ready.
 
-////
 [.text-center]
 image::dirac-logo.png[Dirac,300,role=module-logo]
-////
 
 [.lead]
 Dirac is the MicroProfile Metrics 5.1.1 implementation of the Vidocq ecosystem. It measures the runtime state of an application — counters, gauges, histograms, timers — and exposes it as OpenMetrics / Prometheus text and JSON, without ever altering the observable through observation. CDI annotations (`@Counted`, `@Timed`, `@Gauge`) are wired through xref:vauban::index.adoc[Vauban], the optional `GET /metrics` endpoint is served by xref:cassini::index.adoc[Cassini], and `mp.metrics.*` configuration is resolved through xref:ravel::index.adoc[Ravel].

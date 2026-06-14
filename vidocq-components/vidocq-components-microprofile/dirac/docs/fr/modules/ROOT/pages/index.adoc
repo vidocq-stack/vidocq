@@ -1,10 +1,8 @@
 = Dirac
 :description: Implémentation MicroProfile Metrics 5.1.1 — compteurs, jauges, histogrammes, minuteries exposés en OpenMetrics / Prometheus et JSON, zéro librairie tierce, zéro contention, JPMS strict, prête pour jlink.
 
-////
 [.text-center]
 image::dirac-logo.png[Dirac,300,role=module-logo]
-////
 
 [.lead]
 Dirac est l'implémentation MicroProfile Metrics 5.1.1 de l'écosystème Vidocq. Elle mesure l'état d'exécution d'une application — compteurs, jauges, histogrammes, minuteries — et l'expose en OpenMetrics / Prometheus text et JSON, sans jamais altérer l'observable par l'observation. Les annotations CDI (`@Counted`, `@Timed`, `@Gauge`) sont câblées via xref:vauban::index.adoc[Vauban], l'endpoint optionnel `GET /metrics` est servi par xref:cassini::index.adoc[Cassini], et la configuration `mp.metrics.*` est résolue via xref:ravel::index.adoc[Ravel].
