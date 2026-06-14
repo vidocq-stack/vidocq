@@ -1,10 +1,8 @@
 = Grimm
 :description: Implémentation MicroProfile OpenAPI 4.1, scan d'annotations JAX-RS au démarrage, document statique cacheable, zéro dépendance externe.
 
-////
 [.text-center]
 image::grimm-logo.png[Grimm,300,role=module-logo]
-////
 
 [.lead]
 Grimm est l'implémentation MicroProfile OpenAPI 4.1 de l'écosystème Vidocq. Elle scrute les annotations dispersées dans les ressources JAX-RS, fusionne le résultat avec un éventuel document statique et un éventuel `OASModelReader`, applique les filtres `OASFilter`, et publie un document OpenAPI 3.1 unifié sur `/openapi`. Objectif : conformance 100 % au TCK MicroProfile OpenAPI 4.1 (actuellement 349/349), zéro dépendance externe, JPMS strict, prête pour jlink.
