@@ -16,7 +16,7 @@ The OpenAPI format describes an HTTP service through a structured JSON or YAML t
 | Contract metadata: title, version, license, contact, description.
 
 | `paths`
-| Operation catalogue. Each key is a path (`/pets/{id}`), each value groups HTTP verbs (`get`, `post`, …) and their `Operation`.
+| Operation catalogue. Each key is a path (`/pets/\{id}`), each value groups HTTP verbs (`get`, `post`, …) and their `Operation`.
 
 | `components`
 | Reuse catalogue: `schemas`, `parameters`, `responses`, `requestBodies`, `headers`, `securitySchemes`, `links`, `callbacks`, `examples`.

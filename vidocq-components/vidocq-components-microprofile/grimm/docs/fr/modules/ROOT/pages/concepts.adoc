@@ -16,7 +16,7 @@ Le format OpenAPI décrit un service HTTP par un arbre JSON ou YAML structuré. 
 | Métadonnées du contrat : titre, version, licence, contact, description.
 
 | `paths`
-| Catalogue des opérations. Chaque clé est un chemin (`/pets/{id}`), chaque valeur regroupe les verbes HTTP (`get`, `post`, etc.) et leurs `Operation`.
+| Catalogue des opérations. Chaque clé est un chemin (`/pets/\{id}`), chaque valeur regroupe les verbes HTTP (`get`, `post`, etc.) et leurs `Operation`.
 
 | `components`
 | Catalogue de réutilisation : `schemas`, `parameters`, `responses`, `requestBodies`, `headers`, `securitySchemes`, `links`, `callbacks`, `examples`.
