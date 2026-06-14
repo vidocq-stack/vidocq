@@ -1,10 +1,8 @@
 = Humboldt
 :description: Implémentation MicroProfile Telemetry 2.1 — traces distribuées, metrics, logs — OpenTelemetry-native, JPMS strict, zéro SDK tiers, Java 25.
 
-////
 [.text-center]
-image::humboldt-logo.png[Humboldt,180,180]
-////
+image::humboldt-logo.png[Humboldt,300,role=module-logo]
 
 [.lead]
 Humboldt est l'implémentation MicroProfile Telemetry 2.1 de l'écosystème Vidocq. Elle réécrit son propre SDK OpenTelemetry (traces, metrics, logs) directement sur la surface API OTel publique, et s'intègre avec xref:chappe::index.adoc[Chappe] pour le transport HTTP, xref:vauban::index.adoc[Vauban] pour le CDI, xref:ravel::index.adoc[Ravel] pour la configuration et xref:cassini::index.adoc[Cassini] pour l'instrumentation JAX-RS. Objectif : conformité 100 % au TCK officiel, sans dépendance `opentelemetry-sdk` / `opentelemetry-exporter-*`, sans Netty, sans pile gRPC.
