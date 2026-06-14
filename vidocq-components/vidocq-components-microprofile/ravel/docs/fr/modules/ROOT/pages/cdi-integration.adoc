@@ -274,6 +274,6 @@ public class ApiClient {
 
 == Suivant
 
-* xref:advanced-usage.adoc[Usage avancé] — configuration programmatique et convertisseurs personnalisés
+* xref:usage.adoc[Usage] — configuration programmatique et convertisseurs personnalisés
 * xref:reference.adoc[Référence] — documentation complète de l'API
 

@@ -1,5 +1,8 @@
-= Advanced Usage
+= Usage
 :description: Programmatic configuration, custom converters, and builder patterns.
+
+[.lead]
+Beyond property files, Ravel exposes the full programmatic surface of MicroProfile Config: building a `Config` by hand, registering custom `ConfigSource` and `Converter` instances, and driving resolution from application code. For the configuration model itself, see xref:concepts.adoc[Concepts].
 
 == ConfigBuilder API
 

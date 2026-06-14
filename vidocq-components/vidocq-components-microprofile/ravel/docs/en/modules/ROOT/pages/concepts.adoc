@@ -1,0 +1,56 @@
+= Concepts
+:description: MicroProfile Config vocabulary as Ravel materialises it — Config, ConfigSource, Converter, expression, profile.
+
+[.lead]
+This page defines the configuration vocabulary as Ravel materialises it. The model follows MicroProfile Config 3.1; each concept links to a dedicated deep-dive, and the implementation choices are described in xref:internals.adoc[Internals].
+
+== Config
+
+A `Config` is the unified, read-only view an application queries through `ConfigProvider.getConfig()`. It aggregates every registered source, applies ordinal precedence, resolves expressions and converts values to the requested type. A `Config` is obtained per class loader and cached.
+
+== ConfigSource
+
+A _config source_ is one origin of raw key/value pairs: system properties, environment variables, `microprofile-config.properties`, or any custom source contributed through the SPI. Each source has an **ordinal** that defines precedence — higher ordinal wins. See xref:config-sources.adoc[Config Sources].
+
+[cols="3,1"]
+|===
+| Built-in source | Default ordinal
+
+| System properties | 400
+| Environment variables | 300
+| `META-INF/microprofile-config.properties` | 100
+|===
+
+== Converter
+
+A _converter_ turns a raw `String` into a typed value. Ravel ships converters for primitives, boxed types, `String`, `URL`, `URI`, `InetAddress`, temporal types (`Duration`, `Period`), enums, arrays and collections, plus implicit converters for any type exposing a public constructor, `valueOf()` or `parse()`. Custom converters are registered through the SPI with a priority. See xref:type-converters.adoc[Type Converters].
+
+== Property expression
+
+A _property expression_ references another configuration value with `pass:[${key}]`, with an optional default via `pass:[${key:default}]`. Expressions are resolved at lookup time and cycle detection prevents infinite loops. See xref:property-expressions.adoc[Property Expressions].
+
+== Config profile
+
+A _config profile_ scopes properties to an environment using a `%dev.`, `%prod.` or `%test.` prefix. The active profile is selected through `mp.config.profile` and resolved at lookup time, not build time. See xref:config-profiles.adoc[Config Profiles].
+
+== CDI integration
+
+In a CDI deployment, configuration values are injected with `@ConfigProperty("key")` on a bean field — including `Optional<T>` and `Supplier<T>` wrappers. Discovery is driven by a xref:vauban::index.adoc[Vauban] Build Compatible Extension; standalone (non-CDI) use stays available through `ConfigProvider.getConfig()`. See xref:cdi-integration.adoc[CDI Integration].
+
+== Ordinal and precedence
+
+When the same key exists in several sources, the value from the source with the highest ordinal wins. This lets environment variables override packaged defaults, and system properties override both. Precedence is deterministic and computed at lookup.
+
+== Deep dives
+
+* xref:config-sources.adoc[Config Sources] — built-in and custom sources via the SPI.
+* xref:type-converters.adoc[Type Converters] — built-in and custom converters.
+* xref:property-expressions.adoc[Property Expressions] — reference and compose values.
+* xref:config-profiles.adoc[Config Profiles] — environment-specific settings.
+* xref:cdi-integration.adoc[CDI Integration] — inject values with `@ConfigProperty`.
+
+== See also
+
+* xref:usage.adoc[Usage] — programmatic configuration with `ConfigBuilder`.
+* xref:internals.adoc[Internals] — module structure and design.
+* xref:reference.adoc[Reference] — complete API surface.

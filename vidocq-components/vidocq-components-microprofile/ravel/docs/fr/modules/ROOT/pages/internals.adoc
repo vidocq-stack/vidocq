@@ -1,5 +1,8 @@
-= Architecture
+= Internes
 :description: Conception et architecture interne de Ravel.
+
+[.lead]
+Ravel résout l'abstraction MicroProfile Config avec le seul JDK et la spec — zéro bibliothèque tierce, JPMS strict, prêt pour jlink. Cette page documente la structure des modules et les choix de conception du runtime.
 
 == Vue d'ensemble
 

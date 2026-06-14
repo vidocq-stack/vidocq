@@ -309,6 +309,6 @@ La casse est normalisée en minuscules ; les traits de soulignement et les point
 
 == Suivant
 
-* xref:advanced-usage.adoc[Usage avancé] — configuration programmatique
+* xref:usage.adoc[Usage] — configuration programmatique
 * xref:tck.adoc[TCK] — test de conformance
 

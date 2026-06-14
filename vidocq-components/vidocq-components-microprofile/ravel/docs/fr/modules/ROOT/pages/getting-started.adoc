@@ -194,7 +194,7 @@ Voir xref:config-profiles.adoc[Profils de configuration] pour plus de détails.
 
 == Étapes suivantes
 
-* xref:architecture.adoc[Architecture] — comprendre la conception
+* xref:internals.adoc[Internes] — comprendre la conception
 * xref:config-sources.adoc[Sources de configuration] — sources personnalisées via SPI
 * xref:cdi-integration.adoc[Intégration CDI] — utiliser `@ConfigProperty`
 

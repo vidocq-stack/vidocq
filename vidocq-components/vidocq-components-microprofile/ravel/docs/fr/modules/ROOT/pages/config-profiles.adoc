@@ -213,5 +213,5 @@ java -Dmp.config.profile=prod -jar app.jar
 == Suivant
 
 * xref:cdi-integration.adoc[Intégration CDI] — utiliser les profils avec `@ConfigProperty`
-* xref:advanced-usage.adoc[Usage avancé] — configuration programmatique
+* xref:usage.adoc[Usage] — configuration programmatique
 

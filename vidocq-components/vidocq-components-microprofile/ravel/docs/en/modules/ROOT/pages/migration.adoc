@@ -1,0 +1,57 @@
+= Migration
+:description: Migrating from SmallRye Config or another MicroProfile Config implementation to Ravel.
+
+[.lead]
+Ravel implements the standard MicroProfile Config 3.1 contract. Application code written against the spec — `ConfigProvider.getConfig()`, `@ConfigProperty`, `ConfigSource`, `Converter` — ports without change. Migration effort is concentrated in build configuration and in dropping vendor-specific extensions.
+
+== From SmallRye Config
+
+[cols="2,2,3"]
+|===
+| SmallRye Config | Ravel | Note
+
+| `ConfigProvider.getConfig()`
+| Same
+| Standard MicroProfile Config entry point. No change.
+
+| `@ConfigProperty`
+| Same
+| Standard injection. No change.
+
+| Custom `ConfigSource` / `ConfigSourceProvider`
+| Same SPI
+| Re-register through `META-INF/services`; ordinals are preserved.
+
+| Custom `Converter` with `@Priority`
+| Same SPI
+| Identical contract.
+
+| `@ConfigMapping` interfaces
+| Not in MP Config 3.1
+| SmallRye-specific. Replace with `@ConfigProperty` fields or programmatic lookup.
+
+| `io.smallrye.config.*` extensions (interceptors, secret keys, …)
+| Not applicable
+| Vendor extensions; refactor onto the standard SPI.
+|===
+
+== Migration steps
+
+. Replace the SmallRye Config dependency with `io.vidocq.ravel:ravel-api` (+ `ravel-core`, and `ravel-cdi-vauban` for CDI) — see xref:reference.adoc[Reference].
+. Keep your `microprofile-config.properties`, custom sources and converters unchanged.
+. Replace any `@ConfigMapping` interface with `@ConfigProperty` fields or a programmatic `ConfigBuilder` (see xref:usage.adoc[Usage]).
+. Add a `module-info.java` requiring `org.eclipse.microprofile.config` (Ravel is strict JPMS).
+. Verify ordinal precedence and active profile behave as expected (see xref:concepts.adoc[Concepts]).
+
+== Pitfalls
+
+* **`@ConfigMapping`** — not part of MicroProfile Config 3.1; no direct equivalent. Refactor to `@ConfigProperty`.
+* **Vendor interceptors / secret handling** — SmallRye-only; reimplement on the standard `ConfigSource`/`Converter` SPI.
+* **Implicit module names** — a SmallRye jar on the classpath relied on automatic modules; Ravel requires explicit `requires` clauses.
+* **Expression syntax** — Ravel honours the spec `pass:[${key}]` / `pass:[${key:default}]`; non-standard interpolation features are not supported.
+
+== Going further
+
+* xref:getting-started.adoc[Getting started] — add Ravel to a project.
+* xref:concepts.adoc[Concepts] — the configuration model.
+* xref:tck.adoc[TCK] — conformance status.

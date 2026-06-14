@@ -115,5 +115,5 @@ See `BENCH.md` for interpretation of results.
 == Next
 
 * xref:reference.adoc[Reference] — API documentation
-* xref:advanced-usage.adoc[Advanced Usage] — programmatic configuration
+* xref:usage.adoc[Usage] — programmatic configuration
 

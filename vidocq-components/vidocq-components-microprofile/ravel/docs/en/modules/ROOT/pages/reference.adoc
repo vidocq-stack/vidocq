@@ -309,6 +309,6 @@ Case is normalized to lowercase; underscores and dots are treated equivalently.
 
 == Next
 
-* xref:advanced-usage.adoc[Advanced Usage] — programmatic configuration
+* xref:usage.adoc[Usage] — programmatic configuration
 * xref:tck.adoc[TCK] — conformance testing
 

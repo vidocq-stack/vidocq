@@ -1,0 +1,57 @@
+= Migration
+:description: Migrer depuis SmallRye Config ou une autre implémentation MicroProfile Config vers Ravel.
+
+[.lead]
+Ravel implémente le contrat standard MicroProfile Config 3.1. Le code applicatif écrit contre la spec — `ConfigProvider.getConfig()`, `@ConfigProperty`, `ConfigSource`, `Converter` — se porte sans modification. L'effort de migration se concentre sur la configuration de build et l'abandon des extensions propres à un fournisseur.
+
+== Depuis SmallRye Config
+
+[cols="2,2,3"]
+|===
+| SmallRye Config | Ravel | Note
+
+| `ConfigProvider.getConfig()`
+| Identique
+| Point d'entrée standard MicroProfile Config. Aucun changement.
+
+| `@ConfigProperty`
+| Identique
+| Injection standard. Aucun changement.
+
+| `ConfigSource` / `ConfigSourceProvider` personnalisés
+| Même SPI
+| Réenregistrer via `META-INF/services` ; les ordinaux sont préservés.
+
+| `Converter` personnalisé avec `@Priority`
+| Même SPI
+| Contrat identique.
+
+| Interfaces `@ConfigMapping`
+| Absent de MP Config 3.1
+| Spécifique à SmallRye. Remplacer par des champs `@ConfigProperty` ou une lecture programmatique.
+
+| Extensions `io.smallrye.config.*` (intercepteurs, clés secrètes, …)
+| Sans objet
+| Extensions propriétaires ; réécrire sur la SPI standard.
+|===
+
+== Étapes de migration
+
+. Remplacez la dépendance SmallRye Config par `io.vidocq.ravel:ravel-api` (+ `ravel-core`, et `ravel-cdi-vauban` pour CDI) — voir xref:reference.adoc[Référence].
+. Conservez tels quels vos `microprofile-config.properties`, sources et convertisseurs personnalisés.
+. Remplacez toute interface `@ConfigMapping` par des champs `@ConfigProperty` ou un `ConfigBuilder` programmatique (voir xref:usage.adoc[Usage]).
+. Ajoutez un `module-info.java` requérant `org.eclipse.microprofile.config` (Ravel est en JPMS strict).
+. Vérifiez que la précédence par ordinal et le profil actif se comportent comme attendu (voir xref:concepts.adoc[Concepts]).
+
+== Pièges
+
+* **`@ConfigMapping`** — ne fait pas partie de MicroProfile Config 3.1 ; aucun équivalent direct. Refactorer en `@ConfigProperty`.
+* **Intercepteurs / gestion des secrets propriétaires** — propres à SmallRye ; réimplémenter sur la SPI standard `ConfigSource`/`Converter`.
+* **Noms de modules implicites** — un jar SmallRye sur le classpath s'appuyait sur les modules automatiques ; Ravel exige des clauses `requires` explicites.
+* **Syntaxe des expressions** — Ravel honore la spec `pass:[${key}]` / `pass:[${key:default}]` ; les fonctions d'interpolation non standard ne sont pas prises en charge.
+
+== Pour aller plus loin
+
+* xref:getting-started.adoc[Prise en main] — ajouter Ravel à un projet.
+* xref:concepts.adoc[Concepts] — le modèle de configuration.
+* xref:tck.adoc[TCK] — état de conformité.
