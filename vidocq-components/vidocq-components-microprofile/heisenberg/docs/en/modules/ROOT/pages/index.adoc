@@ -1,10 +1,8 @@
 = Heisenberg
 :description: MicroProfile Fault Tolerance 4.1 implementation, zero third-party libraries, virtual threads, strict JPMS, CDI via Vauban, config via Ravel.
 
-////
 [.text-center]
 image::heisenberg-logo.png[Heisenberg,300,role=module-logo]
-////
 
 [.lead]
 Heisenberg is the MicroProfile Fault Tolerance 4.1 implementation of the Vidocq ecosystem. It applies the `@Retry`, `@Timeout`, `@CircuitBreaker`, `@Bulkhead`, `@Fallback` and `@Asynchronous` policies to CDI beans through a single interceptor, wired into xref:vauban::index.adoc[Vauban] for the container and xref:ravel::index.adoc[Ravel] for configuration. Goal: 100% conformance to the MicroProfile Fault Tolerance 4.1 TCK (currently 463/463), zero external dependency beyond the specs, strict JPMS, jlink-ready.
