@@ -111,7 +111,7 @@ Sur un runtime hôte qui exécute sur virtual threads (par exemple Chappe avec `
 
 == Endpoint `MetricsEndpoint`
 
-`MetricsEndpoint` est une ressource JAX-RS `@ApplicationScoped` du module `dirac-rest`. Trois routes (`/metrics`, `/metrics/{scope}`, `/metrics/{scope}/{name}`), trois étapes par appel :
+`MetricsEndpoint` est une ressource JAX-RS `@ApplicationScoped` du module `dirac-rest`. Trois routes (`/metrics`, `/metrics/\{scope}`, `/metrics/\{scope}/\{name}`), trois étapes par appel :
 
 . Résoudre le format via `Accept` (défaut : `text/plain`, OpenMetrics).
 . Récupérer le registre cible via `MetricRegistryProducerBean.registry(scope)`.

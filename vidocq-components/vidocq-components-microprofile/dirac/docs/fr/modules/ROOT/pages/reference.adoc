@@ -146,7 +146,7 @@ Dirac n'effectue pas de conversion automatique : l'unité est exposée telle que
 
 [cols="1,3"]
 |===
-| Route | `GET /metrics`, `GET /metrics/{scope}`, `GET /metrics/{scope}/{name}`
+| Route | `GET /metrics`, `GET /metrics/\{scope}`, `GET /metrics/\{scope}/\{name}`
 | Verbes | `GET`, `OPTIONS`
 | Types | `text/plain;version=0.0.4` (défaut, OpenMetrics), `application/json` (MP Metrics §3.2)
 | Source | `MetricRegistryImpl` (les trois scopes)

@@ -137,10 +137,10 @@ When `dirac-rest` and xref:cassini::index.adoc[Cassini] are on the classpath, th
 | `GET /metrics`
 | Every scope, format negotiated on `Accept`.
 
-| `GET /metrics/{scope}`
+| `GET /metrics/\{scope}`
 | A single scope (`application` \| `base` \| `vendor`). 404 if unknown.
 
-| `GET /metrics/{scope}/{name}`
+| `GET /metrics/\{scope}/\{name}`
 | A single metric family. 404 if not found.
 |===
 

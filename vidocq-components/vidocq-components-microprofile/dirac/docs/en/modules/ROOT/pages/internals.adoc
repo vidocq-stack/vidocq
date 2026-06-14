@@ -111,7 +111,7 @@ On a host runtime that runs on virtual threads (for example Chappe with `Executo
 
 == `MetricsEndpoint`
 
-`MetricsEndpoint` is an `@ApplicationScoped` JAX-RS resource in `dirac-rest`. Three routes (`/metrics`, `/metrics/{scope}`, `/metrics/{scope}/{name}`), three steps per call:
+`MetricsEndpoint` is an `@ApplicationScoped` JAX-RS resource in `dirac-rest`. Three routes (`/metrics`, `/metrics/\{scope}`, `/metrics/\{scope}/\{name}`), three steps per call:
 
 . Resolve the format via `Accept` (default: `text/plain`, OpenMetrics).
 . Fetch the target registry via `MetricRegistryProducerBean.registry(scope)`.
