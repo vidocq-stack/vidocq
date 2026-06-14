@@ -97,7 +97,7 @@ With `humboldt-rest` active, every JAX-RS endpoint is automatically instrumented
 
 . Reads headers through `TextMapGetter<ContainerRequestContext>`.
 . Extracts the span context via `W3CPropagators.textMap()`.
-. Starts a `SERVER` span with parent = extracted span, name = `{method} {path}`.
+. Starts a `SERVER` span with parent = extracted span, name = `\{method} \{path}`.
 . OTel attributes: `http.request.method`, `url.path` (normalized `/`), `url.scheme`.
 . Stores `Span` + `Scope` via `ContainerRequestContext.setProperty()`.
 
