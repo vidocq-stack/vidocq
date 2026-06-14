@@ -11,7 +11,7 @@ The official MicroProfile Metrics 5.1.1 TCK (`org.eclipse.microprofile.metrics:m
 | Metric | Value
 
 | Target | 100 % PASS on the official 5.1.1 suite
-| Milestone | M8 (xref:{repo-dirac}/src/branch/main/ROADMAP.md[ROADMAP.md])
+| Milestone | M8 (link:{repo-dirac}/src/branch/main/ROADMAP.md[ROADMAP.md])
 | Current count | 🚧 status to be confirmed in `dirac-tck/target/tck-report.txt`
 | Smoke test (out of Arquillian) | ✅ `DiracTckSmokeTest` operational
 | M9 jlink smoke | ✅ `dirac-image-smoke` image built (`run-jlink-smoke.sh`)
