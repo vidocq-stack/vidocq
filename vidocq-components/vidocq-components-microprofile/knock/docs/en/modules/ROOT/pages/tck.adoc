@@ -1,11 +1,97 @@
-= TCK
+= TCK: MicroProfile Health 4.0
+:description: Conformance status of Knock against the official MicroProfile Health 4.0 TCK.
 
-Knock passes the official MicroProfile Health 4.0 TCK:
+[.lead]
+This page consolidates the state of the official MicroProfile Health 4.0 TCK runs against Knock. Knock targets full conformance: passing the TCK is a hard contract before any structural merge.
 
-* 28 / 28 PASS
+== Summary
+
+[cols="2,1,3"]
+|===
+| Metric | Value | Notes
+
+| Spec under test
+| MicroProfile Health 4.0
+| Run against the Vidocq fork `knock-mp-health-api`.
+
+| Tests run
+| 28
+| Official TCK suite.
+
+| Passed
+| 28
+| 100% conformance.
+
+| Failed
+| 0
+| No divergent spec interpretation, no disabled test.
+
+| Errors / skipped
+| 0
+| No JVM crash, no uncaught `Throwable`.
+|===
+
+[NOTE]
+====
+Because conformance is 100% with no disabled tests, there is no `TCK.md` listing exclusions — every assertion of the suite is honoured.
+====
+
+== Coverage
+
+[cols="3,1"]
+|===
+| Area | Status
+
+| `HealthCheck` contract and `HealthCheckResponse`
+| ✅
+
+| Probe qualifiers (`@Liveness`, `@Readiness`, `@Startup`)
+| ✅
+
+| Endpoints (`/health`, `/health/live`, `/health/ready`, `/health/started`)
+| ✅
+
+| Aggregation rule (DOWN if any DOWN, empty = UP)
+| ✅
+
+| Exception handling (folded into a DOWN check)
+| ✅
+
+| JSON payload shape (`status`, `checks[]`, optional `data`)
+| ✅
+
+| HTTP status mapping (200 UP / 503 DOWN)
+| ✅
+
+| `HealthCheckResponseProvider` SPI
+| ✅
+|===
+
+== Reproduce locally
+
+The TCK runs through a dedicated script at the repo root:
 
 [source,bash]
 ----
+cd knock
+sdk env
+
+# Smoke test (KnockTckSmokeTest only)
 ./run-official-tck-mp-health-4.0.sh
+
+# Full official suite (28 tests)
 ./run-official-tck-mp-health-4.0.sh all
+
+# A single test by name
+./run-official-tck-mp-health-4.0.sh -Dtest=TestName
 ----
+
+[NOTE]
+====
+The TCK runs on the classpath (not the module path) as a deliberate JPMS workaround for Arquillian/ShrinkWrap. `knock-tck` therefore uses Maven POM model `4.0.0` while the rest of the reactor uses `4.1.0`.
+====
+
+== See also
+
+* xref:internals.adoc[Internals] — the runtime the TCK exercises.
+* xref:reference.adoc[Reference] — artefacts and commands.

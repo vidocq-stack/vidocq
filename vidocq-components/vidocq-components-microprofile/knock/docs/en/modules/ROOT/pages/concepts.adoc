@@ -1,7 +1,73 @@
 = Concepts
+:description: MicroProfile Health vocabulary as Knock materialises it — check, probe type, registry, snapshot, JSON contract.
 
-* `knock-core` stays standalone Java SE.
-* CDI integration is isolated in `knock-cdi-vauban`.
-* JAX-RS integration is isolated in `knock-cassini`.
-* Internal packages remain non-exported.
-* Runtime is virtual-thread friendly: no `synchronized`, no `ThreadLocal`.
+[.lead]
+This page defines the health vocabulary as Knock materialises it. The model follows MicroProfile Health 4.0; implementation choices are described in xref:internals.adoc[Internals].
+
+== Health check
+
+A _health check_ is an application-supplied diagnostic. It implements `org.eclipse.microprofile.health.HealthCheck` and returns a `HealthCheckResponse` carrying a name, a status (`UP`/`DOWN`) and an optional `data` map. A check is associated with exactly one probe through its qualifier.
+
+== Probe type
+
+A _probe_ is a category of checks answering a specific operational question. Knock models them with the `ProbeType` enum:
+
+[cols="1,3"]
+|===
+| `ProbeType` | Selects
+
+| `LIVENESS`
+| Checks qualified with `@Liveness`.
+
+| `READINESS`
+| Checks qualified with `@Readiness`.
+
+| `STARTUP`
+| Checks qualified with `@Startup`.
+
+| `ALL`
+| Every registered check (backs `GET /health`).
+|===
+
+== Registry
+
+The _registry_ holds the registered checks and returns them filtered by probe type. The contract is the `HealthCheckRegistry` interface (in `knock-api`); the standalone implementation is `KnockHealthCheckRegistry` (in `knock-core`). It is virtual-thread friendly: state lives in a `ConcurrentHashMap`, never guarded by `synchronized`.
+
+== Aggregation
+
+_Aggregation_ reduces a set of individual responses to a single status. The rule (spec §3.2): the group is `DOWN` if at least one check is `DOWN`; an empty group is `UP`; an exception is folded into a `DOWN` check rather than being propagated. `KnockAggregator` implements this and produces a `HealthSnapshot`.
+
+== Snapshot
+
+A _snapshot_ (`HealthSnapshot`, an immutable record) captures the result of an aggregation: the probe type, the overall status, and the immutable list of individual checks. It is the input handed to serialisation, decoupling computation from rendering.
+
+== JSON contract
+
+The _JSON contract_ (spec §3.1) is fixed:
+
+* top-level `status` (`UP`/`DOWN`) and a `checks` array;
+* each entry has `name`, `status`, and an optional `data` object;
+* `data` is omitted when empty;
+* HTTP `200` when `UP`, `503` when `DOWN`.
+
+Knock renders it with Jakarta JSON-P only — no `StringBuilder`, no third-party JSON library. `HealthReport` wraps the serialised payload together with the HTTP status.
+
+== CDI discovery
+
+In a CDI deployment, checks are discovered by a _Build Compatible Extension_ (`HealthCheckCdiExtension`) running on Vauban. It validates the single-qualifier rule at build time, then `HealthCheckRegistrar` registers each discovered bean into the registry when `@Initialized(ApplicationScoped.class)` fires. Outside CDI, the same registry is fed manually — the core never depends on a container.
+
+== Module boundaries
+
+Knock keeps responsibilities split so the core stays dependency-light:
+
+* `knock-api` — re-exported MicroProfile Health spec types + Knock SPI (`ProbeType`, `HealthCheckRegistry`, `Knock`).
+* `knock-core` — registry, aggregation, JSON-P serialisation, runtime facade. Pure Java SE.
+* `knock-cdi-vauban` — CDI discovery and auto-registration.
+* `knock-jaxrs` — the `/health*` Jakarta REST resource.
+
+Internal packages (`io.vidocq.knock.internal`, `io.vidocq.knock.cdi.internal`) are never exported.
+
+== See also
+
+* xref:internals.adoc[Internals] — how these concepts are implemented.
+* xref:reference.adoc[Reference] — artefacts, packages, endpoints.

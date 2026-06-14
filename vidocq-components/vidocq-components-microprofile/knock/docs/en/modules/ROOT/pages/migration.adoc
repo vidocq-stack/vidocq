@@ -1,7 +1,53 @@
 = Migration
+:description: Migrating from SmallRye Health or another MicroProfile Health implementation to Knock.
 
-From another health implementation:
+[.lead]
+Knock implements the standard MicroProfile Health 4.0 contract. Application code written against the spec — `HealthCheck`, `HealthCheckResponse`, `@Liveness/@Readiness/@Startup` — ports without change. Migration effort is concentrated in build configuration and in dropping vendor-specific extensions.
 
-. Keep `HealthCheck` classes.
-. Add one qualifier (`@Liveness`, `@Readiness`, `@Startup`).
-. Keep MicroProfile Health JSON contract.
+== From SmallRye Health
+
+[cols="2,2,3"]
+|===
+| SmallRye | Knock | Note
+
+| `HealthCheck` beans
+| `HealthCheck` beans
+| Identical. Keep your classes as-is.
+
+| `@Liveness` / `@Readiness` / `@Startup`
+| Same annotations
+| Standard MicroProfile Health. No change.
+
+| Vendor JSON extensions / extra fields
+| Standard JSON only
+| Knock emits the spec payload exactly (`status`, `checks[]`, optional `data`). Drop non-standard fields.
+
+| Reactive / Mutiny checks
+| Synchronous `HealthCheck`
+| Knock runs each `call()` on a virtual thread; no reactive API is exposed.
+
+| `mp.health.*` config knobs
+| Not applicable
+| Knock has no vendor configuration surface; behaviour follows the spec.
+|===
+
+== Migration steps
+
+. Replace the SmallRye Health dependency with `knock-api`, `knock-core`, `knock-cdi-vauban` and `knock-jaxrs` (see xref:reference.adoc[Reference]).
+. Ensure each `HealthCheck` carries exactly one probe qualifier — Knock rejects unqualified checks at deployment time.
+. Remove any vendor-specific extra data fields if downstream consumers required the strict spec payload.
+. Add a `module-info.java` requiring `microprofile.health.api` (Knock is strict JPMS).
+. Verify the four endpoints respond and the aggregate HTTP status is `200`/`503` as expected.
+
+== Pitfalls
+
+* **Unqualified checks** — a `HealthCheck` without `@Liveness/@Readiness/@Startup` fails CDI validation. Add the missing qualifier.
+* **Non-standard JSON** — consumers relying on vendor fields must be updated; Knock emits only the spec shape.
+* **`data` typing** — only `String`, `long`, `boolean` and `int` are rendered natively; other types are stringified.
+* **Module path** — missing `requires` clauses surface as JPMS resolution errors rather than classpath warnings.
+
+== Going further
+
+* xref:getting-started.adoc[Getting started] — add Knock to a project.
+* xref:concepts.adoc[Concepts] — the health model.
+* xref:tck.adoc[TCK status] — conformance guarantees.

@@ -1,7 +1,53 @@
 = Migration
+:description: Migrer depuis SmallRye Health ou une autre implémentation MicroProfile Health vers Knock.
 
-Depuis une autre implementation health:
+[.lead]
+Knock implémente le contrat standard MicroProfile Health 4.0. Le code applicatif écrit contre la spec — `HealthCheck`, `HealthCheckResponse`, `@Liveness/@Readiness/@Startup` — se porte sans modification. L'effort de migration se concentre sur la configuration de build et l'abandon des extensions propres à un fournisseur.
 
-. Conserver les classes `HealthCheck`.
-. Ajouter un qualifier (`@Liveness`, `@Readiness`, `@Startup`).
-. Respecter le contrat JSON MicroProfile Health.
+== Depuis SmallRye Health
+
+[cols="2,2,3"]
+|===
+| SmallRye | Knock | Note
+
+| Beans `HealthCheck`
+| Beans `HealthCheck`
+| Identique. Conservez vos classes telles quelles.
+
+| `@Liveness` / `@Readiness` / `@Startup`
+| Mêmes annotations
+| MicroProfile Health standard. Aucun changement.
+
+| Extensions JSON propriétaires / champs supplémentaires
+| JSON standard uniquement
+| Knock émet exactement la charge de la spec (`status`, `checks[]`, `data` optionnel). Abandonnez les champs non standard.
+
+| Contrôles réactifs / Mutiny
+| `HealthCheck` synchrone
+| Knock exécute chaque `call()` sur un thread virtuel ; aucune API réactive n'est exposée.
+
+| Réglages de config `mp.health.*`
+| Sans objet
+| Knock n'a pas de surface de configuration propriétaire ; le comportement suit la spec.
+|===
+
+== Étapes de migration
+
+. Remplacez la dépendance SmallRye Health par `knock-api`, `knock-core`, `knock-cdi-vauban` et `knock-jaxrs` (voir xref:reference.adoc[Référence]).
+. Assurez-vous que chaque `HealthCheck` porte exactement un qualificateur de sonde — Knock rejette les contrôles non qualifiés au déploiement.
+. Supprimez les champs de données propriétaires si des consommateurs avals exigeaient la charge stricte de la spec.
+. Ajoutez un `module-info.java` requérant `microprofile.health.api` (Knock est en JPMS strict).
+. Vérifiez que les quatre endpoints répondent et que le statut HTTP agrégé est `200`/`503` comme attendu.
+
+== Pièges
+
+* **Contrôles non qualifiés** — un `HealthCheck` sans `@Liveness/@Readiness/@Startup` échoue à la validation CDI. Ajoutez le qualificateur manquant.
+* **JSON non standard** — les consommateurs s'appuyant sur des champs propriétaires doivent être adaptés ; Knock n'émet que la forme de la spec.
+* **Typage de `data`** — seuls `String`, `long`, `boolean` et `int` sont rendus nativement ; les autres types sont convertis en chaîne.
+* **Module path** — les clauses `requires` manquantes apparaissent comme des erreurs de résolution JPMS plutôt que comme des avertissements de classpath.
+
+== Pour aller plus loin
+
+* xref:getting-started.adoc[Démarrage] — ajouter Knock à un projet.
+* xref:concepts.adoc[Concepts] — le modèle de santé.
+* xref:tck.adoc[État du TCK] — garanties de conformité.

@@ -1,17 +1,125 @@
-= Reference
+= Référence
+:description: Artefacts Maven, paquets JPMS exportés, types SPI, endpoints, commandes, compatibilité.
 
-== Modules
+[.lead]
+Cette page liste chaque artefact publié par Knock, les paquets JPMS qu'ils exportent, la SPI publique, les endpoints HTTP et les commandes de build.
 
-* `knock-api`
-* `knock-core`
-* `knock-cdi-vauban`
-* `knock-cassini`
-* `knock-tck`
+== Artefacts Maven
+
+Tous les artefacts partagent la version `0.2.0-SNAPSHOT` sous le groupe `io.vidocq.knock`.
+
+[cols="2,1,3"]
+|===
+| Artefact | Portée recommandée | Rôle
+
+| `knock-mp-health-api`
+| `compile`
+| Fork Vidocq de l'API MicroProfile Health 4.0 avec un `module-info.java`.
+
+| `knock-api`
+| `compile`
+| SPI Knock (`ProbeType`, `HealthCheckRegistry`, `Knock`) ; réexporte les types de la spec.
+
+| `knock-core`
+| `runtime`
+| Runtime autonome : registre, agrégateur, sérialiseur JSON-P, `KnockHealthService`.
+
+| `knock-cdi-vauban`
+| `runtime`
+| Découverte CDI + auto-enregistrement (BCE Vauban).
+
+| `knock-jaxrs`
+| `runtime`
+| Ressource Jakarta REST `/health*` (déployée sur Cassini).
+
+| `knock-tck`
+| `test`
+| Lanceur du TCK officiel MicroProfile Health 4.0.
+|===
+
+== Paquets JPMS exportés
+
+[cols="2,3"]
+|===
+| Module | Paquets exportés
+
+| `knock-api`
+| `io.vidocq.knock.spi` (`ProbeType`, `HealthCheckRegistry`, `Knock`)
+
+| `knock-core`
+| `io.vidocq.knock.runtime` (`KnockHealthService`, `HealthReport`)
+
+| `knock-jaxrs`
+| `io.vidocq.knock.jaxrs` (`KnockHealthResource`)
+|===
+
+Les paquets internes (`io.vidocq.knock.internal`, `io.vidocq.knock.cdi.internal`) ne sont pas exportés. `knock-core` fournit `org.eclipse.microprofile.health.spi.HealthCheckResponseProvider` via `provides` et `META-INF/services`.
+
+== SPI publique (`knock-api`)
+
+[cols="2,3"]
+|===
+| Type | Rôle
+
+| `ProbeType` (enum)
+| `LIVENESS`, `READINESS`, `STARTUP`, `ALL` — sélectionne les contrôles à rapporter.
+
+| `HealthCheckRegistry` (interface)
+| Enregistrer des contrôles et les récupérer par type de sonde.
+
+| `Knock` (classe)
+| Constantes de métadonnées du module.
+|===
+
+Implémentation autonome : `new KnockHealthCheckRegistry()` (dans `knock-core`). Sous CDI, le registre est fourni comme bean géré.
+
+== Endpoints
+
+[cols="2,2,2"]
+|===
+| Endpoint | Sonde | Statut HTTP
+
+| `GET /health`         | `ProbeType.ALL`       | 200 UP / 503 DOWN
+| `GET /health/live`    | `ProbeType.LIVENESS`  | 200 UP / 503 DOWN
+| `GET /health/ready`   | `ProbeType.READINESS` | 200 UP / 503 DOWN
+| `GET /health/started` | `ProbeType.STARTUP`   | 200 UP / 503 DOWN
+|===
+
+== Versions des dépendances
+
+[cols="2,1"]
+|===
+| Dépendance | Version
+
+| MicroProfile Health (référence amont) | 4.0.1
+| API Jakarta JSON-P | 2.1.3
+| API Jakarta REST | 4.0.0
+| API Jakarta CDI | 4.1.0
+| API Jakarta Inject | 2.0.1
+| API Jakarta Annotation | 3.0.0
+|===
 
 == Commandes
 
 [source,bash]
 ----
-./mvnw -ntp install -DskipTests
-./mvnw test
+sdk env
+./mvnw -ntp install -DskipTests        # build complet, sans tests
+./mvnw test                             # tests unitaires
+./run-official-tck-mp-health-4.0.sh     # test de fumée du TCK
+./run-official-tck-mp-health-4.0.sh all # suite TCK complète
 ----
+
+== Compatibilité
+
+* Java 25, Maven 3.9.16.
+* JPMS strict, modules nommés uniquement.
+* MicroProfile Health 4.0.
+* Zéro bibliothèque tierce — uniquement les specs Jakarta / MicroProfile.
+* Compatible avec GraalVM `native-image` et les images `jlink` minimales.
+
+== Voir aussi
+
+* xref:concepts.adoc[Concepts] — le modèle derrière ces artefacts.
+* xref:internals.adoc[Internes] — détails d'implémentation.
+* xref:tck.adoc[État du TCK] — conformité.

@@ -1,11 +1,97 @@
-= TCK
+= TCK : MicroProfile Health 4.0
+:description: État de conformité de Knock vis-à-vis du TCK officiel MicroProfile Health 4.0.
 
-Knock passe le TCK officiel MicroProfile Health 4.0:
+[.lead]
+Cette page consolide l'état des exécutions du TCK officiel MicroProfile Health 4.0 sur Knock. Knock vise la conformité totale : passer le TCK est un contrat ferme avant toute fusion structurelle.
 
-* 28 / 28 PASS
+== Synthèse
+
+[cols="2,1,3"]
+|===
+| Métrique | Valeur | Notes
+
+| Spécification testée
+| MicroProfile Health 4.0
+| Exécuté contre le fork Vidocq `knock-mp-health-api`.
+
+| Tests exécutés
+| 28
+| Suite officielle du TCK.
+
+| Réussis
+| 28
+| Conformité à 100 %.
+
+| Échoués
+| 0
+| Aucune interprétation divergente de la spec, aucun test désactivé.
+
+| Erreurs / ignorés
+| 0
+| Aucun crash JVM, aucun `Throwable` non capturé.
+|===
+
+[NOTE]
+====
+La conformité étant à 100 % sans test désactivé, il n'existe pas de `TCK.md` listant des exclusions — chaque assertion de la suite est honorée.
+====
+
+== Couverture
+
+[cols="3,1"]
+|===
+| Domaine | État
+
+| Contrat `HealthCheck` et `HealthCheckResponse`
+| ✅
+
+| Qualificateurs de sonde (`@Liveness`, `@Readiness`, `@Startup`)
+| ✅
+
+| Endpoints (`/health`, `/health/live`, `/health/ready`, `/health/started`)
+| ✅
+
+| Règle d'agrégation (DOWN si un DOWN, vide = UP)
+| ✅
+
+| Gestion des exceptions (repliées en contrôle DOWN)
+| ✅
+
+| Forme de la charge JSON (`status`, `checks[]`, `data` optionnel)
+| ✅
+
+| Correspondance des statuts HTTP (200 UP / 503 DOWN)
+| ✅
+
+| SPI `HealthCheckResponseProvider`
+| ✅
+|===
+
+== Reproduire localement
+
+Le TCK s'exécute via un script dédié à la racine du dépôt :
 
 [source,bash]
 ----
+cd knock
+sdk env
+
+# Test de fumée (KnockTckSmokeTest uniquement)
 ./run-official-tck-mp-health-4.0.sh
+
+# Suite officielle complète (28 tests)
 ./run-official-tck-mp-health-4.0.sh all
+
+# Un seul test par nom
+./run-official-tck-mp-health-4.0.sh -Dtest=TestName
 ----
+
+[NOTE]
+====
+Le TCK s'exécute sur le classpath (et non le module path), contournement JPMS délibéré pour Arquillian/ShrinkWrap. `knock-tck` utilise donc le modèle POM Maven `4.0.0` tandis que le reste du réacteur utilise `4.1.0`.
+====
+
+== Voir aussi
+
+* xref:internals.adoc[Internes] — le runtime que le TCK exerce.
+* xref:reference.adoc[Référence] — artefacts et commandes.

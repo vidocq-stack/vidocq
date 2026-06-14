@@ -1,15 +1,128 @@
 = Internals
+:description: Module architecture, runtime flow, JSON-P serialisation, virtual threads, JPMS workaround.
 
-Runtime flow:
+[.lead]
+Knock rests on a simple principle: implement MicroProfile Health 4.0 with the JDK and Jakarta specs alone. No third-party library, no reflection-heavy machinery, no platform-thread pool. This page documents the implementation choices that uphold that discipline.
 
-. `HealthCheckRegistry.getChecks(ProbeType)`
-. `HealthCheck.call()` execution
-. Aggregate status
-. Build snapshot
-. Serialize JSON via Jakarta JSON-P
+== Module architecture
 
-Service entry points from `knock-core`:
+[cols="2,3"]
+|===
+| Module | Responsibility
 
-* `io.vidocq.knock.runtime.HealthCheckRegistries`
-* `io.vidocq.knock.runtime.KnockHealthService`
-* `io.vidocq.knock.runtime.HealthReport`
+| `knock-mp-health-api`
+| Vidocq fork of the MicroProfile Health API, repackaged with a `module-info.java` (see the JPMS workaround below).
+
+| `knock-api`
+| Knock SPI: `ProbeType`, `HealthCheckRegistry`, `Knock` metadata. Re-exports the spec types.
+
+| `knock-core`
+| Standalone runtime: registry, aggregator, JSON-P serialiser, response builder, `KnockHealthService` facade. Pure Java SE.
+
+| `knock-cdi-vauban`
+| CDI Build Compatible Extension + auto-registration on Vauban.
+
+| `knock-jaxrs`
+| Jakarta REST resource exposing `/health*` (deployed on Cassini).
+
+| `knock-tck`
+| Official MicroProfile Health 4.0 TCK runner.
+|===
+
+== Runtime flow
+
+[mermaid]
+....
+sequenceDiagram
+  participant Client
+  participant REST as KnockHealthResource
+  participant SVC as KnockHealthService
+  participant REG as HealthCheckRegistry
+  participant AGG as KnockAggregator
+  participant SER as KnockJsonSerializer
+
+  Client->>REST: GET /health/live
+  REST->>SVC: report(ProbeType.LIVENESS)
+  SVC->>REG: getChecks(LIVENESS)
+  REG-->>SVC: List<HealthCheck>
+  SVC->>AGG: aggregate(checks)
+  Note right of AGG: each call() on a virtual thread
+  AGG-->>SVC: HealthSnapshot
+  SVC->>SER: toJson(snapshot)
+  SER-->>SVC: JsonObject
+  SVC-->>REST: HealthReport(status, json)
+  REST-->>Client: 200/503 + JSON
+....
+
+. `HealthCheckRegistry.getChecks(ProbeType)` returns the checks for the requested probe.
+. Each `HealthCheck.call()` runs on its own virtual thread.
+. `KnockAggregator` reduces the responses to a `HealthSnapshot` (spec §3.2 rules).
+. `KnockJsonSerializer` renders the snapshot through Jakarta JSON-P.
+. `KnockHealthService` wraps the result in a `HealthReport` (HTTP status + payload).
+
+== Core classes
+
+[cols="2,3"]
+|===
+| Class | Role
+
+| `KnockHealthCheckRegistry` (internal)
+| `HealthCheckRegistry` implementation backed by a `ConcurrentHashMap`. No `synchronized`.
+
+| `KnockAggregator` (internal)
+| Applies the §3.2 aggregation rule and folds exceptions into `DOWN` checks.
+
+| `KnockJsonSerializer` (internal)
+| Builds the response with Jakarta JSON-P (`Json.createObjectBuilder()`), no third-party JSON library.
+
+| `KnockHealthCheckResponseBuilder` (internal)
+| `HealthCheckResponseBuilder` implementation; types `data` entries (`String`, `Long`, `Boolean`, `Integer`, else `String.valueOf`).
+
+| `KnockHealthCheckResponseProvider` (internal)
+| `HealthCheckResponseProvider` SPI implementation registered via `provides`/`META-INF/services`.
+
+| `HealthSnapshot` (internal record)
+| Immutable aggregation result: probe type, overall status, checks list.
+
+| `KnockHealthService` (runtime)
+| Public facade tying registry + aggregator + serialiser together.
+
+| `HealthReport` (runtime record)
+| HTTP response wrapper: status code + serialised JSON.
+|===
+
+== CDI discovery
+
+`knock-cdi-vauban` ships two internal pieces:
+
+* `HealthCheckCdiExtension` — a Build Compatible Extension validating the single-probe-qualifier rule at build time (spec §4.2);
+* `HealthCheckRegistrar` — a CDI bean that, on `@Initialized(ApplicationScoped.class)`, registers each discovered `HealthCheck` into the registry (spec §4.1).
+
+Discovery uses Vauban's BCE pipeline — no runtime classpath scanning, no `setAccessible(true)`.
+
+== JAX-RS resource
+
+`KnockHealthResource` is annotated `@Path("/health")` and exposes the four endpoints. Each method maps its path to a `ProbeType`, calls `KnockHealthService.report(...)`, and returns a `Response` with the snapshot's HTTP status. The resource imports only `jakarta.ws.rs` — never a Cassini-internal package.
+
+== Threading model
+
+All check execution goes through `Executors.newVirtualThreadPerTaskExecutor()` (https://openjdk.org/jeps/444[JEP 444]). Consequences:
+
+* a slow check never blocks the rest of a probe group;
+* no platform-thread pool, no bounded queue, no `ThreadLocal`;
+* shared state (the registry) uses `ConcurrentHashMap` exclusively.
+
+== JPMS workaround (ADR-001)
+
+The upstream MicroProfile Health API jar ships **without** a `module-info.class`, which breaks strict JPMS and `jlink`. Knock forks it as `knock-mp-health-api` and rebuilds it with a proper module descriptor. To keep the descriptor from interfering with annotation processing, the `module-info.java` lives in `src/main/module-info/` and is compiled in a dedicated phase at `prepare-package`. The SPI is registered twice — through JPMS `provides` and `META-INF/services` — so the implementation resolves on both the module path and the classpath. Full rationale: `docs/adr/ADR-001-jpms-workaround-microprofile-health.md`.
+
+== AOT compatibility
+
+No dynamic proxy generation, no `setAccessible(true)`, no hot reflection in the request path. Knock is `native-image` friendly and works inside a minimal `jlink` image.
+
+== Sources
+
+* link:{repo-knock}/src/branch/main/knock-core[knock-core] — registry, aggregator, serialiser, facade.
+* link:{repo-knock}/src/branch/main/knock-cdi-vauban[knock-cdi-vauban] — CDI discovery.
+* link:{repo-knock}/src/branch/main/knock-jaxrs[knock-jaxrs] — REST endpoints.
+* link:{repo-knock}/src/branch/main/docs/adr/ADR-001-jpms-workaround-microprofile-health.md[ADR-001] — JPMS workaround.

@@ -1,26 +1,164 @@
 = Getting started
+:description: Write a first health check, wire it through CDI, and expose the /health* endpoints.
 
-== Maven dependency
+[.lead]
+This page shows how to add Knock to a project, write a first `HealthCheck`, let CDI discover it, and serve the MicroProfile Health endpoints. No reflection runs at startup: discovery happens through a Vauban Build Compatible Extension and the runtime relies on generated wiring only.
+
+== Prerequisites
+
+* **Java 25** — Temurin recommended (`java=25-tem` in `.sdkmanrc`). Module path enabled.
+* **Maven 3.9.16** — pinned via `.sdkmanrc` at the repo root.
+* Strict JPMS: one `module-info.java` per Maven module.
+
+== Maven coordinates
+
+Pick the modules matching your integration level. For a CDI + Jakarta REST application you need the API plus the two integration modules:
 
 [source,xml]
 ----
-<dependency>
-  <groupId>io.vidocq.knock</groupId>
-  <artifactId>knock-cassini</artifactId>
-  <version>0.1.0-SNAPSHOT</version>
-</dependency>
+<properties>
+    <knock.version>0.2.0-SNAPSHOT</knock.version>
+</properties>
+
+<dependencies>
+    <!-- MicroProfile Health API + Knock SPI -->
+    <dependency>
+        <groupId>io.vidocq.knock</groupId>
+        <artifactId>knock-api</artifactId>
+        <version>${knock.version}</version>
+    </dependency>
+    <!-- Standalone core: registry, aggregation, JSON-P serialisation -->
+    <dependency>
+        <groupId>io.vidocq.knock</groupId>
+        <artifactId>knock-core</artifactId>
+        <version>${knock.version}</version>
+        <scope>runtime</scope>
+    </dependency>
+    <!-- CDI discovery of @Liveness/@Readiness/@Startup beans (Vauban) -->
+    <dependency>
+        <groupId>io.vidocq.knock</groupId>
+        <artifactId>knock-cdi-vauban</artifactId>
+        <version>${knock.version}</version>
+        <scope>runtime</scope>
+    </dependency>
+    <!-- Jakarta REST /health* endpoints (deployed on Cassini) -->
+    <dependency>
+        <groupId>io.vidocq.knock</groupId>
+        <artifactId>knock-jaxrs</artifactId>
+        <version>${knock.version}</version>
+        <scope>runtime</scope>
+    </dependency>
+</dependencies>
 ----
+
+[NOTE]
+====
+`knock-jaxrs` is the artifact name (it depends only on the `jakarta.ws.rs` API). Cassini is the JAX-RS runtime that hosts the resource at deployment time — Knock imports no Cassini-internal package.
+====
 
 == First check
 
+A health check is a CDI bean implementing `HealthCheck`, carrying exactly one probe qualifier:
+
 [source,java]
 ----
+package io.example;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import org.eclipse.microprofile.health.HealthCheck;
+import org.eclipse.microprofile.health.HealthCheckResponse;
+import org.eclipse.microprofile.health.Liveness;
+
 @Liveness
 @ApplicationScoped
 public class DatabaseCheck implements HealthCheck {
+
     @Override
     public HealthCheckResponse call() {
-        return HealthCheckResponse.named("database").up().build();
+        return HealthCheckResponse.named("database")
+                .up()
+                .withData("responseTime", "8ms")
+                .build();
     }
 }
 ----
+
+[NOTE]
+====
+A check must carry exactly one of `@Liveness`, `@Readiness` or `@Startup`. A bean implementing `HealthCheck` without a probe qualifier is rejected by the CDI extension at deployment time (MicroProfile Health §4.2).
+====
+
+== Minimal `module-info.java`
+
+[source,java]
+----
+module io.example {
+    requires microprofile.health.api;
+    requires jakarta.cdi;
+    requires jakarta.inject;
+    exports io.example;
+}
+----
+
+The `knock-cdi-vauban` extension discovers `io.example` beans through the module graph — no `opens` and no classpath scanning are required.
+
+== Querying the endpoints
+
+Once deployed on Cassini, the four endpoints answer immediately:
+
+[source,bash]
+----
+curl -i http://localhost:8080/health
+----
+
+[source,json]
+----
+{
+  "status": "UP",
+  "checks": [
+    {
+      "name": "database",
+      "status": "UP",
+      "data": { "responseTime": "8ms" }
+    }
+  ]
+}
+----
+
+A `DOWN` aggregate switches the HTTP status to `503` while keeping the same JSON shape.
+
+== Standalone (no CDI)
+
+`knock-core` is pure Java SE. You can drive it without any container through the `KnockHealthService` facade:
+
+[source,java]
+----
+import io.vidocq.knock.spi.HealthCheckRegistry;
+import io.vidocq.knock.spi.ProbeType;
+import io.vidocq.knock.internal.KnockHealthCheckRegistry;
+import io.vidocq.knock.runtime.KnockHealthService;
+import io.vidocq.knock.runtime.HealthReport;
+
+HealthCheckRegistry registry = new KnockHealthCheckRegistry();
+registry.register(new DatabaseCheck());
+
+KnockHealthService service = new KnockHealthService(registry);
+HealthReport report = service.report(ProbeType.ALL);
+
+System.out.println(report.httpStatus());   // 200 or 503
+System.out.println(report.json());         // serialised payload
+----
+
+== Build and run
+
+[source,bash]
+----
+sdk env
+./mvnw -ntp install -DskipTests
+./mvnw test
+----
+
+== Next step
+
+* xref:usage.adoc[Usage patterns] — probe qualifiers, response data, aggregation, error handling.
+* xref:concepts.adoc[Concepts] — health check, probe type, registry, snapshot, JSON contract.

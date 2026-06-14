@@ -1,7 +1,73 @@
 = Concepts
+:description: Le vocabulaire MicroProfile Health tel que Knock le matérialise — contrôle, type de sonde, registre, instantané, contrat JSON.
 
-* `knock-core` reste standalone Java SE.
-* L integration CDI est isolee dans `knock-cdi-vauban`.
-* L integration JAX-RS est isolee dans `knock-cassini`.
-* Les packages internes restent non exportes.
-* Runtime compatible virtual threads: pas de `synchronized`, pas de `ThreadLocal`.
+[.lead]
+Cette page définit le vocabulaire de santé tel que Knock le matérialise. Le modèle suit MicroProfile Health 4.0 ; les choix d'implémentation sont décrits dans xref:internals.adoc[Internes].
+
+== Contrôle de santé
+
+Un _contrôle de santé_ est un diagnostic fourni par l'application. Il implémente `org.eclipse.microprofile.health.HealthCheck` et renvoie une `HealthCheckResponse` portant un nom, un statut (`UP`/`DOWN`) et une carte `data` optionnelle. Un contrôle est associé à exactement une sonde via son qualificateur.
+
+== Type de sonde
+
+Une _sonde_ est une catégorie de contrôles répondant à une question opérationnelle précise. Knock les modélise avec l'énumération `ProbeType` :
+
+[cols="1,3"]
+|===
+| `ProbeType` | Sélectionne
+
+| `LIVENESS`
+| Les contrôles qualifiés `@Liveness`.
+
+| `READINESS`
+| Les contrôles qualifiés `@Readiness`.
+
+| `STARTUP`
+| Les contrôles qualifiés `@Startup`.
+
+| `ALL`
+| Tous les contrôles enregistrés (sous-tend `GET /health`).
+|===
+
+== Registre
+
+Le _registre_ détient les contrôles enregistrés et les renvoie filtrés par type de sonde. Le contrat est l'interface `HealthCheckRegistry` (dans `knock-api`) ; l'implémentation autonome est `KnockHealthCheckRegistry` (dans `knock-core`). Il est compatible threads virtuels : l'état réside dans un `ConcurrentHashMap`, jamais protégé par `synchronized`.
+
+== Agrégation
+
+L'_agrégation_ réduit un ensemble de réponses individuelles à un statut unique. La règle (spec §3.2) : le groupe est `DOWN` si au moins un contrôle est `DOWN` ; un groupe vide est `UP` ; une exception est repliée en contrôle `DOWN` plutôt que propagée. `KnockAggregator` l'implémente et produit un `HealthSnapshot`.
+
+== Instantané
+
+Un _instantané_ (`HealthSnapshot`, un record immuable) capture le résultat d'une agrégation : le type de sonde, le statut global et la liste immuable des contrôles individuels. C'est l'entrée fournie à la sérialisation, découplant le calcul du rendu.
+
+== Contrat JSON
+
+Le _contrat JSON_ (spec §3.1) est fixe :
+
+* `status` de premier niveau (`UP`/`DOWN`) et un tableau `checks` ;
+* chaque entrée a `name`, `status` et un objet `data` optionnel ;
+* `data` est omis lorsqu'il est vide ;
+* HTTP `200` si `UP`, `503` si `DOWN`.
+
+Knock le rend avec Jakarta JSON-P uniquement — pas de `StringBuilder`, pas de bibliothèque JSON tierce. `HealthReport` encapsule la charge utile sérialisée et le statut HTTP.
+
+== Découverte CDI
+
+Dans un déploiement CDI, les contrôles sont découverts par une _Build Compatible Extension_ (`HealthCheckCdiExtension`) exécutée sur Vauban. Elle valide la règle du qualificateur unique au moment du build, puis `HealthCheckRegistrar` enregistre chaque bean découvert dans le registre au déclenchement de `@Initialized(ApplicationScoped.class)`. Hors CDI, le même registre est alimenté manuellement — le cœur ne dépend jamais d'un conteneur.
+
+== Frontières des modules
+
+Knock sépare les responsabilités pour que le cœur reste léger en dépendances :
+
+* `knock-api` — types de la spec MicroProfile Health réexportés + SPI Knock (`ProbeType`, `HealthCheckRegistry`, `Knock`).
+* `knock-core` — registre, agrégation, sérialisation JSON-P, façade runtime. Java SE pur.
+* `knock-cdi-vauban` — découverte CDI et auto-enregistrement.
+* `knock-jaxrs` — la ressource Jakarta REST `/health*`.
+
+Les paquets internes (`io.vidocq.knock.internal`, `io.vidocq.knock.cdi.internal`) ne sont jamais exportés.
+
+== Voir aussi
+
+* xref:internals.adoc[Internes] — comment ces concepts sont implémentés.
+* xref:reference.adoc[Référence] — artefacts, paquets, endpoints.

@@ -1,26 +1,92 @@
 = Knock
-:description: Implementation MicroProfile Health 4.0 pour Vidocq.
+:description: Implémentation de MicroProfile Health 4.0 — zéro bibliothèque tierce, JDK 25, threads virtuels, JPMS strict.
 
 [.text-center]
 image::knock-logo.png[Knock,300,role=module-logo]
 
 [.lead]
-Knock est le sous-systeme health de l ecosysteme Vidocq.
+Knock est le sous-système de santé du runtime Vidocq. Il implémente MicroProfile Health 4.0 avec zéro bibliothèque tierce — uniquement les spécifications Jakarta EE et MicroProfile. Les contrôles de santé sont découverts via CDI, exposés en Jakarta REST, sérialisés avec Jakarta JSON-P et exécutés sur des threads virtuels.
 
-== En bref
+== Origine du nom
+
+_Knock, ou le Triomphe de la médecine_ est une comédie de Jules Romains (1923). Le docteur Knock transforme un village entier en patients sous observation permanente — _« tout homme bien portant est un malade qui s'ignore »_. Le module Knock applique la même auscultation incessante à une application en cours d'exécution : les sondes de vivacité, de disponibilité et de démarrage maintiennent chaque composant sous diagnostic continu.
+
+== En un coup d'œil
 
 [cols="1,3"]
 |===
-| Spec implementee | {spec-mp-health}
-| Repo | {repo-knock}
+| Spécification implémentée | {spec-mp-health}[MicroProfile Health 4.0]
+| Dépôt | {repo-knock}
 | Java | 25
-| Modules | `knock-api`, `knock-core`, `knock-cdi-vauban`, `knock-cassini`
-| TCK | 28 / 28 PASS
+| Modules JPMS | `knock-api`, `knock-core`, `knock-cdi-vauban`, `knock-jaxrs`, `knock-tck`
+| Dépendances d'exécution | Aucune au-delà de `org.eclipse.microprofile.health` et `jakarta.json`
+| TCK MicroProfile Health 4.0 | 28 / 28 PASS — voir xref:tck.adoc[l'état détaillé]
 |===
 
-== Endpoints
+== Trois traits identitaires
 
-* `GET /health`
-* `GET /health/live`
-* `GET /health/ready`
-* `GET /health/started`
+. **Zéro bibliothèque tierce** — uniquement MicroProfile Health et les specs Jakarta. Pas de SmallRye Health, pas de Vert.x, pas de Jackson. Le JSON est produit via Jakarta JSON-P.
+. **Découverte native CDI** — les beans `@Liveness`, `@Readiness`, `@Startup` sont découverts par une Build Compatible Extension de Vauban et enregistrés automatiquement, tandis que `knock-core` reste utilisable en Java SE pur.
+. **JPMS strict + threads virtuels** — chaque module fournit un `module-info.java` ; les contrôles s'exécutent sur un `VirtualThreadPerTaskExecutor`. Pas de `synchronized`, pas de `ThreadLocal`, pas de `setAccessible(true)`.
+
+== Points d'accès
+
+[cols="2,2,2"]
+|===
+| Point d'accès | Sonde | Statut HTTP
+
+| `GET /health`
+| Tous les contrôles enregistrés
+| 200 UP / 503 DOWN
+
+| `GET /health/live`
+| Contrôles `@Liveness`
+| 200 UP / 503 DOWN
+
+| `GET /health/ready`
+| Contrôles `@Readiness`
+| 200 UP / 503 DOWN
+
+| `GET /health/started`
+| Contrôles `@Startup`
+| 200 UP / 503 DOWN
+|===
+
+== Position dans l'écosystème
+
+[mermaid]
+....
+graph TB
+  subgraph API["knock-api (spec + SPI)"]
+    MPH[org.eclipse.microprofile.health<br/>HealthCheck, @Liveness…]
+    SPI[ProbeType, HealthCheckRegistry, Knock]
+  end
+  subgraph CORE["knock-core (SE autonome)"]
+    REG[KnockHealthCheckRegistry]
+    AGG[KnockAggregator]
+    SER[KnockJsonSerializer<br/>Jakarta JSON-P]
+    SVC[KnockHealthService]
+  end
+  subgraph INT["Intégrations"]
+    CDI[knock-cdi-vauban<br/>découverte BCE]
+    REST[knock-jaxrs<br/>endpoints /health*]
+  end
+  API --> CORE
+  CDI --> CORE
+  REST --> CORE
+  CDI -. découvre via .-> VAUBAN[Vauban CDI]
+  REST -. déployé sur .-> CASSINI[Cassini JAX-RS]
+  CORE -. sérialise avec .-> CHAMP[Champollion JSON-P]
+  classDef rt fill:#e1f5fe,stroke:#0288d1
+  class CORE rt
+....
+
+== Liens rapides
+
+* xref:getting-started.adoc[Démarrage]
+* xref:usage.adoc[Schémas d'utilisation]
+* xref:concepts.adoc[Concepts]
+* xref:internals.adoc[Internes]
+* xref:tck.adoc[État du TCK]
+* xref:reference.adoc[Référence]
+* xref:migration.adoc[Migration]
