@@ -1,10 +1,8 @@
 = Cervantes
 :description: MicroProfile JWT 2.1 implementation — signed-bearer-token RBAC for the Vidocq ecosystem — zero implementation dependency, strict JPMS, virtual threads, Java 25.
 
-////
 [.text-center]
 image::cervantes-logo.png[Cervantes,300,role=module-logo]
-////
 
 [.lead]
 Cervantes is the MicroProfile JWT 2.1 implementation of the Vidocq ecosystem. It validates signed (and optionally encrypted) JWT bearer tokens using `java.security` exclusively, parses JSON through xref:champollion::index.adoc[Champollion], reads its configuration through xref:ravel::index.adoc[Ravel], exposes the `JsonWebToken` principal in CDI through xref:vauban::index.adoc[Vauban], and enforces `@RolesAllowed` on JAX-RS endpoints through xref:cassini::index.adoc[Cassini]. Goal: 100 % conformance to the MicroProfile JWT 2.1 TCK (achieved, *206 / 206* at M6), zero third-party crypto or JWT library, strict JPMS, jlink-ready.
