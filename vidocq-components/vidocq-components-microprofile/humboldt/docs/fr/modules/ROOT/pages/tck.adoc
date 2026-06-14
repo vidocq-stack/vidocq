@@ -49,7 +49,7 @@ Coordonnées TCK confirmées publiquement sur Maven Central (audit M7.1, 2026-05
 | Tests TCK en M7c.2
 |===
 
-Statut détaillé et catégorisation des échecs résiduels : voir https://forge.vidocq.dev/vidocq/humboldt/src/branch/main/TCK.md[TCK.md] dans le repo. Compteur exact à confirmer après chaque run (voir `tck-runs/`).
+Statut détaillé et catégorisation des échecs résiduels : voir https://codeberg.org/Vidocq/humboldt/src/branch/main/TCK.md[TCK.md] dans le repo. Compteur exact à confirmer après chaque run (voir `tck-runs/`).
 
 == Catégorisation des échecs M7c (premier run officiel, 2026-05-21)
 

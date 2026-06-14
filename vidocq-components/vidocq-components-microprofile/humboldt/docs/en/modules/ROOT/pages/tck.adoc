@@ -49,7 +49,7 @@ TCK coordinates publicly confirmed on Maven Central (M7.1 audit, 2026-05-21).
 | TCK tests in M7c.2
 |===
 
-Detailed status and categorization of remaining failures: see https://forge.vidocq.dev/vidocq/humboldt/src/branch/main/TCK.md[TCK.md] in the repo. Exact counter to be confirmed after each run (see `tck-runs/`).
+Detailed status and categorization of remaining failures: see https://codeberg.org/Vidocq/humboldt/src/branch/main/TCK.md[TCK.md] in the repo. Exact counter to be confirmed after each run (see `tck-runs/`).
 
 == M7c failure categorization (first official run, 2026-05-21)
 
