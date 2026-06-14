@@ -61,6 +61,6 @@ Pour les besoins JPA dans Vidocq aujourd'hui :
 
 == Voir aussi
 
-* xref:sub-modules/mansart-jakarta-data.adoc[mansart-jakarta-data] — solution livrée pour les besoins courants.
+* xref:modules/mansart-jakarta-data.adoc[mansart-jakarta-data] — solution livrée pour les besoins courants.
 * xref:concepts.adoc[Concepts] — différences Jakarta Data vs JPA.
 * xref:migration.adoc[Migration] — chemins depuis Hibernate / EclipseLink.

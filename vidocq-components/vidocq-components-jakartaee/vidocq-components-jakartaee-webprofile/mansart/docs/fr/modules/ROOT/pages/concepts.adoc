@@ -22,7 +22,7 @@ Trois racines standards :
 
 == EntityManager
 
-Concept Jakarta Persistence 3.2 — gestionnaire de cycle de vie des entités (managed/detached), file de modifications, propagation `flush`/`commit`. Hors périmètre de `mansart-jakarta-data` ; sera fourni par `mansart-persistence` (M7 en attente — voir xref:sub-modules/mansart-persistence.adoc[mansart-persistence]).
+Concept Jakarta Persistence 3.2 — gestionnaire de cycle de vie des entités (managed/detached), file de modifications, propagation `flush`/`commit`. Hors périmètre de `mansart-jakarta-data` ; sera fourni par `mansart-persistence` (M7 en attente — voir xref:modules/mansart-persistence.adoc[mansart-persistence]).
 
 Dans Vidocq, le besoin courant (CRUD + queries typées) est déjà couvert par les repositories Jakarta Data, qui contournent l'`EntityManager` au profit d'un mapping ResultSet direct via `MethodHandle`.
 

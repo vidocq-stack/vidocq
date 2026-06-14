@@ -52,19 +52,19 @@ Mansart breaks down into four runtime-independent sub-projects, organized as lay
 
 | `mansart-pool`
 | Virtual-thread-native JDBC pool, zero-dep, alternative to HikariCP.
-| xref:sub-modules/mansart-pool.adoc[mansart-pool]
+| xref:modules/mansart-pool.adoc[mansart-pool]
 
 | `mansart-transactions`
 | Jakarta Transactions 2.0 transaction manager (`TransactionManager`, `UserTransaction`, `@Transactional`).
-| xref:sub-modules/mansart-transactions.adoc[mansart-transactions]
+| xref:modules/mansart-transactions.adoc[mansart-transactions]
 
 | `mansart-jakarta-data`
 | Jakarta Data 1.0 implementation — repositories, query methods, JDQL, JDBC dialects (H2, PostgreSQL).
-| xref:sub-modules/mansart-jakarta-data.adoc[mansart-jakarta-data]
+| xref:modules/mansart-jakarta-data.adoc[mansart-jakarta-data]
 
 | `mansart-persistence` *(M7 pending)*
 | Jakarta Persistence 3.2 (classic JPA) implementation. Under design — `mansart-jakarta-data` already covers everyday needs in Vidocq.
-| xref:sub-modules/mansart-persistence.adoc[mansart-persistence]
+| xref:modules/mansart-persistence.adoc[mansart-persistence]
 |===
 
 == Layered architecture

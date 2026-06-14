@@ -7,7 +7,7 @@
 ** xref:reference.adoc[Référence]
 ** xref:migration.adoc[Migration]
 ** Sous-modules
-*** xref:sub-modules/mansart-pool.adoc[mansart-pool]
-*** xref:sub-modules/mansart-transactions.adoc[mansart-transactions]
-*** xref:sub-modules/mansart-jakarta-data.adoc[mansart-jakarta-data]
-*** xref:sub-modules/mansart-persistence.adoc[mansart-persistence]
+*** xref:modules/mansart-pool.adoc[mansart-pool]
+*** xref:modules/mansart-transactions.adoc[mansart-transactions]
+*** xref:modules/mansart-jakarta-data.adoc[mansart-jakarta-data]
+*** xref:modules/mansart-persistence.adoc[mansart-persistence]
