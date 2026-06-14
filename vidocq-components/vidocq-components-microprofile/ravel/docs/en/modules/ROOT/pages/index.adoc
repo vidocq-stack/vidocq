@@ -2,7 +2,7 @@
 :description: MicroProfile Config 3.1 implementation, zero third-party libraries, JPMS strict, Java 25, jlink-ready.
 
 [.text-center]
-image::ravel-logo.svg[Ravel,300,role=module-logo]
+image::ravel-logo.png[Ravel,300,role=module-logo]
 
 [.lead]
 Ravel is the MicroProfile Config 3.1 implementation of the Vidocq ecosystem. It implements the full configuration abstraction layer for Jakarta EE / MicroProfile applications: aggregation of multiple sources (system properties, environment variables, `microprofile-config.properties`), type conversion, property expressions, configuration profiles, and CDI integration via xref:vauban::index.adoc[Vauban]. Goal: 100 % MicroProfile Config 3.1 TCK conformance, zero external dependencies, JPMS-strict, jlink-ready.
