@@ -1,6 +1,9 @@
 = Knock
 :description: MicroProfile Health 4.0 implementation for Vidocq.
 
+[.text-center]
+image::knock-logo.png[Knock,300,role=module-logo]
+
 [.lead]
 Knock is the health subsystem in the Vidocq ecosystem.
 
