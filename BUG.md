@@ -52,3 +52,28 @@ named-module sentinel against silent class-path degradation). The vehicle was pr
 without the opens the boot test fails with the exact VID-001 symptom; with it, green. This also
 gives the runtime its first module-path IT — every other integration test runs on the class path,
 where this whole bug class is invisible.
+
+## BUG-20260612-01 — Invalid 0.2.0-SNAPSHOT pom of vidocq-runtime-cassini-rest-extension on central-snapshots
+
+- **Date** : 2026-06-12
+- **Statut** : OPEN
+- **Module touché** : vidocq-runtime-cassini-rest-extension (published snapshot, timestamp 0.2.0-20260608.152249-5)
+- **Symptôme** : any out-of-reactor consumer resolving the published snapshot gets
+  "The POM ... is invalid, transitive dependencies (if any) will not be available:
+  'dependencies.dependency.version' for io.vidocq.runtime:vidocq-runtime-chappe-webserver-extension:jar is missing"
+  → transitive cassini jars silently dropped → `ClassNotFoundException: io.vidocq.cassini.spi.bean.BeanProvider`
+  (grimm-tck: 29 Arquillian deployment failures / 719 skips). The resolver PREFERS the remote
+  timestamped snapshot over the locally installed one, so a local `mvn install` does not help.
+- **Reproduction minimale** :
+  ```
+  rm -rf ~/.m2/repository/io/vidocq/runtime
+  cd grimm && ./run-official-tck-mp-openapi-4.1.sh all     # before the grimm-tck workaround
+  ```
+- **Hypothèse de cause** : the snapshot published on 2026-06-08 predates the groupId/dependencyManagement
+  fix of the chappe-webserver-extension dependency (the current source pom uses the managed
+  io.vidocq.runtime.extensions.essentials groupId and is valid). Republishing a fresh snapshot
+  via the vidocq CI publish job should fix all consumers.
+- **Investigations** :
+  - 2026-06-12 : root-caused while re-validating grimm-tck on 0.2.0 jars (frozen-runner trap, CG-06).
+    Contained workaround committed in grimm-tck/pom.xml (lost transitives declared explicitly) —
+    remove it once a valid snapshot is republished.
