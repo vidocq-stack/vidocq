@@ -52,15 +52,18 @@
     <properties>
         <vauban.version>0.2.0-SNAPSHOT</vauban.version>
         <chappe.version>0.2.0-SNAPSHOT</chappe.version>
-        <cassini.version>0.1.0-SNAPSHOT</cassini.version>
+        <cassini.version>0.2.0-SNAPSHOT</cassini.version>
         <ravel.version>0.2.0-SNAPSHOT</ravel.version>
-        <mansart.version>0.1.0-SNAPSHOT</mansart.version>
+        <mansart.version>0.2.0-SNAPSHOT</mansart.version>
         <knock.version>0.2.0-SNAPSHOT</knock.version>
-        <dirac.version>0.1.0-SNAPSHOT</dirac.version>
+        <dirac.version>0.2.0-SNAPSHOT</dirac.version>
+        <!-- TODO harmonize to 0.2.0: cyrano 0.2.0 trips "duplicate module on application module
+             path" (a transitive pins cyrano 0.1.0) — separate fix, not used by Arago. -->
         <cyrano.version>0.1.0-SNAPSHOT</cyrano.version>
         <cervantes.version>0.2.0-SNAPSHOT</cervantes.version>
         <humboldt.version>0.2.0-SNAPSHOT</humboldt.version>
         <champollion.version>0.2.0-SNAPSHOT</champollion.version>
+        <!-- TODO harmonize to 0.2.0 together with cyrano (same duplicate-module risk); not used by Arago. -->
         <grimm.version>0.1.0-SNAPSHOT</grimm.version>
         <microprofile.config.version>3.1.1</microprofile.config.version>
         <jakarta.cdi.version>4.1.0</jakarta.cdi.version>
