@@ -52,17 +52,21 @@ import org.eclipse.microprofile.health.Startup;
 @ApplicationScoped
 class HealthCheckRegistrar {
 
+    // Package-private (not private): Vauban injects these statically via the generated
+    // _VaubanComponents.injectField (in-module putfield). A private field is excluded from that
+    // generation and would force `opens … to io.vidocq.vauban.core` (runtime reflection), which this
+    // module forbids by design — hence package-private, eligible for zero-reflection field injection.
     @Inject
-    private HealthCheckRegistry registry;
+    HealthCheckRegistry registry;
 
     @Inject @Liveness
-    private Instance<HealthCheck> livenessChecks;
+    Instance<HealthCheck> livenessChecks;
 
     @Inject @Readiness
-    private Instance<HealthCheck> readinessChecks;
+    Instance<HealthCheck> readinessChecks;
 
     @Inject @Startup
-    private Instance<HealthCheck> startupChecks;
+    Instance<HealthCheck> startupChecks;
 
     /**
      * Registers all checks discovered when the application context starts.
