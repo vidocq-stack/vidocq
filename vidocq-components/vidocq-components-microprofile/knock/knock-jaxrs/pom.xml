@@ -40,6 +40,16 @@
             <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- Cassini adapter codegen (APT): cassini-api supplies the adapter interface that the
+             generated $$CassiniAdapter implements. provided = compile-only, non-transitive — the jar
+             carries the pre-generated adapter but does not pull Cassini at runtime (requires static in
+             module-info), so knock-jaxrs stays runtime-agnostic. -->
+        <dependency>
+            <groupId>io.vidocq.cassini</groupId>
+            <artifactId>cassini-api</artifactId>
+            <version>${cassini.version}</version>
+            <scope>provided</scope>
+        </dependency>
         <!-- Runtime for integration tests: Cassini + Weld -->
         <dependency>
             <groupId>io.vidocq.cassini</groupId>
@@ -115,6 +125,15 @@
                             <groupId>io.vidocq.vauban</groupId>
                             <artifactId>vauban-processor</artifactId>
                             <version>${vauban.version}</version>
+                        </path>
+                        <!-- Cassini codegen (APT): generates KnockHealthResource$$CassiniAdapter at
+                             compile time (zero-reflection dispatch, AOT-friendly) so a Cassini runtime
+                             finds the pre-generated adapter — no runtime adapter generation, no opens,
+                             and no build-time repackaging needed by the consuming app. -->
+                        <path>
+                            <groupId>io.vidocq.cassini</groupId>
+                            <artifactId>cassini-processor</artifactId>
+                            <version>${cassini.version}</version>
                         </path>
                     </annotationProcessorPaths>
                     <!-- Library module, not a complete deployment: KnockHealthResource injects
