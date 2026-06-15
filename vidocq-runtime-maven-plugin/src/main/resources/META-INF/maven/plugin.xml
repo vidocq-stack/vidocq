@@ -34,6 +34,10 @@
                 <parameter><name>extraJvmArgs</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>Extra JVM args passed verbatim to the child, split on whitespace.</description></parameter>
                 <parameter><name>extraSystemProperties</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>Comma-separated key=value system properties forwarded to the child as -Dkey=value.</description></parameter>
                 <parameter><name>profile</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>Profile string injected as -Dvidocq.profile in the child JVM.</description></parameter>
+                <parameter><name>debug</name><type>boolean</type><required>false</required><editable>true</editable><description>Open a JDWP debug agent on the child JVM (default true in dev).</description></parameter>
+                <parameter><name>debugPort</name><type>int</type><required>false</required><editable>true</editable><description>JDWP listen port for the debug agent (default 5005).</description></parameter>
+                <parameter><name>debugSuspend</name><type>boolean</type><required>false</required><editable>true</editable><description>Suspend the child JVM until a debugger attaches (jdwp suspend=y).</description></parameter>
+                <parameter><name>devServices</name><type>boolean</type><required>false</required><editable>true</editable><description>Provision dev-mode services (Postgres, Keycloak, …) discovered via the DevService SPI.</description></parameter>
                 <parameter><name>classesDir</name><type>java.io.File</type><required>false</required><editable>false</editable><description>Compiled classes directory of the project.</description></parameter>
                 <parameter><name>baseDir</name><type>java.io.File</type><required>false</required><editable>false</editable><description>Project base directory.</description></parameter>
             </parameters>
@@ -47,6 +51,10 @@
                 <extraJvmArgs implementation="java.lang.String" default-value="">${vidocq.dev.jvmArgs}</extraJvmArgs>
                 <extraSystemProperties implementation="java.lang.String" default-value="">${vidocq.dev.systemProperties}</extraSystemProperties>
                 <profile implementation="java.lang.String" default-value="dev">${vidocq.profile}</profile>
+                <debug implementation="boolean" default-value="true">${vidocq.dev.debug}</debug>
+                <debugPort implementation="int" default-value="5005">${vidocq.dev.debugPort}</debugPort>
+                <debugSuspend implementation="boolean" default-value="false">${vidocq.dev.debugSuspend}</debugSuspend>
+                <devServices implementation="boolean" default-value="true">${vidocq.dev.devServices}</devServices>
                 <classesDir implementation="java.io.File" default-value="${project.build.outputDirectory}"/>
                 <baseDir implementation="java.io.File" default-value="${project.basedir}"/>
             </configuration>

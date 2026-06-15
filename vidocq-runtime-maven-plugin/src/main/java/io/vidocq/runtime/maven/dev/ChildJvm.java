@@ -74,6 +74,11 @@ final class ChildJvm {
 
         command.add("--module-path");
         command.add(joinPath(modulePath));
+        // Resolve every module on the path, not only the main module's `requires` closure — utility
+        // modules loaded reflectively (JDBC drivers, Flyway → Jackson, …) are otherwise absent from the
+        // module graph and fail at runtime. Mirrors the production launcher (Dockerfile / jlink image).
+        command.add("--add-modules");
+        command.add("ALL-MODULE-PATH");
         command.add("--module");
         String moduleRef = (mainClass == null || mainClass.isBlank())
                 ? mainModule

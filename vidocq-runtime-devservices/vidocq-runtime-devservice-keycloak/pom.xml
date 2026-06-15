@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.runtime</groupId>
+        <artifactId>vidocq-runtime-devservices</artifactId>
+        <version>0.2.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vidocq-runtime-devservice-keycloak</artifactId>
+    <name>Vidocq :: DevServices :: Keycloak</name>
+    <description>DevService that provisions a Keycloak container (optionally importing a realm) for
+        vidocq:dev and publishes mp.jwt.verify.* (plus optional app-specific issuer keys). Runs in the
+        Maven plugin JVM only.</description>
+
+    <dependencies>
+        <!-- Provided by the host plugin's classpath at run time; needed here only to compile. -->
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-devservices-spi</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <!-- Generic Testcontainers (no DB module — Keycloak runs via GenericContainer). -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers</artifactId>
+        </dependency>
+        <!-- Testcontainers' GenericContainer implements org.junit.rules.TestRule (JUnit 4): the JVM
+             resolves that interface when the container class loads, so JUnit 4 must be present at
+             RUNTIME too — in the consuming plugin realm. Hence compile scope (transitive), not provided. -->
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <version>4.13.2</version>
+            <!-- Explicit compile: a parent dependencyManagement pins junit:junit to test scope. -->
+            <scope>compile</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- No Vidocq beans here: turn off the inherited Vauban indexer APT. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <proc>none</proc>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

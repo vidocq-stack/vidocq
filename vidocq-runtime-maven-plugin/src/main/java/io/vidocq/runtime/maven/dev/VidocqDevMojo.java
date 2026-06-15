@@ -120,6 +120,32 @@ public class VidocqDevMojo extends AbstractMojo {
     @Parameter(property = "vidocq.profile", defaultValue = "dev")
     private String profile;
 
+    /**
+     * Open a JDWP debug agent on the child JVM. On by default in dev mode — attach a remote
+     * debugger (e.g. IntelliJ "Remote JVM Debug") to {@link #debugPort}. Disable with
+     * {@code -Dvidocq.dev.debug=false}.
+     */
+    @Parameter(property = "vidocq.dev.debug", defaultValue = "true")
+    private boolean debug;
+
+    /** JDWP listen port for the debug agent. */
+    @Parameter(property = "vidocq.dev.debugPort", defaultValue = "5005")
+    private int debugPort;
+
+    /**
+     * Suspend the child JVM until a debugger attaches ({@code suspend=y}) — useful to debug boot
+     * itself. Default {@code false}: the app starts immediately and you attach whenever.
+     */
+    @Parameter(property = "vidocq.dev.debugSuspend", defaultValue = "false")
+    private boolean debugSuspend;
+
+    /**
+     * Provision dev-mode services (Postgres, Keycloak, …) discovered via the {@code DevService}
+     * SPI from this plugin's {@code <dependencies>}. Disable with {@code -Dvidocq.dev.devServices=false}.
+     */
+    @Parameter(property = "vidocq.dev.devServices", defaultValue = "true")
+    private boolean devServices;
+
     @Parameter(defaultValue = "${project.build.outputDirectory}", readonly = true)
     private File classesDir;
 
@@ -132,12 +158,28 @@ public class VidocqDevMojo extends AbstractMojo {
         List<Path> watch = parseWatchDirs(projectDir);
         List<Path> modulePath = buildModulePath();
         Map<String, String> sysProps = buildSystemProperties();
-        List<String> jvmArgs = splitArgs(extraJvmArgs);
+        List<String> jvmArgs = buildJvmArgs();
 
         getLog().info("Vidocq dev — main module : " + mainModule
                 + (mainClass != null && !mainClass.isBlank() ? ("/" + mainClass) : ""));
         getLog().info("Watching: " + watch);
         getLog().info("Module path entries: " + modulePath.size());
+        if (debug) {
+            getLog().info("Debug agent (JDWP) on port " + debugPort
+                    + (debugSuspend ? " — child suspends until a debugger attaches" : " — attach any time"));
+        }
+
+        // Provision dev-mode services (Postgres, Keycloak, …) ONCE, before the first fork. Their
+        // connection coordinates are folded into the child's system properties; an explicit -D or a
+        // vidocq.dev.systemProperties entry always wins (putIfAbsent). The containers live for the
+        // whole session — source reloads respawn the child but never touch them.
+        DevServiceManager devs = null;
+        if (devServices) {
+            DefaultDevServiceContext devCtx = new DefaultDevServiceContext(projectDir, sysProps);
+            devs = DevServiceManager.start(devCtx, getLog());
+            devs.collectedProperties().forEach(sysProps::putIfAbsent);
+        }
+        final DevServiceManager devServicesRef = devs;
 
         // The atomic reference lets the shutdown hook (running on a separate
         // thread) see the latest spawned child, no matter how many reload
@@ -154,6 +196,9 @@ public class VidocqDevMojo extends AbstractMojo {
                 } catch (InterruptedException ignored) {
                     Thread.currentThread().interrupt();
                 }
+            }
+            if (devServicesRef != null) {
+                devServicesRef.close();
             }
         }, "vidocq-dev-shutdown");
         Runtime.getRuntime().addShutdownHook(hook);
@@ -209,6 +254,10 @@ public class VidocqDevMojo extends AbstractMojo {
                     Thread.currentThread().interrupt();
                 }
             }
+            // Stop the dev-mode containers (idempotent — the hook may already have run on Ctrl+C).
+            if (devServicesRef != null) {
+                devServicesRef.close();
+            }
             // Avoid IllegalStateException if the JVM is mid-shutdown.
             try {
                 Runtime.getRuntime().removeShutdownHook(hook);
@@ -261,6 +310,19 @@ public class VidocqDevMojo extends AbstractMojo {
         return props;
     }
 
+    /**
+     * JVM args for the child: the verbatim {@code extraJvmArgs} plus, when {@link #debug} is on, a
+     * JDWP agent ({@code server=y}, suspend per {@link #debugSuspend}, listening on {@link #debugPort}).
+     */
+    private List<String> buildJvmArgs() {
+        List<String> args = splitArgs(extraJvmArgs);
+        if (debug) {
+            args.add("-agentlib:jdwp=transport=dt_socket,server=y,suspend="
+                    + (debugSuspend ? "y" : "n") + ",address=*:" + debugPort);
+        }
+        return args;
+    }
+
     private static List<String> splitArgs(String raw) {
         if (raw == null || raw.isBlank()) {
             return new ArrayList<>();
@@ -278,4 +340,11 @@ public class VidocqDevMojo extends AbstractMojo {
     void setExtraSystemProperties(String s) { this.extraSystemProperties = s; }
     void setProfile(String profile) { this.profile = profile; }
     Map<String, String> debugSystemProperties() { return buildSystemProperties(); }
+    void setExtraJvmArgs(String s) { this.extraJvmArgs = s; }
+    void setDebugOptions(boolean debug, int port, boolean suspend) {
+        this.debug = debug;
+        this.debugPort = port;
+        this.debugSuspend = suspend;
+    }
+    List<String> debugJvmArgs() { return buildJvmArgs(); }
 }

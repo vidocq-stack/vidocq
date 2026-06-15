@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.runtime</groupId>
+        <artifactId>vidocq-runtime-parent</artifactId>
+        <version>0.2.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vidocq-runtime-devservices</artifactId>
+    <packaging>pom</packaging>
+    <name>Vidocq :: DevServices</name>
+    <description>Dev-mode container services provisioned by the vidocq:dev goal (M4 of DEBUGMODE.md).
+        Build-tooling only: these modules run in the Maven plugin JVM and MUST never land on the runtime
+        module-path nor in the AOT/native image (DEBUGMODE.md §10). Hence no module-info.java — plain
+        classpath jars loaded by the plugin's ServiceLoader.</description>
+
+    <modules>
+        <module>vidocq-runtime-devservices-spi</module>
+        <module>vidocq-runtime-devservice-postgres</module>
+        <module>vidocq-runtime-devservice-keycloak</module>
+    </modules>
+</project>

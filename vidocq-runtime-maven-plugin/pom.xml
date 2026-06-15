@@ -20,6 +20,12 @@
             <groupId>io.vidocq.runtime</groupId>
             <artifactId>vidocq-runtime-core</artifactId>
         </dependency>
+        <!-- Dev-mode service SPI: the dev goal loads DevService providers (from the app's
+             <plugin><dependencies>) via ServiceLoader on this plugin classpath. -->
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-devservices-spi</artifactId>
+        </dependency>
         <dependency>
             <groupId>io.vidocq.vauban</groupId>
             <artifactId>vauban-core</artifactId>
@@ -52,6 +58,20 @@
             <artifactId>maven-plugin-annotations</artifactId>
             <version>3.15.1</version>
             <scope>provided</scope>
+        </dependency>
+
+        <!-- JUnit 4 must live in the plugin realm at RUNTIME: Testcontainers-based DevService
+             providers reference org.junit.rules.TestRule (GenericContainer implements it), and the JVM
+             resolves that interface when the container class loads. Declared on the plugin itself
+             (not only on the providers) because a transitive of a <plugin><dependency> does not reliably
+             reach the realm — Testcontainers marks junit optional, so the mediation drops it. -->
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <version>4.13.2</version>
+            <!-- Explicit compile: a parent dependencyManagement pins junit:junit to test scope,
+                 which would keep it out of the plugin realm. We need it at runtime. -->
+            <scope>compile</scope>
         </dependency>
 
         <dependency>

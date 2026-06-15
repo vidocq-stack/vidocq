@@ -43,6 +43,7 @@
         <module>vidocq-runtime-core</module>
         <module>vidocq-runtime-core-codegen</module>
         <module>vidocq-runtime-extensions</module>
+        <module>vidocq-runtime-devservices</module>
         <module>vidocq-runtime-maven-plugin</module>
         <module>vidocq-runtime-integration-tests</module>
         <module>vidocq-runtime-examples</module>
@@ -65,6 +66,8 @@
         <jakarta.cdi.version>4.1.0</jakarta.cdi.version>
         <jakarta.annotation.version>3.0.0</jakarta.annotation.version>
         <arquillian.version>1.8.0.Final</arquillian.version>
+        <!-- DevServices container providers (build-tooling only — plugin classpath, never runtime) -->
+        <testcontainers.version>1.20.4</testcontainers.version>
     </properties>
 
     <dependencyManagement>
@@ -167,6 +170,23 @@
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-external-rest-lib</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <!-- DevServices (dev-mode container providers — plugin classpath only, never runtime) -->
+            <dependency>
+                <groupId>io.vidocq.runtime</groupId>
+                <artifactId>vidocq-runtime-devservices-spi</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.runtime</groupId>
+                <artifactId>vidocq-runtime-devservice-postgres</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.runtime</groupId>
+                <artifactId>vidocq-runtime-devservice-keycloak</artifactId>
                 <version>${project.version}</version>
             </dependency>
 
@@ -420,6 +440,16 @@
                 <groupId>org.jboss.arquillian</groupId>
                 <artifactId>arquillian-bom</artifactId>
                 <version>${arquillian.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <!-- Testcontainers BOM — consumed only by DevService providers (vidocq-runtime-devservice-*),
+                 which run in the Maven plugin JVM. Never reaches the runtime module-path / AOT image. -->
+            <dependency>
+                <groupId>org.testcontainers</groupId>
+                <artifactId>testcontainers-bom</artifactId>
+                <version>${testcontainers.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>

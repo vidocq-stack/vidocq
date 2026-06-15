@@ -243,7 +243,15 @@ here):
   bring reload below 500 ms, which would make B clearly not worth it. *To be rechecked after trying mvnd.*
 - **M3 — Dev SPI + Dev Console.** `VidocqDevExtension` + reload granularity; minimal Dev Console
   `/_vidocq/dev` (first panel: Vauban beans).
-- **M4 — DevServices.** First target: Mansart H2 (reuses `vidocq-mps-mansart-h2-example`).
+- **M4 — DevServices — ✅ implemented (2026-06-15).** A `DevService` SPI (`vidocq-runtime-devservices-spi`)
+  is loaded by the dev Mojo via `ServiceLoader` on the **plugin classpath** (fed by the application's
+  `<plugin><dependencies>`), so the providers and their Testcontainers machinery live in the Maven JVM
+  and never reach the runtime module-path. Providers shipped: `vidocq-runtime-devservice-postgres`
+  (publishes `vidocq.pool.*`, opts out when a URL is already set) and `vidocq-runtime-devservice-keycloak`
+  (publishes `mp.jwt.verify.*`, with an optional `issuer-keys` fan-out and `public-url-key` for app-specific
+  keys, optionally importing a realm). Properties are injected into the forked child as `-D` values, and the
+  containers survive reloads (started once before the first fork, stopped at Ctrl+C). The dev Mojo also gained
+  a default-on JDWP debug agent (`vidocq.dev.debug`, port `vidocq.dev.debugPort`=5005, `vidocq.dev.debugSuspend`).
 - **M5 — (conditional on M2) Approach B PoC.** In-VM child `ModuleLayer` behind a `--in-vm` flag.
 - **M6 — CLI + continuous testing.** Standalone `vidocq dev` (modeled on `chappe-cli`); rerun impacted
   tests.
@@ -261,7 +269,10 @@ here):
   runners or assume a unified reactor.
 - **AOT impact (critical)**: all dev-mode code (watcher, Mojo, dev SPI, Dev Console) must stay **out of
   the prod/native path** — compiled in separate modules/scopes, gated by the dev profile, and verified
-  as eliminated in native compilation. No dev dependency must bloat the AOT image.
+  as eliminated in native compilation. No dev dependency must bloat the AOT image. *(M4 satisfies this by
+  construction: the `vidocq-runtime-devservices-*` modules carry no `module-info`, are pulled only into the
+  Maven plugin realm via `<plugin><dependencies>`, and never land on the application module-path nor in
+  `target/dependency` — so Testcontainers cannot reach the AOT/native image.)*
 - **Reload granularity**: distinguish config-only / bean-graph / full-restart so a full rebuild is not
   paid when a simple config reread is enough.
 
