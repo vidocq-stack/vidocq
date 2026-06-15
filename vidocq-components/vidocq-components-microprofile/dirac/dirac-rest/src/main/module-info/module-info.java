@@ -28,6 +28,10 @@ module io.vidocq.dirac.rest {
     requires static jakarta.ws.rs;
     // Compile-only (optional at runtime): supplies the VaubanComponentProvider service type.
     requires static io.vidocq.vauban.api;
+    // Compile-only (optional at runtime): the generated MetricsResource$$CassiniAdapter implements a
+    // cassini-api type. `requires static` keeps dirac-rest runtime-agnostic — the pre-generated
+    // adapter stays dormant unless a Cassini runtime is present.
+    requires static io.vidocq.cassini.api;
 
     exports io.vidocq.dirac.rest;
 
