@@ -24,6 +24,9 @@ Zero external dependencies — hand-rolled arg parser, pure Java 25, JPMS-native
 | `vidocq doctor [--verbose]` | ✅ M6 | Environment & project health checks (see M6) |
 | `vidocq build [type] [-o] [--skip-tests] [--dry-run]` | ✅ M4 | Wraps Maven `package`/`jlink`/`jpackage`/`docker` (see M4) |
 | `vidocq clean [-o] [--dry-run]` | ✅ M4 | Wraps `mvn clean` |
+| `vidocq config get\|set\|list` | ✅ M5 | Read/write `vidocq.properties` (see M5) |
+| `vidocq completion bash\|zsh` | ✅ M5 | Print a shell completion script |
+| `<plugin command> …` | ✅ M5 | Provided by a `VidocqCliPlugin` (ServiceLoader) |
 
 ---
 
@@ -120,13 +123,29 @@ straight through to Maven.
 
 ---
 
-## Milestone M5 — Config & shell integration
+## Milestone M5 — Config & shell integration ✅ delivered
 
-- **`vidocq config get/set/list`** — read/write `vidocq.properties` in the current project.
-- **`vidocq completion bash`** / **`vidocq completion zsh`** — emit shell completion scripts  
-  sourced by `~/.bashrc` / `~/.zshrc`.
-- **Plugin SPI** — `VidocqCliPlugin` service interface so third-party modules can register  
-  extra top-level commands without forking the CLI (discovered via ServiceLoader).
+- **`vidocq config get <key>` / `set <key> <value>` / `list`** — read and write
+  `vidocq.properties` in the current project (project root, falling back to
+  `src/main/resources`). `set` rewrites the first existing assignment in place —
+  preserving comments, blank lines, key order and the original separator
+  spacing — or appends a new `key=value`; it creates the file when none exists.
+- **`vidocq completion bash` / `vidocq completion zsh`** — print a self-contained
+  completion script to stdout (`source <(vidocq completion bash)` or redirect to
+  the shell's completion dir). Completes the first argument against the command
+  catalogue, otherwise defers to default file completion.
+- **Plugin SPI** — `io.vidocq.runtime.cli.spi.VidocqCliPlugin` (exported,
+  `uses`-declared) lets third-party modules contribute extra top-level commands
+  via `ServiceLoader` without forking the CLI. Any command token that is not a
+  built-in is matched against the registered plugins (`command()` →
+  `run(args)`); built-ins always win, and `vidocq help` lists discovered plugins.
+
+**Design (testability-first):** pure `config.PropertiesText` (line-preserving
+get/set/entries) + `config.ConfigFile` (candidate path resolution),
+`completion.CompletionScripts` (pure bash/zsh generators) + `completion.Shell` /
+`CommandCatalog`, and `spi.CliPlugins` (impure `all()` + pure `find`). Covered by
+`PropertiesTextTest`, `ConfigFileTest`, `CompletionScriptsTest`,
+`CliPluginsTest`, `CliParserM5Test`.
 
 ---
 

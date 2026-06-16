@@ -20,6 +20,7 @@
 package io.vidocq.runtime.cli;
 
 import io.vidocq.runtime.cli.build.BuildType;
+import io.vidocq.runtime.cli.completion.Shell;
 
 import java.nio.file.Path;
 import java.util.List;
@@ -77,4 +78,15 @@ public sealed interface Command {
         record Add(java.util.List<String> ids) implements Extension {}
         record Remove(java.util.List<String> ids) implements Extension {}
     }
+
+    sealed interface Config extends Command {
+        record Get(String key) implements Config {}
+        record Set(String key, String value) implements Config {}
+        record Listing() implements Config {}
+    }
+
+    record Completion(Shell shell) implements Command {}
+
+    /** A command token that is not a built-in; dispatched to a CLI plugin. */
+    record Plugin(String name, List<String> args) implements Command {}
 }

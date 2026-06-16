@@ -21,6 +21,10 @@ package io.vidocq.runtime.cli;
 
 import io.vidocq.runtime.cli.build.MavenInvocation;
 import io.vidocq.runtime.cli.build.MavenLauncher;
+import io.vidocq.runtime.cli.completion.CommandCatalog;
+import io.vidocq.runtime.cli.completion.CompletionScripts;
+import io.vidocq.runtime.cli.config.ConfigFile;
+import io.vidocq.runtime.cli.config.PropertiesText;
 import io.vidocq.runtime.cli.dev.BootSpinner;
 import io.vidocq.runtime.cli.dev.DebugOptions;
 import io.vidocq.runtime.cli.dev.Profiles;
@@ -35,6 +39,8 @@ import io.vidocq.runtime.cli.ext.KnownExtensions;
 import io.vidocq.runtime.cli.ext.PomEditor;
 import io.vidocq.runtime.cli.ext.RegistryEntry;
 import io.vidocq.runtime.cli.scaffold.ProjectScaffolder;
+import io.vidocq.runtime.cli.spi.CliPlugins;
+import io.vidocq.runtime.cli.spi.VidocqCliPlugin;
 import io.vidocq.runtime.core.VidocqBootstrap;
 import io.vidocq.runtime.spi.VidocqExtension;
 
@@ -67,6 +73,13 @@ public final class CommandRunner {
             case Command.Create c              -> runCreate(c);
             case Command.Build b               -> runBuild(b);
             case Command.Clean cl              -> runClean(cl);
+            case Command.Config cfg            -> switch (cfg) {
+                case Command.Config.Get g       -> runConfigGet(g);
+                case Command.Config.Set s       -> runConfigSet(s);
+                case Command.Config.Listing l   -> runConfigList(l);
+            };
+            case Command.Completion comp       -> runCompletion(comp);
+            case Command.Plugin p              -> runPlugin(p);
             case Command.Extension e           -> switch (e) {
                 case Command.Extension.Listing l -> runExtensionList(l);
                 case Command.Extension.Add a     -> runExtensionAdd(a);
@@ -354,6 +367,95 @@ public final class CommandRunner {
             CliOutput.error("Maven exited with code " + code + ".");
         }
         return code;
+    }
+
+    private static int runConfigGet(Command.Config.Get get) {
+        Path file = locateConfig();
+        if (file == null) {
+            CliOutput.error("No vidocq.properties found in this project.");
+            return 1;
+        }
+        String text = readConfig(file);
+        if (text == null) {
+            return 1;
+        }
+        var value = PropertiesText.get(text, get.key());
+        if (value.isEmpty()) {
+            CliOutput.error("Key '" + get.key() + "' is not set.");
+            return 1;
+        }
+        System.out.println(value.get());
+        return 0;
+    }
+
+    private static int runConfigSet(Command.Config.Set set) {
+        Path cwd = Path.of("").toAbsolutePath();
+        Path file = locateConfig();
+        if (file == null) {
+            file = ConfigFile.resolveTarget(cwd, Files::isDirectory);
+        }
+        String text = Files.exists(file) ? readConfig(file) : "";
+        if (text == null) {
+            return 1;
+        }
+        String updated = PropertiesText.set(text, set.key(), set.value());
+        try {
+            Files.createDirectories(file.getParent());
+            Files.writeString(file, updated);
+        } catch (IOException e) {
+            CliOutput.error("Cannot write " + file + ": " + e.getMessage());
+            return 1;
+        }
+        CliOutput.success("Set " + CliOutput.bold(set.key()) + " = " + set.value()
+                + CliOutput.dim("  (" + cwd.relativize(file) + ")"));
+        return 0;
+    }
+
+    private static int runConfigList(Command.Config.Listing listing) {
+        Path file = locateConfig();
+        if (file == null) {
+            CliOutput.error("No vidocq.properties found in this project.");
+            return 1;
+        }
+        String text = readConfig(file);
+        if (text == null) {
+            return 1;
+        }
+        var entries = PropertiesText.entries(text);
+        if (entries.isEmpty()) {
+            CliOutput.println(CliOutput.dim("  (no properties set)"));
+            return 0;
+        }
+        entries.forEach((k, v) -> System.out.println(k + "=" + v));
+        return 0;
+    }
+
+    private static Path locateConfig() {
+        Path cwd = Path.of("").toAbsolutePath();
+        return ConfigFile.locate(cwd, Files::isRegularFile).orElse(null);
+    }
+
+    private static String readConfig(Path file) {
+        try {
+            return Files.readString(file);
+        } catch (IOException e) {
+            CliOutput.error("Cannot read " + file + ": " + e.getMessage());
+            return null;
+        }
+    }
+
+    private static int runCompletion(Command.Completion completion) {
+        System.out.print(CompletionScripts.script(completion.shell(), CommandCatalog.COMMANDS));
+        return 0;
+    }
+
+    private static int runPlugin(Command.Plugin plugin) {
+        VidocqCliPlugin impl = CliPlugins.find(plugin.name()).orElse(null);
+        if (impl == null) {
+            CliOutput.error("Unknown command '" + plugin.name() + "'. Run 'vidocq help' for usage.");
+            return 1;
+        }
+        return impl.run(plugin.args().toArray(new String[0]));
     }
 
     private static int runExtensionList(Command.Extension.Listing listing) {

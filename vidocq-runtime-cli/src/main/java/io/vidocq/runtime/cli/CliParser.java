@@ -20,6 +20,9 @@
 package io.vidocq.runtime.cli;
 
 import io.vidocq.runtime.cli.build.BuildType;
+import io.vidocq.runtime.cli.completion.Shell;
+import io.vidocq.runtime.cli.spi.CliPlugins;
+import io.vidocq.runtime.cli.spi.VidocqCliPlugin;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -47,8 +50,9 @@ public final class CliParser {
             case "build"                      -> parseBuild(args, 1);
             case "clean"                      -> parseClean(args, 1);
             case "extension", "ext"           -> parseExtension(args, 1);
-            default -> throw new CliException(
-                    "Unknown command '" + args[0] + "'. Run 'vidocq help' for usage.");
+            case "config"                     -> parseConfig(args, 1);
+            case "completion"                 -> parseCompletion(args, 1);
+            default -> new Command.Plugin(args[0], rest(args, 1));
         };
     }
 
@@ -160,6 +164,39 @@ public final class CliParser {
         return out;
     }
 
+    private static Command parseConfig(String[] args, int from) {
+        if (from >= args.length) {
+            throw new CliException("'config' requires a sub-command: get, set, or list.");
+        }
+        return switch (args[from]) {
+            case "get" -> {
+                if (from + 1 >= args.length) throw new CliException("'config get' requires a <key>.");
+                yield new Command.Config.Get(args[from + 1]);
+            }
+            case "set" -> {
+                if (from + 2 >= args.length) {
+                    throw new CliException("'config set' requires a <key> and a <value>.");
+                }
+                yield new Command.Config.Set(args[from + 1], args[from + 2]);
+            }
+            case "list", "ls" -> new Command.Config.Listing();
+            default -> throw new CliException(
+                    "Unknown config sub-command '" + args[from] + "'. Available: get, set, list.");
+        };
+    }
+
+    private static Command.Completion parseCompletion(String[] args, int from) {
+        if (from >= args.length) {
+            throw new CliException("'completion' requires a shell: "
+                    + String.join(", ", Shell.tokens()) + ".");
+        }
+        try {
+            return new Command.Completion(Shell.fromToken(args[from]));
+        } catch (IllegalArgumentException e) {
+            throw new CliException(e.getMessage());
+        }
+    }
+
     private static Command parseExtension(String[] args, int from) {
         if (from >= args.length) return Command.Extension.Listing.defaults();
         return switch (args[from]) {
@@ -219,7 +256,10 @@ public final class CliParser {
         cmd("extension list",   "List installed (and optionally available) extensions.");
         cmd("extension add",    "Add extensions to the current project's pom.xml.");
         cmd("extension remove", "Remove extensions from the current project's pom.xml.");
+        cmd("config get|set|list", "Read or write keys in vidocq.properties.");
+        cmd("completion bash|zsh", "Print a shell completion script.");
         cmd("help [command]",   "Show detailed help for a specific command.");
+        printPluginCommands();
         CliOutput.println();
         CliOutput.println(CliOutput.dim("Run 'vidocq help <command>' for per-command options."));
     }
@@ -316,12 +356,50 @@ public final class CliParser {
                 CliOutput.println("  " + CliOutput.cyan("vidocq extension list --available"));
                 CliOutput.println("  " + CliOutput.cyan("vidocq extension add cassini-rest knock-health"));
             }
+            case "config" -> {
+                CliOutput.println(CliOutput.bold("vidocq config") + " — Read & write vidocq.properties");
+                CliOutput.println();
+                CliOutput.println("Operates on the project's vidocq.properties (project root or");
+                CliOutput.println("src/main/resources). 'set' preserves comments and key ordering.");
+                CliOutput.println();
+                CliOutput.println("Sub-commands:");
+                cmd("get <key>",         "Print the value bound to <key>");
+                cmd("set <key> <value>", "Set (or add) <key> to <value>");
+                cmd("list",              "Print every key=value pair");
+                CliOutput.println();
+                CliOutput.println("Examples:");
+                CliOutput.println("  " + CliOutput.cyan("vidocq config get vidocq.http.port"));
+                CliOutput.println("  " + CliOutput.cyan("vidocq config set vidocq.http.port 9090"));
+            }
+            case "completion" -> {
+                CliOutput.println(CliOutput.bold("vidocq completion") + " — Shell completion scripts");
+                CliOutput.println();
+                CliOutput.println("Prints a completion script to stdout for the given shell.");
+                CliOutput.println();
+                CliOutput.println("Shells: " + String.join(", ", Shell.tokens()));
+                CliOutput.println();
+                CliOutput.println("Examples:");
+                CliOutput.println("  " + CliOutput.cyan("source <(vidocq completion bash)"));
+                CliOutput.println("  " + CliOutput.cyan("vidocq completion zsh > \"${fpath[1]}/_vidocq\""));
+            }
             default -> CliOutput.warning("No detailed help for '" + topic + "'. Run 'vidocq help'.");
         }
     }
 
     private static void cmd(String name, String desc) {
         System.out.printf("  %-30s %s%n", CliOutput.cyan(name), desc);
+    }
+
+    private static void printPluginCommands() {
+        List<VidocqCliPlugin> plugins = CliPlugins.all();
+        if (plugins.isEmpty()) {
+            return;
+        }
+        CliOutput.println();
+        CliOutput.println(CliOutput.bold("Plugin commands:"));
+        for (VidocqCliPlugin plugin : plugins) {
+            cmd(plugin.command(), plugin.description());
+        }
     }
 
     private static void opt(String name, String desc) {

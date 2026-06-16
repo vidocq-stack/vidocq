@@ -17,18 +17,31 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
-module io.vidocq.runtime.cli {
-    requires io.vidocq.runtime.core;
-    requires java.xml;
-    requires java.net.http;
+package io.vidocq.runtime.cli.completion;
 
-    // CLI lists installed extensions via ServiceLoader — each consuming module
-    // must declare its own `uses` even when an upstream module already does.
-    uses io.vidocq.runtime.spi.VidocqExtension;
+import java.util.List;
 
-    // Third-party CLI plugins contribute extra top-level commands.
-    uses io.vidocq.runtime.cli.spi.VidocqCliPlugin;
+/**
+ * The set of top-level command tokens the CLI understands, used to drive shell
+ * completion (and any other catalogue-style feature). Kept here as the single
+ * source of truth so completion stays in step with the parser.
+ */
+public final class CommandCatalog {
 
-    exports io.vidocq.runtime.cli;
-    exports io.vidocq.runtime.cli.spi;
+    /** Built-in top-level commands offered for completion. */
+    public static final List<String> COMMANDS = List.of(
+            "version",
+            "info",
+            "start",
+            "dev",
+            "doctor",
+            "create",
+            "build",
+            "clean",
+            "extension",
+            "config",
+            "completion",
+            "help");
+
+    private CommandCatalog() {}
 }
