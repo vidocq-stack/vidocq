@@ -28,11 +28,14 @@ import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.URI;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
@@ -69,6 +72,88 @@ class PostgresDevServiceTest {
             try (Socket s = new Socket()) {
                 s.connect(new InetSocketAddress(uri.getHost(), uri.getPort()), 5000);
                 assertTrue(s.isConnected());
+            }
+        } finally {
+            svc.stop();
+        }
+    }
+
+    // ---- planning (pure, no Docker) ----
+
+    @Test
+    void planHasOnlyTheDefaultDatasourceByDefault() {
+        List<PostgresDevService.DatasourcePlan> plan = PostgresDevService.plan(ctx(Map.of()));
+        assertEquals(1, plan.size());
+        assertEquals("default", plan.get(0).name());
+        assertEquals("vidocq.pool.", plan.get(0).poolPrefix());
+        assertEquals("vidocq", plan.get(0).db());
+        assertNull(plan.get(0).fixedPort(), "random host port by default");
+    }
+
+    @Test
+    void planAddsNamedDatasourcesFromTheList() {
+        List<PostgresDevService.DatasourcePlan> plan = PostgresDevService.plan(ctx(Map.of(
+                "vidocq.dev.postgres.datasources", "analytics, audit")));
+        assertEquals(List.of("default", "analytics", "audit"),
+                plan.stream().map(PostgresDevService.DatasourcePlan::name).toList());
+        PostgresDevService.DatasourcePlan analytics = named(plan, "analytics");
+        assertEquals("vidocq.pool.analytics.", analytics.poolPrefix());
+        assertEquals("analytics", analytics.db(), "db defaults to the datasource name");
+    }
+
+    @Test
+    void planExcludesExplicitlyConfiguredDatasources() {
+        List<PostgresDevService.DatasourcePlan> plan = PostgresDevService.plan(ctx(Map.of(
+                "vidocq.pool.url", "jdbc:postgresql://ext/app",            // @Default configured → skip
+                "vidocq.dev.postgres.datasources", "analytics,audit",
+                "vidocq.pool.audit.url", "jdbc:postgresql://ext/audit"))); // audit configured → skip
+        assertEquals(List.of("analytics"),
+                plan.stream().map(PostgresDevService.DatasourcePlan::name).toList());
+    }
+
+    @Test
+    void planHonoursPerNameAndGlobalOverrides() {
+        List<PostgresDevService.DatasourcePlan> plan = PostgresDevService.plan(ctx(Map.of(
+                "vidocq.dev.postgres.datasources", "analytics",
+                "vidocq.dev.postgres.analytics.db", "metrics",
+                "vidocq.dev.postgres.analytics.port", "55432",
+                "vidocq.dev.postgres.image", "postgres:15-alpine")));
+        PostgresDevService.DatasourcePlan analytics = named(plan, "analytics");
+        assertEquals("metrics", analytics.db());
+        assertEquals(55432, analytics.fixedPort());
+        assertEquals("postgres:15-alpine", analytics.image(), "global image applies to named datasources too");
+    }
+
+    private static PostgresDevService.DatasourcePlan named(
+            List<PostgresDevService.DatasourcePlan> plan, String name) {
+        return plan.stream().filter(p -> p.name().equals(name)).findFirst().orElseThrow();
+    }
+
+    // ---- provisioning (Docker-gated) ----
+
+    @Test
+    @Timeout(240)
+    void startsNamedContainersAndPublishesDistinctReachablePools() throws Exception {
+        assumeTrue(DockerClientFactory.instance().isDockerAvailable(), "Docker not available — skipping");
+
+        PostgresDevService svc = new PostgresDevService();
+        try {
+            Map<String, String> props = svc.start(ctx(Map.of(
+                    "vidocq.dev.postgres.datasources", "analytics")));
+
+            String defUrl = props.get("vidocq.pool.url");
+            String anUrl = props.get("vidocq.pool.analytics.url");
+            assertTrue(defUrl != null && defUrl.startsWith("jdbc:postgresql://"), "got " + defUrl);
+            assertTrue(anUrl != null && anUrl.startsWith("jdbc:postgresql://"), "got " + anUrl);
+            assertNotEquals(defUrl, anUrl, "the named datasource must be a distinct container");
+            assertEquals("vidocq", props.get("vidocq.pool.analytics.username"));
+
+            for (String url : List.of(defUrl, anUrl)) {
+                URI uri = URI.create(url.substring("jdbc:".length()));
+                try (Socket s = new Socket()) {
+                    s.connect(new InetSocketAddress(uri.getHost(), uri.getPort()), 5000);
+                    assertTrue(s.isConnected());
+                }
             }
         } finally {
             svc.stop();

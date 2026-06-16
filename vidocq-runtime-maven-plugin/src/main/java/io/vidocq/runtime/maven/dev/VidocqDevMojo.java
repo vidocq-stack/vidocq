@@ -29,6 +29,7 @@ import org.apache.maven.project.MavenProject;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -152,6 +153,9 @@ public class VidocqDevMojo extends AbstractMojo {
     @Parameter(defaultValue = "${project.basedir}", readonly = true)
     private File baseDir;
 
+    @Parameter(defaultValue = "${project.build.directory}", readonly = true)
+    private File buildDir;
+
     @Override
     public void execute() throws MojoExecutionException {
         Path projectDir = baseDir.toPath();
@@ -178,6 +182,7 @@ public class VidocqDevMojo extends AbstractMojo {
             DefaultDevServiceContext devCtx = new DefaultDevServiceContext(projectDir, sysProps);
             devs = DevServiceManager.start(devCtx, getLog());
             devs.collectedProperties().forEach(sysProps::putIfAbsent);
+            reportConnectionInformation(devs.collectedProperties());
         }
         final DevServiceManager devServicesRef = devs;
 
@@ -330,12 +335,34 @@ public class VidocqDevMojo extends AbstractMojo {
         return new ArrayList<>(Arrays.asList(raw.trim().split("\\s+")));
     }
 
+    /**
+     * Logs the {@code Connection information} block for every dev-provisioned datasource and writes the
+     * coordinates to {@code target/vidocq-dev-services.properties}, so an external SQL client can reach
+     * the dev databases. No-op when no datasource was provisioned (e.g. only Keycloak ran).
+     */
+    private void reportConnectionInformation(Map<String, String> collected) {
+        List<String> lines = DevServicesReport.consoleLines(collected);
+        if (lines.isEmpty()) {
+            return;
+        }
+        lines.forEach(getLog()::info);
+        Path file = buildDir.toPath().resolve("vidocq-dev-services.properties");
+        try {
+            Files.createDirectories(file.getParent());
+            Files.writeString(file, DevServicesReport.fileContent(collected));
+            getLog().info("Connection information written to " + file);
+        } catch (IOException e) {
+            getLog().warn("Could not write " + file + ": " + e.getMessage());
+        }
+    }
+
     // Package-private accessors used in unit tests — keep at the bottom so the
     // execute() flow is the first thing a reader sees.
     void setProject(MavenProject project) { this.project = project; }
     void setMainModule(String mainModule) { this.mainModule = mainModule; }
     void setMainClass(String mainClass) { this.mainClass = mainClass; }
     void setBaseDir(File baseDir) { this.baseDir = baseDir; }
+    void setBuildDir(File buildDir) { this.buildDir = buildDir; }
     void setClassesDir(File classesDir) { this.classesDir = classesDir; }
     void setExtraSystemProperties(String s) { this.extraSystemProperties = s; }
     void setProfile(String profile) { this.profile = profile; }
