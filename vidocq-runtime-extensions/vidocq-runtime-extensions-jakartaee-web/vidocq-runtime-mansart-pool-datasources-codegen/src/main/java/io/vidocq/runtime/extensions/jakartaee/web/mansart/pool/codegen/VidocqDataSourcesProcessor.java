@@ -211,7 +211,13 @@ public final class VidocqDataSourcesProcessor extends AbstractProcessor {
                 // unqualified @Inject DataSource still resolves to the @Default pool alone.
                 pw.println("@" + MARKER_QUALIFIER);
                 pw.println("@Singleton");
-                pw.println("public final class " + className + " extends " + BASE_HOLDER + " {");
+                // Declare DataSource as a DIRECT interface (the impls are inherited from BASE_HOLDER):
+                // the Vauban indexer reads a bean's types from its own source element and does not walk
+                // the interfaces of an external abstract superclass, so without this the holder would
+                // have no javax.sql.DataSource bean type and @Inject @Named("X") DataSource stays
+                // unsatisfied at build time.
+                pw.println("public final class " + className + " extends " + BASE_HOLDER
+                        + " implements javax.sql.DataSource {");
                 pw.println("    public " + className + "() {");
                 pw.println("        super(\"" + name + "\");");
                 pw.println("    }");

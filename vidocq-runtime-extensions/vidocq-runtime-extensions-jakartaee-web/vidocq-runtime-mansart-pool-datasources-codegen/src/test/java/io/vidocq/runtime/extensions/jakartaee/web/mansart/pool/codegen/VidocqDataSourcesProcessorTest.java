@@ -78,6 +78,8 @@ class VidocqDataSourcesProcessorTest {
         assertTrue(body.contains(
                 "extends io.vidocq.runtime.extensions.jakartaee.web.mansart.pool.AbstractNamedDataSourceHolder"),
                 body);
+        // DataSource declared as a direct interface so the Vauban indexer sees the bean type.
+        assertTrue(body.contains("implements javax.sql.DataSource"), body);
         assertTrue(body.contains("super(\"analytics\")"), body);
     }
 
