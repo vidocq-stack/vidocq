@@ -1,164 +1,178 @@
-# DevServices: multi-datasource, DataGrip connectivity, and DEV_SERVICES.md
+# DevServices: multi-datasource, connection info, and DEV_SERVICES.md
 
 - **Date**: 2026-06-16
-- **Status**: Approved (design) — ready for implementation planning
-- **Scope**: `mansart` (mansart-jakarta-data) + `vidocq` (runtime DevServices, docs)
+- **Status**: Approved (design v2) — ready for implementation planning
+- **Scope**: `vidocq` runtime only (mansart untouched)
 
 ## 1. Context & goal
 
-`vidocq:dev` provisions a Postgres + Keycloak via Testcontainers and forks the app in
-debug mode. Today it supports a **single** datasource: `PostgresDevService` publishes the
-fixed keys `vidocq.pool.url/username/password`, and `MansartPoolExtension` exposes a single
-`@Default` `DataSource` bean. Three gaps to close:
+`vidocq:dev` provisions Postgres + Keycloak via Testcontainers and forks the app in debug
+mode, but supports a **single** datasource: `PostgresDevService` publishes fixed keys
+`vidocq.pool.url/username/password`, and `MansartPoolExtension` exposes one `@Default`
+`DataSource`. Three gaps:
 
-1. **Multiple named datasources** — an app may need a business DB and a separate
-   reporting/analytics DB, each reachable from different repositories.
-2. **External tooling (DataGrip)** — the mapped Testcontainers port is logged inside the
-   JDBC URL but is otherwise hard to find and changes every run.
-3. **No documentation** — there is no `DEV_SERVICES.md` describing the setup.
+1. **Multiple named datasources** — an app may need a business DB + a separate analytics DB,
+   each injectable as `@Inject @Named("X") DataSource` and targetable by
+   `@Repository(dataStore="X")`.
+2. **External tooling connectivity** — the mapped port is buried in the logged JDBC URL.
+3. **No documentation** — no `DEV_SERVICES.md`.
 
-This is a *generic capability* to lay down well, not a fix for a blocked project.
+A *generic capability laid down well*, AOT-friendly, not a fix for a blocked project.
 
 ## 2. Key finding (verified by reading the code)
 
-mansart-data **already routes named datasources**. `DataStoreResolver` (mansart-data-cdi)
-resolves `@Repository(dataStore="X")` to a CDI lookup
-`lookup.select(DataSource.class, NamedLiteral.of("X"))` (with a `java:` JNDI fallback,
-per-store caching, and clear errors). A `MultiDataStoreArquillianTest` (primary/secondary)
-already exercises this. **Consumption is done.** The only missing links are *publication*:
-the runtime publishes a single `@Default` DataSource, and the DevService starts a single DB.
+mansart **already routes named datasources end-to-end and needs no change**:
+- `DataStoreResolver` (mansart-data-cdi:71-110) resolves `@Repository(dataStore="X")` to
+  `lookup.select(DataSource.class, NamedLiteral.of("X"))` (JNDI fallback for `java:`,
+  per-store caching, clear errors). `MultiDataStoreArquillianTest` exercises it.
+- `mansart-pool` only provides a `MansartDataSource` (a JDBC pool) — it has no business with
+  CDI `@Named` beans.
+
+So the work is **publication only**, and per the design discussion it belongs **entirely in
+the Vidocq extension** (`vidocq-runtime-mansart-pool-extension`), not in mansart.
 
 ## 3. Non-goals (YAGNI)
 
-- No change to `DataStoreResolver` or the Vauban resolution engine.
-- No heterogeneous engines in the first cut (the per-container model leaves the door open,
-  but only Postgres is wired now).
-- No XA / JTA multi-resource wiring (lands later with `mansart-persistence`).
-- No runtime bytecode generation or dynamic CDI beans — everything is compile-time.
+- No change to mansart (`mansart-pool`, `mansart-data`, `DataStoreResolver`).
+- No change to the Vauban resolution engine; no runtime-registered/dynamic CDI beans.
+- No enumeration property (`vidocq.pool.datasources=…`): names are **derived** from the
+  `vidocq.pool.<name>.*` keys / the annotation.
+- No XA/JTA multi-resource (lands later with `mansart-persistence`).
+- First cut wires Postgres only (the per-container model leaves other engines open).
 
-## 4. Architecture overview
+## 4. Declaration model — follow Quarkus
+
+Quarkus splits **structure** (which datasources exist) from **values** (url/credentials):
+structure is **build-time fixed** (generates the beans, AOT closed-world), values are
+runtime-overridable. We do the same, because MP Config is runtime-dynamic and the build only
+sees **static** ConfigSources on the classpath.
+
+- **Structure (names) → build-time**, from **two sources**, both feeding one codegen:
+  1. **Properties**: `vidocq.pool.<name>.url` found in the build-visible Vidocq config files
+     `vidocq.properties` / `application.properties` (the `PropertiesFileConfigSource.FILES`,
+     ordinal 100) — read via the `Filer` at annotation-processing time. **Not**
+     `META-INF/microprofile-config.properties`: Vidocq's own convention is `vidocq.properties`,
+     and the examples (and arago) declare `vidocq.pool.*` there.
+  2. **Annotation**: `@VidocqDataSources({"analytics","audit"})` — covers names declared via
+     dynamic sources (env, system props, programmatic ConfigSource) that the build cannot see.
+  Names from both are merged and **deduplicated**.
+- **Values → runtime**: `vidocq.pool.<name>.url/username/password/...` resolved by MP Config
+  (all sources, profiles, dev service overrides).
+- **`@Default`**: `vidocq.pool.*` (unchanged).
+
+Accepted limitation (same as Quarkus): a datasource whose name appears **only** in a dynamic
+source at runtime gets no `@Named` bean unless also declared via the annotation. Values stay
+fully dynamic.
+
+## 5. Architecture — all in `vidocq-runtime-mansart-pool-extension`
 
 | Component | Change |
 | --- | --- |
-| `DataStoreResolver`, Vauban engine, `MansartPoolHolder` (`@Default`) | **unchanged** |
-| `mansart-data-processor` (APT) | **+** generate one `@Named` holder per `dataStore` |
-| `mansart-data-core` | **+** `AbstractNamedDataSourceHolder`, `NamedDataSourceRegistry` |
-| `MansartPoolExtension` (runtime) | **+** publish named pools into the registry |
-| `PostgresDevService` (runtime) | **+** N containers, console message, coords file |
+| mansart (`-pool`, `-data`), Vauban engine, `MansartPoolHolder` (`@Default`) | **unchanged** |
+| `…-mansart-pool-extension` (api) | **+** `@VidocqDataSources`, `NamedDataSourceRegistry`, `AbstractNamedDataSourceHolder` |
+| `…-mansart-pool-extension-codegen` (new APT) | **+** generate one `@Named` holder per declared name |
+| `…-mansart-pool-extension` (runtime) | **+** create named pools from MP Config, feed the registry |
+| `PostgresDevService` (devservice-postgres) | **+** N containers, console message, coords file |
 | `DEV_SERVICES.md` (vidocq root) | **new** |
 
-## 5. Part A — Multi-datasource (compile-time, approach "B")
-
-### 5.1 Generated holder (APT)
-For each distinct `@Repository(dataStore="X")` where `X` is non-empty and not a `java:` JNDI
-name, `mansart-data-processor` generates once per name:
-
+### 5.1 Generated holder (codegen)
+Per declared name `X`:
 ```java
 @Named("X") @Singleton
 public final class _X$DataSource extends AbstractNamedDataSourceHolder {
     public _X$DataSource() { super("X"); }
 }
 ```
+Plain `@Named @Singleton` → discovered by both Weld (TCK) and Vauban; `DataStoreResolver`
+finds it unchanged via `select(DataSource.class, NamedLiteral.of("X"))`.
 
-Plain annotated `@Named @Singleton` class → discovered by **both** Weld (TCK) and Vauban
-(runtime), no BuildCompatibleExtension required. `DataStoreResolver`'s existing
-`select(DataSource.class, NamedLiteral.of("X"))` finds it unchanged. JNDI (`java:`) stores
-keep the existing JNDI path and get no generated holder.
+### 5.2 Shared classes (extension api module)
+- `AbstractNamedDataSourceHolder` — the ten `DataSource` methods, delegating to
+  `NamedDataSourceRegistry.require(name)` (mirrors `MansartPoolHolder`).
+- `NamedDataSourceRegistry` — neutral `Map<String,DataSource>`: `register/unregister/require`
+  with a clear error ("no DataSource registered for 'X'; is `vidocq.pool.X.url` set?").
+- `@VidocqDataSources` — `String[] value()`. The app depends on this api module at compile
+  (to use the annotation and to compile the generated holders that reference the registry).
 
-> **Limitation**: a `@Named` holder exists only for stores referenced by some
-> `@Repository(dataStore="X")`. A direct `@Inject @Named("X") DataSource` outside any
-> repository is out of scope — the named pool is still registered in the registry, it just
-> has no CDI bean. This matches the Jakarta Data access model (DBs are reached via
-> repositories) and keeps generation driven by real usage.
+### 5.3 Codegen APT (new `-codegen` module)
+Runs during the **app** build. Collects names from (a) `@VidocqDataSources` and (b)
+`vidocq.pool.<name>.url` parsed from the static config resource(s) via the `Filer`. Emits one
+deduplicated `_X$DataSource` per name. Wires into the app's `annotationProcessorPaths` like
+the other `*-extension-codegen` modules.
 
-### 5.2 `AbstractNamedDataSourceHolder` (mansart-data-core)
-Carries all ten `DataSource` methods, each delegating to
-`NamedDataSourceRegistry.require(name)`. The generated subclass is the 3-line file above —
-mirrors the existing `MansartPoolHolder` delegation pattern (`@Singleton`, no client proxy).
+### 5.4 Runtime (extension)
+`configure()` scans MP Config property names for `vidocq.pool.<name>.url`, builds a
+`PoolConfig` per named block (same keys as `@Default`, namespaced). `beforeStart()` creates a
+`MansartDataSource` per name and `NamedDataSourceRegistry.register(name, ds)`. `onStop()`
+drains and unregisters. The `@Default` path is byte-for-byte unchanged.
 
-### 5.3 `NamedDataSourceRegistry` (mansart-data-core)
-Neutral `Map<String, DataSource>`: `register(name, ds)`, `unregister(name)`,
-`require(name)` (clear error if absent — "no DataSource registered for dataStore 'X'; is
-`vidocq.pool.X.url` set?"). Not coupled to the pool — any producer can register.
-
-### 5.4 Named pools (runtime — `MansartPoolExtension`)
-`configure()` additionally scans `vidocq.pool.<name>.*` (same key shape as the `@Default`,
-namespaced). `beforeStart()` builds one `MansartDataSource` per named block and calls
-`NamedDataSourceRegistry.register(name, ds)`. `onStop()` drains and unregisters them. The
-`@Default` path (`vidocq.pool.*` → `MansartPoolHolder`) is byte-for-byte unchanged.
-
-## 6. Part B — DevService multi-base
+## 6. DevService multi-base
 
 - Declaration: `vidocq.dev.postgres.datasources=analytics,audit` → one `PostgreSQLContainer`
-  per name → publishes `vidocq.pool.<name>.url/username/password`.
+  per name → publishes `vidocq.pool.<name>.url/username/password`. This explicit list is
+  required here (unlike the runtime pool, which derives names from existing
+  `vidocq.pool.<name>.url`): in dev the DevService *creates* those URLs, so it cannot derive
+  the names from them — it must be told which databases to start.
 - Per-datasource overrides: `vidocq.dev.postgres.<name>.image|db|username|password|port`.
-- The `@Default` base keeps the current `vidocq.dev.postgres.*` keys (back-compatible; an
-  app with no `datasources` list behaves exactly as today).
-- `DevServiceManager` aggregation is collision-free because keys are namespaced.
+- `@Default` base keeps the current `vidocq.dev.postgres.*` keys (back-compatible).
+- `DevServiceManager` aggregation stays collision-free (namespaced keys).
 
-## 7. Part C — DataGrip connectivity (console + file)
+## 7. Connection information (console + file)
 
-Both are produced in dev mode. Per datasource, a readable console block at startup:
-
+Both emitted in dev mode (wording is generic — not tool-specific). Per datasource at startup:
 ```
-╭─ DevService postgres [analytics] ───────────────
+╭─ DevService postgres [analytics] ─ Connection information ─
 │ JDBC : jdbc:postgresql://localhost:54033/analytics
 │ User : test     Password : test
-╰─ DataGrip: host=localhost port=54033 db=analytics
+╰─ host=localhost  port=54033  db=analytics
 ```
-
-Plus a machine-readable `target/vidocq-dev-services.properties` written before the first
-fork (and refreshed if containers restart), e.g.:
-
-```
-postgres.default.jdbcUrl=jdbc:postgresql://localhost:54012/test
-postgres.default.username=test
-postgres.default.password=test
-postgres.analytics.jdbcUrl=jdbc:postgresql://localhost:54033/analytics
-...
-```
+Plus a machine-readable `target/vidocq-dev-services.properties`
+(`postgres.<name>.jdbcUrl/username/password`) written before the first fork and refreshed on
+container restart.
 
 - **Port policy**: random by default (no collisions). Opt-in fixed port via
-  `vidocq.dev.postgres.<name>.port=5432` together with `vidocq.dev.reuse=true` to keep the
-  container (and port) stable across runs for a persistent DataGrip connection. A fixed-port
-  collision fails fast with a clear message and the override hint.
+  `vidocq.dev.postgres.<name>.port` + `vidocq.dev.reuse=true` to keep container and port
+  stable across runs (persistent external connection). Fixed-port collision fails fast with a
+  clear message + override hint.
 
-## 8. Part D — `DEV_SERVICES.md` (vidocq root)
+## 8. `DEV_SERVICES.md` (vidocq root)
 
-Outline: principle (providers on the plugin classpath, AOT-safe) · Postgres + Keycloak ·
-published keys · `vidocq.dev.*` overrides · **multi-datasource** (declaration +
-`@Repository(dataStore)`) · **DataGrip recipe** (console, coords file, fixed-port/reuse) ·
-debug 5005 · pitfalls (Docker daemon resolution → `~/.testcontainers.properties`).
+Principle (providers on the plugin classpath, AOT-safe) · Postgres + Keycloak · published
+keys · `vidocq.dev.*` overrides · **multi-datasource** (`@VidocqDataSources` /
+`vidocq.properties` + `vidocq.pool.<name>.*` + `@Repository(dataStore)` +
+`@Inject @Named`) · **connection info** (console + coords file, fixed-port/reuse) · debug
+5005 · pitfalls (Docker daemon resolution → `~/.testcontainers.properties`).
 
 ## 9. PR breakdown
 
-1. **PR1 — mansart** (do first, stabilize & test): `NamedDataSourceRegistry` +
-   `AbstractNamedDataSourceHolder` in mansart-data-core; APT holder generation in
-   mansart-data-processor; extend the multi-store TCK / unit tests to cover the generated
-   holder discovery. Green before PR2.
-2. **PR2 — vidocq runtime**: named pools in `MansartPoolExtension`; N-container
-   `PostgresDevService` + console message + coords file + port policy; `DEV_SERVICES.md`.
-   Depends on PR1 being published to local M2.
+**Single PR on `vidocq`** (mansart untouched, so no mansart PR): extension api
+(`@VidocqDataSources`, registry, base holder) + new `-codegen` APT + named-pool runtime +
+N-container `PostgresDevService` + console/coords/port + `DEV_SERVICES.md`. The plan may
+stage it internally (api+codegen+registry first, then devservice, then docs).
 
 ## 10. Testing strategy
 
-- **mansart**: unit test the APT (generated holder source for a `dataStore`), the registry
-  (register/require/error), and an Arquillian test where two generated holders resolve to
-  two registered DataSources (extend `MultiDataStoreArquillianTest`).
-- **runtime**: Docker-gated IT — `vidocq.dev.postgres.datasources=a,b` starts two
-  containers, publishes the namespaced keys, and a child app with two
-  `@Repository(dataStore=...)` reads from the right DB; assert the console block and the
-  coords file content.
+- **Codegen**: unit-test holder generation from `@VidocqDataSources` and from a sample
+  `vidocq.properties` (via an in-process `JavaCompiler`); dedup across both sources.
+- **Runtime**: a unit test on `MansartPoolExtension` proving two `vidocq.pool.<name>.url`
+  names are discovered, build distinct pools (isolation: a table created in one is invisible
+  from the other) and are registered/unregistered in `NamedDataSourceRegistry`. The full
+  `@Inject @Named` **and** `@Repository(dataStore)` CDI E2E lives in the example module, where
+  the codegen-generated holders, Vauban discovery and mansart-data routing converge.
+- **DevService**: pure unit tests for the provisioning *plan* (which datasources, key prefixes,
+  per-name/global overrides) and for `DevServicesReport` (grouping, host/port parsing, console
+  block, coords file); a Docker-gated IT starts two containers and asserts distinct reachable
+  pools. `vidocq.dev.postgres.datasources=a,b` → two containers, namespaced keys.
 
 ## 11. Decisions log
 
-- Need = generic capability, well laid (not project-blocked).
-- Isolation = one container per datasource (extensible to other engines later).
-- Declaration = explicit list `vidocq.dev.postgres.datasources=...`.
-- Port = random default, fixed opt-in + reuse for DataGrip stability; console **and** coords
-  file in dev mode.
-- Publication of named beans = **approach B** (APT compile-time holders + registry); Vauban
-  and `DataStoreResolver` untouched.
-- `AbstractNamedDataSourceHolder` lives in `mansart-data-core`.
-- Two PRs, mansart stabilized first.
-```
+- Need = generic capability, AOT-friendly.
+- Isolation = one container per datasource.
+- Names = **derived** (`vidocq.pool.<name>.*`) + `@VidocqDataSources`; no enumeration property.
+- Declaration follows Quarkus: structure build-time (two sources: static properties +
+  annotation), values runtime via MP Config.
+- Publication = compile-time codegen holders backed by `NamedDataSourceRegistry`; Vauban and
+  mansart untouched; **all mechanism lives in the Vidocq extension**.
+- Connection info = console block ("Connection information", not tool-specific) **and**
+  `target/vidocq-dev-services.properties`; port random default, fixed+reuse opt-in.
+- One PR on vidocq.

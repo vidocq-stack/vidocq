@@ -154,6 +154,11 @@
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+                <artifactId>vidocq-runtime-mansart-pool-datasources-codegen</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-mansart-transactions-extension</artifactId>
                 <version>${project.version}</version>
             </dependency>
