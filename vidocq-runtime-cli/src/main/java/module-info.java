@@ -19,6 +19,8 @@
  */
 module io.vidocq.runtime.cli {
     requires io.vidocq.runtime.core;
+    requires java.xml;
+    requires java.net.http;
 
     // CLI lists installed extensions via ServiceLoader — each consuming module
     // must declare its own `uses` even when an upstream module already does.

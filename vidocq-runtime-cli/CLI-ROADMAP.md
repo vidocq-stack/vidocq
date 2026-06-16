@@ -19,8 +19,8 @@ Zero external dependencies — hand-rolled arg parser, pure Java 25, JPMS-native
 | `vidocq dev [--port] [--profile] [--debug]` | ✅ M2 | Boots + watches sources; in-process reload on change (see M2) |
 | `vidocq create --name … [-g] [--package] [-x …]` | ✅ | Scaffolds pom.xml + App + module-info |
 | `vidocq extension list [--installed\|--available\|--all]` | ✅ | ServiceLoader scan |
-| `vidocq extension add <id…>` | 🔲 stub | Prints roadmap notice |
-| `vidocq extension remove <id…>` | 🔲 stub | Prints roadmap notice |
+| `vidocq extension add <id…>` | ✅ M3 | Injects `<dependency>` into pom.xml (idempotent) |
+| `vidocq extension remove <id…>` | ✅ M3 | Removes the matching `<dependency>` from pom.xml |
 | `vidocq doctor [--verbose]` | ✅ M6 | Environment & project health checks (see M6) |
 
 ---
@@ -54,14 +54,35 @@ Zero external dependencies — hand-rolled arg parser, pure Java 25, JPMS-native
 
 ---
 
-## Milestone M3 — Extension management
+## Milestone M3 — Extension management ✅ delivered
 
-- **`vidocq extension add <id…>`** — parse the project `pom.xml` (StAX, zero extra dep),  
-  inject the matching `<dependency>` block, write back.
-- **`vidocq extension remove <id…>`** — remove the dependency block.
-- **`vidocq extension list --available`** — query the Vidocq extension registry  
-  (`https://registry.vidocq.dev`; plain HTTP via `java.net.http.HttpClient`).
-- Offline mode: fall back to a local cache (`~/.vidocq/registry-cache.json`).
+- **`vidocq extension add <id…>`** — resolves each id to a Maven coordinate and injects a
+  project-level `<dependency>` into `./pom.xml`. Editing is **text-based** (the rest of the
+  file's formatting and comments are preserved); existing dependencies are detected with
+  **StAX** (`PomDependencies`, `java.xml`) so adds are **idempotent**. If the POM has no
+  `<dependencies>` element, one is created before `</project>`.
+- **`vidocq extension remove <id…>`** — removes the matching project-level `<dependency>`
+  block, leaving any `<dependencyManagement>` entry untouched.
+- **Id resolution** (`KnownExtensions.resolve`): a known short id (e.g. `knock-health`)
+  maps to its real, category-specific coordinate
+  (`io.vidocq.runtime.extensions.microprofile:vidocq-runtime-knock-health-extension`); an
+  explicit `groupId:artifactId` is used verbatim; anything else falls back to the
+  convention `io.vidocq.runtime:vidocq-runtime-<id>-extension` (with a warning).
+- **`vidocq extension list --available`** — lists extensions from the registry with graceful
+  degradation: a remote fetch (`HttpClient`, virtual thread, short timeout) →
+  on-disk cache (`~/.vidocq/registry-cache.json`) → built-in offline catalog. The source is
+  reported so the user knows whether the data is live, cached, or offline.
+
+**Components** (pure/injectable where possible): `ext/ExtensionCoordinate` (GA value type +
+dependency XML), `ext/RegistryEntry`, `ext/KnownExtensions` (catalog + resolver),
+`ext/PomDependencies` (StAX reader), `ext/PomEditor` (pure text add/remove returning
+`Result(pom, changed)`), `ext/MiniJson` (tiny zero-dep JSON reader),
+`ext/ExtensionRegistry` (remote→cache→catalog strategy with an injectable `Fetcher`),
+`ext/HttpRegistryFetcher` (real `HttpClient` fetch). Wired in `CommandRunner`.
+
+> **Scope (honest):** the registry endpoint (`registry.vidocq.dev`) is not yet live, so in
+> practice `list --available` serves the built-in catalog; the remote + cache paths are
+> implemented and unit-tested with an injected fetcher and a temp cache directory.
 
 ---
 

@@ -26,6 +26,12 @@ import io.vidocq.runtime.cli.dev.SourceWatcher;
 import io.vidocq.runtime.cli.doctor.Diagnostic;
 import io.vidocq.runtime.cli.doctor.Diagnostics;
 import io.vidocq.runtime.cli.doctor.DoctorContext;
+import io.vidocq.runtime.cli.ext.ExtensionCoordinate;
+import io.vidocq.runtime.cli.ext.ExtensionRegistry;
+import io.vidocq.runtime.cli.ext.HttpRegistryFetcher;
+import io.vidocq.runtime.cli.ext.KnownExtensions;
+import io.vidocq.runtime.cli.ext.PomEditor;
+import io.vidocq.runtime.cli.ext.RegistryEntry;
 import io.vidocq.runtime.cli.scaffold.ProjectScaffolder;
 import io.vidocq.runtime.core.VidocqBootstrap;
 import io.vidocq.runtime.spi.VidocqExtension;
@@ -39,7 +45,6 @@ import java.util.ServiceLoader;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
-
 /**
  * Dispatches a parsed {@link Command} to its implementation.
  * Uses pattern-matching switch so the compiler enforces exhaustiveness
@@ -313,37 +318,121 @@ public final class CommandRunner {
     }
 
     private static int runExtensionList(Command.Extension.Listing listing) {
-        CliOutput.println(CliOutput.bold("Installed extensions:"));
-        var extensions = ServiceLoader.load(VidocqExtension.class)
-                .stream()
-                .map(ServiceLoader.Provider::get)
-                .sorted(Comparator.comparingInt(VidocqExtension::priority))
-                .toList();
-        if (extensions.isEmpty()) {
-            CliOutput.println(CliOutput.dim("  (none found on classpath)"));
-        } else {
-            extensions.forEach(ext ->
-                    System.out.printf("  %s %-44s %s%n",
-                            CliOutput.green("✔"),
-                            ext.name(),
-                            CliOutput.dim("priority=" + ext.priority())));
+        if (listing.installed()) {
+            CliOutput.println(CliOutput.bold("Installed extensions:"));
+            var extensions = ServiceLoader.load(VidocqExtension.class)
+                    .stream()
+                    .map(ServiceLoader.Provider::get)
+                    .sorted(Comparator.comparingInt(VidocqExtension::priority))
+                    .toList();
+            if (extensions.isEmpty()) {
+                CliOutput.println(CliOutput.dim("  (none found on classpath)"));
+            } else {
+                extensions.forEach(ext ->
+                        System.out.printf("  %s %-44s %s%n",
+                                CliOutput.green("✔"),
+                                ext.name(),
+                                CliOutput.dim("priority=" + ext.priority())));
+            }
         }
         if (listing.available()) {
+            if (listing.installed()) {
+                CliOutput.println();
+            }
+            CliOutput.println(CliOutput.bold("Available extensions:"));
+            var registry = new ExtensionRegistry(
+                    new HttpRegistryFetcher(),
+                    registryCacheFile(),
+                    KnownExtensions.catalog());
+            var result = registry.list();
+            for (RegistryEntry e : result.entries()) {
+                System.out.printf("  %s %-22s %s%n",
+                        CliOutput.cyan("•"),
+                        e.id(),
+                        CliOutput.dim(e.description()));
+            }
             CliOutput.println();
-            CliOutput.warning("Remote extension registry is planned for roadmap M3.");
+            CliOutput.println(CliOutput.dim("  source: " + originLabel(result.origin())
+                    + " — add with 'vidocq extension add <id>'"));
         }
         return 0;
+    }
+
+    private static String originLabel(ExtensionRegistry.Origin origin) {
+        return switch (origin) {
+            case REMOTE  -> "remote registry";
+            case CACHE   -> "local cache";
+            case CATALOG -> "built-in catalog (offline)";
+        };
+    }
+
+    private static Path registryCacheFile() {
+        return Path.of(System.getProperty("user.home", "."))
+                .resolve(".vidocq").resolve("registry-cache.json");
     }
 
     private static int runExtensionAdd(Command.Extension.Add add) {
-        CliOutput.warning("'extension add' is not yet implemented (pom.xml manipulation — roadmap M3).");
-        CliOutput.println(CliOutput.dim("  Requested: " + String.join(", ", add.ids())));
-        return 0;
+        return editPom(add.ids(), true);
     }
 
     private static int runExtensionRemove(Command.Extension.Remove remove) {
-        CliOutput.warning("'extension remove' is not yet implemented (pom.xml manipulation — roadmap M3).");
-        CliOutput.println(CliOutput.dim("  Requested: " + String.join(", ", remove.ids())));
+        return editPom(remove.ids(), false);
+    }
+
+    private static int editPom(List<String> ids, boolean add) {
+        Path pomPath = Path.of("").toAbsolutePath().resolve("pom.xml");
+        if (!Files.isRegularFile(pomPath)) {
+            CliOutput.error("No pom.xml in the current directory — run from a Vidocq project root.");
+            return 1;
+        }
+        String pom;
+        try {
+            pom = Files.readString(pomPath);
+        } catch (IOException e) {
+            CliOutput.error("Could not read pom.xml: " + e.getMessage());
+            return 1;
+        }
+
+        boolean anyChange = false;
+        for (String id : ids) {
+            ExtensionCoordinate coord;
+            try {
+                coord = KnownExtensions.resolve(id);
+            } catch (IllegalArgumentException e) {
+                CliOutput.error("Invalid extension id '" + id + "': " + e.getMessage());
+                return 1;
+            }
+            PomEditor.Result result = add ? PomEditor.add(pom, coord) : PomEditor.remove(pom, coord);
+            pom = result.pom();
+            if (result.changed()) {
+                anyChange = true;
+                CliOutput.success((add ? "Added " : "Removed ") + id
+                        + CliOutput.dim("  (" + coord + ")"));
+                if (add && !KnownExtensions.isKnown(id)) {
+                    CliOutput.println(CliOutput.dim(
+                            "       ↳ not a known extension — resolved by convention; verify the coordinate."));
+                }
+            } else if (add) {
+                CliOutput.println("  " + CliOutput.dim("• " + id + " already present — skipped."));
+            } else {
+                CliOutput.warning(id + " not found in pom.xml — skipped.");
+            }
+        }
+
+        if (!anyChange) {
+            CliOutput.println();
+            CliOutput.info("No changes — pom.xml left untouched.");
+            return 0;
+        }
+        try {
+            Files.writeString(pomPath, pom);
+        } catch (IOException e) {
+            CliOutput.error("Could not write pom.xml: " + e.getMessage());
+            return 1;
+        }
+        CliOutput.println();
+        CliOutput.success("pom.xml updated.");
+        CliOutput.println(CliOutput.dim("  Run './mvnw package' to fetch the new dependencies."));
         return 0;
     }
 }

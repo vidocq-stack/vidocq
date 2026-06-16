@@ -223,8 +223,16 @@ public final class CliParser {
                 CliOutput.println();
                 CliOutput.println("Sub-commands:");
                 cmd("list [--installed|--available|--all]", "List extensions");
-                cmd("add <id...>",                          "Add extensions to pom.xml (roadmap M3)");
-                cmd("remove <id...>",                      "Remove extensions from pom.xml (roadmap M3)");
+                cmd("add <id...>",                          "Add extensions to the project's pom.xml");
+                cmd("remove <id...>",                       "Remove extensions from the project's pom.xml");
+                CliOutput.println();
+                CliOutput.println("Ids may be a short name (e.g. " + CliOutput.cyan("knock-health")
+                        + "), an explicit " + CliOutput.cyan("groupId:artifactId") + ",");
+                CliOutput.println("or any name (resolved as io.vidocq.runtime:vidocq-runtime-<id>-extension).");
+                CliOutput.println();
+                CliOutput.println("Examples:");
+                CliOutput.println("  " + CliOutput.cyan("vidocq extension list --available"));
+                CliOutput.println("  " + CliOutput.cyan("vidocq extension add cassini-rest knock-health"));
             }
             default -> CliOutput.warning("No detailed help for '" + topic + "'. Run 'vidocq help'.");
         }
