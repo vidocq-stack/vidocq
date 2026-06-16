@@ -20,14 +20,33 @@
 package io.vidocq.runtime.maven.dev;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class VidocqDevMojoTest {
+
+    @Test
+    void connectionReportFallsBackToClassesDirParentWhenBuildDirIsNull(@TempDir Path tmp) throws Exception {
+        VidocqDevMojo mojo = new VidocqDevMojo();
+        Path classes = Files.createDirectories(tmp.resolve("target/classes"));
+        mojo.setClassesDir(classes.toFile());
+        // buildDir deliberately left null (the bug Arago's vidocq:dev hit): must not NPE — the report
+        // falls back to the parent of the classes dir (target/classes → target).
+        mojo.reportConnectionInformation(Map.of(
+                "vidocq.pool.url", "jdbc:postgresql://localhost:5432/app",
+                "vidocq.pool.username", "app"));
+        Path report = tmp.resolve("target/vidocq-dev-services.properties");
+        assertTrue(Files.exists(report), "report written under the classes-dir parent (target)");
+        assertTrue(Files.readString(report).contains("datasource.default.url="));
+    }
 
     @Test
     void addsJdwpAgentWhenDebugEnabled() {

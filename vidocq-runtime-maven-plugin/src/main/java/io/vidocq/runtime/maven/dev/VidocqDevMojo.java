@@ -340,13 +340,17 @@ public class VidocqDevMojo extends AbstractMojo {
      * coordinates to {@code target/vidocq-dev-services.properties}, so an external SQL client can reach
      * the dev databases. No-op when no datasource was provisioned (e.g. only Keycloak ran).
      */
-    private void reportConnectionInformation(Map<String, String> collected) {
+    // package-private for the regression test on the buildDir fallback.
+    void reportConnectionInformation(Map<String, String> collected) {
         List<String> lines = DevServicesReport.consoleLines(collected);
         if (lines.isEmpty()) {
             return;
         }
         lines.forEach(getLog()::info);
-        Path file = buildDir.toPath().resolve("vidocq-dev-services.properties");
+        // buildDir is ${project.build.directory}; fall back to the parent of the (always-injected)
+        // classes dir (target/classes → target) when Maven did not inject it, so the report never NPEs.
+        File targetDir = buildDir != null ? buildDir : classesDir.getParentFile();
+        Path file = targetDir.toPath().resolve("vidocq-dev-services.properties");
         try {
             Files.createDirectories(file.getParent());
             Files.writeString(file, DevServicesReport.fileContent(collected));
