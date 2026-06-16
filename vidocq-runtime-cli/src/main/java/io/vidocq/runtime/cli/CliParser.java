@@ -21,6 +21,7 @@ public final class CliParser {
             case "help", "--help", "-h"       -> new Command.Help(args.length > 1 ? args[1] : null);
             case "start"                      -> parseStart(args, 1);
             case "dev"                        -> parseDev(args, 1);
+            case "doctor"                     -> parseDoctor(args, 1);
             case "create"                     -> parseCreate(args, 1);
             case "extension", "ext"           -> parseExtension(args, 1);
             default -> throw new CliException(
@@ -58,6 +59,17 @@ public final class CliParser {
             }
         }
         return new Command.Dev(port, debug);
+    }
+
+    private static Command.Doctor parseDoctor(String[] args, int from) {
+        boolean verbose = false;
+        for (int i = from; i < args.length; i++) {
+            switch (args[i]) {
+                case "--verbose", "-v" -> verbose = true;
+                default                -> unknownOpt(args[i], "doctor");
+            }
+        }
+        return new Command.Doctor(verbose);
     }
 
     private static Command.Create parseCreate(String[] args, int from) {
@@ -130,6 +142,7 @@ public final class CliParser {
         cmd("info",             "Display runtime, JVM, and extension information.");
         cmd("start",            "Start the Vidocq runtime.");
         cmd("dev",              "Start in development mode (live reload — roadmap M2).");
+        cmd("doctor",           "Run environment & project health checks.");
         cmd("create",           "Scaffold a new Vidocq Maven application.");
         cmd("extension list",   "List installed (and optionally available) extensions.");
         cmd("extension add",    "Add extensions to the current project's pom.xml.");
@@ -157,6 +170,16 @@ public final class CliParser {
                 opt("--debug",        "Enable remote debug on port 5005");
                 CliOutput.println();
                 CliOutput.println(CliOutput.dim("Live class-reload is planned for roadmap milestone M2."));
+            }
+            case "doctor" -> {
+                CliOutput.println(CliOutput.bold("vidocq doctor") + " — Environment & project health checks");
+                CliOutput.println();
+                CliOutput.println("Runs a series of checks (Java version, JAVA_HOME, Maven wrapper,");
+                CliOutput.println("project layout, extensions) and prints a report. Exits non-zero if");
+                CliOutput.println("any check fails.");
+                CliOutput.println();
+                CliOutput.println("Options:");
+                opt("--verbose, -v", "Print extra details (per-status summary, minimum Java version)");
             }
             case "create" -> {
                 CliOutput.println(CliOutput.bold("vidocq create") + " — Scaffold a new Vidocq project");

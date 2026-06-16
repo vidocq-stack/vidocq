@@ -23,6 +23,10 @@ public sealed interface Command {
         static Dev defaults() { return new Dev(8080, false); }
     }
 
+    record Doctor(boolean verbose) implements Command {
+        static Doctor defaults() { return new Doctor(false); }
+    }
+
     record Create(
             String name,
             String groupId,

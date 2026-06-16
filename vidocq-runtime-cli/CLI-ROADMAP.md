@@ -21,6 +21,7 @@ Zero external dependencies — hand-rolled arg parser, pure Java 25, JPMS-native
 | `vidocq extension list [--installed\|--available\|--all]` | ✅ | ServiceLoader scan |
 | `vidocq extension add <id…>` | 🔲 stub | Prints roadmap notice |
 | `vidocq extension remove <id…>` | 🔲 stub | Prints roadmap notice |
+| `vidocq doctor [--verbose]` | ✅ M6 | Environment & project health checks (see M6) |
 
 ---
 
@@ -66,6 +67,34 @@ Zero external dependencies — hand-rolled arg parser, pure Java 25, JPMS-native
   sourced by `~/.bashrc` / `~/.zshrc`.
 - **Plugin SPI** — `VidocqCliPlugin` service interface so third-party modules can register  
   extra top-level commands without forking the CLI (discovered via ServiceLoader).
+
+---
+
+## Milestone M6 — Diagnostics (`vidocq doctor`) ✅ delivered
+
+`vidocq doctor` inspects the local environment and current project, prints a ✔/⚠/✘
+report, and exits non-zero when a blocking issue is found — so it doubles as a CI
+pre-flight gate (`vidocq doctor && vidocq build`).
+
+| Check | OK | WARN | FAIL |
+|---|---|---|---|
+| **Java version** | running JVM ≥ minimum (25) | — | below minimum |
+| **JAVA_HOME** | set & is a directory | unset / not a directory | — |
+| **Maven wrapper** | `mvnw`/`mvnw.cmd` in cwd or an ancestor | none found | — |
+| **Vidocq project** | `pom.xml` references `io.vidocq.runtime` | no pom / not a Vidocq pom | — |
+| **Extensions** | ≥ 1 provider on the classpath | none found | — |
+
+- **`--verbose`, `-v`** — append a per-status summary footer and the minimum Java version.
+- **Exit code** — `1` if any check FAILs, otherwise `0`; warnings never fail the command.
+- **Testability** — checks live in a pure `doctor.Diagnostics` engine driven by an injectable
+  `DoctorContext` record. `CommandRunner` gathers the (impure) facts — JVM version, env,
+  filesystem probes, ServiceLoader scan — then hands them to the pure engine and renders the
+  `Diagnostic` list. The engine is fully unit-tested without touching the filesystem.
+
+### Future checks (backlog)
+- Network reachability of the extension registry (depends on M3).
+- `vidocq.properties` validity / unknown-key warnings (depends on M5 config model).
+- Disk space & write permissions for the build output directory.
 
 ---
 

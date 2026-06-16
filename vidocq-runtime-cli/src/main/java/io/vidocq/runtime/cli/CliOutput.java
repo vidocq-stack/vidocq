@@ -29,6 +29,7 @@ public final class CliOutput {
     public static String bold(String s)   { return ANSI ? BOLD   + s + RESET : s; }
     public static String dim(String s)    { return ANSI ? DIM    + s + RESET : s; }
     public static String green(String s)  { return ANSI ? GREEN  + s + RESET : s; }
+    public static String red(String s)    { return ANSI ? RED    + s + RESET : s; }
     public static String cyan(String s)   { return ANSI ? CYAN   + s + RESET : s; }
     public static String yellow(String s) { return ANSI ? YELLOW + s + RESET : s; }
 

@@ -1,9 +1,15 @@
 package io.vidocq.runtime.cli;
 
+import io.vidocq.runtime.cli.doctor.Diagnostic;
+import io.vidocq.runtime.cli.doctor.Diagnostics;
+import io.vidocq.runtime.cli.doctor.DoctorContext;
 import io.vidocq.runtime.cli.scaffold.ProjectScaffolder;
 import io.vidocq.runtime.core.VidocqBootstrap;
 import io.vidocq.runtime.spi.VidocqExtension;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.ServiceLoader;
 
@@ -23,6 +29,7 @@ public final class CommandRunner {
             case Command.Help h                -> runHelp(h);
             case Command.Start s               -> runStart(s);
             case Command.Dev d                 -> runDev(d);
+            case Command.Doctor doc            -> runDoctor(doc);
             case Command.Create c              -> runCreate(c);
             case Command.Extension e           -> switch (e) {
                 case Command.Extension.Listing l -> runExtensionList(l);
@@ -97,6 +104,83 @@ public final class CommandRunner {
         }
         VidocqBootstrap.create().configure().start().awaitShutdown();
         return 0;
+    }
+
+    private static int runDoctor(Command.Doctor doctor) {
+        CliOutput.println(CliOutput.bold("Vidocq doctor — environment & project checks"));
+        CliOutput.println();
+
+        var diagnostics = Diagnostics.run(gatherDoctorContext());
+        for (Diagnostic d : diagnostics) {
+            System.out.printf("  %s %-16s %s%n", symbol(d.status()), d.name(), d.detail());
+            if (d.hint() != null && (doctor.verbose() || d.status() != Diagnostic.Status.OK)) {
+                CliOutput.println("       " + CliOutput.dim("↳ " + d.hint()));
+            }
+        }
+
+        int exit = Diagnostics.exitCode(diagnostics);
+        var summary = Diagnostics.summarize(diagnostics);
+        CliOutput.println();
+        if (exit == 0) {
+            CliOutput.success("No blocking issues found.");
+        } else {
+            CliOutput.error("One or more checks failed — see the hints above.");
+        }
+        CliOutput.println(CliOutput.dim("  " + summary.total() + " checks — "
+                + summary.ok() + " ok, " + summary.warn() + " warning(s), "
+                + summary.fail() + " failed"));
+        if (doctor.verbose()) {
+            CliOutput.println(CliOutput.dim("  Minimum Java: " + Diagnostics.MINIMUM_JAVA_VERSION));
+        }
+        return exit;
+    }
+
+    private static String symbol(Diagnostic.Status status) {
+        return switch (status) {
+            case OK   -> CliOutput.green("✔");
+            case WARN -> CliOutput.yellow("⚠");
+            case FAIL -> CliOutput.red("✘");
+        };
+    }
+
+    private static DoctorContext gatherDoctorContext() {
+        Path cwd = Path.of("").toAbsolutePath();
+        String javaHome = System.getenv("JAVA_HOME");
+        boolean javaHomeDir = javaHome != null && Files.isDirectory(Path.of(javaHome));
+        Path pom = cwd.resolve("pom.xml");
+        boolean pomPresent = Files.isRegularFile(pom);
+        return new DoctorContext(
+                Runtime.version().feature(),
+                System.getProperty("java.version"),
+                Diagnostics.MINIMUM_JAVA_VERSION,
+                javaHome,
+                javaHomeDir,
+                hasMavenWrapper(cwd),
+                pomPresent,
+                pomPresent && pomReferencesVidocq(pom),
+                extensionCount());
+    }
+
+    private static boolean hasMavenWrapper(Path start) {
+        for (Path dir = start; dir != null; dir = dir.getParent()) {
+            if (Files.isRegularFile(dir.resolve("mvnw"))
+                    || Files.isRegularFile(dir.resolve("mvnw.cmd"))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean pomReferencesVidocq(Path pom) {
+        try {
+            return Files.readString(pom).contains("io.vidocq.runtime");
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    private static int extensionCount() {
+        return (int) ServiceLoader.load(VidocqExtension.class).stream().count();
     }
 
     private static int runCreate(Command.Create create) {
