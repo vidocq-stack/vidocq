@@ -16,7 +16,7 @@ Zero external dependencies — hand-rolled arg parser, pure Java 25, JPMS-native
 | `vidocq info` | ✅ | JVM info + ServiceLoader extension scan |
 | `vidocq help [command]` | ✅ | Top-level + per-command help |
 | `vidocq start [--port] [--config] [--debug]` | ✅ | Delegates to `VidocqBootstrap` |
-| `vidocq dev [--port] [--debug]` | ✅ stub | Starts normally; live reload deferred to M2 |
+| `vidocq dev [--port] [--profile] [--debug]` | ✅ M2 | Boots + watches sources; in-process reload on change (see M2) |
 | `vidocq create --name … [-g] [--package] [-x …]` | ✅ | Scaffolds pom.xml + App + module-info |
 | `vidocq extension list [--installed\|--available\|--all]` | ✅ | ServiceLoader scan |
 | `vidocq extension add <id…>` | 🔲 stub | Prints roadmap notice |
@@ -25,15 +25,32 @@ Zero external dependencies — hand-rolled arg parser, pure Java 25, JPMS-native
 
 ---
 
-## Milestone M2 — Dev mode & live reload
+## Milestone M2 — Dev mode & live reload ✅ delivered
 
-- **`vidocq dev`** — start with class-file watching via `java.nio.file.WatchService`  
-  Recompile + restart changed modules without full JVM restart.  
-  Virtual thread per watched directory tree.
-- **`--profile <name>`** — activate a named config profile (`dev`, `test`, `prod`);  
-  maps to `vidocq-<profile>.properties` layered on top of `vidocq.properties`.
-- **`--debug`** — wire JDWP suspend=y at launch; print connection hint.
-- ANSI progress spinner during boot (virtual-thread driven, cancels on first log line).
+- **`vidocq dev`** — boots the runtime in-process, then watches the project's source
+  roots (`src/main/java`, `src/main/resources`, and `target/classes` when present) via
+  `java.nio.file.WatchService`, one **virtual thread per watched tree** with recursive
+  auto-registration of new directories. Changes are **debounced** (250 ms) and trigger an
+  **in-process reload**: the current `VidocqBootstrap` is shut down and a fresh one is
+  configured + started in the same JVM. This re-applies configuration and resources and
+  re-runs extension discovery.
+  > **Scope (honest):** the reload re-applies config/resources and re-runs the boot
+  > lifecycle in the *same* classloader — it does **not** hot-swap changed `.class` bytes.
+  > Recompile-and-reclassload (à la the `vidocq:dev` Maven mojo, which forks a child JVM)
+  > is a future enhancement tracked separately.
+- **`--profile <name>` / `-P`** — activates a named config profile (default `dev`).
+  Layers `vidocq-<profile>.properties` on top of `vidocq.properties` and publishes the
+  merged values as system properties (highest config ordinal), so explicit `-D…`
+  overrides still win. Reports how many config files were layered.
+- **`--debug`** — prints a JDWP connection hint (`address=*:5005`, `suspend=n`) so a
+  debugger can attach to the dev JVM.
+- ANSI progress **spinner** during boot (virtual-thread driven; auto-disabled when there
+  is no console or `NO_COLOR` is set).
+
+**Components** (all pure/injectable for unit testing): `dev/Profiles` (config layering),
+`dev/DebugOptions` (JDWP string), `dev/Reloads` (extension-change filter),
+`dev/Debouncer` (clock-injectable), `dev/SourceWatcher` (`WatchService` + vthreads),
+`dev/BootSpinner` (ANSI spinner). Supervisor logic lives in `CommandRunner.runDev`.
 
 ---
 

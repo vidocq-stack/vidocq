@@ -1,5 +1,28 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
 package io.vidocq.runtime.cli;
 
+import io.vidocq.runtime.cli.dev.BootSpinner;
+import io.vidocq.runtime.cli.dev.DebugOptions;
+import io.vidocq.runtime.cli.dev.Profiles;
+import io.vidocq.runtime.cli.dev.SourceWatcher;
 import io.vidocq.runtime.cli.doctor.Diagnostic;
 import io.vidocq.runtime.cli.doctor.Diagnostics;
 import io.vidocq.runtime.cli.doctor.DoctorContext;
@@ -11,7 +34,11 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
+import java.util.List;
 import java.util.ServiceLoader;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * Dispatches a parsed {@link Command} to its implementation.
@@ -95,15 +122,101 @@ public final class CommandRunner {
     }
 
     private static int runDev(Command.Dev dev) {
-        CliOutput.info("Starting Vidocq in " + CliOutput.bold("dev mode") + " on port " + dev.port() + "…");
-        CliOutput.warning("Live class-reload is planned for roadmap M2 — starting normally for now.");
+        Path projectDir = Path.of("").toAbsolutePath();
+        CliOutput.info("Starting Vidocq in " + CliOutput.bold("dev mode")
+                + " on port " + dev.port() + " (profile: " + dev.profile() + ")…");
         System.setProperty("vidocq.http.port", String.valueOf(dev.port()));
-        System.setProperty("vidocq.profile", "dev");
+        applyProfile(dev.profile(), projectDir);
+
         if (dev.debug()) {
-            CliOutput.warning("Debug mode active — attach your debugger to port 5005.");
+            DebugOptions debug = DebugOptions.defaults();
+            CliOutput.warning(debug.hint());
+            CliOutput.println(CliOutput.dim("  " + debug.agentArgument()));
         }
-        VidocqBootstrap.create().configure().start().awaitShutdown();
+
+        var current = new AtomicReference<VidocqBootstrap>();
+        bootRuntime(current);
+
+        var reloadLock = new ReentrantLock();
+        SourceWatcher watcher = new SourceWatcher(
+                watchRoots(projectDir),
+                () -> reload(current, dev, projectDir, reloadLock));
+        watcher.start();
+        if (watcher.watchableRoots().isEmpty()) {
+            CliOutput.warning("No source directories to watch — running without live reload.");
+        } else {
+            CliOutput.info("Watching " + watcher.watchableRoots().size()
+                    + " path(s) for changes. Press Ctrl+C to stop.");
+        }
+
+        var done = new CountDownLatch(1);
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            watcher.close();
+            done.countDown();
+        }, "vidocq-dev-stop"));
+        try {
+            done.await();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
         return 0;
+    }
+
+    private static void bootRuntime(AtomicReference<VidocqBootstrap> ref) {
+        BootSpinner spinner = new BootSpinner("Booting Vidocq…");
+        spinner.start();
+        try {
+            ref.set(VidocqBootstrap.create().configure().start());
+        } finally {
+            spinner.stop();
+        }
+    }
+
+    private static void reload(AtomicReference<VidocqBootstrap> ref,
+                               Command.Dev dev, Path projectDir, ReentrantLock lock) {
+        lock.lock();
+        try {
+            CliOutput.println();
+            CliOutput.info("Change detected — reloading runtime…");
+            VidocqBootstrap previous = ref.getAndSet(null);
+            if (previous != null) {
+                try {
+                    previous.shutdown();
+                } catch (Exception e) {
+                    CliOutput.warning("Reload: error during shutdown — " + e.getMessage());
+                }
+            }
+            applyProfile(dev.profile(), projectDir);
+            bootRuntime(ref);
+            CliOutput.success("Reloaded.");
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    private static List<Path> watchRoots(Path projectDir) {
+        return List.of(
+                projectDir.resolve("src"),
+                projectDir.resolve("target").resolve("classes"));
+    }
+
+    private static void applyProfile(String profile, Path projectDir) {
+        if (profile == null || profile.isBlank()) {
+            return;
+        }
+        System.setProperty("vidocq.profile", profile);
+        var files = Profiles.sourceFiles(projectDir, profile);
+        if (files.isEmpty()) {
+            return;
+        }
+        // System properties are Vidocq's highest-precedence config source, so layering the
+        // profile there makes its values win without overriding an explicit -D set by the user.
+        Profiles.load(files).forEach((key, value) -> {
+            if (System.getProperty(key) == null) {
+                System.setProperty(key, value);
+            }
+        });
+        CliOutput.info("Profile '" + profile + "' — layered " + files.size() + " config file(s).");
     }
 
     private static int runDoctor(Command.Doctor doctor) {

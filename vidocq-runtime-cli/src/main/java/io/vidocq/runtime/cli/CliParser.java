@@ -1,3 +1,22 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
 package io.vidocq.runtime.cli;
 
 import java.nio.file.Path;
@@ -50,15 +69,17 @@ public final class CliParser {
 
     private static Command.Dev parseDev(String[] args, int from) {
         int port = 8080;
+        String profile = "dev";
         boolean debug = false;
         for (int i = from; i < args.length; i++) {
             switch (args[i]) {
-                case "--port", "-p" -> port  = parseInt(args, ++i, "--port");
-                case "--debug"      -> debug = true;
-                default             -> unknownOpt(args[i], "dev");
+                case "--port", "-p"    -> port    = parseInt(args, ++i, "--port");
+                case "--profile", "-P" -> profile = value(args, ++i, "--profile");
+                case "--debug"         -> debug   = true;
+                default                -> unknownOpt(args[i], "dev");
             }
         }
-        return new Command.Dev(port, debug);
+        return new Command.Dev(port, profile, debug);
     }
 
     private static Command.Doctor parseDoctor(String[] args, int from) {
@@ -141,7 +162,7 @@ public final class CliParser {
         cmd("version",          "Print the CLI and runtime version.");
         cmd("info",             "Display runtime, JVM, and extension information.");
         cmd("start",            "Start the Vidocq runtime.");
-        cmd("dev",              "Start in development mode (live reload — roadmap M2).");
+        cmd("dev",              "Start in development mode (watch sources, live config reload).");
         cmd("doctor",           "Run environment & project health checks.");
         cmd("create",           "Scaffold a new Vidocq Maven application.");
         cmd("extension list",   "List installed (and optionally available) extensions.");
@@ -165,11 +186,14 @@ public final class CliParser {
             case "dev" -> {
                 CliOutput.println(CliOutput.bold("vidocq dev") + " — Development mode");
                 CliOutput.println();
-                CliOutput.println("Options:");
-                opt("--port, -p <n>", "HTTP listening port (default: 8080)");
-                opt("--debug",        "Enable remote debug on port 5005");
+                CliOutput.println("Starts the runtime and watches your sources; a reload-worthy change");
+                CliOutput.println("(.java/.class/.properties/.xml/.yml) restarts the runtime context so");
+                CliOutput.println("configuration and resources are re-applied without leaving the CLI.");
                 CliOutput.println();
-                CliOutput.println(CliOutput.dim("Live class-reload is planned for roadmap milestone M2."));
+                CliOutput.println("Options:");
+                opt("--port, -p <n>",      "HTTP listening port (default: 8080)");
+                opt("--profile, -P <name>","Config profile to layer (default: dev)");
+                opt("--debug",             "Print JDWP connection hint for port 5005");
             }
             case "doctor" -> {
                 CliOutput.println(CliOutput.bold("vidocq doctor") + " — Environment & project health checks");
