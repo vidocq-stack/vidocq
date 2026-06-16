@@ -171,8 +171,33 @@ stage it internally (api+codegen+registry first, then devservice, then docs).
 - Names = **derived** (`vidocq.pool.<name>.*`) + `@VidocqDataSources`; no enumeration property.
 - Declaration follows Quarkus: structure build-time (two sources: static properties +
   annotation), values runtime via MP Config.
-- Publication = compile-time codegen holders backed by `NamedDataSourceRegistry`; Vauban and
-  mansart untouched; **all mechanism lives in the Vidocq extension**.
+- Publication = compile-time codegen holders backed by `NamedDataSourceRegistry`; mansart
+  untouched; **all mechanism lives in the Vidocq extension**. (Intended Vauban-untouched too —
+  one small Vauban CDI fix proved necessary, see §12.)
 - Connection info = console block ("Connection information", not tool-specific) **and**
   `target/vidocq-dev-services.properties`; port random default, fixed+reuse opt-in.
-- One PR on vidocq.
+- One PR on vidocq **plus** one small Vauban fix (separate repo/branch, see §12).
+
+## 12. Implementation notes (findings while building)
+
+Two non-obvious things surfaced only when the example exercised the whole chain under Vauban
+(not Weld), and are worth recording:
+
+1. **`@Named`-only beans pollute `@Default`.** CDI 4.1 §2.5.2 assumes `@Default` for a bean whose
+   only qualifier is `@Named`, so a generated `@Named("X")` `DataSource` holder would also answer
+   an unqualified `@Inject DataSource` — ambiguous with the `@Default` pool. Fix: the codegen marks
+   every holder with a no-value `@ManagedDataSource` qualifier (in the mansart-pool API) so it stays
+   out of the `@Default` candidate set, while `@Inject @Named("X")` and `@Repository(dataStore)`
+   still select it.
+
+2. **Vauban added `@Default` to `@Named` *injection points* too** (`QualifierResolver`), which is
+   the bean-side rule, not the injection-point rule (§5.2.2): a `@Named("X")` injection point is
+   already qualified. With the marker in place this made the holder unsatisfiable. Fixed in
+   vauban-core (treat any qualifier, including `@Named`, as explicit at an injection point) on
+   branch `fix/named-injection-point-default-qualifier`. **The example build depends on that fix.**
+
+3. **Generated holders must `implements javax.sql.DataSource` directly.** The Vauban compile-time
+   indexer reads a bean's types from its own source element and does not walk the interfaces of an
+   *external* abstract superclass, so `extends AbstractNamedDataSourceHolder` alone left the holder
+   with no `DataSource` bean type. The codegen now emits the interface directly (impls stay
+   inherited).
