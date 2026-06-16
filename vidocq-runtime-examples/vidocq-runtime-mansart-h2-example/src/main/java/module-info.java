@@ -56,6 +56,13 @@ module io.vidocq.runtime.examples.mansart {
 
     requires io.vidocq.mansart.data.core;
 
+    // Schema migration — the Flyway extension (a VidocqExtension via ServiceLoader) migrates the
+    // @Default datasource using scripts in db/migration. Named-DS migration is opt-in and not used here.
+    requires io.vidocq.runtime.extensions.essentials.migration;
+    requires io.vidocq.runtime.extensions.essentials.migration.flyway;
+    // Flyway (automatic module) reads SQL resources; a named module encapsulates them, so open the package.
+    opens db.migration;
+
     // JAX-RS reflects on resource classes; JSON-B reflects on the Product record.
     opens io.vidocq.runtime.examples.mansart;
 }

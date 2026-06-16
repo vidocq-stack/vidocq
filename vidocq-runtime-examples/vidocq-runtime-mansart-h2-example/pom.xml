@@ -139,6 +139,18 @@
             <groupId>io.vidocq.vauban</groupId>
             <artifactId>vauban-indexer</artifactId>
         </dependency>
+
+        <!-- Schema migration extensions — Flyway manages the @Default datasource migrations. -->
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.essentials</groupId>
+            <artifactId>vidocq-runtime-migration-extension</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.essentials</groupId>
+            <artifactId>vidocq-runtime-flyway-migration-extension</artifactId>
+            <version>${project.version}</version>
+        </dependency>
     </dependencies>
 
     <build>
