@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -81,6 +82,34 @@ class MigrationExtensionTest {
         var liq = new FakeMigrator("liquibase");
         assertThrows(IllegalStateException.class,
                 () -> MigrationExtension.select(List.of(fly, liq), Optional.empty()));
+    }
+
+    @Test
+    void selectDisambiguatesByEngineWhenSeveral() {
+        var fly = new FakeMigrator("flyway");
+        var liq = new FakeMigrator("liquibase");
+        assertSame(liq, MigrationExtension.select(List.of(fly, liq), Optional.of("liquibase")));
+    }
+
+    @Test
+    void namedDatasourceWithoutLocationsIsSkipped() {
+        // a named datasource present in the pool but with NO vidocq.migration.<name>.locations is opt-out.
+        var targets = MigrationExtension.buildTargets(MapConfig.of(Map.of(
+                "vidocq.pool.url", "jdbc:h2:mem:def",
+                "vidocq.pool.audit.url", "jdbc:h2:mem:audit")));
+        assertEquals(List.of("default"),
+                targets.stream().map(MigrationTarget::dataSourceName).toList());
+    }
+
+    @Test
+    void disabledShortCircuitsBeforeBackendSelection() {
+        // enabled=false must skip everything — even though a pool.url is set and NO backend is on the
+        // path, which would otherwise make configure() throw at select().
+        MigrationExtension ext = new MigrationExtension();
+        ext.configure(MapConfig.of(Map.of(
+                "vidocq.migration.enabled", "false",
+                "vidocq.pool.url", "jdbc:h2:mem:x")));
+        assertDoesNotThrow(() -> ext.beforeStart(null));
     }
 
     // ── test doubles ─────────────────────────────────────────────────────────

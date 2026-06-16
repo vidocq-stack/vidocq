@@ -40,10 +40,12 @@
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-core</artifactId>
         </dependency>
+        <!-- Bundled (NOT optional): module-info requires flyway.database.postgresql, so consumers must
+             get it transitively, otherwise the flyway extension fails module-path resolution at boot
+             (FindException). Tiny Flyway plugin jar; harmless for H2-only apps. -->
         <dependency>
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-database-postgresql</artifactId>
-            <optional>true</optional>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
