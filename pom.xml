@@ -106,6 +106,21 @@
                 <version>${project.version}</version>
             </dependency>
             <dependency>
+                <groupId>io.vidocq.runtime.extensions.essentials</groupId>
+                <artifactId>vidocq-runtime-flyway-migration-extension</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.flywaydb</groupId>
+                <artifactId>flyway-core</artifactId>
+                <version>${flyway.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.flywaydb</groupId>
+                <artifactId>flyway-database-postgresql</artifactId>
+                <version>${flyway.version}</version>
+            </dependency>
+            <dependency>
                 <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-ravel-config-extension</artifactId>
                 <version>${project.version}</version>
