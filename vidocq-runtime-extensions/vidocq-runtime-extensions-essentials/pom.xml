@@ -20,6 +20,7 @@
         <module>vidocq-runtime-chappe-webserver-extension</module>
         <module>vidocq-runtime-migration-extension</module>
         <module>vidocq-runtime-flyway-migration-extension</module>
+        <module>vidocq-runtime-liquibase-migration-extension</module>
     </modules>
 
     <build>

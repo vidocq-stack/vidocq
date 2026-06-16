@@ -111,6 +111,16 @@
                 <version>${project.version}</version>
             </dependency>
             <dependency>
+                <groupId>io.vidocq.runtime.extensions.essentials</groupId>
+                <artifactId>vidocq-runtime-liquibase-migration-extension</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.liquibase</groupId>
+                <artifactId>liquibase-core</artifactId>
+                <version>${liquibase.version}</version>
+            </dependency>
+            <dependency>
                 <groupId>org.flywaydb</groupId>
                 <artifactId>flyway-core</artifactId>
                 <version>${flyway.version}</version>
