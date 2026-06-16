@@ -58,6 +58,19 @@
             <version>2.3.232</version>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- JDBC driver needed at test runtime for the Postgres IT (Liquibase only contains the
+             strategy, not the driver itself). -->
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <version>42.7.10</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
     <build>
         <plugins>
