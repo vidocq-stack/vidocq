@@ -22,6 +22,8 @@ Zero external dependencies — hand-rolled arg parser, pure Java 25, JPMS-native
 | `vidocq extension add <id…>` | ✅ M3 | Injects `<dependency>` into pom.xml (idempotent) |
 | `vidocq extension remove <id…>` | ✅ M3 | Removes the matching `<dependency>` from pom.xml |
 | `vidocq doctor [--verbose]` | ✅ M6 | Environment & project health checks (see M6) |
+| `vidocq build [type] [-o] [--skip-tests] [--dry-run]` | ✅ M4 | Wraps Maven `package`/`jlink`/`jpackage`/`docker` (see M4) |
+| `vidocq clean [-o] [--dry-run]` | ✅ M4 | Wraps `mvn clean` |
 
 ---
 
@@ -86,15 +88,35 @@ dependency XML), `ext/RegistryEntry`, `ext/KnownExtensions` (catalog + resolver)
 
 ---
 
-## Milestone M4 — Build & packaging
+## Milestone M4 — Build & packaging ✅ delivered
 
-| Sub-command | Description |
-|---|---|
-| `vidocq build` | Full `./mvnw package` wrapper with coloured output |
-| `vidocq build uber-jar` | Trigger `vidocq:uber-jar` Maven goal |
-| `vidocq build jlink` | Trigger `vidocq:jlink` (see `JLINK.md`) |
-| `vidocq build native` | GraalVM `native-image` via `vidocq:native` goal (future) |
-| `vidocq clean` | `./mvnw clean` |
+Thin, coloured wrappers around the real `vidocq-runtime-maven-plugin` goals
+(prefix `vidocq`). The CLI resolves the project `mvnw` wrapper (walking the cwd
+and its ancestors) and falls back to `mvn` on the `PATH`; stdio is inherited so
+Maven's own output streams straight to the terminal.
+
+| Sub-command | Maven invocation | Description |
+|---|---|---|
+| `vidocq build` | `mvn package` | Standalone distribution ZIP |
+| `vidocq build jlink` | `mvn package vidocq:jlink` | Self-contained jlink runtime image (see `JLINK.md`) |
+| `vidocq build jpackage` | `mvn package vidocq:jpackage` | Native installer (.dmg/.deb/.msi) or app-image |
+| `vidocq build docker` | `mvn package vidocq:docker` | Dockerfile around the jlink image |
+| `vidocq clean` | `mvn clean` | Remove build output |
+
+Shared options for `build`/`clean`: `--offline, -o` (Maven `-o`),
+`--skip-tests` (build only, `-DskipTests`), `--dry-run` (print the resolved
+command without running Maven), and `-- <args…>` to pass any extra arguments
+straight through to Maven.
+
+> The original roadmap listed speculative `uber-jar`/`native` goals; those goals
+> do not exist in the Maven plugin. Distribution packaging is the `package`
+> goal, native installers are `jpackage`, and GraalVM `native-image` remains a
+> future addition (no `vidocq:native` goal yet).
+
+**Design (testability-first):** `build/BuildType` (token → real goals),
+`build/MavenInvocation` (pure command-line assembly), `build/MavenLauncher`
+(executable resolution + `ProcessBuilder`). Covered by `BuildTypeTest`,
+`MavenInvocationTest`, `MavenLauncherTest`, `CliParserBuildTest`.
 
 ---
 

@@ -19,6 +19,8 @@
  */
 package io.vidocq.runtime.cli;
 
+import io.vidocq.runtime.cli.build.BuildType;
+
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -42,6 +44,8 @@ public final class CliParser {
             case "dev"                        -> parseDev(args, 1);
             case "doctor"                     -> parseDoctor(args, 1);
             case "create"                     -> parseCreate(args, 1);
+            case "build"                      -> parseBuild(args, 1);
+            case "clean"                      -> parseClean(args, 1);
             case "extension", "ext"           -> parseExtension(args, 1);
             default -> throw new CliException(
                     "Unknown command '" + args[0] + "'. Run 'vidocq help' for usage.");
@@ -111,6 +115,51 @@ public final class CliParser {
         return new Command.Create(name, gid, p, Set.copyOf(extensions));
     }
 
+    private static Command.Build parseBuild(String[] args, int from) {
+        BuildType type = BuildType.PACKAGE;
+        boolean offline = false, skipTests = false, dryRun = false;
+        List<String> passthrough = new ArrayList<>();
+        int i = from;
+        // An optional leading non-flag token selects the build flavour.
+        if (i < args.length && !args[i].startsWith("-")) {
+            try {
+                type = BuildType.fromToken(args[i++]);
+            } catch (IllegalArgumentException e) {
+                throw new CliException(e.getMessage());
+            }
+        }
+        for (; i < args.length; i++) {
+            switch (args[i]) {
+                case "--offline", "-o" -> offline   = true;
+                case "--skip-tests"    -> skipTests = true;
+                case "--dry-run"       -> dryRun    = true;
+                case "--"              -> { passthrough.addAll(rest(args, i + 1)); i = args.length; }
+                default                -> unknownOpt(args[i], "build");
+            }
+        }
+        return new Command.Build(type, offline, skipTests, dryRun, List.copyOf(passthrough));
+    }
+
+    private static Command.Clean parseClean(String[] args, int from) {
+        boolean offline = false, dryRun = false;
+        List<String> passthrough = new ArrayList<>();
+        for (int i = from; i < args.length; i++) {
+            switch (args[i]) {
+                case "--offline", "-o" -> offline = true;
+                case "--dry-run"       -> dryRun  = true;
+                case "--"              -> { passthrough.addAll(rest(args, i + 1)); i = args.length; }
+                default                -> unknownOpt(args[i], "clean");
+            }
+        }
+        return new Command.Clean(offline, dryRun, List.copyOf(passthrough));
+    }
+
+    private static List<String> rest(String[] args, int from) {
+        List<String> out = new ArrayList<>();
+        for (int i = from; i < args.length; i++) out.add(args[i]);
+        return out;
+    }
+
     private static Command parseExtension(String[] args, int from) {
         if (from >= args.length) return Command.Extension.Listing.defaults();
         return switch (args[from]) {
@@ -165,6 +214,8 @@ public final class CliParser {
         cmd("dev",              "Start in development mode (watch sources, live config reload).");
         cmd("doctor",           "Run environment & project health checks.");
         cmd("create",           "Scaffold a new Vidocq Maven application.");
+        cmd("build [type]",     "Build/package the project (package, jlink, jpackage, docker).");
+        cmd("clean",            "Remove build output (mvn clean).");
         cmd("extension list",   "List installed (and optionally available) extensions.");
         cmd("extension add",    "Add extensions to the current project's pom.xml.");
         cmd("extension remove", "Remove extensions from the current project's pom.xml.");
@@ -217,6 +268,37 @@ public final class CliParser {
                 CliOutput.println("Example:");
                 CliOutput.println("  " + CliOutput.cyan(
                         "vidocq create --name my-api -g com.acme -x rest -x health"));
+            }
+            case "build" -> {
+                CliOutput.println(CliOutput.bold("vidocq build") + " — Build & package the project");
+                CliOutput.println();
+                CliOutput.println("Wraps the Vidocq Maven plugin. With no type it runs the package");
+                CliOutput.println("lifecycle phase; a type layers the matching plugin goal on top.");
+                CliOutput.println();
+                CliOutput.println("Types:");
+                cmd("package  (default)", "Standalone distribution ZIP (mvn package)");
+                cmd("jlink",              "Self-contained jlink runtime image (vidocq:jlink)");
+                cmd("jpackage",           "Native installer / app-image (vidocq:jpackage)");
+                cmd("docker",             "Dockerfile around the jlink image (vidocq:docker)");
+                CliOutput.println();
+                CliOutput.println("Options:");
+                opt("--offline, -o",  "Run Maven offline (-o)");
+                opt("--skip-tests",   "Skip tests (-DskipTests)");
+                opt("--dry-run",      "Print the Maven command without running it");
+                opt("-- <args...>",   "Pass everything after -- straight to Maven");
+                CliOutput.println();
+                CliOutput.println("Example:");
+                CliOutput.println("  " + CliOutput.cyan("vidocq build jlink --skip-tests"));
+            }
+            case "clean" -> {
+                CliOutput.println(CliOutput.bold("vidocq clean") + " — Remove build output");
+                CliOutput.println();
+                CliOutput.println("Runs 'mvn clean' in the current project.");
+                CliOutput.println();
+                CliOutput.println("Options:");
+                opt("--offline, -o", "Run Maven offline (-o)");
+                opt("--dry-run",     "Print the Maven command without running it");
+                opt("-- <args...>",  "Pass everything after -- straight to Maven");
             }
             case "extension" -> {
                 CliOutput.println(CliOutput.bold("vidocq extension") + " — Manage extensions");

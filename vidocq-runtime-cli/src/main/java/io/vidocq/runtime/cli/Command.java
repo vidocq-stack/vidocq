@@ -19,7 +19,10 @@
  */
 package io.vidocq.runtime.cli;
 
+import io.vidocq.runtime.cli.build.BuildType;
+
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -51,6 +54,20 @@ public sealed interface Command {
             String groupId,
             String pkg,
             Set<String> extensions
+    ) implements Command {}
+
+    record Build(
+            BuildType type,
+            boolean offline,
+            boolean skipTests,
+            boolean dryRun,
+            List<String> passthrough
+    ) implements Command {}
+
+    record Clean(
+            boolean offline,
+            boolean dryRun,
+            List<String> passthrough
     ) implements Command {}
 
     sealed interface Extension extends Command {

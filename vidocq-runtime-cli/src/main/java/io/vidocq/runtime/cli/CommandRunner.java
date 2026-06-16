@@ -19,6 +19,8 @@
  */
 package io.vidocq.runtime.cli;
 
+import io.vidocq.runtime.cli.build.MavenInvocation;
+import io.vidocq.runtime.cli.build.MavenLauncher;
 import io.vidocq.runtime.cli.dev.BootSpinner;
 import io.vidocq.runtime.cli.dev.DebugOptions;
 import io.vidocq.runtime.cli.dev.Profiles;
@@ -63,6 +65,8 @@ public final class CommandRunner {
             case Command.Dev d                 -> runDev(d);
             case Command.Doctor doc            -> runDoctor(doc);
             case Command.Create c              -> runCreate(c);
+            case Command.Build b               -> runBuild(b);
+            case Command.Clean cl              -> runClean(cl);
             case Command.Extension e           -> switch (e) {
                 case Command.Extension.Listing l -> runExtensionList(l);
                 case Command.Extension.Add a     -> runExtensionAdd(a);
@@ -315,6 +319,41 @@ public final class CommandRunner {
         CliOutput.println("  Build:     " + CliOutput.cyan("./mvnw package"));
         CliOutput.println("  Run:       " + CliOutput.cyan("vidocq start"));
         return 0;
+    }
+
+    private static int runBuild(Command.Build build) {
+        List<String> goals = build.type().goals();
+        MavenInvocation.Options opts = new MavenInvocation.Options(
+                build.offline(), build.skipTests(), build.passthrough());
+        return runMaven(goals, opts, build.dryRun(),
+                "Building " + CliOutput.bold(build.type().label()) + "…");
+    }
+
+    private static int runClean(Command.Clean clean) {
+        MavenInvocation.Options opts = new MavenInvocation.Options(
+                clean.offline(), false, clean.passthrough());
+        return runMaven(List.of("clean"), opts, clean.dryRun(), "Cleaning build output…");
+    }
+
+    private static int runMaven(List<String> goals, MavenInvocation.Options opts,
+                                boolean dryRun, String banner) {
+        Path cwd = Path.of("").toAbsolutePath();
+        String executable = MavenLauncher.resolveExecutable(cwd);
+        List<String> command = MavenInvocation.command(executable, goals, opts);
+
+        CliOutput.info(banner);
+        CliOutput.println(CliOutput.dim("  $ " + String.join(" ", command)));
+        if (dryRun) {
+            CliOutput.println(CliOutput.dim("  (dry run — Maven not executed)"));
+            return 0;
+        }
+        int code = MavenLauncher.run(command, cwd);
+        if (code == 0) {
+            CliOutput.success("Done.");
+        } else {
+            CliOutput.error("Maven exited with code " + code + ".");
+        }
+        return code;
     }
 
     private static int runExtensionList(Command.Extension.Listing listing) {
