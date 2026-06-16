@@ -68,6 +68,9 @@
         <arquillian.version>1.8.0.Final</arquillian.version>
         <!-- DevServices container providers (build-tooling only — plugin classpath, never runtime) -->
         <testcontainers.version>1.20.4</testcontainers.version>
+        <!-- Schema migration backends (opt-in extension modules) -->
+        <flyway.version>11.1.0</flyway.version>
+        <liquibase.version>4.31.1</liquibase.version>
     </properties>
 
     <dependencyManagement>
@@ -95,6 +98,11 @@
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.essentials</groupId>
                 <artifactId>vidocq-runtime-chappe-webserver-extension</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.runtime.extensions.essentials</groupId>
+                <artifactId>vidocq-runtime-migration-extension</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
