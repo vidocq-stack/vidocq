@@ -22,4 +22,6 @@ module io.vidocq.runtime.extensions.essentials.migration {
     requires io.vidocq.vauban.core;
     exports io.vidocq.runtime.extensions.essentials.migration;
     uses io.vidocq.runtime.extensions.essentials.migration.SchemaMigrator;
+    provides io.vidocq.runtime.spi.VidocqExtension
+            with io.vidocq.runtime.extensions.essentials.migration.MigrationExtension;
 }
