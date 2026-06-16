@@ -72,6 +72,9 @@ class VidocqDataSourcesProcessorTest {
         String body = Files.readString(analytics);
         assertTrue(body.contains("@Named(\"analytics\")"), body);
         assertTrue(body.contains("@Singleton"), body);
+        // Marker qualifier keeps the named holder out of the @Default candidate set.
+        assertTrue(body.contains("io.vidocq.runtime.extensions.jakartaee.web.mansart.pool.ManagedDataSource"),
+                body);
         assertTrue(body.contains(
                 "extends io.vidocq.runtime.extensions.jakartaee.web.mansart.pool.AbstractNamedDataSourceHolder"),
                 body);
