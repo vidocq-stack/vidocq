@@ -20,6 +20,7 @@
 package io.vidocq.runtime.spi;
 
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Configuration accessible to Vidocq extensions.
@@ -42,6 +43,18 @@ public interface VidocqConfiguration {
      * <p>Retrieve a property by key.</p>
      */
     Optional<String> property(String key);
+
+    /**
+     * All known configuration keys, across every source.
+     *
+     * <p>Lets an extension discover a dynamic key family whose names are not known ahead of time —
+     * e.g. {@code vidocq.pool.<name>.url} for multi-datasource. The default returns an empty set so
+     * a minimal hand-rolled implementation that only answers {@link #property(String)} keeps
+     * compiling; the runtime facade overrides it to enumerate every registered config source.</p>
+     */
+    default Iterable<String> propertyNames() {
+        return Set.of();
+    }
 
     /**
      * Retrieves a property with a default value.

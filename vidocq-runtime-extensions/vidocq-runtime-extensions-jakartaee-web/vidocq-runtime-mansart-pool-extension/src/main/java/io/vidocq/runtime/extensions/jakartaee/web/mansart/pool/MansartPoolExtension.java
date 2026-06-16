@@ -27,7 +27,10 @@ import io.vidocq.runtime.spi.VidocqExtension;
 import io.vidocq.vauban.core.container.VaubanContainerBuilder;
 
 import java.time.Duration;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Optional;
+import java.util.TreeSet;
 
 /**
  * Publishes a {@link MansartDataSource} as the {@code @Default} CDI {@link DataSource} bean for any
@@ -67,26 +70,30 @@ import java.util.Optional;
  *   <li>{@code vidocq.pool.validationQuery} — when set, default validation switches to {@code ON_BORROW}.</li>
  *   <li>{@code vidocq.pool.leakDetectionThreshold} (default {@code PT0S} = disabled).</li>
  * </ul>
+ *
+ * <p><b>Named datasources (multi-datasource).</b> Besides the {@code @Default} pool, every
+ * {@code vidocq.pool.<name>.url} key (single {@code <name>} segment, no dots) opens a second pool
+ * registered under {@code <name>} in {@link NamedDataSourceRegistry}. The matching
+ * {@code @Named("<name>")} {@link javax.sql.DataSource} bean is the compile-time generated holder
+ * ({@code vidocq-runtime-mansart-pool-datasources-codegen}); {@code mansart-data} routes
+ * {@code @Repository(dataStore = "<name>")} to it. The same {@code vidocq.pool.*} suffixes apply,
+ * prefixed {@code vidocq.pool.<name>.}.</p>
  */
 public final class MansartPoolExtension implements VidocqExtension {
 
     private static final System.Logger LOG = System.getLogger(MansartPoolExtension.class.getName());
 
-    private static final String P_URL                       = "vidocq.pool.url";
-    private static final String P_USERNAME                  = "vidocq.pool.username";
-    private static final String P_PASSWORD                  = "vidocq.pool.password";
-    private static final String P_MIN_IDLE                  = "vidocq.pool.minIdle";
-    private static final String P_MAX_SIZE                  = "vidocq.pool.maxSize";
-    private static final String P_ACQUIRE_TIMEOUT           = "vidocq.pool.acquireTimeout";
-    private static final String P_IDLE_TIMEOUT              = "vidocq.pool.idleTimeout";
-    private static final String P_MAX_LIFETIME              = "vidocq.pool.maxLifetime";
-    private static final String P_VALIDATION_TIMEOUT        = "vidocq.pool.validationTimeout";
-    private static final String P_VALIDATION                = "vidocq.pool.validation";
-    private static final String P_VALIDATION_QUERY          = "vidocq.pool.validationQuery";
-    private static final String P_LEAK_DETECTION_THRESHOLD  = "vidocq.pool.leakDetectionThreshold";
+    private static final String PREFIX     = "vidocq.pool.";
+    private static final String URL_SUFFIX = ".url";
 
-    private PoolConfig        poolConfig;
+    /** The {@code @Default} pool config (from {@code vidocq.pool.*}); {@code null} when not opted in. */
+    private PoolConfig poolConfig;
+    /** Open {@code @Default} pool, or {@code null} when idle. */
     private MansartDataSource pool;
+    /** Named pool configs keyed by datasource name (from {@code vidocq.pool.<name>.*}). */
+    private Map<String, PoolConfig> namedConfigs = Map.of();
+    /** Open named pools, keyed by datasource name. */
+    private final Map<String, MansartDataSource> namedPools = new LinkedHashMap<>();
 
     @Override
     public String name() {
@@ -100,55 +107,125 @@ public final class MansartPoolExtension implements VidocqExtension {
 
     @Override
     public void configure(VidocqConfiguration vidocqConfig) {
-        Optional<String> url = vidocqConfig.property(P_URL);
-        if (url.isEmpty()) {
+        this.poolConfig   = buildPoolConfig(vidocqConfig, PREFIX);   // @Default (null if no url)
+        this.namedConfigs = discoverNamedConfigs(vidocqConfig);      // vidocq.pool.<name>.*
+        if (poolConfig == null && namedConfigs.isEmpty()) {
             LOG.log(System.Logger.Level.DEBUG,
-                    "Mansart pool extension idle: " + P_URL + " not set");
+                    "Mansart pool extension idle: no vidocq.pool[.<name>].url set");
             return;
         }
-        PoolConfig.Builder b = PoolConfig.builder().jdbcUrl(url.get());
-        vidocqConfig.property(P_USERNAME).ifPresent(b::username);
-        vidocqConfig.property(P_PASSWORD).ifPresent(b::password);
-        vidocqConfig.property(P_MIN_IDLE).map(Integer::parseInt).ifPresent(b::minIdle);
-        vidocqConfig.property(P_MAX_SIZE).map(Integer::parseInt).ifPresent(b::maxSize);
-        vidocqConfig.property(P_ACQUIRE_TIMEOUT).map(Duration::parse).ifPresent(b::acquireTimeout);
-        vidocqConfig.property(P_IDLE_TIMEOUT).map(Duration::parse).ifPresent(b::idleTimeout);
-        vidocqConfig.property(P_MAX_LIFETIME).map(Duration::parse).ifPresent(b::maxLifetime);
-        vidocqConfig.property(P_VALIDATION_TIMEOUT).map(Duration::parse).ifPresent(b::validationTimeout);
-        vidocqConfig.property(P_VALIDATION).map(s -> ValidationMode.valueOf(s.trim().toUpperCase()))
-                .ifPresent(b::validation);
-        vidocqConfig.property(P_VALIDATION_QUERY).ifPresent(b::validationQuery);
-        vidocqConfig.property(P_LEAK_DETECTION_THRESHOLD).map(Duration::parse)
-                .ifPresent(b::leakDetectionThreshold);
-        this.poolConfig = b.build();
-        LOG.log(System.Logger.Level.INFO,
-                "Mansart pool configured: url=" + url.get()
-                        + " maxSize=" + poolConfig.maxSize()
-                        + " validation=" + poolConfig.validation());
+        if (poolConfig != null) {
+            LOG.log(System.Logger.Level.INFO,
+                    "Mansart pool configured (@Default): maxSize=" + poolConfig.maxSize()
+                            + " validation=" + poolConfig.validation());
+        }
+        if (!namedConfigs.isEmpty()) {
+            LOG.log(System.Logger.Level.INFO,
+                    "Mansart named pools configured: " + namedConfigs.keySet());
+        }
     }
 
     @Override
     public void beforeStart(VaubanContainerBuilder builder) {
-        if (poolConfig == null) return;
-        this.pool = MansartDataSource.of(poolConfig);
-        // Publish to the holder BEFORE adding it as a bean class so the @Produces method has
-        // its singleton ready by the time Vauban's bean discovery enumerates the producer.
-        MansartPoolHolder.INSTANCE = this.pool;
-        builder.addBeanClass(MansartPoolHolder.class);
+        if (poolConfig != null) {
+            this.pool = MansartDataSource.of(poolConfig);
+            // Publish to the holder BEFORE adding it as a bean class so the holder has its singleton
+            // ready by the time Vauban's bean discovery enumerates it.
+            MansartPoolHolder.INSTANCE = this.pool;
+            builder.addBeanClass(MansartPoolHolder.class);
+        }
+        // Named pools only feed the registry: the @Named DataSource holder beans are generated by
+        // the optional vidocq-runtime-mansart-pool-datasources-codegen into the application module
+        // and scanned by Vauban like any @Named @Singleton bean — the extension does not add them.
+        for (Map.Entry<String, PoolConfig> e : namedConfigs.entrySet()) {
+            MansartDataSource ds = MansartDataSource.of(e.getValue());
+            namedPools.put(e.getKey(), ds);
+            NamedDataSourceRegistry.register(e.getKey(), ds);
+        }
     }
 
     @Override
     public void onStop() {
-        if (pool == null) return;
-        try {
-            pool.close();
-            LOG.log(System.Logger.Level.INFO, "Mansart pool closed");
-        } catch (RuntimeException e) {
-            LOG.log(System.Logger.Level.WARNING, "Error closing Mansart pool", e);
-        } finally {
-            pool = null;
-            MansartPoolHolder.INSTANCE = null;
+        for (Map.Entry<String, MansartDataSource> e : namedPools.entrySet()) {
+            try {
+                e.getValue().close();
+            } catch (RuntimeException ex) {
+                LOG.log(System.Logger.Level.WARNING,
+                        "Error closing Mansart named pool '" + e.getKey() + "'", ex);
+            } finally {
+                NamedDataSourceRegistry.unregister(e.getKey());
+            }
         }
+        namedPools.clear();
+        if (pool != null) {
+            try {
+                pool.close();
+                LOG.log(System.Logger.Level.INFO, "Mansart pool closed");
+            } catch (RuntimeException e) {
+                LOG.log(System.Logger.Level.WARNING, "Error closing Mansart pool", e);
+            } finally {
+                pool = null;
+                MansartPoolHolder.INSTANCE = null;
+            }
+        }
+    }
+
+    /**
+     * Builds a {@link PoolConfig} from the {@code <prefix>*} keys, or {@code null} when
+     * {@code <prefix>url} is absent. The validation rules of {@link PoolConfig.Builder#build()}
+     * surface eagerly, so a misconfiguration fails during {@code configure}.
+     */
+    private static PoolConfig buildPoolConfig(VidocqConfiguration cfg, String prefix) {
+        Optional<String> url = cfg.property(prefix + "url");
+        if (url.isEmpty()) return null;
+        PoolConfig.Builder b = PoolConfig.builder().jdbcUrl(url.get());
+        cfg.property(prefix + "username").ifPresent(b::username);
+        cfg.property(prefix + "password").ifPresent(b::password);
+        cfg.property(prefix + "minIdle").map(Integer::parseInt).ifPresent(b::minIdle);
+        cfg.property(prefix + "maxSize").map(Integer::parseInt).ifPresent(b::maxSize);
+        cfg.property(prefix + "acquireTimeout").map(Duration::parse).ifPresent(b::acquireTimeout);
+        cfg.property(prefix + "idleTimeout").map(Duration::parse).ifPresent(b::idleTimeout);
+        cfg.property(prefix + "maxLifetime").map(Duration::parse).ifPresent(b::maxLifetime);
+        cfg.property(prefix + "validationTimeout").map(Duration::parse).ifPresent(b::validationTimeout);
+        cfg.property(prefix + "validation").map(s -> ValidationMode.valueOf(s.trim().toUpperCase()))
+                .ifPresent(b::validation);
+        cfg.property(prefix + "validationQuery").ifPresent(b::validationQuery);
+        cfg.property(prefix + "leakDetectionThreshold").map(Duration::parse)
+                .ifPresent(b::leakDetectionThreshold);
+        return b.build();
+    }
+
+    /**
+     * Discovers named datasources by scanning every config key for {@code vidocq.pool.<name>.url}
+     * (single {@code <name>} segment, no dots), excluding the {@code @Default} {@code vidocq.pool.url}.
+     * Names are processed in a stable, sorted order for deterministic startup and logs.
+     */
+    private static Map<String, PoolConfig> discoverNamedConfigs(VidocqConfiguration cfg) {
+        TreeSet<String> names = new TreeSet<>();
+        for (String key : cfg.propertyNames()) {
+            namedDatasourceOf(key).ifPresent(names::add);
+        }
+        if (names.isEmpty()) return Map.of();
+        LinkedHashMap<String, PoolConfig> out = new LinkedHashMap<>();
+        for (String name : names) {
+            out.put(name, buildPoolConfig(cfg, PREFIX + name + "."));
+        }
+        return out;
+    }
+
+    /**
+     * Extracts the datasource name from a {@code vidocq.pool.<name>.url} key, or empty when the key
+     * is the {@code @Default} {@code vidocq.pool.url}, is nested ({@code <name>} contains a dot), or
+     * is not a {@code .url} key at all. Mirrors the codegen's parsing so both sources agree.
+     */
+    private static Optional<String> namedDatasourceOf(String key) {
+        if (!key.startsWith(PREFIX) || !key.endsWith(URL_SUFFIX)) return Optional.empty();
+        int begin = PREFIX.length();
+        int end   = key.length() - URL_SUFFIX.length();
+        if (begin >= end) return Optional.empty();            // exactly vidocq.pool.url (the @Default)
+        String name = key.substring(begin, end);
+        if (name.indexOf('.') >= 0) return Optional.empty();  // vidocq.pool.a.b.url → not single-segment
+        return Optional.of(name);
     }
 
     /** Visible for tests. */
@@ -159,5 +236,10 @@ public final class MansartPoolExtension implements VidocqExtension {
     /** Visible for tests. */
     MansartDataSource pool() {
         return pool;
+    }
+
+    /** Visible for tests. */
+    Map<String, PoolConfig> namedConfigs() {
+        return namedConfigs;
     }
 }

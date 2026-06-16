@@ -43,4 +43,9 @@ final class VidocqConfigurationImpl implements VidocqConfiguration {
     public Optional<String> property(String key) {
         return config.getValue(key);
     }
+
+    @Override
+    public Iterable<String> propertyNames() {
+        return config.getPropertyNames();
+    }
 }

@@ -26,15 +26,19 @@ import io.vidocq.vauban.core.container.VaubanContainerBuilder;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import javax.sql.DataSource;
 import java.sql.Connection;
+import java.sql.SQLException;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -138,11 +142,57 @@ class MansartPoolExtensionTest {
         assertDoesNotThrow(() -> ext.onStop(), "second onStop must be a no-op");
     }
 
+    @Test
+    void namedDatasourcesAreDiscoveredRegisteredAndIsolated() throws Exception {
+        String analyticsUrl = "jdbc:h2:mem:vid-named-analytics-" + UUID.randomUUID() + ";DB_CLOSE_DELAY=-1";
+        String auditUrl     = "jdbc:h2:mem:vid-named-audit-"     + UUID.randomUUID() + ";DB_CLOSE_DELAY=-1";
+        ext.configure(MapConfig.of(Map.of(
+                "vidocq.pool.url",               "jdbc:h2:mem:vid-named-default-" + UUID.randomUUID() + ";DB_CLOSE_DELAY=-1",
+                "vidocq.pool.analytics.url",     analyticsUrl,
+                "vidocq.pool.analytics.username", "sa",
+                "vidocq.pool.analytics.maxSize", "5",
+                "vidocq.pool.audit.url",         auditUrl
+        )));
+        // Both names discovered from vidocq.pool.<name>.url; the @Default vidocq.pool.url is excluded.
+        assertEquals(Set.of("analytics", "audit"), ext.namedConfigs().keySet());
+        assertEquals(5, ext.namedConfigs().get("analytics").maxSize(), "per-name suffix honoured");
+        assertNotNull(ext.poolConfig(), "@Default pool still configured alongside named pools");
+
+        ext.beforeStart(new VaubanContainerBuilder());
+
+        DataSource analytics = NamedDataSourceRegistry.require("analytics");
+        DataSource audit     = NamedDataSourceRegistry.require("audit");
+        assertNotSame(analytics, audit, "each name must back a distinct pool");
+
+        // Prove isolation: a table created in 'analytics' must be invisible from 'audit'.
+        try (Connection c = analytics.getConnection(); var st = c.createStatement()) {
+            st.execute("CREATE TABLE t(id INT)");
+            st.execute("INSERT INTO t VALUES (1)");
+        }
+        try (Connection c = analytics.getConnection(); var st = c.createStatement();
+             var rs = st.executeQuery("SELECT COUNT(*) FROM t")) {
+            assertTrue(rs.next());
+            assertEquals(1, rs.getInt(1));
+        }
+        try (Connection c = audit.getConnection(); var st = c.createStatement()) {
+            assertThrows(SQLException.class, () -> st.executeQuery("SELECT COUNT(*) FROM t"),
+                    "audit must be a distinct database — table 't' must not exist there");
+        }
+
+        ext.onStop();
+        assertThrows(IllegalStateException.class, () -> NamedDataSourceRegistry.require("analytics"),
+                "named pools unregistered on stop");
+        assertThrows(IllegalStateException.class, () -> NamedDataSourceRegistry.require("audit"));
+    }
+
     /** Test-only fake for the legacy {@link VidocqConfiguration} backed by a plain map. */
     private record MapConfig(Map<String, String> data) implements VidocqConfiguration {
         static MapConfig of(Map<String, String> data) { return new MapConfig(data); }
         @Override public Optional<String> property(String key) {
             return Optional.ofNullable(data.get(key));
+        }
+        @Override public Iterable<String> propertyNames() {
+            return data.keySet();
         }
     }
 }
