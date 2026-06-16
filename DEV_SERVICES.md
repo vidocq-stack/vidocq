@@ -236,3 +236,113 @@ first thing to check.
 | All dev services | `-Dvidocq.dev.devServices=false` |
 | One datasource (use your own DB) | set its `vidocq.pool[.<name>].url` explicitly (`-D` / env) |
 | Container reuse | `vidocq.dev.reuse=false` (default) |
+
+## Schema migrations
+
+Schema migration runs **at boot**, before any connection pool opens, so the schema is
+always ready before your application code sees it. It is purely opt-in: add one backend
+module to your project dependencies and the migration runs automatically; omit both and
+nothing changes.
+
+### How it works
+
+`MigrationExtension` is a `VidocqExtension` with priority **150** — after the Chappe
+transport (100), before the Mansart pool (200). On startup it reads the
+`vidocq.pool[.<name>].url|username|password` coordinates already present in your
+configuration, constructs a JDBC connection inside the chosen engine (Flyway or Liquibase),
+and applies all pending migrations. No runtime `DataSource` is required — the migration
+extension opens its own short-lived connection and releases it before the pool starts.
+
+If migration fails, the boot **aborts immediately** (fail-fast): no partially-migrated
+database can be reached by a running application.
+
+### Add a backend module
+
+Add **one** of the two backend modules to your project's `<dependencies>`:
+
+```xml
+<!-- Flyway (Apache 2.0) -->
+<dependency>
+  <groupId>io.vidocq.runtime</groupId>
+  <artifactId>vidocq-runtime-flyway-migration-extension</artifactId>
+</dependency>
+
+<!-- — OR — Liquibase (Apache 2.0) -->
+<dependency>
+  <groupId>io.vidocq.runtime</groupId>
+  <artifactId>vidocq-runtime-liquibase-migration-extension</artifactId>
+</dependency>
+```
+
+If both are present, set `vidocq.migration.engine=flyway` or `=liquibase` to
+disambiguate; the extension throws at boot if it finds two backends and no engine selector.
+
+### Script locations
+
+| Engine | Default location | File naming |
+|--------|------------------|-------------|
+| Flyway | `classpath:db/migration` | `V1__description.sql`, `V2__…` |
+| Liquibase | `classpath:db/changelog/db.changelog-master.xml` | XML / YAML / JSON changelog |
+
+Place your scripts under `src/main/resources/` so Maven packages them into the JAR:
+
+```
+src/main/resources/
+  db/migration/
+    V1__create_products.sql
+    V2__add_index.sql
+```
+
+### JPMS — required `opens` in `module-info.java`
+
+Migration scripts are **resources inside a named module** and are subject to JPMS
+encapsulation. The extension cannot open your module for you. You must add an `opens`
+directive for every package that contains migration resources:
+
+```java
+module com.example.app {
+    // Flyway reads scripts from this package at runtime
+    opens db.migration;
+
+    // Liquibase changelog (adjust to match your package structure)
+    // opens db.changelog;
+}
+```
+
+Without this directive Flyway/Liquibase cannot discover the scripts and the migration
+appears to apply zero changes, silently leaving your schema empty.
+
+### Configuration keys
+
+All keys live under the `vidocq.migration.` prefix. JDBC coordinates are **reused** from
+the matching `vidocq.pool[.<name>].*` keys — you do not repeat them.
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `vidocq.migration.enabled` | `true` | Set to `false` to skip all migrations at boot |
+| `vidocq.migration.engine` | _(auto)_ | `flyway` or `liquibase` — required only when both backends are on the classpath |
+| `vidocq.migration.locations` | engine default | Override the `@Default` datasource script location(s), comma-separated |
+| `vidocq.migration.<name>.locations` | — | Opt-in migration of a **named** datasource; the named datasource is **not** migrated unless this key is set |
+
+### Default vs named datasources
+
+- The **`@Default`** datasource (`vidocq.pool.url`) is migrated automatically whenever
+  `vidocq.pool.url` is set and `vidocq.migration.enabled` is `true`.
+- **Named** datasources (`vidocq.pool.<name>.url`) are **opt-in**: set
+  `vidocq.migration.<name>.locations` to enrol a named datasource in migration. This
+  avoids accidentally migrating read-replica or analytics datasources that you manage
+  separately.
+
+### Real example — `vidocq-runtime-mansart-h2-example`
+
+The bundled example (`vidocq-runtime-examples/vidocq-runtime-mansart-h2-example`) uses
+Flyway to create the `products` table at boot:
+
+```
+src/main/resources/db/migration/V1__products.sql
+```
+
+It declares `opens db.migration;` in its `module-info.java` and sets
+`vidocq.pool.url=jdbc:h2:mem:mansart` in its configuration. No further migration
+configuration is needed — the extension picks up the `@Default` pool coordinates and
+applies `V1__products.sql` before the Mansart pool opens.
