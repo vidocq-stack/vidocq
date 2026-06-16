@@ -22,6 +22,7 @@ package io.vidocq.runtime.examples.mansart;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
+import jakarta.inject.Named;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
@@ -50,6 +51,12 @@ public class DatabaseInspectorResource {
     @Inject
     Instance<DataSource> dataSourceInstance;
 
+    // Direct injection of the named DataSource — its @Named("audit") holder is generated into this
+    // module, so unlike the @Default it needs no Instance<> indirection.
+    @Inject
+    @Named("audit")
+    DataSource auditDataSource;
+
     @GET
     @Path("/products")
     public List<Map<String, Object>> rawProducts() {
@@ -67,6 +74,30 @@ public class DatabaseInspectorResource {
             }
         } catch (SQLException e) {
             throw new IllegalStateException("Raw SELECT failed", e);
+        }
+        return rows;
+    }
+
+    /**
+     * Raw {@code SELECT} against the <b>named</b> {@code "audit"} database, via the
+     * {@code @Named("audit")} DataSource. Proves the audit rows live in a different physical
+     * database than {@code /db/products} reads from.
+     */
+    @GET
+    @Path("/audit")
+    public List<Map<String, Object>> rawAudit() {
+        List<Map<String, Object>> rows = new ArrayList<>();
+        try (Connection c = auditDataSource.getConnection();
+             Statement s = c.createStatement();
+             ResultSet rs = s.executeQuery("SELECT \"id\", \"action\" FROM \"audit_log\" ORDER BY \"id\"")) {
+            while (rs.next()) {
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("id", rs.getLong("id"));
+                row.put("action", rs.getString("action"));
+                rows.add(row);
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException("Raw SELECT on audit DB failed", e);
         }
         return rows;
     }

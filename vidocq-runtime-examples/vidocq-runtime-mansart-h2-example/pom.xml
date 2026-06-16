@@ -172,6 +172,14 @@
                             <version>${project.version}</version>
                             <type>pom</type>
                         </path>
+                        <!-- Named-datasource holders for @Inject @Named("audit") / @Repository(dataStore="audit").
+                             A plain jar processor (NOT a *-extension-codegen pom bundle): declared only because
+                             this example uses a named datasource. -->
+                        <path>
+                            <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+                            <artifactId>vidocq-runtime-mansart-pool-datasources-codegen</artifactId>
+                            <version>${project.version}</version>
+                        </path>
                     </annotationProcessorPaths>
                 </configuration>
             </plugin>

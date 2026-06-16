@@ -20,6 +20,7 @@
 package io.vidocq.runtime.examples.mansart;
 
 import io.vidocq.runtime.core.Vidocq;
+import io.vidocq.runtime.extensions.jakartaee.web.mansart.pool.VidocqDataSources;
 
 /**
  * Entry point: delegates to {@link Vidocq#main(String[])} which discovers and orchestrates every
@@ -43,7 +44,12 @@ import io.vidocq.runtime.core.Vidocq;
  *      http://localhost:8080/api/products
  * curl 'http://localhost:8080/api/products?name=%25at%25' # findByNameLike
  * </pre>
+ *
+ * <p>The {@code @VidocqDataSources("audit")} declaration makes the build generate a
+ * {@code @Named("audit")} {@link javax.sql.DataSource} holder, so the app can {@code @Inject}
+ * a second, distinct datasource and target it with {@code @Repository(dataStore = "audit")}.
  */
+@VidocqDataSources("audit")
 public class MansartH2ExampleApp {
     static void main(String[] args) {
         Vidocq.main(args);
