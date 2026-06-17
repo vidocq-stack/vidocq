@@ -40,6 +40,7 @@
 
     <modules>
         <module>vidocq-runtime-spi</module>
+        <module>vidocq-runtime-codegen-commons</module>
         <module>vidocq-runtime-core</module>
         <module>vidocq-runtime-core-codegen</module>
         <module>vidocq-runtime-extensions</module>
@@ -83,6 +84,11 @@
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-spi</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.runtime</groupId>
+                <artifactId>vidocq-runtime-codegen-commons</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
