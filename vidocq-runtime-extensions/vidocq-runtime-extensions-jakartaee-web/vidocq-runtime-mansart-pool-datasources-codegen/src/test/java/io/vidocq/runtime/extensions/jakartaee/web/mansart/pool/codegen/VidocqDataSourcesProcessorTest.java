@@ -36,6 +36,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -80,6 +81,9 @@ class VidocqDataSourcesProcessorTest {
                 body);
         // DataSource declared as a direct interface so the Vauban indexer sees the bean type.
         assertTrue(body.contains("implements javax.sql.DataSource"), body);
+        // NOT final: a managed bean must stay subclassable so Vauban can wrap it for interception
+        // (a final bean fails the container-build proxyability check when interceptors are present).
+        assertFalse(body.contains("final class"), "generated holder must not be final:\n" + body);
         assertTrue(body.contains("super(\"analytics\")"), body);
     }
 

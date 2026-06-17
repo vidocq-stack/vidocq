@@ -216,7 +216,11 @@ public final class VidocqDataSourcesProcessor extends AbstractProcessor {
                 // the interfaces of an external abstract superclass, so without this the holder would
                 // have no javax.sql.DataSource bean type and @Inject @Named("X") DataSource stays
                 // unsatisfied at build time.
-                pw.println("public final class " + className + " extends " + BASE_HOLDER
+                // NOT final: a CDI managed bean must stay subclassable. When the deployment has
+                // interceptors (e.g. mansart-transactions' @Transactional), Vauban wraps beans for
+                // interception, and a final bean fails the proxyability check at container build
+                // (DefinitionException "must not be final"). Mirrors the non-final @Default MansartPoolHolder.
+                pw.println("public class " + className + " extends " + BASE_HOLDER
                         + " implements javax.sql.DataSource {");
                 pw.println("    public " + className + "() {");
                 pw.println("        super(\"" + name + "\");");
