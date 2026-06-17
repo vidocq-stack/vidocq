@@ -22,7 +22,6 @@ package io.vidocq.runtime.maven;
 import io.vidocq.runtime.codegen.commons.ModuleInfoRequirements;
 import io.vidocq.runtime.codegen.commons.ModuleRequirementsDescriptor;
 import io.vidocq.runtime.codegen.commons.Requirement;
-import org.apache.maven.artifact.Artifact;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
@@ -37,12 +36,8 @@ import java.io.InputStream;
 import java.lang.module.ModuleDescriptor;
 import java.nio.file.Files;
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Properties;
 import java.util.Set;
-import java.util.jar.JarFile;
-import java.util.zip.ZipEntry;
 
 /**
  * Verify that the application's {@code module-info.java} declares the JPMS directives its Vidocq
@@ -50,11 +45,12 @@ import java.util.zip.ZipEntry;
  * descriptor (see {@link ModuleRequirementsDescriptor}); this goal unions the descriptors of every
  * resolved dependency and checks them against the compiled {@code module-info.class}.
  *
- * <p>These are the dependency-driven directives — {@code opens db.migration} (Flyway/Liquibase scan
- * classpath migrations), {@code requires java.sql} (the pool's DataSource holder), {@code requires}
- * of an extension's spec API — that compile fine on the classpath/TCK but break only on the module
+ * <p>These are the dependency-driven directives — e.g. {@code opens db.migration} (Flyway/Liquibase
+ * scan classpath migrations) — that compile fine on the classpath/TCK but break only on the module
  * path (a real {@code docker compose up} / jlink boot). A missing directive fails the build with the
- * exact, copy-pasteable fix.</p>
+ * exact, copy-pasteable fix. Only {@code opens} is enforced: it is never inherited, whereas a
+ * {@code requires} may be satisfied transitively and cannot be checked from declared directives
+ * alone.</p>
  *
  * <p>Default phase: {@code process-classes} — after the module-info is compiled, so the check reads
  * the authoritative {@code module-info.class} rather than parsing source. Skip with
@@ -92,7 +88,7 @@ public class VidocqCheckModuleInfoMojo extends AbstractMojo {
             return;
         }
 
-        Set<Requirement> required = collectRequirements();
+        Set<Requirement> required = ModuleRequirementsCollector.collect(project.getArtifacts(), getLog());
         if (required.isEmpty()) {
             getLog().debug("Vidocq check-module-info: no extension module-info requirements on the path.");
             return;
@@ -132,54 +128,6 @@ public class VidocqCheckModuleInfoMojo extends AbstractMojo {
             issues.add("    " + render(r));
         }
         report(issues);
-    }
-
-    /** Unions the requirement descriptors shipped by every resolved dependency (jar or reactor dir). */
-    private Set<Requirement> collectRequirements() {
-        Set<Requirement> all = new LinkedHashSet<>();
-        for (Artifact artifact : project.getArtifacts()) {
-            Properties props = readDescriptor(artifact.getFile());
-            if (props != null) {
-                all.addAll(ModuleRequirementsDescriptor.parse(props));
-            }
-        }
-        return all;
-    }
-
-    private Properties readDescriptor(File artifactFile) {
-        if (artifactFile == null || !artifactFile.exists()) {
-            return null;
-        }
-        try {
-            if (artifactFile.isDirectory()) {
-                // Reactor dependency resolved to target/classes (built in the same reactor).
-                File resource = new File(artifactFile, ModuleRequirementsDescriptor.RESOURCE);
-                if (!resource.isFile()) {
-                    return null;
-                }
-                try (InputStream in = Files.newInputStream(resource.toPath())) {
-                    return load(in);
-                }
-            }
-            try (JarFile jar = new JarFile(artifactFile)) {
-                ZipEntry entry = jar.getEntry(ModuleRequirementsDescriptor.RESOURCE);
-                if (entry == null) {
-                    return null;
-                }
-                try (InputStream in = jar.getInputStream(entry)) {
-                    return load(in);
-                }
-            }
-        } catch (IOException e) {
-            getLog().debug("Vidocq check-module-info: cannot read descriptor from " + artifactFile + ": " + e);
-            return null;
-        }
-    }
-
-    private static Properties load(InputStream in) throws IOException {
-        Properties props = new Properties();
-        props.load(in);
-        return props;
     }
 
     private static String render(Requirement r) {
