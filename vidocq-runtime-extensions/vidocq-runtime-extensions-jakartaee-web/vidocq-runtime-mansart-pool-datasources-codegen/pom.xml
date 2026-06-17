@@ -23,12 +23,6 @@
     </description>
 
     <dependencies>
-        <!-- Shared APT helper: verifies the consumer module-info declares the directives the
-             generated holders need at runtime (requires java.sql). -->
-        <dependency>
-            <groupId>io.vidocq.runtime</groupId>
-            <artifactId>vidocq-runtime-codegen-commons</artifactId>
-        </dependency>
         <!-- The processor itself has no runtime dependency (it reads the annotation via mirrors and
              emits text). The extension is needed only by the tests to compile sample sources that
              reference @VidocqDataSources and AbstractNamedDataSourceHolder. -->

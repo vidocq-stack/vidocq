@@ -19,8 +19,6 @@
  */
 package io.vidocq.runtime.extensions.jakartaee.web.mansart.pool.codegen;
 
-import io.vidocq.runtime.codegen.commons.ModuleInfoRequirements;
-import io.vidocq.runtime.codegen.commons.Requirement;
 import javax.annotation.processing.AbstractProcessor;
 import javax.annotation.processing.Filer;
 import javax.annotation.processing.Messager;
@@ -119,14 +117,6 @@ public final class VidocqDataSourcesProcessor extends AbstractProcessor {
             names.addAll(readAnnotationNames(e));
         }
         names.addAll(readConfigNames());
-
-        // The generated holders implement javax.sql.DataSource; the consumer module must require
-        // java.sql or they are unresolvable on the module path. Fail the compile early with the exact
-        // fix (skipped on the classpath, where there is no module-info to satisfy).
-        if (!names.isEmpty()) {
-            ModuleInfoRequirements.verify(processingEnv, anchor, Set.of(Requirement.requires(
-                    "java.sql", "the generated @Named DataSource holder implements javax.sql.DataSource")));
-        }
 
         for (String name : names) {
             generateHolder(targetPackage, name, anchor);
