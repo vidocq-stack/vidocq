@@ -24,6 +24,7 @@
  */
 module io.vidocq.runtime.extensions.jakartaee.web.mansart.pool.codegen {
     requires java.compiler;
+    requires io.vidocq.runtime.codegen.commons;
 
     exports io.vidocq.runtime.extensions.jakartaee.web.mansart.pool.codegen;
 
