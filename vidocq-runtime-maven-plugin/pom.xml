@@ -20,6 +20,12 @@
             <groupId>io.vidocq.runtime</groupId>
             <artifactId>vidocq-runtime-core</artifactId>
         </dependency>
+        <!-- Shared APT/build helper: Requirement model + descriptor parser + module-info
+             satisfaction check, reused by the check-module-info / complete-module-info goals. -->
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-codegen-commons</artifactId>
+        </dependency>
         <!-- Dev-mode service SPI: the dev goal loads DevService providers (from the app's
              <plugin><dependencies>) via ServiceLoader on this plugin classpath. -->
         <dependency>
