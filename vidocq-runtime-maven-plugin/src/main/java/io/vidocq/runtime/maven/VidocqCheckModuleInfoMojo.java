@@ -88,9 +88,10 @@ public class VidocqCheckModuleInfoMojo extends AbstractMojo {
             return;
         }
 
-        Set<Requirement> required = ModuleRequirementsCollector.collect(project.getArtifacts(), getLog());
+        Set<Requirement> required = ModuleRequirementsCollector.applicableTo(
+                ModuleRequirementsCollector.collect(project.getArtifacts(), getLog()), outputDirectory);
         if (required.isEmpty()) {
-            getLog().debug("Vidocq check-module-info: no extension module-info requirements on the path.");
+            getLog().debug("Vidocq check-module-info: no applicable extension requirements for this module.");
             return;
         }
 

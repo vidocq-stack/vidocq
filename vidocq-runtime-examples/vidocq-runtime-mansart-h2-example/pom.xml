@@ -204,9 +204,6 @@
                         <id>generate</id>
                         <goals>
                             <goal>generate</goal>
-                            <!-- Fail the build early if module-info.java is missing a JPMS directive
-                                 a Vidocq extension needs at runtime (e.g. opens db.migration). -->
-                            <goal>check-module-info</goal>
                         </goals>
                     </execution>
                 </executions>

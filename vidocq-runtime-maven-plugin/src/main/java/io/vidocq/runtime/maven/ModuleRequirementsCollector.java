@@ -56,6 +56,32 @@ final class ModuleRequirementsCollector {
         return all;
     }
 
+    /**
+     * Keeps only the requirements that actually APPLY to the module under build. An {@code opens
+     * <pkg>} applies only to a module that itself contains {@code <pkg>} — you neither need, nor can
+     * legally, open a package you do not have. This is what lets the check run reactor-wide: an
+     * extension that depends on (say) the migration extension but ships no {@code db.migration} package
+     * is simply a no-op, instead of being wrongly told to open a package it lacks.
+     *
+     * @param outputDirectory the module's compiled-classes output (holds packages as directories,
+     *                        resource-only packages included once the resources plugin has run)
+     */
+    static Set<Requirement> applicableTo(Set<Requirement> required, File outputDirectory) {
+        Set<Requirement> out = new LinkedHashSet<>();
+        for (Requirement r : required) {
+            if (r.kind() == Requirement.Kind.OPENS && !containsPackage(outputDirectory, r.name())) {
+                continue;
+            }
+            out.add(r);
+        }
+        return out;
+    }
+
+    private static boolean containsPackage(File outputDirectory, String pkg) {
+        return outputDirectory != null
+                && new File(outputDirectory, pkg.replace('.', '/')).isDirectory();
+    }
+
     private static Properties readDescriptor(File artifactFile, Log log) {
         if (artifactFile == null || !artifactFile.exists()) {
             return null;
