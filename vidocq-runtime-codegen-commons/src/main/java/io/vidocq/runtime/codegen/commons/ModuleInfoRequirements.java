@@ -25,12 +25,14 @@ import javax.lang.model.element.ModuleElement;
 import javax.lang.model.element.ModuleElement.OpensDirective;
 import javax.lang.model.element.ModuleElement.RequiresDirective;
 import javax.tools.Diagnostic;
+import java.lang.module.ModuleDescriptor;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -93,6 +95,34 @@ public final class ModuleInfoRequirements {
         }
         List<Requirement> unmet = new ArrayList<>();
         for (Requirement r : required) {
+            if (!isSatisfied(r, requiresDeclared, opensDeclared)) {
+                unmet.add(r);
+            }
+        }
+        return unmet;
+    }
+
+    /**
+     * Returns the subset of {@code required} directives a compiled {@link ModuleDescriptor} does NOT
+     * satisfy. Used by build tooling (the Maven check goal) that reads {@code module-info.class}
+     * rather than a {@code ModuleElement}. An {@code open} module satisfies every {@code opens}.
+     */
+    public static List<Requirement> missing(ModuleDescriptor descriptor, Collection<Requirement> required) {
+        Objects.requireNonNull(descriptor, "descriptor");
+        Set<String> requiresDeclared = descriptor.requires().stream()
+                .map(ModuleDescriptor.Requires::name)
+                .collect(Collectors.toSet());
+        Map<String, Set<String>> opensDeclared = new HashMap<>();
+        for (ModuleDescriptor.Opens o : descriptor.opens()) {
+            opensDeclared.put(o.source(), o.isQualified() ? new HashSet<>(o.targets()) : Set.of());
+        }
+        boolean openModule = descriptor.isOpen();
+        List<Requirement> unmet = new ArrayList<>();
+        for (Requirement r : required) {
+            // An `open module` opens every package unqualified, satisfying any opens requirement.
+            if (r.kind() == Requirement.Kind.OPENS && openModule) {
+                continue;
+            }
             if (!isSatisfied(r, requiresDeclared, opensDeclared)) {
                 unmet.add(r);
             }
