@@ -11,5 +11,6 @@
 *** xref:modules/vidocq-runtime-spi.adoc[vidocq-runtime-spi]
 *** xref:modules/vidocq-runtime-extensions.adoc[vidocq-runtime-extensions]
 *** xref:modules/vidocq-runtime-maven-plugin.adoc[vidocq-runtime-maven-plugin]
+*** xref:modules/vidocq-runtime-cli.adoc[vidocq-runtime-cli]
 *** xref:modules/vidocq-runtime-examples.adoc[vidocq-runtime-examples]
 *** xref:modules/vidocq-runtime-integration-tests.adoc[vidocq-runtime-integration-tests]

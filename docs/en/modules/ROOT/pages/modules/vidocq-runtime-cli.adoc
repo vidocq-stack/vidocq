@@ -1,0 +1,428 @@
+= vidocq-runtime-cli
+:description: The Vidocq command-line interface — scaffold, run in dev mode, build, manage extensions and configuration.
+
+[.lead]
+`vidocq-runtime-cli` is the zero-dependency, JPMS-native command-line interface for the
+Vidocq runtime. It scaffolds new applications, runs them in a live-reloading dev mode,
+wraps the packaging goals of the Maven plugin, manages extensions and configuration, and
+diagnoses your environment — all from a single `vidocq` command. This page is a complete
+user guide; jump straight to <<getting-started>> for a Hello-World walkthrough.
+
+== Coordinates
+
+[cols="1,3"]
+|===
+| Artefact | `io.vidocq.runtime:vidocq-runtime-cli:0.2.0-SNAPSHOT`
+| JPMS module | `io.vidocq.runtime.cli`
+| Main class | `io.vidocq.runtime.cli.VidocqCli`
+| Dependencies | None beyond the JDK and `io.vidocq.runtime.core` (hand-rolled arg parser, pure Java 25)
+|===
+
+== Prerequisites
+
+* **Java 25** (Temurin recommended) — the CLI refuses to run a project on an older JVM and
+  `vidocq doctor` flags it.
+* **Maven 3.9.16** — pinned per project via `.sdkmanrc` (`sdk env`). The build/clean commands
+  reuse the project's `mvnw` wrapper, falling back to `mvn` on the `PATH`.
+
+== Installing the `vidocq` command
+
+The CLI ships as a JPMS module. The canonical invocation is:
+
+[source,bash]
+----
+java -m io.vidocq.runtime.cli/io.vidocq.runtime.cli.VidocqCli <command> [options]
+----
+
+For day-to-day use, define a `vidocq` shell function so the rest of this guide reads
+naturally. Add this to your `~/.bashrc` or `~/.zshrc`:
+
+[source,bash]
+----
+vidocq() {
+  java -p "$VIDOCQ_CLI_MODULE_PATH" \
+       -m io.vidocq.runtime.cli/io.vidocq.runtime.cli.VidocqCli "$@"
+}
+----
+
+where `$VIDOCQ_CLI_MODULE_PATH` points at the CLI module and `io.vidocq.runtime.core` (and
+any extensions you want discoverable). From here on, every example uses the short `vidocq`
+form.
+
+[TIP]
+====
+Once the function is on your `PATH`, enable tab-completion with
+`source <(vidocq completion bash)` — see <<completion>>.
+====
+
+[#getting-started]
+== Getting started — Hello World
+
+This walkthrough scaffolds, inspects, and boots a brand-new Vidocq application in under a
+minute, using only the CLI.
+
+=== 1. Check your environment
+
+[source,bash]
+----
+vidocq doctor
+----
+
+`doctor` verifies the Java version, `JAVA_HOME`, the Maven wrapper, the project layout, the
+extensions on the classpath, and your `vidocq.properties` keys. Fix any ✘ before continuing;
+⚠ warnings are safe to ignore for now.
+
+=== 2. Scaffold the project
+
+[source,bash]
+----
+vidocq create --name hello-world --group-id com.example
+----
+
+This generates a ready-to-build Maven project:
+
+[source]
+----
+hello-world/
+├── pom.xml                                  # inherits vidocq-runtime-parent, depends on core
+└── src/main/
+    ├── java/
+    │   ├── module-info.java                 # module com.example.hello.world { requires io.vidocq.runtime.core; }
+    │   └── com/example/hello/world/
+    │       └── HelloWorldApp.java            # main() that boots the runtime
+    └── resources/
+        └── vidocq.properties                 # vidocq.http.port=8080
+----
+
+The generated entry point is a complete, runnable Vidocq application:
+
+[source,java]
+----
+package com.example.hello.world;
+
+import io.vidocq.runtime.core.VidocqBootstrap;
+
+public final class HelloWorldApp {
+
+    public static void main(String[] args) {
+        VidocqBootstrap.create()
+                .configure()
+                .start()
+                .awaitShutdown();
+    }
+}
+----
+
+[NOTE]
+====
+The project name is converted to a `PascalCase` class name with an `App` suffix
+(`hello-world` → `HelloWorldApp`) and the default package is `<groupId>.<name>` with dashes
+turned into dots (`com.example.hello.world`). Override the package with `--package` and add
+extensions at creation time with `-x` (repeatable).
+====
+
+=== 3. Move in and build
+
+[source,bash]
+----
+cd hello-world
+vidocq build --skip-tests
+----
+
+`vidocq build` (no type) runs the Maven `package` lifecycle through the project wrapper and
+produces a standalone distribution. Add `--dry-run` to preview the exact Maven command
+without executing it.
+
+=== 4. Run it
+
+[source,bash]
+----
+vidocq start
+----
+
+The runtime boots in the foreground and awaits shutdown (Ctrl-C). To iterate with live
+reload instead, use dev mode:
+
+[source,bash]
+----
+vidocq dev
+----
+
+`dev` boots the runtime and watches `src/main/java`, `src/main/resources` and
+`target/classes`; any `.java` / `.properties` / `.xml` / `.yml` change is debounced and
+re-applies your configuration and resources in-process without leaving the CLI.
+
+=== 5. Add an HTTP endpoint
+
+A bare core application boots the runtime but serves no routes. To expose a REST resource,
+add the Cassini REST extension and follow the full Jakarta REST + CDI walkthrough:
+
+[source,bash]
+----
+vidocq extension add cassini-rest
+----
+
+See xref:getting-started.adoc[Getting started] for a complete REST + persistence example,
+including the resource class, the JPMS module declarations, and `curl` calls.
+
+== Command reference
+
+Run `vidocq help` for the command list, or `vidocq help <command>` for per-command options.
+
+[cols="1,3"]
+|===
+| Command | Description
+
+| `vidocq version`
+| Print the CLI and runtime version string.
+
+| `vidocq info`
+| Display the CLI/Java version and the extensions discovered on the classpath.
+
+| `vidocq doctor [--verbose]`
+| Run environment & project health checks (see <<doctor>>).
+
+| `vidocq create --name <name> …`
+| Scaffold a new Vidocq Maven application (see <<create>>).
+
+| `vidocq dev [--port] [--profile] [--debug]`
+| Start in development mode with source watching and live config reload (see <<dev>>).
+
+| `vidocq start [--port] [--config] [--debug]`
+| Start the Vidocq runtime in the foreground (see <<start>>).
+
+| `vidocq build [type] …`
+| Build/package the project, wrapping the Maven plugin goals (see <<build>>).
+
+| `vidocq clean [--offline] [--dry-run]`
+| Remove build output (`mvn clean`).
+
+| `vidocq extension <list\|add\|remove> …`
+| Manage project extensions (see <<extension>>).
+
+| `vidocq config <get\|set\|list> …`
+| Read or write keys in `vidocq.properties` (see <<config>>).
+
+| `vidocq completion <bash\|zsh>`
+| Print a shell-completion script (see <<completion>>).
+
+| `vidocq help [command]`
+| Show the command list or detailed help for one command.
+|===
+
+[#create]
+=== `vidocq create`
+
+Scaffolds a minimal Maven project (`pom.xml`, `module-info.java`, an `…App` entry point and
+`vidocq.properties`).
+
+[cols="1,2"]
+|===
+| Option | Description
+
+| `--name, -n <name>` | Project / artifact name (**required**).
+| `--group-id, -g <groupId>` | Maven groupId (default `io.example`).
+| `--package <pkg>` | Root Java package (default `<groupId>.<name>`).
+| `--extension, -x <id>` | Extension to enable; repeatable.
+|===
+
+[source,bash]
+----
+vidocq create --name my-api -g com.acme -x cassini-rest -x knock-health
+----
+
+[#dev]
+=== `vidocq dev`
+
+Boots the runtime and watches your sources, restarting the runtime context on a
+reload-worthy change so configuration and resources are re-applied without leaving the CLI.
+
+[cols="1,2"]
+|===
+| Option | Description
+
+| `--port, -p <n>` | HTTP listening port (default `8080`).
+| `--profile, -P <name>` | Config profile to layer over `vidocq.properties` (default `dev`); merges `vidocq-<profile>.properties` on top.
+| `--debug` | Print a JDWP connection hint (`address=*:5005`, `suspend=n`) so a debugger can attach.
+|===
+
+[NOTE]
+====
+Dev reload re-applies config/resources and re-runs the boot lifecycle in the *same*
+classloader — it does not hot-swap changed `.class` bytes. Recompile-and-reclassload is a
+future enhancement.
+====
+
+[#start]
+=== `vidocq start`
+
+Starts the runtime in the foreground via `VidocqBootstrap`.
+
+[cols="1,2"]
+|===
+| Option | Description
+
+| `--port, -p <n>` | HTTP listening port (default `8080`).
+| `--config, -c <file>` | Path to an external `vidocq.properties` file.
+| `--debug` | Print debug info and accept a remote debugger on port `5005`.
+|===
+
+[#build]
+=== `vidocq build` & `vidocq clean`
+
+Thin, coloured wrappers around the real `vidocq-runtime-maven-plugin` goals. The CLI resolves
+the project `mvnw` wrapper (walking the cwd and its ancestors) and falls back to `mvn`;
+Maven's output streams straight to the terminal.
+
+[cols="1,2,2"]
+|===
+| Type | Maven invocation | Result
+
+| `package` _(default)_ | `mvn package` | Standalone distribution ZIP.
+| `jlink` | `mvn package vidocq:jlink` | Self-contained jlink runtime image (no `java` on target).
+| `jpackage` | `mvn package vidocq:jpackage` | Native installer (`.dmg`/`.deb`/`.msi`) or app-image.
+| `docker` | `mvn package vidocq:docker` | Dockerfile around the jlink image.
+|===
+
+Shared options:
+
+[cols="1,2"]
+|===
+| Option | Description
+
+| `--offline, -o` | Run Maven offline (`-o`).
+| `--skip-tests` | Skip tests (`build` only, `-DskipTests`).
+| `--dry-run` | Print the resolved Maven command without running it.
+| `-- <args…>` | Pass everything after `--` straight through to Maven.
+|===
+
+[source,bash]
+----
+vidocq build jlink --skip-tests
+vidocq clean
+vidocq build -- -Dvidocq.docker.build=true   # extra args after --
+----
+
+[#extension]
+=== `vidocq extension`
+
+Manages project-level extensions by editing `./pom.xml` in place (text-based, preserving
+formatting; idempotent thanks to a StAX dependency scan).
+
+[cols="1,2"]
+|===
+| Sub-command | Description
+
+| `list [--installed\|--available\|--all]` | List extensions. `--installed` (default) scans the classpath; `--available` queries the registry; `--all` shows both.
+| `add <id…>` | Inject the matching `<dependency>` into `pom.xml`.
+| `remove <id…>` | Remove the matching project-level `<dependency>`.
+|===
+
+An id may be a known short name (e.g. `cassini-rest`), an explicit `groupId:artifactId`, or
+any name (resolved by convention as `io.vidocq.runtime:vidocq-runtime-<id>-extension`).
+
+[source,bash]
+----
+vidocq extension list --available
+vidocq extension add cassini-rest knock-health
+vidocq extension remove knock-health
+----
+
+[NOTE]
+====
+The public extension registry (`registry.vidocq.dev`) is not yet live, so `list --available`
+currently serves a built-in offline catalog. The CLI reports the data source (live, cached,
+or offline).
+====
+
+[#config]
+=== `vidocq config`
+
+Reads and writes the project's `vidocq.properties` (project root, falling back to
+`src/main/resources`). `set` preserves comments, blank lines, key order and separator
+spacing, and creates the file when none exists.
+
+[cols="1,2"]
+|===
+| Sub-command | Description
+
+| `get <key>` | Print the value bound to `<key>`.
+| `set <key> <value>` | Set (or append) `<key>` to `<value>`.
+| `list` | Print every `key=value` pair.
+|===
+
+[source,bash]
+----
+vidocq config get vidocq.http.port
+vidocq config set vidocq.http.port 9090
+vidocq config list
+----
+
+[#doctor]
+=== `vidocq doctor`
+
+Inspects the local environment and current project and prints a ✔/⚠/✘ report. It exits
+non-zero when a blocking issue is found, so it doubles as a CI pre-flight gate
+(`vidocq doctor && vidocq build`).
+
+[cols="1,3"]
+|===
+| Check | Meaning
+
+| **Java version** | ✔ running JVM ≥ minimum (25); ✘ below minimum.
+| **JAVA_HOME** | ✔ set and a directory; ⚠ unset / not a directory.
+| **Maven wrapper** | ✔ `mvnw` in the cwd or an ancestor; ⚠ none found.
+| **Vidocq project** | ✔ `pom.xml` references `io.vidocq.runtime`; ⚠ no pom / not a Vidocq pom.
+| **Extensions** | ✔ ≥ 1 provider on the classpath; ⚠ none found.
+| **Config** | ✔ no `vidocq.properties` or all keys recognised; ⚠ unknown `vidocq.*` key(s).
+|===
+
+`--verbose, -v` appends a per-status summary footer and the minimum Java version. Warnings
+never fail the command; only ✘ checks set a non-zero exit code.
+
+[#completion]
+=== `vidocq completion`
+
+Prints a self-contained completion script to stdout. The first argument completes against
+the command catalogue; everything else defers to default file completion.
+
+[source,bash]
+----
+# bash — load for the current shell
+source <(vidocq completion bash)
+
+# zsh — install into the completion path
+vidocq completion zsh > "${fpath[1]}/_vidocq"
+----
+
+== Configuration & profiles
+
+The CLI operates on the standard Vidocq configuration model. `vidocq.properties` lives in the
+project root or `src/main/resources`; profile overlays (`vidocq-<profile>.properties`) are
+layered by `vidocq dev --profile`. Any key is overridable via `-Dkey=value`, environment
+variables, or an external file — see xref:reference.adoc[Reference] for the full ordinal
+hierarchy.
+
+== Exit codes
+
+[cols="1,3"]
+|===
+| Code | Meaning
+
+| `0` | Success (including `doctor` runs with only ✔/⚠ checks).
+| `1` | A usage error, a failed command, or a `doctor` run with at least one ✘ check.
+|===
+
+== Extending the CLI (plugin SPI)
+
+Third-party modules can contribute extra top-level commands without forking the CLI by
+implementing `io.vidocq.runtime.cli.spi.VidocqCliPlugin` and declaring it as a
+`ServiceLoader` provider. Any command token that is not a built-in is matched against the
+registered plugins; built-ins always win, and `vidocq help` lists discovered plugins.
+
+== Next steps
+
+* xref:getting-started.adoc[Getting started] — full REST + persistence walkthrough
+* xref:usage.adoc[Usage] — packaging workflows (jlink, jpackage, Docker), profiles
+* xref:modules/vidocq-runtime-maven-plugin.adoc[vidocq-runtime-maven-plugin] — the goals the CLI wraps
+* xref:reference.adoc[Reference] — configuration keys and ordinals
