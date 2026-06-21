@@ -55,7 +55,7 @@ class DiagnosticsTest {
     void healthyContextPassesEveryCheck() {
         List<Diagnostic> diagnostics = Diagnostics.run(healthy());
 
-        assertEquals(5, diagnostics.size());
+        assertEquals(6, diagnostics.size());
         assertTrue(diagnostics.stream().allMatch(d -> d.status() == Diagnostic.Status.OK));
         assertEquals(0, Diagnostics.exitCode(diagnostics));
     }
@@ -161,19 +161,64 @@ class DiagnosticsTest {
     @Test
     void summarizeTalliesEachStatus() {
         Diagnostics.Summary healthy = Diagnostics.summarize(Diagnostics.run(healthy()));
-        assertEquals(5, healthy.ok());
+        assertEquals(6, healthy.ok());
         assertEquals(0, healthy.warn());
         assertEquals(0, healthy.fail());
-        assertEquals(5, healthy.total());
+        assertEquals(6, healthy.total());
 
-        // Old Java fails + JAVA_HOME unset/mvnw/pom/extensions all warn.
+        // Old Java fails + JAVA_HOME unset/mvnw/pom/extensions all warn; config absent → OK.
         DoctorContext mixed = new DoctorContext(
                 21, "21", Diagnostics.MINIMUM_JAVA_VERSION,
                 null, false, false, false, false, 0);
         Diagnostics.Summary s = Diagnostics.summarize(Diagnostics.run(mixed));
         assertEquals(1, s.fail());
         assertEquals(4, s.warn());
-        assertEquals(0, s.ok());
-        assertEquals(5, s.total());
+        assertEquals(1, s.ok());
+        assertEquals(6, s.total());
+    }
+
+    @Test
+    void absentConfigIsOk() {
+        Diagnostic config = byName(Diagnostics.run(healthy())).get("Config");
+        assertEquals(Diagnostic.Status.OK, config.status());
+        assertTrue(config.detail().contains("defaults apply"));
+    }
+
+    @Test
+    void knownConfigKeysAreOk() {
+        DoctorContext ctx = new DoctorContext(
+                Diagnostics.MINIMUM_JAVA_VERSION, "25", Diagnostics.MINIMUM_JAVA_VERSION,
+                "/opt/jdk", true, true, true, true, 3,
+                true, List.of("vidocq.http.port", "vidocq.dev.debug"));
+
+        Diagnostic config = byName(Diagnostics.run(ctx)).get("Config");
+        assertEquals(Diagnostic.Status.OK, config.status());
+        assertTrue(config.detail().contains("all recognized"));
+        assertEquals(0, Diagnostics.exitCode(Diagnostics.run(ctx)));
+    }
+
+    @Test
+    void unknownConfigKeysWarnButDoNotFail() {
+        DoctorContext ctx = new DoctorContext(
+                Diagnostics.MINIMUM_JAVA_VERSION, "25", Diagnostics.MINIMUM_JAVA_VERSION,
+                "/opt/jdk", true, true, true, true, 3,
+                true, List.of("vidocq.http.port", "vidocq.htpp.port", "vidocq.bogus"));
+
+        Diagnostic config = byName(Diagnostics.run(ctx)).get("Config");
+        assertEquals(Diagnostic.Status.WARN, config.status());
+        assertTrue(config.detail().contains("vidocq.bogus"));
+        assertTrue(config.detail().contains("vidocq.htpp.port"));
+        assertNotNull(config.hint());
+        assertEquals(0, Diagnostics.exitCode(Diagnostics.run(ctx)));
+    }
+
+    @Test
+    void nonVidocqKeysNeverWarn() {
+        DoctorContext ctx = new DoctorContext(
+                Diagnostics.MINIMUM_JAVA_VERSION, "25", Diagnostics.MINIMUM_JAVA_VERSION,
+                "/opt/jdk", true, true, true, true, 3,
+                true, List.of("my.app.setting", "logging.level"));
+
+        assertEquals(Diagnostic.Status.OK, byName(Diagnostics.run(ctx)).get("Config").status());
     }
 }

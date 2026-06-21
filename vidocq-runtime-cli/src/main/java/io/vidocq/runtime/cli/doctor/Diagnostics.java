@@ -19,6 +19,8 @@
  */
 package io.vidocq.runtime.cli.doctor;
 
+import io.vidocq.runtime.cli.config.ConfigKeys;
+
 import java.util.List;
 
 /**
@@ -43,6 +45,7 @@ public final class Diagnostics {
                 checkJavaHome(ctx),
                 checkMavenWrapper(ctx),
                 checkProject(ctx),
+                checkConfig(ctx),
                 checkExtensions(ctx));
     }
 
@@ -130,6 +133,26 @@ public final class Diagnostics {
                     "Add a 'io.vidocq.runtime' dependency, or check you are in the right module.");
         }
         return Diagnostic.ok("Vidocq project", "pom.xml references the Vidocq runtime");
+    }
+
+    private static Diagnostic checkConfig(DoctorContext ctx) {
+        if (!ctx.configPresent()) {
+            return Diagnostic.ok("Config", "no vidocq.properties (built-in defaults apply)");
+        }
+        List<String> unknown = ConfigKeys.unknownKeys(ctx.configKeys());
+        int total = ctx.configKeys().size();
+        if (unknown.isEmpty()) {
+            return Diagnostic.ok(
+                    "Config",
+                    "vidocq.properties — " + total + " key" + (total == 1 ? "" : "s")
+                            + ", all recognized");
+        }
+        return Diagnostic.warn(
+                "Config",
+                "vidocq.properties — " + unknown.size() + " unrecognized key"
+                        + (unknown.size() == 1 ? "" : "s") + ": " + String.join(", ", unknown),
+                "Check for typos; Vidocq keys live under known namespaces "
+                        + "(vidocq.http, vidocq.dev, vidocq.pool, …).");
     }
 
     private static Diagnostic checkExtensions(DoctorContext ctx) {

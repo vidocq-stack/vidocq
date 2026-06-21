@@ -284,6 +284,9 @@ public final class CommandRunner {
         boolean javaHomeDir = javaHome != null && Files.isDirectory(Path.of(javaHome));
         Path pom = cwd.resolve("pom.xml");
         boolean pomPresent = Files.isRegularFile(pom);
+        Path config = ConfigFile.locate(cwd, Files::isRegularFile).orElse(null);
+        boolean configPresent = config != null;
+        List<String> configKeys = configPresent ? readConfigKeys(config) : List.of();
         return new DoctorContext(
                 Runtime.version().feature(),
                 System.getProperty("java.version"),
@@ -293,7 +296,17 @@ public final class CommandRunner {
                 hasMavenWrapper(cwd),
                 pomPresent,
                 pomPresent && pomReferencesVidocq(pom),
-                extensionCount());
+                extensionCount(),
+                configPresent,
+                configKeys);
+    }
+
+    private static List<String> readConfigKeys(Path config) {
+        try {
+            return List.copyOf(PropertiesText.entries(Files.readString(config)).keySet());
+        } catch (IOException e) {
+            return List.of();
+        }
     }
 
     private static boolean hasMavenWrapper(Path start) {

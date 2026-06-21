@@ -162,17 +162,22 @@ pre-flight gate (`vidocq doctor && vidocq build`).
 | **Maven wrapper** | `mvnw`/`mvnw.cmd` in cwd or an ancestor | none found | — |
 | **Vidocq project** | `pom.xml` references `io.vidocq.runtime` | no pom / not a Vidocq pom | — |
 | **Extensions** | ≥ 1 provider on the classpath | none found | — |
+| **Config** | no `vidocq.properties`, or all keys recognised | unknown `vidocq.*` key(s) | — |
 
 - **`--verbose`, `-v`** — append a per-status summary footer and the minimum Java version.
 - **Exit code** — `1` if any check FAILs, otherwise `0`; warnings never fail the command.
+- **Config validation** — `config.ConfigKeys` validates each `vidocq.`-prefixed key by its
+  namespace (first segment after the prefix) against a catalogue of 30 recognised namespaces,
+  catching typos like `vidocq.htpp.port`. Dynamic segments (`vidocq.pool.<ds>.url`) and an
+  application's own non-`vidocq.` keys are never flagged.
 - **Testability** — checks live in a pure `doctor.Diagnostics` engine driven by an injectable
   `DoctorContext` record. `CommandRunner` gathers the (impure) facts — JVM version, env,
-  filesystem probes, ServiceLoader scan — then hands them to the pure engine and renders the
-  `Diagnostic` list. The engine is fully unit-tested without touching the filesystem.
+  filesystem probes, ServiceLoader scan, `vidocq.properties` keys — then hands them to the pure
+  engine and renders the `Diagnostic` list. The engine is fully unit-tested without touching the
+  filesystem.
 
 ### Future checks (backlog)
 - Network reachability of the extension registry (depends on M3).
-- `vidocq.properties` validity / unknown-key warnings (depends on M5 config model).
 - Disk space & write permissions for the build output directory.
 
 ---
