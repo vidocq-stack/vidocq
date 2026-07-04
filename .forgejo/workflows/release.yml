@@ -60,6 +60,11 @@ on:
         type: string
         required: true
         default:     "0.1.1"
+      grimm_release:
+        description: "io.vidocq.grimm:* (all artifacts under io.vidocq.grimm) — stable version (must be released on Central first)"
+        type: string
+        required: true
+        default:     "0.1.1"
       humboldt_release:
         description: "io.vidocq.humboldt:* (all artifacts under io.vidocq.humboldt) — stable version (must be released on Central first)"
         type: string
@@ -93,6 +98,9 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ secrets.VIDOCQ_BOT_TOKEN }}
+          # Always checkout the current HEAD of the branch, not the SHA captured
+          # at dispatch time — ensures in-flight commits are included in the release.
+          ref: ${{ github.ref_name }}
 
       - uses: https://codeberg.org/Vidocq/ci/release-maven@main
         with:
@@ -109,12 +117,14 @@ jobs:
             io.vidocq.chappe=${{ inputs.chappe_release }}
             io.vidocq.cyrano=${{ inputs.cyrano_release }}
             io.vidocq.dirac=${{ inputs.dirac_release }}
+            io.vidocq.grimm=${{ inputs.grimm_release }}
             io.vidocq.humboldt=${{ inputs.humboldt_release }}
             io.vidocq.knock=${{ inputs.knock_release }}
             io.vidocq.mansart=${{ inputs.mansart_release }}
             io.vidocq.ravel=${{ inputs.ravel_release }}
             io.vidocq.vauban=${{ inputs.vauban_release }}
           excluded-modules: |
+            vidocq-runtime-it-cyrano-jpms
             vidocq-runtime-examples
           central-username: ${{ secrets.CENTRAL_USERNAME }}
           central-password: ${{ secrets.CENTRAL_PASSWORD }}
