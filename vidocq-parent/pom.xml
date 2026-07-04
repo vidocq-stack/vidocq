@@ -4,7 +4,7 @@
 
     <groupId>io.vidocq</groupId>
     <artifactId>vidocq-parent</artifactId>
-    <version>0.1.2-SNAPSHOT</version>
+    <version>0.2.0</version>
     <packaging>pom</packaging>
 
     <name>Vidocq :: Parent</name>
