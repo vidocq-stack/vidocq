@@ -34,22 +34,22 @@ on:
         description: "io.vidocq.cassini:* (all artifacts under io.vidocq.cassini) — stable version (must be released on Central first)"
         type: string
         required: true
-        default:     "0.1.1"
+        default:     "0.2.0"
       champollion_release:
         description: "io.vidocq.champollion:* (all artifacts under io.vidocq.champollion) — stable version (must be released on Central first)"
         type: string
         required: true
-        default:     "0.1.1"
+        default:     "0.2.0"
       chappe_release:
         description: "io.vidocq.chappe:* (all artifacts under io.vidocq.chappe) — stable version (must be released on Central first)"
         type: string
         required: true
-        default:     "0.1.1"
+        default:     "0.2.0"
       vauban_release:
         description: "io.vidocq.vauban:* (all artifacts under io.vidocq.vauban) — stable version (must be released on Central first)"
         type: string
         required: true
-        default:     "0.1.1"
+        default:     "0.2.0"
 
 jobs:
   release:
@@ -76,6 +76,8 @@ jobs:
             io.vidocq.champollion=${{ inputs.champollion_release }}
             io.vidocq.chappe=${{ inputs.chappe_release }}
             io.vidocq.vauban=${{ inputs.vauban_release }}
+          excluded-modules: |
+            knock-tck
           central-username: ${{ secrets.CENTRAL_USERNAME }}
           central-password: ${{ secrets.CENTRAL_PASSWORD }}
           gpg-private-key:  ${{ secrets.GPG_PRIVATE_KEY }}
