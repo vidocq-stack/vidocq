@@ -30,6 +30,11 @@ on:
         type: string
         required: true
         default:     "0.1.1"
+      vauban_release:
+        description: "io.vidocq.vauban:* (all artifacts under io.vidocq.vauban) — stable version (must be released on Central first)"
+        type: string
+        required: true
+        default:     "0.1.1"
 
 jobs:
   release:
@@ -52,6 +57,7 @@ jobs:
           auto-publish:     ${{ inputs.auto_publish == 'auto' && 'true' || 'false' }}
           overrides: |
             io.vidocq=${{ inputs.vidocq_parent_release }}
+            io.vidocq.vauban=${{ inputs.vauban_release }}
           central-username: ${{ secrets.CENTRAL_USERNAME }}
           central-password: ${{ secrets.CENTRAL_PASSWORD }}
           gpg-private-key:  ${{ secrets.GPG_PRIVATE_KEY }}
