@@ -34,7 +34,7 @@ on:
         description: "io.vidocq.vauban:* (all artifacts under io.vidocq.vauban) — stable version (must be released on Central first)"
         type: string
         required: true
-        default:     "0.1.0"
+        default:     "0.1.1"
 
 jobs:
   release:
@@ -44,6 +44,9 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ secrets.VIDOCQ_BOT_TOKEN }}
+          # Always checkout the current HEAD of the branch, not the SHA captured
+          # at dispatch time — ensures in-flight commits are included in the release.
+          ref: ${{ github.ref_name }}
 
       - uses: https://codeberg.org/Vidocq/ci/release-maven@main
         with:
@@ -55,6 +58,11 @@ jobs:
           overrides: |
             io.vidocq=${{ inputs.vidocq_parent_release }}
             io.vidocq.vauban=${{ inputs.vauban_release }}
+          excluded-modules: |
+            mansart-pool-tests
+            mansart-pool-bench
+            mansart-data-tests
+            mansart-transactions-tests
           central-username: ${{ secrets.CENTRAL_USERNAME }}
           central-password: ${{ secrets.CENTRAL_PASSWORD }}
           gpg-private-key:  ${{ secrets.GPG_PRIVATE_KEY }}
