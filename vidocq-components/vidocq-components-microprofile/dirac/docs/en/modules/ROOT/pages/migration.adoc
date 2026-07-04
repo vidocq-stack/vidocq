@@ -3,7 +3,7 @@
 
 [CAUTION]
 ====
-Dirac is at `0.1.0-SNAPSHOT`. The MicroProfile Metrics 5.1.1 spec is the goal (M8 — TCK 100 % PASS, status to be confirmed in `dirac-tck/target/tck-report.txt`). The public SPI may still evolve before `1.0.0`. This page documents the mappings to prepare a progressive migration.
+Dirac is at `0.2.0`. The MicroProfile Metrics 5.1.1 spec is the goal (M8 — TCK 100 % PASS, status to be confirmed in `dirac-tck/target/tck-report.txt`). The public SPI may still evolve before `1.0.0`. This page documents the mappings to prepare a progressive migration.
 ====
 
 [.lead]

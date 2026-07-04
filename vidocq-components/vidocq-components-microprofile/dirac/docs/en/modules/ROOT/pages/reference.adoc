@@ -43,7 +43,7 @@ This page consolidates the public surface of Dirac: artefacts to declare, export
 | Official MP Metrics 5.1.1 TCK runner — outside reactor (Model 4.0.0). Do not declare as an application dependency.
 |===
 
-All versions at `0.1.0-SNAPSHOT` at the time of writing.
+All versions at `0.2.0` at the time of writing.
 
 == JPMS modules
 
