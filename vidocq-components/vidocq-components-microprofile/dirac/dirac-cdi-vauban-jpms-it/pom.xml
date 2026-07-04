@@ -14,6 +14,14 @@
         subclass and the generated VaubanComponentProvider — including the interceptors themselves
         (VAU-INT-004) — with no `opens` to vauban.core.</description>
 
+    <properties>
+        <!-- Test vehicle: never released. -->
+        <maven.deploy.skip>true</maven.deploy.skip>
+        <maven.javadoc.skip>true</maven.javadoc.skip>
+        <maven.source.skip>true</maven.source.skip>
+        <gpg.skip>true</gpg.skip>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>io.vidocq.dirac</groupId>
@@ -103,6 +111,13 @@
                         </configuration>
                     </execution>
                 </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.sonatype.central</groupId>
+                <artifactId>central-publishing-maven-plugin</artifactId>
+                <configuration>
+                    <skipPublishing>true</skipPublishing>
+                </configuration>
             </plugin>
         </plugins>
     </build>
