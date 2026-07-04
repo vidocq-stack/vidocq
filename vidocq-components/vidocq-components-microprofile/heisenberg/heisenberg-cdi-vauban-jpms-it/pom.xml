@@ -17,6 +17,14 @@
         itself (VAU-INT-004), whose @Inject fields are package-private — with no `opens` to
         vauban.core.</description>
 
+    <properties>
+        <!-- Test vehicle: never released. -->
+        <maven.deploy.skip>true</maven.deploy.skip>
+        <maven.javadoc.skip>true</maven.javadoc.skip>
+        <maven.source.skip>true</maven.source.skip>
+        <gpg.skip>true</gpg.skip>
+    </properties>
+
     <dependencies>
         <!-- Brings heisenberg-core → heisenberg-api → the FT API wrapper (module
              microprofile.fault.tolerance.api) and the Config API wrapper transitively, exactly as
@@ -114,6 +122,13 @@
                         </configuration>
                     </execution>
                 </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.sonatype.central</groupId>
+                <artifactId>central-publishing-maven-plugin</artifactId>
+                <configuration>
+                    <skipPublishing>true</skipPublishing>
+                </configuration>
             </plugin>
         </plugins>
     </build>
