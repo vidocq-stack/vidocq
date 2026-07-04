@@ -34,8 +34,14 @@ on:
         description: "io.vidocq.cassini:* (all artifacts under io.vidocq.cassini) — stable version (must be released on Central first)"
         type: string
         required: true
+        default:     "0.1.1"
       champollion_release:
         description: "io.vidocq.champollion:* (all artifacts under io.vidocq.champollion) — stable version (must be released on Central first)"
+        type: string
+        required: true
+        default:     "0.1.1"
+      chappe_release:
+        description: "io.vidocq.chappe:* (all artifacts under io.vidocq.chappe) — stable version (must be released on Central first)"
         type: string
         required: true
         default:     "0.1.1"
@@ -53,6 +59,9 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ secrets.VIDOCQ_BOT_TOKEN }}
+          # Always checkout the current HEAD of the branch, not the SHA captured
+          # at dispatch time — ensures in-flight commits are included in the release.
+          ref: ${{ github.ref_name }}
 
       - uses: https://codeberg.org/Vidocq/ci/release-maven@main
         with:
@@ -65,6 +74,7 @@ jobs:
             io.vidocq=${{ inputs.vidocq_parent_release }}
             io.vidocq.cassini=${{ inputs.cassini_release }}
             io.vidocq.champollion=${{ inputs.champollion_release }}
+            io.vidocq.chappe=${{ inputs.chappe_release }}
             io.vidocq.vauban=${{ inputs.vauban_release }}
           central-username: ${{ secrets.CENTRAL_USERNAME }}
           central-password: ${{ secrets.CENTRAL_PASSWORD }}
