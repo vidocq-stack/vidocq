@@ -17,7 +17,7 @@ Pick the modules matching your integration level. For a CDI + Jakarta REST appli
 [source,xml]
 ----
 <properties>
-    <knock.version>0.2.0-SNAPSHOT</knock.version>
+    <knock.version>0.2.0</knock.version>
 </properties>
 
 <dependencies>

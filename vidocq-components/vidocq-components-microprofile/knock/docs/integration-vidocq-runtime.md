@@ -12,7 +12,7 @@ Adding this dependency is enough to expose `/health*`:
 
 ```xml
 <dependency>
-    <groupId>io.vidocq.runtime</groupId>
+    <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
     <artifactId>vidocq-runtime-knock-health-extension</artifactId>
 </dependency>
 ```

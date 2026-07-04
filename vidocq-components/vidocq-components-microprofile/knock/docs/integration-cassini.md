@@ -30,19 +30,19 @@
 <dependency>
     <groupId>io.vidocq.knock</groupId>
     <artifactId>knock-cassini</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>0.2.0</version>
 </dependency>
 <dependency>
     <groupId>io.vidocq.knock</groupId>
     <artifactId>knock-cdi-vauban</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>0.2.0</version>
 </dependency>
 
 <!-- runtime: Jakarta JSON-P implementation used by knock-core -->
 <dependency>
     <groupId>io.vidocq.champollion</groupId>
     <artifactId>champollion-jsonp</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>0.2.0</version>
     <scope>runtime</scope>
 </dependency>
 ```

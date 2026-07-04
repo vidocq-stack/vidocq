@@ -6,7 +6,7 @@ This page lists every artefact published by Knock, the JPMS packages they export
 
 == Maven artefacts
 
-All artefacts share the version `0.2.0-SNAPSHOT` under the `io.vidocq.knock` group.
+All artefacts share the version `0.2.0` under the `io.vidocq.knock` group.
 
 [cols="2,1,3"]
 |===

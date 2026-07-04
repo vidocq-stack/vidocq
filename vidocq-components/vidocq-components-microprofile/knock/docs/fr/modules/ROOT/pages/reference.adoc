@@ -6,7 +6,7 @@ Cette page liste chaque artefact publié par Knock, les paquets JPMS qu'ils expo
 
 == Artefacts Maven
 
-Tous les artefacts partagent la version `0.2.0-SNAPSHOT` sous le groupe `io.vidocq.knock`.
+Tous les artefacts partagent la version `0.2.0` sous le groupe `io.vidocq.knock`.
 
 [cols="2,1,3"]
 |===
