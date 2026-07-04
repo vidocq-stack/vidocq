@@ -3,7 +3,7 @@
 
 [CAUTION]
 ====
-Grimm is at `0.1.0-SNAPSHOT`. The MicroProfile OpenAPI 4.1 spec is fully covered (TCK 349/349, see xref:tck.adoc[TCK status]), but the public SPI may still evolve before `1.0.0`. This page documents model mappings to prepare a staged migration.
+Grimm is at `0.2.0`. The MicroProfile OpenAPI 4.1 spec is fully covered (TCK 349/349, see xref:tck.adoc[TCK status]), but the public SPI may still evolve before `1.0.0`. This page documents model mappings to prepare a staged migration.
 ====
 
 [.lead]

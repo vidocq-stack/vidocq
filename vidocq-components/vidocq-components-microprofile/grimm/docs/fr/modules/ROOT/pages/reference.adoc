@@ -31,7 +31,7 @@ Cette page consolide la surface publique de Grimm : artefacts à déclarer, modu
 | Runner officiel TCK MP OpenAPI 4.1 — hors reactor (Model 4.0.0). Ne pas déclarer en dépendance applicative.
 |===
 
-Toutes les versions à `0.1.0-SNAPSHOT` au moment de la rédaction.
+Toutes les versions à `0.2.0` au moment de la rédaction.
 
 == Modules JPMS
 

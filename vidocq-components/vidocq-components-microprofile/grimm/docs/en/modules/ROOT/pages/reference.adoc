@@ -31,7 +31,7 @@ This page consolidates Grimm's public surface: artefacts to declare, exported JP
 | Official MP OpenAPI 4.1 TCK runner — out of reactor (Model 4.0.0). Do not declare as an application dependency.
 |===
 
-Every version is `0.1.0-SNAPSHOT` at the time of writing.
+Every version is `0.2.0` at the time of writing.
 
 == JPMS modules
 
