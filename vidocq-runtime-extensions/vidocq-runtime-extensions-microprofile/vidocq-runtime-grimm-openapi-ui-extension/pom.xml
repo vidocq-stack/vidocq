@@ -7,7 +7,7 @@
     <parent>
         <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
         <artifactId>vidocq-runtime-extensions-microprofile</artifactId>
-        <version>0.2.0-SNAPSHOT</version>
+        <version>0.2.0</version>
     </parent>
 
     <artifactId>vidocq-runtime-grimm-openapi-ui-extension</artifactId>
