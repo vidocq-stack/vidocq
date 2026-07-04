@@ -37,7 +37,7 @@ In the Vauban parent `pom.xml` or in application modules:
         <dependency>
             <groupId>io.vidocq.ravel</groupId>
             <artifactId>ravel-cdi-vauban</artifactId>
-            <version>0.1.0-SNAPSHOT</version>
+            <version>0.2.0</version>
         </dependency>
     </dependencies>
 </dependencyManagement>

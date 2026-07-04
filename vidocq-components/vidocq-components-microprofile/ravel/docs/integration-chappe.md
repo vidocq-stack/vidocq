@@ -16,13 +16,13 @@ Chappe is the Vidocq HTTP server. Ravel reads server configuration
     <dependency>
         <groupId>io.vidocq.ravel</groupId>
         <artifactId>ravel-core</artifactId>
-        <version>0.1.0-SNAPSHOT</version>
+        <version>0.2.0</version>
     </dependency>
     <!-- MicroProfile Config API -->
     <dependency>
         <groupId>io.vidocq.ravel</groupId>
         <artifactId>ravel-api</artifactId>
-        <version>0.1.0-SNAPSHOT</version>
+        <version>0.2.0</version>
     </dependency>
 </dependencies>
 ```
@@ -34,7 +34,7 @@ With CDI (Vauban):
     <dependency>
         <groupId>io.vidocq.ravel</groupId>
         <artifactId>ravel-cdi-vauban</artifactId>
-        <version>0.1.0-SNAPSHOT</version>
+        <version>0.2.0</version>
     </dependency>
 </dependencies>
 ```
