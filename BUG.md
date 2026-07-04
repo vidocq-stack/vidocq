@@ -77,3 +77,26 @@ where this whole bug class is invisible.
   - 2026-06-12 : root-caused while re-validating grimm-tck on 0.2.0 jars (frozen-runner trap, CG-06).
     Contained workaround committed in grimm-tck/pom.xml (lost transitives declared explicitly) —
     remove it once a valid snapshot is republished.
+
+## BUG-20260704-01 — Released CLI 0.2.0 reports "Vidocq CLI 0.2.0-SNAPSHOT" for --version
+
+- **Date** : 2026-07-04
+- **Statut** : OPEN
+- **Module touché** : vidocq-runtime-cli (version banner)
+- **Symptôme** : the jar published on Maven Central as `io.vidocq.runtime:vidocq-runtime-cli:0.2.0`
+  prints `Vidocq CLI 0.2.0-SNAPSHOT` when invoked with `--version`.
+- **Reproduction minimale** :
+  ```
+  # pristine local repo, resolve from Central only
+  mvn -q dependency:copy-dependencies -DincludeScope=runtime -DoutputDirectory=modules \
+      -Dmaven.repo.local=$(mktemp -d)   # pom with a single dep on vidocq-runtime-cli:0.2.0
+  java -p modules -m io.vidocq.runtime.cli/io.vidocq.runtime.cli.VidocqCli --version
+  # → Vidocq CLI 0.2.0-SNAPSHOT
+  ```
+- **Hypothèse de cause** : the version string is not derived from the pom at build time
+  (hardcoded constant, or a resource that is not filtered), so the release build — which
+  runs `versions:set 0.2.0` on the release branch before packaging — does not update it.
+- **Investigations** :
+  - 2026-07-04 : found while validating the Central-based CLI install recipe for the blog
+    tutorial (pages PR #2). Cosmetic only — the artifact itself is the correct 0.2.0 build.
+    Central is immutable, so 0.2.0 will keep the wrong banner; fix for 0.2.1+.
