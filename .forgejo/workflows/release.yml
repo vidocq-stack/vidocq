@@ -74,7 +74,7 @@ on:
         description: "io.vidocq.knock:* (all artifacts under io.vidocq.knock) — stable version (must be released on Central first)"
         type: string
         required: true
-        default:     "0.1.1"
+        default:     "0.2.0"
       mansart_release:
         description: "io.vidocq.mansart:* (all artifacts under io.vidocq.mansart) — stable version (must be released on Central first)"
         type: string
