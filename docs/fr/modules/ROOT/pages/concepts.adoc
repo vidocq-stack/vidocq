@@ -95,7 +95,7 @@ La séquence de boot Vidocq Runtime comporte cinq **phases** ordonnancées :
 
 Vidocq Runtime n'invente aucun runtime ; il **compose** les six briques fondatrices. Une extension `vidocq-runtime-cassini-rest-extension` enregistre par exemple un build step qui :
 
-* consomme `CdiBeanIndexBuildItem` produit par `vidocq-runtime-vauban-extension` ;
+* consomme `CdiBeanIndexBuildItem` produit par le cœur du runtime (Vauban est le moteur CDI intégré, pas une extension autonome) ;
 * déclenche la génération du routage statique de xref:cassini::index.adoc[Cassini] ;
 * produit `HttpRouteBuildItem` consommé par `vidocq-runtime-chappe-webserver-extension`.
 
