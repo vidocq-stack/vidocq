@@ -47,14 +47,12 @@
 
     <properties>
         <h2.version>2.3.232</h2.version>
-        <!-- This module ships third-party bytecode, not Vidocq source: no source/javadoc jars.
-             Central refuses artifacts without sources/javadoc, so publishing is skipped too —
-             the whole bundle would be rejected otherwise (seen on mansart-data-external-it).
-             To release it later: attach stub sources/javadoc jars, then drop these skips. -->
+        <!-- This module ships third-party bytecode, not Vidocq source: the real source/javadoc
+             plugins are skipped, and STUB jars are attached instead (see maven-jar-plugin below).
+             Central validation requires a sources and a javadoc entry per jar artifact; the stubs
+             carry a README pointing at the upstream H2 sources. -->
         <maven.source.skip>true</maven.source.skip>
         <maven.javadoc.skip>true</maven.javadoc.skip>
-        <maven.deploy.skip>true</maven.deploy.skip>
-        <gpg.skip>true</gpg.skip>
     </properties>
 
     <dependencies>
@@ -130,12 +128,37 @@
                     </compilerArgs>
                 </configuration>
             </plugin>
-                    <plugin>
-                <groupId>org.sonatype.central</groupId>
-                <artifactId>central-publishing-maven-plugin</artifactId>
-                <configuration>
-                    <skipPublishing>true</skipPublishing>
-                </configuration>
+
+            <!-- 3) Central requires a sources and a javadoc entry for every jar artifact, but
+                 this module has no Vidocq sources to ship (H2 bytecode + one module-info).
+                 Attach stub jars whose README points at the upstream H2 sources. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>stub-sources-jar</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>jar</goal>
+                        </goals>
+                        <configuration>
+                            <classifier>sources</classifier>
+                            <classesDirectory>${project.basedir}/src/stub</classesDirectory>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>stub-javadoc-jar</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>jar</goal>
+                        </goals>
+                        <configuration>
+                            <classifier>javadoc</classifier>
+                            <classesDirectory>${project.basedir}/src/stub</classesDirectory>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>
