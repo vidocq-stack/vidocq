@@ -15,6 +15,18 @@
     <name>Vidocq :: Integration Tests</name>
     <description>Integration tests for Vidocq extensions (Arquillian)</description>
 
+    <properties>
+        <!-- Test vehicles: never released. Inherited by every child module (the ITs and the
+             Arquillian harness — nothing outside this subtree consumes them). They were
+             published up to 0.2.0 by omission. NOTE: central-publishing ignores
+             maven.deploy.skip — the inherited skipPublishing configuration below is what
+             actually keeps them off Central. -->
+        <maven.deploy.skip>true</maven.deploy.skip>
+        <maven.javadoc.skip>true</maven.javadoc.skip>
+        <maven.source.skip>true</maven.source.skip>
+        <gpg.skip>true</gpg.skip>
+    </properties>
+
     <modules>
         <module>vidocq-runtime-arquillian</module>
         <module>vidocq-runtime-it-cassini-rest</module>
@@ -30,6 +42,13 @@
             <plugin>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-maven-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>org.sonatype.central</groupId>
+                <artifactId>central-publishing-maven-plugin</artifactId>
+                <configuration>
+                    <skipPublishing>true</skipPublishing>
+                </configuration>
             </plugin>
         </plugins>
     </build>
