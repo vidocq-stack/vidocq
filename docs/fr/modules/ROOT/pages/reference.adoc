@@ -10,25 +10,25 @@ Référence opérationnelle de Vidocq Runtime — coordonnées Maven, clés Micr
 |===
 | Artefact | Rôle
 
-| `io.vidocq.runtime:vidocq-runtime-parent:0.1.0-SNAPSHOT`
+| `io.vidocq.runtime:vidocq-runtime-parent:0.2.0`
 | POM parent (Model 4.1.0)
 
-| `io.vidocq.runtime:vidocq-runtime-spi:0.1.0-SNAPSHOT`
+| `io.vidocq.runtime:vidocq-runtime-spi:0.2.0`
 | SPI publique (`@BuildStep`, `@Recorder`, `BuildItem`)
 
-| `io.vidocq.runtime:vidocq-runtime-core:0.1.0-SNAPSHOT`
+| `io.vidocq.runtime:vidocq-runtime-core:0.2.0`
 | Moteur d'exécution (boot orchestrator, lifecycle)
 
-| `io.vidocq.runtime.extensions:vidocq-runtime-extensions:0.1.0-SNAPSHOT`
+| `io.vidocq.runtime.extensions:vidocq-runtime-extensions:0.2.0`
 | Agrégateur des extensions livrées, groupées par domaine (essentials, jakartaee-core, jakartaee-web, microprofile, jpms-repackaged)
 
-| `io.vidocq.runtime:vidocq-runtime-maven-plugin:0.1.0-SNAPSHOT`
+| `io.vidocq.runtime:vidocq-runtime-maven-plugin:0.2.0`
 | Plugin Maven — `build`, `jlink`, `jpackage`, `docker`
 
-| `io.vidocq.runtime:vidocq-runtime-examples:0.1.0-SNAPSHOT`
+| `io.vidocq.runtime:vidocq-runtime-examples:0.2.0`
 | Exemples (`vidocq-runtime-cassini-rest-example`, `vidocq-runtime-mansart-h2-example`, `vidocq-runtime-external-rest-lib`)
 
-| `io.vidocq.runtime:vidocq-runtime-integration-tests:0.1.0-SNAPSHOT`
+| `io.vidocq.runtime:vidocq-runtime-integration-tests:0.2.0`
 | Tests d'intégration multi-extensions
 |===
 

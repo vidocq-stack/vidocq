@@ -18,17 +18,27 @@ This page boots a complete REST + DI + H2 persistence service with Vidocq Runtim
     <dependency>
         <groupId>io.vidocq.runtime</groupId>
         <artifactId>vidocq-runtime-core</artifactId>
-        <version>0.1.0-SNAPSHOT</version>
+        <version>0.2.0</version>
     </dependency>
     <dependency>
-        <groupId>io.vidocq.runtime</groupId>
+        <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
         <artifactId>vidocq-runtime-cassini-rest-extension</artifactId>
-        <version>0.1.0-SNAPSHOT</version>
+        <version>0.2.0</version>
     </dependency>
     <dependency>
-        <groupId>io.vidocq.runtime</groupId>
-        <artifactId>vidocq-runtime-mansart-extension</artifactId>
-        <version>0.1.0-SNAPSHOT</version>
+        <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+        <artifactId>vidocq-runtime-mansart-pool-extension</artifactId>
+        <version>0.2.0</version>
+    </dependency>
+    <dependency>
+        <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+        <artifactId>vidocq-runtime-mansart-data-extension</artifactId>
+        <version>0.2.0</version>
+    </dependency>
+    <dependency>
+        <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+        <artifactId>vidocq-runtime-mansart-transactions-extension</artifactId>
+        <version>0.2.0</version>
     </dependency>
     <dependency>
         <groupId>com.h2database</groupId>
@@ -42,7 +52,7 @@ This page boots a complete REST + DI + H2 persistence service with Vidocq Runtim
     <plugin>
       <groupId>io.vidocq.runtime</groupId>
       <artifactId>vidocq-runtime-maven-plugin</artifactId>
-      <version>0.1.0-SNAPSHOT</version>
+      <version>0.2.0</version>
       <executions>
         <execution>
           <goals>

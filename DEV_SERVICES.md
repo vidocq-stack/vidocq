@@ -263,13 +263,13 @@ Add **one** of the two backend modules to your project's `<dependencies>`:
 ```xml
 <!-- Flyway (Apache 2.0) -->
 <dependency>
-  <groupId>io.vidocq.runtime</groupId>
+  <groupId>io.vidocq.runtime.extensions.essentials</groupId>
   <artifactId>vidocq-runtime-flyway-migration-extension</artifactId>
 </dependency>
 
 <!-- — OR — Liquibase (Apache 2.0) -->
 <dependency>
-  <groupId>io.vidocq.runtime</groupId>
+  <groupId>io.vidocq.runtime.extensions.essentials</groupId>
   <artifactId>vidocq-runtime-liquibase-migration-extension</artifactId>
 </dependency>
 ```

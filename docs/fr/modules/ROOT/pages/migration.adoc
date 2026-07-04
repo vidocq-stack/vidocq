@@ -3,7 +3,7 @@
 
 [CAUTION]
 ====
-Vidocq Runtime est en version **0.1.0-SNAPSHOT**. Toute migration concrète est prématurée — cette page documente les correspondances pour anticiper.
+Vidocq Runtime est en version **0.2.0**. Toute migration concrète est prématurée — cette page documente les correspondances pour anticiper.
 ====
 
 == Tableau comparatif synthétique
