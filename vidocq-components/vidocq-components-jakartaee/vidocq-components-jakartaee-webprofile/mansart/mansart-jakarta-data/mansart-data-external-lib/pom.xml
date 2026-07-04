@@ -14,6 +14,14 @@
         mansart-data-processor — i.e. a pre-compiled dependency for which no repository
         implementation exists. Consumed by mansart-data-external-it through the Maven plugin.</description>
 
+    <properties>
+        <!-- Test vehicle: never released. -->
+        <maven.deploy.skip>true</maven.deploy.skip>
+        <maven.javadoc.skip>true</maven.javadoc.skip>
+        <maven.source.skip>true</maven.source.skip>
+        <gpg.skip>true</gpg.skip>
+    </properties>
+
     <dependencies>
         <!-- Spec APIs only; compile scope so they are transitive to the IT that compiles the
              ahead-of-time generated sources referencing this entity / repository. -->
@@ -26,4 +34,16 @@
             <artifactId>jakarta.persistence-api</artifactId>
         </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.sonatype.central</groupId>
+                <artifactId>central-publishing-maven-plugin</artifactId>
+                <configuration>
+                    <skipPublishing>true</skipPublishing>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>

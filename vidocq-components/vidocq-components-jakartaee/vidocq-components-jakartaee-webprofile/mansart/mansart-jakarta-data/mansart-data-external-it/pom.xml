@@ -14,6 +14,14 @@
         implementation of a @Repository that lives in the mansart-data-external-lib dependency jar,
         then exercises CRUD on it via H2 — proving the AOT (no runtime reflection) path.</description>
 
+    <properties>
+        <!-- Test vehicle: never released. -->
+        <maven.deploy.skip>true</maven.deploy.skip>
+        <maven.javadoc.skip>true</maven.javadoc.skip>
+        <maven.source.skip>true</maven.source.skip>
+        <gpg.skip>true</gpg.skip>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>io.vidocq.mansart</groupId>
@@ -76,6 +84,13 @@
                 </executions>
                 <configuration>
                     <targetPackage>it.gen</targetPackage>
+                </configuration>
+            </plugin>
+                    <plugin>
+                <groupId>org.sonatype.central</groupId>
+                <artifactId>central-publishing-maven-plugin</artifactId>
+                <configuration>
+                    <skipPublishing>true</skipPublishing>
                 </configuration>
             </plugin>
         </plugins>
