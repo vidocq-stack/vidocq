@@ -71,7 +71,7 @@ Cette page consolide la surface publique de Humboldt : artefacts à déclarer, m
 | Runner officiel TCK MicroProfile Telemetry 2.1 — hors reactor (Model 4.0.0). Ne pas déclarer en dépendance applicative.
 |===
 
-Toutes les versions à `0.1.0-SNAPSHOT` au moment de la rédaction (jalon M7c en cours).
+Toutes les versions à `0.2.0` au moment de la rédaction (jalon M7c en cours).
 
 == Modules JPMS
 

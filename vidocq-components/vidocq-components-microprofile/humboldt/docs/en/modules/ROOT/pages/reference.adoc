@@ -71,7 +71,7 @@ This page consolidates Humboldt's public surface: artifacts to declare, exported
 | Official MicroProfile Telemetry 2.1 TCK runner — out-of-reactor (Model 4.0.0). Do not declare as an application dependency.
 |===
 
-All versions are `0.1.0-SNAPSHOT` at the time of writing (M7c in progress).
+All versions are `0.2.0` at the time of writing (M7c in progress).
 
 == JPMS modules
 
