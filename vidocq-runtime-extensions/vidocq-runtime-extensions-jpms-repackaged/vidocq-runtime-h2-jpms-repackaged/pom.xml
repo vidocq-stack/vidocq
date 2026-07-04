@@ -47,9 +47,14 @@
 
     <properties>
         <h2.version>2.3.232</h2.version>
-        <!-- This module ships third-party bytecode, not Vidocq source: no source/javadoc jars. -->
+        <!-- This module ships third-party bytecode, not Vidocq source: no source/javadoc jars.
+             Central refuses artifacts without sources/javadoc, so publishing is skipped too —
+             the whole bundle would be rejected otherwise (seen on mansart-data-external-it).
+             To release it later: attach stub sources/javadoc jars, then drop these skips. -->
         <maven.source.skip>true</maven.source.skip>
         <maven.javadoc.skip>true</maven.javadoc.skip>
+        <maven.deploy.skip>true</maven.deploy.skip>
+        <gpg.skip>true</gpg.skip>
     </properties>
 
     <dependencies>
@@ -123,6 +128,13 @@
                         <arg>--patch-module</arg>
                         <arg>com.h2database=${project.build.outputDirectory}</arg>
                     </compilerArgs>
+                </configuration>
+            </plugin>
+                    <plugin>
+                <groupId>org.sonatype.central</groupId>
+                <artifactId>central-publishing-maven-plugin</artifactId>
+                <configuration>
+                    <skipPublishing>true</skipPublishing>
                 </configuration>
             </plugin>
         </plugins>
