@@ -120,7 +120,7 @@ Types supportés (extrait — voir xref:reference.adoc[Référence] pour la list
 
 [NOTE]
 ====
-Sur un champ _primitif_ (`int`, `boolean`), Vauban a longtemps eu un bug (VAU-INJ-PRIM, corrigé fin mai 2026) qui rendait l'injection silencieusement vide. Cervantes 0.1.0-SNAPSHOT exige donc un Vauban incluant ce fix.
+Sur un champ _primitif_ (`int`, `boolean`), Vauban a longtemps eu un bug (VAU-INJ-PRIM, corrigé fin mai 2026) qui rendait l'injection silencieusement vide. Cervantes 0.2.0 exige donc un Vauban incluant ce fix.
 ====
 
 == Transporter le token via cookie plutôt que `Authorization`

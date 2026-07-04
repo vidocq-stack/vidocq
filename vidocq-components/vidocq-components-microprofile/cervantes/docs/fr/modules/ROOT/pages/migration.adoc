@@ -3,7 +3,7 @@
 
 [CAUTION]
 ====
-Cervantes est en `0.1.0-SNAPSHOT`. La spec MicroProfile JWT 2.1 est entièrement couverte (TCK 206 / 206, voir xref:tck.adoc[état TCK]), mais la SPI publique peut encore évoluer avant la `1.0.0`. Cette page documente les correspondances pour préparer une migration progressive.
+Cervantes est en `0.2.0`. La spec MicroProfile JWT 2.1 est entièrement couverte (TCK 206 / 206, voir xref:tck.adoc[état TCK]), mais la SPI publique peut encore évoluer avant la `1.0.0`. Cette page documente les correspondances pour préparer une migration progressive.
 ====
 
 [.lead]

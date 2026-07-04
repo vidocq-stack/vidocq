@@ -43,7 +43,7 @@ Cette page consolide la surface publique de Cervantes : artefacts à déclarer, 
 | Runner officiel TCK MP JWT 2.1 — hors reactor (Model 4.0.0). Ne pas déclarer en dépendance applicative.
 |===
 
-Toutes les versions à `0.1.0-SNAPSHOT` au moment de la rédaction. Parent commun `io.vidocq:vidocq-parent:1.0.0-SNAPSHOT`.
+Toutes les versions à `0.2.0` au moment de la rédaction. Parent commun `io.vidocq:vidocq-parent:1.0.0-SNAPSHOT`.
 
 == Modules JPMS
 

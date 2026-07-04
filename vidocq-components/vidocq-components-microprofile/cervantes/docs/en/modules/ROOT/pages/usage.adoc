@@ -120,7 +120,7 @@ Supported types (excerpt — see xref:reference.adoc[Reference] for the exhausti
 
 [NOTE]
 ====
-On a _primitive_ field (`int`, `boolean`), Vauban had a long-standing bug (VAU-INJ-PRIM, fixed late May 2026) that made the injection silently empty. Cervantes 0.1.0-SNAPSHOT therefore requires a Vauban that includes this fix.
+On a _primitive_ field (`int`, `boolean`), Vauban had a long-standing bug (VAU-INJ-PRIM, fixed late May 2026) that made the injection silently empty. Cervantes 0.2.0 therefore requires a Vauban that includes this fix.
 ====
 
 == Cookie transport instead of `Authorization`

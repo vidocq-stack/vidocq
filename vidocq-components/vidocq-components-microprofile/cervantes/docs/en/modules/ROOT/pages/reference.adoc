@@ -43,7 +43,7 @@ This page consolidates the public surface of Cervantes: artefacts to declare, ex
 | Official MP JWT 2.1 TCK runner — outside the reactor (Model 4.0.0). Do not declare as an application dependency.
 |===
 
-All versions at `0.1.0-SNAPSHOT` at the time of writing. Shared parent `io.vidocq:vidocq-parent:1.0.0-SNAPSHOT`.
+All versions at `0.2.0` at the time of writing. Shared parent `io.vidocq:vidocq-parent:1.0.0-SNAPSHOT`.
 
 == JPMS modules
 
