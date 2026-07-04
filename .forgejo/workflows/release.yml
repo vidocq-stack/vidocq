@@ -64,7 +64,7 @@ on:
         description: "io.vidocq.grimm:* (all artifacts under io.vidocq.grimm) — stable version (must be released on Central first)"
         type: string
         required: true
-        default:     "0.1.1"
+        default:     "0.2.0"
       humboldt_release:
         description: "io.vidocq.humboldt:* (all artifacts under io.vidocq.humboldt) — stable version (must be released on Central first)"
         type: string
@@ -124,6 +124,7 @@ jobs:
             io.vidocq.ravel=${{ inputs.ravel_release }}
             io.vidocq.vauban=${{ inputs.vauban_release }}
           excluded-modules: |
+            vidocq-runtime-h2-jpms-repackaged
             vidocq-runtime-it-cyrano-jpms
             vidocq-runtime-examples
           central-username: ${{ secrets.CENTRAL_USERNAME }}
