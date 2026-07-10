@@ -22,6 +22,7 @@ package io.vidocq.runtime.cli.scaffold;
 import io.vidocq.runtime.cli.CliOutput;
 import io.vidocq.runtime.cli.Command;
 import io.vidocq.runtime.cli.Version;
+import io.vidocq.runtime.cli.ext.KnownExtensions;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -124,9 +125,10 @@ public final class ProjectScaffolder {
         if (ids.isEmpty()) return "";
         var sb = new StringBuilder();
         for (String id : ids) {
+            var coordinate = KnownExtensions.resolve(id);
             sb.append("        <dependency>\n")
-              .append("            <groupId>io.vidocq.runtime</groupId>\n")
-              .append("            <artifactId>vidocq-runtime-").append(id).append("-extension</artifactId>\n")
+              .append("            <groupId>").append(coordinate.groupId()).append("</groupId>\n")
+              .append("            <artifactId>").append(coordinate.artifactId()).append("</artifactId>\n")
               .append("        </dependency>\n");
         }
         return sb.toString();
