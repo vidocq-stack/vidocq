@@ -123,4 +123,25 @@ public final class KnownExtensions {
     public static boolean isKnown(String id) {
         return byId(id).isPresent();
     }
+
+    /**
+     * The APT codegen bundle that MUST sit on the compiler's
+     * {@code annotationProcessorPaths} when the matching extension is on the
+     * dependencies (enforced by {@code vidocq:checkpom}). Empty for extensions
+     * that do not ship one.
+     */
+    public static Optional<ExtensionCoordinate> codegenBundle(String id) {
+        return switch (id == null ? "" : id.trim().toLowerCase()) {
+            case "cassini-rest" -> Optional.of(new ExtensionCoordinate(
+                    "io.vidocq.runtime.extensions.jakartaee.core",
+                    "vidocq-runtime-cassini-rest-extension-codegen"));
+            case "mansart-data" -> Optional.of(new ExtensionCoordinate(
+                    "io.vidocq.runtime.extensions.jakartaee.web",
+                    "vidocq-runtime-mansart-data-extension-codegen"));
+            case "mansart-transactions" -> Optional.of(new ExtensionCoordinate(
+                    "io.vidocq.runtime.extensions.jakartaee.web",
+                    "vidocq-runtime-mansart-transactions-extension-codegen"));
+            default -> Optional.empty();
+        };
+    }
 }

@@ -106,22 +106,86 @@ public final class ProjectScaffolder {
 
                     <groupId>%s</groupId>
                     <artifactId>%s</artifactId>
-                    <version>1.0.0-SNAPSHOT</version>
                     <name>%s</name>
+
+                    <properties>
+                        <vidocq.mainModule>%s</vidocq.mainModule>
+                        <vidocq.mainClass>%s.%s</vidocq.mainClass>
+                    </properties>
 
                     <dependencies>
                         <dependency>
                             <groupId>io.vidocq.runtime</groupId>
                             <artifactId>vidocq-runtime-core</artifactId>
+                            <version>%s</version>
                         </dependency>
                 %s
                     </dependencies>
+
+                    <build>
+                        <plugins>
+                            <plugin>
+                                <groupId>io.vidocq.runtime</groupId>
+                                <artifactId>vidocq-runtime-maven-plugin</artifactId>
+                                <configuration>
+                                    <!-- vidocq:package 0.2.0 fails on an absent jvmArgs (BUG-20260710-01). -->
+                                    <jvmArgs>-Dfile.encoding=UTF-8</jvmArgs>
+                                </configuration>
+                                <executions>
+                                    <execution>
+                                        <goals>
+                                            <goal>package</goal>
+                                        </goals>
+                                        <configuration>
+                                            <!-- vidocq:package 0.2.0 passes mainClass verbatim to the JVM
+                                                 module option, which needs module/class (BUG-20260710-02). -->
+                                            <mainClass>${vidocq.mainModule}/${vidocq.mainClass}</mainClass>
+                                        </configuration>
+                                    </execution>
+                                </executions>
+                            </plugin>
+                %s        </plugins>
+                    </build>
                 </project>
                 """.formatted(parentVersion, c.groupId(), c.name(), c.name(),
-                extensionDeps(c.extensions()));
+                moduleName(c), c.pkg(), appClassName(c.name()), parentVersion,
+                extensionDeps(c.extensions(), parentVersion),
+                aptCodegenPlugin(c.extensions(), parentVersion));
     }
 
-    private static String extensionDeps(Set<String> ids) {
+    /**
+     * Compiler plugin override wiring the APT codegen bundle of every selected
+     * extension that ships one — {@code vidocq:checkpom} fails the build otherwise.
+     * Appends to the parent's Vauban indexer entry.
+     */
+    private static String aptCodegenPlugin(Set<String> ids, String version) {
+        var paths = new StringBuilder();
+        for (String id : ids) {
+            KnownExtensions.codegenBundle(id).ifPresent(coordinate -> paths
+                    .append("                    <path>\n")
+                    .append("                        <groupId>").append(coordinate.groupId()).append("</groupId>\n")
+                    .append("                        <artifactId>").append(coordinate.artifactId()).append("</artifactId>\n")
+                    .append("                        <version>").append(version).append("</version>\n")
+                    .append("                        <type>pom</type>\n")
+                    .append("                    </path>\n"));
+        }
+        if (paths.isEmpty()) return "";
+        return """
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-compiler-plugin</artifactId>
+                        <configuration>
+                            <annotationProcessorPaths combine.children="append">
+        %s                </annotationProcessorPaths>
+                        </configuration>
+                    </plugin>
+        """.formatted(paths.toString());
+    }
+
+    // Dependency versions are pinned explicitly: the released parent's
+    // dependencyManagement uses ${project.version}, which re-evaluates to the
+    // generated app's own version and would not resolve.
+    private static String extensionDeps(Set<String> ids, String version) {
         if (ids.isEmpty()) return "";
         var sb = new StringBuilder();
         for (String id : ids) {
@@ -129,18 +193,43 @@ public final class ProjectScaffolder {
             sb.append("        <dependency>\n")
               .append("            <groupId>").append(coordinate.groupId()).append("</groupId>\n")
               .append("            <artifactId>").append(coordinate.artifactId()).append("</artifactId>\n")
+              .append("            <version>").append(version).append("</version>\n")
               .append("        </dependency>\n");
         }
         return sb.toString();
     }
 
     private static String buildModuleInfo(Command.Create c) {
-        String moduleName = c.pkg().replace('-', '.');
+        String moduleName = moduleName(c);
+        if (c.extensions().contains("cassini-rest")) {
+            return """
+                    module %s {
+                        // APT-generated $$CassiniAdapter classes import @Generated (SOURCE retention).
+                        requires static java.compiler;
+
+                        requires jakarta.cdi;
+                        requires jakarta.inject;
+                        requires jakarta.ws.rs;
+                        requires jakarta.json.bind;
+
+                        requires io.vidocq.runtime.core;
+                        requires io.vidocq.runtime.extensions.jakartaee.core.cassini;
+                        requires io.vidocq.cassini.api;
+
+                        // JAX-RS and JSON-B reflect on resource classes and payload types.
+                        opens %s;
+                    }
+                    """.formatted(moduleName, c.pkg());
+        }
         return """
                 module %s {
                     requires io.vidocq.runtime.core;
                 }
                 """.formatted(moduleName);
+    }
+
+    private static String moduleName(Command.Create c) {
+        return c.pkg().replace('-', '.');
     }
 
     private static String buildApp(Command.Create c) {
