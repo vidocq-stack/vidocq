@@ -93,14 +93,15 @@ public final class CommandRunner {
     // -------------------------------------------------------------------------
 
     private static int runVersion() {
-        System.out.println(CliOutput.bold("Vidocq CLI ") + VidocqCli.VERSION);
+        System.out.println(CliOutput.bold("Vidocq CLI ") + Version.cli());
         return 0;
     }
 
     private static int runInfo() {
         CliOutput.println(CliOutput.bold("Vidocq Runtime — System Information"));
         CliOutput.println();
-        System.out.printf("  %-24s %s%n", "CLI version:",  VidocqCli.VERSION);
+        System.out.printf("  %-24s %s%n", "CLI version:",  Version.cli());
+        System.out.printf("  %-24s %s%n", "Runtime version:", Version.runtime());
         System.out.printf("  %-24s %s%n", "Java version:", System.getProperty("java.version"));
         System.out.printf("  %-24s %s%n", "JVM:",
                 System.getProperty("java.vm.name") + " " + System.getProperty("java.vm.version"));
@@ -342,7 +343,7 @@ public final class CommandRunner {
         CliOutput.success("Project '" + create.name() + "' created.");
         CliOutput.println();
         CliOutput.println("  Navigate:  " + CliOutput.cyan("cd " + create.name()));
-        CliOutput.println("  Build:     " + CliOutput.cyan("./mvnw package"));
+        CliOutput.println("  Build:     " + CliOutput.cyan("mvn package"));
         CliOutput.println("  Run:       " + CliOutput.cyan("vidocq start"));
         return 0;
     }
@@ -586,7 +587,7 @@ public final class CommandRunner {
         }
         CliOutput.println();
         CliOutput.success("pom.xml updated.");
-        CliOutput.println(CliOutput.dim("  Run './mvnw package' to fetch the new dependencies."));
+        CliOutput.println(CliOutput.dim("  Run 'mvn package' (or './mvnw package' if present) to fetch the new dependencies."));
         return 0;
     }
 }

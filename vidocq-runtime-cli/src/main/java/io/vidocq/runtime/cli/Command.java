@@ -54,7 +54,8 @@ public sealed interface Command {
             String name,
             String groupId,
             String pkg,
-            Set<String> extensions
+            Set<String> extensions,
+            String parentVersion
     ) implements Command {}
 
     record Build(

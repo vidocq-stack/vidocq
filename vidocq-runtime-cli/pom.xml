@@ -11,8 +11,32 @@
     </parent>
 
     <artifactId>vidocq-runtime-cli</artifactId>
+    <version>0.2.1</version>
     <name>Vidocq :: CLI</name>
     <description>Vidocq command-line interface — create, start, dev, and manage extensions</description>
+
+    <!-- Pinned: the parent's dependencyManagement uses ${project.version}, which would
+         resolve to this module's 0.2.1 hotfix version for every runtime artifact,
+         including transitives such as vidocq-runtime-spi. -->
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>io.vidocq.runtime</groupId>
+                <artifactId>vidocq-runtime-core</artifactId>
+                <version>0.2.0</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.runtime</groupId>
+                <artifactId>vidocq-runtime-spi</artifactId>
+                <version>0.2.0</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.runtime</groupId>
+                <artifactId>vidocq-runtime-codegen-commons</artifactId>
+                <version>0.2.0</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <dependencies>
         <dependency>
@@ -28,10 +52,62 @@
     </dependencies>
 
     <build>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>true</filtering>
+                <includes>
+                    <include>io/vidocq/runtime/cli/version.properties</include>
+                </includes>
+            </resource>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>false</filtering>
+                <excludes>
+                    <exclude>io/vidocq/runtime/cli/version.properties</exclude>
+                </excludes>
+            </resource>
+        </resources>
         <plugins>
             <plugin>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-maven-plugin</artifactId>
+                <!-- Pinned for the same ${project.version} reason as vidocq-runtime-core. -->
+                <version>0.2.0</version>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-assembly-plugin</artifactId>
+                <version>3.7.1</version>
+                <executions>
+                    <execution>
+                        <id>cli-distribution</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>single</goal>
+                        </goals>
+                        <configuration>
+                            <descriptors>
+                                <descriptor>src/assembly/cli.xml</descriptor>
+                            </descriptors>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <!-- Same pin: the inherited path uses ${project.version}. -->
+                    <annotationProcessorPaths combine.self="override">
+                        <path>
+                            <groupId>io.vidocq.runtime</groupId>
+                            <artifactId>vidocq-runtime-core-codegen</artifactId>
+                            <version>0.2.0</version>
+                            <type>pom</type>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
             </plugin>
         </plugins>
     </build>
