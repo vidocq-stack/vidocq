@@ -81,7 +81,7 @@ where this whole bug class is invisible.
 ## BUG-20260704-01 — Released CLI 0.2.0 reports "Vidocq CLI 0.2.0-SNAPSHOT" for --version
 
 - **Date** : 2026-07-04
-- **Statut** : OPEN
+- **Statut** : FIXED (a9d3a59 on main, 9a13640 on hotfix/0.2.1-cli — ships with CLI 0.2.1)
 - **Module touché** : vidocq-runtime-cli (version banner)
 - **Symptôme** : the jar published on Maven Central as `io.vidocq.runtime:vidocq-runtime-cli:0.2.0`
   prints `Vidocq CLI 0.2.0-SNAPSHOT` when invoked with `--version`.
@@ -100,6 +100,11 @@ where this whole bug class is invisible.
   - 2026-07-04 : found while validating the Central-based CLI install recipe for the blog
     tutorial (pages PR #2). Cosmetic only — the artifact itself is the correct 0.2.0 build.
     Central is immutable, so 0.2.0 will keep the wrong banner; fix for 0.2.1+.
+  - 2026-07-10 : root cause confirmed — hardcoded `VidocqCli.VERSION` constant, also used
+    for the `<parent><version>` of every scaffolded pom (the actual issue #3 wall: generated
+    projects referenced an unresolvable 0.2.0-SNAPSHOT parent). Fixed by deriving
+    cliVersion/runtimeVersion from a Maven-filtered version.properties; scaffold now emits
+    the runtime parent version. Ships with CLI 0.2.1 (hotfix/0.2.1-cli).
 
 ## BUG-20260710-01 — vidocq:package 0.2.0 NPEs when jvmArgs is not configured
 
