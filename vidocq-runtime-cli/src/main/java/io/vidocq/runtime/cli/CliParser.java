@@ -102,21 +102,22 @@ public final class CliParser {
     }
 
     private static Command.Create parseCreate(String[] args, int from) {
-        String name = null, groupId = null, pkg = null;
+        String name = null, groupId = null, pkg = null, parentVersion = null;
         Set<String> extensions = new LinkedHashSet<>();
         for (int i = from; i < args.length; i++) {
             switch (args[i]) {
-                case "--name", "-n"     -> name    = value(args, ++i, "--name");
-                case "--group-id", "-g" -> groupId = value(args, ++i, "--group-id");
-                case "--package"        -> pkg     = value(args, ++i, "--package");
-                case "--extension", "-x"-> extensions.add(value(args, ++i, "--extension"));
-                default                 -> unknownOpt(args[i], "create");
+                case "--name", "-n"      -> name    = value(args, ++i, "--name");
+                case "--group-id", "-g"  -> groupId = value(args, ++i, "--group-id");
+                case "--package"         -> pkg     = value(args, ++i, "--package");
+                case "--extension", "-x" -> extensions.add(value(args, ++i, "--extension"));
+                case "--parent-version"  -> parentVersion = value(args, ++i, "--parent-version");
+                default                  -> unknownOpt(args[i], "create");
             }
         }
         if (name == null) throw new CliException("'create' requires --name <app-name>.");
         String gid = groupId != null ? groupId : "io.example";
         String p   = pkg != null ? pkg : gid + "." + name.replace('-', '.');
-        return new Command.Create(name, gid, p, Set.copyOf(extensions));
+        return new Command.Create(name, gid, p, Set.copyOf(extensions), parentVersion);
     }
 
     private static Command.Build parseBuild(String[] args, int from) {
@@ -240,7 +241,7 @@ public final class CliParser {
     static void printHelp(String topic) {
         if (topic != null) { printTopicHelp(topic); return; }
 
-        CliOutput.println(CliOutput.bold("Vidocq CLI " + VidocqCli.VERSION));
+        CliOutput.println(CliOutput.bold("Vidocq CLI " + Version.cli()));
         CliOutput.println();
         CliOutput.println("Usage: " + CliOutput.cyan("vidocq") + " <command> [options]");
         CliOutput.println();
@@ -304,6 +305,7 @@ public final class CliParser {
                 opt("--group-id, -g <groupId>",  "Maven groupId            (default: io.example)");
                 opt("--package <pkg>",            "Root Java package        (default: <groupId>.<name>)");
                 opt("--extension, -x <id>",       "Extension to enable, repeatable");
+                opt("--parent-version <version>", "Vidocq runtime parent version   (default: the CLI's runtime version)");
                 CliOutput.println();
                 CliOutput.println("Example:");
                 CliOutput.println("  " + CliOutput.cyan(

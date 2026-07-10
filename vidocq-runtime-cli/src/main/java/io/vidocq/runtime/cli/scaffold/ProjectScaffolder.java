@@ -19,8 +19,9 @@
  */
 package io.vidocq.runtime.cli.scaffold;
 
+import io.vidocq.runtime.cli.CliOutput;
 import io.vidocq.runtime.cli.Command;
-import io.vidocq.runtime.cli.VidocqCli;
+import io.vidocq.runtime.cli.Version;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -46,7 +47,11 @@ public final class ProjectScaffolder {
     private ProjectScaffolder() {}
 
     public static void scaffold(Command.Create create) throws IOException {
-        Path root     = Path.of(create.name());
+        scaffold(create, Path.of(""));
+    }
+
+    public static void scaffold(Command.Create create, Path baseDir) throws IOException {
+        Path root     = baseDir.resolve(create.name());
         Path javaRoot = root.resolve("src/main/java");
         Path srcPkg   = javaRoot.resolve(packageToPath(create.pkg()));
         Path res      = root.resolve("src/main/resources");
@@ -68,6 +73,22 @@ public final class ProjectScaffolder {
     // -------------------------------------------------------------------------
 
     private static String buildPom(Command.Create c) {
+        return buildPom(c, Version.runtime());
+    }
+
+    /**
+     * Builds the pom with an explicit runtime parent version — the released
+     * {@code vidocq-runtime-parent} the generated project inherits from. An explicit
+     * {@code --parent-version} always wins; a SNAPSHOT parent (dev build of the CLI)
+     * triggers a warning because it will not resolve from Maven Central.
+     */
+    static String buildPom(Command.Create c, String runtimeVersion) {
+        String parentVersion = c.parentVersion() != null ? c.parentVersion() : runtimeVersion;
+        if (c.parentVersion() == null && parentVersion.endsWith("-SNAPSHOT")) {
+            CliOutput.warning("Scaffolded parent version " + parentVersion
+                    + " is a SNAPSHOT and will not resolve from Maven Central."
+                    + " Use --parent-version <released-version> to override.");
+        }
         return """
                 <?xml version="1.0" encoding="UTF-8"?>
                 <project xmlns="http://maven.apache.org/POM/4.0.0"
@@ -84,6 +105,7 @@ public final class ProjectScaffolder {
 
                     <groupId>%s</groupId>
                     <artifactId>%s</artifactId>
+                    <version>1.0.0-SNAPSHOT</version>
                     <name>%s</name>
 
                     <dependencies>
@@ -94,7 +116,7 @@ public final class ProjectScaffolder {
                 %s
                     </dependencies>
                 </project>
-                """.formatted(VidocqCli.VERSION, c.groupId(), c.name(), c.name(),
+                """.formatted(parentVersion, c.groupId(), c.name(), c.name(),
                 extensionDeps(c.extensions()));
     }
 
