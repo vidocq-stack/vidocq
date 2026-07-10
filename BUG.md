@@ -100,3 +100,47 @@ where this whole bug class is invisible.
   - 2026-07-04 : found while validating the Central-based CLI install recipe for the blog
     tutorial (pages PR #2). Cosmetic only — the artifact itself is the correct 0.2.0 build.
     Central is immutable, so 0.2.0 will keep the wrong banner; fix for 0.2.1+.
+
+## BUG-20260710-01 — vidocq:package 0.2.0 NPEs when jvmArgs is not configured
+
+- **Date** : 2026-07-10
+- **Statut** : OPEN
+- **Module touché** : vidocq-runtime-maven-plugin / VidocqPackageMojo
+- **Symptôme** : `Cannot invoke "String.isBlank()" because "this.jvmArgs" is null` — the
+  `package` goal fails on any pom that does not set `<jvmArgs>` explicitly. An empty
+  `<jvmArgs></jvmArgs>` element does NOT help (Plexus maps both the absent element and
+  `defaultValue = ""` to null).
+- **Reproduction minimale** :
+  ```
+  vidocq create --name demo -g com.acme   # scaffold without <jvmArgs>
+  cd demo && mvn package                   # with the plugin's package goal wired
+  ```
+- **Hypothèse de cause** : `@Parameter(defaultValue = "")` yields null under Maven/Plexus;
+  the mojo dereferences `jvmArgs.isBlank()` without a null guard.
+- **Investigations** :
+  - 2026-07-10 : found while validating the scaffolded-project E2E flow for the
+    getting-started rewrite (issue #3). Released 0.2.0 is immutable — the scaffold now
+    emits `<jvmArgs>-Dfile.encoding=UTF-8</jvmArgs>` as a workaround. Fix the null guard
+    on main for the next plugin release.
+
+## BUG-20260710-02 — vidocq:package 0.2.0 launcher uses --module <mainClass> without the module name
+
+- **Date** : 2026-07-10
+- **Statut** : OPEN
+- **Module touché** : vidocq-runtime-maven-plugin / VidocqPackageMojo
+- **Symptôme** : the generated `bin/<app>.sh` launcher runs
+  `java --module-path lib --module <mainClass>` — with the default or a plain class name
+  this fails at boot with `FindException: Module <mainClass> not found`. The mojo ignores
+  `vidocq.mainModule` (used by vidocq:dev/jlink) and passes `mainClass` verbatim where the
+  JVM expects `module/class`.
+- **Reproduction minimale** :
+  ```
+  mvn package   # with vidocq:package wired and vidocq.mainClass=com.acme.demo.DemoApp
+  sh target/demo-0.2.0/bin/demo.sh
+  ```
+- **Hypothèse de cause** : the script template concatenates `--module ${mainClass}`
+  instead of `--module ${mainModule}/${mainClass}`.
+- **Investigations** :
+  - 2026-07-10 : found together with BUG-20260710-01. Workaround baked into the scaffold:
+    `<mainClass>${vidocq.mainModule}/${vidocq.mainClass}</mainClass>` on the package
+    execution. Align the mojo with vidocq:dev/jlink (separate mainModule parameter) on main.
