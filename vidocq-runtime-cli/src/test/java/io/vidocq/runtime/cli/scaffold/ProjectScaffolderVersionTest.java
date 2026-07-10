@@ -48,16 +48,22 @@ class ProjectScaffolderVersionTest {
         String pom = Files.readString(dir.resolve("demo/pom.xml"));
         assertTrue(pom.contains("<version>" + Version.runtime() + "</version>"),
                 "scaffolded parent version must be the runtime parent version, pom was:\n" + pom);
-        assertFalse(pom.contains("${"), "pom must not contain unfiltered placeholders");
+        assertFalse(pom.contains("${project."),
+                "pom must not rely on ${project.*} for versions — the parent's "
+                        + "dependencyManagement re-evaluates them to the app's own version");
     }
 
     @Test
-    void scaffoldedAppHasItsOwnInitialVersion(@TempDir Path dir) throws IOException {
+    void scaffoldedAppInheritsTheParentVersion(@TempDir Path dir) throws IOException {
+        // The released parent's dependencyManagement pins every runtime artifact to
+        // ${project.version}. An app declaring its own version would re-evaluate that
+        // to itself and break transitive resolution (e.g. vidocq-runtime-spi), so the
+        // scaffolded pom must NOT declare a version of its own.
         ProjectScaffolder.scaffold(create(null), dir);
 
         String pom = Files.readString(dir.resolve("demo/pom.xml"));
-        assertTrue(pom.contains("<artifactId>demo</artifactId>\n    <version>1.0.0-SNAPSHOT</version>"),
-                "the app must declare its own initial version instead of inheriting the parent's, pom was:\n" + pom);
+        assertFalse(pom.contains("<artifactId>demo</artifactId>\n    <version>"),
+                "the app must inherit the parent version, pom was:\n" + pom);
     }
 
     @Test
@@ -67,6 +73,23 @@ class ProjectScaffolderVersionTest {
         String pom = Files.readString(dir.resolve("demo/pom.xml"));
         assertTrue(pom.contains("<version>9.9.9</version>"),
                 "explicit --parent-version must win, pom was:\n" + pom);
+    }
+
+    @Test
+    void scaffoldedDependenciesCarryExplicitRuntimeVersion(@TempDir Path dir) throws IOException {
+        // The released parent's dependencyManagement uses ${project.version}, which
+        // re-evaluates to the app's own version — dependencies must pin explicitly.
+        ProjectScaffolder.scaffold(
+                new Command.Create("demo", "com.acme", "com.acme.demo",
+                        Set.of("cassini-rest"), "2.2.2"), dir);
+
+        String pom = Files.readString(dir.resolve("demo/pom.xml"));
+        assertTrue(pom.contains("<artifactId>vidocq-runtime-core</artifactId>\n"
+                        + "            <version>2.2.2</version>"),
+                "core dependency must pin the runtime version explicitly, pom was:\n" + pom);
+        assertTrue(pom.contains("<artifactId>vidocq-runtime-cassini-rest-extension</artifactId>\n"
+                        + "            <version>2.2.2</version>"),
+                "extension dependencies must pin the runtime version explicitly, pom was:\n" + pom);
     }
 
     @Test
