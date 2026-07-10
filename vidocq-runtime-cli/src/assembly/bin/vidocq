@@ -1,0 +1,4 @@
+#!/bin/sh
+# Vidocq CLI launcher — expects the sibling ../modules directory from the cli.zip layout.
+DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+exec java --module-path "$DIR/modules" -m io.vidocq.runtime.cli/io.vidocq.runtime.cli.VidocqCli "$@"
