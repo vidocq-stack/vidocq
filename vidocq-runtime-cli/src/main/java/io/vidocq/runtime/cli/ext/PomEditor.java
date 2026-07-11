@@ -114,6 +114,98 @@ public final class PomEditor {
         return new Result(sb.toString(), changed);
     }
 
+    /**
+     * Wires an extension's APT codegen bundle into the compiler plugin's
+     * {@code annotationProcessorPaths} — {@code vidocq:checkpom} fails the build
+     * when the matching extension is on the dependencies without it. Idempotent.
+     * The version uses {@code ${project.version}} like the canonical example pom
+     * (Vidocq apps inherit their version from the released runtime parent).
+     */
+    public static Result addAnnotationProcessorPath(String pom, ExtensionCoordinate codegen) {
+        int aptOpen = pom.indexOf("<annotationProcessorPaths");
+        if (aptOpen >= 0) {
+            int aptClose = pom.indexOf("</annotationProcessorPaths>", aptOpen);
+            if (aptClose < 0) {
+                throw new IllegalArgumentException(
+                        "Not a valid pom.xml: unclosed <annotationProcessorPaths>.");
+            }
+            if (pom.substring(aptOpen, aptClose)
+                    .contains("<artifactId>" + codegen.artifactId() + "</artifactId>")) {
+                return new Result(pom, false);
+            }
+            int lineStart = pom.lastIndexOf('\n', aptClose) + 1;
+            String closeIndent = pom.substring(lineStart, aptClose);
+            String indent = isBlank(closeIndent) ? closeIndent + "    " : "                    ";
+            return new Result(
+                    pom.substring(0, lineStart) + pathXml(codegen, indent) + pom.substring(lineStart),
+                    true);
+        }
+
+        int pluginsClose = projectPluginsClose(pom);
+        if (pluginsClose >= 0) {
+            int lineStart = pom.lastIndexOf('\n', pluginsClose) + 1;
+            String closeIndent = pom.substring(lineStart, pluginsClose);
+            String indent = isBlank(closeIndent) ? closeIndent + "    " : "        ";
+            return new Result(
+                    pom.substring(0, lineStart) + compilerPluginXml(codegen, indent) + pom.substring(lineStart),
+                    true);
+        }
+
+        int proj = pom.indexOf("</project>");
+        if (proj < 0) {
+            throw new IllegalArgumentException("Not a valid pom.xml: missing </project>.");
+        }
+        int lineStart = pom.lastIndexOf('\n', proj) + 1;
+        String projIndent = pom.substring(lineStart, proj);
+        String base = isBlank(projIndent) ? projIndent + "    " : "    ";
+        String block = base + "<build>\n"
+                + base + "    <plugins>\n"
+                + compilerPluginXml(codegen, base + "        ")
+                + base + "    </plugins>\n"
+                + base + "</build>\n";
+        return new Result(pom.substring(0, lineStart) + block + pom.substring(lineStart), true);
+    }
+
+    private static String pathXml(ExtensionCoordinate codegen, String indent) {
+        return indent + "<path>\n"
+                + indent + "    <groupId>" + codegen.groupId() + "</groupId>\n"
+                + indent + "    <artifactId>" + codegen.artifactId() + "</artifactId>\n"
+                + indent + "    <version>${project.version}</version>\n"
+                + indent + "    <type>pom</type>\n"
+                + indent + "</path>\n";
+    }
+
+    private static String compilerPluginXml(ExtensionCoordinate codegen, String indent) {
+        return indent + "<plugin>\n"
+                + indent + "    <groupId>org.apache.maven.plugins</groupId>\n"
+                + indent + "    <artifactId>maven-compiler-plugin</artifactId>\n"
+                + indent + "    <configuration>\n"
+                + indent + "        <annotationProcessorPaths combine.children=\"append\">\n"
+                + pathXml(codegen, indent + "            ")
+                + indent + "        </annotationProcessorPaths>\n"
+                + indent + "    </configuration>\n"
+                + indent + "</plugin>\n";
+    }
+
+    /**
+     * Index of the first {@code </plugins>} outside {@code <pluginManagement>},
+     * or {@code -1} when the pom has no project-level plugins element.
+     */
+    private static int projectPluginsClose(String pom) {
+        int pmStart = pom.indexOf("<pluginManagement>");
+        int pmEnd = pmStart < 0 ? -1 : pom.indexOf("</pluginManagement>", pmStart);
+        int from = 0;
+        int close;
+        while ((close = pom.indexOf("</plugins>", from)) >= 0) {
+            boolean insidePm = pmStart >= 0 && pmEnd >= 0 && close > pmStart && close < pmEnd;
+            if (!insidePm) {
+                return close;
+            }
+            from = close + "</plugins>".length();
+        }
+        return -1;
+    }
+
     private static boolean matches(String dependencyBlock, ExtensionCoordinate coordinate) {
         Matcher g = GROUP_ID.matcher(dependencyBlock);
         Matcher a = ARTIFACT_ID.matcher(dependencyBlock);

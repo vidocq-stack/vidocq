@@ -149,3 +149,27 @@ where this whole bug class is invisible.
   - 2026-07-10 : found together with BUG-20260710-01. Workaround baked into the scaffold:
     `<mainClass>${vidocq.mainModule}/${vidocq.mainClass}</mainClass>` on the package
     execution. Align the mojo with vidocq:dev/jlink (separate mainModule parameter) on main.
+
+## BUG-20260711-01 — extension add does not wire the codegen bundle, next build fails checkpom
+
+- **Date** : 2026-07-11
+- **Statut** : FIXED (fix/extension-add-codegen — ships with CLI 0.2.2)
+- **Module touché** : vidocq-runtime-cli / CommandRunner + PomEditor
+- **Symptôme** : `vidocq extension add cassini-rest` adds the dependency but not the
+  `vidocq-runtime-cassini-rest-extension-codegen` annotationProcessorPaths entry; since the
+  0.2.1 scaffold wires the vidocq plugin (checkpom active), the next `vidocq build` /
+  `mvn package` fails: "codegen bundle ... is missing from annotationProcessorPaths".
+  Breaks the published blog tutorial flow (create → extension add cassini-rest → build).
+- **Reproduction minimale** :
+  ```
+  vidocq create --name hello --group-id com.example
+  cd hello && vidocq extension add cassini-rest && vidocq build   # checkpom FAIL
+  ```
+- **Hypothèse de cause** : `extension add` only edits `<dependencies>`; the APT wiring rule
+  introduced with the 0.2.1 scaffold was not mirrored there.
+- **Investigations** :
+  - 2026-07-11 : found by replaying the published blog tutorial block-by-block in a clean
+    container. Fixed: PomEditor.addAnnotationProcessorPath (append into existing APT block,
+    create the compiler plugin block or the whole build section when absent, idempotent)
+    wired into `extension add` via KnownExtensions.codegenBundle. Verified E2E: patched
+    add + `vidocq build` passes on a 0.2.1-scaffolded project.

@@ -559,6 +559,20 @@ public final class CommandRunner {
             }
             PomEditor.Result result = add ? PomEditor.add(pom, coord) : PomEditor.remove(pom, coord);
             pom = result.pom();
+            if (add) {
+                // Extensions shipping an APT codegen bundle need it on the compiler's
+                // annotationProcessorPaths, or vidocq:checkpom fails the next build.
+                var codegen = KnownExtensions.codegenBundle(id);
+                if (codegen.isPresent()) {
+                    PomEditor.Result apt = PomEditor.addAnnotationProcessorPath(pom, codegen.get());
+                    pom = apt.pom();
+                    if (apt.changed()) {
+                        anyChange = true;
+                        CliOutput.success("Wired " + codegen.get().artifactId()
+                                + CliOutput.dim("  (annotationProcessorPaths)"));
+                    }
+                }
+            }
             if (result.changed()) {
                 anyChange = true;
                 CliOutput.success((add ? "Added " : "Removed ") + id
