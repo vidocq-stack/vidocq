@@ -9,7 +9,7 @@
     POMs that rely on implicit parent versions.
 
     Internal dependencies (knock-core, knock-cdi-vauban) are pinned to
-    version 0.1.0-SNAPSHOT from the local Maven repository.
+    version 0.3.0-SNAPSHOT from the local Maven repository.
 
     Launch through the script:
         ./run-official-tck-mp-health-4.0.sh                      (smoke test)
@@ -40,11 +40,11 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.release>25</maven.compiler.release>
-        <knock.version>0.2.0-SNAPSHOT</knock.version>
-        <microprofile.health.api.version>0.2.0-SNAPSHOT</microprofile.health.api.version>
+        <knock.version>0.3.0-SNAPSHOT</knock.version>
+        <microprofile.health.api.version>0.3.0-SNAPSHOT</microprofile.health.api.version>
         <microprofile.health.tck.version>4.0.1</microprofile.health.tck.version>
-        <cassini.version>0.2.0-SNAPSHOT</cassini.version>
-        <chappe.version>0.2.0-SNAPSHOT</chappe.version>
+        <cassini.version>0.3.0-SNAPSHOT</cassini.version>
+        <chappe.version>0.3.0-SNAPSHOT</chappe.version>
         <!-- TCK harness: never released. -->
         <maven.deploy.skip>true</maven.deploy.skip>
         <maven.javadoc.skip>true</maven.javadoc.skip>
@@ -317,7 +317,7 @@
                 <dependency>
                     <groupId>io.vidocq.champollion</groupId>
                     <artifactId>champollion-jsonp</artifactId>
-                    <version>0.1.0-SNAPSHOT</version>
+                    <version>0.3.0-SNAPSHOT</version>
                     <scope>test</scope>
                 </dependency>
                 <dependency>
