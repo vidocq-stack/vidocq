@@ -53,6 +53,7 @@
                 <module>vidocq-runtime-tck-cervantes-jwt</module>
                 <module>vidocq-runtime-tck-ravel-config</module>
                 <module>vidocq-runtime-tck-humboldt-telemetry</module>
+                <module>vidocq-runtime-tck-dirac-metrics</module>
             </modules>
         </profile>
     </profiles>
