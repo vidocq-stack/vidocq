@@ -65,9 +65,9 @@
         <jakarta.rs.version>4.0.0</jakarta.rs.version>
 
         <!-- Vidocq upstream implementations -->
-        <vauban.version>0.2.0-SNAPSHOT</vauban.version>
-        <ravel.version>0.1.0-SNAPSHOT</ravel.version>
-        <cassini.version>0.2.0-SNAPSHOT</cassini.version>
+        <vauban.version>0.3.0-SNAPSHOT</vauban.version>
+        <ravel.version>0.3.0-SNAPSHOT</ravel.version>
+        <cassini.version>0.3.0-SNAPSHOT</cassini.version>
 
         <!-- JMH for dirac-bench -->
         <jmh.version>1.37</jmh.version>

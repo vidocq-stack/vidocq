@@ -9,7 +9,7 @@
     (implicit version via parent).
 
     Internal dependencies (dirac-api/core/cdi-vauban) are pinned to version
-    0.1.0-SNAPSHOT installed in the local Maven repository.
+    0.3.0-SNAPSHOT installed in the local Maven repository.
 
     Execution goes through the script:
         ./run-official-tck-mp-metrics-5.1.sh              (smoke test)
@@ -28,7 +28,7 @@
 
     <groupId>io.vidocq.dirac</groupId>
     <artifactId>dirac-tck</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>0.3.0-SNAPSHOT</version>
     <packaging>jar</packaging>
 
     <name>Dirac :: TCK Runner</name>
@@ -37,9 +37,9 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.release>25</maven.compiler.release>
-        <dirac.version>0.1.0-SNAPSHOT</dirac.version>
+        <dirac.version>0.3.0-SNAPSHOT</dirac.version>
         <microprofile.metrics.version>5.1.1</microprofile.metrics.version>
-        <vauban.version>0.2.0-SNAPSHOT</vauban.version>
+        <vauban.version>0.3.0-SNAPSHOT</vauban.version>
     </properties>
 
     <repositories>
