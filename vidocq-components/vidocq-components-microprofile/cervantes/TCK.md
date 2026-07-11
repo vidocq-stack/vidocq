@@ -30,7 +30,11 @@ Detailed installation procedure in `cervantes-tck/README.md` (to be created at m
 
 | Date | PASS | FAIL | SKIP | Note |
 |------|------|------|------|------|
-| —    | —    | —    | —    | not run (M6) |
+| 2026-06-04 | **206** | 0 | 0 | Full official suite — **100% PASS** |
+
+**206/206 — 100% of the official MicroProfile JWT 2.1 TCK passes.**
 
 Any test exclusion will be documented here with its justification (non-portable spec
 interpretation, environment limitation, etc.).
+
+_No functional challenge — 100% of the official suite passes._

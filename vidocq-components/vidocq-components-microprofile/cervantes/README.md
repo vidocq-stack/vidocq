@@ -51,4 +51,6 @@ sdk env
 
 ## Status
 
+**MicroProfile JWT 2.1 TCK: 206/206 PASS (2026-06-04).** See [`TCK.md`](TCK.md).
+
 Under active development (milestones M0–M8 in [`ROADMAP.md`](ROADMAP.md)). License: Apache 2.0.

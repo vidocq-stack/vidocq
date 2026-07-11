@@ -72,7 +72,7 @@ connects the auth filter (cassini) to the CDI producer (cdi-vauban) without dire
 4. **No runtime reflection / no dynamic proxy**: `@Claim` injection and `@RolesAllowed` enforcement
    via BCE Vauban + `MethodHandle`, no `setAccessible(true)` in production.
 5. **`cervantes-tck/pom.xml` stays at Model 4.0.0**, outside `<subprojects>`.
-6. **TCK 100% PASS is a hard contract** once reached (M6).
+6. **TCK 100% PASS is a hard contract** — **206/206 PASS (2026-06-04)**. Any structural change must preserve this score.
 
 ## Conventions
 
