@@ -36,6 +36,22 @@
         <module>vidocq-runtime-it-cyrano-jpms</module>
     </modules>
 
+    <profiles>
+        <!--
+            Official MicroProfile TCK runners. Kept out of the default reactor so a
+            normal `mvn install` does not download the TCK jars (TestNG, httpclient,
+            json-schema-validator, ...) nor run the long TCK suites. Activate with
+            `-Ptck`. Each runner drives an official TCK against Vidocq through the
+            embedded Arquillian container.
+        -->
+        <profile>
+            <id>tck</id>
+            <modules>
+                <module>vidocq-runtime-tck-knock-health</module>
+            </modules>
+        </profile>
+    </profiles>
+
     <build>
         <plugins>
             <!-- Inherits the checkpom execution from vidocq-runtime-parent/pluginManagement. -->

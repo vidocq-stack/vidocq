@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.runtime</groupId>
+        <artifactId>vidocq-runtime-integration-tests</artifactId>
+        <version>0.3.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vidocq-runtime-tck-knock-health</artifactId>
+    <name>Vidocq :: TCK :: MicroProfile Health 4.0 (Knock)</name>
+    <description>
+        Runs the official MicroProfile Health 4.0 TCK (org.eclipse.microprofile.health:microprofile-health-tck)
+        against Vidocq via the embedded Arquillian container. The TCK is TestNG-based, uses @RunAsClient +
+        @ArquillianResource URI, and probes /health, /health/live, /health/ready, /health/started over HTTP —
+        endpoints exposed by the Knock (MicroProfile Health) extension mounted through Cassini.
+    </description>
+
+    <properties>
+        <!-- MicroProfile 7.1 pins Health 4.0.1 -->
+        <microprofile.health.tck.version>4.0.1</microprofile.health.tck.version>
+    </properties>
+
+    <!--
+        No module-info.java (unnamed module) to keep the TCK deployment classes,
+        which carry no JPMS descriptor, readable by Vauban/Cassini/Knock — same
+        approach as the other vidocq-runtime-it-* modules.
+    -->
+
+    <dependencies>
+        <!-- Vidocq runtime under test -->
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-core</artifactId>
+        </dependency>
+        <!--
+            Knock = MicroProfile Health 4.0 implementation. Pulls Cassini (mounts
+            KnockHealthResource @Path("/health")), knock-core/api and, at runtime,
+            champollion-jsonp (jakarta.json impl used server-side to serialise
+            HealthCheckResponse).
+        -->
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
+            <artifactId>vidocq-runtime-knock-health-extension</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-core</artifactId>
+        </dependency>
+
+        <!-- Test harness: embedded Vidocq Arquillian container -->
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-arquillian</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!--
+            Official MicroProfile Health TCK. Compile-scoped deps (testng,
+            arquillian-testng-container, httpclient, glassfish jakarta.json,
+            json-schema-validator, shrinkwrap-api) come transitively at test scope;
+            their versions resolve via the microprofile-tck-bom imported by the TCK.
+        -->
+        <dependency>
+            <groupId>org.eclipse.microprofile.health</groupId>
+            <artifactId>microprofile-health-tck</artifactId>
+            <version>${microprofile.health.tck.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <!--
+            Align the Arquillian TestNG container with the rest of the Arquillian
+            stack (arquillian-bom, imported by the root pom at ${arquillian.version})
+            so the embedded container and the TestNG bridge share one core version.
+        -->
+        <dependency>
+            <groupId>org.jboss.arquillian.testng</groupId>
+            <artifactId>arquillian-testng-container</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!--
+            json-schema-validator (used by the TCK's JsonSchemaValidationTest) pulls
+            Guava 31.1, whose mandatory `failureaccess` companion is not dragged in
+            transitively here. Declare it explicitly so the schema validator loads.
+        -->
+        <dependency>
+            <groupId>com.google.guava</groupId>
+            <artifactId>failureaccess</artifactId>
+            <version>1.0.1</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!--
+                        The TCK @Test classes live in the microprofile-health-tck jar,
+                        not in this module's src/test/java. Tell Surefire to scan that
+                        dependency; the TestNG provider is selected automatically
+                        because TestNG (not JUnit) is on the test classpath.
+                    -->
+                    <dependenciesToScan>
+                        <dependency>org.eclipse.microprofile.health:microprofile-health-tck</dependency>
+                    </dependenciesToScan>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

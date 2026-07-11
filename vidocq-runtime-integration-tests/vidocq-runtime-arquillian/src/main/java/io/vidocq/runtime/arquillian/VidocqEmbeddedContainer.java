@@ -131,9 +131,15 @@ public class VidocqEmbeddedContainer implements DeployableContainer<VidocqContai
         for (var entry : content.entrySet()) {
             String path = entry.getKey().get();
             if (path.endsWith(".class") && !path.contains("module-info")) {
-                // /com/example/MyClass.class -> com.example.MyClass
-                String className = path
-                        .substring(1) // remove leading /
+                // Normalise both JavaArchive (classes at root) and WebArchive
+                // (classes under WEB-INF/classes/) layouts, e.g.:
+                //   /com/example/MyClass.class            -> com.example.MyClass
+                //   /WEB-INF/classes/com/example/Foo.class -> com.example.Foo
+                String relative = path.substring(1); // remove leading /
+                if (relative.startsWith("WEB-INF/classes/")) {
+                    relative = relative.substring("WEB-INF/classes/".length());
+                }
+                String className = relative
                         .replace('/', '.')
                         .replace(".class", "");
                 classNames.add(className);
