@@ -77,3 +77,99 @@ where this whole bug class is invisible.
   - 2026-06-12 : root-caused while re-validating grimm-tck on 0.2.0 jars (frozen-runner trap, CG-06).
     Contained workaround committed in grimm-tck/pom.xml (lost transitives declared explicitly) —
     remove it once a valid snapshot is republished.
+
+## BUG-20260704-01 — Released CLI 0.2.0 reports "Vidocq CLI 0.2.0-SNAPSHOT" for --version
+
+- **Date** : 2026-07-04
+- **Statut** : FIXED (a9d3a59 on main, 9a13640 on hotfix/0.2.1-cli — ships with CLI 0.2.1)
+- **Module touché** : vidocq-runtime-cli (version banner)
+- **Symptôme** : the jar published on Maven Central as `io.vidocq.runtime:vidocq-runtime-cli:0.2.0`
+  prints `Vidocq CLI 0.2.0-SNAPSHOT` when invoked with `--version`.
+- **Reproduction minimale** :
+  ```
+  # pristine local repo, resolve from Central only
+  mvn -q dependency:copy-dependencies -DincludeScope=runtime -DoutputDirectory=modules \
+      -Dmaven.repo.local=$(mktemp -d)   # pom with a single dep on vidocq-runtime-cli:0.2.0
+  java -p modules -m io.vidocq.runtime.cli/io.vidocq.runtime.cli.VidocqCli --version
+  # → Vidocq CLI 0.2.0-SNAPSHOT
+  ```
+- **Hypothèse de cause** : the version string is not derived from the pom at build time
+  (hardcoded constant, or a resource that is not filtered), so the release build — which
+  runs `versions:set 0.2.0` on the release branch before packaging — does not update it.
+- **Investigations** :
+  - 2026-07-04 : found while validating the Central-based CLI install recipe for the blog
+    tutorial (pages PR #2). Cosmetic only — the artifact itself is the correct 0.2.0 build.
+    Central is immutable, so 0.2.0 will keep the wrong banner; fix for 0.2.1+.
+  - 2026-07-10 : root cause confirmed — hardcoded `VidocqCli.VERSION` constant, also used
+    for the `<parent><version>` of every scaffolded pom (the actual issue #3 wall: generated
+    projects referenced an unresolvable 0.2.0-SNAPSHOT parent). Fixed by deriving
+    cliVersion/runtimeVersion from a Maven-filtered version.properties; scaffold now emits
+    the runtime parent version. Ships with CLI 0.2.1 (hotfix/0.2.1-cli).
+
+## BUG-20260710-01 — vidocq:package 0.2.0 NPEs when jvmArgs is not configured
+
+- **Date** : 2026-07-10
+- **Statut** : OPEN
+- **Module touché** : vidocq-runtime-maven-plugin / VidocqPackageMojo
+- **Symptôme** : `Cannot invoke "String.isBlank()" because "this.jvmArgs" is null` — the
+  `package` goal fails on any pom that does not set `<jvmArgs>` explicitly. An empty
+  `<jvmArgs></jvmArgs>` element does NOT help (Plexus maps both the absent element and
+  `defaultValue = ""` to null).
+- **Reproduction minimale** :
+  ```
+  vidocq create --name demo -g com.acme   # scaffold without <jvmArgs>
+  cd demo && mvn package                   # with the plugin's package goal wired
+  ```
+- **Hypothèse de cause** : `@Parameter(defaultValue = "")` yields null under Maven/Plexus;
+  the mojo dereferences `jvmArgs.isBlank()` without a null guard.
+- **Investigations** :
+  - 2026-07-10 : found while validating the scaffolded-project E2E flow for the
+    getting-started rewrite (issue #3). Released 0.2.0 is immutable — the scaffold now
+    emits `<jvmArgs>-Dfile.encoding=UTF-8</jvmArgs>` as a workaround. Fix the null guard
+    on main for the next plugin release.
+
+## BUG-20260710-02 — vidocq:package 0.2.0 launcher uses --module <mainClass> without the module name
+
+- **Date** : 2026-07-10
+- **Statut** : OPEN
+- **Module touché** : vidocq-runtime-maven-plugin / VidocqPackageMojo
+- **Symptôme** : the generated `bin/<app>.sh` launcher runs
+  `java --module-path lib --module <mainClass>` — with the default or a plain class name
+  this fails at boot with `FindException: Module <mainClass> not found`. The mojo ignores
+  `vidocq.mainModule` (used by vidocq:dev/jlink) and passes `mainClass` verbatim where the
+  JVM expects `module/class`.
+- **Reproduction minimale** :
+  ```
+  mvn package   # with vidocq:package wired and vidocq.mainClass=com.acme.demo.DemoApp
+  sh target/demo-0.2.0/bin/demo.sh
+  ```
+- **Hypothèse de cause** : the script template concatenates `--module ${mainClass}`
+  instead of `--module ${mainModule}/${mainClass}`.
+- **Investigations** :
+  - 2026-07-10 : found together with BUG-20260710-01. Workaround baked into the scaffold:
+    `<mainClass>${vidocq.mainModule}/${vidocq.mainClass}</mainClass>` on the package
+    execution. Align the mojo with vidocq:dev/jlink (separate mainModule parameter) on main.
+
+## BUG-20260711-01 — extension add does not wire the codegen bundle, next build fails checkpom
+
+- **Date** : 2026-07-11
+- **Statut** : FIXED (fix/extension-add-codegen — ships with CLI 0.2.2)
+- **Module touché** : vidocq-runtime-cli / CommandRunner + PomEditor
+- **Symptôme** : `vidocq extension add cassini-rest` adds the dependency but not the
+  `vidocq-runtime-cassini-rest-extension-codegen` annotationProcessorPaths entry; since the
+  0.2.1 scaffold wires the vidocq plugin (checkpom active), the next `vidocq build` /
+  `mvn package` fails: "codegen bundle ... is missing from annotationProcessorPaths".
+  Breaks the published blog tutorial flow (create → extension add cassini-rest → build).
+- **Reproduction minimale** :
+  ```
+  vidocq create --name hello --group-id com.example
+  cd hello && vidocq extension add cassini-rest && vidocq build   # checkpom FAIL
+  ```
+- **Hypothèse de cause** : `extension add` only edits `<dependencies>`; the APT wiring rule
+  introduced with the 0.2.1 scaffold was not mirrored there.
+- **Investigations** :
+  - 2026-07-11 : found by replaying the published blog tutorial block-by-block in a clean
+    container. Fixed: PomEditor.addAnnotationProcessorPath (append into existing APT block,
+    create the compiler plugin block or the whole build section when absent, idempotent)
+    wired into `extension add` via KnownExtensions.codegenBundle. Verified E2E: patched
+    add + `vidocq build` passes on a 0.2.1-scaffolded project.
