@@ -32,7 +32,7 @@ does not pollute the Humboldt application code in production.
 
 ## Current status
 
-**100 % PASS (2026-05-24)** — TCK MicroProfile Telemetry 2.1 (tracing suite) fully green:
+**100 % PASS (2026-06-24 re-validated)** — TCK MicroProfile Telemetry 2.1 (tracing suite) fully green:
 
 ```
 Tests run: 85, Failures: 0, Errors: 0, Skipped: 0
@@ -45,6 +45,13 @@ Tests run: 85, Failures: 0, Errors: 0, Skipped: 0
 | Logs | ✅ SDK M5b delivered | JulHandler + log bridge; `mptelemetry.tck.log.file.path` wired; no dedicated TCK tests in `microprofile-telemetry-logs-tck:2.1` |
 | Baggage | ✅ W3C propagator delivered in M3 | |
 | Config | ✅ OTEL_* / MP_TELEMETRY_* vars delivered in M6c | |
+
+### Run history
+
+| Date | PASS | FAIL | SKIP | Notes |
+|---|---|---|---|---|
+| 2026-05-24 | **85** | 0 | 0 | M7c final run — 100% PASS |
+| 2026-06-24 | **85** | 0 | 0 | Re-validated — confirmed 100% PASS |
 
 ## M7 roadmap
 

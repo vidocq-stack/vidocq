@@ -5,7 +5,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Prerequisites
 
 - **Java 25** + **Maven 3.9.16** (`.sdkmanrc` provided — use `sdk env`)
-- For the official TCK (M7+), the artifact `org.eclipse.microprofile.telemetry:microprofile-telemetry-tck:2.1` must be available (on Central or installed in the local M2 — procedure documented in `TCK.md` when the runner is created)
+- The official TCK artifacts are on **public Maven Central** (no manual install needed):
+  `microprofile-telemetry-tracing-tck:2.1`, `microprofile-telemetry-metrics-tck:2.1`, `microprofile-telemetry-logs-tck:2.1`
+- **TCK status: 85/85 PASS (2026-06-24)** — see [`TCK.md`](TCK.md)
 
 ## Essential commands
 
@@ -19,9 +21,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Build a single module
 ./mvnw -ntp -pl humboldt-api install
 
-# TCK (coming in M7)
-# ./run-official-tck-telemetry-2.1.sh         # smoke
-# ./run-official-tck-telemetry-2.1.sh all     # full suite
+# TCK — smoke test / full suite / targeted test
+./run-official-tck-telemetry-2.1.sh         # smoke
+./run-official-tck-telemetry-2.1.sh all     # full suite (85 tests)
 ```
 
 > `humboldt-tck` (delivered in M7) will be **outside the reactor** (`pom.xml` Model 4.0.0 standalone, without `<parent>`) to work around the ShrinkWrap Maven Resolver 3.3 / Model 4.1.0 incompatibility — same constraint as `cassini-tck`, `champollion-tck`, `foy-tck`. Do not reintegrate this module into the reactor.
@@ -82,7 +84,7 @@ The detailed plan is in `PLAN.md` (§13 milestones M0..M9). In summary:
 - **M4** — `humboldt-sdk-metric` (metrics TCK PASS)
 - **M5** — `humboldt-sdk-log` (logs TCK PASS)
 - **M6** — `humboldt-cdi` + `humboldt-rest` + `humboldt-runtime` (`@WithSpan`, auto-instrumentation)
-- **M7** — `humboldt-tck` outside reactor, TCK 100%
+- **M7** ✅ — `humboldt-tck` outside reactor, **TCK 85/85 PASS**
 - **M8** — benchmarks vs SmallRye, perf ADRs
 - **M9** — complete Antora documentation, release 1.0
 

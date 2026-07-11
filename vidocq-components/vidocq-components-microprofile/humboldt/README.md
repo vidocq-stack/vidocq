@@ -8,7 +8,9 @@
 
 ## Status
 
-**M0 — JPMS skeleton** (in progress). See [`PLAN.md`](PLAN.md) for the detailed M0 → M9 roadmap, and [`tasks/todo.md`](tasks/todo.md) for task tracking.
+**MicroProfile Telemetry 2.1 TCK: 85/85 PASS (2026-06-24).** See [`TCK.md`](TCK.md).
+
+See [`PLAN.md`](PLAN.md) for the detailed M0 → M9 roadmap, and [`tasks/todo.md`](tasks/todo.md) for task tracking.
 
 ## Scope
 
