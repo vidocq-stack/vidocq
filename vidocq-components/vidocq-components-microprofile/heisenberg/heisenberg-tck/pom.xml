@@ -9,7 +9,7 @@
     (version implicite via parent).
 
     Dépendances internes (heisenberg-api/core/cdi-vauban) sont gelées sur la version
-    0.1.0-SNAPSHOT installée dans le repository Maven local.
+    0.3.0-SNAPSHOT installée dans le repository Maven local.
 
     Le lancement passe par le script :
         ./run-official-tck-mp-fault-tolerance-4.1.sh              (smoke test)
@@ -28,7 +28,7 @@
 
     <groupId>io.vidocq.heisenberg</groupId>
     <artifactId>heisenberg-tck</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>0.3.0-SNAPSHOT</version>
     <packaging>jar</packaging>
 
     <name>Heisenberg :: TCK Runner</name>
@@ -37,11 +37,11 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.release>25</maven.compiler.release>
-        <heisenberg.version>0.1.0-SNAPSHOT</heisenberg.version>
+        <heisenberg.version>0.3.0-SNAPSHOT</heisenberg.version>
         <microprofile.fault.tolerance.version>4.1</microprofile.fault.tolerance.version>
-        <vauban.version>0.2.0-SNAPSHOT</vauban.version>
-        <ravel.version>0.1.0-SNAPSHOT</ravel.version>
-        <humboldt.version>0.1.0-SNAPSHOT</humboldt.version>
+        <vauban.version>0.3.0-SNAPSHOT</vauban.version>
+        <ravel.version>0.3.0-SNAPSHOT</ravel.version>
+        <humboldt.version>0.3.0-SNAPSHOT</humboldt.version>
     </properties>
 
     <repositories>
@@ -260,7 +260,7 @@
                 <dependency>
                     <groupId>io.vidocq.dirac</groupId>
                     <artifactId>dirac-cdi-vauban</artifactId>
-                    <version>0.1.0-SNAPSHOT</version>
+                    <version>0.3.0-SNAPSHOT</version>
                     <scope>test</scope>
                 </dependency>
 
