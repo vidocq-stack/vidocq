@@ -1,0 +1,191 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.runtime</groupId>
+        <artifactId>vidocq-runtime-integration-tests</artifactId>
+        <version>0.3.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vidocq-runtime-tck-ravel-config</artifactId>
+    <name>Vidocq :: TCK :: MicroProfile Config 3.1 (Ravel)</name>
+    <description>
+        Runs the official MicroProfile Config 3.1 TCK
+        (org.eclipse.microprofile.config:microprofile-config-tck) against Ravel, the Config
+        implementation Vidocq activates through vidocq-runtime-ravel-config-extension.
+
+        Unlike the Health / OpenAPI / Rest Client / JWT runners, this one drives the TCK inside
+        an Arquillian **Weld SE embedded** CDI container rather than Vidocq's own Vauban CDI.
+        The reason is structural to the MP Config TCK: many tests register per-deployment custom
+        ConfigSources / Converters through META-INF/services files packaged inside each ShrinkWrap
+        archive, which requires real per-deployment classloader isolation. A flat Local/Vauban
+        classpath cannot isolate those service files across deployments, whereas Weld embedded
+        gives each Arquillian deployment its own bean archive.
+
+        What this still certifies for Vidocq: the shipped Ravel implementation (ravel-core:
+        ConfigSources, Converters, expression/profile resolution) and the shipped CDI integration
+        (ravel-cdi-vauban's ConfigCdiExtension). That extension is a *portable* CDI-Lite
+        BuildCompatibleExtension — the exact same class runs under Weld (via
+        weld-lite-extension-translator) and under Vauban, so this run exercises the real Vidocq
+        CDI-config code. Vauban's own BuildCompatibleExtension engine is independently certified by
+        the JWT (Cervantes) and Rest Client (Cyrano) runners, which boot Vauban directly.
+    </description>
+
+    <properties>
+        <!-- MicroProfile 7.1 pins Config 3.1; TCK/API published as 3.1.1. -->
+        <microprofile.config.tck.version>${microprofile.config.version}</microprofile.config.tck.version>
+        <weld.version>6.0.2.Final</weld.version>
+        <arquillian.tck.version>1.10.1.Final</arquillian.tck.version>
+        <tck.testng.version>7.10.2</tck.testng.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <!--
+                Align weld-lite-extension-translator with weld-core-impl 6.0.2+: the version
+                arquillian-weld-embedded pulls transitively (6.0.0.Alpha1) calls
+                AfterBeanDiscoveryImpl.addBean(Class), removed in weld-core-impl 6.0.2, which
+                breaks the @Synthesis phase of Build Compatible Extensions.
+            -->
+            <dependency>
+                <groupId>org.jboss.weld</groupId>
+                <artifactId>weld-lite-extension-translator</artifactId>
+                <version>6.0.1.Final</version>
+            </dependency>
+            <!--
+                The MP Config TCK pulls cdi-api 4.1.0-M1 transitively, which lacks InvokerFactory;
+                weld-lite-extension-translator 6.0.1 references it during @Registration. Force the
+                final 4.1.0 API + lang-model.
+            -->
+            <dependency>
+                <groupId>jakarta.enterprise</groupId>
+                <artifactId>jakarta.enterprise.cdi-api</artifactId>
+                <version>4.1.0</version>
+            </dependency>
+            <dependency>
+                <groupId>jakarta.enterprise</groupId>
+                <artifactId>jakarta.enterprise.lang-model</artifactId>
+                <version>4.1.0</version>
+            </dependency>
+            <!--
+                arquillian-weld-embedded:4.0.0 drags arquillian-container-spi:1.8.0, whose
+                Container interface is not generic; under JDK 25 strict ParameterizedType
+                validation this throws MalformedParameterizedTypeException while constructing
+                EventTestRunnerAdaptor. 1.10.1 declares the generic Container type. Import the
+                whole arquillian-bom 1.10.1 so every arquillian artifact (spi, impl-base,
+                core-impl-base AND test-impl) is aligned, overriding the root's inherited 1.8.0.
+            -->
+            <dependency>
+                <groupId>org.jboss.arquillian</groupId>
+                <artifactId>arquillian-bom</artifactId>
+                <version>${arquillian.tck.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <dependencies>
+        <!-- Ravel = MicroProfile Config 3.1 implementation + its portable CDI extension. -->
+        <dependency>
+            <groupId>io.vidocq.ravel</groupId>
+            <artifactId>ravel-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.ravel</groupId>
+            <artifactId>ravel-cdi-vauban</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.eclipse.microprofile.config</groupId>
+            <artifactId>microprofile-config-api</artifactId>
+        </dependency>
+
+        <!-- Official MP Config 3.1 TCK (TestNG-based). -->
+        <dependency>
+            <groupId>org.eclipse.microprofile.config</groupId>
+            <artifactId>microprofile-config-tck</artifactId>
+            <version>${microprofile.config.tck.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Arquillian TestNG + Weld SE embedded CDI 4.1 container. -->
+        <dependency>
+            <groupId>org.jboss.arquillian.testng</groupId>
+            <artifactId>arquillian-testng-container</artifactId>
+            <version>${arquillian.tck.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.jboss.arquillian.container</groupId>
+            <artifactId>arquillian-weld-embedded</artifactId>
+            <version>4.0.0.Final</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.jboss.weld</groupId>
+            <artifactId>weld-core-impl</artifactId>
+            <version>${weld.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.testng</groupId>
+            <artifactId>testng</artifactId>
+            <version>${tck.testng.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <useModulePath>false</useModulePath>
+                    <dependenciesToScan>
+                        <dependency>org.eclipse.microprofile.config:microprofile-config-tck</dependency>
+                    </dependenciesToScan>
+                    <includes>
+                        <include>**/*Test.class</include>
+                        <include>**/*Tests.class</include>
+                        <include>**/*IT.class</include>
+                    </includes>
+                    <trimStackTrace>false</trimStackTrace>
+                    <systemPropertyVariables>
+                        <arquillian.launch>weld-embedded</arquillian.launch>
+                        <!-- DefaultConfigSourceOrdinalTest.checkSetup -->
+                        <config_ordinal>120</config_ordinal>
+                        <customer.hobby>Tennis</customer.hobby>
+                        <!-- ConfigProviderTest.testPropertyConfigSource -->
+                        <mp.tck.prop.dummy>dummy</mp.tck.prop.dummy>
+                    </systemPropertyVariables>
+                    <environmentVariables>
+                        <!-- DefaultConfigSourceOrdinalTest.checkSetup: env config_ordinal
+                             must be 45 to verify the env ConfigSource ordinal override. -->
+                        <config_ordinal>45</config_ordinal>
+                        <customer_name>Bob</customer_name>
+                        <!-- ConfigProviderTest.testEnvironmentConfigSource -->
+                        <MP_TCK_ENV_DUMMY>dummy</MP_TCK_ENV_DUMMY>
+                        <!-- CDIPropertyNameMatchingTest.checkSetup (spec 7.6) -->
+                        <my_int_property>45</my_int_property>
+                        <MY_BOOLEAN_PROPERTY>true</MY_BOOLEAN_PROPERTY>
+                        <my_string_property>haha</my_string_property>
+                        <MY_STRING_PROPERTY>woohoo</MY_STRING_PROPERTY>
+                    </environmentVariables>
+                </configuration>
+                <dependencies>
+                    <!-- The MP Config TCK is TestNG-driven; force the TestNG surefire provider. -->
+                    <dependency>
+                        <groupId>org.apache.maven.surefire</groupId>
+                        <artifactId>surefire-testng</artifactId>
+                        <version>3.5.5</version>
+                    </dependency>
+                </dependencies>
+            </plugin>
+        </plugins>
+    </build>
+</project>

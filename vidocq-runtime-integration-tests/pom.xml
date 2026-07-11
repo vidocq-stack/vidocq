@@ -51,6 +51,7 @@
                 <module>vidocq-runtime-tck-grimm-openapi</module>
                 <module>vidocq-runtime-tck-cyrano-restclient</module>
                 <module>vidocq-runtime-tck-cervantes-jwt</module>
+                <module>vidocq-runtime-tck-ravel-config</module>
             </modules>
         </profile>
     </profiles>

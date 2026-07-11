@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Configuration Arquillian pour le TCK MicroProfile Config 3.1.
+
+    Le container Weld SE embedded expose un CDI 4.0 minimal au sein du même process
+    JVM que le test TestNG. Aucun networking, démarrage < 200 ms.
+-->
+<arquillian xmlns="http://jboss.org/schema/arquillian"
+            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+            xsi:schemaLocation="http://jboss.org/schema/arquillian
+                                http://jboss.org/schema/arquillian/arquillian_1_0.xsd">
+
+    <container qualifier="weld-embedded" default="true">
+        <configuration>
+            <!--
+                Force Weld à scanner uniquement les beans déclarés dans le déploiement
+                Arquillian (pas la totalité du classpath du test).
+            -->
+            <property name="forceContextActivation">true</property>
+        </configuration>
+    </container>
+
+</arquillian>
+
