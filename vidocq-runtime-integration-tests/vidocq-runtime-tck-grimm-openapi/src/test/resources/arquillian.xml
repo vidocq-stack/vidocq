@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<arquillian xmlns="http://jboss.org/schema/arquillian"
+            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+            xsi:schemaLocation="http://jboss.org/schema/arquillian
+                http://jboss.org/schema/arquillian/arquillian_1_0.xsd">
+
+    <!--
+        Grimm-specific embedded container (ported from grimm-tck). It boots the real
+        Vidocq runtime per deployment and additionally reproduces the wiring the MP
+        OpenAPI TCK relies on but that generic @Path auto-discovery cannot provide:
+          * feeds ALL deployment classes to Grimm (via TckDeploymentContext /
+            TckGrimmSupportProducer) so the @OpenAPIDefinition Application class and
+            @Schema POJOs are scanned, not just @Path resources;
+          * parses each deployment's microprofile-config.properties into GrimmConfig
+            (mp.openapi.* - filter, model.reader, scan.*, servers);
+          * installs the static META-INF/openapi.{yaml,yml,json} document override.
+        It uses a random free port and waits for /openapi readiness, then publishes
+        `test.url` itself (AppTestBase reads that system property).
+    -->
+    <container qualifier="grimm" default="true">
+        <configuration>
+            <property name="host">127.0.0.1</property>
+            <property name="port">0</property>
+            <property name="waitForReadiness">true</property>
+            <property name="readinessTimeoutMillis">10000</property>
+            <property name="readinessPath">/openapi</property>
+            <property name="systemProperties"></property>
+        </configuration>
+    </container>
+</arquillian>

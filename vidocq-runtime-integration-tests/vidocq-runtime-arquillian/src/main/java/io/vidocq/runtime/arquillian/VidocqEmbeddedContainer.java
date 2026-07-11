@@ -36,10 +36,13 @@ import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.jboss.shrinkwrap.impl.base.path.BasicPath;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.ServerSocket;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.ServiceLoader;
 
 /**
@@ -54,6 +57,7 @@ public class VidocqEmbeddedContainer implements DeployableContainer<VidocqContai
     private VidocqContainerConfig config;
     private VidocqBootstrap bootstrap;
     private int actualPort;
+    private final List<String> appliedConfigKeys = new ArrayList<>();
 
     @Override
     public Class<VidocqContainerConfig> getConfigurationClass() {
@@ -98,6 +102,17 @@ public class VidocqEmbeddedContainer implements DeployableContainer<VidocqContai
             System.setProperty("vidocq.chappe.listener.default.host", config.getHost());
             System.setProperty("vidocq.chappe.listener.default.port", String.valueOf(actualPort));
 
+            // Expose the deployment's MicroProfile Config to the runtime. Many TCK
+            // deployments ship a microprofile-config.properties inside the archive
+            // (e.g. mp.openapi.* for OpenAPI, mp.health.* for Health). Those files
+            // live only inside the in-memory ShrinkWrap archive, never on a real
+            // classpath, so an MP Config provider (ravel) cannot see them on its
+            // own. Surface each entry as a system property (ravel's
+            // SystemPropertiesConfigSource then picks it up) before bootstrap, and
+            // remember the keys so undeploy can remove them and keep deployments
+            // isolated.
+            applyDeploymentConfig(archive);
+
             // Boot Vidocq with extracted classes
             bootstrap = VidocqBootstrap.create();
             bootstrap.configure(beanClassNames);
@@ -123,6 +138,48 @@ public class VidocqEmbeddedContainer implements DeployableContainer<VidocqContai
         }
         System.clearProperty("vidocq.chappe.listener.default.host");
         System.clearProperty("vidocq.chappe.listener.default.port");
+        for (String key : appliedConfigKeys) {
+            System.clearProperty(key);
+        }
+        appliedConfigKeys.clear();
+    }
+
+    /**
+     * Extracts every {@code microprofile-config.properties} bundled in the
+     * deployment archive and publishes its entries as system properties so the
+     * runtime's MicroProfile Config provider can resolve them. Keys are tracked in
+     * {@link #appliedConfigKeys} for cleanup on undeploy.
+     */
+    private void applyDeploymentConfig(Archive<?> archive) {
+        for (Map.Entry<String, String> entry : extractMicroProfileConfig(archive).entrySet()) {
+            System.setProperty(entry.getKey(), entry.getValue());
+            appliedConfigKeys.add(entry.getKey());
+        }
+    }
+
+    private Map<String, String> extractMicroProfileConfig(Archive<?> archive) {
+        Map<String, String> out = new LinkedHashMap<>();
+        Map<org.jboss.shrinkwrap.api.ArchivePath, Node> content = archive.getContent();
+        for (var entry : content.entrySet()) {
+            String path = entry.getKey().get();
+            if (path == null || !path.endsWith("microprofile-config.properties")) {
+                continue;
+            }
+            Node node = entry.getValue();
+            if (node == null || node.getAsset() == null) {
+                continue;
+            }
+            try (InputStream stream = node.getAsset().openStream()) {
+                Properties properties = new Properties();
+                properties.load(stream);
+                for (String key : properties.stringPropertyNames()) {
+                    out.put(key, properties.getProperty(key));
+                }
+            } catch (IOException ignored) {
+                // Partial config is still better than none; keep scanning.
+            }
+        }
+        return out;
     }
 
     private List<String> extractClassNames(Archive<?> archive) {

@@ -48,6 +48,7 @@
             <id>tck</id>
             <modules>
                 <module>vidocq-runtime-tck-knock-health</module>
+                <module>vidocq-runtime-tck-grimm-openapi</module>
             </modules>
         </profile>
     </profiles>

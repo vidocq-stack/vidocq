@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.runtime</groupId>
+        <artifactId>vidocq-runtime-integration-tests</artifactId>
+        <version>0.3.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vidocq-runtime-tck-grimm-openapi</artifactId>
+    <name>Vidocq :: TCK :: MicroProfile OpenAPI 4.0 (Grimm)</name>
+    <description>
+        Runs the official MicroProfile OpenAPI 4.0 TCK (org.eclipse.microprofile.openapi:microprofile-openapi-tck)
+        against the real Vidocq runtime. The OpenAPI document under /openapi is produced by the Grimm
+        (MicroProfile OpenAPI) extension mounted through Cassini.
+
+        The harness (ported from grimm's own grimm-tck) is a Grimm-specific embedded Arquillian container that,
+        per deployment, boots Vidocq and reproduces the wiring the TCK relies on: it feeds ALL deployment classes
+        to Grimm (so the @OpenAPIDefinition Application class and @Schema POJOs are scanned, not just @Path
+        resources), parses each microprofile-config.properties into GrimmConfig (mp.openapi.*), and installs the
+        static META-INF/openapi.{yaml,yml,json} override. It uses a random port, waits for /openapi readiness and
+        publishes `test.url` (read by AppTestBase).
+
+        Scope: the client-mode subset. ModelConstructionTest and OASFactoryErrorTest run inside the container
+        (default testable=true) and need an Arquillian TestEnricher/Servlet protocol the embedded container does
+        not provide; they are excluded below as a known infrastructure gap (not a spec conformance failure).
+    </description>
+
+    <properties>
+        <!-- MicroProfile 7.1 pins OpenAPI 4.0 -->
+        <microprofile.openapi.tck.version>4.0.2</microprofile.openapi.tck.version>
+    </properties>
+
+    <!--
+        No module-info.java (unnamed module) so the TCK deployment classes, which
+        carry no JPMS descriptor, stay readable by Vauban/Cassini/Grimm — same
+        approach as the other vidocq-runtime-it-* modules.
+    -->
+
+    <dependencies>
+        <!-- Vidocq runtime under test -->
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-core</artifactId>
+        </dependency>
+        <!--
+            Grimm = MicroProfile OpenAPI 4.0 implementation. Pulls Cassini (mounts
+            OpenApiResource @Path("/openapi")) and grimm-cdi-vauban, whose
+            BuildCompatibleExtension discovers @Path resource classes at deployment
+            bootstrap and builds the OpenAPI model at runtime.
+        -->
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
+            <artifactId>vidocq-runtime-grimm-openapi-extension</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-core</artifactId>
+        </dependency>
+        <!--
+            The TCK deployment() methods (run in the test JVM) build ShrinkWrap
+            archives that reference jakarta.ws.rs.* types (Application, Response,
+            ExceptionMapper, StreamingOutput, ...). Those APIs must be on the test
+            classpath for the archives to be assembled.
+        -->
+        <dependency>
+            <groupId>jakarta.ws.rs</groupId>
+            <artifactId>jakarta.ws.rs-api</artifactId>
+            <version>4.0.0</version>
+        </dependency>
+        <!--
+            Bean Validation API: grimm maps jakarta.validation constraints
+            (@Size, @Min, @NotNull, ...) onto schema facets (minLength, minimum,
+            minItems, ...). The BeanValidationTest deployment carries annotated
+            classes; without this API on the classpath the constraints are invisible
+            and the schema facets are never emitted.
+        -->
+        <dependency>
+            <groupId>jakarta.validation</groupId>
+            <artifactId>jakarta.validation-api</artifactId>
+            <version>3.1.1</version>
+        </dependency>
+
+        <!--
+            Arquillian container SPI + ShrinkWrap. This module ships its OWN Grimm
+            DeployableContainer (GrimmDeployableContainer, ported from grimm-tck),
+            so it depends on the raw SPI rather than vidocq-runtime-arquillian —
+            pulling the latter would register a SECOND DeployableContainer and clash.
+        -->
+        <dependency>
+            <groupId>org.jboss.arquillian.container</groupId>
+            <artifactId>arquillian-container-spi</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.jboss.arquillian.container</groupId>
+            <artifactId>arquillian-container-test-spi</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.jboss.shrinkwrap</groupId>
+            <artifactId>shrinkwrap-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.jboss.shrinkwrap</groupId>
+            <artifactId>shrinkwrap-impl-base</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!--
+            Official MicroProfile OpenAPI TCK. Compile-scoped deps (testng,
+            arquillian-testng-container, rest-assured, hamcrest, jackson yaml,
+            shrinkwrap-api) come transitively at test scope; their versions resolve
+            via the microprofile-tck-bom imported by the TCK.
+        -->
+        <dependency>
+            <groupId>org.eclipse.microprofile.openapi</groupId>
+            <artifactId>microprofile-openapi-tck</artifactId>
+            <version>${microprofile.openapi.tck.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <!--
+            Align the Arquillian TestNG container with the rest of the Arquillian
+            stack (arquillian-bom, imported by the root pom at ${arquillian.version}).
+        -->
+        <dependency>
+            <groupId>org.jboss.arquillian.testng</groupId>
+            <artifactId>arquillian-testng-container</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <useModulePath>false</useModulePath>
+                    <!--
+                        The TCK @Test classes live in the microprofile-openapi-tck jar,
+                        not in this module's src/test/java. Tell Surefire to scan that
+                        dependency; the TestNG provider is selected automatically
+                        because TestNG (not JUnit) is on the test classpath.
+                    -->
+                    <dependenciesToScan>
+                        <dependency>org.eclipse.microprofile.openapi:microprofile-openapi-tck</dependency>
+                    </dependenciesToScan>
+                    <!--
+                        The Grimm container publishes `test.url` itself from the random
+                        port it binds, after /openapi readiness — no fixed port needed.
+                    -->
+                    <!--
+                        Exclude the two in-container tests. They deploy with the default
+                        (testable=true) protocol and expect an ArquillianServletRunner
+                        inside the container to enrich and drive @Test methods — the
+                        embedded Vidocq container is client-mode only and provides no
+                        TestEnricher, so these cannot execute here. Tracked as an infra
+                        gap; NOT a spec conformance exclusion.
+                    -->
+                    <excludes>
+                        <exclude>**/ModelConstructionTest.java</exclude>
+                        <exclude>**/OASFactoryErrorTest.java</exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
