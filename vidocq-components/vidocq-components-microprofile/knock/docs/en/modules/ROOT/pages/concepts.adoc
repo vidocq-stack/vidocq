@@ -54,7 +54,7 @@ Knock renders it with Jakarta JSON-P only — no `StringBuilder`, no third-party
 
 == CDI discovery
 
-In a CDI deployment, checks are discovered by a _Build Compatible Extension_ (`HealthCheckCdiExtension`) running on Vauban. It validates the single-qualifier rule at build time, then `HealthCheckRegistrar` registers each discovered bean into the registry when `@Initialized(ApplicationScoped.class)` fires. Outside CDI, the same registry is fed manually — the core never depends on a container.
+In a CDI deployment, checks are discovered by Vauban and registered by `HealthCheckRegistrar` when `@Initialized(ApplicationScoped.class)` fires: each bean qualified with `@Liveness`, `@Readiness`, or `@Startup` is registered into the registry by probe type. A `HealthCheck` bean with none of those qualifiers is not a health-check procedure and is silently ignored (spec §4.2). Outside CDI, the same registry is fed manually — the core never depends on a container.
 
 == Module boundaries
 

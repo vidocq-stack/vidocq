@@ -20,7 +20,7 @@ Knock repose sur un principe simple : implémenter MicroProfile Health 4.0 avec 
 | Runtime autonome : registre, agrégateur, sérialiseur JSON-P, constructeur de réponse, façade `KnockHealthService`. Java SE pur.
 
 | `knock-cdi-vauban`
-| Build Compatible Extension CDI + auto-enregistrement sur Vauban.
+| Auto-enregistrement CDI des contrôles qualifiés sur Vauban.
 
 | `knock-jaxrs`
 | Ressource Jakarta REST exposant `/health*` (déployée sur Cassini).
@@ -93,10 +93,9 @@ sequenceDiagram
 
 == Découverte CDI
 
-`knock-cdi-vauban` fournit deux pièces internes :
+`knock-cdi-vauban` fournit une pièce interne :
 
-* `HealthCheckCdiExtension` — une Build Compatible Extension validant la règle du qualificateur de sonde unique au moment du build (spec §4.2) ;
-* `HealthCheckRegistrar` — un bean CDI qui, sur `@Initialized(ApplicationScoped.class)`, enregistre chaque `HealthCheck` découvert dans le registre (spec §4.1).
+* `HealthCheckRegistrar` — un bean CDI qui, sur `@Initialized(ApplicationScoped.class)`, enregistre chaque `HealthCheck` qualifié dans le registre par type de sonde (spec §4.1). Un bean `HealthCheck` sans qualificateur `@Liveness`/`@Readiness`/`@Startup` n'est pas une procédure de contrôle et est silencieusement ignoré (spec §4.2).
 
 La découverte utilise le pipeline BCE de Vauban — pas de balayage du classpath à l'exécution, pas de `setAccessible(true)`.
 

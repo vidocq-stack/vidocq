@@ -27,9 +27,9 @@ Chaque contrôle déclare exactement un qualificateur de sonde. Le qualificateur
 
 `GET /health` agrège **tous** les contrôles enregistrés, sans distinction de qualificateur.
 
-[CAUTION]
+[NOTE]
 ====
-Un bean `HealthCheck` sans qualificateur de sonde — ou avec plus d'un — échoue à la validation CDI au déploiement. Cette règle est appliquée par `HealthCheckCdiExtension` conformément à MicroProfile Health §4.2.
+Un bean `HealthCheck` sans qualificateur de sonde n'est pas une procédure de contrôle : selon MicroProfile Health §4.2, c'est un bean CDI ordinaire, silencieusement ignoré — ni enregistré, ni une erreur de déploiement. Seuls les beans portant `@Liveness`, `@Readiness` ou `@Startup` sont enregistrés comme contrôles.
 ====
 
 == Écrire un contrôle
@@ -120,7 +120,7 @@ HealthReport all  = service.report(ProbeType.ALL);
 
 == Avec CDI (Vauban)
 
-Ajoutez `knock-cdi-vauban` et Knock découvre automatiquement chaque bean `@Liveness/@Readiness/@Startup` : la Build Compatible Extension les valide, et `HealthCheckRegistrar` les enregistre à l'initialisation du contexte applicatif. Aucun enregistrement manuel n'est requis.
+Ajoutez `knock-cdi-vauban` et Knock découvre automatiquement chaque bean `@Liveness/@Readiness/@Startup` : `HealthCheckRegistrar` les enregistre à l'initialisation du contexte applicatif. Aucun enregistrement manuel n'est requis.
 
 == Avec Jakarta REST (Cassini)
 

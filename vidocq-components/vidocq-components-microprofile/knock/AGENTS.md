@@ -21,9 +21,10 @@
   threads), and JSON-P serialization are implemented in `knock-core` (see
   `io.vidocq.knock.internal.*` + tests `KnockHealthCheckResponseBuilderTest`,
   `KnockAggregatorTest`, `KnockJsonSerializerTest`).
-- `M2` is delivered: BCE `HealthCheckCdiExtension` (validation §4.2), `HealthCheckRegistrar`
-  (auto-registration §4.1), and CDI bean `KnockCdiHealthCheckRegistry` in `knock-cdi-vauban`
-  (tests `HealthCheckCdiIntegrationTest` 5/5 PASS against embedded Vauban).
+- `M2` is delivered: `HealthCheckRegistrar` (auto-registration of qualified checks §4.1)
+  and CDI bean `KnockCdiHealthCheckRegistry` in `knock-cdi-vauban`. A `HealthCheck` bean
+  without a probe qualifier is not a procedure and is silently ignored (§4.2) — no deployment
+  error (tests `HealthCheckCdiIntegrationTest` PASS against embedded Vauban).
 - `M3` is delivered: JAX-RS resource `KnockHealthResource` (`@Path("/health")`, 4 endpoints)
   in `knock-cassini` (tests `KnockHealthResourceTest` 7/7 PASS, without HTTP container via a
   minimal local `TestRuntimeDelegate` — zero internal Cassini imports).
@@ -99,8 +100,9 @@ sdk env
   `KnockHealthCheckResponseBuilder`, `KnockHealthCheckRegistry`, `KnockAggregator`,
   `HealthSnapshot`, `KnockJsonSerializer`, and SPI provider
   `KnockHealthCheckResponseProvider`.
-- `M2` = CDI Vauban integration (BCE discovers `@Liveness/@Readiness/@Startup` and auto-registers
-  in the registry). Deployment validation if a `HealthCheck` bean is not qualified.
+- `M2` = CDI Vauban integration (`HealthCheckRegistrar` discovers `@Liveness/@Readiness/@Startup`
+  and auto-registers them in the registry). A `HealthCheck` bean without a probe qualifier is
+  not a procedure and is silently ignored (§4.2) — never a deployment error.
 - `M3` = Jakarta REST endpoints via Cassini (`knock-cassini`): JAX-RS resources
   `/health`, `/health/live`, `/health/ready`, `/health/started`. HTTP 200 if UP, 503 if DOWN.
   JAX-RS `Response` built with `jakarta.ws.rs.core.Response`; JSON body produced

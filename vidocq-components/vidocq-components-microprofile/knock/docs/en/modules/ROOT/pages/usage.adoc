@@ -27,9 +27,9 @@ Each check declares exactly one probe qualifier. The qualifier selects which end
 
 `GET /health` aggregates **all** registered checks regardless of qualifier.
 
-[CAUTION]
+[NOTE]
 ====
-A `HealthCheck` bean with no probe qualifier — or with more than one — fails CDI validation at deployment time. This is enforced by `HealthCheckCdiExtension` per MicroProfile Health §4.2.
+A `HealthCheck` bean with no probe qualifier is not a health-check procedure: per MicroProfile Health §4.2 it is an ordinary CDI bean, silently ignored — neither registered nor a deployment error. Only beans carrying `@Liveness`, `@Readiness`, or `@Startup` are registered as checks.
 ====
 
 == Writing a check
@@ -120,7 +120,7 @@ HealthReport all  = service.report(ProbeType.ALL);
 
 == With CDI (Vauban)
 
-Add `knock-cdi-vauban` and Knock discovers every `@Liveness/@Readiness/@Startup` bean automatically: the Build Compatible Extension validates them, and `HealthCheckRegistrar` registers them when the application context is initialised. No manual registration is required.
+Add `knock-cdi-vauban` and Knock discovers every `@Liveness/@Readiness/@Startup` bean automatically: `HealthCheckRegistrar` registers them when the application context is initialised. No manual registration is required.
 
 == With Jakarta REST (Cassini)
 

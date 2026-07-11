@@ -22,9 +22,12 @@
  *
  * <p>The implementation lives in {@code io.vidocq.knock.cdi.internal} (not exported):</p>
  * <ul>
- *   <li>{@code HealthCheckCdiExtension} — CDI 4.1 BCE (probe qualifier validation)</li>
  *   <li>{@code KnockCdiHealthCheckRegistry} — injectable {@code @ApplicationScoped} bean</li>
- *   <li>{@code HealthCheckRegistrar} — automatic registration at CDI startup</li>
+ *   <li>{@code HealthCheckRegistrar} — automatic registration of qualified checks at CDI startup</li>
  * </ul>
+ *
+ * <p>A {@code HealthCheck} bean with none of the {@code @Liveness}/{@code @Readiness}/
+ * {@code @Startup} qualifiers is not a health-check procedure (MicroProfile Health 4.0 §4.2):
+ * it is an ordinary CDI bean, silently ignored — neither registered nor a deployment error.</p>
  */
 package io.vidocq.knock.cdi;

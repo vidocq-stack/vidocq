@@ -2,7 +2,7 @@
 :description: Write a first health check, wire it through CDI, and expose the /health* endpoints.
 
 [.lead]
-This page shows how to add Knock to a project, write a first `HealthCheck`, let CDI discover it, and serve the MicroProfile Health endpoints. No reflection runs at startup: discovery happens through a Vauban Build Compatible Extension and the runtime relies on generated wiring only.
+This page shows how to add Knock to a project, write a first `HealthCheck`, let CDI discover it, and serve the MicroProfile Health endpoints. No reflection runs at startup: discovery happens through generated Vauban wiring only.
 
 == Prerequisites
 
@@ -85,7 +85,7 @@ public class DatabaseCheck implements HealthCheck {
 
 [NOTE]
 ====
-A check must carry exactly one of `@Liveness`, `@Readiness` or `@Startup`. A bean implementing `HealthCheck` without a probe qualifier is rejected by the CDI extension at deployment time (MicroProfile Health §4.2).
+A check must carry one of `@Liveness`, `@Readiness` or `@Startup` to be reported. A bean implementing `HealthCheck` without a probe qualifier is not a health-check procedure: it is silently ignored — neither registered nor a deployment error (MicroProfile Health §4.2).
 ====
 
 == Minimal `module-info.java`

@@ -140,11 +140,11 @@ correct aggregation; JSON serialization compliant with §3.1.
 
 | Task | Notes | Status |
 |---|---|---|
-| BCE `HealthCheckCdiExtension` (Vauban Build Compatible Extension) | `@Registration(types = HealthCheck.class)` — validates the presence of `@Liveness`/`@Readiness`/`@Startup` | ✅ |
+| Auto-registration of qualified checks | `HealthCheckRegistrar` injects `@Liveness`/`@Readiness`/`@Startup` `Instance<HealthCheck>` and registers each by probe type | ✅ |
 | Registration in `HealthCheckRegistry` at CDI startup | `HealthCheckRegistrar` `@ApplicationScoped` + `@Observes @Initialized(ApplicationScoped.class)` | ✅ |
-| Deployment validation | `HealthCheck` bean without a probe qualifier → `messages.error()` → `DeploymentException` (spec §4.2) | ✅ |
+| Unqualified `HealthCheck` ignored | A `HealthCheck` bean without a probe qualifier is not a procedure — silently ignored, neither registered nor a deployment error (spec §4.2, MP Health TCK `EnforceQualifierTest`) | ✅ |
 | `@Inject HealthCheckRegistry` | `KnockCdiHealthCheckRegistry @ApplicationScoped` — direct CDI bean implementing the interface | ✅ |
-| Integration tests with Vauban container | 5/5 PASS — Vauban SE bootstrap, auto-registered `@Liveness`/`@Readiness`/`@Startup`, aggregated DOWN, deployment rejected if no qualifier | ✅ |
+| Integration tests with Vauban container | Vauban SE bootstrap, auto-registered `@Liveness`/`@Readiness`/`@Startup`, aggregated DOWN, unqualified check ignored (deployment OK, empty aggregate) | ✅ |
 
 **M2 decisions:**
 - `@Produces` avoided for the registry: Vauban returns the producer proxy instead of the produced bean
@@ -233,7 +233,7 @@ health check system of every Vidocq deployment.
 | `docs/integration-cassini.md` documentation | Dependencies, JPMS, JAX-RS resource example with dedicated health check | ✅ |
 | `docs/integration-vidocq-runtime.md` documentation | Health check configuration in Vidocq, default `/health` access | ✅ |
 | ADR-002 integration strategy | Rationale, deployment order, risks (see `docs/adr/ADR-002-vidocq-runtime-integration-strategy.md`) | ✅ |
-| ServiceLoader BCE (`META-INF/services/jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension`) | `HealthCheckCdiExtension` exposed through the standard CDI 4.1 contract | ✅ |
+| ServiceLoader `VaubanComponentProvider` (`META-INF/services/io.vidocq.vauban.api.VaubanComponentProvider`) | `_VaubanComponents` exposes `HealthCheckRegistrar` + `KnockCdiHealthCheckRegistry` — zero-reflection wiring | ✅ |
 | `module-info.java` `provides ... with` | JPMS counterpart for service files (see `knock-cdi-vauban` and `knock-core`) | ✅ |
 | `vidocq`: integrate Knock as the health check system | Wrapper module `vidocq-runtime-knock-health-extension` (Maven/JPMS, no Java code) added in `vidocq-runtime-core-extensions/`. Activates Knock via a single dependency, zero-config integration (BCE + Cassini JAX-RS scanning). | ✅ |
 

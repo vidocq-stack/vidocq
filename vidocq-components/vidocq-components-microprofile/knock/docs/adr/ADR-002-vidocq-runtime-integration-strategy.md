@@ -30,9 +30,11 @@ calls Cassini to mount the resource.
 `module-info` that `requires transitive` the Knock + champollion modules.
 No own Java classes. The integration relies 100% on the **standard** SPIs that already exist:
 
-1. CDI 4.1 BCE (`HealthCheckCdiExtension` registered via
-   `META-INF/services/...BuildCompatibleExtension` + JPMS `provides`) — discovers
-   `@Liveness/@Readiness/@Startup` beans;
+1. CDI auto-registration (`HealthCheckRegistrar`, exposed to Vauban via the generated
+   `VaubanComponentProvider` + JPMS `provides`) — discovers and registers
+   `@Liveness/@Readiness/@Startup` beans on `@Initialized(ApplicationScoped.class)`.
+   A `HealthCheck` bean without a probe qualifier is not a procedure and is silently
+   ignored (spec §4.2) — it is never a deployment error;
 2. JAX-RS scanning of CDI `@Path` beans (`CassiniExtension` already queries
    `VaubanBeanProvider.getResourceClasses()`) — mounts `KnockHealthResource`.
 

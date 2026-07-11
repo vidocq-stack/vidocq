@@ -19,8 +19,12 @@
  */
 /**
  * Knock CDI integration for the Vauban container — automatic discovery of beans
- * annotated with {@code @Liveness}, {@code @Readiness}, and {@code @Startup} via a
- * Build Compatible Extension, with registration in the {@code HealthCheckRegistry}.
+ * annotated with {@code @Liveness}, {@code @Readiness}, and {@code @Startup}, with
+ * registration in the {@code HealthCheckRegistry}.
+ *
+ * <p>A {@code HealthCheck} bean that carries none of the three probe qualifiers is not a
+ * health-check procedure: it is an ordinary CDI bean, silently ignored (MicroProfile
+ * Health 4.0 §4.2) — it is neither registered nor a deployment error.</p>
  *
  * <p>Optional module: a standalone SE deployment does not need this module and can feed
  * the registry directly through its programmatic API.</p>
@@ -30,18 +34,6 @@
  * {@code module-info.java} is in {@code src/main/module-info/} to prevent Maven Compiler
  * Plugin from detecting JPMS during {@code testCompile} (vauban-core is test-scope,
  * absent from {@code target/javamodules/}).</p>
- *
- * <p><strong>Strict JPMS (module-path) requirement.</strong> Vauban's {@code BceProcessor}
- * instantiates Build Compatible Extensions by direct reflection
- * ({@code getDeclaredConstructor().newInstance()}) from module {@code io.vidocq.vauban.core}.
- * Declaring the BCE only via {@code provides ... with} is not enough on the module path: the
- * {@code provides} clause lets the {@code ServiceLoader} instantiate the class, but Vauban does
- * its own reflective instantiation, which requires the hosting package to be open to it. We
- * therefore open {@code io.vidocq.knock.cdi.internal} to {@code io.vidocq.vauban.core} — a
- * <em>qualified</em> open, so the internal package stays unexported (no API leak, honouring the
- * "internal.* not exported" constraint); only Vauban gets deep-reflective access at runtime.
- * Without it, a strict module-path deployment fails at boot with an {@code IllegalAccessException}
- * (e.g. the Vidocq runtime / Arago).</p>
  */
 module io.vidocq.knock.cdi.vauban {
     requires transitive io.vidocq.knock.core;
@@ -52,15 +44,11 @@ module io.vidocq.knock.cdi.vauban {
     // Compile-only (optional at runtime): supplies the VaubanComponentProvider service type.
     requires static io.vidocq.vauban.api;
 
-    provides jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension
-            with io.vidocq.knock.cdi.internal.HealthCheckCdiExtension;
-
     // In-module instantiation, field injection AND method invocation of this package's beans
     // (HealthCheckRegistrar, KnockCdiHealthCheckRegistry), generated as _VaubanComponents co-located
     // in io.vidocq.knock.cdi.internal: the container creates them, injects their package-private
     // @Inject fields and fires the @Observes @Initialized observer through this provider — so it
-    // needs no deep reflection and no `opens … to io.vidocq.vauban.core`. The BCE itself is loaded
-    // via the ServiceLoader `provides` above, not by reflection.
+    // needs no deep reflection and no `opens … to io.vidocq.vauban.core`.
     provides io.vidocq.vauban.api.VaubanComponentProvider
             with io.vidocq.knock.cdi.internal._VaubanComponents;
 }

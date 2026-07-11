@@ -26,7 +26,7 @@ _Knock, or the Triumph of Medicine_ (« Knock, ou le Triomphe de la médecine »
 == Three identifying traits
 
 . **Zero third-party libraries** — MicroProfile Health and Jakarta specs only. No SmallRye Health, no Vert.x, no Jackson. JSON is produced through Jakarta JSON-P.
-. **CDI-native discovery** — `@Liveness`, `@Readiness`, `@Startup` beans are discovered by a Vauban Build Compatible Extension and registered automatically, while `knock-core` stays usable in plain Java SE.
+. **CDI-native discovery** — `@Liveness`, `@Readiness`, `@Startup` beans are discovered on Vauban and registered automatically, while `knock-core` stays usable in plain Java SE.
 . **Strict JPMS + virtual threads** — every module ships a `module-info.java`; checks run on a `VirtualThreadPerTaskExecutor`. No `synchronized`, no `ThreadLocal`, no `setAccessible(true)`.
 
 == Endpoints

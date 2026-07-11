@@ -34,7 +34,7 @@ This aggregate transitively depends on:
 ```
 VidocqBootstrap
  ├─ ChappeEngineExtension   (priority 100) — HTTP engine
- ├─ HealthCheckCdiExtension (Knock BCE)    — discover @Liveness/@Readiness/@Startup
+ ├─ HealthCheckRegistrar    (Knock CDI)    — register qualified @Liveness/@Readiness/@Startup
  ├─ CassiniExtension        (priority 500) — scans @Path beans including KnockHealthResource
  │     └─ mount(/) on Chappe
  └─ ChappeServerBootstrap   — starts the HTTP server
@@ -45,9 +45,9 @@ When `CassiniExtension.onStart()` queries
 
 1. Instantiated the qualified `HealthCheck` beans (the user bean
    `@Liveness DatabaseCheck` and the `KnockHealthResource` resource);
-2. Validated deployment via `HealthCheckCdiExtension` (§4.2 MP Health 4.0 spec):
-   a bean that implements `HealthCheck` *without* an MP qualifier triggers a validation
-   error (deployment rejected);
+2. Registered the qualified `HealthCheck` beans in the registry (§4.1 MP Health 4.0 spec):
+   a bean that implements `HealthCheck` *without* an MP qualifier is not a health-check
+   procedure — it is silently ignored (neither registered nor a deployment error, §4.2);
 3. Exposed `KnockCdiHealthCheckRegistry` (`@ApplicationScoped`) injectable into
    `KnockHealthResource`.
 

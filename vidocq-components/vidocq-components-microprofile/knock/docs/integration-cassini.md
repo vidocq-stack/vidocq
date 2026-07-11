@@ -63,10 +63,11 @@ module my.app {
 }
 ```
 
-The CDI Build-Compatible Extension (`HealthCheckCdiExtension`) is exposed via
-`provides jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension`
-in the `module-info` of `knock-cdi-vauban`, and also declared in
-`META-INF/services/...BuildCompatibleExtension` (for ClassLoader-based `ServiceLoader`).
+Knock's CDI integration exposes `HealthCheckRegistrar` and `KnockCdiHealthCheckRegistry`
+to Vauban through the generated `VaubanComponentProvider`
+(`provides io.vidocq.vauban.api.VaubanComponentProvider` in the `module-info` of
+`knock-cdi-vauban`). No Build Compatible Extension is required: registration happens on the
+`@Initialized(ApplicationScoped.class)` event.
 
 ## Discovery / deployment
 
@@ -116,9 +117,10 @@ public class DatabaseLivenessCheck implements HealthCheck {
 }
 ```
 
-No manual registration: `HealthCheckCdiExtension` (BCE) discovers all beans
+No manual registration: `HealthCheckRegistrar` discovers all beans
 qualified `@Liveness` / `@Readiness` / `@Startup` and registers them in the registry
-at the `Validation` phase of the container.
+when the application context is initialised. A `HealthCheck` bean without a probe
+qualifier is not a procedure and is silently ignored (spec §4.2).
 
 ## Configuration
 

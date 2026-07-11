@@ -20,7 +20,7 @@ Knock rests on a simple principle: implement MicroProfile Health 4.0 with the JD
 | Standalone runtime: registry, aggregator, JSON-P serialiser, response builder, `KnockHealthService` facade. Pure Java SE.
 
 | `knock-cdi-vauban`
-| CDI Build Compatible Extension + auto-registration on Vauban.
+| CDI-driven auto-registration of qualified checks on Vauban.
 
 | `knock-jaxrs`
 | Jakarta REST resource exposing `/health*` (deployed on Cassini).
@@ -93,10 +93,9 @@ sequenceDiagram
 
 == CDI discovery
 
-`knock-cdi-vauban` ships two internal pieces:
+`knock-cdi-vauban` ships one internal piece:
 
-* `HealthCheckCdiExtension` — a Build Compatible Extension validating the single-probe-qualifier rule at build time (spec §4.2);
-* `HealthCheckRegistrar` — a CDI bean that, on `@Initialized(ApplicationScoped.class)`, registers each discovered `HealthCheck` into the registry (spec §4.1).
+* `HealthCheckRegistrar` — a CDI bean that, on `@Initialized(ApplicationScoped.class)`, registers each qualified `HealthCheck` into the registry by probe type (spec §4.1). A `HealthCheck` bean with no `@Liveness`/`@Readiness`/`@Startup` qualifier is not a health-check procedure and is silently ignored (spec §4.2).
 
 Discovery uses Vauban's BCE pipeline — no runtime classpath scanning, no `setAccessible(true)`.
 
