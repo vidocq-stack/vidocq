@@ -1,0 +1,287 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.runtime</groupId>
+        <artifactId>vidocq-runtime-integration-tests</artifactId>
+        <version>0.3.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vidocq-runtime-tck-cervantes-jwt</artifactId>
+    <name>Vidocq :: TCK :: MicroProfile JWT 2.1 (Cervantes)</name>
+    <description>
+        Runs the official MicroProfile JWT 2.1 TCK
+        (org.eclipse.microprofile.jwt:microprofile-jwt-auth-tck) against Cervantes, the JWT
+        implementation Vidocq activates through vidocq-runtime-cervantes-jwt-extension.
+
+        The MP JWT TCK is Arquillian + REST: it deploys a WebArchive of protected JAX-RS
+        endpoints and drives them with forged bearer tokens (jose4j) over HTTP. The harness
+        (ported from Cervantes' own cervantes-tck) is a CervantesJwtDeployableContainer that,
+        per @Deployment, boots the full Cervantes stack — Vauban CDI + Cassini JAX-RS + Chappe
+        HTTP on an ephemeral port — with all Cervantes security beans (CervantesClaimExtension,
+        JwtAuthenticationFilter, RolesAllowedDynamicFeature, the CDI producers) plus the archive
+        classes, then returns a Servlet ProtocolMetaData whose base URL the TCK's JAX-RS client
+        calls. Each archive's microprofile-config.properties (mp.jwt.*) is exported as system
+        properties so Ravel (MP Config) resolves them.
+
+        Unlike the Health / OpenAPI runners this uses its own DeployableContainer (not
+        vidocq-runtime-arquillian): the TCK needs all Cervantes providers wired into every
+        deployment, which the shared embedded container does not do.
+
+        Exclusions (match cervantes/TCK.md): ejb/**, jacc/** and servlet/** optional containers
+        (Chappe is not a Jakarta Servlet container) and the ee-security-optional TestNG group
+        (group-to-role mapping via the EE Security API, not implemented).
+    </description>
+
+    <properties>
+        <!-- MicroProfile 7.1 pins JWT 2.1 -->
+        <microprofile.jwt.tck.version>2.1</microprofile.jwt.tck.version>
+        <!-- Arquillian 1.10.1 avoids MalformedParameterizedTypeException under JDK 25. -->
+        <arquillian.tck.version>1.10.1.Final</arquillian.tck.version>
+        <jose4j.version>0.9.4</jose4j.version>
+        <jersey.version>4.0.2</jersey.version>
+        <tck.testng.version>7.10.2</tck.testng.version>
+    </properties>
+
+    <!--
+        No module-info.java (unnamed module): the TCK archive classes carry no JPMS
+        descriptor and must stay readable by Vauban/Cassini/Cervantes — same approach
+        as the other vidocq-runtime-tck-* modules.
+    -->
+
+    <dependencyManagement>
+        <dependencies>
+            <!--
+                Import arquillian-bom 1.10.1 for THIS module only, overriding the root's
+                inherited 1.8.0 bom, which throws MalformedParameterizedTypeException while
+                reflecting the TestNG runner adaptor under JDK 25. Importing the whole bom
+                keeps every arquillian artifact on one version.
+            -->
+            <dependency>
+                <groupId>org.jboss.arquillian</groupId>
+                <artifactId>arquillian-bom</artifactId>
+                <version>${arquillian.tck.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <dependencies>
+        <!-- Cervantes = MicroProfile JWT 2.1 implementation. -->
+        <dependency>
+            <groupId>io.vidocq.cervantes</groupId>
+            <artifactId>cervantes-mp-jwt-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.cervantes</groupId>
+            <artifactId>cervantes-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.cervantes</groupId>
+            <artifactId>cervantes-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.cervantes</groupId>
+            <artifactId>cervantes-cdi-vauban</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.cervantes</groupId>
+            <artifactId>cervantes-jaxrs</artifactId>
+        </dependency>
+
+        <!-- Cassini JAX-RS runtime + Chappe binding + Vauban request-scope bridge. -->
+        <dependency>
+            <groupId>io.vidocq.cassini</groupId>
+            <artifactId>cassini-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.cassini</groupId>
+            <artifactId>cassini-chappe</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.cassini</groupId>
+            <artifactId>cassini-cdi-vauban</artifactId>
+        </dependency>
+
+        <!-- Chappe HTTP server. -->
+        <dependency>
+            <groupId>io.vidocq.chappe</groupId>
+            <artifactId>chappe-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.chappe</groupId>
+            <artifactId>chappe-core</artifactId>
+        </dependency>
+
+        <!-- Vauban CDI Lite container: boots one per TCK @Deployment. -->
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-core</artifactId>
+        </dependency>
+
+        <!-- Ravel MP Config: Cervantes reads mp.jwt.* through it. -->
+        <dependency>
+            <groupId>io.vidocq.ravel</groupId>
+            <artifactId>ravel-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.ravel</groupId>
+            <artifactId>ravel-mp-config-api</artifactId>
+            <version>${ravel.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.ravel</groupId>
+            <artifactId>ravel-cdi-vauban</artifactId>
+        </dependency>
+
+        <!-- Champollion JSON-P: JSON parsing for claim values. -->
+        <dependency>
+            <groupId>io.vidocq.champollion</groupId>
+            <artifactId>champollion-jsonp</artifactId>
+            <version>${champollion.version}</version>
+        </dependency>
+
+        <!-- Jakarta APIs used by the harness and the deployed resources. -->
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.inject</groupId>
+            <artifactId>jakarta.inject-api</artifactId>
+            <version>2.0.1</version>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.annotation</groupId>
+            <artifactId>jakarta.annotation-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.ws.rs</groupId>
+            <artifactId>jakarta.ws.rs-api</artifactId>
+            <version>4.0.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.eclipse.microprofile.jwt</groupId>
+            <artifactId>microprofile-jwt-auth-api</artifactId>
+            <version>${microprofile.jwt.tck.version}</version>
+        </dependency>
+
+        <!-- Official MP JWT 2.1 TCK: base/utility classes + the @Test classes (tests jar). -->
+        <dependency>
+            <groupId>org.eclipse.microprofile.jwt</groupId>
+            <artifactId>microprofile-jwt-auth-tck</artifactId>
+            <version>${microprofile.jwt.tck.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.eclipse.microprofile.jwt</groupId>
+            <artifactId>microprofile-jwt-auth-tck</artifactId>
+            <version>${microprofile.jwt.tck.version}</version>
+            <classifier>tests</classifier>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Arquillian TestNG + container SPI (this module ships its own DeployableContainer). -->
+        <dependency>
+            <groupId>org.jboss.arquillian.container</groupId>
+            <artifactId>arquillian-container-spi</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.jboss.arquillian.testng</groupId>
+            <artifactId>arquillian-testng-container</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testng</groupId>
+            <artifactId>testng</artifactId>
+            <version>${tck.testng.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- jose4j: the TCK's TokenUtils signs/encrypts test JWTs with it. -->
+        <dependency>
+            <groupId>org.bitbucket.b_c</groupId>
+            <artifactId>jose4j</artifactId>
+            <version>${jose4j.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-simple</artifactId>
+            <version>2.0.9</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Jersey client: the TCK calls the server under test through the JAX-RS Client API. -->
+        <dependency>
+            <groupId>org.glassfish.jersey.core</groupId>
+            <artifactId>jersey-client</artifactId>
+            <version>${jersey.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.glassfish.jersey.inject</groupId>
+            <artifactId>jersey-hk2</artifactId>
+            <version>${jersey.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- MP Config + Jakarta JSON APIs the TCK references directly. -->
+        <dependency>
+            <groupId>org.eclipse.microprofile.config</groupId>
+            <artifactId>microprofile-config-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.json</groupId>
+            <artifactId>jakarta.json-api</artifactId>
+            <version>2.1.3</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <useModulePath>false</useModulePath>
+                    <dependenciesToScan>
+                        <dependency>org.eclipse.microprofile.jwt:microprofile-jwt-auth-tck</dependency>
+                    </dependenciesToScan>
+                    <includes>
+                        <include>**/*Test.class</include>
+                        <include>**/*Tests.class</include>
+                    </includes>
+                    <excludes>
+                        <!-- Optional containers not applicable to a JAX-RS-only impl. -->
+                        <exclude>org/eclipse/microprofile/jwt/tck/container/ejb/**</exclude>
+                        <exclude>org/eclipse/microprofile/jwt/tck/container/jacc/**</exclude>
+                        <!-- Chappe is not a Jakarta Servlet container. -->
+                        <exclude>org/eclipse/microprofile/jwt/tck/container/servlet/**</exclude>
+                    </excludes>
+                    <!-- ee-security-optional: group-to-role mapping via EE Security API, not implemented. -->
+                    <excludedGroups>ee-security-optional</excludedGroups>
+                    <trimStackTrace>false</trimStackTrace>
+                    <systemPropertyVariables>
+                        <arquillian.launch>cervantes-jwt</arquillian.launch>
+                    </systemPropertyVariables>
+                </configuration>
+                <dependencies>
+                    <!-- Force the TestNG surefire provider (the TCK is TestNG-based). -->
+                    <dependency>
+                        <groupId>org.apache.maven.surefire</groupId>
+                        <artifactId>surefire-testng</artifactId>
+                        <version>3.5.5</version>
+                    </dependency>
+                </dependencies>
+            </plugin>
+        </plugins>
+    </build>
+</project>
