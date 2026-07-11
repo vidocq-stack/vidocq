@@ -52,6 +52,7 @@
                 <module>vidocq-runtime-tck-cyrano-restclient</module>
                 <module>vidocq-runtime-tck-cervantes-jwt</module>
                 <module>vidocq-runtime-tck-ravel-config</module>
+                <module>vidocq-runtime-tck-humboldt-telemetry</module>
             </modules>
         </profile>
     </profiles>
