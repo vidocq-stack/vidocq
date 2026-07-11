@@ -173,3 +173,25 @@ where this whole bug class is invisible.
     create the compiler plugin block or the whole build section when absent, idempotent)
     wired into `extension add` via KnownExtensions.codegenBundle. Verified E2E: patched
     add + `vidocq build` passes on a 0.2.1-scaffolded project.
+
+## BUG-20260711-02 — vidocq:docker wraps the host-platform jlink image (broken container on macOS)
+
+- **Date** : 2026-07-11
+- **Statut** : OPEN
+- **Module touché** : vidocq-runtime-maven-plugin / VidocqDockerMojo
+- **Symptôme** : on macOS, `vidocq build jlink` produces a Mach-O arm64 runtime; `vidocq build
+  docker` then generates a Dockerfile that COPYs that dist into a Linux base image — the
+  resulting container fails at start with `exec /opt/app/bin/todo: no such file or directory`.
+  Also note the goal only GENERATES the Dockerfile and prints the `docker build` command
+  ("Build with: …") despite logging "Building Docker image…".
+- **Reproduction minimale** :
+  ```
+  # on macOS
+  vidocq build jlink && vidocq build docker
+  docker build -t app -f target/Dockerfile target && docker run --rm app   # exec format error
+  ```
+- **Hypothèse de cause** : jlink links against the host's jmods; the mojo neither cross-links
+  with Linux jmods nor warns when host OS ≠ linux.
+- **Investigations** :
+  - 2026-07-11 : found while replaying the published tutorials end to end. Options: warn on
+    non-linux hosts, document the CI-only expectation, or support --jmods cross-linking.
