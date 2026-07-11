@@ -1,0 +1,210 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.runtime</groupId>
+        <artifactId>vidocq-runtime-integration-tests</artifactId>
+        <version>0.3.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vidocq-runtime-tck-cyrano-restclient</artifactId>
+    <name>Vidocq :: TCK :: MicroProfile Rest Client 4.0 (Cyrano)</name>
+    <description>
+        Runs the official MicroProfile Rest Client 4.0 TCK
+        (org.eclipse.microprofile.rest.client:microprofile-rest-client-tck) against Cyrano, the
+        Rest Client implementation Vidocq activates through vidocq-runtime-cyrano-rest-client-extension.
+
+        Unlike the Health and OpenAPI runners, the Rest Client TCK is client-side: it exercises the
+        typed proxy Cyrano builds and drives an in-JVM WireMock backend, so the tests run IN-CONTAINER
+        (Arquillian "Local" protocol) rather than as HTTP clients. The harness (ported from Cyrano's own
+        cyrano-tck) provides exactly that:
+
+          * CyranoDeployableContainer  — a Local, no-op container; per @Deployment it boots a Vauban CDI
+            container (VaubanTckBootstrap) with CyranoRestClientCdiExtension + all archive classes.
+          * CyranoTestEnricher         — a TestEnricher that satisfies @Inject / @Inject @RestClient on the
+            TCK test instances from the Vauban BeanManager.
+          * WireMockTestBackend        — a JVM-static WireMock server on 127.0.0.1:8765 (the port the TCK's
+            WiremockArquillianTest expects), started eagerly by an ITestNGListener because Arquillian's
+            Local start()/stop() fires after @AfterSuite — too late for the TCK @BeforeMethod hooks.
+          * TckConfigBridge            — exports each archive's microprofile-config.properties as system
+            properties so CyranoBaseUriResolver's MP Config fallback resolves them.
+
+        Scope: ssl/** and sse/** are excluded (RestClientBuilder.trustStore/keyStore and SSE are not yet
+        implemented in Cyrano) — matching cyrano-tck's documented M4 exclusions.
+    </description>
+
+    <properties>
+        <!-- MicroProfile 7.1 pins Rest Client 4.0 -->
+        <microprofile.rest.client.tck.version>4.0</microprofile.rest.client.tck.version>
+        <!-- Arquillian 1.10.1 avoids MalformedParameterizedTypeException under JDK 25 (see cyrano-tck). -->
+        <arquillian.tck.version>1.10.1.Final</arquillian.tck.version>
+        <wiremock.version>3.10.0</wiremock.version>
+        <tck.testng.version>7.10.2</tck.testng.version>
+    </properties>
+
+    <!--
+        No module-info.java (unnamed module): the TCK archive classes carry no JPMS
+        descriptor and must stay readable by Vauban/Cyrano — same approach as the
+        other vidocq-runtime-it-* / vidocq-runtime-tck-* modules.
+    -->
+
+    <dependencyManagement>
+        <dependencies>
+            <!--
+                Import arquillian-bom 1.10.1 for THIS module only. It overrides the
+                root pom's inherited arquillian-bom (1.8.0), which throws
+                MalformedParameterizedTypeException while reflecting the TestNG runner
+                adaptor (EventTestRunnerAdaptor) under JDK 25. Importing the whole bom
+                keeps every arquillian artifact (core/test/container) on one version,
+                avoiding the 1.8.0/1.10.1 skew that a partial override would leave.
+            -->
+            <dependency>
+                <groupId>org.jboss.arquillian</groupId>
+                <artifactId>arquillian-bom</artifactId>
+                <version>${arquillian.tck.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <dependencies>
+        <!--
+            Cyrano = MicroProfile Rest Client 4.0 implementation, as wired into the
+            Vidocq runtime. The extension wrapper pulls cyrano-api/core/cdi-vauban,
+            whose internal CyranoRestClientCdiExtension / CyranoRestClientInstanceProducer
+            the harness boots per deployment.
+        -->
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
+            <artifactId>vidocq-runtime-cyrano-rest-client-extension</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- Vauban CDI Lite container: VaubanTckBootstrap boots one per TCK archive. -->
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-core</artifactId>
+        </dependency>
+        <!--
+            Champollion JSON-B: the entity provider Cyrano uses at runtime to (de)serialize
+            request/response bodies (JsonBProviderTest and the cditests entity round-trips).
+        -->
+        <dependency>
+            <groupId>io.vidocq.champollion</groupId>
+            <artifactId>champollion-jsonp</artifactId>
+            <version>${champollion.version}</version>
+        </dependency>
+        <!--
+            The TCK @Deployment methods (run in the test JVM) build ShrinkWrap archives
+            that reference jakarta.ws.rs.* types; those APIs must be on the test classpath.
+        -->
+        <dependency>
+            <groupId>jakarta.ws.rs</groupId>
+            <artifactId>jakarta.ws.rs-api</artifactId>
+            <version>4.0.0</version>
+        </dependency>
+        <!--
+            Cassini client runtime: provides the jakarta.ws.rs.ext.RuntimeDelegate
+            SPI implementation (CassiniClientRuntimeDelegate) Cyrano needs to build
+            Response / entities / UriBuilder on the client side. Without a
+            RuntimeDelegate provider on the classpath, jakarta.ws.rs bootstrap fails
+            with "Provider for jakarta.ws.rs.ext.RuntimeDelegate cannot be found".
+        -->
+        <dependency>
+            <groupId>io.vidocq.cassini</groupId>
+            <artifactId>cassini-client</artifactId>
+            <version>${cassini.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!--
+            Official MicroProfile Rest Client 4.0 TCK. The @Test classes live in this jar
+            (scanned via dependenciesToScan); its WiremockArquillianTest base drives WireMock.
+        -->
+        <dependency>
+            <groupId>org.eclipse.microprofile.rest.client</groupId>
+            <artifactId>microprofile-rest-client-tck</artifactId>
+            <version>${microprofile.rest.client.tck.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!--
+            Arquillian container SPI + TestNG container + ShrinkWrap. This module ships its
+            OWN Local DeployableContainer (CyranoDeployableContainer), so it depends on the
+            raw SPI rather than vidocq-runtime-arquillian (which would register a second
+            DeployableContainer and clash).
+        -->
+        <dependency>
+            <groupId>org.jboss.arquillian.container</groupId>
+            <artifactId>arquillian-container-spi</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.jboss.arquillian.test</groupId>
+            <artifactId>arquillian-test-spi</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.jboss.arquillian.testng</groupId>
+            <artifactId>arquillian-testng-container</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testng</groupId>
+            <artifactId>testng</artifactId>
+            <version>${tck.testng.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <!--
+            WireMock: the HTTP backend the TCK talks to (WiremockArquillianTest). Started
+            eagerly on 127.0.0.1:8765 by WireMockProbeListener / WireMockTestBackend.
+        -->
+        <dependency>
+            <groupId>org.wiremock</groupId>
+            <artifactId>wiremock</artifactId>
+            <version>${wiremock.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <useModulePath>false</useModulePath>
+                    <!--
+                        The TCK @Test classes live in the microprofile-rest-client-tck jar,
+                        not in this module's src/test/java. Tell Surefire to scan that
+                        dependency; the TestNG provider is selected because TestNG is on
+                        the test classpath.
+                    -->
+                    <dependenciesToScan>
+                        <dependency>org.eclipse.microprofile.rest.client:microprofile-rest-client-tck</dependency>
+                    </dependenciesToScan>
+                    <excludes>
+                        <!--
+                            ssl/** : require RestClientBuilder.trustStore(...) / keyStore(...),
+                            not yet implemented in Cyrano.
+                            sse/** : Server-Sent Events, out of Cyrano scope.
+                            Both match cyrano-tck's documented M4 exclusions (see cyrano/TCK.md).
+                        -->
+                        <exclude>**/ssl/**</exclude>
+                        <exclude>**/sse/**</exclude>
+                    </excludes>
+                    <trimStackTrace>false</trimStackTrace>
+                    <systemPropertyVariables>
+                        <arquillian.launch>cyrano</arquillian.launch>
+                        <!-- Force IPv4 so Apache HttpClient5 does not fall back to ::1 (macOS). -->
+                        <wiremock.server.host>127.0.0.1</wiremock.server.host>
+                        <java.net.preferIPv4Stack>true</java.net.preferIPv4Stack>
+                    </systemPropertyVariables>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
