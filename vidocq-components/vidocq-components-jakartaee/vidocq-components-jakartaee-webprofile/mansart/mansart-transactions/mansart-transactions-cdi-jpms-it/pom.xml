@@ -14,7 +14,7 @@
         $$Intercepted subclass and the generated VaubanComponentProvider, with no `opens` to vauban.core.</description>
 
     <properties>
-        <vauban.version>0.2.0-SNAPSHOT</vauban.version>
+        <vauban.version>0.3.0-SNAPSHOT</vauban.version>
         <!-- Test vehicle: never released. -->
         <maven.deploy.skip>true</maven.deploy.skip>
         <maven.javadoc.skip>true</maven.javadoc.skip>

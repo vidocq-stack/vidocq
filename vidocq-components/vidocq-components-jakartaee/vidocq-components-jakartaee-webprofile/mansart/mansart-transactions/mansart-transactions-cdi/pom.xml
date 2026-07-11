@@ -13,7 +13,7 @@
     <description>CDI 4.1 bootstrap — @Transactional interceptor (REQUIRED, REQUIRES_NEW, MANDATORY, NEVER, NOT_SUPPORTED, SUPPORTS) + @TransactionScoped scope, plugged via BuildCompatibleExtension + portable Extension.</description>
 
     <properties>
-        <vauban.version>0.2.0-SNAPSHOT</vauban.version>
+        <vauban.version>0.3.0-SNAPSHOT</vauban.version>
     </properties>
 
     <dependencies>
