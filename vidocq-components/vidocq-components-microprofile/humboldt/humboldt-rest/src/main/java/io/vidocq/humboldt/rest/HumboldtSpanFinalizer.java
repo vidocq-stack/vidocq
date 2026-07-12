@@ -41,8 +41,8 @@ import java.lang.System.Logger.Level;
  *
  * <p><b>Why necessary</b>: per JAX-RS spec §10.2.7, {@code ContainerResponseFilter}
  * instances MUST be invoked EVEN when an {@code ExceptionMapper} transforms the
- * exception into a {@code Response}. Certain containers (including Cassini in
- * cassini-core 0.1.0-SNAPSHOT — see {@code Invoker.java:365}) short-circuit this
+ * exception into a {@code Response}. Certain containers (including Cassini at the
+ * time this was written — see {@code Invoker.java:365}) short-circuit this
  * flow and go directly from {@code ExceptionMapper.toResponse()} to marshalling
  * without invoking the response filters. Without this fallback mapper the SERVER
  * span created by the request filter would never be {@code end()}'d and would

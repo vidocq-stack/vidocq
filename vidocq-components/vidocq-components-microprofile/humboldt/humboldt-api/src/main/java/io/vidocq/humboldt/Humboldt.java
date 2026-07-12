@@ -19,8 +19,11 @@
  */
 package io.vidocq.humboldt;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.lang.System.Logger;
 import java.lang.System.Logger.Level;
+import java.util.Properties;
 
 /**
  * Public facade of Humboldt, the entry point for the MicroProfile Telemetry 2.1 runtime.
@@ -31,7 +34,23 @@ import java.lang.System.Logger.Level;
 public final class Humboldt {
 
     private static final Logger LOG = System.getLogger(Humboldt.class.getName());
-    private static final String VERSION = "0.1.0-SNAPSHOT";
+
+    // Filtered by the Maven build into a same-module resource — published artifacts
+    // used to report a stale hardcoded snapshot version (BUG-20260712-01).
+    private static final String VERSION = loadVersion();
+
+    private static String loadVersion() {
+        try (InputStream in = Humboldt.class.getResourceAsStream("version.properties")) {
+            if (in == null) {
+                return "unknown";
+            }
+            Properties props = new Properties();
+            props.load(in);
+            return props.getProperty("version", "unknown");
+        } catch (IOException e) {
+            return "unknown";
+        }
+    }
 
     private Humboldt() {
         // static facade

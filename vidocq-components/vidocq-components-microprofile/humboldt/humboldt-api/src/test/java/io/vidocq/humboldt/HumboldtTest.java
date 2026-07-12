@@ -21,8 +21,8 @@ package io.vidocq.humboldt;
 
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class HumboldtTest {
 
@@ -30,7 +30,11 @@ class HumboldtTest {
     void version_is_published() {
         String v = Humboldt.version();
         assertFalse(v.isBlank(), "version() must return a non-empty string");
-        assertTrue(v.startsWith("0.1.0"), "M0 must publish 0.1.0-* : " + v);
+        assertFalse(v.contains("${"), "version.properties must be filtered by the build");
+        // project.version is injected by surefire (systemPropertyVariables) — the
+        // published 0.2.0 artifact reported a hardcoded 0.1.0-SNAPSHOT.
+        assertEquals(System.getProperty("project.version"), v,
+                "version() must be the Maven build version, not a hardcoded constant");
     }
 
     @Test
