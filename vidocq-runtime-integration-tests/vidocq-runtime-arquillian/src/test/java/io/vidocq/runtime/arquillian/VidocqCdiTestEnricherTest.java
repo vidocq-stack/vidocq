@@ -50,6 +50,12 @@ class VidocqCdiTestEnricherTest {
         GreetingBean greeting;
 
         GreetingBean notInjectable;
+
+        public void probe(GreetingBean bean) {
+        }
+
+        public void unresolvableProbe(Runnable notABean) {
+        }
     }
 
     private static VaubanContainer container;
@@ -83,5 +89,30 @@ class VidocqCdiTestEnricherTest {
     void resolveReturnsNullsForUnhandledMethodParameters() throws Exception {
         var method = FakeTestCase.class.getMethod("hashCode");
         assertEquals(0, new VidocqCdiTestEnricher().resolve(method).length);
+    }
+
+    @Test
+    void resolvesTestMethodParametersFromTheRunningContainer() throws Exception {
+        // The MP Metrics TCK (and others) declare test methods taking CDI-resolvable
+        // parameters, e.g. metricInjectionIntoTest(@Metric Counter counter).
+        var method = FakeTestCase.class.getMethod("probe", GreetingBean.class);
+
+        Object[] values = new VidocqCdiTestEnricher().resolve(method);
+
+        assertEquals(1, values.length);
+        assertNotNull(values[0], "CDI-resolvable parameter must be provided");
+        assertEquals("hello", ((GreetingBean) values[0]).greet());
+    }
+
+    @Test
+    void leavesUnresolvableParametersNullForOtherEnrichers() throws Exception {
+        // @ArquillianResource URL and friends are handled by other registered
+        // enrichers — an unresolvable slot must stay null, never throw.
+        var method = FakeTestCase.class.getMethod("unresolvableProbe", Runnable.class);
+
+        Object[] values = new VidocqCdiTestEnricher().resolve(method);
+
+        assertEquals(1, values.length);
+        assertNull(values[0], "unresolvable parameter must be left to other enrichers");
     }
 }

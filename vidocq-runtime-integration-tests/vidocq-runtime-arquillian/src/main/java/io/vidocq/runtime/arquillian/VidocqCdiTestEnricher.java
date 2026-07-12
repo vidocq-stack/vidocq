@@ -25,8 +25,10 @@ import jakarta.inject.Qualifier;
 import org.jboss.arquillian.test.spi.TestEnricher;
 
 import java.lang.annotation.Annotation;
+import java.lang.reflect.AnnotatedElement;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.lang.reflect.Parameter;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -67,14 +69,32 @@ public class VidocqCdiTestEnricher implements TestEnricher {
 
     @Override
     public Object[] resolve(Method method) {
-        // Method-parameter injection is not part of the CDI enrichment contract
-        // the TCKs rely on; leave every slot to the other registered enrichers.
-        return new Object[method.getParameterCount()];
+        // TCK test methods may declare CDI-resolvable parameters, e.g.
+        // metricInjectionIntoTest(@Metric Counter counter) in the MP Metrics TCK.
+        // Resolve what the container can provide; leave the rest null so other
+        // registered enrichers (@ArquillianResource, ...) can fill their slots.
+        Object[] values = new Object[method.getParameterCount()];
+        VaubanContainer container = VaubanContainer.current();
+        if (container == null) {
+            return values;
+        }
+        Parameter[] parameters = method.getParameters();
+        for (int i = 0; i < parameters.length; i++) {
+            Parameter parameter = parameters[i];
+            try {
+                values[i] = container.resolveParameter(parameter.getType(),
+                        parameter.getParameterizedType(), null, qualifiersOf(parameter),
+                        method, null, parameter, i);
+            } catch (RuntimeException e) {
+                values[i] = null;
+            }
+        }
+        return values;
     }
 
-    private static Annotation[] qualifiersOf(Field field) {
+    private static Annotation[] qualifiersOf(AnnotatedElement element) {
         List<Annotation> qualifiers = new ArrayList<>();
-        for (Annotation annotation : field.getAnnotations()) {
+        for (Annotation annotation : element.getAnnotations()) {
             if (annotation.annotationType().isAnnotationPresent(Qualifier.class)) {
                 qualifiers.add(annotation);
             }
