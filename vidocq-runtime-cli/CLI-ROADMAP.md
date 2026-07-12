@@ -8,7 +8,7 @@ Zero external dependencies — hand-rolled arg parser, pure Java 25, JPMS-native
 
 ---
 
-## Milestone M1 — MVP (current, 0.2.0-SNAPSHOT)
+## Milestone M1 — MVP (shipped in 0.2.x)
 
 | Command | Status | Notes |
 |---|---|---|
