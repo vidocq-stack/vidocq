@@ -40,12 +40,12 @@
         — so it runs safely in-reactor (verified: no resolver references in the tck jar). No exclusions:
         Heisenberg passes the full suite.
 
-        Version note: Heisenberg (and its Dirac/Humboldt/Ravel FT-metrics/tracing collaborators) are pinned
-        here at 0.1.0-SNAPSHOT — the version line Heisenberg currently publishes and against which its
-        463/463 TCK pass is proven. Heisenberg is not yet aligned to the 0.2.0 ecosystem line the rest of
-        the Vidocq runtime consumes, nor is there yet a vidocq-runtime-heisenberg-fault-tolerance-extension
-        wiring it into the runtime (upstream follow-ups). These explicit versions therefore intentionally
-        override the reactor's 0.2.0 dirac/humboldt/ravel management for THIS leaf test module only.
+        Version note: Heisenberg and its Dirac/Humboldt/Ravel FT-metrics/tracing collaborators are pinned
+        here at the 0.2.0 RELEASE line (published on Maven Central) — the exact set Heisenberg 0.2.0 was
+        built and TCK-proven against (heisenberg-parent 0.2.0 pins vauban/dirac/ravel 0.2.0). These
+        explicit versions intentionally override the reactor's 0.2.0-SNAPSHOT dirac/humboldt/ravel
+        management for THIS leaf test module only, so the whole FT stack stays on one immutable release
+        line. Vauban stays reactor-managed (the shared CDI engine).
     </description>
 
     <properties>
@@ -53,11 +53,13 @@
         <microprofile.fault.tolerance.tck.version>4.1</microprofile.fault.tolerance.tck.version>
         <!-- Arquillian 1.10.1 avoids MalformedParameterizedTypeException under JDK 25 (see heisenberg-tck). -->
         <arquillian.tck.version>1.10.1.Final</arquillian.tck.version>
-        <!-- Proven Heisenberg FT stack line (Heisenberg has no 0.2.0-SNAPSHOT build yet). -->
-        <heisenberg.tck.version>0.1.0-SNAPSHOT</heisenberg.tck.version>
-        <dirac.tck.version>0.1.0-SNAPSHOT</dirac.tck.version>
-        <humboldt.tck.version>0.1.0-SNAPSHOT</humboldt.tck.version>
-        <ravel.tck.version>0.1.0-SNAPSHOT</ravel.tck.version>
+        <!-- Heisenberg itself is pulled via vidocq-runtime-heisenberg-fault-tolerance-extension,
+             whose version (0.2.0 release line) is managed by the root BOM. dirac/humboldt/ravel
+             below are the FT-metrics/telemetry collaborators the harness wires per deployment;
+             pinned to the same 0.2.0 release line Heisenberg 0.2.0 was built and TCK-proven against. -->
+        <dirac.tck.version>0.2.0</dirac.tck.version>
+        <humboldt.tck.version>0.2.0</humboldt.tck.version>
+        <ravel.tck.version>0.2.0</ravel.tck.version>
         <tck.testng.version>7.10.2</tck.testng.version>
     </properties>
 
@@ -93,28 +95,23 @@
 
     <dependencies>
         <!--
-            Heisenberg = MicroProfile Fault Tolerance 4.1 implementation. heisenberg-cdi-vauban
-            ships the BCE (HeisenbergExtension) that discovers @Retry/@Timeout/@CircuitBreaker/
-            @Bulkhead/@Fallback/@Asynchronous and the FaultToleranceInterceptor(s) + state beans +
-            Dirac/OTel FT-metrics recorders the harness boots per deployment.
+            Heisenberg = MicroProfile Fault Tolerance 4.1 implementation, consumed through the
+            SAME runtime wrapper a real Vidocq app opts into: vidocq-runtime-heisenberg-fault-
+            tolerance-extension. It brings heisenberg-cdi-vauban (+ heisenberg-core/-api and the
+            repackaged microprofile-fault-tolerance-api spec module) transitively — the BCE
+            (HeisenbergExtension) that discovers @Retry/@Timeout/@CircuitBreaker/@Bulkhead/
+            @Fallback/@Asynchronous and registers the FaultToleranceInterceptor(s) + state beans +
+            Dirac/OTel FT-metrics recorders the harness boots per deployment. Depending on the
+            extension (rather than the raw artifacts) exercises the actual runtime wiring.
         -->
         <dependency>
-            <groupId>io.vidocq.heisenberg</groupId>
-            <artifactId>heisenberg-api</artifactId>
-            <version>${heisenberg.tck.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>io.vidocq.heisenberg</groupId>
-            <artifactId>heisenberg-core</artifactId>
-            <version>${heisenberg.tck.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>io.vidocq.heisenberg</groupId>
-            <artifactId>heisenberg-cdi-vauban</artifactId>
-            <version>${heisenberg.tck.version}</version>
+            <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
+            <artifactId>vidocq-runtime-heisenberg-fault-tolerance-extension</artifactId>
+            <version>${project.version}</version>
         </dependency>
 
-        <!-- MicroProfile Fault Tolerance 4.1 API. -->
+        <!-- MicroProfile Fault Tolerance 4.1 spec API (also brought transitively by the extension;
+             kept explicit so the TCK's compile references resolve to the canonical spec jar). -->
         <dependency>
             <groupId>org.eclipse.microprofile.fault-tolerance</groupId>
             <artifactId>microprofile-fault-tolerance-api</artifactId>
@@ -147,10 +144,10 @@
         </dependency>
 
         <!--
-            Dirac (FT metrics, TCK §9) + Humboldt (FT tracing, TCK §10). Pinned to 0.1.0-SNAPSHOT
-            to match the Heisenberg FT-metrics/tracing recorders compiled against that line. These
-            override the reactor's 0.2.0 management for this leaf module only. Humboldt transitively
-            provides the OpenTelemetry SDK the TCK's InMemoryMetricReader needs.
+            Dirac (FT metrics, TCK §9) + Humboldt (FT tracing, TCK §10). Pinned to the 0.2.0 release
+            line to match Heisenberg 0.2.0's FT-metrics/tracing recorders. These override the reactor's
+            0.2.0-SNAPSHOT management for this leaf module only. Humboldt transitively provides the
+            OpenTelemetry SDK the TCK's InMemoryMetricReader needs.
         -->
         <dependency>
             <groupId>io.vidocq.dirac</groupId>
