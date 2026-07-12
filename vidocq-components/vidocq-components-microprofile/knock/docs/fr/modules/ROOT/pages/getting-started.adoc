@@ -2,7 +2,7 @@
 :description: Écrire un premier contrôle de santé, le câbler via CDI et exposer les endpoints /health*.
 
 [.lead]
-Cette page montre comment ajouter Knock à un projet, écrire un premier `HealthCheck`, le faire découvrir par CDI et servir les endpoints MicroProfile Health. Aucune réflexion ne s'exécute au démarrage : la découverte passe par une Build Compatible Extension de Vauban et le runtime ne s'appuie que sur du câblage généré.
+Cette page montre comment ajouter Knock à un projet, écrire un premier `HealthCheck`, le faire découvrir par CDI et servir les endpoints MicroProfile Health. Aucune réflexion ne s'exécute au démarrage : la découverte ne s'appuie que sur du câblage Vauban généré.
 
 == Prérequis
 
@@ -85,7 +85,7 @@ public class DatabaseCheck implements HealthCheck {
 
 [NOTE]
 ====
-Un contrôle doit porter exactement l'un de `@Liveness`, `@Readiness` ou `@Startup`. Un bean implémentant `HealthCheck` sans qualificateur de sonde est rejeté par l'extension CDI au déploiement (MicroProfile Health §4.2).
+Un contrôle doit porter l'un de `@Liveness`, `@Readiness` ou `@Startup` pour être signalé. Un bean implémentant `HealthCheck` sans qualificateur de sonde n'est pas une procédure de contrôle : il est silencieusement ignoré — ni enregistré, ni une erreur de déploiement (MicroProfile Health §4.2).
 ====
 
 == `module-info.java` minimal

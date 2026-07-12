@@ -54,7 +54,7 @@ Knock le rend avec Jakarta JSON-P uniquement — pas de `StringBuilder`, pas de 
 
 == Découverte CDI
 
-Dans un déploiement CDI, les contrôles sont découverts par une _Build Compatible Extension_ (`HealthCheckCdiExtension`) exécutée sur Vauban. Elle valide la règle du qualificateur unique au moment du build, puis `HealthCheckRegistrar` enregistre chaque bean découvert dans le registre au déclenchement de `@Initialized(ApplicationScoped.class)`. Hors CDI, le même registre est alimenté manuellement — le cœur ne dépend jamais d'un conteneur.
+Dans un déploiement CDI, les contrôles sont découverts par Vauban et enregistrés par `HealthCheckRegistrar` au déclenchement de `@Initialized(ApplicationScoped.class)` : chaque bean qualifié par `@Liveness`, `@Readiness` ou `@Startup` est enregistré dans le registre par type de sonde. Un bean `HealthCheck` sans aucun de ces qualificateurs n'est pas une procédure de contrôle et est silencieusement ignoré (spec §4.2). Hors CDI, le même registre est alimenté manuellement — le cœur ne dépend jamais d'un conteneur.
 
 == Frontières des modules
 

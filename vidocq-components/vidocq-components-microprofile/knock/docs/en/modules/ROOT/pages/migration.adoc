@@ -34,7 +34,7 @@ Knock implements the standard MicroProfile Health 4.0 contract. Application code
 == Migration steps
 
 . Replace the SmallRye Health dependency with `knock-api`, `knock-core`, `knock-cdi-vauban` and `knock-jaxrs` (see xref:reference.adoc[Reference]).
-. Ensure each `HealthCheck` carries exactly one probe qualifier — Knock rejects unqualified checks at deployment time.
+. Ensure each `HealthCheck` you want reported carries a probe qualifier — Knock silently ignores unqualified checks (they are not registered).
 . Remove any vendor-specific extra data fields if downstream consumers required the strict spec payload.
 . Add a `module-info.java` requiring `microprofile.health.api` (Knock is strict JPMS).
 . Verify the four endpoints respond and the aggregate HTTP status is `200`/`503` as expected.

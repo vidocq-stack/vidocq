@@ -26,7 +26,7 @@ _Knock, ou le Triomphe de la médecine_ est une comédie de Jules Romains (1923)
 == Trois traits identitaires
 
 . **Zéro bibliothèque tierce** — uniquement MicroProfile Health et les specs Jakarta. Pas de SmallRye Health, pas de Vert.x, pas de Jackson. Le JSON est produit via Jakarta JSON-P.
-. **Découverte native CDI** — les beans `@Liveness`, `@Readiness`, `@Startup` sont découverts par une Build Compatible Extension de Vauban et enregistrés automatiquement, tandis que `knock-core` reste utilisable en Java SE pur.
+. **Découverte native CDI** — les beans `@Liveness`, `@Readiness`, `@Startup` sont découverts sur Vauban et enregistrés automatiquement, tandis que `knock-core` reste utilisable en Java SE pur.
 . **JPMS strict + threads virtuels** — chaque module fournit un `module-info.java` ; les contrôles s'exécutent sur un `VirtualThreadPerTaskExecutor`. Pas de `synchronized`, pas de `ThreadLocal`, pas de `setAccessible(true)`.
 
 == Points d'accès

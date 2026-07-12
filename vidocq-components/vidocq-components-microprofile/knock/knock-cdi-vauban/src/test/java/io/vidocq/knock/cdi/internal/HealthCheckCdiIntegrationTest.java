@@ -24,7 +24,6 @@ import io.vidocq.knock.runtime.KnockHealthService;
 import io.vidocq.knock.spi.HealthCheckRegistry;
 import io.vidocq.knock.spi.ProbeType;
 import io.vidocq.vauban.core.container.VaubanContainer;
-import jakarta.enterprise.inject.spi.DeploymentException;
 import org.eclipse.microprofile.health.HealthCheck;
 import org.eclipse.microprofile.health.HealthCheckResponse;
 import org.eclipse.microprofile.health.Liveness;
@@ -37,8 +36,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * CDI integration tests — {@link HealthCheckCdiExtension}, {@link HealthCheckRegistrar},
- * {@link KnockCdiHealthCheckRegistry}.
+ * CDI integration tests — {@link HealthCheckRegistrar}, {@link KnockCdiHealthCheckRegistry}.
  *
  * <p>MicroProfile Health 4.0 spec §4.1: "Health check procedures annotated with one
  * of the three qualifiers are automatically discovered and registered."</p>
@@ -80,7 +78,7 @@ class HealthCheckCdiIntegrationTest {
         }
     }
 
-    /** Bean without a probe qualifier — must trigger a deployment error. */
+    /** Bean without a probe qualifier — not a health-check procedure; must be silently ignored. */
     @ApplicationScoped
     static class NoProbeCheck implements HealthCheck {
         @Override public HealthCheckResponse call() {
@@ -150,21 +148,36 @@ class HealthCheckCdiIntegrationTest {
     }
 
     // -----------------------------------------------------------------------
-    // §4.2 — HealthCheck bean without a probe qualifier -> DeploymentException
+    // §4.2 — HealthCheck bean without a probe qualifier is silently ignored
     // -----------------------------------------------------------------------
 
     @Test
-    void health_check_without_probe_annotation_fails_deployment_spec_section4_2() {
-        // Spec §4.2: "Health check procedures that do not carry one of the three
-        // qualifiers result in a deployment error."
-        assertThrows(
-                DeploymentException.class,
-                () -> {
-                    try (var container = buildContainer(NoProbeCheck.class)) {
-                        // The deployment is expected to fail before this container is used.
-                    }
-                },
-                "A HealthCheck bean without @Liveness/@Readiness/@Startup must fail deployment");
+    void health_check_without_probe_annotation_is_ignored_spec_section4_2() {
+        // Spec §4.2: a HealthCheck implementation that carries none of the three
+        // qualifiers is NOT a health-check procedure. It is an ordinary CDI bean and
+        // must be silently ignored — the deployment succeeds and the check is not
+        // registered under any probe type (this is what the MP Health TCK
+        // EnforceQualifierTest asserts: deployment OK + empty checks array).
+        try (var container = buildContainer(NoProbeCheck.class)) {
+            HealthCheckRegistry registry = container.select(HealthCheckRegistry.class);
+
+            assertEquals(0, registry.getChecks(ProbeType.LIVENESS).size(),
+                    "An unqualified HealthCheck must not be registered as a liveness procedure");
+            assertEquals(0, registry.getChecks(ProbeType.READINESS).size(),
+                    "An unqualified HealthCheck must not be registered as a readiness procedure");
+            assertEquals(0, registry.getChecks(ProbeType.STARTUP).size(),
+                    "An unqualified HealthCheck must not be registered as a startup procedure");
+
+            // Aggregated /health: overall UP with an empty checks array.
+            HealthReport report = new KnockHealthService(registry).report(ProbeType.ALL);
+            assertEquals(200, report.httpStatus(),
+                    "Spec §3: an empty aggregate reports status=UP -> HTTP 200");
+            assertTrue(report.json().contains("\"status\":\"UP\"")
+                    || report.json().contains("\"status\": \"UP\""),
+                    "JSON must report overall UP, got: " + report.json());
+            assertFalse(report.json().contains("no-probe"),
+                    "The unqualified check must not appear in the aggregated response, got: " + report.json());
+        }
     }
 
     // -----------------------------------------------------------------------
@@ -177,7 +190,6 @@ class HealthCheckCdiIntegrationTest {
      */
     private static VaubanContainer buildContainer(Class<?>... checkBeans) {
         var builder = VaubanContainer.builder()
-                .addBeanClass(HealthCheckCdiExtension.class)
                 .addBeanClass(KnockCdiHealthCheckRegistry.class)
                 .addBeanClass(HealthCheckRegistrar.class);
         for (Class<?> checkBean : checkBeans) {
