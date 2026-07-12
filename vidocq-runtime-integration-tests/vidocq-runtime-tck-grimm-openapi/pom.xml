@@ -14,24 +14,24 @@
     <name>Vidocq :: TCK :: MicroProfile OpenAPI 4.0 (Grimm)</name>
     <description>
         Runs the official MicroProfile OpenAPI 4.0 TCK (org.eclipse.microprofile.openapi:microprofile-openapi-tck)
-        against the real Vidocq runtime. The OpenAPI document under /openapi is produced by the Grimm
-        (MicroProfile OpenAPI) extension mounted through Cassini.
+        against the assembled Vidocq runtime: vidocq-runtime-core boots via VidocqBootstrap, discovers
+        vidocq-runtime-grimm-openapi-extension (and ravel-config for the mp.openapi.* deployment
+        configuration) through the ServiceLoader SPI, and the shared vidocq-runtime-arquillian embedded
+        container deploys each TCK archive — the same path a real application uses. The OpenAPI document
+        under /openapi is produced by Grimm mounted through Cassini; deployment classes reach Grimm through
+        the standard build-compatible-extension lifecycle, static META-INF/openapi.{yaml,yml,json} overrides
+        through the deployment class loader, and mp.openapi.* configuration through the republished
+        microprofile-config.properties.
 
-        The harness (ported from grimm's own grimm-tck) is a Grimm-specific embedded Arquillian container that,
-        per deployment, boots Vidocq and reproduces the wiring the TCK relies on: it feeds ALL deployment classes
-        to Grimm (so the @OpenAPIDefinition Application class and @Schema POJOs are scanned, not just @Path
-        resources), parses each microprofile-config.properties into GrimmConfig (mp.openapi.*), and installs the
-        static META-INF/openapi.{yaml,yml,json} override. It uses a random port, waits for /openapi readiness and
-        publishes `test.url` (read by AppTestBase).
-
-        Scope: the client-mode subset. ModelConstructionTest and OASFactoryErrorTest run inside the container
-        (default testable=true) and need an Arquillian TestEnricher/Servlet protocol the embedded container does
-        not provide; they are excluded below as a known infrastructure gap (not a spec conformance failure).
+        AppTestBase drives /openapi with REST-assured from the `test.url` system property, so this runner
+        pins the container port in arquillian.xml and mirrors it in test.url below.
     </description>
 
     <properties>
         <!-- MicroProfile 7.1 pins OpenAPI 4.0 -->
         <microprofile.openapi.tck.version>4.0.2</microprofile.openapi.tck.version>
+        <!-- Fixed port mirrored in the test.url system property (AppTestBase). -->
+        <grimm.tck.port>18085</grimm.tck.port>
     </properties>
 
     <!--
@@ -47,75 +47,54 @@
             <artifactId>vidocq-runtime-core</artifactId>
         </dependency>
         <!--
-            Grimm = MicroProfile OpenAPI 4.0 implementation. Pulls Cassini (mounts
-            OpenApiResource @Path("/openapi")) and grimm-cdi-vauban, whose
-            BuildCompatibleExtension discovers @Path resource classes at deployment
-            bootstrap and builds the OpenAPI model at runtime.
+            Grimm = MicroProfile OpenAPI implementation, wired into the runtime the
+            same way an application would: the extension wrapper pulls grimm-cdi-vauban
+            (BCE + producers, self-registered) and Cassini/Chappe for the /openapi endpoint.
         -->
         <dependency>
             <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
             <artifactId>vidocq-runtime-grimm-openapi-extension</artifactId>
             <version>${project.version}</version>
         </dependency>
-        <dependency>
-            <groupId>io.vidocq.vauban</groupId>
-            <artifactId>vauban-core</artifactId>
-        </dependency>
         <!--
-            The TCK deployment() methods (run in the test JVM) build ShrinkWrap
-            archives that reference jakarta.ws.rs.* types (Application, Response,
-            ExceptionMapper, StreamingOutput, ...). Those APIs must be on the test
-            classpath for the archives to be assembled.
+            Ravel = MicroProfile Config: Grimm reads the deployment's mp.openapi.*
+            settings (filter, model.reader, scan.*, servers) through the MP Config API.
+        -->
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
+            <artifactId>vidocq-runtime-ravel-config-extension</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!--
+            The TCK deployment classes (run in the test JVM) reference
+            jakarta.ws.rs.* and jakarta.validation.* types; those APIs must be on
+            the test classpath (the runtime ships them as JPMS-repackaged jars
+            that Maven does not expose under the spec coordinates).
         -->
         <dependency>
             <groupId>jakarta.ws.rs</groupId>
             <artifactId>jakarta.ws.rs-api</artifactId>
             <version>4.0.0</version>
+            <scope>test</scope>
         </dependency>
-        <!--
-            Bean Validation API: grimm maps jakarta.validation constraints
-            (@Size, @Min, @NotNull, ...) onto schema facets (minLength, minimum,
-            minItems, ...). The BeanValidationTest deployment carries annotated
-            classes; without this API on the classpath the constraints are invisible
-            and the schema facets are never emitted.
-        -->
         <dependency>
             <groupId>jakarta.validation</groupId>
             <artifactId>jakarta.validation-api</artifactId>
-            <version>3.1.1</version>
+            <version>3.1.0</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Test harness: shared embedded Vidocq Arquillian container -->
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-arquillian</artifactId>
+            <scope>test</scope>
         </dependency>
 
         <!--
-            Arquillian container SPI + ShrinkWrap. This module ships its OWN Grimm
-            DeployableContainer (GrimmDeployableContainer, ported from grimm-tck),
-            so it depends on the raw SPI rather than vidocq-runtime-arquillian —
-            pulling the latter would register a SECOND DeployableContainer and clash.
-        -->
-        <dependency>
-            <groupId>org.jboss.arquillian.container</groupId>
-            <artifactId>arquillian-container-spi</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.jboss.arquillian.container</groupId>
-            <artifactId>arquillian-container-test-spi</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.jboss.shrinkwrap</groupId>
-            <artifactId>shrinkwrap-api</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.jboss.shrinkwrap</groupId>
-            <artifactId>shrinkwrap-impl-base</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <!--
-            Official MicroProfile OpenAPI TCK. Compile-scoped deps (testng,
-            arquillian-testng-container, rest-assured, hamcrest, jackson yaml,
-            shrinkwrap-api) come transitively at test scope; their versions resolve
-            via the microprofile-tck-bom imported by the TCK.
+            Official MicroProfile OpenAPI TCK. The @Test classes live in this jar
+            (scanned via dependenciesToScan); TestNG + REST-assured come transitively.
         -->
         <dependency>
             <groupId>org.eclipse.microprofile.openapi</groupId>
@@ -123,10 +102,6 @@
             <version>${microprofile.openapi.tck.version}</version>
             <scope>test</scope>
         </dependency>
-        <!--
-            Align the Arquillian TestNG container with the rest of the Arquillian
-            stack (arquillian-bom, imported by the root pom at ${arquillian.version}).
-        -->
         <dependency>
             <groupId>org.jboss.arquillian.testng</groupId>
             <artifactId>arquillian-testng-container</artifactId>
@@ -150,22 +125,10 @@
                     <dependenciesToScan>
                         <dependency>org.eclipse.microprofile.openapi:microprofile-openapi-tck</dependency>
                     </dependenciesToScan>
-                    <!--
-                        The Grimm container publishes `test.url` itself from the random
-                        port it binds, after /openapi readiness — no fixed port needed.
-                    -->
-                    <!--
-                        Exclude the two in-container tests. They deploy with the default
-                        (testable=true) protocol and expect an ArquillianServletRunner
-                        inside the container to enrich and drive @Test methods — the
-                        embedded Vidocq container is client-mode only and provides no
-                        TestEnricher, so these cannot execute here. Tracked as an infra
-                        gap; NOT a spec conformance exclusion.
-                    -->
-                    <excludes>
-                        <exclude>**/ModelConstructionTest.java</exclude>
-                        <exclude>**/OASFactoryErrorTest.java</exclude>
-                    </excludes>
+                    <systemPropertyVariables>
+                        <!-- AppTestBase reads test.url; the container port is pinned in arquillian.xml. -->
+                        <test.url>http://127.0.0.1:${grimm.tck.port}</test.url>
+                    </systemPropertyVariables>
                 </configuration>
             </plugin>
         </plugins>
