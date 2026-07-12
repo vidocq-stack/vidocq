@@ -40,12 +40,11 @@
         — so it runs safely in-reactor (verified: no resolver references in the tck jar). No exclusions:
         Heisenberg passes the full suite.
 
-        Version note: Heisenberg and its Dirac/Humboldt/Ravel FT-metrics/tracing collaborators are pinned
-        here at the 0.2.0 RELEASE line (published on Maven Central) — the exact set Heisenberg 0.2.0 was
-        built and TCK-proven against (heisenberg-parent 0.2.0 pins vauban/dirac/ravel 0.2.0). These
-        explicit versions intentionally override the reactor's 0.2.0-SNAPSHOT dirac/humboldt/ravel
-        management for THIS leaf test module only, so the whole FT stack stays on one immutable release
-        line. Vauban stays reactor-managed (the shared CDI engine).
+        Version note: the whole Fault Tolerance stack is aligned on the 0.3.0-SNAPSHOT global dev
+        version. Heisenberg is pulled through vidocq-runtime-heisenberg-fault-tolerance-extension
+        (version managed by the root BOM); its Dirac/Humboldt/Ravel FT-metrics/tracing collaborators
+        — wired by the harness per deployment — are pinned here to 0.3.0-SNAPSHOT to match. Vauban is
+        reactor-managed (the shared CDI engine).
     </description>
 
     <properties>
@@ -54,12 +53,12 @@
         <!-- Arquillian 1.10.1 avoids MalformedParameterizedTypeException under JDK 25 (see heisenberg-tck). -->
         <arquillian.tck.version>1.10.1.Final</arquillian.tck.version>
         <!-- Heisenberg itself is pulled via vidocq-runtime-heisenberg-fault-tolerance-extension,
-             whose version (0.2.0 release line) is managed by the root BOM. dirac/humboldt/ravel
-             below are the FT-metrics/telemetry collaborators the harness wires per deployment;
-             pinned to the same 0.2.0 release line Heisenberg 0.2.0 was built and TCK-proven against. -->
-        <dirac.tck.version>0.2.0</dirac.tck.version>
-        <humboldt.tck.version>0.2.0</humboldt.tck.version>
-        <ravel.tck.version>0.2.0</ravel.tck.version>
+             whose version (0.3.0-SNAPSHOT) is managed by the root BOM. dirac/humboldt/ravel below
+             are the FT-metrics/telemetry collaborators the harness wires per deployment; aligned on
+             the same 0.3.0-SNAPSHOT dev line as the rest of the reactor. -->
+        <dirac.tck.version>0.3.0-SNAPSHOT</dirac.tck.version>
+        <humboldt.tck.version>0.3.0-SNAPSHOT</humboldt.tck.version>
+        <ravel.tck.version>0.3.0-SNAPSHOT</ravel.tck.version>
         <tck.testng.version>7.10.2</tck.testng.version>
     </properties>
 
@@ -118,7 +117,7 @@
             <version>${microprofile.fault.tolerance.tck.version}</version>
         </dependency>
 
-        <!-- Vauban CDI Lite container: VaubanTckBootstrap boots one per TCK archive (reactor 0.2.0). -->
+        <!-- Vauban CDI Lite container: VaubanTckBootstrap boots one per TCK archive (reactor-managed). -->
         <dependency>
             <groupId>io.vidocq.vauban</groupId>
             <artifactId>vauban-core</artifactId>
@@ -144,10 +143,9 @@
         </dependency>
 
         <!--
-            Dirac (FT metrics, TCK §9) + Humboldt (FT tracing, TCK §10). Pinned to the 0.2.0 release
-            line to match Heisenberg 0.2.0's FT-metrics/tracing recorders. These override the reactor's
-            0.2.0-SNAPSHOT management for this leaf module only. Humboldt transitively provides the
-            OpenTelemetry SDK the TCK's InMemoryMetricReader needs.
+            Dirac (FT metrics, TCK §9) + Humboldt (FT tracing, TCK §10). Aligned on the
+            0.3.0-SNAPSHOT dev line so the whole FT stack matches the rest of the reactor. Humboldt
+            transitively provides the OpenTelemetry SDK the TCK's InMemoryMetricReader needs.
         -->
         <dependency>
             <groupId>io.vidocq.dirac</groupId>

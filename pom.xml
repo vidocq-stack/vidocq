@@ -59,11 +59,11 @@
         <mansart.version>0.3.0-SNAPSHOT</mansart.version>
         <knock.version>0.3.0-SNAPSHOT</knock.version>
         <dirac.version>0.3.0-SNAPSHOT</dirac.version>
-        <!-- Heisenberg (MicroProfile Fault Tolerance 4.1) ships only a 0.2.0 RELEASE on Maven
-             Central — there is no Heisenberg SNAPSHOT. It is built against the 0.2.0 ecosystem
-             releases and is the immutable FT stack the runner + runtime extension certify; it is
-             therefore pinned to 0.2.0 independently of the 0.3.0-SNAPSHOT global dev version. -->
-        <heisenberg.version>0.2.0</heisenberg.version>
+        <!-- Heisenberg (MicroProfile Fault Tolerance 4.1) — aligned on the 0.3.0-SNAPSHOT global
+             dev version (built locally). heisenberg-cdi-vauban hard-depends only on its own
+             core/api; its Dirac §9 metrics / Humboldt §10 telemetry recorders sit behind optional
+             `requires static` edges, so the FT wrapper stays version-independent of those. -->
+        <heisenberg.version>0.3.0-SNAPSHOT</heisenberg.version>
         <cyrano.version>0.3.0-SNAPSHOT</cyrano.version>
         <cervantes.version>0.3.0-SNAPSHOT</cervantes.version>
         <humboldt.version>0.3.0-SNAPSHOT</humboldt.version>
