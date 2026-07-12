@@ -19,6 +19,10 @@
  */
 package io.vidocq.knock.spi;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Properties;
+
 /**
  * Static metadata for the Knock implementation.
  *
@@ -31,13 +35,30 @@ public final class Knock {
     /** Logical name of the implementation. */
     public static final String IMPLEMENTATION_NAME = "knock";
 
-    /** Knock implementation version. */
-    public static final String IMPLEMENTATION_VERSION = "0.1.0-SNAPSHOT";
+    /**
+     * Knock implementation version, filtered by the Maven build into a
+     * same-module resource. Not a compile-time constant on purpose: consumers
+     * always read the version of the artifact actually on their module path.
+     */
+    public static final String IMPLEMENTATION_VERSION = loadVersion();
 
     /** Implemented MicroProfile Health spec version. */
     public static final String SPEC_VERSION = "4.0";
 
     private Knock() {
         // utility class
+    }
+
+    private static String loadVersion() {
+        try (InputStream in = Knock.class.getResourceAsStream("version.properties")) {
+            if (in == null) {
+                return "unknown";
+            }
+            Properties props = new Properties();
+            props.load(in);
+            return props.getProperty("version", "unknown");
+        } catch (IOException e) {
+            return "unknown";
+        }
     }
 }
