@@ -17,7 +17,7 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
-package io.vidocq.humboldt.tck;
+package io.vidocq.runtime.tck.telemetry;
 
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;

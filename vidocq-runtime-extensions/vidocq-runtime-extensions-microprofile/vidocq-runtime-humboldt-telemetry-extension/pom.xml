@@ -12,7 +12,12 @@
 
     <artifactId>vidocq-runtime-humboldt-telemetry-extension</artifactId>
     <name>Vidocq :: Core Extensions :: Telemetry (Humboldt)</name>
-    <description>Extension Vidocq Runtime qui branche Humboldt (MicroProfile Telemetry 2.1 — tracing, metrics, logs) sur le cycle de vie Vidocq. Auto-config via env vars OTEL_*, install GlobalOpenTelemetry, shutdown propre.</description>
+    <description>Extension Vidocq Runtime qui branche Humboldt (MicroProfile Telemetry 2.1 — tracing, metrics, logs) sur le cycle de vie Vidocq. Auto-config via env vars OTEL_*, découverte des SPI OTel autoconfigure via humboldt-otel-interop, install GlobalOpenTelemetry, shutdown propre.</description>
+
+    <properties>
+        <!-- Aligned with the OTel version pinned by humboldt-parent (opentelemetry-bom). -->
+        <opentelemetry.version>1.39.0</opentelemetry.version>
+    </properties>
 
     <dependencies>
         <!-- Humboldt — implémentation MicroProfile Telemetry 2.1 standalone -->
@@ -27,6 +32,85 @@
         <dependency>
             <groupId>io.vidocq.humboldt</groupId>
             <artifactId>humboldt-rest</artifactId>
+        </dependency>
+        <!-- OTel autoconfigure SPI discovery bridged to the Humboldt SDK (span/metric
+             exporters, samplers, propagators, resources, customizers). The interop
+             module declares the OTel SDK artifacts as provided; the extension supplies
+             them below since it runs the discovery at boot. -->
+        <dependency>
+            <groupId>io.vidocq.humboldt</groupId>
+            <artifactId>humboldt-otel-interop</artifactId>
+            <version>${humboldt.version}</version>
+        </dependency>
+
+        <!--
+            OTel SDK artifacts required at runtime by humboldt-otel-interop (provided
+            scope there). io.opentelemetry:opentelemetry-api / -context are excluded:
+            humboldt-otel-api / humboldt-otel-context (transitive via humboldt-runtime)
+            repackage the same classes under the same JPMS module names — keeping both
+            would put two modules named io.opentelemetry.api on the module path.
+        -->
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-sdk</artifactId>
+            <version>${opentelemetry.version}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>io.opentelemetry</groupId>
+                    <artifactId>opentelemetry-api</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>io.opentelemetry</groupId>
+                    <artifactId>opentelemetry-context</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-sdk-extension-autoconfigure</artifactId>
+            <version>${opentelemetry.version}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>io.opentelemetry</groupId>
+                    <artifactId>opentelemetry-api</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>io.opentelemetry</groupId>
+                    <artifactId>opentelemetry-context</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <!-- TestSpanData used by the interop SpanDataMapper (only concrete OTel SpanData). -->
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-sdk-testing</artifactId>
+            <version>${opentelemetry.version}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>io.opentelemetry</groupId>
+                    <artifactId>opentelemetry-api</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>io.opentelemetry</groupId>
+                    <artifactId>opentelemetry-context</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <!-- Builtin b3 / b3multi / jaeger propagators resolvable from otel.propagators. -->
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-extension-trace-propagators</artifactId>
+            <version>${opentelemetry.version}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>io.opentelemetry</groupId>
+                    <artifactId>opentelemetry-api</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>io.opentelemetry</groupId>
+                    <artifactId>opentelemetry-context</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
         <!-- Vidocq Runtime SPI + Vauban container -->
