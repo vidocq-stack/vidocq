@@ -47,6 +47,16 @@ class KnownExtensionsTest {
     }
 
     @Test
+    void knowsTheHeisenbergFaultToleranceExtension() {
+        // Wired into the runtime by the MicroProfile 7.1 certification PR (#19) —
+        // the catalog must expose it to `extension list/add` and `create -x`.
+        ExtensionCoordinate c = KnownExtensions.resolve("heisenberg-fault-tolerance");
+        assertEquals("io.vidocq.runtime.extensions.microprofile", c.groupId());
+        assertEquals("vidocq-runtime-heisenberg-fault-tolerance-extension", c.artifactId());
+        assertTrue(KnownExtensions.isKnown("heisenberg-fault-tolerance"));
+    }
+
+    @Test
     void shortIdLookupIsCaseInsensitive() {
         assertTrue(KnownExtensions.byId("Knock-Health").isPresent());
         assertTrue(KnownExtensions.isKnown("CASSINI-REST"));

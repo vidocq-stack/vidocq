@@ -77,6 +77,10 @@
 | `vidocq-runtime-humboldt-telemetry-extension`
 | `microprofile`
 | MicroProfile Telemetry via xref:humboldt::index.adoc[Humboldt] — traces, metrics, logs, OTLP/HTTP export.
+
+| `vidocq-runtime-heisenberg-fault-tolerance-extension`
+| `microprofile`
+| MicroProfile Fault Tolerance via xref:heisenberg::index.adoc[Heisenberg] — `@Retry`, `@Timeout`, `@CircuitBreaker`, `@Bulkhead`, `@Fallback` interceptors (pure CDI, no HTTP endpoint; Dirac metrics and Humboldt telemetry stay optional).
 |===
 
 CDI (xref:vauban::index.adoc[Vauban]) and JSON (xref:champollion::index.adoc[Champollion]) are not standalone extensions: Vauban is the engine built into `vidocq-runtime-core`, and Champollion ships transitively with the REST extension.
