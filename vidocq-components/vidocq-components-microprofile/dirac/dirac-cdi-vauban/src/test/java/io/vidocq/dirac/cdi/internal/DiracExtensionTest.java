@@ -24,6 +24,7 @@ import org.eclipse.microprofile.metrics.MetricRegistry;
 import org.eclipse.microprofile.metrics.MetricUnits;
 import org.eclipse.microprofile.metrics.annotation.Gauge;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -34,6 +35,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  */
 class DiracExtensionTest {
 
+    // DISCOVERED_GAUGES is a static registry also populated by the CDI integration
+    // tests running in the same JVM. Clearing only after each test made the counting
+    // assertions depend on surefire's filesystem-dependent class order (green on
+    // macOS, red on the CI runner) — clear before as well.
+    @BeforeEach
     @AfterEach
     void cleanup() {
         DiracExtension.clearDiscoveredGauges();
