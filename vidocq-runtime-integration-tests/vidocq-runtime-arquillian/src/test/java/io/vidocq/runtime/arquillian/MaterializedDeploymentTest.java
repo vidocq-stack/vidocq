@@ -80,6 +80,64 @@ class MaterializedDeploymentTest {
     }
 
     @Test
+    void discoversBuildCompatibleExtensionsVisibleToTheDeploymentClassLoader() throws Exception {
+        // Dynamic Arquillian archives are not APT-processed, so the container must
+        // hand every ServiceLoader-registered BCE to the CDI boot explicitly for the
+        // full build-compatible lifecycle (@Discovery..@Synthesis) to run against the
+        // archive classes — the same thing a build-time-processed application gets
+        // from its codegen. BCEs may come from the runtime jars (parent loader) or
+        // from the archive itself.
+        JavaArchive archive = ShrinkWrap.create(JavaArchive.class, "test.jar")
+                .add(new StringAsset("com.example.tck.ArchiveShippedExtension"),
+                        "/META-INF/services/jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension");
+
+        try (MaterializedDeployment deployment = MaterializedDeployment.of(archive)) {
+            var extensions = BuildCompatibleExtensions.discover(deployment.classLoader());
+            assertTrue(extensions.contains("com.example.tck.ArchiveShippedExtension"),
+                    "BCEs registered by the archive must be discovered");
+        }
+    }
+
+    @Test
+    void listsBeanClassesFromArchiveRootAndBundledLibraries() throws Exception {
+        // CDI treats WEB-INF/lib jars as bean archives; several TCKs package their
+        // client interfaces as libraries (ShrinkWrap addAsLibrary). The deployment
+        // must surface those classes as bean class names, next to the classes of
+        // WEB-INF/classes, or the CDI boot never sees them.
+        JavaArchive library = ShrinkWrap.create(JavaArchive.class, "clients.jar")
+                .addClass(MaterializedDeployment.class);
+        WebArchive archive = ShrinkWrap.create(WebArchive.class, "test.war")
+                .addClass(MaterializedDeploymentTest.class)
+                .addAsLibrary(library);
+
+        try (MaterializedDeployment deployment = MaterializedDeployment.of(archive)) {
+            var classNames = deployment.beanClassNames();
+            assertTrue(classNames.contains(MaterializedDeploymentTest.class.getName()),
+                    "classes under WEB-INF/classes must be listed");
+            assertTrue(classNames.contains(MaterializedDeployment.class.getName()),
+                    "classes inside WEB-INF/lib jars must be listed");
+        }
+    }
+
+    @Test
+    void collectsMicroProfileConfigFromArchiveRootAndBundledLibraries() throws Exception {
+        // TCK deployments ship microprofile-config.properties either under
+        // WEB-INF/classes or inside a WEB-INF/lib jar (ShrinkWrap addAsLibrary +
+        // addAsManifestResource). Both must reach the MP Config provider.
+        JavaArchive library = ShrinkWrap.create(JavaArchive.class, "clients.jar")
+                .add(new StringAsset("from.lib=yes"), "/META-INF/microprofile-config.properties");
+        WebArchive archive = ShrinkWrap.create(WebArchive.class, "test.war")
+                .addAsResource(new StringAsset("from.war=yes"), "META-INF/microprofile-config.properties")
+                .addAsLibrary(library);
+
+        try (MaterializedDeployment deployment = MaterializedDeployment.of(archive)) {
+            var config = deployment.microProfileConfig();
+            assertEquals("yes", config.get("from.war"), "war-level config must be collected");
+            assertEquals("yes", config.get("from.lib"), "library-level config must be collected");
+        }
+    }
+
+    @Test
     void closeRemovesMaterializedFilesAndStopsServingResources() throws Exception {
         JavaArchive archive = ShrinkWrap.create(JavaArchive.class, "test.jar")
                 .add(new StringAsset("data"), "/data.txt");

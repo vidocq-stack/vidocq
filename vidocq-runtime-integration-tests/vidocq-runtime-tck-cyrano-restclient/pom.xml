@@ -14,23 +14,22 @@
     <name>Vidocq :: TCK :: MicroProfile Rest Client 4.0 (Cyrano)</name>
     <description>
         Runs the official MicroProfile Rest Client 4.0 TCK
-        (org.eclipse.microprofile.rest.client:microprofile-rest-client-tck) against Cyrano, the
-        Rest Client implementation Vidocq activates through vidocq-runtime-cyrano-rest-client-extension.
+        (org.eclipse.microprofile.rest.client:microprofile-rest-client-tck) against the assembled
+        Vidocq runtime: vidocq-runtime-core boots via VidocqBootstrap, discovers
+        vidocq-runtime-cyrano-rest-client-extension through the ServiceLoader SPI, and the shared
+        vidocq-runtime-arquillian embedded container deploys each TCK archive — the same path a
+        real application uses.
 
-        Unlike the Health and OpenAPI runners, the Rest Client TCK is client-side: it exercises the
-        typed proxy Cyrano builds and drives an in-JVM WireMock backend, so the tests run IN-CONTAINER
-        (Arquillian "Local" protocol) rather than as HTTP clients. The harness (ported from Cyrano's own
-        cyrano-tck) provides exactly that:
+        The Rest Client TCK is client-side: it exercises the typed proxy Cyrano builds and drives an
+        in-JVM WireMock backend, so the tests run IN-CONTAINER (Arquillian "Local" protocol). @Inject
+        and @Inject @RestClient fields on the TCK test classes are resolved by the generic
+        VidocqCdiTestEnricher; each archive's microprofile-config.properties is republished by the
+        shared container. The only local harness kept is the WireMock endpoint the TCK itself expects:
 
-          * CyranoDeployableContainer  — a Local, no-op container; per @Deployment it boots a Vauban CDI
-            container (VaubanTckBootstrap) with CyranoRestClientCdiExtension + all archive classes.
-          * CyranoTestEnricher         — a TestEnricher that satisfies @Inject / @Inject @RestClient on the
-            TCK test instances from the Vauban BeanManager.
-          * WireMockTestBackend        — a JVM-static WireMock server on 127.0.0.1:8765 (the port the TCK's
-            WiremockArquillianTest expects), started eagerly by an ITestNGListener because Arquillian's
-            Local start()/stop() fires after @AfterSuite — too late for the TCK @BeforeMethod hooks.
-          * TckConfigBridge            — exports each archive's microprofile-config.properties as system
-            properties so CyranoBaseUriResolver's MP Config fallback resolves them.
+          * WireMockTestBackend — a JVM-static WireMock server on 127.0.0.1:8765 (the port hardcoded
+            in the TCK's WiremockArquillianTest), started eagerly by an ITestNGListener because
+            Arquillian's Local start()/stop() fires after @AfterSuite — too late for the TCK
+            @BeforeMethod hooks. WireMock is the REMOTE server under test fixtures, not runtime wiring.
 
         Scope: ssl/** and sse/** are excluded (RestClientBuilder.trustStore/keyStore and SSE are not yet
         implemented in Cyrano) — matching cyrano-tck's documented M4 exclusions.
@@ -72,21 +71,20 @@
     </dependencyManagement>
 
     <dependencies>
+        <!-- Vidocq runtime under test -->
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-core</artifactId>
+        </dependency>
         <!--
-            Cyrano = MicroProfile Rest Client 4.0 implementation, as wired into the
-            Vidocq runtime. The extension wrapper pulls cyrano-api/core/cdi-vauban,
-            whose internal CyranoRestClientCdiExtension / CyranoRestClientInstanceProducer
-            the harness boots per deployment.
+            Cyrano = MicroProfile Rest Client 4.0 implementation, wired into the runtime
+            the same way an application would: the extension wrapper pulls
+            cyrano-api/core/cdi-vauban, whose CDI wiring self-registers at boot.
         -->
         <dependency>
             <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
             <artifactId>vidocq-runtime-cyrano-rest-client-extension</artifactId>
             <version>${project.version}</version>
-        </dependency>
-        <!-- Vauban CDI Lite container: VaubanTckBootstrap boots one per TCK archive. -->
-        <dependency>
-            <groupId>io.vidocq.vauban</groupId>
-            <artifactId>vauban-core</artifactId>
         </dependency>
         <!--
             Champollion JSON-B: the entity provider Cyrano uses at runtime to (de)serialize
@@ -131,20 +129,10 @@
             <scope>test</scope>
         </dependency>
 
-        <!--
-            Arquillian container SPI + TestNG container + ShrinkWrap. This module ships its
-            OWN Local DeployableContainer (CyranoDeployableContainer), so it depends on the
-            raw SPI rather than vidocq-runtime-arquillian (which would register a second
-            DeployableContainer and clash).
-        -->
+        <!-- Test harness: shared embedded Vidocq Arquillian container -->
         <dependency>
-            <groupId>org.jboss.arquillian.container</groupId>
-            <artifactId>arquillian-container-spi</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.jboss.arquillian.test</groupId>
-            <artifactId>arquillian-test-spi</artifactId>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-arquillian</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -198,7 +186,6 @@
                     </excludes>
                     <trimStackTrace>false</trimStackTrace>
                     <systemPropertyVariables>
-                        <arquillian.launch>cyrano</arquillian.launch>
                         <!-- Force IPv4 so Apache HttpClient5 does not fall back to ::1 (macOS). -->
                         <wiremock.server.host>127.0.0.1</wiremock.server.host>
                         <java.net.preferIPv4Stack>true</java.net.preferIPv4Stack>

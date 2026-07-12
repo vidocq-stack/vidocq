@@ -22,6 +22,7 @@ package io.vidocq.runtime.arquillian;
 import org.jboss.shrinkwrap.api.Archive;
 import org.jboss.shrinkwrap.api.Node;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
@@ -32,7 +33,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.Enumeration;
 import java.util.List;
+import java.util.jar.JarEntry;
+import java.util.jar.JarFile;
 import java.util.stream.Stream;
 
 /**
@@ -56,10 +60,12 @@ import java.util.stream.Stream;
 final class MaterializedDeployment implements AutoCloseable {
 
     private final Path root;
+    private final List<Path> libraries;
     private final URLClassLoader classLoader;
 
-    private MaterializedDeployment(Path root, URLClassLoader classLoader) {
+    private MaterializedDeployment(Path root, List<Path> libraries, URLClassLoader classLoader) {
         this.root = root;
+        this.libraries = libraries;
         this.classLoader = classLoader;
     }
 
@@ -109,7 +115,7 @@ final class MaterializedDeployment implements AutoCloseable {
                 "vidocq-deployment[" + archive.getName() + "]",
                 urls.toArray(URL[]::new),
                 MaterializedDeployment.class.getClassLoader());
-        return new MaterializedDeployment(root, classLoader);
+        return new MaterializedDeployment(root, List.copyOf(libraries), classLoader);
     }
 
     private static URL toUrl(Path path) {
@@ -126,6 +132,85 @@ final class MaterializedDeployment implements AutoCloseable {
 
     Path root() {
         return root;
+    }
+
+    /**
+     * Names of every class the deployment contributes as CDI bean classes:
+     * classes materialized at the classpath root (originally at the archive root
+     * or under {@code WEB-INF/classes/}) plus classes packaged in
+     * {@code WEB-INF/lib} jars — CDI treats those libraries as bean archives,
+     * and several TCKs ship their beans that way (ShrinkWrap
+     * {@code addAsLibrary}). {@code module-info} descriptors are skipped.
+     */
+    List<String> beanClassNames() throws IOException {
+        List<String> names = new ArrayList<>();
+        try (Stream<Path> walk = Files.walk(root)) {
+            walk.filter(p -> p.toString().endsWith(".class"))
+                    .forEach(p -> {
+                        String relative = root.relativize(p).toString().replace(File.separatorChar, '/');
+                        if (relative.startsWith("WEB-INF/")) {
+                            return; // only normalized root classes; libs are read below
+                        }
+                        addClassName(names, relative);
+                    });
+        }
+        for (Path library : libraries) {
+            try (JarFile jar = new JarFile(library.toFile())) {
+                for (Enumeration<JarEntry> entries = jar.entries(); entries.hasMoreElements(); ) {
+                    JarEntry entry = entries.nextElement();
+                    if (entry.getName().endsWith(".class")) {
+                        addClassName(names, entry.getName());
+                    }
+                }
+            }
+        }
+        return names;
+    }
+
+    /**
+     * Every {@code microprofile-config.properties} entry the deployment carries —
+     * at the materialized root (archive root or {@code WEB-INF/classes/}) or
+     * inside a {@code WEB-INF/lib} jar. Later files never override earlier keys
+     * (stable order: root files first, then libraries).
+     */
+    java.util.Map<String, String> microProfileConfig() throws IOException {
+        var config = new java.util.LinkedHashMap<String, String>();
+        try (Stream<Path> walk = Files.walk(root)) {
+            for (Path file : walk.filter(p -> p.toString().endsWith("microprofile-config.properties")).toList()) {
+                try (InputStream in = Files.newInputStream(file)) {
+                    loadProperties(config, in);
+                }
+            }
+        }
+        for (Path library : libraries) {
+            try (JarFile jar = new JarFile(library.toFile())) {
+                for (Enumeration<JarEntry> entries = jar.entries(); entries.hasMoreElements(); ) {
+                    JarEntry entry = entries.nextElement();
+                    if (entry.getName().endsWith("microprofile-config.properties")) {
+                        try (InputStream in = jar.getInputStream(entry)) {
+                            loadProperties(config, in);
+                        }
+                    }
+                }
+            }
+        }
+        return config;
+    }
+
+    private static void loadProperties(java.util.Map<String, String> config, InputStream in) throws IOException {
+        var properties = new java.util.Properties();
+        properties.load(in);
+        for (String key : properties.stringPropertyNames()) {
+            config.putIfAbsent(key, properties.getProperty(key));
+        }
+    }
+
+    private static void addClassName(List<String> names, String resourcePath) {
+        if (resourcePath.contains("module-info")) {
+            return;
+        }
+        names.add(resourcePath.substring(0, resourcePath.length() - ".class".length())
+                .replace('/', '.'));
     }
 
     @Override

@@ -28,16 +28,13 @@ import org.jboss.arquillian.container.spi.client.protocol.metadata.HTTPContext;
 import org.jboss.arquillian.container.spi.client.protocol.metadata.ProtocolMetaData;
 import org.jboss.arquillian.container.spi.client.protocol.metadata.Servlet;
 import org.jboss.shrinkwrap.api.Archive;
-import org.jboss.shrinkwrap.api.Node;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.ServerSocket;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 
 /**
  * Embedded Arquillian container for Vidocq.
@@ -118,8 +115,23 @@ public class VidocqEmbeddedContainer implements DeployableContainer<VidocqContai
         try {
             int port = config.getPort() == 0 ? findFreePort() : config.getPort();
 
-            // Extract bean classes from archive
-            List<String> beanClassNames = extractClassNames(archive);
+            // Surface the archive content (keys, static documents,
+            // META-INF/services entries) on a deployment class loader. It stays
+            // installed as the context class loader until undeploy: threads the
+            // runtime spawns during start() inherit it, and lazy resource reads
+            // (JWT keys, OpenAPI documents) keep working after boot.
+            materialized = MaterializedDeployment.of(archive);
+
+            // Bean classes handed to the boot: every ServiceLoader-registered BCE
+            // first, then the archive classes (WEB-INF/classes AND WEB-INF/lib
+            // jars — CDI treats bundled libraries as bean archives). Dynamic
+            // archives are not APT-processed, so the BCEs must go through the
+            // full build-compatible lifecycle (@Discovery..@Synthesis) scoped to
+            // the archive classes — exactly what build-time codegen does for a
+            // real application.
+            List<String> beanClassNames = new ArrayList<>();
+            beanClassNames.addAll(BuildCompatibleExtensions.discover(materialized.classLoader()));
+            beanClassNames.addAll(materialized.beanClassNames());
 
             // Set system properties for the Chappe HTTP listener (consumed by
             // ChappeServerBootstrap). Cassini (rest-cassini-extension) mounts
@@ -129,24 +141,17 @@ public class VidocqEmbeddedContainer implements DeployableContainer<VidocqContai
 
             // Expose the deployment's MicroProfile Config to the runtime. Many TCK
             // deployments ship a microprofile-config.properties inside the archive
-            // (e.g. mp.openapi.* for OpenAPI, mp.health.* for Health). Those files
-            // live only inside the in-memory ShrinkWrap archive, never on a real
-            // classpath, so an MP Config provider (ravel) cannot see them on its
-            // own. Surface each entry as a system property (ravel's
-            // SystemPropertiesConfigSource then picks it up) before bootstrap, and
-            // remember the keys so undeploy can remove them and keep deployments
-            // isolated.
-            for (Map.Entry<String, String> entry : extractMicroProfileConfig(archive).entrySet()) {
+            // (WEB-INF/classes or a WEB-INF/lib jar). Those files live only inside
+            // the in-memory ShrinkWrap archive, never on a real classpath, so an
+            // MP Config provider (ravel) cannot see them on its own. Surface each
+            // entry as a system property (picked up by the providers' system
+            // property fallback) before bootstrap, and remember the keys so
+            // undeploy can remove them and keep deployments isolated.
+            for (Map.Entry<String, String> entry : materialized.microProfileConfig().entrySet()) {
                 System.setProperty(entry.getKey(), entry.getValue());
                 appliedConfigKeys.add(entry.getKey());
             }
 
-            // Surface the rest of the archive content (keys, static documents,
-            // META-INF/services entries) on a deployment class loader. It stays
-            // installed as the context class loader until undeploy: threads the
-            // runtime spawns during start() inherit it, and lazy resource reads
-            // (JWT keys, OpenAPI documents) keep working after boot.
-            materialized = MaterializedDeployment.of(archive);
             Thread.currentThread().setContextClassLoader(materialized.classLoader());
 
             // Boot Vidocq with extracted classes
@@ -201,54 +206,6 @@ public class VidocqEmbeddedContainer implements DeployableContainer<VidocqContai
         } catch (IOException ignored) {
             // Temp files are cleaned up by the OS eventually; never fail a test on this.
         }
-    }
-
-    private Map<String, String> extractMicroProfileConfig(Archive<?> archive) {
-        Map<String, String> out = new LinkedHashMap<>();
-        Map<org.jboss.shrinkwrap.api.ArchivePath, Node> content = archive.getContent();
-        for (var entry : content.entrySet()) {
-            String path = entry.getKey().get();
-            if (path == null || !path.endsWith("microprofile-config.properties")) {
-                continue;
-            }
-            Node node = entry.getValue();
-            if (node == null || node.getAsset() == null) {
-                continue;
-            }
-            try (InputStream stream = node.getAsset().openStream()) {
-                Properties properties = new Properties();
-                properties.load(stream);
-                for (String key : properties.stringPropertyNames()) {
-                    out.put(key, properties.getProperty(key));
-                }
-            } catch (IOException ignored) {
-                // Partial config is still better than none; keep scanning.
-            }
-        }
-        return out;
-    }
-
-    private List<String> extractClassNames(Archive<?> archive) {
-        List<String> classNames = new ArrayList<>();
-        Map<org.jboss.shrinkwrap.api.ArchivePath, Node> content = archive.getContent();
-        for (var entry : content.entrySet()) {
-            String path = entry.getKey().get();
-            if (path.endsWith(".class") && !path.contains("module-info")) {
-                // Normalise both JavaArchive (classes at root) and WebArchive
-                // (classes under WEB-INF/classes/) layouts, e.g.:
-                //   /com/example/MyClass.class            -> com.example.MyClass
-                //   /WEB-INF/classes/com/example/Foo.class -> com.example.Foo
-                String relative = path.substring(1); // remove leading /
-                if (relative.startsWith("WEB-INF/classes/")) {
-                    relative = relative.substring("WEB-INF/classes/".length());
-                }
-                String className = relative
-                        .replace('/', '.')
-                        .replace(".class", "");
-                classNames.add(className);
-            }
-        }
-        return classNames;
     }
 
     private int findFreePort() {
