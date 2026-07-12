@@ -45,6 +45,15 @@ class VidocqCdiTestEnricherTest {
         }
     }
 
+    @jakarta.enterprise.context.RequestScoped
+    public static class RequestCounter {
+        private int count;
+
+        public int bump() {
+            return ++count;
+        }
+    }
+
     public static class FakeTestCase {
         @Inject
         GreetingBean greeting;
@@ -64,6 +73,7 @@ class VidocqCdiTestEnricherTest {
     static void bootContainer() {
         container = VaubanContainer.builder()
                 .addBeanClass(GreetingBean.class)
+                .addBeanClass(RequestCounter.class)
                 .build();
     }
 
@@ -83,6 +93,22 @@ class VidocqCdiTestEnricherTest {
         assertNotNull(testCase.greeting, "@Inject field must be populated");
         assertEquals("hello", testCase.greeting.greet());
         assertNull(testCase.notInjectable, "fields without @Inject must be left alone");
+    }
+
+    @Test
+    void enrichmentStartsAFreshRequestContext() {
+        // A servlet-based Arquillian container serves every test method in its
+        // own HTTP request, so @RequestScoped state never leaks between tests
+        // (the FT TCK's RetryService state machine relies on it). Enrichment is
+        // our per-test hook: it must recycle the request context.
+        new VidocqCdiTestEnricher().enrich(new FakeTestCase());
+        RequestCounter counter = container.select(RequestCounter.class);
+        assertEquals(1, counter.bump(), "request scope must start fresh");
+        assertEquals(2, counter.bump(), "state must persist within the same request");
+
+        new VidocqCdiTestEnricher().enrich(new FakeTestCase());
+        RequestCounter again = container.select(RequestCounter.class);
+        assertEquals(1, again.bump(), "a new enrichment must recycle the request context");
     }
 
     @Test

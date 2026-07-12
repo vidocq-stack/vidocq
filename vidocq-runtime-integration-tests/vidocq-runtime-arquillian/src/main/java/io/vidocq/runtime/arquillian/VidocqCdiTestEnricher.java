@@ -48,6 +48,15 @@ public class VidocqCdiTestEnricher implements TestEnricher {
         if (container == null || testCase == null) {
             return;
         }
+        // Enrichment runs once per test method — recycle the request context so
+        // every test starts with fresh @RequestScoped state, exactly like a
+        // servlet-based Arquillian container serving each test in its own HTTP
+        // request (the FT TCK's stateful services rely on it).
+        var requestContext = container.requestContext();
+        if (requestContext.isActive()) {
+            requestContext.deactivate();
+        }
+        requestContext.activate();
         for (Class<?> type = testCase.getClass(); type != null && type != Object.class;
                 type = type.getSuperclass()) {
             for (Field field : type.getDeclaredFields()) {

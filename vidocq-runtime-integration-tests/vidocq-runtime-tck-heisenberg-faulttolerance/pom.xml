@@ -14,37 +14,27 @@
     <name>Vidocq :: TCK :: MicroProfile Fault Tolerance 4.1 (Heisenberg)</name>
     <description>
         Runs the official MicroProfile Fault Tolerance 4.1 TCK
-        (org.eclipse.microprofile.fault-tolerance:microprofile-fault-tolerance-tck) against Heisenberg,
-        Vidocq's Fault Tolerance implementation.
+        (org.eclipse.microprofile.fault-tolerance:microprofile-fault-tolerance-tck) against the
+        assembled Vidocq runtime: vidocq-runtime-core boots via VidocqBootstrap, discovers
+        vidocq-runtime-heisenberg-fault-tolerance-extension and
+        vidocq-runtime-dirac-metrics-extension through the ServiceLoader SPI, and the shared
+        vidocq-runtime-arquillian embedded container deploys each TCK archive — the same path a
+        real application uses. The FT-to-metrics composition (TCK section 9) is the real one:
+        heisenberg's DiracFtMetricsRecorder resolves Dirac's registry through CDI; the
+        telemetryMetrics module (section 10) goes through heisenberg's OtelFtMetricsRecorder and
+        GlobalOpenTelemetry.
 
-        The MP Fault Tolerance TCK is a CDI suite (TestNG + @RunWith-less Arquillian discovery): each
-        @Deployment is a ShrinkWrap archive of @Retry/@Timeout/@CircuitBreaker/@Bulkhead/@Fallback/
-        @Asynchronous beans and the test methods run IN-CONTAINER against the deployed CDI graph. So the
-        harness (ported from Heisenberg's own heisenberg-tck) uses Arquillian's "Local" protocol and boots
-        a Vauban CDI container per deployment:
+        The MP Fault Tolerance TCK is a CDI suite (TestNG + Arquillian, Local protocol): each
+        @Deployment is a ShrinkWrap archive of @Retry/@Timeout/... beans and the test methods run
+        IN-CONTAINER against the deployed CDI graph. @Inject fields on the test classes are
+        resolved by the generic VidocqCdiTestEnricher. Negative-deployment scenarios rely on the
+        typed FaultToleranceDefinitionException surviving in the DeploymentException cause chain
+        (vauban VAU-BCE-003). The only local harness is TelemetryBootstrapListener, which registers
+        the TCK's InMemoryMetricReader on the global OpenTelemetry — TCK-mandated test
+        infrastructure, not runtime wiring.
 
-          * HeisenbergDeployableContainer — a Local container; per @Deployment VaubanTckBootstrap starts a
-            Vauban CDI container with Heisenberg's HeisenbergExtension BCE + FaultToleranceInterceptor(s) +
-            state-registry beans + all archive classes. Negative-deployment scenarios surface Heisenberg
-            BCE @Enhancement errors as FaultToleranceDefinitionException (as the TCK expects).
-          * HeisenbergTestEnricher       — a TestEnricher that satisfies @Inject on the TCK test instances
-            from the Vauban BeanManager.
-          * VaubanTckBootstrap           — also wires Dirac (FT metrics, TCK §9) and Humboldt (FT tracing,
-            TCK §10): Dirac's registry producer + Counted/Timed interceptors + Heisenberg's
-            DiracFtMetricsRecorder feed the metrics tests; Humboldt's BCE + WithSpanInterceptor +
-            Heisenberg's OtelFtMetricsRecorder + an in-memory OTel SDK MeterProvider feed the
-            telemetryMetrics tests. Each archive's microprofile-config.properties is exported as system
-            properties so Ravel/MP-Config resolves it per deployment.
-
-        The TCK builds deployments with addClass/addPackage — it does NOT use the ShrinkWrap Maven resolver
-        — so it runs safely in-reactor (verified: no resolver references in the tck jar). No exclusions:
-        Heisenberg passes the full suite.
-
-        Version note: the whole Fault Tolerance stack is aligned on the 0.3.0-SNAPSHOT global dev
-        version. Heisenberg is pulled through vidocq-runtime-heisenberg-fault-tolerance-extension
-        (version managed by the root BOM); its Dirac/Humboldt/Ravel FT-metrics/tracing collaborators
-        — wired by the harness per deployment — are pinned here to 0.3.0-SNAPSHOT to match. Vauban is
-        reactor-managed (the shared CDI engine).
+        The TCK builds deployments with addClass/addPackage — it does NOT use the ShrinkWrap Maven
+        resolver — so it runs safely in-reactor. No exclusions: Heisenberg passes the full suite.
     </description>
 
     <properties>
@@ -52,13 +42,6 @@
         <microprofile.fault.tolerance.tck.version>4.1</microprofile.fault.tolerance.tck.version>
         <!-- Arquillian 1.10.1 avoids MalformedParameterizedTypeException under JDK 25 (see heisenberg-tck). -->
         <arquillian.tck.version>1.10.1.Final</arquillian.tck.version>
-        <!-- Heisenberg itself is pulled via vidocq-runtime-heisenberg-fault-tolerance-extension,
-             whose version (0.3.0-SNAPSHOT) is managed by the root BOM. dirac/humboldt/ravel below
-             are the FT-metrics/telemetry collaborators the harness wires per deployment; aligned on
-             the same 0.3.0-SNAPSHOT dev line as the rest of the reactor. -->
-        <dirac.tck.version>0.3.0-SNAPSHOT</dirac.tck.version>
-        <humboldt.tck.version>0.3.0-SNAPSHOT</humboldt.tck.version>
-        <ravel.tck.version>0.3.0-SNAPSHOT</ravel.tck.version>
         <tck.testng.version>7.10.2</tck.testng.version>
     </properties>
 
@@ -93,47 +76,63 @@
     </dependencyManagement>
 
     <dependencies>
+        <!-- Vidocq runtime under test -->
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-core</artifactId>
+        </dependency>
         <!--
-            Heisenberg = MicroProfile Fault Tolerance 4.1 implementation, consumed through the
-            SAME runtime wrapper a real Vidocq app opts into: vidocq-runtime-heisenberg-fault-
-            tolerance-extension. It brings heisenberg-cdi-vauban (+ heisenberg-core/-api and the
-            repackaged microprofile-fault-tolerance-api spec module) transitively — the BCE
-            (HeisenbergExtension) that discovers @Retry/@Timeout/@CircuitBreaker/@Bulkhead/
-            @Fallback/@Asynchronous and registers the FaultToleranceInterceptor(s) + state beans +
-            Dirac/OTel FT-metrics recorders the harness boots per deployment. Depending on the
-            extension (rather than the raw artifacts) exercises the actual runtime wiring.
+            Heisenberg = MicroProfile Fault Tolerance 4.1 implementation, wired into the
+            runtime the same way an application would: the extension wrapper pulls
+            heisenberg-cdi-vauban, whose BCE/interceptors/recorders self-register at boot.
         -->
         <dependency>
             <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
             <artifactId>vidocq-runtime-heisenberg-fault-tolerance-extension</artifactId>
             <version>${project.version}</version>
         </dependency>
-
-        <!-- MicroProfile Fault Tolerance 4.1 spec API (also brought transitively by the extension;
-             kept explicit so the TCK's compile references resolve to the canonical spec jar). -->
+        <!--
+            Dirac = MicroProfile Metrics: the TCK metrics module (section 9) asserts FT
+            metrics through @Inject MetricRegistry. With Dirac on the path, heisenberg's
+            DiracFtMetricsRecorder resolves the registry through CDI — the real
+            composition, no fake bean.
+        -->
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
+            <artifactId>vidocq-runtime-dirac-metrics-extension</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!--
+            Ravel = MicroProfile Config: heisenberg reads every FT configuration
+            override (spec section 11 — Retry/maxRetries, MP_Fault_Tolerance_*,
+            enable/disable switches) through the MP Config API, and its
+            HeisenbergAutoDiscovery resolver delegates to the real provider found
+            via ServiceLoader. An application composing FT with config would ship
+            the same extension.
+        -->
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
+            <artifactId>vidocq-runtime-ravel-config-extension</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- MicroProfile FT API — types the TCK references directly. -->
         <dependency>
             <groupId>org.eclipse.microprofile.fault-tolerance</groupId>
             <artifactId>microprofile-fault-tolerance-api</artifactId>
             <version>${microprofile.fault.tolerance.tck.version}</version>
         </dependency>
 
-        <!-- Vauban CDI Lite container: VaubanTckBootstrap boots one per TCK archive (reactor-managed). -->
+        <!-- Test harness: shared embedded Vidocq Arquillian container -->
         <dependency>
-            <groupId>io.vidocq.vauban</groupId>
-            <artifactId>vauban-core</artifactId>
-        </dependency>
-
-        <!-- Ravel MP Config: reads the archive's microprofile-config.properties (exported as sys props). -->
-        <dependency>
-            <groupId>io.vidocq.ravel</groupId>
-            <artifactId>ravel-core</artifactId>
-            <version>${ravel.tck.version}</version>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-arquillian</artifactId>
+            <scope>test</scope>
         </dependency>
 
         <!--
-            Official MicroProfile Fault Tolerance 4.1 TCK. The @Test classes live in this jar
-            (scanned via dependenciesToScan); its telemetryMetrics util (InMemoryMetricReader)
-            drives the FT metrics/telemetry sections.
+            Official MicroProfile Fault Tolerance 4.1 TCK. The @Test classes live in this
+            jar (scanned via dependenciesToScan); it pulls the OpenTelemetry SDK its
+            telemetryMetrics utils (InMemoryMetricReader) are built on.
         -->
         <dependency>
             <groupId>org.eclipse.microprofile.fault-tolerance</groupId>
@@ -142,39 +141,7 @@
             <scope>test</scope>
         </dependency>
 
-        <!--
-            Dirac (FT metrics, TCK §9) + Humboldt (FT tracing, TCK §10). Aligned on the
-            0.3.0-SNAPSHOT dev line so the whole FT stack matches the rest of the reactor. Humboldt
-            transitively provides the OpenTelemetry SDK the TCK's InMemoryMetricReader needs.
-        -->
-        <dependency>
-            <groupId>io.vidocq.dirac</groupId>
-            <artifactId>dirac-cdi-vauban</artifactId>
-            <version>${dirac.tck.version}</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>io.vidocq.humboldt</groupId>
-            <artifactId>humboldt-cdi</artifactId>
-            <version>${humboldt.tck.version}</version>
-            <scope>test</scope>
-        </dependency>
-
-        <!--
-            Arquillian container SPI + test SPI + TestNG container. This module ships its OWN Local
-            DeployableContainer (HeisenbergDeployableContainer), so it depends on the raw SPI rather
-            than vidocq-runtime-arquillian (which would register a second DeployableContainer and clash).
-        -->
-        <dependency>
-            <groupId>org.jboss.arquillian.container</groupId>
-            <artifactId>arquillian-container-spi</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.jboss.arquillian.test</groupId>
-            <artifactId>arquillian-test-spi</artifactId>
-            <scope>test</scope>
-        </dependency>
+        <!-- The MP FT TCK uses TestNG + the Arquillian TestNG container. -->
         <dependency>
             <groupId>org.jboss.arquillian.testng</groupId>
             <artifactId>arquillian-testng-container</artifactId>
@@ -186,8 +153,7 @@
             <version>${tck.testng.version}</version>
             <scope>test</scope>
         </dependency>
-
-        <!-- CDI / interceptor APIs the TCK beans and harness reference. -->
+        <!-- CDI / interceptor / annotation APIs the TCK beans reference. -->
         <dependency>
             <groupId>jakarta.enterprise</groupId>
             <artifactId>jakarta.enterprise.cdi-api</artifactId>
@@ -197,6 +163,12 @@
             <groupId>jakarta.interceptor</groupId>
             <artifactId>jakarta.interceptor-api</artifactId>
             <version>2.2.0</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.annotation</groupId>
+            <artifactId>jakarta.annotation-api</artifactId>
+            <version>3.0.0</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
@@ -211,7 +183,7 @@
                     <!--
                         The TCK @Test classes live in the microprofile-fault-tolerance-tck jar,
                         not in this module's src/test/java. Tell Surefire to scan that dependency;
-                        the TestNG provider (below) runs them through the Arquillian adaptor.
+                        the TestNG provider runs them through the Arquillian adaptor.
                     -->
                     <dependenciesToScan>
                         <dependency>org.eclipse.microprofile.fault-tolerance:microprofile-fault-tolerance-tck</dependency>
@@ -219,18 +191,10 @@
                     <trimStackTrace>false</trimStackTrace>
                     <forkedProcessExitTimeoutInSeconds>60</forkedProcessExitTimeoutInSeconds>
                     <systemPropertyVariables>
-                        <arquillian.launch>heisenberg</arquillian.launch>
                         <!-- Timeout multiplier: scale all TCK delays for slower CI environments. -->
                         <org.eclipse.microprofile.fault.tolerance.tck.timeout.multiplier>1.0</org.eclipse.microprofile.fault.tolerance.tck.timeout.multiplier>
                     </systemPropertyVariables>
                 </configuration>
-                <dependencies>
-                    <dependency>
-                        <groupId>org.apache.maven.surefire</groupId>
-                        <artifactId>surefire-testng</artifactId>
-                        <version>3.5.5</version>
-                    </dependency>
-                </dependencies>
             </plugin>
         </plugins>
     </build>

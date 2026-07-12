@@ -20,6 +20,7 @@
 package io.vidocq.runtime.arquillian;
 
 import io.vidocq.runtime.core.VidocqBootstrap;
+import io.vidocq.vauban.core.container.VaubanContainer;
 import org.jboss.arquillian.container.spi.client.container.DeployableContainer;
 import org.jboss.arquillian.container.spi.client.container.DeploymentException;
 import org.jboss.arquillian.container.spi.client.container.LifecycleException;
@@ -158,6 +159,16 @@ public class VidocqEmbeddedContainer implements DeployableContainer<VidocqContai
             VidocqBootstrap bootstrap = VidocqBootstrap.create();
             bootstrap.configure(beanClassNames);
             bootstrap.start();
+
+            // In-container tests (Local protocol) run outside any HTTP request,
+            // but CDI TCK beans are frequently @RequestScoped. A servlet-based
+            // Arquillian container would have an active request context around
+            // each test; the embedded container activates it for the deployment
+            // lifetime, like other embedded CDI containers do.
+            VaubanContainer vauban = VaubanContainer.current();
+            if (vauban != null) {
+                vauban.requestContext().activate();
+            }
 
             deployments.put(archive, new DeploymentState(
                     bootstrap, port, appliedConfigKeys, materialized, previousTccl));

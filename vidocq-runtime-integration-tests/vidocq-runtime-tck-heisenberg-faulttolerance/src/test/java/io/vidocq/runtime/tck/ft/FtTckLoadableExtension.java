@@ -17,23 +17,19 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
-package io.vidocq.heisenberg.tck.arquillian;
+package io.vidocq.runtime.tck.ft;
 
-import org.jboss.arquillian.container.spi.ConfigurationException;
-import org.jboss.arquillian.container.spi.client.container.ContainerConfiguration;
+import org.jboss.arquillian.container.test.spi.client.deployment.ApplicationArchiveProcessor;
+import org.jboss.arquillian.core.spi.LoadableExtension;
 
 /**
- * Arquillian configuration for the Heisenberg TCK container — POJO with no required property.
- *
- * <p>Heisenberg is a MicroProfile Fault Tolerance 4.1 implementation:
- * no HTTP resource is required, the TCK is purely CDI in-VM
- * (Arquillian {@code Local} protocol).</p>
+ * Registers the FT TCK archive glue ({@link FtTckArchiveProcessor}). The
+ * embedded Vidocq container itself comes from vidocq-runtime-arquillian.
  */
-public class HeisenbergContainerConfiguration implements ContainerConfiguration {
+public class FtTckLoadableExtension implements LoadableExtension {
 
     @Override
-    public void validate() throws ConfigurationException {
-        // Nothing to validate.
+    public void register(ExtensionBuilder builder) {
+        builder.service(ApplicationArchiveProcessor.class, FtTckArchiveProcessor.class);
     }
 }
-
