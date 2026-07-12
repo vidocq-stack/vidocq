@@ -11,10 +11,27 @@
     </formats>
     <includeBaseDirectory>false</includeBaseDirectory>
     <fileSets>
+        <!-- cmd.exe requires CRLF line endings: with LF-only batch files its line
+             parser mangles the java invocation and the CLI receives no arguments
+             at all (BUG-20260712-02, reported as issue #23). Keep the launchers in
+             two filesets so each ships with its native line endings. -->
         <fileSet>
             <directory>src/assembly/bin</directory>
             <outputDirectory>bin</outputDirectory>
             <fileMode>0755</fileMode>
+            <lineEnding>unix</lineEnding>
+            <excludes>
+                <exclude>*.cmd</exclude>
+            </excludes>
+        </fileSet>
+        <fileSet>
+            <directory>src/assembly/bin</directory>
+            <outputDirectory>bin</outputDirectory>
+            <fileMode>0755</fileMode>
+            <lineEnding>crlf</lineEnding>
+            <includes>
+                <include>*.cmd</include>
+            </includes>
         </fileSet>
     </fileSets>
     <dependencySets>

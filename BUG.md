@@ -173,3 +173,28 @@ where this whole bug class is invisible.
     create the compiler plugin block or the whole build section when absent, idempotent)
     wired into `extension add` via KnownExtensions.codegenBundle. Verified E2E: patched
     add + `vidocq build` passes on a 0.2.1-scaffolded project.
+
+## BUG-20260712-02 — Windows launcher vidocq.cmd shipped with LF line endings, CLI receives no arguments
+
+- **Date** : 2026-07-12
+- **Statut** : FIXED (hotfix/0.2.1-cli — ships with CLI 0.2.3)
+- **Module touché** : vidocq-runtime-cli / src/assembly (cli.zip distribution)
+- **Symptôme** : on Windows (cmd.exe), every `vidocq <command>` behaves as if no arguments
+  were given: the help is printed (whose first line is the version banner — hence
+  "version also prints the help"), `help create` shows the generic help, `create` does
+  nothing (issue #23). The zip was built on macOS: `bin/vidocq.cmd` shipped with LF-only
+  line endings (cmd.exe's batch parser requires CRLF) and contained a multi-byte UTF-8
+  em-dash in a rem line (cmd.exe runs in an OEM codepage).
+- **Reproduction minimale** :
+  ```
+  # unzip vidocq-runtime-cli-0.2.2-cli.zip on Windows
+  bin\vidocq.cmd version   # prints the full help instead of the version alone
+  ```
+- **Hypothèse de cause** : no <lineEnding> control in the assembly descriptor; ASCII not
+  enforced in the batch launcher.
+- **Investigations** :
+  - 2026-07-12 : macOS/Linux launcher verified unaffected (all commands behave). Fixed in
+    the assembly: the .cmd fileset ships with <lineEnding>crlf</lineEnding>, the sh
+    launcher with unix endings, and the batch file is ASCII-only. Verified in the built
+    zip (file(1): "DOS batch file text, ASCII text, with CRLF line terminators").
+    Behavioural confirmation on a real Windows box requested from the reporter.

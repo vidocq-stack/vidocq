@@ -11,7 +11,7 @@
     </parent>
 
     <artifactId>vidocq-runtime-cli</artifactId>
-    <version>0.2.2</version>
+    <version>0.2.3</version>
     <name>Vidocq :: CLI</name>
     <description>Vidocq command-line interface — create, start, dev, and manage extensions</description>
 
