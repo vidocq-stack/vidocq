@@ -403,58 +403,6 @@
                 <version>${humboldt.version}</version>
             </dependency>
 
-            <!-- Vidocq modules -->
-            <dependency>
-                <groupId>io.vidocq.runtime</groupId>
-                <artifactId>vidocq-runtime-spi</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>io.vidocq.runtime.extensions.essentials</groupId>
-                <artifactId>vidocq-runtime-chappe-webserver-extension</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>io.vidocq.runtime</groupId>
-                <artifactId>vidocq-runtime-core</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
-                <artifactId>vidocq-runtime-cassini-rest-extension</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
-                <artifactId>vidocq-runtime-knock-health-extension</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
-                <artifactId>vidocq-runtime-dirac-metrics-extension</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
-                <artifactId>vidocq-runtime-cyrano-rest-client-extension</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
-                <artifactId>vidocq-runtime-cervantes-jwt-extension</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
-                <artifactId>vidocq-runtime-humboldt-telemetry-extension</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>io.vidocq.runtime</groupId>
-                <artifactId>vidocq-runtime-arquillian</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-
             <!-- Codegen bundles — POM-only artifacts referenced from
                  <annotationProcessorPaths>. core-codegen is wired by default
                  through pluginManagement (Vauban indexer is universal). Each
