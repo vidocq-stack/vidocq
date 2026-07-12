@@ -67,6 +67,7 @@ import java.util.List;
  * {@link #SCOPE_PROPERTY} for symmetrical closing.</p>
  */
 @Provider
+@jakarta.enterprise.context.Dependent
 public class HumboldtServerRequestFilter implements ContainerRequestFilter {
 
     public static final String SPAN_PROPERTY = "io.vidocq.humboldt.rest.span";

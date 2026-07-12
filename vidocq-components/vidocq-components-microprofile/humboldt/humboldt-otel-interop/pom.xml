@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.humboldt</groupId>
+        <artifactId>humboldt-parent</artifactId>
+        <version>0.3.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>humboldt-otel-interop</artifactId>
+    <name>Humboldt :: OTel SDK Interop</name>
+    <description>
+        OpenTelemetry SDK autoconfigure SPI interoperability layer. Discovers OTel SDK
+        autoconfigure providers (ConfigurableSpanExporterProvider, ConfigurableMetricExporterProvider,
+        ConfigurableSamplerProvider, ConfigurablePropagatorProvider, ResourceProvider,
+        AutoConfigurationCustomizerProvider) via ServiceLoader on a caller-supplied ClassLoader
+        and bridges them to the Humboldt SDK. The OTel SDK artifacts are provided-scope: the
+        consumer supplies them at runtime (Humboldt itself never bundles the OTel SDK).
+    </description>
+
+    <dependencies>
+        <!-- Humboldt SDK — target types of the bridges (SpanExporter, MetricExporter, Sampler). -->
+        <dependency>
+            <groupId>io.vidocq.humboldt</groupId>
+            <artifactId>humboldt-sdk-common</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.humboldt</groupId>
+            <artifactId>humboldt-sdk-trace</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.humboldt</groupId>
+            <artifactId>humboldt-sdk-metric</artifactId>
+        </dependency>
+        <!-- Default base propagator (W3C TraceContext + Baggage) for propagator customizers. -->
+        <dependency>
+            <groupId>io.vidocq.humboldt</groupId>
+            <artifactId>humboldt-propagator-w3c</artifactId>
+        </dependency>
+        <!-- OTel public API/context types (Humboldt JPMS repackages: io.opentelemetry.api / .context). -->
+        <dependency>
+            <groupId>io.vidocq.humboldt</groupId>
+            <artifactId>humboldt-otel-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.humboldt</groupId>
+            <artifactId>humboldt-otel-context</artifactId>
+        </dependency>
+
+        <!--
+            OTel SDK artifacts — PROVIDED: the consumer brings them (same policy as
+            opentelemetry-api elsewhere in Humboldt: the SDK is never bundled).
+            io.opentelemetry:opentelemetry-api / -context are excluded everywhere because
+            humboldt-otel-api / humboldt-otel-context repackage the very same classes under
+            the same JPMS module names (io.opentelemetry.api / io.opentelemetry.context) —
+            keeping both would put two modules with the same name on the module path.
+            Versions are managed by the opentelemetry-bom import in humboldt-parent.
+        -->
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-sdk</artifactId>
+            <scope>provided</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>io.opentelemetry</groupId>
+                    <artifactId>opentelemetry-api</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>io.opentelemetry</groupId>
+                    <artifactId>opentelemetry-context</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <!-- The autoconfigure SPI interfaces the module discovers via ServiceLoader. -->
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-sdk-extension-autoconfigure-spi</artifactId>
+            <scope>provided</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>io.opentelemetry</groupId>
+                    <artifactId>opentelemetry-api</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>io.opentelemetry</groupId>
+                    <artifactId>opentelemetry-context</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <!-- TestSpanData.builder() — the only concrete io.opentelemetry.sdk.trace.data.SpanData
+             implementation the OTel SDK exposes, used by SpanDataMapper. -->
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-sdk-testing</artifactId>
+            <scope>provided</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>io.opentelemetry</groupId>
+                    <artifactId>opentelemetry-api</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>io.opentelemetry</groupId>
+                    <artifactId>opentelemetry-context</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <!-- Builtin b3 / b3multi / jaeger propagators resolvable from otel.propagators. -->
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-extension-trace-propagators</artifactId>
+            <scope>provided</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>io.opentelemetry</groupId>
+                    <artifactId>opentelemetry-api</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>io.opentelemetry</groupId>
+                    <artifactId>opentelemetry-context</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!-- Tests exercise ServiceLoader over a plain URLClassLoader; run on
+                         the class path like the TCK harnesses that consume this module. -->
+                    <useModulePath>false</useModulePath>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
