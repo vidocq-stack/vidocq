@@ -5,10 +5,11 @@ repo_root="$(cd "$(dirname "$0")" && pwd)"
 cd "$repo_root"
 
 echo "==> M9.2 smoke: build minimal modules"
-./mvnw -ntp -pl dirac-api,dirac-core -am install -DskipTests >/dev/null
+./mvnw -ntp -pl dirac-api,dirac-core -am clean install -DskipTests >/dev/null
 
-api_jar="$repo_root/dirac-api/target/dirac-api-0.1.0-SNAPSHOT.jar"
-core_jar="$repo_root/dirac-core/target/dirac-core-0.1.0-SNAPSHOT.jar"
+# Globs — never hardcode the reactor version (issue #3 follow-up).
+api_jar="$(ls "$repo_root"/dirac-api/target/dirac-api-*.jar 2>/dev/null | grep -vE '(sources|javadoc)' | head -n 1)"
+core_jar="$(ls "$repo_root"/dirac-core/target/dirac-core-*.jar 2>/dev/null | grep -vE '(sources|javadoc)' | head -n 1)"
 mp_api_src="$HOME/.m2/repository/org/eclipse/microprofile/metrics/microprofile-metrics-api/5.1.1/microprofile-metrics-api-5.1.1.jar"
 
 if [[ ! -f "$api_jar" || ! -f "$core_jar" || ! -f "$mp_api_src" ]]; then

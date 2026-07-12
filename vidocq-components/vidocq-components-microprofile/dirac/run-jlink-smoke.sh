@@ -5,11 +5,12 @@ repo_root="$(cd "$(dirname "$0")" && pwd)"
 cd "$repo_root"
 
 echo "==> M9 smoke: install minimal modules (dirac-mp-metrics-api, dirac-api, dirac-core)"
-./mvnw -ntp -pl dirac-mp-metrics-api,dirac-api,dirac-core -am install -DskipTests >/dev/null
+./mvnw -ntp -pl dirac-mp-metrics-api,dirac-api,dirac-core -am clean install -DskipTests >/dev/null
 
-mp_api_jar="$repo_root/dirac-mp-metrics-api/target/dirac-mp-metrics-api-0.1.0-SNAPSHOT.jar"
-api_jar="$repo_root/dirac-api/target/dirac-api-0.1.0-SNAPSHOT.jar"
-core_jar="$repo_root/dirac-core/target/dirac-core-0.1.0-SNAPSHOT.jar"
+# Globs — never hardcode the reactor version (issue #3 follow-up).
+mp_api_jar="$(ls "$repo_root"/dirac-mp-metrics-api/target/dirac-mp-metrics-api-*.jar 2>/dev/null | grep -vE '(sources|javadoc)' | head -n 1)"
+api_jar="$(ls "$repo_root"/dirac-api/target/dirac-api-*.jar 2>/dev/null | grep -vE '(sources|javadoc)' | head -n 1)"
+core_jar="$(ls "$repo_root"/dirac-core/target/dirac-core-*.jar 2>/dev/null | grep -vE '(sources|javadoc)' | head -n 1)"
 
 if [[ ! -f "$mp_api_jar" || ! -f "$api_jar" || ! -f "$core_jar" ]]; then
   echo "[ERROR] Missing required jars for smoke check."
