@@ -19,6 +19,10 @@
  */
 package io.vidocq.ravel.spi;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Properties;
+
 /**
  * Static metadata for the Ravel implementation — used by {@code ConfigSource}
  * for tracing and by benchmarks.
@@ -32,13 +36,30 @@ public final class Ravel {
     /** Logical name of the implementation, exposed via {@code Config.getConfigSources()}. */
     public static final String IMPLEMENTATION_NAME = "ravel";
 
-    /** Version of the Ravel implementation. */
-    public static final String IMPLEMENTATION_VERSION = "0.1.0-SNAPSHOT";
+    /**
+     * Version of the Ravel implementation, filtered by the Maven build into a
+     * same-module resource. Not a compile-time constant on purpose: consumers
+     * always read the version of the artifact actually on their module path.
+     */
+    public static final String IMPLEMENTATION_VERSION = loadVersion();
 
     /** Version of the MicroProfile Config spec implemented. */
     public static final String SPEC_VERSION = "3.1";
 
     private Ravel() {
         // utility class
+    }
+
+    private static String loadVersion() {
+        try (InputStream in = Ravel.class.getResourceAsStream("version.properties")) {
+            if (in == null) {
+                return "unknown";
+            }
+            Properties props = new Properties();
+            props.load(in);
+            return props.getProperty("version", "unknown");
+        } catch (IOException e) {
+            return "unknown";
+        }
     }
 }
