@@ -154,7 +154,7 @@ org.eclipse.microprofile.openapi:microprofile-openapi-api:4.1
 jakarta.ws.rs:jakarta.ws.rs-api:4.0                            (provided)
 jakarta.enterprise:jakarta.enterprise.cdi-api:4.1              (provided)
 jakarta.annotation:jakarta.annotation-api:3.0                   (provided)
-io.vidocq.ravel:ravel-mp-config-api:0.1.0-SNAPSHOT              (provided)
+io.vidocq.ravel:ravel-mp-config-api:0.3.0-SNAPSHOT              (provided)
 org.junit:junit-bom:6.0.3                                       (test, BOM)
 ```
 
