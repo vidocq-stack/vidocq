@@ -96,3 +96,31 @@ Deploy a Dirac-enabled app on the module path with an application `@Gauge` bean 
 
 Verified: dirac unit tests + **MP-Metrics 5.1 TCK 127/127 PASS**; Arago Docker `/metrics` 200 with
 `arago_active_rooms` exposed.
+
+## BUG-20260712-01 — Plain `@Inject MetricRegistry` and `@Inject @Metric Gauge` unresolvable via CDI
+
+- **Date** : 2026-07-12
+- **Statut** : FIXED (branch pr/ybl/metrics-default-registry-injection)
+- **Module touché** : dirac-cdi-vauban (`MetricRegistryProducerBean`)
+- **Symptôme** : two spec-mandated injection shapes failed with
+  `UnsatisfiedResolutionException` when resolved through the real CDI container:
+  (1) plain `@Inject MetricRegistry` (no qualifier) — the only producer carried the
+  `@RegistryScope` qualifier, so `@Default` injection points had no candidate;
+  (2) `@Inject @Metric(...) Gauge<T>` — no Gauge producer existed at all.
+  Both were masked in dirac-tck and in the runtime TCK runner of vidocq PR #19 by a
+  custom `DiracTestEnricher` that bypassed CDI and read the Dirac registry directly
+  via reflection. Only the assembled-runtime runner (generic CDI enricher) exposed them.
+- **Reproduction minimale** :
+  ```
+  cd vidocq && ./mvnw -Ptck -pl vidocq-runtime-integration-tests/vidocq-runtime-tck-dirac-metrics test
+  # -> 127 errors "No bean found for type MetricRegistry", then Gauge failures
+  ```
+- **Hypothèse de cause** : producers designed for the TCK-harness path, never exercised
+  through standard CDI resolution.
+- **Investigations** :
+  - 2026-07-12 : `produceByScope` now also carries an explicit `@Default`
+    (spec: plain injection = application scope); new lazy-forwarding
+    `<T extends Number> Gauge<T>` producer resolves the gauge from the registry at
+    `getValue()` time (registration order independent). Unit tests added
+    (`MetricRegistryDefaultInjectionCdiIntegrationTest`), per-brick TCK still 127/127
+    PASS, runtime TCK runner 127/127 PASS.
