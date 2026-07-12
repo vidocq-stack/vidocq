@@ -82,7 +82,7 @@ connects the auth filter (cassini) to the CDI producer (cdi-vauban) without dire
 - **Packages**: `io.vidocq.cervantes.api.*` = stable public SPI;
   `io.vidocq.cervantes.internal.*` = internal code; `io.vidocq.cervantes.cdi.*` = CDI integration;
   `io.vidocq.cervantes.cassini.*` = JAX-RS integration.
-- **Maven groupId**: `io.vidocq.cervantes`. Version: `0.1.0-SNAPSHOT` (parent `vidocq-parent:1.0.0-SNAPSHOT`).
+- **Maven groupId**: `io.vidocq.cervantes`. Version: `0.3.0-SNAPSHOT` — the global dev version (parent `io.vidocq:vidocq-parent:0.3.0-SNAPSHOT`).
 - **Immutable records** for configs (JwtConfig, claims), **sealed interfaces** for validation results.
 - **Language** — commit messages, Javadoc, and all `.md` file content must be written in **English**.
 
