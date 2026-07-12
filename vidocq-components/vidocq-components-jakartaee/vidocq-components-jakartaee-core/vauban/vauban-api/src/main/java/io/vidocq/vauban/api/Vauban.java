@@ -19,12 +19,34 @@
  */
 package io.vidocq.vauban.api;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Properties;
+
 /**
  * Entry point marker for the Vauban CDI container.
  */
 public final class Vauban {
 
-    public static final String VERSION = "0.1.0-SNAPSHOT";
+    /**
+     * Implementation version, filtered by the Maven build into a same-module
+     * resource. Not a compile-time constant on purpose: consumers always read
+     * the version of the artifact actually on their module path.
+     */
+    public static final String VERSION = loadVersion();
 
     private Vauban() {}
+
+    private static String loadVersion() {
+        try (InputStream in = Vauban.class.getResourceAsStream("version.properties")) {
+            if (in == null) {
+                return "unknown";
+            }
+            Properties props = new Properties();
+            props.load(in);
+            return props.getProperty("version", "unknown");
+        } catch (IOException e) {
+            return "unknown";
+        }
+    }
 }
