@@ -7,6 +7,6 @@ Repackaging of `io.opentelemetry.instrumentation:opentelemetry-instrumentation-a
 ```zsh
 cd /Users/antoine/dev/vidocq/humboldt
 ./mvnw -ntp -pl humboldt-otel-instrumentation-annotations clean verify
-jar --describe-module --file humboldt-otel-instrumentation-annotations/target/humboldt-otel-instrumentation-annotations-0.1.0-SNAPSHOT.jar
+jar --describe-module --file humboldt-otel-instrumentation-annotations/target/humboldt-otel-instrumentation-annotations-*.jar
 ```
 
