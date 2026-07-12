@@ -19,7 +19,8 @@
 @REM
 
 @echo off
-rem Vidocq CLI launcher — expects the sibling ..\modules directory from the cli.zip layout.
+rem Vidocq CLI launcher - expects the sibling ..\modules directory from the cli.zip layout.
+rem ASCII only: cmd.exe runs in an OEM codepage and multi-byte characters can corrupt parsing.
 setlocal
 set "DIR=%~dp0.."
 java --module-path "%DIR%\modules" -m io.vidocq.runtime.cli/io.vidocq.runtime.cli.VidocqCli %*
