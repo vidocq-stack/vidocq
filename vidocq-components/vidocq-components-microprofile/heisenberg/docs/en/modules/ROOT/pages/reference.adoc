@@ -39,7 +39,7 @@ This page consolidates Heisenberg's public surface: Maven artifacts, JPMS module
 | Official MP FT 4.1 TCK runner — out of reactor (Model 4.0.0). Do not declare as an application dependency.
 |===
 
-All versions at `0.1.0-SNAPSHOT` at the time of writing.
+All versions at `0.2.0` (latest release on Maven Central) at the time of writing.
 
 == JPMS modules
 

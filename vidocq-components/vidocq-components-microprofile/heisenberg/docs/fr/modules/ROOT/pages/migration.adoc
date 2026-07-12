@@ -3,7 +3,7 @@
 
 [CAUTION]
 ====
-Heisenberg est en `0.1.0-SNAPSHOT`. La spec MicroProfile Fault Tolerance 4.1 est entièrement couverte (TCK 463/463, voir xref:tck.adoc[état TCK]), mais la SPI publique `io.vidocq.heisenberg.api.*` peut encore évoluer avant la `1.0.0`. Cette page documente les correspondances de modèle pour préparer une migration progressive.
+Heisenberg est publié en `0.2.0` sur Maven Central (`0.3.0-SNAPSHOT` en développement). La spec MicroProfile Fault Tolerance 4.1 est entièrement couverte (TCK 463/463, voir xref:tck.adoc[état TCK]), mais la SPI publique `io.vidocq.heisenberg.api.*` peut encore évoluer avant la `1.0.0`. Cette page documente les correspondances de modèle pour préparer une migration progressive.
 ====
 
 [.lead]
