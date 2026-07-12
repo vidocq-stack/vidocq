@@ -17,15 +17,19 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
-package io.vidocq.cervantes.tck.arquillian;
+package io.vidocq.runtime.tck.jwt;
 
-import org.jboss.arquillian.container.spi.client.container.DeployableContainer;
+import org.jboss.arquillian.container.test.spi.client.deployment.ApplicationArchiveProcessor;
 import org.jboss.arquillian.core.spi.LoadableExtension;
 
-/** Registers {@link CervantesJwtDeployableContainer} through the Arquillian SPI. */
-public class CervantesContainerExtension implements LoadableExtension {
+/**
+ * Registers the JWT TCK archive glue ({@link JwtTckArchiveProcessor}). The
+ * embedded Vidocq container itself comes from vidocq-runtime-arquillian.
+ */
+public class JwtTckLoadableExtension implements LoadableExtension {
+
     @Override
     public void register(ExtensionBuilder builder) {
-        builder.service(DeployableContainer.class, CervantesJwtDeployableContainer.class);
+        builder.service(ApplicationArchiveProcessor.class, JwtTckArchiveProcessor.class);
     }
 }

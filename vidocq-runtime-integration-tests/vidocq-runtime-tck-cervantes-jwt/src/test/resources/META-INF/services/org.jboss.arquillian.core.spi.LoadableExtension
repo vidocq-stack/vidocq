@@ -1,1 +1,1 @@
-io.vidocq.cervantes.tck.arquillian.CervantesContainerExtension
+io.vidocq.runtime.tck.jwt.JwtTckLoadableExtension
