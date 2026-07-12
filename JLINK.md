@@ -353,7 +353,7 @@ since `Class.newInstance()` only uses the public no-arg constructor.
 ### 6.4 macOS app-image and version
 
 `jpackage --type app-image` on macOS requires `appVersion` starting with `1`
-or higher. A `0.1.0-SNAPSHOT` project must set an explicit
+or higher. A `-SNAPSHOT` project must set an explicit
 `<appVersion>1.0.0</appVersion>`.
 
 ### 6.5 Ports in Docker
