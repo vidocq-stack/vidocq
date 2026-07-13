@@ -1,8 +1,8 @@
 = Reference
-:description: Maven artefacts, exported JPMS modules, supported annotations, MicroProfile Config keys.
+:description: Maven artefacts, exported Java modules, supported annotations, MicroProfile Config keys.
 
 [.lead]
-This page consolidates Grimm's public surface: artefacts to declare, exported JPMS modules, OpenAPI 3.1 annotations the scanner understands, and `mp.openapi.*` keys honoured by `ConfigApplier`.
+This page consolidates Grimm's public surface: artefacts to declare, exported Java modules, OpenAPI 3.1 annotations the scanner understands, and `mp.openapi.*` keys honoured by `ConfigApplier`.
 
 == Maven artefacts
 
@@ -33,7 +33,7 @@ This page consolidates Grimm's public surface: artefacts to declare, exported JP
 
 Every version is `0.2.0` at the time of writing.
 
-== JPMS modules
+== Java modules
 
 [cols="2,3"]
 |===

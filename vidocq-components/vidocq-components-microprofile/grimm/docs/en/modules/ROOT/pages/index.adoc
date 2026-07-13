@@ -5,7 +5,7 @@
 image::grimm-logo.png[Grimm,300,role=module-logo]
 
 [.lead]
-Grimm is the MicroProfile OpenAPI 4.1 implementation of the Vidocq ecosystem. It scans the annotations scattered across JAX-RS resources, merges them with an optional static document and an optional `OASModelReader`, applies `OASFilter` filters, and publishes a unified OpenAPI 3.1 document on `/openapi`. Goal: 100 % MicroProfile OpenAPI 4.1 TCK conformance (currently 349/349), zero external dependency, strict JPMS, jlink-ready.
+Grimm is the MicroProfile OpenAPI 4.1 implementation of the Vidocq ecosystem. It scans the annotations scattered across JAX-RS resources, merges them with an optional static document and an optional `OASModelReader`, applies `OASFilter` filters, and publishes a unified OpenAPI 3.1 document on `/openapi`. Goal: 100 % MicroProfile OpenAPI 4.1 TCK conformance (currently 349/349), zero external dependency, strict Java Modules, jlink-ready.
 
 == Origin of the name
 
@@ -43,7 +43,7 @@ The Grimms gathered scattered oral tradition — tales, legends, word roots — 
 | Implemented spec | MicroProfile OpenAPI 4.1
 | Repo | https://codeberg.org/Vidocq/grimm
 | Java | 25 (LTS)
-| JPMS modules | `io.vidocq.grimm.core`, `io.vidocq.grimm.cdi.vauban`
+| Java modules | `io.vidocq.grimm.core`, `io.vidocq.grimm.cdi.vauban`
 | Public packages | `io.vidocq.grimm.api.*` (stable SPI), `io.vidocq.grimm.cdi.*` (CDI integration)
 | Runtime dependencies | `microprofile-openapi-api` 4.1, `jakarta.ws.rs-api` 4.0, `jakarta.enterprise.cdi-api` 4.1, `jakarta.annotation-api` 3.0, `io.vidocq.ravel:ravel-mp-config-api`
 | jlink-ready | ✅ — every sub-module ships its own `module-info.java`, no `Automatic-Module-Name` fallback.
@@ -54,7 +54,7 @@ The Grimms gathered scattered oral tradition — tales, legends, word roots — 
 
 . **Zero external dependency beyond Jakarta / MicroProfile specs** — no SnakeYAML, no Jackson, no SmallRye. The YAML and JSON serializers are hand-written in `grimm-core`. The only companion library is xref:ravel::index.adoc[Ravel] for MicroProfile Config, itself zero-dependency.
 . **Startup resolution, not per request** — every annotation is scanned once, when the CDI container starts, by a Vauban Build Compatible Extension. The document is cached in `GrimmModelCache` and served on every call to `/openapi`. No per-request recompute, no hot locking.
-. **Strict JPMS** — every Grimm artefact has its own `module-info.java`. Walled packages: `io.vidocq.grimm.api.*` exported, `io.vidocq.grimm.internal.*` hidden, no unjustified `opens`, no `setAccessible(true)` in production.
+. **Strict Java Modules** — every Grimm artefact has its own `module-info.java`. Walled packages: `io.vidocq.grimm.api.*` exported, `io.vidocq.grimm.internal.*` hidden, no unjustified `opens`, no `setAccessible(true)` in production.
 
 == Position in the ecosystem
 
