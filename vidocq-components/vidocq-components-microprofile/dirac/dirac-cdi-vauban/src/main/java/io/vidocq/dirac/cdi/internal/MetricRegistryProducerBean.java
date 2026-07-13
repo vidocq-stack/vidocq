@@ -23,10 +23,13 @@ import io.vidocq.dirac.internal.BaseMetricsRegistrar;
 import io.vidocq.dirac.internal.MetricRegistryImpl;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.Dependent;
+import jakarta.enterprise.inject.Default;
 import jakarta.enterprise.inject.Produces;
 import jakarta.enterprise.inject.spi.InjectionPoint;
 import org.eclipse.microprofile.metrics.Counter;
+import org.eclipse.microprofile.metrics.Gauge;
 import org.eclipse.microprofile.metrics.Histogram;
+import org.eclipse.microprofile.metrics.MetricID;
 import org.eclipse.microprofile.metrics.MetricRegistry;
 import org.eclipse.microprofile.metrics.Tag;
 import org.eclipse.microprofile.metrics.Timer;
@@ -64,8 +67,14 @@ public class MetricRegistryProducerBean {
      * Single producer for {@code @RegistryScope} — resolves the scope via the InjectionPoint
      * because {@code @RegistryScope.scope} is {@code @Nonbinding}.
      * Creates a new registry for any unknown scope (e.g. "customScope").
+     *
+     * <p>Also carries {@code @Default}: {@code @RegistryScope} is a CDI qualifier, so an
+     * explicit {@code @Default} is required for the spec-mandated plain injection
+     * ({@code @Inject MetricRegistry} — MP Metrics 5.1 §"MetricRegistry"), which then
+     * resolves to the application scope (no annotation on the injection point).</p>
      */
     @Produces
+    @Default
     @RegistryScope
     public MetricRegistry produceByScope(InjectionPoint ip) {
         String scope = MetricRegistry.APPLICATION_SCOPE;
@@ -129,6 +138,30 @@ public class MetricRegistryProducerBean {
         String name = resolveMetricName(ip.getMember(), ann);
         Tag[] tags = resolveTags(ann);
         return registry(resolveScope(ann)).histogram(name, tags);
+    }
+
+    /**
+     * Gauges cannot be created on demand — they are registered by their owning
+     * bean (via {@code @Gauge} methods, at application start). The injected
+     * handle therefore forwards to the registry lazily, so injection order
+     * relative to gauge registration does not matter (TCK
+     * {@code GaugeInjectionBeanTest}).
+     */
+    @SuppressWarnings("unchecked")
+    @Produces
+    @Dependent
+    public <T extends Number> Gauge<T> produceGauge(InjectionPoint ip) {
+        Metric ann = ip.getAnnotated().getAnnotation(Metric.class);
+        String name = resolveMetricName(ip.getMember(), ann);
+        MetricID metricId = new MetricID(name, resolveTags(ann));
+        MetricRegistry registry = registry(resolveScope(ann));
+        return () -> {
+            Gauge<T> gauge = (Gauge<T>) registry.getGauge(metricId);
+            if (gauge == null) {
+                throw new IllegalStateException("No gauge registered for " + metricId);
+            }
+            return gauge.getValue();
+        };
     }
 
     // ------------------------------------------------------------------
