@@ -44,7 +44,7 @@ module io.vidocq.mansart.transactions.cdi {
     // No `opens`: the producer, the @TransactionScoped context AND the six @Transactional interceptors
     // are all instantiated and field-injected in-module by the APT-generated _VaubanComponents provider
     // below. The interceptors' public @AroundInvoke methods are reachable without opens (exported
-    // package, public member). Proven on the strict module path by mansart-transactions-cdi-jpms-it.
+    // package, public member). Proven on the strict module path by mansart-transactions-cdi-module-it.
 
     // In-module instantiation, field injection and producer invocation of this package's beans (the
     // six @Transactional interceptors, the TM/UT/TSR producer and the @TransactionScoped context),

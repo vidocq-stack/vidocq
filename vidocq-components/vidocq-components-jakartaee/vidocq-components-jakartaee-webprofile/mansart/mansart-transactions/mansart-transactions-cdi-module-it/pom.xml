@@ -8,7 +8,7 @@
         <version>0.3.0-SNAPSHOT</version>
     </parent>
 
-    <artifactId>mansart-transactions-cdi-jpms-it</artifactId>
+    <artifactId>mansart-transactions-cdi-module-it</artifactId>
     <name>Mansart :: Transactions :: CDI Java module-path IT</name>
     <description>Module-path proof vehicle: a @Transactional bean intercepted with a build-time
         $$Intercepted subclass and the generated VaubanComponentProvider, with no `opens` to vauban.core.</description>
