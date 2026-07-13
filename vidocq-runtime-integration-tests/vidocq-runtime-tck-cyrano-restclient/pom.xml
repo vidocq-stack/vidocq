@@ -31,8 +31,11 @@
             Arquillian's Local start()/stop() fires after @AfterSuite — too late for the TCK
             @BeforeMethod hooks. WireMock is the REMOTE server under test fixtures, not runtime wiring.
 
-        Scope: ssl/** and sse/** are excluded (RestClientBuilder.trustStore/keyStore and SSE are not yet
-        implemented in Cyrano) — matching cyrano-tck's documented M4 exclusions.
+        Full suite, no exclusions: the ssl/** suites exercise the transport SSL wiring
+        (trustStore/keyStore/sslContext/hostnameVerifier, MP Config classpath: locations
+        materialized by the shared container) and the sse/** suites the reactive
+        Publisher return types, including the official Reactive Streams
+        PublisherVerification.
     </description>
 
     <properties>
@@ -168,6 +171,25 @@
             <version>${wiremock.version}</version>
             <scope>test</scope>
         </dependency>
+        <!--
+            ssl/sse fixture deps (test-JVM side): the TCK's HttpSseServer needs
+            jetty-servlets' EventSourceServlet (jetty-server/servlet and
+            httpcore5 come transitively from plain wiremock — do not redeclare
+            them with explicit versions), and ReactiveStreamsPublisherTckTest
+            extends the official Reactive Streams PublisherVerification.
+        -->
+        <dependency>
+            <groupId>org.eclipse.jetty</groupId>
+            <artifactId>jetty-servlets</artifactId>
+            <version>11.0.24</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.reactivestreams</groupId>
+            <artifactId>reactive-streams-tck</artifactId>
+            <version>1.0.3</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
@@ -186,17 +208,7 @@
                     <dependenciesToScan>
                         <dependency>org.eclipse.microprofile.rest.client:microprofile-rest-client-tck</dependency>
                     </dependenciesToScan>
-                    <excludes>
-                        <!--
-                            ssl/** : require RestClientBuilder.trustStore(...) / keyStore(...),
-                            not yet implemented in Cyrano.
-                            sse/** : Server-Sent Events, out of Cyrano scope.
-                            Both match cyrano-tck's documented M4 exclusions (see cyrano/TCK.md).
-                        -->
-                        <exclude>**/ssl/**</exclude>
-                        <exclude>**/sse/**</exclude>
-                    </excludes>
-                    <trimStackTrace>false</trimStackTrace>
+                                        <trimStackTrace>false</trimStackTrace>
                     <systemPropertyVariables>
                         <!-- Force IPv4 so Apache HttpClient5 does not fall back to ::1 (macOS). -->
                         <wiremock.server.host>127.0.0.1</wiremock.server.host>

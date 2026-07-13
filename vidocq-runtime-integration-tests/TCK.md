@@ -5,8 +5,8 @@ Unlike the per-brick TCK runners that live in each implementation repository
 (knock-tck, dirac-tck, …) and certify one implementation in isolation, these runners
 certify **the assembled Vidocq runtime**: the exact boot path a real application uses.
 
-Status: **1780 official TCK tests green** (2026-07-13), all 8 runners on the
-embedded Vidocq container.
+Status: **1837 official TCK tests green** (2026-07-13), all 8 runners on the
+embedded Vidocq container, no suite exclusion.
 
 ## How the TCKs run
 
@@ -51,27 +51,29 @@ neither downloads nor runs anything TCK-related.
 |---|---|---:|---|
 | `vidocq-runtime-tck-knock-health` | Health 4.0 | 28 | Vidocq embedded |
 | `vidocq-runtime-tck-dirac-metrics` | Metrics 5.1 | 127 | Vidocq embedded |
-| `vidocq-runtime-tck-cyrano-restclient` | Rest Client 4.0 | 168 | Vidocq embedded |
+| `vidocq-runtime-tck-cyrano-restclient` | Rest Client 4.0 | 235 | Vidocq embedded |
 | `vidocq-runtime-tck-heisenberg-faulttolerance` | Fault Tolerance 4.1 | 463 | Vidocq embedded |
 | `vidocq-runtime-tck-grimm-openapi` | OpenAPI 4.1 | 344 | Vidocq embedded |
 | `vidocq-runtime-tck-cervantes-jwt` | JWT Auth 2.1 | 206 | Vidocq embedded |
 | `vidocq-runtime-tck-humboldt-telemetry` | Telemetry 2.1 | 85 | Vidocq embedded |
 | `vidocq-runtime-tck-ravel-config` | Config 3.1 | 349 | Vidocq embedded |
-| **Total** | | **1780** | |
+| **Total** | | **1837** | |
 
-Six of the eight suites run with **zero test exclusions**. Notably, the OpenAPI suite
-previously passed 307 tests with 2 excluded classes under the old ad hoc harness; the
-assembled runtime passes the full 344. Two runners carry documented, deliberate
-exclusions (identical to their per-brick baselines):
+Seven of the eight suites run with **zero test exclusions**. Notably, the OpenAPI
+suite previously passed 307 tests with 2 excluded classes under the old ad hoc
+harness (the assembled runtime passes the full 344), and the Rest Client suite ran
+without its `ssl/**`/`sse/**` packages until 2026-07-13 — Cyrano now implements the
+SSL options and SSE Publisher return types, and the full 235-test suite passes (the
+9 TestNG skips are the Reactive Streams `PublisherVerification` harness's own
+`untested_*`/optional self-skips, not exclusions). One runner keeps a documented,
+deliberate exclusion:
 
 - **JWT** — the `ejb`/`jacc`/`servlet` packages and the `ee-security-optional`
   TestNG group are excluded: Jakarta EE full-profile integrations outside the
   MicroProfile runtime scope, per the MP JWT TCK's own documentation.
-- **Rest Client** — `ssl/**` and `sse/**` are excluded:
-  `RestClientBuilder.trustStore()/keyStore()` and Server-Sent Events are **not yet
-  implemented in Cyrano** (tracked since cyrano M4, see `cyrano/TCK.md`). This is an
-  implementation gap, not an optional feature — it must be closed before any
-  Rest Client 4.0 certification claim.
+
+(Bookkeeping note: earlier revisions of this file stated a 1780 total — an
+addition error; the per-runner numbers were correct and summed to 1770.)
 
 ## TCK glue vs. runtime code
 
