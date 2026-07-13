@@ -29,7 +29,7 @@ import org.eclipse.microprofile.metrics.Metadata;
 import org.eclipse.microprofile.metrics.MetricRegistry;
 import org.eclipse.microprofile.metrics.MetricUnits;
 import org.eclipse.microprofile.metrics.Tag;
-import org.eclipse.microprofile.metrics.annotation.RegistryType;
+import org.eclipse.microprofile.metrics.annotation.RegistryScope;
 
 import java.lang.reflect.Method;
 import java.util.concurrent.ConcurrentHashMap;
@@ -38,7 +38,10 @@ import java.util.concurrent.atomic.AtomicLong;
 /**
  * MicroProfile Fault Tolerance 4.1 §9 metrics recorder based on Dirac (MP Metrics).
  *
- * <p>Publishes all FT metrics in the Dirac APPLICATION registry:
+ * <p>Publishes all FT metrics in the {@code base} scope registry (MP Fault
+ * Tolerance 4.1 §9 — the FT TCK reads them back through
+ * {@code @RegistryType(BASE)}, which MP Metrics 5.1 maps to the base-scope
+ * registry):
  * {@code ft.invocations.total}, {@code ft.retry.calls.total}, {@code ft.retry.retries.total},
  * {@code ft.timeout.calls.total}, {@code ft.timeout.executionDuration},
  * {@code ft.circuitbreaker.calls.total}, {@code ft.circuitbreaker.state.total},
@@ -54,9 +57,8 @@ public class DiracFtMetricsRecorder implements FtMetricsRecorder {
 
     // Package-private (not private): the co-located _VaubanComponents provider assigns it with an
     // in-package putfield, so Vauban needs no `opens … to io.vidocq.vauban.core` for field injection.
-    @SuppressWarnings("deprecation")
     @Inject
-    @RegistryType
+    @RegistryScope(scope = MetricRegistry.BASE_SCOPE)
     MetricRegistry registry;
 
     // Idempotency guard: method tag → registered

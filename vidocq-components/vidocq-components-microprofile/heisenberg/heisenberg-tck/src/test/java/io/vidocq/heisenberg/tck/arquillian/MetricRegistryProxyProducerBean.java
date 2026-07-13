@@ -25,25 +25,25 @@ import jakarta.inject.Inject;
 import org.eclipse.microprofile.fault.tolerance.tck.metrics.util.MetricRegistryProxy;
 import org.eclipse.microprofile.fault.tolerance.tck.metrics.util.MetricRegistryProxyHandler;
 import org.eclipse.microprofile.metrics.MetricRegistry;
+import org.eclipse.microprofile.metrics.annotation.RegistryScope;
 import org.eclipse.microprofile.metrics.annotation.RegistryType;
 
 import java.lang.reflect.Proxy;
 
 /**
  * Produces a {@code @Default} {@link MetricRegistryProxy} bean that wraps the
- * Dirac APPLICATION registry, required by the MicroProfile Fault Tolerance metrics TCK tests.
+ * Dirac base-scope registry, required by the MicroProfile Fault Tolerance metrics TCK tests.
  *
- * <p>FT metrics are published in the APPLICATION registry by {@code DiracFtMetricsRecorder}.
+ * <p>FT metrics are published in the base-scope registry (FT 4.1 §9) by {@code DiracFtMetricsRecorder}.
  * This producer exposes that registry through the TCK {@code MetricRegistryProxy} interface with
  * qualifier {@code @Default} (the TCK tests inject without a qualifier).</p>
  */
 @ApplicationScoped
 public class MetricRegistryProxyProducerBean {
 
-    @SuppressWarnings("deprecation")
     @Inject
-    @RegistryType
-    private MetricRegistry applicationRegistry;
+    @RegistryScope(scope = MetricRegistry.BASE_SCOPE)
+    private MetricRegistry ftMetricsRegistry;
 
     @Produces
     public MetricRegistryProxy produce() {
@@ -78,14 +78,14 @@ public class MetricRegistryProxyProducerBean {
     @Produces
     @RegistryType(type = MetricRegistry.Type.BASE)
     public MetricRegistry produceBaseRegistry() {
-        return applicationRegistry;
+        return ftMetricsRegistry;
     }
 
     private MetricRegistryProxy buildProxy() {
         return (MetricRegistryProxy) Proxy.newProxyInstance(
                 MetricRegistryProxy.class.getClassLoader(),
                 new Class<?>[] { MetricRegistryProxy.class },
-                new MetricRegistryProxyHandler(applicationRegistry)
+                new MetricRegistryProxyHandler(ftMetricsRegistry)
         );
     }
 }
