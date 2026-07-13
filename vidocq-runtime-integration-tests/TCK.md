@@ -5,12 +5,12 @@ Unlike the per-brick TCK runners that live in each implementation repository
 (knock-tck, dirac-tck, …) and certify one implementation in isolation, these runners
 certify **the assembled Vidocq runtime**: the exact boot path a real application uses.
 
-Status: **1780 official TCK tests green** (2026-07-13), 7 of 8 runners on the
-embedded Vidocq container, 1 runner (Config) intentionally on Weld SE (see below).
+Status: **1780 official TCK tests green** (2026-07-13), all 8 runners on the
+embedded Vidocq container.
 
 ## How the TCKs run
 
-All runners (except `ravel-config`) share the same Arquillian harness,
+All runners share the same Arquillian harness,
 [`vidocq-runtime-arquillian`](vidocq-runtime-arquillian/):
 
 1. **Materialization** — each ShrinkWrap archive the TCK produces is exploded to disk
@@ -56,7 +56,7 @@ neither downloads nor runs anything TCK-related.
 | `vidocq-runtime-tck-grimm-openapi` | OpenAPI 4.1 | 344 | Vidocq embedded |
 | `vidocq-runtime-tck-cervantes-jwt` | JWT Auth 2.1 | 206 | Vidocq embedded |
 | `vidocq-runtime-tck-humboldt-telemetry` | Telemetry 2.1 | 85 | Vidocq embedded |
-| `vidocq-runtime-tck-ravel-config` | Config 3.1 | 349 | Weld SE embedded (exception) |
+| `vidocq-runtime-tck-ravel-config` | Config 3.1 | 349 | Vidocq embedded |
 | **Total** | | **1780** | |
 
 All suites run with **zero test exclusions**. Notably, the OpenAPI suite previously
@@ -104,16 +104,29 @@ genuine bugs across the ecosystem, all fixed and merged (2026-07-13):
 - **vidocq** — `CassiniExtension` honors `@ApplicationPath` when
   `vidocq.rest.context-path` is left at its default.
 
-## The Config exception (Ravel on Weld)
+The Config runner was the last to migrate (it initially stayed on Weld SE with
+16 failures in 4 families, tracked as **BUG-20260713-01** in `ravel/BUG.md` —
+now FIXED). That migration surfaced a second wave of fixes:
 
-`vidocq-runtime-tck-ravel-config` still drives the MP Config TCK inside a Weld SE
-embedded container. Migrating it to the assembled runtime currently yields
-375 run / 16 failures in 4 families — array-typed `@ConfigProperty` producers,
-`@ConfigProperties` resolution (including the required deployment failure on a missing
-property), config-expression visibility during deployment validation, and a duplicated
-`Config` producer through the runtime BCE path. These are tracked as
-**BUG-20260713-01** in `ravel/BUG.md`; the runner moves off Weld once they are fixed.
+- **vauban** — synthetic beans registered with runtime array classes
+  (`Boolean[].class`) resolve against `ArrayType` injection points;
+  the build-time composite discovery loader exposes `getResources` of every
+  source loader **and** of the caller-installed TCCL (deployment
+  `microprofile-config.properties` / ServiceLoader `ConfigSource`s were
+  invisible during BCE validation); `CDI.current().select(type, qualifiers…)`
+  no longer drops its qualifiers and programmatic lookups expose a synthetic
+  `InjectionPoint`; observer-method non-event parameters are validated as real
+  injection points and exposed to BCEs.
+- **ravel** — `ConfigCdiExtension` vetoes type-level `@ConfigProperties`
+  classes itself (`@Enhancement` + `@Vetoed` — the portable exclusion extension
+  never runs on CDI Lite) and re-validates their required fields in
+  `@Validation`; the fallback `@Default Config` synthetic bean is skipped when
+  a `Config` producer is already registered.
+- **vidocq (this harness)** — the container no longer surfaces deployment
+  config entries as system properties: the materialized deployment class
+  loader makes them visible to MP Config naturally, with correct ordinals and
+  `%profile.` semantics (the hack clobbered `config_ordinal` and broke the
+  profile TCK tests).
 
-What the Weld run still certifies: ravel-core (ConfigSources, converters,
-expression/profile resolution) and the portable `ConfigCdiExtension` — the exact same
-CDI-Lite `BuildCompatibleExtension` class that runs under Vauban in production.
+The Weld per-brick runner in the ravel repository still passes 349/349 after
+these changes, so both CDI paths of the same `ConfigCdiExtension` are certified.
