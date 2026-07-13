@@ -109,6 +109,82 @@ class VaubanContainerIntegrationTest {
     }
 
 
+    /**
+     * The assembled Vidocq runtime registers BOTH {@link RavelConfigProducer}
+     * (listed in this jar's APT-generated {@code META-INF/vauban-beans.list})
+     * and {@link ConfigCdiExtension} (BCE service file). The extension's
+     * {@code @Synthesis} used to add its own {@code @Default Config} bean
+     * unconditionally, making every {@code @Inject Config} ambiguous on that
+     * path. The synthetic bean must only be registered when no other
+     * {@code Config} bean exists (MP Config 3.1 §6.2 mandates exactly one
+     * injectable {@code Config}). Cf. ravel BUG-20260713-01 family 4.
+     */
+    @Test
+    void config_producer_and_bce_together_yield_a_single_config_bean() {
+        registerConfig(Map.of("app.name", "ravel"));
+
+        SeContainerInitializer initializer = SeContainerInitializer.newInstance()
+                .addBeanClasses(RavelConfigProducer.class, ConfigCdiExtension.class, TestBean.class);
+
+        try (SeContainer container = initializer.initialize()) {
+            TestBean bean = container.select(TestBean.class).get();
+            assertNotNull(bean.config, "@Inject Config must resolve to exactly one bean");
+            assertEquals("ravel", bean.config.getValue("app.name", String.class));
+        }
+    }
+
+    /**
+     * MP Config 3.1 §6.4 — a type-level {@code @ConfigProperties} class must be
+     * excluded from regular bean discovery (Weld path: portable extension veto;
+     * Vauban path: BCE {@code @Enhancement} adds {@code @Vetoed}) so the only
+     * bean satisfying {@code @Inject @ConfigProperties} is the synthetic one.
+     * Without the veto both the class bean (which carries the qualifier) and
+     * the synthetic bean match → AmbiguousResolutionException.
+     * Cf. ravel BUG-20260713-01 family 2.
+     */
+    @Test
+    void config_properties_class_is_vetoed_and_resolves_through_synthetic_bean() {
+        registerConfig(Map.of("srv.host", "example.org"));
+
+        SeContainerInitializer initializer = SeContainerInitializer.newInstance()
+                .addBeanClasses(ConfigCdiExtension.class, ServerProps.class, PropsConsumer.class);
+
+        try (SeContainer container = initializer.initialize()) {
+            PropsConsumer consumer = container.select(PropsConsumer.class).get();
+            assertNotNull(consumer.props, "@Inject @ConfigProperties must resolve to the synthetic bean");
+            assertEquals("example.org", consumer.props.host);
+            assertEquals(9090, consumer.props.port, "Java initializer keeps its value when no property is set");
+            assertTrue(consumer.props.zone.isEmpty(), "srv.zone absent → Optional.empty()");
+        }
+    }
+
+    /**
+     * MP Config 3.1 §6.4 — deployment must fail when a required property of a
+     * discovered type-level {@code @ConfigProperties} class is missing, even
+     * when nothing injects the class (TCK
+     * {@code ConfigPropertiesMissingPropertyInjectionTest}). On the Weld path
+     * the portable extension validates at {@code AfterDeploymentValidation};
+     * the BCE must do the same in {@code @Validation} for CDI Lite runtimes.
+     * Cf. ravel BUG-20260713-01 family 2.
+     */
+    @Test
+    void missing_required_config_properties_field_fails_deployment() {
+        registerConfig(Map.of("srv.host", "example.org"));
+        // srv.nationality is NOT provided and MissingProps has no fallback for it.
+
+        SeContainerInitializer initializer = SeContainerInitializer.newInstance()
+                .addBeanClasses(ConfigCdiExtension.class, MissingProps.class);
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                jakarta.enterprise.inject.spi.DeploymentException.class,
+                () -> {
+                    try (SeContainer container = initializer.initialize()) {
+                        // deployment must not succeed
+                    }
+                },
+                "A discovered @ConfigProperties class with a missing required property must fail the deployment");
+    }
+
     private void registerConfig(Map<String, String> values) {
         ConfigProviderResolver resolver = ConfigProviderResolver.instance();
         Config custom = resolver.getBuilder()
@@ -122,6 +198,27 @@ class VaubanContainerIntegrationTest {
     static class TestBean {
         @Inject
         Config config;
+    }
+
+    @org.eclipse.microprofile.config.inject.ConfigProperties(prefix = "srv")
+    @Dependent
+    public static class ServerProps {
+        public String host;
+        public int port = 9090;
+        public Optional<String> zone;
+    }
+
+    @Dependent
+    public static class PropsConsumer {
+        @Inject
+        @org.eclipse.microprofile.config.inject.ConfigProperties(prefix = "srv")
+        ServerProps props;
+    }
+
+    @org.eclipse.microprofile.config.inject.ConfigProperties(prefix = "srv")
+    @Dependent
+    public static class MissingProps {
+        public String nationality;
     }
 
     @Dependent
