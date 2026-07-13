@@ -60,7 +60,7 @@ public class FaultToleranceInterceptor {
 
     // Package-private (not private): the APT-generated _VaubanComponents.injectField writes these
     // with an in-package putfield, so the container needs no `opens … to io.vidocq.vauban.core` on
-    // the strict module path. Proven by heisenberg-cdi-vauban-jpms-it.
+    // the strict module path. Proven by heisenberg-cdi-vauban-module-it.
     @Inject
     StateRegistryBean stateRegistry;
 

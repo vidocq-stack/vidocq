@@ -10,7 +10,7 @@
         <version>0.3.0-SNAPSHOT</version>
     </parent>
 
-    <artifactId>heisenberg-cdi-vauban-jpms-it</artifactId>
+    <artifactId>heisenberg-cdi-vauban-module-it</artifactId>
     <name>Heisenberg :: CDI Vauban Java module-path IT</name>
     <description>Module-path proof vehicle: a @Retry bean intercepted with a build-time $$Intercepted
         subclass and the generated VaubanComponentProvider — including the FaultToleranceInterceptor

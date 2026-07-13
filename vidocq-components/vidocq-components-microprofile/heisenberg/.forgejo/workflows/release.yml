@@ -71,7 +71,7 @@ jobs:
             io.vidocq.ravel=${{ inputs.ravel_release }}
             io.vidocq.vauban=${{ inputs.vauban_release }}
           excluded-modules: |
-            heisenberg-cdi-vauban-jpms-it
+            heisenberg-cdi-vauban-module-it
             heisenberg-bench
             heisenberg-examples
           central-username: ${{ secrets.CENTRAL_USERNAME }}
