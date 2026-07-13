@@ -1,7 +1,7 @@
 # Ravel — Roadmap
 
 > MicroProfile Config 3.1 implementation in the Vidocq style: zero third-party libraries
-> (Jakarta EE / MicroProfile specs allowed), JDK 25, virtual threads, strict JPMS,
+> (Jakarta EE / MicroProfile specs allowed), JDK 25, virtual threads, strict Java Modules,
 > optional CDI integration via Vauban.
 
 ## Guiding Principles
@@ -11,7 +11,7 @@
 | Zero third-party libraries | No Smallrye Config, Helidon Config, Apache Commons Config in `ravel-core`. Only spec APIs (`microprofile-config-api`, `jakarta.inject`, `jakarta.cdi-api`, `jakarta.annotation-api`) are compiled. |
 | Jakarta / MicroProfile specs allowed | `ravel-cdi-vauban` may depend on `jakarta.enterprise.cdi-api`, `jakarta.inject-api`, `jakarta.annotation-api`. The core `ravel-core` is limited to `microprofile-config-api`. |
 | Virtual threads | No `synchronized`, no `ThreadLocal`. `ConcurrentHashMap`/`ClassValue` caches. Expression cycle detection via `ScopedValue`. |
-| Strict JPMS | `module-info.java` everywhere, `internal.*` packages not exported, SPI via `provides/uses`. No unjustified `opens`. |
+| Strict Java Modules | `module-info.java` everywhere, `internal.*` packages not exported, SPI via `provides/uses`. No unjustified `opens`. |
 | Strict TDD | Red → Green → Refactor. Tests written before production code. Systematic citation of the MicroProfile Config 3.1 spec section in test Javadoc. |
 | TCK 100% PASS | Hard contract on the MicroProfile Config 3.1 TCK before any structural merge. |
 | Measured performance | JMH from M1, systematic comparison with Smallrye Config (MP reference), baseline ratchet. |
@@ -63,7 +63,7 @@ automatic name.
 | `RavelConfig` implements `org.eclipse.microprofile.config.Config` | `getValue`, `getOptionalValue`, `getValues`, `getOptionalValues`, `getPropertyNames`, `getConfigSources`, `getConfigValue`, `getConverter`, `unwrap` | ✅ |
 | `RavelConfigBuilder` implements `ConfigBuilder` | `addDefaultSources`, `addDiscoveredSources`, `addDiscoveredConverters`, `withSources`, `withConverter(s)`, `forClassLoader`, `build` | ✅ |
 | `RavelConfigProviderResolver` extends `ConfigProviderResolver` | Singleton via ServiceLoader, one `Config` per `ClassLoader`, `ConcurrentHashMap` + atomic `computeIfAbsent` (tested under 100 concurrent virtual threads) | ✅ |
-| `META-INF/services/org.eclipse.microprofile.config.spi.ConfigProviderResolver` + JPMS `provides` | Dual classpath/module-path compatibility | ✅ |
+| `META-INF/services/org.eclipse.microprofile.config.spi.ConfigProviderResolver` + Java Modules `provides` | Dual classpath/module-path compatibility | ✅ |
 | `SystemPropertiesConfigSource` (ordinal 400) | Reads `System.getProperty/getProperties` on each call (mutable runtime, no local cache) | ✅ |
 | `EnvironmentVariablesConfigSource` (ordinal 300) | Spec §7.6 mapping: 3 forms tried (exact / non-alphanumeric→`_` / +UPPER). `toEnvFormat` helper extracted for testability | ✅ |
 | `MicroprofilePropertiesConfigSource` (ordinal 100) | One instance per `META-INF/microprofile-config.properties` URL from `ClassLoader`, frozen snapshot | ✅ |
@@ -106,7 +106,7 @@ converters), §5.3 (Custom converters), §5.4 (Arrays).
 - Built-ins are registered at **priority 1**; any application converter (default priority 100)
   automatically overrides them.
 - §5.2 patterns use **only** `public` methods/constructors — no `setAccessible(true)`, compliant
-  with JPMS / AOT-friendly constraints.
+  with Java Modules / AOT-friendly constraints.
 - `getOptionalValue(name, X[].class)` treats an empty string as "absent" (§2.1.4); `,,` or
   `\\` not followed by `,` are normalised by `ArraySplitter`.
 
@@ -159,7 +159,7 @@ cycles detected. **155 green tests** on `ravel-core`.
 | `@ConfigProperty(defaultValue=…)` | Default value converted with the target converter | ✅ |
 | Deployment validation (§6.4) | BCE reports missing required injections (without `defaultValue`) | ✅ |
 | Integration tests with Vauban container | CDI SE bootstrap smoke test + `Config` injection in a real container (`SeContainerInitializer`) | ✅ |
-| No JPMS `opens` on user beans | BCE + producers without reflection on application classes | ✅ |
+| No Java Modules `opens` on user beans | BCE + producers without reflection on application classes | ✅ |
 
 **Deliverable (current increment):** `@Inject @ConfigProperty(name="app.name", defaultValue="vidocq") String name;`
 + `Optional<T>`/`Provider<T>`/`Supplier<T>` validated by module tests. **20 green tests** on
@@ -202,14 +202,14 @@ Smallrye Config as the default implementation. Documented in
 
 | Task | Status | Notes |
 |---|---|---|
-| Documentation [`docs/integration-cassini.md`](docs/integration-cassini.md) | ✅ | 198 lines — dependencies, JPMS, `@Path` + `@ConfigProperty` example, profiles, `@ConfigProperties`, Ravel/Smallrye comparison |
+| Documentation [`docs/integration-cassini.md`](docs/integration-cassini.md) | ✅ | 198 lines — dependencies, Java Modules, `@Path` + `@ConfigProperty` example, profiles, `@ConfigProperties`, Ravel/Smallrye comparison |
 | Documentation [`docs/integration-chappe.md`](docs/integration-chappe.md) | ✅ | 155 lines — programmatic usage without CDI (`ConfigProvider.getConfig()` for port/TLS/timeouts) |
 | Documentation [`docs/integration-vauban.md`](docs/integration-vauban.md) | ✅ | 260 lines — injectable `Config` bean, auto-discoverable BCE via ServiceLoader, `@ConfigProperties` POJO |
 | ADR-001 integration strategy | ✅ | "Drop-in" rationale + deployment order + risks |
 | ServiceLoader BCE (`META-INF/services/jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension`) | ✅ | `ConfigCdiExtension` exposed via the standard CDI 4.1 contract |
 | Portable extension ServiceLoader (`jakarta.enterprise.inject.spi.Extension`) | ✅ | `ConfigPropertiesExclusionExtension` exposed |
-| `META-INF/vauban-beans.list` (strict-JPMS fallback) | ✅ | Complement to ServiceLoader for non-portable discovery paths |
-| `module-info.java` `provides ... with` | ✅ | JPMS mirror for both service files |
+| `META-INF/vauban-beans.list` (strict Java Modules fallback) | ✅ | Complement to ServiceLoader for non-portable discovery paths |
+| `module-info.java` `provides ... with` | ✅ | Java Modules mirror for both service files |
 | `cassini-cdi-vauban` adapter: `ravel-cdi-vauban` as optional dependency | ✅ (Cassini side) | `<optional>true</optional>` — BCE auto-discovered if the JAR is on the classpath |
 | `cassini-examples-vauban/ConfigDemoResource` example | ✅ (code written) | JAX-RS resource `@ApplicationScoped @Path("/config")` with 3 `@ConfigProperty` (greeting/version/Optional env) |
 | `cassini-examples-vauban/ConfigDemoResourceTest` end-to-end test | ✅ | 2/2 PASS after rebuilding Cassini on corrected Vauban snapshot (VAU-BCE-001) |
@@ -218,7 +218,7 @@ Smallrye Config as the default implementation. Documented in
 | `vidocq`: integrate Ravel as MicroProfile Config 3.1 implementation | ✅ | `ravel-cdi-vauban` added to `vidocq-runtime-core`; `requires transitive io.vidocq.ravel.cdi.vauban` in module-info; `RavelConfigPropertyIntegrationTest` 1/1 PASS (String, Integer, Optional<String>) — all vidocq apps can use `@ConfigProperty` without additional dependencies |
 
 **Deliverable:** complete documentation, discovery artifacts (ServiceLoader +
-JPMS + `vauban-beans.list`) packaged, Cassini integration operational
+Java Modules + `vauban-beans.list`) packaged, Cassini integration operational
 (`ConfigDemoResourceTest` 2/2 PASS), Ravel swap in vidocq validated
 (`RavelConfigPropertyIntegrationTest` 1/1 PASS). Spec conformance via TCK
 349/349 PASS (Weld); `vauban-core ↔ ravel-cdi-vauban` bridge unblocked by
@@ -270,7 +270,7 @@ Details and regression test in `vauban/BUG.md#VAU-BCE-001`. Measured effect:
 | TCK Arquillian: containerless vs embedded Vauban | Two Maven profiles in `ravel-tck`; `@Tag("cdi")` tests excluded in standalone mode |
 | Profiles + expressions interaction | Combinatorics explicitly tested: `%dev.url=${base}/dev` must resolve `${base}` *after* profile selection |
 | GraalVM AOT compatibility | Test `native-image` on a `ravel-examples` example from M3; implicit converters via reflection are the sensitive point |
-| ServiceLoader + JPMS in `ravel-cdi-vauban` | Verify that CDI `@Provides` does not require `opens` on user modules |
+| ServiceLoader + Java Modules in `ravel-cdi-vauban` | Verify that CDI `@Provides` does not require `opens` on user modules |
 
 ## Actioned Decisions
 

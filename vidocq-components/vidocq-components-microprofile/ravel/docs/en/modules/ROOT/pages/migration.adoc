@@ -40,7 +40,7 @@ Ravel implements the standard MicroProfile Config 3.1 contract. Application code
 . Replace the SmallRye Config dependency with `io.vidocq.ravel:ravel-api` (+ `ravel-core`, and `ravel-cdi-vauban` for CDI) — see xref:reference.adoc[Reference].
 . Keep your `microprofile-config.properties`, custom sources and converters unchanged.
 . Replace any `@ConfigMapping` interface with `@ConfigProperty` fields or a programmatic `ConfigBuilder` (see xref:usage.adoc[Usage]).
-. Add a `module-info.java` requiring `org.eclipse.microprofile.config` (Ravel is strict JPMS).
+. Add a `module-info.java` requiring `org.eclipse.microprofile.config` (Ravel is strict Java Modules).
 . Verify ordinal precedence and active profile behave as expected (see xref:concepts.adoc[Concepts]).
 
 == Pitfalls

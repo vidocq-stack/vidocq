@@ -54,7 +54,7 @@ In modules that need MP Config:
 </dependencies>
 ```
 
-## JPMS Configuration
+## Java Modules Configuration
 
 ```java
 module io.vidocq.vauban.mymodule {

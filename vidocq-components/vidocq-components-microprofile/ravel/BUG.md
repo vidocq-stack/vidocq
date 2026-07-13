@@ -12,7 +12,7 @@
 - **Investigations** :
   - 2026-07-12 : found by grepping for stale version strings after the issue #3 follow-up.
     Fixed: version.properties filtered by Maven next to the class, constant loaded at class
-    init (same-module JPMS resource, no opens). No longer compile-time-inlineable, which
+    init (same-module Java Modules resource, no opens). No longer compile-time-inlineable, which
     also protects future consumers from the javac inlining trap.
 
 ## BUG-20260713-01 — MP Config TCK gaps when running on the Vauban CDI runtime (vs Weld)

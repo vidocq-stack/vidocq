@@ -75,7 +75,7 @@ Ravel's implementation targets these milestones:
 
 | Milestone | Features | Status |
 |-----------|----------|--------|
-| M0 | Reactor, JPMS, `.sdkmanrc` | ✅ Done |
+| M0 | Reactor, Java Modules, `.sdkmanrc` | ✅ Done |
 | M1 | 3 built-in sources, basic converters, `ConfigProvider` | ✅ Done |
 | M2 | Advanced converters, arrays, implicit converters | ✅ Done |
 | M3 | Profiles, property expressions, cycle detection | ✅ Done (M4) |

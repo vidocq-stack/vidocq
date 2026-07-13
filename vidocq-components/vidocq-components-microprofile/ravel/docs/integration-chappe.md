@@ -39,7 +39,7 @@ With CDI (Vauban):
 </dependencies>
 ```
 
-## JPMS Configuration
+## Java Modules Configuration
 
 ```java
 module io.vidocq.chappe.server {
