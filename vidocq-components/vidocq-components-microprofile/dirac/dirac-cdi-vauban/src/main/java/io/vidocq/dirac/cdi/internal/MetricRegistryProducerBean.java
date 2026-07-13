@@ -87,26 +87,30 @@ public class MetricRegistryProducerBean {
         return registryMap.computeIfAbsent(scope, MetricRegistryImpl::new);
     }
 
-    // Deprecated @RegistryType support (MP Metrics < 5.0 compat)
+    // Deprecated @RegistryType support (MP Metrics < 5.0 compat). Each legacy
+    // type aliases the same-named scope registry (Metrics TCK
+    // testMetricRegistryScopeDeprecatedRegistryType asserts getScope()); the
+    // registries are created on demand — a plain .get() returned null when the
+    // legacy qualifier was the first to touch a scope.
     @SuppressWarnings("deprecation")
     @Produces
     @RegistryType
     public MetricRegistry produceApplicationByType() {
-        return registryMap.get(MetricRegistry.APPLICATION_SCOPE);
+        return registryMap.computeIfAbsent(MetricRegistry.APPLICATION_SCOPE, MetricRegistryImpl::new);
     }
 
     @SuppressWarnings("deprecation")
     @Produces
     @RegistryType(type = MetricRegistry.Type.BASE)
     public MetricRegistry produceBaseByType() {
-        return registryMap.get(MetricRegistry.BASE_SCOPE);
+        return registryMap.computeIfAbsent(MetricRegistry.BASE_SCOPE, MetricRegistryImpl::new);
     }
 
     @SuppressWarnings("deprecation")
     @Produces
     @RegistryType(type = MetricRegistry.Type.VENDOR)
     public MetricRegistry produceVendorByType() {
-        return registryMap.get(MetricRegistry.VENDOR_SCOPE);
+        return registryMap.computeIfAbsent(MetricRegistry.VENDOR_SCOPE, MetricRegistryImpl::new);
     }
 
     // ------------------------------------------------------------------
