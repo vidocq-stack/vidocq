@@ -111,17 +111,28 @@ public class HeisenbergExtension implements BuildCompatibleExtension {
 		if (!bindingEnhancedClasses.add(className)) {
 			return;
 		}
-		validateClass(resolveClass(classConfig));
+		Class<?> beanClass = resolveClass(classConfig);
+		if (beanClass != null) {
+			validateClass(beanClass);
+		}
 		classConfig.addAnnotation(FaultToleranceBinding.class);
 	}
 
+	/**
+	 * Loads the bean class for FT validation, or returns {@code null} when it is
+	 * not loadable in the current context. This happens when the BCE runs inside
+	 * the annotation processor (build-time codegen discovers it through
+	 * {@code META-INF/services}): the classes under compilation are not on any
+	 * class loader yet. The binding annotation is still added — validation is
+	 * deferred to the runtime boot, where the class is loadable.
+	 */
 	private Class<?> resolveClass(ClassConfig classConfig) {
 		String className = classConfig.info().name();
 		try {
 			return Class.forName(className, false, Thread.currentThread().getContextClassLoader());
 		}
 		catch (ClassNotFoundException e) {
-			throw new FaultToleranceDefinitionException("Unable to load bean class for FT validation: " + className, e);
+			return null;
 		}
 	}
 
