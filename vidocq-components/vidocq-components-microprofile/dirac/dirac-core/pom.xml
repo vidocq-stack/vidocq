@@ -35,9 +35,9 @@
     <build>
         <plugins>
              <!--
-                 JPMS workaround dirac-core: microprofile-metrics-api may not have
+                 Java Modules workaround dirac-core: microprofile-metrics-api may not have
                  Automatic-Module-Name. If module-info.class is in target/classes,
-                 Maven enables JPMS for testCompile and the module is not found on module-path.
+                 Maven enables Java Modules for testCompile and the module is not found on module-path.
 
                  Three-step solution:
                  1. module-info.java in src/main/module-info/ (not src/main/java/).

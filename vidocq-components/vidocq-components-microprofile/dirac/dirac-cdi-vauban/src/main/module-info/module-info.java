@@ -34,9 +34,9 @@
  *       beans with the {@code @RegistryScope} qualifier.</li>
  * </ul>
  *
- * <p><strong>JPMS note — testCompile workaround</strong> :
+ * <p><strong>Java Modules note — testCompile workaround</strong> :
  * {@code module-info.java} is in {@code src/main/module-info/} to prevent Maven
- * Compiler Plugin from detecting JPMS during {@code testCompile} (vauban-core is test-scope,
+ * Compiler Plugin from detecting Java Modules during {@code testCompile} (vauban-core is test-scope,
  * absent from {@code target/javamodules/}).
  * See {@code dirac-core/pom.xml} for the full workaround description.</p>
  */
@@ -66,6 +66,6 @@ module io.vidocq.dirac.cdi.vauban {
             with io.vidocq.dirac.cdi.internal._VaubanComponents;
 
     //CG-05 — generated $$DiracMetrics companions (dirac annotation processor):
-    //strict-JPMS user modules declare `provides MetricsCompanion with ...`.
+    //strict Java Modules user modules declare `provides MetricsCompanion with ...`.
     uses io.vidocq.dirac.spi.gen.MetricsCompanion;
 }

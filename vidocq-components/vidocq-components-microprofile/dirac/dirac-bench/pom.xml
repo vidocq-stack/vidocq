@@ -51,7 +51,7 @@
                 </configuration>
             </plugin>
             <!--
-                dirac-bench is NOT a JPMS module: the JMH benchmarks deliberately reach into
+                dirac-bench is NOT a Java module: the JMH benchmarks deliberately reach into
                 non-exported internal packages (io.vidocq.dirac.internal.*,
                 io.vidocq.dirac.cdi.internal.*) to measure raw overhead. It is a shaded,
                 classpath-only executable, never a published library, so it stays on the

@@ -1,5 +1,5 @@
 = Dirac
-:description: MicroProfile Metrics 5.1.1 implementation — counters, gauges, histograms, timers exposed in OpenMetrics / Prometheus and JSON, zero third-party library, zero contention, strict JPMS, jlink-ready.
+:description: MicroProfile Metrics 5.1.1 implementation — counters, gauges, histograms, timers exposed in OpenMetrics / Prometheus and JSON, zero third-party library, zero contention, strict Java Modules, jlink-ready.
 
 [.text-center]
 image::dirac-logo.png[Dirac,300,role=module-logo]
@@ -43,7 +43,7 @@ Dirac built the formal frame that separates the observable from the instrument �
 | Implemented spec | {spec-mp-metrics}[MicroProfile Metrics 5.1.1]
 | Repo | {repo-dirac}
 | Java | 25 (LTS)
-| JPMS modules | `io.vidocq.dirac.api`, `io.vidocq.dirac.core`, `io.vidocq.dirac.cdi.vauban`, `io.vidocq.dirac.rest`, `microprofile.metrics.api` (repackage)
+| Java modules | `io.vidocq.dirac.api`, `io.vidocq.dirac.core`, `io.vidocq.dirac.cdi.vauban`, `io.vidocq.dirac.rest`, `microprofile.metrics.api` (repackage)
 | Public packages | `io.vidocq.dirac.api.*` (stable SPI), `io.vidocq.dirac.cdi.internal.*` (CDI integration)
 | Runtime dependencies | `microprofile-metrics-api` 5.1.1, `jakarta.enterprise.cdi-api` 4.1, `jakarta.interceptor-api` 2.2, `jakarta.annotation-api` 3.0, `jakarta.ws.rs-api` 4.0 (only `dirac-rest`)
 | jlink-ready | ✅ — every sub-module ships its own `module-info.java`, `dirac-mp-metrics-api` repackages the MP spec with an explicit `module-info.class` (M9)
@@ -54,7 +54,7 @@ Dirac built the formal frame that separates the observable from the instrument �
 
 . **Zero third-party library** — no Micrometer, no Dropwizard Metrics, no SmallRye Metrics. Only `microprofile-metrics-api` is compiled into `dirac-core`. The OpenMetrics and JSON formatters are hand-written with `StringBuilder`.
 . **Zero contention on the instrumentation path** — `LongAdder` for counters, `AtomicLongArray` for histograms, `System.nanoTime()` for timers, `ConcurrentHashMap` for registries. No `synchronized`, no `ThreadLocal`, no platform locks — virtual-thread-friendly by construction.
-. **Strict JPMS + validated jlink (M9)** — every Dirac artefact has its own `module-info.java`. `dirac-mp-metrics-api` is a local repackage of MP Metrics 5.1.1 with an explicit `module-info.class`, shipped so that `jlink` does not have to cross an automatic module without a canonical name.
+. **Strict Java Modules + validated jlink (M9)** — every Dirac artefact has its own `module-info.java`. `dirac-mp-metrics-api` is a local repackage of MP Metrics 5.1.1 with an explicit `module-info.class`, shipped so that `jlink` does not have to cross an automatic module without a canonical name.
 
 == Position in the ecosystem
 

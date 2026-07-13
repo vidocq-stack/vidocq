@@ -10,7 +10,7 @@
   implementation libraries**: only the spec APIs (`microprofile-metrics-api`,
   `jakarta.enterprise.cdi-api`, `jakarta.interceptor-api`, `jakarta.annotation-api`) are
   compiled in `dirac-core` and `dirac-cdi-vauban`.
-- Strict JPMS architecture: `dirac-api` wraps the spec, `dirac-core` pure Java 25 implementations
+- Strict Java Modules architecture: `dirac-api` wraps the spec, `dirac-core` pure Java 25 implementations
   without CDI, `dirac-cdi-vauban` CDI interceptors + BCE Vauban,
   `dirac-rest` optional JAX-RS endpoint, `dirac-tck` out-of-reactor.
 - **No Micrometer, Dropwizard Metrics, SmallRye Metrics** in production code.
@@ -33,7 +33,7 @@
   (Note: `MetricsEndpoint.java` replaced by `MetricsResource.java` in M7.)
 - Any implementation description below (`CounterImpl`, `TimerImpl`, etc.) remains the
   **target** as long as the corresponding concrete file doesn't yet exist in `src/main/java`.
-- Target JPMS modules:
+- Target Java modules:
   - `io.vidocq.dirac.api` (`dirac-api`)
   - `io.vidocq.dirac.core` (`dirac-core`)
   - `io.vidocq.dirac.cdi.vauban` (`dirac-cdi-vauban`)
@@ -137,20 +137,20 @@ dirac-examples       io.vidocq.dirac.examples
   or `dirac-cdi-vauban` (inverted dependency or SPI).
 - **Language** — commit messages, Javadoc, and all `.md` file content must be written in **English**.
 
-## JPMS Convention — `module-info` + `target/javamodules/` Workaround
+## Java Modules Convention — `module-info` + `target/javamodules/` Workaround
 
 - In `dirac-core` and `dirac-cdi-vauban`, the `module-info.java` lives under
   `src/main/module-info/` (and **not** `src/main/java/`). This is intentional: prevents
-  Maven Compiler Plugin from switching to JPMS mode during `testCompile`. The `module-info.class`
+  Maven Compiler Plugin from switching to Java Modules mode during `testCompile`. The `module-info.class`
   is compiled alone in the `prepare-package` phase. Same constraint as in Heisenberg.
 - `dirac-api` currently keeps its `module-info.java` under `src/main/java/`.
 - `dirac-rest`, `dirac-bench`, and `dirac-examples` don't yet have a `module-info.java` in
   the current state; their `pom.xml` neutralize inherited parent `compilerArgs` via
   `combine.self="override"` to avoid an invalid `--module-path`.
 - `microprofile-metrics-api:5.1.1`: verify the presence or absence of `Automatic-Module-Name`
-  in the MANIFEST.MF before declaring the `requires`. If absent, the JPMS name is derived
+  in the MANIFEST.MF before declaring the `requires`. If absent, the Java Modules name is derived
   from the artifact (`microprofile.metrics.api`).
-- Tests run on the classpath (`useModulePath=false`); JPMS wiring is validated
+- Tests run on the classpath (`useModulePath=false`); Java Modules wiring is validated
   by the smoke TCK.
 
 ## Useful Workflows

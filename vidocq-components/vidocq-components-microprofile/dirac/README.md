@@ -9,7 +9,7 @@
 
 - **Zero third-party libraries** — no Micrometer, Dropwizard Metrics, SmallRye Metrics.
   Only `microprofile-metrics-api` is compiled into `dirac-core`.
-- **Java 25** + **strict JPMS** — every module has its `module-info.java`, minimal exports.
+- **Java 25** + **strict Java Modules** — every module has its `module-info.java`, minimal exports.
 - **Virtual threads** — `LongAdder` for counters, `System.nanoTime()` for timers.
   No `synchronized`, no `ThreadLocal`.
 - **CDI via Vauban** — `@Counted`, `@Timed` interceptors, `DiracExtension` BCE.
@@ -39,7 +39,7 @@ sdk env          # Java 25-tem + Maven 3.9.16
 The TCK runner first installs the required Dirac artifacts into the local M2 via
 `run-official-tck-mp-metrics-5.1.sh`.
 
-## JPMS / jlink (M9)
+## Java Modules / jlink (M9)
 
 ```bash
 ./run-jlink-smoke.sh
@@ -57,7 +57,7 @@ The M9 smoke uses the reactor artifact `dirac-mp-metrics-api`, which repackages
 
 | Module | Description |
 |---|---|
-| `dirac-mp-metrics-api` | Local repackage of MP Metrics API with an explicit `module-info.class` for JPMS/jlink |
+| `dirac-mp-metrics-api` | Local repackage of MP Metrics API with an explicit `module-info.class` for Java Modules/jlink |
 | `dirac-api` | Controlled re-export of MP Metrics 5.1.1 + Dirac SPI |
 | `dirac-core` | Pure Java 25 implementations (Counter, Gauge, Histogram, Timer, registry, formatters) |
 | `dirac-cdi-vauban` | CDI interceptors + Vauban BCE (DiracExtension) |

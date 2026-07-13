@@ -32,13 +32,13 @@
  *   <li>{@code BaseMetricsRegistrar} — mandatory JVM metrics (GC, threads, heap, uptime).</li>
  * </ul>
  *
- * <p><strong>JPMS note — testCompile workaround</strong> :
+ * <p><strong>Java Modules note — testCompile workaround</strong> :
  * This {@code module-info.java} is in {@code src/main/module-info/} (not
- * {@code src/main/java/}) so that Maven Compiler Plugin does not detect JPMS during
+ * {@code src/main/java/}) so that Maven Compiler Plugin does not detect Java Modules during
  * {@code testCompile}. {@code maven-clean-plugin} deletes {@code module-info.class} before
  * {@code testCompile} (incremental builds). A {@code prepare-package} execution
  * recompiles {@code module-info.java} alone. Tests run on the classpath
- * ({@code useModulePath=false}) — JPMS wiring is validated by the smoke TCK.</p>
+ * ({@code useModulePath=false}) — Java Modules wiring is validated by the smoke TCK.</p>
  */
 module io.vidocq.dirac.core {
     requires transitive io.vidocq.dirac.api;

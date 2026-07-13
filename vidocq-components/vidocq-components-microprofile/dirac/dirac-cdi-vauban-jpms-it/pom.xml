@@ -9,7 +9,7 @@
     </parent>
 
     <artifactId>dirac-cdi-vauban-jpms-it</artifactId>
-    <name>Dirac :: CDI Vauban JPMS module-path IT</name>
+    <name>Dirac :: CDI Vauban Java module-path IT</name>
     <description>Module-path proof vehicle: a @Counted bean intercepted with a build-time $$Intercepted
         subclass and the generated VaubanComponentProvider — including the interceptors themselves
         (VAU-INT-004) — with no `opens` to vauban.core.</description>
@@ -50,7 +50,7 @@
         <!--
             Vauban container as a REAL (compile) dependency: this vehicle boots a container, and the
             build-time MetricsService$$Intercepted references io.vidocq.vauban.core.interceptor.*.
-            Legitimate for a JPMS proof vehicle (unlike the production wrappers).
+            Legitimate for a Java Modules proof vehicle (unlike the production wrappers).
         -->
         <dependency>
             <groupId>io.vidocq.vauban</groupId>

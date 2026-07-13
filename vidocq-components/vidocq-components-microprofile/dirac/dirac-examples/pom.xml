@@ -47,7 +47,7 @@
                 </configuration>
             </plugin>
             <!--
-                JPMS workaround dirac-examples : module-info.java sous src/main/module-info,
+                Java Modules workaround dirac-examples : module-info.java sous src/main/module-info,
                 tests en classpath, compilation du descripteur en prepare-package.
             -->
             <plugin>
