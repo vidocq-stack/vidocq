@@ -17,7 +17,7 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
-package io.vidocq.dirac.cdi.jpmsit;
+package io.vidocq.dirac.cdi.moduleit;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import org.eclipse.microprofile.metrics.annotation.Counted;
@@ -35,7 +35,7 @@ import org.eclipse.microprofile.metrics.annotation.Counted;
  *       provider, and its public {@code @AroundConstruct} is reachable without opens). That callback's
  *       {@code preRegisterCounters} is what registers the counter below;</li>
  *   <li><b>method level</b> on {@link #ping()} drives {@code @AroundInvoke} and pins the asserted
- *       metric id ({@code jpmsit.counted.calls}).</li>
+ *       metric id ({@code moduleit.counted.calls}).</li>
  * </ul>
  *
  * <p>Used by {@code MetricsModulePathTest} to prove that {@code @Counted} interception — both
@@ -47,7 +47,7 @@ import org.eclipse.microprofile.metrics.annotation.Counted;
 @Counted
 public class MetricsService {
 
-    @Counted(name = "jpmsit.counted.calls", absolute = true, tags = {"source=jpms"})
+    @Counted(name = "moduleit.counted.calls", absolute = true, tags = {"source=module"})
     public String ping() {
         return "pong";
     }

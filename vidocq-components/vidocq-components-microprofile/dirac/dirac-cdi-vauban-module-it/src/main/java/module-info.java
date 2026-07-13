@@ -28,7 +28,7 @@
  * and runs the interception chain through that provider, so this module opens nothing to
  * {@code io.vidocq.vauban.core}. It depends on {@code vauban-core} for real (it boots a container).</p>
  */
-module io.vidocq.dirac.cdi.jpmsit {
+module io.vidocq.dirac.cdi.moduleit {
     requires io.vidocq.dirac.cdi.vauban;
     requires io.vidocq.vauban.core;
     requires microprofile.metrics.api;
@@ -38,8 +38,8 @@ module io.vidocq.dirac.cdi.jpmsit {
     requires jakarta.interceptor;
     requires jakarta.annotation;
 
-    exports io.vidocq.dirac.cdi.jpmsit;
+    exports io.vidocq.dirac.cdi.moduleit;
 
     provides io.vidocq.vauban.api.VaubanComponentProvider
-            with io.vidocq.dirac.cdi.jpmsit._VaubanComponents;
+            with io.vidocq.dirac.cdi.moduleit._VaubanComponents;
 }

@@ -56,7 +56,7 @@ module io.vidocq.dirac.cdi.vauban {
     // in-module by the Vauban-APT-generated _VaubanComponents provider, and the interceptors'
     // @AroundConstruct/@AroundInvoke methods are public in this exported package, so the container
     // reaches them without privateLookupIn. Proven on the strict module path by
-    // dirac-cdi-vauban-jpms-it (both interception kinds, zero opens).
+    // dirac-cdi-vauban-module-it (both interception kinds, zero opens).
 
     // Dirac BCE: @Gauge resolution + BASE registry population at startup
     provides jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension

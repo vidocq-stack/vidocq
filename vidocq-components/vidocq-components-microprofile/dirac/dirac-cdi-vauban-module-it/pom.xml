@@ -8,7 +8,7 @@
         <version>0.3.0-SNAPSHOT</version>
     </parent>
 
-    <artifactId>dirac-cdi-vauban-jpms-it</artifactId>
+    <artifactId>dirac-cdi-vauban-module-it</artifactId>
     <name>Dirac :: CDI Vauban Java module-path IT</name>
     <description>Module-path proof vehicle: a @Counted bean intercepted with a build-time $$Intercepted
         subclass and the generated VaubanComponentProvider — including the interceptors themselves
