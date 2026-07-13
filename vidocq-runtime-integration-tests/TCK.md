@@ -59,9 +59,19 @@ neither downloads nor runs anything TCK-related.
 | `vidocq-runtime-tck-ravel-config` | Config 3.1 | 349 | Vidocq embedded |
 | **Total** | | **1780** | |
 
-All suites run with **zero test exclusions**. Notably, the OpenAPI suite previously
-passed 307 tests with 2 excluded classes under the old ad hoc harness; the assembled
-runtime passes the full 344.
+Six of the eight suites run with **zero test exclusions**. Notably, the OpenAPI suite
+previously passed 307 tests with 2 excluded classes under the old ad hoc harness; the
+assembled runtime passes the full 344. Two runners carry documented, deliberate
+exclusions (identical to their per-brick baselines):
+
+- **JWT** — the `ejb`/`jacc`/`servlet` packages and the `ee-security-optional`
+  TestNG group are excluded: Jakarta EE full-profile integrations outside the
+  MicroProfile runtime scope, per the MP JWT TCK's own documentation.
+- **Rest Client** — `ssl/**` and `sse/**` are excluded:
+  `RestClientBuilder.trustStore()/keyStore()` and Server-Sent Events are **not yet
+  implemented in Cyrano** (tracked since cyrano M4, see `cyrano/TCK.md`). This is an
+  implementation gap, not an optional feature — it must be closed before any
+  Rest Client 4.0 certification claim.
 
 ## TCK glue vs. runtime code
 
