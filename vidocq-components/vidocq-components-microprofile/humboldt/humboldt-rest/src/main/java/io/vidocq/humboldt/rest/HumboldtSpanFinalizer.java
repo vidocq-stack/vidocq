@@ -62,6 +62,7 @@ import java.lang.System.Logger.Level;
  * property will have been removed), and the mapper simply returns a generic 500.</p>
  */
 @Provider
+@jakarta.enterprise.context.Dependent
 @Priority(jakarta.ws.rs.Priorities.USER + 1000)
 public class HumboldtSpanFinalizer implements ExceptionMapper<Throwable> {
 

@@ -91,6 +91,7 @@
         <module>humboldt-cdi</module>
         <module>humboldt-rest</module>
         <module>humboldt-runtime</module>
+        <module>humboldt-otel-interop</module>
     </modules>
 
     <dependencyManagement>
@@ -205,6 +206,11 @@
             <dependency>
                 <groupId>io.vidocq.humboldt</groupId>
                 <artifactId>humboldt-runtime</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.humboldt</groupId>
+                <artifactId>humboldt-otel-interop</artifactId>
                 <version>${project.version}</version>
             </dependency>
         </dependencies>

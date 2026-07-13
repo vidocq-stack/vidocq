@@ -41,6 +41,7 @@ import jakarta.ws.rs.ext.Provider;
  * url.scheme} — conformant with MP Telemetry 2.1 §"HTTP server metrics".
  */
 @Provider
+@jakarta.enterprise.context.Dependent
 public class HumboldtServerResponseFilter implements ContainerResponseFilter {
 
     static final AttributeKey<Long> HTTP_RESPONSE_STATUS_CODE = AttributeKey.longKey("http.response.status_code");

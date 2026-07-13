@@ -39,6 +39,13 @@
             <groupId>jakarta.ws.rs</groupId>
             <artifactId>jakarta.ws.rs-api</artifactId>
         </dependency>
+        <!-- CDI scope annotations on the server filters (provided: the runtime brings CDI). -->
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+            <version>4.1.0</version>
+            <scope>provided</scope>
+        </dependency>
         <!-- M7c.12 — MicroProfile Rest Client API : scope provided.
              Le HumboldtMpRestClientListener n'est invoqué que si MP Rest Client est
              effectivement présent en runtime (typiquement via cyrano-core dans le
@@ -61,6 +68,19 @@
         <dependency>
             <groupId>jakarta.annotation</groupId>
             <artifactId>jakarta.annotation-api</artifactId>
+        </dependency>
+        <!--
+            Vauban SPI (provided): the Vauban APT below generates the
+            _VaubanComponents provider so the @Provider filters self-register as
+            CDI beans in a Vauban-based runtime (same pattern as knock-jaxrs) —
+            without it the assembled Vidocq runtime never discovers the JAX-RS
+            tracing filters.
+        -->
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-api</artifactId>
+            <version>${vauban.version}</version>
+            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
@@ -149,7 +169,20 @@
                     <compilerArgs>
                         <arg>-p</arg>
                         <arg>${project.build.directory}/javamodules</arg>
+                        <!-- Library module: cross-module beans are validated at the
+                             Vidocq runtime assembly, not here (pattern knock-jaxrs). -->
+                        <arg>-Avauban.validation=false</arg>
                     </compilerArgs>
+                    <!-- Vauban indexer APT: generates META-INF/vauban-beans.list and the
+                         _VaubanComponents provider so the @Provider tracing filters
+                         self-register as CDI beans in a Vauban-based runtime. -->
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>io.vidocq.vauban</groupId>
+                            <artifactId>vauban-processor</artifactId>
+                            <version>${vauban.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
                 </configuration>
                 <executions>
                     <execution>
