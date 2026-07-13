@@ -18,7 +18,7 @@
     <packaging>pom</packaging>
 
     <name>Heisenberg</name>
-    <description>Implémentation MicroProfile Fault Tolerance 4.1 — zéro librairie tierce, virtual threads, JPMS strict, CDI via Vauban, config via Ravel</description>
+    <description>Implémentation MicroProfile Fault Tolerance 4.1 — zéro librairie tierce, virtual threads, Java Modules strict, CDI via Vauban, config via Ravel</description>
     <url>https://codeberg.org/Vidocq/heisenberg</url>
 
     <!--
@@ -57,7 +57,7 @@
         <!--
             MicroProfile Fault Tolerance 4.1 API.
             ATTENTION : microprofile-fault-tolerance-api:4.1 peut ne pas avoir d'Automatic-Module-Name
-            dans son MANIFEST.MF. Si c'est le cas, le nom JPMS dérivé du nom de fichier est
+            dans son MANIFEST.MF. Si c'est le cas, le nom Java Modules dérivé du nom de fichier est
             "microprofile.fault.tolerance.api" (strip version + remplacement '-' par '.').
             Le maven-dependency-plugin copie les JARs compile-scope dans target/javamodules/
             en phase initialize, et le maven-compiler-plugin reçoit l'argument module-path
@@ -213,7 +213,7 @@
 
     <build>
         <!--
-            JPMS workaround : microprofile-fault-tolerance-api:4.1 peut ne pas avoir
+            Java Modules workaround : microprofile-fault-tolerance-api:4.1 peut ne pas avoir
             d'Automatic-Module-Name dans son MANIFEST.MF (à vérifier à l'install).
 
             Solution : maven-dependency-plugin copie tous les JARs compile-scope dans

@@ -29,7 +29,7 @@
  *
  * <p>The name {@code microprofile.fault.tolerance.api} is the one the JDK had been deriving so far
  * from the file name {@code microprofile-fault-tolerance-api-4.1.jar} using the
- * JPMS rule "strip version + replace '-' with '.'" — so no migration is required
+ * Java Modules rule "strip version + replace '-' with '.'" — so no migration is required
  * in modules that already declared {@code requires microprofile.fault.tolerance.api}.
  */
 module microprofile.fault.tolerance.api {

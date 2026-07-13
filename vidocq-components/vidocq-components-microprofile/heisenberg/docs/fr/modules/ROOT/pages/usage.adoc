@@ -193,7 +193,7 @@ public void fireAndForget() { /* ... */ } // void interdit, voir spec §6.1
 </dependency>
 ----
 
-Modules JPMS correspondants : `io.vidocq.heisenberg.core` et `io.vidocq.heisenberg.cdi.vauban`. La SPI publique vit dans `io.vidocq.heisenberg.api.*`.
+Modules Java Modules correspondants : `io.vidocq.heisenberg.core` et `io.vidocq.heisenberg.cdi.vauban`. La SPI publique vit dans `io.vidocq.heisenberg.api.*`.
 
 == Surcharges de configuration sans recompilation
 

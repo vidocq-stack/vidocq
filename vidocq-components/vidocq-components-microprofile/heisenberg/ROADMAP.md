@@ -2,7 +2,7 @@
 
 > MicroProfile Fault Tolerance 4.1 implementation in the Vidocq style: zero third-party
 > implementation libraries (Jakarta EE / MicroProfile APIs allowed), Java 25, virtual threads,
-> strict JPMS, CDI via Vauban, configuration via Ravel.
+> strict Java Modules, CDI via Vauban, configuration via Ravel.
 
 ## Guiding principles
 
@@ -11,7 +11,7 @@
 | Zero implementation libraries | No SmallRye FT, Hystrix, or Resilience4j in `heisenberg-core`. Only compiled spec APIs. |
 | Policy / CDI separation | `heisenberg-core` contains the pure Java engines ; `heisenberg-cdi-vauban` contains the only CDI interceptor. |
 | Virtual threads | `@Asynchronous` via `VirtualThreadPerTaskExecutor` ; `@Timeout` via `Thread.ofVirtual() + join(Duration)` (Java 21+, finalized). No `synchronized`, no `ThreadLocal`. |
-| Strict JPMS | `module-info.java` everywhere, `internal.*` not exported, SPI via `provides/uses`. No unjustified `opens`. |
+| Strict Java Modules | `module-info.java` everywhere, `internal.*` not exported, SPI via `provides/uses`. No unjustified `opens`. |
 | Strict TDD | Red → Green → Refactor. Test before code. Spec section citation in tests. |
 | TCK 100% PASS | Hard contract before any structural merge. Score declared in `TCK.md`. |
 | Measured performance | JMH from M3 onward, comparison vs SmallRye Fault Tolerance, results in `BENCH.md`. |
@@ -105,7 +105,7 @@ heisenberg-examples     io.vidocq.heisenberg.examples
 | `FallbackResolver` | Resolves `FallbackHandler.handle(ExecutionContext)` vs `fallbackMethod` through `MethodHandle` | ☑ |
 | `FallbackPolicy` | Wraps the invocation ; catches exceptions ; delegates to `FallbackResolver` | ☑ |
 | `PolicyComposer` — @Fallback enabled | Inserts `FallbackPolicy` first (outermost layer) | ☑ |
-| `HeisenbergAutoDiscovery` ServiceLoader | `META-INF/services` + JPMS `provides` for `ConfigProviderResolver` | ☑ |
+| `HeisenbergAutoDiscovery` ServiceLoader | `META-INF/services` + Java Modules `provides` for `ConfigProviderResolver` | ☑ |
 | `FallbackResolver` unit tests | FallbackHandler, fallbackMethod, incompatible type → `FaultToleranceDefinitionException` | ☑ |
 | CDI integration tests | `@Fallback(FooHandler.class)` and `@Fallback(fallbackMethod="bar")` with embedded Vauban | ☑ |
 
