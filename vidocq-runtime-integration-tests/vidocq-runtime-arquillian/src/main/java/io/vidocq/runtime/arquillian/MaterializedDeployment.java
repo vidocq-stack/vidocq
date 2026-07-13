@@ -135,12 +135,14 @@ final class MaterializedDeployment implements AutoCloseable {
 
         @Override
         public URL getResource(String name) {
-            URL local = findResource(name);
-            return local != null ? local : super.getResource(name);
+            String lenient = stripLeadingSlash(name);
+            URL local = findResource(lenient);
+            return local != null ? local : super.getResource(lenient);
         }
 
         @Override
         public Enumeration<URL> getResources(String name) throws IOException {
+            name = stripLeadingSlash(name);
             // Deployment resources first, then the parent's, deduplicated.
             List<URL> ordered = new ArrayList<>();
             for (Enumeration<URL> local = findResources(name); local.hasMoreElements(); ) {
@@ -159,6 +161,16 @@ final class MaterializedDeployment implements AutoCloseable {
                 }
             }
             return Collections.enumeration(ordered);
+        }
+
+        /**
+         * Jakarta EE deployment class loaders (servlet-container derived) tolerate a
+         * leading slash in resource names; a bare {@link URLClassLoader} does not. TCK
+         * deployment code loads resources like {@code getResourceAsStream("/key.pub")},
+         * so strip a single leading slash to match the app-server behaviour.
+         */
+        private static String stripLeadingSlash(String name) {
+            return name != null && name.startsWith("/") ? name.substring(1) : name;
         }
     }
 
