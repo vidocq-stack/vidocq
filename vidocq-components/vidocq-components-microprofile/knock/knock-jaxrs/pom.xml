@@ -78,10 +78,10 @@
     <build>
         <plugins>
             <!--
-                JPMS workaround for knock-jaxrs: same issue as knock-core and
+                Java Modules workaround for knock-jaxrs: same issue as knock-core and
                 knock-cdi-vauban. cassini-core is test-scope and absent from
                 target/javamodules/; if module-info.class is in target/classes,
-                Maven enables JPMS for testCompile and cannot resolve test modules
+                Maven enables Java Modules for testCompile and cannot resolve test modules
                 on the module path. Same three-step solution (see ADR-001).
             -->
             <plugin>

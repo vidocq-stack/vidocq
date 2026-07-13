@@ -28,7 +28,7 @@ import io.vidocq.knock.spi.HealthCheckRegistry;
  * <p>Stable entry point for Knock integration modules
  * ({@code knock-cdi-vauban}, {@code knock-cassini}) that need a registry instance
  * without depending on the internal {@code io.vidocq.knock.internal} package
- * (which remains unexported — project JPMS boundary).</p>
+ * (which remains unexported — project Java Modules boundary).</p>
  *
  * <p>Implementation: delegates to {@link KnockHealthCheckRegistry} (thread-safe,
  * virtual-thread-friendly).</p>

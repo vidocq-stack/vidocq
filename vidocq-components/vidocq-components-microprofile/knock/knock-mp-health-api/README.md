@@ -1,7 +1,7 @@
 # Knock MP Health API
 
 This module is a minimal fork of `org.eclipse.microprofile.health:microprofile-health-api:4.0.1`.
-It adds a `module-info.java` file to make the module JPMS/jlink compatible.
+It adds a `module-info.java` file to make the module Java Modules/jlink compatible.
 
 Changes compared to upstream:
 - added `module-info.java` (module name: `microprofile.health.api`)

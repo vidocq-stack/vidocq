@@ -1,7 +1,7 @@
 # Knock — Implementation plan
 
 > MicroProfile Health 4.0 implementation in the Vidocq style: zero third-party libraries
-> (Jakarta EE / MicroProfile specs allowed), JDK 25, virtual threads, strict JPMS,
+> (Jakarta EE / MicroProfile specs allowed), JDK 25, virtual threads, strict Java Modules,
 > optional CDI integration via Vauban, optional HTTP transport via Chappe.
 
 ## Design principles
@@ -11,7 +11,7 @@
 | Zero third-party libraries | No SmallRye Health, Vert.x Health, Jackson, Gson in `knock-core`. Only the spec APIs are compiled: `knock-mp-health-api` + `jakarta.json` (JSON-P spec, implemented by Champollion). |
 | Jakarta / MicroProfile specs allowed | `knock-cdi-vauban` may depend on `jakarta.enterprise.cdi-api`, `jakarta.inject-api`, `jakarta.annotation-api`. `knock-cassini` may depend on `jakarta.ws.rs` (Jakarta REST spec, implemented by Cassini). The `knock-core` core is limited to `knock-mp-health-api` + `jakarta.json`. |
 | Virtual threads | No `synchronized`, no `ThreadLocal`. The registry uses concurrent structures (`ConcurrentHashMap`, `CopyOnWriteArrayList`). `HealthCheck.call()` invocations can be parallelized on a `VirtualThreadPerTaskExecutor`. |
-| JPMS strict | `module-info.java` everywhere, `internal.*` packages not exported, SPI via `provides/uses`. No unjustified `opens`. |
+| Java Modules strict | `module-info.java` everywhere, `internal.*` packages not exported, SPI via `provides/uses`. No unjustified `opens`. |
 | Strict TDD | Red → Green → Refactor. Tests written before production code. Systematic citation of the MicroProfile Health 4.0 spec section in test JavaDoc. |
 | TCK PASS 100 % | Hard contract on the MicroProfile Health 4.0 TCK before any structural merge. |
 | AOT-friendly | No dynamic proxy generation, no `setAccessible(true)`. Compatible with GraalVM `native-image`. |
@@ -91,12 +91,12 @@ public interface HealthCheck {
 - ✅ Validation that `mvn -ntp install -DskipTests` succeeds (reactor + standalone `knock-tck`)
 - ✅ Smoke test `KnockTckSmokeTest` : 3/3 PASS
 
-**JPMS note:** upstream `microprofile-health-api:4.0.1` has no `module-info.class`.
+**Java Modules note:** upstream `microprofile-health-api:4.0.1` has no `module-info.class`.
 Knock ships a modular fork `io.vidocq.knock:knock-mp-health-api` documented
 in `docs/adr/ADR-001-jpms-workaround-microprofile-health.md` — summary:
 `module-info.java` adds the explicit `microprofile.health.api` module, the OSGi `@Version`
 annotations were removed from `package-info.java` to avoid an automatic module, and the
-`src/main/module-info/` workaround remains in place for `knock-core` to avoid JPMS detection
+`src/main/module-info/` workaround remains in place for `knock-core` to avoid Java Modules detection
 in `testCompile`. `target/javamodules/` continues to be used to align javac and jlink —
 **jlink compatibility is guaranteed without automatic modules** (see ADR-001).
 
@@ -172,7 +172,7 @@ correct aggregation; JSON serialization compliant with §3.1.
 | Content-Type `application/json` | `@Produces(MediaType.APPLICATION_JSON)` on the resource | ✅ |
 | `@Inject HealthCheckRegistry` in the resource | Field injection + public ctor for direct tests | ✅ |
 | TDD tests `KnockHealthResourceTest` | 7/7 PASS (empty 200, 503 down, probe isolation, exception → DOWN, content-type) | ✅ |
-| Exported runtime SPI `io.vidocq.knock.runtime.{HealthCheckRegistries, KnockHealthService, HealthReport}` | JPMS boundary: `internal.*` remains non-exported; adapters go through this SPI | ✅ |
+| Exported runtime SPI `io.vidocq.knock.runtime.{HealthCheckRegistries, KnockHealthService, HealthReport}` | Java Modules boundary: `internal.*` remains non-exported; adapters go through this SPI | ✅ |
 
 **M3 decisions:**
 - `KnockHealthService(registry).report(probeType)` facade returning a `HealthReport(httpStatus, json)` — single entry point for HTTP transports. Encapsulates `KnockAggregator` + `KnockJsonSerializer`.
@@ -230,23 +230,23 @@ health check system of every Vidocq deployment.
 
 | Task | Notes | Status |
 |---|---|---|
-| `docs/integration-cassini.md` documentation | Dependencies, JPMS, JAX-RS resource example with dedicated health check | ✅ |
+| `docs/integration-cassini.md` documentation | Dependencies, Java Modules, JAX-RS resource example with dedicated health check | ✅ |
 | `docs/integration-vidocq-runtime.md` documentation | Health check configuration in Vidocq, default `/health` access | ✅ |
 | ADR-002 integration strategy | Rationale, deployment order, risks (see `docs/adr/ADR-002-vidocq-runtime-integration-strategy.md`) | ✅ |
 | ServiceLoader `VaubanComponentProvider` (`META-INF/services/io.vidocq.vauban.api.VaubanComponentProvider`) | `_VaubanComponents` exposes `HealthCheckRegistrar` + `KnockCdiHealthCheckRegistry` — zero-reflection wiring | ✅ |
-| `module-info.java` `provides ... with` | JPMS counterpart for service files (see `knock-cdi-vauban` and `knock-core`) | ✅ |
-| `vidocq`: integrate Knock as the health check system | Wrapper module `vidocq-runtime-knock-health-extension` (Maven/JPMS, no Java code) added in `vidocq-runtime-core-extensions/`. Activates Knock via a single dependency, zero-config integration (BCE + Cassini JAX-RS scanning). | ✅ |
+| `module-info.java` `provides ... with` | Java Modules counterpart for service files (see `knock-cdi-vauban` and `knock-core`) | ✅ |
+| `vidocq`: integrate Knock as the health check system | Wrapper module `vidocq-runtime-knock-health-extension` (Maven/Java Modules, no Java code) added in `vidocq-runtime-core-extensions/`. Activates Knock via a single dependency, zero-config integration (BCE + Cassini JAX-RS scanning). | ✅ |
 
 **M5 decisions:**
 
-- **Maven/JPMS wrapper instead of a dedicated `VidocqExtension`** (ADR-002): no Java code
+- **Maven/Java Modules wrapper instead of a dedicated `VidocqExtension`** (ADR-002): no Java code
   on the Vidocq side. Knock self-deploys through two standard SPIs — the `knock-cdi-vauban`
   BCE to discover `@Liveness/@Readiness/@Startup`, and the `@Path` scanning of
   `CassiniExtension` to mount `KnockHealthResource`. Benefit: Knock remains usable
   outside Vidocq with exactly the same deps.
 - **`vidocq-runtime-knock-health-extension` `requires transitive`** the 4 Knock modules + depends on
   `vidocq-runtime-cassini-rest-extension`. `champollion-jsonp` is runtime-only.
-- **Same JPMS workaround as `knock-core`** applied to the wrapper (module-info outside
+- **Same Java Modules workaround as `knock-core`** applied to the wrapper (module-info outside
   `src/main/java/`, recompilation in `prepare-package`, `--module-path target/javamodules`)
   to align compilation with the modular `microprofile.health.api` fork.
 
@@ -278,7 +278,7 @@ health check system of every Vidocq deployment.
 | Parallel check execution and timeout | Define a timeout per check (configurable via `HealthCheckRegistry`); virtual threads let us wait without blocking |
 | Champollion availability at runtime for JSON-P | Validate from M1 onward that `champollion` is on the module-path as the Jakarta JSON-P implementation; it is a mandatory runtime dependency of `knock-core` |
 | Interaction between different check types on `/health` | Test ALL aggregation with a mix of LIVENESS/READINESS/STARTUP, some DOWN |
-| JPMS and ServiceLoader discovery in `knock-cdi-vauban` | Verify that CDI `provides` do not require `opens` on user modules |
+| Java Modules and ServiceLoader discovery in `knock-cdi-vauban` | Verify that CDI `provides` do not require `opens` on user modules |
 | Availability of the MicroProfile Health 4.0 TCK on Maven Central | Verify availability of `org.eclipse.microprofile.health:microprofile-health-tck:4.0` |
 
 ## Decided decisions

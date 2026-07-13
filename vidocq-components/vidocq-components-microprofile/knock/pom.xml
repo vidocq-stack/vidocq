@@ -18,7 +18,7 @@
     <packaging>pom</packaging>
 
     <name>Knock</name>
-    <description>Implémentation MicroProfile Health 4.0 — zéro librairie tierce, virtual threads, JPMS strict</description>
+    <description>Implémentation MicroProfile Health 4.0 — zéro librairie tierce, virtual threads, Java Modules strict</description>
     <url>https://codeberg.org/Vidocq/knock</url>
 
     <!--
@@ -55,7 +55,7 @@
     <properties>
         <!--
             MicroProfile Health API 4.0.1 - Vidocq fork with module-info
-            for JPMS/jlink. The upstream version is kept for reference.
+            for Java Modules/jlink. The upstream version is kept for reference.
         -->
         <microprofile.health.api.version>${project.version}</microprofile.health.api.version>
         <microprofile.health.upstream.version>4.0.1</microprofile.health.upstream.version>
@@ -176,7 +176,7 @@
 
     <build>
         <!--
-            JPMS: the knock-mp-health-api fork includes a module-info and can
+            Java Modules: the knock-mp-health-api fork includes a module-info and can
             be placed on the module path. We keep target/javamodules to align
             javac/jlink resolution and multi-module builds.
         -->

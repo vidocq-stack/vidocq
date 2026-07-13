@@ -88,7 +88,7 @@ sdk env
 
 [NOTE]
 ====
-Le TCK s'exécute sur le classpath (et non le module path), contournement JPMS délibéré pour Arquillian/ShrinkWrap. `knock-tck` utilise donc le modèle POM Maven `4.0.0` tandis que le reste du réacteur utilise `4.1.0`.
+Le TCK s'exécute sur le classpath (et non le module path), contournement Java Modules délibéré pour Arquillian/ShrinkWrap. `knock-tck` utilise donc le modèle POM Maven `4.0.0` tandis que le reste du réacteur utilise `4.1.0`.
 ====
 
 == Voir aussi

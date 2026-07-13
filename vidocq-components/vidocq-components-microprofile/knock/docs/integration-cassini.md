@@ -51,7 +51,7 @@
 MP Health 4.0 spec). No dependency on Cassini *runtime*: Knock depends
 only on `jakarta.ws.rs` (API) and works with any conformant JAX-RS 4.0 implementation.
 
-## JPMS
+## Java Modules
 
 ```java
 module my.app {

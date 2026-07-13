@@ -146,7 +146,7 @@ public class KnockDeployableContainer implements DeployableContainer<KnockContai
                             ? null
                             : c.getDeclaredConstructor().newInstance();
                     // Producer method in the MP Health TCK: package-private. Access via
-                    // MethodHandles.privateLookupIn to remain JPMS-friendly.
+                    // MethodHandles.privateLookupIn to remain Java Modules-friendly.
                     var lookup = java.lang.invoke.MethodHandles.privateLookupIn(
                             c, java.lang.invoke.MethodHandles.lookup());
                     var handle = lookup.unreflect(m);

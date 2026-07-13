@@ -28,10 +28,10 @@
  * <p>Optional module: a deployment without Jakarta REST can query the registry directly
  * (CLI, tests, other transports).</p>
  *
- * <p><strong>JPMS note — testCompile workaround</strong>
+ * <p><strong>Java Modules note — testCompile workaround</strong>
  * (see {@code docs/adr/ADR-001-jpms-workaround-microprofile-health.md}) :
  * {@code module-info.java} is in {@code src/main/module-info/} to prevent Maven Compiler
- * Plugin from detecting JPMS during {@code testCompile} (cassini-core is test-scope,
+ * Plugin from detecting Java Modules during {@code testCompile} (cassini-core is test-scope,
  * absent from {@code target/javamodules/}).</p>
  */
 module io.vidocq.knock.jaxrs {

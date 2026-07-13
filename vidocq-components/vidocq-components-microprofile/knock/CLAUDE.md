@@ -41,7 +41,7 @@
 
 Knock is a MicroProfile Health 4.0 implementation with **zero third-party libraries**
 (no SmallRye Health, no Vert.x Health), only Jakarta EE / MicroProfile specs as
-dependencies, virtual threads, strict JPMS.
+dependencies, virtual threads, strict Java Modules.
 
 ```
 knock-api          ← Re-exposes the org.eclipse.microprofile.health spec
@@ -97,12 +97,12 @@ HTTP 200 if `status=UP`, HTTP 503 if `status=DOWN`.
 4. **champollion is the reference Jakarta JSON-P/JSON-B implementation**: `knock-core`
    declares `requires jakarta.json` (spec API); champollion is provided at runtime.
    Never Jackson, Gson, or any other third-party JSON library.
-5. **Strict JPMS**: all modules have a `module-info.java`, `internal.*` packages
+5. **Strict Java Modules**: all modules have a `module-info.java`, `internal.*` packages
    not exported, SPI exposed only via `provides ... with`.
 6. **No `synchronized`, no `ThreadLocal`** — virtual-thread-friendly. Use
    `ConcurrentHashMap` for the registry, `ScopedValue` if propagation context becomes needed.
 7. **No `setAccessible(true)` reflection** — no functional reason in a
-   health check system. Any eventual JPMS opening must be documented.
+   health check system. Any eventual Java Modules opening must be documented.
 8. **MicroProfile Health 4.0 TCK PASS at 100%** is a hard contract before any structural merge.
 
 ## Conventions
