@@ -141,18 +141,20 @@ public final class StaticFileReader {
     private Set<ClassLoader> collectCandidateClassLoaders(Iterable<Class<?>> knownDeploymentTypes) {
         LinkedHashSet<ClassLoader> classLoaders = new LinkedHashSet<>();
 
+        // The deployment class path (TCCL) always comes first: application
+        // classes may resolve parent-first from another loader (embedded
+        // Arquillian deployments) while META-INF/openapi.yaml only exists on
+        // the deployment loader.
+        ClassLoader tccl = Thread.currentThread().getContextClassLoader();
+        if (tccl != null) {
+            classLoaders.add(tccl);
+        }
+
         if (knownDeploymentTypes != null) {
             for (Class<?> type : knownDeploymentTypes) {
                 if (type != null && type.getClassLoader() != null) {
                     classLoaders.add(type.getClassLoader());
                 }
-            }
-        }
-
-        if (classLoaders.isEmpty()) {
-            ClassLoader tccl = Thread.currentThread().getContextClassLoader();
-            if (tccl != null) {
-                classLoaders.add(tccl);
             }
         }
 

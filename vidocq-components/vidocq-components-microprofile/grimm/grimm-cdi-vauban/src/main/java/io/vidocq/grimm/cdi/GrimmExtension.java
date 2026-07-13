@@ -53,12 +53,34 @@ public final class GrimmExtension implements BuildCompatibleExtension {
     private static final Set<String> DISCOVERED_NAMES = new LinkedHashSet<>();
 
     /**
-     * Records every {@link Path @Path}-annotated class found by the CDI scanner.
-     * Called once per class during deployment.
+     * One container boot = one deployment: drop everything collected by a
+     * previous boot in the same JVM (sequential Arquillian TCK deployments)
+     * before this deployment's {@code @Enhancement} phase runs.
      */
-    @Enhancement(types = Object.class, withSubtypes = true, withAnnotations = Path.class)
-    public void registerPathClass(ClassConfig classConfig) {
+    @jakarta.enterprise.inject.build.compatible.spi.Discovery
+    public void resetForNewDeployment(jakarta.enterprise.inject.build.compatible.spi.ScannedClasses classes) {
+        LOCK.lock();
+        try {
+            DISCOVERED_NAMES.clear();
+        } finally {
+            LOCK.unlock();
+        }
+    }
+
+    /**
+     * Records every application class found by the CDI scanner — spec §4.4: the
+     * annotation scan covers <em>all application classes</em>, so {@code @Schema}
+     * POJOs and the {@code @OpenAPIDefinition} {@code Application} subclass
+     * contribute to the model, not only {@link Path @Path} resources. Grimm's
+     * own classes are skipped: the /openapi endpoint itself must not be listed
+     * in the document it serves (spec §2.2).
+     */
+    @Enhancement(types = Object.class, withSubtypes = true)
+    public void registerApplicationClass(ClassConfig classConfig) {
         String name = classConfig.info().name();
+        if (name.startsWith("io.vidocq.grimm.")) {
+            return;
+        }
         LOCK.lock();
         try {
             DISCOVERED_NAMES.add(name);
