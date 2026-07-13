@@ -18,7 +18,7 @@
 ## BUG-20260713-01 — MP Config TCK gaps when running on the Vauban CDI runtime (vs Weld)
 
 - **Date** : 2026-07-13
-- **Statut** : OPEN
+- **Statut** : FIXED (2026-07-13 — ravel-cdi-vauban + Vauban fixes, runner migrated, 349/349 on the assembled runtime)
 - **Module touché** : ravel-cdi-vauban (+ possibly vauban resolution rules)
 - **Symptôme** : migrating the vidocq runtime TCK runner
   (`vidocq-runtime-tck-ravel-config`) from Weld SE embedded to the assembled Vidocq
@@ -55,3 +55,27 @@
     344+206+85 all green); this runner intentionally left on Weld until the four
     families above are fixed. The Weld run still certifies ravel-core and the
     portable ConfigCdiExtension (349/349).
+  - 2026-07-13 (fix) : all four families resolved — **349/349 on the assembled
+    Vidocq runtime** (zero skip), Weld per-brick run still 349/349. Root causes
+    split between ravel and Vauban:
+    1. arrays — Vauban recorded synthetic bean types given as runtime array
+       classes as flat ClassType (`[Ljava.lang.Boolean;`), unmatchable against
+       ArrayType injection points (vauban VAU-BCE-004);
+    2. `@ConfigProperties` — the Weld-only portable exclusion extension never
+       runs on CDI Lite: ConfigCdiExtension now vetoes type-level
+       `@ConfigProperties` classes itself (`@Enhancement` adds `@Vetoed`) and
+       re-validates required fields in `@Validation` (covers the broken-deployment
+       TCK tests); programmatic lookups needed Vauban to stop dropping
+       `select(type, qualifiers...)` qualifiers and to expose a synthetic
+       InjectionPoint to synthetic bean creators;
+    3. expressions/profile/ordinal — the Vauban build-time composite discovery
+       loader did not expose `getResources` of the deployment loader, so the
+       MicroprofilePropertiesConfigSource (and ServiceLoader ConfigSources) were
+       invisible during BCE validation; fixed in Vauban, and the Arquillian
+       container's system-property surfacing hack (which clobbered
+       `config_ordinal` and broke `%dev.` profiles) was removed from vidocq;
+    4. duplicate Config bean — ConfigCdiExtension now skips its fallback
+       `@Default Config` synthetic bean when a Config-typed bean (the producer
+       from the jar's APT bean index) is already registered; Vauban also
+       validates observer-method non-event parameters as real injection points
+       (MissingValueOnObserverMethodInjectionTest).

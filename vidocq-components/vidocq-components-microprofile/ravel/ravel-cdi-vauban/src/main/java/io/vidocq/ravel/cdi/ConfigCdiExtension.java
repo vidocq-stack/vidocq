@@ -22,15 +22,19 @@ package io.vidocq.ravel.cdi;
 import io.vidocq.ravel.cdi.internal.ConfigPropertiesSyntheticCreator;
 import io.vidocq.ravel.cdi.internal.ConfigSyntheticCreator;
 import jakarta.enterprise.context.Dependent;
+import jakarta.enterprise.inject.Vetoed;
 import jakarta.enterprise.inject.build.compatible.spi.BeanInfo;
 import jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension;
+import jakarta.enterprise.inject.build.compatible.spi.ClassConfig;
 import jakarta.enterprise.inject.build.compatible.spi.Discovery;
+import jakarta.enterprise.inject.build.compatible.spi.Enhancement;
 import jakarta.enterprise.inject.build.compatible.spi.InjectionPointInfo;
 import jakarta.enterprise.inject.build.compatible.spi.Messages;
 import jakarta.enterprise.inject.build.compatible.spi.Registration;
 import jakarta.enterprise.inject.build.compatible.spi.Synthesis;
 import jakarta.enterprise.inject.build.compatible.spi.SyntheticComponents;
 import jakarta.enterprise.inject.build.compatible.spi.Types;
+import jakarta.enterprise.inject.build.compatible.spi.Validation;
 import jakarta.enterprise.lang.model.AnnotationInfo;
 import jakarta.enterprise.lang.model.AnnotationMember;
 import jakarta.enterprise.lang.model.declarations.ClassInfo;
@@ -87,6 +91,16 @@ public class ConfigCdiExtension implements BuildCompatibleExtension {
     private final Map<String, ConfigPropertiesEntry> configPropertiesTypes = new LinkedHashMap<>();
 
     /**
+     * True when a bean typed {@link Config} is already registered — e.g.
+     * {@link RavelConfigProducer}, listed in this jar's APT-generated bean index
+     * and therefore present whenever ravel-cdi-vauban is on the runtime's bean
+     * path (the assembled Vidocq runtime). MP Config 3.1 §6.2 mandates exactly
+     * one injectable {@code Config}: synthesizing a second {@code @Default}
+     * bean would make every {@code @Inject Config} ambiguous.
+     */
+    private boolean configBeanAlreadyRegistered;
+
+    /**
      * Entry to store a @ConfigProperties type together with its prefix.
      */
     private static class ConfigPropertiesEntry {
@@ -100,14 +114,51 @@ public class ConfigCdiExtension implements BuildCompatibleExtension {
     }
 
     /**
-     * Exclusion phase (@Discovery) that marks classes annotated with @ConfigProperties
-     * to prevent them from being discovered as managed beans.
-     *
-     * <p>@ConfigProperties classes should only be injected via our synthetic beans
-     * (qualified with @ConfigProperties), not via automatic bean discovery.</p>
+     * Binary names of type-level {@code @ConfigProperties} classes vetoed during
+     * {@code @Enhancement}, validated field-by-field in {@code @Validation}.
      */
-    // Note: CDI 4.1 BC API does not expose a direct API to @Exclude classes.
-    // This feature must be handled through another extension.
+    private final java.util.Set<String> vetoedConfigPropertiesClassNames = new java.util.LinkedHashSet<>();
+
+    /**
+     * MP Config 3.1 §6.4 — type-level {@code @ConfigProperties} classes must only
+     * be injectable through the synthetic beans (whose creator resolves the
+     * per-injection-point prefix), never as regular managed beans: the class
+     * carries the {@code @ConfigProperties} qualifier, so leaving it discovered
+     * makes every {@code @Inject @ConfigProperties} ambiguous. On the Weld path
+     * {@link ConfigPropertiesExclusionExtension} vetoes them via
+     * {@code ProcessAnnotatedType.veto()}; portable extensions never run on CDI
+     * Lite runtimes (Vauban), so the BCE adds {@code @Vetoed} itself. The double
+     * veto under Weld is harmless.
+     */
+    @Enhancement(types = Object.class, withSubtypes = true, withAnnotations = ConfigProperties.class)
+    public void vetoConfigPropertiesClasses(ClassConfig classConfig) {
+        if (!classConfig.info().hasAnnotation(ConfigProperties.class)) {
+            return;
+        }
+        vetoedConfigPropertiesClassNames.add(classConfig.info().name());
+        classConfig.addAnnotation(Vetoed.class);
+    }
+
+    /**
+     * §6.4 deployment validation for discovered type-level {@code @ConfigProperties}
+     * classes — runs even when nothing injects the class (the TCK's
+     * {@code ConfigPropertiesMissingPropertyInjectionTest} bundles such a bean and
+     * expects a {@code DeploymentException}). Mirrors what
+     * {@link ConfigPropertiesExclusionExtension} does at
+     * {@code AfterDeploymentValidation} on the Weld path.
+     */
+    @Validation
+    public void validateVetoedConfigPropertiesClasses(Messages messages) {
+        for (String className : vetoedConfigPropertiesClassNames) {
+            Class<?> beanClass = loadClass(className);
+            if (beanClass == null) {
+                continue;
+            }
+            validateConfigPropertiesFields(beanClass,
+                    resolveConfigPropertiesPrefix(beanClass, ConfigProperties.UNCONFIGURED_PREFIX),
+                    null, messages);
+        }
+    }
 
     @Registration(types = Object.class)
     public void registerConfigPropertyInjectionPoints(BeanInfo beanInfo, Messages messages) {
@@ -154,15 +205,31 @@ public class ConfigCdiExtension implements BuildCompatibleExtension {
         // but for now this logic is already handled in registerConfigPropertyInjectionPoints
     }
 
+    /**
+     * Invoked for every bean whose types include {@link Config} (producer or
+     * managed). When one exists, {@code @Synthesis} skips the fallback
+     * {@code @Default Config} synthetic bean. Under the plain TCK archives
+     * (no producer bundled) this never fires and the synthetic bean is kept.
+     */
+    @Registration(types = Config.class)
+    public void trackExistingConfigBean(BeanInfo beanInfo) {
+        configBeanAlreadyRegistered = true;
+    }
+
     @Synthesis
     public void synthesizeConfigPropertyBeans(SyntheticComponents components, Types types) {
-        // @Default Config bean — many TCK tests simply inject
-        // {@code @Inject Config config} without @ConfigProperty, and the
-        // RavelConfigProducer is not included in ShrinkWrap archives.
-        components.addBean(org.eclipse.microprofile.config.Config.class)
-                .type(org.eclipse.microprofile.config.Config.class)
-                .scope(Dependent.class)
-                .createWith(ConfigSyntheticCreator.class);
+        // Fallback @Default Config bean — many TCK tests simply inject
+        // {@code @Inject Config config} without @ConfigProperty and their
+        // archives bundle no producer. Skipped when a Config-typed bean is
+        // already registered (RavelConfigProducer via the jar's bean index on
+        // the assembled runtime) — two @Default Config beans would make every
+        // {@code @Inject Config} ambiguous.
+        if (!configBeanAlreadyRegistered) {
+            components.addBean(org.eclipse.microprofile.config.Config.class)
+                    .type(org.eclipse.microprofile.config.Config.class)
+                    .scope(Dependent.class)
+                    .createWith(ConfigSyntheticCreator.class);
+        }
 
         // Synthesise @ConfigProperty beans.
         // For non-parameterized types (Class, Class[], boxed primitives),
@@ -310,7 +377,17 @@ public class ConfigCdiExtension implements BuildCompatibleExtension {
         // Class not loadable at deployment time — let runtime validation handle it.
             return;
         }
-        String resolvedPrefix = resolveConfigPropertiesPrefix(beanClass, fieldRawPrefix);
+        validateConfigPropertiesFields(beanClass,
+                resolveConfigPropertiesPrefix(beanClass, fieldRawPrefix), declaration, messages);
+    }
+
+    /**
+     * Field-by-field §6.4 required-property check, shared by the injection-point
+     * path ({@code @Registration}) and the discovered-class path
+     * ({@code @Validation}, no declaration available).
+     */
+    private static void validateConfigPropertiesFields(
+            Class<?> beanClass, String resolvedPrefix, DeclarationInfo declaration, Messages messages) {
         Object probe = tryInstantiate(beanClass);
         Config config = ConfigProvider.getConfig();
         for (java.lang.reflect.Field field : beanClass.getDeclaredFields()) {
@@ -324,8 +401,13 @@ public class ConfigCdiExtension implements BuildCompatibleExtension {
             ConfigValue cv = config.getConfigValue(name);
             String resolved = cv != null ? cv.getValue() : null;
             if (resolved == null || resolved.isEmpty()) {
-                messages.error("@ConfigProperties: missing required property '" + name
-                        + "' for " + beanClass.getName() + "." + field.getName(), declaration);
+                String message = "@ConfigProperties: missing required property '" + name
+                        + "' for " + beanClass.getName() + "." + field.getName();
+                if (declaration != null) {
+                    messages.error(message, declaration);
+                } else {
+                    messages.error(message);
+                }
             }
         }
     }
