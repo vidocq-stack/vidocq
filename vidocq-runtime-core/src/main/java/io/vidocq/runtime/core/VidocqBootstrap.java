@@ -119,8 +119,14 @@ public final class VidocqBootstrap {
             for (String className : additionalBeanClassNames) {
                 try {
                     builder.addBeanClass(cl.loadClass(className));
-                } catch (ClassNotFoundException e) {
-                    LOG.log(System.Logger.Level.WARNING, "Bean class not found: " + className);
+                } catch (ClassNotFoundException | LinkageError e) {
+                    // A bean class we cannot load or link is skipped, not fatal. This
+                    // covers infrastructure classes bundled in a deployment's
+                    // WEB-INF/lib (e.g. a TCK harness that packages a Maven resolver)
+                    // whose optional transitive references are absent — they are not
+                    // application beans, so dropping them must not abort the boot.
+                    LOG.log(System.Logger.Level.WARNING,
+                            "Skipping bean class that cannot be loaded/linked: " + className + " (" + e + ")");
                 }
             }
         }
