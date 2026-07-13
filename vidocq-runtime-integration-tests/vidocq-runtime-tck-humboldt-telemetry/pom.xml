@@ -84,6 +84,18 @@
             <artifactId>vidocq-runtime-humboldt-telemetry-extension</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!--
+            Ravel = MicroProfile Config: MP Telemetry reads every otel.* key
+            through MP Config — the TCK deployments ship them in their
+            microprofile-config.properties (otel.sdk.disabled, in-memory
+            exporters), visible through the deployment class loader. A complete
+            MP runtime always assembles Config alongside Telemetry.
+        -->
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
+            <artifactId>vidocq-runtime-ravel-config-extension</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <!-- Traced REST endpoints (tracing TCK) — server side. -->
         <dependency>
             <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>

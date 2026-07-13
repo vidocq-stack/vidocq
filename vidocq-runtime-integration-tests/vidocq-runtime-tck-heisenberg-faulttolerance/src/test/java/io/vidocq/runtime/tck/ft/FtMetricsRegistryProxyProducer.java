@@ -37,15 +37,16 @@ import java.lang.reflect.Proxy;
  * types and the MP Metrics API are involved: the runtime under test is not
  * modified. Added to each deployment by {@link FtTckArchiveProcessor}.
  *
- * <p>FT metrics land in the application-scope registry
- * ({@code DiracFtMetricsRecorder}); MP Metrics 5 deprecated the
- * BASE/APPLICATION/VENDOR split, so both producers expose that same registry.</p>
+ * <p>FT metrics land in the base-scope registry (FT 4.1 §9,
+ * {@code DiracFtMetricsRecorder}); the TCK's own {@code @RegistryType(BASE)}
+ * producer resolves the same registry through the deprecated qualifier.</p>
  */
 @ApplicationScoped
 public class FtMetricsRegistryProxyProducer {
 
     @Inject
-    MetricRegistry applicationRegistry;
+    @org.eclipse.microprofile.metrics.annotation.RegistryScope(scope = MetricRegistry.BASE_SCOPE)
+    MetricRegistry ftMetricsRegistry;
 
     @Produces
     public MetricRegistryProxy produce() {
@@ -56,6 +57,6 @@ public class FtMetricsRegistryProxyProducer {
         return (MetricRegistryProxy) Proxy.newProxyInstance(
                 MetricRegistryProxy.class.getClassLoader(),
                 new Class<?>[] { MetricRegistryProxy.class },
-                new MetricRegistryProxyHandler(applicationRegistry));
+                new MetricRegistryProxyHandler(ftMetricsRegistry));
     }
 }

@@ -128,5 +128,26 @@ now FIXED). That migration surfaced a second wave of fixes:
   `%profile.` semantics (the hack clobbered `config_ordinal` and broke the
   profile TCK tests).
 
-The Weld per-brick runner in the ravel repository still passes 349/349 after
-these changes, so both CDI paths of the same `ConfigCdiExtension` are certified.
+Removing the system-property hack — and Vauban honoring programmatic-lookup
+qualifiers again — surfaced accidental couplings in three more bricks, all
+fixed the spec way:
+
+- **cyrano** — `RestClientBuilder.build()` resolves
+  `microprofile.rest.client.disable.default.mapper` through MP Config (spec
+  §8.1); the Rest Client and Telemetry runners now assemble the Ravel Config
+  extension, as a complete MP runtime would (the `mp-rest/url` keys and
+  `otel.*` settings the TCK archives ship are MP Config properties).
+- **dirac** — deprecated `@RegistryType` selections alias the same-named
+  scope registries and never resolve `null` (Metrics TCK asserts
+  `getScope()` on the legacy path).
+- **heisenberg** — the FT metrics recorder publishes in the **base-scope**
+  registry (FT 4.1 §9): the FT TCK reads them back through
+  `@RegistryType(BASE)`, which had silently resolved `@Default` while
+  qualifiers were dropped.
+- **humboldt** — `HumboldtExtension` bridges every `otel.*` key from MP
+  Config (reflectively; system properties and env vars remain the fallback on
+  Config-less runtimes).
+
+The per-brick runners stay green after these changes: ravel 349/349 (Weld),
+cyrano 168/168, dirac 127/127, heisenberg 463/463 — so both CDI paths of the
+same extensions are certified.

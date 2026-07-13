@@ -87,6 +87,18 @@
             <version>${project.version}</version>
         </dependency>
         <!--
+            Ravel = MicroProfile Config: the Rest Client spec (§5) resolves
+            <interface>/mp-rest/url through MP Config — the TCK archives ship
+            those keys in their microprofile-config.properties, which the
+            deployment class loader exposes to the Config provider. A complete
+            MP runtime always assembles Config alongside Rest Client.
+        -->
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
+            <artifactId>vidocq-runtime-ravel-config-extension</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!--
             Champollion JSON-B: the entity provider Cyrano uses at runtime to (de)serialize
             request/response bodies (JsonBProviderTest and the cditests entity round-trips).
         -->
