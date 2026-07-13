@@ -30,7 +30,7 @@ build (TCK suites, opaque jars).
    emitters as the APT (no duplicated codegen).
 3. Emits each `*RepositoryImpl` (and any missing `_Entity` metamodel) into an
    **application-owned package**, referencing the external types by fully-qualified name so the
-   application module never shares a package with the dependency jar (**no JPMS split package**).
+   application module never shares a package with the dependency jar (**no Java Modules split package**).
 4. Writes `META-INF/mansart-repositories-external.list`, which `mansart-data-cdi` reads alongside the
    APT index.
 

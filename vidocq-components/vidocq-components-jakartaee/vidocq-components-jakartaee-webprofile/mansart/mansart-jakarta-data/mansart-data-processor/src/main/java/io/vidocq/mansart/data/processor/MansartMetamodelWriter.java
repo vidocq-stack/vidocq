@@ -36,7 +36,7 @@ import java.io.Writer;
  *   <li><b>Relocated</b> (Maven plugin / {@link ExternalRepositoryCodegen}) —
  *       {@link #write(EntityDescriptor, String, String, String)} emits the metamodel into an
  *       application-owned package and refers to the (external) entity by its fully-qualified name,
- *       avoiding a JPMS split package with the dependency jar that owns the entity.</li>
+ *       avoiding a Java Modules split package with the dependency jar that owns the entity.</li>
  * </ul>
  */
 final class MansartMetamodelWriter {

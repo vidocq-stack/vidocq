@@ -9,7 +9,7 @@
     </parent>
 
     <artifactId>mansart-transactions-cdi-jpms-it</artifactId>
-    <name>Mansart :: Transactions :: CDI JPMS module-path IT</name>
+    <name>Mansart :: Transactions :: CDI Java module-path IT</name>
     <description>Module-path proof vehicle: a @Transactional bean intercepted with a build-time
         $$Intercepted subclass and the generated VaubanComponentProvider, with no `opens` to vauban.core.</description>
 
@@ -50,7 +50,7 @@
         <!--
             Vauban container as a REAL (compile) dependency: this vehicle boots a container, and the
             build-time TxService$$Intercepted subclass references io.vidocq.vauban.core.interceptor.*.
-            This is legitimate here (a JPMS proof vehicle), unlike the production wrapper modules which
+            This is legitimate here (a Java Modules proof vehicle), unlike the production wrapper modules which
             keep vauban out of their runtime path.
         -->
         <dependency>

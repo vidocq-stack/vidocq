@@ -38,7 +38,7 @@ Target scope (to be refined):
 * **Zero reflection** — internal `EntityManager` consumes the static metamodel and the `MethodHandle` produced by APT. No runtime `EntityManagerProxy`.
 * **No runtime bytecode** — no Hibernate-style enhancement. Lazy loading via APT-generated intercepted getter (to be designed in M7).
 * **Native virtual threads** — every JDBC execution under Loom. No `synchronized` block wrapping a blocking I/O.
-* **JPMS-strict** — `module io.vidocq.mansart.persistence`, minimal `exports`.
+* **strict Java Modules** — `module io.vidocq.mansart.persistence`, minimal `exports`.
 
 == To plan in detail later
 

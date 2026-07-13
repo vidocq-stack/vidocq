@@ -69,7 +69,7 @@ Errors emitted by the processor:
 - Syntactically invalid JDQL `@Query`.
 - Mansart **and** JPA annotations mixed on the same entity.
 
-## JPMS module
+## Java module
 
 ```java
 module io.vidocq.mansart.data.processor {

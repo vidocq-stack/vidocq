@@ -26,7 +26,7 @@ Mansart, la couche persistance, applique le même découpage : la base d'un syst
 | Java
 | 25 (LTS)
 
-| Modules JPMS
+| Modules Java Modules
 | `io.vidocq.mansart.data`, `io.vidocq.mansart.pool`, `io.vidocq.mansart.transactions`, `io.vidocq.mansart.persistence`
 
 | Dépendances runtime

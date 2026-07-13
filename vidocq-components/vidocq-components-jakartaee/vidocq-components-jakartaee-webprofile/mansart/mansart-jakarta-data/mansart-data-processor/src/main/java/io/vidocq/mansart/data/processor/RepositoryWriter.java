@@ -131,7 +131,7 @@ final class RepositoryWriter {
      * Relocated emission (Maven plugin / {@link ExternalRepositoryCodegen}): the {@code Impl} is
      * written into an application-owned package and refers to the (external) repository interface
      * and metamodel by their fully-qualified names, so it never shares a package with the
-     * dependency jar that owns the {@code @Repository} (no JPMS split package).
+     * dependency jar that owns the {@code @Repository} (no Java Modules split package).
      *
      * @param targetPkg     application-owned package the {@code Impl} is emitted into
      * @param implName      simple name of the generated {@code Impl} class (collision-free)

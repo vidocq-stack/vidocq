@@ -38,7 +38,7 @@ Périmètre cible (à raffiner) :
 * **Zéro réflexion** — `EntityManager` interne consomme le métamodèle statique et les `MethodHandle` produits par APT. Pas d'`EntityManagerProxy` runtime.
 * **Pas de bytecode runtime** — pas d'enhancement Hibernate-style. Lazy loading via getter intercepté généré APT (à concevoir en M7).
 * **Virtual threads natifs** — toute exécution JDBC sous Loom. Pas de `synchronized` englobant un I/O bloquant.
-* **JPMS strict** — `module io.vidocq.mansart.persistence`, `exports` minimaux.
+* **Java Modules strict** — `module io.vidocq.mansart.persistence`, `exports` minimaux.
 
 == À planifier en détail plus tard
 

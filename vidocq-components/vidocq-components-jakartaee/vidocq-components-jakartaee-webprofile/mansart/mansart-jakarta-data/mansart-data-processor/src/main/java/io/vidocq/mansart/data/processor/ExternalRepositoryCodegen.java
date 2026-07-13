@@ -34,7 +34,7 @@ import java.util.Map;
  * emitters used by the in-compiler path ({@link MansartMetamodelWriter}, {@link RepositoryWriter}),
  * but in <em>relocated</em> mode: every generated class is placed in an application-owned package
  * and refers to the external repository / entity by fully-qualified name, so the application module
- * never shares a package with the dependency jar (no JPMS split package).
+ * never shares a package with the dependency jar (no Java Modules split package).
  *
  * <p>The {@code mansart-data-maven-plugin} supplies real {@link Elements}/{@link Types} obtained
  * from a source-less {@code javax.tools.JavaCompiler} task over the application compile classpath,

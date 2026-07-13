@@ -48,7 +48,7 @@ AOT compatible (GraalVM, Leyden CDS) — generated classes are hidden classes sc
 
 `JdqlAst` + `JdqlExecutor` implement a subset of JDQL (Jakarta Data Query Language): `SELECT` / `FROM` / `WHERE` / `GROUP BY` / `HAVING` / `ORDER BY` / `UPDATE` / `DELETE`. See root README for the exhaustive list of operators.
 
-## JPMS module
+## Java module
 
 ```java
 module io.vidocq.mansart.data.core {

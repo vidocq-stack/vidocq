@@ -32,7 +32,7 @@ public class MyRuntime {
 
 The default producer (`MansartRuntimeProducer`) can be disabled by excluding it from scanned classes (depending on the container).
 
-## JPMS module
+## Java module
 
 ```java
 module io.vidocq.mansart.data.cdi {
@@ -46,7 +46,7 @@ module io.vidocq.mansart.data.cdi {
 }
 ```
 
-The `META-INF/services/jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension` is also provided for containers without JPMS support.
+The `META-INF/services/jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension` is also provided for containers without Java Modules support.
 
 ## Dependencies
 

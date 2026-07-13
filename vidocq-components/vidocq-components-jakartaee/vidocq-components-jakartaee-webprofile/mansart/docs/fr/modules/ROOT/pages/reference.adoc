@@ -1,5 +1,5 @@
 = Référence
-:description: Artefacts Maven, annotations, configuration, dialectes, modules JPMS.
+:description: Artefacts Maven, annotations, configuration, dialectes, modules Java.
 
 [.lead]
 Référence exhaustive Mansart. Pour la prise en main, voir xref:getting-started.adoc[Démarrage rapide]. Pour les patterns courants, voir xref:usage.adoc[Cas d'usage].
@@ -44,7 +44,7 @@ Référence exhaustive Mansart. Pour la prise en main, voir xref:getting-started
 | Implémentation Jakarta Persistence 3.2.
 |===
 
-== Modules JPMS
+== Modules Java Modules
 
 [cols="1,3"]
 |===
@@ -63,7 +63,7 @@ Référence exhaustive Mansart. Pour la prise en main, voir xref:getting-started
 | TBD.
 |===
 
-Tous les modules sont JPMS strict — `exports` minimaux, pas d'`opens` non justifié, pas de classpath.
+Tous les modules sont Java Modules strict — `exports` minimaux, pas d'`opens` non justifié, pas de classpath.
 
 == Annotations entité
 

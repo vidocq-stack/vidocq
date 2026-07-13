@@ -26,7 +26,7 @@ The Mansart persistence layer applies the same separation: the foundation of an 
 | Java
 | 25 (LTS)
 
-| JPMS modules
+| Java modules
 | `io.vidocq.mansart.data`, `io.vidocq.mansart.pool`, `io.vidocq.mansart.transactions`, `io.vidocq.mansart.persistence`
 
 | Runtime dependencies

@@ -41,7 +41,7 @@ import jakarta.transaction.TransactionScoped;
  *
  * <p>Vauban-processor honours {@code ScannedClasses.add(...)} by indexing the classes for the
  * deployment validator, but skips emitting {@code *_Factory.class} in the user module — those
- * factory classes would clash JPMS with the package exported by this jar (split-package). At
+ * factory classes would clash Java Modules with the package exported by this jar (split-package). At
  * runtime Vauban falls back to a reflective factory for these classes, so no on-disk artefact
  * is needed.
  *
