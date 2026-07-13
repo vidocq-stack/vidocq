@@ -120,7 +120,7 @@ Les autres extensions suivent une logique d'ordonnancement comparable, avec leur
 
 == Activation par dépendance
 
-Une extension est activée dès qu'elle est présente sur le module-path. Aucune annotation `@EnableX` n'est requise — l'index APT détecte le `provides VidocqExtension` JPMS.
+Une extension est activée dès qu'elle est présente sur le module-path. Aucune annotation `@EnableX` n'est requise — l'index APT détecte le `provides VidocqExtension` Java Modules.
 
 [source,xml]
 ----

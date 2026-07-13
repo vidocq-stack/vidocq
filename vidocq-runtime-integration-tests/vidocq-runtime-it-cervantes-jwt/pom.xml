@@ -19,7 +19,7 @@
 
     <!--
         Pas de module-info.java (unnamed module) pour eviter les contraintes
-        JPMS dans les tests. Les resources @Path/beans CDI sont accessibles
+        Java Modules dans les tests. Les resources @Path/beans CDI sont accessibles
         par cassini et vauban sans opens explicites.
     -->
 

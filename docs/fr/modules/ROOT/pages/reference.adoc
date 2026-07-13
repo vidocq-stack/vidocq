@@ -1,8 +1,8 @@
 = Référence
-:description: Coordonnées Maven, configuration, CLI plugin, SPI publique, JPMS.
+:description: Coordonnées Maven, configuration, CLI plugin, SPI publique, Java Modules.
 
 [.lead]
-Référence opérationnelle de Vidocq Runtime — coordonnées Maven, clés MicroProfile Config, goals du `vidocq-runtime-maven-plugin`, modules JPMS exportés, SPI publique.
+Référence opérationnelle de Vidocq Runtime — coordonnées Maven, clés MicroProfile Config, goals du `vidocq-runtime-maven-plugin`, modules Java exportés, SPI publique.
 
 == Coordonnées Maven
 
@@ -32,7 +32,7 @@ Référence opérationnelle de Vidocq Runtime — coordonnées Maven, clés Micr
 | Tests d'intégration multi-extensions
 |===
 
-== Modules JPMS exportés
+== Modules Java Modules exportés
 
 [cols="1,3"]
 |===
@@ -180,7 +180,7 @@ Source : `vidocq-runtime-spi/src/main/java/io/vidocq/runtime/spi/`.
 
 * **Java 25** minimum (LTS)
 * **Maven 3.9.16** minimum
-* **JPMS strict** — un `module-info.java` par sous-module
+* **Java Modules strict** — un `module-info.java` par sous-module
 * **Aucun classpath caché** — toutes les dépendances exposent un module nommé
 
 == Pour aller plus loin

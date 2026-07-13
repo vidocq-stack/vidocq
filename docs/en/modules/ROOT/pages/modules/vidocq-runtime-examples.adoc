@@ -25,7 +25,7 @@
 | Complete REST + CDI + persistence application via xref:mansart::index.adoc[Mansart] on H2 in-memory. Demonstrates `@Transactional`, `Repository<T, ID>`, constructor `@Inject`. The recommended example in xref:getting-started.adoc[Getting started].
 
 | `vidocq-runtime-external-rest-lib`
-| External library consumed by the examples — illustrates the case where a JPMS-named dependency provides its own CDI beans. Useful for validating multi-module APT composition.
+| External library consumed by the examples — illustrates the case where a Java Modules-named dependency provides its own CDI beans. Useful for validating multi-module APT composition.
 |===
 
 == `vidocq-runtime-cassini-rest-example` — quick start

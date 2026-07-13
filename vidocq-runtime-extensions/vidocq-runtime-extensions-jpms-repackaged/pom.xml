@@ -13,8 +13,8 @@
     <groupId>io.vidocq.runtime.extensions.jpms.repackaged</groupId>
     <artifactId>vidocq-runtime-extensions-jpms-repackaged</artifactId>
     <packaging>pom</packaging>
-    <name>Vidocq :: Extensions :: JPMS Repackaged</name>
-    <description>Third-party libraries repackaged as named JPMS modules so embedding examples
+    <name>Vidocq :: Extensions :: Java Modules Repackaged</name>
+    <description>Third-party libraries repackaged as named Java modules so embedding examples
         can be jlink'd / jpackage'd (H2).</description>
 
     <modules>

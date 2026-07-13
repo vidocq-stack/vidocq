@@ -36,7 +36,7 @@ Vidocq Runtime is at **0.2.0**. Any real-world migration is premature — this p
 | Runtime
 | Runtime
 
-| Strict JPMS
+| Strict Java Modules
 | Yes
 | No
 | No

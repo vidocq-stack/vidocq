@@ -12,7 +12,7 @@
 
     <artifactId>vidocq-runtime-dirac-metrics-extension</artifactId>
     <name>Vidocq :: Core Extensions :: Metrics (Dirac)</name>
-    <description>Maven/JPMS wrapper activating Dirac (MicroProfile Metrics 5.1) in a vidocq deployment.
+    <description>Maven/Java Modules wrapper activating Dirac (MicroProfile Metrics 5.1) in a vidocq deployment.
         No own Java class — the integration relies on dirac-cdi-vauban's BuildCompatibleExtension
         (discovery of @Counted/@Timed/@Gauge + @ApplicationScoped MetricRegistry producers) and the
         JAX-RS @Path scanning of CassiniExtension, which auto-mounts MetricsResource (@Path("/metrics")).
@@ -116,7 +116,7 @@
     <build>
         <plugins>
             <!--
-                JPMS workaround identical to knock-extension. dirac.api requires transitive
+                Java Modules workaround identical to knock-extension. dirac.api requires transitive
                 microprofile.metrics.api (a named module via dirac-mp-metrics-api); to let the
                 wrapper's module-info resolve the full dirac graph, copy all compile deps to
                 target/javamodules/ and pass an explicit module-path to javac.

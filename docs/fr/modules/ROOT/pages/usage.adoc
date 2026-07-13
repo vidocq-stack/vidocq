@@ -111,7 +111,7 @@ Le base image `distroless/base-debian12:nonroot` n'a ni shell ni package manager
 == AOT — GraalVM et Leyden
 
 * **Leyden CDS** — supporté de série. La génération statique Class-File API produit un bytecode parfaitement archivable.
-* **GraalVM native-image** — la stratégie zéro-réflexion + zéro-proxy de Vidocq Runtime minimise les `reachability-metadata`. Voir `vidocq/JLINK.md` pour les pré-requis runtime (logging.properties, JPMS nommés, records sérialisés).
+* **GraalVM native-image** — la stratégie zéro-réflexion + zéro-proxy de Vidocq Runtime minimise les `reachability-metadata`. Voir `vidocq/JLINK.md` pour les pré-requis runtime (logging.properties, Java Modules nommés, records sérialisés).
 
 [NOTE]
 ====

@@ -22,7 +22,7 @@
  *
  * <p>The official artifact {@code com.h2database:h2} only declares
  * {@code Automatic-Module-Name: com.h2database} in its manifest, which {@code jlink}
- * rejects. This descriptor turns it into an explicit JPMS module — keeping the exact
+ * rejects. This descriptor turns it into an explicit Java module — keeping the exact
  * same module name {@code com.h2database} so existing {@code requires} statements keep
  * working — without touching any H2 class.
  *

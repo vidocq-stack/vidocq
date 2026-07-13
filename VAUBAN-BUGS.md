@@ -14,7 +14,7 @@
 
 **Symptom:** `RuntimeException: Cannot obtain Lookup for X`
 
-**Context:** Vauban called `MethodHandles.privateLookupIn()` without `Module.addReads()` for application JPMS modules.
+**Context:** Vauban called `MethodHandles.privateLookupIn()` without `Module.addReads()` for application Java modules.
 
 **Status:** Fixed in Vauban 0.1.0-SNAPSHOT.
 

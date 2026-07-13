@@ -24,7 +24,7 @@
  * <p>Auto-config via env vars {@code OTEL_*} and system properties {@code otel.*},
  * installation of {@code GlobalOpenTelemetry}, shutdown ordered at end of life.</p>
  *
- * <p>Discovery via ServiceLoader (META-INF/services + {@code provides} JPMS).</p>
+ * <p>Discovery via ServiceLoader (META-INF/services + {@code provides} Java Modules).</p>
  */
 module io.vidocq.runtime.extensions.microprofile.humboldt {
 

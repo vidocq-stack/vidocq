@@ -30,7 +30,7 @@ La métaphore est fidèle au rôle du module. Vidocq fédérait des indicateurs 
 | Build
 | Maven 3.9.16
 
-| Modules JPMS
+| Modules Java Modules
 | `io.vidocq.runtime`, `io.vidocq.runtime.spi`, `io.vidocq.runtime.core`, `io.vidocq.runtime.maven`
 
 | Dépendances runtime
@@ -90,7 +90,7 @@ graph TB
 == Différenciateurs
 
 * **Java 25 + virtual threads** — `Executors.newVirtualThreadPerTaskExecutor()` partout, pas de pool de threads plateforme.
-* **JPMS strict** — chaque artefact est un module nommé, `exports` minimaux, pas de classpath caché.
+* **Java Modules strict** — chaque artefact est un module nommé, `exports` minimaux, pas de classpath caché.
 * **Génération statique** — Class-File API (JEP 484) + APT au compile-time, pas de proxy dynamique, pas d'ASM, pas de Byte Buddy.
 * **Zéro réflexion runtime** — tout ce qui peut l'être est résolu au build, compatible AOT (GraalVM, Leyden CDS).
 * **Build-time first** — comme Quarkus mais sur un socle CDI Lite + Class-File API standard JDK.

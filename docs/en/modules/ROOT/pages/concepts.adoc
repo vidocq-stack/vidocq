@@ -86,7 +86,7 @@ The Vidocq Runtime boot sequence comprises five ordered **phases**:
 | 17
 | 25 (LTS)
 
-| Native JPMS
+| Native Java Modules
 | No
 | Yes — `module-info.java` everywhere
 |===

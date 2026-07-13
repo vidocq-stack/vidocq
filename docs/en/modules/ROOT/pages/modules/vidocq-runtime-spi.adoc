@@ -2,14 +2,14 @@
 :description: Vidocq Runtime public extension SPI.
 
 [.lead]
-`vidocq-runtime-spi` exposes the interfaces and annotations an extension consumes to contribute to the runtime. It is the only module a user-side extension must declare in its JPMS `requires`.
+`vidocq-runtime-spi` exposes the interfaces and annotations an extension consumes to contribute to the runtime. It is the only module a user-side extension must declare in its Java Modules `requires`.
 
 == Coordinates
 
 [cols="1,3"]
 |===
 | Artefact | `io.vidocq.runtime:vidocq-runtime-spi:0.2.0`
-| JPMS module | `io.vidocq.runtime.spi`
+| Java module | `io.vidocq.runtime.spi`
 | Source | `vidocq-runtime-spi/src/main/java/io/vidocq/runtime/spi/`
 |===
 
@@ -67,7 +67,7 @@ public class GreetingExtension implements VidocqExtension {
 }
 ----
 
-JPMS declaration in `module-info.java`:
+Java Modules declaration in `module-info.java`:
 
 [source,java]
 ----
@@ -79,7 +79,7 @@ module com.example.greeting {
 }
 ----
 
-That is all. The `vidocq-runtime-maven-plugin` detects the JPMS `provides`, indexes the extension and includes it in the generated bootstrap.
+That is all. The `vidocq-runtime-maven-plugin` detects the Java Modules `provides`, indexes the extension and includes it in the generated bootstrap.
 
 == Build step purity model
 

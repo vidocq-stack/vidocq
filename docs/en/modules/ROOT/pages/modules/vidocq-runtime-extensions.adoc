@@ -120,7 +120,7 @@ Other extensions follow comparable scheduling logic with their own priorities.
 
 == Activation by dependency
 
-An extension activates as soon as it is on the module-path. No `@EnableX` annotation is required — the APT index detects the JPMS `provides VidocqExtension` declaration.
+An extension activates as soon as it is on the module-path. No `@EnableX` annotation is required — the APT index detects the Java Modules `provides VidocqExtension` declaration.
 
 [source,xml]
 ----

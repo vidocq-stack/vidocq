@@ -58,7 +58,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * <p>The Mojo is <b>blocking</b> — it keeps the terminal until the user hits
  * Ctrl+C, at which point a JVM shutdown hook kills the child cleanly. No state
  * survives a reload: every cycle is a "miniature production", which is why
- * Approach A honors JPMS strict + static codegen with zero risk of class-loader
+ * Approach A honors Java Modules strict + static codegen with zero risk of class-loader
  * leaks.</p>
  *
  * <p><b>Not for use against TCK runners</b> ({@code cassini-tck}, {@code foy-tck}, …)

@@ -12,7 +12,7 @@
 
     <artifactId>vidocq-runtime-cyrano-rest-client-extension</artifactId>
     <name>Vidocq :: Core Extensions :: Rest Client (Cyrano)</name>
-    <description>Wrapper Maven/JPMS qui active Cyrano (MicroProfile Rest Client 4.0) dans un deploiement vidocq.</description>
+    <description>Wrapper Maven/Java Modules qui active Cyrano (MicroProfile Rest Client 4.0) dans un deploiement vidocq.</description>
 
     <dependencies>
         <dependency>
@@ -100,7 +100,7 @@
                 Le pattern `src/main/module-info` separe maintient `target/classes`
                 sans `module-info.class` pendant `test-compile`, ce qui evite que
                 maven-compiler-plugin 4.x ne bascule en mode patch-module et n'exige
-                la resolution JPMS de `microprofile.rest.client.api` (jar sans
+                la resolution Java Modules de `microprofile.rest.client.api` (jar sans
                 Automatic-Module-Name place sur classpath, donc introuvable cote
                 module-path). `compile-module-info` (phase prepare-package) ecrit
                 ensuite `module-info.class` dans `target/classes` pour le packaging,

@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>Modular Java SE MicroProfile Runtime</strong><br>
-  <a href="https://microprofile.io/">MicroProfile 7.1</a> | <a href="https://codeberg.org/Vidocq/vauban">Vauban CDI Lite</a> | JDK 25 | JPMS
+  <a href="https://microprofile.io/">MicroProfile 7.1</a> | <a href="https://codeberg.org/Vidocq/vauban">Vauban CDI Lite</a> | JDK 25 | Java Modules
 </p>
 
 <p align="center">
@@ -27,7 +27,7 @@ Vidocq is a modular Java SE application runtime built on [Vauban](https://codebe
 
 | | Quarkus | Helidon | **Vidocq** |
 |---|---|---|---|
-| CDI | ArC (partial) | Weld | **Vauban (native JPMS CDI Lite)** |
+| CDI | ArC (partial) | Weld | **Vauban (native Java Modules CDI Lite)** |
 | Java Modules | No | Partial | **Native (module-info.java)** |
 | Approach | Build-time + extensions | Microframework | **MicroProfile extensions on CDI Lite** |
 | Minimum JDK | 17 | 21 | **25** |
@@ -36,7 +36,7 @@ Vidocq is a modular Java SE application runtime built on [Vauban](https://codebe
 
 - **CDI Lite first**: Vauban generates proxies and interceptors at compile time via the JDK 25 Class-File API
 - **MicroProfile extensions**: each spec (REST, Config, Health, ...) is an independent extension
-- **Native JPMS**: each module declares a `module-info.java`
+- **Native Java Modules**: each module declares a `module-info.java`
 - **Virtual threads ready**: `ScopedValue` (JEP 487) for `@RequestScoped` context
 
 ## Quick Start
@@ -130,7 +130,7 @@ vidocq/
 │   ├── vidocq-runtime-extensions-jakartaee-core/   Cassini JAX-RS 4.0
 │   ├── vidocq-runtime-extensions-jakartaee-web/    Mansart Data / Persistence / pool
 │   ├── vidocq-runtime-extensions-microprofile/     Config, Rest Client, JWT, Metrics, OpenAPI, Telemetry, Health
-│   └── vidocq-runtime-extensions-jpms-repackaged/  Third-party JPMS repackages (H2)
+│   └── vidocq-runtime-extensions-jpms-repackaged/  Third-party Java Modules repackages (H2)
 └── vidocq-runtime-examples/             Examples
     └── vidocq-runtime-cassini-rest-example      Sample REST application
 ```

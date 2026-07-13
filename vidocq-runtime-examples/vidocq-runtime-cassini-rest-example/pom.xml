@@ -112,7 +112,7 @@
     <profiles>
         <!-- Packaging final (jlink + jpackage + docker) — actif par défaut.
              Tous les jars de l'exemple (et ses dépendances transitives) sont
-             des modules JPMS nommés : `ravel-mp-config-api` fournit
+             des modules Java nommés : `ravel-mp-config-api` fournit
              `org.eclipse.microprofile.config` en module nommé, levant la
              dernière limitation jlink historique.
              Pour court-circuiter ces goals (CI rapide compile+tests uniquement),

@@ -22,7 +22,7 @@
         Pre-generates &lt;Resource&gt;$$CassiniAdapter + $$CassiniRoutes at compile
         time (no runtime reflection, AOT-safe). Without this APT, AdapterRegistry
         falls back to RuntimeAdapterGenerator at the first request (JVM-only path
-        with a JPMS warning); functionally OK, but off the nominal codegen path
+        with a Java Modules warning); functionally OK, but off the nominal codegen path
         documented in cassini/CLAUDE.md (M4).
     </description>
 

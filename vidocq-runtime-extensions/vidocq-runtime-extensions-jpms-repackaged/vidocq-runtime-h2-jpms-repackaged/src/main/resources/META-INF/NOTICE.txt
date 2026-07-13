@@ -3,7 +3,7 @@ vidocq-runtime-h2-jpms-repackaged
 
 This artifact is a VERBATIM repackage of the H2 Database Engine. Every class file it
 contains is unmodified H2 bytecode; the only file added by the Vidocq project is the
-explicit JPMS descriptor `module-info.class` (source: `src/main/java/module-info.java`),
+explicit Java Modules descriptor `module-info.class` (source: `src/main/java/module-info.java`),
 generated with `jdeps --generate-module-info`. No H2 class is altered.
 
 Bundled software

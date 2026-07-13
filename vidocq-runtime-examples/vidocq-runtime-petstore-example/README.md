@@ -74,7 +74,7 @@ Pour un cycle rapide compile + tests sans packaging natif : `-P'!dist'`.
 > **Pourquoi `vidocq-runtime-h2-jpms-repackaged` ?** H2 n'est qu'un *module automatique*
 > (manifest `Automatic-Module-Name`, pas de `module-info`), ce que `jlink` refuse. L'artefact
 > `io.vidocq.runtime.extensions.jpms.repackaged:vidocq-runtime-h2-jpms-repackaged` (dans
-> `vidocq-runtime-extensions/vidocq-runtime-extensions-jpms-repackaged/`) republie H2 **à l'identique** en module JPMS nommé
+> `vidocq-runtime-extensions/vidocq-runtime-extensions-jpms-repackaged/`) republie H2 **à l'identique** en module Java Modules nommé
 > `com.h2database` (`module-info` généré par `jdeps`, `provides java.sql.Driver with
 > org.h2.Driver`), ce qui permet de produire le jpackage. Le petstore en dépend à la place du
 > `com.h2database:h2` brut. Les classes H2 restent sous leur licence d'origine (MPL 2.0 / EPL 1.0,

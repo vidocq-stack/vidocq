@@ -12,7 +12,7 @@
 
     <artifactId>vidocq-runtime-knock-health-extension</artifactId>
     <name>Vidocq :: Core Extensions :: Health (Knock)</name>
-    <description>Wrapper Maven/JPMS qui active Knock (MicroProfile Health 4.0) dans un déploiement vidocq.
+    <description>Wrapper Maven/Java Modules qui active Knock (MicroProfile Health 4.0) dans un déploiement vidocq.
         Aucune classe Java propre — l'intégration repose sur la BCE de knock-cdi-vauban (découverte
         @Liveness/@Readiness/@Startup) et le scanning JAX-RS de CassiniExtension qui mount
         automatiquement KnockHealthResource (@Path("/health")). Voir docs/adr/ADR-002 dans le repo knock.</description>
@@ -117,7 +117,7 @@
     <build>
         <plugins>
             <!--
-                Workaround JPMS identique à knock-core / knock-parent (ADR-001 du repo knock).
+                Workaround Java Modules identique à knock-core / knock-parent (ADR-001 du repo knock).
 
                 microprofile-health-api:4.0.1 n'a pas d'Automatic-Module-Name. Pour que le
                 module-info de ce wrapper puisse `requires transitive io.vidocq.knock.api`
