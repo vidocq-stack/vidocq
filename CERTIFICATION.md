@@ -6,9 +6,10 @@ involved, and the current conformance status. It is the reference for filing the
 compatibility request once Vidocq 0.3.0 is released.
 
 > Status: **pre-filing.** All seven constituent specification TCKs pass; the
-> profile-level composite TCK is at 7/13 on JDK 25 (see [Status](#status)). The
-> request is not yet filed — it certifies a *released* product, and 0.3.0 is not
-> cut.
+> profile-level composite TCK is at 10/13 on JDK 25 — every test reachable on
+> JDK 25 passes, the remaining 3 being the documented JDK 25 TCK-helper
+> incompatibility (see [Status](#status)). The request is not yet filed — it
+> certifies a *released* product, and 0.3.0 is not cut.
 
 ## 1. What Core Profile 11 certification requires
 
@@ -152,9 +153,10 @@ Compatible* logo and be listed as a compatible product.
 - Constituent TCKs: **all seven green** — Annotations 1/1, CDI 4.1 Lite 774/774
   (incl. Interceptors 2.2), Dependency Injection 2.0 (atinject) pass, JSON-P
   178/179 (0 fail), JSON-B 289/295 (0 fail), REST 4.0 2538.
-- Core Profile composite: **7/13**. Of the six not passing: **3** are the JDK 25
-  `getDescriptor()` TCK-helper incompatibility (challenge; §6), **3** are open
-  Vidocq gaps in Cassini's server-side JSON-B custom-serialization path and the
-  MVP `cassini-client` `readEntity(<type>)`.
+- Core Profile composite: **10/13** — every test reachable on JDK 25 passes. The
+  3 not passing are the JDK 25 `getDescriptor()` TCK-helper incompatibility
+  (challenge; §6), unreachable on JDK 25 regardless of conformance. The former
+  Cassini gaps (client JSON-B entity (de)serialisation, `Accept` negotiation) are
+  fixed — Jakarta REST 4.0 TCK stays 2538/2538.
 - Not started: EFTL re-run, hosted results page, the certification issue — all
   post-0.3.0.
