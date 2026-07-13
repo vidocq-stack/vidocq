@@ -174,10 +174,16 @@ public final class HumboldtExtension implements VidocqExtension {
      */
     private static Map<String, String> bridgeFromVidocqConfig(VidocqConfiguration cfg) {
         Map<String, String> env = new LinkedHashMap<>();
-        // Arbitrary otel.* properties first (lowest precedence): OTel SPI
-        // providers may consult application-defined keys (the MP Telemetry TCK's
-        // TestResourceProvider reads otel.test.*), and OTel semantics accept any
-        // otel.* property.
+        // MP Telemetry §Configuration: every otel.* key is read through
+        // MicroProfile Config when an implementation is assembled — including
+        // the application's own microprofile-config.properties, which never
+        // reaches System.getProperties(). Lowest precedence here; MP Config's
+        // internal ordering already ranks system properties above files.
+        bridgeFromMpConfig(env);
+        // Arbitrary otel.* system properties next: OTel SPI providers may
+        // consult application-defined keys (the MP Telemetry TCK's
+        // TestResourceProvider reads otel.test.*), and OTel semantics accept
+        // any otel.* property — also the only source when MP Config is absent.
         for (String name : System.getProperties().stringPropertyNames()) {
             if (name.startsWith("otel.")) {
                 env.put(name.toUpperCase(Locale.ROOT).replace('.', '_'),
@@ -190,6 +196,41 @@ public final class HumboldtExtension implements VidocqExtension {
             cfg.property(key).ifPresent(v -> env.put(key, v));
         }
         return env;
+    }
+
+    /**
+     * Bridges every {@code otel.*} property visible to MicroProfile Config
+     * (context class loader) into the env-form map. Reflective so the
+     * extension keeps working on runtimes assembled without a Config
+     * implementation — system properties and env vars remain the sources then.
+     */
+    private static void bridgeFromMpConfig(Map<String, String> env) {
+        try {
+            ClassLoader tccl = Thread.currentThread().getContextClassLoader();
+            ClassLoader loader = tccl != null ? tccl : HumboldtExtension.class.getClassLoader();
+            Class<?> providerClass = Class.forName(
+                    "org.eclipse.microprofile.config.ConfigProvider", true, loader);
+            Class<?> configClass = Class.forName(
+                    "org.eclipse.microprofile.config.Config", true, loader);
+            Object config = providerClass.getMethod("getConfig").invoke(null);
+            @SuppressWarnings("unchecked")
+            Iterable<String> names = (Iterable<String>) configClass
+                    .getMethod("getPropertyNames").invoke(config);
+            var getOptionalValue = configClass.getMethod("getOptionalValue", String.class, Class.class);
+            for (String name : names) {
+                if (!name.startsWith("otel.")) {
+                    continue;
+                }
+                @SuppressWarnings("unchecked")
+                var value = (java.util.Optional<String>) getOptionalValue.invoke(config, name, String.class);
+                if (value != null) {
+                    value.ifPresent(v -> env.put(
+                            name.toUpperCase(Locale.ROOT).replace('.', '_'), v));
+                }
+            }
+        } catch (ReflectiveOperationException | RuntimeException ignored) {
+            // MP Config absent from the assembled runtime — not an error.
+        }
     }
 
     /** Standard OTel/MP-Telemetry keys recognized by Humboldt autoconfig. */

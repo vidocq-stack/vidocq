@@ -70,7 +70,6 @@ public class VidocqEmbeddedContainer implements DeployableContainer<VidocqContai
     private record DeploymentState(
             VidocqBootstrap bootstrap,
             int port,
-            List<String> appliedConfigKeys,
             MaterializedDeployment materialized,
             ClassLoader previousContextClassLoader) {
     }
@@ -112,7 +111,6 @@ public class VidocqEmbeddedContainer implements DeployableContainer<VidocqContai
     public ProtocolMetaData deploy(Archive<?> archive) throws DeploymentException {
         MaterializedDeployment materialized = null;
         ClassLoader previousTccl = Thread.currentThread().getContextClassLoader();
-        List<String> appliedConfigKeys = new ArrayList<>();
         try {
             int port = config.getPort() == 0 ? findFreePort() : config.getPort();
 
@@ -140,19 +138,16 @@ public class VidocqEmbeddedContainer implements DeployableContainer<VidocqContai
             System.setProperty("vidocq.chappe.listener.default.host", config.getHost());
             System.setProperty("vidocq.chappe.listener.default.port", String.valueOf(port));
 
-            // Expose the deployment's MicroProfile Config to the runtime. Many TCK
-            // deployments ship a microprofile-config.properties inside the archive
-            // (WEB-INF/classes or a WEB-INF/lib jar). Those files live only inside
-            // the in-memory ShrinkWrap archive, never on a real classpath, so an
-            // MP Config provider (ravel) cannot see them on its own. Surface each
-            // entry as a system property (picked up by the providers' system
-            // property fallback) before bootstrap, and remember the keys so
-            // undeploy can remove them and keep deployments isolated.
-            for (Map.Entry<String, String> entry : materialized.microProfileConfig().entrySet()) {
-                System.setProperty(entry.getKey(), entry.getValue());
-                appliedConfigKeys.add(entry.getKey());
-            }
-
+            // The deployment's MicroProfile Config needs no special handling:
+            // the archive is materialized on disk, so every
+            // microprofile-config(-profile).properties and every
+            // META-INF/services ConfigSource/Converter is visible to the MP
+            // Config provider (ravel) through the deployment class loader
+            // installed below. Surfacing entries as system properties (the
+            // previous approach) is actively harmful — it promotes file
+            // entries to ordinal 400, clobbers harness-provided system
+            // properties (DefaultConfigSourceOrdinalTest's config_ordinal) and
+            // breaks profile resolution (%dev. keys).
             Thread.currentThread().setContextClassLoader(materialized.classLoader());
 
             // Boot Vidocq with extracted classes
@@ -171,7 +166,7 @@ public class VidocqEmbeddedContainer implements DeployableContainer<VidocqContai
             }
 
             deployments.put(archive, new DeploymentState(
-                    bootstrap, port, appliedConfigKeys, materialized, previousTccl));
+                    bootstrap, port, materialized, previousTccl));
 
             // Return protocol metadata with HTTP context
             HTTPContext httpContext = new HTTPContext(config.getHost(), port);
@@ -182,9 +177,6 @@ public class VidocqEmbeddedContainer implements DeployableContainer<VidocqContai
 
         } catch (Exception e) {
             Thread.currentThread().setContextClassLoader(previousTccl);
-            for (String key : appliedConfigKeys) {
-                System.clearProperty(key);
-            }
             if (materialized != null) {
                 closeQuietly(materialized);
             }
@@ -204,9 +196,6 @@ public class VidocqEmbeddedContainer implements DeployableContainer<VidocqContai
             Thread.currentThread().setContextClassLoader(state.previousContextClassLoader());
             System.clearProperty("vidocq.chappe.listener.default.host");
             System.clearProperty("vidocq.chappe.listener.default.port");
-            for (String key : state.appliedConfigKeys()) {
-                System.clearProperty(key);
-            }
             closeQuietly(state.materialized());
         }
     }

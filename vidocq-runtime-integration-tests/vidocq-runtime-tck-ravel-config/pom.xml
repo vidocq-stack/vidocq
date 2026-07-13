@@ -14,51 +14,34 @@
     <name>Vidocq :: TCK :: MicroProfile Config 3.1 (Ravel)</name>
     <description>
         Runs the official MicroProfile Config 3.1 TCK
-        (org.eclipse.microprofile.config:microprofile-config-tck) against Ravel, the Config
-        implementation Vidocq activates through vidocq-runtime-ravel-config-extension.
-
-        Unlike the Health / OpenAPI / Rest Client / JWT runners, this one drives the TCK inside
-        an Arquillian **Weld SE embedded** CDI container rather than Vidocq's own Vauban CDI.
-        The reason is structural to the MP Config TCK: many tests register per-deployment custom
-        ConfigSources / Converters through META-INF/services files packaged inside each ShrinkWrap
-        archive, which requires real per-deployment classloader isolation. A flat Local/Vauban
-        classpath cannot isolate those service files across deployments, whereas Weld embedded
-        gives each Arquillian deployment its own bean archive.
-
-        What this still certifies for Vidocq: the shipped Ravel implementation (ravel-core:
-        ConfigSources, Converters, expression/profile resolution) and the shipped CDI integration
-        (ravel-cdi-vauban's ConfigCdiExtension). That extension is a *portable* CDI-Lite
-        BuildCompatibleExtension — the exact same class runs under Weld (via
-        weld-lite-extension-translator) and under Vauban, so this run exercises the real Vidocq
-        CDI-config code. Vauban's own BuildCompatibleExtension engine is independently certified by
-        the JWT (Cervantes) and Rest Client (Cyrano) runners, which boot Vauban directly.
+        (org.eclipse.microprofile.config:microprofile-config-tck) against the assembled Vidocq
+        runtime: vidocq-runtime-core boots via VidocqBootstrap, discovers
+        vidocq-runtime-ravel-config-extension through the ServiceLoader SPI, and the shared
+        vidocq-runtime-arquillian embedded container deploys each TCK archive — the same path
+        a real application uses. Per-deployment META-INF/services files (custom ConfigSources,
+        ConfigSourceProviders, Converters) are honored through the materialized deployment
+        class loader.
     </description>
 
     <properties>
         <!-- MicroProfile 7.1 pins Config 3.1; TCK/API published as 3.1.1. -->
         <microprofile.config.tck.version>${microprofile.config.version}</microprofile.config.tck.version>
-        <weld.version>6.0.2.Final</weld.version>
+        <!-- Arquillian 1.10.1 avoids MalformedParameterizedTypeException under JDK 25. -->
         <arquillian.tck.version>1.10.1.Final</arquillian.tck.version>
         <tck.testng.version>7.10.2</tck.testng.version>
     </properties>
 
+    <!--
+        No module-info.java (unnamed module): the TCK archive classes carry no JPMS
+        descriptor and must stay readable by Vauban/Ravel — same approach as the
+        other vidocq-runtime-tck-* modules.
+    -->
+
     <dependencyManagement>
         <dependencies>
             <!--
-                Align weld-lite-extension-translator with weld-core-impl 6.0.2+: the version
-                arquillian-weld-embedded pulls transitively (6.0.0.Alpha1) calls
-                AfterBeanDiscoveryImpl.addBean(Class), removed in weld-core-impl 6.0.2, which
-                breaks the @Synthesis phase of Build Compatible Extensions.
-            -->
-            <dependency>
-                <groupId>org.jboss.weld</groupId>
-                <artifactId>weld-lite-extension-translator</artifactId>
-                <version>6.0.1.Final</version>
-            </dependency>
-            <!--
-                The MP Config TCK pulls cdi-api 4.1.0-M1 transitively, which lacks InvokerFactory;
-                weld-lite-extension-translator 6.0.1 references it during @Registration. Force the
-                final 4.1.0 API + lang-model.
+                The MP Config TCK pulls cdi-api 4.1.0-M1 transitively; force the final
+                4.1.0 API + lang-model so the BCE lang-model types match Vauban's.
             -->
             <dependency>
                 <groupId>jakarta.enterprise</groupId>
@@ -71,12 +54,9 @@
                 <version>4.1.0</version>
             </dependency>
             <!--
-                arquillian-weld-embedded:4.0.0 drags arquillian-container-spi:1.8.0, whose
-                Container interface is not generic; under JDK 25 strict ParameterizedType
-                validation this throws MalformedParameterizedTypeException while constructing
-                EventTestRunnerAdaptor. 1.10.1 declares the generic Container type. Import the
-                whole arquillian-bom 1.10.1 so every arquillian artifact (spi, impl-base,
-                core-impl-base AND test-impl) is aligned, overriding the root's inherited 1.8.0.
+                Import arquillian-bom 1.10.1 for THIS module only. It overrides the
+                root pom's inherited arquillian-bom (1.8.0), whose EventTestRunnerAdaptor
+                throws MalformedParameterizedTypeException under JDK 25.
             -->
             <dependency>
                 <groupId>org.jboss.arquillian</groupId>
@@ -89,18 +69,30 @@
     </dependencyManagement>
 
     <dependencies>
-        <!-- Ravel = MicroProfile Config 3.1 implementation + its portable CDI extension. -->
+        <!-- Vidocq runtime under test -->
         <dependency>
-            <groupId>io.vidocq.ravel</groupId>
-            <artifactId>ravel-core</artifactId>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-core</artifactId>
+        </dependency>
+        <!--
+            Ravel = MicroProfile Config 3.1 implementation, wired into the runtime
+            the same way an application would; pulls ravel-core and ravel-cdi-vauban
+            (the ConfigCdiExtension Build Compatible Extension).
+        -->
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
+            <artifactId>vidocq-runtime-ravel-config-extension</artifactId>
         </dependency>
         <dependency>
-            <groupId>io.vidocq.ravel</groupId>
-            <artifactId>ravel-cdi-vauban</artifactId>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-core</artifactId>
         </dependency>
+
+        <!-- Test harness: shared embedded Vidocq Arquillian container -->
         <dependency>
-            <groupId>org.eclipse.microprofile.config</groupId>
-            <artifactId>microprofile-config-api</artifactId>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-arquillian</artifactId>
+            <scope>test</scope>
         </dependency>
 
         <!-- Official MP Config 3.1 TCK (TestNG-based). -->
@@ -111,26 +103,11 @@
             <scope>test</scope>
         </dependency>
 
-        <!-- Arquillian TestNG + Weld SE embedded CDI 4.1 container. -->
         <dependency>
             <groupId>org.jboss.arquillian.testng</groupId>
             <artifactId>arquillian-testng-container</artifactId>
-            <version>${arquillian.tck.version}</version>
             <scope>test</scope>
         </dependency>
-        <dependency>
-            <groupId>org.jboss.arquillian.container</groupId>
-            <artifactId>arquillian-weld-embedded</artifactId>
-            <version>4.0.0.Final</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.jboss.weld</groupId>
-            <artifactId>weld-core-impl</artifactId>
-            <version>${weld.version}</version>
-            <scope>test</scope>
-        </dependency>
-
         <dependency>
             <groupId>org.testng</groupId>
             <artifactId>testng</artifactId>
@@ -156,7 +133,7 @@
                     </includes>
                     <trimStackTrace>false</trimStackTrace>
                     <systemPropertyVariables>
-                        <arquillian.launch>weld-embedded</arquillian.launch>
+                        <arquillian.launch>vidocq</arquillian.launch>
                         <!-- DefaultConfigSourceOrdinalTest.checkSetup -->
                         <config_ordinal>120</config_ordinal>
                         <customer.hobby>Tennis</customer.hobby>
