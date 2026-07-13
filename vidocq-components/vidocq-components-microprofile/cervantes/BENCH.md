@@ -56,7 +56,7 @@ SmallRyeJwtValidationBenchmark.validateRs256SmallRye   avgt    5  29,046 ±  0,3
   parsing path with fewer allocations.
 - RS256 ≈ RS512 on the Cervantes side: the SHA-256/SHA-512 difference is negligible next to the RSA modexp.
 - **The accepted trade-off**: Cervantes trades ~1.5× throughput for **zero third-party dependencies**
-  (no jose4j/jackson/bouncycastle), native JPMS and AOT compatibility (GraalVM/Leyden). Same order
+  (no jose4j/jackson/bouncycastle), native Java Modules and AOT compatibility (GraalVM/Leyden). Same order
   of magnitude, no abyss. The optimisation path is clear and identified (see below).
 
 ### TODO (next measurements)

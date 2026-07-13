@@ -25,7 +25,7 @@
  * and produces a {@code JwtValidator} configured from the
  * properties MicroProfile Config {@code mp.jwt.verify.*} (via Ravel).</p>
  *
- * <p>Note JPMS — workaround testCompile: {@code module-info.java} in {@code src/main/module-info/}
+ * <p>Note Java Modules — workaround testCompile: {@code module-info.java} in {@code src/main/module-info/}
  * (vauban-core/level-core are test-scope, absent from the path module). See ZZPH0ZZ.ZZPH1ZZ
  */
 module io.vidocq.cervantes.cdi.vauban {

@@ -1,8 +1,8 @@
 = Reference
-:description: Maven artefacts, exported JPMS modules, supported annotations, `mp.jwt.*` MicroProfile Config keys, supported JOSE algorithms.
+:description: Maven artefacts, exported Java modules, supported annotations, `mp.jwt.*` MicroProfile Config keys, supported JOSE algorithms.
 
 [.lead]
-This page consolidates the public surface of Cervantes: artefacts to declare, exported JPMS modules, recognised security annotations, every `mp.jwt.*` key read by `JwtAuthConfigProducer`, and every JOSE algorithm supported by the signature and encryption engine.
+This page consolidates the public surface of Cervantes: artefacts to declare, exported Java modules, recognised security annotations, every `mp.jwt.*` key read by `JwtAuthConfigProducer`, and every JOSE algorithm supported by the signature and encryption engine.
 
 == Maven artefacts
 
@@ -12,7 +12,7 @@ This page consolidates the public surface of Cervantes: artefacts to declare, ex
 
 | `io.vidocq.cervantes`
 | `cervantes-mp-jwt-api`
-| MP JWT 2.1 spec repackaged into a named JPMS module (`org.eclipse.microprofile.jwt`). No dependency.
+| MP JWT 2.1 spec repackaged into a named Java module (`org.eclipse.microprofile.jwt`). No dependency.
 
 | `io.vidocq.cervantes`
 | `cervantes-api`
@@ -45,7 +45,7 @@ This page consolidates the public surface of Cervantes: artefacts to declare, ex
 
 All versions at `0.2.0` at the time of writing. Shared parent `io.vidocq:vidocq-parent:1.0.0-SNAPSHOT`.
 
-== JPMS modules
+== Java modules
 
 [cols="2,3"]
 |===

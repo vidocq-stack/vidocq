@@ -20,12 +20,12 @@
 /**
  * Moteur de validation JWT pur (sans CDI ni JAX-RS).
  *
- * <p>Note JPMS — workaround testCompile: this {@code module-info.java} is in
+ * <p>Note Java Modules — workaround testCompile: this {@code module-info.java} is in
  * {@code src/main/module-info/} (not {@code src/main/java/}) so Maven Compiler Plugin
- * does not detect JPMS during {@code testCompile} (test dependencies — champollion-jsonp, junit —
+ * does not detect Java Modules during {@code testCompile} (test dependencies — champollion-jsonp, junit —
  * tournent sur le classpath, {@code useModulePath=false}). {@code maven-clean-plugin} retire
  * {@code module-info.class} before {@code testCompile}, then a {@code prepare-package} run
- * Recompile {@code module-info.java} alone. JPMS wiring is validated by TCK (M6).</p>
+ * Recompile {@code module-info.java} alone. Java Modules wiring is validated by TCK (M6).</p>
  *
  * <p>{@code io.vidocq.cervantes.internal} will be exported qualifiedly to
  * {@code io.vidocq.cervantes.cdi.vauban} and {@code io.vidocq.cervantes.jaxrs} from M3/M4.ZZPH2ZZ

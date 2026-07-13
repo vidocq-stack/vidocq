@@ -5,7 +5,7 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
 
 ---
 
-## CERV-001 — JAX-RS security beans fail to wire on the module path (strict JPMS)
+## CERV-001 — JAX-RS security beans fail to wire on the module path (strict Java Modules)
 
 - **Opening date**: 2026-06-02
 - **Status**: ✅ FIXED 2026-06-02
@@ -52,7 +52,7 @@ Verified: **MP-JWT 2.1 TCK 206/206 PASS**; Arago Docker boots and serves with no
 
 ---
 
-## CERV-002 — `JsonWebTokenContext` fails to wire on the module path (strict JPMS)
+## CERV-002 — `JsonWebTokenContext` fails to wire on the module path (strict Java Modules)
 
 - **Opening date**: 2026-06-03
 - **Status**: ✅ FIXED 2026-06-03
@@ -94,7 +94,7 @@ seeded speaker returns **200** with the resolved identity (was 500). MP-JWT 2.1 
 
 ---
 
-## CERV-003 — `org.eclipse.microprofile.jwt` module declares no read edges (strict JPMS)
+## CERV-003 — `org.eclipse.microprofile.jwt` module declares no read edges (strict Java Modules)
 
 - **Opening date**: 2026-06-03
 - **Status**: ✅ FIXED 2026-06-03

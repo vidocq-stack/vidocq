@@ -1,11 +1,11 @@
 = Cervantes
-:description: Implémentation MicroProfile JWT 2.1 — RBAC par bearer token signé pour l'écosystème Vidocq — zéro dépendance d'implémentation, JPMS strict, virtual threads, Java 25.
+:description: Implémentation MicroProfile JWT 2.1 — RBAC par bearer token signé pour l'écosystème Vidocq — zéro dépendance d'implémentation, Java Modules strict, virtual threads, Java 25.
 
 [.text-center]
 image::cervantes-logo.png[Cervantes,300,role=module-logo]
 
 [.lead]
-Cervantes est l'implémentation MicroProfile JWT 2.1 de l'écosystème Vidocq. Elle valide les bearer tokens JWT signés (et optionnellement chiffrés) en s'appuyant exclusivement sur `java.security`, parse le JSON via xref:champollion::index.adoc[Champollion], lit sa configuration via xref:ravel::index.adoc[Ravel], expose le principal `JsonWebToken` en CDI via xref:vauban::index.adoc[Vauban], et applique `@RolesAllowed` sur les endpoints JAX-RS via xref:cassini::index.adoc[Cassini]. Objectif : conformance 100 % au TCK MicroProfile JWT 2.1 (atteint, *206 / 206* à M6), zéro lib tierce de crypto ou JWT, JPMS strict, prête pour jlink.
+Cervantes est l'implémentation MicroProfile JWT 2.1 de l'écosystème Vidocq. Elle valide les bearer tokens JWT signés (et optionnellement chiffrés) en s'appuyant exclusivement sur `java.security`, parse le JSON via xref:champollion::index.adoc[Champollion], lit sa configuration via xref:ravel::index.adoc[Ravel], expose le principal `JsonWebToken` en CDI via xref:vauban::index.adoc[Vauban], et applique `@RolesAllowed` sur les endpoints JAX-RS via xref:cassini::index.adoc[Cassini]. Objectif : conformance 100 % au TCK MicroProfile JWT 2.1 (atteint, *206 / 206* à M6), zéro lib tierce de crypto ou JWT, Java Modules strict, prête pour jlink.
 
 == Origine du nom
 
@@ -48,7 +48,7 @@ Le JWT est exactement ça : un jeton porteur qui présente une identité signée
 | Spec implémentée | {spec-mp-jwt}
 | Dépôt | {repo-cervantes}
 | Java | 25 (LTS)
-| Modules JPMS | `io.vidocq.cervantes.api`, `io.vidocq.cervantes.core`, `io.vidocq.cervantes.cdi.vauban`, `io.vidocq.cervantes.jaxrs`, `org.eclipse.microprofile.jwt` (repackaging)
+| Modules Java Modules | `io.vidocq.cervantes.api`, `io.vidocq.cervantes.core`, `io.vidocq.cervantes.cdi.vauban`, `io.vidocq.cervantes.jaxrs`, `org.eclipse.microprofile.jwt` (repackaging)
 | Packages publics | `io.vidocq.cervantes.api.*` (SPI stable), `io.vidocq.cervantes.cdi.*` (intégration CDI), `io.vidocq.cervantes.jaxrs.*` (intégration JAX-RS)
 | Dépendances runtime | `microprofile-jwt-auth-api` 2.1, `jakarta.json-api` (via Champollion), `jakarta.enterprise.cdi-api` 4.1, `jakarta.ws.rs-api` 4.0, `jakarta.annotation-api` 3.0, `io.vidocq.ravel:ravel-mp-config-api`
 | Crypto | `java.security` (`Signature`, `KeyFactory`), `javax.crypto` (JWE) — *aucune* lib tierce
@@ -60,7 +60,7 @@ Le JWT est exactement ça : un jeton porteur qui présente une identité signée
 
 . **Zéro lib tierce de crypto ou de JWT.** Pas de Nimbus, pas de jose4j, pas de Bouncy Castle, pas de Auth0 java-jwt, pas de SmallRye JWT. Toute la vérification de signature (RS256/384/512, ES256/384/512, transcodage JOSE R‖S ⇄ DER pour ECDSA) passe par `java.security.Signature`. Le déchiffrement JWE (`RSA-OAEP`, `A256GCM`) passe par `javax.crypto`. Le parsing JSON passe par xref:champollion::index.adoc[Champollion] (JSON-P 2.1).
 . **`@RolesAllowed` natif, sans réécrire Cassini.** L'intégration JAX-RS pose un `SecurityContext` adossé au `JsonWebToken` validé, et applique `@RolesAllowed` / `@PermitAll` / `@DenyAll` via un `DynamicFeature`. Précédence méthode > classe. 401 si signature invalide, 403 si rôle manquant — uniquement avec l'API JAX-RS standard, aucun patch d'implémentation.
-. **JPMS strict, virtual-thread-friendly, AOT-friendly.** Chaque artefact a son `module-info.java`. `io.vidocq.cervantes.internal.*` n'est jamais exporté. Aucun `setAccessible(true)` en production, aucun `Proxy` dynamique. Le fetch JWKS utilise `java.net.http.HttpClient`, sans `synchronized` autour de l'I/O. Compatible GraalVM native-image / Leyden CDS.
+. **Java Modules strict, virtual-thread-friendly, AOT-friendly.** Chaque artefact a son `module-info.java`. `io.vidocq.cervantes.internal.*` n'est jamais exporté. Aucun `setAccessible(true)` en production, aucun `Proxy` dynamique. Le fetch JWKS utilise `java.net.http.HttpClient`, sans `synchronized` autour de l'I/O. Compatible GraalVM native-image / Leyden CDS.
 
 == Positionnement dans l'écosystème
 

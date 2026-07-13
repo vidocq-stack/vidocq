@@ -42,8 +42,8 @@
     <build>
         <plugins>
             <!--
-                JPMS workaround (cf. heisenberg-core) : module-info.java dans src/main/module-info/
-                pour éviter l'activation JPMS au testCompile (deps test sans Automatic-Module-Name
+                Java Modules workaround (cf. heisenberg-core) : module-info.java dans src/main/module-info/
+                pour éviter l'activation Java Modules au testCompile (deps test sans Automatic-Module-Name
                 sur le module-path). 1) clean retire module-info.class avant testCompile ;
                 2) compile recompile module-info.java seul à prepare-package ;
                 3) surefire exécute les tests sur le classpath.
