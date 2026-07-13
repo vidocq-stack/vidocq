@@ -235,7 +235,7 @@ public class VidocqCheckPomMojo extends AbstractMojo {
      * Vidocq runtime extensions and their codegen bundles live either under the legacy
      * {@code io.vidocq.runtime} group or under any {@code io.vidocq.runtime.extensions.*}
      * sub-group introduced by the domain-based reorganization (essentials, jakartaee.core,
-     * jakartaee.web, microprofile, jpms.repackaged). Recognise the whole family.
+     * jakartaee.web, microprofile, module.repackaged). Recognise the whole family.
      */
     static boolean isVidocqRuntimeGroup(String groupId) {
         return groupId != null

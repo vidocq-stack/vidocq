@@ -71,8 +71,8 @@
              (named module com.h2database) rather than the upstream automatic-module jar,
              so jlink/jpackage accept it. -->
         <dependency>
-            <groupId>io.vidocq.runtime.extensions.jpms.repackaged</groupId>
-            <artifactId>vidocq-runtime-h2-jpms-repackaged</artifactId>
+            <groupId>io.vidocq.runtime.extensions.module.repackaged</groupId>
+            <artifactId>vidocq-runtime-h2-module-repackaged</artifactId>
             <version>${project.version}</version>
             <scope>runtime</scope>
         </dependency>

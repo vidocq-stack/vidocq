@@ -21,7 +21,7 @@
         <module>vidocq-runtime-extensions-jakartaee-core</module>
         <module>vidocq-runtime-extensions-jakartaee-web</module>
         <module>vidocq-runtime-extensions-microprofile</module>
-        <module>vidocq-runtime-extensions-jpms-repackaged</module>
+        <module>vidocq-runtime-extensions-module-repackaged</module>
     </modules>
 
     <build>

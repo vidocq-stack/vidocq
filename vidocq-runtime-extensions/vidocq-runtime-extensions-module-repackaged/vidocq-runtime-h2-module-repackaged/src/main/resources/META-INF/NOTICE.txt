@@ -1,4 +1,4 @@
-vidocq-runtime-h2-jpms-repackaged
+vidocq-runtime-h2-module-repackaged
 =================================
 
 This artifact is a VERBATIM repackage of the H2 Database Engine. Every class file it

@@ -39,7 +39,7 @@ class CyranoBuildCompatibleExtensionTest {
 
     @Test
     @DisplayName("M5 - the wrapper republishes the Cyrano BCE via ServiceLoader and Java Modules provides")
-    void wrapper_republishes_cyrano_extension_via_service_loader_and_jpms() {
+    void wrapper_republishes_cyrano_extension_via_service_loader_and_java_modules() {
         // Load extension class via reflection
         Class<?> extensionClass;
         try {

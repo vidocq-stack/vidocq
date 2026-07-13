@@ -2,7 +2,7 @@
 :description: Extensions built-in fournies avec Vidocq Runtime.
 
 [.lead]
-`vidocq-runtime-extensions` est l'ensemble des extensions livrées d'office, regroupées par domaine sous cinq agrégateurs (`essentials`, `jakartaee-core`, `jakartaee-web`, `microprofile`, `jpms-repackaged`). Chaque feuille est un artefact Maven indépendant, activé par simple ajout en dépendance par l'application utilisateur.
+`vidocq-runtime-extensions` est l'ensemble des extensions livrées d'office, regroupées par domaine sous cinq agrégateurs (`essentials`, `jakartaee-core`, `jakartaee-web`, `microprofile`, `module-repackaged`). Chaque feuille est un artefact Maven indépendant, activé par simple ajout en dépendance par l'application utilisateur.
 
 == Coordonnées
 

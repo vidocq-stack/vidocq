@@ -20,7 +20,7 @@ Référence opérationnelle de Vidocq Runtime — coordonnées Maven, clés Micr
 | Moteur d'exécution (boot orchestrator, lifecycle)
 
 | `io.vidocq.runtime.extensions:vidocq-runtime-extensions:0.2.0`
-| Agrégateur des extensions livrées, groupées par domaine (essentials, jakartaee-core, jakartaee-web, microprofile, jpms-repackaged)
+| Agrégateur des extensions livrées, groupées par domaine (essentials, jakartaee-core, jakartaee-web, microprofile, module-repackaged)
 
 | `io.vidocq.runtime:vidocq-runtime-maven-plugin:0.2.0`
 | Plugin Maven — `build`, `jlink`, `jpackage`, `docker`

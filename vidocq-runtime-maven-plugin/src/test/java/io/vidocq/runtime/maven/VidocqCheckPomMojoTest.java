@@ -48,7 +48,7 @@ class VidocqCheckPomMojoTest {
         assertTrue(VidocqCheckPomMojo.isVidocqRuntimeGroup("io.vidocq.runtime.extensions.jakartaee.core"));
         assertTrue(VidocqCheckPomMojo.isVidocqRuntimeGroup("io.vidocq.runtime.extensions.jakartaee.web"));
         assertTrue(VidocqCheckPomMojo.isVidocqRuntimeGroup("io.vidocq.runtime.extensions.microprofile"));
-        assertTrue(VidocqCheckPomMojo.isVidocqRuntimeGroup("io.vidocq.runtime.extensions.jpms.repackaged"));
+        assertTrue(VidocqCheckPomMojo.isVidocqRuntimeGroup("io.vidocq.runtime.extensions.module.repackaged"));
 
         assertFalse(VidocqCheckPomMojo.isVidocqRuntimeGroup("io.vidocq.cassini"));
         // Prefix match must be dot-anchored: a group that merely *starts with* the string is not a member.

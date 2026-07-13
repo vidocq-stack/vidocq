@@ -39,7 +39,7 @@ class CervantesJwtBuildCompatibleExtensionTest {
 
     @Test
     @DisplayName("M8 - the wrapper republishes the Cervantes BCE via ServiceLoader and Java Modules provides")
-    void wrapper_republishes_cervantes_extension_via_service_loader_and_jpms() {
+    void wrapper_republishes_cervantes_extension_via_service_loader_and_java_modules() {
         Class<?> extensionClass;
         try {
             extensionClass = Class.forName(

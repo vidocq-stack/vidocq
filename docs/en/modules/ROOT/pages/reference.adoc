@@ -20,7 +20,7 @@ Operational reference for Vidocq Runtime — Maven coordinates, MicroProfile Con
 | Runtime engine (boot orchestrator, lifecycle)
 
 | `io.vidocq.runtime.extensions:vidocq-runtime-extensions:0.2.0`
-| Aggregator of the shipped extensions, grouped by domain (essentials, jakartaee-core, jakartaee-web, microprofile, jpms-repackaged)
+| Aggregator of the shipped extensions, grouped by domain (essentials, jakartaee-core, jakartaee-web, microprofile, module-repackaged)
 
 | `io.vidocq.runtime:vidocq-runtime-maven-plugin:0.2.0`
 | Maven plugin — `build`, `jlink`, `jpackage`, `docker`
