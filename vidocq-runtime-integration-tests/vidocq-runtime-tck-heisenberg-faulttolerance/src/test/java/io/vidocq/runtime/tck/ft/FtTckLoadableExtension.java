@@ -17,21 +17,19 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
-package io.vidocq.runtime.arquillian;
+package io.vidocq.runtime.tck.ft;
 
-import org.jboss.arquillian.container.spi.client.container.DeployableContainer;
+import org.jboss.arquillian.container.test.spi.client.deployment.ApplicationArchiveProcessor;
 import org.jboss.arquillian.core.spi.LoadableExtension;
-import org.jboss.arquillian.test.spi.TestEnricher;
 
 /**
- * Arquillian extension that registers the embedded Vidocq container and the
- * CDI test-class enricher.
+ * Registers the FT TCK archive glue ({@link FtTckArchiveProcessor}). The
+ * embedded Vidocq container itself comes from vidocq-runtime-arquillian.
  */
-public class VidocqLoadableExtension implements LoadableExtension {
+public class FtTckLoadableExtension implements LoadableExtension {
 
     @Override
     public void register(ExtensionBuilder builder) {
-        builder.service(DeployableContainer.class, VidocqEmbeddedContainer.class);
-        builder.service(TestEnricher.class, VidocqCdiTestEnricher.class);
+        builder.service(ApplicationArchiveProcessor.class, FtTckArchiveProcessor.class);
     }
 }

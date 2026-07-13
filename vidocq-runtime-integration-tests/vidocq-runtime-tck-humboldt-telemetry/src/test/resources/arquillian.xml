@@ -1,19 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Arquillian configuration for the MicroProfile Telemetry 2.1 TCK suites.
+    Single embedded Vidocq container (vidocq-runtime-arquillian), used by default.
+-->
 <arquillian xmlns="http://jboss.org/schema/arquillian"
             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-            xsi:schemaLocation="http://jboss.org/schema/arquillian http://jboss.org/schema/arquillian/arquillian_1_0.xsd">
+            xsi:schemaLocation="http://jboss.org/schema/arquillian
+                                http://jboss.org/schema/arquillian/arquillian_1_0.xsd">
 
-    <!--
-        Container Arquillian Humboldt (M7b.4b.1 squelette).
-        Enregistré via META-INF/services/org.jboss.arquillian.core.spi.LoadableExtension
-        → HumboldtLoadableExtension → HumboldtDeployableContainer.
-    -->
-    <container qualifier="humboldt" default="true">
-        <!-- M7b.4b.1 : aucune option de configuration exposée pour l'instant -->
+    <container qualifier="vidocq" default="true">
+        <!-- Embedded Vidocq: no container properties required (free port at deploy time). -->
     </container>
-
-    <engine>
-        <property name="deploymentExportPath">target/arquillian-deployments</property>
-    </engine>
 
 </arquillian>

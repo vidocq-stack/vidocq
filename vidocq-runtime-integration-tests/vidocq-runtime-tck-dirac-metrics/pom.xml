@@ -14,23 +14,17 @@
     <name>Vidocq :: TCK :: MicroProfile Metrics 5.1 (Dirac)</name>
     <description>
         Runs the official MicroProfile Metrics 5.1.1 TCK
-        (org.eclipse.microprofile.metrics:microprofile-metrics-api-tck) against Dirac, the Metrics
-        implementation Vidocq activates through vidocq-runtime-dirac-metrics-extension.
+        (org.eclipse.microprofile.metrics:microprofile-metrics-api-tck) against the assembled Vidocq
+        runtime: vidocq-runtime-core boots via VidocqBootstrap, discovers
+        vidocq-runtime-dirac-metrics-extension through the ServiceLoader SPI, and the shared
+        vidocq-runtime-arquillian embedded container deploys each TCK archive as CDI bean classes —
+        exactly the path a real application uses, no TCK-specific wiring.
 
         The MP Metrics 5.1 api-tck is a CDI test suite (JUnit 4 + @RunWith(Arquillian.class)): each
         @Deployment is a ShrinkWrap archive of @Counted/@Timed/@Gauge beans and the test methods run
-        IN-CONTAINER against the deployed CDI graph — there is no HTTP endpoint under test (the REST
-        /metrics scrape format is not part of this api-tck). So the harness (ported from Dirac's own
-        dirac-tck) uses Arquillian's "Local" protocol and boots a Vauban CDI container per deployment:
-
-          * DiracDeployableContainer  — a Local, no-op container; per @Deployment VaubanDiracTckBootstrap
-            starts a Vauban CDI container with Dirac's DiracExtension BCE + Counted/Timed interceptors +
-            MetricRegistry producer + gauge registration bean + all archive classes.
-          * DiracTestEnricher          — a TestEnricher that satisfies @Inject MetricRegistry /
-            Counter/Timer/Histogram/Gauge on the TCK test instances directly from the Dirac registry
-            (the CDI producers require an InjectionPoint unavailable outside the container).
-          * VaubanDiracTckBootstrap    — exports each archive's microprofile-config.properties as system
-            properties so Dirac's histogram/timer config (mp.metrics.*) resolves per deployment.
+        IN-CONTAINER against the deployed CDI graph (Local protocol, no HTTP endpoint under test).
+        @Inject fields on the test classes are resolved by the generic VidocqCdiTestEnricher through
+        the public VaubanContainer lookup API.
 
         The api-tck builds deployments with addClass/addPackage — it does NOT use the ShrinkWrap Maven
         resolver — so it runs safely in-reactor (verified: no resolver references in the tck jar). No
@@ -75,27 +69,33 @@
     </dependencyManagement>
 
     <dependencies>
+        <!-- Vidocq runtime under test -->
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-core</artifactId>
+        </dependency>
         <!--
-            Dirac = MicroProfile Metrics 5.1 implementation, as wired into the Vidocq
-            runtime. The extension wrapper pulls dirac-cdi-vauban, whose internal
-            DiracExtension / Counted+Timed interceptors / MetricRegistryProducerBean /
-            GaugeRegistrationBean the harness boots per deployment.
+            Dirac = MicroProfile Metrics 5.1 implementation, wired into the runtime the
+            same way an application would: the extension wrapper pulls dirac-cdi-vauban,
+            whose BCE/interceptors/producers self-register at CDI boot.
         -->
         <dependency>
             <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
             <artifactId>vidocq-runtime-dirac-metrics-extension</artifactId>
             <version>${project.version}</version>
         </dependency>
-        <!-- Vauban CDI Lite container: VaubanDiracTckBootstrap boots one per TCK archive. -->
-        <dependency>
-            <groupId>io.vidocq.vauban</groupId>
-            <artifactId>vauban-core</artifactId>
-        </dependency>
-        <!-- MicroProfile Metrics 5.1 API — types the harness/TCK reference directly. -->
+        <!-- MicroProfile Metrics 5.1 API — types the TCK references directly. -->
         <dependency>
             <groupId>org.eclipse.microprofile.metrics</groupId>
             <artifactId>microprofile-metrics-api</artifactId>
             <version>${microprofile.metrics.tck.version}</version>
+        </dependency>
+
+        <!-- Test harness: shared embedded Vidocq Arquillian container -->
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-arquillian</artifactId>
+            <scope>test</scope>
         </dependency>
 
         <!--
@@ -110,22 +110,9 @@
         </dependency>
 
         <!--
-            Arquillian container SPI + test SPI + JUnit 4 container. This module ships its
-            OWN Local DeployableContainer (DiracDeployableContainer), so it depends on the
-            raw SPI rather than vidocq-runtime-arquillian (which would register a second
-            DeployableContainer and clash). The MP Metrics TCK uses JUnit 4
-            (@RunWith(Arquillian.class)), so the JUnit container is used (not TestNG).
+            The MP Metrics TCK uses JUnit 4 (@RunWith(Arquillian.class)), so the JUnit
+            container is used (not TestNG).
         -->
-        <dependency>
-            <groupId>org.jboss.arquillian.container</groupId>
-            <artifactId>arquillian-container-spi</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.jboss.arquillian.test</groupId>
-            <artifactId>arquillian-test-spi</artifactId>
-            <scope>test</scope>
-        </dependency>
         <dependency>
             <groupId>org.jboss.arquillian.junit</groupId>
             <artifactId>arquillian-junit-container</artifactId>
@@ -144,7 +131,7 @@
             <version>1.3</version>
             <scope>test</scope>
         </dependency>
-        <!-- CDI / interceptor / annotation APIs the TCK beans and harness reference. -->
+        <!-- CDI / interceptor / annotation APIs the TCK beans reference. -->
         <dependency>
             <groupId>jakarta.enterprise</groupId>
             <artifactId>jakarta.enterprise.cdi-api</artifactId>
@@ -181,9 +168,6 @@
                     </dependenciesToScan>
                     <trimStackTrace>false</trimStackTrace>
                     <forkedProcessExitTimeoutInSeconds>120</forkedProcessExitTimeoutInSeconds>
-                    <systemPropertyVariables>
-                        <arquillian.launch>dirac</arquillian.launch>
-                    </systemPropertyVariables>
                 </configuration>
                 <dependencies>
                     <dependency>

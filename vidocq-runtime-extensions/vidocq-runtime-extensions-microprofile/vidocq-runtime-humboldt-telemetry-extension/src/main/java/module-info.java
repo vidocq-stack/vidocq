@@ -32,10 +32,22 @@ module io.vidocq.runtime.extensions.microprofile.humboldt {
     requires io.vidocq.humboldt.runtime;
     requires io.vidocq.humboldt.sdk.common;
     requires io.vidocq.humboldt.api;
+    requires io.vidocq.humboldt.otel.interop;
     requires io.vidocq.vauban.core;
     requires io.opentelemetry.api;
+    requires io.opentelemetry.context;
     requires jakarta.cdi;
     requires java.logging;
+
+    // The interop module only `requires static` the OTel SDK automatic modules
+    // (the consumer supplies them). This extension IS that consumer: require them
+    // here so the module graph resolves them on module-path boots.
+    requires io.opentelemetry.sdk.common;
+    requires io.opentelemetry.sdk.trace;
+    requires io.opentelemetry.sdk.metrics;
+    requires io.opentelemetry.sdk.autoconfigure.spi;
+    requires io.opentelemetry.sdk.testing;
+    requires io.opentelemetry.extension.trace.propagation;
 
     // Export package to enable @Inject AutoConfiguredHumboldt from apps/tests
     // (HumboldtHolder must be accessible to the CDI Vauban container).

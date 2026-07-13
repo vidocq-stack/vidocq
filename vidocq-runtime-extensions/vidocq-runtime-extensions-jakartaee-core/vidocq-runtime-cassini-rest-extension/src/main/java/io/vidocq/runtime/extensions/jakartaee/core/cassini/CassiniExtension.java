@@ -84,6 +84,38 @@ public final class CassiniExtension implements VidocqExtension {
     public void beforeStart(VaubanContainerBuilder builder) {
     }
 
+    /**
+     * Returns the normalized {@code @ApplicationPath} of the (first) JAX-RS
+     * {@code Application} bean, or {@code null} when none declares one.
+     */
+    private static String resolveApplicationPath(ExtensionContext context) {
+        var beanManager = context.container().getBeanManager();
+        for (jakarta.enterprise.inject.spi.Bean<?> bean
+                : beanManager.getBeans(Object.class, jakarta.enterprise.inject.Any.Literal.INSTANCE)) {
+            Class<?> beanClass = bean.getBeanClass();
+            if (beanClass == null || !jakarta.ws.rs.core.Application.class.isAssignableFrom(beanClass)) {
+                continue;
+            }
+            jakarta.ws.rs.ApplicationPath annotation =
+                    beanClass.getAnnotation(jakarta.ws.rs.ApplicationPath.class);
+            if (annotation == null) {
+                continue;
+            }
+            String value = annotation.value();
+            if (value == null || value.isBlank() || "/".equals(value)) {
+                return null;
+            }
+            String normalized = value.startsWith("/") ? value : "/" + value;
+            if (normalized.endsWith("/")) {
+                normalized = normalized.substring(0, normalized.length() - 1);
+            }
+            LOG.log(System.Logger.Level.INFO,
+                    "Mounting at @ApplicationPath {0} from {1}", normalized, beanClass.getName());
+            return normalized.isEmpty() ? null : normalized;
+        }
+        return null;
+    }
+
     @Override
     public void onStart(ExtensionContext context) {
         if (hasDeclarativeCassiniMount(context)) {
@@ -110,7 +142,17 @@ public final class CassiniExtension implements VidocqExtension {
         ChappeHttpAdapter.Scoped scoped = requestContext::runInScope;
         ChappeHttpAdapter bridge = new ChappeHttpAdapter(stack.adapter(), scoped);
 
-        String mountPrefix = "/".equals(contextPath) ? "" : contextPath;
+        // JAX-RS §2.3: an Application subclass's @ApplicationPath defines the
+        // base URI of the resources. Honour it when the mount prefix was not
+        // explicitly configured (vidocq.rest.context-path always wins).
+        String effectiveContextPath = contextPath;
+        if ("/".equals(contextPath)) {
+            String applicationPath = resolveApplicationPath(context);
+            if (applicationPath != null) {
+                effectiveContextPath = applicationPath;
+            }
+        }
+        String mountPrefix = "/".equals(effectiveContextPath) ? "" : effectiveContextPath;
         ChappeMountPoint.instance().mount(listener, mountPrefix, bridge);
 
         LOG.log(System.Logger.Level.INFO,

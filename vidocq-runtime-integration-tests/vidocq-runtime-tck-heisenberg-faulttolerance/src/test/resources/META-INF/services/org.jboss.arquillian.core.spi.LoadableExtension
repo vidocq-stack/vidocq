@@ -1,2 +1,1 @@
-io.vidocq.heisenberg.tck.arquillian.HeisenbergArquillianExtension
-
+io.vidocq.runtime.tck.ft.FtTckLoadableExtension
