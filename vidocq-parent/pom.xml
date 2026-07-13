@@ -159,7 +159,7 @@
                     <version>${maven.surefire.plugin.version}</version>
                 </plugin>
                 <!--
-                    JPMS workaround shared by the MicroProfile repos (heisenberg, knock,
+                    Java Modules workaround shared by the MicroProfile repos (heisenberg, knock,
                     dirac, the vidocq runtime wrappers, ...): upstream MicroProfile API
                     jars are not modular, so the compile-scope dependencies are copied to
                     target/javamodules/ and that directory is fed to javac's module path
