@@ -96,15 +96,17 @@ uses the EFTL-signed binaries.
 
 **Profile composite TCK** — `vidocq-runtime-tck-coreprofile` runs the
 `jakarta.tck.coreprofile:core-profile-tck-impl` composite tests on the assembled
-runtime (Cassini + Champollion + Vauban over real HTTP). Currently **7/13**:
+runtime (Cassini + Champollion + Vauban over real HTTP). **10/13** — every test
+that can pass on JDK 25 passes:
 
 - **3** fail on a JDK 25 vs TCK-helper incompatibility — `Utils.getDescriptor()`
   needs `RETAIN_CLASS_REFERENCE` on JDK 25 (a documented contract JDK ≤ 21
   enforced leniently). Not a Vidocq defect; resolved through a TCK challenge
-  (`CERTIFICATION.md` §6).
-- **3** are open Vidocq gaps: Cassini's server-side JSON-B custom-serialization
-  path (a resource throws instead of returning), and the MVP `cassini-client`
-  `readEntity(<type>)` (JSON-B client deserialisation).
+  (`CERTIFICATION.md` §6). Unreachable on JDK 25 regardless of conformance.
+
+The former Cassini gaps are closed: the JAX-RS client now serialises/deserialises
+POJO entities through JSON-B (honouring a `ContextResolver<Jsonb>`) and emits a
+single comma-separated `Accept` header — Jakarta REST 4.0 TCK stays 2538/2538.
 
 ## TCK glue vs. runtime code
 
