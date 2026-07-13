@@ -25,7 +25,7 @@
  * champollion is the reference implementation provided at runtime.</p>
  *
  * <p><strong>Java Modules note — Vidocq fork of the MicroProfile Health API</strong>
- * (see {@code docs/adr/ADR-001-jpms-workaround-microprofile-health.md}) :</p>
+ * (see {@code docs/adr/ADR-001-java-modules-workaround-microprofile-health.md}) :</p>
  *
  * <ol>
  *   <li><em>Double SPI registration.</em> {@code HealthCheckResponse.named()}

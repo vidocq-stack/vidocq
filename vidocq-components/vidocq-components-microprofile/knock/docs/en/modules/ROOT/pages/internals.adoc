@@ -113,7 +113,7 @@ All check execution goes through `Executors.newVirtualThreadPerTaskExecutor()` (
 
 == Java Modules workaround (ADR-001)
 
-The upstream MicroProfile Health API jar ships **without** a `module-info.class`, which breaks strict Java Modules and `jlink`. Knock forks it as `knock-mp-health-api` and rebuilds it with a proper module descriptor. To keep the descriptor from interfering with annotation processing, the `module-info.java` lives in `src/main/module-info/` and is compiled in a dedicated phase at `prepare-package`. The SPI is registered twice — through Java Modules `provides` and `META-INF/services` — so the implementation resolves on both the module path and the classpath. Full rationale: `docs/adr/ADR-001-jpms-workaround-microprofile-health.md`.
+The upstream MicroProfile Health API jar ships **without** a `module-info.class`, which breaks strict Java Modules and `jlink`. Knock forks it as `knock-mp-health-api` and rebuilds it with a proper module descriptor. To keep the descriptor from interfering with annotation processing, the `module-info.java` lives in `src/main/module-info/` and is compiled in a dedicated phase at `prepare-package`. The SPI is registered twice — through Java Modules `provides` and `META-INF/services` — so the implementation resolves on both the module path and the classpath. Full rationale: `docs/adr/ADR-001-java-modules-workaround-microprofile-health.md`.
 
 == AOT compatibility
 
@@ -124,4 +124,4 @@ No dynamic proxy generation, no `setAccessible(true)`, no hot reflection in the 
 * link:{repo-knock}/src/branch/main/knock-core[knock-core] — registry, aggregator, serialiser, facade.
 * link:{repo-knock}/src/branch/main/knock-cdi-vauban[knock-cdi-vauban] — CDI discovery.
 * link:{repo-knock}/src/branch/main/knock-jaxrs[knock-jaxrs] — REST endpoints.
-* link:{repo-knock}/src/branch/main/docs/adr/ADR-001-jpms-workaround-microprofile-health.md[ADR-001] — Java Modules workaround.
+* link:{repo-knock}/src/branch/main/docs/adr/ADR-001-java-modules-workaround-microprofile-health.md[ADR-001] — Java Modules workaround.

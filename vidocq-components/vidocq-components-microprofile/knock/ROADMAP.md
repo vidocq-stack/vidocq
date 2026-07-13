@@ -93,7 +93,7 @@ public interface HealthCheck {
 
 **Java Modules note:** upstream `microprofile-health-api:4.0.1` has no `module-info.class`.
 Knock ships a modular fork `io.vidocq.knock:knock-mp-health-api` documented
-in `docs/adr/ADR-001-jpms-workaround-microprofile-health.md` — summary:
+in `docs/adr/ADR-001-java-modules-workaround-microprofile-health.md` — summary:
 `module-info.java` adds the explicit `microprofile.health.api` module, the OSGi `@Version`
 annotations were removed from `package-info.java` to avoid an automatic module, and the
 `src/main/module-info/` workaround remains in place for `knock-core` to avoid Java Modules detection

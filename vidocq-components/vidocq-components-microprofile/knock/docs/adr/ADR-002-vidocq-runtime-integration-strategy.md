@@ -109,6 +109,6 @@ vidocq-runtime-knock-health-extension/
 ## References
 
 - MicroProfile Health 4.0 §3 (endpoints), §4 (qualifiers), §6 (config)
-- `ADR-001-jpms-workaround-microprofile-health.md` (module-info workaround for testCompile)
+- `ADR-001-java-modules-workaround-microprofile-health.md` (module-info workaround for testCompile)
 - `knock-tck/src/test/java/io/vidocq/knock/tck/arquillian/KnockDeployableContainer.java`
   (Arquillian runner — reproduces the M5 integration path)

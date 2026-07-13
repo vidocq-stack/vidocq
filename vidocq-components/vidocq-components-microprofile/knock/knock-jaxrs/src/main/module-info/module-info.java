@@ -29,7 +29,7 @@
  * (CLI, tests, other transports).</p>
  *
  * <p><strong>Java Modules note — testCompile workaround</strong>
- * (see {@code docs/adr/ADR-001-jpms-workaround-microprofile-health.md}) :
+ * (see {@code docs/adr/ADR-001-java-modules-workaround-microprofile-health.md}) :
  * {@code module-info.java} is in {@code src/main/module-info/} to prevent Maven Compiler
  * Plugin from detecting Java Modules during {@code testCompile} (cassini-core is test-scope,
  * absent from {@code target/javamodules/}).</p>

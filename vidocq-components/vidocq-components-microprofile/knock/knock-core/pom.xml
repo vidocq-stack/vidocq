@@ -41,7 +41,7 @@
         <plugins>
             <!--
                 Java Modules workaround for knock-core - module-info is isolated to avoid Java Modules
-                detection during testCompile (see docs/adr/ADR-001-jpms-workaround-microprofile-health.md).
+                detection during testCompile (see docs/adr/ADR-001-java-modules-workaround-microprofile-health.md).
 
                 knock-core-specific issue: Maven Compiler Plugin 4.0.0-beta-4 detects
                 Java Modules mode as soon as module-info.class is present in target/classes. In
