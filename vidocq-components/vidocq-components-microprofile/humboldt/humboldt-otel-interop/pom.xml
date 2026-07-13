@@ -40,7 +40,7 @@
             <groupId>io.vidocq.humboldt</groupId>
             <artifactId>humboldt-propagator-w3c</artifactId>
         </dependency>
-        <!-- OTel public API/context types (Humboldt JPMS repackages: io.opentelemetry.api / .context). -->
+        <!-- OTel public API/context types (Humboldt Java Modules repackages: io.opentelemetry.api / .context). -->
         <dependency>
             <groupId>io.vidocq.humboldt</groupId>
             <artifactId>humboldt-otel-api</artifactId>
@@ -55,7 +55,7 @@
             opentelemetry-api elsewhere in Humboldt: the SDK is never bundled).
             io.opentelemetry:opentelemetry-api / -context are excluded everywhere because
             humboldt-otel-api / humboldt-otel-context repackage the very same classes under
-            the same JPMS module names (io.opentelemetry.api / io.opentelemetry.context) —
+            the same Java module names (io.opentelemetry.api / io.opentelemetry.context) —
             keeping both would put two modules with the same name on the module path.
             Versions are managed by the opentelemetry-bom import in humboldt-parent.
         -->

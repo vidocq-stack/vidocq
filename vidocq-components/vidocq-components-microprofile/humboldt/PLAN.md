@@ -8,7 +8,7 @@ The Write tool isn't available in this session. I'll deliver the plan inline as 
 
 Workspace path: `/Users/yblazart/projects/perso/vidocq/humboldt/`
 Maven groupId: `io.vidocq.humboldt`
-JPMS root namespace: `io.vidocq.humboldt.*`
+Java Modules root namespace: `io.vidocq.humboldt.*`
 Forge: `https://forge.vidocq.dev/vidocq/humboldt`
 
 ---
@@ -119,7 +119,7 @@ Conformant to `org.eclipse.microprofile.telemetry:microprofile-telemetry-api:2.1
 
 Protobuf-java weighs ~1.7 MB. Two options were evaluated:
 
-**Option A — accept protobuf-java (4.27.x)**: de facto OTLP standard, acceptable performance, already JPMS-friendly since 4.x.
+**Option A — accept protobuf-java (4.27.x)**: de facto OTLP standard, acceptable performance, already Java Modules-friendly since 4.x.
 **Option B — hand-rolled protobuf**: write a protobuf encoder for the OTel subset (~15 messages). Estimated effort: 2 weeks. Reinvents the wheel, but with absolute zero-dep.
 
 **Plan decision**: start with option A for M3 (TCK velocity), reclassify in M8/M9 based on the measured footprint (`humboldt-exporter-otlp-http` must stay < 400 KB to remain compatible with a future minimal Vidocq jlink). The hand-rolled variant is documented in `docs/.../performance.adoc` as ADR-002.
@@ -545,7 +545,7 @@ Modeled on `champollion-codegen-maven-plugin` — scans the classpath to apply `
 
 ---
 
-## 6. JPMS — `module-info.java` skeletons
+## 6. Java Modules — `module-info.java` skeletons
 
 ### 6.1 `humboldt-api/src/main/java/module-info.java`
 
@@ -613,7 +613,7 @@ module io.vidocq.humboldt.exporter.otlp.http {
     requires io.vidocq.humboldt.sdk.metric;
     requires io.vidocq.humboldt.sdk.log;
     requires java.net.http;          // standard JDK HTTP client (or switch to chappe-client)
-    requires com.google.protobuf;    // 4.x est JPMS-friendly
+    requires com.google.protobuf;    // 4.x est Java Modules-friendly
 
     provides io.vidocq.humboldt.spi.SpanExporterProvider       with OtlpSpanExporterProvider;
     provides io.vidocq.humboldt.spi.MetricReaderProvider       with OtlpMetricExporterProvider;
@@ -905,7 +905,7 @@ asciidoc:
 
 ### 10.3 `index.adoc` (skeleton to write)
 
-Follows the `cassini/docs/en/modules/ROOT/pages/index.adoc` pattern exactly: name & metaphor (cf. §1), "At a glance" table (spec, repo, JDK, JPMS modules, runtime deps, TCK), "Position in the ecosystem" section with Mermaid graph (chappe→humboldt-chappe→humboldt-sdk-trace→humboldt-exporter-otlp), Quick links.
+Follows the `cassini/docs/en/modules/ROOT/pages/index.adoc` pattern exactly: name & metaphor (cf. §1), "At a glance" table (spec, repo, JDK, Java modules, runtime deps, TCK), "Position in the ecosystem" section with Mermaid graph (chappe→humboldt-chappe→humboldt-sdk-trace→humboldt-exporter-otlp), Quick links.
 
 ### 10.4 Key pages to produce
 
@@ -948,7 +948,7 @@ org.eclipse.microprofile.telemetry:microprofile-telemetry-logs-tck:2.1
 - `humboldt-tck/pom.xml` → `<modelVersion>4.0.0</modelVersion>`, **no `<parent>`**
 - **NOT listed** in the parent `humboldt/pom.xml` `<subprojects>`
 - All explicit versions (`<champollion.version>`, `<humboldt.version>`, etc.) hardcoded in the POM
-- `humboldt-tck` contains **no** `module-info.java` (Arquillian TCK does not work in strict JPMS mode)
+- `humboldt-tck` contains **no** `module-info.java` (Arquillian TCK does not work in strict Java Modules mode)
 
 ### 11.3 `humboldt-tck/pom.xml` — sketch
 
@@ -1069,7 +1069,7 @@ Creation required as of M0 — workspace convention.
 | Milestone | Deliverables | TCK gate | Estimated duration |
 |---|---|---|---|
 | **M0 — Bootstrap** | Repo skeleton, parent `pom.xml`, `.sdkmanrc`, `.forgejo/workflows/*`, `CLAUDE.md`, FR/EN `README.md`, empty `BUG.md`/`BENCH.md`, placeholder logo, `docs/{en,fr}/antora.yml` + `index.adoc` (name & metaphor), initialized tasks/todo.md. Empty reactor build. | — | 1-2 d |
-| **M1 — JPMS + API + Context** | `humboldt-api`, `humboldt-context` (ScopedValueContextStorage), tests: a `ContextStorage` that propagates correctly across `Thread.ofVirtual()`. Module-info validated by `jpms-guardian`. | — | 3-5 d |
+| **M1 — Java Modules + API + Context** | `humboldt-api`, `humboldt-context` (ScopedValueContextStorage), tests: a `ContextStorage` that propagates correctly across `Thread.ofVirtual()`. Module-info validated by `jpms-guardian`. | — | 3-5 d |
 | **M2 — Minimal SDK traces** | `humboldt-sdk-trace`: SdkTracerProvider, SdkSpan, SpanBuilder, SimpleSpanProcessor, AlwaysOnSampler, IdGenerator. Unit tests coverage > 70%. `humboldt-sdk-testing` (InMemoryExporter). | TCK tracing: smoke PASS | 5-7 d |
 | **M3 — Propagator + OTLP HTTP exporter** | `humboldt-propagator` (W3C TraceContext + Baggage). `humboldt-exporter-otlp-http`: protobuf marshalling, HTTP/1.1 sender (chappe-client or java.net.http), retry policy, virtual-thread BatchSpanProcessor. E2E tests against Jaeger in Docker via testcontainers (or manual docker compose). | TCK tracing: full PASS | 7-10 d |
 | **M4 — SDK Metrics** | `humboldt-sdk-metric`: async Counter/Histogram/UpDownCounter/Gauge, SumAggregator, HistogramAggregator (explicit buckets), ExponentialHistogramAggregator, ViewRegistry, PeriodicMetricReader. OTLP metric exporter (extension of `humboldt-exporter-otlp-http`). | TCK metrics: full PASS | 7-10 d |
@@ -1099,7 +1099,7 @@ No `0.1.0-final` tag without :
 |---|---|---|
 | **Total runtime dependencies** | ~25 jars (otel-sdk, exporter-otlp, grpc-java, netty, guava, protobuf, perfmark, …) | **6 jars**: opentelemetry-api, opentelemetry-context, opentelemetry-semconv, protobuf-java, humboldt-* (5 modules), microprofile-telemetry-api |
 | **Total module-path size** | ~14 MB | **< 3 MB** target |
-| **Native JPMS module** | Partial (otel-api OK, sdk becomes an automatic module) | **100% JPMS**: all modules named with `module-info.java` |
+| **Native Java module** | Partial (otel-api OK, sdk becomes an automatic module) | **100% Java Modules**: all modules named with `module-info.java` |
 | **CDI container** | Weld (~3 MB) | **Vauban CDI Lite** (~200 KB) |
 | **@WithSpan reflection** | Runtime (BeanManager + dynamic interceptor) | **APT + Class-File API** → static MethodHandle |
 | **Context storage** | ThreadLocal | **ScopedValue** (JEP 506) |
@@ -1112,7 +1112,7 @@ No `0.1.0-final` tag without :
 | **MP Telemetry 2.1 TCK compliance** | 100% | **100% targeted** |
 | **OTel API compatibility** | 1.39.x | **1.39.x** (same contract) — later versions tested in weekly CI |
 
-Intentional product differentiation: **less magic, more codegen, virtual-thread native, strict JPMS, vertical Vidocq integration**.
+Intentional product differentiation: **less magic, more codegen, virtual-thread native, strict Java Modules, vertical Vidocq integration**.
 
 ---
 
@@ -1175,7 +1175,7 @@ To execute in order after validating this plan :
 The most critical files to start implementation, in order of importance:
 
 - `/Users/yblazart/projects/perso/vidocq/humboldt/pom.xml` — parent reactor Model 4.1.0, version properties, BOM-style dependencyManagement
-- `/Users/yblazart/projects/perso/vidocq/humboldt/humboldt-api/src/main/java/module-info.java` — JPMS foundation, `uses` SPIs, `requires transitive` OTel API
+- `/Users/yblazart/projects/perso/vidocq/humboldt/humboldt-api/src/main/java/module-info.java` — Java Modules foundation, `uses` SPIs, `requires transitive` OTel API
 - `/Users/yblazart/projects/perso/vidocq/humboldt/humboldt-context/src/main/java/io/vidocq/humboldt/context/ScopedValueContextStorageProvider.java` — virtual-threads-friendly pivot, first real differentiation
 - `/Users/yblazart/projects/perso/vidocq/humboldt/humboldt-sdk-trace/src/main/java/io/vidocq/humboldt/sdk/trace/SdkTracerProvider.java` — SDK core
 - `/Users/yblazart/projects/perso/vidocq/humboldt/humboldt-tck/pom.xml` — standalone POM Model 4.0.0, ShrinkWrap constraint, quality gate

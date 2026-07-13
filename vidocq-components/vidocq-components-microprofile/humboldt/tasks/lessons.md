@@ -30,7 +30,7 @@ be implemented (the "cache by name only" simplification is OK for M2).
 
 ### `requires static jdk.httpserver` for E2E tests
 
-In a JPMS module with `module-info.java`, Maven 4 + Surefire 3.5 tests
+In a Java module with `module-info.java`, Maven 4 + Surefire 3.5 tests
 are compiled on the MODULEPATH (not the classpath). A test that uses
 `com.sun.net.httpserver.HttpServer` (the pure JDK HttpServer, perfect for
 in-process fake servers) must therefore see the `jdk.httpserver` module.
@@ -57,7 +57,7 @@ Symptom: `LayerInstantiationException: Package X in both module A and module B`
 when starting the test JVM. Cause: an orphan `.class` remains in `target/`
 after moving the `.java` to another module (or changing its
 `package`). The built JAR contains both the class at the new
-location AND the leftover class at the old one — JPMS detects the duplicate
+location AND the leftover class at the old one — Java Modules detects the duplicate
 package and refuses to mount the layer.
 
 Always run `mvn clean install` after moving a class between
@@ -191,7 +191,7 @@ Advantages of BCE vs portable Extension:
 - Standard CDI 4.x API (vs Quarkus-specific)
 
 Discovery: `META-INF/services/jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension`
-+ JPMS `provides` in module-info.
++ Java Modules `provides` in module-info.
 
 ### Automatic-Module-Name with underscore
 

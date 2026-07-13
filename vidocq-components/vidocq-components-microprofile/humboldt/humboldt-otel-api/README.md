@@ -1,6 +1,6 @@
 # humboldt-otel-api
 
-Repackaging of `io.opentelemetry:opentelemetry-api` with an explicit `module-info.class` (`io.opentelemetry.api`) for JPMS/jlink usage.
+Repackaging of `io.opentelemetry:opentelemetry-api` with an explicit `module-info.class` (`io.opentelemetry.api`) for Java Modules/jlink usage.
 
 ## Quick verification
 

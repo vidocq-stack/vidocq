@@ -91,10 +91,10 @@
 
     <build>
         <!--
-            JPMS workaround aligné sur cyrano-core (cf. cyrano/cyrano-core/pom.xml).
+            Java Modules workaround aligné sur cyrano-core (cf. cyrano/cyrano-core/pom.xml).
 
-            Problème : maven-compiler-plugin 4.0.0-beta-4 détecte le mode JPMS dès que
-            module-info.class est présent dans target/classes. En mode JPMS pour
+            Problème : maven-compiler-plugin 4.0.0-beta-4 détecte le mode Java Modules dès que
+            module-info.class est présent dans target/classes. En mode Java Modules pour
             testCompile, il reconstruit un module-path qui ignore le -p custom et
             échoue sur `module not found: microprofile.rest.client.api` (JAR sans
             Automatic-Module-Name).
@@ -102,7 +102,7 @@
             Solution :
             1. module-info.java déplacé hors de src/main/java (dans src/main/module-info) :
                default-compile ne le voit pas → pas de module-info.class dans
-               target/classes → Maven ne détecte pas JPMS pour testCompile, qui
+               target/classes → Maven ne détecte pas Java Modules pour testCompile, qui
                s'exécute sur classpath normal.
             2. maven-clean-plugin (generate-test-sources) supprime un éventuel
                module-info.class stale avant testCompile.
@@ -144,7 +144,7 @@
                     <!-- Copie toutes les deps (incl. provided microprofile-rest-client-api)
                          dans target/javamodules pour que javac puisse dériver le nom de
                          module depuis le nom de fichier. Phase initialize : disponible
-                         à default-compile (les deps JPMS forcent le mode module-path)
+                         à default-compile (les deps Java Modules forcent le mode module-path)
                          et à compile-module-info en prepare-package. -->
                     <execution>
                         <id>copy-deps-to-module-path</id>
@@ -163,7 +163,7 @@
                 <configuration>
                     <!-- -p javamodules appliqué à toutes les executions sauf override.
                          Nécessaire car maven-compiler-plugin 4.0.0-beta-4 active le mode
-                         JPMS dès qu'une dep est nommée module (humboldt-api etc.) — il
+                         Java Modules dès qu'une dep est nommée module (humboldt-api etc.) — il
                          faut alors lui dire où trouver microprofile-rest-client-api
                          (JAR sans Automatic-Module-Name, copié par dependency-plugin). -->
                     <compilerArgs>

@@ -72,7 +72,7 @@ The Collector accepts both transports in parallel (receivers `otlp.protocols.grp
 
 For architectures that strictly depend on gRPC (compression, explicit H2 multiplexing), wait for the upcoming `humboldt-exporter-otlp-grpc` module (post-MVP, on top of `chappe-grpc`).
 
-== classpath → JPMS switch
+== classpath → Java Modules switch
 
 Humboldt requires a clean `module-info.java`. If the application is still on the classpath:
 
@@ -81,7 +81,7 @@ Humboldt requires a clean `module-info.java`. If the application is still on the
 . Declare OTel API `requires` (`io.opentelemetry.api`, `io.opentelemetry.context`).
 . Check no leftover `requires io.opentelemetry.sdk` (this module no longer exists at runtime).
 
-If the JPMS switch is too costly in the short term, Humboldt also works on the classpath through the standard `META-INF/services` fallback — but that is not the target mode.
+If the Java Modules switch is too costly in the short term, Humboldt also works on the classpath through the standard `META-INF/services` fallback — but that is not the target mode.
 
 == CDI: Vauban vs Weld / Quarkus Arc
 

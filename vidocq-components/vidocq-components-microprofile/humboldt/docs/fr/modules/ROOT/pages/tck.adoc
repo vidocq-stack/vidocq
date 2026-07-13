@@ -98,7 +98,7 @@ sdk env
 Le script :
 
 . Utilise `mvnw` (Maven 4) s'il est présent, sinon fallback sur `mvn` système.
-. Passe `maven.test.skip=true` (au lieu de `-DskipTests`) — nécessaire depuis M7c.12 car le compile-test de `humboldt-rest` échoue (`microprofile.rest.client.api` hors module-path en mode JPMS strict).
+. Passe `maven.test.skip=true` (au lieu de `-DskipTests`) — nécessaire depuis M7c.12 car le compile-test de `humboldt-rest` échoue (`microprofile.rest.client.api` hors module-path en mode Java Modules strict).
 . Les tests `humboldt-rest` restent exécutables manuellement via `mvn test -pl humboldt-rest`.
 
 == Profile rapide (un test ciblé)

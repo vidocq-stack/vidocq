@@ -80,7 +80,7 @@
 
 ---
 
-### [HBT-3] JPMS workaround in `humboldt-rest` via manual copying of compile-scope JARs
+### [HBT-3] Java Modules workaround in `humboldt-rest` via manual copying of compile-scope JARs
 
 - **Date** : 2026-05-25
 - **Component**: humboldt-rest/pom.xml
@@ -102,7 +102,7 @@
   and the copied intermediate Humboldt modules do not have a `module-info.class` recognized by
   `maven-compiler-plugin` 4.x. Copying them into `target/javamodules/` allows javac to
   resolve them as automatic modules from the JAR filename.
-- **Proposed fix**: check whether `opentelemetry-api` 1.x publishes a JPMS descriptor
+- **Proposed fix**: check whether `opentelemetry-api` 1.x publishes a Java Modules descriptor
   explicitly in recent versions; wrap if needed. Investigate why
   `humboldt-propagator-w3c` and `humboldt-otel-*` (internal modules) are not resolved
   natively — they should have their own `module-info.class`.
@@ -122,5 +122,5 @@
 - **Investigations** :
   - 2026-07-12 : found by grepping for stale version strings after the issue #3 follow-up.
     Fixed: version.properties filtered by Maven next to the class, constant loaded at class
-    init (same-module JPMS resource, no opens). No longer compile-time-inlineable, which
+    init (same-module Java Modules resource, no opens). No longer compile-time-inlineable, which
     also protects future consumers from the javac inlining trap.

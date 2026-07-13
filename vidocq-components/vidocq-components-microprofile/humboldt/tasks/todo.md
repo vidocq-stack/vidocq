@@ -2,7 +2,7 @@
 
 > Summary view for tracking milestone progress. The detailed plan is in `PLAN.md` and the milestone list is in `ROADMAP.md`.
 
-## M0 — JPMS skeleton and tooling _(completed 2026-05-20)_
+## M0 — Java Modules skeleton and tooling _(completed 2026-05-20)_
 
 - [x] PLAN.md committed (1190 lines, validated by Yann on 2026-05-20)
 - [x] `.sdkmanrc`, `mvnw`, `pom.xml` parent Model 4.1.0, `.gitignore`, LICENSE

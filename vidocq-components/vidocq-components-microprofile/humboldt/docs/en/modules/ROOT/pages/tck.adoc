@@ -98,7 +98,7 @@ sdk env
 The script:
 
 . Uses `mvnw` (Maven 4) when present, otherwise falls back to system `mvn`.
-. Passes `maven.test.skip=true` (instead of `-DskipTests`) — required since M7c.12 because `humboldt-rest` test-compile fails (`microprofile.rest.client.api` outside the module path under strict JPMS).
+. Passes `maven.test.skip=true` (instead of `-DskipTests`) — required since M7c.12 because `humboldt-rest` test-compile fails (`microprofile.rest.client.api` outside the module path under strict Java Modules).
 . `humboldt-rest` tests remain manually runnable through `mvn test -pl humboldt-rest`.
 
 == Fast profile (a single targeted test)

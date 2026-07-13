@@ -94,12 +94,12 @@ Humboldt follows the Vidocq philosophy: no bytecode agent, no dynamic proxy, no 
 This guarantees:
 
 . **AOT-ready** — GraalVM native-image and Leyden CDS need no reachability metadata for Humboldt; everything is static.
-. **JPMS clean** — generated classes are emitted into the right modules with the right access.
+. **Java Modules clean** — generated classes are emitted into the right modules with the right access.
 . **No dynamic proxy** — the `@WithSpan` interceptor is a plain static class, step-debuggable, profileable like hand-written code.
 
 == Bootstrap sequence
 
-. **JPMS startup** — `ServiceLoader` loads `HumboldtContextStorageProvider` via `provides ... with` (and `META-INF/services` fallback on classpath).
+. **Java Modules startup** — `ServiceLoader` loads `HumboldtContextStorageProvider` via `provides ... with` (and `META-INF/services` fallback on classpath).
 . **`HumboldtAutoConfigure.configure()`** is called by the application `main()`.
 . **`EnvConfig.fromProcess()`** reads `System.getenv()` + `System.getProperties()`.
 . Builds the `Resource` from `OTEL_SERVICE_NAME` + `OTEL_RESOURCE_ATTRIBUTES`.

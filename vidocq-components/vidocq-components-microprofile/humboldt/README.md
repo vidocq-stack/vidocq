@@ -44,7 +44,7 @@ sdk env
 
 ## Documentation
 
-- 📖 [Detailed implementation plan](PLAN.md) (1190 lines — metaphor, scope, dependency trade-offs, architecture, codegen, JPMS, milestones)
+- 📖 [Detailed implementation plan](PLAN.md) (1190 lines — metaphor, scope, dependency trade-offs, architecture, codegen, Java Modules, milestones)
 - 🇫🇷 [French Antora documentation](docs/fr/modules/ROOT/pages/index.adoc)
 - 🇬🇧 [English Antora documentation](docs/en/modules/ROOT/pages/index.adoc)
 - 🐛 [Bugs](BUG.md)

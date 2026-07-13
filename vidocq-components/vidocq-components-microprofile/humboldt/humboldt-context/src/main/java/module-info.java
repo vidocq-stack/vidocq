@@ -21,7 +21,7 @@
  * Humboldt Context — provides the OpenTelemetry {@code ContextStorageProvider}
  * implementation for the Humboldt runtime.
  *
- * <p>Discovered by OTel via {@link java.util.ServiceLoader} (JPMS
+ * <p>Discovered by OTel via {@link java.util.ServiceLoader} (Java Modules
  * {@code provides} binding + {@code META-INF/services} fallback for
  * classpath environments).</p>
  *

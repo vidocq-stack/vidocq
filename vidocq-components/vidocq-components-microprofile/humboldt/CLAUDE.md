@@ -77,7 +77,7 @@ humboldt-tck                       ← official TCK runner outside reactor (M7)
 
 The detailed plan is in `PLAN.md` (§13 milestones M0..M9). In summary:
 
-- **M0** — JPMS skeleton + workflows + documentation (in progress)
+- **M0** — Java Modules skeleton + workflows + documentation (in progress)
 - **M1** — `humboldt-sdk-common` + `humboldt-context` (Resource, Clock, ScopedValueContextStorage)
 - **M2** — `humboldt-sdk-trace` (first complete signal, partial tracing TCK)
 - **M3** — `humboldt-propagator-w3c` + `humboldt-exporter-otlp-http` (tracing TCK PASS)
