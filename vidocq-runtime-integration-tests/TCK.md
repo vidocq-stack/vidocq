@@ -75,6 +75,37 @@ deliberate exclusion:
 (Bookkeeping note: earlier revisions of this file stated a 1780 total — an
 addition error; the per-runner numbers were correct and summed to 1770.)
 
+## Jakarta EE Core Profile 11
+
+Beyond MicroProfile, Vidocq targets **Jakarta EE Core Profile 11** certification.
+That is a two-tier exercise (see `CERTIFICATION.md` at the repo root for the full
+process): the profile-level composite TCK, plus the standalone TCK of each of the
+seven constituent specifications. Develop against Maven Central; the certifying run
+uses the EFTL-signed binaries.
+
+**Constituent spec TCKs — all green:**
+
+| Spec | Runner | Result |
+|------|--------|--------|
+| Annotations 3.0 (signature) | `vidocq-runtime-tck-annotations` | 1/1 (JDK 25) |
+| CDI 4.1 Lite (+ Interceptors 2.2) | `vauban/vauban-tck-runner` | 774/774 |
+| Dependency Injection 2.0 (atinject) | `vauban/vauban-atinject-tck-runner` | pass |
+| JSON Processing 2.1 | `champollion/champollion-tck` | 178/179 (0 fail) |
+| JSON Binding 3.0 | `champollion/champollion-tck` | 289/295 (0 fail) |
+| RESTful Web Services 4.0 | `cassini/cassini-tck` | 2538 |
+
+**Profile composite TCK** — `vidocq-runtime-tck-coreprofile` runs the
+`jakarta.tck.coreprofile:core-profile-tck-impl` composite tests on the assembled
+runtime (Cassini + Champollion + Vauban over real HTTP). Currently **7/13**:
+
+- **3** fail on a JDK 25 vs TCK-helper incompatibility — `Utils.getDescriptor()`
+  needs `RETAIN_CLASS_REFERENCE` on JDK 25 (a documented contract JDK ≤ 21
+  enforced leniently). Not a Vidocq defect; resolved through a TCK challenge
+  (`CERTIFICATION.md` §6).
+- **3** are open Vidocq gaps: Cassini's server-side JSON-B custom-serialization
+  path (a resource throws instead of returning), and the MVP `cassini-client`
+  `readEntity(<type>)` (JSON-B client deserialisation).
+
 ## TCK glue vs. runtime code
 
 Each runner ships only the glue the TCK's own porting SPI requires — never patches to

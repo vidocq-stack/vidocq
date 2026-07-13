@@ -32,6 +32,7 @@ import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.Enumeration;
 import java.util.List;
@@ -111,11 +112,66 @@ final class MaterializedDeployment implements AutoCloseable {
         for (Path library : libraries) {
             urls.add(toUrl(library));
         }
-        URLClassLoader classLoader = new URLClassLoader(
+        URLClassLoader classLoader = new DeploymentClassLoader(
                 "vidocq-deployment[" + archive.getName() + "]",
                 urls.toArray(URL[]::new),
                 MaterializedDeployment.class.getClassLoader());
         return new MaterializedDeployment(root, List.copyOf(libraries), classLoader);
+    }
+
+    /**
+     * Deployment class loader with child-first <em>resource</em> lookup. Classes are
+     * still loaded parent-first (standard delegation, no risk of duplicate class
+     * definitions), but {@code getResource(s)} return the deployment's own resources
+     * before the parent's. This gives a deployment-local {@code META-INF/services/*}
+     * provider precedence over a runtime provider — the Jakarta EE web-app rule that
+     * the Core Profile TCK relies on (a WAR that ships its own {@code JsonProvider} /
+     * {@code JsonbProvider} must be the one {@code ServiceLoader} resolves).
+     */
+    private static final class DeploymentClassLoader extends URLClassLoader {
+        DeploymentClassLoader(String name, URL[] urls, ClassLoader parent) {
+            super(name, urls, parent);
+        }
+
+        @Override
+        public URL getResource(String name) {
+            String lenient = stripLeadingSlash(name);
+            URL local = findResource(lenient);
+            return local != null ? local : super.getResource(lenient);
+        }
+
+        @Override
+        public Enumeration<URL> getResources(String name) throws IOException {
+            name = stripLeadingSlash(name);
+            // Deployment resources first, then the parent's, deduplicated.
+            List<URL> ordered = new ArrayList<>();
+            for (Enumeration<URL> local = findResources(name); local.hasMoreElements(); ) {
+                URL url = local.nextElement();
+                if (!ordered.contains(url)) {
+                    ordered.add(url);
+                }
+            }
+            ClassLoader parent = getParent();
+            if (parent != null) {
+                for (Enumeration<URL> up = parent.getResources(name); up.hasMoreElements(); ) {
+                    URL url = up.nextElement();
+                    if (!ordered.contains(url)) {
+                        ordered.add(url);
+                    }
+                }
+            }
+            return Collections.enumeration(ordered);
+        }
+
+        /**
+         * Jakarta EE deployment class loaders (servlet-container derived) tolerate a
+         * leading slash in resource names; a bare {@link URLClassLoader} does not. TCK
+         * deployment code loads resources like {@code getResourceAsStream("/key.pub")},
+         * so strip a single leading slash to match the app-server behaviour.
+         */
+        private static String stripLeadingSlash(String name) {
+            return name != null && name.startsWith("/") ? name.substring(1) : name;
+        }
     }
 
     private static URL toUrl(Path path) {

@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.runtime</groupId>
+        <artifactId>vidocq-runtime-integration-tests</artifactId>
+        <version>0.3.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vidocq-runtime-tck-annotations</artifactId>
+    <name>Vidocq :: TCK :: Jakarta Annotations 3.0</name>
+    <description>
+        Runs the Jakarta Annotations 3.0 TCK (jakarta.annotation:jakarta-annotations-tck).
+        This TCK is signature-only: it verifies the jakarta.annotation API surface against the
+        recorded signature (there are no behavioural tests — the official exclude list excludes
+        nothing). Vidocq ships the standard jakarta.annotation-api 3.0.0 jar, so this asserts the
+        Core Profile's Annotations constituent stays spec-exact. Gated behind the `tck` profile.
+    </description>
+
+    <properties>
+        <annotations.tck.version>3.0.0</annotations.tck.version>
+        <jimage.dir>${project.build.directory}/jimage</jimage.dir>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>jakarta.annotation</groupId>
+            <artifactId>jakarta.annotation-api</artifactId>
+            <version>3.0.0</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- Signature test suite (installed from the EFTL bundle). -->
+        <dependency>
+            <groupId>jakarta.annotation</groupId>
+            <artifactId>jakarta-annotations-tck</artifactId>
+            <version>${annotations.tck.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- The sigtest tool (SignatureTest) the TCK's driver invokes. -->
+        <dependency>
+            <groupId>jakarta.tck</groupId>
+            <artifactId>sigtest-maven-plugin</artifactId>
+            <version>2.6</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- Expose the resolved jakarta.annotation-api jar path as a property. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>resolve-sig-classpath</id>
+                        <phase>process-test-resources</phase>
+                        <goals>
+                            <goal>properties</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <!-- Extract java.base so the signature test can resolve JDK types the API references. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-antrun-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>jimage-extract</id>
+                        <phase>process-test-resources</phase>
+                        <goals>
+                            <goal>run</goal>
+                        </goals>
+                        <configuration>
+                            <target>
+                                <delete dir="${jimage.dir}" quiet="true"/>
+                                <exec executable="${java.home}/bin/jimage" failonerror="true">
+                                    <arg value="extract"/>
+                                    <arg value="--dir=${jimage.dir}"/>
+                                    <arg value="${java.home}/lib/modules"/>
+                                </exec>
+                            </target>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <dependenciesToScan>
+                        <dependency>jakarta.annotation:jakarta-annotations-tck</dependency>
+                    </dependenciesToScan>
+                    <includes>
+                        <include>**/*IT.class</include>
+                    </includes>
+                    <systemPropertyVariables>
+                        <jimage.dir>${jimage.dir}</jimage.dir>
+                        <sigTestClasspath>${jakarta.annotation:jakarta.annotation-api:jar}${path.separator}${jimage.dir}/java.base</sigTestClasspath>
+                        <ca.sig.generated>true</ca.sig.generated>
+                        <ca.sig.postconstruct>true</ca.sig.postconstruct>
+                        <ca.sig.priority>true</ca.sig.priority>
+                        <ca.sig.predestroy>true</ca.sig.predestroy>
+                        <ca.sig.resource>true</ca.sig.resource>
+                        <ca.sig.resources>true</ca.sig.resources>
+                        <ca.sig.securitydeclareroles>true</ca.sig.securitydeclareroles>
+                        <ca.sig.securitydenyall>true</ca.sig.securitydenyall>
+                        <ca.sig.securitypermitall>true</ca.sig.securitypermitall>
+                        <ca.sig.securityrolesallowed>true</ca.sig.securityrolesallowed>
+                        <ca.sig.securityrunas>true</ca.sig.securityrunas>
+                        <ca.sig.sqldatasourcedefinition>true</ca.sig.sqldatasourcedefinition>
+                        <ca.sig.sqldatasourcedefinitions>true</ca.sig.sqldatasourcedefinitions>
+                    </systemPropertyVariables>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

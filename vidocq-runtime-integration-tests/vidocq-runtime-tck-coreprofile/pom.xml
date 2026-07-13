@@ -1,0 +1,200 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.runtime</groupId>
+        <artifactId>vidocq-runtime-integration-tests</artifactId>
+        <version>0.3.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vidocq-runtime-tck-coreprofile</artifactId>
+    <name>Vidocq :: TCK :: Jakarta EE Core Profile 11</name>
+    <description>
+        Runs the Jakarta EE Core Profile 11 TCK composite tests
+        (jakarta.tck.coreprofile:core-profile-tck-impl) against the assembled Vidocq
+        runtime through the embedded Arquillian container. These tests validate the
+        ability to combine the Core Profile component specs into composite
+        applications — a JAX-RS resource (Cassini) injecting a CDI bean (Vauban) and
+        serialising JSON-P / JSON-B entities (Champollion) — served over real HTTP by
+        Cassini-on-Chappe. Signature tests of the Core Profile API are wired here too.
+        Gated behind the `tck` profile.
+    </description>
+
+    <properties>
+        <core.profile.tck.version>11.0.0</core.profile.tck.version>
+    </properties>
+
+    <!--
+        No module-info.java (unnamed module) so the TCK deployment classes, which
+        carry no JPMS descriptor, stay readable by Vauban/Cassini/Champollion —
+        same approach as the other vidocq-runtime-it-* / vidocq-runtime-tck-* modules.
+    -->
+
+    <dependencies>
+        <!-- Vidocq runtime under test — the Core Profile constituent bricks -->
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-core</artifactId>
+        </dependency>
+        <!-- Cassini = Jakarta REST 4.0 (mounts JAX-RS resources over Chappe) -->
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
+            <artifactId>vidocq-runtime-cassini-rest-extension</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-core</artifactId>
+        </dependency>
+        <!--
+            Cassini's JAX-RS Client (jakarta.ws.rs.client.ClientBuilder provider).
+            The @RunAsClient Core Profile REST tests call ClientBuilder.newClient()
+            from the test JVM to reach the deployed resource over HTTP.
+        -->
+        <dependency>
+            <groupId>io.vidocq.cassini</groupId>
+            <artifactId>cassini-client</artifactId>
+            <version>${cassini.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- Champollion = JSON-P 2.1 + JSON-B 3.0 runtime implementations -->
+        <dependency>
+            <groupId>io.vidocq.champollion</groupId>
+            <artifactId>champollion-jsonp</artifactId>
+            <version>${champollion.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.champollion</groupId>
+            <artifactId>champollion-jsonb</artifactId>
+            <version>${champollion.version}</version>
+        </dependency>
+
+        <!-- Jakarta Core Profile APIs -->
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.ws.rs</groupId>
+            <artifactId>jakarta.ws.rs-api</artifactId>
+            <version>4.0.0</version>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.json</groupId>
+            <artifactId>jakarta.json-api</artifactId>
+            <version>2.1.3</version>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.json.bind</groupId>
+            <artifactId>jakarta.json.bind-api</artifactId>
+            <version>3.0.0</version>
+        </dependency>
+        <!-- JSON-B references jakarta.activation (DataSource) for media handling. -->
+        <dependency>
+            <groupId>jakarta.activation</groupId>
+            <artifactId>jakarta.activation-api</artifactId>
+            <version>2.1.3</version>
+        </dependency>
+        <!-- JSON-B's default type adapters reference jakarta.xml.bind (JAXBException). -->
+        <dependency>
+            <groupId>jakarta.xml.bind</groupId>
+            <artifactId>jakarta.xml.bind-api</artifactId>
+            <version>4.0.2</version>
+        </dependency>
+
+        <!-- Core Profile 11 composite TCK tests (installed from the EFTL bundle). -->
+        <dependency>
+            <groupId>jakarta.tck.coreprofile</groupId>
+            <artifactId>core-profile-tck-impl</artifactId>
+            <version>${core.profile.tck.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Test harness: embedded Vidocq Arquillian container (JUnit 5). -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!--
+            junit-jupiter-api 6.x carries an OPTIONAL reference to Kotlin
+            (kotlin.jvm.functions.Function0). The embedded container adds the
+            deployment's JUnit 5 test class as a CDI bean (it is @Inject-enriched),
+            and introspecting it links junit-jupiter-api — so kotlin-stdlib must be
+            resolvable on the test class path. Test scope only; never in the runtime.
+        -->
+        <dependency>
+            <groupId>org.jetbrains.kotlin</groupId>
+            <artifactId>kotlin-stdlib</artifactId>
+            <version>2.1.0</version>
+            <scope>test</scope>
+        </dependency>
+        <!--
+            Same reason: junit-jupiter's vintage/migration surface links
+            junit.framework.TestCase (JUnit 3/4). Present so introspecting the
+            deployment test class resolves cleanly. Test scope only.
+        -->
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <version>4.13.2</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-arquillian</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.jboss.arquillian.junit5</groupId>
+            <artifactId>arquillian-junit5-container</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.jboss.shrinkwrap</groupId>
+            <artifactId>shrinkwrap-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <annotationProcessorPaths combine.children="append">
+                        <path>
+                            <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
+                            <artifactId>vidocq-runtime-cassini-rest-extension-codegen</artifactId>
+                            <version>${project.version}</version>
+                            <type>pom</type>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!--
+                        The Core Profile composite tests are JUnit 5 (@ExtendWith
+                        ArquillianExtension) *IT classes shipped in the TCK jar, not in
+                        this module's src/test/java. Scan that dependency and include the
+                        *IT naming. The embedded container runs @Deployment(testable=true)
+                        tests in-JVM (Local protocol) and serves testable=false ones over
+                        HTTP through Cassini-on-Chappe (@ArquillianResource URL).
+                    -->
+                    <dependenciesToScan>
+                        <dependency>jakarta.tck.coreprofile:core-profile-tck-impl</dependency>
+                    </dependenciesToScan>
+                    <includes>
+                        <include>**/*IT.class</include>
+                    </includes>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
