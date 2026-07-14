@@ -222,14 +222,19 @@ public class MansartTransactionManager implements TransactionManager {
     public RecoveryReport recover(XAResource... resources) throws java.io.IOException {
         List<RecoveryLog.Record> inDoubt = recover();
 
-        // Pre-compute every driver's in-doubt branches — one scan call per resource.
-        var driverIndex = new LinkedHashMap<XAResource, java.util.Map<XidKey, Xid>>();
+        // Pre-compute every driver's in-doubt branches — one scan call per resource. The journal
+        // records the GLOBAL xid (branch qualifier 0) while each enlisted resource holds its own
+        // BRANCH (same gtrid, distinct bqual), so reconciliation matches on the global
+        // transaction id and a driver may hold several branches of the same transaction.
+        var driverIndex = new LinkedHashMap<XAResource, java.util.Map<GtridKey, java.util.List<Xid>>>();
         for (XAResource r : resources) {
-            var index = new LinkedHashMap<XidKey, Xid>();
+            var index = new LinkedHashMap<GtridKey, java.util.List<Xid>>();
             try {
                 Xid[] xids = r.recover(XAResource.TMSTARTRSCAN | XAResource.TMENDRSCAN);
                 if (xids != null) {
-                    for (Xid x : xids) index.put(XidKey.of(x), x);
+                    for (Xid x : xids) {
+                        index.computeIfAbsent(GtridKey.of(x), k -> new ArrayList<>()).add(x);
+                    }
                 }
             } catch (XAException ignored) {
                 // Driver scan failed — treat as empty ; affected records stay in doubt.
@@ -242,32 +247,45 @@ public class MansartTransactionManager implements TransactionManager {
         var unresolved  = new ArrayList<RecoveryLog.Record>();
 
         for (RecoveryLog.Record rec : inDoubt) {
-            var key = XidKey.of(rec.xid());
-            XAResource match = null;
-            Xid driverXid = null;
+            var key = GtridKey.of(rec.xid());
+            boolean matched = false;
+            boolean failed = false;
+            // Branches of one transaction may be spread over SEVERAL drivers — resolve them all.
             for (var entry : driverIndex.entrySet()) {
-                Xid x = entry.getValue().get(key);
-                if (x != null) { match = entry.getKey(); driverXid = x; break; }
-            }
-            if (match == null) {
-                unresolved.add(rec);
-                continue;
-            }
-            try {
-                if (rec.type() == RecoveryLog.Type.COMMITTING) {
-                    match.commit(driverXid, false);
-                    committed.add(driverXid);
-                } else {
-                    // PREPARED — no durable commit decision was made.
-                    match.rollback(driverXid);
-                    rolledBack.add(driverXid);
+                var branches = entry.getValue().get(key);
+                if (branches == null) continue;
+                matched = true;
+                for (Xid branch : branches) {
+                    try {
+                        if (rec.type() == RecoveryLog.Type.COMMITTING) {
+                            entry.getKey().commit(branch, false);
+                            committed.add(branch);
+                        } else {
+                            // PREPARED — no durable commit decision was made.
+                            entry.getKey().rollback(branch);
+                            rolledBack.add(branch);
+                        }
+                    } catch (XAException ex) {
+                        // Driver rejected our resolution attempt — surface as still-in-doubt.
+                        failed = true;
+                    }
                 }
-            } catch (XAException ex) {
-                // Driver rejected our resolution attempt — surface as still-in-doubt for now.
+            }
+            if (!matched || failed) {
                 unresolved.add(rec);
             }
         }
         return new RecoveryReport(committed, rolledBack, unresolved);
+    }
+
+    /** Global-transaction-id equality wrapper — branch qualifiers deliberately excluded. */
+    private record GtridKey(int format, java.util.List<Byte> gtrid) {
+        static GtridKey of(javax.transaction.xa.Xid x) {
+            var g = x.getGlobalTransactionId();
+            var gl = new java.util.ArrayList<Byte>(g.length);
+            for (byte v : g) gl.add(v);
+            return new GtridKey(x.getFormatId(), gl);
+        }
     }
 
     /** Equality wrapper for {@link javax.transaction.xa.Xid} — by-content hash/equals on

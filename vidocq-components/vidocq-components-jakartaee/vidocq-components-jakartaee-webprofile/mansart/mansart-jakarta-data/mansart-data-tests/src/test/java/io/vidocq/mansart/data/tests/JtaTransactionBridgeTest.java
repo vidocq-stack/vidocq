@@ -220,6 +220,38 @@ class JtaTransactionBridgeTest {
     }
 
     @Test
+    void twoRealXaBranchesCommitAtomically() throws Exception {
+        // Both datasources are real XADataSources ("bridgeds" + "xaonly") — a transaction
+        // touching both enlists TWO XA branches: full two-phase commit, no LRCO involved.
+        tm.begin();
+        BridgeNote note = new BridgeNote();
+        note.setText("xa branch 1");
+        bridgeNotes.save(note);
+        XaOnlyNote other = new XaOnlyNote();
+        other.setText("xa branch 2");
+        xaOnlyNotes.save(other);
+        tm.commit();
+
+        assertThat(countRows(BridgeDataSources.AUDIT_URL, "bridge_notes")).isEqualTo(1);
+        assertThat(countRows(BridgeDataSources.XAONLY_URL, "xa_only_notes")).isEqualTo(1);
+    }
+
+    @Test
+    void twoRealXaBranchesRollBackAtomically() throws Exception {
+        tm.begin();
+        BridgeNote note = new BridgeNote();
+        note.setText("must vanish 1");
+        bridgeNotes.save(note);
+        XaOnlyNote other = new XaOnlyNote();
+        other.setText("must vanish 2");
+        xaOnlyNotes.save(other);
+        tm.rollback();
+
+        assertThat(countRows(BridgeDataSources.AUDIT_URL, "bridge_notes")).isZero();
+        assertThat(countRows(BridgeDataSources.XAONLY_URL, "xa_only_notes")).isZero();
+    }
+
+    @Test
     void xaOnlyNamedDataSourceWorksOutsideTransaction() throws Exception {
         XaOnlyNote note = new XaOnlyNote();
         note.setText("adapter path");

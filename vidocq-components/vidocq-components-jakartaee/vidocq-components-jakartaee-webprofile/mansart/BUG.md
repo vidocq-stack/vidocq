@@ -94,6 +94,16 @@ mansart-transactions extension (`MansartTransactionManager.recover()` over every
 shows "durable recovery journal" + "recovery scan clean". Still out of scope: pooling of the
 transactional `XAConnection`s themselves (per-transaction connections are correct and simple).
 
+**XA branch identity (2026-07-14, follow-up)**: the TM handed the SAME Xid to every enlisted
+resource (bqual frozen at `{0}`) — non-conformant, and `XAER_DUPID` waiting to happen when two
+datasources reach the same resource manager. Each enlisted resource now gets its own branch
+(same gtrid, distinct bqual); every per-branch call (end/prepare/commit/rollback) reuses the
+branch's own Xid, and the recovery reconciliation matches journal records against driver
+branches by GLOBAL transaction id (a driver may hold several branches of one transaction,
+spread over several drivers — all are resolved). Regression: `BranchXidTest` (red→green),
+`JtaTransactionBridgeTest.twoRealXaBranches*` (two real XA branches commit/roll back
+atomically).
+
 ## MANSART-005 — `@Repository(dataStore = "name")` routing silently lost when the APT impl is a managed bean
 - **Date**: 2026-07-14 — **Status**: FIXED
 - **Severity**: high (multi-datasource repositories silently read/write the WRONG database)

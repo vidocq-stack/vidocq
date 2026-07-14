@@ -75,7 +75,12 @@ final class MansartTransaction implements Transaction {
      *  {@link #delistResource(XAResource, int)} — they must not be re-ended at commit. */
     private final Set<XAResource> alreadyEnded =
             java.util.Collections.newSetFromMap(new IdentityHashMap<>());
-    private final Xid xid = new MansartXid(longToBytes(XID_COUNTER.incrementAndGet()), new byte[]{0});
+    private final byte[] gtrid = longToBytes(XID_COUNTER.incrementAndGet());
+    /** Journal identity of the whole transaction (branch qualifier 0 is never handed to a resource). */
+    private final Xid xid = new MansartXid(gtrid, new byte[]{0});
+    /** One XA branch per enlisted resource — same gtrid, DISTINCT branch qualifier (XA spec). */
+    private final IdentityHashMap<XAResource, Xid> branchXids = new IdentityHashMap<>();
+    private int branchSequence;
     private final RecoveryLog recoveryLog;
 
     MansartTransaction() {
@@ -125,7 +130,7 @@ final class MansartTransaction implements Transaction {
             // 1PC degenerate path — skip prepare entirely.
             status = Status.STATUS_COMMITTING;
             try {
-                resources.get(0).commit(xid, true);
+                resources.get(0).commit(xidFor(resources.get(0)), true);
             } catch (XAException ex) {
                 status = Status.STATUS_UNKNOWN;
                 invokeAfterCompletion(Status.STATUS_UNKNOWN);
@@ -142,7 +147,7 @@ final class MansartTransaction implements Transaction {
         boolean rollback = false;
         for (XAResource r : resources) {
             try {
-                int vote = r.prepare(xid);
+                int vote = r.prepare(xidFor(r));
                 if (vote == XAResource.XA_OK) {
                     prepared.add(r);
                 }
@@ -156,7 +161,7 @@ final class MansartTransaction implements Transaction {
             // Roll back every resource that voted YES (they are still holding locks).
             status = Status.STATUS_ROLLING_BACK;
             for (XAResource r : prepared) {
-                try { r.rollback(xid); } catch (XAException ignored) { /* best effort */ }
+                try { r.rollback(xidFor(r)); } catch (XAException ignored) { /* best effort */ }
             }
             status = Status.STATUS_ROLLEDBACK;
             invokeAfterCompletion(Status.STATUS_ROLLEDBACK);
@@ -182,15 +187,15 @@ final class MansartTransaction implements Transaction {
         }
         for (int i = 0; i < lastResources.size(); i++) {
             try {
-                lastResources.get(i).commit(xid, false);
+                lastResources.get(i).commit(xidFor(lastResources.get(i)), false);
             } catch (XAException ex) {
                 status = Status.STATUS_ROLLING_BACK;
                 for (XAResource r : twoPhase) {
-                    try { r.rollback(xid); } catch (XAException ignored) { /* best effort */ }
+                    try { r.rollback(xidFor(r)); } catch (XAException ignored) { /* best effort */ }
                 }
                 // Remaining single-phase resources have not committed yet — roll them back too.
                 for (XAResource r : lastResources.subList(i + 1, lastResources.size())) {
-                    try { r.rollback(xid); } catch (XAException ignored) { /* best effort */ }
+                    try { r.rollback(xidFor(r)); } catch (XAException ignored) { /* best effort */ }
                 }
                 status = Status.STATUS_ROLLEDBACK;
                 invokeAfterCompletion(Status.STATUS_ROLLEDBACK);
@@ -207,7 +212,7 @@ final class MansartTransaction implements Transaction {
         appendOrFailSystem(RecoveryLog.Type.COMMITTING);
         for (XAResource r : twoPhase) {
             try {
-                r.commit(xid, false);
+                r.commit(xidFor(r), false);
             } catch (XAException ex) {
                 // Heuristic territory — for M5 we surface as SystemException ; the on-disk
                 // COMMITTING record means recovery can complete this commit on restart.
@@ -246,17 +251,23 @@ final class MansartTransaction implements Transaction {
         status = Status.STATUS_ROLLING_BACK;
         endActiveResources(XAResource.TMFAIL);
         for (XAResource r : resources) {
-            try { r.rollback(xid); } catch (XAException ignored) { /* best effort */ }
+            try { r.rollback(xidFor(r)); } catch (XAException ignored) { /* best effort */ }
         }
         status = Status.STATUS_ROLLEDBACK;
         invokeAfterCompletion(Status.STATUS_ROLLEDBACK);
+    }
+
+    /** The branch Xid this resource was started with — per-branch XA calls must reuse it. */
+    private Xid xidFor(XAResource r) {
+        Xid branch = branchXids.get(r);
+        return branch != null ? branch : xid;
     }
 
     private void endActiveResources(int flag) {
         for (XAResource r : resources) {
             if (alreadyEnded.contains(r)) continue;
             try {
-                r.end(xid, flag);
+                r.end(xidFor(r), flag);
                 alreadyEnded.add(r);
             } catch (XAException ignored) {
                 // Best effort — proceed even if end() fails ; commit/rollback is what matters.
@@ -303,11 +314,13 @@ final class MansartTransaction implements Transaction {
             throw new IllegalStateException(
                     "enlistResource() requires STATUS_ACTIVE, was " + statusName(status));
         }
+        Xid branchXid = new MansartXid(gtrid, longToBytes(++branchSequence));
         try {
-            xaRes.start(xid, XAResource.TMNOFLAGS);
+            xaRes.start(branchXid, XAResource.TMNOFLAGS);
         } catch (XAException ex) {
             throw new SystemException("XAResource.start failed: " + ex.errorCode);
         }
+        branchXids.put(xaRes, branchXid);
         resources.add(xaRes);
         return true;
     }
@@ -321,7 +334,7 @@ final class MansartTransaction implements Transaction {
         }
         if (!resources.contains(xaRes)) return false;
         try {
-            xaRes.end(xid, flag);
+            xaRes.end(xidFor(xaRes), flag);
             alreadyEnded.add(xaRes);
         } catch (XAException ex) {
             throw new SystemException("XAResource.end failed: " + ex.errorCode);
