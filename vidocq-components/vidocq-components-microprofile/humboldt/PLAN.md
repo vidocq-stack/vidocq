@@ -1069,7 +1069,7 @@ Creation required as of M0 — workspace convention.
 | Milestone | Deliverables | TCK gate | Estimated duration |
 |---|---|---|---|
 | **M0 — Bootstrap** | Repo skeleton, parent `pom.xml`, `.sdkmanrc`, `.forgejo/workflows/*`, `CLAUDE.md`, FR/EN `README.md`, empty `BUG.md`/`BENCH.md`, placeholder logo, `docs/{en,fr}/antora.yml` + `index.adoc` (name & metaphor), initialized tasks/todo.md. Empty reactor build. | — | 1-2 d |
-| **M1 — Java Modules + API + Context** | `humboldt-api`, `humboldt-context` (ScopedValueContextStorage), tests: a `ContextStorage` that propagates correctly across `Thread.ofVirtual()`. Module-info validated by `jpms-guardian`. | — | 3-5 d |
+| **M1 — Java Modules + API + Context** | `humboldt-api`, `humboldt-context` (ScopedValueContextStorage), tests: a `ContextStorage` that propagates correctly across `Thread.ofVirtual()`. Module-info validated by `java-modules-guardian`. | — | 3-5 d |
 | **M2 — Minimal SDK traces** | `humboldt-sdk-trace`: SdkTracerProvider, SdkSpan, SpanBuilder, SimpleSpanProcessor, AlwaysOnSampler, IdGenerator. Unit tests coverage > 70%. `humboldt-sdk-testing` (InMemoryExporter). | TCK tracing: smoke PASS | 5-7 d |
 | **M3 — Propagator + OTLP HTTP exporter** | `humboldt-propagator` (W3C TraceContext + Baggage). `humboldt-exporter-otlp-http`: protobuf marshalling, HTTP/1.1 sender (chappe-client or java.net.http), retry policy, virtual-thread BatchSpanProcessor. E2E tests against Jaeger in Docker via testcontainers (or manual docker compose). | TCK tracing: full PASS | 7-10 d |
 | **M4 — SDK Metrics** | `humboldt-sdk-metric`: async Counter/Histogram/UpDownCounter/Gauge, SumAggregator, HistogramAggregator (explicit buckets), ExponentialHistogramAggregator, ViewRegistry, PeriodicMetricReader. OTLP metric exporter (extension of `humboldt-exporter-otlp-http`). | TCK metrics: full PASS | 7-10 d |
@@ -1086,7 +1086,7 @@ Creation required as of M0 — workspace convention.
 No `0.1.0-final` tag without :
 - Traces + Metrics + Logs TCK: 100% PASS in both runtime and static codegen modes
 - `humboldt-bench`: regression < 10% vs SmallRye across all benchmarks
-- `jpms-guardian` agent: 0 warnings
+- `java-modules-guardian` agent: 0 warnings
 - `dependency-gatekeeper` agent: 0 unjustified dependencies
 - Complete EN+FR Antora pages
 - 2 reviewers on the final PR
