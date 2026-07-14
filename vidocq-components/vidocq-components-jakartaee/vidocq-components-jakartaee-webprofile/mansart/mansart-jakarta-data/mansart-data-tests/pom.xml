@@ -14,6 +14,8 @@
 
     <properties>
         <maven.deploy.skip>true</maven.deploy.skip>
+        <!-- Test-only CDI container for the multi-dataStore routing tests (MANSART-005). -->
+        <vauban.version>0.3.0-SNAPSHOT</vauban.version>
     </properties>
 
     <dependencies>
@@ -78,6 +80,21 @@
         <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- MANSART-005 — CDI-level routing tests: boot a real Vauban container so the
+             @Repository(dataStore = "name") path is exercised with a managed APT impl present. -->
+        <dependency>
+            <groupId>io.vidocq.mansart</groupId>
+            <artifactId>mansart-data-cdi</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-core</artifactId>
+            <version>${vauban.version}</version>
             <scope>test</scope>
         </dependency>
 

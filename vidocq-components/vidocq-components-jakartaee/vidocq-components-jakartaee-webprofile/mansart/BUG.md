@@ -5,6 +5,62 @@ short id, date, symptom, minimal repro, cause hypothesis, status. Update on each
 
 ---
 
+## MANSART-005 — `@Repository(dataStore = "name")` routing silently lost when the APT impl is a managed bean
+- **Date**: 2026-07-14 — **Status**: FIXED
+- **Severity**: high (multi-datasource repositories silently read/write the WRONG database)
+
+### Symptom
+In `vidocq-runtime-mansart-h2-example`, `GET /api/audit` → 500 `Table "audit_log" not found`:
+`AuditEntryRepository` (`@Repository(dataStore = "audit")`) queries the **default** H2 database
+instead of the `@Named("audit")` one. Direct injection (`@Inject @Named("audit") DataSource`)
+works — only the repository path mis-routes.
+
+### Minimal repro
+```
+# example on module path, two H2 in-memory pools (default + "audit")
+cd vidocq/vidocq-runtime-examples/vidocq-runtime-mansart-h2-example && ../../mvnw vidocq:dev
+curl localhost:8080/api/audit   # 500, SELECT runs on jdbc:h2:mem:mansart-vidocq-demo
+```
+
+### Cause
+Two compounding facts on the compile-time path:
+1. `mansart-data-processor` generates `*RepositoryImpl` as `@Singleton` with an **unqualified**
+   `@Inject *(RepositoryRuntime runtime)` constructor — that always resolves the `@Default`
+   runtime (default `DataSource`), no matter what `dataStore` says.
+2. `MansartDataExtension.@Synthesis` **skips** the synthetic routing bean when the impl is
+   already a managed bean (`isAlreadyManagedBean`) — so `DataStoreResolver` (the only code that
+   honors `dataStore`) is **never invoked** (verified by instrumentation: no `resolve()` call at
+   runtime).
+
+Not a July regression: bisected back to vauban@`eefc6ea` + vidocq@`ab1b6bd` (2026-06-17, the
+day after the feature demo commit) — already broken. The June E2E validation demonstrably
+covered the direct `@Named` injection paths (`/db/audit`), not the repository routing.
+
+### Investigations
+- 2026-07-14: full bisection (vauban pre/post TCK campaign, vidocq June state) — rules out the
+  Core Profile 11 / assembled-runtime TCK campaigns. Fix direction: veto the managed impl when
+  `dataStore` is non-default (`@Enhancement` + `@Vetoed`, same idiom as ravel's
+  `ConfigCdiExtension`) and register the synthetic bean unconditionally for those repositories,
+  so `MansartRepoCreator`/`DataStoreResolver` route as designed.
+
+### Fix / verification
+Two-sided fix:
+1. **mansart-data-cdi** — `MansartDataExtension` vetoes (`@Enhancement` + `@Vetoed`) any bean
+   class implementing a `@Repository(dataStore = "name")` interface (found by reflection — the
+   index-backed lang model returns no super-interfaces for pre-indexed module-path classes),
+   and `@Synthesis` registers the routing synthetic bean unconditionally for those interfaces.
+   The default-dataStore path is untouched (managed impl keeps winning, `@Transactional`
+   interception included). Note: routed repositories are instantiated by `MansartRepoCreator`
+   and are NOT interceptor-enhanced (pre-existing property of the synthetic path).
+2. **vauban** — `EnhancementApplier.applyEnhancements` now drops a bean descriptor whose
+   enhancement adds `@Vetoed` (index-discovered beans ignored the added veto; only the
+   pre-discovery archive pass honored it). Regression test `BceVetoedEnhancementTest`.
+
+Verified: new `MultiDataStoreRoutingTest` (mansart-data-tests, Vauban SE, two H2 databases)
+red→green; full mansart reactor green; full vauban reactor green; e2e on
+`vidocq-runtime-mansart-h2-example` (module path): POST/GET `/api/audit` 201/200 with rows in
+the audit database only, `/api/products` CRUD unchanged; CDI Lite TCK re-run (see below).
+
 ## MANSART-004 — Jakarta Data 1.0 TCK harness fully green (root cause was upstream in Vauban)
 - **Date**: 2026-06-02 — **Status**: FIXED
 - **Severity**: high (the official TCK could not run at all — it is the conformance contract)
