@@ -46,7 +46,7 @@ public class MansartRuntimeProducer {
 
     @Produces
     @Singleton
-    public RepositoryRuntime runtime(Instance<DataSource> defaultDs) {
+    public RepositoryRuntime runtime(Instance<DataSource> defaultDs, Instance<Object> lookup) {
         if (defaultDs.isUnsatisfied()) {
             throw new MansartDataException(
                     "No @Default DataSource bean found. Either expose one, or route every repository "
@@ -57,6 +57,13 @@ public class MansartRuntimeProducer {
                     "Multiple @Default DataSource beans match. Disambiguate with @Named and route "
                             + "each repository via @Repository(dataStore = \"name\").");
         }
-        return MansartData.builder().dataSource(defaultDs.get()).build().runtime();
+        // MANSART-007 — when a TransactionManager is present, repository connections join the
+        // active JTA transaction. The lookup parameter is Instance<Object> on purpose: a typed
+        // Instance<TransactionManager> parameter would make this producer's signature
+        // unloadable in deployments without jakarta.transaction.
+        return MansartData.builder()
+                .dataSource(defaultDs.get())
+                .transactionBridge(JtaBridgeActivator.tryCreate(lookup))
+                .build().runtime();
     }
 }

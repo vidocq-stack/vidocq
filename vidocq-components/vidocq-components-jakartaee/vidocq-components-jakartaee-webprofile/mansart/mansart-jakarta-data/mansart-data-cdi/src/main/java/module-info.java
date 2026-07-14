@@ -28,6 +28,11 @@ module io.vidocq.mansart.data.cdi {
     requires jakarta.data;        // M7-4 — @Enhancement uses Repository.class in the typed BCE API
     requires java.sql;            // javax.sql.DataSource, javax.sql.XADataSource
     requires java.naming;         // M9 — JNDI lookup for dataStore values starting with "java:"
+    // MANSART-007 — JTA transaction bridge, active only when a TransactionManager is deployed.
+    // `static`: a TX-less deployment (e.g. the Jakarta Data TCK on Weld) must keep working;
+    // JtaBridgeActivator probes both APIs by name before any typed class is loaded.
+    requires static jakarta.transaction;
+    requires static io.vidocq.mansart.transactions.jdbc;
 
     exports io.vidocq.mansart.data.cdi;
 
