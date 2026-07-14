@@ -91,6 +91,17 @@
                             <artifactId>vauban-processor</artifactId>
                             <version>${vauban.version}</version>
                         </path>
+                        <!-- mansart-transactions-cdi on the PROCESSOR path (MANSART-006): its BCE
+                             declares @Enhancement(withAnnotations = TransactionScoped.class), which
+                             is how the APT round picks up @TransactionScoped classes at all — and it
+                             pulls jakarta.transaction so the @NormalScope meta-annotation resolves,
+                             making the APT generate the TxScopedCounter factory + client proxy.
+                             Mirrors what the vidocq extension codegen bundle does for applications. -->
+                        <path>
+                            <groupId>io.vidocq.mansart</groupId>
+                            <artifactId>mansart-transactions-cdi</artifactId>
+                            <version>${project.version}</version>
+                        </path>
                     </annotationProcessorPaths>
                     <compilerArgs>
                         <!-- TxService injects TransactionManager, produced by mansart-transactions-cdi

@@ -88,4 +88,39 @@ class TxModulePathTest {
             container.close();
         }
     }
+
+    /**
+     * MANSART-006 — the {@code @TransactionScoped} context registered by the BCE
+     * ({@code MetaAnnotations.addContext}) must be installed on the strict module path: two
+     * client-proxy calls inside the same transaction must reach the SAME contextual instance.
+     * Before the fix, Vauban could not instantiate {@code TransactionScopedContext} in-module
+     * (no {@code opens}, context class absent from {@code _VaubanComponents}) and silently fell
+     * back to per-call {@code @Dependent} instances — state written through the proxy vanished
+     * on the next call.
+     */
+    @Test
+    void transaction_scoped_context_works_on_the_module_path() throws Exception {
+        VaubanContainer container = VaubanContainer.builder()
+                .addBeanClass(io.vidocq.mansart.transactions.cdi.MansartTransactionsExtension.class)
+                .addBeanClass(MansartTransactionsProducer.class)
+                .addBeanClass(TransactionalInterceptor.class)
+                .addBeanClass(TxScopedCounter.class)
+                .build();
+        try {
+            TransactionManager tm = container.select(TransactionManager.class);
+            TxScopedCounter counter = container.select(TxScopedCounter.class);
+
+            tm.begin();
+            try {
+                counter.increment();
+                counter.increment();
+                assertEquals(2, counter.value(),
+                        "@TransactionScoped state must survive across proxy calls within one TX");
+            } finally {
+                tm.commit();
+            }
+        } finally {
+            container.close();
+        }
+    }
 }
