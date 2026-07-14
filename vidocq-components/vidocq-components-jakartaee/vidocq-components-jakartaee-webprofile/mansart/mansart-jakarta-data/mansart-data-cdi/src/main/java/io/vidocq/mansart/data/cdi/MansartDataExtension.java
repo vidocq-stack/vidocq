@@ -132,6 +132,43 @@ public final class MansartDataExtension implements BuildCompatibleExtension {
         runtimeRepoFqns.add(fqn);
     }
 
+    /**
+     * MANSART-005 — a bean class implementing an interface that declares a non-default
+     * {@code dataStore} must NOT become a managed bean: the APT-generated constructor injects the
+     * unqualified ({@code @Default}) {@link io.vidocq.mansart.data.core.RepositoryRuntime}, which
+     * would silently route every operation to the default datasource. Veto it here so the
+     * {@code @Synthesis} phase registers the synthetic bean instead, whose creator resolves the
+     * runtime through {@link DataStoreResolver} (CDI {@code @Named} / JNDI). Same
+     * {@code @Enhancement + @Vetoed} idiom as Ravel's {@code ConfigCdiExtension} (portable
+     * extensions never run on CDI Lite).
+     *
+     * <p>Deliberately stateless (no {@code entries} lookup): the container may run
+     * {@code @Enhancement} on a fresh extension instance (Vauban's archive-class pass does).
+     * The interface is found by reflection on the loaded class, not through the lang model —
+     * index-backed {@code ClassInfo.superInterfacesDeclarations()} is empty for pre-indexed
+     * application classes on the module path. Class-loading tolerance matches
+     * {@code @Synthesis}: when the class is not loadable (APT-time replay), no veto happens
+     * and no synthetic bean is registered either, keeping both sides consistent.
+     */
+    @Enhancement(types = Object.class, withSubtypes = true)
+    public void vetoRoutedRepositoryImpls(jakarta.enterprise.inject.build.compatible.spi.ClassConfig clazz) {
+        if (clazz.info().isInterface()) return;
+        Class<?> impl;
+        try {
+            impl = currentClassLoader().loadClass(clazz.info().name());
+        } catch (ClassNotFoundException | LinkageError ex) {
+            return;
+        }
+        for (Class<?> itf : impl.getInterfaces()) {
+            Repository ann = itf.getAnnotation(Repository.class);
+            if (ann == null) continue;
+            if (isRouted(ann.dataStore())) {
+                clazz.addAnnotation(jakarta.enterprise.inject.Vetoed.class);
+            }
+            return;
+        }
+    }
+
     @Synthesis
     public void registerRepositories(SyntheticComponents components) {
         ClassLoader cl = currentClassLoader();
@@ -149,10 +186,15 @@ public final class MansartDataExtension implements BuildCompatibleExtension {
                 // re-runs this BCE with a classloader that can see the user module.
                 continue;
             }
-            // Skip if the impl is already a managed CDI bean (recent mansart-data-processor
-            // versions emit @Singleton on *RepositoryImpl). Re-registering as a synthetic bean
-            // would create an ambiguous dependency for @Inject MyRepository.
-            if (isAlreadyManagedBean(impl)) continue;
+            Repository ann = itf.getAnnotation(Repository.class);
+            boolean routed = ann != null && isRouted(ann.dataStore());
+            // Default dataStore: skip if the impl is already a managed CDI bean (recent
+            // mansart-data-processor versions emit @Singleton on *RepositoryImpl) — its
+            // unqualified RepositoryRuntime injection is correct there, and re-registering a
+            // synthetic bean would create an ambiguous dependency for @Inject MyRepository.
+            // Non-default dataStore (MANSART-005): the impl was vetoed at @Enhancement, so the
+            // synthetic bean below is the only one and its creator routes via DataStoreResolver.
+            if (!routed && isAlreadyManagedBean(impl)) continue;
             registerCompileTime(components, itf, impl);
         }
 
@@ -177,6 +219,12 @@ public final class MansartDataExtension implements BuildCompatibleExtension {
         return impl.isAnnotationPresent(jakarta.inject.Singleton.class)
                 || impl.isAnnotationPresent(jakarta.enterprise.context.ApplicationScoped.class)
                 || impl.isAnnotationPresent(jakarta.enterprise.context.Dependent.class);
+    }
+
+    /** True when {@code dataStore} names a specific store (CDI {@code @Named} or JNDI). */
+    private static boolean isRouted(String dataStore) {
+        return dataStore != null && !dataStore.isEmpty()
+                && !Repository.DEFAULT_DATA_STORE.equals(dataStore);
     }
 
     private static boolean hasManagedImplFor(ClassLoader cl, String itfFqn) {
