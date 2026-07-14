@@ -177,7 +177,7 @@ The `run-official-tck-mp-config-3.1.sh` script:
 - **Zero third-party libraries**: Jakarta EE and MicroProfile specs are the only dependencies
   allowed in `provided`/`compile` scope (CDI, Annotations, etc.). If an implementation library
   seems necessary, the modular decomposition is wrong.
-- Use agents **`jpms-guardian`**, **`virtual-threads-reviewer`**, **`dependency-gatekeeper`**
+- Use agents **`java-modules-guardian`**, **`virtual-threads-reviewer`**, **`dependency-gatekeeper`**
   proactively on any modification to `module-info.java`, concurrent code, or `pom.xml`.
 
 ## Documentation (Antora) conventions
