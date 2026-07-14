@@ -168,7 +168,7 @@ The `run-official-tck-mp-health-4.0.sh` script:
 - **Zero third-party libraries**: Jakarta EE and MicroProfile specs are the only
   dependencies allowed in `provided`/`compile` scope. If an implementation library
   seems necessary, the decomposition is wrong.
-- Use agents **`jpms-guardian`**, **`virtual-threads-reviewer`**,
+- Use agents **`java-modules-guardian`**, **`virtual-threads-reviewer`**,
   **`dependency-gatekeeper`** proactively on any `module-info.java` modification,
   concurrent code, or `pom.xml`.
 - If the rules in this file need updating, remember to align `AGENTS.md` accordingly
