@@ -70,6 +70,14 @@ public class MansartTransactionManager implements TransactionManager {
         this.recoveryLog = recoveryLog;
     }
 
+    /**
+     * True when this TM writes a durable recovery journal — a boot-time recovery scan
+     * ({@link #recover(javax.transaction.xa.XAResource...)}) is then meaningful.
+     */
+    public boolean durable() {
+        return recoveryLog != NoOpRecoveryLog.INSTANCE;
+    }
+
     @Override
     public void begin() throws NotSupportedException {
         if (active.get() != null) {

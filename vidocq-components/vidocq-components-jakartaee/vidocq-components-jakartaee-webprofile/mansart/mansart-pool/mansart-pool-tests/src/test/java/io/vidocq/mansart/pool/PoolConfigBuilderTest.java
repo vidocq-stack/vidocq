@@ -96,7 +96,7 @@ class PoolConfigBuilderTest {
                 0, 5,
                 Duration.ofSeconds(1), Duration.ofMinutes(1), Duration.ofMinutes(2),
                 Duration.ofMillis(500), ValidationMode.NEVER, null,
-                Duration.ZERO, null);
+                Duration.ZERO, null, null);
         assertThat(c.driverProperties()).isEmpty();
     }
 

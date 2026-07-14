@@ -53,7 +53,8 @@ public record PoolConfig(
         ValidationMode      validation,
         String              validationQuery,
         Duration            leakDetectionThreshold,
-        Map<String, String> driverProperties) {
+        Map<String, String> driverProperties,
+        String              xaDataSourceClassName) {
 
     /** Sentinel meaning "leak detection disabled". Compared by reference, so do not duplicate. */
     public static final Duration LEAK_DETECTION_DISABLED = Duration.ZERO;
@@ -84,6 +85,7 @@ public record PoolConfig(
         private String              validationQuery;       // null → use Connection.isValid
         private Duration            leakDetectionThreshold = LEAK_DETECTION_DISABLED;
         private final Map<String, String> driverProperties = new LinkedHashMap<>();
+        private String              xaDataSourceClassName;
 
         private Builder() {}
 
@@ -99,6 +101,16 @@ public record PoolConfig(
         public Builder validation(ValidationMode v)   { this.validation = v;            return this; }
         public Builder validationQuery(String v)      { this.validationQuery = v;       return this; }
         public Builder leakDetectionThreshold(Duration v) { this.leakDetectionThreshold = v; return this; }
+
+        /**
+         * Optional (MANSART-007 phase 2) — fully qualified name of the driver's
+         * {@link javax.sql.XADataSource} implementation (e.g. {@code org.h2.jdbcx.JdbcDataSource},
+         * {@code org.postgresql.xa.PGXADataSource}). When set, the pool exposes that XADataSource
+         * through {@code unwrap(XADataSource.class)} so a JTA bridge can enlist the driver's
+         * XAResource (real two-phase commit). Pooled connections themselves are unaffected;
+         * transactional XA connections are opened outside the pool, one per transaction.
+         */
+        public Builder xaDataSourceClassName(String v) { this.xaDataSourceClassName = v; return this; }
 
         public Builder driverProperty(String k, String v) {
             driverProperties.put(Objects.requireNonNull(k, "key"),
@@ -132,7 +144,7 @@ public record PoolConfig(
                     minIdle, maxSize,
                     acquireTimeout, idleTimeout, maxLifetime, validationTimeout,
                     resolvedValidation, validationQuery, leakDetectionThreshold,
-                    Map.copyOf(driverProperties));
+                    Map.copyOf(driverProperties), xaDataSourceClassName);
         }
 
         private static void requirePositive(String name, Duration d) {

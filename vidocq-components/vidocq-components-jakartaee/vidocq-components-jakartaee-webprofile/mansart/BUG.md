@@ -83,9 +83,16 @@ multi-datasource mix LRCO+XA, routed repository, XA-only named bean, outside-TX 
 full mansart reactor green; official Jakarta Data TCK EntityTests 73/73; e2e
 `vidocq-runtime-mansart-h2-example` on the module path unchanged and functional.
 
-**Phase 2 (still open, tracked here)**: XA-aware pooling (`vidocq.pool.<name>.xa=true`,
-generated `XADataSource` holders — today the vidocq pools take the LRCO path), boot-time
-recovery scan (`XAResource.recover()` ↔ `FileRecoveryLog` reconciliation).
+**Phase 2 — DELIVERED (2026-07-14)**: `PoolConfig.xaDataSourceClassName` exposes the driver's
+`XADataSource` through the pool's `unwrap` (vidocq: `vidocq.pool[.<name>].xa=true`,
+auto-detected from the URL for H2/PostgreSQL, `xaDataSourceClass` override); the vidocq pools
+now take the real-XA path. Durable TM via the `mansart.tx.recovery.log` system property
+(vidocq: `vidocq.tx.recovery.log`) + boot-time recovery scan in the vidocq
+mansart-transactions extension (`MansartTransactionManager.recover()` over every XA-capable
+`DataSource` bean, `RecoveryReport` logged). Tests: `XaDataSourceExposureTest` (pool),
+`DurableTmBootstrapTest` (producer), vidocq `MansartPoolExtensionTest` xa cases; e2e boot log
+shows "durable recovery journal" + "recovery scan clean". Still out of scope: pooling of the
+transactional `XAConnection`s themselves (per-transaction connections are correct and simple).
 
 ## MANSART-005 — `@Repository(dataStore = "name")` routing silently lost when the APT impl is a managed bean
 - **Date**: 2026-07-14 — **Status**: FIXED

@@ -45,7 +45,30 @@ import jakarta.transaction.UserTransaction;
 @ApplicationScoped
 public class MansartTransactionsProducer {
 
-    private static final MansartTransactionManager TM = new MansartTransactionManager();
+    /** System property naming the durable recovery journal (MANSART-007 phase 2) — absent = volatile TM. */
+    static final String RECOVERY_LOG_PROPERTY = "mansart.tx.recovery.log";
+
+    private static final MansartTransactionManager TM =
+            bootstrapTm(System.getProperty(RECOVERY_LOG_PROPERTY));
+
+    /**
+     * Builds the JVM-wide TM: volatile by default, durable ({@code FileRecoveryLog}) when
+     * {@code mansart.tx.recovery.log} names a journal path. The property is read once, at
+     * class initialisation — set it before the CDI container boots (the Vidocq
+     * mansart-transactions extension does, from {@code vidocq.tx.recovery.log}).
+     */
+    static MansartTransactionManager bootstrapTm(String recoveryLogPath) {
+        if (recoveryLogPath == null || recoveryLogPath.isBlank()) {
+            return new MansartTransactionManager();
+        }
+        try {
+            return new MansartTransactionManager(new io.vidocq.mansart.transactions.core.FileRecoveryLog(
+                    java.nio.file.Path.of(recoveryLogPath)));
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException(
+                    "Cannot open the transaction recovery log at " + recoveryLogPath, e);
+        }
+    }
 
     /** Same instance the producer publishes — used by {@link TransactionScopedContext} which
      *  needs the TM <i>before</i> CDI injection is online to resolve the
