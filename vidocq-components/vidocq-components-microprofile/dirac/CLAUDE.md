@@ -173,14 +173,14 @@ delegates to `ctx.proceed()`.
   refactoring `MetricRegistryImpl`, modifying the OpenMetrics format).
 - Document architecture decisions in `ROADMAP.md` (section "Documented decisions").
 - Use the `virtual-threads-reviewer` agent for any concurrent code modification.
-- Use the `jpms-guardian` agent after any package addition or `module-info.java` modification.
+- Use the `java-modules-guardian` agent after any package addition or `module-info.java` modification.
 
 ## Available Agents
 
 - `classfile-codegen` — if `@Gauge` resolution requires bytecode generation
 - `virtual-threads-reviewer` — for `TimerImpl` (nanoTime + LongAdder), concurrent access
   to `MetricRegistryImpl`, any concurrent or performance-critical code
-- `jpms-guardian` — after `module-info.java` modification or package addition
+- `java-modules-guardian` — after `module-info.java` modification or package addition
 - `dependency-gatekeeper` — before any `pom.xml` dependency addition
 - `tck-runner` — to diagnose MicroProfile Metrics 5.1.1 TCK failures
 
