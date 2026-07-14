@@ -122,6 +122,35 @@ class MansartPoolExtensionTest {
     }
 
     @Test
+    void xaTrueAutoDetectsTheDriverXaDataSource() {
+        ext.configure(MapConfig.of(Map.of(
+                "vidocq.pool.url", "jdbc:h2:mem:vid-pool-xa;DB_CLOSE_DELAY=-1",
+                "vidocq.pool.username", "sa",
+                "vidocq.pool.xa", "true"
+        )));
+        assertEquals("org.h2.jdbcx.JdbcDataSource", ext.poolConfig().xaDataSourceClassName(),
+                "xa=true must auto-detect the H2 XADataSource from the URL");
+    }
+
+    @Test
+    void explicitXaDataSourceClassWinsAndImpliesXa() {
+        ext.configure(MapConfig.of(Map.of(
+                "vidocq.pool.url", "jdbc:h2:mem:vid-pool-xa2;DB_CLOSE_DELAY=-1",
+                "vidocq.pool.username", "sa",
+                "vidocq.pool.xaDataSourceClass", "com.example.CustomXADataSource"
+        )));
+        assertEquals("com.example.CustomXADataSource", ext.poolConfig().xaDataSourceClassName());
+    }
+
+    @Test
+    void xaTrueOnUnknownDriverFailsLoudly() {
+        assertThrows(IllegalArgumentException.class, () -> ext.configure(MapConfig.of(Map.of(
+                "vidocq.pool.url", "jdbc:exotic:whatever",
+                "vidocq.pool.xa", "true"
+        ))), "xa=true without a derivable XADataSource class must fail at configure time");
+    }
+
+    @Test
     void invalidConfigSurfaced() {
         // maxSize < 1 → Builder.build() throws IllegalArgumentException
         assertThrows(IllegalArgumentException.class, () -> ext.configure(MapConfig.of(Map.of(
