@@ -5,6 +5,58 @@ short id, date, symptom, minimal repro, cause hypothesis, status. Update on each
 
 ---
 
+## MANSART-006 — `@TransactionScoped` beans empty on the module path (context never installed)
+- **Date**: 2026-07-14 — **Status**: FIXED (root cause upstream in Vauban, VAU-CTX-001)
+- **Severity**: high (any `@TransactionScoped` state silently lost — one fresh instance per proxy call)
+
+### Symptom
+In `vidocq-runtime-mansart-h2-example`, `ProductResource.create` (`@Transactional`) records an
+entry in the `@TransactionScoped` `OperationAudit` bean and reads it back in the same method —
+and gets an EMPTY list ("TX audit: []"), silently.
+
+### Cause
+Upstream Vauban VAU-CTX-001, two silent fallbacks: on the strict module path the
+`TransactionScopedContext` registered by `MansartTransactionsExtension`
+(`MetaAnnotations.addContext`) could not be instantiated (private-lookup only, no `opens`,
+and the context class is not part of the APT-generated `_VaubanComponents` — the module-info
+comment claiming otherwise was aspirational); the failure was swallowed, and the client-proxy
+delegate then fell back to per-call `@Dependent` instances instead of throwing
+`ContextNotActiveException`.
+
+### Fix / verification
+Vauban VAU-CTX-001 (public-constructor path for BCE contexts + loud failures). Mansart side:
+new regression coverage in `mansart-transactions-cdi-jpms-it`
+(`transaction_scoped_context_works_on_the_module_path`, red before / green after) with a
+`TxScopedCounter` fixture; the IT's processor path now includes `mansart-transactions-cdi` so
+the APT sees the BCE's `@Enhancement(withAnnotations = TransactionScoped.class)` trigger and
+generates the fixture's factory + client proxy (same wiring the vidocq extension codegen
+bundles give applications). E2E: the example now logs "TX audit: [created product id=N]".
+
+## MANSART-007 — `@Transactional` does not govern mansart-data connections (no TX↔data bridge)
+- **Date**: 2026-07-14 — **Status**: OPEN (design work — bridge to specify)
+- **Severity**: high conceptually (rollback semantics), latent in practice (no reported data loss)
+
+### Symptom
+A JTA rollback does not undo repository writes. `RepositoryRuntime` always runs each operation
+on its own autocommit connection (`ConnectionScope.withConnection`, `CURRENT` unbound), whether
+or not the caller is inside a `@Transactional` method.
+
+### Cause
+There is no bridge between mansart-transactions (JTA `TransactionManager`, used by the
+`@Transactional` interceptors and `@TransactionScoped`) and mansart-data's `ConnectionScope`:
+nothing binds `ConnectionScope.CURRENT` when a JTA transaction starts, and
+`ConnectionXAResource` (mansart-transactions-jdbc) is only exercised by tests. `@Transactional`
+on repository interfaces currently provides interception and TX lifecycle but not connection
+enlistment.
+
+### Notes
+Related: dataStore-routed repositories (MANSART-005 path) are instantiated by
+`MansartRepoCreator` and are not interceptor-enhanced at all — once the bridge exists, routed
+repositories must also join it. Design sketch: a per-(transaction × datasource) connection
+holder registered via `TransactionSynchronizationRegistry`, bound to `ConnectionScope.CURRENT`
+(or consulted by `withConnection`), committed/rolled back by a `Synchronization` — or full XA
+via `ConnectionXAResource` for multi-resource TX.
+
 ## MANSART-005 — `@Repository(dataStore = "name")` routing silently lost when the APT impl is a managed bean
 - **Date**: 2026-07-14 — **Status**: FIXED
 - **Severity**: high (multi-datasource repositories silently read/write the WRONG database)
