@@ -139,7 +139,7 @@ java -jar grimm-bench/target/benchmarks.jar
   status.
 - For non-trivial changes (scanner phase, `ModelMerger`, BCE, `module-info.java`), enter plan
   mode and record architectural decisions in `ROADMAP.md` (section "Actioned Decisions").
-- Use `virtual-threads-reviewer` for concurrent code changes, `jpms-guardian` after
+- Use `virtual-threads-reviewer` for concurrent code changes, `java-modules-guardian` after
   `module-info.java`/package changes, and `tck-runner` to diagnose TCK failures.
 - **Language**: Commit messages, Javadoc, and the content of all `.md` files must be written in **English**.
 
