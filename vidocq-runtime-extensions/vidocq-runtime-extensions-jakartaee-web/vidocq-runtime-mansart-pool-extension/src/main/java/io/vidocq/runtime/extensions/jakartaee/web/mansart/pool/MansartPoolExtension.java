@@ -192,7 +192,30 @@ public final class MansartPoolExtension implements VidocqExtension {
         cfg.property(prefix + "validationQuery").ifPresent(b::validationQuery);
         cfg.property(prefix + "leakDetectionThreshold").map(Duration::parse)
                 .ifPresent(b::leakDetectionThreshold);
+        // MANSART-007 phase 2 — `xa=true` exposes the driver's XADataSource through the pool
+        // (unwrap), so the JTA bridge enlists real XA branches. The implementation class is
+        // auto-detected from the JDBC URL for the bundled dialects and overridable with
+        // `xaDataSourceClass` for any other driver.
+        String xaClass = cfg.property(prefix + "xaDataSourceClass").orElse(null);
+        boolean xa = cfg.property(prefix + "xa").map(Boolean::parseBoolean).orElse(xaClass != null);
+        if (xa) {
+            String resolved = xaClass != null ? xaClass : autoDetectXaDataSourceClass(url.get());
+            if (resolved == null) {
+                throw new IllegalArgumentException(
+                        "Property '" + prefix + "xa=true' but the XADataSource class cannot be"
+                                + " derived from the URL '" + url.get() + "' — set '"
+                                + prefix + "xaDataSourceClass' explicitly");
+            }
+            b.xaDataSourceClassName(resolved);
+        }
         return b.build();
+    }
+
+    /** Known dialects' XADataSource implementations, keyed by JDBC URL scheme. */
+    private static String autoDetectXaDataSourceClass(String jdbcUrl) {
+        if (jdbcUrl.startsWith("jdbc:h2:")) return "org.h2.jdbcx.JdbcDataSource";
+        if (jdbcUrl.startsWith("jdbc:postgresql:")) return "org.postgresql.xa.PGXADataSource";
+        return null;
     }
 
     /**

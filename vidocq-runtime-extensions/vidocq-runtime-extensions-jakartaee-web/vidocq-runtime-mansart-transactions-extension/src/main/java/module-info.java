@@ -31,6 +31,11 @@ module io.vidocq.runtime.extensions.jakartaee.web.mansart.transactions {
     requires io.vidocq.vauban.core;
     requires transitive io.vidocq.mansart.transactions.cdi;
     requires jakarta.cdi;
+    // MANSART-007 phase 2 — boot-time recovery scan: XA-capable DataSource beans contribute
+    // their driver XAResource to MansartTransactionManager.recover().
+    requires jakarta.transaction;
+    requires java.sql;
+    requires java.transaction.xa;
 
     provides io.vidocq.runtime.spi.VidocqExtension
             with io.vidocq.runtime.extensions.jakartaee.web.mansart.transactions.MansartTransactionsIntegrationExtension;
