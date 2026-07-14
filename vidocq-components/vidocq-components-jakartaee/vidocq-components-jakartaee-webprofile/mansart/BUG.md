@@ -33,7 +33,7 @@ generates the fixture's factory + client proxy (same wiring the vidocq extension
 bundles give applications). E2E: the example now logs "TX audit: [created product id=N]".
 
 ## MANSART-007 — `@Transactional` does not govern mansart-data connections (no TX↔data bridge)
-- **Date**: 2026-07-14 — **Status**: OPEN (design work — bridge to specify)
+- **Date**: 2026-07-14 — **Status**: FIXED
 - **Severity**: high conceptually (rollback semantics), latent in practice (no reported data loss)
 
 ### Symptom
@@ -56,6 +56,36 @@ repositories must also join it. Design sketch: a per-(transaction × datasource)
 holder registered via `TransactionSynchronizationRegistry`, bound to `ConnectionScope.CURRENT`
 (or consulted by `withConnection`), committed/rolled back by a `Synchronization` — or full XA
 via `ConnectionXAResource` for multi-resource TX.
+
+### Fix / verification (2026-07-14)
+Design: `docs/superpowers/specs/2026-07-14-mansart-007-tx-data-bridge-design.md`. Delivered:
+- **data-core** — `TransactionBridge` SPI (no TX dependency), consulted by
+  `ConnectionScope.withConnection` between the programmatic `CURRENT` and the autocommit path;
+  carried by `RepositoryRuntime` / `MansartData.Builder.transactionBridge`.
+- **data-cdi** — `JtaTransactionBridge`: one connection per (transaction × datasource) stored in
+  the TSR, enlisted XA-first (`instanceof`/`unwrap` `XADataSource` → the driver's XAResource,
+  real 2PC) with a `ConnectionXAResource` LRCO fallback for plain datasources (WARN at the 2nd
+  plain resource in one TX); closed by an interposed `Synchronization` after completion.
+  `JtaBridgeActivator`/`JtaBridgeFactory` gate the optional dependencies (`requires static
+  jakarta.transaction` + `mansart-transactions-jdbc`) so TX-less deployments are untouched.
+  Wired automatically in `MansartRuntimeProducer` AND `DataStoreResolver` (routed repositories
+  join the caller's transaction — the MANSART-005 note above is addressed for the semantics
+  that matter; interceptor enhancement of routed beans remains cosmetic). A `@Named` bean
+  exposed only as `XADataSource` is now adapted (`XaBackedDataSource`) instead of rejected.
+- **transactions-core/jdbc** — `SinglePhaseResource` marker + LRCO ordering in
+  `MansartTransaction.commit()`: single-phase resources commit first (after the XA prepares,
+  before the COMMITTING record); if one fails, the prepared XA branches are rolled back and the
+  caller gets `RollbackException` (previously: commit in enlistment order, heuristic UNKNOWN).
+
+Verified (TDD, red first): `LastResourceCommitOrderTest` (ordering + rollback-on-failure),
+`JtaTransactionBridgeTest` 9/9 (rollback/commit via TM and via `@Transactional` interceptor,
+multi-datasource mix LRCO+XA, routed repository, XA-only named bean, outside-TX unchanged);
+full mansart reactor green; official Jakarta Data TCK EntityTests 73/73; e2e
+`vidocq-runtime-mansart-h2-example` on the module path unchanged and functional.
+
+**Phase 2 (still open, tracked here)**: XA-aware pooling (`vidocq.pool.<name>.xa=true`,
+generated `XADataSource` holders — today the vidocq pools take the LRCO path), boot-time
+recovery scan (`XAResource.recover()` ↔ `FileRecoveryLog` reconciliation).
 
 ## MANSART-005 — `@Repository(dataStore = "name")` routing silently lost when the APT impl is a managed bean
 - **Date**: 2026-07-14 — **Status**: FIXED

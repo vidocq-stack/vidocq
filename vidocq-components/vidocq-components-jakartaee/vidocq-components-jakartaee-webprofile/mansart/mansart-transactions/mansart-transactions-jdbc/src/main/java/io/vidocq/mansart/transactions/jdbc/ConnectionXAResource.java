@@ -45,8 +45,13 @@ import java.util.Objects;
  *
  * <p>The original autoCommit value is restored at completion so downstream pooled-connection
  * recyclers don't see it dirty.
+ *
+ * <p>Implements {@link io.vidocq.mansart.transactions.core.SinglePhaseResource} so the
+ * coordinator applies the LRCO ordering in mixed transactions: this resource commits first,
+ * while real XA resources are still merely prepared, and a failure here rolls them back.
  */
-public final class ConnectionXAResource implements XAResource {
+public final class ConnectionXAResource
+        implements io.vidocq.mansart.transactions.core.SinglePhaseResource {
 
     private final Connection connection;
     private boolean originalAutoCommit;

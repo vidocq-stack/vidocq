@@ -79,7 +79,11 @@ final class DataStoreResolver {
 
     private static RepositoryRuntime buildRuntime(Instance<Object> lookup, String key) {
         DataSource ds = key.startsWith("java:") ? jndiLookup(key) : cdiLookup(lookup, key);
-        return MansartData.builder().dataSource(ds).build().runtime();
+        // MANSART-007 — routed repositories join the caller's active JTA transaction too.
+        return MansartData.builder()
+                .dataSource(ds)
+                .transactionBridge(JtaBridgeActivator.tryCreate(lookup))
+                .build().runtime();
     }
 
     private static DataSource jndiLookup(String name) {
@@ -97,12 +101,12 @@ final class DataStoreResolver {
     private static DataSource cdiLookup(Instance<Object> lookup, String name) {
         Instance<DataSource> ds = lookup.select(DataSource.class, NamedLiteral.of(name));
         if (ds.isResolvable()) return ds.get();
-        // Friendlier error path: detect the XA case so the user gets a precise message.
+        // MANSART-007 — a bean exposed only as XADataSource is adapted: outside a transaction
+        // the wrapper hands out plain connections; inside one, JtaTransactionBridge unwraps it
+        // and enlists the driver's XAResource (real two-phase commit).
         Instance<XADataSource> xa = lookup.select(XADataSource.class, NamedLiteral.of(name));
         if (xa.isResolvable()) {
-            throw new MansartDataException(
-                    "@Named(\"" + name + "\") matches an XADataSource — XA wiring lands with the "
-                            + "mansart-persistence JTA bridge; for now expose a javax.sql.DataSource bean instead");
+            return new XaBackedDataSource(xa.get());
         }
         throw new MansartDataException(
                 "No DataSource bean found with @Named(\"" + name + "\") for @Repository(dataStore=\""

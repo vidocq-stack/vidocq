@@ -103,6 +103,7 @@ public final class MansartData {
     public static final class Builder {
         private DataSource dataSource;
         private Dialect    dialect;
+        private TransactionBridge transactionBridge;
 
         private Builder() {}
 
@@ -111,10 +112,17 @@ public final class MansartData {
         /** Optional — auto-detected from the data source if omitted. */
         public Builder dialect(Dialect d) { this.dialect = d; return this; }
 
+        /**
+         * Optional — links repository operations to an externally managed transaction
+         * (MANSART-007). {@code null} (the default) keeps the per-operation autocommit
+         * behaviour.
+         */
+        public Builder transactionBridge(TransactionBridge bridge) { this.transactionBridge = bridge; return this; }
+
         public MansartData build() {
             Objects.requireNonNull(dataSource, "dataSource is required");
             Dialect resolved = dialect != null ? dialect : DialectResolver.resolve(dataSource);
-            return new MansartData(new RepositoryRuntime(dataSource, resolved));
+            return new MansartData(new RepositoryRuntime(dataSource, resolved, transactionBridge));
         }
     }
 }

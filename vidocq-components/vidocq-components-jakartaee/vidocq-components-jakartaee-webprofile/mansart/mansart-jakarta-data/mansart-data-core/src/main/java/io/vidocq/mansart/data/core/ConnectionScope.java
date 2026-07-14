@@ -68,11 +68,36 @@ public final class ConnectionScope {
     }
 
     public static <T> T withConnection(DataSource dataSource, SqlAction<T> action) {
+        return withConnection(null, dataSource, action);
+    }
+
+    /**
+     * Same as {@link #withConnection(DataSource, SqlAction)} with an optional
+     * {@link TransactionBridge} (MANSART-007). Resolution order:
+     * <ol>
+     *   <li>a {@link #CURRENT}-bound connection (programmatic {@link #inTransaction}) — join;</li>
+     *   <li>a bridge-provided connection — the caller runs inside an externally managed
+     *       transaction; the action uses the enlisted connection and does NOT close it (each
+     *       operation re-asks the bridge, the per-transaction lookup is O(1));</li>
+     *   <li>otherwise a fresh per-operation autocommit connection, as always.</li>
+     * </ol>
+     */
+    public static <T> T withConnection(TransactionBridge bridge, DataSource dataSource, SqlAction<T> action) {
         if (CURRENT.isBound()) {
             try {
                 return action.run(CURRENT.get());
             } catch (SQLException e) {
                 throw new MansartDataException("SQL error", e);
+            }
+        }
+        if (bridge != null) {
+            Connection enlisted = bridge.connectionFor(dataSource);
+            if (enlisted != null) {
+                try {
+                    return action.run(enlisted);
+                } catch (SQLException e) {
+                    throw new MansartDataException("SQL error", e);
+                }
             }
         }
         try (Connection c = dataSource.getConnection()) {

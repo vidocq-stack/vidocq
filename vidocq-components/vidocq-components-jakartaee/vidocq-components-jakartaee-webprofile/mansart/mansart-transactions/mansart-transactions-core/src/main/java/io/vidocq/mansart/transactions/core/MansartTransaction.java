@@ -169,11 +169,43 @@ final class MansartTransaction implements Transaction {
         // these branches with type=PREPARED/COMMITTING and the operator can replay.
         appendOrFailSystem(RecoveryLog.Type.PREPARED);
 
+        // LRCO — single-phase resources (JDBC local transactions wrapped as XAResource) cannot
+        // really prepare: their commit IS the decision. Commit them first, while the real XA
+        // resources are still merely prepared; if one fails, the prepared XA branches are rolled
+        // back cleanly instead of being committed against a half-applied outcome. No COMMITTING
+        // record has been written yet, so a crash in this window recovers as presumed-abort —
+        // consistent with the rollback taken here.
+        var lastResources = new ArrayList<XAResource>();
+        var twoPhase = new ArrayList<XAResource>();
+        for (XAResource r : prepared) {
+            (r instanceof SinglePhaseResource ? lastResources : twoPhase).add(r);
+        }
+        for (int i = 0; i < lastResources.size(); i++) {
+            try {
+                lastResources.get(i).commit(xid, false);
+            } catch (XAException ex) {
+                status = Status.STATUS_ROLLING_BACK;
+                for (XAResource r : twoPhase) {
+                    try { r.rollback(xid); } catch (XAException ignored) { /* best effort */ }
+                }
+                // Remaining single-phase resources have not committed yet — roll them back too.
+                for (XAResource r : lastResources.subList(i + 1, lastResources.size())) {
+                    try { r.rollback(xid); } catch (XAException ignored) { /* best effort */ }
+                }
+                status = Status.STATUS_ROLLEDBACK;
+                invokeAfterCompletion(Status.STATUS_ROLLEDBACK);
+                RollbackException rex = new RollbackException(
+                        "Last-resource commit failed — transaction rolled back");
+                rex.initCause(ex);
+                throw rex;
+            }
+        }
+
         status = Status.STATUS_COMMITTING;
         // Crossing the point of no return — write before any resource.commit() call so that a
         // crash during the loop still allows on-restart recovery to commit the rest.
         appendOrFailSystem(RecoveryLog.Type.COMMITTING);
-        for (XAResource r : prepared) {
+        for (XAResource r : twoPhase) {
             try {
                 r.commit(xid, false);
             } catch (XAException ex) {

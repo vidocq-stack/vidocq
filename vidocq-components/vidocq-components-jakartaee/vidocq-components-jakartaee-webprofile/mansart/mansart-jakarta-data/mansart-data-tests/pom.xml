@@ -91,6 +91,20 @@
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
+        <!-- MANSART-007 — JTA transaction-bridge tests: real TM + @Transactional interceptor
+             + ConnectionXAResource in the same container as the repositories. -->
+        <dependency>
+            <groupId>io.vidocq.mansart</groupId>
+            <artifactId>mansart-transactions-cdi</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.mansart</groupId>
+            <artifactId>mansart-transactions-jdbc</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>io.vidocq.vauban</groupId>
             <artifactId>vauban-core</artifactId>
