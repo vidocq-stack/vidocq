@@ -95,7 +95,7 @@ connects the auth filter (cassini) to the CDI producer (cdi-vauban) without dire
 
 ## Available Agents
 
-- `jpms-guardian` — after any `module-info.java` modification or package addition
+- `java-modules-guardian` — after any `module-info.java` modification or package addition
 - `virtual-threads-reviewer` — for JWKS fetch (HttpClient + cache) and auth filter
 - `dependency-gatekeeper` — before any dependency addition (zero-dep philosophy)
 - `tck-runner` — to diagnose MP JWT 2.1 TCK failures
