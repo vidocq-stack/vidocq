@@ -163,3 +163,22 @@ The 1PC single-resource path is already correct and stays unchanged.
 | mansart-transactions-core | `SinglePhaseResource` (new), `MansartTransaction` LRCO commit ordering |
 | mansart-transactions-jdbc | `ConnectionXAResource implements SinglePhaseResource` (+ `requires` core if missing) |
 | mansart-data-tests / mansart-transactions-tests | new TDD suites above |
+
+## Phase 2 — delivered (2026-07-14, same day)
+
+- **XA through the pool** (`mansart-pool`): `PoolConfig.xaDataSourceClassName` — the pool
+  exposes the driver's `XADataSource` through `unwrap`, built once by reflection
+  (config-driven, no driver dependency). Pooled connections are unaffected; transactional XA
+  connections are opened outside the pool, one per (transaction × datasource).
+  Vidocq side: `vidocq.pool[.<name>].xa=true` auto-detects the class from the JDBC URL
+  (H2 → `org.h2.jdbcx.JdbcDataSource`, PostgreSQL → `org.postgresql.xa.PGXADataSource`) and
+  `vidocq.pool[.<name>].xaDataSourceClass` overrides it for any other driver.
+- **Durable TM + boot-time recovery scan**: the `mansart.tx.recovery.log` system property makes
+  `MansartTransactionsProducer` build a `FileRecoveryLog`-backed TM
+  (`MansartTransactionManager.durable()`); the Vidocq mansart-transactions extension forwards
+  `vidocq.tx.recovery.log` to it at `configure` time and, at `onStart`, collects the XAResource
+  of every XA-capable `DataSource` bean and runs `MansartTransactionManager.recover(...)`,
+  logging the `RecoveryReport` ("recovery scan clean" on a healthy boot).
+- **True XA pooling of transactional connections** (a pool of `XAConnection`s) remains out of
+  scope — transactional connections are per-transaction, which is correct and simple; revisit
+  only if profiling shows enlistment cost matters.

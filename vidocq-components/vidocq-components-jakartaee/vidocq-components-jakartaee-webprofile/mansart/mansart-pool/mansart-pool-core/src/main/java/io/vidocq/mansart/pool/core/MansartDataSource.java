@@ -40,6 +40,8 @@ public final class MansartDataSource implements DataSource, AutoCloseable {
 
     private final PoolConfig     config;
     private final ConnectionPool pool;
+    /** Built lazily from {@code config.xaDataSourceClassName()} — MANSART-007 phase 2. */
+    private volatile javax.sql.XADataSource xaDataSource;
 
     private MansartDataSource(PoolConfig config) {
         this.config = Objects.requireNonNull(config, "config");
@@ -90,11 +92,72 @@ public final class MansartDataSource implements DataSource, AutoCloseable {
     @SuppressWarnings("unchecked")
     public <T> T unwrap(Class<T> iface) throws SQLException {
         if (iface.isInstance(this)) return (T) this;
+        if (iface == javax.sql.XADataSource.class && config.xaDataSourceClassName() != null) {
+            return (T) xaDataSource();
+        }
         throw new SQLException("Not a wrapper for " + iface.getName());
     }
 
     @Override
     public boolean isWrapperFor(Class<?> iface) {
-        return iface.isInstance(this);
+        return iface.isInstance(this)
+                || (iface == javax.sql.XADataSource.class && config.xaDataSourceClassName() != null);
+    }
+
+    /**
+     * The driver's {@link javax.sql.XADataSource} configured with this pool's URL/credentials
+     * (MANSART-007 phase 2). Built once by reflection from {@code xaDataSourceClassName} —
+     * config-driven, so the pool stays free of driver dependencies. Transactional XA
+     * connections are opened on it OUTSIDE the pool, one per (transaction × datasource);
+     * pooled connections are unaffected.
+     */
+    private javax.sql.XADataSource xaDataSource() throws SQLException {
+        javax.sql.XADataSource existing = xaDataSource;
+        if (existing != null) return existing;
+        synchronized (this) {
+            if (xaDataSource == null) {
+                xaDataSource = buildXaDataSource();
+            }
+            return xaDataSource;
+        }
+    }
+
+    private javax.sql.XADataSource buildXaDataSource() throws SQLException {
+        String className = config.xaDataSourceClassName();
+        try {
+            Class<?> type = Class.forName(className, true, resolveDriverLoader());
+            Object instance = type.getDeclaredConstructor().newInstance();
+            setBeanProperty(type, instance, new String[]{"setURL", "setUrl"}, config.jdbcUrl());
+            if (config.username() != null) {
+                setBeanProperty(type, instance, new String[]{"setUser"}, config.username());
+            }
+            if (config.password() != null) {
+                setBeanProperty(type, instance, new String[]{"setPassword"}, config.password());
+            }
+            return (javax.sql.XADataSource) instance;
+        } catch (ReflectiveOperationException | ClassCastException e) {
+            throw new SQLException("Cannot build the XADataSource '" + className
+                    + "' configured for this pool (xaDataSourceClassName)", e);
+        }
+    }
+
+    private static ClassLoader resolveDriverLoader() {
+        ClassLoader cl = Thread.currentThread().getContextClassLoader();
+        return cl != null ? cl : MansartDataSource.class.getClassLoader();
+    }
+
+    private static void setBeanProperty(Class<?> type, Object instance,
+                                        String[] setterCandidates, String value)
+            throws ReflectiveOperationException {
+        for (String name : setterCandidates) {
+            try {
+                type.getMethod(name, String.class).invoke(instance, value);
+                return;
+            } catch (NoSuchMethodException tryNext) {
+                // driver naming differs (setURL vs setUrl) — try the next candidate
+            }
+        }
+        throw new NoSuchMethodException(type.getName() + " has none of "
+                + String.join("/", setterCandidates) + "(String)");
     }
 }
