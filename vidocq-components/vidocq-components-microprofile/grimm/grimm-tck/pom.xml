@@ -123,13 +123,13 @@
           <scope>test</scope>
         </dependency>
         <dependency>
-          <groupId>io.vidocq.runtime</groupId>
+          <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
           <artifactId>vidocq-runtime-cassini-rest-extension</artifactId>
           <version>0.3.0-SNAPSHOT</version>
           <scope>test</scope>
         </dependency>
         <dependency>
-          <groupId>io.vidocq.runtime</groupId>
+          <groupId>io.vidocq.runtime.extensions.essentials</groupId>
           <artifactId>vidocq-runtime-chappe-webserver-extension</artifactId>
           <version>0.3.0-SNAPSHOT</version>
           <scope>test</scope>
