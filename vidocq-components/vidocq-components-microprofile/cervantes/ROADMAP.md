@@ -109,3 +109,10 @@ Source of truth for milestones and TCK score. TDD at each step (Red → Green �
   `PrimitiveQualifiedInjectionTest`. Verified end-to-end (cervantes `@Claim boolean` green).
   The Cervantes extension returned to simple boxing (Ravel pattern). **Dependency**: Cervantes M3b
   requires a Vauban build containing this fix.
+- **2026-07-15** — TCK harmonisation: `cervantes-tck` moves **in-reactor behind the `tck` Maven
+  profile** of `cervantes-parent` (vidocq-runtime-tck-* pattern), replacing the earlier
+  out-of-reactor decision (M6, standalone Model 4.0.0 POM without `<parent>`). The original
+  ShrinkWrap Maven Resolver 3.3 vs Model 4.1.0 constraint is obsolete since the workspace migrated
+  to Maven 3.9.16 / Model 4.0.0. A plain `mvn install` still skips the runner; activation via
+  `run-official-tck-mp-jwt-2.1.sh` or `./mvnw -P"tck,smoke|tck-official" -pl cervantes-tck test`.
+  Verified: reactor build green without the profile, smoke PASS, full suite 206/206 PASS.

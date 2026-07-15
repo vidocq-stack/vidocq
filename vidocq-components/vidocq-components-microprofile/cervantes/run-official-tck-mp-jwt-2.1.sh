@@ -2,27 +2,32 @@
 # ---------------------------------------------------------------------------
 # run-official-tck-mp-jwt-2.1.sh
 #
-# Lance le TCK officiel MicroProfile JWT 2.1 pour Cervantes.
+# Runs the official MicroProfile JWT 2.1 TCK for Cervantes.
+#
+# cervantes-tck is in-reactor behind the `tck` Maven profile (TCK harmonisation):
+# a plain `mvn install` never builds it; this script activates it with
+# `-P"tck,<smoke|tck-official>" -pl cervantes-tck test` from the repo root.
 #
 # Usage:
-#   ./run-official-tck-mp-jwt-2.1.sh             # smoke test (défaut)
-#   ./run-official-tck-mp-jwt-2.1.sh all          # suite TCK complète
-#   ./run-official-tck-mp-jwt-2.1.sh -Dtest=Foo   # test ciblé
+#   ./run-official-tck-mp-jwt-2.1.sh             # smoke test (default)
+#   ./run-official-tck-mp-jwt-2.1.sh all          # full TCK suite
+#   ./run-official-tck-mp-jwt-2.1.sh -Dtest=Foo   # targeted test
 #
-# Prérequis:
-#   - Java 25 + Maven 3.9.16 (sdk env dans le répertoire cervantes/)
-#   - Le reactor cervantes installé en local :
+# Prerequisites:
+#   - Java 25 + Maven 3.9.16 (sdk env in the cervantes/ directory)
+#   - The cervantes reactor installed locally:
 #       PATH="$HOME/.sdkman/candidates/maven/3.9.16/bin:$PATH" ./mvnw -ntp install -DskipTests
-#   - Les TCK artifacts sur Maven Central (téléchargés automatiquement) :
+#   - The TCK artifacts on Maven Central (downloaded automatically):
 #       org.eclipse.microprofile.jwt:microprofile-jwt-auth-tck:2.1
 #       org.eclipse.microprofile.jwt:microprofile-jwt-auth-tck:2.1:tests
 # ---------------------------------------------------------------------------
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TCK_DIR="$SCRIPT_DIR/cervantes-tck"
+ROOT_DIR="$SCRIPT_DIR"
+TCK_DIR="$ROOT_DIR/cervantes-tck"
 
-# Force Maven 4
+# Force Maven 3.9.16
 export PATH="$HOME/.sdkman/candidates/maven/3.9.16/bin:$PATH"
 
 if [ ! -f "$TCK_DIR/pom.xml" ]; then
@@ -39,24 +44,22 @@ if [ -d "$CASSINI_TCK_DIR" ]; then
     mvn -ntp install -DskipTests -q
 fi
 
-cd "$TCK_DIR"
-
 case "${1:-}" in
     all)
         echo "==> Running FULL MP JWT 2.1 TCK (tck-official profile)..."
-        mvn -ntp test -Ptck-official
+        ( cd "${ROOT_DIR}" && mvn -ntp -P"tck,tck-official" -pl cervantes-tck test )
         ;;
     -Dtest=*)
         TEST_ARG="$1"
         echo "==> Running targeted test: $TEST_ARG"
-        mvn -ntp test -Ptck-official "$TEST_ARG"
+        ( cd "${ROOT_DIR}" && mvn -ntp -P"tck,tck-official" -pl cervantes-tck test "$TEST_ARG" )
         ;;
     "")
-        echo "==> Running SMOKE test (default profile)..."
-        mvn -ntp test
+        echo "==> Running SMOKE test (smoke profile)..."
+        ( cd "${ROOT_DIR}" && mvn -ntp -P"tck,smoke" -pl cervantes-tck test )
         ;;
     *)
         echo "==> Running with extra args: $*"
-        mvn -ntp test -Ptck-official "$@"
+        ( cd "${ROOT_DIR}" && mvn -ntp -P"tck,tck-official" -pl cervantes-tck test "$@" )
         ;;
 esac

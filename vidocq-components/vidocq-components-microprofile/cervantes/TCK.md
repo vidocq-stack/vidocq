@@ -23,8 +23,10 @@ Detailed installation procedure in `cervantes-tck/README.md` (to be created at m
 ./run-official-tck-mp-jwt-2.1.sh -Dtest=... # targeted test
 ```
 
-> `cervantes-tck` is **out-of-reactor** (standalone Model 4.0.0, no `<parent>`) — ShrinkWrap
-> Maven Resolver 3.3 vs Model 4.1.0 constraint. Always use the script, never `mvn -pl`.
+> `cervantes-tck` is **in-reactor behind the `tck` Maven profile**: a plain `mvn install`
+> skips it. Use the script above, or directly `./mvnw -P"tck,smoke" -pl cervantes-tck test`
+> (`tck-official` for the full suite). The former out-of-reactor constraint (ShrinkWrap
+> Maven Resolver 3.3 vs Model 4.1.0) is obsolete since Maven 3.9.16 / Model 4.0.0.
 
 ## Score & Exclusions
 
