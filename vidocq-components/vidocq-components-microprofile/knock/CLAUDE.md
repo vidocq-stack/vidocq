@@ -16,7 +16,7 @@
 ## Essential Commands
 
 ```bash
-# Build reactor (includes knock-tck)
+# Build reactor (knock-tck excluded — it joins only under the `tck` profile)
 ./mvnw -ntp install -DskipTests
 
 # Unit tests
@@ -30,12 +30,17 @@
 
 # TCK — targeted test
 ./run-official-tck-mp-health-4.0.sh -Dtest=TestName
+
+# TCK — direct in-reactor invocation (equivalent to the script, without the report)
+./mvnw -Ptck -pl knock-tck test                  # smoke
+./mvnw -Ptck,tck-official -pl knock-tck test     # full suite
 ```
 
-> `knock-tck` is now **part of the main reactor**, but its POM stays at **Model 4.0.0**
-> and remains **standalone-capable** to work around ShrinkWrap Maven Resolver 3.3 vs
-> Model 4.1.0 — same constraint as `cassini-tck`, `foy-tck`, `champollion-tck`, and
-> `ravel-tck`. Do not upgrade it to Model 4.1.0 nor make it depend on reactor-only features.
+> `knock-tck` is **in-reactor behind the `tck` Maven profile** (TCK harmonisation, same
+> pattern as the `vidocq-runtime-tck-*` runners): a regular `./mvnw install` neither builds
+> nor downloads the TCK harness. The historical ShrinkWrap Maven Resolver 3.3 vs
+> Model 4.1.0 constraint that once kept TCK runners out of reactors is obsolete since
+> the Maven 3.9.16 / Model 4.0.0 migration.
 
 ## Architecture
 
@@ -54,7 +59,7 @@ knock-cdi-vauban   ← CDI Vauban integration: BCE discovering
 knock-cassini      ← Cassini adapter (Jakarta REST): JAX-RS resources /health,
                      /health/live, /health/ready, /health/started
 knock-tck          ← Official MicroProfile Health 4.0 TCK runner
-                     (in the reactor, standalone-capable POM Model 4.0.0)
+                     (in-reactor, activated by the `tck` Maven profile)
 ```
 
 **Health check flow:**
@@ -138,8 +143,8 @@ Concrete rules:
 
 ## TCK — Technology Compatibility Kit
 
-MicroProfile Health TCK — run from the `knock-tck` module (POM Model 4.0.0, included in the
-reactor but kept standalone-capable to work around ShrinkWrap Maven Resolver 3.3):
+MicroProfile Health TCK — run from the `knock-tck` module (in-reactor, gated behind the
+`tck` Maven profile so a regular build never pulls the TCK harness):
 
 | TCK | Artifact | Target |
 |---|---|---|

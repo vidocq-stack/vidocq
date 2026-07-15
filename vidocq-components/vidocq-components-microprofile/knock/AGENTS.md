@@ -8,8 +8,8 @@
 - Strict Java Modules architecture: `knock-api` re-exports the spec, `knock-core` stays standalone SE
   (depends on `jakarta.json` / champollion for JSON serialization), `knock-cdi-vauban` is
   an optional CDI adapter, `knock-cassini` is the optional Jakarta REST adapter
-  (JAX-RS `/health*` resources via Cassini), `knock-tck` is now part of the main reactor
-  (standalone-capable Model 4.0.0 POM, also runnable on its own via the TCK script).
+  (JAX-RS `/health*` resources via Cassini), `knock-tck` is in-reactor behind the `tck`
+  Maven profile (runnable via the TCK script or `./mvnw -Ptck -pl knock-tck test`).
 - Prefer `ROADMAP.md` to track project progress rather than updating this file,
   which is intended as a contribution guide for agents.
 - If the rules in this file need updating, remember to align `CLAUDE.md` accordingly
@@ -46,11 +46,11 @@
 
 ## Boundaries Not to Break
 
-- `knock-tck` is included in the main reactor (parent `pom.xml` lists it as a `<module>`).
-  Keep its POM at Model 4.0.0 and standalone-capable: ShrinkWrap Maven Resolver 3.3
-  (Arquillian transitive dependency) uses maven-resolver 1.9 / maven-model 3.9 and cannot
-  parse Model 4.1.0 reactor POMs, so `knock-tck` must never rely on Model 4.1.0 features
-  (e.g. implicit parent versions) and must stay buildable in isolation via the TCK script.
+- `knock-tck` joins the reactor **only under the `tck` Maven profile** (TCK harmonisation,
+  same pattern as the `vidocq-runtime-tck-*` runners): a regular `./mvnw install` neither
+  builds nor downloads the TCK harness. Keep that gating. The historical ShrinkWrap Maven
+  Resolver 3.3 vs Model 4.1.0 constraint (which once kept the runner out of the reactor)
+  is obsolete since the Maven 3.9.16 / Model 4.0.0 migration.
 - `knock-core` depends on `org.eclipse.microprofile.health` + `jakarta.json` (JSON-P spec API)
   at compile scope; champollion is provided at runtime. CDI and Jakarta REST stay in their
   dedicated modules. `jakarta.annotation` is allowed **in test scope only**.
@@ -82,7 +82,7 @@ sdk env
 ```
 
 - The TCK always goes through the root script, which first installs the reactor then invokes
-  `mvn -f knock-tck/pom.xml -Ptck-official test`.
+  `./mvnw -Ptck,tck-official -pl knock-tck test` (knock-tck is in-reactor behind the `tck` profile).
 - The TCK script explicitly installs `knock-api,knock-core,knock-cdi-vauban,knock-cassini`
   via `./mvnw -pl ... -am install -DskipTests` before executing `knock-tck`.
 - The TCK is not "for later": it serves as continuous verification from M2/M3 onward.

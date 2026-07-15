@@ -86,9 +86,17 @@ sdk env
 ./run-official-tck-mp-health-4.0.sh -Dtest=TestName
 ----
 
+Le runner peut aussi être invoqué directement via le réacteur :
+
+[source,bash]
+----
+./mvnw -Ptck -pl knock-tck test                  # smoke
+./mvnw -Ptck,tck-official -pl knock-tck test     # suite officielle complète
+----
+
 [NOTE]
 ====
-Le TCK s'exécute sur le classpath (et non le module path), contournement Java Modules délibéré pour Arquillian/ShrinkWrap. `knock-tck` utilise donc le modèle POM Maven `4.0.0` tandis que le reste du réacteur utilise `4.1.0`.
+Le TCK s'exécute sur le classpath (et non le module path), contournement Java Modules délibéré pour Arquillian/ShrinkWrap. Depuis le 2026-07-15, `knock-tck` est dans le réacteur mais gardé derrière le profil Maven `tck` (même motif que les runners `vidocq-runtime-tck-*`) : un build ordinaire ne construit ni ne télécharge le harnais TCK. La contrainte historique ShrinkWrap Maven Resolver 3.3 vs Model 4.1.0, qui maintenait autrefois le runner hors du réacteur, est obsolète depuis la migration Maven 3.9.16 / Model 4.0.0.
 ====
 
 == Voir aussi

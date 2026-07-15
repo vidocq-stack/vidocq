@@ -77,14 +77,23 @@
         <cassini.version>0.3.0-SNAPSHOT</cassini.version>
     </properties>
 
-    <!-- Main reactor modules -->
+    <!--
+        Main reactor modules. knock-tck joins the reactor only under the `tck`
+        Maven profile (see <profiles> below) — TCK harmonisation, same pattern
+        as the vidocq-runtime-tck-* runners: a regular `mvn install` neither
+        builds nor downloads the TCK harness. The historical reason for keeping
+        TCK runners out of the reactor (ShrinkWrap Maven Resolver 3.3 unable to
+        parse Model 4.1.0 POMs) is obsolete since the Maven 3.9.16 /
+        Model 4.0.0 migration.
+        Activation: ./mvnw -Ptck,tck-official -pl knock-tck test
+        (or through run-official-tck-mp-health-4.0.sh).
+    -->
     <modules>
         <module>knock-mp-health-api</module>
         <module>knock-api</module>
         <module>knock-core</module>
         <module>knock-cdi-vauban</module>
         <module>knock-jaxrs</module>
-        <module>knock-tck</module>
     </modules>
 
     <dependencyManagement>
@@ -217,4 +226,18 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <!--
+            TCK profile: pulls the knock-tck runner into the reactor.
+            Kept behind a profile so a regular build never downloads nor runs
+            the official MicroProfile Health 4.0 TCK harness.
+        -->
+        <profile>
+            <id>tck</id>
+            <modules>
+                <module>knock-tck</module>
+            </modules>
+        </profile>
+    </profiles>
 </project>
