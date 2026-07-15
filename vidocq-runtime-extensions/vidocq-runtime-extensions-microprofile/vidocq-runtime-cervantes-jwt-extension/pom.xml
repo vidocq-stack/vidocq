@@ -12,7 +12,7 @@
 
     <artifactId>vidocq-runtime-cervantes-jwt-extension</artifactId>
     <name>Vidocq :: Core Extensions :: JWT (Cervantes)</name>
-    <description>Wrapper Maven/JPMS qui active Cervantes (MicroProfile JWT 2.1) dans un deploiement vidocq.</description>
+    <description>Wrapper Maven/Java Modules qui active Cervantes (MicroProfile JWT 2.1) dans un deploiement vidocq.</description>
 
     <dependencies>
         <dependency>
@@ -119,7 +119,7 @@
                 Le pattern `src/main/module-info` separe maintient `target/classes`
                 sans `module-info.class` pendant `test-compile`, ce qui evite que
                 maven-compiler-plugin 4.x ne bascule en mode patch-module et n'exige
-                la resolution JPMS de specs sans Automatic-Module-Name. On supprime
+                la resolution Java Modules de specs sans Automatic-Module-Name. On supprime
                 l'artefact `module-info.class` avant chaque `test-compile`.
             -->
             <plugin>

@@ -58,7 +58,7 @@ import java.util.stream.Stream;
  * </pre>
  *
  * <p>All dependency jars and the application artifact must be
- * <b>named JPMS modules</b> (presence of a {@code module-info.class}). TEA
+ * <b>named Java modules</b> (presence of a {@code module-info.class}). TEA
  * automatic modules are rejected by {@code jlink}.</p>
  */
 @Mojo(name = "jlink",
@@ -103,7 +103,7 @@ public class VidocqJlinkMojo extends AbstractMojo {
     /**
      * Skip the complete execution of the jlink goal (default: false).
      * Useful in CI to short-circuit the packaging when a dependency remains
-     * temporarily an automatic module while waiting for its transition to JPMS.
+     * temporarily an automatic module while waiting for its transition to Java Modules.
      */
     @Parameter(defaultValue = "false", property = "vidocq.jlink.skip")
     private boolean skip;
@@ -175,7 +175,7 @@ public class VidocqJlinkMojo extends AbstractMojo {
         if (!automatic.isEmpty()) {
             throw new IOException("jlink does not support automatic modules: "
                     + String.join(", ", automatic)
-                    + ". Convert these JARs into proper JPMS modules (add a module-info.java).");
+                    + ". Convert these JARs into proper Java modules (add a module-info.java).");
         }
     }
 

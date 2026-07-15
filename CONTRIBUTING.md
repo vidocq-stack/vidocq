@@ -116,5 +116,11 @@ By making a contribution to this project, I certify that:
 ## Code conventions
 
 See `CLAUDE.md` / `README.md` at the root of this repository for the project's
-coding standards (JPMS-strict, zero runtime dependencies, virtual threads,
+coding standards (strict Java Modules, zero runtime dependencies, virtual threads,
 TDD, English-only code and Javadoc).
+
+## Terminology
+
+Use **Java Modules** (or **Java module** for a single module) when referring to
+the Java Platform Module System. Do **not** use the abbreviation **JPMS** — in
+prose, identifiers, or documentation.

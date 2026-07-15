@@ -16,7 +16,7 @@
         /openapi/ui by the OpenAPI UI extension.</description>
 
     <!--
-        No module-info.java (unnamed module) to avoid JPMS constraints in tests. Test @Path
+        No module-info.java (unnamed module) to avoid Java Modules constraints in tests. Test @Path
         resources are visible to cassini and vauban without explicit opens.
     -->
 

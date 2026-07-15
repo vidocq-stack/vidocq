@@ -30,7 +30,7 @@ The metaphor faithfully reflects the role of the module. Vidocq fused heterogene
 | Build
 | Maven 3.9.16
 
-| JPMS modules
+| Java modules
 | `io.vidocq.runtime`, `io.vidocq.runtime.spi`, `io.vidocq.runtime.core`, `io.vidocq.runtime.maven`
 
 | Runtime dependencies
@@ -90,7 +90,7 @@ graph TB
 == Differentiators
 
 * **Java 25 + virtual threads** — `Executors.newVirtualThreadPerTaskExecutor()` everywhere, no platform thread pools.
-* **Strict JPMS** — every artefact is a named module, minimal `exports`, no hidden classpath.
+* **Strict Java Modules** — every artefact is a named module, minimal `exports`, no hidden classpath.
 * **Static codegen** — Class-File API (JEP 484) + APT at compile time, no dynamic proxies, no ASM, no Byte Buddy.
 * **Zero runtime reflection** — anything that can be is resolved at build, AOT-ready (GraalVM, Leyden CDS).
 * **Build-time first** — like Quarkus, but on a CDI Lite + Class-File API standard JDK foundation.

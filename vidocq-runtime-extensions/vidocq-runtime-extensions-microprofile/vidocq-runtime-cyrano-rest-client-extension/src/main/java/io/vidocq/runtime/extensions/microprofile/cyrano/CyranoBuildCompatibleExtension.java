@@ -23,7 +23,7 @@ import io.vidocq.cyrano.cdi.internal.CyranoRestClientCdiExtension;
 
 /**
  * BCE relay local to the wrapper module to republish the CDI Cyrano extension
- * via ServiceLoader and provides JPMS.
+ * via ServiceLoader and provides Java Modules.
  */
 public final class CyranoBuildCompatibleExtension extends CyranoRestClientCdiExtension {
 }

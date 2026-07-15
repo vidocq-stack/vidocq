@@ -9,7 +9,7 @@
 [cols="1,3"]
 |===
 | Artefact | `io.vidocq.runtime:vidocq-runtime-maven-plugin:0.2.0`
-| Module JPMS | `io.vidocq.runtime.maven`
+| Module Java Modules | `io.vidocq.runtime.maven`
 |===
 
 == Goals
@@ -69,7 +69,7 @@ target/
 │   ├── conf/                       # config surchargeable (ExternalFileConfigSource)
 │   │   ├── vidocq.properties
 │   │   └── logging.properties
-│   ├── lib/                        # modules JPMS app + JDK
+│   ├── lib/                        # modules Java app + JDK
 │   ├── legal/
 │   └── release
 ├── installer/                      # si jpackage activé
@@ -109,7 +109,7 @@ docker run --rm -p 8080:8080 \
 
 == Pré-requis et limitations
 
-* **JPMS strict** — toutes les dépendances doivent être des modules nommés. Un jar sans `module-info.class` ni `Automatic-Module-Name` casse `jlink`.
+* **Java Modules strict** — toutes les dépendances doivent être des modules nommés. Un jar sans `module-info.class` ni `Automatic-Module-Name` casse `jlink`.
 * **Records sérialisés via REST** — Champollion les gère par génération APT, pas par réflexion. Si une dépendance externe expose des records non générés, déclarer un `Converter<T>` JSON-B.
 * **Custom `java.util.logging` Handler** — déclarer le module dans `logging.properties` pour que `jlink` l'embarque (`handlers=com.example.MyHandler`).
 * **macOS app-image** — le bundle nécessite `--app-version` valide ; le plugin défaute à la version Maven du projet.

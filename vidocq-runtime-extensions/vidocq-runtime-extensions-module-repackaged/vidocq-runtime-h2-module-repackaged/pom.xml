@@ -5,22 +5,22 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>io.vidocq.runtime.extensions.jpms.repackaged</groupId>
-        <artifactId>vidocq-runtime-extensions-jpms-repackaged</artifactId>
+        <groupId>io.vidocq.runtime.extensions.module.repackaged</groupId>
+        <artifactId>vidocq-runtime-extensions-module-repackaged</artifactId>
         <version>0.3.0-SNAPSHOT</version>
     </parent>
 
-    <!-- Inherits groupId io.vidocq.runtime.extensions.jpms.repackaged from the parent aggregator:
-         the ".jpms.repackaged" namespace already signals that this artifact bundles third-party
+    <!-- Inherits groupId io.vidocq.runtime.extensions.module.repackaged from the parent aggregator:
+         the ".module.repackaged" namespace already signals that this artifact bundles third-party
          (H2) bytecode rather than Vidocq-authored code. Only module-info.java is contributed by
          Vidocq; every other class is H2's, under its own license (see below). -->
-    <artifactId>vidocq-runtime-h2-jpms-repackaged</artifactId>
-    <name>Vidocq :: Third-party :: H2 (JPMS repackaged)</name>
+    <artifactId>vidocq-runtime-h2-module-repackaged</artifactId>
+    <name>Vidocq :: Third-party :: H2 (Java Modules repackaged)</name>
     <description>
         Verbatim repackage of com.h2database:h2 with an added explicit module-info.class (module
         name: com.h2database, generated with `jdeps --generate-module-info`). The official artifact
         only declares Automatic-Module-Name, which jlink rejects — this turns it into an explicit
-        JPMS module WITHOUT modifying any H2 class, so runtimes/examples embedding H2 can be
+        Java module WITHOUT modifying any H2 class, so runtimes/examples embedding H2 can be
         jlink'd / jpackage'd. The H2 class files retain their original license (MPL 2.0 / EPL 1.0);
         only the added module-info.java is Vidocq's, under the project license.
     </description>

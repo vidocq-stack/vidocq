@@ -35,7 +35,7 @@ target/
 │   ├── conf/                           # overrideable config (see §5)
 │   │   ├── vidocq.properties
 │   │   └── logging.properties
-│   ├── lib/                            # app JPMS modules + JDK
+│   ├── lib/                            # app Java modules + JDK
 │   ├── legal/                          # licences (jlink)
 │   └── release                         # build info
 ├── installer/
@@ -280,14 +280,14 @@ If no file is found, the source is silently absent and only the classpath config
 
 ## 6. Prerequisites and best practices
 
-### 6.1 All jars must be named JPMS modules
+### 6.1 All jars must be named Java modules
 
 `jlink` rejects automatic modules. The goal detects this and fails cleanly
 with:
 
 ```
 jlink does not support automatic modules: my.legacy.lib (file:///…/legacy.jar).
-Convert these jars to proper JPMS modules (add a module-info.java).
+Convert these jars to proper Java modules (add a module-info.java).
 ```
 
 For your own project:
@@ -380,7 +380,7 @@ dist/
 │   ├── net.properties
 │   ├── security/                   # truststore, policies
 │   └── vidocq.properties           # ← copied by vidocq:jlink, overrideable
-├── lib/                            # JPMS modules (app + JDK + libs)
+├── lib/                            # Java modules (app + JDK + libs)
 │   ├── modules                     # jimage archive of modules
 │   ├── jrt-fs.jar
 │   └── …
@@ -423,7 +423,7 @@ ENTRYPOINT ["/opt/app/bin/<launcher>"]
 
 | # | Limitation | Workaround |
 |---|------------|------------|
-| 1 | Any non-modular dependency blocks `jlink` | Add `module-info.java` or use `jdeps --generate-module-info`. **Note**: the MicroProfile Config API is delivered as a named module `org.eclipse.microprofile.config` via `io.vidocq.ravel:ravel-mp-config-api` (JPMS substitute for `org.eclipse.microprofile.config:microprofile-config-api`, which remains an automatic module upstream). |
+| 1 | Any non-modular dependency blocks `jlink` | Add `module-info.java` or use `jdeps --generate-module-info`. **Note**: the MicroProfile Config API is delivered as a named module `org.eclipse.microprofile.config` via `io.vidocq.ravel:ravel-mp-config-api` (Java Modules substitute for `org.eclipse.microprofile.config:microprofile-config-api`, which remains an automatic module upstream). |
 | 2 | Yasson + records → `title=null` on POST/GET round-trip in module-path | `@JsonbCreator` factory (see §6.2). Will be fixed by in-house `cassini-jsonb`. |
 | 3 | macOS `app-image` rejects `appVersion=0.x.y` | Set `<appVersion>1.0.0</appVersion>` |
 | 4 | `--strip-debug` removes `LineNumberTable` (less readable stack-traces) | `<stripDebug>false</stripDebug>` in dev, `true` in prod |

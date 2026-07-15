@@ -20,7 +20,7 @@ is ready to receive spans from the very first call.
 ## Automatic activation
 
 As soon as this artifact is on the classpath, the ServiceLoader discovers it
-(`META-INF/services/io.vidocq.runtime.spi.VidocqExtension` + `provides` JPMS).
+(`META-INF/services/io.vidocq.runtime.spi.VidocqExtension` + `provides` Java Modules).
 No code configuration required.
 
 ## Environment variable configuration

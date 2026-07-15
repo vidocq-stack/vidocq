@@ -2,7 +2,7 @@
 :description: Built-in extensions shipped with Vidocq Runtime.
 
 [.lead]
-`vidocq-runtime-extensions` is the set of extensions shipped out of the box, grouped by domain under five aggregators (`essentials`, `jakartaee-core`, `jakartaee-web`, `microprofile`, `jpms-repackaged`). Each leaf is an independent Maven artefact, activated by the user simply adding it as a dependency.
+`vidocq-runtime-extensions` is the set of extensions shipped out of the box, grouped by domain under five aggregators (`essentials`, `jakartaee-core`, `jakartaee-web`, `microprofile`, `module-repackaged`). Each leaf is an independent Maven artefact, activated by the user simply adding it as a dependency.
 
 == Coordinates
 
@@ -120,7 +120,7 @@ Other extensions follow comparable scheduling logic with their own priorities.
 
 == Activation by dependency
 
-An extension activates as soon as it is on the module-path. No `@EnableX` annotation is required — the APT index detects the JPMS `provides VidocqExtension` declaration.
+An extension activates as soon as it is on the module-path. No `@EnableX` annotation is required — the APT index detects the Java Modules `provides VidocqExtension` declaration.
 
 [source,xml]
 ----

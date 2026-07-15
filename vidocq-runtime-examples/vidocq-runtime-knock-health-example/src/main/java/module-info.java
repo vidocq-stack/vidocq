@@ -32,7 +32,7 @@ module io.vidocq.runtime.examples.knock {
     // @Liveness/@Readiness/@Startup discovery BCE + the auto-mounted KnockHealthResource.
     requires io.vidocq.runtime.extensions.microprofile.knock;
     requires io.vidocq.knock.api;            // HealthCheckRegistry / SPI
-    // MP Health spec API. JPMS module name is `microprofile.health.api` (Vidocq fork with
+    // MP Health spec API. Java module name is `microprofile.health.api` (Vidocq fork with
     // module-info); the package is org.eclipse.microprofile.health. Brings HealthCheck /
     // HealthCheckResponse / @Liveness. Re-exported transitively by io.vidocq.knock.api.
     requires microprofile.health.api;

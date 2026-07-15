@@ -29,7 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * M8 non-regression test — the wrapper {@code vidocq-runtime-cervantes-jwt-extension}
  * must republish the ECB Cervantes (MicroProfile JWT 2.1) so that it remains
- * discovered via {@code ServiceLoader} and {@code provides ... with} JPMS.
+ * discovered via {@code ServiceLoader} and {@code provides ... with} Java Modules.
  *
  * <p>Objective: to confirm that the Cervantes integration in vidocq did not break the
  * discovery of the ECB on the CDI container side (injection {@code @Claim} +
@@ -38,8 +38,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class CervantesJwtBuildCompatibleExtensionTest {
 
     @Test
-    @DisplayName("M8 - the wrapper republishes the Cervantes BCE via ServiceLoader and JPMS provides")
-    void wrapper_republishes_cervantes_extension_via_service_loader_and_jpms() {
+    @DisplayName("M8 - the wrapper republishes the Cervantes BCE via ServiceLoader and Java Modules provides")
+    void wrapper_republishes_cervantes_extension_via_service_loader_and_java_modules() {
         Class<?> extensionClass;
         try {
             extensionClass = Class.forName(
@@ -52,7 +52,7 @@ class CervantesJwtBuildCompatibleExtensionTest {
         assertTrue(io.vidocq.cervantes.cdi.CervantesClaimExtension.class.isAssignableFrom(extensionClass),
                 "The wrapper must extend io.vidocq.cervantes.cdi.CervantesClaimExtension");
 
-        // When the JPMS module is named, it must publish the ECB via provides ... with.
+        // When the Java module is named, it must publish the ECB via provides ... with.
         Module module = extensionClass.getModule();
         ModuleDescriptor descriptor = module.getDescriptor();
         if (module.isNamed() && descriptor != null) {
@@ -61,7 +61,7 @@ class CervantesJwtBuildCompatibleExtensionTest {
                             .equals(provides.service())
                             && provides.providers().contains(extensionClass.getName()));
             assertTrue(providesExtension,
-                    "The wrapper JPMS module must publish BuildCompatibleExtension via provides ... with");
+                    "The wrapper Java module must publish BuildCompatibleExtension via provides ... with");
         }
     }
 }
