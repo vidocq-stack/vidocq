@@ -1,5 +1,5 @@
 = TCK MicroProfile Fault Tolerance 4.1
-:description: Statut, exécution du runner, mode no-observability, architecture hors reactor, exclusions documentées.
+:description: Statut, exécution du runner, mode no-observability, runner in-reactor derrière le profil tck, exclusions documentées.
 
 [.lead]
 Le TCK officiel MicroProfile Fault Tolerance 4.1 valide qu'une implémentation respecte les sémantiques §2.5 (composition), §4 (Retry), §5 (CircuitBreaker), §6 (Asynchronous), §7 (Timeout), §8 (Fallback), §9 (Bulkhead), §10 (Metrics) et §11 (OpenTelemetry) sur un ensemble d'applications de référence. Heisenberg le passe à *463 / 463* sur la version 4.1 (mai 2026).
@@ -55,7 +55,13 @@ Le script `run-official-tck-mp-fault-tolerance-4.1.sh` à la racine du dépôt o
 ./run-official-tck-mp-fault-tolerance-4.1.sh -Dtest=CircuitBreakerTest#testCircuitClosesAfterDelay
 ----
 
-Le runner exécute Arquillian + TestNG. Le rapport Surefire atterrit dans `heisenberg-tck/target/surefire-reports/`, et un résumé `tck-report.txt` est généré par le script avec le nombre de tests PASS / FAIL / ERROR / SKIP.
+Le runner exécute Arquillian + TestNG. Le rapport Surefire atterrit dans `heisenberg-tck/target/surefire-reports/`, et un résumé `tck-report.txt` est généré par le script avec le nombre de tests PASS / FAIL / ERROR / SKIP. Invocation directe sans le script :
+
+[source,bash]
+----
+./mvnw -Ptck -pl heisenberg-tck test                  # smoke
+./mvnw -Ptck,tck-official -pl heisenberg-tck test     # suite complète
+----
 
 == Mode `no-observability`
 
@@ -88,11 +94,11 @@ Si `-Dsurefire.excludes=...` est déjà fourni en ligne de commande, les exclusi
 
 == Architecture du runner
 
-`heisenberg-tck` est **volontairement hors reactor** : son `pom.xml` est en `modelVersion 4.0.0` standalone, sans `<parent>`.
+`heisenberg-tck` est un **module in-reactor gardé derrière le profil Maven `tck`** (harmonisation TCK à l'échelle du workspace Vidocq, sur le modèle des runners `vidocq-runtime-tck-*` du runtime Vidocq) : un `mvn install` normal ne télécharge ni n'exécute rien du TCK, et le reactor de release ne voit jamais le module.
 
 [NOTE]
 ====
-Ce détachement est imposé par ShrinkWrap Maven Resolver 3.3 transitif au TCK officiel, qui ne sait pas parser les POMs Model 4.1.0 et crashe sur le reactor Vidocq. La règle est documentée dans la racine du workspace : **ne pas réintégrer `heisenberg-tck` aux `<subprojects>` de `heisenberg-parent`**, ne pas leur ajouter de `<parent>`, ne pas les builder via `mvn -pl`.
+Historiquement `heisenberg-tck` était un POM standalone hors reactor : ShrinkWrap Maven Resolver 3.3, transitif au TCK officiel, ne savait pas parser les POMs Model 4.1.0. Cette contrainte a disparu avec la migration du workspace vers Maven 3.9.16 / Model 4.0.0, et le TCK MP Fault Tolerance construit ses déploiements uniquement via `addClass`/`addPackage` (pas de resolver Maven ShrinkWrap) — il est donc sûr in-reactor, vérification déjà faite pour `vidocq-runtime-tck-heisenberg-faulttolerance`.
 ====
 
 Stack assemblée par le runner :

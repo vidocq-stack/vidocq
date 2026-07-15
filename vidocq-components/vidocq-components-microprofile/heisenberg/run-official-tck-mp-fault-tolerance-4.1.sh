@@ -12,7 +12,9 @@
 #
 # Comportement :
 #   1. Installe en local (./mvnw install -DskipTests) heisenberg-api/core/cdi-vauban
-#   2. Invoque mvn -f heisenberg-tck/pom.xml -P<profile> test [args...]
+#   2. Invoque ./mvnw -Ptck,<profile> -pl heisenberg-tck test [args...]
+#      (heisenberg-tck est in-reactor, activé par le profil Maven `tck` —
+#      harmonisation TCK, même pattern que les runners vidocq-runtime-tck-*)
 #   3. Génère heisenberg-tck/target/tck-report.txt avec le résumé PASS/FAIL/SKIP
 #
 # Vérification de la disponibilité du TCK sur Maven Central :
@@ -53,13 +55,13 @@ esac
 echo "==> Étape 1/2 : install local des artefacts Heisenberg (./mvnw install -DskipTests)"
 ( cd "${ROOT_DIR}" && ./mvnw -ntp -pl heisenberg-api,heisenberg-core,heisenberg-cdi-vauban -am install -DskipTests )
 
-echo "==> Étape 2/2 : exécution Maven sur heisenberg-tck (profil=${profile})"
+echo "==> Étape 2/2 : exécution Maven sur heisenberg-tck in-reactor (profils=tck,${profile})"
 mkdir -p "${TCK_DIR}/target"
 
 MVN="${ROOT_DIR}/mvnw"
 
 set +e
-"${MVN}" -ntp -f "${TCK_DIR}/pom.xml" -P"${profile}" test "$@" \
+( cd "${ROOT_DIR}" && "${MVN}" -ntp -P"tck,${profile}" -pl heisenberg-tck test "$@" ) \
     | tee "${REPORT_FILE}.raw"
 status=$?
 set -e

@@ -7,7 +7,7 @@
 ## Repository mission
 
 - Heisenberg implements **MicroProfile Fault Tolerance 4.1** in Java 25, with **zero third-party implementation libraries**: only the spec APIs (`microprofile-fault-tolerance-api`, `jakarta.enterprise.cdi-api`, `jakarta.interceptor-api`, `microprofile-config-api`) are compiled into `heisenberg-core` and `heisenberg-cdi-vauban`.
-- Strict Java Modules architecture: `heisenberg-api` wraps the spec, `heisenberg-core` contains pure Java 25 engines without CDI, `heisenberg-cdi-vauban` contains the CDI interceptor + Vauban BCE, `heisenberg-tck` stays outside the reactor.
+- Strict Java Modules architecture: `heisenberg-api` wraps the spec, `heisenberg-core` contains pure Java 25 engines without CDI, `heisenberg-cdi-vauban` contains the CDI interceptor + Vauban BCE, `heisenberg-tck` is in-reactor behind the `tck` Maven profile.
 - **No SmallRye Fault Tolerance, Hystrix, or Resilience4j** in production code.
 - Virtual threads (Project Loom) for `@Asynchronous` and `@Timeout` — `Thread.ofVirtual() + join(Duration)` (Java 21+, finalized). `StructuredTaskScope` (JEP 505) has been available since Java 25 but is not currently used to maximize compatibility with Java 21+.
 - Use `ROADMAP.md` to track milestone progress (M0..M9).
@@ -65,9 +65,11 @@
 
 ## Boundaries not to break
 
-- Never put `heisenberg-tck` back into the reactor: it is intentionally excluded because of
-  ShrinkWrap Maven Resolver / Model 4.0.0 vs 4.1.0 incompatibility (a common constraint
-  across the whole Vidocq ecosystem).
+- `heisenberg-tck` is in-reactor but **gated behind the `tck` Maven profile** (TCK
+  harmonisation, `vidocq-runtime-tck-*` pattern): never add it to the default
+  `<modules>` — a plain `mvn install` must neither download nor run anything
+  TCK-related. The historical ShrinkWrap Maven Resolver 3.3 vs Model 4.1.0
+  constraint disappeared with the Maven 3.9.16 / Model 4.0.0 migration.
 - `heisenberg-core` must import **no** CDI class (`jakarta.enterprise.*`,
   `jakarta.inject.*`) — only `microprofile-fault-tolerance-api`,
   `jakarta.interceptor-api` (for `InvocationContext`), and `microprofile-config-api`.

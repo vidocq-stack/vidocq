@@ -1,34 +1,44 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-    Projet Maven STANDALONE en Model Version 4.0.0, volontairement EN DEHORS
-    du reactor Heisenberg.
+    In-reactor TCK runner, gated by the `tck` Maven profile of heisenberg-parent
+    (TCK harmonisation — workspace-wide effort, mirroring the
+    vidocq-runtime-tck-* pattern): a plain `mvn install` neither downloads nor
+    runs anything TCK-related.
 
-    Pourquoi : ShrinkWrap Maven Resolver 3.3 (dépendance transitive Arquillian) utilise
-    maven-resolver 1.9 / maven-model 3.9 qui ne savent pas parser les POMs Model 4.1.0
-    du reactor. Son ClasspathWorkspaceReader crasherait sur tout POM Heisenberg
-    (version implicite via parent).
+    History: this module used to be a STANDALONE out-of-reactor POM to work
+    around ShrinkWrap Maven Resolver 3.3 (could not parse Model 4.1.0 POMs).
+    That constraint disappeared with the Maven 3.9.16 / Model 4.0.0 migration,
+    and the MP Fault Tolerance TCK builds its deployments with
+    addClass/addPackage only (no ShrinkWrap Maven resolver), so it is safe
+    in-reactor.
 
-    Dépendances internes (heisenberg-api/core/cdi-vauban) sont gelées sur la version
-    0.3.0-SNAPSHOT installée dans le repository Maven local.
+    Internal dependency versions (heisenberg-api/core/cdi-vauban, vauban-core,
+    ravel-core, microprofile-fault-tolerance-api) are managed by heisenberg-parent.
 
-    Le lancement passe par le script :
+    Execution goes through the script (thin wrapper over the reactor):
         ./run-official-tck-mp-fault-tolerance-4.1.sh              (smoke test)
-        ./run-official-tck-mp-fault-tolerance-4.1.sh all          (suite complète TestNG)
-        ./run-official-tck-mp-fault-tolerance-4.1.sh -Dtest=Foo   (classe ciblée)
+        ./run-official-tck-mp-fault-tolerance-4.1.sh all          (full suite)
+        ./run-official-tck-mp-fault-tolerance-4.1.sh -Dtest=Foo   (targeted class)
 
-    TCK MicroProfile Fault Tolerance 4.1 :
+    Or directly:
+        ./mvnw -Ptck -pl heisenberg-tck test                      (smoke)
+        ./mvnw -Ptck,tck-official -pl heisenberg-tck test         (full suite)
+
+    MicroProfile Fault Tolerance 4.1 TCK:
         org.eclipse.microprofile.fault-tolerance:microprofile-fault-tolerance-tck:4.1
-    Vérification de disponibilité sur Maven Central :
-        mvn dependency:get -Dartifact=org.eclipse.microprofile.fault-tolerance:microprofile-fault-tolerance-tck:4.1
 -->
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>io.vidocq.heisenberg</groupId>
+    <parent>
+        <groupId>io.vidocq.heisenberg</groupId>
+        <artifactId>heisenberg-parent</artifactId>
+        <version>0.3.0-SNAPSHOT</version>
+    </parent>
+
     <artifactId>heisenberg-tck</artifactId>
-    <version>0.3.0-SNAPSHOT</version>
     <packaging>jar</packaging>
 
     <name>Heisenberg :: TCK Runner</name>
@@ -37,10 +47,6 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.release>25</maven.compiler.release>
-        <heisenberg.version>0.3.0-SNAPSHOT</heisenberg.version>
-        <microprofile.fault.tolerance.version>4.1</microprofile.fault.tolerance.version>
-        <vauban.version>0.3.0-SNAPSHOT</vauban.version>
-        <ravel.version>0.3.0-SNAPSHOT</ravel.version>
         <humboldt.version>0.3.0-SNAPSHOT</humboldt.version>
     </properties>
 
@@ -84,42 +90,36 @@
     </dependencyManagement>
 
     <dependencies>
-        <!-- Heisenberg (installé en local via le script TCK) -->
+        <!-- Heisenberg (managed by heisenberg-parent at ${project.version}) -->
         <dependency>
             <groupId>io.vidocq.heisenberg</groupId>
             <artifactId>heisenberg-api</artifactId>
-            <version>${heisenberg.version}</version>
         </dependency>
         <dependency>
             <groupId>io.vidocq.heisenberg</groupId>
             <artifactId>heisenberg-core</artifactId>
-            <version>${heisenberg.version}</version>
         </dependency>
         <dependency>
             <groupId>io.vidocq.heisenberg</groupId>
             <artifactId>heisenberg-cdi-vauban</artifactId>
-            <version>${heisenberg.version}</version>
         </dependency>
 
         <!-- MP FT API -->
         <dependency>
             <groupId>org.eclipse.microprofile.fault-tolerance</groupId>
             <artifactId>microprofile-fault-tolerance-api</artifactId>
-            <version>${microprofile.fault.tolerance.version}</version>
         </dependency>
 
         <!-- Vauban CDI container -->
         <dependency>
             <groupId>io.vidocq.vauban</groupId>
             <artifactId>vauban-core</artifactId>
-            <version>${vauban.version}</version>
         </dependency>
 
         <!-- Ravel Config -->
         <dependency>
             <groupId>io.vidocq.ravel</groupId>
             <artifactId>ravel-core</artifactId>
-            <version>${ravel.version}</version>
         </dependency>
 
         <!-- JUnit Jupiter pour smoke test -->
@@ -132,6 +132,41 @@
     </dependencies>
 
     <build>
+        <plugins>
+            <!-- Test harness, never published (same rule as heisenberg-bench). -->
+            <plugin>
+                <groupId>org.sonatype.central</groupId>
+                <artifactId>central-publishing-maven-plugin</artifactId>
+                <configuration>
+                    <skipPublishing>true</skipPublishing>
+                </configuration>
+            </plugin>
+            <!--
+                Classpath-only harness: neutralise the Java Modules wiring
+                inherited from heisenberg-parent. The TCK archives are
+                unnamed-module CDI deployments; putting the MicroProfile
+                originals on the module path would duplicate the modules
+                carried by the heisenberg-mp-ft-api / ravel-mp-config-api /
+                dirac-mp-metrics-api repacks.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>copy-compile-deps-to-module-path</id>
+                        <phase>none</phase>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration combine.self="override">
+                    <release>25</release>
+                </configuration>
+            </plugin>
+        </plugins>
         <pluginManagement>
             <plugins>
                 <plugin>

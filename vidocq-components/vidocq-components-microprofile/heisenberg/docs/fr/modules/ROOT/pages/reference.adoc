@@ -36,7 +36,7 @@ Cette page consolide la surface publique de Heisenberg : artefacts Maven, module
 
 | `io.vidocq.heisenberg`
 | `heisenberg-tck`
-| Runner officiel TCK MP FT 4.1 — hors reactor (Model 4.0.0). Ne pas déclarer en dépendance applicative.
+| Runner officiel TCK MP FT 4.1 — in-reactor, gardé derrière le profil Maven `tck`. Ne pas déclarer en dépendance applicative.
 |===
 
 Toutes les versions à `0.2.0` (dernière release sur Maven Central) au moment de la rédaction.
