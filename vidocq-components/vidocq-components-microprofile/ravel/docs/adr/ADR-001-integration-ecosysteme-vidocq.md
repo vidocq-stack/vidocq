@@ -47,7 +47,7 @@ io.vidocq.ravel:ravel-core        # without CDI (standalone Chappe)
 - **Zero third-party dependency** in the configuration stack (Ravel is self-contained)
 - **Improved JMH performance** on conversions (~20-37% depending on type)
 - **Certified TCK 100% PASS** — guaranteed spec compliance
-- **Strict JPMS** — no encapsulation issues at runtime
+- **Strict Java Modules** — no encapsulation issues at runtime
 - **Virtual threads friendly** — no `synchronized`, no `ThreadLocal`
 
 ### Identified Risks

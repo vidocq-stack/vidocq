@@ -1,11 +1,11 @@
 = Ravel
-:description: MicroProfile Config 3.1 implementation, zero third-party libraries, JPMS strict, Java 25, jlink-ready.
+:description: MicroProfile Config 3.1 implementation, zero third-party libraries, Java Modules strict, Java 25, jlink-ready.
 
 [.text-center]
 image::ravel-logo.png[Ravel,300,role=module-logo]
 
 [.lead]
-Ravel is the MicroProfile Config 3.1 implementation of the Vidocq ecosystem. It implements the full configuration abstraction layer for Jakarta EE / MicroProfile applications: aggregation of multiple sources (system properties, environment variables, `microprofile-config.properties`), type conversion, property expressions, configuration profiles, and CDI integration via xref:vauban::index.adoc[Vauban]. Goal: 100 % MicroProfile Config 3.1 TCK conformance, zero external dependencies, JPMS-strict, jlink-ready.
+Ravel is the MicroProfile Config 3.1 implementation of the Vidocq ecosystem. It implements the full configuration abstraction layer for Jakarta EE / MicroProfile applications: aggregation of multiple sources (system properties, environment variables, `microprofile-config.properties`), type conversion, property expressions, configuration profiles, and CDI integration via xref:vauban::index.adoc[Vauban]. Goal: 100 % MicroProfile Config 3.1 TCK conformance, zero external dependencies, strict Java Modules, jlink-ready.
 
 == Origin of the name
 
@@ -35,7 +35,7 @@ Ravel orchestrates all these voices into a single, unified configuration accessi
 | Implemented spec | {spec-mp-config}
 | Repo | {repo-ravel}
 | Java | 25 (LTS)
-| JPMS modules | `org.eclipse.microprofile.config` (repackaged), `io.vidocq.ravel.api`, `io.vidocq.ravel.core`, `io.vidocq.ravel.cdi.vauban`
+| Java modules | `org.eclipse.microprofile.config` (repackaged), `io.vidocq.ravel.api`, `io.vidocq.ravel.core`, `io.vidocq.ravel.cdi.vauban`
 | Runtime dependencies | MicroProfile Config spec only. CDI optional via xref:vauban::index.adoc[Vauban].
 | jlink-ready | ✅ - all dependencies have explicit `module-info`, no `Automatic-Module-Name` fallback.
 | TCK | ✅ Target: 100 % PASS (M5 - May 2026).
@@ -65,7 +65,7 @@ flowchart LR
 === Zero external dependencies
 Only `org.eclipse.microprofile.config` as a compile dependency. The implementation is fully self-contained, with no Smallrye, Guava, or other third-party libs. Perfect for embedded and microservices.
 
-=== JPMS strict
+=== Java Modules strict
 All modules have explicit `module-info.java`, no automatic module fallbacks. Internal packages are not exported. Compatible with `jlink` for custom JDK images.
 
 === Built-in type converters

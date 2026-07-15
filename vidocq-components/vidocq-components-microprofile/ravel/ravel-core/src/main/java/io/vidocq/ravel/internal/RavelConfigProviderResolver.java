@@ -33,7 +33,7 @@ import java.util.concurrent.ConcurrentMap;
  * per {@link ClassLoader}.
  *
  * <p>Discovered through {@link java.util.ServiceLoader} using both
- * {@code META-INF/services/...ConfigProviderResolver} and the JPMS
+ * {@code META-INF/services/...ConfigProviderResolver} and the Java Modules
  * {@code provides ... with} declaration.</p>
  *
  * <p><b>Thread-safety</b>: uses {@link ConcurrentHashMap} and atomic

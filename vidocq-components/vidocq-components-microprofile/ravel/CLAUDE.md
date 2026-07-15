@@ -18,7 +18,7 @@
   (unlike Jakarta TCKs, no manual installation needed).
   Note: artifact version `3.1.1` is a re-release of spec 3.1 published on
   2026-04-22 that adds `Automatic-Module-Name` to the manifest — functionally identical
-  to 3.1 but usable with strict JPMS. The original 3.1 version (without modular descriptor)
+  to 3.1 but usable with strict Java Modules. The original 3.1 version (without modular descriptor)
   must not be used.
 
 ## Essential commands
@@ -51,7 +51,7 @@ java -jar ravel-bench/target/benchmarks.jar
 ## Architecture
 
 Ravel is a MicroProfile Config 3.1 implementation with **zero third-party libraries** (no Smallrye,
-Guava, etc.), only Jakarta EE / MicroProfile specs as dependencies, virtual threads, strict JPMS.
+Guava, etc.), only Jakarta EE / MicroProfile specs as dependencies, virtual threads, strict Java Modules.
 
 ```
 ravel-api          ← Re-exports the org.eclipse.microprofile.config spec (ConfigProvider, Config,
@@ -84,12 +84,12 @@ ravel-tck          ← Official MicroProfile Config 3.1 TCK runner (OUT of react
    no other Jakarta specs. The config core must work standalone SE without any container.
 2. **`ravel-cdi-vauban` depends on `ravel-core` + `jakarta.cdi`** but never the reverse — the
    CDI integration is an optional module not visible from the core.
-3. **Strict JPMS**: all modules have a `module-info.java`, `internal.*` packages unexported,
+3. **Strict Java Modules**: all modules have a `module-info.java`, `internal.*` packages unexported,
    SPI exposed only via `provides ... with`.
 4. **No `synchronized`, no `ThreadLocal`** — virtual-thread-friendly. Use `ScopedValue`
    for any propagated context (e.g., cyclic resolution detected in `ExpressionResolver.STACK`).
 5. **No `setAccessible(true)` reflection** except for the implicit converter (String constructor,
-   `valueOf`/`parse` method) — document any required JPMS opening in `module-info`.
+   `valueOf`/`parse` method) — document any required Java Modules opening in `module-info`.
 6. **Cycle detection in property expressions**: an expression that references itself
    (directly or indirectly) must throw `IllegalArgumentException`, not loop indefinitely.
 7. **TCK MicroProfile Config 3.1 100% PASS** is a hard contract before any structural merge.
@@ -118,7 +118,7 @@ ravel-tck          ← Official MicroProfile Config 3.1 TCK runner (OUT of react
 
 See `ROADMAP.md` for the detailed phase-by-phase plan (M0..M5).
 
-- **M0** — Bootstrap Maven reactor, JPMS, `.sdkmanrc`
+- **M0** — Bootstrap Maven reactor, Java Modules, `.sdkmanrc`
 - **M1** — `ravel-api` + `ravel-core`: 3 built-in sources, primitive converters, `ConfigProvider`
 - **M2** — Advanced converters (arrays, collections, temporal types), implicit converters
 - **M3** — Config Profiles (`%dev.`, `%prod.`, `%test.`), property expressions (`${key}`)
@@ -177,7 +177,7 @@ The `run-official-tck-mp-config-3.1.sh` script:
 - **Zero third-party libraries**: Jakarta EE and MicroProfile specs are the only dependencies
   allowed in `provided`/`compile` scope (CDI, Annotations, etc.). If an implementation library
   seems necessary, the modular decomposition is wrong.
-- Use agents **`jpms-guardian`**, **`virtual-threads-reviewer`**, **`dependency-gatekeeper`**
+- Use agents **`java-modules-guardian`**, **`virtual-threads-reviewer`**, **`dependency-gatekeeper`**
   proactively on any modification to `module-info.java`, concurrent code, or `pom.xml`.
 
 ## Documentation (Antora) conventions
@@ -223,3 +223,9 @@ Follow Vauban's `index.adoc`: page title (`= <Project>`), `:description:`, a cen
 Provide `modules/ROOT/images/<project>-logo.png` (PNG), referenced from `index.adoc`.
 
 > When you change these documentation rules, keep `AGENTS.md` and `CLAUDE.md` in sync.
+
+## Terminology
+
+Use **Java Modules** (or **Java module** for a single module) when referring to
+the Java Platform Module System. Do **not** use the abbreviation **JPMS** — in
+prose, identifiers, or documentation.

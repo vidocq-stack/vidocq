@@ -30,7 +30,7 @@ In your `cassini-*` module or application using Cassini:
 </dependencies>
 ```
 
-## JPMS Configuration
+## Java Modules Configuration
 
 In your `module-info.java`:
 

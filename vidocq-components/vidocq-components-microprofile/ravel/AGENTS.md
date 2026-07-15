@@ -2,7 +2,7 @@
 
 ## Repository mission
 - Ravel implements **MicroProfile Config 3.1** in Java 25 with **zero third-party implementation libraries**: only the MP Config spec in `ravel-core`, Jakarta APIs only on the CDI side (`README.md`, `pom.xml`, `CLAUDE.md`).
-- Strict JPMS architecture: `ravel-api` re-exports the spec, `ravel-core` stays standalone SE, `ravel-cdi-vauban` is an optional adapter, `ravel-tck` stays out of reactor.
+- Strict Java Modules architecture: `ravel-api` re-exports the spec, `ravel-core` stays standalone SE, `ravel-cdi-vauban` is an optional adapter, `ravel-tck` stays out of reactor.
 - **jlink-ready**: because the original MicroProfile Config API only has an `Automatic-Module-Name`, the `ravel-mp-config-api` module repackages it with an explicit `module-info.class` (module name kept: `org.eclipse.microprofile.config`). All other modules depend on **this repackage**, never directly on `org.eclipse.microprofile.config:microprofile-config-api` (except `ravel-tck` out of reactor).
 - Prefer using `ROADMAP.md` to track project progress rather than updating this file, which is intended as a contribution guide for agents.
 - When updating the rules in this file, remember to align `CLAUDE.md` accordingly so Claude Code can reference it easily.
@@ -95,3 +95,9 @@ Follow Vauban's `index.adoc`: page title (`= <Project>`), `:description:`, a cen
 Provide `modules/ROOT/images/<project>-logo.png` (PNG), referenced from `index.adoc`.
 
 > When you change these documentation rules, keep `AGENTS.md` and `CLAUDE.md` in sync.
+
+## Terminology
+
+Use **Java Modules** (or **Java module** for a single module) when referring to
+the Java Platform Module System. Do **not** use the abbreviation **JPMS** — in
+prose, identifiers, or documentation.

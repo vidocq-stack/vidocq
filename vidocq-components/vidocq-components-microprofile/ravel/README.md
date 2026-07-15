@@ -12,7 +12,7 @@ implementation for the [Vidocq](https://forge.vidocq.dev/vidocq) ecosystem.
   as compile/runtime dependencies. No Smallrye Config, no Helidon Config, no Apache
   Commons Config.
 - **Java 25 + Maven 4** — pinned via `.sdkmanrc`.
-- **Strict JPMS** — each module has its `module-info.java`, `internal.*` packages unexported,
+- **Strict Java Modules** — each module has its `module-info.java`, `internal.*` packages unexported,
   SPI via `provides/uses`.
 - **Virtual threads friendly** — no `synchronized`, no `ThreadLocal`. `ScopedValue` for
   contextual propagation (cycle detection in expressions in particular).
@@ -41,7 +41,7 @@ mvn test                        # unit tests
 ## Official TCK
 
 The `org.eclipse.microprofile.config:microprofile-config-tck:3.1.1` artifact is public on Maven
-Central — no manual installation needed (3.1.1 is a JPMS-friendly re-release of
+Central — no manual installation needed (3.1.1 is a Java Modules-friendly re-release of
 spec 3.1, identical content).
 
 ```bash

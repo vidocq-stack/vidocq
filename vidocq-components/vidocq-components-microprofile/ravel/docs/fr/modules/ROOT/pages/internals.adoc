@@ -2,14 +2,14 @@
 :description: Conception et architecture interne de Ravel.
 
 [.lead]
-Ravel résout l'abstraction MicroProfile Config avec le seul JDK et la spec — zéro bibliothèque tierce, JPMS strict, prêt pour jlink. Cette page documente la structure des modules et les choix de conception du runtime.
+Ravel résout l'abstraction MicroProfile Config avec le seul JDK et la spec — zéro bibliothèque tierce, Java Modules strict, prêt pour jlink. Cette page documente la structure des modules et les choix de conception du runtime.
 
 == Vue d'ensemble
 
 Ravel implémente MicroProfile Config 3.1 avec ces principes :
 
 * **Zéro dépendance externe** — seulement `org.eclipse.microprofile.config`
-* **JPMS strict** — tous les modules ont un `module-info` explicite, pas de module automatique
+* **Java Modules strict** — tous les modules ont un `module-info` explicite, pas de module automatique
 * **Prête pour jlink** — peut être incluse dans des images JDK personnalisées via `jlink`
 * **Compatible virtual threads** — pas de `synchronized` ou `ThreadLocal`, utilise `ScopedValue` pour le contexte
 

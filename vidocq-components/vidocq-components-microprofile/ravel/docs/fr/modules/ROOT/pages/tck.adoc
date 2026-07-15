@@ -75,7 +75,7 @@ L'implémentation de Ravel cible ces jalons :
 
 | Jalon | Fonctionnalités | Statut |
 |-------|-----------------|--------|
-| M0 | Reactor, JPMS, `.sdkmanrc` | ✅ Fait |
+| M0 | Reactor, Java Modules, `.sdkmanrc` | ✅ Fait |
 | M1 | 3 sources built-in, convertisseurs basiques, `ConfigProvider` | ✅ Fait |
 | M2 | Convertisseurs avancés, tableaux, convertisseurs implicites | ✅ Fait |
 | M3 | Profils, expressions de propriété, détection de cycle | ✅ Fait (M4) |

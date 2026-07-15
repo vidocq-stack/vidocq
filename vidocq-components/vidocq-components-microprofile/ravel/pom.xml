@@ -18,7 +18,7 @@
     <packaging>pom</packaging>
 
     <name>Ravel</name>
-    <description>Implémentation MicroProfile Config 3.1 — zéro librairie tierce, virtual threads, JPMS strict</description>
+    <description>Implémentation MicroProfile Config 3.1 — zéro librairie tierce, virtual threads, Java Modules strict</description>
     <url>https://codeberg.org/Vidocq/ravel</url>
 
     <!--
