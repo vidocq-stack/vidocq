@@ -40,7 +40,7 @@ import java.lang.System.Logger.Level;
  *
  * <p>Discovery: via CDI ServiceLoader (entry in
  * {@code META-INF/services/jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension}
- * and JPMS {@code provides} binding). Must be called automatically by any conformant
+ * and Java Modules {@code provides} binding). Must be called automatically by any conformant
  * CDI 4.x container (Vauban CDI Lite, Weld 5+, etc.).</p>
  */
 public final class HumboldtBuildCompatibleExtension implements BuildCompatibleExtension {

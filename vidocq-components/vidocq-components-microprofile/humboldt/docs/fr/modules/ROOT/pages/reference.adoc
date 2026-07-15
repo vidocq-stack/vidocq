@@ -1,8 +1,8 @@
 = Référence
-:description: Modules JPMS, artefacts Maven, clés de configuration OTEL_* / mp.telemetry.*, semantic conventions exposées.
+:description: Modules Java Modules, artefacts Maven, clés de configuration OTEL_* / mp.telemetry.*, semantic conventions exposées.
 
 [.lead]
-Cette page consolide la surface publique de Humboldt : artefacts à déclarer, modules JPMS exportés, clés de configuration reconnues par `HumboldtAutoConfigure`, et conventions sémantiques OTel appliquées par les filters automatiques.
+Cette page consolide la surface publique de Humboldt : artefacts à déclarer, modules Java exportés, clés de configuration reconnues par `HumboldtAutoConfigure`, et conventions sémantiques OTel appliquées par les filters automatiques.
 
 == Artefacts Maven
 
@@ -56,15 +56,15 @@ Cette page consolide la surface publique de Humboldt : artefacts à déclarer, m
 
 | `io.vidocq.humboldt`
 | `humboldt-otel-api`
-| Re-bundle JPMS de `io.opentelemetry:opentelemetry-api` (module nommé).
+| Re-bundle Java Modules de `io.opentelemetry:opentelemetry-api` (module nommé).
 
 | `io.vidocq.humboldt`
 | `humboldt-otel-context`
-| Re-bundle JPMS de `io.opentelemetry:opentelemetry-context`.
+| Re-bundle Java Modules de `io.opentelemetry:opentelemetry-context`.
 
 | `io.vidocq.humboldt`
 | `humboldt-otel-instrumentation-annotations`
-| Re-bundle JPMS de `opentelemetry-instrumentation-annotations`.
+| Re-bundle Java Modules de `opentelemetry-instrumentation-annotations`.
 
 | `io.vidocq.humboldt`
 | `humboldt-tck`
@@ -73,7 +73,7 @@ Cette page consolide la surface publique de Humboldt : artefacts à déclarer, m
 
 Toutes les versions à `0.2.0` au moment de la rédaction (jalon M7c en cours).
 
-== Modules JPMS
+== Modules Java Modules
 
 [cols="2,3"]
 |===
@@ -113,10 +113,10 @@ Toutes les versions à `0.2.0` au moment de la rédaction (jalon M7c en cours).
 | `HumboldtAutoConfigure`, `AutoConfiguredHumboldt`, `EnvConfig`.
 
 | `io.opentelemetry.api`, `io.opentelemetry.context`, `io.opentelemetry.instrumentation_annotations`
-| Modules JPMS des artefacts OTel publics, rebundlés avec un `module-info` explicite.
+| Modules Java Modules des artefacts OTel publics, rebundlés avec un `module-info` explicite.
 |===
 
-Les packages `io.vidocq.humboldt.internal.*` ne sont jamais exportés. Tout accès direct passe par un crash JPMS clair.
+Les packages `io.vidocq.humboldt.internal.*` ne sont jamais exportés. Tout accès direct passe par un crash Java Modules clair.
 
 == Clés de configuration
 

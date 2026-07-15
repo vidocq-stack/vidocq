@@ -18,7 +18,7 @@
     <packaging>pom</packaging>
 
     <name>Humboldt</name>
-    <description>Implémentation MicroProfile Telemetry 2.1 — tracing/metrics/logs OpenTelemetry-native, JPMS strict, zéro SDK tiers, Java 25.</description>
+    <description>Implémentation MicroProfile Telemetry 2.1 — tracing/metrics/logs OpenTelemetry-native, Java Modules strict, zéro SDK tiers, Java 25.</description>
     <url>https://codeberg.org/Vidocq/humboldt</url>
 
     <developers>

@@ -11,7 +11,7 @@
 	</parent>
 
 	<artifactId>humboldt-otel-api</artifactId>
-	<name>Humboldt :: OTel API (JPMS)</name>
+	<name>Humboldt :: OTel API (Java Modules)</name>
 	<description>Repackage io.opentelemetry:opentelemetry-api avec module-info explicite io.opentelemetry.api pour jlink.</description>
 
 	<dependencies>

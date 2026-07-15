@@ -78,7 +78,7 @@
 
                 The module-info lives in src/main/module-info/ and is compiled in a separate step
                 (vauban is not on this module's runtime path; keeping module-info.class out of
-                target/classes during testCompile prevents Maven from activating JPMS and failing
+                target/classes during testCompile prevents Maven from activating Java Modules and failing
                 to resolve the test modules — same workaround as ravel-cdi-vauban / knock-cdi-vauban).
             -->
             <plugin>

@@ -11,7 +11,7 @@
     </parent>
 
     <artifactId>humboldt-otel-context</artifactId>
-    <name>Humboldt :: OTel Context (JPMS)</name>
+    <name>Humboldt :: OTel Context (Java Modules)</name>
     <description>Repackage io.opentelemetry:opentelemetry-context avec module-info explicite io.opentelemetry.context pour jlink.</description>
 
     <dependencies>

@@ -1,5 +1,5 @@
 = Humboldt
-:description: MicroProfile Telemetry 2.1 implementation — distributed tracing, metrics, logs — OpenTelemetry-native, JPMS-strict, zero third-party SDK, Java 25.
+:description: MicroProfile Telemetry 2.1 implementation — distributed tracing, metrics, logs — OpenTelemetry-native, strict Java Modules, zero third-party SDK, Java 25.
 
 [.text-center]
 image::humboldt-logo.png[Humboldt,300,role=module-logo]
@@ -42,7 +42,7 @@ OpenTelemetry is the _Naturgemälde_ of distributed systems. Humboldt embeds it 
 | Implemented spec | MicroProfile Telemetry 2.1 (OpenTelemetry API 1.39+, semconv 1.27+)
 | Repo | {repo-humboldt}
 | Java | 25 (LTS)
-| JPMS modules | ~16 modules — main ones: `io.vidocq.humboldt.api`, `.sdk.trace`, `.sdk.metric`, `.sdk.log`, `.sdk.common`, `.context`, `.exporter.otlp.http`, `.propagator.w3c`, `.cdi`, `.rest`, `.runtime`. Full list: xref:reference.adoc[Reference].
+| Java modules | ~16 modules — main ones: `io.vidocq.humboldt.api`, `.sdk.trace`, `.sdk.metric`, `.sdk.log`, `.sdk.common`, `.context`, `.exporter.otlp.http`, `.propagator.w3c`, `.cdi`, `.rest`, `.runtime`. Full list: xref:reference.adoc[Reference].
 | Runtime dependencies | `opentelemetry-api`, `opentelemetry-context`, `opentelemetry-semconv`, `opentelemetry-instrumentation-annotations`, `protobuf-java`, `microprofile-telemetry-api`. Third-party SDK and exporters refused.
 | jlink-ready | ✅
 | MP Telemetry 2.1 TCK | 🚧 M7c in progress — first `OpenTelemetryBeanTest` PASS ✅ ; detailed status to be confirmed (see `tck-runs/`)
@@ -118,7 +118,7 @@ Humboldt shares its transport with the rest of the Vidocq ecosystem (Chappe HTTP
 * xref:usage.adoc[Usage] — `@WithSpan`, Tracer/Meter/Logger injection, OTLP exporter, sampling, baggage.
 * xref:internals.adoc[Internals] — SDK pipeline, BatchSpanProcessor on virtual threads, JEP 506, APT/Class-File codegen.
 * xref:tck.adoc[TCK] — MicroProfile Telemetry 2.1 status, commands, out-of-reactor constraints.
-* xref:reference.adoc[Reference] — full JPMS module table, `otel.*` / `mp.telemetry.*` keys, semantic conventions.
+* xref:reference.adoc[Reference] — full Java module table, `otel.*` / `mp.telemetry.*` keys, semantic conventions.
 * xref:migration.adoc[Migration] — from SmallRye Telemetry / Quarkus OpenTelemetry.
 
 Consolidated bugs and benchmarks: link:{repo-humboldt}/src/branch/main/BUG.md[BUG.md], link:{repo-humboldt}/src/branch/main/BENCH.md[BENCH.md].

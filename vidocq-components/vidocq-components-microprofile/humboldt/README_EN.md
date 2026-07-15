@@ -8,7 +8,7 @@
 
 ## Status
 
-**M0 — JPMS skeleton** (in progress). See [`PLAN.md`](PLAN.md) for the detailed roadmap M0 → M9, and [`tasks/todo.md`](tasks/todo.md) for task tracking.
+**M0 — Java Modules skeleton** (in progress). See [`PLAN.md`](PLAN.md) for the detailed roadmap M0 → M9, and [`tasks/todo.md`](tasks/todo.md) for task tracking.
 
 ## Scope
 
@@ -42,7 +42,7 @@ sdk env
 
 ## Documentation
 
-- 📖 [Detailed implementation plan](PLAN.md) (1190 lines — metaphor, scope, dep arbitrage, architecture, codegen, JPMS, milestones)
+- 📖 [Detailed implementation plan](PLAN.md) (1190 lines — metaphor, scope, dep arbitrage, architecture, codegen, Java Modules, milestones)
 - 🇬🇧 [English Antora documentation](docs/en/modules/ROOT/pages/index.adoc)
 - 🇫🇷 [French Antora documentation](docs/fr/modules/ROOT/pages/index.adoc)
 - 🐛 [Bugs](BUG.md)
