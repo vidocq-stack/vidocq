@@ -9,7 +9,7 @@
 
 - **Java 25** + **Maven 3.9.16** (`.sdkmanrc` provided — use `sdk env`)
 - **JUnit 6 minimum** (`org.junit:junit-bom` ≥ 6.0.3) — the version is pinned in the
-  parent `pom.xml` via `<junit.version>` and in `ravel-tck/pom.xml` (standalone POM).
+  parent `pom.xml` via `<junit.version>` and in `ravel-tck/pom.xml`.
   No downgrade to JUnit 5: all new tests target `org.junit.jupiter.api.*` /
   JUnit Platform 2.x. The target JVM (Java 25) easily covers the minimum
   required by JUnit 6 (Java 17+).
@@ -44,7 +44,10 @@ java -jar ravel-bench/target/benchmarks.jar
 ./run-official-tck-mp-config-3.1.sh -Dtest=TestName
 ```
 
-> `ravel-tck` is **out of reactor** (standalone POM Model 4.0.0) to work around
+> `ravel-tck` is **in-reactor, gated behind the `tck` Maven profile** (TCK
+> harmonisation, same pattern as the vidocq-runtime-tck-* runners): a plain
+> `mvn install` neither downloads nor runs anything TCK-related. Historical
+> constraint, now obsolete — it used to be out-of-reactor to work around
 > ShrinkWrap Maven Resolver 3.3 vs Model 4.1.0 — same constraint as `cassini-tck`,
 > `foy-tck`, and `champollion-tck`. Do not change this model.
 
@@ -147,7 +150,7 @@ Concrete rules:
 
 ## TCK — Technology Compatibility Kit
 
-MicroProfile Config TCK — run in an out-of-reactor module (`ravel-tck`, POM Model 4.0.0)
+MicroProfile Config TCK — run in the `ravel-tck` module (in-reactor, `tck` Maven profile)
 to work around ShrinkWrap Maven Resolver 3.3:
 
 | TCK | Artifact | Target |
