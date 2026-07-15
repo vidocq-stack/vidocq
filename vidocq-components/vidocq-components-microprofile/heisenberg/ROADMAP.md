@@ -404,6 +404,15 @@ heisenberg-examples     io.vidocq.heisenberg.examples
   - **CDI fan-out**: `FaultToleranceInterceptor` (and the 3850 TCK interceptor) inject `@Any Instance<FtMetricsRecorder>` and delegate to `MetricsRecorderResolver.resolve()` which returns either the single recorder present or a `CompositeFtMetricsRecorder` that calls all delegates in fan-out ; avoids `AmbiguousResolutionException` when §9 and §10 coexist
   - Dependencies: `io.opentelemetry:opentelemetry-api:1.39.0` (provided) on `heisenberg-cdi-vauban`, AMBN = `io.opentelemetry.api`, `requires static io.opentelemetry.api` in `module-info` ; CDI silently ignores the bean if OTel is absent at runtime
   - **TCK impact**: +16 PASS (28 → 12 fails) on `tck-official` ; the remaining 12 were symmetric CB/Fallback bugs in §9/§10 (engine-side) + 4 upstream TCK bugs on JDK 25 + 2 minor missing pieces (see § M9)
+- [x] `heisenberg-tck` in-reactor behind the `tck` Maven profile (2026-07-15, TCK harmonisation
+  across the Vidocq workspace, mirroring the `vidocq-runtime-tck-*` pattern — dirac was the
+  pilot brick). Supersedes the original out-of-reactor decision: the ShrinkWrap Maven
+  Resolver 3.3 vs Model 4.1.0 constraint disappeared with the workspace migration to
+  Maven 3.9.16 / Model 4.0.0, and the MP Fault Tolerance TCK builds its deployments with
+  `addClass`/`addPackage` only (no ShrinkWrap Maven resolver). A plain `mvn install`
+  neither downloads nor runs anything TCK-related; `run-official-tck-mp-fault-tolerance-4.1.sh`
+  and `run-tck-no-observability.sh` stay as thin wrappers. Full suite re-verified at
+  463/463 PASS after the move.
 
 ## Open decisions
 

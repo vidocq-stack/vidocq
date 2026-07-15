@@ -33,11 +33,18 @@ sdk env
 
 # TCK — targeted test
 ./run-official-tck-mp-fault-tolerance-4.1.sh -Dtest=TestName
+
+# TCK — direct reactor invocation (heisenberg-tck is gated by the `tck` profile)
+./mvnw -Ptck -pl heisenberg-tck test                  # smoke
+./mvnw -Ptck,tck-official -pl heisenberg-tck test     # full suite
 ```
 
-> `heisenberg-tck` is **outside the reactor** (standalone Model 4.0.0 pom.xml) to work around
-> a ShrinkWrap Maven Resolver 3.3 vs Model 4.1.0 incompatibility. Do not change that model.
-> See the root Vidocq `CLAUDE.md` § *Critical architecture constraint: TCK runners outside the reactor*.
+> `heisenberg-tck` is **in-reactor, gated behind the `tck` Maven profile** (TCK harmonisation
+> across the Vidocq workspace, mirroring the `vidocq-runtime-tck-*` pattern): a plain
+> `mvn install` neither downloads nor runs anything TCK-related. The historical
+> out-of-reactor constraint (ShrinkWrap Maven Resolver 3.3 vs Model 4.1.0) disappeared
+> with the Maven 3.9.16 / Model 4.0.0 migration; the MP Fault Tolerance TCK does not use
+> the ShrinkWrap Maven resolver, so it is safe in-reactor. See ROADMAP.md § *Ratified decisions*.
 
 ## Architecture
 
@@ -50,7 +57,7 @@ heisenberg-core         ← Pure Java 25 policy engines, without CDI (RetryEngin
                           CircuitBreakerEngine, BulkheadEngine, FallbackResolver, PolicyComposer)
 heisenberg-cdi-vauban   ← CDI interceptor + Vauban BCE (HeisenbergExtension), delegates to the core
 heisenberg-bench        ← JMH benchmarks vs SmallRye Fault Tolerance
-heisenberg-tck          ← Official TestNG+Arquillian TCK runner (outside the reactor — Model 4.0.0)
+heisenberg-tck          ← Official TCK runner (in-reactor, gated by the `tck` Maven profile)
 heisenberg-examples     ← Usage examples
 ```
 
@@ -98,8 +105,8 @@ metric families simultaneously.
 3. **No `setAccessible(true)` in production** — use `MethodHandles.privateLookupIn`
    if internal access is needed ; document any `opens` in `module-info`.
 4. **No `java.lang.reflect.Proxy`** for fallbacks — resolve them via `MethodHandle`.
-5. **`heisenberg-tck/pom.xml` stays on Model 4.0.0** — do not switch to 4.1.0 as long as
-   ShrinkWrap is not updated (common constraint across the whole Vidocq ecosystem).
+5. **`heisenberg-tck` stays gated behind the `tck` Maven profile** — the release reactor
+   must never build or download the TCK; keep the profile boundary intact.
 6. **TCK 100% PASS is a contract** — any structural change to `heisenberg-core`
    or `heisenberg-cdi-vauban` must preserve this score before merge.
 
