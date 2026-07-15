@@ -131,7 +131,7 @@ chemin **réflexif** (proxy généré au démarrage via la Class-File API).
   dupliqué ;
 . génère les `*RepositoryImpl` (et les métamodèles `_Entity` manquants) dans un **package possédé par
   l'application**, en référençant les types externes par nom pleinement qualifié → **pas de
-  split-package JPMS** avec le jar d'origine ;
+  split-package Java Modules** avec le jar d'origine ;
 . écrit l'index `META-INF/mansart-repositories-external.list`, lu par le BCE de `mansart-data-cdi` au
   même titre que l'index APT.
 
@@ -180,7 +180,7 @@ n'en régénère pas.
 
 Différences clés isolées dans le dialecte : pagination, upsert, retour d'identifiant, types natifs (`UUID`, `JSONB`, `BOOLEAN`), schéma snake_case.
 
-== JPMS
+== Java Modules
 
 [source,java]
 ----

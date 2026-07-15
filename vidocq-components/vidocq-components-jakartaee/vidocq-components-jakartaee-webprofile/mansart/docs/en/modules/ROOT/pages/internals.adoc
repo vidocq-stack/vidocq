@@ -72,7 +72,7 @@ package "Application" {
 . **AOT-friendly** — GraalVM native-image, Leyden CDS: no proxy to register, everything is in the bytecode at build time.
 . **Diagnosable** — generated code is readable, debuggable, visible in stack traces.
 . **Zero warmup** — no dynamic classloading on first call.
-. **JPMS-strict-friendly** — generated classes are in the same package as sources, no need for `opens`.
+. **strict Java Modules-friendly** — generated classes are in the same package as sources, no need for `opens`.
 
 == Codegen — Class-File API (build time)
 

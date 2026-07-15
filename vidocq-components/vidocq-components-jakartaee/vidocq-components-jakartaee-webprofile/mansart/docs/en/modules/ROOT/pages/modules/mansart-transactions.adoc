@@ -14,7 +14,7 @@
 
 == Why a new project
 
-Available open-source TMs (Atomikos, Narayana) are designed for classic Java EE: platform thread pool, XML configuration, heavy dependencies. Mansart targets virtual threads + zero-dep + JPMS-strict — a fit that did not exist.
+Available open-source TMs (Atomikos, Narayana) are designed for classic Java EE: platform thread pool, XML configuration, heavy dependencies. Mansart targets virtual threads + zero-dep + strict Java Modules — a fit that did not exist.
 
 == Modules
 

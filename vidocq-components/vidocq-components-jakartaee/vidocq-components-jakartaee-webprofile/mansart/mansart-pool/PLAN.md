@@ -149,7 +149,7 @@ Connection c = MansartPool.CURRENT.orElseGet(() -> ds.getConnection());
 | Proxy via Class-File API | No `Proxy.newProxyInstance` (runtime reflection); AOT-compatible. |
 | No JTA in v1 | Out of scope. If XA needed, Mansart Pool will be enriched in v1.1 or delegated to external pool. |
 | Default validation = `Connection.isValid(1)` | JDBC 4 standard, no magic query. Override possible. |
-| `System.Logger` (not SLF4J) | Zero-dep + JPMS-friendly. |
+| `System.Logger` (not SLF4J) | Zero-dep + Java Modules-friendly. |
 | No prepared statement pool | Modern drivers (PG, H2) do it server-side or driver-side. Keep pool simple. |
 
 ## Work plan (milestones)

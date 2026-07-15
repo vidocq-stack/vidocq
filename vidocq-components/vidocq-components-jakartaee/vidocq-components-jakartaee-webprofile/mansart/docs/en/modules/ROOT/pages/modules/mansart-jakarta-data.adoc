@@ -129,7 +129,7 @@ that did not run the APT) therefore has no implementation: at runtime the BCE fa
 . reuses **the very same emitters as the APT** through a source-less `javac` task — no duplicated
   codegen;
 . generates the `*RepositoryImpl` (and any missing `_Entity` metamodels) into an
-  **application-owned package**, referring to the external types by fully-qualified name → **no JPMS
+  **application-owned package**, referring to the external types by fully-qualified name → **no Java Modules
   split package** with the originating jar;
 . writes the `META-INF/mansart-repositories-external.list` index, read by the `mansart-data-cdi` BCE
   alongside the APT index.
@@ -178,7 +178,7 @@ APT (it already ships its `_Entity`), the plugin reuses that metamodel instead o
 
 Key differences isolated in the dialect: pagination, upsert, identifier return, native types (`UUID`, `JSONB`, `BOOLEAN`), snake_case schema.
 
-== JPMS
+== Java Modules
 
 [source,java]
 ----

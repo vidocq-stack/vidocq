@@ -25,7 +25,7 @@ Provide the Vidocq ecosystem with three persistence building blocks, independent
    - an `XxxRepositoryImpl implements XxxRepository` implementation class per annotated `@Repository` interface.
 2. **No runtime bytecode generation** (no ASM, no Byte Buddy, no dynamic proxy). If a case requires dynamic behavior, use the **Class-File API** (`java.lang.classfile`) — never ASM.
 3. **Zero external dependencies** beyond `jakarta.data-api`, `jakarta.persistence-api`, `jakarta.transaction-api`, `jakarta.inject-api`, `jakarta.cdi-api`. JDBC is in the JDK. Drivers (`h2`, `postgresql`) stay in `<scope>provided</scope>` (the application provides them).
-4. **Strict JPMS** — each module has its `module-info.java`. The dialect SPI (`mansart-data-dialect-spi`) is `exports`; dialects (`mansart-data-dialect-h2`, `…-postgresql`) are `provides DialectFactory with …` and discovered by `ServiceLoader`.
+4. **Strict Java Modules** — each module has its `module-info.java`. The dialect SPI (`mansart-data-dialect-spi`) is `exports`; dialects (`mansart-data-dialect-h2`, `…-postgresql`) are `provides DialectFactory with …` and discovered by `ServiceLoader`.
 5. **Virtual Threads** — all `PreparedStatement.execute*` calls run from a virtual thread. A JDBC connection must never be held across a `synchronized` block that wraps a blocking operation.
 
 ## Delivered Modules
@@ -116,3 +116,9 @@ Follow Vauban's `index.adoc`: page title (`= <Project>`), `:description:`, a cen
 Provide `modules/ROOT/images/<project>-logo.png` (PNG), referenced from `index.adoc`.
 
 > When you change these documentation rules, keep `AGENTS.md` and `CLAUDE.md` in sync.
+
+## Terminology
+
+Use **Java Modules** (or **Java module** for a single module) when referring to
+the Java Platform Module System. Do **not** use the abbreviation **JPMS** — in
+prose, identifiers, or documentation.

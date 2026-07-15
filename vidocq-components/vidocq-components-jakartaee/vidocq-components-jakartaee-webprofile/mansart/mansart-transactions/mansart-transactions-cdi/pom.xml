@@ -122,7 +122,7 @@
                 <executions>
                     <!-- The APT does not process the (nested) test fixtures: this module's own unit
                          test exercises behaviour on the class path. The module-path / zero-opens
-                         proof lives in the mansart-transactions-cdi-jpms-it vehicle, where the
+                         proof lives in the mansart-transactions-cdi-module-it vehicle, where the
                          @Transactional fixture is a top-level class processed by the APT. -->
                     <execution>
                         <id>default-testCompile</id>
@@ -138,7 +138,7 @@
                 `opens` and no add-reads option. vauban-core (test scope) runtime-generates the nested
                 fixture's TxService$$Intercepted there, which is fine on the class path. Strict
                 module-path interception with a build-time subclass and no opens is proven separately by
-                mansart-transactions-cdi-jpms-it.
+                mansart-transactions-cdi-module-it.
             -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

@@ -20,7 +20,7 @@ the persistence layer in the stack.
 
 ## Philosophy (inherited from Vidocq)
 
-- **Strict JPMS**, no classpath.
+- **Strict Java Modules**, no classpath.
 - **Class-File API (JEP 484) + APT** to generate `@Repository` implementations and the static metamodel at compile time. No runtime reflection, no dynamic proxies.
 - **Zero external dependencies** beyond Jakarta specs. Native JDBC, no Hibernate, no Spring Data, no QueryDSL.
 - **Virtual Threads** for all query execution.

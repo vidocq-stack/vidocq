@@ -59,7 +59,7 @@ import java.util.Set;
  * {@link io.vidocq.mansart.data.core.RepositoryRuntime} is available for injection. Vauban-processor
  * indexes the producer class for validation but skips emitting a {@code *_Factory.class} in the
  * user module's output (Phase 1 patch on Vauban-processor) — Vauban-runtime falls back to a
- * reflective factory, avoiding the JPMS split-package that a generated class would create.
+ * reflective factory, avoiding the Java Modules split-package that a generated class would create.
  */
 public final class MansartDataExtension implements BuildCompatibleExtension {
 

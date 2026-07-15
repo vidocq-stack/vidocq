@@ -28,7 +28,7 @@
  * nothing to {@code io.vidocq.vauban.core}. It depends on {@code vauban-core} for real (it boots a
  * container, and the generated subclass references {@code io.vidocq.vauban.core.interceptor.*}).</p>
  */
-module io.vidocq.mansart.transactions.jpmsit {
+module io.vidocq.mansart.transactions.moduleit {
     requires io.vidocq.mansart.transactions.cdi;
     requires io.vidocq.vauban.core;
 
@@ -38,10 +38,10 @@ module io.vidocq.mansart.transactions.jpmsit {
     requires jakarta.interceptor;
     requires jakarta.annotation;
 
-    exports io.vidocq.mansart.transactions.jpmsit;
+    exports io.vidocq.mansart.transactions.moduleit;
 
     // Build-time, in-module instantiation + field injection of the @Transactional fixture bean — so
     // the container needs no `opens … to io.vidocq.vauban.core`.
     provides io.vidocq.vauban.api.VaubanComponentProvider
-            with io.vidocq.mansart.transactions.jpmsit._VaubanComponents;
+            with io.vidocq.mansart.transactions.moduleit._VaubanComponents;
 }
