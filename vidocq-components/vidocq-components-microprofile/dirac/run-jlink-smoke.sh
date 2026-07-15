@@ -19,7 +19,7 @@ fi
 
 module_path="$mp_api_jar:$api_jar:$core_jar"
 
-echo "==> M9 smoke: JPMS resolution check"
+echo "==> M9 smoke: Java Modules resolution check"
 java --module-path "$module_path" --validate-modules
 
 output_dir="$repo_root/target/dirac-image-smoke"

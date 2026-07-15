@@ -33,7 +33,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * {@code DiracExtension} instead of the startup annotation scan.
  *
  * <p>Lives in dirac-core (not dirac-api) because dirac-api has no testCompile
- * JPMS workaround — dirac-core re-exports the SPI transitively.</p>
+ * Java Modules workaround — dirac-core re-exports the SPI transitively.</p>
  */
 class MetricsCompanionTest {
 

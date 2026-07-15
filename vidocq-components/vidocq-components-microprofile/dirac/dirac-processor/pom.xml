@@ -41,7 +41,7 @@
 
     <build>
         <plugins>
-            <!-- Same JPMS workaround as dirac-core: module-info.java lives in
+            <!-- Same Java Modules workaround as dirac-core: module-info.java lives in
                  src/main/module-info so testCompile runs on the classpath; the module
                  descriptor is compiled alone at prepare-package. -->
             <plugin>

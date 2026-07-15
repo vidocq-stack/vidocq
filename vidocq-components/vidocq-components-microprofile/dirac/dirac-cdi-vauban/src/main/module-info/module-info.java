@@ -34,9 +34,9 @@
  *       beans with the {@code @RegistryScope} qualifier.</li>
  * </ul>
  *
- * <p><strong>JPMS note — testCompile workaround</strong> :
+ * <p><strong>Java Modules note — testCompile workaround</strong> :
  * {@code module-info.java} is in {@code src/main/module-info/} to prevent Maven
- * Compiler Plugin from detecting JPMS during {@code testCompile} (vauban-core is test-scope,
+ * Compiler Plugin from detecting Java Modules during {@code testCompile} (vauban-core is test-scope,
  * absent from {@code target/javamodules/}).
  * See {@code dirac-core/pom.xml} for the full workaround description.</p>
  */
@@ -56,7 +56,7 @@ module io.vidocq.dirac.cdi.vauban {
     // in-module by the Vauban-APT-generated _VaubanComponents provider, and the interceptors'
     // @AroundConstruct/@AroundInvoke methods are public in this exported package, so the container
     // reaches them without privateLookupIn. Proven on the strict module path by
-    // dirac-cdi-vauban-jpms-it (both interception kinds, zero opens).
+    // dirac-cdi-vauban-module-it (both interception kinds, zero opens).
 
     // Dirac BCE: @Gauge resolution + BASE registry population at startup
     provides jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension
@@ -66,6 +66,6 @@ module io.vidocq.dirac.cdi.vauban {
             with io.vidocq.dirac.cdi.internal._VaubanComponents;
 
     //CG-05 — generated $$DiracMetrics companions (dirac annotation processor):
-    //strict-JPMS user modules declare `provides MetricsCompanion with ...`.
+    //strict Java Modules user modules declare `provides MetricsCompanion with ...`.
     uses io.vidocq.dirac.spi.gen.MetricsCompanion;
 }

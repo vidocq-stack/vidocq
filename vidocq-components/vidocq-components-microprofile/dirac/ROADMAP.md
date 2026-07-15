@@ -2,7 +2,7 @@
 
 > MicroProfile Metrics 5.1.1 implementation in the Vidocq style: zero third-party
 > implementation libraries (Jakarta EE / MicroProfile APIs allowed), Java 25, virtual threads,
-> strict JPMS, CDI via Vauban, REST endpoint via Cassini, configuration via Ravel.
+> strict Java Modules, CDI via Vauban, REST endpoint via Cassini, configuration via Ravel.
 
 ## Design principles
 
@@ -11,7 +11,7 @@
 | Zero implementation libraries | No Micrometer, Dropwizard Metrics, or SmallRye Metrics in `dirac-core`. Only compiled spec APIs. |
 | Metrics / CDI separation | `dirac-core` contains the data structures and registries; `dirac-cdi-vauban` contains the CDI interceptors. |
 | Thread-safety without contention | `LongAdder` for counters; `AtomicReference` for states; `ConcurrentHashMap` for registries. No `synchronized`. |
-| Strict JPMS | `module-info.java` everywhere, non-exported `internal.*`, SPI via `provides/uses`. No unjustified `opens`. |
+| Strict Java Modules | `module-info.java` everywhere, non-exported `internal.*`, SPI via `provides/uses`. No unjustified `opens`. |
 | Strict TDD | Red → Green → Refactor. Test before code. Spec section citations in tests. |
 | 100% PASS TCK | Hard contract before any structural merge. Score declared in `TCK.md`. |
 | Measured performance | JMH from M4, comparison vs Micrometer and SmallRye Metrics, results in `BENCH.md`. |
@@ -95,7 +95,7 @@ dirac-examples       io.vidocq.dirac.examples
 - [x] Validation `mvn -f dirac-tck/pom.xml -DskipTests compile` succeeds (outside reactor)
 
 **M0 note:** `dirac-rest/module-info.java` is intentionally deferred to M7 (optional module
-with no content in M0 — compiler args override incompatible with JPMS without sources).
+with no content in M0 — compiler args override incompatible with Java Modules without sources).
 
 **M0 deliverable ✅:** compilable reactor (7/7 BUILD SUCCESS), coherent skeleton `module-info.java`
 on `dirac-api`, `dirac-core`, `dirac-cdi-vauban`, non-reactor TCK compilable.
@@ -311,7 +311,7 @@ on `dirac-api`, `dirac-core`, `dirac-cdi-vauban`, non-reactor TCK compilable.
 
 ---
 
-### M9 — Full JPMS compatibility + jlink
+### M9 — Full Java Modules compatibility + jlink
 
 **Scope:** produce a custom runtime image via `jlink` for a strictly modular Dirac subset
 (no automatic module in the final graph).
@@ -324,9 +324,9 @@ on `dirac-api`, `dirac-core`, `dirac-cdi-vauban`, non-reactor TCK compilable.
 | Option A (local prototype M9.2) | POC validated: local modularization of `microprofile-metrics-api` via `jdeps`/`javac`/`jar` + generated `jlink` image (`run-jlink-smoke-m92.sh`) | ☑ |
 | Option B — modular API artifact | Industrialized through the reactor module `dirac-mp-metrics-api` | ☑ |
 | Module-path inventory | Document explicit/automatic modules (Dirac + Jakarta + MP) | ☑ |
-| Missing `module-info` | `dirac-rest`, `dirac-examples` and `dirac-bench` are modularized (JPMS workaround) | ☑ |
+| Missing `module-info` | `dirac-rest`, `dirac-examples` and `dirac-bench` are modularized (Java Modules workaround) | ☑ |
 | `jlink-smoke` Maven profile | Parent profile `-Pjlink-smoke` added (blocking: fail if the `jlink` smoke test fails) | ☑ |
-| `run-jlink-smoke.sh` script | Reproducible M9 smoke check (JPMS OK + `jlink` blocker detection) | ☑ |
+| `run-jlink-smoke.sh` script | Reproducible M9 smoke check (Java Modules OK + `jlink` blocker detection) | ☑ |
 | Image smoke test | `target/dirac-image-smoke` image generated and validated (`--list-modules`) | ☑ |
 | `jlink` CI gate | Add a blocking job (`jlink-smoke`) | ☐ |
 | Exploitation docs | Add `JLINK.md` and link it from `README.md` | ☑ |
@@ -343,7 +343,7 @@ on `dirac-api`, `dirac-core`, `dirac-cdi-vauban`, non-reactor TCK compilable.
 jar --describe-module --file dirac-api/target/dirac-api-0.1.0-SNAPSHOT.jar
 jar --describe-module --file dirac-core/target/dirac-core-0.1.0-SNAPSHOT.jar
 
-# Check JPMS resolution
+# Check Java Modules resolution
 java --module-path "<module-path>" --validate-modules
 
 # Build the runtime image (minimum target)

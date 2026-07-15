@@ -1,6 +1,6 @@
 # JLINK.md
 
-Ce document decrit le smoke check M9 pour JPMS/jlink via l'artefact `dirac-mp-metrics-api`.
+Ce document decrit le smoke check M9 pour Java Modules/jlink via l'artefact `dirac-mp-metrics-api`.
 
 ## Etat actuel
 

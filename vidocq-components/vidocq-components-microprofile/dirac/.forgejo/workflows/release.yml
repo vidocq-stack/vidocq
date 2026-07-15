@@ -71,7 +71,7 @@ jobs:
             io.vidocq.ravel=${{ inputs.ravel_release }}
             io.vidocq.vauban=${{ inputs.vauban_release }}
           excluded-modules: |
-            dirac-cdi-vauban-jpms-it
+            dirac-cdi-vauban-module-it
             dirac-bench
             dirac-examples
           central-username: ${{ secrets.CENTRAL_USERNAME }}

@@ -6,7 +6,7 @@ minimal repro, cause hypothesis, status.
 
 ---
 
-## DRC-001 — JPMS bypassed via manual copy of compile-scope JARs
+## DRC-001 — Java Modules bypassed via manual copy of compile-scope JARs
 
 - **Opening date**: 2026-05-25
 - **Status**: ⚠️ OPEN — active workaround
@@ -17,7 +17,7 @@ The dirac root `pom.xml` uses `maven-dependency-plugin` (`initialize` phase) to
 copy all compile-scope JARs to `target/javamodules/`, then passes
 `--module-path ${project.build.directory}/javamodules` manually to the compiler.
 
-This workaround indicates that Maven's native JPMS resolution doesn't work for
+This workaround indicates that Maven's native Java Modules resolution doesn't work for
 some of dirac's compile-scope dependencies, notably `microprofile-metrics-api` and
 `vauban-core`/`vauban-classloader-spi`.
 
@@ -52,7 +52,7 @@ resolve them as automatic modules by deriving their name from the JAR file name.
 
 ---
 
-## DRC-002 — @Gauge resolution + BASE registry fail on the module path (strict JPMS)
+## DRC-002 — @Gauge resolution + BASE registry fail on the module path (strict Java Modules)
 
 - **Opening date**: 2026-06-02
 - **Status**: ✅ FIXED 2026-06-02
@@ -69,7 +69,7 @@ first `/metrics` scrape fails. Two distinct failures:
    ManagementFactory because module io.vidocq.dirac.core does not read module java.management`.
 
 Neither reproduces on the class-path (unnamed module reads everything / is open), so unit tests
-and the Arquillian TCK (which run class-path) stay green — the bug only bites under strict JPMS.
+and the Arquillian TCK (which run class-path) stay green — the bug only bites under strict Java Modules.
 
 ### Minimal repro
 

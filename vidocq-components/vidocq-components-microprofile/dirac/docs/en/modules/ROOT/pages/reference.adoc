@@ -1,8 +1,8 @@
 = Reference
-:description: Maven artefacts, JPMS modules, supported annotations, MicroProfile Config keys, types and units.
+:description: Maven artefacts, Java modules, supported annotations, MicroProfile Config keys, types and units.
 
 [.lead]
-This page consolidates the public surface of Dirac: artefacts to declare, exported JPMS modules, supported MicroProfile Metrics 5.1.1 annotations, and the `mp.metrics.*` keys recognised by the implementation.
+This page consolidates the public surface of Dirac: artefacts to declare, exported Java modules, supported MicroProfile Metrics 5.1.1 annotations, and the `mp.metrics.*` keys recognised by the implementation.
 
 == Maven artefacts
 
@@ -45,7 +45,7 @@ This page consolidates the public surface of Dirac: artefacts to declare, export
 
 All versions at `0.2.0` at the time of writing.
 
-== JPMS modules
+== Java modules
 
 [cols="2,3"]
 |===

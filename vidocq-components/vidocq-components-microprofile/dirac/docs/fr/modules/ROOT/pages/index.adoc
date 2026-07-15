@@ -1,5 +1,5 @@
 = Dirac
-:description: Implémentation MicroProfile Metrics 5.1.1 — compteurs, jauges, histogrammes, minuteries exposés en OpenMetrics / Prometheus et JSON, zéro librairie tierce, zéro contention, JPMS strict, prête pour jlink.
+:description: Implémentation MicroProfile Metrics 5.1.1 — compteurs, jauges, histogrammes, minuteries exposés en OpenMetrics / Prometheus et JSON, zéro librairie tierce, zéro contention, Java Modules strict, prête pour jlink.
 
 [.text-center]
 image::dirac-logo.png[Dirac,300,role=module-logo]
@@ -43,7 +43,7 @@ Dirac a posé le cadre formel qui sépare l'observable de l'instrument — son f
 | Spec implémentée | {spec-mp-metrics}[MicroProfile Metrics 5.1.1]
 | Dépôt | {repo-dirac}
 | Java | 25 (LTS)
-| Modules JPMS | `io.vidocq.dirac.api`, `io.vidocq.dirac.core`, `io.vidocq.dirac.cdi.vauban`, `io.vidocq.dirac.rest`, `microprofile.metrics.api` (repackage)
+| Modules Java Modules | `io.vidocq.dirac.api`, `io.vidocq.dirac.core`, `io.vidocq.dirac.cdi.vauban`, `io.vidocq.dirac.rest`, `microprofile.metrics.api` (repackage)
 | Packages publics | `io.vidocq.dirac.api.*` (SPI stable), `io.vidocq.dirac.cdi.internal.*` (intégration CDI)
 | Dépendances runtime | `microprofile-metrics-api` 5.1.1, `jakarta.enterprise.cdi-api` 4.1, `jakarta.interceptor-api` 2.2, `jakarta.annotation-api` 3.0, `jakarta.ws.rs-api` 4.0 (uniquement `dirac-rest`)
 | Prête pour jlink | ✅ — chaque sous-module a son `module-info.java`, `dirac-mp-metrics-api` repackage la spec MP avec un `module-info.class` explicite (M9)
@@ -54,7 +54,7 @@ Dirac a posé le cadre formel qui sépare l'observable de l'instrument — son f
 
 . **Zéro librairie tierce** — pas de Micrometer, pas de Dropwizard Metrics, pas de SmallRye Metrics. Seule `microprofile-metrics-api` est compilée dans `dirac-core`. Les formatters OpenMetrics et JSON sont écrits à la main avec `StringBuilder`.
 . **Zéro contention sur le chemin d'instrumentation** — `LongAdder` pour les compteurs, `AtomicLongArray` pour les histogrammes, `System.nanoTime()` pour les minuteries, `ConcurrentHashMap` pour les registres. Aucun `synchronized`, aucun `ThreadLocal`, aucun verrou plateforme — virtual-thread-friendly par construction.
-. **JPMS strict + jlink validé (M9)** — chaque artefact Dirac a son `module-info.java`. `dirac-mp-metrics-api` est un repackage local de la spec MP Metrics 5.1.1 avec `module-info.class` explicite, livré pour que `jlink` n'ait pas à traverser un module automatique sans nom canonique.
+. **Java Modules strict + jlink validé (M9)** — chaque artefact Dirac a son `module-info.java`. `dirac-mp-metrics-api` est un repackage local de la spec MP Metrics 5.1.1 avec `module-info.class` explicite, livré pour que `jlink` n'ait pas à traverser un module automatique sans nom canonique.
 
 == Positionnement dans l'écosystème
 

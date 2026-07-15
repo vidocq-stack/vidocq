@@ -35,7 +35,7 @@ import java.util.function.Function;
  * non-private gauge methods.</p>
  *
  * <p>Discovered by {@code DiracExtension} before the reflective startup scan:
- * ServiceLoader (module-layer aware, strict-JPMS friendly via
+ * ServiceLoader (module-layer aware, strict Java Modules friendly via
  * {@code provides ... with}) first, then the
  * {@code Class.forName(bean + "$$DiracMetrics")} naming convention. The scan
  * remains the documented fallback for classes compiled without the processor.</p>

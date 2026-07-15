@@ -33,7 +33,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  *
  * <ol>
  *   <li><strong>ServiceLoader</strong> of {@link MetricsCompanion} — module-layer
- *       aware, so a strict-JPMS module only declares
+ *       aware, so a strict Java module only declares
  *       {@code provides MetricsCompanion with com.acme.MyBean$$DiracMetrics};</li>
  *   <li><strong>Naming convention</strong> —
  *       {@code Class.forName(bean.getName() + "$$DiracMetrics")};</li>

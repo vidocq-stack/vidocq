@@ -54,7 +54,7 @@
      <build>
          <plugins>
              <!--
-                 JPMS workaround dirac-rest: keep tests on classpath, then
+                 Java Modules workaround dirac-rest: keep tests on classpath, then
                  compile module-info.java separately in prepare-package phase.
              -->
             <plugin>

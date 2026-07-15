@@ -72,7 +72,7 @@
                  subclass. Build-time only, no compile/runtime dependency on Vauban, Weld-safe.
              -->
              <!--
-                 JPMS workaround dirac-cdi-vauban: vauban-core is test-scope,
+                 Java Modules workaround dirac-cdi-vauban: vauban-core is test-scope,
                  absent from target/javamodules/. Same three-step solution as dirac-core.
              -->
             <plugin>

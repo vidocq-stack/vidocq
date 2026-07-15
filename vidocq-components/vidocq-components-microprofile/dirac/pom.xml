@@ -15,7 +15,7 @@
     <packaging>pom</packaging>
 
     <name>Dirac</name>
-    <description>MicroProfile Metrics 5.1.1 implementation — zero third-party libraries, virtual threads, strict JPMS, CDI via Vauban, REST endpoint via Cassini</description>
+    <description>MicroProfile Metrics 5.1.1 implementation — zero third-party libraries, virtual threads, strict Java Modules, CDI via Vauban, REST endpoint via Cassini</description>
     <url>https://codeberg.org/Vidocq/dirac</url>
 
     <!--
@@ -85,7 +85,7 @@
         <module>dirac-processor</module>
         <module>dirac-core</module>
         <module>dirac-cdi-vauban</module>
-        <module>dirac-cdi-vauban-jpms-it</module>
+        <module>dirac-cdi-vauban-module-it</module>
         <module>dirac-rest</module>
         <module>dirac-bench</module>
         <module>dirac-examples</module>
@@ -191,7 +191,7 @@
 
     <build>
         <!--
-            JPMS workaround: microprofile-metrics-api:5.1.1 may not have
+            Java Modules workaround: microprofile-metrics-api:5.1.1 may not have
             Automatic-Module-Name in its MANIFEST.MF (to be verified on install).
 
             Solution: maven-dependency-plugin copies all compile-scope JARs to
