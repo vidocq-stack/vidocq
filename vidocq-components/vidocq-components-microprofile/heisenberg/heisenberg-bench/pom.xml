@@ -57,7 +57,7 @@
                 </configuration>
             </plugin>
             <!--
-                heisenberg-bench n'a pas de module-info.java : pas de JPMS strict.
+                heisenberg-bench n'a pas de module-info.java : pas de Java Modules strict.
                 On efface les compilerArgs hérités du parent (argument module-path javamodules)
                 pour éviter le conflit de doublon org.eclipse.microprofile.config quand
                 microprofile-config-api (via heisenberg-core) et ravel-mp-config-api

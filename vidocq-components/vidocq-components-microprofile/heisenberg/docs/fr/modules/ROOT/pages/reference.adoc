@@ -1,8 +1,8 @@
 = Référence
-:description: Artefacts Maven, modules JPMS exportés, annotations supportées, ordre canonique de composition, clés MicroProfile Config.
+:description: Artefacts Maven, modules Java exportés, annotations supportées, ordre canonique de composition, clés MicroProfile Config.
 
 [.lead]
-Cette page consolide la surface publique de Heisenberg : artefacts Maven, modules JPMS, table complète des annotations MP FT 4.1 avec ordre canonique de composition, et clés `fault-tolerance/*` reconnues par xref:ravel::index.adoc[Ravel].
+Cette page consolide la surface publique de Heisenberg : artefacts Maven, modules Java, table complète des annotations MP FT 4.1 avec ordre canonique de composition, et clés `fault-tolerance/*` reconnues par xref:ravel::index.adoc[Ravel].
 
 == Artefacts Maven
 
@@ -24,7 +24,7 @@ Cette page consolide la surface publique de Heisenberg : artefacts Maven, module
 
 | `io.vidocq.heisenberg`
 | `heisenberg-mp-ft-api`
-| Repackage modularisé de `microprofile-fault-tolerance-api` (nommé JPMS, jlink-compatible).
+| Repackage modularisé de `microprofile-fault-tolerance-api` (nommé Java Modules, jlink-compatible).
 
 | `io.vidocq.heisenberg`
 | `heisenberg-bench`
@@ -41,7 +41,7 @@ Cette page consolide la surface publique de Heisenberg : artefacts Maven, module
 
 Toutes les versions à `0.2.0` (dernière release sur Maven Central) au moment de la rédaction.
 
-== Modules JPMS
+== Modules Java Modules
 
 [cols="2,3"]
 |===

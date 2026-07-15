@@ -9,7 +9,7 @@ Implementation of **MicroProfile Fault Tolerance 4.1** in the Vidocq ecosystem.
 
 - **Zero third-party libraries** — only Jakarta EE / MicroProfile spec APIs are compiled.
 - **Java 25** — virtual threads for `@Asynchronous` and `@Timeout` (`Thread.ofVirtual() + join(Duration)`).
-- **Strict JPMS** — each module has its own `module-info.java`, with minimal exports.
+- **Strict Java Modules** — each module has its own `module-info.java`, with minimal exports.
 - **CDI via Vauban** — `heisenberg-cdi-vauban` provides the CDI interceptor and BCE.
 - **Config via Ravel** — parameter overrides through MicroProfile Config.
 

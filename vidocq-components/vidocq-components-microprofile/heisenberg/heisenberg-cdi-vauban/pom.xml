@@ -95,7 +95,7 @@
             <!--
                 Copie supplmentaire pour opentelemetry-api (scope=provided) dans
                 target/javamodules/ : le plugin parent ne copie que compile-scope, mais OTel
-                est utilis par OtelFtMetricsRecorder pour compiler le module-info JPMS.
+                est utilis par OtelFtMetricsRecorder pour compiler le module-info Java Modules.
                 AMBN = io.opentelemetry.api (vrifi dans MANIFEST.MF de la 1.39.0).
             -->
             <plugin>
@@ -127,9 +127,9 @@
                 </executions>
             </plugin>
             <!--
-                JPMS workaround heisenberg-cdi-vauban : même problème que heisenberg-core.
+                Java Modules workaround heisenberg-cdi-vauban : même problème que heisenberg-core.
                 vauban-core et ravel-core sont test-scope, absents de target/javamodules/.
-                Si module-info.class est dans target/classes, Maven active JPMS pour
+                Si module-info.class est dans target/classes, Maven active Java Modules pour
                 testCompile et ne trouve pas les modules test sur le module-path.
                 Même solution en trois temps (voir heisenberg-core/pom.xml).
             -->

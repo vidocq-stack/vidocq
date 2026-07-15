@@ -1,11 +1,11 @@
 = Heisenberg
-:description: MicroProfile Fault Tolerance 4.1 implementation, zero third-party libraries, virtual threads, strict JPMS, CDI via Vauban, config via Ravel.
+:description: MicroProfile Fault Tolerance 4.1 implementation, zero third-party libraries, virtual threads, strict Java Modules, CDI via Vauban, config via Ravel.
 
 [.text-center]
 image::heisenberg-logo.png[Heisenberg,300,role=module-logo]
 
 [.lead]
-Heisenberg is the MicroProfile Fault Tolerance 4.1 implementation of the Vidocq ecosystem. It applies the `@Retry`, `@Timeout`, `@CircuitBreaker`, `@Bulkhead`, `@Fallback` and `@Asynchronous` policies to CDI beans through a single interceptor, wired into xref:vauban::index.adoc[Vauban] for the container and xref:ravel::index.adoc[Ravel] for configuration. Goal: 100% conformance to the MicroProfile Fault Tolerance 4.1 TCK (currently 463/463), zero external dependency beyond the specs, strict JPMS, jlink-ready.
+Heisenberg is the MicroProfile Fault Tolerance 4.1 implementation of the Vidocq ecosystem. It applies the `@Retry`, `@Timeout`, `@CircuitBreaker`, `@Bulkhead`, `@Fallback` and `@Asynchronous` policies to CDI beans through a single interceptor, wired into xref:vauban::index.adoc[Vauban] for the container and xref:ravel::index.adoc[Ravel] for configuration. Goal: 100% conformance to the MicroProfile Fault Tolerance 4.1 TCK (currently 463/463), zero external dependency beyond the specs, strict Java Modules, jlink-ready.
 
 == Origin of the name
 
@@ -43,7 +43,7 @@ Heisenberg established that **uncertainty is intrinsic, not a flaw of the instru
 | Implemented spec | MicroProfile Fault Tolerance 4.1
 | Repository | https://codeberg.org/Vidocq/heisenberg
 | Java | 25 (LTS)
-| JPMS modules | `io.vidocq.heisenberg.api`, `io.vidocq.heisenberg.core`, `io.vidocq.heisenberg.cdi.vauban`
+| Java modules | `io.vidocq.heisenberg.api`, `io.vidocq.heisenberg.core`, `io.vidocq.heisenberg.cdi.vauban`
 | Public packages | `io.vidocq.heisenberg.api.*` (stable SPI), `io.vidocq.heisenberg.cdi.*` (CDI integration)
 | Runtime dependencies | `microprofile-fault-tolerance-api` 4.1, `jakarta.enterprise.cdi-api` 4.1 (provided), `jakarta.interceptor-api` 2.2 (provided), `ravel-mp-config-api` (MicroProfile Config 3.1), `opentelemetry-api` 1.39 (`requires static`)
 | jlink-ready | ✅ — every sub-module has its `module-info.java`, no `Automatic-Module-Name` fallback in production.
@@ -95,7 +95,7 @@ The chain wrapping order follows MP FT 4.1 spec §2.5 — `@Fallback` is the out
 * xref:getting-started.adoc[Getting started] — first guarded method, first `@Retry + @CircuitBreaker + @Fallback` chain.
 * xref:concepts.adoc[Concepts] — annotations, composition order, circuit breaker states.
 * xref:usage.adoc[Usage] — robust REST clients, `@Asynchronous`, `FallbackHandler`, MP Config overrides.
-* xref:reference.adoc[Reference] — artifacts, JPMS modules, annotations, `fault-tolerance/*` keys.
+* xref:reference.adoc[Reference] — artifacts, Java modules, annotations, `fault-tolerance/*` keys.
 * xref:internals.adoc[Internals] — pure engines, `StateRegistry`, virtual threads.
 * xref:tck.adoc[TCK] — execution, status, `no-observability` mode.
 * xref:migration.adoc[Migration] — from SmallRye Fault Tolerance or Resilience4j.

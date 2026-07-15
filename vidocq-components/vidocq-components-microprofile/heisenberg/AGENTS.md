@@ -7,7 +7,7 @@
 ## Repository mission
 
 - Heisenberg implements **MicroProfile Fault Tolerance 4.1** in Java 25, with **zero third-party implementation libraries**: only the spec APIs (`microprofile-fault-tolerance-api`, `jakarta.enterprise.cdi-api`, `jakarta.interceptor-api`, `microprofile-config-api`) are compiled into `heisenberg-core` and `heisenberg-cdi-vauban`.
-- Strict JPMS architecture: `heisenberg-api` wraps the spec, `heisenberg-core` contains pure Java 25 engines without CDI, `heisenberg-cdi-vauban` contains the CDI interceptor + Vauban BCE, `heisenberg-tck` stays outside the reactor.
+- Strict Java Modules architecture: `heisenberg-api` wraps the spec, `heisenberg-core` contains pure Java 25 engines without CDI, `heisenberg-cdi-vauban` contains the CDI interceptor + Vauban BCE, `heisenberg-tck` stays outside the reactor.
 - **No SmallRye Fault Tolerance, Hystrix, or Resilience4j** in production code.
 - Virtual threads (Project Loom) for `@Asynchronous` and `@Timeout` — `Thread.ofVirtual() + join(Duration)` (Java 21+, finalized). `StructuredTaskScope` (JEP 505) has been available since Java 25 but is not currently used to maximize compatibility with Java 21+.
 - Use `ROADMAP.md` to track milestone progress (M0..M9).
@@ -38,7 +38,7 @@
   `HeisenbergAutoDiscovery` (ServiceLoader bridge to Ravel),
   **§9 / §10 metrics recorders** (`DiracFtMetricsRecorder` + `OtelFtMetricsRecorder`,
   fan-out via `CompositeFtMetricsRecorder` and `MetricsRecorderResolver`).
-- Effective JPMS modules: `io.vidocq.heisenberg.api`, `io.vidocq.heisenberg.core`,
+- Effective Java modules: `io.vidocq.heisenberg.api`, `io.vidocq.heisenberg.core`,
   `io.vidocq.heisenberg.cdi.vauban` (note: suffix `.vauban`, not just `.cdi`).
 - `heisenberg-core` exports its internal package **as a qualified export**:
   `exports io.vidocq.heisenberg.internal to io.vidocq.heisenberg.cdi.vauban;` — any
@@ -84,22 +84,22 @@
 - Any `<scope>compile|runtime</scope>` dependency addition requires a pass through the
   `dependency-gatekeeper` agent and explicit justification in the PR.
 
-## JPMS convention — `module-info` + `target/javamodules/` workaround
+## Java Modules convention — `module-info` + `target/javamodules/` workaround
 
 - In `heisenberg-core` and `heisenberg-cdi-vauban`, `module-info.java` lives under
   `src/main/module-info/` (and **not** `src/main/java/`). This is intentional: it prevents
-  Maven Compiler Plugin from switching into JPMS mode during `testCompile` (test-scope
+  Maven Compiler Plugin from switching into Java Modules mode during `testCompile` (test-scope
   dependencies such as Vauban/Ravel are not on the module-path). `module-info.class`
   is compiled on its own during `prepare-package`, and `maven-clean-plugin` deletes it before
   incremental builds. `heisenberg-api` keeps its `module-info.java` under
   `src/main/java/` (no CDI test-scope isolation required).
-- Tests run on the classpath (`useModulePath=false`) ; JPMS wiring is validated
+- Tests run on the classpath (`useModulePath=false`) ; Java Modules wiring is validated
   only by the TCK smoke test.
 - The compilation module-path is built through `maven-dependency-plugin` during the
   `initialize` phase, which copies required JARs into `target/javamodules/`. Any dependency added
   to the module-path must be referenced in that copy step.
 - `microprofile-fault-tolerance-api:4.1` has neither `Automatic-Module-Name` nor
-  `module-info.class` : its JPMS name is `microprofile.fault.tolerance.api` (derived from the
+  `module-info.class` : its Java Modules name is `microprofile.fault.tolerance.api` (derived from the
   artifact name). This is the name that must appear in `requires`, not
   `org.eclipse.microprofile.faulttolerance`.
 - `heisenberg-cdi-vauban` declares Jakarta APIs (`jakarta.cdi`, `jakarta.inject`,
@@ -233,3 +233,9 @@ Follow Vauban's `index.adoc`: page title (`= <Project>`), `:description:`, a cen
 Provide `modules/ROOT/images/<project>-logo.png` (PNG), referenced from `index.adoc`.
 
 > When you change these documentation rules, keep `AGENTS.md` and `CLAUDE.md` in sync.
+
+## Terminology
+
+Use **Java Modules** (or **Java module** for a single module) when referring to
+the Java Platform Module System. Do **not** use the abbreviation **JPMS** — in
+prose, identifiers, or documentation.

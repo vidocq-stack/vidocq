@@ -28,7 +28,7 @@
  * runs the interception chain through that provider, so this module opens nothing to
  * {@code io.vidocq.vauban.core}. It depends on {@code vauban-core} for real (it boots a container).</p>
  */
-module io.vidocq.heisenberg.cdi.jpmsit {
+module io.vidocq.heisenberg.cdi.moduleit {
     requires io.vidocq.heisenberg.cdi.vauban;
     requires io.vidocq.vauban.core;
     requires microprofile.fault.tolerance.api;
@@ -38,8 +38,8 @@ module io.vidocq.heisenberg.cdi.jpmsit {
     requires jakarta.interceptor;
     requires jakarta.annotation;
 
-    exports io.vidocq.heisenberg.cdi.jpmsit;
+    exports io.vidocq.heisenberg.cdi.moduleit;
 
     provides io.vidocq.vauban.api.VaubanComponentProvider
-            with io.vidocq.heisenberg.cdi.jpmsit._VaubanComponents;
+            with io.vidocq.heisenberg.cdi.moduleit._VaubanComponents;
 }

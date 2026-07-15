@@ -33,13 +33,13 @@
  *   <li>{@code ConfigResolver} — MP Config §9 precedence (method > class > global).</li>
  * </ul>
  *
- * <p><strong>JPMS note — testCompile workaround</strong>:
+ * <p><strong>Java Modules note — testCompile workaround</strong>:
  * This {@code module-info.java} is in {@code src/main/module-info/} (not
- * {@code src/main/java/}) so that Maven Compiler Plugin does not detect JPMS during
+ * {@code src/main/java/}) so that Maven Compiler Plugin does not detect Java Modules during
  * {@code testCompile}. {@code maven-clean-plugin} deletes {@code module-info.class} before
  * {@code testCompile} (incremental builds). A {@code prepare-package}
  * execution recompiles only {@code module-info.java}. The tests run on the classpath
- * ({@code useModulePath=false}) — JPMS wiring is validated by the TCK smoke test.</p>
+ * ({@code useModulePath=false}) — Java Modules wiring is validated by the TCK smoke test.</p>
  */
 module io.vidocq.heisenberg.core {
     requires transitive io.vidocq.heisenberg.api;

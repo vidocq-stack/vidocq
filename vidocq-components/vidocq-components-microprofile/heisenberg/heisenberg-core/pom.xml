@@ -40,10 +40,10 @@
     <build>
         <plugins>
             <!--
-                JPMS workaround heisenberg-core : même problème que cyrano-core.
+                Java Modules workaround heisenberg-core : même problème que cyrano-core.
                 microprofile-fault-tolerance-api et microprofile-config-api peuvent ne pas
                 avoir d'Automatic-Module-Name ; si module-info.class est dans target/classes,
-                Maven active JPMS pour testCompile et ne trouve pas ces modules sur le module-path.
+                Maven active Java Modules pour testCompile et ne trouve pas ces modules sur le module-path.
 
                 Solution en trois temps :
                 1. module-info.java dans src/main/module-info/ (pas src/main/java/).

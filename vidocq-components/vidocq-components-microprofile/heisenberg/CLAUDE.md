@@ -137,14 +137,14 @@ metric families simultaneously.
   `PolicyComposer`, modifying `StateRegistry`).
 - Document architecture decisions in `ROADMAP.md` (section “Ratified decisions”).
 - Use the `virtual-threads-reviewer` agent for any concurrent code modification.
-- Use the `jpms-guardian` agent after any package addition or `module-info.java` modification.
+- Use the `java-modules-guardian` agent after any package addition or `module-info.java` modification.
 
 ## Available agents
 
 - `classfile-codegen` — if a fallback requires bytecode generation (unlikely)
 - `virtual-threads-reviewer` — for `TimeoutEngine` (virtual threads + `join(Duration)`), `BulkheadEngine`
   (`Semaphore` under virtual threads), any concurrent code change
-- `jpms-guardian` — after modifying `module-info.java` or adding a package
+- `java-modules-guardian` — after modifying `module-info.java` or adding a package
 - `dependency-gatekeeper` — before adding any dependency to `pom.xml`
 - `tck-runner` — to diagnose MicroProfile FT 4.1 TCK failures
 
@@ -219,3 +219,9 @@ Follow Vauban's `index.adoc`: page title (`= <Project>`), `:description:`, a cen
 Provide `modules/ROOT/images/<project>-logo.png` (PNG), referenced from `index.adoc`.
 
 > When you change these documentation rules, keep `AGENTS.md` and `CLAUDE.md` in sync.
+
+## Terminology
+
+Use **Java Modules** (or **Java module** for a single module) when referring to
+the Java Platform Module System. Do **not** use the abbreviation **JPMS** — in
+prose, identifiers, or documentation.
