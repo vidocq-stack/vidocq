@@ -8,7 +8,7 @@ This page shows how to add Knock to a project, write a first `HealthCheck`, let 
 
 * **Java 25** — Temurin recommended (`java=25-tem` in `.sdkmanrc`). Module path enabled.
 * **Maven 3.9.16** — pinned via `.sdkmanrc` at the repo root.
-* Strict JPMS: one `module-info.java` per Maven module.
+* Strict Java Modules: one `module-info.java` per Maven module.
 
 == Maven coordinates
 

@@ -5,7 +5,7 @@
 - Knock implements **MicroProfile Health 4.0** in Java 25 with **zero third-party
   implementation libraries**: only the MP Health spec in `knock-core`, Jakarta APIs only
   on the CDI side (`README.md`, `pom.xml`, `CLAUDE.md`).
-- Strict JPMS architecture: `knock-api` re-exports the spec, `knock-core` stays standalone SE
+- Strict Java Modules architecture: `knock-api` re-exports the spec, `knock-core` stays standalone SE
   (depends on `jakarta.json` / champollion for JSON serialization), `knock-cdi-vauban` is
   an optional CDI adapter, `knock-cassini` is the optional Jakarta REST adapter
   (JAX-RS `/health*` resources via Cassini), `knock-tck` is now part of the main reactor
@@ -31,7 +31,7 @@
 - The target flow in `knock-core`: `HealthCheckRegistry.getChecks(ProbeType)` → call `.call()`
   on each `HealthCheck` → aggregation (DOWN if ≥ 1 DOWN) → `HealthSnapshot` (status + list).
 - The MP Health builder is already wired via SPI ServiceLoader:
-  `KnockHealthCheckResponseProvider` + `META-INF/services` + JPMS `provides` in
+  `KnockHealthCheckResponseProvider` + `META-INF/services` + Java Modules `provides` in
   `knock-core/src/main/module-info/module-info.java`.
 - **Exported runtime SPI**: `io.vidocq.knock.runtime.{HealthCheckRegistries, KnockHealthService,
   HealthReport}` in `knock-core` — single entry point for adapters
@@ -54,7 +54,7 @@
 - `knock-core` depends on `org.eclipse.microprofile.health` + `jakarta.json` (JSON-P spec API)
   at compile scope; champollion is provided at runtime. CDI and Jakarta REST stay in their
   dedicated modules. `jakarta.annotation` is allowed **in test scope only**.
-- Preserve the JPMS workaround in `knock-core`: `module-info.java` stays in
+- Preserve the Java Modules workaround in `knock-core`: `module-info.java` stays in
   `knock-core/src/main/module-info/` (not in `src/main/java`) with dedicated recompilation in
   `prepare-package` + cleanup of `module-info.class` before `testCompile`. Same workaround
   applied to `knock-cdi-vauban` and `knock-cassini` (test-scope dependencies outside module-path).
@@ -157,3 +157,9 @@ Follow Vauban's `index.adoc`: page title (`= <Project>`), `:description:`, a cen
 Provide `modules/ROOT/images/<project>-logo.png` (PNG), referenced from `index.adoc`.
 
 > When you change these documentation rules, keep `AGENTS.md` and `CLAUDE.md` in sync.
+
+## Terminology
+
+Use **Java Modules** (or **Java module** for a single module) when referring to
+the Java Platform Module System. Do **not** use the abbreviation **JPMS** — in
+prose, identifiers, or documentation.

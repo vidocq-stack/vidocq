@@ -29,10 +29,10 @@
  * <p>Optional module: a standalone SE deployment does not need this module and can feed
  * the registry directly through its programmatic API.</p>
  *
- * <p><strong>JPMS note — testCompile workaround</strong>
- * (see {@code docs/adr/ADR-001-jpms-workaround-microprofile-health.md}) :
+ * <p><strong>Java Modules note — testCompile workaround</strong>
+ * (see {@code docs/adr/ADR-001-java-modules-workaround-microprofile-health.md}) :
  * {@code module-info.java} is in {@code src/main/module-info/} to prevent Maven Compiler
- * Plugin from detecting JPMS during {@code testCompile} (vauban-core is test-scope,
+ * Plugin from detecting Java Modules during {@code testCompile} (vauban-core is test-scope,
  * absent from {@code target/javamodules/}).</p>
  */
 module io.vidocq.knock.cdi.vauban {

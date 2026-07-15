@@ -24,14 +24,14 @@ calls Cassini to mount the resource.
 - **−** Couples Knock to a detail of the vidocq SPI API (priority, order).
 - **−** Goes against Knock's *zero-config* design (no beans, no services, just standard CDI annotations).
 
-### Option B — Maven/JPMS wrapper only (chosen)
+### Option B — Maven/Java Modules wrapper only (chosen)
 
 `vidocq-runtime-knock-health-extension` is merely a dependency aggregate + a
 `module-info` that `requires transitive` the Knock + champollion modules.
 No own Java classes. The integration relies 100% on the **standard** SPIs that already exist:
 
 1. CDI auto-registration (`HealthCheckRegistrar`, exposed to Vauban via the generated
-   `VaubanComponentProvider` + JPMS `provides`) — discovers and registers
+   `VaubanComponentProvider` + Java Modules `provides`) — discovers and registers
    `@Liveness/@Readiness/@Startup` beans on `@Initialized(ApplicationScoped.class)`.
    A `HealthCheck` bean without a probe qualifier is not a procedure and is silently
    ignored (spec §4.2) — it is never a deployment error;
@@ -53,7 +53,7 @@ Cassini, breaking the *core can run without REST* contract.
 
 ## Decision
 
-**Option B** chosen: `vidocq-runtime-knock-health-extension` is a Maven/JPMS
+**Option B** chosen: `vidocq-runtime-knock-health-extension` is a Maven/Java Modules
 *wrapper* module, without Java code. It lives in
 `vidocq/vidocq-runtime-core-extensions/vidocq-runtime-knock-health-extension/` and publishes
 the artifact `io.vidocq.runtime:vidocq-runtime-knock-health-extension`.
@@ -102,13 +102,13 @@ vidocq-runtime-knock-health-extension/
 | Risk                                                                   | Mitigation                                                                                  |
 |------------------------------------------------------------------------|---------------------------------------------------------------------------------------------|
 | `jakarta.json-api` version conflict between champollion and the host   | Parent vidocq `dependencyManagement` fixes the version (aligned 2.1.x); champollion runtime-only |
-| Knock BCE not discovered (ServiceLoader) in strict JPMS                | Double declaration: `META-INF/services/` + JPMS `provides` in `module-info`                |
+| Knock BCE not discovered (ServiceLoader) in strict Java Modules                | Double declaration: `META-INF/services/` + Java Modules `provides` in `module-info`                |
 | Cassini does not scan `KnockHealthResource` if not in `annotated` mode | CDI 4.1 defaults to `annotated` mode; bean explicitly annotated `@ApplicationScoped`       |
 | Knock TCK regresses due to a new Cassini version                       | Knock TCK runs via `./run-official-tck-mp-health-4.0.sh all` on every PR                  |
 
 ## References
 
 - MicroProfile Health 4.0 §3 (endpoints), §4 (qualifiers), §6 (config)
-- `ADR-001-jpms-workaround-microprofile-health.md` (module-info workaround for testCompile)
+- `ADR-001-java-modules-workaround-microprofile-health.md` (module-info workaround for testCompile)
 - `knock-tck/src/test/java/io/vidocq/knock/tck/arquillian/KnockDeployableContainer.java`
   (Arquillian runner — reproduces the M5 integration path)

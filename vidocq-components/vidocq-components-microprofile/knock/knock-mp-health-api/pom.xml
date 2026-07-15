@@ -12,7 +12,7 @@
 
     <artifactId>knock-mp-health-api</artifactId>
     <name>Knock :: MicroProfile Health API</name>
-    <description>Fork du MicroProfile Health API avec module-info pour JPMS/jlink</description>
+    <description>Fork du MicroProfile Health API avec module-info pour Java Modules/jlink</description>
 
     <dependencies>
         <dependency>

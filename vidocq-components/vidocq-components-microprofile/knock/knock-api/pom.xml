@@ -44,7 +44,7 @@
             </resource>
         </resources>
         <plugins>
-            <!-- Same JPMS workaround as knock-core (ADR-001): module-info lives in
+            <!-- Same Java Modules workaround as knock-core (ADR-001): module-info lives in
                  src/main/module-info so testCompile stays on the class path; it is
                  compiled into target/classes at prepare-package for the final JAR. -->
             <plugin>

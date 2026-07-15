@@ -33,7 +33,7 @@ import java.util.List;
  *
  * <p>Delegates to a registry obtained from the SPI factory
  * {@link HealthCheckRegistries#newRegistry()} (the internal package
- * {@code io.vidocq.knock.internal} is not exported — project JPMS boundary).
+ * {@code io.vidocq.knock.internal} is not exported — project Java Modules boundary).
  * Exposed as an {@code @ApplicationScoped} bean implementing the
  * {@link HealthCheckRegistry} interface so that the CDI proxy directly implements
  * the interface and can be cast without ambiguity.</p>

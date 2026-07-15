@@ -1,8 +1,8 @@
 = Reference
-:description: Maven artefacts, exported JPMS packages, SPI types, endpoints, commands, compatibility.
+:description: Maven artefacts, exported Java Modules packages, SPI types, endpoints, commands, compatibility.
 
 [.lead]
-This page lists every artefact published by Knock, the JPMS packages they export, the public SPI, the HTTP endpoints, and the build commands.
+This page lists every artefact published by Knock, the Java Modules packages they export, the public SPI, the HTTP endpoints, and the build commands.
 
 == Maven artefacts
 
@@ -37,7 +37,7 @@ All artefacts share the version `0.2.0` under the `io.vidocq.knock` group.
 | Official MicroProfile Health 4.0 TCK runner.
 |===
 
-== Exported JPMS packages
+== Exported Java Modules packages
 
 [cols="2,3"]
 |===
@@ -113,7 +113,7 @@ sdk env
 == Compatibility
 
 * Java 25, Maven 3.9.16.
-* Strict JPMS, named modules only.
+* Strict Java Modules, named modules only.
 * MicroProfile Health 4.0.
 * Zero third-party libraries — Jakarta / MicroProfile specs only.
 * Compatible with GraalVM `native-image` and `jlink` minimal images.

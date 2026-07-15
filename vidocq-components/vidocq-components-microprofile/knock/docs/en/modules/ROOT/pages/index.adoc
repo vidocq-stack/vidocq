@@ -1,5 +1,5 @@
 = Knock
-:description: MicroProfile Health 4.0 implementation — zero third-party libraries, JDK 25, virtual threads, strict JPMS.
+:description: MicroProfile Health 4.0 implementation — zero third-party libraries, JDK 25, virtual threads, strict Java Modules.
 
 [.text-center]
 image::knock-logo.png[Knock,300,role=module-logo]
@@ -18,7 +18,7 @@ _Knock, or the Triumph of Medicine_ (« Knock, ou le Triomphe de la médecine »
 | Implemented spec | {spec-mp-health}[MicroProfile Health 4.0]
 | Repo | {repo-knock}
 | Java | 25
-| JPMS modules | `knock-api`, `knock-core`, `knock-cdi-vauban`, `knock-jaxrs`, `knock-tck`
+| Java modules | `knock-api`, `knock-core`, `knock-cdi-vauban`, `knock-jaxrs`, `knock-tck`
 | Runtime dependencies | None beyond `org.eclipse.microprofile.health` and `jakarta.json`
 | MicroProfile Health 4.0 TCK | 28 / 28 PASS — see xref:tck.adoc[detailed status]
 |===
@@ -27,7 +27,7 @@ _Knock, or the Triumph of Medicine_ (« Knock, ou le Triomphe de la médecine »
 
 . **Zero third-party libraries** — MicroProfile Health and Jakarta specs only. No SmallRye Health, no Vert.x, no Jackson. JSON is produced through Jakarta JSON-P.
 . **CDI-native discovery** — `@Liveness`, `@Readiness`, `@Startup` beans are discovered on Vauban and registered automatically, while `knock-core` stays usable in plain Java SE.
-. **Strict JPMS + virtual threads** — every module ships a `module-info.java`; checks run on a `VirtualThreadPerTaskExecutor`. No `synchronized`, no `ThreadLocal`, no `setAccessible(true)`.
+. **Strict Java Modules + virtual threads** — every module ships a `module-info.java`; checks run on a `VirtualThreadPerTaskExecutor`. No `synchronized`, no `ThreadLocal`, no `setAccessible(true)`.
 
 == Endpoints
 

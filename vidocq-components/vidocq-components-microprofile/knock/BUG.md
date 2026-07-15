@@ -105,7 +105,7 @@ Total: 1m06s. The `deploy needs: [build, tck-mp-health]` gate is enforced.
 
 ---
 
-## BUG-002 — JPMS workaround via manual copy of compile-scope JARs
+## BUG-002 — Java Modules workaround via manual copy of compile-scope JARs
 
 - **Opened**: 2026-05-25
 - **Status**: ⚠️ OPEN — active workaround
@@ -116,7 +116,7 @@ The root `pom.xml` of knock uses `maven-dependency-plugin` (phase `initialize`) 
 clean and repopulate `target/javamodules/` with all compile-scope JARs, then passes
 `--module-path ${project.build.directory}/javamodules` manually to the compiler.
 
-This workaround indicates that Maven's native JPMS resolution does not work for
+This workaround indicates that Maven's native Java Modules resolution does not work for
 certain compile-scope dependencies of knock, notably `champollion-jsonp`, `cassini-core`
 and `vauban-core`/`vauban-classloader-spi`.
 
@@ -140,7 +140,7 @@ incremental builds.
 
 ### Resolution Path
 
-Check module by module which ones have an explicit JPMS descriptor and which ones
+Check module by module which ones have an explicit Java Modules descriptor and which ones
 only have an `Automatic-Module-Name` — then remove the corresponding entries from the
 workaround as upstream modules are fixed.
 
@@ -157,5 +157,5 @@ workaround as upstream modules are fixed.
 - **Investigations** :
   - 2026-07-12 : found by grepping for stale version strings after the issue #3 follow-up.
     Fixed: version.properties filtered by Maven next to the class, constant loaded at class
-    init (same-module JPMS resource, no opens). No longer compile-time-inlineable, which
+    init (same-module Java Modules resource, no opens). No longer compile-time-inlineable, which
     also protects future consumers from the javac inlining trap.

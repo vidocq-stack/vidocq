@@ -1,5 +1,5 @@
 = Internes
-:description: Architecture des modules, flux d'exécution, sérialisation JSON-P, threads virtuels, contournement JPMS.
+:description: Architecture des modules, flux d'exécution, sérialisation JSON-P, threads virtuels, contournement Java Modules.
 
 [.lead]
 Knock repose sur un principe simple : implémenter MicroProfile Health 4.0 avec le seul JDK et les specs Jakarta. Aucune bibliothèque tierce, aucune mécanique lourde en réflexion, aucun pool de threads plateforme. Cette page documente les choix d'implémentation qui maintiennent cette discipline.
@@ -11,7 +11,7 @@ Knock repose sur un principe simple : implémenter MicroProfile Health 4.0 avec 
 | Module | Responsabilité
 
 | `knock-mp-health-api`
-| Fork Vidocq de l'API MicroProfile Health, reconditionné avec un `module-info.java` (voir le contournement JPMS plus bas).
+| Fork Vidocq de l'API MicroProfile Health, reconditionné avec un `module-info.java` (voir le contournement Java Modules plus bas).
 
 | `knock-api`
 | SPI Knock : `ProbeType`, `HealthCheckRegistry`, métadonnées `Knock`. Réexporte les types de la spec.
@@ -111,9 +111,9 @@ Toute l'exécution des contrôles passe par `Executors.newVirtualThreadPerTaskEx
 * pas de pool de threads plateforme, pas de file bornée, pas de `ThreadLocal` ;
 * l'état partagé (le registre) utilise exclusivement `ConcurrentHashMap`.
 
-== Contournement JPMS (ADR-001)
+== Contournement Java Modules (ADR-001)
 
-Le jar amont de l'API MicroProfile Health est livré **sans** `module-info.class`, ce qui casse le JPMS strict et `jlink`. Knock le fork sous `knock-mp-health-api` et le reconstruit avec un descripteur de module en bonne et due forme. Pour empêcher ce descripteur d'interférer avec le traitement des annotations, le `module-info.java` réside dans `src/main/module-info/` et est compilé dans une phase dédiée à `prepare-package`. La SPI est enregistrée deux fois — via `provides` JPMS et `META-INF/services` — afin que l'implémentation se résolve sur le module path comme sur le classpath. Justification complète : `docs/adr/ADR-001-jpms-workaround-microprofile-health.md`.
+Le jar amont de l'API MicroProfile Health est livré **sans** `module-info.class`, ce qui casse le Java Modules strict et `jlink`. Knock le fork sous `knock-mp-health-api` et le reconstruit avec un descripteur de module en bonne et due forme. Pour empêcher ce descripteur d'interférer avec le traitement des annotations, le `module-info.java` réside dans `src/main/module-info/` et est compilé dans une phase dédiée à `prepare-package`. La SPI est enregistrée deux fois — via `provides` Java Modules et `META-INF/services` — afin que l'implémentation se résolve sur le module path comme sur le classpath. Justification complète : `docs/adr/ADR-001-java-modules-workaround-microprofile-health.md`.
 
 == Compatibilité AOT
 
@@ -124,4 +124,4 @@ Pas de génération de proxy dynamique, pas de `setAccessible(true)`, pas de ré
 * link:{repo-knock}/src/branch/main/knock-core[knock-core] — registre, agrégateur, sérialiseur, façade.
 * link:{repo-knock}/src/branch/main/knock-cdi-vauban[knock-cdi-vauban] — découverte CDI.
 * link:{repo-knock}/src/branch/main/knock-jaxrs[knock-jaxrs] — endpoints REST.
-* link:{repo-knock}/src/branch/main/docs/adr/ADR-001-jpms-workaround-microprofile-health.md[ADR-001] — contournement JPMS.
+* link:{repo-knock}/src/branch/main/docs/adr/ADR-001-java-modules-workaround-microprofile-health.md[ADR-001] — contournement Java Modules.

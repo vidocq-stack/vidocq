@@ -36,7 +36,7 @@ Knock implémente le contrat standard MicroProfile Health 4.0. Le code applicati
 . Remplacez la dépendance SmallRye Health par `knock-api`, `knock-core`, `knock-cdi-vauban` et `knock-jaxrs` (voir xref:reference.adoc[Référence]).
 . Assurez-vous que chaque `HealthCheck` à signaler porte un qualificateur de sonde — Knock ignore silencieusement les contrôles non qualifiés (ils ne sont pas enregistrés).
 . Supprimez les champs de données propriétaires si des consommateurs avals exigeaient la charge stricte de la spec.
-. Ajoutez un `module-info.java` requérant `microprofile.health.api` (Knock est en JPMS strict).
+. Ajoutez un `module-info.java` requérant `microprofile.health.api` (Knock est en Java Modules strict).
 . Vérifiez que les quatre endpoints répondent et que le statut HTTP agrégé est `200`/`503` comme attendu.
 
 == Pièges
@@ -44,7 +44,7 @@ Knock implémente le contrat standard MicroProfile Health 4.0. Le code applicati
 * **Contrôles non qualifiés** — un `HealthCheck` sans `@Liveness/@Readiness/@Startup` est silencieusement ignoré (il n'est pas signalé). Ajoutez le qualificateur manquant pour qu'il soit pris en compte.
 * **JSON non standard** — les consommateurs s'appuyant sur des champs propriétaires doivent être adaptés ; Knock n'émet que la forme de la spec.
 * **Typage de `data`** — seuls `String`, `long`, `boolean` et `int` sont rendus nativement ; les autres types sont convertis en chaîne.
-* **Module path** — les clauses `requires` manquantes apparaissent comme des erreurs de résolution JPMS plutôt que comme des avertissements de classpath.
+* **Module path** — les clauses `requires` manquantes apparaissent comme des erreurs de résolution Java Modules plutôt que comme des avertissements de classpath.
 
 == Pour aller plus loin
 

@@ -3,7 +3,7 @@
 > *"Knock, or the Triumph of Medicine"* — Jules Romains, 1923.
 
 **MicroProfile Health 4.0** implementation in the Vidocq style:
-zero third-party libraries, JDK 25, virtual threads, strict JPMS,
+zero third-party libraries, JDK 25, virtual threads, strict Java Modules,
 CDI integration via Vauban, Jakarta REST endpoints via Cassini,
 JSON serialisation via Champollion.
 
@@ -67,7 +67,7 @@ public class DatabaseCheck implements HealthCheck {
 ## Constraints
 
 - **Zero third-party libraries**: Jakarta EE / MicroProfile specs only
-- **Strict JPMS**: `module-info.java` on all modules
+- **Strict Java Modules**: `module-info.java` on all modules
 - **Virtual threads**: no `synchronized`, no `ThreadLocal`
 - **TCK 100% PASS**: required contract before any structural merge
 

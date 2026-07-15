@@ -77,9 +77,9 @@
                 inert for a standard CDI container (Weld).
             -->
             <!--
-                JPMS workaround for knock-cdi-vauban: same issue as knock-core.
+                Java Modules workaround for knock-cdi-vauban: same issue as knock-core.
                 vauban-core is test-scope, absent from target/javamodules/; if
-                module-info.class is in target/classes, Maven enables JPMS for
+                module-info.class is in target/classes, Maven enables Java Modules for
                 testCompile and cannot resolve test modules on the module path.
                 Same three-step solution (see ADR-001 and knock-core/pom.xml).
             -->

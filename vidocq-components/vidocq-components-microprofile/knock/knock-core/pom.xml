@@ -40,23 +40,23 @@
     <build>
         <plugins>
             <!--
-                JPMS workaround for knock-core - module-info is isolated to avoid JPMS
-                detection during testCompile (see docs/adr/ADR-001-jpms-workaround-microprofile-health.md).
+                Java Modules workaround for knock-core - module-info is isolated to avoid Java Modules
+                detection during testCompile (see docs/adr/ADR-001-java-modules-workaround-microprofile-health.md).
 
                 knock-core-specific issue: Maven Compiler Plugin 4.0.0-beta-4 detects
-                JPMS mode as soon as module-info.class is present in target/classes. In
-                JPMS mode for testCompile, it rebuilds a module path that excludes
+                Java Modules mode as soon as module-info.class is present in target/classes. In
+                Java Modules mode for testCompile, it rebuilds a module path that excludes
                 test-scope dependencies, which breaks test compilation.
 
                 Three-step solution:
 
                 1. module-info.java outside src/main/java (in src/main/module-info):
                    default-compile does not see it -> no module-info.class in
-                   target/classes -> Maven does not detect JPMS for testCompile.
+                   target/classes -> Maven does not detect Java Modules for testCompile.
 
                 2. maven-clean-plugin (generate-test-sources) removes any stale
                    module-info.class from target/classes before testCompile (incremental
-                   builds: avoids JPMS detection from a leftover class file).
+                   builds: avoids Java Modules detection from a leftover class file).
 
                 3. maven-compiler-plugin (prepare-package) recompiles module-info.java only
                    into target/classes before JAR assembly - the final JAR still includes
@@ -64,7 +64,7 @@
 
                 Consequence: knock-core tests run on the class path
                 (useModulePath=false). This is intentional: unit tests validate business
-                logic; JPMS wiring (ServiceLoader, module graph) is validated by the
+                logic; Java Modules wiring (ServiceLoader, module graph) is validated by the
                 knock-tck smoke test.
 
                 jlink compatibility: the io.vidocq.knock:knock-mp-health-api fork
