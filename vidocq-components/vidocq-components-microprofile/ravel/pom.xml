@@ -69,10 +69,12 @@
     </properties>
 
     <!--
-        ravel-tck est volontairement HORS reactor (POM Model 4.0.0 standalone)
-        pour contourner ShrinkWrap Maven Resolver 3.3 qui ne sait pas parser
-        les POMs Model 4.1.0. Il sera invoqué par run-official-tck-mp-config-3.1.sh
-        après installation locale du reactor.
+        ravel-tck joins the reactor only under the `tck` profile (see <profiles>
+        below) — TCK harmonisation, same pattern as the vidocq-runtime-tck-*
+        runners and the dirac pilot: a plain `mvn install` neither downloads nor
+        runs anything TCK-related. The historical out-of-reactor constraint
+        (ShrinkWrap Maven Resolver 3.3 vs Model 4.1.0 POMs) disappeared with the
+        Maven 3.9.16 / Model 4.0.0 migration.
     -->
     <modules>
         <module>ravel-mp-config-api</module>
@@ -150,4 +152,21 @@
             </dependency>
         </dependencies>
     </dependencyManagement>
+    <profiles>
+        <!--
+            TCK harmonisation: the official MicroProfile Config 3.1 TCK runner
+            joins the reactor only when this profile is active.
+
+                ./mvnw -Ptck -pl ravel-tck test                     # smoke
+                ./mvnw -Ptck,tck-official -pl ravel-tck test        # full suite
+
+            run-official-tck-mp-config-3.1.sh remains the friendly wrapper.
+        -->
+        <profile>
+            <id>tck</id>
+            <modules>
+                <module>ravel-tck</module>
+            </modules>
+        </profile>
+    </profiles>
 </project>

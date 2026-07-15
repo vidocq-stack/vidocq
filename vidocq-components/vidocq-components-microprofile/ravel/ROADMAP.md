@@ -173,7 +173,7 @@ cycles detected. **155 green tests** on `ravel-core`.
 
 | Task | Notes | Status |
 |---|---|---|
-| `ravel-tck/pom.xml` Model 4.0.0 standalone | Same as `cassini-tck`/`foy-tck`/`champollion-tck` — out-of-reactor | ✅ |
+| `ravel-tck` in-reactor behind the `tck` Maven profile (2026-07-15) | TCK harmonisation, dirac pilot pattern — supersedes the out-of-reactor decision (ShrinkWrap constraint obsolete since Maven 3.9.16 / Model 4.0.0) | ✅ |
 | Arquillian runner + official `microprofile-config-tck:3.1.1` harness | Arquillian 1.10.1 (BOM + dep mgmt on `container-spi/impl-base/core-impl-base`) + Weld 6.0.2 + TestNG 7.10.2; JDK 25 `MalformedParameterizedTypeException` bug resolved | ✅ |
 | Arquillian → Ravel embedded adapter | Weld SE embedded; `arquillian.xml` + `META-INF/beans.xml` (CDI 4.1) in place | ✅ |
 | `run-official-tck-mp-config-3.1.sh` | Modes: smoke (default, 2/2 PASS) / all / `-Dtest=TestName`; report `target/tck-report.txt` | ✅ |

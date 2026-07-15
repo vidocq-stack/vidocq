@@ -1,29 +1,35 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-    Projet Maven STANDALONE en Model Version 4.0.0, volontairement EN DEHORS
-    du reactor Ravel.
+    In-reactor TCK runner, gated by the `tck` Maven profile of ravel-parent
+    (TCK harmonisation — same pattern as the vidocq-runtime-tck-* runners and
+    the dirac pilot): a plain `mvn install` neither downloads nor runs anything
+    TCK-related.
 
-    Pourquoi : ShrinkWrap Maven Resolver 3.3 (dép. transitive Arquillian) utilise
-    maven-resolver 1.9 / maven-model 3.9 qui ne savent pas parser les POMs
-    Model 4.1.0 du reactor. Son ClasspathWorkspaceReader crash avec
-    "Bad artifact coordinates ... jar:".
+    History: this module used to be a STANDALONE out-of-reactor POM to work
+    around ShrinkWrap Maven Resolver 3.3 (could not parse Model 4.1.0 POMs).
+    That constraint disappeared with the Maven 3.9.16 / Model 4.0.0 migration.
 
-    Dépendances internes (ravel-core, ravel-cdi-vauban) sont gelées sur la
-    version 0.3.0-SNAPSHOT installée dans le repository Maven local.
-
-    Le lancement passe par le script :
+    Execution goes through the script (thin wrapper over the reactor):
         ./run-official-tck-mp-config-3.1.sh                      (smoke test)
-        ./run-official-tck-mp-config-3.1.sh all                  (suite complète)
-        ./run-official-tck-mp-config-3.1.sh -Dtest=SomeTests     (classe ciblée)
+        ./run-official-tck-mp-config-3.1.sh all                  (full suite)
+        ./run-official-tck-mp-config-3.1.sh -Dtest=SomeTests     (targeted class)
+
+    Or directly:
+        ./mvnw -Ptck -pl ravel-tck test                          (smoke)
+        ./mvnw -Ptck,tck-official -pl ravel-tck test             (full suite)
 -->
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>io.vidocq.ravel</groupId>
+    <parent>
+        <groupId>io.vidocq.ravel</groupId>
+        <artifactId>ravel-parent</artifactId>
+        <version>0.3.0-SNAPSHOT</version>
+    </parent>
+
     <artifactId>ravel-tck</artifactId>
-    <version>0.3.0-SNAPSHOT</version>
     <packaging>jar</packaging>
 
     <name>Ravel :: TCK Runner</name>

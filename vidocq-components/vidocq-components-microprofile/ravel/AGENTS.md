@@ -2,7 +2,7 @@
 
 ## Repository mission
 - Ravel implements **MicroProfile Config 3.1** in Java 25 with **zero third-party implementation libraries**: only the MP Config spec in `ravel-core`, Jakarta APIs only on the CDI side (`README.md`, `pom.xml`, `CLAUDE.md`).
-- Strict Java Modules architecture: `ravel-api` re-exports the spec, `ravel-core` stays standalone SE, `ravel-cdi-vauban` is an optional adapter, `ravel-tck` stays out of reactor.
+- Strict Java Modules architecture: `ravel-api` re-exports the spec, `ravel-core` stays standalone SE, `ravel-cdi-vauban` is an optional adapter, `ravel-tck` is in-reactor behind the `tck` Maven profile.
 - **jlink-ready**: because the original MicroProfile Config API only has an `Automatic-Module-Name`, the `ravel-mp-config-api` module repackages it with an explicit `module-info.class` (module name kept: `org.eclipse.microprofile.config`). All other modules depend on **this repackage**, never directly on `org.eclipse.microprofile.config:microprofile-config-api` (except `ravel-tck` out of reactor).
 - Prefer using `ROADMAP.md` to track project progress rather than updating this file, which is intended as a contribution guide for agents.
 - When updating the rules in this file, remember to align `CLAUDE.md` accordingly so Claude Code can reference it easily.
@@ -23,7 +23,7 @@
 - No `synchronized`, no `ThreadLocal`; for propagated contexts (e.g., expression cycles in M3), use `ScopedValue`.
 - No `setAccessible(true)` — implicit converters only target `public` methods/constructors.
 - Reading `@Priority` is done by qualified name (reflection on `Annotation.annotationType().getName()`), never by `import jakarta.annotation.Priority` on the production side.
-- **JUnit 6 minimum** (`org.junit:junit-bom` ≥ 6.0.3) for all tests. No downgrade to JUnit 5: the version is pinned in the parent `pom.xml` (`<junit.version>`) and in the standalone POM `ravel-tck/pom.xml`. Tests target `org.junit.jupiter.api.*`, JUnit Platform 2.x.
+- **JUnit 6 minimum** (`org.junit:junit-bom` ≥ 6.0.3) for all tests. No downgrade to JUnit 5: the version is pinned in the parent `pom.xml` (`<junit.version>`) and in `ravel-tck/pom.xml`. Tests target `org.junit.jupiter.api.*`, JUnit Platform 2.x.
 
 ## Useful workflows
 ```bash
