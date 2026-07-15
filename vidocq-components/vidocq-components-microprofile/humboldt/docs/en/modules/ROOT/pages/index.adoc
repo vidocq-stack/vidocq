@@ -117,7 +117,7 @@ Humboldt shares its transport with the rest of the Vidocq ecosystem (Chappe HTTP
 * xref:concepts.adoc[Concepts] — OpenTelemetry model (Span, Metric, LogRecord, Context, Resource, Scope) and what MP Telemetry 2.1 adds.
 * xref:usage.adoc[Usage] — `@WithSpan`, Tracer/Meter/Logger injection, OTLP exporter, sampling, baggage.
 * xref:internals.adoc[Internals] — SDK pipeline, BatchSpanProcessor on virtual threads, JEP 506, APT/Class-File codegen.
-* xref:tck.adoc[TCK] — MicroProfile Telemetry 2.1 status, commands, out-of-reactor constraints.
+* xref:tck.adoc[TCK] — MicroProfile Telemetry 2.1 status, commands, in-reactor runner behind the `tck` profile.
 * xref:reference.adoc[Reference] — full Java module table, `otel.*` / `mp.telemetry.*` keys, semantic conventions.
 * xref:migration.adoc[Migration] — from SmallRye Telemetry / Quarkus OpenTelemetry.
 

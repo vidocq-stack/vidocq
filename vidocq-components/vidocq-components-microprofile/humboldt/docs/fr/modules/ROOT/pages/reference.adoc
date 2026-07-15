@@ -68,7 +68,7 @@ Cette page consolide la surface publique de Humboldt : artefacts à déclarer, m
 
 | `io.vidocq.humboldt`
 | `humboldt-tck`
-| Runner officiel TCK MicroProfile Telemetry 2.1 — hors reactor (Model 4.0.0). Ne pas déclarer en dépendance applicative.
+| Runner officiel TCK MicroProfile Telemetry 2.1 — in-reactor, gardé par le profil Maven `tck`. Ne pas déclarer en dépendance applicative.
 |===
 
 Toutes les versions à `0.2.0` au moment de la rédaction (jalon M7c en cours).
@@ -293,7 +293,7 @@ Pas de B3 par défaut (opt-in via clé `mp.telemetry.propagators=tracecontext,ba
 == Compatibilité
 
 * Java 25 LTS minimum (compilation et runtime).
-* Maven 3.9.16 ou supérieur (Model 4.1.0 pour le reactor parent ; le runner TCK reste en 4.0.0).
+* Maven 3.9.16 ou supérieur (Model 4.0.0 partout ; le runner TCK est in-reactor derrière le profil `tck`).
 * Compatible CDI 4.1 Lite (Vauban) et JAX-RS 4.0 (Cassini). CDI Full (Weld, OpenWebBeans) non testé.
 
 Suivant : xref:internals.adoc[Fonctionnement interne].
