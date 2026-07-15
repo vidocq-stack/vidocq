@@ -293,7 +293,12 @@ health check system of every Vidocq deployment.
   the standard JAX-RS API is enough.
 - ✅ **Strict TDD** on all production modules.
 - ✅ **TCK PASS 100 %** as a hard contract.
-- ✅ **TCK outside the reactor** (standalone POM Model 4.0.0) — ShrinkWrap Maven Resolver 3.3 constraint.
+- ✅ **TCK in-reactor behind the `tck` Maven profile** (2026-07-15 — supersedes the original
+  "TCK outside the reactor" decision): the ShrinkWrap Maven Resolver 3.3 vs Model 4.1.0
+  constraint is obsolete since the Maven 3.9.16 / Model 4.0.0 migration. `knock-tck` joins
+  the reactor only when the `tck` profile is active (pattern of the `vidocq-runtime-tck-*`
+  runners), so a regular build neither builds nor downloads the TCK harness.
+  Invocation: `./run-official-tck-mp-health-4.0.sh` or `./mvnw -Ptck[,tck-official] -pl knock-tck test`.
 - ✅ **Parallel check execution** via `VirtualThreadPerTaskExecutor` — virtual-thread-friendly.
 
 ## Open decisions

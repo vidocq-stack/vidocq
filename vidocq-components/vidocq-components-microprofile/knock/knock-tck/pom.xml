@@ -1,26 +1,22 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-    Standalone-capable Maven project using Model Version 4.0.0, now also included
-    in the Knock main reactor.
+    In-reactor TCK runner, gated behind the `tck` Maven profile of knock-parent
+    (TCK harmonisation — same pattern as the vidocq-runtime-tck-* runners):
+    a regular `mvn install` neither builds nor downloads the TCK harness.
 
-    Historical context: ShrinkWrap Maven Resolver 3.3 (Arquillian transitive
-    dependency) uses maven-resolver 1.9 / maven-model 3.9, which cannot parse
-    Model 4.1.0 reactor POMs. Its ClasspathWorkspaceReader would crash on Knock
-    POMs that rely on implicit parent versions.
-
-    Internal dependencies (knock-core, knock-cdi-vauban) are pinned to
-    version 0.3.0-SNAPSHOT from the local Maven repository.
+    Historical context: this POM used to be standalone (out of the reactor)
+    because ShrinkWrap Maven Resolver 3.3 (Arquillian transitive dependency)
+    uses maven-resolver 1.9 / maven-model 3.9, which cannot parse Model 4.1.0
+    reactor POMs. That constraint is obsolete since the Maven 3.9.16 /
+    Model 4.0.0 migration, so the runner now inherits knock-parent directly.
 
     Launch through the script:
         ./run-official-tck-mp-health-4.0.sh                      (smoke test)
         ./run-official-tck-mp-health-4.0.sh all                  (full suite)
         ./run-official-tck-mp-health-4.0.sh -Dtest=SomeTest      (targeted class)
-
-    TCK note: microprofile-health-tck:4.0.x was not available in the local M2
-    during M0 bootstrap. Check availability on Maven Central before enabling
-    the tck-official profile.
-    Verification command:
-        mvn dependency:get -Dartifact=org.eclipse.microprofile.health:microprofile-health-tck:4.0.1
+    Or directly through the reactor:
+        ./mvnw -Ptck -pl knock-tck test                          (smoke, default)
+        ./mvnw -Ptck,tck-official -pl knock-tck test             (full suite)
 -->
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
