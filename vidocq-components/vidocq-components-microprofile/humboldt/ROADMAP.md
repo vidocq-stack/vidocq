@@ -30,7 +30,7 @@ Detailed plan: [`PLAN.md`](PLAN.md) (§13 milestones). This page is the short ve
 - [x] Utility exporters: `InMemorySpanExporter` (tests), `LoggingSpanExporter` (System.getLogger)
 - [x] `CompletableResultCode` — equivalent OTel SDK without dep (async result with succeed/fail/whenComplete/join)
 - [x] E2E tests : 8 samplers + 9 tracer/span (parent-child, links, kind/status, events, recordException, scope cache, Resource, noParent) + 3 processors (drop unsampled, batch threshold, drain on shutdown) = **20 tests**
-- [ ] TCK audit : deferred to M7 (official out-of-reactor runner)
+- [ ] TCK audit : deferred to M7 (official TCK runner, in-reactor behind the `tck` profile since 2026-07-15)
 
 ## M3 — W3C propagator + OTLP HTTP-JSON exporter _(completed 2026-05-20)_
 
@@ -38,7 +38,7 @@ Detailed plan: [`PLAN.md`](PLAN.md) (§13 milestones). This page is the short ve
 - [x] `humboldt-exporter-otlp-http` MVP: manual OTLP/JSON encoder (`OtlpJsonEncoder` via StringBuilder, resourceSpans/scopeSpans/spans/attributes schema, AnyValue stringValue/boolValue/intValue/doubleValue/arrayValue, minimal JSON escaping), `java.net.http.HttpClient` transport with virtual thread executor, builder (endpoint, headers, requestTimeout, connectTimeout, maxRetries), bounded exponential retry (100ms × 2^attempt, ceiling 5s) on 5xx and network errors
 - [x] E2E tests with in-process JDK fake server `com.sun.net.httpserver.HttpServer`: valid OTLP/JSON POST, retry 503→503→200, custom Authorization header, capped backoff. 4 EncoderTest unit tests (single span, parentSpanId, events+links+status, JSON escaping, empty collection)
 - [ ] **M3b** (deferred) : OTLP/HTTP-protobuf, transport via chappe-client, Jaeger E2E tests via testcontainers — see [`PLAN.md`](PLAN.md) §3.4
-- [ ] **Tracing TCK gate** : deferred to M7 (official out-of-reactor runner)
+- [ ] **Tracing TCK gate** : deferred to M7 (official TCK runner, in-reactor behind the `tck` profile since 2026-07-15)
 
 ## M4 — SDK Metric (synchronous MVP) _(completed 2026-05-20)_
 
@@ -50,7 +50,7 @@ Detailed plan: [`PLAN.md`](PLAN.md) (§13 milestones). This page is the short ve
 - [x] Refactor: `CompletableResultCode` and `InstrumentationScope` moved to humboldt-sdk-common (shared trace/metric/log building blocks, avoids cross-SDK coupling)
 - [x] Tests: 17 new ones (6 SdkMeterProvider — counter/negative/histogram/Resource/cache/UOE, 1 OtlpHttpMetric E2E end-to-end with fake server) — **total 74/74 PASS**
 - [ ] **M4b** (deferred) : Observable instruments (Gauge/Counter/UpDownCounter), missing Long/Double variants (DoubleCounter, LongHistogram, LongUpDownCounter), ExponentialHistogramAggregator, ViewRegistry/advice, DELTA temporality
-- [ ] **Metrics TCK gate** : deferred to M7 (official out-of-reactor runner)
+- [ ] **Metrics TCK gate** : deferred to M7 (official TCK runner, in-reactor behind the `tck` profile since 2026-07-15)
 
 ## M5 — SDK Log _(completed 2026-05-20)_
 
@@ -60,7 +60,7 @@ Detailed plan: [`PLAN.md`](PLAN.md) (§13 milestones). This page is the short ve
 - [x] OtlpHttpLogExporter (POST /v1/logs JDK HttpClient + VT executor, shared retry via OtlpHttpSpanExporter.computeBackoffMillis) + OtlpJsonLogEncoder (resourceLogs/scopeLogs/logRecords with severityNumber/severityText/body.stringValue/attributes/traceId/spanId/flags)
 - [x] Tests: 7 SdkLoggerProvider (emit/captures span context/independent severity/scope cache/batch drain/immediate sync/timestamp TimeUnit) + 1 OtlpHttpLog E2E = **8 new** → total **82/82 PASS**
 - [ ] **M5b** (deferred) : `java.util.logging` (Handler) + SLF4J (Appender) bridges → OTel — to capture existing logs without changing code calls
-- [ ] **Logs TCK gate** : deferred to M7 (official out-of-reactor runner)
+- [ ] **Logs TCK gate** : deferred to M7 (official TCK runner, in-reactor behind the `tck` profile since 2026-07-15)
 
 ## M6 — CDI + JAX-RS + Runtime (split into M6a/b/c)
 
@@ -115,6 +115,17 @@ Detailed plan: [`PLAN.md`](PLAN.md) (§13 milestones). This page is the short ve
   - Commits: `cassini:cfbd32b` (BCE + provides + cleanup), `vauban:9986c52` (revert), `humboldt:6a580b0` (cleanup workaround).
 
 ## M7 — Official MicroProfile Telemetry 2.1 TCK
+
+- [x] **Decision (2026-07-15)** : `humboldt-tck` moved **in-reactor behind the `tck` Maven
+  profile** (TCK harmonisation across the Vidocq workspace — same pattern as the
+  `vidocq-runtime-tck-*` runners and the dirac pilot). Supersedes the original
+  out-of-reactor decision (M7.2 scaffold below, kept as history): the ShrinkWrap Maven
+  Resolver 3.3 vs Model 4.1.0 constraint disappeared with the workspace migration to
+  Maven 3.9.16 / Model 4.0.0. `humboldt-tck` now inherits `humboldt-parent`; a plain
+  `mvn install` neither downloads nor runs anything TCK-related;
+  `run-official-tck-telemetry-2.1.sh` stays as a thin wrapper over
+  `./mvnw -Ptck,<profile> -pl humboldt-tck test`. Full suite re-verified at
+  **85/85 PASS** after the move.
 
 ### M7a — Audit + scaffold _(completed 2026-05-21)_
 

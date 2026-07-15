@@ -1,37 +1,35 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-    Projet Maven STANDALONE en Model Version 4.0.0, volontairement EN DEHORS
-    du reactor Humboldt.
+    In-reactor TCK runner, gated by the `tck` Maven profile of humboldt-parent
+    (TCK harmonisation — same pattern as the vidocq-runtime-tck-* runners and
+    the dirac pilot): a plain `mvn install` neither downloads nor runs anything
+    TCK-related.
 
-    Pourquoi : ShrinkWrap Maven Resolver 3.3 (dépendance transitive du TCK
-    Jakarta/MicroProfile) utilise maven-resolver 1.9 / maven-model 3.9 qui ne
-    savent pas parser les POMs Model 4.1.0 du reactor Humboldt. Son
-    ClasspathWorkspaceReader crashe avec "Bad artifact coordinates ... jar:".
+    History: this module used to be a STANDALONE out-of-reactor POM to work
+    around ShrinkWrap Maven Resolver 3.3 (could not parse Model 4.1.0 POMs).
+    That constraint disappeared with the Maven 3.9.16 / Model 4.0.0 migration.
 
-    Voir cassini-tck, foy-tck, champollion-tck pour le même pattern dans
-    l'écosystème Vidocq.
+    Execution goes through the script (thin wrapper over the reactor):
+        ./run-official-tck-telemetry-2.1.sh              # smoke
+        ./run-official-tck-telemetry-2.1.sh all          # full suite
+        ./run-official-tck-telemetry-2.1.sh -Dtest=...   # targeted class
 
-    Dépendances internes (humboldt-runtime, humboldt-sdk-*, humboldt-cdi, etc.)
-    sont gelées sur la version 0.3.0-SNAPSHOT installée dans le repo M2 local
-    (via 'mvn install' sur le reactor parent au préalable).
-
-    Lancement :
-        ../run-official-tck-telemetry-2.1.sh             # smoke
-        ../run-official-tck-telemetry-2.1.sh all         # suite complète
-        ../run-official-tck-telemetry-2.1.sh -Dtest=...  # ciblé
-
-    M7 SCAFFOLD (2026-05-21) : pom + arquillian.xml + test smoke. Aucun TCK
-    test ne passe encore — l'adapter Arquillian Humboldt (Vauban CDI Lite +
-    Cassini JAX-RS + Chappe HTTP) viendra en M7b. Voir TCK.md.
+    Or directly:
+        ./mvnw -Ptck,tck-smoke -pl humboldt-tck test     # smoke
+        ./mvnw -Ptck,tck-official -pl humboldt-tck test  # full suite
 -->
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>io.vidocq.humboldt</groupId>
+    <parent>
+        <groupId>io.vidocq.humboldt</groupId>
+        <artifactId>humboldt-parent</artifactId>
+        <version>0.3.0-SNAPSHOT</version>
+    </parent>
+
     <artifactId>humboldt-tck</artifactId>
-    <version>0.3.0-SNAPSHOT</version>
     <packaging>jar</packaging>
 
     <name>Humboldt :: TCK Runner</name>

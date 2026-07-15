@@ -27,8 +27,9 @@ except for the `@WithSpan` annotation from
 
 **TestNG + Arquillian + ShrinkWrap** (not JUnit). The TCK brings its own
 copy of `io.opentelemetry:opentelemetry-sdk` for its internal fixtures
-(`InMemorySpanExporter`, etc.) — that is OK on the out-of-reactor runner side, it does not
-does not pollute the Humboldt application code in production.
+(`InMemorySpanExporter`, etc.) — that is OK on the runner side (`humboldt-tck` is
+gated behind the `tck` Maven profile), it does not pollute the Humboldt
+application code in production.
 
 ## Current status
 
@@ -96,13 +97,17 @@ Complete progression of the 2026-05-21→24 session (5 → 85 PASS, +1600%):
 
 **100 % de tests applicables PASS** ✅
 
-## Architectural constraint
+## Runner architecture
 
-Like `cassini-tck`, `champollion-tck`, `foy-tck`: `humboldt-tck` is
-**outside reactor** (POM Model 4.0.0 standalone, without `<parent>`), to work around
-the ShrinkWrap Maven Resolver 3.3 incompatibility (transitive TCK deps) which
-cannot parse Model 4.1.0 POMs. See root workspace `CLAUDE.md`
-for details. Do not reintegrate it into the reactor.
+Since 2026-07-15 (TCK harmonisation across the Vidocq workspace), `humboldt-tck` is
+**in-reactor, gated behind the `tck` Maven profile** of `humboldt-parent` — same
+pattern as the `vidocq-runtime-tck-*` runners and the dirac pilot. A plain
+`mvn install` neither downloads nor runs anything TCK-related.
+
+Historically the module was a standalone out-of-reactor POM, to work around the
+ShrinkWrap Maven Resolver 3.3 incompatibility (transitive TCK deps) which could not
+parse Model 4.1.0 POMs. That constraint disappeared with the workspace migration to
+Maven 3.9.16 / Model 4.0.0.
 
 ## Challenge format (template)
 

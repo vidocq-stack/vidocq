@@ -24,9 +24,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # TCK — smoke test / full suite / targeted test
 ./run-official-tck-telemetry-2.1.sh         # smoke
 ./run-official-tck-telemetry-2.1.sh all     # full suite (85 tests)
+
+# TCK — direct reactor invocation (humboldt-tck is gated by the `tck` profile)
+./mvnw -Ptck,tck-smoke -pl humboldt-tck test        # smoke
+./mvnw -Ptck,tck-official -pl humboldt-tck test     # full suite
 ```
 
-> `humboldt-tck` (delivered in M7) will be **outside the reactor** (`pom.xml` Model 4.0.0 standalone, without `<parent>`) to work around the ShrinkWrap Maven Resolver 3.3 / Model 4.1.0 incompatibility — same constraint as `cassini-tck`, `champollion-tck`, `foy-tck`. Do not reintegrate this module into the reactor.
+> `humboldt-tck` is **in-reactor, gated behind the `tck` Maven profile** (TCK harmonisation —
+> same pattern as the `vidocq-runtime-tck-*` runners and the dirac pilot): a plain
+> `mvn install` neither downloads nor runs anything TCK-related. The historical
+> out-of-reactor constraint (ShrinkWrap Maven Resolver 3.3 vs Model 4.1.0) disappeared
+> with the Maven 3.9.16 / Model 4.0.0 migration. See `ROADMAP.md` (M7, decision 2026-07-15).
 
 ## Architecture
 
@@ -44,7 +52,7 @@ humboldt-sdk-log                   ← LogRecordProcessor, JUL/SLF4J bridge (M5)
 humboldt-cdi                       ← @WithSpan interceptor via Vauban (M6)
 humboldt-rest                      ← JAX-RS filter via Cassini (M6)
 humboldt-runtime                   ← autoconfig aggregator (M6)
-humboldt-tck                       ← official TCK runner outside reactor (M7)
+humboldt-tck                       ← official TCK runner, in-reactor behind the `tck` Maven profile (M7)
 ```
 
 **Flow of an instrumented incoming HTTP request**:
@@ -62,7 +70,7 @@ humboldt-tck                       ← official TCK runner outside reactor (M7)
 1. **No `import io.opentelemetry.sdk.*`** in humboldt — this code is rewritten, not consumed.
 2. **No Netty / grpc-java / OkHttp / Guava dependency** — any exception must go through the `dependency-gatekeeper` agent.
 3. **`@WithSpan` must work on virtual threads without pinning** — use `ScopedValue<Context>` (JEP 506), never direct `ThreadLocal` on the hot path.
-4. **`humboldt-tck/pom.xml` stays at Model 4.0.0** once created (ShrinkWrap constraint).
+4. **`humboldt-tck` stays gated behind the `tck` Maven profile** — a plain `mvn install` must never download or run anything TCK-related.
 5. **MicroProfile Telemetry 2.1 conformance**: any patch to the core must preserve the TCK score once achieved.
 
 ## Conventions
@@ -84,7 +92,7 @@ The detailed plan is in `PLAN.md` (§13 milestones M0..M9). In summary:
 - **M4** — `humboldt-sdk-metric` (metrics TCK PASS)
 - **M5** — `humboldt-sdk-log` (logs TCK PASS)
 - **M6** — `humboldt-cdi` + `humboldt-rest` + `humboldt-runtime` (`@WithSpan`, auto-instrumentation)
-- **M7** ✅ — `humboldt-tck` outside reactor, **TCK 85/85 PASS**
+- **M7** ✅ — `humboldt-tck` (in-reactor behind the `tck` Maven profile since 2026-07-15), **TCK 85/85 PASS**
 - **M8** — benchmarks vs SmallRye, perf ADRs
 - **M9** — complete Antora documentation, release 1.0
 

@@ -16,6 +16,10 @@ set -e
 #   ./run-official-tck-telemetry-2.1.sh                       # smoke
 #   ./run-official-tck-telemetry-2.1.sh all                   # suite complète (M7c+)
 #   ./run-official-tck-telemetry-2.1.sh -Dtest=BasicAppTest   # test ciblé
+#
+# humboldt-tck est in-reactor, activé par le profil Maven `tck` (harmonisation
+# TCK, même pattern que les runners vidocq-runtime-tck-*) : ce script est un
+# simple wrapper au-dessus de `./mvnw -Ptck,<profil> -pl humboldt-tck test`.
 # ==============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -54,11 +58,11 @@ echo "============================================"
 echo " Étape 2 — Lancement TCK MP Telemetry 2.1   "
 echo "============================================"
 
-cd humboldt-tck
-
 if $USE_ALL; then
-    "${MVN_CMD[@]}" -f pom.xml -Ptck-official verify "${MVN_ARGS[@]}"
+    profile="tck-official"
 else
     # Smoke : juste le test scaffold maison (HumboldtTckSmokeTest)
-    "${MVN_CMD[@]}" -f pom.xml test "${MVN_ARGS[@]}"
+    profile="tck-smoke"
 fi
+
+( cd "${SCRIPT_DIR}" && "${MVN_CMD[@]}" -P"tck,${profile}" -pl humboldt-tck test "${MVN_ARGS[@]}" )

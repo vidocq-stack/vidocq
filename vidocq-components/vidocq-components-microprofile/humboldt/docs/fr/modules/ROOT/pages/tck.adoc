@@ -1,8 +1,8 @@
 = TCK
-:description: Statut TCK MicroProfile Telemetry 2.1, structure du runner hors-reactor, commandes, contraintes Arquillian / ShrinkWrap.
+:description: Statut TCK MicroProfile Telemetry 2.1, runner in-reactor derrière le profil tck, commandes, contraintes Arquillian / ShrinkWrap.
 
 [.lead]
-Humboldt vise la conformité 100 % au TCK officiel **MicroProfile Telemetry 2.1** sur les trois suites (tracing + metrics + logs), avec propagation W3C TraceContext + Baggage et configuration `OTEL_*` / `MP_TELEMETRY_*`. Le runner `humboldt-tck` est **volontairement hors reactor** (POM Model 4.0.0 standalone, sans `<parent>`) pour contourner l'incompatibilité de ShrinkWrap Maven Resolver 3.3 avec Maven Model 4.1.0 — contrainte commune à `cassini-tck`, `champollion-tck`, `foy-tck`.
+Humboldt vise la conformité 100 % au TCK officiel **MicroProfile Telemetry 2.1** sur les trois suites (tracing + metrics + logs), avec propagation W3C TraceContext + Baggage et configuration `OTEL_*` / `MP_TELEMETRY_*`. Le runner `humboldt-tck` est membre du reactor mais **gardé derrière le profil Maven `tck`** (harmonisation TCK — même pattern que les runners `vidocq-runtime-tck-*` et la brique pilote dirac) : un `mvn install` normal ne télécharge ni n'exécute rien du TCK.
 
 == Cible
 
@@ -18,7 +18,7 @@ Coordonnées TCK confirmées publiquement sur Maven Central (audit M7.1, 2026-05
 
 * **TestNG + Arquillian + ShrinkWrap** (pas JUnit).
 * Adapter Arquillian Humboldt : `HumboldtDeployableContainer` (déploie via Vauban + Chappe + Cassini), `HumboldtCdiEnricher` (injection des beans CDI dans les `@Test`), hook runtime `withExtraSpanExporter` pour brancher `InMemorySpanExporter` du TCK.
-* Le TCK importe sa propre copie d'`io.opentelemetry:opentelemetry-sdk` pour ses fixtures internes — c'est OK côté runner hors-reactor, ça ne pollue pas le classpath de production.
+* Le TCK importe sa propre copie d'`io.opentelemetry:opentelemetry-sdk` pour ses fixtures internes — c'est OK côté runner gardé par le profil `tck`, ça ne pollue pas le classpath de production.
 
 == Statut courant
 
@@ -105,8 +105,7 @@ Le script :
 
 [source,bash]
 ----
-cd humboldt-tck
-mvn -ntp -f pom.xml -Ptck-cdi-bean test
+./mvnw -ntp -Ptck,tck-cdi-bean -pl humboldt-tck test
 ----
 
 Profile `tck-cdi-bean` = bootstrap minimal (sans HTTP) pour les tests CDI purs comme `OpenTelemetryBeanTest`. Utile pour itérer sur les bugs catégorie C sans payer le démarrage de Chappe.
@@ -133,18 +132,20 @@ Profile `tck-cdi-bean` = bootstrap minimal (sans HTTP) pour les tests CDI purs c
 | Suite logs seulement.
 |===
 
-== Contrainte d'architecture : hors-reactor
+== Architecture du runner
 
-`humboldt-tck` reste en **Model 4.0.0** standalone même si le reste du reactor passe à 4.1.0. Raison rappelée dans `CLAUDE.md` du repo :
+`humboldt-tck` est un **module in-reactor gardé derrière le profil Maven `tck`** de `humboldt-parent` (harmonisation TCK — même pattern que les runners `vidocq-runtime-tck-*` du runtime Vidocq et la brique pilote dirac) : un `mvn install` normal ne télécharge ni n'exécute rien du TCK, et le reactor de release ne voit jamais le module.
 
-> ShrinkWrap Maven Resolver 3.3 (transitive du TCK officiel) repose sur `maven-resolver 1.9` / `maven-model 3.9` qui ne savent pas parser les POMs Maven Model 4.1.0. Son `ClasspathWorkspaceReader` scanne le reactor courant et crashe sur tout POM Vidocq (version implicite via parent). Tant qu'upstream ShrinkWrap ne supporte pas Model 4.1, ce module **doit rester détaché** — ne pas le réintégrer au `<modules>` parent, ne pas lui ajouter de `<parent>`, ne pas le builder via `mvn -pl`. Toujours passer par `run-official-tck-telemetry-2.1.sh`.
+[NOTE]
+====
+Historiquement `humboldt-tck` était un POM standalone hors reactor : ShrinkWrap Maven Resolver 3.3, transitif au TCK officiel, ne savait pas parser les POMs Model 4.1.0 et crashait sur le reactor Vidocq. Cette contrainte a disparu avec la migration du workspace vers Maven 3.9.16 / Model 4.0.0 — le runner est donc sûr in-reactor.
+====
 
 == Reproduire en local
 
 [source,bash]
 ----
-cd humboldt-tck
-mvn -ntp -f pom.xml -Ptck-official test 2>&1 | tee /tmp/tck-humboldt.log
+./mvnw -ntp -Ptck,tck-official -pl humboldt-tck test 2>&1 | tee /tmp/tck-humboldt.log
 
 # Trier les échecs par catégorie
 grep -E "Tests run|FAILED|ERROR" /tmp/tck-humboldt.log
