@@ -128,13 +128,13 @@ reads from `GrimmModelCache` and serves the document as `application/json` or `a
   changing the CDI BCE, touching `module-info.java`).
 - Document architecture decisions in `ROADMAP.md` (section "Actioned Decisions").
 - Use the `virtual-threads-reviewer` agent for any concurrent code modification.
-- Use the `jpms-guardian` agent after any package addition or `module-info.java` change.
+- Use the `java-modules-guardian` agent after any package addition or `module-info.java` change.
 
 ## Available Agents
 
 - `classfile-codegen` — if schema introspection requires compile-time annotation processing
 - `virtual-threads-reviewer` — for any concurrent scanning or model caching code
-- `jpms-guardian` — after `module-info.java` modification or new package introduction
+- `java-modules-guardian` — after `module-info.java` modification or new package introduction
 - `dependency-gatekeeper` — before any `pom.xml` dependency addition
 - `tck-runner` — to diagnose MicroProfile OpenAPI 4.1 TCK failures
 
@@ -204,3 +204,9 @@ Follow Vauban's `index.adoc`: page title (`= <Project>`), `:description:`, a cen
 Provide `modules/ROOT/images/<project>-logo.png` (PNG), referenced from `index.adoc`.
 
 > When you change these documentation rules, keep `AGENTS.md` and `CLAUDE.md` in sync.
+
+## Terminology
+
+Use **Java Modules** (or **Java module** for a single module) when referring to
+the Java Platform Module System. Do **not** use the abbreviation **JPMS** — in
+prose, identifiers, or documentation.

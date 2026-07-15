@@ -43,7 +43,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * annotation scan → merge → config-apply → filter) runs inside
  * {@link io.vidocq.grimm.internal.ModelBuilder} when the model cache is instantiated.</p>
  *
- * <p>Registered as a JPMS service in {@code module-info.java}:
+ * <p>Registered as a Java Modules service in {@code module-info.java}:
  * {@code provides jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension
  * with io.vidocq.grimm.cdi.GrimmExtension;}</p>
  */

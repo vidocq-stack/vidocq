@@ -11,7 +11,7 @@
   `jakarta.enterprise.cdi-api`, `jakarta.annotation-api`) plus the Vidocq modular repackage
   `io.vidocq.ravel:ravel-mp-config-api` are compiled into `grimm-core` and
   `grimm-cdi-vauban`.
-- Strict JPMS architecture: `grimm-core` is pure Java scanning + serialization logic with no
+- Strict Java Modules architecture: `grimm-core` is pure Java scanning + serialization logic with no
   CDI dependency; `grimm-cdi-vauban` is the CDI integration layer and JAX-RS endpoint host;
   `grimm-tck` is out-of-reactor.
 - **No SmallRye OpenAPI, Swagger Core, Jackson, or Snakeyaml** in production code.
@@ -51,11 +51,11 @@
 - Any `<scope>compile|runtime</scope>` dependency addition requires the `dependency-gatekeeper`
   agent and an explicit justification in the PR.
 
-## JPMS Convention — `module-info` placement
+## Java Modules Convention — `module-info` placement
 
 - In `grimm-core` and `grimm-cdi-vauban`, place `module-info.java` under
   `src/main/module-info/` (not `src/main/java/`). This prevents Maven Compiler Plugin from
-  switching to JPMS mode during `testCompile` (test-scope dependencies like Vauban/Ravel
+  switching to Java Modules mode during `testCompile` (test-scope dependencies like Vauban/Ravel
   are not on the module path).
 - `module-info.class` is compiled alone in the `prepare-package` phase; `maven-clean-plugin`
   removes it before incremental builds.
@@ -65,7 +65,7 @@
 - `microprofile-openapi-api:4.1` provides `module-info.class`; use
   `requires org.eclipse.microprofile.openapi` in `module-info.java`.
 - MP Config API is consumed via `io.vidocq.ravel:ravel-mp-config-api`, which provides
-  `module org.eclipse.microprofile.config` for JPMS/jlink compatibility.
+  `module org.eclipse.microprofile.config` for Java Modules/jlink compatibility.
 
 ## Model Build Pipeline
 
@@ -139,7 +139,7 @@ java -jar grimm-bench/target/benchmarks.jar
   status.
 - For non-trivial changes (scanner phase, `ModelMerger`, BCE, `module-info.java`), enter plan
   mode and record architectural decisions in `ROADMAP.md` (section "Actioned Decisions").
-- Use `virtual-threads-reviewer` for concurrent code changes, `jpms-guardian` after
+- Use `virtual-threads-reviewer` for concurrent code changes, `java-modules-guardian` after
   `module-info.java`/package changes, and `tck-runner` to diagnose TCK failures.
 - **Language**: Commit messages, Javadoc, and the content of all `.md` files must be written in **English**.
 
@@ -150,7 +150,7 @@ java -jar grimm-bench/target/benchmarks.jar
   `ModelReaderInvoker`, JSON and YAML serializers, `ScanConfig` record, `FilterConfig` record.
 - `grimm-cdi-vauban` will contain: `GrimmExtension` (BCE CDI 4.1), `GrimmModelCache`
   (`@ApplicationScoped`), `OpenApiResource` (JAX-RS resource), `GrimmConfigProducer`.
-- The JPMS module name for `grimm-core` is `io.vidocq.grimm.core`; for `grimm-cdi-vauban`
+- The Java module name for `grimm-core` is `io.vidocq.grimm.core`; for `grimm-cdi-vauban`
   it is `io.vidocq.grimm.cdi.vauban`.
 - Configuration keys follow the MP OpenAPI spec §4.1:
   `mp.openapi.model.reader`, `mp.openapi.filter`, `mp.openapi.scan.disable`,
@@ -206,3 +206,9 @@ Follow Vauban's `index.adoc`: page title (`= <Project>`), `:description:`, a cen
 Provide `modules/ROOT/images/<project>-logo.png` (PNG), referenced from `index.adoc`.
 
 > When you change these documentation rules, keep `AGENTS.md` and `CLAUDE.md` in sync.
+
+## Terminology
+
+Use **Java Modules** (or **Java module** for a single module) when referring to
+the Java Platform Module System. Do **not** use the abbreviation **JPMS** — in
+prose, identifiers, or documentation.

@@ -1,7 +1,7 @@
 # Grimm — Implementation Roadmap
 
 > MicroProfile OpenAPI 4.1 implementation in the Vidocq style: zero third-party implementation
-> libraries (Jakarta EE / MicroProfile spec APIs only), Java 25, virtual threads, strict JPMS,
+> libraries (Jakarta EE / MicroProfile spec APIs only), Java 25, virtual threads, strict Java Modules,
 > CDI via Vauban, configuration via Ravel, transport via Cassini/Chappe.
 
 ## Guiding Principles
@@ -11,7 +11,7 @@
 | Zero implementation library | No SmallRye OpenAPI, Swagger Core, Jackson, Snakeyaml in `grimm-core`. Only spec APIs compiled. |
 | Scanner / CDI separation | `grimm-core` contains pure Java scanning + serialization; `grimm-cdi-vauban` holds the single BCE and the JAX-RS endpoint. |
 | Virtual threads | Any parallel scanning uses `VirtualThreadPerTaskExecutor`. No `synchronized`, no `ThreadLocal`. |
-| Strict JPMS | `module-info.java` everywhere, `internal.*` not exported, SPI via `provides/uses`. No unjustified `opens`. |
+| Strict Java Modules | `module-info.java` everywhere, `internal.*` not exported, SPI via `provides/uses`. No unjustified `opens`. |
 | Strict TDD | Red → Green → Refactor. Test before code. Cite spec section in test comments. |
 | TCK 100% PASS | Hard contract before any structural merge. Score declared in `TCK.md`. |
 | Measured performance | JMH from M5+, comparison vs SmallRye OpenAPI; results in `BENCH.md`. |
@@ -96,7 +96,7 @@ compilable.
 
 | Task | Notes | Status |
 |---|---|---|
-| `OASFactoryImpl` | Implements `OASFactory` SPI; registered via `ServiceLoader` (`META-INF/services` + JPMS `provides`) | ☑ |
+| `OASFactoryImpl` | Implements `OASFactory` SPI; registered via `ServiceLoader` (`META-INF/services` + Java Modules `provides`) | ☑ |
 | `OpenAPIImpl` record/POJO | Implements `org.eclipse.microprofile.openapi.models.OpenAPI` | ☑ |
 | `InfoImpl` | Implements `Info` | ☑ |
 | `PathItemImpl` | Implements `PathItem` | ☑ |
@@ -159,7 +159,7 @@ ServiceLoader.
 |---|---|---|
 | `StaticFileReader` | Reads `META-INF/openapi.yaml`, `openapi.yml`, `openapi.json` from the deployment classpath (in that priority order per spec) | ☑ |
 | Format detection | Detect file format from extension; delegate to `YamlDeserializer` or `JsonDeserializer` | ☑ |
-| Classpath scanning | Use `ClassLoader.getResourceAsStream` — JPMS-safe, no file-system assumptions | ☑ |
+| Classpath scanning | Use `ClassLoader.getResourceAsStream` — Java Modules-safe, no file-system assumptions | ☑ |
 | Absent file | Return `Optional.empty()` cleanly (not an error) | ☑ |
 | Unit tests | Files present / absent / malformed | ☑ |
 
@@ -332,7 +332,7 @@ endpoint, integrated with Vauban (CDI) and Cassini (JAX-RS).
 | YAML serialization correctness | Hand-written YAML may miss edge cases (multi-line strings, special chars) | Extensive round-trip tests; validate against OpenAPI Parser in `grimm-tck` |
 | Circular schema detection | StackOverflow risk in deep object graphs | `SchemaRegistry` with a `Set<Class<?>>` visited guard in `SchemaGenerator` |
 | TCK non-public artifact | Blocked if not installed in M2 local | Document in `grimm-tck/README.md`; CI install script |
-| `OASFactory` ServiceLoader in JPMS | `provides` declaration in `module-info.java` must match the `GrimmOASFactoryResolver` class exactly | Validate with `java --list-modules` smoke test in M0 |
+| `OASFactory` ServiceLoader in Java Modules | `provides` declaration in `module-info.java` must match the `GrimmOASFactoryResolver` class exactly | Validate with `java --list-modules` smoke test in M0 |
 | Cassini resource scanning | `GrimmExtension` must discover JAX-RS resources before Cassini scans them | Hook BCE in the `@Enhancement` phase; ensure ordering via CDI priorities |
 | MP Config key `mp.openapi.schema.<FQCN>` | FQCN contains dots — may collide with Config key namespace | Use `Config.getPropertyNames()` + prefix filter; test with Ravel |
 
@@ -347,7 +347,7 @@ endpoint, integrated with Vauban (CDI) and Cassini (JAX-RS).
 - [x] `grimm-tck/pom.xml` on Model 4.0.0 — ShrinkWrap constraint (ecosystem-wide)
 - [x] `/openapi` endpoint as a plain JAX-RS resource discovered by Cassini — no special adapter
 - [x] M1 completed: all MP OpenAPI model POJOs + `OASFactoryResolver` ServiceLoader wiring
-- [x] JPMS alignment: use `requires org.eclipse.microprofile.openapi` (real module name in MP OpenAPI 4.1)
+- [x] Java Modules alignment: use `requires org.eclipse.microprofile.openapi` (real module name in MP OpenAPI 4.1)
 - [x] MP Config API is consumed via `io.vidocq.ravel:ravel-mp-config-api` (repackaged modular API)
 - [x] M2 completed: JSON/YAML serialization with round-trip tests
 - [x] M3 completed: StaticFileReader with classpath scanning
