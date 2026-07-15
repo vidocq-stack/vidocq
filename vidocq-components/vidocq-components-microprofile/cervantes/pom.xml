@@ -78,10 +78,13 @@
     </properties>
 
     <!--
-        cervantes-tck est volontairement HORS reactor (POM Model 4.0.0 standalone, sans
-        <parent>) pour contourner ShrinkWrap Maven Resolver 3.3 qui ne sait pas parser les
-        POMs Model 4.1.0. Il sera invoqué par run-official-tck-mp-jwt-2.1.sh après
-        installation locale du reactor. Ne pas l'ajouter ici.
+        TCK harmonisation: cervantes-tck joins the reactor ONLY under the `tck` Maven
+        profile (see <profiles> below), following the vidocq-runtime-tck-* runner
+        pattern. The historical reason for keeping it out-of-reactor — ShrinkWrap Maven
+        Resolver 3.3 unable to parse Model 4.1.0 POMs — is obsolete since the workspace
+        migrated to Maven 3.9.16 / Model 4.0.0. A regular `mvn install` still skips it;
+        activate it with `./mvnw -Ptck -pl cervantes-tck test` or via
+        run-official-tck-mp-jwt-2.1.sh.
     -->
     <modules>
         <module>cervantes-mp-jwt-api</module>
@@ -92,6 +95,19 @@
         <module>cervantes-bench</module>
         <module>cervantes-examples</module>
     </modules>
+
+    <profiles>
+        <!--
+            `tck` profile: pulls the official MP JWT 2.1 TCK runner into the reactor.
+            Not active by default so a plain build never downloads nor runs the TCK.
+        -->
+        <profile>
+            <id>tck</id>
+            <modules>
+                <module>cervantes-tck</module>
+            </modules>
+        </profile>
+    </profiles>
 
     <dependencyManagement>
         <dependencies>

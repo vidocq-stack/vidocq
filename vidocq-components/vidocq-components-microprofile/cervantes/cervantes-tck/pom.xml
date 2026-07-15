@@ -1,18 +1,29 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-    cervantes-tck — Model 4.0.0 standalone, sans <parent>.
-    IMPORTANT: ce module est VOLONTAIREMENT exclu du reactor cervantes-parent.
-    Raison: ShrinkWrap Maven Resolver 3.3 ne sait pas parser les POMs Model 4.1.0.
-    Toujours invoquer via run-official-tck-mp-jwt-2.1.sh.
+    cervantes-tck — official MicroProfile JWT 2.1 TCK runner, in-reactor behind the
+    `tck` Maven profile of cervantes-parent (TCK harmonisation, vidocq-runtime-tck-*
+    pattern). Historically this module was a standalone Model 4.0.0 POM without
+    <parent> because ShrinkWrap Maven Resolver 3.3 could not parse Model 4.1.0 POMs;
+    that constraint is obsolete since the workspace moved to Maven 3.9.16 / Model 4.0.0.
+
+    Invocation:
+      ./run-official-tck-mp-jwt-2.1.sh [all|-Dtest=...]        (wrapper script)
+      ./mvnw -P"tck,smoke"        -pl cervantes-tck test        (smoke test)
+      ./mvnw -P"tck,tck-official" -pl cervantes-tck test        (full official suite)
 -->
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>io.vidocq.cervantes</groupId>
+    <parent>
+        <groupId>io.vidocq.cervantes</groupId>
+        <artifactId>cervantes-parent</artifactId>
+        <version>0.3.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
     <artifactId>cervantes-tck</artifactId>
-    <version>0.3.0-SNAPSHOT</version>
     <packaging>jar</packaging>
 
     <name>Cervantes :: TCK Runner</name>

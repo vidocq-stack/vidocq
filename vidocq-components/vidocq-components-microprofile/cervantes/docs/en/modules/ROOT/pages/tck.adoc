@@ -1,5 +1,5 @@
 = MicroProfile JWT 2.1 TCK
-:description: 206/206 status, runner execution, out-of-reactor architecture, documented exclusions, gaps resolved during the race to 100 %.
+:description: 206/206 status, runner execution, in-reactor architecture behind the tck profile, documented exclusions, gaps resolved during the race to 100 %.
 
 [.lead]
 The official MicroProfile JWT 2.1 TCK verifies that an implementation correctly accepts, rejects and exposes a wide range of forged tokens against an Arquillian reference application — inline keys, JWKS, JWE, standard claims, MP claims, `Authorization` and cookie transport, key rotation, falsified signatures, `exp` / `nbf` / `iat` at the boundaries. Cervantes passes it at **206 / 206** on the 2.1 release (May 2026, milestone M6).
@@ -58,11 +58,11 @@ The runner uses Arquillian. The Surefire report lands in `cervantes-tck/target/s
 
 == Runner architecture
 
-`cervantes-tck` is **deliberately outside the reactor**: its `pom.xml` uses standalone `modelVersion 4.0.0` with no `<parent>`. Template mirrored from `heisenberg-tck`.
+`cervantes-tck` is **in-reactor behind the `tck` Maven profile** of `cervantes-parent` (TCK harmonisation, `vidocq-runtime-tck-*` pattern): a plain `mvn install` never builds nor downloads it. Direct invocation: `./mvnw -P"tck,smoke" -pl cervantes-tck test` (smoke) or `./mvnw -P"tck,tck-official" -pl cervantes-tck test` (full suite). Template originally mirrored from `heisenberg-tck`.
 
 [NOTE]
 ====
-This detachment is forced by ShrinkWrap Maven Resolver 3.3, transitively pulled in by the official TCK, which cannot parse Model 4.1.0 POMs and crashes on the Vidocq reactor. The rule is documented at the workspace root: **do not reintegrate `cervantes-tck` into the `<subprojects>` of `cervantes-parent`**.
+The runner was historically detached from the reactor (standalone `modelVersion 4.0.0` POM with no `<parent>`) because ShrinkWrap Maven Resolver 3.3, transitively pulled in by the official TCK, could not parse Model 4.1.0 POMs. That constraint is obsolete since the workspace migrated to Maven 3.9.16 / Model 4.0.0, allowing the reintegration behind the `tck` profile.
 ====
 
 Stack assembled by the runner:

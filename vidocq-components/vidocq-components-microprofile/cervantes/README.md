@@ -47,7 +47,7 @@ sdk env
 | `cervantes-cassini` | JAX-RS security (`@RolesAllowed`, auth filter, `SecurityContext`) |
 | `cervantes-bench` | JMH benchmarks |
 | `cervantes-examples` | Usage examples |
-| `cervantes-tck` | Official TCK runner (out-of-reactor — Model 4.0.0) |
+| `cervantes-tck` | Official TCK runner (in-reactor, built only under the `tck` Maven profile) |
 
 ## Status
 

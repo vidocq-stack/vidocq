@@ -31,9 +31,12 @@ sdk env
 ./run-official-tck-mp-jwt-2.1.sh -Dtest=TestName
 ```
 
-> `cervantes-tck` is **out-of-reactor** (standalone POM Model 4.0.0, without `<parent>`) to work
-> around ShrinkWrap Maven Resolver 3.3 vs Model 4.1.0 incompatibility. Do not change this model.
-> See workspace root `CLAUDE.md` § *Critical architecture constraint: out-of-reactor TCK runners*.
+> `cervantes-tck` is **in-reactor behind the `tck` Maven profile** (TCK harmonisation,
+> vidocq-runtime-tck-* pattern): a plain `mvn install` never builds nor downloads it.
+> Activate it via the wrapper script or `./mvnw -P"tck,smoke" -pl cervantes-tck test`
+> (`tck-official` instead of `smoke` for the full suite). The historical out-of-reactor
+> constraint (ShrinkWrap Maven Resolver 3.3 vs Model 4.1.0) is obsolete since the
+> workspace migrated to Maven 3.9.16 / Model 4.0.0.
 
 ## Architecture
 
@@ -52,7 +55,7 @@ cervantes-cassini      ← JAX-RS security: JwtAuthenticationFilter, RolesAllowe
                          (@RolesAllowed/@PermitAll/@DenyAll), SecurityContext backed by JsonWebToken
 cervantes-bench        ← JMH benchmarks (vs SmallRye JWT)
 cervantes-examples     ← examples (@RolesAllowed resource + @Inject @Claim)
-cervantes-tck          ← Arquillian official TCK runner (out-of-reactor — Model 4.0.0)
+cervantes-tck          ← Arquillian official TCK runner (in-reactor, `tck` Maven profile only)
 ```
 
 **Fundamental separation:** `cervantes-core` knows neither HTTP nor CDI (pure validation,
