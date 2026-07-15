@@ -27,7 +27,7 @@
  * (validated against Cassini). Filters are CDI {@code @Provider} beans discovered by the
  * Cassini {@code BeanProvider}.</p>
  *
- * <p>JPMS note — testCompile workaround: {@code module-info.java} placed in {@code src/main/module-info/}.
+ * <p>Java Modules note — testCompile workaround: {@code module-info.java} placed in {@code src/main/module-info/}.
  * See {@code cervantes-core/pom.xml}.</p>
  */
 module io.vidocq.cervantes.jaxrs {

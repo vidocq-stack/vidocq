@@ -95,7 +95,7 @@ connects the auth filter (cassini) to the CDI producer (cdi-vauban) without dire
 
 ## Available Agents
 
-- `jpms-guardian` — after any `module-info.java` modification or package addition
+- `java-modules-guardian` — after any `module-info.java` modification or package addition
 - `virtual-threads-reviewer` — for JWKS fetch (HttpClient + cache) and auth filter
 - `dependency-gatekeeper` — before any dependency addition (zero-dep philosophy)
 - `tck-runner` — to diagnose MP JWT 2.1 TCK failures
@@ -162,3 +162,9 @@ Follow Vauban's `index.adoc`: page title (`= <Project>`), `:description:`, a cen
 Provide `modules/ROOT/images/<project>-logo.png` (PNG), referenced from `index.adoc`.
 
 > When you change these documentation rules, keep `AGENTS.md` and `CLAUDE.md` in sync.
+
+## Terminology
+
+Use **Java Modules** (or **Java module** for a single module) when referring to
+the Java Platform Module System. Do **not** use the abbreviation **JPMS** — in
+prose, identifiers, or documentation.

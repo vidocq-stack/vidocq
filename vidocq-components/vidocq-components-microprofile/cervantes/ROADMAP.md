@@ -93,7 +93,7 @@ Source of truth for milestones and TCK score. TDD at each step (Red → Green �
   `exports` (zero `requires`); consumers declare their own `requires`
   (`jakarta.json`, `jakarta.cdi`). Same approach as `heisenberg-mp-ft-api`. Selected module name:
   `org.eclipse.microprofile.jwt`.
-- **2026-05-26** — `cervantes-core` JPMS trick: cleaning `module-info.class` is tied to
+- **2026-05-26** — `cervantes-core` Java Modules trick: cleaning `module-info.class` is tied to
   `process-sources` (and not `generate-test-sources` as in heisenberg) so incremental builds
   without `clean` do not flip `default-compile` into module mode. No-op on a clean build.
 - **2026-05-26** — Current Vauban defect: a `@Produces` bean whose PRODUCER is normal-scoped

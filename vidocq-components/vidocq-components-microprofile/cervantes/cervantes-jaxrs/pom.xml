@@ -79,7 +79,7 @@
 
     <build>
         <plugins>
-            <!-- JPMS workaround (cf. cervantes-core) : nettoyage lié à process-sources. -->
+            <!-- Java Modules workaround (cf. cervantes-core) : nettoyage lié à process-sources. -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-clean-plugin</artifactId>

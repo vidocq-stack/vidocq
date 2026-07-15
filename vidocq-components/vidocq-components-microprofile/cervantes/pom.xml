@@ -18,7 +18,7 @@
     <packaging>pom</packaging>
 
     <name>Cervantes</name>
-    <description>Implémentation MicroProfile JWT 2.1 — zéro librairie tierce, crypto via java.security, JSON via Champollion, config via Ravel, JPMS strict, virtual threads, CDI via Vauban</description>
+    <description>Implémentation MicroProfile JWT 2.1 — zéro librairie tierce, crypto via java.security, JSON via Champollion, config via Ravel, Java Modules strict, virtual threads, CDI via Vauban</description>
     <url>https://codeberg.org/Vidocq/cervantes</url>
 
     <!--

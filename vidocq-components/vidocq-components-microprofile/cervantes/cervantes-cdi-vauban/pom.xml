@@ -83,7 +83,7 @@
     <build>
         <plugins>
             <!--
-                JPMS workaround (cf. cervantes-core) : module-info.java dans src/main/module-info/.
+                Java Modules workaround (cf. cervantes-core) : module-info.java dans src/main/module-info/.
                 Nettoyage lié à process-sources (avant compile) pour les builds incrémentaux.
             -->
             <plugin>
