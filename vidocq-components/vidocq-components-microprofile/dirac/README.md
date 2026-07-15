@@ -63,7 +63,7 @@ The M9 smoke uses the reactor artifact `dirac-mp-metrics-api`, which repackages
 | `dirac-cdi-vauban` | CDI interceptors + Vauban BCE (DiracExtension) |
 | `dirac-rest` | JAX-RS `GET /metrics` endpoint — optional, enabled when Cassini is present |
 | `dirac-bench` | JMH benchmarks vs Micrometer and SmallRye Metrics |
-| `dirac-tck` | Official TestNG/Arquillian TCK runner (out-of-reactor — Model 4.0.0) |
+| `dirac-tck` | Official TCK runner (in-reactor, gated by the `tck` Maven profile) |
 | `dirac-examples` | Standalone usage examples and integration with vidocq-mps |
 
 ## Supported Metric Types (MP Metrics 5.1.1)

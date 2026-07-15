@@ -384,7 +384,14 @@ target/dirac-image/bin/java --list-modules
 - [x] In-house EWMA reservoir for `Histogram` (avoids HDR Histogram as a third-party dependency)
 - [x] OpenMetrics format prioritized over JSON (text/plain is the default format)
 - [x] `dirac-rest` is optional (separate module, no dependency from `dirac-core`)
-- [x] `dirac-tck` outside the reactor (common constraint across the Vidocq ecosystem — ShrinkWrap)
+- [x] `dirac-tck` in-reactor behind the `tck` Maven profile (2026-07-15, TCK harmonisation —
+  Dirac is the pilot brick, mirroring the `vidocq-runtime-tck-*` pattern). Supersedes the
+  original out-of-reactor decision: the ShrinkWrap Maven Resolver 3.3 vs Model 4.1.0
+  constraint disappeared with the workspace migration to Maven 3.9.16 / Model 4.0.0, and
+  the MP Metrics api-tck builds its deployments with `addClass`/`addPackage` only (no
+  ShrinkWrap Maven resolver). A plain `mvn install` neither downloads nor runs anything
+  TCK-related; `run-official-tck-mp-metrics-5.1.sh` stays as a thin wrapper. Full suite
+  re-verified at 127/127 PASS after the move.
 
 ## Open decisions
 

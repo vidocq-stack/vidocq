@@ -1,8 +1,8 @@
 = TCK MicroProfile Metrics 5.1.1
-:description: Statut, exécution du runner, architecture hors reactor, smoke test M9 jlink.
+:description: Statut, exécution du runner, runner in-reactor derrière le profil tck, smoke test M9 jlink.
 
 [.lead]
-Le TCK officiel MicroProfile Metrics 5.1.1 (`org.eclipse.microprofile.metrics:microprofile-metrics-tck:5.1.1`) valide qu'une implémentation respecte la totalité de la spec — formats d'exposition, scopes, types, configuration. La cible Dirac est *100 % PASS* (jalon M8). Le runner est livré dans le module `dirac-tck`, volontairement détaché du reactor.
+Le TCK officiel MicroProfile Metrics 5.1.1 (`org.eclipse.microprofile.metrics:microprofile-metrics-tck:5.1.1`) valide qu'une implémentation respecte la totalité de la spec — formats d'exposition, scopes, types, configuration. La cible Dirac est *100 % PASS* (jalon M8). Le runner est livré dans le module `dirac-tck`, membre du reactor mais gardé derrière le profil Maven `tck`.
 
 == Statut
 
@@ -24,7 +24,7 @@ Tant que la suite complète n'est pas verte, le chiffre exact est tracé dans `d
 
 == Prérequis
 
-L'artefact `org.eclipse.microprofile.metrics:microprofile-metrics-tck:5.1.1` est disponible sur Maven Central. Le runner installe d'abord les modules Dirac requis dans le M2 local, puis exécute Maven sur le `dirac-tck/pom.xml` détaché.
+L'artefact `org.eclipse.microprofile.metrics:microprofile-metrics-tck:5.1.1` est disponible sur Maven Central. Le runner installe d'abord les modules Dirac requis dans le M2 local, puis exécute le reactor sur `dirac-tck` avec le profil `tck`.
 
 [source,bash]
 ----
@@ -48,15 +48,21 @@ Le script `run-official-tck-mp-metrics-5.1.sh` à la racine du dépôt orchestre
 ./run-official-tck-mp-metrics-5.1.sh -Dtest=CounterTest
 ----
 
-Le runner installe `dirac-api`, `dirac-core`, `dirac-cdi-vauban` dans le M2 local (étape 1), puis invoque Maven sur `dirac-tck/pom.xml` (étape 2). Le rapport synthétique atterrit dans `dirac-tck/target/tck-report.txt`.
+Le runner installe `dirac-api`, `dirac-core`, `dirac-cdi-vauban` dans le M2 local (étape 1), puis invoque `./mvnw -Ptck,<profil> -pl dirac-tck test` (étape 2). Le rapport synthétique atterrit dans `dirac-tck/target/tck-report.txt`. Invocation directe sans le script :
+
+[source,bash]
+----
+./mvnw -Ptck -pl dirac-tck test                  # smoke
+./mvnw -Ptck,tck-official -pl dirac-tck test     # suite complète
+----
 
 == Architecture du runner
 
-`dirac-tck` est **volontairement hors reactor** : son `pom.xml` est en `modelVersion 4.0.0` standalone, sans `<parent>`.
+`dirac-tck` est un **module in-reactor gardé derrière le profil Maven `tck`** (harmonisation TCK — Dirac est la brique pilote, sur le modèle des runners `vidocq-runtime-tck-*` du runtime Vidocq) : un `mvn install` normal ne télécharge ni n'exécute rien du TCK, et le reactor de release ne voit jamais le module.
 
 [NOTE]
 ====
-Cette détachement est imposé par ShrinkWrap Maven Resolver 3.3, transitif au TCK officiel, qui ne sait pas parser les POMs Model 4.1.0 et crashe sur le reactor Vidocq. La règle est documentée dans la racine du workspace (§ _Contrainte d'architecture critique : TCK runners hors reactor_). **Ne pas réintégrer `dirac-tck` au `<modules>` du reactor parent, ne pas lui ajouter de `<parent>`, ne pas le builder via `mvn -pl`.** Toujours passer par le script.
+Historiquement `dirac-tck` était un POM standalone hors reactor : ShrinkWrap Maven Resolver 3.3, transitif au TCK officiel, ne savait pas parser les POMs Model 4.1.0. Cette contrainte a disparu avec la migration du workspace vers Maven 3.9.16 / Model 4.0.0, et le TCK MP Metrics construit ses déploiements uniquement via `addClass`/`addPackage` (pas de resolver Maven ShrinkWrap) — il est donc sûr in-reactor, vérification déjà faite pour `vidocq-runtime-tck-dirac-metrics`.
 ====
 
 Stack assemblée par le runner :
