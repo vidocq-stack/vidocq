@@ -88,12 +88,22 @@ public class VidocqPackageMojo extends AbstractMojo {
             Files.copy(appJar, libDir.resolve(appJar.getFileName()),
                     StandardCopyOption.REPLACE_EXISTING);
 
-            // Copy dependency JARs
+            // Copy dependency JARs. A dependency for which vidocq:generate parked
+            // cross-module classes (target/vidocq-patches/<artifactId>) is copied as an
+            // enriched jar carrying its own generated classes — no JPMS split package,
+            // no --patch-module needed at launch.
             for (var artifact : project.getArtifacts()) {
                 if (artifact.getFile() != null && "jar".equals(artifact.getType())) {
                     Path src = artifact.getFile().toPath();
-                    Files.copy(src, libDir.resolve(src.getFileName()),
-                            StandardCopyOption.REPLACE_EXISTING);
+                    Path patchDir = JpmsPatches.patchDirFor(buildDir.toPath(), artifact.getArtifactId());
+                    if (Files.isDirectory(patchDir)) {
+                        JpmsPatches.enrich(src, patchDir, libDir.resolve(src.getFileName().toString()));
+                        getLog().info("Enriched " + src.getFileName()
+                                + " with its generated classes (JPMS cross-module)");
+                    } else {
+                        Files.copy(src, libDir.resolve(src.getFileName()),
+                                StandardCopyOption.REPLACE_EXISTING);
+                    }
                 }
             }
 

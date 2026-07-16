@@ -251,6 +251,16 @@ module com.acme.todo {
 }
 ----
 
+[TIP]
+====
+Cet `opens` fonctionne parce que les resources vivent dans le *même* module que la classe
+principale. Dans une application multi-modules (p. ex. hexagonale, resources dans leur propre
+module Java), le système de modules ne permet à un module d'ouvrir que ses propres packages : l'`opens` doit
+migrer dans le module qui contient les classes, et le module runtime le scanne via
+`<scanDependencies>`. Voir
+xref:usage.adoc#applications-multi-modules-dépendances-scannées[Usage — Applications multi-modules].
+====
+
 `src/main/java/com/acme/todo/TodoApp.java` :
 
 [source,java]

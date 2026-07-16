@@ -31,6 +31,18 @@
 | Génère `target/Dockerfile` distroless basé sur `distroless/base-debian12:nonroot`. Build optionnel via `vidocq.docker.build=true`.
 |===
 
+[NOTE]
+.Dépendances scannées et Java Modules — nouveau en 0.3.0-SNAPSHOT
+====
+Quand `vidocq:generate` tourne avec `<scanDependencies>`, les classes produites pour une
+dépendance scannée appartiennent aux packages de *cette dépendance*. Le plugin garde désormais
+le module path sans split package de bout en bout : `generate` parque ces classes dans
+`target/vidocq-patches/<artifactId>/`, `package` et `jlink` livrent des copies *enrichies* des
+jars de dépendance embarquant leurs propres classes générées, et `dev` ajoute automatiquement
+les options `--patch-module` à la JVM fille. Zéro configuration. Voir
+xref:usage.adoc#applications-multi-modules-dépendances-scannées[Usage — Applications multi-modules].
+====
+
 == Goal `vidocq:jlink`
 
 [source,xml]

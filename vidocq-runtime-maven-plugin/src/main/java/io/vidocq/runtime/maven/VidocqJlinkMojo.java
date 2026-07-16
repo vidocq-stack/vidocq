@@ -160,7 +160,17 @@ public class VidocqJlinkMojo extends AbstractMojo {
                     getLog().info("Staging sealed copy of " + artifact.getArtifactId()
                             + " (resource package closed, adapters via provides)");
                 }
-                Files.copy(src, stage.resolve(f.getName()), StandardCopyOption.REPLACE_EXISTING);
+                // Stage an enriched copy when vidocq:generate parked cross-module classes
+                // for this dependency: the generated classes ship inside the module that
+                // owns their package, so the image has no split package to reject.
+                Path patchDir = JpmsPatches.patchDirFor(buildDir.toPath(), artifact.getArtifactId());
+                if (Files.isDirectory(patchDir)) {
+                    JpmsPatches.enrich(src, patchDir, stage.resolve(f.getName()));
+                    getLog().info("Staging enriched copy of " + artifact.getArtifactId()
+                            + " (carries its generated classes, JPMS cross-module)");
+                } else {
+                    Files.copy(src, stage.resolve(f.getName()), StandardCopyOption.REPLACE_EXISTING);
+                }
             }
         }
 
