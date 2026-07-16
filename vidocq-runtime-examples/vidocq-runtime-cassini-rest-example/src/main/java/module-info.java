@@ -32,6 +32,11 @@ module io.vidocq.runtime.examples.rest {
     requires io.vidocq.cassini.api;
     requires io.vidocq.chappe.api;
     requires io.vidocq.vauban.core;
+    // The external library's beans are served by this application: the module must be
+    // in the resolved graph, otherwise its classes are silently unloadable at runtime
+    // (/api/external answered 404). Its generated proxies ship inside the extlib jar,
+    // enriched at packaging time by the vidocq-runtime-maven-plugin.
+    requires io.vidocq.runtime.examples.extlib;
 
     // ZERO opens AND zero exports on the resource package. The APT generates
     // TodoResource$$CassiniAdapter/$$CassiniRoutes; cassini obtains them via ServiceLoader (provides

@@ -34,6 +34,85 @@ cd vidocq-runtime-examples/vidocq-runtime-cassini-rest-example
 ./target/dist/bin/todo-app
 ----
 
+== Applications multi-modules (dépendances scannées)
+
+Les applications hexagonales et multi-modules gardent en général leurs modules métier et
+adaptateurs *spec-only* — uniquement les API Jakarta EE / MicroProfile, aucune dépendance
+Vidocq, aucun APT Vidocq — et concentrent tout le spécifique runtime dans un petit module
+principal. Ce module principal demande à `vidocq:generate` de scanner les modules applicatifs
+et de produire la glu CDI/REST pour eux :
+
+[source,xml]
+----
+<execution>
+    <id>generate</id>
+    <goals><goal>generate</goal></goals>
+    <configuration>
+        <scanDependencies>
+            <scanDependency>com.acme:my-rest-adapter</scanDependency>
+            <scanDependency>com.acme:my-domain</scanDependency>
+        </scanDependencies>
+    </configuration>
+</execution>
+----
+
+Deux règles pour le `module-info.java` de chaque module *scanné* — en se rappelant que le
+système de modules Java ne permet à un module d'`opens` (ou d'`exports`) que les packages
+qu'il *possède* : impossible
+d'ouvrir le package d'un autre module depuis le module principal, c'est pourquoi l'`opens`
+mono-module montré dans xref:getting-started.adoc[Getting started] doit migrer dans le module
+qui contient les classes.
+
+[source,java]
+----
+module com.acme.rest.adapter {
+    exports com.acme.rest;          // les resources
+    exports com.acme.rest.dto;      // JSON-B lit les records via leurs accesseurs publics
+    requires jakarta.cdi;
+    requires jakarta.ws.rs;
+
+    // Le runtime consommateur génère/réfléchit la plomberie CDI de ces beans.
+    // Un `opens` non qualifié ne nomme aucun module runtime : le module reste
+    // spec-only, et les runtimes classpath l'ignorent totalement.
+    opens com.acme.rest;
+}
+----
+
+[NOTE]
+.Nouveau en 0.3.0-SNAPSHOT
+====
+Les classes que `vidocq:generate` produit pour les dépendances scannées (proxies clients,
+intercepteurs) vivent dans des packages *possédés par ces dépendances*. Depuis 0.3.0 le plugin
+les tient automatiquement hors du module principal :
+
+* `vidocq:generate` les parque dans `target/vidocq-patches/<artifactId>/`
+  (ligne de log : `JPMS: parked N generated class(es) of '…'`) ;
+* `vidocq:package` et `vidocq:jlink` copient/staguent des jars de dépendance *enrichis* qui
+  embarquent leurs propres classes générées — les packages existant déjà dans ces jars, leur
+  descripteur de module reste exact et le module path ne voit jamais de split package ;
+* `vidocq:dev` ajoute automatiquement les options `--patch-module` correspondantes à la JVM
+  fille.
+
+Aucune configuration supplémentaire au-delà de `<scanDependencies>`.
+====
+
+[WARNING]
+.En 0.2.0 (publiée)
+====
+Vidocq 0.2.0 laisse les classes générées dans le `target/classes` du module principal, ce qui
+crée un *split package* illégal sur le module path : le boot layer échoue avec
+`ResolutionException: Module <main> contains package <pkg>, module <dep> exports package <pkg>`
+— ou, si la dépendance n'est pas `requires`, ses beans sont silencieusement absents (HTTP 404).
+Le contournement en 0.2.0 consiste à faire à la main ce que 0.3.0 fait nativement :
+
+. déplacer les classes des packages étrangers hors de `target/classes` *avant* la construction
+  du jar (p. ex. `maven-antrun-plugin` en `prepare-package` — les retirer après coup ne suffit
+  pas, car `maven-jar-plugin` enregistre les packages dans l'attribut `ModulePackages` du
+  `module-info.class`) ;
+. lancer avec `--patch-module <module.dep>=<dir>` pour chaque dépendance, p. ex. via le
+  `<jvmArgs>` du goal `package` pour les scripts de lancement générés.
+====
+
 == Configuration MicroProfile
 
 Vidocq Runtime implémente {spec-mp-config}. Hiérarchie des sources, du plus prioritaire au moins prioritaire :

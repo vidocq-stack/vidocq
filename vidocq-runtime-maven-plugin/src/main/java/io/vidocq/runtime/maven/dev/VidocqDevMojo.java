@@ -19,6 +19,7 @@
  */
 package io.vidocq.runtime.maven.dev;
 
+import io.vidocq.runtime.maven.JpmsPatches;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
@@ -163,6 +164,28 @@ public class VidocqDevMojo extends AbstractMojo {
         List<Path> modulePath = buildModulePath();
         Map<String, String> sysProps = buildSystemProperties();
         List<String> jvmArgs = buildJvmArgs();
+
+        // The dev module path uses the original dependency jars: re-attach the classes
+        // that vidocq:generate parked for scanned dependencies (target/vidocq-patches)
+        // to their owning module, exactly like the packaging goals do by enrichment.
+        try {
+            Map<String, Path> jarsByArtifactId = new HashMap<>();
+            for (var artifact : project.getArtifacts()) {
+                if (artifact.getFile() != null) {
+                    jarsByArtifactId.put(artifact.getArtifactId(), artifact.getFile().toPath());
+                }
+            }
+            File targetDir = buildDir != null ? buildDir : classesDir.getParentFile();
+            List<String> patchArgs = JpmsPatches.patchModuleArgs(targetDir.toPath(), jarsByArtifactId);
+            if (!patchArgs.isEmpty()) {
+                jvmArgs = new ArrayList<>(jvmArgs);
+                jvmArgs.addAll(patchArgs);
+                getLog().info("JPMS: " + patchArgs.size() / 2
+                        + " --patch-module option(s) added for generated classes");
+            }
+        } catch (IOException e) {
+            throw new MojoExecutionException("Failed to compute --patch-module options", e);
+        }
 
         getLog().info("Vidocq dev — main module : " + mainModule
                 + (mainClass != null && !mainClass.isBlank() ? ("/" + mainClass) : ""));

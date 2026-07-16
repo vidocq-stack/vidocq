@@ -37,7 +37,9 @@ import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.jar.JarFile;
 
 /**
@@ -65,6 +67,9 @@ public class VidocqGenerateMojo extends AbstractMojo {
     @Parameter(defaultValue = "${project.build.outputDirectory}", readonly = true)
     private File outputDirectory;
 
+    @Parameter(defaultValue = "${project.build.directory}", readonly = true)
+    private File buildDirectory;
+
     /**
      * List of dependencies to scan for proxy/index generation.
      * Format: {@code groupId:artifactId}. {@code artifactId} optional or
@@ -87,7 +92,8 @@ public class VidocqGenerateMojo extends AbstractMojo {
         }
 
         try {
-            List<Path> vidocqDeps = collectScannedDependencies();
+            Map<Path, String> scannedByArtifactId = collectScannedDependencies();
+            List<Path> vidocqDeps = new ArrayList<>(scannedByArtifactId.keySet());
             if (vidocqDeps.isEmpty()) {
                 getLog().info("No dependencies to process (scanDependencies empty or all pre-processed)");
                 return;
@@ -159,6 +165,21 @@ public class VidocqGenerateMojo extends AbstractMojo {
                 getLog().warn(warning);
             }
 
+            // Classes generated for a scanned dependency live in packages owned by that
+            // dependency's module: leaving them in target/classes would create a JPMS
+            // split package. Park them in target/vidocq-patches/<artifactId>/; the
+            // packaging goals re-attach them by enriching the dependency jar copies.
+            List<String> generated = new ArrayList<>();
+            generated.addAll(result.generatedProxies());
+            generated.addAll(result.generatedInterceptors());
+            var relocated = JpmsPatches.relocate(
+                    classesDir, buildDirectory.toPath(), scannedByArtifactId, generated);
+            for (var e : relocated.entrySet()) {
+                getLog().info("JPMS: parked " + e.getValue() + " generated class(es) of '" + e.getKey()
+                        + "' in target/" + JpmsPatches.DIR_NAME + "/" + e.getKey()
+                        + " — packaging goals will enrich that jar");
+            }
+
         } catch (IOException e) {
             throw new MojoExecutionException("Failed to generate bean index", e);
         }
@@ -175,12 +196,13 @@ public class VidocqGenerateMojo extends AbstractMojo {
         return new URLClassLoader(urls.toArray(new URL[0]), getClass().getClassLoader());
     }
 
-    private List<Path> collectScannedDependencies() throws IOException {
+    /** Scanned dependency jar → artifactId, in dependency order. */
+    private Map<Path, String> collectScannedDependencies() throws IOException {
         if (scanDependencies == null || scanDependencies.isEmpty()) {
-            return List.of();
+            return Map.of();
         }
         List<Pattern> patterns = scanDependencies.stream().map(Pattern::parse).toList();
-        List<Path> deps = new ArrayList<>();
+        Map<Path, String> deps = new LinkedHashMap<>();
         for (var artifact : project.getArtifacts()) {
             if (artifact.getFile() == null) continue;
             String g = artifact.getGroupId();
@@ -191,7 +213,7 @@ public class VidocqGenerateMojo extends AbstractMojo {
                 getLog().debug("Skipping " + g + ":" + a + " (vauban-bce-processed)");
                 continue;
             }
-            deps.add(jar);
+            deps.put(jar, a);
         }
         return deps;
     }
