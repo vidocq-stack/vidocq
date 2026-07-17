@@ -87,7 +87,6 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
-                    <release>25</release>
                     <compilerArgs combine.children="append">
                         <arg>--patch-module</arg>
                         <arg>org.eclipse.microprofile.config=${project.build.outputDirectory}</arg>
