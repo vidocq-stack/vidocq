@@ -187,7 +187,6 @@
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-compiler-plugin</artifactId>
                     <configuration>
-                        <release>25</release>
                         <!-- Keep parameter names in the .class files so APT and the runtime
                              proxy (M7-3 @Query :name resolution) can read them. -->
                         <parameters>true</parameters>
