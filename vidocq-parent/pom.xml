@@ -84,7 +84,10 @@
         <junit.version>6.0.3</junit.version>
 
         <!-- Versions des plugins Maven — overridables par propriété dans les enfants -->
-        <maven.compiler.plugin.version>3.13.0</maven.compiler.plugin.version>
+        <!-- 3.15.0: required for Maven 4, which enables Reproducible Builds by
+             default and thereby the compiler-plugin's JDK-8318913 module-info
+             patch; the ASM 9.6 bundled with 3.13.0 cannot read Java 25 classes. -->
+        <maven.compiler.plugin.version>3.15.0</maven.compiler.plugin.version>
         <maven.dependency.plugin.version>3.8.1</maven.dependency.plugin.version>
         <!-- Hook for the managed copy-compile-deps-to-module-path execution: repos that
              repackage upstream non-modular APIs (e.g. heisenberg) exclude the originals
@@ -242,6 +245,15 @@
                     `v<version>` and the release builds activate the release
                     profile (sources + javadoc + GPG + central-publishing).
                 -->
+                <!-- Version managed here (not only in the release profile) so that
+                     modules declaring the plugin with skipPublishing=true get a
+                     version in the default effective model — otherwise Maven 4
+                     emits a model-validation warning per module. -->
+                <plugin>
+                    <groupId>org.sonatype.central</groupId>
+                    <artifactId>central-publishing-maven-plugin</artifactId>
+                    <version>${central.publishing.plugin.version}</version>
+                </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-release-plugin</artifactId>
