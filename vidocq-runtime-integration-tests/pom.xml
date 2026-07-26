@@ -58,6 +58,47 @@
                 <module>vidocq-runtime-tck-coreprofile</module>
                 <module>vidocq-runtime-tck-annotations</module>
             </modules>
+
+            <build>
+                <plugins>
+                    <!--
+                        Drop previously compiled test classes before every TCK run.
+
+                        These runners only join the reactor under `-Ptck`, so a plain
+                        `mvn clean install` never cleans them: their target/ survives across
+                        builds untouched. A class compiled while one of its member types was
+                        not yet resolvable stays on disk forever, because the incremental
+                        compiler sees an up-to-date .class and never rebuilds it — and an
+                        active annotation processor keeps javac from failing outright, so the
+                        stale class carries a simple-name field descriptor (`LMetricRegistry;`)
+                        that only blows up at deployment time.
+
+                        That is Vidocq/vidocq#38: 93 Fault Tolerance TCK deployments aborted by
+                        a single stale test class, while the standalone heisenberg runner was
+                        green. Recompiling the (few) test sources costs seconds; a TCK run costs
+                        minutes, so always start from freshly compiled bytecode.
+                    -->
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-clean-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>remove-stale-tck-test-classes</id>
+                                <phase>process-resources</phase>
+                                <goals><goal>clean</goal></goals>
+                                <configuration>
+                                    <excludeDefaultDirectories>true</excludeDefaultDirectories>
+                                    <filesets>
+                                        <fileset>
+                                            <directory>${project.build.testOutputDirectory}</directory>
+                                        </fileset>
+                                    </filesets>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
         </profile>
     </profiles>
 
