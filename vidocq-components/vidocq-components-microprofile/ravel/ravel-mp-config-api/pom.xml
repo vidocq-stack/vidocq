@@ -61,8 +61,14 @@
                                         maven-jar-plugin réécrira un manifest propre pour
                                         notre artefact (sans Automatic-Module-Name, désormais
                                         superflu : le module est explicite).
+
+                                        META-INF/LICENSE et META-INF/NOTICE ne sont
+                                        volontairement PAS exclus : les .class dépaquetés
+                                        restent sous Apache-2.0, dont les sections 4(a) et
+                                        4(d) imposent de joindre la licence et le NOTICE
+                                        amont à toute redistribution.
                                     -->
-                                    <excludes>META-INF/MANIFEST.MF,META-INF/maven/**,META-INF/LICENSE,META-INF/NOTICE</excludes>
+                                    <excludes>META-INF/MANIFEST.MF,META-INF/maven/**</excludes>
                                 </artifactItem>
                             </artifactItems>
                             <overWriteReleases>true</overWriteReleases>
