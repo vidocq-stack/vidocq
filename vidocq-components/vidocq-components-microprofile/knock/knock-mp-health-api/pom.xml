@@ -11,10 +11,32 @@
     </parent>
 
     <artifactId>knock-mp-health-api</artifactId>
-    <name>Knock :: MicroProfile Health API</name>
-    <description>Fork du MicroProfile Health API avec module-info pour Java Modules/jlink</description>
+    <name>Knock :: MicroProfile Health API (modularised)</name>
+    <description>
+        Re-package of org.eclipse.microprofile.health:microprofile-health-api with an explicit
+        module-info.class (module name: microprofile.health.api). The official API only ships an
+        Automatic-Module-Name, which prevents its direct use with jlink. This artifact is the sole
+        source of the MP Health spec consumed by the Knock modules; the official TCK keeps using
+        the upstream API.
+
+        No upstream source file is vendored in this repository: the official .class files are
+        unpacked from the upstream binary jar at build time, and the only source we own and compile
+        is module-info.java. The upstream META-INF/LICENSE and META-INF/NOTICE are propagated
+        verbatim into the produced jar, as required by Apache-2.0 section 4.
+    </description>
 
     <dependencies>
+        <!--
+            The official spec is pulled in 'provided' scope only so that its .class files can be
+            unpacked into target/classes; it is not exposed transitively to consumers, who instead
+            receive the repackaged jar with its explicit module-info.
+        -->
+        <dependency>
+            <groupId>org.eclipse.microprofile.health</groupId>
+            <artifactId>microprofile-health-api</artifactId>
+            <version>${microprofile.health.upstream.version}</version>
+            <scope>provided</scope>
+        </dependency>
         <dependency>
             <groupId>jakarta.enterprise</groupId>
             <artifactId>jakarta.enterprise.cdi-api</artifactId>
@@ -24,4 +46,65 @@
             <artifactId>jakarta.inject-api</artifactId>
         </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <!-- 1) Unpack the microprofile-health-api .class files into target/classes -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <version>3.8.1</version>
+                <executions>
+                    <execution>
+                        <id>unpack-microprofile-health-api</id>
+                        <phase>generate-resources</phase>
+                        <goals>
+                            <goal>unpack</goal>
+                        </goals>
+                        <configuration>
+                            <artifactItems>
+                                <artifactItem>
+                                    <groupId>org.eclipse.microprofile.health</groupId>
+                                    <artifactId>microprofile-health-api</artifactId>
+                                    <version>${microprofile.health.upstream.version}</version>
+                                    <outputDirectory>${project.build.outputDirectory}</outputDirectory>
+                                    <!--
+                                        The original manifest and Maven metadata are dropped:
+                                        maven-jar-plugin writes a clean manifest for our artefact
+                                        (without Automatic-Module-Name, now superfluous since the
+                                        module is explicit).
+
+                                        META-INF/LICENSE and META-INF/NOTICE are deliberately NOT
+                                        excluded: Apache-2.0 section 4(a)/(d) requires us to carry
+                                        the upstream licence and NOTICE along in every distributed
+                                        copy of the work.
+                                    -->
+                                    <excludes>META-INF/MANIFEST.MF,META-INF/maven/**</excludes>
+                                </artifactItem>
+                            </artifactItems>
+                            <overWriteReleases>true</overWriteReleases>
+                            <overWriteSnapshots>true</overWriteSnapshots>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!--
+                2) Compile only our own src/main/java/module-info.java, patching it into the
+                   'microprofile.health.api' module (the .class files unpacked above provide the
+                   exported packages).
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <release>25</release>
+                    <compilerArgs combine.children="append">
+                        <arg>--patch-module</arg>
+                        <arg>microprofile.health.api=${project.build.outputDirectory}</arg>
+                    </compilerArgs>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>
