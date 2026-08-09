@@ -63,4 +63,20 @@ class CliParserDevTest {
     void devDefaultsMatchParserDefault() {
         assertEquals(Command.Dev.defaults(), CliParser.parse(new String[]{"dev"}));
     }
+
+    /**
+     * The runner publishes the listener port only when {@code --port} was typed: publishing the
+     * default on every run would make the CLI silently outrank the project's own configuration
+     * (Vidocq/chappe#7, where {@code vidocq.http.port} finally became a live key).
+     */
+    @Test
+    void portIsMarkedExplicitOnlyWhenTyped() {
+        assertFalse(((Command.Dev) CliParser.parse(new String[]{"dev"})).portExplicit());
+        assertTrue(((Command.Dev) CliParser.parse(new String[]{"dev", "--port", "9090"})).portExplicit());
+        assertTrue(((Command.Dev) CliParser.parse(new String[]{"dev", "-p", "8080"})).portExplicit(),
+                "an explicit --port that happens to equal the default is still explicit");
+
+        assertFalse(((Command.Start) CliParser.parse(new String[]{"start"})).portExplicit());
+        assertTrue(((Command.Start) CliParser.parse(new String[]{"start", "--port", "9099"})).portExplicit());
+    }
 }

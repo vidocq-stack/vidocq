@@ -62,32 +62,34 @@ public final class CliParser {
 
     private static Command.Start parseStart(String[] args, int from) {
         int port = 8080;
+        boolean portExplicit = false;
         Path config = null;
         boolean debug = false;
         for (int i = from; i < args.length; i++) {
             switch (args[i]) {
-                case "--port", "-p"   -> port   = parseInt(args, ++i, "--port");
+                case "--port", "-p"   -> { port = parseInt(args, ++i, "--port"); portExplicit = true; }
                 case "--config", "-c" -> config = Path.of(value(args, ++i, "--config"));
                 case "--debug"        -> debug  = true;
                 default               -> unknownOpt(args[i], "start");
             }
         }
-        return new Command.Start(port, config, debug);
+        return new Command.Start(port, portExplicit, config, debug);
     }
 
     private static Command.Dev parseDev(String[] args, int from) {
         int port = 8080;
+        boolean portExplicit = false;
         String profile = "dev";
         boolean debug = false;
         for (int i = from; i < args.length; i++) {
             switch (args[i]) {
-                case "--port", "-p"    -> port    = parseInt(args, ++i, "--port");
+                case "--port", "-p"    -> { port = parseInt(args, ++i, "--port"); portExplicit = true; }
                 case "--profile", "-P" -> profile = value(args, ++i, "--profile");
                 case "--debug"         -> debug   = true;
                 default                -> unknownOpt(args[i], "dev");
             }
         }
-        return new Command.Dev(port, profile, debug);
+        return new Command.Dev(port, portExplicit, profile, debug);
     }
 
     private static Command.Doctor parseDoctor(String[] args, int from) {

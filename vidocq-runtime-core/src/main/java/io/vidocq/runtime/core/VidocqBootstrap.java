@@ -21,6 +21,7 @@ package io.vidocq.runtime.core;
 
 import io.vidocq.vauban.core.container.VaubanContainer;
 import io.vidocq.vauban.core.container.VaubanContainerBuilder;
+import io.vidocq.runtime.core.config.ConfigKeyAudit;
 import io.vidocq.runtime.core.config.VidocqConfigImpl;
 import io.vidocq.runtime.spi.ExtensionContext;
 import io.vidocq.runtime.spi.VidocqConfiguration;
@@ -144,6 +145,8 @@ public final class VidocqBootstrap {
             ext.onStart(context);
         }
 
+        auditConfigKeys();
+
         // Shutdown hook
         Runtime.getRuntime().addShutdownHook(new Thread(this::shutdown, "vidocq-shutdown"));
 
@@ -155,6 +158,28 @@ public final class VidocqBootstrap {
                 "Vidocq - Started in " + ms + "." + String.format("%03d", us)
                         + " ms (process running for " + jvmUptime + " ms)");
         return this;
+    }
+
+    /**
+     * Warns about every configured {@code vidocq.*} key that no loaded extension consumes.
+     *
+     * <p>Such a key is applied by nobody: the application silently keeps the default, and the
+     * mistake stays invisible whenever the configured value happens to <em>be</em> the default —
+     * how a documented {@code vidocq.http.port} sat inert in real applications for weeks
+     * (Vidocq/chappe#7). Reporting is best-effort and never fails the boot.
+     */
+    private void auditConfigKeys() {
+        try {
+            java.util.Set<String> declared = new java.util.HashSet<>();
+            for (VidocqExtension ext : extensions) {
+                declared.addAll(ext.configKeys());
+            }
+            for (String key : ConfigKeyAudit.unconsumedKeys(config.getPropertyNames(), declared)) {
+                LOG.log(System.Logger.Level.WARNING, ConfigKeyAudit.warningFor(key, declared));
+            }
+        } catch (RuntimeException e) {
+            LOG.log(System.Logger.Level.DEBUG, "Configuration key audit skipped", e);
+        }
     }
 
     /**

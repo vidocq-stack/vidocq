@@ -254,6 +254,9 @@ public final class ProjectScaffolder {
     private static String buildProperties() {
         return """
                 # Vidocq application configuration
+
+                # HTTP endpoint. vidocq.http.port is an alias for the listener named 'default';
+                # vidocq.chappe.listener.<name>.port addresses any listener and wins over the alias.
                 vidocq.http.port=8080
                 """;
     }
