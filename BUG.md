@@ -109,7 +109,7 @@ where this whole bug class is invisible.
 ## BUG-20260710-01 — vidocq:package 0.2.0 NPEs when jvmArgs is not configured
 
 - **Date** : 2026-07-10
-- **Statut** : OPEN
+- **Statut** : FIXED (2026-08-09, `pr/ybl/vidocq-40-jvmargs-npe`)
 - **Module touché** : vidocq-runtime-maven-plugin / VidocqPackageMojo
 - **Symptôme** : `Cannot invoke "String.isBlank()" because "this.jvmArgs" is null` — the
   `package` goal fails on any pom that does not set `<jvmArgs>` explicitly. An empty
@@ -127,6 +127,16 @@ where this whole bug class is invisible.
     getting-started rewrite (issue #3). Released 0.2.0 is immutable — the scaffold now
     emits `<jvmArgs>-Dfile.encoding=UTF-8</jvmArgs>` as a workaround. Fix the null guard
     on main for the next plugin release.
+  - 2026-08-09 : reported again from the outside by Sébastien Blanc (Vidocq/vidocq#40),
+    hit on a from-scratch project built for a separate Vauban reproducer — i.e. on the
+    exact path a new user takes. Fixed on main: both launcher generators now read the
+    parameter through a null-safe `jvmArgsLine()`, and `VidocqPackageMojoTest` pins the
+    absent / blank / configured cases. Swept the rest of the plugin for the same
+    `defaultValue = ""` trap: `VidocqDevMojo.extraJvmArgs` and `extraSystemProperties`
+    were already null-guarded (`splitArgs`), so `package` was the only faulty site.
+    The scaffold keeps emitting `<jvmArgs>` while it targets the released 0.2.x plugin;
+    drop that workaround (and its assertion in `ProjectScaffolderExtensionsTest`) in the
+    commit that bumps the scaffolded version to 0.3.0.
 
 ## BUG-20260710-02 — vidocq:package 0.2.0 launcher uses --module <mainClass> without the module name
 
