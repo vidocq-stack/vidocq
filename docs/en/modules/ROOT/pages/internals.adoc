@@ -23,6 +23,55 @@ flowchart LR
     style BOOT fill:#e1f5fe,stroke:#0288d1
 ....
 
+== Class loading — the Vauban application layer
+
+Vidocq does not let the application own its class loading: whatever the launch vehicle
+(IDE right-click on a `@VidocqMain` trampoline, packaged distribution scripts,
+`vidocq:dev`, the CLI), the application resolves into a **child `ModuleLayer` whose
+defining loader is Vauban's `VaubanClassLoader`** — the runtime and its extensions stay
+in the boot layer, exports/opens keep being enforced, and every application class flows
+through the loader's transformer chain at definition (client-proxy weaving by the
+`cdi-proxifier`, sjar decryption by the source plugins).
+
+[mermaid]
+....
+flowchart TB
+    subgraph boot["boot ModuleLayer — JVM module path"]
+        TRAMP["@VidocqMain trampoline<br/>(loaded here, no logic)"]
+        RT["vidocq runtime + extensions<br/>vauban · chappe · cassini · jakarta"]
+    end
+    subgraph child["child ModuleLayer — VaubanClassLoader (self-first)"]
+        APP["application modules<br/>woven at definition"]
+    end
+    TRAMP -- "Vidocq.run()" --> DET["boot-layer detection<br/>(caller + vauban-beans.list modules)"]
+    DET -- "same archives,<br/>re-resolved" --> child
+    APP -- requires --> RT
+....
+
+Key mechanics (implemented in `vauban-classloader`, consumed by
+`VidocqAppLayer`/`Vidocq.run`):
+
+* **Boot-layer shadowing** — the child layer resolves the SAME module names the IDE put
+  on the module path; the layer loader is *self-first* for its archives, so every
+  internal reference of a layer class resolves against the woven world, never against
+  its un-woven boot-layer twin. Duplicate `ServiceLoader` providers are deduplicated by
+  class name, preferring the layer's copy.
+* **Services promotion** — when the layer resolves an application module, the archive's
+  `META-INF/services/*` files are promoted to synthetic `provides` directives in the
+  module descriptor. Applications never declare generated providers
+  (`_VaubanComponents`, `$$CassiniAdapter`…) in `module-info.java`.
+* **Hot reload** — `vidocq:dev` signals the running JVM after a recompile; the runtime
+  shuts the deployment down, discards the layer, resolves a fresh one over the new
+  classes and boots again (same process, warm JIT, debugger attached). Cassini's static
+  discovery caches are reset between deployments
+  (`io.vidocq.cassini.runtime.CassiniMaintenance`).
+* **Compatibility net** — a legacy main that boots the runtime without the layer still
+  works: unwoven beans are handled by the Vauban load-time weaving agent (dynamic
+  attach, with the JDK's warning) and the log suggests the trampoline.
+
+The full engine documentation (source/transformer SPI, weaving tiers, diagnostics
+options) lives in the Vauban documentation, Internals → Class loading.
+
 == Boot sequence diagram
 
 [mermaid]
