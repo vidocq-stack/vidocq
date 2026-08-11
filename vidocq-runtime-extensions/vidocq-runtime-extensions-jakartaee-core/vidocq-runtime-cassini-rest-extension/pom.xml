@@ -25,9 +25,9 @@
             <artifactId>cassini-api</artifactId>
         </dependency>
         <dependency>
+            <!-- compile scope: onStop() calls the CassiniMaintenance API (hot reload) -->
             <groupId>io.vidocq.cassini</groupId>
             <artifactId>cassini-core</artifactId>
-            <scope>runtime</scope>
         </dependency>
         <dependency>
             <groupId>io.vidocq.cassini</groupId>

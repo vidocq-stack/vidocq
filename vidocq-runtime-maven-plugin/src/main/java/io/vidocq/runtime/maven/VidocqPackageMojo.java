@@ -57,6 +57,28 @@ public class VidocqPackageMojo extends AbstractMojo {
     @Parameter(defaultValue = "io.vidocq.runtime.core.Vidocq", property = "vidocq.mainClass")
     private String mainClass;
 
+    /**
+     * Java module of the application's {@code @VidocqMain} trampoline. When set together
+     * with a non-default {@link #mainClass}, the layer-mode scripts launch the trampoline
+     * directly ({@code --module <mainModule>/<mainClass>} with {@code app/} on the module
+     * path) — {@code Vidocq.run()} then re-layers the application through the Vauban
+     * class loader; otherwise the scripts boot the runtime with
+     * {@code -Dvidocq.app.path}.
+     */
+    @Parameter(property = "vidocq.mainModule")
+    private String mainModule;
+
+    /**
+     * Universal-loader mode (default): the application jar lands in {@code app/} (not
+     * {@code lib/}) and the launch scripts boot the runtime with
+     * {@code -Dvidocq.app.path="$BASEDIR/app"} — the application resolves into a child
+     * module layer defined by the Vauban class loader (classes woven at definition, no
+     * instrumentation agent). Set to {@code false} to restore the legacy
+     * everything-in-lib layout.
+     */
+    @Parameter(defaultValue = "true", property = "vidocq.package.layer")
+    private boolean layerMode;
+
     @Parameter(defaultValue = "${project.artifactId}", property = "vidocq.scriptName")
     private String scriptName;
 
@@ -83,9 +105,14 @@ public class VidocqPackageMojo extends AbstractMojo {
             Files.createDirectories(binDir);
             Files.createDirectories(libDir);
 
-            // Copy application JAR
+            // Copy application JAR. Universal-loader mode: the application lands in its
+            // own app/ directory — the launch scripts hand it to the runtime through
+            // -Dvidocq.app.path, so it resolves into a Vauban-defined module layer
+            // instead of the JVM module path.
             Path appJar = project.getArtifact().getFile().toPath();
-            Files.copy(appJar, libDir.resolve(appJar.getFileName()),
+            Path appDir = layerMode ? distRoot.resolve("app") : libDir;
+            Files.createDirectories(appDir);
+            Files.copy(appJar, appDir.resolve(appJar.getFileName()),
                     StandardCopyOption.REPLACE_EXISTING);
 
             // Copy dependency JARs. A dependency for which vidocq:generate parked
@@ -126,15 +153,44 @@ public class VidocqPackageMojo extends AbstractMojo {
     }
 
     private void generateShScript(Path binDir) throws IOException {
-        String jvmArgsLine = jvmArgs.isBlank() ? "" : " " + jvmArgs;
-        String script = """
-                #!/bin/sh
-                BASEDIR=$(cd "$(dirname "$0")/.." && pwd)
-                exec java%s \\
-                  --module-path "$BASEDIR/lib" \\
-                  --module %s \\
-                  "$@"
-                """.formatted(jvmArgsLine, mainClass);
+        String jvmArgsLine = (jvmArgs == null || jvmArgs.isBlank()) ? "" : " " + jvmArgs;
+        String script;
+        if (layerMode && trampolineRef() != null) {
+            // @VidocqMain trampoline launch: the app rides the module path; Vidocq.run()
+            // re-layers it through the Vauban class loader — one launch shape for the
+            // IDE, the dev mode and the distribution.
+            script = """
+                    #!/bin/sh
+                    BASEDIR=$(cd "$(dirname "$0")/.." && pwd)
+                    exec java%s \\
+                      --module-path "$BASEDIR/lib:$BASEDIR/app" \\
+                      --add-modules ALL-MODULE-PATH \\
+                      --module %s \\
+                      "$@"
+                    """.formatted(jvmArgsLine, trampolineRef());
+        } else if (layerMode) {
+            String appMain = appMainProperty();
+            script = """
+                    #!/bin/sh
+                    BASEDIR=$(cd "$(dirname "$0")/.." && pwd)
+                    exec java%s \\
+                      --module-path "$BASEDIR/lib" \\
+                      --add-modules ALL-MODULE-PATH \\
+                      -Dvidocq.app.path="$BASEDIR/app" \\%s
+                      --module io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq \\
+                      "$@"
+                    """.formatted(jvmArgsLine,
+                    appMain == null ? "" : "\n  -Dvidocq.app.main=" + appMain + " \\");
+        } else {
+            script = """
+                    #!/bin/sh
+                    BASEDIR=$(cd "$(dirname "$0")/.." && pwd)
+                    exec java%s \\
+                      --module-path "$BASEDIR/lib" \\
+                      --module %s \\
+                      "$@"
+                    """.formatted(jvmArgsLine, mainClass);
+        }
 
         Path shFile = binDir.resolve(scriptName + ".sh");
         Files.writeString(shFile, script);
@@ -142,17 +198,67 @@ public class VidocqPackageMojo extends AbstractMojo {
     }
 
     private void generateCmdScript(Path binDir) throws IOException {
-        String jvmArgsLine = jvmArgs.isBlank() ? "" : " " + jvmArgs;
-        String script = """
-                @echo off
-                set BASEDIR=%%~dp0..
-                java%s ^
-                  --module-path "%%BASEDIR%%\\lib" ^
-                  --module %s ^
-                  %%*
-                """.formatted(jvmArgsLine, mainClass);
+        String jvmArgsLine = (jvmArgs == null || jvmArgs.isBlank()) ? "" : " " + jvmArgs;
+        String script;
+        if (layerMode && trampolineRef() != null) {
+            script = """
+                    @echo off
+                    set BASEDIR=%%~dp0..
+                    java%s ^
+                      --module-path "%%BASEDIR%%\\lib;%%BASEDIR%%\\app" ^
+                      --add-modules ALL-MODULE-PATH ^
+                      --module %s ^
+                      %%*
+                    """.formatted(jvmArgsLine, trampolineRef());
+        } else if (layerMode) {
+            String appMain = appMainProperty();
+            script = """
+                    @echo off
+                    set BASEDIR=%%~dp0..
+                    java%s ^
+                      --module-path "%%BASEDIR%%\\lib" ^
+                      --add-modules ALL-MODULE-PATH ^
+                      -Dvidocq.app.path="%%BASEDIR%%\\app" ^%s
+                      --module io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq ^
+                      %%*
+                    """.formatted(jvmArgsLine,
+                    appMain == null ? "" : "\n  -Dvidocq.app.main=" + appMain + " ^");
+        } else {
+            script = """
+                    @echo off
+                    set BASEDIR=%%~dp0..
+                    java%s ^
+                      --module-path "%%BASEDIR%%\\lib" ^
+                      --module %s ^
+                      %%*
+                    """.formatted(jvmArgsLine, mainClass);
+        }
 
         Files.writeString(binDir.resolve(scriptName + ".cmd"), script);
+    }
+
+    /**
+     * The {@code module/class} reference of the application trampoline, or {@code null}
+     * when {@link #mainModule} is absent or {@link #mainClass} is the runtime default.
+     */
+    private String trampolineRef() {
+        if (mainModule == null || mainModule.isBlank()) return null;
+        String appMain = appMainProperty();
+        return appMain == null ? null : mainModule + "/" + appMain;
+    }
+
+    /**
+     * The application main class to run through the layer, derived from {@code mainClass}
+     * — {@code null} when it is the runtime's own main (the default) or blank. A legacy
+     * {@code module/class} reference keeps only its class part.
+     */
+    private String appMainProperty() {
+        if (mainClass == null || mainClass.isBlank()
+                || "io.vidocq.runtime.core.Vidocq".equals(mainClass)) {
+            return null;
+        }
+        int slash = mainClass.indexOf('/');
+        return slash >= 0 ? mainClass.substring(slash + 1) : mainClass;
     }
 
     private void createZip(Path sourceDir, Path zipFile) throws IOException {

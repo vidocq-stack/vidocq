@@ -20,14 +20,22 @@
 package io.vidocq.runtime.examples.rest;
 
 import io.vidocq.runtime.core.Vidocq;
-
-import java.io.IOException;
-import java.util.logging.LogManager;
+import io.vidocq.runtime.spi.VidocqApp;
+import io.vidocq.runtime.spi.VidocqMain;
 
 /**
  * Entry point of the example todo-list application — static UI served by
  * Chappe + REST endpoints {@code /api/todos} provided by Cassini, with
  * in-memory storage in a Vauban CDI service.
+ *
+ * <p>The class is a {@link VidocqMain} <b>trampoline</b>: its {@code main} contains
+ * nothing but {@code Vidocq.run(...)}. That is what makes a plain IDE launch
+ * (right-click → Run, everything on the module path) work with no special
+ * configuration — the runtime re-resolves the application into a child module layer
+ * defined by the Vauban class loader, where classes are transformed at definition
+ * (client-proxy weaving), and only then executes {@link #run} <em>inside</em> that
+ * layer. Never put business logic before {@code Vidocq.run(...)}: it would execute in
+ * the wrong class loader, against untransformed classes.
  *
  * <h3>Usage</h3>
  * <pre>{@code
@@ -40,11 +48,17 @@ import java.util.logging.LogManager;
  *   <li>API → {@code http://localhost:8080/api/todos}</li>
  * </ul>
  */
-public class RestExampleApp {
+@VidocqMain
+public class RestExampleApp implements VidocqApp {
 
-    public static void main(String[] args) throws IOException {
-        LogManager.getLogManager().readConfiguration(
-                RestExampleApp.class.getResourceAsStream("/logging.properties"));
-        Vidocq.main(args);
+    static void main(String[] args) {
+        Vidocq.run(RestExampleApp.class, args);
+    }
+
+    @Override
+    public int run(String... args) throws Exception {
+        // Runs after boot, inside the Vauban layer — a server application just blocks.
+        Vidocq.waitForExit();
+        return 0;
     }
 }

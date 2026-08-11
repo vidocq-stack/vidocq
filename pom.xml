@@ -285,6 +285,11 @@
                 <artifactId>vauban-classloader-spi</artifactId>
                 <version>${vauban.version}</version>
             </dependency>
+            <dependency>
+                <groupId>io.vidocq.vauban</groupId>
+                <artifactId>vauban-classloader</artifactId>
+                <version>${vauban.version}</version>
+            </dependency>
 
             <!-- Chappe HTTP server -->
             <dependency>

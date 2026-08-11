@@ -54,6 +54,7 @@ public final class VidocqBootstrap {
     private static final System.Logger LOG = System.getLogger(VidocqBootstrap.class.getName());
 
     private final CountDownLatch shutdownLatch = new CountDownLatch(1);
+    private Thread shutdownHook;
 
     private VidocqConfig config;
     private VidocqConfiguration configuration;
@@ -82,6 +83,12 @@ public final class VidocqBootstrap {
     public VidocqBootstrap configure() {
         LOG.log(System.Logger.Level.INFO, "Vidocq - Configuration phase");
 
+        // Universal-loader mode: embedders that skip Vidocq.main (the CLI boots
+        // in-process) still get the application layer when -Dvidocq.app.path is set —
+        // configuration sources below read through the loader installed here. No-op when
+        // the property is absent or the layer is already in place.
+        VidocqAppLayer.installIfConfigured();
+
         this.config = new VidocqConfigImpl();
         this.configuration = new VidocqConfigurationImpl(config);
         this.extensions = ExtensionLoader.load();
@@ -108,6 +115,16 @@ public final class VidocqBootstrap {
      */
     public VidocqBootstrap start() {
         LOG.log(System.Logger.Level.INFO, "Vidocq - Starting");
+
+        // vauban#24 load-time weaving (IDE builds): must run before ANY extension code —
+        // e.g. Cassini inspects @Path classes in beforeStart, and a bean class loaded
+        // before the weaving agent is attached can no longer gain its (ProxyLink)
+        // constructor. Vauban's container builder re-runs this as a no-op backstop.
+        var weaving = io.vidocq.vauban.core.weaving.LoadTimeWeaving.prepare(
+                Thread.currentThread().getContextClassLoader());
+        if (weaving.failure() != null) {
+            LOG.log(System.Logger.Level.WARNING, weaving.failure());
+        }
 
         // Build CDI container
         VaubanContainerBuilder builder = VaubanContainer.builder()
@@ -145,7 +162,8 @@ public final class VidocqBootstrap {
         }
 
         // Shutdown hook
-        Runtime.getRuntime().addShutdownHook(new Thread(this::shutdown, "vidocq-shutdown"));
+        shutdownHook = new Thread(this::shutdown, "vidocq-shutdown");
+        Runtime.getRuntime().addShutdownHook(shutdownHook);
 
         long elapsed = System.nanoTime() - startTime;
         long ms = elapsed / 1_000_000;
@@ -169,7 +187,31 @@ public final class VidocqBootstrap {
         }
     }
 
+    /**
+     * Waits up to {@code timeoutMillis} for {@link #shutdown()} to complete. Returns
+     * {@code true} when the runtime is down — used by the dev-mode hot-reload loop to
+     * poll for a reload signal while still honouring a normal shutdown.
+     */
+    public boolean awaitShutdown(long timeoutMillis) {
+        try {
+            return shutdownLatch.await(timeoutMillis, java.util.concurrent.TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return true;
+        }
+    }
+
     public void shutdown() {
+        if (shutdownLatch.getCount() == 0) {
+            return; // idempotent — the JVM hook and the reload loop may both call this
+        }
+        if (shutdownHook != null) {
+            try {
+                Runtime.getRuntime().removeShutdownHook(shutdownHook);
+            } catch (IllegalStateException jvmAlreadyShuttingDown) {
+                // called FROM the hook — nothing to deregister
+            }
+        }
         LOG.log(System.Logger.Level.INFO, "Vidocq - Shutting down");
 
         // Stop extensions in reverse order

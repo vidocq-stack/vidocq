@@ -27,6 +27,12 @@
             <groupId>io.vidocq.vauban</groupId>
             <artifactId>vauban-classloader-spi</artifactId>
         </dependency>
+        <dependency>
+            <!-- Universal-loader launch mode: VidocqAppLayer resolves the application
+                 archives into a child module layer defined by the VaubanClassLoader. -->
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-classloader</artifactId>
+        </dependency>
 
         <!--
             Ravel (MicroProfile Config 3.1) est volontairement EXCLU du core.

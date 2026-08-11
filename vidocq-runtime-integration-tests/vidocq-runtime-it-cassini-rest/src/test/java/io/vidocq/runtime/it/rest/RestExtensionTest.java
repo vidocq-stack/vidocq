@@ -55,7 +55,9 @@ class RestExtensionTest {
         return ShrinkWrap.create(JavaArchive.class, "vidocq-rest-it.jar")
                 .addClass(TestResource.class)
                 .addClass(InjectedTestResource.class)
-                .addClass(TestService.class);
+                .addClass(TestService.class)
+                .addClass(ComposedService.class)
+                .addClass(ComposedResource.class);
     }
 
     @Test
@@ -77,6 +79,16 @@ class RestExtensionTest {
         var response = httpGet("/injected");
         assertEquals(200, response.statusCode);
         assertEquals("hello-from-cdi", response.body);
+    }
+
+    @Test
+    void shouldProxyABeanWithOnlyAnInjectConstructor() throws IOException {
+        // Vidocq/vauban#24: ComposedService declares no no-arg constructor and its @Inject
+        // constructor dereferences its parameter. The woven (ProxyLink) entry constructor
+        // makes the client proxy viable without any workaround in the bean.
+        var response = httpGet("/composed");
+        assertEquals(200, response.statusCode);
+        assertEquals("hello-from-cdi-composed", response.body);
     }
 
     @Test

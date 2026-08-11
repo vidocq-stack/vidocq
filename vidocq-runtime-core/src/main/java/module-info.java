@@ -20,6 +20,11 @@
 module io.vidocq.runtime.core {
     requires transitive io.vidocq.runtime.spi;
     requires io.vidocq.vauban.core;
+    // Vidocq.run(Class, args): the VidocqApp callback is resolved as a CDI bean first
+    requires jakarta.cdi;
+    // Universal-loader launch mode (VidocqAppLayer): app archives in a child module
+    // layer defined by the VaubanClassLoader.
+    requires io.vidocq.vauban.classloader;
     requires java.management;
 
     exports io.vidocq.runtime.core;
