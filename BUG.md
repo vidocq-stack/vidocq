@@ -195,3 +195,38 @@ where this whole bug class is invisible.
 - **Investigations** :
   - 2026-07-11 : found while replaying the published tutorials end to end. Options: warn on
     non-linux hosts, document the CI-only expectation, or support --jmods cross-linking.
+
+## BUG-20260815-01 — jlink launcher requires an explicit `exports … to io.vidocq.runtime.core`
+
+- **Date**: 2026-08-15
+- **Status**: OPEN
+- **Affected module**: vidocq-runtime-core / `Vidocq.instantiateInLayer` + `VidocqAppLayer.exportToRuntime`
+- **Symptom**: an application packaged with `vidocq:jlink` and started through the generated
+  launcher fails at boot unless its main package is exported to the runtime by hand. The same
+  application boots under `vidocq:dev` and under surefire without that edge:
+  ```
+  Exception in thread "main" java.lang.IllegalStateException: Application …ExampleApp failed
+  Caused by: java.lang.IllegalAccessException: class io.vidocq.runtime.core.Vidocq
+    cannot access class io.vidocq.experiments.lc4j.ExampleApp … because module
+    io.vidocq.experiments.lc4j does not export io.vidocq.experiments.lc4j to module io.vidocq.runtime.core
+  ```
+- **Minimal repro** (`langchain4jcdi-experiment/langchain4jcdi-example`, commit b0470bc):
+  ```
+  # remove `exports io.vidocq.experiments.lc4j to io.vidocq.runtime.core;` from module-info.java
+  ./mvnw -o -pl langchain4jcdi-example clean package
+  target/dist/…/lc4j-app        # boot failure, trace above
+  ```
+- **Cause hypothesis**: the jlink launcher boots the application module on the **boot layer**.
+  `Vidocq.instantiateInLayer` (`Vidocq.java:149-165`) grants itself reflective access through
+  `VidocqAppLayer.exportToRuntime`, but that method is guarded by
+  `if (layer != null && layerClass.getModule().getLayer() == layer.layer())`
+  (`VidocqAppLayer.java:210-216`) — true only when the class was re-layered into the Vauban
+  application layer. In a jlink image it never is, so the call is a no-op and the export is missing.
+- **Investigations**:
+  - 2026-08-15: found while validating the LangChain4j-CDI integration end to end (task B4 report,
+    section "A third edge the jlink launcher forced"). Worked around application-side with a
+    qualified `exports … to io.vidocq.runtime.core;` — an export suffices, class and constructor
+    are public. The reference `vidocq-runtime-cassini-rest-example` declares no such edge and is
+    likely affected too. Proper fix: make the boot-layer case explicit — either grant the access
+    without the re-layering guard (`addExports` on the boot-layer module) or have `vidocq:jlink`
+    fail loudly with the required directive rather than at run time.
