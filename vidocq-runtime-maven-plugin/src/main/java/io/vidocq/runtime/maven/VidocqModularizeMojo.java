@@ -151,7 +151,7 @@ public class VidocqModularizeMojo extends AbstractMojo {
                 forceExplicit);
         Modularizer.Result result;
         try {
-            result = Modularizer.run(closure, artifactIdByJar, buildDir.toPath(), options, getLog()::info);
+            result = Modularizer.run(closure, artifactIdByJar, buildDir.toPath(), options, this::log);
         } catch (IllegalStateException e) {
             throw new MojoFailureException(e.getMessage(), e);
         } catch (IOException e) {
@@ -177,6 +177,21 @@ public class VidocqModularizeMojo extends AbstractMojo {
         getLog().info("vidocq:modularize — " + result.patched().size() + " jar(s) patched, "
                 + result.skipped().size() + " left as is; report: "
                 + ModularizedJars.root(buildDir.toPath()).resolve("report.txt"));
+    }
+
+    /**
+     * Routes one Modularizer message to the matching Maven level. A dropped {@code uses} or a jar
+     * left automatic is a real warning — it changes what the produced image can do — so it has to
+     * reach the user as one, not as another info line in a wall of jdeps output.
+     */
+    private void log(String message) {
+        if (message.startsWith("WARN ")) {
+            getLog().warn(message.substring(5));
+        } else if (message.startsWith("ERROR ")) {
+            getLog().error(message.substring(6));
+        } else {
+            getLog().info(message);
+        }
     }
 
     /** The licence names declared by the POM of {@code a}, in declaration order. */

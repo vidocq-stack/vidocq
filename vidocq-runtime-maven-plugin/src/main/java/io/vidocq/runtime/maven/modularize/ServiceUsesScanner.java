@@ -26,8 +26,11 @@ import java.lang.classfile.ClassModel;
 import java.lang.classfile.CodeElement;
 import java.lang.classfile.CodeModel;
 import java.lang.classfile.MethodModel;
+import java.lang.classfile.Opcode;
 import java.lang.classfile.instruction.ConstantInstruction;
 import java.lang.classfile.instruction.InvokeInstruction;
+import java.lang.classfile.instruction.ReturnInstruction;
+import java.lang.classfile.instruction.ThrowInstruction;
 import java.lang.constant.ClassDesc;
 import java.lang.constant.MethodTypeDesc;
 import java.nio.file.Path;
@@ -83,6 +86,9 @@ final class ServiceUsesScanner {
 
     /** The parameter type that makes a method a candidate for forwarding a service type. */
     private static final ClassDesc CLASS = ClassDesc.of("java.lang.Class");
+
+    /** Same type, internal form, for the receiver test in {@link #consume}. */
+    private static final String CLASS_INTERNAL = "java/lang/Class";
 
     /** Identity of a method across the closure: owner, name and descriptor. */
     private record MethodKey(String owner, String name, String descriptor) {}
@@ -181,18 +187,21 @@ final class ServiceUsesScanner {
             // `ServiceLoader.load(Foo.class)` compiles to `ldc Foo.class` then `invokestatic`,
             // with any ClassLoader or ModuleLayer argument loaded around it — and that argument is
             // itself regularly a class constant: `ServiceLoader.load(Foo.class,
-            // Util.class.getClassLoader())` pushes two. Keeping only the last would record `Util`
-            // and drop `Foo`, the very service the lookup is for, so every class constant seen
-            // since the previous lookup is a candidate. Superfluous directives are inert; a missing
-            // one is a ServiceConfigurationError.
-            Set<ClassDesc> pending = new HashSet<>();
+            // Util.class.getClassLoader())` pushes two. So the candidates are kept as a stack of
+            // every class constant pushed since the previous lookup, and an intervening call
+            // removes the ones it consumes (see `consume`). Branches are not modelled: a candidate
+            // pushed on one arm can reach a lookup on another. Erring that way is deliberate — a
+            // superfluous directive is dropped by UsesLegality when it is not legal, a missing one
+            // is a ServiceConfigurationError.
+            Deque<ClassDesc> pending = new ArrayDeque<>();
             eachInstruction(method, element -> {
                 if (element instanceof ConstantInstruction ci && ci.constantValue() instanceof ClassDesc cd) {
-                    pending.add(cd);
+                    pending.addLast(cd);
                 } else if (element instanceof InvokeInstruction invoke) {
                     MethodKey key = keyOf(invoke);
                     boolean direct = isServiceLoaderLookup(key);
                     if (!direct && !lookups.contains(key)) {
+                        consume(pending, invoke);
                         return;
                     }
                     for (ClassDesc candidate : pending) {
@@ -216,8 +225,38 @@ final class ServiceUsesScanner {
                     }
                     // Reset per lookup: a constant pushed after this call belongs to the next one.
                     pending.clear();
+                } else if (element instanceof ReturnInstruction || element instanceof ThrowInstruction) {
+                    pending.clear();
                 }
             });
+        }
+    }
+
+    /**
+     * Removes the candidates {@code invoke} consumes: one per {@code Class}-typed parameter, plus
+     * the receiver when the call is an instance method on {@code java.lang.Class}.
+     *
+     * <p>This is what keeps an unrelated constant from drifting into a later lookup —
+     * {@code LoggerFactory.getLogger(Service.class)} earlier in the method eats its own argument
+     * rather than being recorded as a service. It is also why a call that consumes nothing, such
+     * as {@code Thread.currentThread()} in
+     * {@code ServiceLoader.load(Foo.class, Thread.currentThread().getContextClassLoader())}, is
+     * allowed to leave the candidates alone: clearing on every intervening call would lose
+     * {@code Foo}, which is the whole point of the scan.
+     */
+    private static void consume(Deque<ClassDesc> pending, InvokeInstruction invoke) {
+        int consumed = 0;
+        for (ClassDesc parameter : invoke.typeSymbol().parameterList()) {
+            if (CLASS.equals(parameter)) {
+                consumed++;
+            }
+        }
+        // `Util.class.getClassLoader()` / `.getModule()`: the receiver is the constant just pushed.
+        if (invoke.opcode() != Opcode.INVOKESTATIC && CLASS_INTERNAL.equals(invoke.owner().asInternalName())) {
+            consumed++;
+        }
+        while (consumed-- > 0 && !pending.isEmpty()) {
+            pending.pollLast();
         }
     }
 

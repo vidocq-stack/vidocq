@@ -221,7 +221,10 @@ public final class Modularizer {
             demoted.forEach(scannedServices::remove);
             // One extra pass is enough: an automatic module reads every module and exports every
             // package, so demoting a jar only ever relaxes the constraints on the others. No new
-            // drop — and therefore no new demotion — can appear in the second pass.
+            // drop — and therefore no new demotion — can appear in the second pass. What makes that
+            // airtight is that jdeps emits plain `requires` only: no still-patched jar reaches its
+            // exporter *through* a demoted one, so demotion cannot take readability away. Should a
+            // generated descriptor ever carry `requires transitive`, iterate to a fixed point.
             verdict = UsesLegality.of(closure, candidates, moduleNames, descriptors)
                     .check(scannedServices);
         }
@@ -261,12 +264,20 @@ public final class Modularizer {
         List<Path> allSkipped = new ArrayList<>(skipped);
         allSkipped.addAll(demoted);
         for (Path jar : demoted) {
-            UsesLegality.Drop drop = firstPass.firstUnreadableDrop(jar);
+            List<UsesLegality.Drop> blocking = firstPass.unreadableDrops(jar);
             String message = "kept automatic: " + jar.getFileName() + " — ServiceLoader of "
-                    + drop.service() + " from " + moduleNames.get(jar)
+                    + blocking.get(0).service() + " from " + moduleNames.get(jar)
                     + " cannot be declared (module cycle); jlink will reject it, dev mode works";
             report.append('\n').append(message).append('\n');
             log.accept("WARN " + message);
+            // One jar regularly loses several services the same way; naming only the first would
+            // hide how much of its lookup surface the cycle costs.
+            for (UsesLegality.Drop drop : blocking) {
+                String detail = "dropped uses: " + jar.getFileName() + " — " + drop.service()
+                        + " (" + drop.reason() + ")";
+                report.append(detail).append('\n');
+                log.accept("WARN " + detail);
+            }
         }
         for (UsesLegality.Drop drop : verdict.drops()) {
             String message = "dropped uses: " + drop.jar().getFileName() + " — " + drop.service()

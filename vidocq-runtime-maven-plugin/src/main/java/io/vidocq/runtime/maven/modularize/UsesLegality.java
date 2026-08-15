@@ -82,10 +82,10 @@ final class UsesLegality {
             return drops.stream().anyMatch(d -> d.jar().equals(jar) && d.kind() == Kind.UNREADABLE);
         }
 
-        /** The first {@link Kind#UNREADABLE} drop of {@code jar}, for the demotion message. */
-        Drop firstUnreadableDrop(Path jar) {
+        /** Every {@link Kind#UNREADABLE} drop of {@code jar}, in scan order. */
+        List<Drop> unreadableDrops(Path jar) {
             return drops.stream().filter(d -> d.jar().equals(jar) && d.kind() == Kind.UNREADABLE)
-                    .findFirst().orElseThrow();
+                    .toList();
         }
     }
 

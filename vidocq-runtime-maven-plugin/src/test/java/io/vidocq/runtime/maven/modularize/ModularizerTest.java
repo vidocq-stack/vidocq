@@ -476,9 +476,10 @@ class ModularizerTest {
                 import java.util.ServiceLoader;
                 public class Dyn {
                     public Object first(Class<?> type) {
-                        String tag = Class.class.getName();
+                        // Pushed and stored, never consumed by a call: it survives to the lookup.
+                        Class<?> marker = Class.class;
                         Object found = ServiceLoader.load(type).findFirst().orElse(null);
-                        return found == null ? tag : found;
+                        return found == null ? marker : found;
                     }
                 }
                 """));
@@ -492,6 +493,57 @@ class ModularizerTest {
         assertFalse(uses.contains("java.lang.Class"), uses.toString());
         assertFalse(uses.contains("java.lang.Object"), uses.toString());
         assertTrue(result.report().contains("(not a class literal)"), result.report());
+    }
+
+    /**
+     * A class constant consumed by an earlier call must not drift into a later lookup. Before the
+     * consumption rule, {@code LoggerFactory.getLogger(Service.class)} at the top of a method was
+     * recorded as a service of that method's {@code ServiceLoader.load} — an invented directive
+     * that, once legality is enforced, can cost the jar its explicit form for nothing.
+     */
+    @Test
+    void ignoresAClassConstantConsumedByAnEarlierCall() throws IOException {
+        Path logClasses = tmp.resolve("acme-log-classes");
+        TestJars.compileClasses(logClasses, Map.of("com.acme.log.LoggerFactory", """
+                package com.acme.log;
+                public class LoggerFactory {
+                    public static String getLogger(Class<?> owner) { return owner.getName(); }
+                }
+                """));
+        Path logJar = TestJars.jar(tmp.resolve("m2/acme-log-1.0.jar"), logClasses, Map.of(), Map.of());
+
+        Path svcClasses = tmp.resolve("acme-svc-classes");
+        TestJars.compileClasses(svcClasses, Map.of(
+                "com.acme.svc.Spi", "package com.acme.svc; public interface Spi {}",
+                "com.acme.svc.Service", """
+                        package com.acme.svc;
+                        import com.acme.log.LoggerFactory;
+                        import java.util.ServiceLoader;
+                        public class Service {
+                            private static final String LOG = LoggerFactory.getLogger(Service.class);
+                            public Spi first() {
+                                LoggerFactory.getLogger(Service.class);
+                                return ServiceLoader.load(Spi.class).findFirst().orElse(null);
+                            }
+                            public String log() { return LOG; }
+                        }
+                        """), logJar);
+        Path svcJar = TestJars.jar(tmp.resolve("m2/acme-svc-1.0.jar"), svcClasses, Map.of(), Map.of());
+        Path buildDir = tmp.resolve("target");
+        List<String> log = new ArrayList<>();
+
+        Modularizer.Result result = Modularizer.run(List.of(svcJar, logJar),
+                Map.of(svcJar, "acme-svc", logJar, "acme-log"), buildDir, defaults(), log::add);
+
+        Path svc = ModularizedJars.root(buildDir).resolve("acme-svc-1.0.jar");
+        assertEquals(Set.of("com.acme.svc.Spi"), usesOf(svc),
+                "only the service type may be declared, not the logger's argument");
+        // Nothing invented means nothing to drop, and so no reason to demote either jar.
+        assertEquals(2, result.patched().size(), result.report());
+        assertFalse(result.report().contains("kept automatic"), result.report());
+        // ModiTect's own jdeps chatter also comes through the log, so only our warnings count.
+        assertTrue(log.stream().noneMatch(l -> l.startsWith("WARN dropped uses:")
+                || l.startsWith("WARN kept automatic:")), log.toString());
     }
 
     @Test
