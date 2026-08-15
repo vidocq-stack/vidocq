@@ -144,6 +144,10 @@ public final class Modularizer {
         for (Path jar : closure) {
             deps.add(new DependencyDescriptor(jar, false, null));
         }
+        // Built once over the whole closure: a service-lookup helper is regularly in another jar
+        // than the code that names the service type (langchain4j-core's ServiceHelper, called
+        // from langchain4j), so the call graph has to be closure-wide to be seen whole.
+        ServiceUsesScanner usesScanner = ServiceUsesScanner.over(closure);
         StringBuilder report = new StringBuilder("# vidocq:modularize report\n");
         List<Path> patched = new ArrayList<>();
         Log mlog = new ConsumerLog(log);
@@ -164,10 +168,18 @@ public final class Modularizer {
                         options.openModules() ? List.of() : PackageNamePattern.parsePatterns("*;"),
                         DependencePattern.parsePatterns("*;"),           // keep every jdeps requires
                         workDir, genDir, Set.of(), Set.of(), Set.of(),
-                        false,                                            // addServiceUses
+                        // addServiceUses stays false: ModiTect's own scanner runs on a shaded ASM
+                        // that rejects any class file newer than it knows ("Unsupported class file
+                        // major version 69"), which would break modularize on every jar built with
+                        // a recent JDK. The `uses` directives are appended below instead, scanned
+                        // with the JDK Class-File API — see ServiceUsesScanner.
+                        false,
                         List.of("--multi-release", options.release(), "--ignore-missing-deps"),
                         mlog).run();
-                source = Files.readString(gen.getPath());
+                // An automatic module may consume any service; an explicit one may only consume
+                // what it declares. Without these directives the very jar we just promoted fails
+                // its own lookup with "module … does not declare 'uses'".
+                source = withUses(Files.readString(gen.getPath()), usesScanner.scan(info.jar()));
                 // `base` keeps module-info.class at the jar root. Passing a JVM version instead
                 // would hide the descriptor under META-INF/versions/<n> and stamp the jar
                 // `Multi-Release: true` — a gratuitous change of shape for a jar that has none.
@@ -194,6 +206,28 @@ public final class Modularizer {
         }
         Files.writeString(outDir.resolve(REPORT_FILE_NAME), report.toString());
         return new Result(patched, skipped, report.toString());
+    }
+
+    /**
+     * Inserts one {@code uses <service>;} line per scanned service into the body of the
+     * ModiTect-generated descriptor source, just before its closing brace.
+     *
+     * @return {@code source} unchanged when there is nothing to add
+     */
+    private static String withUses(String source, Set<String> services) {
+        if (services.isEmpty()) {
+            return source;
+        }
+        int close = source.lastIndexOf('}');
+        if (close < 0) {
+            // Not a body we recognise; a malformed descriptor is ModiTect's to report, not ours.
+            return source;
+        }
+        StringBuilder sb = new StringBuilder(source.substring(0, close));
+        for (String service : services) {
+            sb.append("    uses ").append(service).append(";\n");
+        }
+        return sb.append(source.substring(close)).toString();
     }
 
     /**

@@ -110,6 +110,15 @@ package, and `jlink` refuses to link it. This goal patches a copy of it with a g
 `provides`, `open module` by default) into `target/vidocq-modularized/`, under the **original file
 name**.
 
+The descriptor also carries `uses` directives, scanned off the bytecode of the whole dependency
+closure with the JDK Class-File API. They are not optional: an automatic module may consume any
+service, an explicit one may only consume what it declares, so a jar promoted without them fails
+its own `ServiceLoader.load` with *"module … does not declare `uses`"*. Lookups written through a
+helper that takes the service type as a `Class` parameter are followed across jars, since it is the
+module reaching `ServiceLoader` — not the one naming the service — that must declare the directive.
+A service type passed as a variable rather than a class literal cannot be seen by any bytecode
+scan; declare that one by hand.
+
 Nothing is installed, deployed or redistributed: the copies live in `target/` and only this build
 sees them. `vidocq:dev`, `vidocq:jlink` and `vidocq:package` resolve every dependency through that
 directory first, so a patched copy transparently replaces the original jar on the module path, in

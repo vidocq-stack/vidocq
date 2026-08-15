@@ -37,14 +37,40 @@ final class TestJars {
 
     /** Compiles {@code source} (a full compilation unit) into {@code classesDir}. */
     static void compileClass(Path classesDir, String fqcn, String source) throws IOException {
-        Path src = classesDir.resolveSibling(classesDir.getFileName() + "-src")
-                .resolve(fqcn.replace('.', '/') + ".java");
-        Files.createDirectories(src.getParent());
-        Files.writeString(src, source);
+        compileClasses(classesDir, Map.of(fqcn, source));
+    }
+
+    /**
+     * Compiles several compilation units ({@code fqcn} → source) into {@code classesDir} in a
+     * single javac invocation, so they may reference each other.
+     */
+    static void compileClasses(Path classesDir, Map<String, String> sources) throws IOException {
+        compileClasses(classesDir, sources, null);
+    }
+
+    /** Same, compiled against {@code classpath} (a jar or directory, {@code null} for none). */
+    static void compileClasses(Path classesDir, Map<String, String> sources, Path classpath) throws IOException {
+        Path srcRoot = classesDir.resolveSibling(classesDir.getFileName() + "-src");
+        String[] args = new String[(classpath == null ? 4 : 6) + sources.size()];
+        args[0] = "-d";
+        args[1] = classesDir.toString();
+        args[2] = "--release";
+        args[3] = "25";
+        int i = 4;
+        if (classpath != null) {
+            args[i++] = "-classpath";
+            args[i++] = classpath.toString();
+        }
+        for (var e : sources.entrySet()) {
+            Path src = srcRoot.resolve(e.getKey().replace('.', '/') + ".java");
+            Files.createDirectories(src.getParent());
+            Files.writeString(src, e.getValue());
+            args[i++] = src.toString();
+        }
         Files.createDirectories(classesDir);
         var javac = ToolProvider.getSystemJavaCompiler();
-        int rc = javac.run(null, null, null, "-d", classesDir.toString(), "--release", "25", src.toString());
-        if (rc != 0) throw new IllegalStateException("javac failed for " + fqcn);
+        int rc = javac.run(null, null, null, args);
+        if (rc != 0) throw new IllegalStateException("javac failed for " + sources.keySet());
     }
 
     /** Packs {@code classesDir} (+ optional text entries) into a jar with the given manifest attributes. */
