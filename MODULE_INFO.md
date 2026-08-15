@@ -119,6 +119,41 @@ module reaching `ServiceLoader` — not the one naming the service — that must
 A service type passed as a variable rather than a class literal cannot be seen by any bytecode
 scan; declare that one by hand.
 
+Only the directives the module system will accept are emitted. A `uses` is not a hint: the JVM
+rejects the whole graph at resolution time with *"Module M uses S but does not read a module that
+exports P to M"*, so a directive that cannot be satisfied trades one broken lookup for a runtime
+that does not start at all. A scanned service is kept only when its type resolves to a package of
+the closure or of the JDK, **and** the declaring module can read the module exporting it (following
+`requires` and the transitive closure of `requires transitive`). Everything else is dropped, listed
+in `report.txt` and logged as a `WARN` naming the jar, the service and the reason — `not in
+closure`, `caller <m> cannot read <exporter>`, or `not a class literal`.
+
+### Why some jars stay automatic
+
+A jar whose own code reaches `ServiceLoader` for a type defined in a jar that depends on it has
+**no legal explicit form at all**. LangChain4j is the textbook case: `langchain4j-core` ships a
+generic `ServiceHelper.loadFactories(Class)`, and `langchain4j` calls it with types from its own
+packages. `ServiceLoader` checks the *calling* class's module, so the JVM demands
+`uses dev.langchain4j.spi.services.AiServiceContextFactory` on `langchain4j.core` — but that package
+belongs to `langchain4j`, which already `requires langchain4j.core`. Declaring it would need a
+`requires` back, and JPMS has no cycles. No descriptor satisfies both constraints.
+
+Such a jar is therefore **left automatic** rather than patched into a graph that cannot resolve, and
+the build warns:
+
+```
+kept automatic: langchain4j-core-1.17.1.jar — ServiceLoader of dev.langchain4j.http.client.HttpClientBuilderFactory
+  from langchain4j.core cannot be declared (module cycle); jlink will reject it, dev mode works
+```
+
+Automatic modules work on the module path, so `vidocq:dev` and a plain `--module-path` run are
+unaffected; only `jlink` refuses them, and an application depending on such a library cannot be
+linked into an image until the situation changes. The ways out are upstream (each caller doing its
+own `ServiceLoader.load`, or the library shipping a hand-written `module-info`) — or, in a future
+version of this goal, merging the mutually-dependent jars into a single module, which is the only
+shape the cycle admits. Set `vidocq.modularize.forceExplicit` to patch the jar anyway (the illegal
+directives stay dropped) when you know the failing lookup is one your application never reaches.
+
 Nothing is installed, deployed or redistributed: the copies live in `target/` and only this build
 sees them. `vidocq:dev`, `vidocq:jlink` and `vidocq:package` resolve every dependency through that
 directory first, so a patched copy transparently replaces the original jar on the module path, in
@@ -221,6 +256,7 @@ gate is off — nothing is redistributed by the goal itself.
 | `<includes>` / `<excludes>` | empty | Restrict patching to / away from these `artifactId`s. Both only ever *restrict*: an explicit module named in `<includes>` still stays untouched. |
 | `vidocq.modularize.open` (`<openModules>`) | `true` | Generate `open module` descriptors (a reflective library keeps working). `false` generates a closed module that `exports` every package. |
 | `<release>` | `${maven.compiler.release}` (else `25`) | JDK release `jdeps` analyses multi-release jars against. |
+| `vidocq.modularize.forceExplicit` (`<forceExplicit>`) | `false` | Patch a jar even when one of its own `ServiceLoader` lookups cannot be declared legally — see *Why some jars stay automatic*. The illegal directives are dropped either way. |
 
 ### Dev mode needs an earlier binding
 

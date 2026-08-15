@@ -52,7 +52,7 @@ class ModularizerTest {
     }
 
     private static Modularizer.Options defaults() {
-        return new Modularizer.Options(Modularizer.Mode.DERIVED, Set.of(), Set.of(), Map.of(), true, "25");
+        return new Modularizer.Options(Modularizer.Mode.DERIVED, Set.of(), Set.of(), Map.of(), true, "25", false);
     }
 
     @Test
@@ -103,7 +103,7 @@ class ModularizerTest {
         Path jar = TestJars.jar(tmp.resolve("m2/acme-named2-1.0.jar"), classes,
                 Map.of("Automatic-Module-Name", "org.acme.named2"), Map.of());
         Path buildDir = tmp.resolve("target");
-        var opts = new Modularizer.Options(Modularizer.Mode.ALL_AUTOMATIC, Set.of(), Set.of(), Map.of(), true, "25");
+        var opts = new Modularizer.Options(Modularizer.Mode.ALL_AUTOMATIC, Set.of(), Set.of(), Map.of(), true, "25", false);
 
         Modularizer.Result result = Modularizer.run(List.of(jar), Map.of(jar, "acme-named2"), buildDir, opts, s -> {});
 
@@ -118,7 +118,7 @@ class ModularizerTest {
         Path jar = plainJar("acme-thing-2.0.jar", "com.acme.thing", "T", Map.of());
         Path buildDir = tmp.resolve("target");
         var opts = new Modularizer.Options(Modularizer.Mode.DERIVED, Set.of(), Set.of(),
-                Map.of("acme-thing", "com.acme.thing"), true, "25");
+                Map.of("acme-thing", "com.acme.thing"), true, "25", false);
 
         Modularizer.Result result = Modularizer.run(List.of(jar), Map.of(jar, "acme-thing"), buildDir, opts, s -> {});
 
@@ -151,7 +151,7 @@ class ModularizerTest {
         Path explicit = explicitJar("acme-explicit-1.0.jar", "com.acme.explicit", "com.acme.explicit", "E");
         Path buildDir = tmp.resolve("target");
         var opts = new Modularizer.Options(Modularizer.Mode.DERIVED,
-                Set.of("acme-wanted", "acme-explicit"), Set.of(), Map.of(), true, "25");
+                Set.of("acme-wanted", "acme-explicit"), Set.of(), Map.of(), true, "25", false);
 
         Modularizer.Result result = Modularizer.run(List.of(wanted, other, explicit),
                 Map.of(wanted, "acme-wanted", other, "acme-other", explicit, "acme-explicit"),
@@ -168,7 +168,7 @@ class ModularizerTest {
         Path b = plainJar("acme-drop-1.0.jar", "com.acme.drop", "D", Map.of());
         Path buildDir = tmp.resolve("target");
         var opts = new Modularizer.Options(Modularizer.Mode.DERIVED, Set.of(), Set.of("acme-drop"),
-                Map.of(), true, "25");
+                Map.of(), true, "25", false);
 
         Modularizer.Result result = Modularizer.run(List.of(a, b), Map.of(a, "acme-keep", b, "acme-drop"),
                 buildDir, opts, s -> {});
@@ -320,33 +320,35 @@ class ModularizerTest {
     }
 
     /**
-     * The langchain4j shape exactly: the lookup helper ships in one jar and its callers in
-     * another, so the call graph is only whole across the closure.
+     * Cross-jar propagation when it is legal: the helper and the service type ship in the same
+     * jar, and the caller reads it. Both descriptors may then declare the directive — the helper's
+     * because the package is its own, the caller's because it requires the helper.
      */
     @Test
-    void emitsUsesWhenTheLookupHelperLivesInAnotherJarOfTheClosure() throws IOException {
+    void emitsUsesInBothJarsWhenTheLookupHelperLivesInAnotherJarOfTheClosure() throws IOException {
         Path helperClasses = tmp.resolve("acme-lib-classes");
-        TestJars.compileClasses(helperClasses, Map.of("com.acme.lib.Loader", """
-                package com.acme.lib;
-                import java.util.ServiceLoader;
-                public class Loader {
-                    public static <T> T load(Class<T> type) {
-                        return ServiceLoader.load(type).findFirst().orElse(null);
-                    }
-                }
-                """));
+        TestJars.compileClasses(helperClasses, Map.of(
+                "com.acme.lib.LibSpi", "package com.acme.lib; public interface LibSpi {}",
+                "com.acme.lib.Loader", """
+                        package com.acme.lib;
+                        import java.util.ServiceLoader;
+                        public class Loader {
+                            public static <T> T load(Class<T> type) {
+                                return ServiceLoader.load(type).findFirst().orElse(null);
+                            }
+                        }
+                        """));
         Path helperJar = TestJars.jar(tmp.resolve("m2/acme-lib-1.0.jar"), helperClasses, Map.of(), Map.of());
 
         Path appClasses = tmp.resolve("acme-app-classes");
-        TestJars.compileClasses(appClasses, Map.of(
-                "com.acme.app.AppSpi", "package com.acme.app; public interface AppSpi {}",
-                "com.acme.app.App", """
-                        package com.acme.app;
-                        import com.acme.lib.Loader;
-                        public class App {
-                            public AppSpi get() { return Loader.load(AppSpi.class); }
-                        }
-                        """), helperJar);
+        TestJars.compileClasses(appClasses, Map.of("com.acme.app.App", """
+                package com.acme.app;
+                import com.acme.lib.LibSpi;
+                import com.acme.lib.Loader;
+                public class App {
+                    public LibSpi get() { return Loader.load(LibSpi.class); }
+                }
+                """), helperJar);
         Path appJar = TestJars.jar(tmp.resolve("m2/acme-app-1.0.jar"), appClasses, Map.of(), Map.of());
         Path buildDir = tmp.resolve("target");
 
@@ -355,18 +357,141 @@ class ModularizerTest {
 
         Path app = ModularizedJars.root(buildDir).resolve("acme-app-1.0.jar");
         Path lib = ModularizedJars.root(buildDir).resolve("acme-lib-1.0.jar");
-        assertTrue(result.patched().containsAll(List.of(app, lib)));
-        assertTrue(usesOf(app).contains("com.acme.app.AppSpi"),
+        assertTrue(result.patched().containsAll(List.of(app, lib)), result.patched().toString());
+        assertTrue(usesOf(app).contains("com.acme.lib.LibSpi"),
                 "a helper in another jar of the closure must still be recognised, was " + usesOf(app));
-        // The one that actually matters: ServiceLoader checks its immediate caller's module, and
-        // that is the helper's — com.acme.lib — not the module naming the service type.
-        assertTrue(usesOf(lib).contains("com.acme.app.AppSpi"),
+        // The one that actually matters at run time: ServiceLoader checks its immediate caller's
+        // module, and that is the helper's — com.acme.lib — not the module naming the service type.
+        assertTrue(usesOf(lib).contains("com.acme.lib.LibSpi"),
                 "the jar reaching ServiceLoader must declare the service, was " + usesOf(lib));
     }
 
     /** The {@code uses} directives of the module packaged in {@code jar}. */
     private static Set<String> usesOf(Path jar) {
         return ModuleFinder.of(jar).findAll().iterator().next().descriptor().uses();
+    }
+
+    /**
+     * A `uses` on a type the resolved graph does not contain is a hard resolution error, so a
+     * service whose package is in no jar of the closure is dropped — but the jar is still patched.
+     */
+    @Test
+    void dropsAndReportsAUsesOfATypeOutsideTheClosure() throws IOException {
+        Path outside = tmp.resolve("outside-classes");
+        TestJars.compileClasses(outside, Map.of("org.outside.External",
+                "package org.outside; public interface External {}"));
+        Path classes = tmp.resolve("acme-lonely-classes");
+        TestJars.compileClasses(classes, Map.of("com.acme.lonely.Consumer", """
+                package com.acme.lonely;
+                import java.util.ServiceLoader;
+                import org.outside.External;
+                public class Consumer {
+                    public External first() {
+                        return ServiceLoader.load(External.class).findFirst().orElse(null);
+                    }
+                }
+                """), outside);
+        // org.outside is compiled against but never packaged: it is outside the closure.
+        Path jar = TestJars.jar(tmp.resolve("m2/acme-lonely-1.0.jar"), classes, Map.of(), Map.of());
+        Path buildDir = tmp.resolve("target");
+        List<String> log = new ArrayList<>();
+
+        Modularizer.Result result = Modularizer.run(List.of(jar), Map.of(jar, "acme-lonely"),
+                buildDir, defaults(), log::add);
+
+        assertEquals(1, result.patched().size(), "an unresolvable service must not cost the patch");
+        assertFalse(usesOf(result.patched().get(0)).contains("org.outside.External"));
+        assertTrue(result.report().contains(
+                "dropped uses: acme-lonely-1.0.jar — org.outside.External (not in closure)"),
+                result.report());
+        assertTrue(log.stream().anyMatch(l -> l.startsWith("WARN dropped uses:")), log.toString());
+    }
+
+    /**
+     * The langchain4j wall. A generic helper reaches {@code ServiceLoader} for a type defined in
+     * the jar that calls it, so the JVM demands a {@code uses} on the helper's module — which
+     * would need a {@code requires} back, and JPMS has no cycles. The helper jar has no legal
+     * explicit form, so it is left automatic instead of being patched into a graph that
+     * cannot resolve.
+     */
+    @Test
+    void keepsAJarAutomaticWhenItsOwnLookupCannotBeDeclaredLegally() throws IOException {
+        Path helperClasses = tmp.resolve("acme-helper2-classes");
+        TestJars.compileClasses(helperClasses, Map.of("com.acme.helper2.Helper", """
+                package com.acme.helper2;
+                import java.util.ServiceLoader;
+                public class Helper {
+                    public static <T> T load(Class<T> type) {
+                        return ServiceLoader.load(type).findFirst().orElse(null);
+                    }
+                }
+                """));
+        Path helperJar = TestJars.jar(tmp.resolve("m2/acme-helper2-1.0.jar"), helperClasses,
+                Map.of(), Map.of());
+        Path userClasses = tmp.resolve("acme-user-classes");
+        TestJars.compileClasses(userClasses, Map.of(
+                "com.acme.user.Spi", "package com.acme.user; public interface Spi {}",
+                "com.acme.user.Caller", """
+                        package com.acme.user;
+                        import com.acme.helper2.Helper;
+                        public class Caller {
+                            public Spi get() { return Helper.load(Spi.class); }
+                        }
+                        """), helperJar);
+        Path userJar = TestJars.jar(tmp.resolve("m2/acme-user-1.0.jar"), userClasses, Map.of(), Map.of());
+        Map<Path, String> ids = Map.of(helperJar, "acme-helper2", userJar, "acme-user");
+        Path buildDir = tmp.resolve("target");
+        List<String> log = new ArrayList<>();
+
+        Modularizer.Result result = Modularizer.run(List.of(helperJar, userJar), ids,
+                buildDir, defaults(), log::add);
+
+        Path patchedUser = ModularizedJars.root(buildDir).resolve("acme-user-1.0.jar");
+        assertEquals(List.of(patchedUser), result.patched());
+        assertTrue(result.skipped().contains(helperJar), "the helper jar must stay automatic");
+        // The naming jar can declare it — the package is its own — and still does.
+        assertTrue(usesOf(patchedUser).contains("com.acme.user.Spi"), usesOf(patchedUser).toString());
+        assertTrue(result.report().contains("kept automatic: acme-helper2-1.0.jar"), result.report());
+        assertTrue(log.stream().anyMatch(l -> l.startsWith("WARN kept automatic:")), log.toString());
+
+        // forceExplicit patches it anyway, still without the directive it cannot declare.
+        Path forcedBuildDir = tmp.resolve("target-forced");
+        var forced = new Modularizer.Options(Modularizer.Mode.DERIVED, Set.of(), Set.of(),
+                Map.of(), true, "25", true);
+        Modularizer.Result forcedResult = Modularizer.run(List.of(helperJar, userJar), ids,
+                forcedBuildDir, forced, s -> {});
+
+        Path patchedHelper = ModularizedJars.root(forcedBuildDir).resolve("acme-helper2-1.0.jar");
+        assertTrue(forcedResult.patched().contains(patchedHelper));
+        assertFalse(usesOf(patchedHelper).contains("com.acme.user.Spi"),
+                "an illegal directive stays dropped even under forceExplicit");
+    }
+
+    /** {@code ServiceLoader.load(variable)} must never be turned into {@code uses java.lang.Class}. */
+    @Test
+    void neverEmitsUsesForJavaLangClass() throws IOException {
+        Path classes = tmp.resolve("acme-dyn-classes");
+        TestJars.compileClasses(classes, Map.of("com.acme.dyn.Dyn", """
+                package com.acme.dyn;
+                import java.util.ServiceLoader;
+                public class Dyn {
+                    public Object first(Class<?> type) {
+                        String tag = Class.class.getName();
+                        Object found = ServiceLoader.load(type).findFirst().orElse(null);
+                        return found == null ? tag : found;
+                    }
+                }
+                """));
+        Path jar = TestJars.jar(tmp.resolve("m2/acme-dyn-1.0.jar"), classes, Map.of(), Map.of());
+        Path buildDir = tmp.resolve("target");
+
+        Modularizer.Result result = Modularizer.run(List.of(jar), Map.of(jar, "acme-dyn"),
+                buildDir, defaults(), s -> {});
+
+        Set<String> uses = usesOf(result.patched().get(0));
+        assertFalse(uses.contains("java.lang.Class"), uses.toString());
+        assertFalse(uses.contains("java.lang.Object"), uses.toString());
+        assertTrue(result.report().contains("(not a class literal)"), result.report());
     }
 
     @Test

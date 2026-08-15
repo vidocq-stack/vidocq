@@ -111,6 +111,13 @@ public class VidocqModularizeMojo extends AbstractMojo {
     @Parameter(defaultValue = "${maven.compiler.release}")
     private String release;
 
+    /**
+     * Patch a jar even when its own {@code ServiceLoader} lookups cannot be declared legally.
+     * By default such a jar is left automatic, because no legal explicit descriptor exists for it.
+     */
+    @Parameter(property = "vidocq.modularize.forceExplicit", defaultValue = "false")
+    private boolean forceExplicit;
+
     /** Optional licence allow-list; empty (the default) leaves the gate off. */
     @Parameter
     private List<String> allowedLicenses;
@@ -140,7 +147,8 @@ public class VidocqModularizeMojo extends AbstractMojo {
                 new HashSet<>(excludes == null ? List.of() : excludes),
                 moduleNames == null ? Map.of() : moduleNames,
                 openModules,
-                release == null || release.isBlank() ? "25" : release);
+                release == null || release.isBlank() ? "25" : release,
+                forceExplicit);
         Modularizer.Result result;
         try {
             result = Modularizer.run(closure, artifactIdByJar, buildDir.toPath(), options, getLog()::info);

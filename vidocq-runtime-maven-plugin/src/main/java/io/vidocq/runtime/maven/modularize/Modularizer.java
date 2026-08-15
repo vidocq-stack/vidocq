@@ -36,6 +36,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -61,9 +62,16 @@ public final class Modularizer {
         ALL_AUTOMATIC
     }
 
-    /** Tuning knobs, all mirrored 1:1 by the mojo parameters. */
+    /**
+     * Tuning knobs, all mirrored 1:1 by the mojo parameters.
+     *
+     * @param forceExplicit patch a jar even when its own {@code ServiceLoader} lookups cannot be
+     *                      declared legally (the illegal directives are dropped either way). Off by
+     *                      default: such a jar has no working explicit form — see {@link UsesLegality}.
+     */
     public record Options(Mode mode, Set<String> includeArtifactIds, Set<String> excludeArtifactIds,
-                          Map<String, String> moduleNames, boolean openModules, String release) {}
+                          Map<String, String> moduleNames, boolean openModules, String release,
+                          boolean forceExplicit) {}
 
     /** What was patched, what was left alone, and a human-readable report. */
     public record Result(List<Path> patched, List<Path> skipped, String report) {}
@@ -133,7 +141,7 @@ public final class Modularizer {
         // 4. split-package guard over the automatic part of the closure
         assertNoSplitPackage(infos);
 
-        // 5. patch
+        // 5. generate every candidate descriptor, before writing any of them
         // ModiTect recreates <dir>/<moduleName> under both of these, so neither may be outDir:
         // the modularized directory is handed to the JVM as a module path and must hold jars only.
         Path scratch = buildDir.resolve("vidocq-modularize-work");
@@ -151,13 +159,14 @@ public final class Modularizer {
         ServiceUsesScanner usesScanner = selected.isEmpty()
                 ? ServiceUsesScanner.over(List.of())
                 : ServiceUsesScanner.over(closure);
-        StringBuilder report = new StringBuilder("# vidocq:modularize report\n");
-        List<Path> patched = new ArrayList<>();
         Log mlog = new ConsumerLog(log);
+        Map<Path, JarModuleInfo> infoByJar = new LinkedHashMap<>();
+        Map<Path, String> moduleNames = new LinkedHashMap<>();
+        Map<Path, String> descriptors = new LinkedHashMap<>();
+        Map<Path, Set<String>> scannedServices = new LinkedHashMap<>();
         for (JarModuleInfo info : selected) {
             String artifactId = artifactIdOf(artifactIdByJar, info.jar());
             String name = options.moduleNames().getOrDefault(artifactId, info.moduleName());
-            String source;
             try {
                 GeneratedModuleInfo gen = new GenerateModuleInfo(
                         info.jar(), name, options.openModules(), deps,
@@ -179,36 +188,97 @@ public final class Modularizer {
                         false,
                         List.of("--multi-release", options.release(), "--ignore-missing-deps"),
                         mlog).run();
-                // An automatic module may consume any service; an explicit one may only consume
-                // what it declares. Without these directives the very jar we just promoted fails
-                // its own lookup with "module … does not declare 'uses'".
-                source = withUses(Files.readString(gen.getPath()), usesScanner.scan(info.jar()));
-                // `base` keeps module-info.class at the jar root. Passing a JVM version instead
-                // would hide the descriptor under META-INF/versions/<n> and stamp the jar
-                // `Multi-Release: true` — a gratuitous change of shape for a jar that has none.
-                // `release` stays what it is: the JDK level jdeps analyses against.
-                new AddModuleInfo(source, null, versionOf(info.jar()), info.jar(), outDir,
-                        "base", true, Instant.EPOCH).run();
+                descriptors.put(info.jar(), Files.readString(gen.getPath()));
             } catch (RuntimeException e) {
                 // ModiTect reports every jdeps and compilation failure as an unchecked
                 // exception naming nothing; `run` promises IOException, so name the jar.
                 throw new IOException("vidocq:modularize — jdeps/ModiTect failed for "
                         + info.jar().getFileName() + ": " + e.getMessage(), e);
             }
-            Path out = outDir.resolve(info.jar().getFileName().toString());
+            infoByJar.put(info.jar(), info);
+            moduleNames.put(info.jar(), name);
+            scannedServices.put(info.jar(), usesScanner.scan(info.jar()));
+        }
+
+        // 6. keep only the `uses` the module system will accept, and demote the jars that have
+        //    none they can legally declare. Which jars end up explicit changes what the others may
+        //    declare, so the whole set has to be analysed before anything is written.
+        Set<Path> candidates = new LinkedHashSet<>(descriptors.keySet());
+        UsesLegality.Verdict verdict =
+                UsesLegality.of(closure, candidates, moduleNames, descriptors).check(scannedServices);
+        // Kept for the demotion messages: the second pass no longer analyses the demoted jars.
+        UsesLegality.Verdict firstPass = verdict;
+        List<Path> demoted = new ArrayList<>();
+        if (!options.forceExplicit()) {
+            for (Path jar : candidates) {
+                if (verdict.hasUnreadableDrop(jar)) {
+                    demoted.add(jar);
+                }
+            }
+        }
+        if (!demoted.isEmpty()) {
+            candidates.removeAll(demoted);
+            demoted.forEach(scannedServices::remove);
+            // One extra pass is enough: an automatic module reads every module and exports every
+            // package, so demoting a jar only ever relaxes the constraints on the others. No new
+            // drop — and therefore no new demotion — can appear in the second pass.
+            verdict = UsesLegality.of(closure, candidates, moduleNames, descriptors)
+                    .check(scannedServices);
+        }
+
+        // 7. write the survivors
+        StringBuilder report = new StringBuilder("# vidocq:modularize report\n");
+        List<Path> patched = new ArrayList<>();
+        for (Path jar : candidates) {
+            JarModuleInfo info = infoByJar.get(jar);
+            String name = moduleNames.get(jar);
+            // An automatic module may consume any service; an explicit one may only consume what
+            // it declares. Without these directives the very jar we just promoted fails its own
+            // lookup with "module … does not declare 'uses'".
+            String source = withUses(descriptors.get(jar), verdict.legal().getOrDefault(jar, Set.of()));
+            try {
+                // `base` keeps module-info.class at the jar root. Passing a JVM version instead
+                // would hide the descriptor under META-INF/versions/<n> and stamp the jar
+                // `Multi-Release: true` — a gratuitous change of shape for a jar that has none.
+                // `release` stays what it is: the JDK level jdeps analyses against.
+                new AddModuleInfo(source, null, versionOf(jar), jar, outDir,
+                        "base", true, Instant.EPOCH).run();
+            } catch (RuntimeException e) {
+                throw new IOException("vidocq:modularize — ModiTect failed for "
+                        + jar.getFileName() + ": " + e.getMessage(), e);
+            }
+            Path out = outDir.resolve(jar.getFileName().toString());
             if (!Files.isRegularFile(out)) {
                 throw new IOException("ModiTect did not produce " + out);
             }
             patched.add(out);
-            report.append("\n## ").append(info.jar().getFileName()).append(" → module ").append(name)
+            report.append("\n## ").append(jar.getFileName()).append(" → module ").append(name)
                     .append(" (").append(info.kind()).append(")\n").append(source).append('\n');
-            log.accept("modularized " + info.jar().getFileName() + " as " + name);
+            log.accept("modularized " + jar.getFileName() + " as " + name);
+        }
+
+        // 8. account for everything that was left alone, with the reason when there is one
+        List<Path> allSkipped = new ArrayList<>(skipped);
+        allSkipped.addAll(demoted);
+        for (Path jar : demoted) {
+            UsesLegality.Drop drop = firstPass.firstUnreadableDrop(jar);
+            String message = "kept automatic: " + jar.getFileName() + " — ServiceLoader of "
+                    + drop.service() + " from " + moduleNames.get(jar)
+                    + " cannot be declared (module cycle); jlink will reject it, dev mode works";
+            report.append('\n').append(message).append('\n');
+            log.accept("WARN " + message);
+        }
+        for (UsesLegality.Drop drop : verdict.drops()) {
+            String message = "dropped uses: " + drop.jar().getFileName() + " — " + drop.service()
+                    + " (" + drop.reason() + ")";
+            report.append('\n').append(message).append('\n');
+            log.accept("WARN " + message);
         }
         for (Path s : skipped) {
             report.append("\nskipped: ").append(s.getFileName()).append('\n');
         }
         Files.writeString(outDir.resolve(REPORT_FILE_NAME), report.toString());
-        return new Result(patched, skipped, report.toString());
+        return new Result(patched, allSkipped, report.toString());
     }
 
     /**
