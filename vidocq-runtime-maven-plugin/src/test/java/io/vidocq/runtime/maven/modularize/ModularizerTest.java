@@ -1,0 +1,142 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.runtime.maven.modularize;
+
+import io.vidocq.runtime.maven.ModularizedJars;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import java.io.IOException;
+import java.lang.module.ModuleDescriptor;
+import java.lang.module.ModuleFinder;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+class ModularizerTest {
+
+    @TempDir
+    Path tmp;
+
+    private Path plainJar(String fileName, String pkg, String cls, Map<String, String> services) throws IOException {
+        Path classes = tmp.resolve(fileName + "-classes");
+        TestJars.compileClass(classes, pkg + "." + cls,
+                "package " + pkg + "; public class " + cls + " {}");
+        return TestJars.jar(tmp.resolve("m2").resolve(fileName), classes, Map.of(), services);
+    }
+
+    private static Modularizer.Options defaults() {
+        return new Modularizer.Options(Modularizer.Mode.DERIVED, Set.of(), Set.of(), Map.of(), true, "25");
+    }
+
+    @Test
+    void patchesDerivedJarWithOpenModuleAndPromotedServices() throws IOException {
+        Path jar = plainJar("acme-provider-1.0.0.jar", "com.acme.provider", "Impl",
+                Map.of("META-INF/services/com.acme.provider.Impl", "com.acme.provider.Impl\n"));
+        Path buildDir = tmp.resolve("target");
+        List<String> log = new ArrayList<>();
+
+        Modularizer.Result result = Modularizer.run(List.of(jar), Map.of(jar, "acme-provider"),
+                buildDir, defaults(), log::add);
+
+        Path out = ModularizedJars.root(buildDir).resolve("acme-provider-1.0.0.jar");
+        assertEquals(List.of(out), result.patched());
+        assertTrue(Files.isRegularFile(out));
+        ModuleDescriptor md = ModuleFinder.of(out).findAll().iterator().next().descriptor();
+        assertFalse(md.isAutomatic());
+        assertEquals("acme.provider", md.name());
+        assertTrue(md.isOpen());
+        assertEquals(Set.of("com.acme.provider"),
+                md.exports().stream().map(ModuleDescriptor.Exports::source).collect(Collectors.toSet()));
+        assertEquals(1, md.provides().size());
+        assertEquals("com.acme.provider.Impl", md.provides().iterator().next().service());
+        // original untouched
+        assertTrue(ModuleFinder.of(jar).findAll().iterator().next().descriptor().isAutomatic());
+        assertTrue(result.report().contains("acme.provider"));
+    }
+
+    @Test
+    void derivedModeSkipsAutomaticNamedJars() throws IOException {
+        Path classes = tmp.resolve("named-classes");
+        TestJars.compileClass(classes, "org.acme.named.N", "package org.acme.named; public class N {}");
+        Path jar = TestJars.jar(tmp.resolve("m2/acme-named-1.0.jar"), classes,
+                Map.of("Automatic-Module-Name", "org.acme.named"), Map.of());
+        Path buildDir = tmp.resolve("target");
+
+        Modularizer.Result result = Modularizer.run(List.of(jar), Map.of(jar, "acme-named"),
+                buildDir, defaults(), s -> {});
+
+        assertTrue(result.patched().isEmpty());
+        assertEquals(List.of(jar), result.skipped());
+    }
+
+    @Test
+    void allAutomaticModePatchesAutomaticNamedJarsKeepingTheirName() throws IOException {
+        Path classes = tmp.resolve("named2-classes");
+        TestJars.compileClass(classes, "org.acme.named2.N", "package org.acme.named2; public class N {}");
+        Path jar = TestJars.jar(tmp.resolve("m2/acme-named2-1.0.jar"), classes,
+                Map.of("Automatic-Module-Name", "org.acme.named2"), Map.of());
+        Path buildDir = tmp.resolve("target");
+        var opts = new Modularizer.Options(Modularizer.Mode.ALL_AUTOMATIC, Set.of(), Set.of(), Map.of(), true, "25");
+
+        Modularizer.Result result = Modularizer.run(List.of(jar), Map.of(jar, "acme-named2"), buildDir, opts, s -> {});
+
+        assertEquals(1, result.patched().size());
+        ModuleDescriptor md = ModuleFinder.of(result.patched().get(0)).findAll().iterator().next().descriptor();
+        assertEquals("org.acme.named2", md.name());
+        assertFalse(md.isAutomatic());
+    }
+
+    @Test
+    void moduleNameOverrideWins() throws IOException {
+        Path jar = plainJar("acme-thing-2.0.jar", "com.acme.thing", "T", Map.of());
+        Path buildDir = tmp.resolve("target");
+        var opts = new Modularizer.Options(Modularizer.Mode.DERIVED, Set.of(), Set.of(),
+                Map.of("acme-thing", "com.acme.thing"), true, "25");
+
+        Modularizer.Result result = Modularizer.run(List.of(jar), Map.of(jar, "acme-thing"), buildDir, opts, s -> {});
+
+        ModuleDescriptor md = ModuleFinder.of(result.patched().get(0)).findAll().iterator().next().descriptor();
+        assertEquals("com.acme.thing", md.name());
+    }
+
+    @Test
+    void failsOnSplitPackageAcrossTwoAutomaticJars() throws IOException {
+        Path a = plainJar("acme-a-1.0.jar", "com.acme.shared", "A", Map.of());
+        Path b = plainJar("acme-b-1.0.jar", "com.acme.shared", "B", Map.of());
+        Path buildDir = tmp.resolve("target");
+
+        var ex = assertThrows(IllegalStateException.class, () ->
+                Modularizer.run(List.of(a, b), Map.of(a, "acme-a", b, "acme-b"), buildDir, defaults(), s -> {}));
+
+        assertTrue(ex.getMessage().contains("com.acme.shared"));
+        assertTrue(ex.getMessage().contains("acme-a-1.0.jar"));
+        assertTrue(ex.getMessage().contains("acme-b-1.0.jar"));
+    }
+}
