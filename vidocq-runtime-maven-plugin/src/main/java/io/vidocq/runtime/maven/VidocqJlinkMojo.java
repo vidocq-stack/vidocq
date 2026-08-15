@@ -59,7 +59,9 @@ import java.util.stream.Stream;
  *
  * <p>All dependency jars and the application artifact must be
  * <b>named Java modules</b> (presence of a {@code module-info.class}). TEA
- * automatic modules are rejected by {@code jlink}.</p>
+ * automatic modules are rejected by {@code jlink}. Run {@code vidocq:modularize}
+ * first to patch the non-modular dependencies: this goal stages the copies it
+ * produced in {@code target/vidocq-modularized/} instead of the original jars.</p>
  */
 @Mojo(name = "jlink",
       defaultPhase = LifecyclePhase.PACKAGE,
@@ -160,6 +162,15 @@ public class VidocqJlinkMojo extends AbstractMojo {
                     getLog().info("Staging sealed copy of " + artifact.getArtifactId()
                             + " (resource package closed, adapters via provides)");
                 }
+                // Prefer the copy patched with a generated module-info by vidocq:modularize:
+                // jlink rejects automatic modules, so this is what makes a non-modular
+                // dependency stageable at all.
+                Path modularized = ModularizedJars.resolve(buildDir.toPath(), f.toPath());
+                if (!modularized.equals(f.toPath())) {
+                    src = modularized;
+                    getLog().info("Staging modularized copy of " + artifact.getArtifactId()
+                            + " (vidocq:modularize generated its module descriptor)");
+                }
                 // Stage an enriched copy when vidocq:generate parked cross-module classes
                 // for this dependency: the generated classes ship inside the module that
                 // owns their package, so the image has no split package to reject.
@@ -185,7 +196,9 @@ public class VidocqJlinkMojo extends AbstractMojo {
         if (!automatic.isEmpty()) {
             throw new IOException("jlink does not support automatic modules: "
                     + String.join(", ", automatic)
-                    + ". Convert these JARs into proper Java modules (add a module-info.java).");
+                    + ". Convert these JARs into proper Java modules (add a module-info.java)"
+                    + " — run vidocq:modularize (mode all-automatic) before jlink,"
+                    + " or exclude the artifact.");
         }
     }
 

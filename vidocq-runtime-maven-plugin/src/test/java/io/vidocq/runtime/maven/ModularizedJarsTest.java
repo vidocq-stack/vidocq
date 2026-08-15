@@ -56,4 +56,37 @@ class ModularizedJarsTest {
         assertTrue(ModularizedJars.isModularized(buildDir, original));
         assertEquals(buildDir.resolve("vidocq-modularized"), ModularizedJars.root(buildDir));
     }
+
+    /**
+     * The dev, jlink and package goals resolve jars coming from the local repository and
+     * stage/copy them under their original file name: the lookup must be name-based only,
+     * and the resolved copy must keep that very name.
+     */
+    @Test
+    void resolvePrefersTheCopyForAJarComingFromTheLocalRepository() throws IOException {
+        Path buildDir = tmp.resolve("target");
+        Path m2 = Files.createDirectories(tmp.resolve("m2/dev/langchain4j/langchain4j-open-ai/1.17.1"));
+        Path original = Files.createFile(m2.resolve("langchain4j-open-ai-1.17.1.jar"));
+        Path patched = ModularizedJars.root(buildDir).resolve("langchain4j-open-ai-1.17.1.jar");
+        Files.createDirectories(patched.getParent());
+        Files.createFile(patched);
+
+        Path resolved = ModularizedJars.resolve(buildDir, original);
+
+        assertEquals(patched, resolved);
+        assertEquals(original.getFileName(), resolved.getFileName());
+    }
+
+    /** A copy produced under another build directory must never leak into this one. */
+    @Test
+    void resolveIgnoresACopyFromAnotherBuildDirectory() throws IOException {
+        Path buildDir = tmp.resolve("target");
+        Path otherBuildDir = tmp.resolve("other-target");
+        Path original = Files.createFile(tmp.resolve("langchain4j-core-1.17.1.jar"));
+        Files.createDirectories(ModularizedJars.root(otherBuildDir));
+        Files.createFile(ModularizedJars.root(otherBuildDir).resolve("langchain4j-core-1.17.1.jar"));
+
+        assertEquals(original, ModularizedJars.resolve(buildDir, original));
+        assertFalse(ModularizedJars.isModularized(buildDir, original));
+    }
 }
