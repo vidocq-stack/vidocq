@@ -70,8 +70,8 @@ import java.util.jar.JarFile;
  *
  * <h2>Deliberate over-approximation</h2>
  *
- * The service type is taken to be the last class constant pushed before the lookup call, which
- * can pick up an unrelated constant. That is the right way to be wrong here — a superfluous
+ * Every class constant pushed since the previous lookup is taken to be a candidate service type,
+ * which can pick up unrelated constants. That is the right way to be wrong here — a superfluous
  * {@code uses} is inert (nothing ever resolves it), a missing one turns the jar's own lookup into
  * a {@code ServiceConfigurationError}. A service type held in a variable rather than written as a
  * class literal cannot be seen at all; no bytecode scanner can, ModiTect included.
@@ -104,6 +104,10 @@ final class ServiceUsesScanner {
     static ServiceUsesScanner over(Iterable<Path> closure) throws IOException {
         // Pass 1: the call graph, restricted to the methods that could forward a service type.
         Map<MethodKey, Set<MethodKey>> callees = new HashMap<>();
+        // Known limitation: a class present in several jars of the closure (a shaded or duplicated
+        // copy) resolves to the last jar iterated. Only the attribution of a forwarded service is
+        // affected, and the split-package guard already rejects the case that matters — two
+        // automatic jars sharing a package.
         Map<String, Path> jarOfClass = new HashMap<>();
         for (Path jar : closure) {
             forEachClass(jar, model -> {
@@ -175,19 +179,27 @@ final class ServiceUsesScanner {
                                 Map<Path, Set<String>> servicesByJar) {
         for (MethodModel method : model.methods()) {
             // `ServiceLoader.load(Foo.class)` compiles to `ldc Foo.class` then `invokestatic`,
-            // with any ClassLoader or ModuleLayer argument loaded around it.
-            ClassDesc[] pending = new ClassDesc[1];
+            // with any ClassLoader or ModuleLayer argument loaded around it — and that argument is
+            // itself regularly a class constant: `ServiceLoader.load(Foo.class,
+            // Util.class.getClassLoader())` pushes two. Keeping only the last would record `Util`
+            // and drop `Foo`, the very service the lookup is for, so every class constant seen
+            // since the previous lookup is a candidate. Superfluous directives are inert; a missing
+            // one is a ServiceConfigurationError.
+            Set<ClassDesc> pending = new HashSet<>();
             eachInstruction(method, element -> {
                 if (element instanceof ConstantInstruction ci && ci.constantValue() instanceof ClassDesc cd) {
-                    pending[0] = cd;
+                    pending.add(cd);
                 } else if (element instanceof InvokeInstruction invoke) {
                     MethodKey key = keyOf(invoke);
                     boolean direct = isServiceLoaderLookup(key);
                     if (!direct && !lookups.contains(key)) {
                         return;
                     }
-                    if (pending[0] != null && pending[0].isClassOrInterface()) {
-                        String service = binaryNameOf(pending[0]);
+                    for (ClassDesc candidate : pending) {
+                        if (!candidate.isClassOrInterface()) {
+                            continue;
+                        }
+                        String service = binaryNameOf(candidate);
                         // The naming jar: correct on its own for the direct shape, and harmless
                         // for the indirect one.
                         servicesByJar.computeIfAbsent(jar, j -> new HashSet<>()).add(service);
@@ -202,7 +214,8 @@ final class ServiceUsesScanner {
                             }
                         }
                     }
-                    pending[0] = null;
+                    // Reset per lookup: a constant pushed after this call belongs to the next one.
+                    pending.clear();
                 }
             });
         }

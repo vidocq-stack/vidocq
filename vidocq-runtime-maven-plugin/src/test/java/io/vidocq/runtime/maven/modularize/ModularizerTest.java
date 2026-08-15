@@ -262,6 +262,64 @@ class ModularizerTest {
     }
 
     /**
+     * The two-argument overload loads its ClassLoader from a second class constant, pushed after
+     * the service type. Keeping only the last constant would record the utility class and drop the
+     * service — exactly the lookup this whole fix exists for.
+     */
+    @Test
+    void emitsUsesWhenAClassLoaderConstantFollowsTheServiceType() throws IOException {
+        Path classes = tmp.resolve("acme-two-classes");
+        TestJars.compileClasses(classes, Map.of(
+                "com.acme.two.Spi", "package com.acme.two; public interface Spi {}",
+                "com.acme.two.Util", "package com.acme.two; public class Util {}",
+                "com.acme.two.Consumer", """
+                        package com.acme.two;
+                        import java.util.ServiceLoader;
+                        public class Consumer {
+                            public Spi first() {
+                                return ServiceLoader.load(Spi.class, Util.class.getClassLoader())
+                                        .findFirst().orElse(null);
+                            }
+                        }
+                        """));
+        Path jar = TestJars.jar(tmp.resolve("m2/acme-two-1.0.jar"), classes, Map.of(), Map.of());
+        Path buildDir = tmp.resolve("target");
+
+        Modularizer.Result result = Modularizer.run(List.of(jar), Map.of(jar, "acme-two"),
+                buildDir, defaults(), s -> {});
+
+        Set<String> uses = usesOf(result.patched().get(0));
+        assertTrue(uses.contains("com.acme.two.Spi"),
+                "the service type must survive a trailing ClassLoader constant, was " + uses);
+    }
+
+    /** A nested service type must survive the round trip through the generated source. */
+    @Test
+    void emitsUsesForANestedServiceType() throws IOException {
+        Path classes = tmp.resolve("acme-nested-classes");
+        TestJars.compileClasses(classes, Map.of(
+                "com.acme.nested.Outer", "package com.acme.nested; public class Outer { public interface Inner {} }",
+                "com.acme.nested.Consumer", """
+                        package com.acme.nested;
+                        import java.util.ServiceLoader;
+                        public class Consumer {
+                            public Outer.Inner first() {
+                                return ServiceLoader.load(Outer.Inner.class).findFirst().orElse(null);
+                            }
+                        }
+                        """));
+        Path jar = TestJars.jar(tmp.resolve("m2/acme-nested-1.0.jar"), classes, Map.of(), Map.of());
+        Path buildDir = tmp.resolve("target");
+
+        Modularizer.Result result = Modularizer.run(List.of(jar), Map.of(jar, "acme-nested"),
+                buildDir, defaults(), s -> {});
+
+        Set<String> uses = usesOf(result.patched().get(0));
+        assertTrue(uses.contains("com.acme.nested.Outer$Inner"),
+                "a nested service type must be declared under its binary name, was " + uses);
+    }
+
+    /**
      * The langchain4j shape exactly: the lookup helper ships in one jar and its callers in
      * another, so the call graph is only whole across the closure.
      */

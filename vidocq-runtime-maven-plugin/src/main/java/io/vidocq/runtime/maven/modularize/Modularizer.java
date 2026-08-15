@@ -146,8 +146,11 @@ public final class Modularizer {
         }
         // Built once over the whole closure: a service-lookup helper is regularly in another jar
         // than the code that names the service type (langchain4j-core's ServiceHelper, called
-        // from langchain4j), so the call graph has to be closure-wide to be seen whole.
-        ServiceUsesScanner usesScanner = ServiceUsesScanner.over(closure);
+        // from langchain4j), so the call graph has to be closure-wide to be seen whole. Reading
+        // every class of the closure is not worth it when nothing is going to be patched.
+        ServiceUsesScanner usesScanner = selected.isEmpty()
+                ? ServiceUsesScanner.over(List.of())
+                : ServiceUsesScanner.over(closure);
         StringBuilder report = new StringBuilder("# vidocq:modularize report\n");
         List<Path> patched = new ArrayList<>();
         Log mlog = new ConsumerLog(log);
@@ -225,7 +228,12 @@ public final class Modularizer {
         }
         StringBuilder sb = new StringBuilder(source.substring(0, close));
         for (String service : services) {
-            sb.append("    uses ").append(service).append(";\n");
+            String directive = "uses " + service + ";";
+            // Belt and braces: should ModiTect ever emit the directive itself, a second copy would
+            // make the descriptor unreadable ("duplicate uses").
+            if (!source.contains(directive)) {
+                sb.append("    ").append(directive).append('\n');
+            }
         }
         return sb.append(source.substring(close)).toString();
     }
