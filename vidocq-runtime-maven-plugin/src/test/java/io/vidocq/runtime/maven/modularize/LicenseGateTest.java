@@ -52,5 +52,17 @@ class LicenseGateTest {
 
         assertEquals(2, v.size());
         assertTrue(v.get(0).contains("com.acme:closed") || v.get(1).contains("com.acme:closed"));
+        assertTrue(v.get(0).contains("com.acme:gpl-only") || v.get(1).contains("com.acme:gpl-only"));
+    }
+
+    @Test
+    void bsdBoilerplateTextDoesNotFalselyMatchMit() {
+        var licenses = Map.of(
+                "com.acme:bsd-boilerplate", List.of(
+                        "Redistribution and use in source and binary forms are permitted provided that..."));
+
+        List<String> v = LicenseGate.violations(licenses, Set.of("MIT"));
+
+        assertEquals(1, v.size());
     }
 }

@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -33,8 +34,16 @@ import java.util.stream.Collectors;
  */
 public final class LicenseGate {
 
+    private static final Pattern MIT = Pattern.compile("\\bmit\\b");
+    private static final Pattern EDL = Pattern.compile("\\bedl\\b");
+
     private LicenseGate() {}
 
+    /**
+     * Returns one human-readable violation line per artifact whose declared licences are
+     * either missing or none of which normalize to an entry of {@code allowed}; empty when
+     * every artifact clears the gate.
+     */
     public static List<String> violations(Map<String, List<String>> licensesByArtifact, Set<String> allowed) {
         Set<String> ok = allowed.stream().map(LicenseGate::normalize).collect(Collectors.toSet());
         List<String> out = new ArrayList<>();
@@ -52,12 +61,12 @@ public final class LicenseGate {
     static String normalize(String raw) {
         String s = raw.toLowerCase(Locale.ROOT);
         if (s.contains("apache") && s.contains("2")) return "apache-2.0";
-        if (s.contains("mit")) return "mit";
+        if (MIT.matcher(s).find()) return "mit";
         if ((s.contains("epl") || s.contains("eclipse public")) && s.contains("2")) return "epl-2.0";
         if ((s.contains("epl") || s.contains("eclipse public")) && s.contains("1")) return "epl-1.0";
         if (s.contains("bsd") && s.contains("3")) return "bsd-3-clause";
         if (s.contains("bsd") && s.contains("2")) return "bsd-2-clause";
-        if (s.contains("edl")) return "edl-1.0";
+        if (EDL.matcher(s).find()) return "edl-1.0";
         return s.replaceAll("[^a-z0-9.]", "");
     }
 }
