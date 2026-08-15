@@ -140,9 +140,7 @@ public class VidocqModularizeMojo extends AbstractMojo {
                 artifactByJarName.put(f.getName(), a);
             }
         }
-        Modularizer.Mode m = "all-automatic".equalsIgnoreCase(mode) ? Modularizer.Mode.ALL_AUTOMATIC
-                : Modularizer.Mode.DERIVED;
-        var options = new Modularizer.Options(m,
+        var options = new Modularizer.Options(modeOf(mode),
                 new HashSet<>(includes == null ? List.of() : includes),
                 new HashSet<>(excludes == null ? List.of() : excludes),
                 moduleNames == null ? Map.of() : moduleNames,
@@ -176,7 +174,30 @@ public class VidocqModularizeMojo extends AbstractMojo {
         }
         getLog().info("vidocq:modularize — " + result.patched().size() + " jar(s) patched, "
                 + result.skipped().size() + " left as is; report: "
-                + ModularizedJars.root(buildDir.toPath()).resolve("report.txt"));
+                + ModularizedJars.root(buildDir.toPath()).resolve(Modularizer.REPORT_FILE_NAME));
+    }
+
+    /**
+     * The {@link Modularizer.Mode} named by {@code value}; {@code derived} when it is unset.
+     *
+     * <p>A typo used to fall through to {@code DERIVED}, so {@code all-automtic} silently produced a
+     * build that left every {@code Automatic-Module-Name} jar unpatched and only failed much later,
+     * in jlink, pointing at the jars rather than at the typo. An unknown mode is a configuration
+     * error and is reported as one.
+     */
+    static Modularizer.Mode modeOf(String value) throws MojoFailureException {
+        if (value == null || value.isBlank()) {
+            return Modularizer.Mode.DERIVED;
+        }
+        String v = value.trim();
+        if ("derived".equalsIgnoreCase(v)) {
+            return Modularizer.Mode.DERIVED;
+        }
+        if ("all-automatic".equalsIgnoreCase(v)) {
+            return Modularizer.Mode.ALL_AUTOMATIC;
+        }
+        throw new MojoFailureException("vidocq:modularize: unknown mode '" + value
+                + "' (expected derived | all-automatic)");
     }
 
     /**
@@ -189,6 +210,8 @@ public class VidocqModularizeMojo extends AbstractMojo {
             getLog().warn(message.substring(5));
         } else if (message.startsWith("ERROR ")) {
             getLog().error(message.substring(6));
+        } else if (message.startsWith("DEBUG ")) {
+            getLog().debug(message.substring(6));
         } else {
             getLog().info(message);
         }

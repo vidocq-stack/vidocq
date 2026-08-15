@@ -151,8 +151,17 @@ unaffected; only `jlink` refuses them, and an application depending on such a li
 linked into an image until the situation changes. The ways out are upstream (each caller doing its
 own `ServiceLoader.load`, or the library shipping a hand-written `module-info`) — or, in a future
 version of this goal, merging the mutually-dependent jars into a single module, which is the only
-shape the cycle admits. Set `vidocq.modularize.forceExplicit` to patch the jar anyway (the illegal
-directives stay dropped) when you know the failing lookup is one your application never reaches.
+shape the cycle admits.
+
+That merge needs a second half to be usable, because it destroys module names consumers already
+`requires`: the jars of the cycle become one module named after its root (`langchain4j`), and every
+other name of the cycle ships as an **alias stub** — an empty jar whose `module-info` only declares
+`requires transitive <merged module>`. An application that wrote `requires langchain4j.core;` still
+resolves, still reads every package it used to read, and never learns that the two jars became one.
+Without the stubs the merge would break the compilation of every consumer that names a merged jar.
+
+Set `vidocq.modularize.forceExplicit` to patch the jar anyway (the illegal directives stay dropped)
+when you know the failing lookup is one your application never reaches.
 
 Nothing is installed, deployed or redistributed: the copies live in `target/` and only this build
 sees them. `vidocq:dev`, `vidocq:jlink` and `vidocq:package` resolve every dependency through that

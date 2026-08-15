@@ -28,6 +28,8 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class JarModuleClassifierTest {
 
@@ -58,6 +60,24 @@ class JarModuleClassifierTest {
 
         assertEquals(JarModuleInfo.Kind.AUTOMATIC_NAMED, info.kind());
         assertEquals("org.apache.opennlp.tools", info.moduleName());
+    }
+
+    /**
+     * {@code ModuleFinder.findAll()} signals an underivable automatic name with an unchecked
+     * {@code FindException}. Unwrapped it would surface as an internal error naming no jar, so the
+     * classifier has to turn it into the {@code IOException} it declares, jar name included.
+     */
+    @Test
+    void jarWhoseNameYieldsNoValidModuleNameFailsWithTheJarNamed() throws IOException {
+        Path classes = tmp.resolve("c4");
+        TestJars.compileClass(classes, "com.acme.weird.Weird", "package com.acme.weird; public class Weird {}");
+        // "1weird" is not a Java identifier: a module name may not start with a digit.
+        Path jar = TestJars.jar(tmp.resolve("1weird-1.0.jar"), classes, Map.of(), Map.of());
+
+        IOException e = assertThrows(IOException.class, () -> JarModuleClassifier.classify(jar));
+
+        assertTrue(e.getMessage().contains("1weird-1.0.jar"), e.getMessage());
+        assertTrue(e.getMessage().startsWith("Cannot derive a module descriptor for"), e.getMessage());
     }
 
     @Test

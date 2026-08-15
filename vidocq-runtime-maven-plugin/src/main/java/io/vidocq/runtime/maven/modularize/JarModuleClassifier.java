@@ -20,6 +20,7 @@
 package io.vidocq.runtime.maven.modularize;
 
 import java.io.IOException;
+import java.lang.module.FindException;
 import java.lang.module.ModuleDescriptor;
 import java.lang.module.ModuleFinder;
 import java.nio.file.Path;
@@ -33,11 +34,31 @@ public final class JarModuleClassifier {
 
     private JarModuleClassifier() {}
 
+    /**
+     * The descriptor the platform reads from {@code jar}, explicit or derived.
+     *
+     * <p>{@link ModuleFinder#findAll()} signals a jar whose automatic name cannot be derived from
+     * its file name ({@code 1weird-1.0.jar} — a leading digit is no Java identifier) with an
+     * <em>unchecked</em> {@link FindException}. Left alone it escapes {@code modularize} as an
+     * internal error naming no jar, so it is turned into the {@link IOException} this class already
+     * promises. Single entry point on purpose: {@code UsesLegality} reads descriptors the same way.
+     *
+     * @throws IOException if the jar is not a module and no automatic name can be derived for it
+     */
+    static ModuleDescriptor descriptorOf(Path jar) throws IOException {
+        try {
+            return ModuleFinder.of(jar).findAll().stream()
+                    .findFirst()
+                    .orElseThrow(() -> new IOException("Not a module or automatic module: " + jar))
+                    .descriptor();
+        } catch (FindException e) {
+            throw new IOException("Cannot derive a module descriptor for "
+                    + jar.getFileName() + ": " + e.getMessage(), e);
+        }
+    }
+
     public static JarModuleInfo classify(Path jar) throws IOException {
-        ModuleDescriptor md = ModuleFinder.of(jar).findAll().stream()
-                .findFirst()
-                .orElseThrow(() -> new IOException("Not a module or automatic module: " + jar))
-                .descriptor();
+        ModuleDescriptor md = descriptorOf(jar);
         JarModuleInfo.Kind kind;
         if (!md.isAutomatic()) {
             kind = JarModuleInfo.Kind.EXPLICIT;

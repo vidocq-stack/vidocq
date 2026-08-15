@@ -38,6 +38,7 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -105,9 +106,14 @@ final class ServiceUsesScanner {
      *
      * @param closure every jar of the dependency closure — a helper is regularly in another jar
      *                than the code naming the service, so a per-jar analysis sees neither whole
+     * @param log     receives one debug line per jar whose classes could not all be read, so an
+     *                incomplete scan leaves a trace instead of only a missing {@code uses}
      * @throws IOException if a jar cannot be opened
      */
-    static ServiceUsesScanner over(Iterable<Path> closure) throws IOException {
+    static ServiceUsesScanner over(Iterable<Path> closure, Consumer<String> log) throws IOException {
+        // Highest failure count seen for a jar over the two reading passes — they read the same
+        // entries, so adding them up would double-count the same unreadable classes.
+        Map<Path, Integer> unreadable = new LinkedHashMap<>();
         // Pass 1: the call graph, restricted to the methods that could forward a service type.
         Map<MethodKey, Set<MethodKey>> callees = new HashMap<>();
         // Known limitation: a class present in several jars of the closure (a shaded or duplicated
@@ -116,7 +122,7 @@ final class ServiceUsesScanner {
         // automatic jars sharing a package.
         Map<String, Path> jarOfClass = new HashMap<>();
         for (Path jar : closure) {
-            forEachClass(jar, model -> {
+            record(unreadable, jar, forEachClass(jar, model -> {
                 String owner = model.thisClass().asInternalName();
                 jarOfClass.put(owner, jar);
                 for (MethodModel method : model.methods()) {
@@ -135,7 +141,7 @@ final class ServiceUsesScanner {
                     callees.put(new MethodKey(owner, method.methodName().stringValue(),
                             type.descriptorString()), invoked);
                 }
-            });
+            }));
         }
 
         // Pass 2: fixed point — a helper calling a helper is the common case
@@ -162,10 +168,24 @@ final class ServiceUsesScanner {
         Map<Path, Set<String>> servicesByJar = new HashMap<>();
         Map<MethodKey, Set<String>> chainCache = new HashMap<>();
         for (Path jar : closure) {
-            forEachClass(jar, model -> harvest(model, jar, callees, lookups, jarOfClass, chainCache,
-                    servicesByJar));
+            record(unreadable, jar, forEachClass(jar, model -> harvest(model, jar, callees, lookups,
+                    jarOfClass, chainCache, servicesByJar)));
+        }
+        // Reported once per jar, after both passes: a class the scanner cannot read is a service
+        // lookup it cannot see, so a jar whose descriptor is generated from a partial scan may be
+        // missing a `uses` — worth a trace when one of its lookups later fails at runtime.
+        for (Map.Entry<Path, Integer> e : unreadable.entrySet()) {
+            log.accept("DEBUG " + e.getValue() + " class file(s) of " + e.getKey().getFileName()
+                    + " could not be parsed — uses scan may be incomplete");
         }
         return new ServiceUsesScanner(servicesByJar);
+    }
+
+    /** Keeps the worst count seen for {@code jar}; the passes read the same entries. */
+    private static void record(Map<Path, Integer> unreadable, Path jar, int failures) {
+        if (failures > 0) {
+            unreadable.merge(jar, failures, Math::max);
+        }
     }
 
     /**
@@ -313,8 +333,11 @@ final class ServiceUsesScanner {
      * Parses every class of {@code jar} and hands it to {@code visitor}. A class that cannot be
      * parsed is skipped rather than fatal: a missing {@code uses} costs one runtime code path,
      * an aborted build costs the whole modularization.
+     *
+     * @return how many classes were skipped — silence would make an incomplete scan look complete
      */
-    private static void forEachClass(Path jar, Consumer<ClassModel> visitor) throws IOException {
+    private static int forEachClass(Path jar, Consumer<ClassModel> visitor) throws IOException {
+        int failures = 0;
         try (JarFile jf = new JarFile(jar.toFile())) {
             for (JarEntry entry : jf.stream().toList()) {
                 String name = entry.getName();
@@ -325,15 +348,18 @@ final class ServiceUsesScanner {
                 try (InputStream in = jf.getInputStream(entry)) {
                     model = ClassFile.of().parse(in.readAllBytes());
                 } catch (RuntimeException | IOException e) {
+                    failures++;
                     continue;
                 }
                 try {
                     visitor.accept(model);
                 } catch (RuntimeException e) {
                     // Same reasoning: one unreadable member must not cost the jar its descriptor.
+                    failures++;
                 }
             }
         }
+        return failures;
     }
 
     /** {@code Lcom/acme/Foo;} → {@code com.acme.Foo} (nested types keep their {@code $}). */

@@ -19,6 +19,7 @@
  */
 package io.vidocq.runtime.maven.modularize;
 
+import java.io.IOException;
 import java.lang.module.ModuleDescriptor;
 import java.lang.module.ModuleFinder;
 import java.lang.module.ModuleReference;
@@ -273,13 +274,13 @@ final class UsesLegality {
     /** The module packaged in {@code jar}, or {@code null} when the platform cannot read one. */
     private static ModuleDescriptor descriptorOf(Path jar) {
         try {
-            for (ModuleReference ref : ModuleFinder.of(jar).findAll()) {
-                return ref.descriptor();
-            }
-        } catch (RuntimeException e) {
-            // A jar with no derivable module name cannot host a uses directive either.
+            // Same reader as the classifier, so both agree on what a jar's descriptor is — and on
+            // which jars have none. A jar with no derivable module name (unchecked FindException
+            // there, IOException here) cannot host a uses directive either, so it drops out.
+            return JarModuleClassifier.descriptorOf(jar);
+        } catch (IOException | RuntimeException e) {
+            return null;
         }
-        return null;
     }
 
     /** A {@link Mod} view of a descriptor written by hand (a closure jar or a system module). */
