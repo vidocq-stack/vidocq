@@ -9,7 +9,7 @@ Liquibase scan the `db.migration` package for SQL/XML scripts, so a named module
 
 The `vidocq-runtime-maven-plugin` catches these at build time.
 
-## The two goals
+## The two module-info goals
 
 ### `vidocq:check-module-info` — verify (default, fail-fast)
 
@@ -99,6 +99,137 @@ footgun:
 
 JAX-RS resource dispatch (Cassini) uses APT-generated adapters with direct typed dispatch, so it does
 **not** reflect into your resource packages on the nominal codegen path — no `opens` is needed for it.
+
+## `vidocq:modularize` — give a non-modular dependency a module descriptor
+
+The goals above are about the directives **your** `module-info.java` is missing. `vidocq:modularize`
+answers the opposite problem: a third-party jar that has **no** `module-info.class` at all. On the
+module path such a jar is an *automatic module* — it works, but it reads every module, exports every
+package, and `jlink` refuses to link it. This goal patches a copy of it with a generated descriptor
+(ModiTect: `jdeps`-derived `requires`, every package exported, `META-INF/services` promoted to
+`provides`, `open module` by default) into `target/vidocq-modularized/`, under the **original file
+name**.
+
+Nothing is installed, deployed or redistributed: the copies live in `target/` and only this build
+sees them. `vidocq:dev`, `vidocq:jlink` and `vidocq:package` resolve every dependency through that
+directory first, so a patched copy transparently replaces the original jar on the module path, in
+the staged jlink image and in the distribution's `lib/`.
+
+Minimal wiring (the goal has no default binding of its own — declare an execution; its default phase
+is `prepare-package`):
+
+```xml
+<plugin>
+    <groupId>io.vidocq.runtime</groupId>
+    <artifactId>vidocq-runtime-maven-plugin</artifactId>
+    <executions>
+        <execution>
+            <id>modularize</id>
+            <goals><goal>modularize</goal></goals>
+            <configuration>
+                <mode>all-automatic</mode>
+            </configuration>
+        </execution>
+    </executions>
+</plugin>
+```
+
+### `derived` or `all-automatic`
+
+| `<mode>` | Patches | Use it when |
+|---|---|---|
+| `derived` (default) | only jars whose automatic name is *derived from the file name* (no `Automatic-Module-Name` manifest entry) | you want to stabilise the modules nobody has named yet, and to leave every jar whose author already committed to a module name untouched |
+| `all-automatic` | every automatic jar, including those declaring `Automatic-Module-Name` | you run `vidocq:jlink` or `vidocq:jpackage` — `jlink` rejects **any** automatic module, so all of them must become named modules |
+
+### Module naming
+
+By default a patched jar keeps **the very name it already had as an automatic module** (the
+`Automatic-Module-Name` entry, or the JDK-derived name from the file name). That is deliberate: it is
+the name `javac` saw when it compiled your `module-info.java` against the *original* jar, so the
+`requires` you wrote keeps resolving after patching.
+
+`<moduleNames>` overrides that name per `artifactId`:
+
+```xml
+<moduleNames>
+    <langchain4j-open-ai>dev.langchain4j.openai</langchain4j-open-ai>
+</moduleNames>
+```
+
+**Caveat — an override is a runtime-only rename.** Compilation still resolves against the original
+jar, which announces its automatic name; an overridden module renamed out from under a
+`requires <old.name>;` will compile and then fail module resolution at run time (or vice versa). Only
+override the name of a jar your code does not `requires` by name — one reached transitively or purely
+through services — or the derived name is not a legal Java module name at all (in which case javac
+could not resolve it either, and the dependency must be reached through services).
+
+### Split packages fail the build
+
+Two automatic jars sharing a package cannot both become named modules — and the module system would
+reject them side by side anyway. The goal checks the whole automatic closure up front and fails with
+the offending package and the jars holding it:
+
+```
+vidocq:modularize — split package(s) between dependency jars, the module system cannot host them together:
+  com.acme.util in acme-core-1.2.jar, acme-legacy-1.2.jar
+Remove one side from the dependency graph (Maven <exclusions>) or wait for an upstream fix.
+```
+
+`<excludes>` does **not** silence this: leaving one side unpatched does not make the packages any
+less split.
+
+### `report.txt`
+
+Every run writes `target/vidocq-modularized/report.txt` with, per patched jar, the module name, why
+it was selected, and the **full generated `module-info` source** — plus one line per jar left as is.
+It is the thing to read when a `requires` looks wrong or a service is not picked up; the output
+directory is emptied at the start of each run, so the report always describes the jars sitting next
+to it.
+
+### Licence gate (opt-in)
+
+Patching rewrites someone else's jar. When `<allowedLicenses>` is set, every artifact that ends up
+patched must declare one of the listed licences, otherwise the build fails — an explicit,
+licence-aware decision for teams that ship the patched copies inside an image:
+
+```xml
+<allowedLicenses>
+    <license>Apache-2.0</license>
+    <license>EPL-2.0</license>
+    <license>MIT</license>
+</allowedLicenses>
+```
+
+Names are normalised before comparison (`The Apache Software License, Version 2.0` matches
+`Apache-2.0`). An artifact declaring no licence at all is a violation. Left empty (the default) the
+gate is off — nothing is redistributed by the goal itself.
+
+### Other parameters
+
+| Parameter / property | Default | Effect |
+|---|---|---|
+| `vidocq.modularize.skip` | `false` | Skip the goal entirely. |
+| `<includes>` / `<excludes>` | empty | Restrict patching to / away from these `artifactId`s. Both only ever *restrict*: an explicit module named in `<includes>` still stays untouched. |
+| `vidocq.modularize.open` (`<openModules>`) | `true` | Generate `open module` descriptors (a reflective library keeps working). `false` generates a closed module that `exports` every package. |
+| `<release>` | `${maven.compiler.release}` (else `25`) | JDK release `jdeps` analyses multi-release jars against. |
+
+### Dev mode needs an earlier binding
+
+`vidocq:dev` is a direct-invocation goal: it does not fork a lifecycle, and its rebuild loop runs
+`mvn process-classes`. Bound at its default `prepare-package`, `modularize` therefore never runs in a
+`mvn vidocq:dev` session and dev mode would see the original jars. Bind it to `process-classes` when
+you want dev mode to run against the patched copies:
+
+```xml
+<execution>
+    <id>modularize</id>
+    <phase>process-classes</phase>
+    <goals><goal>modularize</goal></goals>
+</execution>
+```
+
+(The alternative is to run `mvn prepare-package` once before starting `vidocq:dev` — the copies
+survive in `target/` until the next `clean`.)
 
 ## Roadmap
 
