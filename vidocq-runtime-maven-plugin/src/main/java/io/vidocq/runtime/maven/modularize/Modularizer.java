@@ -43,6 +43,7 @@ import java.util.Set;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
 /**
  * Patches non-modular dependency jars with a generated {@code module-info}
@@ -75,26 +76,49 @@ public final class Modularizer {
 
     private Modularizer() {}
 
+    /**
+     * Patches the automatic jars of {@code closure} selected by {@code options}.
+     *
+     * <p>The output directory is emptied first, so a jar patched by an earlier run with
+     * different includes/excludes can never linger and be silently substituted.
+     *
+     * @param closure         every jar of the dependency closure, patched or not: jdeps needs
+     *                        the whole set to resolve {@code requires}
+     * @param artifactIdByJar artifact id per jar, used by the include/exclude filters and the
+     *                        {@code moduleNames} overrides; the file name is used as a fallback
+     * @param buildDir        the project {@code target/} directory
+     * @param log             receives one line per patched jar plus ModiTect's own output
+     * @throws IllegalStateException if two automatic jars of the closure share a package
+     * @throws IOException           if a jar cannot be read, or jdeps/ModiTect fails on one
+     */
     public static Result run(List<Path> closure, Map<Path, String> artifactIdByJar, Path buildDir,
                              Options options, Consumer<String> log) throws IOException {
-        // 1. classify
+        // 1. start from a clean output directory: a jar left over from a previous run with
+        //    other includes/excludes would still be substituted by ModularizedJars.resolve.
+        Path outDir = ModularizedJars.root(buildDir);
+        Files.createDirectories(outDir);
+        deleteFilesIn(outDir);
+
+        // 2. classify
         List<JarModuleInfo> infos = new ArrayList<>();
         for (Path jar : closure) {
             infos.add(JarModuleClassifier.classify(jar));
         }
 
-        // 2. select
+        // 3. select
         List<JarModuleInfo> selected = new ArrayList<>();
         List<Path> skipped = new ArrayList<>();
         for (JarModuleInfo info : infos) {
-            String artifactId = artifactIdByJar.getOrDefault(info.jar(), info.jar().getFileName().toString());
+            String artifactId = artifactIdOf(artifactIdByJar, info.jar());
             boolean wanted = switch (info.kind()) {
                 case EXPLICIT -> false;
                 case AUTOMATIC_DERIVED -> true;
                 case AUTOMATIC_NAMED -> options.mode() == Mode.ALL_AUTOMATIC;
             };
+            // Both filters only ever restrict: an explicit module named in <includes> stays
+            // untouched, patching it would overwrite a descriptor its author wrote by hand.
             if (!options.includeArtifactIds().isEmpty()) {
-                wanted = options.includeArtifactIds().contains(artifactId);
+                wanted &= options.includeArtifactIds().contains(artifactId);
             }
             if (options.excludeArtifactIds().contains(artifactId)) {
                 wanted = false;
@@ -106,12 +130,10 @@ public final class Modularizer {
             }
         }
 
-        // 3. split-package guard over the automatic part of the closure
+        // 4. split-package guard over the automatic part of the closure
         assertNoSplitPackage(infos);
 
-        // 4. patch
-        Path outDir = ModularizedJars.root(buildDir);
-        Files.createDirectories(outDir);
+        // 5. patch
         // ModiTect recreates <dir>/<moduleName> under both of these, so neither may be outDir:
         // the modularized directory is handed to the JVM as a module path and must hold jars only.
         Path scratch = buildDir.resolve("vidocq-modularize-work");
@@ -126,30 +148,38 @@ public final class Modularizer {
         List<Path> patched = new ArrayList<>();
         Log mlog = new ConsumerLog(log);
         for (JarModuleInfo info : selected) {
-            String artifactId = artifactIdByJar.getOrDefault(info.jar(), "");
+            String artifactId = artifactIdOf(artifactIdByJar, info.jar());
             String name = options.moduleNames().getOrDefault(artifactId, info.moduleName());
-            GeneratedModuleInfo gen = new GenerateModuleInfo(
-                    info.jar(), name, options.openModules(), deps,
-                    // `parsePatterns` (plural) is the parser for the ";"-terminated ModiTect
-                    // configuration form; `parsePattern` would take the ";" for pattern text
-                    // and silently match nothing, dropping every exports directive.
-                    PackageNamePattern.parsePatterns("*;"),              // export everything
-                    // "The opens table for an open module must be 0 length": an `open module`
-                    // already opens everything, and a redundant `opens` makes the descriptor
-                    // unreadable. Only a closed module gets the open-everything patterns.
-                    options.openModules() ? List.of() : PackageNamePattern.parsePatterns("*;"),
-                    DependencePattern.parsePatterns("*;"),               // keep every jdeps requires
-                    workDir, genDir, Set.of(), Set.of(), Set.of(),
-                    false,                                                // addServiceUses
-                    List.of("--multi-release", options.release(), "--ignore-missing-deps"),
-                    mlog).run();
-            String source = Files.readString(gen.getPath());
-            // `base` keeps module-info.class at the jar root. Passing a JVM version instead
-            // would hide the descriptor under META-INF/versions/<n> and stamp the jar
-            // `Multi-Release: true` — a gratuitous change of shape for a jar that has none.
-            // `release` stays what it is: the JDK level jdeps analyses against.
-            new AddModuleInfo(source, null, versionOf(info.jar()), info.jar(), outDir,
-                    "base", true, Instant.EPOCH).run();
+            String source;
+            try {
+                GeneratedModuleInfo gen = new GenerateModuleInfo(
+                        info.jar(), name, options.openModules(), deps,
+                        // `parsePatterns` (plural) is the parser for the ";"-terminated ModiTect
+                        // configuration form; `parsePattern` would take the ";" for pattern text
+                        // and silently match nothing, dropping every exports directive.
+                        PackageNamePattern.parsePatterns("*;"),          // export everything
+                        // "The opens table for an open module must be 0 length": an `open module`
+                        // already opens everything, and a redundant `opens` makes the descriptor
+                        // unreadable. Only a closed module gets the open-everything patterns.
+                        options.openModules() ? List.of() : PackageNamePattern.parsePatterns("*;"),
+                        DependencePattern.parsePatterns("*;"),           // keep every jdeps requires
+                        workDir, genDir, Set.of(), Set.of(), Set.of(),
+                        false,                                            // addServiceUses
+                        List.of("--multi-release", options.release(), "--ignore-missing-deps"),
+                        mlog).run();
+                source = Files.readString(gen.getPath());
+                // `base` keeps module-info.class at the jar root. Passing a JVM version instead
+                // would hide the descriptor under META-INF/versions/<n> and stamp the jar
+                // `Multi-Release: true` — a gratuitous change of shape for a jar that has none.
+                // `release` stays what it is: the JDK level jdeps analyses against.
+                new AddModuleInfo(source, null, versionOf(info.jar()), info.jar(), outDir,
+                        "base", true, Instant.EPOCH).run();
+            } catch (RuntimeException e) {
+                // ModiTect reports every jdeps and compilation failure as an unchecked
+                // exception naming nothing; `run` promises IOException, so name the jar.
+                throw new IOException("vidocq:modularize — jdeps/ModiTect failed for "
+                        + info.jar().getFileName() + ": " + e.getMessage(), e);
+            }
             Path out = outDir.resolve(info.jar().getFileName().toString());
             if (!Files.isRegularFile(out)) {
                 throw new IOException("ModiTect did not produce " + out);
@@ -187,8 +217,25 @@ public final class Modularizer {
             sb.append("  ").append(sp.packageName()).append(" in ")
                     .append(String.join(", ", sp.jarFiles())).append('\n');
         }
-        sb.append("Exclude one side (<excludes>) or wait for an upstream fix.");
+        // Not something <excludes> can silence: the guard covers the whole automatic closure,
+        // and leaving one side unpatched would not make the packages any less split.
+        sb.append("Remove one side from the dependency graph (Maven <exclusions>) "
+                + "or wait for an upstream fix.");
         throw new IllegalStateException(sb.toString());
+    }
+
+    /** The configured artifact id for {@code jar}, falling back to its file name. */
+    private static String artifactIdOf(Map<Path, String> artifactIdByJar, Path jar) {
+        return artifactIdByJar.getOrDefault(jar, jar.getFileName().toString());
+    }
+
+    /** Empties {@code dir} of its regular files (patched jars and the previous report). */
+    private static void deleteFilesIn(Path dir) throws IOException {
+        try (Stream<Path> entries = Files.list(dir)) {
+            for (Path p : entries.filter(Files::isRegularFile).toList()) {
+                Files.delete(p);
+            }
+        }
     }
 
     /** The module version to stamp, read off the file name; {@code null} when there is none. */

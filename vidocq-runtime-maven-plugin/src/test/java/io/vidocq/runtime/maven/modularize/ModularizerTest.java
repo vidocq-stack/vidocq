@@ -126,6 +126,71 @@ class ModularizerTest {
         assertEquals("com.acme.thing", md.name());
     }
 
+    /** A jar that already ships a hand-written {@code module-info.class}. */
+    private Path explicitJar(String fileName, String moduleName, String pkg, String cls) throws IOException {
+        Path classes = tmp.resolve(fileName + "-classes");
+        Path srcDir = tmp.resolve(fileName + "-src");
+        Files.createDirectories(srcDir.resolve(pkg.replace('.', '/')));
+        Files.writeString(srcDir.resolve("module-info.java"),
+                "module " + moduleName + " { exports " + pkg + "; }");
+        Files.writeString(srcDir.resolve(pkg.replace('.', '/') + "/" + cls + ".java"),
+                "package " + pkg + "; public class " + cls + " {}");
+        Files.createDirectories(classes);
+        int rc = javax.tools.ToolProvider.getSystemJavaCompiler().run(null, null, null,
+                "-d", classes.toString(), "--release", "25",
+                srcDir.resolve("module-info.java").toString(),
+                srcDir.resolve(pkg.replace('.', '/') + "/" + cls + ".java").toString());
+        assertEquals(0, rc);
+        return TestJars.jar(tmp.resolve("m2").resolve(fileName), classes, Map.of(), Map.of());
+    }
+
+    @Test
+    void includesRestrictTheSelectionAndNeverPromoteAnExplicitJar() throws IOException {
+        Path wanted = plainJar("acme-wanted-1.0.jar", "com.acme.wanted", "W", Map.of());
+        Path other = plainJar("acme-other-1.0.jar", "com.acme.other", "O", Map.of());
+        Path explicit = explicitJar("acme-explicit-1.0.jar", "com.acme.explicit", "com.acme.explicit", "E");
+        Path buildDir = tmp.resolve("target");
+        var opts = new Modularizer.Options(Modularizer.Mode.DERIVED,
+                Set.of("acme-wanted", "acme-explicit"), Set.of(), Map.of(), true, "25");
+
+        Modularizer.Result result = Modularizer.run(List.of(wanted, other, explicit),
+                Map.of(wanted, "acme-wanted", other, "acme-other", explicit, "acme-explicit"),
+                buildDir, opts, s -> {});
+
+        // listed AND automatic: patched. Listed but explicit: still skipped, its author wrote it.
+        assertEquals(List.of(ModularizedJars.root(buildDir).resolve("acme-wanted-1.0.jar")), result.patched());
+        assertEquals(List.of(other, explicit), result.skipped());
+    }
+
+    @Test
+    void excludesDropTheNamedJarAndLeaveTheRest() throws IOException {
+        Path a = plainJar("acme-keep-1.0.jar", "com.acme.keep", "K", Map.of());
+        Path b = plainJar("acme-drop-1.0.jar", "com.acme.drop", "D", Map.of());
+        Path buildDir = tmp.resolve("target");
+        var opts = new Modularizer.Options(Modularizer.Mode.DERIVED, Set.of(), Set.of("acme-drop"),
+                Map.of(), true, "25");
+
+        Modularizer.Result result = Modularizer.run(List.of(a, b), Map.of(a, "acme-keep", b, "acme-drop"),
+                buildDir, opts, s -> {});
+
+        assertEquals(List.of(ModularizedJars.root(buildDir).resolve("acme-keep-1.0.jar")), result.patched());
+        assertEquals(List.of(b), result.skipped());
+    }
+
+    @Test
+    void deletesStaleOutputsFromAPreviousRun() throws IOException {
+        Path jar = plainJar("acme-fresh-1.0.jar", "com.acme.fresh", "F", Map.of());
+        Path buildDir = tmp.resolve("target");
+        Path stale = Files.createDirectories(ModularizedJars.root(buildDir)).resolve("old-1.0.jar");
+        Files.writeString(stale, "leftover");
+
+        Modularizer.Result result = Modularizer.run(List.of(jar), Map.of(jar, "acme-fresh"),
+                buildDir, defaults(), s -> {});
+
+        assertFalse(Files.exists(stale), "a jar left by a previous run must not survive");
+        assertEquals(List.of(ModularizedJars.root(buildDir).resolve("acme-fresh-1.0.jar")), result.patched());
+    }
+
     @Test
     void failsOnSplitPackageAcrossTwoAutomaticJars() throws IOException {
         Path a = plainJar("acme-a-1.0.jar", "com.acme.shared", "A", Map.of());
@@ -138,5 +203,8 @@ class ModularizerTest {
         assertTrue(ex.getMessage().contains("com.acme.shared"));
         assertTrue(ex.getMessage().contains("acme-a-1.0.jar"));
         assertTrue(ex.getMessage().contains("acme-b-1.0.jar"));
+        // <excludes> cannot silence this guard: it covers the whole automatic closure.
+        assertTrue(ex.getMessage().contains("Remove one side from the dependency graph (Maven <exclusions>)"),
+                ex.getMessage());
     }
 }
