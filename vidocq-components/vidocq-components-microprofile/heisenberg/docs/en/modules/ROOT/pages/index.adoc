@@ -80,9 +80,9 @@ flowchart LR
   Bulkhead --> Async
   Async --> Method
 
-  Interceptor -.config.-> Ravel["Ravel<br/>MicroProfile Config"]
-  Interceptor -.BCE.-> Vauban["Vauban<br/>CDI Lite"]
-  Interceptor -.opt. metrics.-> Humboldt["Humboldt<br/>OpenTelemetry"]
+  Interceptor -. "config" .-> Ravel["Ravel<br/>MicroProfile Config"]
+  Interceptor -. "BCE" .-> Vauban["Vauban<br/>CDI Lite"]
+  Interceptor -. "optional metrics" .-> Humboldt["Humboldt<br/>OpenTelemetry"]
 
   classDef rt fill:#e1f5fe,stroke:#0288d1
   class Interceptor rt
