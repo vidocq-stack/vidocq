@@ -90,9 +90,9 @@ Each layer can be used independently: `mansart-pool` is a standalone `DataSource
 [mermaid]
 ....
 flowchart LR
-    VIDOCQ[xref:vidocq::index.adoc[Vidocq Runtime]] --> MANSART[Mansart]
-    VAUBAN[xref:vauban::index.adoc[Vauban CDI]] -.@Repository.-> MANSART
-    VAUBAN -.@Transactional.-> MANSART
+    VIDOCQ[Vidocq Runtime] --> MANSART[Mansart]
+    VAUBAN[Vauban CDI] -. "@Repository" .-> MANSART
+    VAUBAN -. "@Transactional" .-> MANSART
     MANSART --> JDK[Java 25 JDBC]
 ....
 
