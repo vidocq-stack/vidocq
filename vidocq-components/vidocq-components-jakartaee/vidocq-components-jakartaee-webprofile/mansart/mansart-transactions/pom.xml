@@ -16,12 +16,12 @@
 
     <name>Mansart :: Transactions</name>
     <description>Jakarta Transactions 2.0 implementation — local 1PC then 2PC, virtual-thread-native, peer of mansart-jakarta-data and mansart-pool.</description>
-    <url>https://codeberg.org/Vidocq/mansart</url>
+    <url>https://codefloe.com/Vidocq/mansart</url>
 
     <scm>
-        <connection>scm:git:https://codeberg.org/Vidocq/mansart.git</connection>
-        <developerConnection>scm:git:ssh://git@codeberg.org/Vidocq/mansart.git</developerConnection>
-        <url>https://codeberg.org/Vidocq/mansart</url>
+        <connection>scm:git:https://codefloe.com/Vidocq/mansart.git</connection>
+        <developerConnection>scm:git:ssh://git@codefloe.com/Vidocq/mansart.git</developerConnection>
+        <url>https://codefloe.com/Vidocq/mansart</url>
         <tag>HEAD</tag>
     </scm>
 
