@@ -20,6 +20,7 @@
 package io.vidocq.runtime.maven.dev;
 
 import io.vidocq.runtime.maven.JpmsPatches;
+import io.vidocq.runtime.maven.ModularizedJars;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
@@ -206,11 +207,14 @@ public class VidocqDevMojo extends AbstractMojo {
             Map<String, Path> jarsByArtifactId = new HashMap<>();
             for (var artifact : project.getArtifacts()) {
                 if (artifact.getFile() != null) {
-                    jarsByArtifactId.put(artifact.getArtifactId(), artifact.getFile().toPath());
+                    // Same file the module path uses (see buildModulePath): a modularized
+                    // copy when vidocq:modularize produced one, the original jar otherwise —
+                    // otherwise --patch-module would target a jar that is not on the path.
+                    jarsByArtifactId.put(artifact.getArtifactId(),
+                            ModularizedJars.resolve(buildDirPath(), artifact.getFile().toPath()));
                 }
             }
-            File targetDir = buildDir != null ? buildDir : classesDir.getParentFile();
-            List<String> patchArgs = JpmsPatches.patchModuleArgs(targetDir.toPath(), jarsByArtifactId);
+            List<String> patchArgs = JpmsPatches.patchModuleArgs(buildDirPath(), jarsByArtifactId);
             if (!patchArgs.isEmpty()) {
                 jvmArgs = new ArrayList<>(jvmArgs);
                 jvmArgs.addAll(patchArgs);
@@ -372,10 +376,24 @@ public class VidocqDevMojo extends AbstractMojo {
         }
         for (var artifact : project.getArtifacts()) {
             if (artifact.getFile() != null && "jar".equals(artifact.getType())) {
-                entries.add(artifact.getFile().toPath());
+                Path jar = artifact.getFile().toPath();
+                Path resolved = ModularizedJars.resolve(buildDirPath(), jar);
+                if (!resolved.equals(jar)) {
+                    getLog().info("dev: using modularized copy of " + jar.getFileName());
+                }
+                entries.add(resolved);
             }
         }
         return entries;
+    }
+
+    /**
+     * {@code ${project.build.directory}}, falling back to the parent of the (always
+     * injected) classes directory ({@code target/classes} → {@code target}) when Maven
+     * did not inject it.
+     */
+    private Path buildDirPath() {
+        return (buildDir != null ? buildDir : classesDir.getParentFile()).toPath();
     }
 
     /** The application archives of the layer mode: the project's own build output. */
@@ -430,10 +448,9 @@ public class VidocqDevMojo extends AbstractMojo {
             return;
         }
         lines.forEach(getLog()::info);
-        // buildDir is ${project.build.directory}; fall back to the parent of the (always-injected)
-        // classes dir (target/classes → target) when Maven did not inject it, so the report never NPEs.
-        File targetDir = buildDir != null ? buildDir : classesDir.getParentFile();
-        Path file = targetDir.toPath().resolve("vidocq-dev-services.properties");
+        // buildDirPath() falls back to the parent of the (always-injected) classes dir
+        // (target/classes → target) when Maven did not inject it, so the report never NPEs.
+        Path file = buildDirPath().resolve("vidocq-dev-services.properties");
         try {
             Files.createDirectories(file.getParent());
             Files.writeString(file, DevServicesReport.fileContent(collected));

@@ -19,6 +19,7 @@
  */
 package io.vidocq.runtime.maven;
 
+import io.vidocq.runtime.maven.modularize.Modularizer;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
@@ -39,8 +40,10 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.spi.ToolProvider;
 import java.util.stream.Stream;
@@ -59,7 +62,9 @@ import java.util.stream.Stream;
  *
  * <p>All dependency jars and the application artifact must be
  * <b>named Java modules</b> (presence of a {@code module-info.class}). TEA
- * automatic modules are rejected by {@code jlink}.</p>
+ * automatic modules are rejected by {@code jlink}. Run {@code vidocq:modularize}
+ * first to patch the non-modular dependencies: this goal stages the copies it
+ * produced in {@code target/vidocq-modularized/} instead of the original jars.</p>
  */
 @Mojo(name = "jlink",
       defaultPhase = LifecyclePhase.PACKAGE,
@@ -160,6 +165,15 @@ public class VidocqJlinkMojo extends AbstractMojo {
                     getLog().info("Staging sealed copy of " + artifact.getArtifactId()
                             + " (resource package closed, adapters via provides)");
                 }
+                // Prefer the copy patched with a generated module-info by vidocq:modularize:
+                // jlink rejects automatic modules, so this is what makes a non-modular
+                // dependency stageable at all.
+                Path modularized = ModularizedJars.resolve(buildDir.toPath(), f.toPath());
+                if (!modularized.equals(f.toPath())) {
+                    src = modularized;
+                    getLog().info("Staging modularized copy of " + artifact.getArtifactId()
+                            + " (vidocq:modularize generated its module descriptor)");
+                }
                 // Stage an enriched copy when vidocq:generate parked cross-module classes
                 // for this dependency: the generated classes ship inside the module that
                 // owns their package, so the image has no split package to reject.
@@ -183,10 +197,84 @@ public class VidocqJlinkMojo extends AbstractMojo {
             }
         }
         if (!automatic.isEmpty()) {
-            throw new IOException("jlink does not support automatic modules: "
-                    + String.join(", ", automatic)
-                    + ". Convert these JARs into proper Java modules (add a module-info.java).");
+            throw new IOException(automaticModulesMessage(automatic, buildDir.toPath()));
         }
+    }
+
+    /**
+     * The failure raised when jars stayed automatic in the staged image.
+     *
+     * <p>Telling the user to "run vidocq:modularize" is actively wrong for a jar that
+     * {@code modularize} <em>deliberately</em> left automatic — a {@code ServiceLoader} cycle has no
+     * legal explicit descriptor, so running the goal again changes nothing. The report the goal
+     * already wrote is therefore read back and its {@code kept automatic: … — <reason>} line quoted
+     * for each such module; the generic hint is kept only for the modules it does not explain.
+     *
+     * @param names    one {@code <module name> (<location>)} entry per rejected module
+     * @param buildDir the project {@code target/} directory, holding the modularize report
+     */
+    static String automaticModulesMessage(List<String> names, Path buildDir) {
+        Map<String, String> kept = keptAutomaticReasons(buildDir);
+        StringBuilder sb = new StringBuilder("jlink does not support automatic modules: ")
+                .append(String.join(", ", names)).append('.');
+        List<String> unexplained = new ArrayList<>();
+        boolean anyKept = false;
+        for (String entry : names) {
+            String reason = kept.get(jarFileNameOf(entry));
+            if (reason == null) {
+                unexplained.add(entry);
+            } else {
+                anyKept = true;
+                sb.append("\n  ").append(entry)
+                        .append("\n      vidocq:modularize kept it automatic on purpose: ").append(reason);
+            }
+        }
+        if (anyKept) {
+            sb.append("\n  A jar kept automatic has no legal explicit descriptor, so re-running")
+                    .append(" vidocq:modularize cannot fix it: exclude the artifact from the image,")
+                    .append(" drop the dependency, or set vidocq.modularize.forceExplicit=true when")
+                    .append(" you know the failing lookup is one your application never reaches.");
+        }
+        if (!unexplained.isEmpty()) {
+            sb.append("\n  Convert into proper Java modules (add a module-info.java) — run")
+                    .append(" vidocq:modularize (mode all-automatic) before jlink, or exclude the")
+                    .append(" artifact: ").append(String.join(", ", unexplained)).append('.');
+        }
+        return sb.toString();
+    }
+
+    /** {@code jar file name → reason} for every {@code kept automatic:} line of the report. */
+    private static Map<String, String> keptAutomaticReasons(Path buildDir) {
+        Path report = ModularizedJars.root(buildDir).resolve(Modularizer.REPORT_FILE_NAME);
+        if (!Files.isRegularFile(report)) {
+            return Map.of();
+        }
+        Map<String, String> reasons = new LinkedHashMap<>();
+        try {
+            for (String line : Files.readAllLines(report)) {
+                String l = line.strip();
+                if (!l.startsWith(Modularizer.KEPT_AUTOMATIC_PREFIX)) {
+                    continue;
+                }
+                String rest = l.substring(Modularizer.KEPT_AUTOMATIC_PREFIX.length());
+                int sep = rest.indexOf(" — ");
+                if (sep > 0) {
+                    reasons.put(rest.substring(0, sep).strip(), rest.substring(sep + 3).strip());
+                }
+            }
+        } catch (IOException e) {
+            // A report we cannot read only costs the extra explanation, never the failure itself.
+            return Map.of();
+        }
+        return reasons;
+    }
+
+    /** {@code name (file:/…/foo-1.0.jar)} → {@code foo-1.0.jar}; the whole entry when it has none. */
+    private static String jarFileNameOf(String entry) {
+        int close = entry.lastIndexOf(')');
+        String location = close < 0 ? entry : entry.substring(entry.lastIndexOf('(') + 1, close);
+        int slash = location.lastIndexOf('/');
+        return slash < 0 ? location : location.substring(slash + 1);
     }
 
     /** Resolves the full set of modules to include: user modules + transitive JDK (via jdeps). */

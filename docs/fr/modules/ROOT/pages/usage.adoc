@@ -97,6 +97,8 @@ cd vidocq-runtime-examples/vidocq-runtime-cassini-rest-example
 ./target/dist/bin/todo-app
 ----
 
+`jlink` et `jpackage` exigent que chaque dépendance soit un module *nommé*. Quand certains jars tiers sont livrés sans `module-info.class`, exécuter `vidocq:modularize` au préalable : il génère leurs descripteurs dans `target/vidocq-modularized/`, où `dev`, `jlink` et `package` les reprennent automatiquement. Voir xref:modules/vidocq-runtime-maven-plugin.adoc#modularize[le goal `vidocq:modularize`].
+
 == Applications multi-modules (dépendances scannées)
 
 Les applications hexagonales et multi-modules gardent en général leurs modules métier et

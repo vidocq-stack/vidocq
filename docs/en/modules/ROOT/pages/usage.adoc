@@ -96,6 +96,8 @@ cd vidocq-runtime-examples/vidocq-runtime-cassini-rest-example
 ./target/dist/bin/todo-app
 ----
 
+`jlink` and `jpackage` require every dependency to be a *named* module. When some third-party jars ship without `module-info.class`, run `vidocq:modularize` beforehand: it generates their descriptors into `target/vidocq-modularized/`, where `dev`, `jlink` and `package` pick them up automatically. See xref:modules/vidocq-runtime-maven-plugin.adoc#modularize[the `vidocq:modularize` goal].
+
 == Multi-module applications (scanned dependencies)
 
 Hexagonal and multi-module applications typically keep their business and adapter modules

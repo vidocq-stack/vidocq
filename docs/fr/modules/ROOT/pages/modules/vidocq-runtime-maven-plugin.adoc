@@ -2,7 +2,7 @@
 :description: Plugin Maven Vidocq Runtime — build, jlink, jpackage, docker.
 
 [.lead]
-`vidocq-runtime-maven-plugin` est le plugin Maven qui transforme une application en binaire déployable autonome. Il expose quatre goals : `build`, `jlink`, `jpackage`, `docker`. Voir aussi `vidocq/JLINK.md` pour le détail interne.
+`vidocq-runtime-maven-plugin` est le plugin Maven qui transforme une application en binaire déployable autonome. Il expose cinq goals : `build`, `modularize`, `jlink`, `jpackage`, `docker`. Voir aussi `vidocq/JLINK.md` pour le détail interne.
 
 == Coordonnées
 
@@ -20,6 +20,9 @@
 
 | `vidocq:build`
 | Exécute le graphe topologique des `@BuildStep`, génère les classes Class-File API, produit le JAR runner et l'index `extensions.list`.
+
+| `vidocq:modularize`
+| Dote les jars de dépendance non modulaires d'un `module-info` généré dans `target/vidocq-modularized/`, repris automatiquement par `dev`, `jlink` et `package`.
 
 | `vidocq:jlink`
 | Image Java autonome (`target/dist/`) avec `bin/<launcher>` binaire — pas de `java` requis sur la cible.
@@ -42,6 +45,100 @@ jars de dépendance embarquant leurs propres classes générées, et `dev` ajout
 les options `--patch-module` à la JVM fille. Zéro configuration. Voir
 xref:usage.adoc#applications-multi-modules-dépendances-scannées[Usage — Applications multi-modules].
 ====
+
+[#modularize]
+== Goal `vidocq:modularize`
+
+Un jar de dépendance sans `module-info.class` est un *module automatique* : son nom est dérivé du nom de fichier (il change donc avec la version), il lit tous les modules, il exporte tous ses packages — et `jlink` refuse purement et simplement de le lier.
+
+`vidocq:modularize` patche une *copie* de chacun de ces jars avec un descripteur généré — `requires` dérivés par `jdeps`, tous les packages exportés, `META-INF/services` promus en `provides`, `uses` scannés dans le bytecode, `open module` par défaut — dans `target/vidocq-modularized/`, sous le nom de fichier d'origine. `vidocq:dev`, `vidocq:jlink` et `vidocq:package` résolvent chaque dépendance via ce répertoire en premier : une copie patchée remplace donc de façon transparente le jar d'origine sur le module path, dans l'image jlink en préparation et dans le `lib/` de la distribution. Rien n'est installé, déployé ni redistribué : les copies ne quittent jamais `target/`.
+
+Le goal n'a pas de binding par défaut — déclarer une exécution (sa propre phase par défaut est `prepare-package`) :
+
+[source,xml]
+----
+<plugin>
+    <groupId>io.vidocq.runtime</groupId>
+    <artifactId>vidocq-runtime-maven-plugin</artifactId>
+    <executions>
+        <execution>
+            <id>modularize</id>
+            <!-- process-classes : vidocq:dev reconstruit via `mvn process-classes` et
+                 n'exécuterait jamais un goal lié à la phase prepare-package par défaut -->
+            <phase>process-classes</phase>
+            <goals><goal>modularize</goal></goals>
+            <configuration>
+                <mode>all-automatic</mode>
+            </configuration>
+        </execution>
+    </executions>
+</plugin>
+----
+
+`<mode>derived</mode>` (le défaut) ne patche que les jars dont le nom automatique est dérivé du nom de fichier, et laisse intact tout jar dont l'auteur s'est déjà engagé sur un `Automatic-Module-Name`. `<mode>all-automatic</mode>` les patche tous — indispensable avant `vidocq:jlink`, qui rejette *tout* module automatique.
+
+=== Noms de modules
+
+Un jar patché conserve exactement le nom qu'il avait déjà en tant que module automatique : les `requires` contre lesquels votre `module-info.java` a été compilé continuent donc de résoudre. `<moduleNames>` surcharge ce nom par `artifactId`, mais une telle surcharge est un *renommage runtime seulement* : la compilation résout toujours contre le jar d'origine, qui annonce son nom automatique. Ne renommer qu'un jar que votre code ne `requires` pas par son nom — atteint transitivement ou uniquement par services.
+
+=== Ce qui peut arrêter le build
+
+*Split package.* Deux jars automatiques partageant un package ne peuvent pas devenir tous deux des modules nommés, et le module system les rejetterait côte à côte de toute façon. Le goal vérifie toute la fermeture automatique en amont et échoue en nommant le package et les deux jars. `<excludes>` ne fait pas taire l'erreur — laisser un côté non patché ne rend pas le package moins partagé ; retirer un côté du graphe de dépendances (`<exclusions>` Maven) ou attendre un correctif amont.
+
+*Jars laissés automatiques.* Un jar dont le code appelle lui-même `ServiceLoader` pour un type de service défini dans un jar qui dépend de lui n'a aucune forme explicite légale : `ServiceLoader` contrôle le module *appelant*, donc le `uses` est exigé du module du dessous, qui aurait besoin d'un `requires` en retour — et JPMS n'admet pas de cycles. `langchain4j-core` est le cas d'école : son `ServiceHelper.loadFactories(Class)` générique est appelé avec des types de service appartenant à `langchain4j`, qui le requiert déjà. Un tel jar est laissé automatique plutôt que patché dans un graphe qui ne peut pas résoudre, et `report.txt` en consigne la raison :
+
+[source]
+----
+kept automatic: langchain4j-core-1.17.1.jar — ServiceLoader of dev.langchain4j.http.client.HttpClientBuilderFactory
+  from langchain4j.core cannot be declared (module cycle); jlink will reject it, dev mode works
+----
+
+Les modules automatiques fonctionnent sur le module path : `vidocq:dev` et un lancement `--module-path` simple ne sont pas affectés ; seul `jlink` les refuse, et son message d'échec cite précisément cette raison. Relancer le goal n'y changera rien : les issues sont en amont (la bibliothèque livrant un `module-info` écrit à la main, ou chaque appelant faisant son propre `ServiceLoader.load`) — ou, dans une future version du goal, la fusion des jars mutuellement dépendants en un seul module. `vidocq.modularize.forceExplicit=true` patche quand même le jar (les directives illégales restent écartées) quand on sait que le lookup fautif n'est jamais atteint par l'application.
+
+=== Paramètres
+
+[cols="1,1,3"]
+|===
+| Paramètre (propriété utilisateur) | Défaut | Effet
+
+| `<mode>` (`vidocq.modularize.mode`)
+| `derived`
+| `derived` ou `all-automatic` — voir ci-dessus.
+
+| `<includes>` / `<excludes>`
+| vide
+| Restreindre le patch à / hors de ces `artifactId`. Les deux ne font jamais que *restreindre*.
+
+| `<moduleNames>`
+| vide
+| Surcharges `artifactId` → nom de module. Renommage runtime seulement, voir ci-dessus.
+
+| `<openModules>` (`vidocq.modularize.open`)
+| `true`
+| Générer des descripteurs `open module`, pour qu'une bibliothèque réflexive continue de fonctionner. `false` génère un module fermé qui `exports` tous ses packages.
+
+| `<release>`
+| `${maven.compiler.release}` (sinon `25`)
+| Release JDK contre laquelle `jdeps` analyse les jars multi-release.
+
+| `<allowedLicenses>`
+| vide
+| Garde-fou licence optionnel : quand il est renseigné, tout artefact effectivement patché doit déclarer une de ces licences (les noms sont normalisés), sinon le build échoue.
+
+| `<forceExplicit>` (`vidocq.modularize.forceExplicit`)
+| `false`
+| Patcher un jar même quand l'un de ses propres lookups `ServiceLoader` ne peut pas être déclaré légalement.
+
+| `<skip>` (`vidocq.modularize.skip`)
+| `false`
+| Désactiver entièrement le goal.
+|===
+
+=== `report.txt`
+
+Chaque exécution écrit `target/vidocq-modularized/report.txt` : par jar patché, le nom de module, la raison de sa sélection et la source complète du `module-info` généré — plus une ligne par jar laissé tel quel. C'est ce qu'il faut lire quand un `requires` semble faux ou qu'un service n'est pas trouvé. Le répertoire de sortie est vidé au début de chaque exécution : le rapport décrit donc toujours les jars posés à côté de lui.
+
+Voir `vidocq/MODULE_INFO.md` § `vidocq:modularize` pour la référence complète : les règles de scan des `uses`, les avertissements émis pour les directives écartées, et la fusion de modules prévue comme issue aux cycles.
 
 == Goal `vidocq:jlink`
 
@@ -121,7 +218,7 @@ docker run --rm -p 8080:8080 \
 
 == Pré-requis et limitations
 
-* **Java Modules strict** — toutes les dépendances doivent être des modules nommés. Un jar sans `module-info.class` ni `Automatic-Module-Name` casse `jlink`.
+* **Java Modules strict** — toutes les dépendances doivent être des modules nommés ; `jlink` rejette tout module automatique. Doter les jars non modulaires d'un descripteur avec <<modularize,`vidocq:modularize`>> en mode `all-automatic`.
 * **Records sérialisés via REST** — Champollion les gère par génération APT, pas par réflexion. Si une dépendance externe expose des records non générés, déclarer un `Converter<T>` JSON-B.
 * **Custom `java.util.logging` Handler** — déclarer le module dans `logging.properties` pour que `jlink` l'embarque (`handlers=com.example.MyHandler`).
 * **macOS app-image** — le bundle nécessite `--app-version` valide ; le plugin défaute à la version Maven du projet.
