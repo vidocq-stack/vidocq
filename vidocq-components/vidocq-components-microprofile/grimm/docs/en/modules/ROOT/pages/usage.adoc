@@ -72,7 +72,7 @@ public List<Pet> adminList() { /* ... */ }
 
 [NOTE]
 ====
-Runtime JWT conformance is the concern of Cervantes (MP JWT 2.1). Grimm only documents the security scheme. See https://codeberg.org/Vidocq/cervantes[Cervantes].
+Runtime JWT conformance is the concern of Cervantes (MP JWT 2.1). Grimm only documents the security scheme. See https://codefloe.com/Vidocq/cervantes[Cervantes].
 ====
 
 == Multiple servers

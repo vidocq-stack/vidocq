@@ -20,18 +20,18 @@ sdk env
 
 `grimm-core` carries the scanner and the serializer. `grimm-cdi-vauban` adds the BCE and the `/openapi` endpoint. A standard application declares both and lets the runtime wire the rest.
 
-[source,xml]
+[source,xml,subs=attributes+]
 ----
 <dependencies>
     <dependency>
         <groupId>io.vidocq.grimm</groupId>
         <artifactId>grimm-core</artifactId>
-        <version>0.2.0</version>
+        <version>{project-version}</version>
     </dependency>
     <dependency>
         <groupId>io.vidocq.grimm</groupId>
         <artifactId>grimm-cdi-vauban</artifactId>
-        <version>0.2.0</version>
+        <version>{project-version}</version>
     </dependency>
     <dependency>
         <groupId>org.eclipse.microprofile.openapi</groupId>

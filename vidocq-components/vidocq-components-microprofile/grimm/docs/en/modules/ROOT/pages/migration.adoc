@@ -3,7 +3,7 @@
 
 [CAUTION]
 ====
-Grimm is at `0.2.0`. The MicroProfile OpenAPI 4.1 spec is fully covered (TCK 349/349, see xref:tck.adoc[TCK status]), but the public SPI may still evolve before `1.0.0`. This page documents model mappings to prepare a staged migration.
+Grimm is at `{project-version}`. The MicroProfile OpenAPI 4.1 spec is fully covered (TCK 349/349, see xref:tck.adoc[TCK status]), but the public SPI may still evolve before `1.0.0`. This page documents model mappings to prepare a staged migration.
 ====
 
 [.lead]
@@ -91,4 +91,4 @@ Quarkus OpenAPI sits on top of SmallRye OpenAPI but adds proprietary extensions.
 
 * xref:concepts.adoc[Concepts] — model, merge, filters.
 * xref:reference.adoc[Reference] — annotations and `mp.openapi.*` keys.
-* link:https://codeberg.org/Vidocq/grimm/src/branch/main/BUG.md[BUG.md] — known gotchas.
+* link:https://codefloe.com/Vidocq/grimm/src/branch/main/BUG.md[BUG.md] — known gotchas.

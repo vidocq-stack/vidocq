@@ -126,4 +126,4 @@ Any structural change to `grimm-core` or `grimm-cdi-vauban` must preserve the 34
 
 * xref:internals.adoc[Internals] — understand what the TCK validates.
 * xref:reference.adoc[Reference] — annotations and keys exercised by the tests.
-* link:https://codeberg.org/Vidocq/grimm/src/branch/main/BUG.md[BUG.md] — tracked reproducible bugs.
+* link:https://codefloe.com/Vidocq/grimm/src/branch/main/BUG.md[BUG.md] — tracked reproducible bugs.

@@ -31,7 +31,7 @@ This page consolidates Grimm's public surface: artefacts to declare, exported Ja
 | Official MP OpenAPI 4.1 TCK runner — out of reactor (Model 4.0.0). Do not declare as an application dependency.
 |===
 
-Every version is `0.2.0` at the time of writing.
+Every artefact is at `{project-version}`.
 
 == Java modules
 
@@ -187,8 +187,8 @@ The `mp.openapi.application.path.disable` and `mp.openapi.extensions.path` keys 
 
 == Bugs and benchmarks
 
-* link:https://codeberg.org/Vidocq/grimm/src/branch/main/BUG.md[BUG.md] — tracked reproducible bugs (to be created if missing).
-* link:https://codeberg.org/Vidocq/grimm/src/branch/main/BENCH.md[BENCH.md] — JMH benchmarks (to be created if missing).
+* link:https://codefloe.com/Vidocq/grimm/src/branch/main/BUG.md[BUG.md] — tracked reproducible bugs (to be created if missing).
+* link:https://codefloe.com/Vidocq/grimm/src/branch/main/BENCH.md[BENCH.md] — JMH benchmarks (to be created if missing).
 
 == Further reading
 
