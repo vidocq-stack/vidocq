@@ -22,18 +22,18 @@ sdk env
 
 For a standard JAX-RS application, declaring the two integration modules (`cervantes-cdi-vauban` + `cervantes-jaxrs`) is enough: they transitively pull in `cervantes-core`, `cervantes-api` and `cervantes-mp-jwt-api`.
 
-[source,xml]
+[source,xml,subs=attributes+]
 ----
 <dependencies>
     <dependency>
         <groupId>io.vidocq.cervantes</groupId>
         <artifactId>cervantes-cdi-vauban</artifactId>
-        <version>0.2.0</version>
+        <version>{project-version}</version>
     </dependency>
     <dependency>
         <groupId>io.vidocq.cervantes</groupId>
         <artifactId>cervantes-jaxrs</artifactId>
-        <version>0.2.0</version>
+        <version>{project-version}</version>
     </dependency>
 </dependencies>
 ----
