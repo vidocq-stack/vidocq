@@ -19,7 +19,7 @@
 
     <name>Knock</name>
     <description>Implémentation MicroProfile Health 4.0 — zéro librairie tierce, virtual threads, Java Modules strict</description>
-    <url>https://codeberg.org/Vidocq/knock</url>
+    <url>https://codefloe.com/Vidocq/knock</url>
 
     <!--
         Disjunctive triple license: a recipient may use this software under
@@ -47,8 +47,8 @@
     </licenses>
 
     <scm>
-        <url>https://codeberg.org/Vidocq/knock</url>
-        <connection>scm:git:https://codeberg.org/Vidocq/knock.git</connection>
+        <url>https://codefloe.com/Vidocq/knock</url>
+        <connection>scm:git:https://codefloe.com/Vidocq/knock.git</connection>
         <developerConnection>scm:git:git@forge.vidocq.dev:vidocq/knock.git</developerConnection>
     </scm>
 
