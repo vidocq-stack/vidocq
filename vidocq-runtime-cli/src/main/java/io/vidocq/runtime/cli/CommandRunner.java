@@ -131,8 +131,17 @@ public final class CommandRunner {
         return 0;
     }
 
+    /**
+     * The canonical key of the {@code default} Chappe listener. The CLI publishes this one rather
+     * than the {@code vidocq.http.port} alias so an explicit {@code --port} outranks any value the
+     * project set for itself — the alias is resolved only when the listener key is absent.
+     */
+    private static final String DEFAULT_LISTENER_PORT_KEY = "vidocq.chappe.listener.default.port";
+
     private static int runStart(Command.Start start) {
-        System.setProperty("vidocq.http.port", String.valueOf(start.port()));
+        if (start.portExplicit()) {
+            System.setProperty(DEFAULT_LISTENER_PORT_KEY, String.valueOf(start.port()));
+        }
         if (start.configFile() != null) {
             System.setProperty("vidocq.config.file", start.configFile().toAbsolutePath().toString());
         }
@@ -148,7 +157,9 @@ public final class CommandRunner {
         Path projectDir = Path.of("").toAbsolutePath();
         CliOutput.info("Starting Vidocq in " + CliOutput.bold("dev mode")
                 + " on port " + dev.port() + " (profile: " + dev.profile() + ")…");
-        System.setProperty("vidocq.http.port", String.valueOf(dev.port()));
+        if (dev.portExplicit()) {
+            System.setProperty(DEFAULT_LISTENER_PORT_KEY, String.valueOf(dev.port()));
+        }
         applyProfile(dev.profile(), projectDir);
 
         if (dev.debug()) {

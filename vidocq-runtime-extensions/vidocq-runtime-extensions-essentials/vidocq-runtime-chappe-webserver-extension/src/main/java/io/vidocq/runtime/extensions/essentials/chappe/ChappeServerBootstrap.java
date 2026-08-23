@@ -28,6 +28,7 @@ import io.vidocq.runtime.spi.config.VidocqConfig;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Starts a {@link Server} Chappe by {@link ChappeListener} declared, after all
@@ -47,6 +48,16 @@ public final class ChappeServerBootstrap implements VidocqExtension {
 
     private static final System.Logger LOG = System.getLogger(ChappeServerBootstrap.class.getName());
 
+    /**
+     * Published aliases for the listener named {@code default}. They are the discoverable names —
+     * the CLI ({@code vidocq start --port}), every scaffolded {@code vidocq.properties} and the
+     * reference documentation all use them — so the runtime honours them rather than ignoring
+     * them silently. The explicit {@code vidocq.chappe.listener.default.*} key always wins, and the
+     * aliases back no other listener.
+     */
+    static final String HTTP_HOST_ALIAS = "vidocq.http.host";
+    static final String HTTP_PORT_ALIAS = "vidocq.http.port";
+
     private final List<Server> servers = new ArrayList<>();
     private ChappeMountPoint mountPoint;
 
@@ -58,6 +69,18 @@ public final class ChappeServerBootstrap implements VidocqExtension {
     @Override
     public int priority() {
         return 10_000;
+    }
+
+    @Override
+    public java.util.Set<String> configKeys() {
+        return java.util.Set.of(
+                "vidocq.chappe.listeners",
+                "vidocq.chappe.listener.*",
+                HTTP_HOST_ALIAS,
+                HTTP_PORT_ALIAS,
+                // Claimed by ChappeMountConfigExtension, declared here so the shared vidocq.http.
+                // namespace is audited as a whole rather than half-claimed.
+                "vidocq.http.mount.*");
     }
 
     @Override
@@ -119,11 +142,16 @@ public final class ChappeServerBootstrap implements VidocqExtension {
         for (String raw : names) {
             String name = raw.trim();
             if (name.isEmpty()) continue;
+            boolean isDefault = ChappeListener.DEFAULT.equals(name);
             String hostKey = "vidocq.chappe.listener." + name + ".host";
             String portKey = "vidocq.chappe.listener." + name + ".port";
-            String host = config.getValue(hostKey, String.class, "0.0.0.0");
-            int port = config.getValue(portKey, Integer.class,
-                    ChappeListener.DEFAULT.equals(name) ? 8080 : -1);
+
+            String host = config.getValue(hostKey, String.class)
+                    .or(() -> isDefault ? config.getValue(HTTP_HOST_ALIAS, String.class) : Optional.empty())
+                    .orElse("0.0.0.0");
+            int port = config.getValue(portKey, Integer.class)
+                    .or(() -> isDefault ? config.getValue(HTTP_PORT_ALIAS, Integer.class) : Optional.empty())
+                    .orElse(isDefault ? 8080 : -1);
             if (port < 0) {
                 throw new IllegalStateException(
                         "Missing port configuration for listener '" + name + "' (" + portKey + ")");

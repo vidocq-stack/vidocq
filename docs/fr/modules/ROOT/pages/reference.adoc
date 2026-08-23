@@ -61,35 +61,38 @@ Les autres modules `io.vidocq.runtime.*.extension` correspondent chacun à une e
 
 | `vidocq.http.host`
 | `0.0.0.0`
-| Adresse de bind du transport Chappe.
+| Adresse de bind du listener `default`. Alias de `vidocq.chappe.listener.default.host`.
 
 | `vidocq.http.port`
 | `8080`
-| Port HTTP/1.1 + H2c.
+| Port du listener `default` (HTTP/1.1 + H2c). Alias de `vidocq.chappe.listener.default.port`.
 
-| `vidocq.https.port`
-| (désactivé)
-| Port HTTPS/H2/H3 si TLS configuré.
+| `vidocq.chappe.listeners`
+| `default`
+| Liste CSV des listeners à démarrer.
 
-| `vidocq.tls.cert`
+| `vidocq.chappe.listener.<nom>.host` +
+`vidocq.chappe.listener.<nom>.port`
+| `0.0.0.0` +
+`8080` (pour `default`)
+| Bind d'un listener nommé. Prioritaire sur l'alias `vidocq.http.*` ; tout listener autre que `default` doit déclarer son port.
+
+| `vidocq.http.mount.<nom>.*`
 | —
-| Chemin vers le certificat PEM.
+| Montages déclaratifs (ressources statiques, …).
 
-| `vidocq.tls.key`
+| `vidocq.pool.url` +
+`vidocq.pool.username` / `vidocq.pool.password`
 | —
-| Chemin vers la clé privée PEM.
+| Coordonnées JDBC de la datasource Mansart par défaut. Une datasource nommée utilise `vidocq.pool.<nom>.url`.
 
-| `vidocq.datasource.url`
-| —
-| URL JDBC pour Mansart.
-
-| `vidocq.datasource.username` / `vidocq.datasource.password`
-| —
-| Credentials JDBC.
-
-| `vidocq.datasource.pool.maxSize`
+| `vidocq.pool.maxSize`
 | `20`
-| Taille maximale du pool Mansart.
+| Taille maximale du pool Mansart. Voir l'extension pool Mansart pour `minIdle`, `acquireTimeout`, `validation`, `xa`, …
+
+| `vidocq.rest.context-path`
+| `/`
+| Préfixe sous lequel Cassini monte l'application JAX-RS.
 
 | `vidocq.profile`
 | (vide)
@@ -99,6 +102,17 @@ Les autres modules `io.vidocq.runtime.*.extension` correspondent chacun à une e
 | (vide)
 | Répertoire de surcharge externe (`ExternalFileConfigSource`, ordinal 250).
 |===
+
+TLS n'est pas encore implémenté : `vidocq.https.port`, `vidocq.tls.cert` et `vidocq.tls.key` sont
+*prévues*, et les positionner aujourd'hui n'a aucun effet.
+
+[NOTE]
+====
+Une clé `vidocq.*` que personne ne consomme n'est appliquée par personne : l'application conserve
+silencieusement la valeur par défaut, et l'erreur reste invisible dès lors que la valeur configurée
+*est* le défaut. Depuis la 0.3.0, le runtime signale une telle clé par un avertissement au
+démarrage, pour tout namespace revendiqué par une extension via `VidocqExtension.configKeys()`.
+====
 
 [NOTE]
 ====

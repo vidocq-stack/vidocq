@@ -82,6 +82,11 @@ public class VidocqPackageMojo extends AbstractMojo {
     @Parameter(defaultValue = "${project.artifactId}", property = "vidocq.scriptName")
     private String scriptName;
 
+    /**
+     * Extra JVM arguments inserted in the generated launchers. Genuinely optional: an empty
+     * {@code defaultValue} is <em>not</em> injected by Maven, so an omitted {@code <jvmArgs>}
+     * leaves this field {@code null} — always read it through {@link #jvmArgsLine()}.
+     */
     @Parameter(defaultValue = "", property = "vidocq.jvmArgs")
     private String jvmArgs;
 
@@ -152,8 +157,16 @@ public class VidocqPackageMojo extends AbstractMojo {
         }
     }
 
-    private void generateShScript(Path binDir) throws IOException {
-        String jvmArgsLine = (jvmArgs == null || jvmArgs.isBlank()) ? "" : " " + jvmArgs;
+    /**
+     * The JVM-argument fragment spliced into a launcher: empty when {@code <jvmArgs>} is absent,
+     * blank, or left at its (uninjected) default, else the arguments preceded by a single space.
+     */
+    private String jvmArgsLine() {
+        return jvmArgs == null || jvmArgs.isBlank() ? "" : " " + jvmArgs.strip();
+    }
+
+    void generateShScript(Path binDir) throws IOException {
+        String jvmArgsLine = jvmArgsLine();
         String script;
         if (layerMode && trampolineRef() != null) {
             // @VidocqMain trampoline launch: the app rides the module path; Vidocq.run()
@@ -197,8 +210,8 @@ public class VidocqPackageMojo extends AbstractMojo {
         shFile.toFile().setExecutable(true);
     }
 
-    private void generateCmdScript(Path binDir) throws IOException {
-        String jvmArgsLine = (jvmArgs == null || jvmArgs.isBlank()) ? "" : " " + jvmArgs;
+    void generateCmdScript(Path binDir) throws IOException {
+        String jvmArgsLine = jvmArgsLine();
         String script;
         if (layerMode && trampolineRef() != null) {
             script = """
