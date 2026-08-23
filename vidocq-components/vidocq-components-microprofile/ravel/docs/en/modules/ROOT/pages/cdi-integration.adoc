@@ -9,12 +9,12 @@ Ravel integrates with CDI via xref:vauban::index.adoc[Vauban] Build-Compatible E
 
 Add the dependency:
 
-[source,xml]
+[source,xml,subs=attributes+]
 ----
 <dependency>
     <groupId>io.vidocq.ravel</groupId>
     <artifactId>ravel-cdi-vauban</artifactId>
-    <version>0.2.0</version>
+    <version>{project-version}</version>
 </dependency>
 ----
 

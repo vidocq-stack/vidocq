@@ -1,9 +1,0 @@
-name: ravel-fr
-title: Ravel
-version: ~
-nav:
-  - modules/ROOT/nav.adoc
-asciidoc:
-  attributes:
-    lang: fr
-

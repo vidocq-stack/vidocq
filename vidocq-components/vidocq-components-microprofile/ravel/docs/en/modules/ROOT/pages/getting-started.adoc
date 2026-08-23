@@ -10,25 +10,25 @@
 
 Add Ravel to your `pom.xml`:
 
-[source,xml]
+[source,xml,subs=attributes+]
 ----
 <dependencies>
     <dependency>
         <groupId>io.vidocq.ravel</groupId>
         <artifactId>ravel-api</artifactId>
-        <version>0.2.0</version>
+        <version>{project-version}</version>
     </dependency>
 </dependencies>
 ----
 
 For CDI integration (optional), also add:
 
-[source,xml]
+[source,xml,subs=attributes+]
 ----
 <dependency>
     <groupId>io.vidocq.ravel</groupId>
     <artifactId>ravel-cdi-vauban</artifactId>
-    <version>0.2.0</version>
+    <version>{project-version}</version>
 </dependency>
 ----
 
