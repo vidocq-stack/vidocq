@@ -61,38 +61,35 @@ The other `io.vidocq.runtime.*.extension` modules each correspond to a built-in 
 
 | `vidocq.http.host`
 | `0.0.0.0`
-| Bind address of the `default` listener. Alias for `vidocq.chappe.listener.default.host`.
+| Chappe transport bind address.
 
 | `vidocq.http.port`
 | `8080`
-| Port of the `default` listener (HTTP/1.1 + H2c). Alias for `vidocq.chappe.listener.default.port`.
+| HTTP/1.1 + H2c port.
 
-| `vidocq.chappe.listeners`
-| `default`
-| CSV list of listeners to start.
+| `vidocq.https.port`
+| (disabled)
+| HTTPS/H2/H3 port if TLS is configured.
 
-| `vidocq.chappe.listener.<name>.host` +
-`vidocq.chappe.listener.<name>.port`
-| `0.0.0.0` +
-`8080` (for `default`)
-| Bind of a named listener. Takes precedence over the `vidocq.http.*` alias; any listener other than `default` must declare its port.
-
-| `vidocq.http.mount.<name>.*`
+| `vidocq.tls.cert`
 | —
-| Declarative mounts (static resources, …).
+| Path to PEM certificate.
 
-| `vidocq.pool.url` +
-`vidocq.pool.username` / `vidocq.pool.password`
+| `vidocq.tls.key`
 | —
-| JDBC coordinates of the default Mansart datasource. A named datasource uses `vidocq.pool.<name>.url`.
+| Path to PEM private key.
 
-| `vidocq.pool.maxSize`
+| `vidocq.datasource.url`
+| —
+| JDBC URL for Mansart.
+
+| `vidocq.datasource.username` / `vidocq.datasource.password`
+| —
+| JDBC credentials.
+
+| `vidocq.datasource.pool.maxSize`
 | `20`
-| Mansart pool maximum size. See the Mansart pool extension for `minIdle`, `acquireTimeout`, `validation`, `xa`, …
-
-| `vidocq.rest.context-path`
-| `/`
-| Prefix under which Cassini mounts the JAX-RS application.
+| Mansart pool maximum size.
 
 | `vidocq.profile`
 | (empty)
@@ -102,17 +99,6 @@ The other `io.vidocq.runtime.*.extension` modules each correspond to a built-in 
 | (empty)
 | External override directory (`ExternalFileConfigSource`, ordinal 250).
 |===
-
-TLS is not implemented yet: `vidocq.https.port`, `vidocq.tls.cert` and `vidocq.tls.key` are
-*planned*, and setting them today has no effect.
-
-[NOTE]
-====
-A `vidocq.*` key that no extension consumes is applied by nobody: the application silently keeps
-the default, and the mistake stays invisible whenever the configured value happens to *be* the
-default. Since 0.3.0 the runtime reports such a key as a startup warning, for every namespace an
-extension claims through `VidocqExtension.configKeys()`.
-====
 
 [NOTE]
 ====
