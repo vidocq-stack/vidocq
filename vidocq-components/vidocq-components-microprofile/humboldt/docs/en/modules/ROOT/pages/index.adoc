@@ -59,7 +59,7 @@ OpenTelemetry is the _Naturgemälde_ of distributed systems. Humboldt embeds it 
 [mermaid]
 ....
 flowchart LR
-  App[User application] -->|@WithSpan, MP Telemetry API| API[humboldt-api]
+  App[User application] -->|"@WithSpan, MP Telemetry API"| API[humboldt-api]
   HTTP[Inbound HTTP request] -->|traceparent, tracestate| Prop[humboldt-propagator-w3c]
   Prop --> Ctx[humboldt-context]
   API --> Trace[humboldt-sdk-trace]
@@ -74,7 +74,7 @@ flowchart LR
   Exp -->|HTTP/JSON or /protobuf| Coll[OTel Collector]
   Cassini[cassini-core] -->|filter| REST[humboldt-rest]
   REST --> API
-  Vauban[vauban-core] -->|@Inject Tracer/Meter/Logger| CDI[humboldt-cdi]
+  Vauban[vauban-core] -->|"@Inject Tracer/Meter/Logger"| CDI[humboldt-cdi]
   CDI --> API
   Ravel[ravel-core] -->|otel.*, mp.telemetry.*| Runtime[humboldt-runtime]
   Runtime --> Trace
