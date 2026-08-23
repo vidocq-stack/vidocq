@@ -163,7 +163,7 @@ workaround as upstream modules are fixed.
 ## BUG-20260823-01 — main build-and-deploy fails: javadoc jar on knock-cdi-vauban has nothing to document
 
 - **Date** : 2026-08-23
-- **Statut** : FIXED (6a485ea)
+- **Statut** : FIXED (58e1f31)
 - **Module touché** : knock-cdi-vauban (maven-javadoc-plugin attach-javadocs)
 - **Symptôme** : `build-and-deploy` on main is red since 2026-07-26 (first failure right
   after PR #17 merged, well before the Codefloe migration — reproduced identically on the
