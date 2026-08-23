@@ -19,7 +19,7 @@
 
     <name>Cervantes</name>
     <description>Implémentation MicroProfile JWT 2.1 — zéro librairie tierce, crypto via java.security, JSON via Champollion, config via Ravel, Java Modules strict, virtual threads, CDI via Vauban</description>
-    <url>https://codeberg.org/Vidocq/cervantes</url>
+    <url>https://codefloe.com/Vidocq/cervantes</url>
 
     <!--
         Disjunctive triple license: a recipient may use this software under
@@ -47,9 +47,9 @@
     </licenses>
 
     <scm>
-        <url>https://codeberg.org/Vidocq/cervantes</url>
-        <connection>scm:git:https://codeberg.org/Vidocq/cervantes.git</connection>
-        <developerConnection>scm:git:git@codeberg.org:Vidocq/cervantes.git</developerConnection>
+        <url>https://codefloe.com/Vidocq/cervantes</url>
+        <connection>scm:git:https://codefloe.com/Vidocq/cervantes.git</connection>
+        <developerConnection>scm:git:git@codefloe.com:Vidocq/cervantes.git</developerConnection>
     </scm>
 
     <properties>
