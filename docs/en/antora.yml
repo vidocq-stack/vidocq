@@ -1,5 +1,5 @@
 name: vidocq
-title: Vidocq
+title: Vidocq Runtime
 version: '0.2.0'
 nav:
   - modules/ROOT/nav.adoc
