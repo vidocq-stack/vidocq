@@ -1,8 +1,0 @@
-name: dirac-fr
-title: Dirac
-version: ~
-nav:
-  - modules/ROOT/nav.adoc
-asciidoc:
-  attributes:
-    lang: fr

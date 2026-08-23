@@ -20,23 +20,23 @@ sdk env
 
 `dirac-core` contains the pure-Java implementations (Counter, Gauge, Histogram, Timer, registry, formatters). `dirac-cdi-vauban` adds the interceptors and the `DiracExtension` BCE. `dirac-rest` exposes the optional `GET /metrics` endpoint. For a standard application, declare all three and let the runtime wire the rest.
 
-[source,xml]
+[source,xml,subs=attributes+]
 ----
 <dependencies>
     <dependency>
         <groupId>io.vidocq.dirac</groupId>
         <artifactId>dirac-core</artifactId>
-        <version>0.2.0</version>
+        <version>{project-version}</version>
     </dependency>
     <dependency>
         <groupId>io.vidocq.dirac</groupId>
         <artifactId>dirac-cdi-vauban</artifactId>
-        <version>0.2.0</version>
+        <version>{project-version}</version>
     </dependency>
     <dependency>
         <groupId>io.vidocq.dirac</groupId>
         <artifactId>dirac-rest</artifactId>
-        <version>0.2.0</version>
+        <version>{project-version}</version>
     </dependency>
     <dependency>
         <groupId>org.eclipse.microprofile.metrics</groupId>
