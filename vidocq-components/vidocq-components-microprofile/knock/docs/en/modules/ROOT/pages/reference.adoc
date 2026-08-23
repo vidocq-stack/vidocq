@@ -6,7 +6,7 @@ This page lists every artefact published by Knock, the Java Modules packages the
 
 == Maven artefacts
 
-All artefacts share the version `0.2.0` under the `io.vidocq.knock` group.
+All artefacts share the version `{project-version}` under the `io.vidocq.knock` group.
 
 [cols="2,1,3"]
 |===

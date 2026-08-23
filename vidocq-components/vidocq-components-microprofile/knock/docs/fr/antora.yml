@@ -1,8 +1,0 @@
-name: knock-fr
-title: Knock
-version: ~
-nav:
-  - modules/ROOT/nav.adoc
-asciidoc:
-  attributes:
-    lang: fr

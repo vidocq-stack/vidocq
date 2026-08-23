@@ -14,10 +14,10 @@ This page shows how to add Knock to a project, write a first `HealthCheck`, let 
 
 Pick the modules matching your integration level. For a CDI + Jakarta REST application you need the API plus the two integration modules:
 
-[source,xml]
+[source,xml,subs=attributes+]
 ----
 <properties>
-    <knock.version>0.2.0</knock.version>
+    <knock.version>{project-version}</knock.version>
 </properties>
 
 <dependencies>

@@ -1,8 +1,0 @@
-* xref:index.adoc[Knock]
-** xref:getting-started.adoc[Demarrage rapide]
-** xref:usage.adoc[Usage]
-** xref:concepts.adoc[Concepts]
-** xref:internals.adoc[Fonctionnement interne]
-** xref:tck.adoc[TCK]
-** xref:reference.adoc[Reference]
-** xref:migration.adoc[Migration]
