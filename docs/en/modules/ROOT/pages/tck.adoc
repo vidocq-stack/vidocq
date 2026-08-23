@@ -30,31 +30,38 @@ Vidocq Runtime inherits TCK passes from its foundational bricks and exposes its 
 | 774 / 774
 | via xref:vauban::tck.adoc[Vauban]
 
-| MicroProfile Config 3.x
-| Planned
-| `vidocq-runtime-config-extension` in progress
+| MicroProfile Config 3.1
+| 349 green
+| in-reactor runner on the assembled runtime
 
-| MicroProfile Health 4.x
-| Planned
-| `vidocq-runtime-health-extension` in progress
+| MicroProfile Health 4.0
+| 28 green
+| in-reactor runner on the assembled runtime
 
-| MicroProfile Metrics 5.x
-| Planned
-| `vidocq-runtime-metrics-extension` in progress
+| MicroProfile Metrics 5.1
+| 127 green
+| in-reactor runner on the assembled runtime
+
+| MicroProfile Fault Tolerance 4.1
+| 463 green
+| in-reactor runner on the assembled runtime
+
+| MicroProfile JWT Auth 2.1
+| 206 green
+| in-reactor runner (documented `ejb`/`jacc`/`servlet` exclusions)
+
+| MicroProfile Rest Client 4.0
+| 235 green
+| in-reactor runner on the assembled runtime
+
+| MicroProfile Telemetry 2.1
+| 85 green
+| in-reactor runner on the assembled runtime
 
 | MicroProfile OpenAPI 4.x
-| Planned
-| `vidocq-runtime-openapi-extension` in progress
-
-| MicroProfile JWT Auth
-| Planned
-| Later milestone
+| 344 green
+| in-reactor runner on the assembled runtime
 |===
-
-[NOTE]
-====
-// TODO@user: update pass/total ratios for the MicroProfile TCKs once the official runners are wired in.
-====
 
 == Inherited Jakarta TCKs
 
@@ -65,7 +72,7 @@ Vidocq Runtime does not re-run Jakarta TCKs: they are validated by the underlyin
 * `champollion-tck` — JSON-P 2.1 + JSON-B 3.0
 * `vauban-tck-runner` — CDI 4.1 Lite (774/774)
 
-All of them are **deliberately outside the reactor** (standalone POM `modelVersion 4.0.0`, no `<parent>`). The reason is documented in the workspace `CLAUDE.md`: ShrinkWrap Resolver 3.3's `ClasspathWorkspaceReader` (transitive of the official TCK) relies on `maven-resolver 1.9` and cannot parse Maven Model 4.1.0 POMs used in Vidocq.
+All of them are **deliberately outside the reactor** (standalone POM `modelVersion 4.0.0`, no `<parent>`). The historical trigger — a ShrinkWrap Resolver incompatibility with the Maven Model 4.1 POMs of the pre-migration workspace — is gone; the separation is kept on purpose to **decouple the release cycle of each brick from the release cycle of its official TCK** (a TCK upstream bump must not force a runtime release, and vice versa).
 
 Operational consequence: these TCKs always launch via their dedicated shell script, never via `mvn -pl`.
 
@@ -78,14 +85,20 @@ cd vidocq-servlet-chappe-tck-runner
 ./run-official-tck-servlet6.1.sh
 ----
 
-== MicroProfile TCKs
+== MicroProfile TCKs on the assembled runtime
 
-The targeted MicroProfile TCKs (Config, Health, Metrics, OpenAPI) will be wired in progressively as the corresponding extensions ship. The runner architecture follows the same principle: an outside-reactor module with its own ShrinkWrap dependency, launched via a `run-official-tck-mp-<spec>.sh` script.
+Unlike the Jakarta suites above (run per brick), the MicroProfile TCKs are run **against the assembled Vidocq runtime** — the exact boot path a real application uses. Eight runner modules live in `vidocq-runtime-integration-tests/vidocq-runtime-tck-*`, guarded behind the `tck` Maven profile so a normal `mvn install` downloads and runs nothing:
 
-[NOTE]
-====
-// TODO@user: document the chosen harness (Arquillian + patched ShrinkWrap fork or in-house substitute) once the first MP extension ships.
-====
+[source,bash]
+----
+./mvnw -Ptck -pl vidocq-runtime-integration-tests -amd test
+----
+
+Status: **1837 official TCK tests green** across all eight MicroProfile 7.1 component specs (Config 3.1: 349, Fault Tolerance 4.1: 463, OpenAPI: 344, Rest Client 4.0: 235, JWT Auth 2.1: 206, Metrics 5.1: 127, Telemetry 2.1: 85, Health 4.0: 28), with no suite exclusion except the documented `ejb`/`jacc`/`servlet` categories of the JWT suite. Run details and per-module reports: `vidocq-runtime-integration-tests/TCK.md` in the repo.
+
+Two additional runners are not MicroProfile: Jakarta Annotations 3.0 (signature test, 1/1) and the **Jakarta Core Profile 11 composite TCK** (10/13 on JDK 25). All seven constituent Core Profile spec TCKs pass; the profile-level certification request is *pre-filing* — it certifies a released product, and will be filed with the next release.
+
+NOTE: To be precise about wording: Vidocq *passes* these official TCK suites; no formal MicroProfile compatibility filing has been made yet. The per-brick runners listed on each component's TCK page remain the authority for each individual implementation.
 
 == Justified skipped tests
 
