@@ -21,7 +21,7 @@ The Mansart persistence layer applies the same separation: the foundation of an 
 | {spec-data-1}[Jakarta Data 1.0] + {spec-jpa-3-2}[Jakarta Persistence 3.2] *(M7 pending)* + Jakarta Transactions 2.0
 
 | Repository
-| {repo-mansart}[codeberg.org/Vidocq/mansart]
+| {repo-mansart}[codefloe.com/Vidocq/mansart]
 
 | Java
 | 25 (LTS)
