@@ -19,7 +19,7 @@
 
     <name>Heisenberg</name>
     <description>Implémentation MicroProfile Fault Tolerance 4.1 — zéro librairie tierce, virtual threads, Java Modules strict, CDI via Vauban, config via Ravel</description>
-    <url>https://codeberg.org/Vidocq/heisenberg</url>
+    <url>https://codefloe.com/Vidocq/heisenberg</url>
 
     <!--
         Disjunctive triple license: a recipient may use this software under
