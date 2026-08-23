@@ -19,7 +19,7 @@
 
     <name>Ravel</name>
     <description>Implémentation MicroProfile Config 3.1 — zéro librairie tierce, virtual threads, Java Modules strict</description>
-    <url>https://codeberg.org/Vidocq/ravel</url>
+    <url>https://codefloe.com/Vidocq/ravel</url>
 
     <!--
         Disjunctive triple license: a recipient may use this software under
