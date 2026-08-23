@@ -17,8 +17,7 @@ New in the `{project-version}` development line — everything listed here lande
 
 == Persistence — Mansart
 
-* [.tag-new]#NEW# **Named datasources routing** — `@Repository(dataStore = "...")` now routes to its named pool (`vidocq.pool.<name>.*`), with `@Inject @Named` datasource holders generated at compile time. See xref:mansart::usage.adoc[Mansart usage].
-* [.tag-new]#NEW# **PostgreSQL Dev Services** — dev mode provisions disposable containers per declared datasource, nothing to install. See the xref:tutorials::rest-and-database.adoc[REST + database tutorial].
+* [.tag-new]#NEW# **Named datasources routing actually works end to end** — on 0.2.0, `@Repository(dataStore = "...")` silently hit the default datasource (MANSART-005); the dev line routes it to its named pool (`vidocq.pool.<name>.*`), pairing with the PostgreSQL Dev Services one-container-per-datasource provisioning. See xref:mansart::usage.adoc[Mansart usage].
 
 == New brick
 
