@@ -156,4 +156,4 @@ Any structural change to `heisenberg-core` or `heisenberg-cdi-vauban` must prese
 
 * xref:internals.adoc[Internals] — understand what the TCK validates (pipeline, engines, observability).
 * xref:reference.adoc[Reference] — annotations and keys covered by the tests.
-* link:https://codeberg.org/Vidocq/heisenberg/src/branch/main/BUG.md[BUG.md] — tracked reproducible bugs.
+* link:https://codefloe.com/Vidocq/heisenberg/src/branch/main/BUG.md[BUG.md] — tracked reproducible bugs.

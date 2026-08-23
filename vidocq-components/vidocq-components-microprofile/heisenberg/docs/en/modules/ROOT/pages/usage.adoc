@@ -184,12 +184,12 @@ public void fireAndForget() { /* ... */ } // void is forbidden, see spec §6.1
 
 == Maven coordinates
 
-[source,xml]
+[source,xml,subs=attributes+]
 ----
 <dependency>
   <groupId>io.vidocq.heisenberg</groupId>
   <artifactId>heisenberg-cdi-vauban</artifactId>
-  <version>0.2.0</version>
+  <version>{project-version}</version>
 </dependency>
 ----
 

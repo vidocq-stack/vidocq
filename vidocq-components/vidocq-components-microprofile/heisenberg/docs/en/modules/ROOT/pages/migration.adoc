@@ -3,7 +3,7 @@
 
 [CAUTION]
 ====
-Heisenberg is released as `0.2.0` on Maven Central (`0.3.0-SNAPSHOT` in development). The MicroProfile Fault Tolerance 4.1 spec is fully covered (TCK 463/463, see xref:tck.adoc[TCK status]), but the public SPI `io.vidocq.heisenberg.api.*` may still change before `1.0.0`. This page documents the model correspondences to prepare a progressive migration.
+Heisenberg is at `{project-version}` (latest release on Maven Central: `{release-version}`). The MicroProfile Fault Tolerance 4.1 spec is fully covered (TCK 463/463, see xref:tck.adoc[TCK status]), but the public SPI `io.vidocq.heisenberg.api.*` may still change before `1.0.0`. This page documents the model correspondences to prepare a progressive migration.
 ====
 
 [.lead]
@@ -134,4 +134,4 @@ If application code uses `synchronized` or `ThreadLocal` inside a method annotat
 
 * xref:concepts.adoc[Concepts] — MP FT model, canonical order.
 * xref:internals.adoc[Internals] — virtual threads, StateRegistry, observability.
-* link:https://codeberg.org/Vidocq/heisenberg/src/branch/main/BUG.md[BUG.md] — known pitfalls.
+* link:https://codefloe.com/Vidocq/heisenberg/src/branch/main/BUG.md[BUG.md] — known pitfalls.

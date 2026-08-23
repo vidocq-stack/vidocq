@@ -20,13 +20,13 @@ sdk env                              # Java 25 + Maven 3.9.16
 
 `heisenberg-cdi-vauban` brings the interceptor and the Vauban BCE; it transitively pulls `heisenberg-core` (the pure engines) and `heisenberg-api` (the SPI). A single dependency entry is enough in the application `pom.xml`.
 
-[source,xml]
+[source,xml,subs=attributes+]
 ----
 <dependencies>
     <dependency>
         <groupId>io.vidocq.heisenberg</groupId>
         <artifactId>heisenberg-cdi-vauban</artifactId>
-        <version>0.2.0</version>
+        <version>{project-version}</version>
     </dependency>
     <dependency>
         <groupId>org.eclipse.microprofile.fault-tolerance</groupId>

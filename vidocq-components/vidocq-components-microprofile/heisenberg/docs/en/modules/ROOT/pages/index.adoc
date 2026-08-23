@@ -41,7 +41,7 @@ Heisenberg established that **uncertainty is intrinsic, not a flaw of the instru
 [cols="1,3"]
 |===
 | Implemented spec | MicroProfile Fault Tolerance 4.1
-| Repository | https://codeberg.org/Vidocq/heisenberg
+| Repository | https://codefloe.com/Vidocq/heisenberg
 | Java | 25 (LTS)
 | Java modules | `io.vidocq.heisenberg.api`, `io.vidocq.heisenberg.core`, `io.vidocq.heisenberg.cdi.vauban`
 | Public packages | `io.vidocq.heisenberg.api.*` (stable SPI), `io.vidocq.heisenberg.cdi.*` (CDI integration)
@@ -100,6 +100,6 @@ The chain wrapping order follows MP FT 4.1 spec §2.5 — `@Fallback` is the out
 * xref:tck.adoc[TCK] — execution, status, `no-observability` mode.
 * xref:migration.adoc[Migration] — from SmallRye Fault Tolerance or Resilience4j.
 
-Consolidated bugs and benchmarks: link:https://codeberg.org/Vidocq/heisenberg/src/branch/main/BUG.md[BUG.md], link:https://codeberg.org/Vidocq/heisenberg/src/branch/main/BENCH.md[BENCH.md].
+Consolidated bugs and benchmarks: link:https://codefloe.com/Vidocq/heisenberg/src/branch/main/BUG.md[BUG.md], link:https://codefloe.com/Vidocq/heisenberg/src/branch/main/BENCH.md[BENCH.md].
 
 Next: xref:getting-started.adoc[Getting started].
