@@ -12,6 +12,13 @@
 
     <artifactId>knock-cdi-vauban</artifactId>
     <name>Knock :: CDI Vauban Integration</name>
+
+    <properties>
+        <!-- Every class here is package-private (ServiceLoader provider + generated
+             wiring only). javadoc has no public API to document; still produce the
+             (empty) javadoc jar for the release train instead of failing the build. -->
+        <maven.javadoc.failOnError>false</maven.javadoc.failOnError>
+    </properties>
     <description>Intégration CDI 4.1 (Vauban) — découverte auto des @Liveness/@Readiness/@Startup via BCE</description>
 
     <dependencies>

@@ -159,3 +159,26 @@ workaround as upstream modules are fixed.
     Fixed: version.properties filtered by Maven next to the class, constant loaded at class
     init (same-module Java Modules resource, no opens). No longer compile-time-inlineable, which
     also protects future consumers from the javac inlining trap.
+
+## BUG-20260823-01 — main build-and-deploy fails: javadoc jar on knock-cdi-vauban has nothing to document
+
+- **Date** : 2026-08-23
+- **Statut** : FIXED (6a485ea)
+- **Module touché** : knock-cdi-vauban (maven-javadoc-plugin attach-javadocs)
+- **Symptôme** : `build-and-deploy` on main is red since 2026-07-26 (first failure right
+  after PR #17 merged, well before the Codefloe migration — reproduced identically on the
+  Codefloe runners). `maven-javadoc-plugin:3.11.2:jar` fails with
+  "error: No public or protected classes found to document."
+- **Reproduction minimale** :
+  ```
+  ./mvnw -pl knock-cdi-vauban javadoc:jar
+  ```
+- **Hypothèse de cause** : the BCE static-metadata wave made every class in
+  knock-cdi-vauban package-private (the module only ships a ServiceLoader provider and
+  generated wiring); javadoc then has zero public API to document and fails the build.
+- **Investigations** :
+  - 2026-08-23 : surfaced by the post-migration CI sweep on codefloe.com; Codeberg run
+    history shows the same failure on 2026-07-26. Candidate fix: set
+    `<maven.javadoc.failOnError>false</maven.javadoc.failOnError>` in the module POM so an
+    (empty) javadoc jar is still produced for the release train, rather than skipping the
+    javadoc jar entirely (Central requires the artifact's presence).
