@@ -53,7 +53,7 @@ flowchart LR
   Ravel -->|cascading lookup| Props["microprofile-config.properties<br/>ordinal: 100"]
   Ravel -->|cascading lookup| Custom["Custom ConfigSource<br/>via SPI"]
 
-  Ravel -->|@Inject| Vauban["Vauban<br/>CDI Lite"]
+  Ravel -->|"@Inject"| Vauban["Vauban<br/>CDI Lite"]
 
   Ravel -->|type conversion| Converters["Built-in converters<br/>primitives, collections, temporal, etc."]
   Ravel -->|property resolution| Expressions["Property expressions<br/>${key}, ${key:default}"]
