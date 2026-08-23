@@ -138,11 +138,55 @@ var ds = MansartDataSource.create(PoolConfig.builder()
 
 === Sizing
 
-With virtual threads, the classic "threads = connections" sizing disappears: dimension on real DB concurrency, not application concurrency. Rule of thumb: `maxSize ≈ DB vCPUs × 2..4`. Beyond that, the DB becomes the bottleneck — see lien:{repo-mansart}/src/branch/main/mansart-pool/BENCH.md[mansart-pool BENCH.md].
+With virtual threads, the classic "threads = connections" sizing disappears: dimension on real DB concurrency, not application concurrency. Rule of thumb: `maxSize ≈ DB vCPUs × 2..4`. Beyond that, the DB becomes the bottleneck — see link:{repo-mansart}/src/branch/main/mansart-pool/BENCH.md[mansart-pool BENCH.md].
 
 === Leak detection
 
 `leakDetectionThreshold(Duration)` logs a warning + acquisition stack trace when a connection stays borrowed longer than the threshold. Enable in staging, disable in production if the overhead is measured.
+
+== Named datasources (`dataStore`) in Vidocq
+
+In a Vidocq application, the pool is configured declaratively (the `vidocq-runtime-mansart-pool-extension` reads `vidocq.pool.*` keys) and one application can talk to **several databases**. Names are *structural* (fixed at build time), values are runtime MicroProfile Config.
+
+Declare a named pool alongside the default one — the name is the single path segment after `vidocq.pool.`:
+
+[source,properties]
+----
+# @Default datasource
+vidocq.pool.url=jdbc:postgresql://db.local:5432/shop
+vidocq.pool.username=shop
+vidocq.pool.maxSize=16
+
+# named datasource "audit"
+vidocq.pool.audit.url=jdbc:postgresql://db.local:5432/audit
+vidocq.pool.audit.username=audit
+vidocq.pool.audit.maxSize=4
+----
+
+Every sizing key of `PoolConfig` has its property twin (`minIdle`, `maxSize`, `acquireTimeout`, `idleTimeout`, `maxLifetime`, `validationTimeout`, `validation`, `validationQuery`, `leakDetectionThreshold`), for the default and for each name. Names can also be declared with `@VidocqDataSources({"audit"})` on the application class; the two declaration paths are merged and deduplicated.
+
+Route a repository to a named datasource with the standard Jakarta Data attribute:
+
+[source,java]
+----
+@Repository(dataStore = "audit")
+public interface AuditEntryRepository extends BasicRepository<AuditEntry, Long> { }
+----
+
+And inject the raw datasource anywhere with the generated `@Named` holder:
+
+[source,java]
+----
+@Inject
+@Named("audit")
+DataSource auditDataSource;
+----
+
+Named datasources need the `vidocq-runtime-mansart-pool-datasources-codegen` jar on the compiler's `annotationProcessorPaths` (it generates the `@Named` holder beans). The end-to-end walkthrough — including this wiring — is the xref:tutorials::rest-and-database.adoc[REST + database tutorial]; the runnable reference is `vidocq-runtime-examples/vidocq-runtime-mansart-h2-example` in the runtime repo.
+
+NOTE: Repositories routed via `dataStore` are built by the repository factory without interceptor enhancement; transactional semantics are handled, but custom CDI interceptors on such repositories are not applied today (tracked in the repo's `BUG.md`).
+
+In dev mode, the runtime's PostgreSQL Dev Service can provision one disposable container per declared datasource name — nothing to install or configure. See `DEV_SERVICES.md` in the {repo-vidocq}[Vidocq runtime repo].
 
 == Composition with other modules
 
