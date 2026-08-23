@@ -19,7 +19,7 @@
 
     <name>Humboldt</name>
     <description>Implémentation MicroProfile Telemetry 2.1 — tracing/metrics/logs OpenTelemetry-native, Java Modules strict, zéro SDK tiers, Java 25.</description>
-    <url>https://codeberg.org/Vidocq/humboldt</url>
+    <url>https://codefloe.com/Vidocq/humboldt</url>
 
     <developers>
         <developer>
@@ -54,9 +54,9 @@
     </licenses>
 
     <scm>
-        <connection>scm:git:https://codeberg.org/Vidocq/humboldt.git</connection>
+        <connection>scm:git:https://codefloe.com/Vidocq/humboldt.git</connection>
         <developerConnection>scm:git:ssh://git@forge.vidocq.dev:vidocq/humboldt.git</developerConnection>
-        <url>https://codeberg.org/Vidocq/humboldt</url>
+        <url>https://codefloe.com/Vidocq/humboldt</url>
     </scm>
 
     <properties>
