@@ -8,7 +8,7 @@
 
 [cols="1,3"]
 |===
-| Parent artefact | `io.vidocq.runtime.extensions:vidocq-runtime-extensions:0.2.0`
+| Parent artefact | `io.vidocq.runtime.extensions:vidocq-runtime-extensions:{project-version}`
 | Source | `vidocq-runtime-extensions/`
 |===
 
@@ -122,12 +122,12 @@ Other extensions follow comparable scheduling logic with their own priorities.
 
 An extension activates as soon as it is on the module-path. No `@EnableX` annotation is required — the APT index detects the Java Modules `provides VidocqExtension` declaration.
 
-[source,xml]
+[source,xml,subs=attributes+]
 ----
 <dependency>
     <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
     <artifactId>vidocq-runtime-cassini-rest-extension</artifactId>
-    <version>0.2.0</version>
+    <version>{project-version}</version>
 </dependency>
 ----
 

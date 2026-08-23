@@ -10,25 +10,25 @@ Operational reference for Vidocq Runtime — Maven coordinates, MicroProfile Con
 |===
 | Artefact | Role
 
-| `io.vidocq.runtime:vidocq-runtime-parent:0.2.0`
+| `io.vidocq.runtime:vidocq-runtime-parent:{project-version}`
 | Parent POM (Model 4.1.0)
 
-| `io.vidocq.runtime:vidocq-runtime-spi:0.2.0`
+| `io.vidocq.runtime:vidocq-runtime-spi:{project-version}`
 | Public SPI (`@BuildStep`, `@Recorder`, `BuildItem`)
 
-| `io.vidocq.runtime:vidocq-runtime-core:0.2.0`
+| `io.vidocq.runtime:vidocq-runtime-core:{project-version}`
 | Runtime engine (boot orchestrator, lifecycle)
 
-| `io.vidocq.runtime.extensions:vidocq-runtime-extensions:0.2.0`
+| `io.vidocq.runtime.extensions:vidocq-runtime-extensions:{project-version}`
 | Aggregator of the shipped extensions, grouped by domain (essentials, jakartaee-core, jakartaee-web, microprofile, module-repackaged)
 
-| `io.vidocq.runtime:vidocq-runtime-maven-plugin:0.2.0`
+| `io.vidocq.runtime:vidocq-runtime-maven-plugin:{project-version}`
 | Maven plugin — `build`, `jlink`, `jpackage`, `docker`
 
-| `io.vidocq.runtime:vidocq-runtime-examples:0.2.0`
+| `io.vidocq.runtime:vidocq-runtime-examples:{project-version}`
 | Examples (`vidocq-runtime-cassini-rest-example`, `vidocq-runtime-mansart-h2-example`, `vidocq-runtime-external-rest-lib`)
 
-| `io.vidocq.runtime:vidocq-runtime-integration-tests:0.2.0`
+| `io.vidocq.runtime:vidocq-runtime-integration-tests:{project-version}`
 | Multi-extension integration tests
 |===
 

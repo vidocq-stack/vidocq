@@ -8,7 +8,7 @@
 
 [cols="1,3"]
 |===
-| Artefact | `io.vidocq.runtime:vidocq-runtime-spi:0.2.0`
+| Artefact | `io.vidocq.runtime:vidocq-runtime-spi:{project-version}`
 | Java module | `io.vidocq.runtime.spi`
 | Source | `vidocq-runtime-spi/src/main/java/io/vidocq/runtime/spi/`
 |===

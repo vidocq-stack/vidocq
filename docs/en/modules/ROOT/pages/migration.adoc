@@ -3,7 +3,7 @@
 
 [CAUTION]
 ====
-Vidocq Runtime is at **0.2.0**. Any real-world migration is premature — this page documents the mappings ahead of time.
+Vidocq Runtime is at **{project-version}**. Any real-world migration is premature — this page documents the mappings ahead of time.
 ====
 
 == Side-by-side comparison

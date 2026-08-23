@@ -27,10 +27,10 @@ irm https://vidocq.dev/install.ps1 | iex
 
 The script downloads the latest released CLI from Maven Central into `~/.vidocq/cli` and puts a `vidocq` launcher on your `PATH`. Verify:
 
-[source,bash]
+[source,bash,subs=attributes+]
 ----
 $ vidocq version
-Vidocq CLI 0.2.1
+Vidocq CLI {cli-version}
 ----
 
 NOTE: No installer needed? Download `vidocq-runtime-cli-<version>-cli.zip` from https://repo1.maven.org/maven2/io/vidocq/runtime/vidocq-runtime-cli/[Maven Central], unzip it anywhere, and add its `bin/` directory to your `PATH`.
@@ -55,7 +55,7 @@ todo/
   src/main/resources/
     vidocq.properties          <4>
 ----
-<1> Inherits `io.vidocq.runtime:vidocq-runtime-parent:0.2.0` and wires the `vidocq-runtime-maven-plugin` so `mvn package` produces a runnable distribution.
+<1> Inherits `io.vidocq.runtime:vidocq-runtime-parent:{release-version}` and wires the `vidocq-runtime-maven-plugin` so `mvn package` produces a runnable distribution.
 <2> Module descriptor, pre-filled with the `requires`/`opens` a REST app needs.
 <3> The entry point â€” boots the runtime with `VidocqBootstrap`.
 <4> MicroProfile-style configuration (`vidocq.http.port=8080`, â€¦).
@@ -92,13 +92,13 @@ No further wiring: the Cassini annotation processor generates the dispatch adapt
 
 == Step 4 â€” Build and run
 
-[source,bash]
+[source,bash,subs=attributes+]
 ----
 mvn package
-sh target/todo-0.2.0/bin/todo.sh
+sh target/todo-{release-version}/bin/todo.sh
 ----
 
-`mvn package` compiles, runs the code generators, and assembles a standalone distribution under `target/todo-0.2.0/` (launchers in `bin/`, module path in `lib/`). In another terminal:
+`mvn package` compiles, runs the code generators, and assembles a standalone distribution under `target/todo-{release-version}/` (launchers in `bin/`, module path in `lib/`). In another terminal:
 
 [source,bash]
 ----
@@ -152,7 +152,7 @@ The CLI is a convenience, not a requirement. The project above is plain Maven â€
 
 `pom.xml`:
 
-[source,xml]
+[source,xml,subs=attributes+]
 ----
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
@@ -163,7 +163,7 @@ The CLI is a convenience, not a requirement. The project above is plain Maven â€
     <parent>
         <groupId>io.vidocq.runtime</groupId>
         <artifactId>vidocq-runtime-parent</artifactId>
-        <version>0.2.0</version>
+        <version>{release-version}</version>
         <relativePath/>
     </parent>
 
@@ -180,12 +180,12 @@ The CLI is a convenience, not a requirement. The project above is plain Maven â€
         <dependency>
             <groupId>io.vidocq.runtime</groupId>
             <artifactId>vidocq-runtime-core</artifactId>
-            <version>0.2.0</version>
+            <version>{release-version}</version>
         </dependency>
         <dependency>
             <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
             <artifactId>vidocq-runtime-cassini-rest-extension</artifactId>
-            <version>0.2.0</version>
+            <version>{release-version}</version>
         </dependency>
     </dependencies>
 
@@ -216,7 +216,7 @@ The CLI is a convenience, not a requirement. The project above is plain Maven â€
                         <path>
                             <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
                             <artifactId>vidocq-runtime-cassini-rest-extension-codegen</artifactId>
-                            <version>0.2.0</version>
+                            <version>{release-version}</version>
                             <type>pom</type>
                         </path>
                     </annotationProcessorPaths>
