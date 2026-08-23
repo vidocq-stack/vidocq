@@ -146,6 +146,26 @@ class ChappeServerEndToEndTest {
         client.sendClose(java.net.http.WebSocket.NORMAL_CLOSURE, "bye");
     }
 
+    /**
+     * The exact report of Vidocq/chappe#7: a vidocq.properties carrying nothing but
+     * {@code vidocq.http.port} used to leave the application listening on 8080, so the setting was
+     * inert and the failure invisible whenever the configured value happened to be the default.
+     * The socket is the assertion.
+     */
+    @Test
+    void httpPortAliasAloneBindsTheAdvertisedPort() throws Exception {
+        ChappeMountPoint.instance().router(ChappeListener.DEFAULT)
+                .get("/", _ -> Response.ok("hello from core"));
+
+        var ctx = new FakeExtensionContext(TestConfig.of(Map.of(
+                "vidocq.http.port", Integer.toString(port))));
+        bootstrap.onStart(ctx);
+
+        HttpResponse<String> resp = get("http://127.0.0.1:" + port + "/");
+        assertEquals(200, resp.statusCode());
+        assertEquals("hello from core", resp.body());
+    }
+
     private static int freePort() throws Exception {
         try (ServerSocket s = new ServerSocket(0)) {
             return s.getLocalPort();

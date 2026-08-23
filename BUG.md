@@ -5,6 +5,47 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20260809-01 — the documented `vidocq.http.port` was read by nobody
+
+- **Date** : 2026-08-09
+- **Statut** : FIXED (2026-08-09, `pr/ybl/vidocq-http-port-alias`)
+- **Module touché** : vidocq-runtime-chappe-webserver-extension, vidocq-runtime-cli,
+  vidocq-runtime-core, docs
+- **Symptôme** : an application setting `vidocq.http.port` silently stayed on 8080. The key is
+  published everywhere — reference documentation, getting-started, the scaffolded
+  `vidocq.properties`, the blog tutorial — but the only key the extension read was
+  `vidocq.chappe.listener.<name>.port`. Invisible whenever the configured value happened to *be*
+  the default, which in a quickstart setting it to 8080 it always is.
+- **Reproduction minimale** :
+  ```properties
+  # src/main/resources/vidocq.properties, nothing else set
+  vidocq.http.port=9099
+  ```
+  ```
+  $ ./bin/app.sh && curl http://127.0.0.1:9099/   # connection refused; the app is on 8080
+  ```
+- **Hypothèse de cause** : the key was documented before the multi-listener configuration landed,
+  and nothing tied the reference table to the keys the code actually reads.
+- **Investigations** :
+  - 2026-08-09 : reported by Sébastien Blanc (Vidocq/chappe#7 — filed on the chappe repo, but
+    Chappe knows nothing about `vidocq.*` keys: the defect is in the runtime extension). Found
+    while building Rossignol, where the inert setting was carried for weeks.
+  - Scope was wider than reported. (a) `vidocq start --port` / `vidocq dev --port` published
+    `vidocq.http.port` as a system property, so **the CLI's own `--port` option was inert too**.
+    (b) The scaffolder writes the key into every generated project. (c) The reference table
+    documented three further families read by nobody: `vidocq.https.port` + `vidocq.tls.*`
+    (TLS is not implemented) and `vidocq.datasource.*` (the real prefix is `vidocq.pool.*`).
+    (d) `vidocq.http.mount.*` *was* live, so the `vidocq.http.` namespace was half-claimed —
+    which is precisely why the silence read as normal.
+  - Fixed by making `vidocq.http.{host,port}` a declared alias of the `default` listener
+    (the explicit listener key still wins), by publishing the canonical listener key from the CLI
+    and only when `--port` was actually typed (otherwise the CLI default would outrank the
+    project's own configuration), and by correcting the documentation.
+  - Generalised, as the reporter suggested: `VidocqExtension.configKeys()` lets an extension
+    declare the keys it consumes, and `ConfigKeyAudit` warns at startup about any configured
+    `vidocq.*` key that no extension reads. Opt-in per namespace, so an extension that declares
+    nothing never produces a false warning.
+
 ## VID-001 — Cervantes JWT extension wrapper BCE not openable on the module path
 
 - **Opening date**: 2026-06-02

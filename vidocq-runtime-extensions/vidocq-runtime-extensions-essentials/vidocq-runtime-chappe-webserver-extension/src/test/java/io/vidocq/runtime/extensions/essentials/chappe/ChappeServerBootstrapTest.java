@@ -82,4 +82,50 @@ class ChappeServerBootstrapTest {
     void priorityIsTenThousand() {
         assertEquals(10_000, new ChappeServerBootstrap().priority());
     }
+
+    // --- vidocq.http.* aliases (Vidocq/chappe#7) ------------------------------------------------
+    // The published documentation, the CLI (`vidocq start --port`) and every scaffolded
+    // vidocq.properties use vidocq.http.port. It used to be read by nobody, so the application
+    // silently stayed on 8080 — invisible whenever the configured value happened to be the default.
+
+    @Test
+    void httpPortAliasConfiguresTheDefaultListener() {
+        var listeners = new ChappeServerBootstrap().resolveListeners(TestConfig.of(Map.of(
+                "vidocq.http.port", "9099"
+        )));
+        assertEquals(1, listeners.size());
+        assertEquals(9099, listeners.get(0).port());
+    }
+
+    @Test
+    void httpHostAliasConfiguresTheDefaultListener() {
+        var listeners = new ChappeServerBootstrap().resolveListeners(TestConfig.of(Map.of(
+                "vidocq.http.host", "127.0.0.1"
+        )));
+        assertEquals("127.0.0.1", listeners.get(0).host());
+    }
+
+    @Test
+    void listenerKeyWinsOverTheHttpAlias() {
+        var listeners = new ChappeServerBootstrap().resolveListeners(TestConfig.of(Map.of(
+                "vidocq.http.port", "9099",
+                "vidocq.http.host", "127.0.0.1",
+                "vidocq.chappe.listener.default.port", "9100",
+                "vidocq.chappe.listener.default.host", "10.0.0.1"
+        )));
+        assertEquals(9100, listeners.get(0).port(), "the explicit listener key is the more specific one");
+        assertEquals("10.0.0.1", listeners.get(0).host());
+    }
+
+    @Test
+    void httpAliasAppliesOnlyToTheDefaultListener() {
+        // A named listener has no implicit port, and the alias must not silently satisfy it:
+        // vidocq.http.* means "the application's HTTP endpoint", i.e. the listener named 'default'.
+        var cfg = TestConfig.of(Map.of(
+                "vidocq.chappe.listeners", "admin",
+                "vidocq.http.port", "9099"));
+        var bootstrap = new ChappeServerBootstrap();
+        var ex = assertThrows(IllegalStateException.class, () -> bootstrap.resolveListeners(cfg));
+        assertTrue(ex.getMessage().contains("admin"));
+    }
 }

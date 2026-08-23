@@ -38,12 +38,19 @@ public sealed interface Command {
 
     record Help(String topic) implements Command {}
 
-    record Start(int port, Path configFile, boolean debug) implements Command {
-        static Start defaults() { return new Start(8080, null, false); }
+    /**
+     * {@code portExplicit} records whether {@code --port} was actually typed. Only then may the
+     * runner override the port the application configured for itself — publishing the default on
+     * every run would make {@code vidocq start} silently outrank the project's own
+     * {@code vidocq.properties}.
+     */
+    record Start(int port, boolean portExplicit, Path configFile, boolean debug) implements Command {
+        static Start defaults() { return new Start(8080, false, null, false); }
     }
 
-    record Dev(int port, String profile, boolean debug) implements Command {
-        static Dev defaults() { return new Dev(8080, "dev", false); }
+    /** See {@link Start} for the meaning of {@code portExplicit}. */
+    record Dev(int port, boolean portExplicit, String profile, boolean debug) implements Command {
+        static Dev defaults() { return new Dev(8080, false, "dev", false); }
     }
 
     record Doctor(boolean verbose) implements Command {

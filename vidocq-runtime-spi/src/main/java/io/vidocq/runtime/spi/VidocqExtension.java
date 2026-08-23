@@ -76,4 +76,24 @@ public interface VidocqExtension {
      * <p>Stop phase: release resources.</p>
      */
     default void onStop() {}
+
+    /**
+     * The {@code vidocq.*} configuration keys this extension consumes, declared so the runtime can
+     * tell a configured key apart from a key nobody reads.
+     *
+     * <p>A key that no extension consumes is applied by nobody: the application silently keeps the
+     * default, and the mistake is invisible whenever the configured value happens to <em>be</em> the
+     * default. Declaring keys here lets {@code VidocqBootstrap} report that at startup instead
+     * (see {@code ConfigKeyAudit}).
+     *
+     * <p>An entry ending in {@code *} is a prefix — {@code "vidocq.chappe.listener.*"} covers
+     * {@code vidocq.chappe.listener.admin.port}. Auditing is opt-in per namespace: keys are only
+     * reported under a {@code vidocq.<namespace>.} that some loaded extension claims, so an
+     * extension that declares nothing costs nothing and never produces false warnings.
+     *
+     * @return the consumed keys and key prefixes; empty by default
+     */
+    default java.util.Set<String> configKeys() {
+        return java.util.Set.of();
+    }
 }
