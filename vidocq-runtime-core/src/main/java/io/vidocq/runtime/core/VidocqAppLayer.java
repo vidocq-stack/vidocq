@@ -1,0 +1,300 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.runtime.core;
+
+import io.vidocq.vauban.classloader.VaubanLayerFactory;
+import io.vidocq.vauban.classloader.spi.PluginContext;
+
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.List;
+
+/**
+ * Universal-loader launch mode (Vauban class-loader study, M2): when
+ * {@value #APP_PATH_PROPERTY} is set, the application archives are NOT on the JVM module
+ * path — the runtime resolves them into a child module layer whose defining loader is the
+ * {@code VaubanClassLoader}, so every application class flows through the source and
+ * transformer plugins (sjar decryption, cdi-proxifier weaving) at definition. Exports and
+ * opens keep being enforced inside the child layer.
+ *
+ * <p>Must run before anything else touches application classes — it is the first call of
+ * {@link Vidocq#main}; extensions, configuration sources and the container all resolve
+ * application classes and resources through the context class loader installed here.
+ *
+ * <pre>{@code
+ * java -p <runtime modules> --add-modules ALL-MODULE-PATH \
+ *      -Dvidocq.app.path=app/target/classes:libs/extra.jar \
+ *      -m io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq
+ * }</pre>
+ *
+ * <p>An application {@code main} class (inside the layer) can be named with
+ * {@value #APP_MAIN_PROPERTY}: {@link Vidocq#main} then delegates to it after installing
+ * the layer — and when that main calls {@code Vidocq.main} back (the usual pattern), the
+ * second {@link #installIfConfigured()} is a no-op and the regular boot proceeds.
+ */
+public final class VidocqAppLayer {
+
+    /** {@code File.pathSeparator}-separated application archives (jars, dirs, sjars). */
+    public static final String APP_PATH_PROPERTY = "vidocq.app.path";
+    /** Binary name of an application main class to run once the layer is installed. */
+    public static final String APP_MAIN_PROPERTY = "vidocq.app.main";
+
+    private static final System.Logger LOG = System.getLogger(VidocqAppLayer.class.getName());
+
+    /** The layer installed by this JVM, kept for {@link #runAppMainIfConfigured}. */
+    private static volatile VaubanLayerFactory.AppLayer installed;
+    /** The context loader that was active before the layer install (reload restores it). */
+    private static volatile ClassLoader parentLoaderBeforeInstall;
+
+    private VidocqAppLayer() {}
+
+    /**
+     * Tears the current application layer down so the next {@link #installIfConfigured()}
+     * resolves a fresh one over the (recompiled) archives — the dev-mode hot reload.
+     * The old layer's classes become collectable once the new container drops the last
+     * reference; its archive readers are closed here.
+     */
+    static void resetForReload() {
+        var layer = installed;
+        if (layer == null) {
+            return;
+        }
+        installed = null;
+        Thread.currentThread().setContextClassLoader(parentLoaderBeforeInstall);
+        try {
+            layer.loader().close();
+        } catch (IOException e) {
+            LOG.log(System.Logger.Level.DEBUG, "Closing the old layer loader failed: " + e);
+        }
+    }
+
+    /**
+     * Creates the application layer and installs its loader as the context class loader
+     * when {@value #APP_PATH_PROPERTY} is set. Returns {@code true} when the layer was
+     * installed by THIS call — {@code false} when the property is absent or the layer is
+     * already in place (a {@code VaubanClassLoader} already sits in the context-loader
+     * chain), which is what makes application mains calling {@code Vidocq.main} back
+     * re-entrant.
+     */
+    public static boolean installIfConfigured() {
+        var property = System.getProperty(APP_PATH_PROPERTY, "").strip();
+        if (property.isEmpty()) {
+            return false;
+        }
+        if (alreadyInLayer()) {
+            return false;
+        }
+        List<Path> paths = Arrays.stream(property.split(File.pathSeparator))
+                .map(String::strip)
+                .filter(s -> !s.isEmpty())
+                .map(Path::of)
+                .toList();
+        var parentLayer = VidocqAppLayer.class.getModule().getLayer();
+        if (parentLayer == null) {
+            // class-path launch — the runtime lives in the unnamed module
+            parentLayer = ModuleLayer.boot();
+        }
+        return installLayer(paths, parentLayer, APP_PATH_PROPERTY + "=" + property);
+    }
+
+    /**
+     * The trampoline path ({@code Vidocq.run()} from a plain IDE launch): the caller's
+     * module was resolved into the boot layer together with the rest of the application.
+     * This re-resolves the application archives — the caller's own, plus every module of
+     * the caller's layer that carries {@code META-INF/vauban-beans.list} and is not a
+     * runtime/platform module — into a fresh Vauban layer. Module names deliberately
+     * shadow their boot-layer twins.
+     *
+     * <p>{@code -Dvidocq.app.modules=<name,name>} overrides the detection with an
+     * explicit module list.
+     */
+    static boolean installFromBootLayer(Class<?> caller) {
+        if (alreadyInLayer()) {
+            return false;
+        }
+        var callerModule = caller.getModule();
+        var callerLayer = callerModule.getLayer();
+        if (!callerModule.isNamed() || callerLayer == null) {
+            return false; // class-path launch — nothing to re-layer, agent net applies
+        }
+        var explicit = System.getProperty("vidocq.app.modules", "").strip();
+        var explicitNames = explicit.isEmpty() ? null
+                : java.util.Set.of(explicit.split("\\s*,\\s*"));
+
+        var configuration = callerLayer.configuration();
+        // Packages of the beans declared by the caller's archive: a scanned dependency's
+        // beans (vidocq:generate scanDependencies) are listed in the CALLER's
+        // vauban-beans.list, so the owning modules must be re-layered too.
+        var callerBeanPackages = explicitNames != null ? java.util.Set.<String>of()
+                : beanPackagesOf(configuration, callerModule.getName());
+        var paths = new java.util.LinkedHashSet<Path>();
+        for (var resolved : configuration.modules()) {
+            var name = resolved.name();
+            var location = resolved.reference().location()
+                    .filter(uri -> "file".equals(uri.getScheme()))
+                    .orElse(null);
+            if (location == null) continue;
+            boolean isApp;
+            if (explicitNames != null) {
+                isApp = explicitNames.contains(name);
+            } else if (name.equals(callerModule.getName())) {
+                isApp = true;
+            } else if (isRuntimeModule(name)) {
+                isApp = false;
+            } else {
+                isApp = hasBeansList(resolved.reference())
+                        || resolved.reference().descriptor().packages().stream()
+                                .anyMatch(callerBeanPackages::contains);
+            }
+            if (isApp) {
+                paths.add(Path.of(location));
+            }
+        }
+        if (paths.isEmpty()) {
+            return false;
+        }
+        return installLayer(List.copyOf(paths), callerLayer,
+                "boot-layer detection from " + callerModule.getName());
+    }
+
+    private static boolean installLayer(List<Path> paths, ModuleLayer parentLayer, String origin) {
+        try {
+            var parentLoader = Thread.currentThread().getContextClassLoader();
+            var appLayer = VaubanLayerFactory.createAppLayer(paths, parentLayer,
+                    parentLoader, pluginContext());
+            parentLoaderBeforeInstall = parentLoader;
+            Thread.currentThread().setContextClassLoader(appLayer.loader());
+            installed = appLayer;
+            LOG.log(System.Logger.Level.INFO, "Application layer ready: modules {0} ({1})",
+                    appLayer.moduleNames(), origin);
+            return true;
+        } catch (IOException e) {
+            throw new IllegalStateException(
+                    "Cannot create the application layer (" + origin + ")", e);
+        }
+    }
+
+    static boolean alreadyInLayer() {
+        for (var l = Thread.currentThread().getContextClassLoader(); l != null; l = l.getParent()) {
+            if (l instanceof io.vidocq.vauban.classloader.VaubanClassLoader) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Exports the class' package to the runtime module through the layer controller —
+     * the JDK-launcher technique, needed before any reflective touch of an application
+     * type (packages are fully encapsulated).
+     */
+    static void exportToRuntime(Class<?> layerClass) {
+        var layer = installed;
+        if (layer != null && layerClass.getModule().getLayer() == layer.layer()) {
+            layer.controller().addExports(layerClass.getModule(),
+                    layerClass.getPackageName(), VidocqAppLayer.class.getModule());
+        }
+    }
+
+    /** Runtime and platform module-name prefixes never re-layered by the detection. */
+    private static final List<String> RUNTIME_MODULE_PREFIXES = List.of(
+            "java.", "jdk.", "jakarta.", "org.eclipse.",
+            "io.vidocq.vauban", "io.vidocq.cassini", "io.vidocq.chappe",
+            "io.vidocq.champollion", "io.vidocq.cyrano", "io.vidocq.cervantes",
+            "io.vidocq.knock", "io.vidocq.dirac", "io.vidocq.heisenberg",
+            "io.vidocq.grimm", "io.vidocq.ravel", "io.vidocq.humboldt",
+            "io.vidocq.mansart",
+            "io.vidocq.runtime.core", "io.vidocq.runtime.spi",
+            "io.vidocq.runtime.extensions");
+
+    private static boolean isRuntimeModule(String moduleName) {
+        return RUNTIME_MODULE_PREFIXES.stream().anyMatch(moduleName::startsWith);
+    }
+
+    private static boolean hasBeansList(java.lang.module.ModuleReference reference) {
+        try (var reader = reference.open()) {
+            return reader.find("META-INF/vauban-beans.list").isPresent();
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    /** Packages of every bean declared in {@code moduleName}'s vauban-beans.list. */
+    private static java.util.Set<String> beanPackagesOf(
+            java.lang.module.Configuration configuration, String moduleName) {
+        var resolved = configuration.findModule(moduleName).orElse(null);
+        if (resolved == null) return java.util.Set.of();
+        var packages = new java.util.LinkedHashSet<String>();
+        try (var reader = resolved.reference().open()) {
+            var list = reader.open("META-INF/vauban-beans.list").orElse(null);
+            if (list == null) return java.util.Set.of();
+            try (list; var buffered = new java.io.BufferedReader(
+                    new java.io.InputStreamReader(list, java.nio.charset.StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = buffered.readLine()) != null) {
+                    line = line.strip();
+                    if (line.isEmpty() || line.startsWith("#")) continue;
+                    int lastDot = line.lastIndexOf('.');
+                    if (lastDot > 0) packages.add(line.substring(0, lastDot));
+                }
+            }
+        } catch (IOException e) {
+            return java.util.Set.of();
+        }
+        return packages;
+    }
+
+    /**
+     * Invokes the {@value #APP_MAIN_PROPERTY} class' {@code main(String[])} through the
+     * installed layer loader. Returns {@code false} when no application main is
+     * configured.
+     */
+    static boolean runAppMainIfConfigured(String[] args) {
+        var mainName = System.getProperty(APP_MAIN_PROPERTY, "").strip();
+        if (mainName.isEmpty()) {
+            return false;
+        }
+        try {
+            var mainClass = Class.forName(mainName, false,
+                    Thread.currentThread().getContextClassLoader());
+            exportToRuntime(mainClass);
+            mainClass.getMethod("main", String[].class).invoke(null, (Object) args);
+            return true;
+        } catch (ReflectiveOperationException e) {
+            var cause = e instanceof java.lang.reflect.InvocationTargetException ite
+                    ? ite.getCause() : e;
+            if (cause instanceof RuntimeException re) throw re;
+            if (cause instanceof Error err) throw err;
+            throw new IllegalStateException("Cannot run application main " + mainName, cause);
+        }
+    }
+
+    /** The sjar key provider when vauban-sjar is present, otherwise an empty context. */
+    private static PluginContext pluginContext() {
+        try {
+            var providerClass = Class.forName("io.vidocq.vauban.sjar.SjarKeyProvider");
+            return (PluginContext) providerClass.getDeclaredConstructor().newInstance();
+        } catch (Exception e) {
+            return PluginContext.empty();
+        }
+    }
+}

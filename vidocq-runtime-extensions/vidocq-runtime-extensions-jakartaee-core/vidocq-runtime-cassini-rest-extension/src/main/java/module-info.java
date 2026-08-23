@@ -28,6 +28,8 @@ module io.vidocq.runtime.extensions.jakartaee.core.cassini {
     requires io.vidocq.cassini.api;
     requires io.vidocq.cassini.chappe;
     requires io.vidocq.cassini.cdi.vauban;
+    // Maintenance API only (CassiniMaintenance.resetDiscoveryCaches on hot reload)
+    requires io.vidocq.cassini.core;
 
     requires io.vidocq.chappe.api;
     requires jakarta.cdi;

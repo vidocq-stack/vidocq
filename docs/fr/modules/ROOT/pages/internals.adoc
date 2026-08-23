@@ -23,6 +23,58 @@ flowchart LR
     style BOOT fill:#e1f5fe,stroke:#0288d1
 ....
 
+== Chargement de classes — la layer applicative Vauban
+
+Vidocq ne laisse pas l'application posséder son chargement de classes : quel que soit le
+véhicule de lancement (clic droit IDE sur un trampoline `@VidocqMain`, scripts de
+distribution, `vidocq:dev`, CLI), l'application se résout dans une **`ModuleLayer`
+enfant dont le loader est le `VaubanClassLoader`** — le runtime et ses extensions
+restent dans la boot layer, exports/opens restent appliqués, et chaque classe
+applicative passe par la chaîne de transformers du loader à la définition (tissage du
+client proxy par le `cdi-proxifier`, déchiffrement sjar par les plugins source).
+
+[mermaid]
+....
+flowchart TB
+    subgraph boot["boot ModuleLayer — module path de la JVM"]
+        TRAMP["trampoline @VidocqMain<br/>(chargé ici, sans logique)"]
+        RT["runtime vidocq + extensions<br/>vauban · chappe · cassini · jakarta"]
+    end
+    subgraph child["child ModuleLayer — VaubanClassLoader (self-first)"]
+        APP["modules applicatifs<br/>tissés à la définition"]
+    end
+    TRAMP -- "Vidocq.run()" --> DET["détection boot layer<br/>(appelant + modules à vauban-beans.list)"]
+    DET -- "mêmes archives,<br/>re-résolues" --> child
+    APP -- requires --> RT
+....
+
+Mécanique clef (implémentée dans `vauban-classloader`, consommée par
+`VidocqAppLayer`/`Vidocq.run`) :
+
+* **Shadowing de la boot layer** — la layer enfant résout les MÊMES noms de modules que
+  ceux mis sur le module path par l'IDE ; le loader de layer est *self-first* pour ses
+  archives, si bien que chaque référence interne d'une classe de la layer se résout dans
+  le monde tissé, jamais contre son jumeau boot-layer non tissé. Les providers
+  `ServiceLoader` en double sont dédupliqués par nom de classe, en préférant la copie de
+  la layer.
+* **Promotion des services** — à la résolution d'un module applicatif, les fichiers
+  `META-INF/services/*` de l'archive sont promus en directives `provides` synthétiques
+  du descripteur. Les applications ne déclarent jamais de provider généré
+  (`_VaubanComponents`, `$$CassiniAdapter`…) dans `module-info.java`.
+* **Hot reload** — `vidocq:dev` signale la JVM en cours après une recompilation ; le
+  runtime arrête le déploiement, jette la layer, en résout une neuve sur les classes
+  recompilées et redémarre (même processus, JIT chaud, debugger attaché). Les caches
+  statiques de découverte de Cassini sont réinitialisés entre déploiements
+  (`io.vidocq.cassini.runtime.CassiniMaintenance`).
+* **Filet de compatibilité** — un main historique qui boote le runtime sans la layer
+  fonctionne toujours : les beans non tissés sont pris en charge par l'agent de tissage
+  au chargement de Vauban (attach dynamique, avec l'avertissement JDK) et le log suggère
+  le trampoline.
+
+La documentation complète du moteur (SPI sources/transformers, étages de tissage,
+options de diagnostic) vit dans la documentation Vauban, Fonctionnement interne →
+Chargement de classes.
+
 == Diagramme de séquence — boot
 
 [mermaid]

@@ -148,6 +148,24 @@ public class VidocqDevMojo extends AbstractMojo {
     @Parameter(property = "vidocq.dev.devServices", defaultValue = "true")
     private boolean devServices;
 
+    /**
+     * Universal-loader mode (default): the application's classes stay off the module
+     * path and boot inside a child module layer defined by the Vauban class loader —
+     * classes are woven at definition, no instrumentation agent. Set to {@code false}
+     * to restore the legacy everything-on-the-module-path launch.
+     */
+    @Parameter(defaultValue = "true", property = "vidocq.dev.layer")
+    private boolean layerMode;
+
+    /**
+     * In-JVM hot reload (default, requires {@link #layerMode}): after a successful
+     * recompile the child JVM is signalled (reload file touch) and re-creates its
+     * application module layer in place — no process respawn, warm JIT, debugger and
+     * dev services survive. Set to {@code false} to restore the stop-and-respawn cycle.
+     */
+    @Parameter(defaultValue = "true", property = "vidocq.dev.hotReload")
+    private boolean hotReload;
+
     @Parameter(defaultValue = "${project.build.outputDirectory}", readonly = true)
     private File classesDir;
 
@@ -162,8 +180,24 @@ public class VidocqDevMojo extends AbstractMojo {
         Path projectDir = baseDir.toPath();
         List<Path> watch = parseWatchDirs(projectDir);
         List<Path> modulePath = buildModulePath();
+        List<Path> appPath = buildAppPath();
         Map<String, String> sysProps = buildSystemProperties();
         List<String> jvmArgs = buildJvmArgs();
+
+        // In-JVM hot reload: the child watches this file's mtime and swaps its
+        // application layer when we touch it (after a successful recompile).
+        boolean inJvmReload = layerMode && hotReload;
+        Path reloadFile = buildDir.toPath().resolve(".vidocq-dev-reload");
+        if (inJvmReload) {
+            try {
+                Files.createDirectories(reloadFile.getParent());
+                Files.writeString(reloadFile, "0\n");
+            } catch (IOException e) {
+                throw new MojoExecutionException("Cannot create the reload signal file "
+                        + reloadFile, e);
+            }
+            sysProps.put("vidocq.dev.reload.file", reloadFile.toString());
+        }
 
         // The dev module path uses the original dependency jars: re-attach the classes
         // that vidocq:generate parked for scanned dependencies (target/vidocq-patches)
@@ -189,6 +223,10 @@ public class VidocqDevMojo extends AbstractMojo {
 
         getLog().info("Vidocq dev — main module : " + mainModule
                 + (mainClass != null && !mainClass.isBlank() ? ("/" + mainClass) : ""));
+        if (layerMode) {
+            getLog().info("Universal-loader mode: app classes boot in a Vauban-defined"
+                    + " module layer (-Dvidocq.dev.layer=false for the legacy launch)");
+        }
         getLog().info("Watching: " + watch);
         getLog().info("Module path entries: " + modulePath.size());
         if (debug) {
@@ -234,7 +272,7 @@ public class VidocqDevMojo extends AbstractMojo {
         RecompileRunner recompile = new RecompileRunner(projectDir);
 
         try (SourceWatcher watcher = SourceWatcher.on(watch, Duration.ofMillis(debounceMillis))) {
-            ChildJvm child = ChildJvm.of(modulePath, mainModule, mainClass,
+            ChildJvm child = ChildJvm.of(modulePath, appPath, mainModule, mainClass,
                     jvmArgs, sysProps, projectDir);
             long pid = child.start();
             currentChild.set(child);
@@ -257,8 +295,21 @@ public class VidocqDevMojo extends AbstractMojo {
                     getLog().warn("Compile failed (exit " + rc + "); keeping previous JVM up.");
                     continue;
                 }
+                if (inJvmReload && child.isAlive()) {
+                    // Signal the child: it re-creates its application layer in place.
+                    try {
+                        Files.writeString(reloadFile, System.nanoTime() + "\n");
+                        long elapsed = (System.nanoTime() - t0) / 1_000_000;
+                        getLog().info("Hot reload signalled after " + elapsed
+                                + " ms (in-JVM layer swap, pid=" + pid + ").");
+                        continue;
+                    } catch (IOException e) {
+                        getLog().warn("Cannot signal hot reload (" + e.getMessage()
+                                + ") — falling back to a respawn.");
+                    }
+                }
                 child.stop(Duration.ofMillis(gracePeriodMillis));
-                child = ChildJvm.of(modulePath, mainModule, mainClass,
+                child = ChildJvm.of(modulePath, appPath, mainModule, mainClass,
                         jvmArgs, sysProps, projectDir);
                 pid = child.start();
                 currentChild.set(child);
@@ -314,13 +365,22 @@ public class VidocqDevMojo extends AbstractMojo {
      */
     private List<Path> buildModulePath() {
         List<Path> entries = new ArrayList<>();
-        entries.add(classesDir.toPath());
+        if (!layerMode) {
+            // Legacy shape only — in layer mode the application classes travel through
+            // -Dvidocq.app.path instead (a module must not be on both paths).
+            entries.add(classesDir.toPath());
+        }
         for (var artifact : project.getArtifacts()) {
             if (artifact.getFile() != null && "jar".equals(artifact.getType())) {
                 entries.add(artifact.getFile().toPath());
             }
         }
         return entries;
+    }
+
+    /** The application archives of the layer mode: the project's own build output. */
+    private List<Path> buildAppPath() {
+        return layerMode ? List.of(classesDir.toPath()) : List.of();
     }
 
     private Map<String, String> buildSystemProperties() {

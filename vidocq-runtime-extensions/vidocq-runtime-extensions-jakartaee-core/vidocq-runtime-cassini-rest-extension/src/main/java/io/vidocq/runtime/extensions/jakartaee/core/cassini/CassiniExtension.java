@@ -162,6 +162,11 @@ public final class CassiniExtension implements VidocqExtension {
 
     @Override
     public void onStop() {
+        // Cassini's route/adapter discovery caches are static and keyed by application
+        // Class objects. On an in-JVM hot reload (dev mode, layer re-creation) the next
+        // deployment carries NEW classes from a fresh loader — stale keys would miss and
+        // dispatch would fall back to reflection against encapsulated packages.
+        io.vidocq.cassini.runtime.CassiniMaintenance.resetDiscoveryCaches();
     }
 
     private static boolean hasDeclarativeCassiniMount(ExtensionContext context) {

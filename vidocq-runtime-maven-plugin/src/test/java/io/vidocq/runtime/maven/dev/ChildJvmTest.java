@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -48,6 +49,7 @@ class ChildJvmTest {
         // we want to exercise here.
         ChildJvm jvm = ChildJvm.of(
                 List.of(tmp),
+                List.of(),
                 "no.such.module",
                 null,
                 List.of("-Xshare:off"),
@@ -62,5 +64,46 @@ class ChildJvmTest {
         Thread.sleep(1500);
         jvm.stop(Duration.ofSeconds(5));
         assertFalse(jvm.isAlive(), "child JVM should have exited");
+    }
+
+    @Test
+    void layer_mode_boots_the_runtime_and_hands_the_app_over_via_properties(@TempDir Path tmp) {
+        ChildJvm jvm = ChildJvm.of(
+                List.of(tmp.resolve("libs")),
+                List.of(tmp.resolve("classes")),
+                "com.example.app",
+                "com.example.app.Main",
+                List.of(),
+                Map.of("vidocq.profile", "dev"),
+                tmp);
+
+        var command = jvm.command();
+        assertTrue(command.contains("-Dvidocq.app.path=" + tmp.resolve("classes")),
+                "app classes travel through vidocq.app.path: " + command);
+        assertTrue(command.contains("-Dvidocq.app.main=com.example.app.Main"),
+                "the app main runs through the layer: " + command);
+        assertEquals("io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq",
+                command.get(command.size() - 1),
+                "the root module is always the runtime in layer mode");
+        int mp = command.indexOf("--module-path");
+        assertEquals(tmp.resolve("libs").toString(), command.get(mp + 1),
+                "the module path carries only the dependencies");
+    }
+
+    @Test
+    void legacy_mode_keeps_the_module_main_launch(@TempDir Path tmp) {
+        ChildJvm jvm = ChildJvm.of(
+                List.of(tmp.resolve("classes"), tmp.resolve("libs")),
+                List.of(),
+                "com.example.app",
+                "com.example.app.Main",
+                List.of(),
+                Map.of(),
+                tmp);
+
+        var command = jvm.command();
+        assertEquals("com.example.app/com.example.app.Main", command.get(command.size() - 1));
+        assertTrue(command.stream().noneMatch(a -> a.startsWith("-Dvidocq.app.path=")),
+                "no layer hand-over in legacy mode: " + command);
     }
 }

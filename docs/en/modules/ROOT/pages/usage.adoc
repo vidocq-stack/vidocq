@@ -2,7 +2,69 @@
 :description: Packaging, configuration, profiles, deployment, AOT.
 
 [.lead]
-This page covers Vidocq Runtime usage beyond the hello world: packaging via the `vidocq-runtime-maven-plugin` (jlink, jpackage, Docker), configuration via {spec-mp-config}, observability ({spec-mp-health}, {spec-mp-metrics}, {spec-mp-openapi}), profiles, and AOT preparation.
+This page covers Vidocq Runtime usage beyond the hello world: the application entry
+point, packaging via the `vidocq-runtime-maven-plugin` (jlink, jpackage, Docker),
+configuration via {spec-mp-config}, observability ({spec-mp-health}, {spec-mp-metrics},
+{spec-mp-openapi}), profiles, and AOT preparation.
+
+== The application entry point — `@VidocqMain`
+
+The official application main is a *trampoline*: it contains nothing but
+`Vidocq.run(...)`.
+
+[source,java]
+----
+@VidocqMain
+public final class App implements VidocqApp {
+
+    public static void main(String[] args) {
+        Vidocq.run(App.class, args);      // no business logic before this line
+    }
+
+    @Override
+    public int run(String... args) throws Exception {
+        // runs AFTER boot, inside the Vauban class loader, with transformed classes
+        Vidocq.waitForExit();             // block for a server application
+        return 0;
+    }
+}
+----
+
+Why a trampoline? Because Vidocq does not let the application main "own" the runtime:
+`Vidocq.run()` re-resolves the application into a **child module layer defined by the
+Vauban class loader**, where every class flows through the load-time transformations
+(client-proxy weaving…) at definition. This is what makes a plain IDE launch —
+right-click → Run, everything on the module path, no special configuration — behave
+exactly like a production launch: same layer, same transformed classes, no
+instrumentation agent, no JVM warning.
+
+The contract (deliberately identical to Quarkus' `@QuarkusMain`):
+
+* **no business logic before `Vidocq.run(...)`** — the trampoline class is loaded by the
+  JVM's boot layer while the application runs in the Vauban layer; code executed before
+  `run()` lives in the wrong class loader and sees untransformed classes;
+* application logic that must run after boot goes into a `VidocqApp` passed to
+  `Vidocq.run(Class, args)` — the class is re-loaded through the layer and instantiated
+  there (as a CDI bean when it is one); its return value is the exit code;
+* a plain server without post-boot logic just calls `Vidocq.run(args)`.
+
+`Vidocq.run()` picks the application modules of the boot layer automatically (the
+caller's module, every non-runtime module carrying `META-INF/vauban-beans.list`, and the
+modules owning the beans that `vidocq:generate` scanned from dependencies); override
+with `-Dvidocq.app.modules=<name,name>` or an explicit `-Dvidocq.app.path=<archives>`.
+A legacy main that boots the runtime directly still works — unwoven beans are then
+covered by the load-time weaving agent (with the JDK's dynamic-agent warning) and the
+log suggests migrating to the trampoline.
+
+One more benefit: applications never declare generated providers in
+`module-info.java`. The annotation processors emit standard `META-INF/services` files
+(`_VaubanComponents`, Cassini `$$CassiniAdapter`/`$$CassiniRoutes`…), and the Vauban
+layer promotes them to synthetic `provides` when it resolves the module — your
+`module-info.java` stays free of any generated class name.
+
+NOTE: custom JUL log handlers declared in the application's `logging.properties` must
+live on the module path — `LogManager` instantiates handlers through the system class
+loader, which cannot see the layer.
 
 == Packaging with `vidocq-runtime-maven-plugin`
 

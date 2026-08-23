@@ -53,19 +53,38 @@ final class ChildJvm {
      * main module / extra JVM args. The {@code workingDir} is the project base
      * dir, so the child sees the user's {@code application.properties} /
      * {@code vidocq.properties} the same way a {@code mvn exec:java} would.
+     *
+     * <p>Two launch shapes:
+     * <ul>
+     *   <li>{@code appPath} non-empty — <b>universal-loader mode</b>: the application
+     *       archives stay off the module path and are handed to the runtime through
+     *       {@code -Dvidocq.app.path} (child module layer defined by the Vauban class
+     *       loader); the root module is always the runtime, and {@code mainClass} (when
+     *       given) becomes {@code -Dvidocq.app.main}, run through the layer.</li>
+     *   <li>{@code appPath} null/empty — legacy shape: everything on the module path,
+     *       {@code --module mainModule[/mainClass]}.</li>
+     * </ul>
      */
     static ChildJvm of(List<Path> modulePath,
+                       List<Path> appPath,
                        String mainModule,
                        String mainClass,
                        List<String> extraJvmArgs,
                        Map<String, String> systemProps,
                        Path workingDir) {
+        boolean layerMode = appPath != null && !appPath.isEmpty();
         List<String> command = new ArrayList<>();
         command.add(JAVA_BIN);
 
         // System properties — at minimum -Dvidocq.profile=dev (caller injects it).
         for (Map.Entry<String, String> e : systemProps.entrySet()) {
             command.add("-D" + e.getKey() + "=" + e.getValue());
+        }
+        if (layerMode) {
+            command.add("-Dvidocq.app.path=" + joinPath(appPath));
+            if (mainClass != null && !mainClass.isBlank()) {
+                command.add("-Dvidocq.app.main=" + mainClass);
+            }
         }
 
         if (extraJvmArgs != null) {
@@ -80,9 +99,14 @@ final class ChildJvm {
         command.add("--add-modules");
         command.add("ALL-MODULE-PATH");
         command.add("--module");
-        String moduleRef = (mainClass == null || mainClass.isBlank())
-                ? mainModule
-                : mainModule + "/" + mainClass;
+        String moduleRef;
+        if (layerMode) {
+            moduleRef = "io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq";
+        } else {
+            moduleRef = (mainClass == null || mainClass.isBlank())
+                    ? mainModule
+                    : mainModule + "/" + mainClass;
+        }
         command.add(moduleRef);
 
         ProcessBuilder pb = new ProcessBuilder(command)
@@ -90,6 +114,11 @@ final class ChildJvm {
                 .redirectErrorStream(true)
                 .inheritIO();
         return new ChildJvm(pb);
+    }
+
+    /** The assembled command line (tests). */
+    List<String> command() {
+        return List.copyOf(builder.command());
     }
 
     /** Start the child process. Returns the spawned PID for logging. */
