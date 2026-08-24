@@ -43,15 +43,15 @@ flowchart LR
 PoolConfig config = PoolConfig.builder()
     .jdbcUrl("jdbc:postgresql://db.local:5432/shop")
     .username("shop").password("...")
-    .minSize(4).maxSize(32)
+    .minIdle(4).maxSize(32)
     .acquireTimeout(Duration.ofSeconds(5))
     .idleTimeout(Duration.ofMinutes(10))
     .maxLifetime(Duration.ofMinutes(30))
-    .validationMode(ValidationMode.IS_VALID)
+    .validation(ValidationMode.IS_VALID)
     .leakDetectionThreshold(Duration.ofSeconds(30))
     .build();
 
-DataSource ds = MansartDataSource.create(config);
+DataSource ds = MansartDataSource.of(config);
 PoolMetrics metrics = ((MansartDataSource) ds).metrics();
 ----
 

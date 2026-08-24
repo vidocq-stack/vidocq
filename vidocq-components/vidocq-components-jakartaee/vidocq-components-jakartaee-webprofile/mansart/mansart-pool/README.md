@@ -10,13 +10,13 @@ It is completely decoupled from the rest of Mansart: it only provides a
 ## Standalone
 
 ```java
-import io.vidocq.mansart.pool.MansartDataSource;
 import io.vidocq.mansart.pool.PoolConfig;
+import io.vidocq.mansart.pool.core.MansartDataSource;
 
-var dataSource = MansartDataSource.create(PoolConfig.builder()
+var dataSource = MansartDataSource.of(PoolConfig.builder()
     .jdbcUrl("jdbc:postgresql://db.local:5432/shop")
     .username("shop").password("...")
-    .minSize(2).maxSize(10)
+    .minIdle(2).maxSize(10)
     .build());
 ```
 

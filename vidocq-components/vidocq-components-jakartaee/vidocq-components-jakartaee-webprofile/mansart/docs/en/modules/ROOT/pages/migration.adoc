@@ -104,7 +104,7 @@ Less common case; transposition similar to Hibernate. Standard JPA 3.2 annotatio
 | Similar API — `jdbcUrl`, `username`, `password`, `maximumPoolSize` → `maxSize`.
 
 | `minimumIdle`
-| `minSize`
+| `minIdle`
 | Same.
 
 | `connectionTimeout`
@@ -124,8 +124,8 @@ Less common case; transposition similar to Hibernate. Standard JPA 3.2 annotatio
 | Same.
 
 | `connectionTestQuery`
-| `validationQuery` + `validationMode=QUERY`
-| Mansart prefers `Connection.isValid()` (`validationMode=IS_VALID`) — JDBC standard, no custom SQL.
+| `validationQuery` + `validation=QUERY`
+| Mansart prefers `Connection.isValid()` (`validation=IS_VALID`) — JDBC standard, no custom SQL.
 
 | Micrometer / Prometheus metrics
 | `PoolMetrics` (snapshot)

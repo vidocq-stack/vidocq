@@ -156,13 +156,13 @@ APT rule: if `@jakarta.persistence.Entity` is present → JPA annotations. Other
 | `jdbcUrl` | `String` | Full JDBC URL.
 | `username` | `String` | DB login.
 | `password` | `String` | Password.
-| `minSize` | `int` | Pre-warmed minimum connections (default 0).
+| `minIdle` | `int` | Idle connections kept warm (default 0).
 | `maxSize` | `int` | Hard pool bound (default 10).
 | `acquireTimeout` | `Duration` | Timeout on `getConnection()` (default 30 s).
 | `idleTimeout` | `Duration` | Eviction of an idle connection (default 10 min).
 | `maxLifetime` | `Duration` | Eviction of an old connection (default 30 min).
-| `validationMode` | `ValidationMode` | `IS_VALID`, `QUERY`, `NONE`.
-| `validationQuery` | `String` | SQL when `validationMode=QUERY`.
+| `validation` | `ValidationMode` | `IS_VALID`, `QUERY`, `NONE`.
+| `validationQuery` | `String` | SQL when `validation=QUERY`.
 | `leakDetectionThreshold` | `Duration` | Leak stack-trace if a connection is borrowed longer than the threshold.
 | `connectionInitSql` | `List<String>` | SQL run on first `acquire` (`SET TIMEZONE`, etc.).
 |===

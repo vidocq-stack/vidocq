@@ -116,17 +116,18 @@ The APT generates `shop.AuthorRepositoryImpl` next to it, plus an entry in `META
 
 [source,java]
 ----
-import io.vidocq.mansart.pool.MansartDataSource;
 import io.vidocq.mansart.pool.PoolConfig;
-import io.vidocq.mansart.data.MansartData;
+import io.vidocq.mansart.pool.core.MansartDataSource;
+import io.vidocq.mansart.data.core.MansartData;
 
-var dataSource = MansartDataSource.create(PoolConfig.builder()
+var dataSource = MansartDataSource.of(PoolConfig.builder()
     .jdbcUrl("jdbc:h2:mem:shop;DB_CLOSE_DELAY=-1")
     .username("sa").password("")
-    .minSize(2).maxSize(10)
+    .minIdle(2).maxSize(10)
     .build());
 
-var authors = MansartData.repository(AuthorRepository.class, dataSource);
+var mansart = MansartData.builder().dataSource(dataSource).build();
+var authors = mansart.repository(AuthorRepository.class);
 
 authors.save(new Author("Sylvie Germain"));
 authors.findByName("Sylvie Germain").forEach(System.out::println);

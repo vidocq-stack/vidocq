@@ -112,7 +112,7 @@ flowchart LR
 * **`Semaphore permits`** — hard pool bound, fair=false (perf).
 * **`ConcurrentLinkedDeque idle`** — lock-free stack, push/pop at the head (hot LIFO).
 * **`ConcurrentHashMap.newKeySet inUse`** — set of borrowed connections, for metrics and leak detection.
-* **Housekeeper virtual thread** — periodic wake-up, evicts connections that are too old or idle, pre-warms up to `minSize`.
+* **Housekeeper virtual thread** — periodic wake-up, evicts connections that are too old or idle, pre-warms up to `minIdle`.
 
 Details and numbers: see lien:{repo-mansart}/src/branch/main/mansart-pool/BENCH.md[mansart-pool BENCH.md].
 
