@@ -151,6 +151,37 @@ public Author register(String name) {
 
 The `mansart-data-cdi` BCE reads `META-INF/mansart-repositories.list` and declares an `@ApplicationScoped` bean for each `@Repository` interface detected. The `mansart-transactions` interceptor materializes `@Transactional`. See xref:vauban::index.adoc[Vauban] for the CDI container details.
 
+=== Wiring the BCE into the Vauban build
+
+Add `mansart-data-cdi` to your dependencies — and, crucially, **to the annotation-processor path**. Vauban resolves injections at compile time inside its annotation processor, which discovers CDI Build Compatible Extensions via `ServiceLoader` *on the processor path*: the moment your pom declares `<annotationProcessorPaths>` (it does, for `mansart-data-processor`), javac sees *only* those entries, and a BCE left on the plain compile path silently never runs. The tell-tale failure is a build-time
+`[Vauban] Unsatisfied dependency: ... of type ClassType[name=io.vidocq.mansart.data.core.RepositoryRuntime]`.
+
+[source,xml]
+----
+<annotationProcessorPaths>
+  <path>
+    <groupId>io.vidocq.mansart</groupId>
+    <artifactId>mansart-data-processor</artifactId>
+    <version>${mansart.version}</version>
+  </path>
+  <path><!-- vauban-processor, if not already on the processor path -->
+    <groupId>io.vidocq.vauban</groupId>
+    <artifactId>vauban-processor</artifactId>
+    <version>${vauban.version}</version>
+  </path>
+  <path><!-- the BCE contributing MansartRuntimeProducer must be visible to the Vauban APT -->
+    <groupId>io.vidocq.mansart</groupId>
+    <artifactId>mansart-data-cdi</artifactId>
+    <version>${mansart.version}</version>
+  </path>
+</annotationProcessorPaths>
+----
+
+Two related notes:
+
+* if some *other* cross-module bean still trips the build-time validator, pass `-Avauban.validation=false` to the compiler to defer validation to runtime (that is what Mansart's own module-path integration tests do);
+* at runtime, the default `RepositoryRuntime` needs a `@Default` `javax.sql.DataSource` bean (a `@Produces DataSource` backed by your driver or `mansart-pool`) — the producer fails fast with an explicit message otherwise. No `requires io.vidocq.mansart.data.cdi` is needed in your `module-info.java`: boot-layer service binding pulls the module in through its `provides BuildCompatibleExtension`.
+
 == Full example in Vidocq Runtime
 
 The `vidocq-runtime-mansart-h2-example` example (in the Vidocq Runtime repo) shows end-to-end wiring: `MansartDataSource` + `mansart-jakarta-data` + `@Transactional` + Cassini REST endpoint. It is the reference sandbox to validate an integration.
