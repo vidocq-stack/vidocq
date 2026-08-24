@@ -52,7 +52,7 @@ Target scope (to be refined):
 
 For JPA needs in Vidocq today:
 
-* If CRUD + typed queries are enough → `mansart-jakarta-data` (delivered, TCK 73/73).
+* If CRUD + typed queries are enough → `mansart-jakarta-data` (delivered, TCK 74/74).
 * If advanced JPQL not covered by JDQL is needed → native SQL via `@Query("...")` or `Connection.prepareStatement(...)`.
 * If JPA listeners are needed → application-level workaround (CDI interceptors, `@Transactional` + explicit before/after save).
 * If a persistence context is needed → migration deferred until M7 delivery.

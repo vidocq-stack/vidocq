@@ -28,7 +28,7 @@ Mansart targets the standard ({spec-data-1}[Jakarta Data 1.0] + {spec-jpa-3-2}[J
 
 | `Pageable` / `Page<T>`
 | `PageRequest` / `Page<T>`
-| Identical semantics. `PageRequest.afterKey(...)` for keyset.
+| Identical semantics. `PageRequest.afterCursor(cursor)` for keyset.
 
 | `@Transactional` (Spring)
 | `@jakarta.transaction.Transactional`
@@ -36,7 +36,7 @@ Mansart targets the standard ({spec-data-1}[Jakarta Data 1.0] + {spec-jpa-3-2}[J
 
 | `JpaRepository<T, ID>`
 | `BasicRepository<T, K>` or `CrudRepository<T, K>`
-| No `findAll(Sort)` — use `@OrderBy` or a `findAllByOrderByXxxAsc`.
+| No `findAll(Sort)` overload — pass `Sort`/`Order`/`Limit` as extra call parameters, or use `findAllByOrderByXxxAsc`.
 |===
 
 [TIP]
@@ -124,8 +124,8 @@ Less common case; transposition similar to Hibernate. Standard JPA 3.2 annotatio
 | Same.
 
 | `connectionTestQuery`
-| `validationQuery` + `validation=QUERY`
-| Mansart prefers `Connection.isValid()` (`validation=IS_VALID`) — JDBC standard, no custom SQL.
+| `validationQuery` + `validation=ON_BORROW`
+| Mansart prefers `Connection.isValid()` (`ON_BORROW` without a query) — JDBC standard, no custom SQL.
 
 | Micrometer / Prometheus metrics
 | `PoolMetrics` (snapshot)

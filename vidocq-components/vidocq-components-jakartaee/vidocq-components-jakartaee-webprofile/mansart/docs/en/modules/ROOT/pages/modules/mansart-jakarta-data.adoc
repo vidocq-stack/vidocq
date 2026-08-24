@@ -2,7 +2,7 @@
 :description: Jakarta Data 1.0 implementation — repositories, JDQL, JDBC dialects, APT codegen.
 
 [.lead]
-`mansart-jakarta-data` implements {spec-data-1}[Jakarta Data 1.0] — `@Repository` annotations, query methods, pagination, JDQL — on top of JDBC, with no heavy ORM, no runtime reflection. Every user-defined repository is materialized at compile time by APT. Official TCK: 73/73 PASS (M7, May 2026).
+`mansart-jakarta-data` implements {spec-data-1}[Jakarta Data 1.0] — `@Repository` annotations, query methods, pagination, JDQL — on top of JDBC, with no heavy ORM, no runtime reflection. Every user-defined repository is materialized at compile time by APT. Official TCK: 74/74 PASS (M7, May 2026).
 
 == Mission
 
@@ -17,11 +17,14 @@
 |===
 | Sub-module | Role
 
-| `mansart-data-api`
-| `@Entity`, `@Repository`, `@Find`, `@Query`, `@Insert`, `@Update`, `@Delete`, `@Save`, `@Dialect`, `@JdbcRepository`, `@MansartDataSource` annotations.
-
 | `mansart-data-core`
-| Runtime: `RepositoryRuntime`, `QueryPlan` execution, ResultSet ↔ entity mapping, connection management.
+| Runtime: `RepositoryRuntime`, query execution, ResultSet ↔ entity mapping, connection management.
+
+| `mansart-data-cdi`
+| CDI 4.1 Lite bootstrap (Build Compatible Extension) — `@Repository` beans, `RepositoryRuntime` producer, `dataStore` routing.
+
+| `mansart-data-dialects`
+| `mansart-data-dialect-spi` + shipped dialects `mansart-data-dialect-h2`, `mansart-data-dialect-postgresql`.
 
 | `mansart-data-processor`
 | APT — static metamodel (`_Book`, `Book_`) + `*RepositoryImpl` + `META-INF/mansart-repositories.list`.
@@ -73,12 +76,12 @@ public interface AuthorRepository extends BasicRepository<Author, Long> {
 == Functional scope (delivered)
 
 * `BasicRepository`, `CrudRepository`, `DataRepository`.
-* Inherited methods: `save`, `delete`, `findById`, `findAll`, `count`, `existsById`.
+* Inherited methods: `save`, `saveAll`, `findById`, `findAll`, `deleteById`, `delete`, `deleteAll` (+ `insert`/`update` pairs via `CrudRepository`).
 * Lifecycle: `@Insert`, `@Update`, `@Delete`, `@Save`.
-* `@Find` (parameter-name binding).
+* `@Find` (parameter-name binding) — served by the reflective runtime fallback; the APT compiles `@Query` and the lifecycle annotations.
 * Derived queries: `findBy`, `existsBy`, `countBy`, `deleteBy` + `And`, `Or`, `Like`, `Between`, `LessThan`, `GreaterThan`, `LessThanEqual`, `GreaterThanEqual`, `IgnoreCase`, `OrderBy<Asc|Desc>`.
 * `@Query` JDQL (SELECT/UPDATE/DELETE).
-* Offset pagination (`PageRequest.ofPage(n).size(s)`) and keyset (`PageRequest.afterKey(...)`).
+* Offset pagination (`PageRequest.ofPage(n).size(s)`) and keyset cursors (`PageRequest.afterCursor(cursor)`).
 * `Sort`, `Order`, `Limit`.
 * SQLState → Jakarta Data exception mapping (`OptimisticLockingFailureException`, `EntityExistsException`, etc.).
 
@@ -98,7 +101,7 @@ Deferred to `mansart-persistence` (M7) or v1.1.
 [mermaid]
 ....
 flowchart TB
-    REPO[Repository Impl<br/>APT-generated] --> PLAN[QueryPlan<br/>static const]
+    REPO[Repository Impl<br/>APT-generated] --> PLAN[prepared query plan<br/>cached]
     PLAN --> RT[RepositoryRuntime]
     RT --> DIAL[Dialect SPI]
     DIAL --> SQL[SQL + parameters]
@@ -171,7 +174,7 @@ APT (it already ships its `_Entity`), the plugin reuses that metamodel instead o
 | Dialect | Status | Key notes
 
 | H2 | ✅ Delivered | `MERGE INTO`, `LIMIT/OFFSET`, `IDENTITY`.
-| PostgreSQL | ⏳ M4 | `ON CONFLICT`, `RETURNING`, `UUID`/`JSONB` types.
+| PostgreSQL | ✅ Delivered | `ON CONFLICT`, `RETURNING`, `UUID`/`JSONB` types.
 | MariaDB | ❌ Backlog | —
 | SQL Server | ❌ Backlog | —
 |===
@@ -182,14 +185,13 @@ Key differences isolated in the dialect: pagination, upsert, identifier return, 
 
 [source,java]
 ----
-module io.vidocq.mansart.data {
-    requires jakarta.data;
-    requires jakarta.persistence;
+module io.vidocq.mansart.data.core {
+    requires transitive io.vidocq.mansart.data.dialect.spi;
     requires java.sql;
-    exports io.vidocq.mansart.data;
-    exports io.vidocq.mansart.data.runtime;
-    exports io.vidocq.mansart.data.dialect.spi;
-    uses io.vidocq.mansart.data.dialect.spi.DialectFactory;
+    requires jakarta.data;
+    requires transitive jakarta.inject;   // *RepositoryImpl carries @Singleton/@Inject
+    exports io.vidocq.mansart.data.core;
+    uses io.vidocq.mansart.data.dialect.DialectFactory;
 }
 ----
 
@@ -209,6 +211,6 @@ See lien:{repo-mansart}/src/branch/main/mansart-jakarta-data/BUG.md[BUG.md]. Maj
 * ⏳ M4 — PostgreSQL dialect.
 * ⏳ M5 — `@Query` JDQL (extras — base delivered in M7-27).
 * ✅ M6 — Jakarta Data 1.0 TCK.
-* ✅ M7 — Runtime impl generation — TCK 73/73 PASS.
+* ✅ M7 — Runtime impl generation — TCK 74/74 PASS.
 
 See lien:{repo-mansart}/src/branch/main/mansart-jakarta-data/PLAN.md[PLAN.md] for sub-milestone details (M7-26 to M7-29).

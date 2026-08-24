@@ -8,7 +8,7 @@ Common recipes for `mansart-jakarta-data`, `mansart-transactions`, and `mansart-
 
 === `BasicRepository<T, K>` and `CrudRepository<T, K>`
 
-`BasicRepository` covers `save`, `delete`, `findById`, `findAll`. `CrudRepository` adds typed batch variants. To go further, declare specialized methods on the interface; the APT turns them into static query plans.
+`BasicRepository` covers `save`, `saveAll`, `findById`, `findAll`, `deleteById`, `delete`, `deleteAll`. `CrudRepository` adds `insert`/`insertAll`/`update`/`updateAll`. To go further, declare specialized methods on the interface; the APT turns them into static query plans.
 
 [source,java]
 ----
@@ -38,12 +38,10 @@ long deleteByName(String name);
 [source,java]
 ----
 @Find
-List<Book> findByAuthorAndPublishedOnBetween(Author author,
-                                             LocalDate from,
-                                             LocalDate to);
+List<Book> find(String title, Author author);
 ----
 
-The Java parameter name must match the entity attribute (compile with `-parameters`).
+The Java parameter name must match the entity attribute (compile with `-parameters`); each parameter is an equality match. `@Find` methods are currently served by the reflective runtime fallback — range conditions (`Between`, `LessThan`, …) belong to derived method names such as `findByPublishedOnBetween(from, to)`, which the APT compiles.
 
 === `@Query` JDQL
 
@@ -68,7 +66,7 @@ Page<Author> findByNameLikeOrderByNameAsc(String pattern, PageRequest page);
 var page = authors.findByNameLikeOrderByNameAsc("S%", PageRequest.ofPage(1).size(20));
 ----
 
-Keyset cursors (`PageRequest.afterKey(...)`) avoid drift on long pagination.
+Keyset cursors (`PageRequest.afterCursor(cursor)`) avoid drift on long pagination.
 
 === Lifecycle annotations
 
@@ -117,7 +115,7 @@ void run() throws Exception {
 
 === Suspend / resume
 
-`TransactionManager.suspend()` and `resume(Transaction)` cover batch / scheduler cases. The transactional context is carried by a `ScopedValue<TransactionContext>`, so it propagates transparently across virtual threads created by `StructuredTaskScope`.
+`TransactionManager.suspend()` and `resume(Transaction)` cover batch / scheduler cases. The transactional context is carried in a `ThreadLocal` — a deliberate choice: the Jakarta Transactions API is imperative (`begin()` returns, `commit()` comes later from arbitrary call sites), which cannot fit `ScopedValue`'s enclosing-scope model; `ThreadLocal` works on virtual threads exactly as on platform threads.
 
 == Connection pool
 
@@ -132,7 +130,7 @@ var ds = MansartDataSource.of(PoolConfig.builder()
     .acquireTimeout(Duration.ofSeconds(5))
     .idleTimeout(Duration.ofMinutes(10))
     .maxLifetime(Duration.ofMinutes(30))
-    .validation(ValidationMode.IS_VALID)
+    .validation(ValidationMode.ON_BORROW)
     .build());
 ----
 
@@ -163,7 +161,7 @@ vidocq.pool.audit.username=audit
 vidocq.pool.audit.maxSize=4
 ----
 
-Every sizing key of `PoolConfig` has its property twin (`minIdle`, `maxSize`, `acquireTimeout`, `idleTimeout`, `maxLifetime`, `validationTimeout`, `validation`, `validationQuery`, `leakDetectionThreshold`), for the default and for each name. Names can also be declared with `@VidocqDataSources({"audit"})` on the application class; the two declaration paths are merged and deduplicated.
+Every key of `PoolConfig` has its property twin (`minIdle`, `maxSize`, `acquireTimeout`, `idleTimeout`, `maxLifetime`, `validationTimeout`, `validation`, `validationQuery`, `leakDetectionThreshold`), plus `password`, `xa` (XA enlistment) and `xaDataSourceClass`, for the default and for each name. Names can also be declared with `@VidocqDataSources({"audit"})` on the application class; the two declaration paths are merged and deduplicated.
 
 Route a repository to a named datasource with the standard Jakarta Data attribute:
 

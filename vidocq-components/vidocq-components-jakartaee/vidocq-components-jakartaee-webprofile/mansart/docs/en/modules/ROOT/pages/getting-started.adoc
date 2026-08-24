@@ -27,12 +27,12 @@ This page shows how to lay the first stone: an entity, a Jakarta Data repository
   </dependency>
   <dependency>
     <groupId>io.vidocq.mansart</groupId>
-    <artifactId>mansart-pool</artifactId>
+    <artifactId>mansart-pool-core</artifactId>
     <version>${mansart.version}</version>
   </dependency>
   <dependency>
     <groupId>io.vidocq.mansart</groupId>
-    <artifactId>mansart-transactions</artifactId>
+    <artifactId>mansart-transactions-cdi</artifactId>
     <version>${mansart.version}</version>
   </dependency>
   <dependency>
@@ -83,8 +83,6 @@ public class Author {
     // getters / setters / no-arg constructor
 }
 ----
-
-Mansart also accepts its zero-dep annotation set `io.vidocq.mansart.data.@Entity` when you want to avoid `jakarta.persistence-api` at the business module's compile time. See xref:reference.adoc[Reference].
 
 == A repository
 

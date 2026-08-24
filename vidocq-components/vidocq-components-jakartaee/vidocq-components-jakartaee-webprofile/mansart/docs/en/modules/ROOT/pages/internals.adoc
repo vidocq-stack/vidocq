@@ -21,11 +21,11 @@ sequenceDiagram
     App->>Bean: authors.findByName("...")
     Bean->>Impl: delegate (CDI synthetic bean)
     Impl->>Runtime: queryList(FIND_BY_NAME, args)
-    Runtime->>Dialect: render(QueryPlan, args)
+    Runtime->>Dialect: render(query, args)
     Dialect-->>Runtime: SQL + typed parameters
     Runtime->>TX: getCurrentConnection() ?
     alt enlisted connection
-        TX-->>Runtime: Connection (ScopedValue)
+        TX-->>Runtime: Connection (thread-bound)
     else new connection
         Runtime->>Pool: getConnection()
         Pool-->>Runtime: PooledConnection
@@ -38,7 +38,7 @@ sequenceDiagram
     Bean-->>App: List<Author>
 ....
 
-The whole hot path is reflection-free: `QueryPlan` instances are static constants prepared at `<clinit>`, parameter/attribute binding goes through `MethodHandle` cached once.
+The whole hot path is reflection-free: query plans are prepared once and cached, parameter/attribute binding goes through `MethodHandle` cached once.
 
 == Codegen — APT (compile time)
 
@@ -47,7 +47,7 @@ The whole hot path is reflection-free: `QueryPlan` instances are static constant
 . For each class annotated `@Entity` (Mansart or JPA) → generates `_Book.java` (rich metamodel) and `Book_.java` (JPA standard metamodel).
 . For each interface annotated `@Repository` → generates `BookRepositoryImpl.java` (final public implementation class) + an entry in `META-INF/mansart-repositories.list`.
 
-Source code generated under `target/generated-sources/annotations/`, marked `@Generated("io.vidocq.mansart.data.processor")`. The processor has no runtime dependency — it lives only in the consuming module's APT classpath.
+Source code generated under `target/generated-sources/annotations/`, marked `@Generated("io.vidocq.mansart.data.processor.MansartProcessor")`. The processor has no runtime dependency — it lives only in the consuming module's APT classpath.
 
 [plantuml]
 ....
@@ -74,15 +74,14 @@ package "Application" {
 . **Zero warmup** — no dynamic classloading on first call.
 . **strict Java Modules-friendly** — generated classes are in the same package as sources, no need for `opens`.
 
-== Codegen — Class-File API (build time)
+== The `Connection` wrapper (hand-written)
 
-`mansart-pool` generates `PooledConnectionProxy` at build via {url-jep}/484[JEP 484 Class-File API]. The proxy implements `java.sql.Connection`, delegates every method to the physical connection, and intercepts `close()` to return the connection to the pool instead of closing it.
+`mansart-pool` ships a plain hand-written `PooledConnection implements Connection`: every method delegates to the physical connection, and `close()` returns the connection to the pool instead of closing it.
 
-Why Class-File API rather than `java.lang.reflect.Proxy`:
+Why hand-written rather than `java.lang.reflect.Proxy`:
 
-* `Connection` has 50+ methods — a reflective proxy costs an `invoke` per call.
-* The Class-File API produces standard bytecode, JIT-friendly from the first call.
-* No ASM / Byte Buddy dependency — matches the ecosystem's "zero external dependency" rule.
+* `Connection` has 50+ methods — a reflective proxy costs an `invoke` per call; direct delegation is JIT-friendly from the first call.
+* No bytecode generation and no ASM / Byte Buddy dependency — matches the ecosystem's "zero external dependency" rule.
 
 == Pool acquire / release
 
@@ -94,16 +93,16 @@ flowchart LR
       A2 -- no --> A3[idle.poll]
       A3 --> A4{valid<br/>isValid ?}
       A4 -- yes --> A5[inUse.add]
-      A4 -- no --> A6[realClose<br/>+ create new]
+      A4 -- no --> A6[close physically<br/>+ create new]
       A2 -- yes --> A6
       A6 --> A5
     end
     subgraph Release
-      R1[Connection.close on proxy] --> R2[reset state]
+      R1[Connection.close on wrapper] --> R2[restore defaults]
       R2 --> R3[inUse.remove]
-      R3 --> R4{aliveAndYoung ?}
+      R3 --> R4{valid and young ?}
       R4 -- yes --> R5[idle.offerFirst]
-      R4 -- no --> R6[realClose]
+      R4 -- no --> R6[close physically]
       R5 --> R7[permits.release]
       R6 --> R7
     end
@@ -120,7 +119,7 @@ Details and numbers: see lien:{repo-mansart}/src/branch/main/mansart-pool/BENCH.
 
 * All blocking JDBC executions (`PreparedStatement.execute*`, `ResultSet.next`) run on virtual threads. No platform pool.
 * The JDBC connection is **never** held across a `synchronized` block that wraps a blocking operation (anti-pattern: thread pinning).
-* The transactional connection is carried by `ScopedValue<Connection> CURRENT` — automatic propagation into `StructuredTaskScope.fork(...)` with no application code.
+* The transactional context lives in a `ThreadLocal` on the transaction's thread (see mansart-transactions); it does not auto-propagate into `StructuredTaskScope` forks — keep transactional work on the transaction's thread.
 * `mansart-pool` validates in CI with `-Djdk.tracePinnedThreads=full` that no pinning appears under 1000 parallel borrows.
 
 == ResultSet → entity mapping
@@ -141,6 +140,6 @@ _Book.author.setter.invokeExact(row, refLoader.get(rs.getLong(2)));
 
 * **Single-resource** (the dominant case) — the `@Transactional` interceptor opens/closes the transaction. The JDBC connection is enlisted as a degenerate `XAResource` (`onePhase=true`).
 * **Multi-resource (M4)** — true 2PC: `prepare` then `commit` on each enlisted `XAResource`. Recovery log (M5) records `PREPARED` transactions that did not complete, for recovery on reboot.
-* **Suspend / resume** — `TransactionManager.suspend()` removes the context from the current `ScopedValue` and returns it; `resume(t)` reinstates it. Typical batch case: a worker job suspending the caller's TX to issue a clean INSERT/COMMIT.
+* **Suspend / resume** — `TransactionManager.suspend()` removes the context from the current thread and returns it; `resume(t)` reinstates it. Typical batch case: a worker job suspending the caller's TX to issue a clean INSERT/COMMIT.
 
-See lien:{repo-mansart}/src/branch/main/mansart-transactions/PLAN.md[mansart-transactions PLAN.md] for the M1-M8 roadmap.
+See link:{repo-mansart}/src/branch/main/mansart-transactions/PLAN.md[mansart-transactions PLAN.md] for the M1-M8 roadmap.

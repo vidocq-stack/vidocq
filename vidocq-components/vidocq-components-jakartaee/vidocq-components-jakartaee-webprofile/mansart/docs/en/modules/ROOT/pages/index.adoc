@@ -27,19 +27,19 @@ The Mansart persistence layer applies the same separation: the foundation of an 
 | 25 (LTS)
 
 | Java modules
-| `io.vidocq.mansart.data`, `io.vidocq.mansart.pool`, `io.vidocq.mansart.transactions`, `io.vidocq.mansart.persistence`
+| `io.vidocq.mansart.data.core`, `io.vidocq.mansart.data.cdi`, `io.vidocq.mansart.data.dialect.*`, `io.vidocq.mansart.pool.api`, `io.vidocq.mansart.pool.core`, `io.vidocq.mansart.transactions.{api,core,cdi,jdbc}`
 
 | Runtime dependencies
 | Jakarta specs only (`jakarta.data-api`, `jakarta.persistence-api`, `jakarta.transaction-api`, `jakarta.inject-api`, `jakarta.cdi-api`). JDBC in the JDK. Drivers `provided`.
 
 | Threading
-| Virtual threads everywhere — no platform pool, transaction propagation via `ScopedValue`.
+| Virtual threads everywhere — no platform pool. The transaction context is carried in a `ThreadLocal` — a deliberate choice: the Jakarta Transactions API is imperative (`begin()` returns, `commit()` comes later from arbitrary call sites), which cannot fit `ScopedValue`'s enclosing-scope model; `ThreadLocal` works on virtual threads exactly as on platform threads.
 
 | Codegen
-| APT (metamodel, `*RepositoryImpl`) + Class-File API (`Connection` proxy). Zero runtime reflection, zero ASM/Byte Buddy.
+| APT (metamodel, `*RepositoryImpl`). The pool's `Connection` wrapper is a plain hand-written class. Zero ASM/Byte Buddy, no dynamic proxies.
 
 | TCK
-| ✅ Jakarta Data 1.0 73/73 (M7) — see xref:tck.adoc[detailed status]. Jakarta Transactions 2.0 — smoke 5/5; full suite in M6c.
+| ✅ Jakarta Data 1.0 74/74 (M7) — see xref:tck.adoc[detailed status]. Jakarta Transactions 2.0 — smoke 5/5; full suite in M6c.
 |===
 
 == Sub-modules

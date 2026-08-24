@@ -2,7 +2,7 @@
 
 A virtual-thread-native JDBC connection pool with zero third-party dependency.
 **Delivered** (milestones MP1–MP5) and released on Maven Central as
-`io.vidocq.mansart:mansart-pool`.
+`io.vidocq.mansart:mansart-pool-core` (API in `mansart-pool-api`, pulled transitively).
 
 It is completely decoupled from the rest of Mansart: it only provides a
 `javax.sql.DataSource`, usable by any JDBC client.

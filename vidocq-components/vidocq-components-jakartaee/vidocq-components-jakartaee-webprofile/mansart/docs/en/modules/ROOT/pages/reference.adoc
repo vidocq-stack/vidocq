@@ -10,11 +10,14 @@ Exhaustive Mansart reference. For onboarding, see xref:getting-started.adoc[Gett
 |===
 | Artefact | Role
 
-| `io.vidocq.mansart:mansart-data-api`
-| Annotations (`@Entity`, `@Repository`, `@Find`, `@Query`, `@Insert`, `@Update`, `@Delete`, `@Save`) — re-export of `jakarta.data` + Mansart specifics (`@Dialect`, `@JdbcRepository`, `@MansartDataSource`).
-
 | `io.vidocq.mansart:mansart-data-core`
-| Runtime: `RepositoryRuntime`, `QueryPlan` execution, `ResultSet` mapping.
+| Runtime: `RepositoryRuntime`, query execution, `ResultSet` mapping. Annotations come from the standard `jakarta.data-api` / `jakarta.persistence-api`.
+
+| `io.vidocq.mansart:mansart-data-cdi`
+| CDI 4.1 Lite bootstrap (BCE): `@Repository` beans, `RepositoryRuntime` producer, `dataStore` routing.
+
+| `io.vidocq.mansart:mansart-data-dialect-h2` / `mansart-data-dialect-postgresql`
+| Shipped SQL dialects (`mansart-data-dialect-spi` is pulled transitively).
 
 | `io.vidocq.mansart:mansart-data-processor`
 | APT — static metamodel + `*RepositoryImpl` generation. Declare under `<annotationProcessorPaths>`.
@@ -37,8 +40,8 @@ Exhaustive Mansart reference. For onboarding, see xref:getting-started.adoc[Gett
 | `io.vidocq.mansart:mansart-pool-core`
 | `MansartDataSource` implementation.
 
-| `io.vidocq.mansart:mansart-transactions`
-| `MansartTransactionManager`, `UserTransaction`, `@Transactional` interceptor, `@TransactionScoped`, Vauban BCE.
+| `io.vidocq.mansart:mansart-transactions-{api,core,cdi,jdbc}`
+| `mansart-transactions` itself is a POM aggregator — depend on `-cdi` (`@Transactional` interceptor, `@TransactionScoped`, Vauban BCE; pulls `-core`'s `MansartTransactionManager`/`UserTransaction`) and `-jdbc` for the connection bridge.
 
 | `io.vidocq.mansart:mansart-persistence` *(M7 pending)*
 | Jakarta Persistence 3.2 implementation.
@@ -50,14 +53,14 @@ Exhaustive Mansart reference. For onboarding, see xref:getting-started.adoc[Gett
 |===
 | Module | Exports
 
-| `io.vidocq.mansart.data`
-| `io.vidocq.mansart.data` (annotations + `MansartData` factory), `io.vidocq.mansart.data.runtime` (SPI), `io.vidocq.mansart.data.dialect.spi`.
+| `io.vidocq.mansart.data.core`
+| `io.vidocq.mansart.data.core` (`MansartData`, `RepositoryRuntime`); `requires transitive` the dialect SPI and `jakarta.inject`.
 
-| `io.vidocq.mansart.pool`
-| `io.vidocq.mansart.pool` (`MansartDataSource`, `PoolConfig`, `PoolMetrics`).
+| `io.vidocq.mansart.pool.api` / `io.vidocq.mansart.pool.core`
+| `io.vidocq.mansart.pool` (`PoolConfig`, `PoolMetrics`, `ValidationMode`) / `io.vidocq.mansart.pool.core` (`MansartDataSource`).
 
-| `io.vidocq.mansart.transactions`
-| `io.vidocq.mansart.transactions` (`MansartTransactionManager`, `UserTransaction` providers).
+| `io.vidocq.mansart.transactions.api` / `.core` / `.cdi` / `.jdbc`
+| `…transactions.api` (re-exports `jakarta.transaction`) / `…transactions.core` (`MansartTransactionManager`) / CDI interceptor + BCE / JDBC enlistment bridge.
 
 | `io.vidocq.mansart.persistence` *(M7 pending)*
 | TBD.
@@ -67,45 +70,7 @@ All modules are strict Java Modules — minimal `exports`, no unjustified `opens
 
 == Entity annotations
 
-[cols="2,3"]
-|===
-| Mansart (zero-dep) | JPA equivalent recognized
-
-| `@io.vidocq.mansart.data.Entity`
-| `@jakarta.persistence.Entity`
-
-| `@Id`
-| `@Id`
-
-| `@GeneratedValue(strategy)`
-| `@GeneratedValue(strategy)` — `IDENTITY`, `SEQUENCE`, `UUID`, `AUTO`
-
-| `@Column(name, nullable, unique, length)`
-| `@Column(...)`
-
-| `@Table(name, schema)`
-| `@Table(...)`
-
-| `@Version`
-| `@Version` — optimistic locking
-
-| `@Enumerated(STRING\|ORDINAL)`
-| `@Enumerated(...)`
-
-| `@Embedded` / `@Embeddable`
-| same
-
-| `@ManyToOne(fetch)` / `@OneToOne(fetch)`
-| same (owning relations only in v1)
-
-| `@JoinColumn(name)`
-| `@JoinColumn(...)`
-
-| `@Transient`
-| `@Transient`
-|===
-
-APT rule: if `@jakarta.persistence.Entity` is present → JPA annotations. Otherwise, `@io.vidocq.mansart.data.Entity` → Mansart annotations. Both at once → explicit compile-time error.
+Entities use the **standard `jakarta.persistence` annotations**: `@Entity`, `@Table`, `@Id`, `@GeneratedValue`, `@Column`, `@Version`, `@Enumerated`, `@Embedded`/`@Embeddable`, `@ManyToOne`, `@OneToOne`, `@JoinColumn`, `@Transient`. The processor reads them at compile time; no other annotation set is recognized (the early zero-dep Mansart annotations were retired in M7-29).
 
 **Out of scope v1**: `@OneToMany`, `@ManyToMany`, `@MappedSuperclass`, `@Inheritance`, `@Convert`/`AttributeConverter`. Deferred to `mansart-persistence` (M7).
 
@@ -127,11 +92,11 @@ APT rule: if `@jakarta.persistence.Entity` is present → JPA annotations. Other
 | `@Insert`, `@Update`, `@Delete`, `@Save`
 | Lifecycle annotations — parameter = entity, collection or varargs; return `void`/`T`/`Iterable<T>`/`int`/`long`/`boolean`.
 
-| `@OrderBy("attribute")`
-| Static order on a finder.
+| `OrderBy<Attr><Asc|Desc>` (method-name infix)
+| Static order on a derived finder; dynamic order via `Sort`/`Order`/`Limit` call parameters.
 
-| `@io.vidocq.mansart.data.MansartDataSource("name")`
-| Overrides the `DataSource` injected into the repository (default `@Inject DataSource`).
+| `@Repository(dataStore = "name")`
+| Routes the repository to a named datasource (`@Default` datasource otherwise).
 |===
 
 == Transaction annotations
@@ -161,10 +126,12 @@ APT rule: if `@jakarta.persistence.Entity` is present → JPA annotations. Other
 | `acquireTimeout` | `Duration` | Timeout on `getConnection()` (default 30 s).
 | `idleTimeout` | `Duration` | Eviction of an idle connection (default 10 min).
 | `maxLifetime` | `Duration` | Eviction of an old connection (default 30 min).
-| `validation` | `ValidationMode` | `IS_VALID`, `QUERY`, `NONE`.
-| `validationQuery` | `String` | SQL when `validation=QUERY`.
+| `validation` | `ValidationMode` | `NEVER`, `ON_BORROW` (default when `validationQuery` is set), `PERIODIC`.
+| `validationQuery` | `String` | SQL used by `ON_BORROW` (falls back to `Connection.isValid`).
 | `leakDetectionThreshold` | `Duration` | Leak stack-trace if a connection is borrowed longer than the threshold.
-| `connectionInitSql` | `List<String>` | SQL run on first `acquire` (`SET TIMEZONE`, etc.).
+| `validationTimeout` | `Duration` | Bound on a validation probe (default 1 s).
+| `driverProperties` | `Map<String,String>` | Extra driver properties (`driverProperty(k, v)` on the builder).
+| `xaDataSourceClassName` | `String` | Explicit `XADataSource` class when auto-detection from the URL is not enough.
 |===
 
 == Pluggable dialects

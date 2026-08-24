@@ -7,7 +7,7 @@
 == Mission
 
 * `MansartTransactionManager` conformant to Jakarta Transactions 2.0.
-* Native virtual-thread support — TX propagation via `ScopedValue<TransactionContext>`.
+* Native virtual-thread support — the transaction context is a per-thread `ThreadLocal` (see the architecture note below for why not `ScopedValue`).
 * `@Transactional` CDI interceptor (six TxTypes) integrated with xref:vauban::index.adoc[Vauban].
 * `ConnectionXAResource` adapter to enlist a JDBC connection as a resource.
 * Jakarta Transactions 2.0 TCK — smoke 5/5 delivered, full suite in progress.
@@ -22,7 +22,7 @@ Available open-source TMs (Atomikos, Narayana) are designed for classic Java EE:
 |===
 | Sub-module | Role
 
-| `mansart-transactions-spi`
+| `mansart-transactions-api`
 | Public API: `TransactionManager`, `UserTransaction`, `Transaction`, `Synchronization`, `Status`. Re-export of `jakarta.transaction-api` + minor additions.
 
 | `mansart-transactions-core`
@@ -40,7 +40,7 @@ Available open-source TMs (Atomikos, Narayana) are designed for classic Java EE:
 
 == Quick architecture
 
-* Transactional context stored in `ScopedValue<TransactionContext>`.
+* Transactional context stored in a `ThreadLocal<MansartTransaction>`. Why not `ScopedValue`: the Jakarta Transactions API is imperative — `begin()` returns and `commit()` comes later from arbitrary call sites, which cannot fit `ScopedValue`'s enclosing `run(...)` scope; `ThreadLocal` works on virtual threads exactly as on platform threads.
 * `begin/commit/rollback` mutates the current context; `suspend` returns the context and removes it; `resume(t)` reinstates it.
 * `enlistResource(XAResource)` adds a resource to the context; on `commit`, the TM calls `prepare` then `commit` (or `commit(onePhase=true)` if single-resource).
 * Recovery log — append-only file journaling `PREPARED` TXs. On reboot, recovery scans known XAResources and finishes orphan TXs.
@@ -56,7 +56,7 @@ sequenceDiagram
 
     App->>Interceptor: methodCall()
     Interceptor->>TM: begin()
-    TM->>TM: ScopedValue.where(CTX, new tx)
+    TM->>TM: bind new tx to the current thread
     Interceptor->>App: invoke method body
     App->>Conn: getConnection()<br/>(enlist via ConnectionXAResource)
     App->>DB: SQL
