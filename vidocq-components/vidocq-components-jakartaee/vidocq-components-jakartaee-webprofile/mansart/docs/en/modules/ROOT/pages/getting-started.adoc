@@ -17,11 +17,6 @@ This page shows how to lay the first stone: an entity, a Jakarta Data repository
 <dependencies>
   <dependency>
     <groupId>io.vidocq.mansart</groupId>
-    <artifactId>mansart-data-api</artifactId>
-    <version>${mansart.version}</version>
-  </dependency>
-  <dependency>
-    <groupId>io.vidocq.mansart</groupId>
     <artifactId>mansart-data-core</artifactId>
     <version>${mansart.version}</version>
   </dependency>
