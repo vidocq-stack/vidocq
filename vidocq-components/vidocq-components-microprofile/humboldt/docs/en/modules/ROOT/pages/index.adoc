@@ -5,7 +5,7 @@
 image::humboldt-logo.png[Humboldt,300,role=module-logo]
 
 [.lead]
-Humboldt is the MicroProfile Telemetry 2.1 implementation of the Vidocq ecosystem. It rewrites its own OpenTelemetry SDK (traces, metrics, logs) directly on top of the public OTel API surface, and integrates with xref:chappe::index.adoc[Chappe] for HTTP transport, xref:vauban::index.adoc[Vauban] for CDI, xref:ravel::index.adoc[Ravel] for configuration, and xref:cassini::index.adoc[Cassini] for JAX-RS instrumentation. Goal: 100 % official TCK conformance, with no `opentelemetry-sdk` / `opentelemetry-exporter-*` dependency, no Netty, no gRPC stack.
+Humboldt is the MicroProfile Telemetry 2.1 implementation of the Vidocq ecosystem. It rewrites its own OpenTelemetry SDK (traces, metrics, logs) directly on top of the public OTel API surface, and integrates with xref:chappe::index.adoc[Chappe] for HTTP transport, xref:vauban::index.adoc[Vauban] for CDI, and xref:cassini::index.adoc[Cassini] for JAX-RS instrumentation; configuration comes from the standard `OTEL_*` environment variables and `otel.*` system properties. Goal: 100 % official TCK conformance, with no `opentelemetry-sdk` / `opentelemetry-exporter-*` dependency, no Netty, no gRPC stack.
 
 == Origin of the name
 
@@ -42,17 +42,17 @@ OpenTelemetry is the _Naturgemälde_ of distributed systems. Humboldt embeds it 
 | Implemented spec | MicroProfile Telemetry 2.1 (OpenTelemetry API 1.39+, semconv 1.27+)
 | Repo | {repo-humboldt}
 | Java | 25 (LTS)
-| Java modules | ~16 modules — main ones: `io.vidocq.humboldt.api`, `.sdk.trace`, `.sdk.metric`, `.sdk.log`, `.sdk.common`, `.context`, `.exporter.otlp.http`, `.propagator.w3c`, `.cdi`, `.rest`, `.runtime`. Full list: xref:reference.adoc[Reference].
-| Runtime dependencies | `opentelemetry-api`, `opentelemetry-context`, `opentelemetry-semconv`, `opentelemetry-instrumentation-annotations`, `protobuf-java`, `microprofile-telemetry-api`. Third-party SDK and exporters refused.
+| Java modules | 15 modules — main ones: `io.vidocq.humboldt.api`, `.sdk.trace`, `.sdk.metric`, `.sdk.log`, `.sdk.common`, `.context`, `.exporter.otlp.http`, `.propagator.w3c`, `.cdi`, `.rest`, `.runtime`, `.otel.interop`, plus the repackaged `io.opentelemetry.api` / `.context` / `.instrumentation_annotations`. Full list: xref:reference.adoc[Reference].
+| Runtime dependencies | None external. The public OpenTelemetry API surface (`opentelemetry-api` 1.39, `-context`, `-instrumentation-annotations`) is repackaged as explicit Java modules inside the `humboldt-otel-*` artifacts; `opentelemetry-semconv` appears only in the TCK harness; no `protobuf-java`, no `microprofile-telemetry-api` jar. Third-party SDK and exporters refused.
 | jlink-ready | ✅
-| MP Telemetry 2.1 TCK | 🚧 M7c in progress — first `OpenTelemetryBeanTest` PASS ✅ ; detailed status to be confirmed (see `tck-runs/`)
+| MP Telemetry 2.1 TCK | ✅ **85/85 PASS** — full official suite (tracing + metrics + logs), re-verified stable 2026-06-01 (see `tck-runs/` and `TCK.md`)
 |===
 
 == Three identity traits
 
-. **6 runtime jars** instead of about 25 in SmallRye Telemetry — no `opentelemetry-sdk`, no `opentelemetry-exporter-otlp`, no `grpc-java`, no Netty, no Guava.
+. **Self-contained jars, zero external runtime dependency** instead of about 25 third-party jars in SmallRye Telemetry — no `opentelemetry-sdk`, no `opentelemetry-exporter-otlp`, no `grpc-java`, no Netty, no Guava, no protobuf.
 . **`ScopedValue<Context>`** (JEP 506) instead of plain `ThreadLocal` — zero carrier-thread pinning on virtual threads, planned for M8 (`humboldt-context` MVP uses JDK 21+-compliant `ThreadLocal`, migration ADR tracked).
-. **APT + Class-File API** at `process-classes` to generate interceptors, providers and bridges — AOT-ready for GraalVM / Leyden CDS, no dynamic proxy, no hot bytecode agent.
+. **No runtime bytecode machinery** — no agent, no ASM/Byte Buddy; CDI wiring is generated at compile time by Vauban's annotation processor. The one deliberate exception: `humboldt-cdi` creates two `java.lang.reflect.Proxy` instances so the injected current-`Span` and current-`Baggage` beans always track the active `Context`.
 
 == Position in the ecosystem
 
@@ -71,12 +71,12 @@ flowchart LR
   Batch --> Exp[humboldt-exporter-otlp-http]
   Reader --> Exp
   BatchL --> Exp
-  Exp -->|HTTP/JSON or /protobuf| Coll[OTel Collector]
+  Exp -->|OTLP HTTP/JSON| Coll[OTel Collector]
   Cassini[cassini-core] -->|filter| REST[humboldt-rest]
   REST --> API
   Vauban[vauban-core] -->|"@Inject Tracer/Meter/Logger"| CDI[humboldt-cdi]
   CDI --> API
-  Ravel[ravel-core] -->|otel.*, mp.telemetry.*| Runtime[humboldt-runtime]
+  Env["OTEL_* env vars / otel.* properties"] --> Runtime[humboldt-runtime]
   Runtime --> Trace
   Runtime --> Metric
   Runtime --> Log
@@ -92,11 +92,11 @@ Humboldt shares its transport with the rest of the Vidocq ecosystem (Chappe HTTP
 
 | Runtime dependencies
 | ~25 jars (otel-sdk, exporter-otlp, grpc-java, netty, guava, protobuf, perfmark, …)
-| *6 jars* (`opentelemetry-api`, `-context`, `-semconv`, `protobuf-java`, humboldt-*, `microprofile-telemetry-api`)
+| *zero external* — self-contained `humboldt-*` jars; the OTel API surface is repackaged inside `humboldt-otel-*`
 
 | Runtime reflection
 | yes (Weld + OTel reflection)
-| *no* — APT + Class-File API at `process-classes`
+| *almost none* — CDI wiring generated at compile time (Vauban processor); the only dynamic proxies are the two injected current-`Span` / current-`Baggage` beans
 
 | Virtual-thread pinning
 | risk (`ThreadLocal` Context)
@@ -108,7 +108,7 @@ Humboldt shares its transport with the rest of the Vidocq ecosystem (Chappe HTTP
 
 | OTLP transport v1
 | gRPC or HTTP
-| *HTTP/protobuf and HTTP/JSON* (gRPC through future native `chappe-grpc`)
+| *HTTP/JSON only* (protobuf not shipped; gRPC through future native `chappe-grpc`)
 |===
 
 == Chapters
@@ -116,9 +116,9 @@ Humboldt shares its transport with the rest of the Vidocq ecosystem (Chappe HTTP
 * xref:getting-started.adoc[Getting started] — add Humboldt to a Vidocq project in a few minutes.
 * xref:concepts.adoc[Concepts] — OpenTelemetry model (Span, Metric, LogRecord, Context, Resource, Scope) and what MP Telemetry 2.1 adds.
 * xref:usage.adoc[Usage] — `@WithSpan`, Tracer/Meter/Logger injection, OTLP exporter, sampling, baggage.
-* xref:internals.adoc[Internals] — SDK pipeline, BatchSpanProcessor on virtual threads, JEP 506, APT/Class-File codegen.
-* xref:tck.adoc[TCK] — MicroProfile Telemetry 2.1 status, commands, in-reactor runner behind the `tck` profile.
-* xref:reference.adoc[Reference] — full Java module table, `otel.*` / `mp.telemetry.*` keys, semantic conventions.
+* xref:internals.adoc[Internals] — SDK pipeline, BatchSpanProcessor on virtual threads, JEP 506, bootstrap sequence.
+* xref:tck.adoc[TCK] — MicroProfile Telemetry 2.1 status (85/85 PASS), commands, in-reactor runner behind the `tck` profile.
+* xref:reference.adoc[Reference] — full Java module table, `OTEL_*` / `otel.*` keys, semantic conventions.
 * xref:migration.adoc[Migration] — from SmallRye Telemetry / Quarkus OpenTelemetry.
 
 Consolidated bugs and benchmarks: link:{repo-humboldt}/src/branch/main/BUG.md[BUG.md], link:{repo-humboldt}/src/branch/main/BENCH.md[BENCH.md].

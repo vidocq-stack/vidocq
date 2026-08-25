@@ -12,7 +12,7 @@ The following are strictly identical between SmallRye Telemetry, the official OT
 * APIs: `Tracer`, `Meter`, `Logger`, `Span`, `Baggage`, `Context`, `TextMapPropagator`.
 * Configuration: `OTEL_*` env vars, `otel.*` system properties.
 * OTel semantic conventions (`http.*`, `db.*`, etc.).
-* Output format: OTLP/HTTP-JSON or OTLP/HTTP-protobuf to standard Collector.
+* Output format: OTLP/HTTP-JSON to a standard Collector (Humboldt emits JSON only; Collectors accept JSON and protobuf on the same HTTP receiver).
 
 If your code only uses these APIs, migration is essentially a dependency swap.
 
@@ -41,13 +41,13 @@ If your code only uses these APIs, migration is essentially a dependency swap.
 | _(dropped — no gRPC in v1)_
 
 | `io.opentelemetry:opentelemetry-api`
-| _(kept — not re-implemented)_
+| _(not re-implemented — repackaged as `io.vidocq.humboldt:humboldt-otel-api`, module `io.opentelemetry.api`)_
 
 | `io.opentelemetry:opentelemetry-context`
-| _(kept — not re-implemented)_
+| _(not re-implemented — repackaged as `io.vidocq.humboldt:humboldt-otel-context`, module `io.opentelemetry.context`)_
 |===
 
-Direct consequence: ~25 jars → 6 runtime jars (see the differentiation table on the xref:index.adoc[index]).
+Direct consequence: ~25 third-party jars → self-contained `humboldt-*` jars with zero external runtime dependency (see the differentiation table on the xref:index.adoc[index]).
 
 == gRPC → HTTP transport switch
 
@@ -60,15 +60,15 @@ export OTEL_EXPORTER_OTLP_PROTOCOL=grpc
 export OTEL_EXPORTER_OTLP_ENDPOINT=http://collector:4317
 ----
 
-After — switch to HTTP (standard port 4318):
+After — point the endpoint at the HTTP receiver (standard port 4318); `OTEL_EXPORTER_OTLP_PROTOCOL` is **not read** by Humboldt (unset it or leave it, it has no effect — the payload is always OTLP/HTTP JSON):
 
 [source,bash]
 ----
-export OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+export OTEL_SDK_DISABLED=false
 export OTEL_EXPORTER_OTLP_ENDPOINT=http://collector:4318
 ----
 
-The Collector accepts both transports in parallel (receivers `otlp.protocols.grpc` and `otlp.protocols.http`). No infra-side change required.
+The Collector accepts both transports in parallel (receivers `otlp.protocols.grpc` and `otlp.protocols.http`). The only infra-side requirement: the `http` receiver must be enabled.
 
 For architectures that strictly depend on gRPC (compression, explicit H2 multiplexing), wait for the upcoming `humboldt-exporter-otlp-grpc` module (post-MVP, on top of `chappe-grpc`).
 
@@ -118,15 +118,15 @@ Recommendation: align on the standard OTel keys (`OTEL_*`) for portability. Humb
 
 * **No JVM agent** — SmallRye/Quarkus sometimes relies on the OTel Java agent to instrument external libraries (JDBC, gRPC clients…). Humboldt does not support the agent: use manual instrumentation or wait for native Vidocq modules (for example `humboldt-jdbc`, post-MVP).
 * **No direct Jaeger exporter** — use the OTLP Collector as a proxy to Jaeger.
-* **`mp.telemetry.sdk.disabled`** — deferred to M7. To fully disable, use `OTEL_TRACES_EXPORTER=none` + `_METRICS_EXPORTER=none` + `_LOGS_EXPORTER=none`.
+* **SDK disabled by default** — per MP Telemetry 2.1, `OTEL_SDK_DISABLED` defaults to `true`: coming from the OTel Java SDK (opposite default), remember to export `OTEL_SDK_DISABLED=false` or nothing is emitted. To disable a single signal, use `OTEL_TRACES_EXPORTER=none` / `_METRICS_EXPORTER=none` / `_LOGS_EXPORTER=none`.
 
 == Migration checklist
 
 . [x] Remove `quarkus-opentelemetry` / `smallrye-opentelemetry` / `opentelemetry-sdk` / third-party exporters.
 . [x] Add `humboldt-runtime` + the integration modules you need.
 . [x] Complete `module-info.java`.
-. [x] Align env vars on `OTEL_*`.
-. [x] Switch to `http/protobuf` if current usage is `grpc`.
+. [x] Align env vars on `OTEL_*`, and set `OTEL_SDK_DISABLED=false` (the MP Telemetry default is disabled).
+. [x] Point `OTEL_EXPORTER_OTLP_ENDPOINT` at the Collector's HTTP port (4318) if current usage is gRPC (4317).
 . [x] Run the application test suite.
 . [x] Check spans in the Collector — `service.name`, HTTP attributes, consistent latencies.
 . [x] Measure the footprint delta (jars, RAM, startup) — record in `BENCH.md`.

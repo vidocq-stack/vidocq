@@ -2,7 +2,7 @@
 :description: MicroProfile Telemetry 2.1 TCK status, in-reactor runner behind the tck profile, commands, Arquillian / ShrinkWrap constraints.
 
 [.lead]
-Humboldt targets 100 % conformance to the official **MicroProfile Telemetry 2.1** TCK across the three suites (tracing + metrics + logs), with W3C TraceContext + Baggage propagation and `OTEL_*` / `MP_TELEMETRY_*` configuration. The `humboldt-tck` runner is part of the reactor but **gated behind the `tck` Maven profile** (TCK harmonisation — same pattern as the `vidocq-runtime-tck-*` runners and the dirac pilot): a plain `mvn install` neither downloads nor runs anything TCK-related.
+Humboldt passes the official **MicroProfile Telemetry 2.1** TCK — **85/85 PASS** across the three suites (tracing + metrics + logs), with W3C TraceContext + Baggage propagation and `OTEL_*` configuration. The `humboldt-tck` runner is part of the reactor but **gated behind the `tck` Maven profile** (TCK harmonisation — same pattern as the `vidocq-runtime-tck-*` runners and the dirac pilot): a plain `mvn install` neither downloads nor runs anything TCK-related.
 
 == Target
 
@@ -22,61 +22,15 @@ TCK coordinates publicly confirmed on Maven Central (M7.1 audit, 2026-05-21).
 
 == Current status
 
-**M7b delivered (2026-05-21)** — complete Arquillian adapter, **first official TCK test `OpenTelemetryBeanTest` PASS (2/2)**.
+**M7 complete — 85/85 PASS.** The full official suite (tracing + metrics + logs, as composed by the `tck-official` profile) runs green:
 
-[cols="2,2,2"]
-|===
-| Signal | Real passing tests | Step
+----
+Tests run: 85, Failures: 0, Errors: 0, Skipped: 0
+----
 
-| Tracing
-| ✅ 4 / ~50 (`OpenTelemetryBeanTest`, `TracerTest`, `ExporterSpiTest`)
-| M7c.2 — unblock HTTP
+First achieved on 2026-05-24, re-verified stable on `main` on 2026-06-01 (`./run-official-tck-telemetry-2.1.sh all`, Temurin 25, Maven 3.9.16). Every run is archived with its raw counters in `tck-runs/`; consolidated status lives in https://codefloe.com/Vidocq/humboldt/src/branch/main/TCK.md[TCK.md].
 
-| Metrics
-| ✅ 24 / ~50 (CDI counters/gauges/histos + JVM*)
-| M7c.2 — unblock HTTP histograms
-
-| Logs
-| ✅ 3 / ~10 (`JulTest`, `ServerInstanceTest`)
-| M7c
-
-| Baggage
-| ✅ W3C propagator delivered in M3
-| TCK tests in M7c.2
-
-| Config
-| ✅ `OTEL_*` env vars delivered in M6c
-| TCK tests in M7c.2
-|===
-
-Detailed status and categorization of remaining failures: see https://codefloe.com/Vidocq/humboldt/src/branch/main/TCK.md[TCK.md] in the repo. Exact counter to be confirmed after each run (see `tck-runs/`).
-
-== M7c failure categorization (first official run, 2026-05-21)
-
-`Tests run: 138, Failures: 62, Errors: 0, Skipped: 73`
-
-[cols="3,1,4"]
-|===
-| Category | Failures | Cause / action
-
-| A. Unresolved `@ArquillianResource URL`
-| 56
-| HTTP tests. Start Chappe HTTP + Cassini in `HumboldtDeployableContainer.deploy()`, expose the port through `ProtocolMetaData → HTTPContext`.
-
-| B. `Failed to deploy ...war`
-| 8
-| Missing classes/deps in the ShrinkWrap war crashing `extractBeanClasses` or `VaubanContainer.build()`. Case-by-case investigation.
-
-| C. `injected{Span, Baggage, Tracer}` null
-| 12
-| MP Telemetry spec §"Required CDI beans": missing producers for `Span.current()`, `Baggage.current()`. To be added in `HumboldtTelemetryProducers`.
-
-| D. `NoSuchMethod commons.io.input.Tailer.builder()`
-| 24
-| commons-io version conflict between TCK metrics deps and our classpath. Force commons-io 2.16+ in `humboldt-tck/pom.xml`.
-|===
-
-The 4 categories partially overlap (a JvmMemory test can fail on URL and on Tailer at the same time). Addressing one category may unblock more tests than the counter suggests.
+The road to green (M7b Arquillian adapter, M7c failure clusters — `@ArquillianResource URL` wiring, ShrinkWrap deployments, required CDI beans, commons-io conflicts) is preserved in the dated reports under `tck-runs/` for archaeology.
 
 == Running the TCK
 
@@ -85,10 +39,10 @@ The 4 categories partially overlap (a JvmMemory test can fail on URL and on Tail
 cd humboldt
 sdk env
 
-# Smoke — a single test to validate the install
+# Smoke — local harness tests to validate the install
 ./run-official-tck-telemetry-2.1.sh
 
-# Full suite (M7c+) — equivalent of the official 138+ test TCK
+# Full official suite — 85 tests (tracing + metrics + logs)
 ./run-official-tck-telemetry-2.1.sh all
 
 # Targeted test
@@ -97,7 +51,7 @@ sdk env
 
 The script:
 
-. Uses `mvnw` (Maven 4) when present, otherwise falls back to system `mvn`.
+. Uses the Maven wrapper `mvnw` (Maven 3.9.16) when present, otherwise falls back to system `mvn`.
 . Passes `maven.test.skip=true` (instead of `-DskipTests`) — required since M7c.12 because `humboldt-rest` test-compile fails (`microprofile.rest.client.api` outside the module path under strict Java Modules).
 . `humboldt-rest` tests remain manually runnable through `mvn test -pl humboldt-rest`.
 
@@ -108,28 +62,24 @@ The script:
 ./mvnw -ntp -Ptck,tck-cdi-bean -pl humboldt-tck test
 ----
 
-Profile `tck-cdi-bean` = minimal bootstrap (no HTTP) for pure CDI tests such as `OpenTelemetryBeanTest`. Useful for iterating on category-C bugs without paying the Chappe startup cost.
+Profile `tck-cdi-bean` = runs only `OpenTelemetryBeanTest` from the tracing TCK, validating the Arquillian → HumboldtContainer → Vauban CDI chain without paying the full-suite cost.
 
 == Runner Maven profiles
+
+The runner defines three profiles (read them in `humboldt-tck/pom.xml`); they combine with the reactor-level `tck` gate (`-Ptck,<profile>`):
 
 [cols="2,3"]
 |===
 | Profile | Effect
 
-| `tck-official`
-| Full suite (tracing + metrics + logs). Imports all 3 TCK artifacts.
+| `tck-smoke` _(active by default)_
+| Local harness tests only (`HumboldtTckSmokeTest`, bridge tests, Arquillian boot smoke) — does not run the official suites.
 
 | `tck-cdi-bean`
-| CDI-only subset — no Chappe/Cassini.
+| A single official test, `OpenTelemetryBeanTest` (tracing TCK) — minimal CDI bootstrap.
 
-| `tck-trace-only`
-| Tracing suite only (M7c fast iteration).
-
-| `tck-metrics-only`
-| Metrics suite only.
-
-| `tck-logs-only`
-| Logs suite only.
+| `tck-official`
+| Full official suite (85 tests) via `tck-suite.xml`, scanning all three TCK artifacts (tracing + metrics + logs).
 |===
 
 == Runner architecture
@@ -151,14 +101,14 @@ Historically `humboldt-tck` was a standalone out-of-reactor POM: ShrinkWrap Mave
 grep -E "Tests run|FAILED|ERROR" /tmp/tck-humboldt.log
 ----
 
-Run artifacts (logs, Surefire reports, `InMemorySpanExporter` span dumps) are placed under `humboldt-tck/target/surefire-reports/` and archived in `humboldt/tck-runs/<date>/` for traceability.
+Run artifacts (logs, Surefire reports, `InMemorySpanExporter` span dumps) are placed under `humboldt-tck/target/surefire-reports/`, and each significant run is archived as a dated report in `tck-runs/` for traceability.
 
 == Quality gate
 
 Before any merge to `main`:
 
 . `humboldt-tck` smoke PASS.
-. No regression of the full-suite counter (see consolidated `BENCH.md`).
+. No regression of the full-suite counter — 85/85 must stay green (see `TCK.md` and `tck-runs/`).
 . No new `import io.opentelemetry.sdk.*` in application code (architecture constraint #1 from `CLAUDE.md`).
 
 Next: xref:reference.adoc[Reference] and xref:migration.adoc[Migration].

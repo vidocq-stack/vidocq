@@ -101,7 +101,7 @@ With `humboldt-rest` active, every JAX-RS endpoint is automatically instrumented
 . OTel attributes: `http.request.method`, `url.path` (normalized `/`), `url.scheme`.
 . Stores `Span` + `Scope` via `ContainerRequestContext.setProperty()`.
 
-`HumboldtServerResponseFilter` closes the span: `http.response.status_code`, status `ERROR` if ≥ 500, `Scope.close()` then `span.end()` in `finally`.
+`HumboldtServerResponseFilter` closes the span: `http.response.status_code`, status `ERROR` if ≥ 500, and records the `http.server.request.duration` histogram — with an `error.type` attribute (the status code as a string) whenever the status is ≥ 400 — then `Scope.close()` and `span.end()` in `finally`.
 
 No application code is required: it is enough to have `humboldt-rest` on the classpath and Cassini as the JAX-RS runtime.
 
@@ -174,7 +174,7 @@ latency.record(durationMs);
 
 == OTel logs
 
-`humboldt-sdk-log` exposes `SdkLoggerProvider`. JUL and SLF4J bridges are deferred to M5b. In the meantime, direct emission is possible:
+`humboldt-sdk-log` exposes `SdkLoggerProvider`. The JUL bridge (`HumboldtJulHandler`, shipped in M5b) is installed automatically on the root JUL logger by `HumboldtAutoConfigure` whenever the log pipeline is active, so `java.util.logging` records flow to the OTel pipeline out of the box. There is no SLF4J bridge. Direct emission is also possible:
 
 [source,java]
 ----
@@ -224,13 +224,13 @@ export OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://traces.example/v1/traces
 export OTEL_EXPORTER_OTLP_HEADERS="authorization=Bearer abcdef123,x-tenant=acme"
 ----
 
-The `humboldt-exporter-otlp-http` exporter uses `java.net.http.HttpClient` with a virtual-thread executor, bounded exponential retry (`100ms × 2^attempt`, capped at 5 s) on 5xx and network errors, up to 5 attempts.
+The `humboldt-exporter-otlp-http` exporter uses `java.net.http.HttpClient` with a virtual-thread executor, bounded exponential retry (`100ms × 2^attempt`, capped at 5 s) on 5xx and network errors, up to 3 retries by default (`setMaxRetries`). The payload is always OTLP/HTTP **JSON** — there is no protobuf encoding.
 
 == Batching and flush
 
 `BatchSpanProcessor` (virtual-thread worker) accumulates spans and exports them in batches:
 
-* Bounded queue — drops spans on overflow (counted through an internal metric).
+* Bounded queue — drops spans on overflow (reported through a `System.Logger` WARNING).
 * Trigger: batch threshold reached, scheduled delay elapsed (`scheduleDelay`), or explicit `flush()`/`shutdown()`.
 
 [source,java]
@@ -245,6 +245,7 @@ For unit tests without a Collector:
 
 [source,bash]
 ----
+export OTEL_SDK_DISABLED=false
 export OTEL_TRACES_EXPORTER=in-memory
 export OTEL_METRICS_EXPORTER=in-memory
 export OTEL_LOGS_EXPORTER=in-memory

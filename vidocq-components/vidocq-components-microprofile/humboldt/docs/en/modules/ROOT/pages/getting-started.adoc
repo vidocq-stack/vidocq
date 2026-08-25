@@ -2,7 +2,7 @@
 :description: Add Humboldt to a Vidocq project, configure an OTLP exporter, emit a first trace in five minutes.
 
 [.lead]
-This page walks through a first integration: declare the artifacts, configure the OTLP exporter, boot the auto-configured runtime, and observe a span in the Collector. The target is a Java 25 + Maven 4 project that already consumes Cassini (JAX-RS) and Vauban (CDI) — HTTP and CDI integration is then automatic.
+This page walks through a first integration: declare the artifacts, configure the OTLP exporter, boot the auto-configured runtime, and observe a span in the Collector. The target is a Java 25 + Maven 3.9.16 project that already consumes Cassini (JAX-RS) and Vauban (CDI) — HTTP and CDI integration is then automatic.
 
 == Prerequisites
 
@@ -62,8 +62,14 @@ module my.application {
 
 Humboldt reads the standard OpenTelemetry env vars (`OTEL_*`), with fallback to equivalent system properties (`otel.*`). See xref:reference.adoc[Reference] for the full table.
 
+[IMPORTANT]
+====
+Per the MicroProfile Telemetry 2.1 specification, the SDK is **disabled by default**: `OTEL_SDK_DISABLED` defaults to `true`. You MUST export `OTEL_SDK_DISABLED=false`, otherwise Humboldt boots as a no-op and nothing is ever exported.
+====
+
 [source,bash]
 ----
+export OTEL_SDK_DISABLED=false
 export OTEL_SERVICE_NAME=my-service
 export OTEL_RESOURCE_ATTRIBUTES=service.namespace=billing,deployment.environment=prod
 export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
@@ -185,10 +191,10 @@ At runtime, `checkout` spans will appear in the Collector console with the right
 ./mvnw test
 ----
 
-The invariant to observe in logs: exporter threads are virtual threads (`HttpClient-virtual`, `humboldt-batch-worker`). No `io.opentelemetry.sdk.*` class should appear in the application classpath — only `io.opentelemetry.api.*` is consumed.
+The invariant to observe in logs: exporter threads are virtual threads (`humboldt-batch-span-processor`, `humboldt-batch-log-processor`, `humboldt-periodic-metric-reader`). No `io.opentelemetry.sdk.*` class should appear in the application classpath — only `io.opentelemetry.api.*` is consumed.
 
 == What next?
 
 * To understand OTel vocabulary (Span, Resource, Scope, baggage), see xref:concepts.adoc[Concepts].
 * For manual instrumentation patterns, metrics and logs: xref:usage.adoc[Usage].
-* For the full table of `OTEL_*` / `MP_TELEMETRY_*` keys: xref:reference.adoc[Reference].
+* For the full table of `OTEL_*` keys: xref:reference.adoc[Reference].

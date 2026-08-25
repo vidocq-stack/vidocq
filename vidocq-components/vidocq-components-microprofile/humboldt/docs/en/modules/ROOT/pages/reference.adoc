@@ -1,5 +1,5 @@
 = Reference
-:description: Java modules, Maven artifacts, OTEL_* / mp.telemetry.* configuration keys, applied semantic conventions.
+:description: Java modules, Maven artifacts, OTEL_* configuration keys, applied semantic conventions.
 
 [.lead]
 This page consolidates Humboldt's public surface: artifacts to declare, exported Java modules, configuration keys recognized by `HumboldtAutoConfigure`, and OTel semantic conventions applied by the automatic filters.
@@ -40,7 +40,7 @@ This page consolidates Humboldt's public surface: artifacts to declare, exported
 
 | `io.vidocq.humboldt`
 | `humboldt-exporter-otlp-http`
-| OTLP/JSON and OTLP/protobuf exporter via `java.net.http.HttpClient`.
+| OTLP/HTTP exporter (JSON encoding only — no protobuf) via `java.net.http.HttpClient`.
 
 | `io.vidocq.humboldt`
 | `humboldt-cdi`
@@ -67,6 +67,10 @@ This page consolidates Humboldt's public surface: artifacts to declare, exported
 | Java Modules re-bundle of `opentelemetry-instrumentation-annotations`.
 
 | `io.vidocq.humboldt`
+| `humboldt-otel-interop`
+| Optional bridge to the OTel SDK autoconfigure SPI: discovers `Configurable*Provider` / `ResourceProvider` / `AutoConfigurationCustomizerProvider` implementations via `ServiceLoader` and wires them into the Humboldt SDK. The OTel SDK artifacts stay provided-scope — supplied by the consumer, never bundled.
+
+| `io.vidocq.humboldt`
 | `humboldt-tck`
 | Official MicroProfile Telemetry 2.1 TCK runner — in-reactor, gated by the `tck` Maven profile. Do not declare as an application dependency.
 |===
@@ -80,7 +84,7 @@ All versions are `{project-version}`.
 | Module | Contents
 
 | `io.vidocq.humboldt.api`
-| `io.vidocq.humboldt.spi.*` (public SPI: `ExporterProvider`, `SamplerProvider`, `ResourceProvider`).
+| `io.vidocq.humboldt.spi.*` (public SPI: `SpanExporterProvider`, `MetricReaderProvider`, `LogRecordExporterProvider`, `SamplerProvider`, `ResourceProvider`).
 
 | `io.vidocq.humboldt.sdk.common`
 | `Resource`, `Clock`, `IdGenerator` (Random128).
@@ -101,7 +105,7 @@ All versions are `{project-version}`.
 | `W3CPropagators.get()` — composite TraceContext + Baggage.
 
 | `io.vidocq.humboldt.exporter.otlp.http`
-| `OtlpHttpSpanExporter`, `OtlpHttpMetricExporter`, `OtlpHttpLogExporter`, `OtlpJsonEncoder`, exponential retry.
+| `OtlpHttpSpanExporter`, `OtlpHttpMetricExporter`, `OtlpHttpLogExporter`, exponential retry. The OTLP/JSON encoders (`OtlpJsonEncoder` and friends) live in the non-exported `...otlp.http.internal` package.
 
 | `io.vidocq.humboldt.cdi`
 | `@WithSpan` annotation (re-exported), `WithSpanInterceptor`, `HumboldtBuildCompatibleExtension`, Tracer/Meter/Logger producers.
@@ -112,6 +116,9 @@ All versions are `{project-version}`.
 | `io.vidocq.humboldt.runtime`
 | `HumboldtAutoConfigure`, `AutoConfiguredHumboldt`, `EnvConfig`.
 
+| `io.vidocq.humboldt.otel.interop`
+| `OtelSpiAutoConfiguration` — ServiceLoader discovery of OTel SDK autoconfigure SPI providers (exporters, samplers, propagators, resources) supplied by the consumer.
+
 | `io.opentelemetry.api`, `io.opentelemetry.context`, `io.opentelemetry.instrumentation_annotations`
 | Java modules of the public OTel artifacts, rebundled with explicit `module-info`.
 |===
@@ -120,7 +127,18 @@ All versions are `{project-version}`.
 
 == Configuration keys
 
-Humboldt reads standard OpenTelemetry env vars, with fallback to equivalent system properties (`SCREAMING_SNAKE_CASE` → `lower.dot.case`).
+Humboldt reads standard OpenTelemetry env vars, with fallback to equivalent system properties (`SCREAMING_SNAKE_CASE` → `lower.dot.case`). Env vars take priority.
+
+=== SDK gate
+
+[cols="2,1,2"]
+|===
+| Key | Default | Effect
+
+| `OTEL_SDK_DISABLED` / `otel.sdk.disabled`
+| **`true`**
+| Per MP Telemetry 2.1 the SDK is **disabled by default**: the OTel API stays usable but nothing is exported. Set explicitly to `false` to enable telemetry.
+|===
 
 === Service identification
 
@@ -129,7 +147,7 @@ Humboldt reads standard OpenTelemetry env vars, with fallback to equivalent syst
 | Key | Default | Effect
 
 | `OTEL_SERVICE_NAME` / `otel.service.name`
-| `unknown_service:java`
+| `humboldt`
 | `service.name` attribute of the `Resource`.
 
 | `OTEL_RESOURCE_ATTRIBUTES` / `otel.resource.attributes`
@@ -183,12 +201,12 @@ Humboldt reads standard OpenTelemetry env vars, with fallback to equivalent syst
 | Comma-separated HTTP headers `key1=value1,key2=value2`.
 
 | `OTEL_EXPORTER_OTLP_TIMEOUT`
-| _(deferred M7)_
-| Request timeout, ms.
+| _(not read)_
+| Not read by Humboldt — the request timeout is the exporter-builder default (10 s).
 
 | `OTEL_EXPORTER_OTLP_PROTOCOL`
-| `http/protobuf`
-| `http/json` or `http/protobuf`. Full switch deferred to M7.
+| _(not read)_
+| **Not read** — the exporter always sends OTLP/HTTP with JSON encoding; there is no protobuf variant to switch to.
 |===
 
 === Sampling
@@ -217,24 +235,13 @@ Humboldt reads standard OpenTelemetry env vars, with fallback to equivalent syst
 | Period of `PeriodicMetricReader`.
 
 | `OTEL_METRIC_EXPORT_TIMEOUT`
-| _(deferred M7)_
-| Collection timeout.
+| _(not read)_
+| Not read by Humboldt.
 |===
 
-=== MicroProfile Telemetry
+=== MicroProfile Telemetry keys
 
-[cols="2,1,2"]
-|===
-| Key | Default | Effect
-
-| `mp.telemetry.sdk.disabled`
-| `false`
-| Completely disable the SDK (no-op). _Deferred M7._
-
-| `mp.telemetry.propagators`
-| `tracecontext,baggage`
-| Comma-separated propagator list. _Deferred M7._
-|===
+The runtime reads **no** `mp.telemetry.*` key: enabling/disabling goes through `OTEL_SDK_DISABLED` (see the SDK gate above), and propagators default to W3C TraceContext + Baggage. The single exception lives in the optional `humboldt-otel-interop` bridge, whose SPI autoconfiguration accepts `mp.telemetry.propagators` as an alias of `otel.propagators` (MP Telemetry §3.3).
 
 == Applied semantic conventions
 
@@ -256,11 +263,14 @@ OTel HTTP conventions 1.27+ are applied automatically by `humboldt-rest` on the 
 | `http.response.status_code`
 | `ContainerResponseContext.getStatus()` (long)
 
-| `error.type` / status `ERROR`
-| If `status_code ≥ 500` (4xx ignored — OTel HTTP convention)
+| `error.type`
+| Added to the `http.server.request.duration` histogram attributes when `status_code ≥ 400` (the status code as a string — OTel SemConv 1.27+ §HTTP).
+
+| span status `ERROR`
+| Set on the server span only when `status_code ≥ 500` (4xx leaves the span status `UNSET` — OTel HTTP convention).
 |===
 
-For client-side attributes (HTTP, DB, messaging…), Humboldt does not generate them automatically: use the constants from `opentelemetry-semconv` in application code. Full reference: https://opentelemetry.io/docs/specs/semconv/[OpenTelemetry Semantic Conventions].
+For client-side attributes (HTTP, DB, messaging…), Humboldt does not generate them automatically: set them in application code (either as plain `AttributeKey`s, or with the constants from `opentelemetry-semconv` — an artifact Humboldt itself does not ship). Full reference: https://opentelemetry.io/docs/specs/semconv/[OpenTelemetry Semantic Conventions].
 
 == Registered propagators
 
@@ -269,7 +279,7 @@ For client-side attributes (HTTP, DB, messaging…), Humboldt does not generate 
 . `W3CTraceContextPropagator` — headers `traceparent`, `tracestate`.
 . `W3CBaggagePropagator` — header `baggage`.
 
-No B3 by default (opt-in via `mp.telemetry.propagators=tracecontext,baggage,b3` once the key is enabled in M7).
+No B3 by default. With the optional `humboldt-otel-interop` bridge on the module path, `otel.propagators` (alias `mp.telemetry.propagators`) can select `tracecontext`, `baggage`, `b3`, `b3multi`, `jaeger`, or any propagator discovered through the OTel `ConfigurablePropagatorProvider` SPI.
 
 == Outputs and formats
 
@@ -278,10 +288,10 @@ No B3 by default (opt-in via `mp.telemetry.propagators=tracecontext,baggage,b3` 
 | Exporter | Output
 
 | `otlp`
-| OTLP/HTTP POST — JSON or protobuf depending on `OTEL_EXPORTER_OTLP_PROTOCOL`.
+| OTLP/HTTP POST, JSON encoding — always; `OTEL_EXPORTER_OTLP_PROTOCOL` is not read and there is no protobuf encoder.
 
 | `in-memory`
-| `InMemorySpanExporter` / `InMemoryMetricReader` / `InMemoryLogRecordExporter` buffers — used by tests.
+| `InMemorySpanExporter` / `InMemoryMetricExporter` / `InMemoryLogRecordExporter` buffers — used by tests, accessible via the `AutoConfiguredHumboldt` accessors.
 
 | `logging`
 | `System.getLogger(...).log()` human-readable format.

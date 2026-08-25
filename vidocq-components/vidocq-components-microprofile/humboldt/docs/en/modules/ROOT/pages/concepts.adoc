@@ -26,7 +26,7 @@ OpenTelemetry separates observability into three independent but correlatable si
 
 | Baggage
 | `io.opentelemetry.api.baggage.Baggage`
-| inside `humboldt-sdk-trace` (`BaggageManager`)
+| the default implementation shipped inside the repackaged OTel API (`humboldt-otel-api`); propagated by `humboldt-propagator-w3c`, injected as a CDI bean by `humboldt-cdi`
 
 | Context
 | `io.opentelemetry.context.Context`
@@ -103,7 +103,7 @@ When an HTTP call leaves the service, the `traceId` and `spanId` must be injecte
 
 == Semantic conventions — a common vocabulary
 
-OTel _semantic conventions_ standardize attribute and metric names: `http.request.method`, `http.response.status_code`, `db.system`, `db.statement`, `messaging.system`, `network.peer.address`, etc. Humboldt imports `opentelemetry-semconv` (spec only) to expose the constants, and the `humboldt-rest` filters apply them automatically to inbound JAX-RS requests (HTTP conventions 1.27+).
+OTel _semantic conventions_ standardize attribute and metric names: `http.request.method`, `http.response.status_code`, `db.system`, `db.statement`, `messaging.system`, `network.peer.address`, etc. Humboldt does not depend on the `opentelemetry-semconv` artifact at runtime (it only appears in the TCK harness): the `humboldt-rest` filters apply the HTTP conventions 1.27+ to inbound JAX-RS requests using plain `AttributeKey` constants.
 
 Reference: https://opentelemetry.io/docs/specs/semconv/[OpenTelemetry Semantic Conventions]. Humboldt does not re-implement the convention: it consumes it.
 
@@ -111,8 +111,8 @@ Reference: https://opentelemetry.io/docs/specs/semconv/[OpenTelemetry Semantic C
 
 MicroProfile Telemetry 2.1 is a thin layer on top of OpenTelemetry, essentially adding:
 
-* CDI producers: `@Inject Tracer`, `@Inject Meter`, `@Inject io.opentelemetry.api.logs.Logger`, `@Inject Span` (current), `@Inject Baggage` (current).
-* MicroProfile Config–driven configuration (`mp.telemetry.*` and `otel.*`) — Humboldt relies on xref:ravel::index.adoc[Ravel] for resolution.
+* CDI producers: `@Inject OpenTelemetry`, `@Inject Tracer`, `@Inject Meter`, `@Inject io.opentelemetry.api.logs.Logger`, `@Inject Span` (current), `@Inject Baggage` (current).
+* An opt-in gate: the SDK is disabled unless `OTEL_SDK_DISABLED=false` is set. Humboldt reads the standard `OTEL_*` environment variables and `otel.*` system properties directly (`EnvConfig`) — no MicroProfile Config dependency.
 * `@WithSpan` (`opentelemetry-instrumentation-annotations`) wired through a CDI interceptor.
 
 None of these additions break the OTel API: `GlobalOpenTelemetry.getTracer(...)` still works directly.
