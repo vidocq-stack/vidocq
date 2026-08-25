@@ -12,14 +12,15 @@ For programmatic configuration beyond property files, use `ConfigBuilder`:
 ----
 import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.spi.ConfigBuilder;
+import org.eclipse.microprofile.config.spi.ConfigProviderResolver;
 
-ConfigBuilder builder = ConfigProvider.getConfigBuilder();
+ConfigBuilder builder = ConfigProviderResolver.instance().getBuilder();
 
 // Add custom sources
 builder.withSources(new MyCustomConfigSource());
 
-// Add custom converters
-builder.withConverter(Color.class, new ColorConverter());
+// Add custom converters (priority 100 = standard application priority)
+builder.withConverter(Color.class, 100, new ColorConverter());
 
 // Build the config
 Config config = builder.build();
@@ -31,10 +32,10 @@ Register converters per-Config instance:
 
 [source,java]
 ----
-ConfigBuilder builder = ConfigProvider.getConfigBuilder();
+ConfigBuilder builder = ConfigProviderResolver.instance().getBuilder();
 
 // Register a JSON converter
-builder.withConverter(MyConfigDto.class, new JsonConverter<>(MyConfigDto.class));
+builder.withConverter(MyConfigDto.class, 100, new JsonConverter<>(MyConfigDto.class));
 
 // Register multiple converters
 builder.withConverters(
@@ -55,13 +56,13 @@ You can maintain multiple `Config` instances with different setups:
 
 [source,java]
 ----
-// Production config (from standard sources + database)
-ConfigBuilder prodBuilder = ConfigProvider.getConfigBuilder();
-prodBuilder.withSources(new DatabaseConfigSource());
+// Production config (standard sources + database)
+ConfigBuilder prodBuilder = ConfigProviderResolver.instance().getBuilder();
+prodBuilder.addDefaultSources().withSources(new DatabaseConfigSource());
 Config prodConfig = prodBuilder.build();
 
-// Development config (from files only, no database)
-ConfigBuilder devBuilder = ConfigProvider.getConfigBuilder();
+// Development config (default sources only, no database)
+ConfigBuilder devBuilder = ConfigProviderResolver.instance().getBuilder().addDefaultSources();
 devBuilder.withConverters(new DebugConverter());
 Config devConfig = devBuilder.build();
 
@@ -82,7 +83,7 @@ Config config2 = ConfigProvider.getConfig();
 assert config1 == config2; // Same instance
 ----
 
-To create a fresh config (useful in tests), use `ConfigBuilder` directly or reset via system properties.
+To create a fresh config (useful in tests), use a `ConfigBuilder` directly, or drop the cached instance with `ConfigProviderResolver.instance().releaseConfig(config)`.
 
 == Watching for changes
 
@@ -207,7 +208,7 @@ void testConfigProcessing() {
     properties.put("app.name", "TestApp");
     properties.put("app.port", "9999");
 
-    ConfigBuilder builder = ConfigProvider.getConfigBuilder();
+    ConfigBuilder builder = ConfigProviderResolver.instance().getBuilder();
     builder.withSources(new MapConfigSource(properties));
     Config config = builder.build();
 
@@ -216,7 +217,7 @@ void testConfigProcessing() {
 }
 ----
 
-## Next
+== Next
 
 * xref:tck.adoc[TCK] — conformance testing
 * xref:reference.adoc[Reference] — API documentation

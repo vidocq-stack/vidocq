@@ -195,7 +195,7 @@ When multiple sources define the same key, Ravel uses the **highest ordinal** fi
 | Low-priority custom sources
 |===
 
-Higher ordinal = higher priority. If not specified, the default ordinal is `ConfigSource.CONFIG_ORDINAL_DEFAULT` (== 100).
+Higher ordinal = higher priority. If not specified, the default ordinal is `ConfigSource.DEFAULT_ORDINAL` (== 100); a source can also carry a `config_ordinal` property (`ConfigSource.CONFIG_ORDINAL`) that the default `getOrdinal()` honours.
 
 == Overriding sources
 

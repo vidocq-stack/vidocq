@@ -4,11 +4,11 @@
 == Prerequisites
 
 * Java 25+
-* Maven 4.0.0 or later (or Gradle)
+* Maven 3.9.16 (pinned via `.sdkmanrc` — run `sdk env`) or Gradle
 
 == Installation
 
-Add Ravel to your `pom.xml`:
+Add Ravel to your `pom.xml`. The API alone is not enough — `ConfigProvider.getConfig()` throws `IllegalStateException` when no implementation is present, so pull in `ravel-core` as well:
 
 [source,xml,subs=attributes+]
 ----
@@ -16,6 +16,11 @@ Add Ravel to your `pom.xml`:
     <dependency>
         <groupId>io.vidocq.ravel</groupId>
         <artifactId>ravel-api</artifactId>
+        <version>{project-version}</version>
+    </dependency>
+    <dependency>
+        <groupId>io.vidocq.ravel</groupId>
+        <artifactId>ravel-core</artifactId>
         <version>{project-version}</version>
     </dependency>
 </dependencies>
@@ -126,9 +131,9 @@ Config config = ConfigProvider.getConfig();
 int port = config.getValue("app.port", int.class);
 Integer portBox = config.getValue("app.port", Integer.class);
 
-// Collections
-List<String> items = config.getValue("app.items", List.class);
-Set<Integer> ids = config.getValue("app.ids", Set.class);
+// Arrays and multi-valued properties (comma-separated)
+String[] items = config.getValue("app.items", String[].class);
+List<Integer> ids = config.getValues("app.ids", Integer.class);
 
 // Temporal types
 Duration timeout = config.getValue("app.timeout", Duration.class);

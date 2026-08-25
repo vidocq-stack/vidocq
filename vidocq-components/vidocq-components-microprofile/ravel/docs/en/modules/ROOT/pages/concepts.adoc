@@ -23,7 +23,7 @@ A _config source_ is one origin of raw key/value pairs: system properties, envir
 
 == Converter
 
-A _converter_ turns a raw `String` into a typed value. Ravel ships converters for primitives, boxed types, `String`, `URL`, `URI`, `InetAddress`, temporal types (`Duration`, `Period`), enums, arrays and collections, plus implicit converters for any type exposing a public constructor, `valueOf()` or `parse()`. Custom converters are registered through the SPI with a priority. See xref:type-converters.adoc[Type Converters].
+A _converter_ turns a raw `String` into a typed value. Ravel ships converters for primitives, boxed types, `String`, `URL`, `URI`, `InetAddress`, temporal types (`Duration`, `Period`), enums and arrays, plus implicit converters for any type exposing a public constructor, `valueOf()` or `parse()`. Collections are not converted through `getValue()`: `List<T>` comes from the `getValues()` methods and `List<T>` / `Set<T>` from CDI injection. Custom converters are registered through the SPI with a priority. See xref:type-converters.adoc[Type Converters].
 
 == Property expression
 
@@ -35,7 +35,7 @@ A _config profile_ scopes properties to an environment using a `%dev.`, `%prod.`
 
 == CDI integration
 
-In a CDI deployment, configuration values are injected with `@ConfigProperty("key")` on a bean field — including `Optional<T>` and `Supplier<T>` wrappers. Discovery is driven by a xref:vauban::index.adoc[Vauban] Build Compatible Extension; standalone (non-CDI) use stays available through `ConfigProvider.getConfig()`. See xref:cdi-integration.adoc[CDI Integration].
+In a CDI deployment, configuration values are injected with `@ConfigProperty(name = "key")` on a bean field — including `Optional<T>` and `Supplier<T>` wrappers. Discovery is driven by a xref:vauban::index.adoc[Vauban] Build Compatible Extension; standalone (non-CDI) use stays available through `ConfigProvider.getConfig()`. See xref:cdi-integration.adoc[CDI Integration].
 
 == Ordinal and precedence
 

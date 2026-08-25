@@ -32,15 +32,15 @@ import jakarta.enterprise.context.ApplicationScoped;
 public class DatabaseConfig {
 
     @Inject
-    @ConfigProperty("db.host")
+    @ConfigProperty(name = "db.host")
     String host;
 
     @Inject
-    @ConfigProperty("db.port")
+    @ConfigProperty(name = "db.port")
     int port;
 
     @Inject
-    @ConfigProperty("db.name")
+    @ConfigProperty(name = "db.name")
     String database;
 }
 ----
@@ -71,7 +71,7 @@ For optional configuration, use `Optional<T>`:
 [source,java]
 ----
 @Inject
-@ConfigProperty("feature.flag.experimental")
+@ConfigProperty(name = "feature.flag.experimental")
 Optional<Boolean> experimentalFeature;
 
 // Usage
@@ -81,12 +81,12 @@ if (experimentalFeature.isPresent()) {
 }
 ----
 
-You can also use `Optional` without specifying a name (not recommended, but supported):
+Any injectable type, including plain `String`, can be wrapped in `Optional`:
 
 [source,java]
 ----
 @Inject
-@ConfigProperty("app.version")
+@ConfigProperty(name = "app.version")
 Optional<String> version;
 ----
 
@@ -109,7 +109,7 @@ Field injection is the canonical pattern for `@ConfigProperty`:
 @ApplicationScoped
 public class Config {
     @Inject
-    @ConfigProperty("key")
+    @ConfigProperty(name = "key")
     String value;
 }
 ----
@@ -123,7 +123,7 @@ public class Config {
     private final String value;
 
     @Inject
-    public Config(@ConfigProperty("key") String value) {
+    public Config(@ConfigProperty(name = "key") String value) {
         this.value = value;
     }
 }
@@ -142,7 +142,7 @@ app.db.host=prod-db.example.com
 [source,java]
 ----
 @Inject
-@ConfigProperty("app.db.host")
+@ConfigProperty(name = "app.db.host")
 String dbHost;
 ----
 
@@ -156,7 +156,7 @@ Configuration values are validated when the container starts. If a required key 
 [source,java]
 ----
 @Inject
-@ConfigProperty("app.secret.key") // Required, no default
+@ConfigProperty(name = "app.secret.key") // Required, no default
 String secretKey;
 ----
 
@@ -178,15 +178,15 @@ A common pattern is grouping related config in a `@Dependent` bean:
 @Dependent
 public class DatabaseConfig {
     @Inject
-    @ConfigProperty("database.host")
+    @ConfigProperty(name = "database.host")
     String host;
 
     @Inject
-    @ConfigProperty("database.port")
+    @ConfigProperty(name = "database.port")
     int port;
 
     @Inject
-    @ConfigProperty("database.name")
+    @ConfigProperty(name = "database.name")
     String name;
 }
 
@@ -254,11 +254,11 @@ api.retry.attempts=3
 public class ApiClient {
 
     @Inject
-    @ConfigProperty("api.base.url")
+    @ConfigProperty(name = "api.base.url")
     String baseUrl;
 
     @Inject
-    @ConfigProperty("api.timeout")
+    @ConfigProperty(name = "api.timeout")
     long timeoutMs;
 
     @Inject

@@ -129,9 +129,13 @@ Result: `team.email` = `Acme-Engineering@example.com`
 [source,properties]
 ----
 app.features.cache=true
-app.cache.ttl=${app.cache.ttl:3600}
-app.cache.maxsize=${app.cache.maxsize:1000}
+app.cache.ttl=${cache.ttl.override:3600}
+app.cache.maxsize=${cache.maxsize.override:1000}
 ----
+
+If `cache.ttl.override` is not defined in any source, `app.cache.ttl` resolves to `3600`.
+
+WARNING: A property must not reference itself in its own default, e.g. `app.cache.ttl=${app.cache.ttl:3600}` — the cycle detector rejects it with `IllegalArgumentException`.
 
 === Environment-specific URLs
 

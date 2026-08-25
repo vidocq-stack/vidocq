@@ -38,7 +38,7 @@ Ravel orchestrates all these voices into a single, unified configuration accessi
 | Java modules | `org.eclipse.microprofile.config` (repackaged), `io.vidocq.ravel.api`, `io.vidocq.ravel.core`, `io.vidocq.ravel.cdi.vauban`
 | Runtime dependencies | MicroProfile Config spec only. CDI optional via xref:vauban::index.adoc[Vauban].
 | jlink-ready | ✅ - all dependencies have explicit `module-info`, no `Automatic-Module-Name` fallback.
-| TCK | ✅ Target: 100 % PASS (M5 - May 2026).
+| TCK | ✅ 100 % PASS — 349/349 tests (M5 achieved).
 |===
 
 == Position in the ecosystem
@@ -55,7 +55,7 @@ flowchart LR
 
   Ravel -->|"@Inject"| Vauban["Vauban<br/>CDI Lite"]
 
-  Ravel -->|type conversion| Converters["Built-in converters<br/>primitives, collections, temporal, etc."]
+  Ravel -->|type conversion| Converters["Built-in converters<br/>primitives, arrays, temporal, etc."]
   Ravel -->|property resolution| Expressions["Property expressions<br/>${key}, ${key:default}"]
   Ravel -->|profile matching| Profiles["Config profiles<br/>%dev., %prod., %test."]
 ....
@@ -69,7 +69,7 @@ Only `org.eclipse.microprofile.config` as a compile dependency. The implementati
 All modules have explicit `module-info.java`, no automatic module fallbacks. Internal packages are not exported. Compatible with `jlink` for custom JDK images.
 
 === Built-in type converters
-Supports primitives, boxes, `String`, `URL`, `URI`, `InetAddress`, `Duration`, `Period`, temporal types, enumerations, arrays, and collections - with implicit converters for custom types via public constructors or `valueOf()` / `parse()` methods.
+Supports primitives, boxes, `String`, `URL`, `URI`, `InetAddress`, `Duration`, `Period`, temporal types, enumerations, and arrays — `List<T>` / `Set<T>` are served by the `getValues()` methods and CDI injection rather than by converters — with implicit converters for custom types via public constructors or `valueOf()` / `parse()` methods.
 
 === Property expressions
 Support for property references with pass:[${key}] and default values via pass:[${key:default}]. Cycle detection prevents infinite loops.
@@ -78,7 +78,7 @@ Support for property references with pass:[${key}] and default values via pass:[
 Environment-specific configuration via `%dev.`, `%prod.`, `%test.` prefixes. Profiles are resolved at lookup time, not build time.
 
 === CDI integration (optional)
-Inject configuration values directly into beans via `@ConfigProperty("key")` and `@ConfigProperty("key")` on `Optional<T>` fields. Powered by xref:vauban::index.adoc[Vauban] Build-Compatible Extension.
+Inject configuration values directly into beans via `@ConfigProperty(name = "key")`, including on `Optional<T>` fields. Powered by xref:vauban::index.adoc[Vauban] Build-Compatible Extension.
 
 == Try it out
 
@@ -93,15 +93,15 @@ Optional<String> optValue = config.getOptionalValue("my.property", String.class)
 @ApplicationScoped
 public class MyApplication {
     @Inject
-    @ConfigProperty("app.name")
+    @ConfigProperty(name = "app.name")
     String appName;
 
     @Inject
-    @ConfigProperty("app.port")
+    @ConfigProperty(name = "app.port")
     int port;
 
     @Inject
-    @ConfigProperty("app.debug")
+    @ConfigProperty(name = "app.debug")
     Optional<Boolean> debug;
 }
 ----

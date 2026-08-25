@@ -9,7 +9,7 @@ Ravel provides converters (priority 1) for these types, automatically applied du
 |===
 | Type | Behavior
 
-| `String`, `CharSequence`
+| `String`
 | Pass-through (no conversion)
 
 | `boolean`, `Boolean`
@@ -21,6 +21,9 @@ Ravel provides converters (priority 1) for these types, automatically applied du
 | `float`, `double`, `Float`, `Double`
 | Via `Float.parseFloat()`, `Double.parseDouble()`
 
+| `char`, `Character`
+| Single-character string; longer values throw `IllegalArgumentException`
+
 | `java.net.URL`
 | Via `new URL(string)`
 
@@ -30,8 +33,8 @@ Ravel provides converters (priority 1) for these types, automatically applied du
 | `java.net.InetAddress`
 | Via `InetAddress.getByName(string)`
 
-| `java.util.Optional<T>`, `OptionalInt`, `OptionalLong`, `OptionalDouble`
-| Converts the value to `T`, then wraps in the optional type
+| `OptionalInt`, `OptionalLong`, `OptionalDouble`
+| Parses the numeric value and wraps it (`Optional<T>` itself is served by `getOptionalValue()`, not by a converter)
 
 | `java.time.Duration`
 | ISO-8601 format: `PT1H30M`, `PT45S`, `1800000ms`, etc.
@@ -62,13 +65,9 @@ Ravel provides converters (priority 1) for these types, automatically applied du
 
 | `java.lang.Class<?>`
 | Via `Class.forName(string)`
-
-| Enum types
-| Match by enum constant name (case-sensitive)
-
-| `List<T>`, `Set<T>`, `Iterable<T>`
-| CSV: comma-separated values, converted to list of `T`
 |===
+
+Enum types are converted too (matched by enum constant name), but through the implicit-converter mechanism described below, not by a registered built-in. Collection types have **no converter**: `List<T>` values come from the `getValues()` / `getOptionalValues()` methods (comma split, built on the array conversion path), and `List<T>` / `Set<T>` injection is handled by the CDI layer.
 
 == Arrays
 
@@ -88,16 +87,19 @@ Integer[] ids = config.getValue("app.ids", Integer[].class);
 
 == Collections
 
+`getValue()` does **not** accept collection classes — `config.getValue("app.items", List.class)` throws, because no converter exists for `List`. Multi-valued properties are read through the dedicated methods:
+
 [source,java]
 ----
-List<String> items = config.getValue("app.items", List.class);
-Set<Integer> ids = config.getValue("app.ids", Set.class);
-Collection<Duration> timeouts = config.getValue("app.timeouts", Collection.class);
+List<String> items = config.getValues("app.items", String.class);
+Optional<List<Integer>> ids = config.getOptionalValues("app.ids", Integer.class);
 ----
+
+In CDI beans, `List<T>` and `Set<T>` can be injected directly with `@ConfigProperty` (comma split plus element-wise conversion).
 
 == Implicit converters
 
-If a type doesn't have a built-in converter, Ravel attempts to use an **implicit converter** (priority 2):
+If no registered converter matches a type, Ravel falls back to an **implicit converter** (MicroProfile Config §5.2):
 
 1. **Public constructor taking `String`**: `new MyType(string)`
 2. **Static method `valueOf(String)`**: `MyType.valueOf(string)`
@@ -165,23 +167,24 @@ com.example.ColorConverter
 
 === Register programmatically
 
+The builder implementation is internal (unexported package); obtain it through the resolver:
+
 [source,java]
 ----
-ConfigBuilder builder = new RavelConfigBuilder();
-builder.withConverter(Color.class, new ColorConverter());
+ConfigBuilder builder = ConfigProviderResolver.instance().getBuilder();
+builder.withConverter(Color.class, 100, new ColorConverter());
 Config config = builder.build();
 ----
 
 == Converter priority
 
-When resolving a type, Ravel applies converters in this order:
+Registered converters compete by priority — the highest priority wins, and on ties the last registered converter overrides the previous one:
 
-1. **Built-in converters** (priority 1)
-2. **Implicit converters** (priority 2)
-3. **Custom converters via ServiceLoader** (priority >= 3)
-4. **Converters from `ConfigBuilder.withConverter()`** (highest priority)
+1. **Built-in converters** — priority 1
+2. **Converters discovered via ServiceLoader** — their `@jakarta.annotation.Priority` value, or **100** when the annotation is absent (the standard application priority)
+3. **Converters from `ConfigBuilder.withConverter(type, priority, converter)`** — the explicit priority argument (no special rank: 100 is the conventional value here too)
 
-The first converter that claims to handle the type is used. If none match, `IllegalArgumentException` is thrown.
+When **no** registered converter exists for the requested type, Ravel derives one: arrays are converted component-wise, and other types go through the implicit-converter fallback. If nothing applies, `IllegalArgumentException` is thrown.
 
 == Example: JSON converter
 
@@ -208,7 +211,7 @@ public class JsonConverter<T> implements Converter<T> {
 }
 
 // Usage
-MyConfigClass config = configProvider.getConfig()
+MyConfigClass config = ConfigProvider.getConfig()
     .getValue("app.config.json", MyConfigClass.class);
 ----
 

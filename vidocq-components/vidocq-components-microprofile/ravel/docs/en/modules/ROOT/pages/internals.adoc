@@ -49,13 +49,15 @@ All other Ravel modules depend on this repackaged JAR, not directly on the Micro
 * `Converter` — type conversion SPI
 * `ConfigBuilder` — programmatic configuration
 
-Also declares:
+Its module descriptor is minimal: `requires transitive org.eclipse.microprofile.config` (the re-export) plus `exports io.vidocq.ravel.spi`. The `uses` clauses for SPI discovery live in `ravel-core`, next to the code that runs the `ServiceLoader` lookups:
 
-```java
+[source,java]
+----
+// module io.vidocq.ravel.core
 uses org.eclipse.microprofile.config.spi.ConfigSource;
 uses org.eclipse.microprofile.config.spi.ConfigSourceProvider;
 uses org.eclipse.microprofile.config.spi.Converter;
-```
+----
 
 === ravel-core
 
@@ -66,7 +68,7 @@ uses org.eclipse.microprofile.config.spi.Converter;
 * **`RavelConfig`** — main config object (immutable, thread-safe)
 * **Built-in `ConfigSource` implementations** — system properties, environment variables, `microprofile-config.properties`
 * **`Converter` registry** — built-in converters for primitives, collections, temporal types, etc.
-* **`ExpressionResolver`** — property expression evaluation with cycle detection
+* **Property expression evaluation** — private to `RavelConfig` (`resolveRawValue` / `resolveTemplate` / `resolveExpression`), with cycle detection; there is no separate resolver class
 * **`ProfiledConfigSource`** — profile-aware wrapping of sources
 
 No external dependencies. Can be used standalone without CDI.
@@ -121,7 +123,7 @@ Cycle detection uses `ScopedValue<Set<String>>` to track currently-resolving key
 
 == Configuration profile matching
 
-Config profiles are activated via system property `mp.config.profile`:
+Config profiles are activated via the `mp.config.profile` property, resolvable from any config source — most commonly set as a system property:
 
 [source,bash]
 ----
@@ -154,11 +156,10 @@ With `mp.config.profile=prod`:
 
 == Type conversion
 
-Ravel uses a three-tier converter lookup:
+Ravel uses a two-stage converter lookup:
 
-. **Built-in converters** (priority 1) — primitives, collections, temporal types, standard library types
-. **Implicit converters** (priority 2) — types with public `String` constructor or `valueOf(String)` / `parse(CharSequence)` methods
-. **Custom converters** (priority > 2) — user-registered via `ConfigBuilder.withConverter()` or ServiceLoader
+. **Registered converters, competing by priority** — built-ins at priority 1; user converters from ServiceLoader (their `@Priority` value, default 100) or `ConfigBuilder.withConverter(type, priority, converter)` (explicit priority). The highest priority wins; on ties the last registered converter overrides.
+. **Derived converters, when nothing is registered for the type** — arrays converted component-wise, then implicit converters (public `String` constructor, `valueOf(String)`, `parse(CharSequence)`, enums), cached in `RavelConfig.derivedConverters`.
 
 If no converter matches, `IllegalArgumentException` is thrown.
 
@@ -174,7 +175,7 @@ If no converter matches, `IllegalArgumentException` is thrown.
 * **Lazy initialization** — converters are not instantiated until first use
 * **SPI discovery via `ServiceLoader`** — once at startup, then cached
 * **Configuration sources are ordered by ordinal** — lookup short-circuits on first match
-* **Array and collection conversion** — split and convert on demand, cached in `RavelConfig.derivedConverters`
+* **Array conversion** — split and convert on demand, cached in `RavelConfig.derivedConverters` (collection reads build on the same path via `getValues()`)
 
 == Next
 

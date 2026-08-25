@@ -3,7 +3,7 @@
 
 == Overview
 
-Configuration profiles allow you to define environment-specific values without changing code. Profiles are prefixed keys in property files and activated via the `mp.config.profile` system property.
+Configuration profiles allow you to define environment-specific values without changing code. Profiles are prefixed keys in property files and activated via the `mp.config.profile` property, resolvable from any config source (most commonly a system property).
 
 == Basics
 
@@ -59,7 +59,7 @@ Without a profile:
 
 Only **one profile at a time** is active (set via `mp.config.profile`). You cannot combine multiple profiles with a single lookup.
 
-However, you can switch profiles dynamically:
+The active profile is fixed when a `Config` instance is built, and `ConfigProvider.getConfig()` caches one instance per class loader — so changing `mp.config.profile` with `System.setProperty()` afterwards does **not** affect the cached instance. To pick up a new profile in the same class loader, release the cached instance first:
 
 [source,java]
 ----
@@ -68,8 +68,9 @@ System.setProperty("mp.config.profile", "dev");
 Config devConfig = ConfigProvider.getConfig();
 String debugDev = devConfig.getValue("app.debug", String.class); // "true"
 
-// Switch to prod
+// Switch to prod: release the cached Config, then request a fresh one
 System.setProperty("mp.config.profile", "prod");
+ConfigProviderResolver.instance().releaseConfig(devConfig);
 Config prodConfig = ConfigProvider.getConfig();
 String debugProd = prodConfig.getValue("app.debug", String.class); // "false"
 ----
@@ -152,11 +153,11 @@ With xref:cdi-integration.adoc[CDI integration], `@ConfigProperty` respects prof
 @ApplicationScoped
 public class AppConfig {
     @Inject
-    @ConfigProperty("app.debug")
+    @ConfigProperty(name = "app.debug")
     boolean debug;
 
     @Inject
-    @ConfigProperty("app.port")
+    @ConfigProperty(name = "app.port")
     int port;
 }
 
