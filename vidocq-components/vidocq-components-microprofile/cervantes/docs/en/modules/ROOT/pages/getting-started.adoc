@@ -8,6 +8,7 @@ This page assumes a Jakarta REST 4.0 application already running on xref:cassini
 
 * Java 25 (LTS) — Temurin recommended.
 * Maven 3.9.16 — pinned through `.sdkmanrc` at the root of Cervantes (`cd cervantes && sdk env`).
+* To build Cervantes itself from source: the shared parent POM `io.vidocq:vidocq-parent:0.3.0-SNAPSHOT` must be resolvable — it is declared with an empty `relativePath`, so install it into your local Maven repository first.
 * A JAX-RS 4.0 application already deployed, with at least an `Application` class and a `@Path` resource.
 * xref:vauban::index.adoc[Vauban] active as the CDI 4.1 Lite container.
 * xref:ravel::index.adoc[Ravel] active as the MicroProfile Config implementation (Cervantes reads `mp.jwt.*` keys through the standard SPI).
@@ -133,8 +134,15 @@ curl -i http://localhost:8080/orders
 # 2. With a bearer token signed by the wrong key → 401
 curl -i -H "Authorization: Bearer eyJ.invalid.signature" http://localhost:8080/orders
 
-# 3. With a valid bearer token, groups including "manager" → 200
-TOKEN=$(./scripts/forge-token.sh manager@example.com manager)
+# 3. Mint a short-lived RS256 token with the private.pem generated earlier,
+#    groups including "manager" → 200
+b64url() { openssl base64 -A | tr '+/' '-_' | tr -d '='; }
+now=$(date +%s)
+header=$(printf '{"alg":"RS256","typ":"JWT"}' | b64url)
+claims=$(printf '{"iss":"https://issuer.example.com","aud":"orders-api","upn":"manager@example.com","groups":["manager"],"iat":%s,"exp":%s}' "$now" "$((now + 300))" | b64url)
+signature=$(printf '%s.%s' "$header" "$claims" | openssl dgst -sha256 -sign private.pem -binary | b64url)
+TOKEN="$header.$claims.$signature"
+
 curl -i -H "Authorization: Bearer $TOKEN" http://localhost:8080/orders
 ----
 
@@ -142,7 +150,7 @@ A token forged for a user without the `manager` role returns `403 Forbidden`.
 
 [NOTE]
 ====
-For a minimal `forge-token.sh` script that generates a valid RS256 JWT from `private.pem` (pure shell / openssl), see the `cervantes-examples` module in the repository.
+To forge tokens from Java tests, see the `TestJwts` helper in `cervantes-core/src/test` — its `sign(JsonObject header, JsonObject claims, PrivateKey key, SignatureAlgorithm alg)` method builds and signs a compact JWS through `java.security.Signature`, with no third-party library.
 ====
 
 == The server-side pipeline

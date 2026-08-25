@@ -23,7 +23,7 @@ flowchart LR
   Detect["Detection<br/>3 segments → JWS<br/>5 segments → JWE"]
   Decrypt["JweDecryptor<br/>RSA-OAEP + A256GCM"]
   Parse["JwtParser<br/>base64url decode<br/>JSON parse (Champollion)"]
-  Sig["JwtSignatureVerifier<br/>java.security.Signature<br/>RS/ES/PS/HS"]
+  Sig["JwtSignatureVerifier<br/>java.security.Signature<br/>RS/ES"]
   KeyR["KeyResolver<br/>kid → PublicKey"]
   Claims["JwtClaimsValidator<br/>iss/aud/exp/nbf/iat<br/>+ clock-skew"]
   Out["DefaultJsonWebToken<br/>(immutable)"]
@@ -43,10 +43,10 @@ flowchart LR
 
 . **Detection** — a JWT has 3 dot-separated segments, a JWE has 5. Dispatch to the matching branch.
 . **Decryption (JWE only)** — `JweDecryptor` unwraps the ephemeral symmetric key (`RSA-OAEP[-256]`), decrypts the content (`A256GCM`), checks the authentication tag, checks the `cty` header (must be `JWT` for a nested token), and produces a JWS that re-enters the normal pipeline.
-. **Parsing** — `JwtParser` decodes the three segments through `Base64.getUrlDecoder()`, parses the header and payload JSON through Champollion → `ParsedJwt(JsonObject header, JsonObject payload, byte[] signedContent, byte[] signature)`.
-. **Key selection** — `KeyResolver.resolve(header)` returns the `PublicKey` to use. Three implementations in `KeyResolvers`: `fromInlinePem`, `fromLocation` (PEM-vs-JWKS auto-detection), and `JwksKeyResolver` for multi-key JWKS URLs/files.
-. **Signature verification** — `JwtSignatureVerifier` instantiates a `java.security.Signature` according to the header's `alg`, verifies `signedContent` against `signature`. For ECDSA, R‖S → DER transcoding through `EcdsaSignatures` (the JDK requires DER).
-. **Claim validation** — `JwtClaimsValidator` checks `iss` (strict equality with `JwtConfig.expectedIssuer`), `aud` (non-empty intersection with `JwtConfig.expectedAudiences`), `exp` (≥ `now - skew`), `nbf` (≤ `now + skew`), optionally `iat` (presence + max age via `token.age`).
+. **Parsing** — `JwtParser` decodes the three segments through `Base64.getUrlDecoder()`, parses the header and payload JSON through Champollion → `ParsedJwt(JsonObject header, JsonObject claims, byte[] signingInput, byte[] signature, String rawToken)`.
+. **Key selection** — `KeyResolver.resolve(String kid, SignatureAlgorithm algorithm)` returns an `Optional<PublicKey>` (empty when the `kid` cannot be resolved). Three implementations: `KeyResolvers.fromInlinePem`, `KeyResolvers.fromLocation` (PEM-vs-JWKS auto-detection), and `JwksKeyResolver` for multi-key JWKS URLs/files.
+. **Signature verification** — `JwtSignatureVerifier` instantiates a `java.security.Signature` according to the header's `alg`, verifies `signingInput` against `signature`. For ECDSA, R‖S → DER transcoding through `EcdsaSignatures` (the JDK requires DER).
+. **Claim validation** — `JwtClaimsValidator` checks `iss` (strict equality with `JwtConfig.issuer()`), `aud` (non-empty intersection with `JwtConfig.audiences()`), `exp` (rejected once `exp + skew < now`), `nbf` (rejected while `nbf - skew > now`), and `iat` (rejected if later than `exp`; maximum age via `token.age`, applied only when the claim is present).
 . **Principal construction** — `DefaultJsonWebToken` wraps the validated payload. Immutable. `getName()` prioritises `upn` > `preferred_username` > `sub`. `getGroups()` extracts the `groups` claim (unmodifiable set).
 
 The result is either a validated `JsonWebToken` or a typed `JwtValidationException`. No step is short-circuited — a failure at `n` interrupts the whole chain before `n+1`.
@@ -91,15 +91,23 @@ The JAX-RS filter and the CDI producer do not know each other directly. They com
 ----
 @RequestScoped
 public class JsonWebTokenContext {
+
     private JsonWebToken token;
-    public void setToken(JsonWebToken t) { this.token = t; }
-    public JsonWebToken getToken() { return token; }
+
+    /** Stores the validated token for the request (called by the authentication filter). */
+    public void setToken(JsonWebToken token) { this.token = token; }
+
+    /** @return the token for the current request if it was validated, otherwise empty (anonymous request). */
+    public Optional<JsonWebToken> current() { return Optional.ofNullable(token); }
+
+    /** Resets the context (end of request). */
+    public void clear() { this.token = null; }
 }
 ----
 
-* Filter side: `tokenContext.setToken(jwt)` (at the start of the request).
-* Producer side: `JsonWebTokenProducer.@Produces @RequestScoped JsonWebToken get(JsonWebTokenContext ctx)` reads `ctx.getToken()` (or returns an anonymous `DefaultJsonWebToken.anonymous()` if absent).
-* `@Claim` side: the synthetic BCE also re-reads `ctx.getToken()` on every resolution.
+* Filter side: `tokenContext.setToken(jwt)` (at the start of the request); `clear()` resets the context.
+* Producer side: `JsonWebTokenProducer.@Produces @RequestScoped JsonWebToken get(JsonWebTokenContext ctx)` reads `ctx.current()` and falls back to the anonymous `DefaultJsonWebToken.anonymous()` when it is empty.
+* `@Claim` side: the synthetic BCE also re-reads `ctx.current()` on every resolution.
 
 `@RequestScoped` guarantees per-request isolation _without_ `ThreadLocal` — which avoids pinning virtual threads.
 
@@ -123,13 +131,13 @@ Implementation:
 |===
 | Mechanism | Role
 
-| `AtomicReference<JwksSnapshot>` (`kid` → `PublicKey`)
+| `AtomicReference<Snapshot>` — a private `record Snapshot(Jwks jwks, Instant fetchedAt)`
 | Lock-free reads. Every request reads the current snapshot in `O(1)`.
 
 | Non-fair `ReentrantLock`
 | Serialises _refreshes_ — one thread fetches the JWK Set at a time. Others wait and re-read the snapshot.
 
-| Configurable TTL + `Instant lastRefresh`
+| Configurable TTL + `Snapshot.fetchedAt`
 | _Periodic_ refresh even without visible rotation — defence against compromised keys.
 
 | `minRefreshInterval`
@@ -155,18 +163,17 @@ The snapshot is immutable; the `AtomicReference` acts as the memory barrier (JMM
 * Each sub-module ships its own `module-info.java`. No `Automatic-Module-Name` fallback.
 * No `setAccessible(true)` in production. When a privileged view is needed (rarely), `MethodHandles.privateLookupIn`.
 * No dynamic `java.lang.reflect.Proxy`. `@Claim` beans are _synthetic_, created at CDI compile time by Vauban — not at runtime.
-* `cervantes-tck` stays outside the reactor (Model 4.0.0), to avoid blocking the compilation of the other modules with ShrinkWrap Maven Resolver 3.3 (a transitive constraint of the official TCK).
+* `cervantes-tck` joins the reactor only under the `tck` Maven profile (a regular child of `cervantes-parent`): a plain `mvn install` never builds nor downloads it, which decouples the runtime build from the official TCK stack.
 
 == Unit tests of `cervantes-core`
 
 A matter of pride: the entire engine is testable without HTTP, without CDI, with key pairs generated on the fly through `KeyPairGenerator`. The test suites:
 
-* `DefaultJwtValidatorTest` — end-to-end signature + claims.
-* `JwtSignatureVerifierTest` — each family (RSA, EC, PS, HS).
+* `DefaultJwtValidatorTest` — end-to-end: signature verification (RS and ES families) + claim validation (iss/aud/exp/nbf/iat + clock-skew).
 * `JwkParserTest` — RSA and EC JWK parsing.
 * `JwksKeyResolverTest` — cache, refresh, rotation, fallback.
-* `JweDecryptorTest` — unwrapping + decryption.
-* `JwtClaimsValidatorTest` — iss/aud/exp/nbf/iat + clock-skew.
+* `JweDecryptorTest` — key unwrapping + content decryption.
+* `TestJwts`, `TestJwks`, `TestJwe` — helpers that forge tokens, JWK Sets and JWEs on the fly.
 
 No Mockito — only hand-written doubles and generated key pairs.
 

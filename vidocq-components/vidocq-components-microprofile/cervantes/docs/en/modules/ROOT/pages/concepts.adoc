@@ -65,7 +65,7 @@ An even more opaque variant: JWE (RFC 7516) with _five_ segments — encrypted h
 | Fallback for `upn` when the `upn` claim is missing.
 
 | `groups`
-| List of strings — _the roles_ backing `@RolesAllowed`. Becomes `JsonWebToken.getGroups()`.
+| Array of strings — _the roles_ backing `@RolesAllowed`. Becomes `JsonWebToken.getGroups()` (a `Set<String>`).
 
 | `raw_token`
 | Pseudo-claim — when injecting `@Claim("raw_token") String`, returns the original raw token.
@@ -85,20 +85,16 @@ Cervantes supports the families covered by MP JWT 2.1 and by the JDK, with no ex
 | `RS256`, `RS384`, `RS512`
 | `Signature.getInstance("SHA256withRSA"/…)`. X.509 key ≥ 2048 bits recommended.
 
-| RSA-PSS
-| `PS256`, `PS384`, `PS512`
-| Probabilistic RSA variant (RFC 8017).
-
 | ECDSA
 | `ES256`, `ES384`, `ES512`
 | P-256 / P-384 / P-521 curves. *Internal transcoding* JOSE R‖S ↔ DER (the JDK requires DER, JOSE requires R‖S concatenated).
 
-| HMAC
-| `HS256`, `HS384`, `HS512`
-| Shared (symmetric) key. Outside the default MP profile — usable internally.
+| Not supported
+| `PS256/384/512` (RSA-PSS), `HS256/384/512` (HMAC)
+| `SignatureAlgorithm.fromJoseName` resolves only the six RS/ES values above; any other `alg` — including `none` — fails validation with `unsupported or missing 'alg' header`.
 |===
 
-`mp.jwt.verify.publickey.algorithm` enforces an expected algorithm. If the token header announces a different `alg`, validation fails. Defence in depth against `alg=none` and RS256/HS256 confusion attacks.
+`mp.jwt.verify.publickey.algorithm` enforces an expected algorithm. If the token header announces a different `alg`, validation fails. Defence in depth against `alg=none` downgrade — and because the HMAC family is not implemented at all, the classic RS256→HS256 key-confusion attack is structurally impossible.
 
 == JWK Set — distributing public keys
 
@@ -157,7 +153,7 @@ The JWT contract is: _I trust you to verify my signature with my public key, I t
 . **The issuer** signs with its private key. Nobody else can produce a token that passes the verification.
 . **The service** (your application, powered by Cervantes) knows the issuer's public key — via `mp.jwt.verify.publickey` or via the JWK Set published at `iss`.
 . **Verification** is local: no call to the issuer per request (except to refresh the JWK Set, and only when necessary).
-. **Time** is measured by the service (`Clock.systemUTC()` by default), with a `mp.jwt.verify.clock.skew` tolerance (default 60 s) to absorb drift.
+. **Time** is measured by the service (`Clock.systemUTC()` by default), with a fixed 60-second clock-skew tolerance (`JwtConfig.DEFAULT_CLOCK_SKEW`) to absorb drift — the standard `mp.jwt.verify.clock.skew` key is not read by the current release.
 . **The role** comes from the `groups` claim — the issuer decides who has which roles, and Cervantes accepts it.
 
 The trust service boils down to: _I verify a signature with a known public key, I check claims against a known configuration, I call nobody_.

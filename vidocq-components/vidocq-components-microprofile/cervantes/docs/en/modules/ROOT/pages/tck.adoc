@@ -87,25 +87,31 @@ Stack assembled by the runner:
 | Chappe (`io.vidocq.chappe.http`)
 
 | Test framework
-| Arquillian + REST (the MP JWT TCK is *not* TestNG-only, unlike the MP FT TCK)
+| TestNG (`arquillian-testng-container`), executed by Maven Surefire through the `surefire-testng` provider
 |===
 
 == Documented exclusions
 
-Two exclusions, not applicable to the Core + JWT profile targeted by Cervantes:
+Four exclusions, not applicable to the Core + JWT profile targeted by Cervantes:
 
 [cols="2,3"]
 |===
 | Exclusion | Justification
 
-| Tests under `…/tck/container/servlet/**`
-| Tests targeting the Jakarta EE Full _container servlet_ profile. Cervantes targets the _Core_ (MicroProfile) profile — no Servlet 6.1 commitment. The Servlet role is filled by xref:foy::index.adoc[Foy], out of scope for this MP JWT implementation.
+| `<exclude>org/eclipse/microprofile/jwt/tck/container/ejb/**</exclude>`
+| EJB optional tests — not applicable (no EJB container in the Vidocq ecosystem).
 
-| TestNG group `ee-security-optional`
-| Tests marked _optional_ by the spec for Jakarta EE Security 3.0 integration. Not required for MP JWT 2.1 conformance.
+| `<exclude>org/eclipse/microprofile/jwt/tck/container/jacc/**</exclude>`
+| JACC optional tests — not applicable.
+
+| `<exclude>org/eclipse/microprofile/jwt/tck/container/servlet/**</exclude>`
+| Servlet optional tests — Chappe is not a Jakarta Servlet container. Cervantes targets the _Core_ (MicroProfile) profile; the Servlet role is filled by xref:foy::index.adoc[Foy], out of scope for this MP JWT implementation.
+
+| `<excludedGroups>ee-security-optional</excludedGroups>`
+| TestNG group for group-to-role mapping via the Jakarta EE Security API — marked _optional_ by the spec, not required for MP JWT 2.1 conformance, and not implemented.
 |===
 
-The exclusions are listed in the Arquillian/TestNG suite file under `cervantes-tck/src/test/resources/`. Any future exclusion must be tracked in `TCK.md` with its justification.
+The exclusions are declared in the Surefire configuration of `cervantes-tck/pom.xml` (`<excludes>` + `<excludedGroups>`). Any future exclusion must be tracked in `TCK.md` with its justification.
 
 == Gaps resolved during the race to 100 %
 

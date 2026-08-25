@@ -35,7 +35,8 @@ public class OrderResource {
 
 Expected behaviour:
 
-* Token missing or invalid + non-`@PermitAll` endpoint → **401 Unauthorized**.
+* Invalid token (bad signature, expired, wrong issuer or audience, unsupported `alg`) → **401 Unauthorized**, whatever the endpoint annotations — the `@PreMatching` authentication filter aborts before the endpoint is even matched.
+* Missing token → the request proceeds **anonymously**: a `@RolesAllowed` endpoint then returns **401 Unauthorized**, while an unannotated or `@PermitAll` endpoint runs with the anonymous principal.
 * Valid token without the required role → **403 Forbidden**.
 * Valid token with the required role → **200 OK** (the method runs).
 * `@DenyAll` → always **403**, whatever the token.
@@ -66,7 +67,7 @@ public class MeResource {
 }
 ----
 
-Without a token, the principal is an _anonymous_ one — `getName() == null`, `getGroups()` empty, all claims `null`. No NPE to fear, but `@RolesAllowed` will already have returned 401 if the endpoint is not `@PermitAll`.
+Without a token, the principal is an _anonymous_ one — `getName() == null`, `getGroups()` empty, all claims `null`. No NPE to fear, but a `@RolesAllowed` endpoint will already have returned 401 before the method runs — an unannotated or `@PermitAll` endpoint, on the other hand, executes with this anonymous principal.
 
 == Injecting a single claim with `@Claim`
 
@@ -105,7 +106,7 @@ Supported types (excerpt — see xref:reference.adoc[Reference] for the exhausti
 | `String`, `Long`, `Integer`, `Double`, `Boolean`
 | Coercion from the claim's JSON value.
 
-| `Set<String>`, `List<String>`
+| `Set<String>`
 | For array claims (`groups`, `aud`).
 
 | `jakarta.json.JsonValue` / `JsonString` / `JsonNumber` / `JsonObject` / `JsonArray`
@@ -183,19 +184,16 @@ To reject tokens that are too old regardless of their `exp`:
 mp.jwt.verify.token.age=300
 ----
 
-The `iat` claim must then be present (unless `mp.jwt.verify.requireiat=false`).
+The age check only applies when the `iat` claim is present — a token without `iat` is not rejected by this rule. Independently of `token.age`, a token whose `iat` is later than its `exp` is always rejected.
 
-== Adjusting the clock-skew tolerance
+== Clock-skew tolerance
 
-When the issuer and the service do not share an atomic clock:
+When the issuer and the service do not share an atomic clock, Cervantes applies a fixed tolerance of **60 seconds** (`JwtConfig.DEFAULT_CLOCK_SKEW`): `exp` is valid up to `exp + 60 s`, `nbf` is valid from `nbf - 60 s`.
 
-[source,properties]
-----
-# Tolerance in seconds (default 60)
-mp.jwt.verify.clock.skew=120
-----
-
-`exp` is valid up to `exp + clockSkew`, `nbf` is valid from `nbf - clockSkew`.
+[NOTE]
+====
+The standard `mp.jwt.verify.clock.skew` key is **not read** by the current release — the CDI producer always applies the 60-second default. Embedders building a `JwtConfig` programmatically (through `cervantes-api`) can pass any `clockSkew` duration.
+====
 
 == Reading an _ad-hoc_ claim through `JsonWebToken.getClaim`
 
@@ -247,8 +245,7 @@ public class AuditFilter implements ContainerResponseFilter {
 
     @Override
     public void filter(ContainerRequestContext req, ContainerResponseContext resp) {
-        JsonWebToken jwt = tokenCtx.getToken();
-        String name = jwt == null ? "anonymous" : jwt.getName();
+        String name = tokenCtx.current().map(JsonWebToken::getName).orElse("anonymous");
         log.info("{} {} → {} (caller={})", req.getMethod(), req.getUriInfo().getPath(), resp.getStatus(), name);
     }
 }

@@ -60,7 +60,7 @@ A JWT is exactly that: a bearer token that presents a signed identity on every H
 
 . **Zero third-party crypto or JWT library.** No Nimbus, no jose4j, no Bouncy Castle, no Auth0 java-jwt, no SmallRye JWT. All signature verification (RS256/384/512, ES256/384/512, JOSE R‖S ⇄ DER transcoding for ECDSA) runs through `java.security.Signature`. JWE decryption (`RSA-OAEP`, `A256GCM`) runs through `javax.crypto`. JSON parsing runs through xref:champollion::index.adoc[Champollion] (JSON-P 2.1).
 . **Native `@RolesAllowed` without patching Cassini.** The JAX-RS integration sets a `SecurityContext` backed by the validated `JsonWebToken` and enforces `@RolesAllowed` / `@PermitAll` / `@DenyAll` through a `DynamicFeature`. Method precedence over class. 401 on invalid signature, 403 on missing role — entirely through the standard JAX-RS API, no implementation patch.
-. **Strict Java Modules, virtual-thread-friendly, AOT-friendly.** Every artefact has its own `module-info.java`. `io.vidocq.cervantes.internal.*` is never exported. No `setAccessible(true)` in production, no dynamic `Proxy`. JWKS fetching uses `java.net.http.HttpClient`, with no `synchronized` around I/O. Compatible with GraalVM native-image and Leyden CDS.
+. **Strict Java Modules, virtual-thread-friendly, AOT-friendly.** Every artefact has its own `module-info.java`. `io.vidocq.cervantes.internal` is exported only to `io.vidocq.cervantes.cdi.vauban` (qualified export) — never to applications. No `setAccessible(true)` in production, no dynamic `Proxy`. JWKS fetching uses `java.net.http.HttpClient`, with no `synchronized` around I/O. Compatible with GraalVM native-image and Leyden CDS.
 
 == Position in the ecosystem
 

@@ -27,11 +27,11 @@ SmallRye JWT is the reference implementation in Quarkus and in several Jakarta E
 
 | `@Inject @Claim("…") String`
 | Same, same supported types
-| Cervantes adds support for `Supplier<T>` on top of `ClaimValue<T>`, `Provider<T>`, `Instance<T>`.
+| Cervantes adds support for `Supplier<T>` on top of `ClaimValue<T>`, `Provider<T>` and `Optional<T>`. `Instance<T>` is not a supported claim container — use `Provider<T>` instead.
 
 | `mp.jwt.verify.*` keys
 | Same keys
-| `publickey`, `publickey.location`, `issuer`, `audiences`, `publickey.algorithm`, `clock.skew`, `token.age`, `requireiat` — identical.
+| `publickey`, `publickey.location`, `issuer`, `audiences`, `publickey.algorithm`, `token.age` — identical. `clock.skew` is *not* read by Cervantes: the tolerance is fixed at 60 seconds.
 
 | `mp.jwt.token.*` keys
 | Same keys

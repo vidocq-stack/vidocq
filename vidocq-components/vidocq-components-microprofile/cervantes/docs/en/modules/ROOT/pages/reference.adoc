@@ -20,7 +20,7 @@ This page consolidates the public surface of Cervantes: artefacts to declare, ex
 
 | `io.vidocq.cervantes`
 | `cervantes-core`
-| Pure validation engine — JWT parsing, signature verification (RS/ES/PS/HS), claim validation, key loading (PEM, JWKS), JWE decryption. *No* CDI, *no* JAX-RS.
+| Pure validation engine — JWT parsing, signature verification (RS/ES), claim validation, key loading (PEM, JWKS), JWE decryption. *No* CDI, *no* JAX-RS.
 
 | `io.vidocq.cervantes`
 | `cervantes-cdi-vauban`
@@ -40,10 +40,10 @@ This page consolidates the public surface of Cervantes: artefacts to declare, ex
 
 | `io.vidocq.cervantes`
 | `cervantes-tck`
-| Official MP JWT 2.1 TCK runner — outside the reactor (Model 4.0.0). Do not declare as an application dependency.
+| Official MP JWT 2.1 TCK runner — in-reactor, but only under the `tck` Maven profile (a plain `mvn install` never builds it). Do not declare as an application dependency.
 |===
 
-All versions at `{project-version}`. Shared parent `io.vidocq:vidocq-parent:1.0.0-SNAPSHOT`.
+All versions at `{project-version}`. Shared parent `io.vidocq:vidocq-parent:0.3.0-SNAPSHOT`.
 
 == Java modules
 
@@ -58,16 +58,16 @@ All versions at `{project-version}`. Shared parent `io.vidocq:vidocq-parent:1.0.
 | `io.vidocq.cervantes.api.*` — stable SPI.
 
 | `io.vidocq.cervantes.core`
-| `io.vidocq.cervantes.api.*` (partial re-export), `io.vidocq.cervantes.internal.*` (not exported).
+| No unqualified export — the only export is qualified: `exports io.vidocq.cervantes.internal to io.vidocq.cervantes.cdi.vauban`. The stable SPI reaches consumers through `requires transitive io.vidocq.cervantes.api`.
 
 | `io.vidocq.cervantes.cdi.vauban`
-| `io.vidocq.cervantes.cdi.*` — `JsonWebTokenContext`, `CervantesClaimExtension`. `provides BuildCompatibleExtension`.
+| `exports io.vidocq.cervantes.cdi` (`JsonWebTokenContext`, `CervantesClaimExtension`) and `exports io.vidocq.cervantes.cdi.internal` (producers and generated `_VaubanComponents`). `provides BuildCompatibleExtension` and `VaubanComponentProvider`.
 
 | `io.vidocq.cervantes.jaxrs`
 | `io.vidocq.cervantes.jaxrs.*` — filters, `SecurityContext`, `DynamicFeature`.
 |===
 
-`io.vidocq.cervantes.internal.*` is never exported. Any application class depending on it signals a regression to be fixed.
+`io.vidocq.cervantes.internal` (the core engine) is exported only to `io.vidocq.cervantes.cdi.vauban` — application modules cannot read it, and any application class depending on it signals a regression to be fixed. The `io.vidocq.cervantes.cdi.internal` package, although exported for the Vauban wiring, is likewise not a supported API.
 
 == Recognised security annotations
 
@@ -121,8 +121,8 @@ All versions at `{project-version}`. Shared parent `io.vidocq:vidocq-parent:1.0.
 | `Boolean`, `boolean`
 | `JsonValue.TRUE` / `JsonValue.FALSE`.
 
-| `Set<String>`, `List<String>`
-| For array-typed claims (`groups`, `aud`). Order preserved in `List`, deduplicated in `Set`.
+| `Set<String>`
+| For array-typed claims (`groups`, `aud`). Deduplicated, insertion order preserved (`LinkedHashSet`).
 
 | `jakarta.json.JsonValue`
 | Raw value parsed by xref:champollion::index.adoc[Champollion].
@@ -136,8 +136,8 @@ All versions at `{project-version}`. Shared parent `io.vidocq:vidocq-parent:1.0.
 | `org.eclipse.microprofile.jwt.ClaimValue<T>`
 | Lazy MP. `getValue()` re-reads the current request's token.
 
-| `jakarta.inject.Provider<T>`, `jakarta.enterprise.inject.Instance<T>`
-| Lazy CDI. `get()` re-reads the current token.
+| `jakarta.inject.Provider<T>`
+| Lazy CDI. `get()` re-reads the current token. (`jakarta.enterprise.inject.Instance<T>` is *not* a supported claim container — use `Provider<T>` instead.)
 
 | `java.util.function.Supplier<T>`
 | Lazy JDK. `get()` re-reads the current token.
@@ -171,15 +171,14 @@ All keys are read through `ConfigProvider.getConfig()` — provided by xref:rave
 | `mp.jwt.verify.audiences`
 | Accepted audiences — comma-separated list. At least one intersection with `aud` required (unless empty).
 
-| `mp.jwt.verify.clock.skew`
-| Clock-skew tolerance in seconds (default 60). Applied to `exp` and `nbf`.
-
 | `mp.jwt.verify.token.age`
-| Maximum token age, in seconds since `iat`. Optional.
-
-| `mp.jwt.verify.requireiat`
-| Boolean — require the `iat` claim. Default `false`.
+| Maximum token age, in seconds since `iat`. Optional — and applied only when the `iat` claim is present.
 |===
+
+[NOTE]
+====
+The standard `mp.jwt.verify.clock.skew` key is **not read** by this release: the clock-skew tolerance applied to `exp` and `nbf` is fixed at 60 seconds (`JwtConfig.DEFAULT_CLOCK_SKEW`). Embedders building a `JwtConfig` directly through `cervantes-api` can pass any `clockSkew` duration.
+====
 
 === Token transport
 
@@ -220,17 +219,13 @@ All keys are read through `ConfigProvider.getConfig()` — provided by xref:rave
 | `RS256`, `RS384`, `RS512`
 | `Signature.getInstance("SHA256withRSA"/…)`. Keys ≥ 2048 bits recommended.
 
-| RSA-PSS
-| `PS256`, `PS384`, `PS512`
-| `Signature.getInstance("RSASSA-PSS")` + `PSSParameterSpec`.
-
 | ECDSA
 | `ES256`, `ES384`, `ES512`
 | `Signature.getInstance("SHA256withECDSA"/…)`. P-256/P-384/P-521 curves. Internal R‖S ↔ DER transcoding (`EcdsaSignatures`).
 
-| HMAC
-| `HS256`, `HS384`, `HS512`
-| `Mac.getInstance("HmacSHA256"/…)`. Outside the default MP profile, usable internally.
+| Not supported
+| `PS256`, `PS384`, `PS512` (RSA-PSS) — `HS256`, `HS384`, `HS512` (HMAC)
+| Rejected: `SignatureAlgorithm.fromJoseName` resolves only the six RS/ES values, so any other `alg` fails validation with `unsupported or missing 'alg' header`.
 |===
 
 == Supported JWE algorithms
@@ -241,7 +236,7 @@ All keys are read through `ConfigProvider.getConfig()` — provided by xref:rave
 
 | Key wrapping (`alg`)
 | `RSA-OAEP`, `RSA-OAEP-256`
-| `Cipher.getInstance("RSA/ECB/OAEPWithSHA-1AndMGF1Padding")` / `…SHA-256…`.
+| Single transformation `Cipher.getInstance("RSA/ECB/OAEPPadding")` with an explicit `OAEPParameterSpec` per algorithm (SHA-1 + MGF1/SHA-1, or SHA-256 + MGF1/SHA-256) — explicit parameters avoid the JDK trap of defaulting MGF1 to SHA-1. Both algorithms are covered by MP JWT 2.1 §9.2.4 (`mp.jwt.decrypt.key.algorithm`).
 
 | Content encryption (`enc`)
 | `A256GCM`
@@ -258,10 +253,10 @@ All keys are read through `ConfigProvider.getConfig()` — provided by xref:rave
 |===
 | Situation | Code
 
-| No token + `@PermitAll` endpoint
-| Endpoint runs anonymously.
+| No token + unannotated or `@PermitAll` endpoint
+| Endpoint runs anonymously (the filter leaves the request anonymous — pass-through).
 
-| No token + `@RolesAllowed` or default endpoint
+| No token + `@RolesAllowed` endpoint
 | `401 Unauthorized`.
 
 | Token present, invalid signature / expired `exp` / unexpected `iss` / unexpected `aud` / unauthorised `alg`
@@ -288,7 +283,7 @@ All keys are read through `ConfigProvider.getConfig()` — provided by xref:rave
 
 == Bugs and benchmarks
 
-* link:{repo-cervantes}/src/branch/main/BUG.md[BUG.md] — tracked reproducible bugs (empty as of today).
+* link:{repo-cervantes}/src/branch/main/BUG.md[BUG.md] — tracked reproducible bugs (id, symptom, minimal reproduction, status).
 * link:{repo-cervantes}/src/branch/main/BENCH.md[BENCH.md] — JMH `DefaultJwtValidator.validate` vs SmallRye JWT (M7).
 
 == Further reading
