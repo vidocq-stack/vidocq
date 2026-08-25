@@ -20,7 +20,7 @@ Both modules will share the same dialect SPI (`mansart-data-dialect-spi`) and th
 
 == Status
 
-⏳ **M7 pending** — see lien:{repo-mansart}/src/branch/main/mansart-persistence/PLAN.md[mansart-persistence/PLAN.md] (sketch) and lien:{repo-mansart}/src/branch/main/mansart-jakarta-data/PLAN.md[mansart-jakarta-data/PLAN.md] (M7 milestone "mansart-persistence bridge").
+⏳ **M7 pending** — see link:{repo-mansart}/src/branch/main/mansart-persistence/PLAN.md[mansart-persistence/PLAN.md] (sketch) and link:{repo-mansart}/src/branch/main/mansart-jakarta-data/PLAN.md[mansart-jakarta-data/PLAN.md] (M7 milestone "mansart-persistence bridge").
 
 Target scope (to be refined):
 

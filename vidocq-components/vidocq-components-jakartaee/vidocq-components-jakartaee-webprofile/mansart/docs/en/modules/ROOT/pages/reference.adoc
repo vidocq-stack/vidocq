@@ -159,7 +159,7 @@ Discovered via `ServiceLoader` (`provides DialectFactory with H2DialectFactory`)
 
 == See also
 
-* lien:{repo-mansart}/src/branch/main/PLAN.md[Mansart PLAN.md] — global vision and work order.
-* lien:{repo-mansart}/src/branch/main/mansart-jakarta-data/PLAN.md[mansart-jakarta-data PLAN.md] — detailed plan of the Data module.
-* lien:{repo-mansart}/src/branch/main/mansart-pool/PLAN.md[mansart-pool PLAN.md] — pool design.
-* lien:{repo-mansart}/src/branch/main/mansart-transactions/PLAN.md[mansart-transactions PLAN.md] — transactions roadmap.
+* link:{repo-mansart}/src/branch/main/PLAN.md[Mansart PLAN.md] — global vision and work order.
+* link:{repo-mansart}/src/branch/main/mansart-jakarta-data/PLAN.md[mansart-jakarta-data PLAN.md] — detailed plan of the Data module.
+* link:{repo-mansart}/src/branch/main/mansart-pool/PLAN.md[mansart-pool PLAN.md] — pool design.
+* link:{repo-mansart}/src/branch/main/mansart-transactions/PLAN.md[mansart-transactions PLAN.md] — transactions roadmap.

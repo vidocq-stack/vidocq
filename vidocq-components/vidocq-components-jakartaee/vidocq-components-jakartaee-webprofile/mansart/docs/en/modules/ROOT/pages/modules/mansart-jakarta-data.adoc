@@ -197,11 +197,11 @@ module io.vidocq.mansart.data.core {
 
 == Bench
 
-First smoke: see lien:{repo-mansart}/src/branch/main/mansart-jakarta-data/BENCH.md[mansart-jakarta-data BENCH.md] (BENCH-20260504-01: `findById` H2 in-memory).
+First smoke: see link:{repo-mansart}/src/branch/main/mansart-jakarta-data/BENCH.md[mansart-jakarta-data BENCH.md] (BENCH-20260504-01: `findById` H2 in-memory).
 
 == Bugs
 
-See lien:{repo-mansart}/src/branch/main/mansart-jakarta-data/BUG.md[BUG.md]. Major historical bug: `BUG-20260505-01` (TCK entities not metamodelled) — resolved via the M7 runtime repo creator.
+See link:{repo-mansart}/src/branch/main/mansart-jakarta-data/BUG.md[BUG.md]. Major historical bug: `BUG-20260505-01` (TCK entities not metamodelled) — resolved via the M7 runtime repo creator.
 
 == Roadmap
 
@@ -213,4 +213,4 @@ See lien:{repo-mansart}/src/branch/main/mansart-jakarta-data/BUG.md[BUG.md]. Maj
 * ✅ M6 — Jakarta Data 1.0 TCK.
 * ✅ M7 — Runtime impl generation — TCK 74/74 PASS.
 
-See lien:{repo-mansart}/src/branch/main/mansart-jakarta-data/PLAN.md[PLAN.md] for sub-milestone details (M7-26 to M7-29).
+See link:{repo-mansart}/src/branch/main/mansart-jakarta-data/PLAN.md[PLAN.md] for sub-milestone details (M7-26 to M7-29).

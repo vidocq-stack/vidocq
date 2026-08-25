@@ -80,18 +80,18 @@ sequenceDiagram
 * ✅ **M7** — `@Transactional` CDI interceptor + `@TransactionScoped` + Vauban BCE.
 * ✅ **M8** — `ConnectionXAResource` JDBC adapter.
 
-See lien:{repo-mansart}/src/branch/main/mansart-transactions/PLAN.md[PLAN.md].
+See link:{repo-mansart}/src/branch/main/mansart-transactions/PLAN.md[PLAN.md].
 
 == TCK
 
-Detailed status: xref:tck.adoc[Mansart TCK status] and lien:{repo-mansart}/src/branch/main/mansart-transactions/TCK.md[TCK.md].
+Detailed status: xref:tck.adoc[Mansart TCK status] and link:{repo-mansart}/src/branch/main/mansart-transactions/TCK.md[TCK.md].
 
 The Jakarta Transactions 2.0 TCK is a historical Sun tsharness harness (Apache Ant + `ts.jte` + ~80 properties). No Surefire-scannable jar. Mansart ships `MansartTckProvider` + `MansartUserTransaction` that plug into the harness; smoke wiring 5/5 validated in CI.
 
 == Bugs / Bench
 
-* Bugs: see lien:{repo-mansart}/src/branch/main/mansart-transactions/BUG.md[BUG.md].
-* Benchmarks: see lien:{repo-mansart}/src/branch/main/mansart-transactions/BENCH.md[BENCH.md].
+* Bugs: see link:{repo-mansart}/src/branch/main/mansart-transactions/BUG.md[BUG.md].
+* Benchmarks: see link:{repo-mansart}/src/branch/main/mansart-transactions/BENCH.md[BENCH.md].
 
 == Vidocq integration
 

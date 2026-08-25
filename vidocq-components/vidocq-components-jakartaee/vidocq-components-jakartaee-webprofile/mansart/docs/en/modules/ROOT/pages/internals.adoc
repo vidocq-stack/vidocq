@@ -113,7 +113,7 @@ flowchart LR
 * **`ConcurrentHashMap.newKeySet inUse`** — set of borrowed connections, for metrics and leak detection.
 * **Housekeeper virtual thread** — periodic wake-up, evicts connections that are too old or idle, pre-warms up to `minIdle`.
 
-Details and numbers: see lien:{repo-mansart}/src/branch/main/mansart-pool/BENCH.md[mansart-pool BENCH.md].
+Details and numbers: see link:{repo-mansart}/src/branch/main/mansart-pool/BENCH.md[mansart-pool BENCH.md].
 
 == Threading — virtual threads
 

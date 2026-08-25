@@ -13,7 +13,7 @@ This page consolidates the status of the official TCK runs against Mansart. Day-
 | Jakarta Data 1.0 — `EntityTests`
 | 73
 | 73
-| ✅ M7 delivered 2026-05-05. See lien:{repo-mansart}/src/branch/main/mansart-jakarta-data/PLAN.md[PLAN.md].
+| ✅ M7 delivered 2026-05-05. See link:{repo-mansart}/src/branch/main/mansart-jakarta-data/PLAN.md[PLAN.md].
 
 | Jakarta Data 1.0 — `SignatureTests`
 | 1
@@ -64,11 +64,11 @@ cd mansart/mansart-jakarta-data/mansart-data-tck
 ./run-official-tck-data-1.0.sh all
 ----
 
-Major historical bug: `BUG-20260505-01` (TCK entities not metamodelled because compiled without the processor in the APT classpath). Resolved by the M7 runtime runner (`MansartRuntimeRepoCreator`). See lien:{repo-mansart}/src/branch/main/mansart-jakarta-data/BUG.md[BUG.md].
+Major historical bug: `BUG-20260505-01` (TCK entities not metamodelled because compiled without the processor in the APT classpath). Resolved by the M7 runtime runner (`MansartRuntimeRepoCreator`). See link:{repo-mansart}/src/branch/main/mansart-jakarta-data/BUG.md[BUG.md].
 
 == Jakarta Transactions 2.0 — detail
 
-Runner: `mansart-transactions/`, see lien:{repo-mansart}/src/branch/main/mansart-transactions/TCK.md[TCK.md].
+Runner: `mansart-transactions/`, see link:{repo-mansart}/src/branch/main/mansart-transactions/TCK.md[TCK.md].
 
 The official TCK distributed by Eclipse is a historical **Sun tsharness** harness:
 

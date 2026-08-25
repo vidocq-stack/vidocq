@@ -132,7 +132,7 @@ Less common case; transposition similar to Hibernate. Standard JPA 3.2 annotatio
 | Micrometer bridge on the `mansart-pool` backlog.
 |===
 
-Performance comparison: see lien:{repo-mansart}/src/branch/main/mansart-pool/BENCH.md[mansart-pool BENCH.md]. mansart-pool is virtual-thread-native and avoids the pinning cost under Loom load.
+Performance comparison: see link:{repo-mansart}/src/branch/main/mansart-pool/BENCH.md[mansart-pool BENCH.md]. mansart-pool is virtual-thread-native and avoids the pinning cost under Loom load.
 
 == Known pitfalls
 

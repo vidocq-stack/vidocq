@@ -110,7 +110,7 @@ Micrometer / Prometheus bridge on the backlog (MP3).
 * **AOT** — Mansart compatible with GraalVM native-image and Leyden CDS without configuration. HikariCP needs `--initialize-at-build-time` for javassist.
 * **API** — very close (`HikariConfig` → `PoolConfig`). See xref:migration.adoc[Migration].
 
-Numbers: see lien:{repo-mansart}/src/branch/main/mansart-pool/BENCH.md[mansart-pool BENCH.md] (2026-05-06 baseline vs HikariCP).
+Numbers: see link:{repo-mansart}/src/branch/main/mansart-pool/BENCH.md[mansart-pool BENCH.md] (2026-05-06 baseline vs HikariCP).
 
 == Roadmap
 
@@ -119,4 +119,4 @@ Numbers: see lien:{repo-mansart}/src/branch/main/mansart-pool/BENCH.md[mansart-p
 * ⏳ MP3 — Metrics + leak detection.
 * ⏳ MP4 — `mansart-jakarta-data` integration (transparent for the user).
 
-See lien:{repo-mansart}/src/branch/main/mansart-pool/PLAN.md[mansart-pool PLAN.md].
+See link:{repo-mansart}/src/branch/main/mansart-pool/PLAN.md[mansart-pool PLAN.md].
