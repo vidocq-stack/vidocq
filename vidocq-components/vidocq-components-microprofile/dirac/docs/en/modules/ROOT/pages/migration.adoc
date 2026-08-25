@@ -3,7 +3,7 @@
 
 [CAUTION]
 ====
-Dirac is at `{project-version}`. The MicroProfile Metrics 5.1.1 spec is the goal (M8 — TCK 100 % PASS, status to be confirmed in `dirac-tck/target/tck-report.txt`). The public SPI may still evolve before `1.0.0`. This page documents the mappings to prepare a progressive migration.
+Dirac is at `{project-version}`. The official MicroProfile Metrics 5.1.1 TCK passes **127/127 (100 %)** — see link:{repo-dirac}/src/branch/main/TCK.md[TCK.md]. The public SPI may still evolve before `1.0.0`. This page documents the mappings to prepare a progressive migration.
 ====
 
 [.lead]
@@ -26,8 +26,8 @@ SmallRye Metrics is the reference implementation in Quarkus and some Jakarta EE 
 | Identical. OpenMetrics/JSON content negotiation identical.
 
 | `mp.metrics.*` (MP Config keys)
-| `mp.metrics.*` (same keys)
-| Global tags, percentiles, buckets: identical.
+| `mp.metrics.distribution.*` only
+| Percentiles and buckets: identical keys, read from system properties or `microprofile-config.properties`. Global tags (`mp.metrics.tags`, `mp.metrics.appName`): **not implemented** in Dirac.
 
 | Dependencies: Micrometer, HdrHistogram, Jackson…
 | None (hand-written formatters)
@@ -94,7 +94,7 @@ Dropwizard is the ancestor of much of the MP Metrics spec. Two-step migration: c
 * **`@Histogram` (annotation)** — absent from the `microprofile-metrics-api:5.1.1` JAR used by Dirac. Declare histograms programmatically via `MetricRegistry.histogram(...)`.
 * **No `setAccessible(true)`** — if application code relied on non-public classes scanned by a permissive scanner, Dirac will not reach them. Make types `public` or add `opens` in the application `module-info`.
 * **Fixed endpoint** — `/metrics` is mandated by the spec. To publish at another path, add a JAX-RS alias on the application side.
-* **Global tags** — `mp.metrics.tags=app=orders,env=prod` is applied to the union of all three scopes; there is no need to patch every registration call.
+* **Global tags not implemented** — `mp.metrics.tags` and `mp.metrics.appName` are not read by Dirac, and no `mp_scope` label is emitted (the registry rejects `mp_scope`/`mp_app` as user tags). If the previous stack relied on global tags, declare the tags on each metric instead.
 
 == Porting checklist
 
@@ -102,7 +102,7 @@ Dropwizard is the ancestor of much of the MP Metrics spec. Two-step migration: c
 . Replace proprietary imports (`io.micrometer.*`, `com.codahale.*`, `io.smallrye.metrics.*`) with `org.eclipse.microprofile.metrics.*`.
 . Migrate proprietary properties to `mp.metrics.*` keys (xref:reference.adoc[Reference]).
 . Run `./mvnw test` then `./run-official-tck-mp-metrics-5.1.sh all`.
-. Compare OpenMetrics output before/after — check canonical names, global tags, units.
+. Compare OpenMetrics output before/after — check canonical names, per-metric tags, units, the `_total`/`_seconds` sample suffixes and the final `# EOF` marker.
 
 == Further reading
 

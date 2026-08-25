@@ -10,7 +10,7 @@ Dirac rejects instrumentation by hot-path reflection: all wiring is done at CDI 
 
 `dirac-cdi-vauban` is the integration layer: `@Counted` and `@Timed` interceptors, the `DiracExtension` BCE that validates and resolves `@Gauge`, and the `MetricRegistryProducerBean` producer that exposes the three `MetricRegistry`.
 
-`dirac-rest` is the optional HTTP layer: `MetricsEndpoint` consumes the registries and delegates to a formatter according to `Accept`.
+`dirac-rest` is the optional HTTP layer: `MetricsResource` consumes the registries and delegates to a formatter according to `Accept`, normalised upfront by `ContentNegotiationFilter`.
 
 == Startup pipeline
 
@@ -33,9 +33,9 @@ flowchart LR
 ....
 
 . `DiracExtension` is discovered by Vauban through `ServiceLoader` (`provides BuildCompatibleExtension`).
-. `@Enhancement` phase — gathers classes annotated with `@Gauge`; every method is resolved to a `MethodHandle` (preferring `MethodHandles.privateLookupIn` over `setAccessible`).
-. `@Synthesis` phase — synthesises the `@ApplicationScoped` `MetricRegistryProducerBean`, owner of the three registries.
-. On container activation, the producer's `@PostConstruct` instantiates the `MetricRegistryImpl` and invokes `BaseMetricsRegistrar` to populate the `BASE` scope (JVM gauges, GC, threads, heap).
+. `@Discovery` phase — `registerCustomInterceptorBindings(MetaAnnotations)` declares the interceptor bindings backing `@Counted` and `@Timed`.
+. `@Enhancement` phase — `collectMetricAnnotations(ClassInfo, Messages)` scans every bean class for `@Counted`, `@Timed` and `@Gauge`; gauge methods are resolved to `MethodHandle` (preferring `MethodHandles.privateLookupIn` over `setAccessible`) when no compile-time `$$DiracMetrics` companion covers them. These are the only two BCE hooks — no `@Synthesis` phase is used.
+. `MetricRegistryProducerBean` is a regular `@ApplicationScoped` bean; its **constructor** instantiates the three `MetricRegistryImpl` (`APPLICATION`, `BASE`, `VENDOR`) and invokes `BaseMetricsRegistrar` to populate the `BASE` scope (JVM gauges: GC, threads, heap, classloader, CPU, uptime). No `@PostConstruct` callback is involved.
 . The gathered `@Gauge` are registered as `Gauge<T>` in the target scope (`APPLICATION` by default).
 
 No user class is instantiated until it is actually injected: `MethodHandle` resolution runs on metadata, not on instances.
@@ -60,7 +60,7 @@ return ctx.proceed();
 
 == `MetricRegistryImpl`
 
-Three invariants:
+`MetricRegistryImpl` is a single `public final class` implementing the spec's `MetricRegistry` directly — no intermediate Dirac interface layer. Three invariants:
 
 . **`ConcurrentHashMap` per scope** — key `MetricID`, value `Metric`. Insert via `computeIfAbsent`, lock-free read.
 . **Idempotence** — `counter(metadata, tags)` returns the existing metric if already registered. No duplicate on a `MetricID`.
@@ -70,7 +70,7 @@ The registry is `@ApplicationScoped`: one instance per scope, owned by `MetricRe
 
 == `HistogramImpl` and percentiles
 
-`HistogramImpl` uses three lock-free primitives:
+`HistogramImpl` uses four lock-free primitives:
 
 * `LongAdder count` — sample counter.
 * `LongAdder sum` — sum of values.
@@ -87,9 +87,9 @@ Fixed buckets (`mp.metrics.distribution.histogram.buckets`) add a `_bucket{le=..
 
 == OpenMetrics format
 
-`OpenMetricsFormatter` writes directly to an `OutputStream` via `StringBuilder` + `getBytes(UTF_8)`. No third-party library, no templating engine.
+`OpenMetricsFormatter` builds the whole exposition with a `StringBuilder` and returns it as a `String` (`public String format(MetricRegistry)`); `MetricsResource` hands that `String` to JAX-RS. No third-party library, no templating engine.
 
-Convention: for `Timer`, the emitted type is `summary` (lines `_sum`, `_count`, `quantile`), per `https://openmetrics.io`. For `Histogram` with buckets, the type is `histogram` (lines `_bucket{le=...}`, `_sum`, `_count`).
+Conventions: `Counter` samples carry a `_total` suffix (added unless the name already ends with it); `Timer` is emitted as `summary` under `<name>_seconds` samples (`quantile` labels, `_seconds_count`, `_seconds_sum`, values converted from nanoseconds); `Histogram` with buckets is emitted as `histogram` (lines `_bucket{le=...}` plus the `+Inf` bucket, `_count`, `_sum`). Labels are the metric's own tags only — no `mp_scope` label — and the output is terminated by the `# EOF` marker.
 
 == JSON format
 
@@ -99,7 +99,7 @@ Convention: for `Timer`, the emitted type is `summary` (lines `_sum`, `_count`, 
 
 === No hot-path locks
 
-The hot path — `inc()`, `update(long)`, `time(...)` — engages neither `synchronized` nor `ReentrantLock`. The concurrent data structures (`LongAdder`, `LongAccumulator`, `AtomicLongArray`, `ConcurrentHashMap`, `ConcurrentLinkedQueue`) are designed for heavy concurrency with no yield to the scheduler.
+The hot path — `inc()`, `update(long)`, `time(...)` — engages neither `synchronized` nor `ReentrantLock`. The concurrent data structures (`LongAdder`, `LongAccumulator`, `ConcurrentHashMap`, `ConcurrentLinkedQueue`) are designed for heavy concurrency with no yield to the scheduler.
 
 === No `ThreadLocal`
 
@@ -109,12 +109,26 @@ Per the module's `CLAUDE.md`, no `ThreadLocal` is used in production. When state
 
 On a host runtime that runs on virtual threads (for example Chappe with `Executors.newVirtualThreadPerTaskExecutor()`), Dirac introduces no platform contention: `LongAdder` and `ConcurrentHashMap` are indifferent to the kind of carrier thread.
 
-== `MetricsEndpoint`
+== `MetricsResource`
 
-`MetricsEndpoint` is an `@ApplicationScoped` JAX-RS resource in `dirac-rest`. Three routes (`/metrics`, `/metrics/\{scope}`, `/metrics/\{scope}/\{name}`), three steps per call:
+`MetricsResource` is an `@ApplicationScoped` JAX-RS resource in `dirac-rest`, paired with `ContentNegotiationFilter` — a `@PreMatching` `ContainerRequestFilter` that rewrites a missing, blank or wildcard `Accept` header to `text/plain` before routing. The resource holds the three registries as three injected fields:
 
-. Resolve the format via `Accept` (default: `text/plain`, OpenMetrics).
-. Fetch the target registry via `MetricRegistryProducerBean.registry(scope)`.
+[source,java]
+----
+@Inject @RegistryScope
+MetricRegistry appRegistry;
+
+@Inject @RegistryScope(scope = MetricRegistry.BASE_SCOPE)
+MetricRegistry baseRegistry;
+
+@Inject @RegistryScope(scope = MetricRegistry.VENDOR_SCOPE)
+MetricRegistry vendorRegistry;
+----
+
+Three routes (`/metrics`, `/metrics/\{scope}`, `/metrics/\{scope}/\{name}`), three steps per call:
+
+. Resolve the format via `Accept` (JSON only when it contains `application/json`; otherwise OpenMetrics, served as `text/plain;version=0.0.4;charset=utf-8`).
+. Pick the target registry among the three injected fields.
 . Emit via `OpenMetricsFormatter` or `JsonMetricsFormatter`.
 
 No lock is taken; the serialisation itself can be parallelised safely, since registry reads are lock-free.

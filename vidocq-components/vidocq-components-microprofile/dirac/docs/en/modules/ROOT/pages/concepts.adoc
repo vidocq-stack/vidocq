@@ -46,7 +46,7 @@ Spec §1.3 distinguishes three registries, populated and read separately:
 | Application metrics. Injectable with no qualifier (default registry).
 
 | `BASE`
-| Spec-mandated JVM metrics: `cpu.processCpuLoad`, `gc.total`, `memory.usedHeap`, `thread.count`, `classloader.loadedClasses.count`, `jvm.uptime`. Populated by `BaseMetricsRegistrar` at startup.
+| Spec-mandated JVM metrics, registered by `BaseMetricsRegistrar` at startup: `gc.total`, `gc.time`, `thread.count`, `thread.daemon.count`, `thread.max.count`, `memory.usedHeap`, `memory.committedHeap`, `memory.maxHeap`, `jvm.uptime`, `classloader.loadedClasses`, `classloader.unloadedClasses`, `cpu.availableProcessors`, `cpu.systemLoadAverage`.
 
 | `VENDOR`
 | Runtime-specific metrics — initially empty on Dirac's side, extensible.
@@ -81,13 +81,12 @@ counter("http_requests_total", new Tag("method", "POST"));
 
 == Tags
 
-Tags are arbitrary `(key, value)` pairs. Three sources combine:
+Tags are arbitrary `(key, value)` pairs, fixed at declaration (`@Counted(tags = "endpoint=orders")`) or passed programmatically (`new Tag("method", "GET")`). A metric's uniqueness is computed on the pair `(name, tags)` after spec §3 normalisation.
 
-. **Annotation tags** — fixed at declaration: `@Counted(tags = "endpoint=orders")`.
-. **Global application tags** — key `mp.metrics.tags`, e.g. `mp.metrics.tags=app=orders,env=prod`. Added to every metric of the application.
-. **`mp_scope` tag** — automatically injected by the OpenMetrics formatter with the scope value (`application`, `base`, `vendor`).
-
-A metric's uniqueness is computed on the union of those tags after spec §3 normalisation.
+[IMPORTANT]
+====
+The global-tag keys `mp.metrics.tags` and `mp.metrics.appName` are **not implemented**: Dirac reads neither of them, and no global tag is appended to the exposition. The label names `mp_scope` and `mp_app` are reserved by the spec — `MetricRegistryImpl` rejects them when supplied as user tags. The OpenMetrics output carries only the tags declared on each metric — no `mp_scope` label is injected.
+====
 
 == Exposition formats
 
@@ -98,17 +97,17 @@ Two formats are produced by `dirac-core`, both hand-written with `StringBuilder`
 | Format | Detail
 
 | OpenMetrics / Prometheus text
-| Content-Type `text/plain;version=0.0.4`. `# HELP`, `# TYPE` lines, then samples. Emitted by `OpenMetricsFormatter`. Default format with no `Accept`.
+| Content-Type `text/plain;version=0.0.4;charset=utf-8`. `# HELP`, `# TYPE` lines, then samples — counters carry a `_total` sample suffix, timers a `_seconds` one — and the output ends with the `# EOF` marker. Emitted by `OpenMetricsFormatter`. Default format with no `Accept`.
 
 | JSON
 | Content-Type `application/json`. MP Metrics §3.2 tree — one object per scope, containing one object per metric. Emitted by `JsonMetricsFormatter`, no third-party JSON engine, in the spirit of xref:champollion::index.adoc[Champollion].
 |===
 
-Content negotiation is handled by `MetricsEndpoint` (xref:reference.adoc[Reference]).
+Content negotiation is handled by `ContentNegotiationFilter` — a `@PreMatching` filter that normalises a missing or wildcard `Accept` to `text/plain` — and by `MetricsResource` (xref:reference.adoc[Reference]).
 
 == Distribution configuration
 
-Histograms and timers read three `mp.metrics.distribution.*` keys through MicroProfile Config:
+Histograms and timers read three `mp.metrics.distribution.*` keys — resolved from system properties first, then from every `META-INF/microprofile-config.properties` visible on the classpath. No MicroProfile Config implementation is required:
 
 [cols="2,3"]
 |===

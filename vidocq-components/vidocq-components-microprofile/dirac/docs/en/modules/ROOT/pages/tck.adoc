@@ -2,7 +2,7 @@
 :description: Status, runner execution, in-reactor runner behind the tck profile, M9 jlink smoke test.
 
 [.lead]
-The official MicroProfile Metrics 5.1.1 TCK (`org.eclipse.microprofile.metrics:microprofile-metrics-tck:5.1.1`) validates that an implementation honours the whole spec — exposition formats, scopes, types, configuration. Dirac's target is *100 % PASS* (milestone M8). The runner ships in the `dirac-tck` module, part of the reactor but gated behind the `tck` Maven profile.
+The official MicroProfile Metrics 5.1.1 TCK (`org.eclipse.microprofile.metrics:microprofile-metrics-api-tck:5.1.1`) validates that an implementation honours the whole spec — exposition formats, scopes, types, configuration. Dirac passes it in full: **127/127 PASS (100 %)**, consolidated in link:{repo-dirac}/src/branch/main/TCK.md[TCK.md]. The runner ships in the `dirac-tck` module, part of the reactor but gated behind the `tck` Maven profile.
 
 == Status
 
@@ -10,21 +10,20 @@ The official MicroProfile Metrics 5.1.1 TCK (`org.eclipse.microprofile.metrics:m
 |===
 | Metric | Value
 
-| Target | 100 % PASS on the official 5.1.1 suite
-| Milestone | M8 (link:{repo-dirac}/src/branch/main/ROADMAP.md[ROADMAP.md])
-| Current count | 🚧 status to be confirmed in `dirac-tck/target/tck-report.txt`
+| Official 5.1.1 suite | ✅ **127/127 PASS (100 %)** — link:{repo-dirac}/src/branch/main/TCK.md[TCK.md]
+| Milestone | M8 — complete (link:{repo-dirac}/src/branch/main/ROADMAP.md[ROADMAP.md])
 | Smoke test (out of Arquillian) | ✅ `DiracTckSmokeTest` operational
 | M9 jlink smoke | ✅ `dirac-image-smoke` image built (`run-jlink-smoke.sh`)
 |===
 
 [NOTE]
 ====
-As long as the full suite is not green, the exact figure lives in `dirac-tck/target/tck-report.txt` (regenerated on each run by `run-official-tck-mp-metrics-5.1.sh`). This page does not freeze a score in advance.
+The consolidated score lives in link:{repo-dirac}/src/branch/main/TCK.md[TCK.md]; each run also regenerates a raw report in `dirac-tck/target/tck-report.txt` (via `run-official-tck-mp-metrics-5.1.sh`).
 ====
 
 == Prerequisites
 
-The artefact `org.eclipse.microprofile.metrics:microprofile-metrics-tck:5.1.1` is available on Maven Central. The runner first installs the required Dirac modules in the local M2, then runs the reactor on `dirac-tck` with the `tck` profile.
+The artefact `org.eclipse.microprofile.metrics:microprofile-metrics-api-tck:5.1.1` is available on Maven Central. The runner first installs the required Dirac modules in the local M2, then runs the reactor on `dirac-tck` with the `tck` profile.
 
 [source,bash]
 ----
@@ -41,7 +40,7 @@ The script `run-official-tck-mp-metrics-5.1.sh` at the repository root orchestra
 # Smoke test — DiracTckSmokeTest, no Arquillian
 ./run-official-tck-mp-metrics-5.1.sh
 
-# Full suite — TestNG/Arquillian, tck-official profile
+# Full suite — JUnit 4/Arquillian, tck-official profile
 ./run-official-tck-mp-metrics-5.1.sh all
 
 # Targeted test — tck-official profile + -Dtest=
@@ -87,7 +86,7 @@ Stack assembled by the runner:
 | Chappe (`io.vidocq.chappe.http`)
 
 | Test framework
-| TestNG (upstream constraint — not JUnit)
+| JUnit 4 + Arquillian (`surefire-junit4` provider) — the MP Metrics api-tck is JUnit-based, not TestNG
 |===
 
 Arquillian configuration in `dirac-tck/src/test/resources/arquillian.xml`. Current smoke test: `dirac-tck/src/test/java/io/vidocq/dirac/tck/DiracTckSmokeTest.java`.
@@ -107,7 +106,7 @@ Details in link:{repo-dirac}/src/branch/main/JLINK.md[JLINK.md].
 
 == Quality contract
 
-Any structural modification of `dirac-core`, `dirac-cdi-vauban` or `dirac-rest` must preserve the TCK score before merge. A TCK regression is a CI-level blocker: the PR does not pass. Any excluded test (if any) must be listed in the TestNG suite and justified in `TCK.md` (to be created on first exclusion).
+Any structural modification of `dirac-core`, `dirac-cdi-vauban` or `dirac-rest` must preserve the 127/127 TCK score before merge. A TCK regression is a CI-level blocker: the PR does not pass. Any excluded test (if any) must be justified in link:{repo-dirac}/src/branch/main/TCK.md[TCK.md].
 
 == Further reading
 

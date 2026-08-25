@@ -1,5 +1,5 @@
 = Reference
-:description: Maven artefacts, Java modules, supported annotations, MicroProfile Config keys, types and units.
+:description: Maven artefacts, Java modules, supported annotations, configuration keys, types and units.
 
 [.lead]
 This page consolidates the public surface of Dirac: artefacts to declare, exported Java modules, supported MicroProfile Metrics 5.1.1 annotations, and the `mp.metrics.*` keys recognised by the implementation.
@@ -16,7 +16,11 @@ This page consolidates the public surface of Dirac: artefacts to declare, export
 
 | `io.vidocq.dirac`
 | `dirac-api`
-| Re-exposition of the MP Metrics spec and stable Dirac SPI (`DiracException`, `HistogramSnapshot`, `TimerSnapshot`).
+| Re-exposition of the MP Metrics spec and stable Dirac SPI (`DiracException`, `HistogramSnapshot`, `TimerSnapshot`), plus the `io.vidocq.dirac.spi.gen` descriptors (`MetricsCompanion`) implemented by generated companions.
+
+| `io.vidocq.dirac`
+| `dirac-processor`
+| APT annotation processor (CG-05): generates `$$DiracMetrics` companion sources at compile time (names, units, tags, scopes resolved statically; gauges as direct functional accessors). Build-time only — never a runtime dependency.
 
 | `io.vidocq.dirac`
 | `dirac-core`
@@ -28,7 +32,7 @@ This page consolidates the public surface of Dirac: artefacts to declare, export
 
 | `io.vidocq.dirac`
 | `dirac-rest`
-| JAX-RS resource `MetricsEndpoint` exposing `GET /metrics`. Optional — activated only if Cassini is on the classpath.
+| JAX-RS resource `MetricsResource` (plus the `ContentNegotiationFilter` `@PreMatching` filter) exposing `GET /metrics`. Optional — activated only if Cassini is on the classpath.
 
 | `io.vidocq.dirac`
 | `dirac-bench`
@@ -40,7 +44,7 @@ This page consolidates the public surface of Dirac: artefacts to declare, export
 
 | `io.vidocq.dirac`
 | `dirac-tck`
-| Official MP Metrics 5.1.1 TCK runner — outside reactor (Model 4.0.0). Do not declare as an application dependency.
+| Official MP Metrics 5.1.1 TCK runner — in-reactor, gated behind the `tck` Maven profile (a plain `mvn install` never builds it). Do not declare as an application dependency.
 |===
 
 All artefacts share the version `{project-version}`.
@@ -55,13 +59,16 @@ All artefacts share the version `{project-version}`.
 | MP Metrics 5.1.1 repackage with an explicit `module-info.class`. Exports `org.eclipse.microprofile.metrics` and `org.eclipse.microprofile.metrics.annotation`.
 
 | `io.vidocq.dirac.api`
-| `io.vidocq.dirac.api.*` — stable public SPI. `requires transitive microprofile.metrics.api`.
+| Exports `io.vidocq.dirac.api` (stable public SPI) and `io.vidocq.dirac.spi.gen` (compile-time `MetricsCompanion` descriptors implemented by generated `$$DiracMetrics` companions). `requires transitive microprofile.metrics.api`.
+
+| `io.vidocq.dirac.processor`
+| APT processor module — generates the `$$DiracMetrics` companion sources. Compile-time only.
 
 | `io.vidocq.dirac.core`
 | `io.vidocq.dirac.internal.*` — private implementations, exported only to `io.vidocq.dirac.cdi.vauban` and `io.vidocq.dirac.rest`.
 
 | `io.vidocq.dirac.cdi.vauban`
-| `io.vidocq.dirac.cdi.internal.*` — interceptors and BCE. `provides BuildCompatibleExtension with DiracExtension`.
+| `io.vidocq.dirac.cdi.internal.*` — interceptors and BCE. `provides BuildCompatibleExtension with DiracExtension`, `provides io.vidocq.vauban.api.VaubanComponentProvider with _VaubanComponents` (APT-generated, in-module create/inject), and `uses io.vidocq.dirac.spi.gen.MetricsCompanion` (companions provided by user modules).
 
 | `io.vidocq.dirac.rest`
 | `io.vidocq.dirac.rest.*` — JAX-RS resource. `opens` to `jakarta.cdi` and `jakarta.ws.rs` for runtime introspection.
@@ -100,19 +107,13 @@ All artefacts share the version `{project-version}`.
 | ⚠️ Not exposed by the API
 |===
 
-== MicroProfile Config keys
+== Configuration keys
 
-All keys are read via `ConfigProvider.getConfig()` (xref:ravel::index.adoc[Ravel]). See `DistributionConfig` and `MetricRegistryImpl`.
+Dirac reads its configuration without any MicroProfile Config dependency: `DistributionConfig` resolves each key from `System.getProperty(...)` first, then scans every `META-INF/microprofile-config.properties` visible on the classpath. Exactly three keys are recognised:
 
 [cols="2,3"]
 |===
 | Key | Effect
-
-| `mp.metrics.appName`
-| Logical application name — emitted as a global `_app` tag.
-
-| `mp.metrics.tags`
-| Global tags, format `key=val,key=val`. Applied to every metric of the application.
 
 | `mp.metrics.distribution.percentiles`
 | Global percentile list (`0.5,0.95,0.99`) or per-metric (`name=0.5,0.99`). An empty value disables percentiles.
@@ -122,10 +123,12 @@ All keys are read via `ConfigProvider.getConfig()` (xref:ravel::index.adoc[Ravel
 
 | `mp.metrics.distribution.timer.buckets`
 | Fixed buckets for `Timer`, expressed as `ms`, `s`, `ns`, etc. Global or per metric.
-
-| `mp.metrics.smallrye.timer.minmax.histogram.buckets.percentiles`
-| _Possible compat key (non-standard) — check `DistributionConfig`._
 |===
+
+[IMPORTANT]
+====
+`mp.metrics.tags` and `mp.metrics.appName` are **not implemented**: neither key is read, and no global tag is appended to the exposition. The reserved label names `mp_scope` and `mp_app` are rejected by `MetricRegistryImpl` when supplied as user tags.
+====
 
 [NOTE]
 ====
@@ -147,11 +150,11 @@ Dirac performs no automatic conversion: the unit is exposed as declared. Prometh
 [cols="1,3"]
 |===
 | Route | `GET /metrics`, `GET /metrics/\{scope}`, `GET /metrics/\{scope}/\{name}`
-| Verbs | `GET`, `OPTIONS`
-| Types | `text/plain;version=0.0.4` (default, OpenMetrics), `application/json` (MP Metrics §3.2)
-| Source | `MetricRegistryImpl` (all three scopes)
+| Verbs | `GET` only
+| Types | `text/plain;version=0.0.4;charset=utf-8` (default, OpenMetrics), `application/json` (MP Metrics §3.2)
+| Source | `MetricRegistryImpl` (all three scopes, injected via `@RegistryScope`)
 | Status | `200` on success, `404` on unknown scope/metric
-| Implementation | `MetricsEndpoint` in `dirac-rest`
+| Implementation | `MetricsResource` + `ContentNegotiationFilter` in `dirac-rest`
 |===
 
 == Injectable `MetricRegistry`
@@ -173,7 +176,7 @@ MetricRegistry vendor;
 * Java 25 (LTS), Maven 3.9.16.
 * CDI 4.1 Lite (Vauban) or Lite-compatible — the standard `Interceptor` and `BuildCompatibleExtension` suffice.
 * JAX-RS 4.0 (Cassini) — only if `dirac-rest` is used.
-* MicroProfile Config 3.1 (Ravel) — strongly recommended for `mp.metrics.tags` and `mp.metrics.distribution.*`.
+* No MicroProfile Config integration: the `mp.metrics.distribution.*` keys are read from system properties or `META-INF/microprofile-config.properties` directly.
 * No Jakarta EE Full Profile dependency.
 
 == Bugs and benchmarks

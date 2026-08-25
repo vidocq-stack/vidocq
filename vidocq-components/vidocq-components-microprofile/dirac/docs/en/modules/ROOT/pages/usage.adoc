@@ -1,5 +1,5 @@
 = Usage patterns
-:description: Annotations, tags, percentiles, REST exposition, configuration via Ravel — concrete patterns to instrument an MP Metrics 5.1.1 application.
+:description: Annotations, tags, percentiles, REST exposition, distribution configuration — concrete patterns to instrument an MP Metrics 5.1.1 application.
 
 [.lead]
 This page walks through the MP Metrics 5.1.1 instrumentation patterns that come up in real applications. Every example relies strictly on the standard annotations `org.eclipse.microprofile.metrics.annotation.*`; no Dirac-proprietary import is ever needed in application code.
@@ -49,7 +49,7 @@ Per-call duration measurement, aggregated in a `HistogramImpl`. Measured via `Sy
 @ApplicationScoped
 public class CheckoutService {
 
-    @Timed(name = "order_checkout_seconds",
+    @Timed(name = "order_checkout",
            description = "Duration of checkout flow",
            unit = MetricUnits.SECONDS)
     public Receipt checkout(Cart cart) {
@@ -119,7 +119,7 @@ public class RateLimiter {
 
 == Annotation tags
 
-The spec format is `tags = { "key1=value1", "key2=value2" }`. A metric's uniqueness is computed on the union (`name`, annotation tags, global `mp.metrics.tags`).
+The spec format is `tags = { "key1=value1", "key2=value2" }`. A metric's uniqueness is computed on the pair (`name`, tags).
 
 [source,java]
 ----
@@ -148,23 +148,17 @@ Spec §4 exposes three `mp.metrics.distribution.*` keys read by `DistributionCon
 ----
 # microprofile-config.properties
 mp.metrics.distribution.percentiles=0.5,0.75,0.95,0.99
-mp.metrics.distribution.percentiles=order_checkout_seconds=0.5,0.95,0.99
-mp.metrics.distribution.timer.buckets=order_checkout_seconds=10ms,50ms,250ms,1s,5s
+mp.metrics.distribution.percentiles=order_checkout=0.5,0.95,0.99
+mp.metrics.distribution.timer.buckets=order_checkout=10ms,50ms,250ms,1s,5s
 ----
 
 An empty value (`mp.metrics.distribution.percentiles=`) disables percentiles globally and only emits `_count` and `_sum`.
 
-== Global application tags
+== Global application tags — not implemented
 
-`mp.metrics.tags=app=orders,env=prod` adds two tags to every metric, in every exposition, without touching application code.
+The spec keys `mp.metrics.tags` and `mp.metrics.appName` are **not implemented** in Dirac: neither key is read, and no global tag is appended to the exposition. The reserved label names `mp_scope` and `mp_app` are rejected by `MetricRegistryImpl` when supplied as user tags. To attach an application-wide tag, declare it on each metric (annotation `tags` or programmatic `Tag`).
 
-[source,properties]
-----
-mp.metrics.appName=orders-service
-mp.metrics.tags=app=orders-service,env=prod,region=eu-west-3
-----
-
-These keys are resolved through xref:ravel::index.adoc[Ravel], which implements MicroProfile Config 3.1.
+The only configuration keys Dirac reads are the three `mp.metrics.distribution.*` keys above — resolved from system properties first, then from `META-INF/microprofile-config.properties`, without any MicroProfile Config implementation.
 
 == HTTP exposition
 
@@ -187,21 +181,23 @@ curl http://localhost:8080/metrics/vendor
 curl http://localhost:8080/metrics/application/orders_placed_total
 ----
 
-Negotiation runs on `Accept`. The OpenMetrics output looks like:
+Negotiation runs on `Accept`, normalised upfront by `ContentNegotiationFilter`; the OpenMetrics Content-Type is `text/plain;version=0.0.4;charset=utf-8`. The output looks like — timer samples carry a `_seconds` suffix, labels are only the metric's own tags (no `mp_scope` label), and the exposition ends with `# EOF`:
 
 [source,text]
 ----
-# HELP order_checkout_seconds Duration of checkout flow
-# TYPE order_checkout_seconds summary
-order_checkout_seconds{mp_scope="application",quantile="0.5"} 0.024
-order_checkout_seconds{mp_scope="application",quantile="0.95"} 0.072
-order_checkout_seconds_count{mp_scope="application"} 1542
-order_checkout_seconds_sum{mp_scope="application"} 38.71
+# HELP order_checkout Duration of checkout flow
+# TYPE order_checkout summary
+order_checkout_seconds{quantile="0.5"} 0.024
+order_checkout_seconds{quantile="0.95"} 0.061
+order_checkout_seconds{quantile="0.99"} 0.072
+order_checkout_seconds_count 1542
+order_checkout_seconds_sum 38.71
+# EOF
 ----
 
 == JVM metrics (`BASE`)
 
-No code to write: `BaseMetricsRegistrar` populates the `BASE` registry at startup, via `DiracExtension`. The metrics listed in spec §5 (memory, GC, threads, classes, CPU, uptime) are automatically exposed on `GET /metrics/base`.
+No code to write: `BaseMetricsRegistrar` populates the `BASE` registry at startup, invoked by the `MetricRegistryProducerBean` constructor. The registered gauges (memory, GC, threads, classloader, CPU, uptime — see xref:concepts.adoc[Concepts] for the exact names) are automatically exposed on `GET /metrics/base`.
 
 [source,bash]
 ----
