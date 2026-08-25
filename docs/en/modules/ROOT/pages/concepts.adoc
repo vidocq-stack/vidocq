@@ -1,66 +1,59 @@
 = Concepts
-:description: Vidocq Runtime vocabulary — extension, build step, recorder, lifecycle phase.
+:description: Vidocq Runtime vocabulary — extension, lifecycle hook, priority, ServiceLoader discovery.
 
 [.lead]
-Vidocq Runtime adopts the extension vocabulary popularised by Quarkus, but implements it on a 100 % JDK foundation (CDI Lite via xref:vauban::index.adoc[Vauban] + standard Class-File API, JEP 484). This page defines the terms used throughout the documentation.
+Vidocq Runtime borrows the *extension* idea popularised by Quarkus, but implements it with a deliberately simple, 100 % JDK mechanism: a `ServiceLoader`-discovered lifecycle interface on top of CDI Lite via xref:vauban::index.adoc[Vauban] and static code generation (Class-File API, JEP 484). This page defines the terms used throughout the documentation.
 
 == Extension
 
-An **extension** is a Maven module that contributes to the runtime via the `vidocq-runtime-spi` SPI. It manifests as:
+An **extension** is a Maven module that contributes to the runtime by implementing the `io.vidocq.runtime.spi.VidocqExtension` interface from `vidocq-runtime-spi`. It manifests as:
 
-* a fragment of bytecode and configuration injected into the boot sequence;
-* one or more classes annotated `@BuildStep` running at compile time;
-* optionally one or more `@Recorder` classes producing bytecode replayed at startup.
+* an implementation class registered with `provides io.vidocq.runtime.spi.VidocqExtension with …` in its `module-info.java` (or a `META-INF/services` entry on the class path);
+* a set of lifecycle hooks invoked by the runtime core in a fixed order;
+* optionally an APT codegen companion (`vidocq-runtime-<x>-extension-codegen`) that generates bean metadata at compile time instead of relying on runtime reflection.
 
-An extension is **static**: it loads nothing dynamically at runtime. Everything it contributes is resolved at `mvn package`.
+Reflection-heavy work is pushed to compile time through APT and the Class-File API; at runtime the extension only wires already-generated artifacts into the lifecycle.
 
-== Build step
+== The `VidocqExtension` lifecycle
 
-A **build step** is a method annotated `@BuildStep` inside an extension. It:
+`VidocqExtension` declares seven methods. Two identify and order the extension:
 
-* consumes zero, one or more `BuildItem` parameters;
-* produces one or more `BuildItem` via return value or `BuildProducer<T>`;
-* runs at compile time, in a topological graph computed by `vidocq-runtime-core`.
+* `name()` — unique extension name (e.g. `rest-cassini`);
+* `priority()` — execution order, **lower runs first** (default `1000`).
 
-The orchestration engine guarantees that a build step runs only after its inputs are produced and before its outputs are consumed. Producer/consumer pairs define the graph edges.
+Four are lifecycle hooks, all with empty default implementations so an extension overrides only what it needs:
 
-== BuildItem
+1. `configure(VidocqConfiguration)` — called before CDI boot. The extension reads its configuration keys (`config.property("vidocq.rest.context-path", "/")`, `config.portFor(name, defaultPort)`, …).
+2. `beforeStart(VaubanContainerBuilder)` — enrich the Vauban container builder before the container exists: add synthetic beans, packages or interceptors.
+3. `onStart(ExtensionContext)` — the CDI container is up. The extension resolves beans, mounts HTTP handlers, opens listeners.
+4. `onStop()` — server shutdown; release resources. Extensions are stopped in **reverse** priority order.
 
-A **BuildItem** is the exchange unit between build steps. Three families:
+The seventh method, `configKeys()`, lets an extension declare the `vidocq.*` keys (or `prefix.*` patterns) it consumes, so the runtime's `ConfigKeyAudit` can warn at startup about configured keys that no extension reads.
 
-* `SimpleBuildItem` — a single producer allowed (e.g. `JaxRsApplicationBuildItem`);
-* `MultiBuildItem` — N producers allowed (e.g. `BeanBuildItem`, `ResourceBuildItem`);
-* `SymbolicBuildItem` — phase marker without payload (e.g. `ApplicationStartBuildItem`).
+== ExtensionContext
 
-[NOTE]
-====
-// TODO@user: the exhaustive list of standard `BuildItem` is being stabilised. See `vidocq-runtime-spi/src/main/java/io/vidocq/runtime/spi/`.
-====
+`ExtensionContext` is handed to `onStart` and gives the extension:
 
-== Recorder
+* `container()` — the initialized Vauban `VaubanContainer`;
+* `beanManager()` — shortcut to the CDI `BeanManager`;
+* `configuration()` — the legacy `VidocqConfiguration` (string properties);
+* `config()` — the typed `VidocqConfig` API (`Optional`-returning `getValue(key, type)`, aligned with MicroProfile Config concepts).
 
-A **recorder** is a class annotated `@Recorder` whose method invocations are **recorded** rather than executed. At compile time, every method call on a recorder is serialised as `invokevirtual` bytecode in a generated class produced via Class-File API. At startup, that bytecode is replayed — no reflection, no proxy.
+== Discovery and ordering
 
-Recorders distinguish two phases:
+There is no build-step graph and no bytecode recording: discovery is plain `java.util.ServiceLoader`. At boot, `ExtensionLoader` loads every `VidocqExtension` visible on the module path, sorts the list by ascending `priority()`, then `VidocqBootstrap` drives each phase across the sorted list — `configure`, then `beforeStart`, then container start, then `onStart`; `onStop` walks the list backwards.
 
-* `@Record(STATIC_INIT)` — runs early, in the static initialiser of the generated class;
-* `@Record(RUNTIME_INIT)` — runs at startup, after external configuration is loaded.
-
-== Lifecycle phase
-
-The Vidocq Runtime boot sequence comprises five ordered **phases**:
-
-1. **Config** — resolution of MicroProfile Config sources, external override.
-2. **Extensions init** — each extension receives `ExtensionContext` and publishes its runtime `BuildItem`.
-3. **CDI start** — Vauban starts the `BeanManager` (beans were already indexed at build time).
-4. **Transport bind** — Chappe opens HTTP/1.1, H2, H3 listeners per config.
-5. **Routes register** — Cassini and Foy register REST resources and servlets; Mansart opens the JDBC pool.
+Priorities express real ordering constraints. In the HTTP stack, for example, `ChappeEngineExtension` (priority 100) prepares the web server engine before contributing extensions such as `CassiniExtension` (priority 500) mount their handlers, and `ChappeServerBootstrap` (priority 10 000) opens the listeners at the very end of the chain.
 
 == Notable differences from Quarkus
 
 [cols="1,1,2"]
 |===
 | Aspect | Quarkus | Vidocq Runtime
+
+| Extension model
+| Build-step graph + bytecode recorders
+| `VidocqExtension` lifecycle interface, `ServiceLoader` discovery
 
 | Runtime CDI
 | ArC (custom)
@@ -93,16 +86,16 @@ The Vidocq Runtime boot sequence comprises five ordered **phases**:
 
 == Composition of the six bricks
 
-Vidocq Runtime invents no runtime; it **composes** the six foundational bricks. The `vidocq-runtime-cassini-rest-extension` extension, for example, registers a build step that:
+Vidocq Runtime invents no runtime; it **composes** the six foundational bricks through the same lifecycle. The `vidocq-runtime-cassini-rest-extension`, for example:
 
-* consumes `CdiBeanIndexBuildItem` produced by the runtime core (Vauban is the built-in CDI engine, not a standalone extension);
-* triggers static routing generation in xref:cassini::index.adoc[Cassini];
-* produces `HttpRouteBuildItem` consumed by `vidocq-runtime-chappe-webserver-extension`.
+* reads `vidocq.rest.context-path` and `vidocq.rest.listener` in `configure`;
+* in `onStart`, resolves the JAX-RS `Application` bean from the Vauban container, then mounts the xref:cassini::index.adoc[Cassini] dispatcher (whose routing was generated statically at compile time) on a mount point of the Chappe server contributed by `vidocq-runtime-chappe-webserver-extension`;
+* relies on `priority()` so the Chappe engine exists before the mount and the listeners open after it.
 
-This `BuildItem` grammar makes the ecosystem homogeneous while every brick remains self-contained in its own repo.
+This shared lifecycle grammar keeps the ecosystem homogeneous while every brick remains self-contained in its own repo.
 
 == Next steps
 
 * xref:internals.adoc[Internals] — boot sequence step by step
 * xref:modules/vidocq-runtime-spi.adoc[SPI] — how to write an extension
-* xref:reference.adoc[Reference] — standard annotations and BuildItem
+* xref:reference.adoc[Reference] — public SPI types and Maven goals

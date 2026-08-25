@@ -24,6 +24,15 @@
 | `vidocq-runtime-mansart-h2-example`
 | Complete REST + CDI + persistence application via xref:mansart::index.adoc[Mansart] on H2 in-memory. Demonstrates `@Transactional`, `Repository<T, ID>`, constructor `@Inject`. The recommended example in xref:getting-started.adoc[Getting started].
 
+| `vidocq-runtime-cervantes-jwt-example`
+| REST application secured with MicroProfile JWT via `vidocq-runtime-cervantes-jwt-extension` — token validation and `@RolesAllowed` on Jakarta REST resources.
+
+| `vidocq-runtime-knock-health-example`
+| MicroProfile Health via `vidocq-runtime-knock-health-extension` — custom `@Liveness`/`@Readiness` checks exposed on `/health`.
+
+| `vidocq-runtime-petstore-example`
+| The largest example — Cassini + Mansart + Champollion + H2 petstore combining REST, persistence and JSON binding.
+
 | `vidocq-runtime-external-rest-lib`
 | External library consumed by the examples — illustrates the case where a Java Modules-named dependency provides its own CDI beans. Useful for validating multi-module APT composition.
 |===
@@ -48,7 +57,9 @@ cd vidocq-runtime-examples/vidocq-runtime-cassini-rest-example
 ----
 cd vidocq-runtime-examples/vidocq-runtime-mansart-h2-example
 ./mvnw -ntp package
-java -jar target/*-runner.jar
+
+# vidocq:package produced a bin/ + lib/ distribution (also zipped as *-dist.zip)
+./target/vidocq-runtime-mansart-h2-example-<version>/bin/run.sh
 
 curl -X POST http://localhost:8080/api/products \
      -H 'Content-Type: application/json' \

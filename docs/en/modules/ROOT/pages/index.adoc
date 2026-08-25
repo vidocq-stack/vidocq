@@ -18,8 +18,8 @@ The metaphor faithfully reflects the role of the module. Vidocq fused heterogene
 
 [cols="1,3"]
 |===
-| Targeted MicroProfile specs
-| {spec-mp-config}, {spec-mp-health}, {spec-mp-metrics}, {spec-mp-openapi} (current milestone: Config, Health, Metrics, OpenAPI)
+| MicroProfile specs
+| All eight shipped and TCK-green: {spec-mp-config}, {spec-mp-health}, {spec-mp-metrics}, {spec-mp-openapi}, {spec-mp-rest-client}, {spec-mp-jwt}, {spec-mp-telemetry}, {spec-mp-fault-tolerance}
 
 | Repo
 | {repo-vidocq}
@@ -31,13 +31,13 @@ The metaphor faithfully reflects the role of the module. Vidocq fused heterogene
 | Maven 3.9.16
 
 | Java modules
-| `io.vidocq.runtime`, `io.vidocq.runtime.spi`, `io.vidocq.runtime.core`, `io.vidocq.runtime.maven`
+| `io.vidocq.runtime.spi`, `io.vidocq.runtime.core`, plus one `io.vidocq.runtime.extensions.*` module per extension (the Maven plugin is intentionally non-modular)
 
 | Runtime dependencies
 | Jakarta + MicroProfile specs only — no third-party framework
 
 | TCK
-| See xref:tck.adoc[detailed status] — JAX-RS via xref:cassini::tck.adoc[Cassini], Servlet via xref:foy::tck.adoc[Foy], MicroProfile in progress
+| See xref:tck.adoc[detailed status] — JAX-RS via xref:cassini::tck.adoc[Cassini], Servlet via xref:foy::tck.adoc[Foy], all eight MicroProfile TCKs green on the assembled runtime (1837 tests)
 |===
 
 == Position in the ecosystem
@@ -47,7 +47,7 @@ The metaphor faithfully reflects the role of the module. Vidocq fused heterogene
 graph TB
     subgraph "Vidocq Runtime — orchestrator"
         MPS[vidocq-runtime-core<br/>Bootstrap + lifecycle]
-        SPI[vidocq-runtime-spi<br/>BuildStep + BuildItem]
+        SPI[vidocq-runtime-spi<br/>VidocqExtension lifecycle]
         EXT[vidocq-runtime-extensions<br/>Built-in extensions]
         PLUGIN[vidocq-runtime-maven-plugin<br/>jlink / jpackage / docker]
     end
@@ -99,9 +99,9 @@ graph TB
 
 * xref:getting-started.adoc[Getting started] — REST + DI + H2 persistence hello world
 * xref:usage.adoc[Usage] — jlink/jpackage/Docker packaging, MicroProfile Config, Health, Metrics, OpenAPI
-* xref:concepts.adoc[Concepts] — extension, build step, recorder, lifecycle phase
+* xref:concepts.adoc[Concepts] — extension, lifecycle hooks, priority, discovery
 * xref:internals.adoc[Internals] — boot sequence, extension mechanism, threading
-* xref:tck.adoc[TCK status] — MicroProfile Config, Health, Metrics, OpenAPI
+* xref:tck.adoc[TCK status] — the eight MicroProfile TCKs on the assembled runtime
 * xref:reference.adoc[Reference] — configuration keys, Maven CLI, properties
 * xref:migration.adoc[Migration] — from Quarkus, Helidon, Spring Boot, Open Liberty, Payara Micro
 * xref:modules/vidocq-runtime-core.adoc[Reactor sub-modules]

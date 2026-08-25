@@ -2,7 +2,7 @@
 :description: Vidocq Runtime public extension SPI.
 
 [.lead]
-`vidocq-runtime-spi` exposes the interfaces and annotations an extension consumes to contribute to the runtime. It is the only module a user-side extension must declare in its Java Modules `requires`.
+`vidocq-runtime-spi` exposes the interfaces an extension implements to contribute to the runtime. It is the only module a user-side extension must declare in its Java Modules `requires`.
 
 == Coordinates
 
@@ -22,47 +22,64 @@ List indexed from the existing sources:
 | Type | Role
 
 | `VidocqExtension`
-| Marker interface for `ServiceLoader`. An extension implements `configure(ExtensionContext)`.
+| The extension point — lifecycle interface with `name()`, `priority()` (lower runs first, default 1000), `configure(VidocqConfiguration)`, `beforeStart(VaubanContainerBuilder)`, `onStart(ExtensionContext)`, `onStop()` and `configKeys()`. Discovered via `ServiceLoader`.
 
 | `ExtensionContext`
-| Contribution API — `BuildItem` registry, configuration access, current phase.
+| Handed to `onStart` — `container()` (Vauban), `beanManager()`, `configuration()` (legacy string API), `config()` (typed API).
 
 | `VidocqConfiguration`
-| Interface read at build time to resolve extension-specific options.
+| String-property view passed to `configure` — `property(key)` returns `Optional<String>`, plus `property(key, default)` and `portFor(extensionName, defaultPort)`.
 
 | `config.VidocqConfig`
-| MicroProfile Config facade — `getValue()`, `getOptionalValue()`, `Converter<T>`, `ConfigSource`.
+| Typed configuration API aligned with MicroProfile Config concepts — `getValue(key, type)` returns `Optional<T>`, `getValue(key, type, default)`, `getValues(key, elementType)`.
 
-| `config.ConfigSource`
-| Configuration source (analogous to MicroProfile, re-exposed).
+| `config.ConfigSource` / `config.ConfigSourceProvider`
+| Pluggable configuration sources (analogous to MicroProfile), also discovered via `ServiceLoader`.
 
 | `config.Converter<T>`
 | Typed conversion of configuration values.
+
+| `VidocqApp` / `@VidocqMain`
+| Application-side entry points — the class run inside the Vauban application layer by `Vidocq.run(Class, args)`, and the zero-config IDE trampoline annotation.
 |===
 
-[NOTE]
-====
-// TODO@user: add the standard `BuildItem`, the `@BuildStep`, `@Record`, `@Recorder` annotations to this table once the SPI is frozen. Source to index: `vidocq-runtime-spi/src/main/java/`.
-====
-
 == Writing an extension — skeleton
+
+An extension overrides only the hooks it needs; every lifecycle method has an empty default implementation.
 
 [source,java]
 ----
 package com.example.greeting;
 
 import io.vidocq.runtime.spi.VidocqExtension;
+import io.vidocq.runtime.spi.VidocqConfiguration;
 import io.vidocq.runtime.spi.ExtensionContext;
-import io.vidocq.runtime.spi.config.VidocqConfig;
 
 public class GreetingExtension implements VidocqExtension {
 
-    @Override
-    public void configure(ExtensionContext ctx) {
-        VidocqConfig cfg = ctx.config();
-        String prefix = cfg.getValue("greeting.prefix", String.class);
+    private String prefix;
 
-        ctx.produce(new GreetingPrefixBuildItem(prefix));
+    @Override
+    public String name() {
+        return "greeting";
+    }
+
+    @Override
+    public void configure(VidocqConfiguration config) {
+        // called before CDI boot — read your keys
+        this.prefix = config.property("vidocq.greeting.prefix", "Hello");
+    }
+
+    @Override
+    public void onStart(ExtensionContext ctx) {
+        // the CDI container is up — resolve beans, mount handlers
+        Greeter greeter = ctx.container().select(Greeter.class);
+        greeter.setPrefix(prefix);
+    }
+
+    @Override
+    public java.util.Set<String> configKeys() {
+        return java.util.Set.of("vidocq.greeting.prefix");
     }
 }
 ----
@@ -79,31 +96,15 @@ module com.example.greeting {
 }
 ----
 
-That is all. The `vidocq-runtime-maven-plugin` detects the Java Modules `provides`, indexes the extension and includes it in the generated bootstrap.
+That is all. At startup the runtime's `ExtensionLoader` discovers the `provides` directive through `java.util.ServiceLoader`, sorts all extensions by ascending `priority()`, and `VidocqBootstrap` drives the lifecycle: `configure` → `beforeStart` → `onStart`, then `onStop` in reverse order at shutdown.
 
-== Build step purity model
+== Ordering with `priority()`
 
-A `@BuildStep` must be:
+Priorities express real ordering constraints between extensions. The built-in HTTP stack illustrates the idiom: the Chappe engine prepares the server at priority 100, contributors such as the Cassini REST extension mount their handlers around priority 500, and the listener bootstrap opens the sockets last at priority 10 000. Pick a value between the extensions you must run after and before; unrelated extensions can keep the default 1000.
 
-* **deterministic** — same inputs yield same outputs;
-* **pure** — no side effects outside `BuildProducer`;
-* **idempotent** — replayable safely.
+== Configuration keys audit
 
-This discipline guarantees that generated bytecode is reproducible and compatible with Maven caches and immutable artefacts.
-
-== Recorders
-
-A recorder is a `@Recorder` class whose method invocations are recorded rather than executed. The engine generates, for every call, an `invokevirtual` bytecode fragment in the `RuntimeBootstrap` class. See xref:internals.adoc[Internals] for the full mechanism.
-
-[source,java]
-----
-@Recorder
-public class GreetingRecorder {
-    public RuntimeValue<Greeter> create(String prefix) {
-        return new RuntimeValue<>(new Greeter(prefix));
-    }
-}
-----
+Declaring your keys in `configKeys()` is optional but recommended: the runtime's `ConfigKeyAudit` compares every configured `vidocq.*` key against the union of declared keys and warns at startup about keys nobody consumes — the typical typo that otherwise silently keeps the default. Entries ending in `*` declare a prefix (`"vidocq.greeting.*"`).
 
 == Next steps
 

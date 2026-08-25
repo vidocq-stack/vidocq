@@ -56,7 +56,7 @@
 
 | `vidocq-runtime-knock-health-extension`
 | `microprofile`
-| {spec-mp-health} via xref:knock::index.adoc[Knock] — `/q/health/{live,ready,started}` endpoints.
+| {spec-mp-health} via xref:knock::index.adoc[Knock] — `/health`, `/health/live`, `/health/ready`, `/health/started` endpoints.
 
 | `vidocq-runtime-dirac-metrics-extension`
 | `microprofile`

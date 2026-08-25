@@ -209,15 +209,15 @@ public class DatabaseHealth implements HealthCheck {
 }
 ----
 
-Endpoints exposed: `/q/health`, `/q/health/live`, `/q/health/ready`, `/q/health/started` (current milestone, see xref:tck.adoc[TCK]).
+Endpoints exposed by `vidocq-runtime-knock-health-extension`: `/health`, `/health/live`, `/health/ready`, `/health/started` (see xref:tck.adoc[TCK]).
 
 == Metrics
 
-{spec-mp-metrics} implementation in progress. Counters and histograms will be registered at build time by the `vidocq-runtime-metrics-extension` extension. Prometheus endpoint `/q/metrics`.
+{spec-mp-metrics} is shipped by the `vidocq-runtime-dirac-metrics-extension` extension (127 MicroProfile Metrics TCK tests green). Endpoints: `/metrics`, `/metrics/{scope}` and `/metrics/{scope}/{name}`.
 
 == OpenAPI
 
-The `vidocq-runtime-openapi-extension` extension (current milestone) generates the OpenAPI document at compile time from Jakarta REST + MicroProfile OpenAPI annotations. Endpoint `/q/openapi`.
+The `vidocq-runtime-grimm-openapi-extension` extension serves the OpenAPI document, generated from Jakarta REST + MicroProfile OpenAPI annotations, at `/openapi`; the companion `vidocq-runtime-grimm-openapi-ui-extension` serves Swagger UI at `/openapi/ui`.
 
 == Profiles
 
@@ -230,7 +230,7 @@ vidocq.http.port=8080
 %prod.vidocq.http.port=80
 ----
 
-Activate via `-Dvidocq.profile=dev` or the `VIDOCQ_PROFILE` environment variable.
+Activate via the `-Dvidocq.profile=dev` system property (there is no environment-variable equivalent).
 
 == Docker deployment
 
