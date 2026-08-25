@@ -1,15 +1,15 @@
 = vidocq-runtime-maven-plugin
-:description: Vidocq Runtime Maven plugin — build, jlink, jpackage, docker.
+:description: Vidocq Runtime Maven plugin — generate, package, dev, jlink, jpackage, docker.
 
 [.lead]
-`vidocq-runtime-maven-plugin` is the Maven plugin that turns an application into a deployable standalone binary. It exposes four goals: `build`, `jlink`, `jpackage`, `docker`. Also see `vidocq/JLINK.md` for internal details.
+`vidocq-runtime-maven-plugin` is the Maven plugin that turns an application into a deployable standalone distribution. It exposes ten goals: `generate`, `package`, `dev`, `checkpom`, `modularize`, `jlink`, `jpackage`, `docker`, `check-module-info`, `complete-module-info`. Also see `vidocq/JLINK.md` for internal details.
 
 == Coordinates
 
 [cols="1,3"]
 |===
 | Artefact | `io.vidocq.runtime:vidocq-runtime-maven-plugin:{project-version}`
-| Java module | `io.vidocq.runtime.maven`
+| Java module | *(none)* — Maven plugins run on Maven's class path, so the plugin intentionally has no `module-info.java`.
 |===
 
 == Goals
@@ -18,8 +18,26 @@
 |===
 | Goal | Role
 
-| `vidocq:build`
-| Runs the topological `@BuildStep` graph, generates Class-File API classes, produces the runner JAR and `extensions.list` index.
+| `vidocq:generate`
+| Generates the CDI bean index (`META-INF/vauban-beans.list`) and pre-generates proxies/interceptors at compile time. Extension discovery itself needs no index — it is plain `ServiceLoader` over `provides` directives.
+
+| `vidocq:package`
+| Standalone distribution: `bin/run.sh` + `bin/run.cmd` launchers and `lib/*.jar` (application + module-path closure), attached as a `-dist.zip` artifact.
+
+| `vidocq:dev`
+| Dev/watch mode — forks a child JVM with `-Dvidocq.profile=dev`, recompiles and hot-reloads on change.
+
+| `vidocq:checkpom`
+| Verifies every `vidocq-runtime-<name>-extension` declared in the pom is correctly wired (annotation processor paths, codegen bundles). Bound to `validate` via `pluginManagement`.
+
+| `vidocq:modularize`
+| Gives the non-modular dependency jars a generated `module-info` in `target/vidocq-modularized/`, picked up automatically by `dev`, `jlink` and `package`.
+
+| `vidocq:check-module-info`
+| Verifies the application `module-info.java` declares the JPMS directives its Vidocq extensions need (e.g. `opens db.migration` for Flyway migrations).
+
+| `vidocq:complete-module-info`
+| Opt-in companion of `check-module-info` — rewrites `src/main/java/module-info.java` to add the missing directives.
 
 | `vidocq:jlink`
 | Standalone Java image (`target/dist/`) with `bin/<launcher>` binary — no `java` required on target.

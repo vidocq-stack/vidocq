@@ -9,17 +9,15 @@ This page describes what happens between `mvn package` and the first `200 OK`. I
 [mermaid]
 ....
 flowchart LR
-    SRC[Source code<br/>+ extensions<br/>declared as deps] --> APT[APT scan<br/>vauban-processor<br/>+ extension APTs]
-    APT --> PLUGIN[vidocq-runtime-maven-plugin<br/>build]
-    PLUGIN --> BUILDSTEPS[Run @BuildStep<br/>topological graph]
-    BUILDSTEPS --> RECORDERS[Recorders<br/>Class-File API JEP 484]
-    RECORDERS --> JAR[Runner JAR<br/>+ generated classes]
-    JAR --> JAVA[java -jar / jlink launcher]
+    SRC[Source code<br/>+ extensions<br/>declared as deps] --> APT[APT scan<br/>vidocq-runtime-core-codegen<br/>+ extension codegens]
+    APT --> PLUGIN[vidocq-runtime-maven-plugin<br/>generate + package]
+    PLUGIN --> DIST[bin/ + lib/ distribution<br/>+ -dist.zip]
+    DIST --> JAVA[bin/run.sh / jlink image]
     JAVA --> BOOT[Vidocq.main]
-    BOOT --> READY[HTTP listener ready]
+    BOOT --> LIFE[VidocqBootstrap<br/>extension lifecycle]
+    LIFE --> READY[HTTP listener ready]
 
     style PLUGIN fill:#fff3e0,stroke:#f57c00
-    style BUILDSTEPS fill:#fff3e0,stroke:#f57c00
     style BOOT fill:#e1f5fe,stroke:#0288d1
 ....
 
@@ -29,107 +27,72 @@ flowchart LR
 ....
 sequenceDiagram
     participant U as User
-    participant J as JVM
     participant V as Vidocq.main
-    participant CFG as Config (MicroProfile)
-    participant EXT as Runtime extensions
+    participant B as VidocqBootstrap
+    participant L as ExtensionLoader
+    participant EXT as VidocqExtension (sorted by priority)
     participant VAU as Vauban (CDI)
-    participant CHA as Chappe (transport)
-    participant CAS as Cassini (REST)
-    participant MAN as Mansart (JDBC)
 
-    U->>J: java -jar app-runner.jar
-    J->>V: invoke main()
-    V->>CFG: phase 1 — config resolution
-    CFG-->>V: MicroProfile Config ready
-    V->>EXT: phase 2 — init extensions
-    EXT->>EXT: replay STATIC_INIT recorders
-    EXT-->>V: ExtensionContext populated
-    V->>VAU: phase 3 — start BeanManager
-    VAU-->>V: CDI container active
-    V->>CHA: phase 4 — bind HTTP listeners
-    CHA-->>V: 8080 / 8443 listeners open
-    V->>CAS: phase 5a — register REST routes
-    V->>MAN: phase 5b — open JDBC pool
-    V-->>U: ready (~1 s with CDS)
+    U->>V: bin/run.sh (or IDE @VidocqMain)
+    V->>B: configure()
+    B->>B: build VidocqConfig / VidocqConfiguration<br/>(system props, env, properties files)
+    B->>L: ExtensionLoader.load()
+    L-->>B: ServiceLoader instances,<br/>sorted by ascending priority()
+    B->>EXT: configure(configuration) for each
+    V->>B: start()
+    B->>VAU: VaubanContainer.builder().scanClasspath()
+    B->>EXT: beforeStart(builder) for each
+    B->>VAU: builder.build() — CDI container active
+    B->>EXT: onStart(context) for each<br/>(Chappe opens listeners, Cassini mounts routes)
+    B-->>U: ready
 ....
 
-Phases 4 and 5 run in distinct virtual threads via `StructuredTaskScope`, allowing Cassini to register its routes while Mansart validates the database connection.
+The lifecycle itself is sequential on a single thread — extensions run one after another in priority order, which keeps boot diagnosis trivial. On shutdown, `onStop()` walks the same list in reverse order. Concurrency lives inside the bricks: once the listeners are open, Chappe serves every connection on its own virtual thread.
 
 == Extension mechanism
 
 === Public SPI
 
-The `vidocq-runtime-spi` module exposes the contribution interfaces. The main classes shipped today:
+The `vidocq-runtime-spi` module exposes the contribution interfaces. The main types shipped today:
 
 [cols="1,3"]
 |===
 | Type | Role
 
 | `io.vidocq.runtime.spi.VidocqExtension`
-| Marker interface declared via `ServiceLoader` or `META-INF/services`. An extension implements `configure(ExtensionContext)` to register itself.
+| Lifecycle interface with `name()`, `priority()`, `configure(VidocqConfiguration)`, `beforeStart(VaubanContainerBuilder)`, `onStart(ExtensionContext)`, `onStop()` and `configKeys()`. Registered via `provides … with …` in `module-info.java` (or `META-INF/services`), loaded through `ServiceLoader`.
 
 | `io.vidocq.runtime.spi.ExtensionContext`
-| Contribution API — access to the `BuildItem` registry, configuration, current phase.
+| Handed to `onStart` — access to the Vauban `container()`, the CDI `beanManager()`, the legacy `configuration()` and the typed `config()`.
 
 | `io.vidocq.runtime.spi.VidocqConfiguration`
-| Interface read at build time to resolve the extension's options.
+| String-property view passed to `configure`: `property(key)` returns `Optional<String>`, plus `property(key, default)` and `portFor(extensionName, defaultPort)` helpers.
 
 | `io.vidocq.runtime.spi.config.VidocqConfig`
-| Re-exposed `MicroProfile Config` facade with `Converter<T>` and `ConfigSource`.
+| Typed configuration API aligned with MicroProfile Config concepts — `getValue(key, type)` returns `Optional<T>`; pluggable `ConfigSource`, `ConfigSourceProvider` and `Converter<T>`.
 |===
 
 Source: `vidocq-runtime-spi/src/main/java/io/vidocq/runtime/spi/`.
 
-=== APT processor
+=== Compile-time indexing (APT)
 
-The `vidocq-runtime-processor` (derived from `vauban-processor`) scans classes annotated `@BuildStep`, `@Recorder`, `@Path`, `@ApplicationScoped`, etc. It produces:
+The `vidocq-runtime-core-codegen` POM bundle wires the Vauban indexer (`vauban-processor`) into every application build. At compile time it scans CDI-annotated classes and produces:
 
-* an index `META-INF/vidocq/extensions.list` (one line per extension class);
-* an index `META-INF/vauban/beans.list` (reused by xref:vauban::index.adoc[Vauban]);
-* the configuration option file consumed by recorders.
+* the `META-INF/vauban-beans.list` index consumed by xref:vauban::index.adoc[Vauban] to boot without classpath scanning or reflection;
+* for each `vidocq-runtime-<x>-extension` the application depends on, a matching `vidocq-runtime-<x>-extension-codegen` bundle adds the extension's own APT output (e.g. Cassini's statically generated dispatch).
 
-No runtime reflection — the index is read at startup with a plain `getResourceAsStream`.
+Extension discovery itself needs no index file: it is plain `ServiceLoader` over the `provides io.vidocq.runtime.spi.VidocqExtension with …` directives of the modules on the module path.
 
-=== Class-File API generation
+=== Static generation, no recording
 
-When a build step calls a method on a `@Recorder`, the engine does not execute the call: it records it. At the end of the graph, `vidocq-runtime-core` synthesises a `RuntimeBootstrap` class via Class-File API (JEP 484). That class contains a sequence of `invokevirtual` instructions which, replayed at startup, reproduce the desired effect with no reflection.
-
-Concretely:
-
-[source,java]
-----
-@Recorder
-public class HttpRecorder {
-    public RuntimeValue<Server> startServer(int port) { ... }
-}
-
-@BuildStep
-@Record(RUNTIME_INIT)
-public ServerStartedBuildItem boot(HttpRecorder rec, HttpConfig cfg) {
-    rec.startServer(cfg.port());                  // <-- recorded
-    return new ServerStartedBuildItem();
-}
-----
-
-At compile time, `vidocq-runtime-core` emits:
-
-[source,java]
-----
-// generated class — pseudo-code
-class RuntimeBootstrap_HttpRecorder {
-    static void __runtimeInit() {
-        new HttpRecorder().startServer(8080);     // <-- replayed
-    }
-}
-----
+There is no bytecode-recording machinery in `vidocq-runtime-core`: nothing is "replayed" at startup. Everything that would otherwise require runtime reflection is generated at compile time by the bricks themselves — Vauban emits client proxies and interceptor plumbing via the Class-File API (JEP 484), Cassini generates its REST dispatch statically — and the runtime core merely runs the extension lifecycle over those pre-built artifacts.
 
 == Threading model
 
 * **Bootstrap** — a single platform thread, no pool. Boot is intentionally sequential to ease diagnosis.
 * **HTTP I/O** — `Executors.newVirtualThreadPerTaskExecutor()` on the xref:chappe::index.adoc[Chappe] side. One connection = one virtual thread. No reactor, no callbacks.
 * **Persistence** — JDBC pool from xref:mansart::index.adoc[Mansart] with non-fair `Semaphore`. `ScopedValue<Connection>` propagates the current connection inside a transaction without `ThreadLocal`.
-* **Periodic health checks** — virtual threads scheduled via `StructuredTaskScope`.
+* **Health checks** — executed on the virtual thread of the incoming `/health` request; no dedicated scheduler thread.
 
 No platform thread pool is created by default. The rule is documented in the workspace root `CLAUDE.md`.
 

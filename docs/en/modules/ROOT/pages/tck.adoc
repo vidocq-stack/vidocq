@@ -30,31 +30,40 @@ Vidocq Runtime inherits TCK passes from its foundational bricks and exposes its 
 | 774 / 774
 | via xref:vauban::tck.adoc[Vauban]
 
-| MicroProfile Config 3.x
-| Planned
-| `vidocq-runtime-config-extension` in progress
+| MicroProfile Config 3.1
+| Green
+| `vidocq-runtime-ravel-config-extension`, runner `vidocq-runtime-tck-ravel-config`
 
-| MicroProfile Health 4.x
-| Planned
-| `vidocq-runtime-health-extension` in progress
+| MicroProfile Health 4.0
+| Green
+| `vidocq-runtime-knock-health-extension`, runner `vidocq-runtime-tck-knock-health`
 
-| MicroProfile Metrics 5.x
-| Planned
-| `vidocq-runtime-metrics-extension` in progress
+| MicroProfile Metrics 5.1
+| Green (127 tests)
+| `vidocq-runtime-dirac-metrics-extension`, runner `vidocq-runtime-tck-dirac-metrics`
 
 | MicroProfile OpenAPI 4.x
-| Planned
-| `vidocq-runtime-openapi-extension` in progress
+| Green
+| `vidocq-runtime-grimm-openapi-extension`, runner `vidocq-runtime-tck-grimm-openapi`
 
-| MicroProfile JWT Auth
-| Planned
-| Later milestone
+| MicroProfile JWT Auth 2.1
+| Green
+| `vidocq-runtime-cervantes-jwt-extension`, runner `vidocq-runtime-tck-cervantes-jwt`
+
+| MicroProfile REST Client 4.0
+| Green
+| `vidocq-runtime-cyrano-rest-client-extension`, runner `vidocq-runtime-tck-cyrano-restclient`
+
+| MicroProfile Telemetry 2.1
+| Green
+| `vidocq-runtime-humboldt-telemetry-extension`, runner `vidocq-runtime-tck-humboldt-telemetry`
+
+| MicroProfile Fault Tolerance 4.1
+| Green
+| `vidocq-runtime-heisenberg-fault-tolerance-extension`, runner `vidocq-runtime-tck-heisenberg-faulttolerance`
 |===
 
-[NOTE]
-====
-// TODO@user: update pass/total ratios for the MicroProfile TCKs once the official runners are wired in.
-====
+The eight MicroProfile TCK runners are embedded in `vidocq-runtime-integration-tests/vidocq-runtime-tck-*` behind the Maven profile `tck` and certify the assembled runtime — 1837 tests green in total. See `vidocq/TCK.md` and `vidocq/CERTIFICATION.md`.
 
 == Inherited Jakarta TCKs
 

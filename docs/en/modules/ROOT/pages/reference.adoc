@@ -11,10 +11,10 @@ Operational reference for Vidocq Runtime — Maven coordinates, MicroProfile Con
 | Artefact | Role
 
 | `io.vidocq.runtime:vidocq-runtime-parent:{project-version}`
-| Parent POM (Model 4.1.0)
+| Parent POM (Model 4.0.0)
 
 | `io.vidocq.runtime:vidocq-runtime-spi:{project-version}`
-| Public SPI (`@BuildStep`, `@Recorder`, `BuildItem`)
+| Public SPI (`VidocqExtension`, `ExtensionContext`, `VidocqConfig`)
 
 | `io.vidocq.runtime:vidocq-runtime-core:{project-version}`
 | Runtime engine (boot orchestrator, lifecycle)
@@ -23,10 +23,10 @@ Operational reference for Vidocq Runtime — Maven coordinates, MicroProfile Con
 | Aggregator of the shipped extensions, grouped by domain (essentials, jakartaee-core, jakartaee-web, microprofile, module-repackaged)
 
 | `io.vidocq.runtime:vidocq-runtime-maven-plugin:{project-version}`
-| Maven plugin — `build`, `jlink`, `jpackage`, `docker`
+| Maven plugin — `generate`, `package`, `dev`, `checkpom`, `modularize`, `jlink`, `jpackage`, `docker`, `check-module-info`, `complete-module-info`
 
 | `io.vidocq.runtime:vidocq-runtime-examples:{project-version}`
-| Examples (`vidocq-runtime-cassini-rest-example`, `vidocq-runtime-mansart-h2-example`, `vidocq-runtime-external-rest-lib`)
+| Examples (`vidocq-runtime-cassini-rest-example`, `vidocq-runtime-cervantes-jwt-example`, `vidocq-runtime-knock-health-example`, `vidocq-runtime-mansart-h2-example`, `vidocq-runtime-petstore-example`, plus the `vidocq-runtime-external-rest-lib` helper library)
 
 | `io.vidocq.runtime:vidocq-runtime-integration-tests:{project-version}`
 | Multi-extension integration tests
@@ -38,20 +38,14 @@ Operational reference for Vidocq Runtime — Maven coordinates, MicroProfile Con
 |===
 | Module | Contents
 
-| `io.vidocq.runtime`
-| `Vidocq.main(String[])` facade, application entry point.
-
 | `io.vidocq.runtime.spi`
-| Public annotations and interfaces. Must be declared `requires` in any extension.
+| Public SPI interfaces (`VidocqExtension`, `ExtensionContext`, `VidocqConfiguration`, `config.*`). Must be declared `requires` in any extension.
 
 | `io.vidocq.runtime.core`
-| Orchestration engine. Not intended for direct user consumption.
-
-| `io.vidocq.runtime.maven`
-| Shared code of the Maven plugin (APT index reading, runner generation).
+| Orchestration engine — `io.vidocq.runtime.core.Vidocq` (the `main`/`run` entry point), `VidocqBootstrap`, `ExtensionLoader`, built-in config sources.
 |===
 
-The other `io.vidocq.runtime.*.extension` modules each correspond to a built-in extension.
+The `io.vidocq.runtime.extensions.*` modules each correspond to a built-in extension. The Maven plugin has **no** `module-info.java` on purpose: Maven plugins run on Maven's class path, not on the application module path.
 
 == MicroProfile Config keys
 
@@ -102,7 +96,7 @@ The other `io.vidocq.runtime.*.extension` modules each correspond to a built-in 
 
 [NOTE]
 ====
-// TODO@user: extract the exhaustive key list once `vidocq-runtime-config-extension` is stabilised. Each key depends on the extension declaring it via `@VidocqConfig`.
+// TODO@user: extract the exhaustive key list from the shipped extensions. Each extension declares the keys it consumes via `VidocqExtension.configKeys()`; MicroProfile Config itself is provided by `vidocq-runtime-ravel-config-extension`.
 ====
 
 `ConfigSource` hierarchy (descending ordinal):
@@ -123,8 +117,20 @@ The other `io.vidocq.runtime.*.extension` modules each correspond to a built-in 
 |===
 | Goal | Role
 
-| `vidocq:build`
-| Runs `@BuildStep`, generates Class-File API classes, produces the runner JAR.
+| `vidocq:generate`
+| Generates the CDI bean index and pre-generates proxies/interceptors (compile-time codegen).
+
+| `vidocq:package`
+| Standalone distribution: `bin/run.sh` + `bin/run.cmd` launchers, `lib/*.jar` (application + module-path closure), attached as a `-dist.zip`.
+
+| `vidocq:dev`
+| Dev/watch mode — forks a child JVM with `-Dvidocq.profile=dev`, recompiles and hot-reloads on change.
+
+| `vidocq:checkpom`
+| Verifies every `vidocq-runtime-<name>-extension` declared in the pom is correctly wired (bound to `validate` via `pluginManagement`).
+
+| `vidocq:modularize`
+| Patches the non-modular jars of the runtime closure with a generated `module-info` (default phase `prepare-package`).
 
 | `vidocq:jlink`
 | Standalone Java image (`target/dist/`) with binary launcher.
@@ -134,6 +140,12 @@ The other `io.vidocq.runtime.*.extension` modules each correspond to a built-in 
 
 | `vidocq:docker`
 | Generates `target/Dockerfile` distroless; optional Docker build via `vidocq.docker.build=true`.
+
+| `vidocq:check-module-info`
+| Verifies the application `module-info.java` declares the JPMS directives its Vidocq extensions need (e.g. `opens db.migration`).
+
+| `vidocq:complete-module-info`
+| Opt-in companion of `check-module-info` — rewrites `src/main/java/module-info.java` to add the missing directives.
 |===
 
 See xref:modules/vidocq-runtime-maven-plugin.adoc[the dedicated page] for the exhaustive parameter list.
@@ -147,28 +159,23 @@ Source: `vidocq-runtime-spi/src/main/java/io/vidocq/runtime/spi/`.
 | Type | Role
 
 | `VidocqExtension`
-| Marker interface declared via `META-INF/services`.
+| Lifecycle interface — `name()`, `priority()` (lower runs first, default 1000), `configure(VidocqConfiguration)`, `beforeStart(VaubanContainerBuilder)`, `onStart(ExtensionContext)`, `onStop()`, `configKeys()`. Registered with `provides … with …` in `module-info.java` (or `META-INF/services`), discovered via `ServiceLoader`.
 
 | `ExtensionContext`
-| Contribution API (`BuildItem` registry, config access).
+| Passed to `onStart` — `container()`, `beanManager()`, `configuration()` (legacy), `config()` (typed).
 
 | `VidocqConfiguration`
-| Read at build to resolve extension options.
+| String-property configuration passed to `configure` — `property(key)` returns `Optional<String>`, `property(key, default)`, `portFor(extensionName, defaultPort)`.
 
 | `config.VidocqConfig`
-| MicroProfile Config facade (with `Converter<T>` and `ConfigSource`).
+| Typed configuration API aligned with MicroProfile Config concepts — `getValue(key, type)` returns `Optional<T>`, `getValues(key, elementType)`; extensible via `config.ConfigSource`, `config.ConfigSourceProvider` and `config.Converter<T>`.
 
-| `@BuildStep`, `@Record`, `@Recorder`
-| Build-time contribution annotations.
+| `VidocqApp`
+| Interface for the application entry class re-loaded inside the Vauban application layer by `Vidocq.run(Class, args)`.
 
-| `BuildItem`, `SimpleBuildItem`, `MultiBuildItem`
-| Exchange units between build steps.
+| `@VidocqMain`
+| Annotation for the zero-config IDE trampoline `main` — boots the runtime in the Vauban layer.
 |===
-
-[NOTE]
-====
-// TODO@user: freeze the full list of standard `BuildItem` exposed by core and each built-in extension.
-====
 
 == Bugs and benchmarks
 
