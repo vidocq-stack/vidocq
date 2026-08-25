@@ -43,8 +43,8 @@ The Grimms gathered scattered oral tradition — tales, legends, word roots — 
 | Implemented spec | MicroProfile OpenAPI 4.1
 | Repo | https://codefloe.com/Vidocq/grimm
 | Java | 25 (LTS)
-| Java modules | `io.vidocq.grimm.core`, `io.vidocq.grimm.cdi.vauban`
-| Public packages | `io.vidocq.grimm.api.*` (stable SPI), `io.vidocq.grimm.cdi.*` (CDI integration)
+| Java modules | `io.vidocq.grimm.core`, `io.vidocq.grimm.processor`, `io.vidocq.grimm.cdi.vauban`
+| Public packages | `io.vidocq.grimm.spi.gen` (compile-time contribution SPI), `io.vidocq.grimm.internal.reader` (static-document readers), `io.vidocq.grimm.cdi` (CDI integration)
 | Runtime dependencies | `microprofile-openapi-api` 4.1, `jakarta.ws.rs-api` 4.0, `jakarta.enterprise.cdi-api` 4.1, `jakarta.annotation-api` 3.0, `io.vidocq.ravel:ravel-mp-config-api`
 | jlink-ready | ✅ — every sub-module ships its own `module-info.java`, no `Automatic-Module-Name` fallback.
 | MP OpenAPI 4.1 TCK | ✅ 349 / 349 — see xref:tck.adoc[detailed status]
@@ -53,8 +53,8 @@ The Grimms gathered scattered oral tradition — tales, legends, word roots — 
 == Three identifying traits
 
 . **Zero external dependency beyond Jakarta / MicroProfile specs** — no SnakeYAML, no Jackson, no SmallRye. The YAML and JSON serializers are hand-written in `grimm-core`. The only companion library is xref:ravel::index.adoc[Ravel] for MicroProfile Config, itself zero-dependency.
-. **Startup resolution, not per request** — every annotation is scanned once, when the CDI container starts, by a Vauban Build Compatible Extension. The document is cached in `GrimmModelCache` and served on every call to `/openapi`. No per-request recompute, no hot locking.
-. **Strict Java Modules** — every Grimm artefact has its own `module-info.java`. Walled packages: `io.vidocq.grimm.api.*` exported, `io.vidocq.grimm.internal.*` hidden, no unjustified `opens`, no `setAccessible(true)` in production.
+. **Startup resolution, not per request** — every application class is recorded once, when the CDI container starts, by a Vauban Build Compatible Extension. The document is built once in `GrimmModelCache` (a one-time initialisation guarded by a `ReentrantLock`) and served on every call to `/openapi`. No per-request recompute — after the build, a read is a single `volatile` read.
+. **Strict Java Modules** — every Grimm artefact has its own `module-info.java`. Walled packages: only `io.vidocq.grimm.spi.gen` and `io.vidocq.grimm.internal.reader` are exported unqualified; the other `io.vidocq.grimm.internal.*` packages are qualified-exported to the CDI module or not exported at all. No unjustified `opens`, no `setAccessible(true)` in production.
 
 == Position in the ecosystem
 

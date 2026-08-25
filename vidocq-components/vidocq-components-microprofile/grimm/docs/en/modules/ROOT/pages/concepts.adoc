@@ -26,13 +26,13 @@ The MP OpenAPI 4.1 spec's Java model mirrors that structure: the `OpenAPI` inter
 
 == Three sources, one merge
 
-MP OpenAPI 4.1 §3 prescribes three model sources, merged in this order:
+MP OpenAPI 4.1 §3 prescribes three model sources, merged in this order (lowest to highest priority):
 
 . **Static file** — `META-INF/openapi.yaml`, `.yml` or `.json` packaged in the classpath. Loaded by `StaticFileReader`. Acts as the "editorial skeleton" supplied by the design team.
 . **`OASModelReader`** — an application class implementing `org.eclipse.microprofile.openapi.OASModelReader`, selected via `mp.openapi.model.reader`. Lets you build the `OpenAPI` programmatically.
-. **Annotation scan** — visits the `@Path`, `@OpenAPIDefinition`, `@Server`, `@Tag`, `@SecurityScheme` classes in the current CDI module. Driven by `AnnotationScanner`.
+. **Annotation scan** — visits every application class discovered by the CDI container: `@Path` resources, but also standalone carriers of `@OpenAPIDefinition`, `@Server`, `@Tag`, `@SecurityScheme` or `@Schema`. Driven by `AnnotationScanner`.
 
-`ModelMerger` combines the three — annotations win on conflicts, per spec. The result is a single `OpenAPI`, dropped into `GrimmModelCache`.
+`ModelMerger` combines the three with the spec priority annotations > reader > static file: annotations win on conflicts, and the reader model overrides the static file. The result is a single `OpenAPI`, dropped into `GrimmModelCache`.
 
 == `OASFilter` filters
 
@@ -79,7 +79,7 @@ MP OpenAPI 4.1 §4 defines a set of `mp.openapi.*` keys read through MicroProfil
 | JSON snippet defining a schema for a given class (override).
 |===
 
-See xref:reference.adoc[Reference] for the exhaustive list and the `servers.path.*` / `servers.operation.*` variants.
+See xref:reference.adoc[Reference] for the exhaustive list and the `mp.openapi.servers.path.<path>` / `mp.openapi.servers.operation.<operationId>` variants.
 
 == Differences from OpenAPI 3.0 (reminder)
 

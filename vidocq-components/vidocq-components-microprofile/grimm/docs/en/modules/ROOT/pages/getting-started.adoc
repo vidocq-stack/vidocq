@@ -43,7 +43,7 @@ sdk env
 
 [NOTE]
 ====
-`microprofile-openapi-api` is `provided` inside `grimm-core` but should be declared `compile` in the application — it provides the annotations the application uses.
+`microprofile-openapi-api` is a `compile`-scope dependency of `grimm-core`, so it already reaches the application transitively. Declaring it explicitly (as above) simply keeps the annotation dependency direct and visible in the application's own POM.
 ====
 
 == Root annotation on the `Application` class
@@ -172,7 +172,7 @@ Grimm merges up to three sources of truth:
 | Source | Description | Activation
 
 | Annotations
-| Scan of `@Path` classes in the current CDI module.
+| Scan of every application class discovered by the CDI container — `@Path` resources, but also `@Schema` POJOs and the `@OpenAPIDefinition` `Application` subclass.
 | Automatic, default.
 
 | Static document
@@ -184,7 +184,7 @@ Grimm merges up to three sources of truth:
 | `mp.openapi.model.reader=fqn.ModelReader`.
 |===
 
-Priority order is defined by the MP OpenAPI 4.1 spec: `OASModelReader` < static < annotations < `OASFilter`. See xref:concepts.adoc[Concepts] for the detailed mechanics.
+Priority order is defined by the MP OpenAPI 4.1 spec: static file < `OASModelReader` < annotations — annotations win on conflict. The `OASFilter` then transforms the merged document. See xref:concepts.adoc[Concepts] for the detailed mechanics.
 
 == Next step
 

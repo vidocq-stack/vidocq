@@ -2,7 +2,7 @@
 :description: Status, runner execution, out-of-reactor architecture, documented exclusions.
 
 [.lead]
-The official MicroProfile OpenAPI 4.1 TCK verifies that an implementation produces a conformant OpenAPI 3.1 document from a set of reference applications (`PetStoreApp`, `AirlinesApp`, `AnnotationTest`, …). Grimm passes it at *349 / 349* on the 4.1 release (May 2026).
+The official MicroProfile OpenAPI 4.1 TCK verifies that an implementation produces a conformant OpenAPI 3.1 document from a set of reference applications and their test classes (`PetStoreAppTest`, `AirlinesAppTest`, `StaticDocumentTest`, `FilterTest`, `ModelReaderAppTest`, `OASConfigServersTest`, …). Grimm passes it at *349 / 349* on the 4.1 release (May 2026).
 
 == Status
 
@@ -44,23 +44,23 @@ The `run-official-tck-mp-openapi-4.1.sh` script at the repository root drives ev
 
 [source,bash]
 ----
-# Smoke suite — single fast test to validate the installation
+# Smoke suite (default) — runs GrimmTckSmokeTest to validate the installation
 ./run-official-tck-mp-openapi-4.1.sh
 
-# Full suite — equivalent to the official 349-test TCK
+# Full suite — the official 349-test TCK
 ./run-official-tck-mp-openapi-4.1.sh all
 
-# Readiness matrix — runs the same test under three profiles:
+# Readiness matrix — runs one test (default PetStoreAppTest) under three profiles:
 #   default-readiness (10 s timeout)
 #   extended-readiness (30 s timeout)
 #   no-readiness-probe
 ./run-official-tck-mp-openapi-4.1.sh matrix PetStoreAppTest
 
 # Targeted test via -Dtest=
-./run-official-tck-mp-openapi-4.1.sh -Dtest=AnnotationScanTest
+./run-official-tck-mp-openapi-4.1.sh -Dtest=AirlinesAppTest
 ----
 
-The runner uses Arquillian + TestNG. The Surefire report lands in `grimm-tck/target/surefire-reports/`.
+The runner uses Arquillian + TestNG, invoking `mvn -f grimm-tck/pom.xml -Ptck-official test`. The TCK test classes come straight from the official `microprofile-openapi-tck` jar, picked up by Surefire's `<dependenciesToScan>` — there is no local TestNG suite file. The Surefire report lands in `grimm-tck/target/surefire-reports/`.
 
 == Runner architecture
 
@@ -116,7 +116,7 @@ The readiness probe is parameterisable:
 
 == Documented exclusions
 
-None to date: the full suite runs and passes at 349/349. Should an exclusion ever be added, it would be listed in the TestNG suite file (`grimm-tck/src/test/resources/tck-suite.xml`) and tracked in `TCK.md`.
+None to date: the full suite runs and passes at 349/349. Should an exclusion ever be added, it would be declared as a Surefire exclusion in `grimm-tck/pom.xml` and tracked in `TCK.md`.
 
 == Quality contract
 

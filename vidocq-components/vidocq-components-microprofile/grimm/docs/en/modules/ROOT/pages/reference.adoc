@@ -15,6 +15,10 @@ This page consolidates Grimm's public surface: artefacts to declare, exported Ja
 | Annotation scanner, JSON/YAML serializer, internal model, merger, `OASFactoryResolver`.
 
 | `io.vidocq.grimm`
+| `grimm-processor`
+| APT processor generating the `$$GrimmModel` compile-time companions consumed through `io.vidocq.grimm.spi.gen`.
+
+| `io.vidocq.grimm`
 | `grimm-cdi-vauban`
 | Vauban BCE, `GrimmModelCache`, `/openapi` JAX-RS resource, config producer.
 
@@ -40,13 +44,16 @@ Every artefact is at `{project-version}`.
 | Module | Contents
 
 | `io.vidocq.grimm.core`
-| `io.vidocq.grimm.api.*` (public SPI), `io.vidocq.grimm.internal.*` (scanner, serializer, merger, model — not exported).
+| Exports `io.vidocq.grimm.spi.gen` (compile-time contribution SPI) and `io.vidocq.grimm.internal.reader` (static-document readers) unqualified; exports `io.vidocq.grimm.internal`, `internal.config`, `internal.merger`, `internal.schema` only to `io.vidocq.grimm.cdi.vauban`. `internal.factory`, `internal.invoker`, `internal.model`, `internal.scanner`, `internal.serialization` are not exported at all.
+
+| `io.vidocq.grimm.processor`
+| No exports — the APT processor is consumed exclusively through the `javax.annotation.processing.Processor` service it `provides`.
 
 | `io.vidocq.grimm.cdi.vauban`
-| `io.vidocq.grimm.cdi.*` — `GrimmExtension`, `OpenApiResource`, `GrimmModelCache`, `GrimmConfigProducer`, `GrimmAutoDiscovery`.
+| `io.vidocq.grimm.cdi` — `GrimmExtension`, `OpenApiResource`, `GrimmModelCache`, `GrimmConfigProducer`, `GrimmAutoDiscovery`.
 |===
 
-`io.vidocq.grimm.internal.*` is never exported. Any application class depending on it signals a regression to fix.
+Apart from `io.vidocq.grimm.internal.reader`, the `io.vidocq.grimm.internal.*` packages are reserved for Grimm's own modules. Any application class depending on them signals a regression to fix.
 
 == Supported MicroProfile OpenAPI annotations
 
@@ -106,8 +113,8 @@ Every artefact is at `{project-version}`.
 | Explicit reuse catalogue.
 | ✅
 
-| `@Hidden`
-| Hides a class, method, or parameter from the document.
+| `@Schema(hidden = true)` / `@Operation(hidden = true)`
+| Hides a type, property, or operation from the document — MP OpenAPI has no standalone `@Hidden` annotation; hiding is expressed through the `hidden` attribute.
 | ✅
 |===
 
@@ -115,7 +122,7 @@ JAX-RS annotations consumed by the scanner: `@Path`, `@GET`, `@POST`, `@PUT`, `@
 
 == MicroProfile Config keys
 
-All keys are read through `ConfigProvider.getConfig()`. See `io.vidocq.grimm.internal.config.ConfigApplier`.
+All keys are read once at startup: `GrimmConfigProducer` (in `io.vidocq.grimm.cdi`) calls `ConfigProvider.getConfig()` and materialises the `GrimmConfig` record (`io.vidocq.grimm.internal.config`); `ConfigApplier` then applies the server and schema overrides at step 5 of the pipeline.
 
 [cols="2,3"]
 |===
@@ -163,7 +170,7 @@ All keys are read through `ConfigProvider.getConfig()`. See `io.vidocq.grimm.int
 
 [NOTE]
 ====
-The `mp.openapi.application.path.disable` and `mp.openapi.extensions.path` keys mentioned in the spec may be added to the `ConfigApplier` whitelist without touching the public SPI. Check the current status in `ConfigApplier.java`.
+Two spec keys are deliberately deferred and currently unimplemented: `mp.openapi.servers.<name>.*` (per-server variable overrides) and `mp.openapi.extensions.<key>=<value>` (document-level extensions). They are intentionally left out for now and scheduled for a later milestone — see the `GrimmConfig` Javadoc for the authoritative status.
 ====
 
 == `/openapi` endpoint
