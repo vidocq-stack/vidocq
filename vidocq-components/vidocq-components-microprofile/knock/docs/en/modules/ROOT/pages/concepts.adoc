@@ -31,7 +31,7 @@ A _probe_ is a category of checks answering a specific operational question. Kno
 
 == Registry
 
-The _registry_ holds the registered checks and returns them filtered by probe type. The contract is the `HealthCheckRegistry` interface (in `knock-api`); the standalone implementation is `KnockHealthCheckRegistry` (in `knock-core`). It is virtual-thread friendly: state lives in a `ConcurrentHashMap`, never guarded by `synchronized`.
+The _registry_ holds the registered checks and returns them filtered by probe type. The contract is the `HealthCheckRegistry` interface (in `knock-api`): `register(ProbeType, String, HealthCheck)`, `unregister(String)`, `getChecks(ProbeType)`. Instances are created through the exported factory `HealthCheckRegistries.newRegistry()` (in `knock-core`); the implementation, `KnockHealthCheckRegistry`, lives in the unexported `io.vidocq.knock.internal` package. It is virtual-thread friendly: state lives in a `ConcurrentHashMap`, never guarded by `synchronized`.
 
 == Aggregation
 
@@ -54,13 +54,14 @@ Knock renders it with Jakarta JSON-P only — no `StringBuilder`, no third-party
 
 == CDI discovery
 
-In a CDI deployment, checks are discovered by Vauban and registered by `HealthCheckRegistrar` when `@Initialized(ApplicationScoped.class)` fires: each bean qualified with `@Liveness`, `@Readiness`, or `@Startup` is registered into the registry by probe type. A `HealthCheck` bean with none of those qualifiers is not a health-check procedure and is silently ignored (spec §4.2). Outside CDI, the same registry is fed manually — the core never depends on a container.
+In a CDI deployment, checks are discovered by Vauban and registered by `HealthCheckRegistrar` when `@Initialized(ApplicationScoped.class)` fires: each bean qualified with `@Liveness`, `@Readiness`, or `@Startup` is registered into the registry by probe type, under the check's class name. The registry is itself a CDI bean (`KnockCdiHealthCheckRegistry`, injectable as `HealthCheckRegistry`) delegating to `HealthCheckRegistries.newRegistry()`. A `HealthCheck` bean with none of those qualifiers is not a health-check procedure and is silently ignored (spec §4.2). Outside CDI, the same registry is fed manually — the core never depends on a container.
 
 == Module boundaries
 
 Knock keeps responsibilities split so the core stays dependency-light:
 
-* `knock-api` — re-exported MicroProfile Health spec types + Knock SPI (`ProbeType`, `HealthCheckRegistry`, `Knock`).
+* `knock-mp-health-api` — Vidocq repackage of the MicroProfile Health API with a proper `module-info.java`.
+* `knock-api` — Knock SPI (`ProbeType`, `HealthCheckRegistry`, `Knock`); re-exports the spec types (`requires transitive microprofile.health.api`).
 * `knock-core` — registry, aggregation, JSON-P serialisation, runtime facade. Pure Java SE.
 * `knock-cdi-vauban` — CDI discovery and auto-registration.
 * `knock-jaxrs` — the `/health*` Jakarta REST resource.

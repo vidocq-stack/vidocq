@@ -12,7 +12,7 @@ This page shows how to add Knock to a project, write a first `HealthCheck`, let 
 
 == Maven coordinates
 
-Pick the modules matching your integration level. For a CDI + Jakarta REST application you need the API plus the two integration modules:
+Pick the modules matching your integration level. For a CDI + Jakarta REST application you need the API, the standalone core, and the two integration modules (`knock-api` pulls the repackaged `knock-mp-health-api` spec jar transitively):
 
 [source,xml,subs=attributes+]
 ----
@@ -96,11 +96,17 @@ module io.example {
     requires microprofile.health.api;
     requires jakarta.cdi;
     requires jakarta.inject;
+    requires static io.vidocq.vauban.api;
+
     exports io.example;
+
+    // _VaubanComponents is generated at compile time by the Vauban annotation processor.
+    provides io.vidocq.vauban.api.VaubanComponentProvider
+            with io.example._VaubanComponents;
 }
 ----
 
-The `knock-cdi-vauban` extension discovers `io.example` beans through the module graph — no `opens` and no classpath scanning are required.
+Vauban instantiates and injects `io.example` beans through the generated `_VaubanComponents` provider declared above — no runtime classpath scanning and no `opens` to the container are required.
 
 == Querying the endpoints
 
@@ -135,12 +141,12 @@ A `DOWN` aggregate switches the HTTP status to `503` while keeping the same JSON
 ----
 import io.vidocq.knock.spi.HealthCheckRegistry;
 import io.vidocq.knock.spi.ProbeType;
-import io.vidocq.knock.internal.KnockHealthCheckRegistry;
-import io.vidocq.knock.runtime.KnockHealthService;
+import io.vidocq.knock.runtime.HealthCheckRegistries;
 import io.vidocq.knock.runtime.HealthReport;
+import io.vidocq.knock.runtime.KnockHealthService;
 
-HealthCheckRegistry registry = new KnockHealthCheckRegistry();
-registry.register(new DatabaseCheck());
+HealthCheckRegistry registry = HealthCheckRegistries.newRegistry();
+registry.register(ProbeType.LIVENESS, "database", new DatabaseCheck());
 
 KnockHealthService service = new KnockHealthService(registry);
 HealthReport report = service.report(ProbeType.ALL);

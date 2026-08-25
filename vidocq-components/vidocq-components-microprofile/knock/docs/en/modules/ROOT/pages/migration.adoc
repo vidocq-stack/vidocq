@@ -41,7 +41,7 @@ Knock implements the standard MicroProfile Health 4.0 contract. Application code
 
 == Pitfalls
 
-* **Unqualified checks** — a `HealthCheck` without `@Liveness/@Readiness/@Startup` fails CDI validation. Add the missing qualifier.
+* **Unqualified checks** — a `HealthCheck` without `@Liveness/@Readiness/@Startup` is **silently ignored**: it is never registered and simply does not appear in any probe response — there is no deployment error to alert you. Add the missing qualifier to have it reported.
 * **Non-standard JSON** — consumers relying on vendor fields must be updated; Knock emits only the spec shape.
 * **`data` typing** — only `String`, `long`, `boolean` and `int` are rendered natively; other types are stringified.
 * **Module path** — missing `requires` clauses surface as Java Modules resolution errors rather than classpath warnings.

@@ -18,8 +18,8 @@ _Knock, or the Triumph of Medicine_ (« Knock, ou le Triomphe de la médecine »
 | Implemented spec | {spec-mp-health}[MicroProfile Health 4.0]
 | Repo | {repo-knock}
 | Java | 25
-| Java modules | `knock-api`, `knock-core`, `knock-cdi-vauban`, `knock-jaxrs`, `knock-tck`
-| Runtime dependencies | None beyond `org.eclipse.microprofile.health` and `jakarta.json`
+| Java modules | `knock-mp-health-api`, `knock-api`, `knock-core`, `knock-cdi-vauban`, `knock-jaxrs` (plus `knock-tck`, the TCK runner — profile-gated, no `module-info.java`)
+| Runtime dependencies | `knock-core`: only the MicroProfile Health API and `jakarta.json` (JSON-P). The integration modules add their spec APIs — `jakarta.cdi`/`jakarta.inject` for `knock-cdi-vauban`, `jakarta.ws.rs` for `knock-jaxrs` — plus compile-time-only (`requires static`) `vauban-api` / `cassini-api`
 | MicroProfile Health 4.0 TCK | 28 / 28 PASS — see xref:tck.adoc[detailed status]
 |===
 
@@ -68,7 +68,7 @@ graph TB
     SVC[KnockHealthService]
   end
   subgraph INT["Integrations"]
-    CDI[knock-cdi-vauban<br/>BCE discovery]
+    CDI[knock-cdi-vauban<br/>observer-driven registration]
     REST[knock-jaxrs<br/>/health* endpoints]
   end
   API --> CORE

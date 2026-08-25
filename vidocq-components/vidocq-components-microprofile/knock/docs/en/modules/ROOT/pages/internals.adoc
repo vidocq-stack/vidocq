@@ -26,7 +26,7 @@ Knock rests on a simple principle: implement MicroProfile Health 4.0 with the JD
 | Jakarta REST resource exposing `/health*` (deployed on Cassini).
 
 | `knock-tck`
-| Official MicroProfile Health 4.0 TCK runner.
+| Official MicroProfile Health 4.0 TCK runner — joins the reactor only under the `tck` Maven profile, has no `module-info.java`, and is never published to Maven Central.
 |===
 
 == Runtime flow
@@ -43,22 +43,21 @@ sequenceDiagram
 
   Client->>REST: GET /health/live
   REST->>SVC: report(ProbeType.LIVENESS)
-  SVC->>REG: getChecks(LIVENESS)
-  REG-->>SVC: List<HealthCheck>
-  SVC->>AGG: aggregate(checks)
+  SVC->>AGG: aggregate(registry, LIVENESS)
+  AGG->>REG: getChecks(LIVENESS)
+  REG-->>AGG: List<HealthCheck>
   Note right of AGG: each call() on a virtual thread
   AGG-->>SVC: HealthSnapshot
-  SVC->>SER: toJson(snapshot)
-  SER-->>SVC: JsonObject
-  SVC-->>REST: HealthReport(status, json)
+  SVC->>SER: serialize(snapshot)
+  SER-->>SVC: String (JSON payload)
+  SVC-->>REST: HealthReport(httpStatus, json)
   REST-->>Client: 200/503 + JSON
 ....
 
-. `HealthCheckRegistry.getChecks(ProbeType)` returns the checks for the requested probe.
-. Each `HealthCheck.call()` runs on its own virtual thread.
-. `KnockAggregator` reduces the responses to a `HealthSnapshot` (spec §3.2 rules).
-. `KnockJsonSerializer` renders the snapshot through Jakarta JSON-P.
-. `KnockHealthService` wraps the result in a `HealthReport` (HTTP status + payload).
+. `KnockAggregator.aggregate(HealthCheckRegistry, ProbeType)` pulls the checks for the requested probe via `HealthCheckRegistry.getChecks(ProbeType)`.
+. Each `HealthCheck.call()` runs on its own virtual thread; the responses are reduced to a `HealthSnapshot` (spec §3.2 rules).
+. `KnockJsonSerializer.serialize(HealthSnapshot)` renders the snapshot to a JSON `String` through Jakarta JSON-P; `httpStatus(HealthSnapshot)` maps UP/DOWN to 200/503.
+. `KnockHealthService.report(ProbeType)` wraps both in a `HealthReport(int httpStatus, String json)` record.
 
 == Core classes
 
@@ -70,7 +69,7 @@ sequenceDiagram
 | `HealthCheckRegistry` implementation backed by a `ConcurrentHashMap`. No `synchronized`.
 
 | `KnockAggregator` (internal)
-| Applies the §3.2 aggregation rule and folds exceptions into `DOWN` checks.
+| Applies the §3.2 aggregation rule and folds exceptions into `DOWN` checks named after the exception's simple class name, with no `data`.
 
 | `KnockJsonSerializer` (internal)
 | Builds the response with Jakarta JSON-P (`Json.createObjectBuilder()`), no third-party JSON library.
@@ -84,6 +83,9 @@ sequenceDiagram
 | `HealthSnapshot` (internal record)
 | Immutable aggregation result: probe type, overall status, checks list.
 
+| `HealthCheckRegistries` (runtime)
+| Exported factory — `newRegistry()` is the only public way to obtain a `HealthCheckRegistry` instance.
+
 | `KnockHealthService` (runtime)
 | Public facade tying registry + aggregator + serialiser together.
 
@@ -93,15 +95,16 @@ sequenceDiagram
 
 == CDI discovery
 
-`knock-cdi-vauban` ships one internal piece:
+`knock-cdi-vauban` ships two internal pieces:
 
-* `HealthCheckRegistrar` — a CDI bean that, on `@Initialized(ApplicationScoped.class)`, registers each qualified `HealthCheck` into the registry by probe type (spec §4.1). A `HealthCheck` bean with no `@Liveness`/`@Readiness`/`@Startup` qualifier is not a health-check procedure and is silently ignored (spec §4.2).
+* `HealthCheckRegistrar` — an `@ApplicationScoped` bean whose observer method `onApplicationStart(@Observes @Initialized(ApplicationScoped.class) Object)` registers each qualified `HealthCheck` into the registry by probe type, under the check's class name (spec §4.1). It injects `Instance<HealthCheck>` qualified with `@Liveness`, `@Readiness` and `@Startup`; a `HealthCheck` bean with none of those qualifiers is never selected and is silently ignored (spec §4.2).
+* `KnockCdiHealthCheckRegistry` — the `@ApplicationScoped` registry bean, injectable as `HealthCheckRegistry`, delegating to an instance obtained from `HealthCheckRegistries.newRegistry()`.
 
-Discovery uses Vauban's BCE pipeline — no runtime classpath scanning, no `setAccessible(true)`.
+There is no `BuildCompatibleExtension`: both beans are instantiated, field-injected and notified through the `_VaubanComponents` provider generated at compile time by the Vauban annotation processor and declared as `provides io.vidocq.vauban.api.VaubanComponentProvider` in `module-info.java` — no runtime classpath scanning, no `setAccessible(true)`, no `opens` to the container.
 
 == JAX-RS resource
 
-`KnockHealthResource` is annotated `@Path("/health")` and exposes the four endpoints. Each method maps its path to a `ProbeType`, calls `KnockHealthService.report(...)`, and returns a `Response` with the snapshot's HTTP status. The resource imports only `jakarta.ws.rs` — never a Cassini-internal package.
+`KnockHealthResource` is annotated `@Path("/health")` and exposes the four endpoints. Each method maps its path to a `ProbeType`, calls `KnockHealthService.report(...)` on the injected `HealthCheckRegistry`, and returns a `Response` with the report's HTTP status. The resource uses only the standard `jakarta.ws.rs` and CDI APIs — never a Cassini-internal package — and `knock-jaxrs` declares its own generated `_VaubanComponents` provider to wire the resource bean.
 
 == Threading model
 

@@ -26,16 +26,17 @@ All artefacts share the version `{project-version}` under the `io.vidocq.knock` 
 
 | `knock-cdi-vauban`
 | `runtime`
-| CDI discovery + auto-registration (Vauban BCE).
+| CDI auto-registration at context start (`@Observes @Initialized(ApplicationScoped.class)`, generated Vauban wiring).
 
 | `knock-jaxrs`
 | `runtime`
 | Jakarta REST `/health*` resource (deployed on Cassini).
-
-| `knock-tck`
-| `test`
-| Official MicroProfile Health 4.0 TCK runner.
 |===
+
+[NOTE]
+====
+`knock-tck` (the official MicroProfile Health 4.0 TCK runner) is **not** published to Maven Central: it joins the reactor only under the `tck` Maven profile and cannot be declared as a dependency.
+====
 
 == Exported Java Modules packages
 
@@ -47,7 +48,7 @@ All artefacts share the version `{project-version}` under the `io.vidocq.knock` 
 | `io.vidocq.knock.spi` (`ProbeType`, `HealthCheckRegistry`, `Knock`)
 
 | `knock-core`
-| `io.vidocq.knock.runtime` (`KnockHealthService`, `HealthReport`)
+| `io.vidocq.knock.runtime` (`HealthCheckRegistries`, `KnockHealthService`, `HealthReport`)
 
 | `knock-jaxrs`
 | `io.vidocq.knock.jaxrs` (`KnockHealthResource`)
@@ -65,13 +66,13 @@ Internal packages (`io.vidocq.knock.internal`, `io.vidocq.knock.cdi.internal`) a
 | `LIVENESS`, `READINESS`, `STARTUP`, `ALL` — selects the checks to report.
 
 | `HealthCheckRegistry` (interface)
-| Register checks and retrieve them by probe type.
+| Register checks and retrieve them by probe type: `register(ProbeType type, String name, HealthCheck check)`, `unregister(String name)`, `getChecks(ProbeType type)`.
 
 | `Knock` (class)
 | Module metadata constants.
 |===
 
-Standalone implementation: `new KnockHealthCheckRegistry()` (in `knock-core`). Under CDI the registry is provided as a managed bean.
+Standalone instances come from the exported factory `HealthCheckRegistries.newRegistry()` (in `knock-core`); the `KnockHealthCheckRegistry` implementation lives in the unexported `io.vidocq.knock.internal` package. Under CDI the registry is provided as a managed bean (`KnockCdiHealthCheckRegistry`, injectable as `HealthCheckRegistry`).
 
 == Endpoints
 
