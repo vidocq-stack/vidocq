@@ -46,18 +46,18 @@ MP FT 4.1 spec §2.5 mandates a single wrapping order, from the outside in:
 flowchart LR
   Caller["Caller"]
   Fb["@Fallback"]
-  Cb["@CircuitBreaker"]
-  Bh["@Bulkhead"]
-  To["@Timeout"]
   Rt["@Retry"]
+  Cb["@CircuitBreaker"]
+  To["@Timeout"]
+  Bh["@Bulkhead"]
   Method["target method"]
 
   Caller --> Fb
-  Fb --> Cb
-  Cb --> Bh
-  Bh --> To
-  To --> Rt
-  Rt --> Method
+  Fb --> Rt
+  Rt --> Cb
+  Cb --> To
+  To --> Bh
+  Bh --> Method
 ....
 
 `@Asynchronous` sits _above_ this chain when present: it switches execution onto a virtual thread, then the `@Fallback → ... → method` chain runs in that thread.
@@ -127,7 +127,7 @@ The two combine naturally: `@CircuitBreaker` protects, `@Fallback` recovers the 
 
 . The interceptor immediately returns an empty `CompletableFuture<T>`.
 . A virtual thread is created (`Thread.ofVirtual().start(...)`).
-. The `@Fallback → @CircuitBreaker → @Bulkhead → @Timeout → @Retry → method` chain runs on that virtual thread.
+. The `@Fallback → @Retry → @CircuitBreaker → @Timeout → @Bulkhead → method` chain runs on that virtual thread.
 . When the result is known, `CompletableFuture.complete(value)` is called.
 
 For `Future<T>`, the contract is stricter: `Future.cancel(true)` interrupts the virtual thread (best-effort), `Future.get(timeout)` blocks the calling thread until `timeout`.
@@ -146,25 +146,25 @@ A method annotated `@Asynchronous` must not be called _directly_ from another vi
 
 == Configuration through MicroProfile Config
 
-MP FT 4.1 spec §12 defines a `fault-tolerance/...` key scheme read through MicroProfile Config — provided by xref:ravel::index.adoc[Ravel].
+MP FT 4.1 spec §12 defines a config-key scheme — `<Annotation>/<param>`, optionally qualified by class and method — read through MicroProfile Config, provided by xref:ravel::index.adoc[Ravel].
 
 [cols="2,3"]
 |===
 | Key | Effect
 
-| `fault-tolerance/<Annotation>/<param>`
+| `<Annotation>/<param>`
 | Global value, takes precedence over the annotation default.
 
-| `fault-tolerance/<Class>/<Annotation>/<param>`
+| `<FQCN>/<Annotation>/<param>`
 | Class-level override.
 
-| `fault-tolerance/<Class>/<method>/<Annotation>/<param>`
+| `<FQCN>/<method>/<Annotation>/<param>`
 | Method-level override — highest precedence.
 
-| `fault-tolerance/MP_Fault_Tolerance_NonFallback_Enabled`
-| Boolean. `false` disables everything except `@Fallback`.
+| `MP_Fault_Tolerance_NonFallback_Enabled`
+| Boolean. `false` disables everything except `@Fallback`. Dotted alias: `mp.fault.tolerance.nonFallback.enabled`.
 
-| `fault-tolerance/MP_Fault_Tolerance_Metrics_Enabled`
+| `mp.fault.tolerance.metrics.enabled`
 | Boolean. `false` disables §9 / §10 metric emission.
 |===
 
@@ -173,5 +173,5 @@ See xref:reference.adoc[Reference] for the exhaustive list and per-parameter var
 == Going further
 
 * xref:usage.adoc[Usage] — typical chains (`@Retry + @Timeout + @CircuitBreaker + @Fallback`), `FallbackHandler`, `@Asynchronous`.
-* xref:internals.adoc[Internals] — invocation pipeline, pure engines, virtual threads, `StateRegistry`.
+* xref:internals.adoc[Internals] — invocation pipeline, pure engines, virtual threads, shared state registries.
 * xref:reference.adoc[Reference] — annotations, parameters, MP Config keys.

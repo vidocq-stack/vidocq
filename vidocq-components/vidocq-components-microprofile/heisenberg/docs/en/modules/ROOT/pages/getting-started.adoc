@@ -43,7 +43,7 @@ The MicroProfile Fault Tolerance API is declared `provided` in `heisenberg-cdi-v
 
 == First guarded method
 
-Annotate a method on a CDI bean. The Heisenberg interceptor composes policies from the outside in — `@Fallback` wraps `@CircuitBreaker`, which wraps `@Bulkhead`, `@Timeout` and `@Retry`, which eventually invoke the actual method.
+Annotate a method on a CDI bean. The Heisenberg interceptor composes policies from the outside in — `@Fallback` wraps `@Retry`, which wraps `@CircuitBreaker`, then `@Timeout`, then `@Bulkhead`, which eventually invokes the actual method (`@Asynchronous`, when present, wraps the whole chain in a virtual thread).
 
 [source,java]
 ----
@@ -100,20 +100,20 @@ curl -i http://localhost:8080/api/stock/SKU-42
 
 == Override without recompiling
 
-Every annotation parameter is overridable through MicroProfile Config (keys `fault-tolerance/<bean>/<method>/<Annotation>/<param>`). See xref:reference.adoc#mp-config[Reference].
+Every annotation parameter is overridable through MicroProfile Config (keys `<FQCN>/<method>/<Annotation>/<param>`). See xref:reference.adoc#mp-config[Reference].
 
 [source,properties]
 ----
 # Disable @Retry on this method without touching the code
-fault-tolerance/io.example.InventoryClient/currentStock/Retry/maxRetries=0
+io.example.InventoryClient/currentStock/Retry/maxRetries=0
 
-# Lengthen the circuit breaker timeout on a slow environment
-fault-tolerance/io.example.InventoryClient/currentStock/CircuitBreaker/delay=10000
+# Lengthen the circuit breaker delay on a slow environment
+io.example.InventoryClient/currentStock/CircuitBreaker/delay=10000
 ----
 
 [NOTE]
 ====
-The MP FT 4.1 §12 precedence stays classic: *target method* > *class* > *annotation default value*. The unqualified key `fault-tolerance/<Annotation>/<param>` acts as a global default.
+The MP FT 4.1 §12 precedence stays classic: *target method* > *class* > *annotation default value*. The unqualified key `<Annotation>/<param>` acts as a global default.
 ====
 
 == Three combinable annotation sources
@@ -131,7 +131,7 @@ The MP FT 4.1 §12 precedence stays classic: *target method* > *class* > *annota
 | Automatic (spec §9.3).
 
 | MicroProfile Config
-| `fault-tolerance/...` key read by xref:ravel::index.adoc[Ravel].
+| `<FQCN>/<method>/<Annotation>/<param>` key read by xref:ravel::index.adoc[Ravel].
 | Presence of the key is enough.
 |===
 
@@ -141,14 +141,14 @@ For integration tests where retry slowness is a nuisance:
 
 [source,properties]
 ----
-fault-tolerance/MP_Fault_Tolerance_NonFallback_Enabled=false
-fault-tolerance/MP_Fault_Tolerance_Metrics_Enabled=false
+MP_Fault_Tolerance_NonFallback_Enabled=false
+mp.fault.tolerance.metrics.enabled=false
 ----
 
-`MP_Fault_Tolerance_NonFallback_Enabled=false` disables `@Retry`, `@Timeout`, `@CircuitBreaker`, `@Bulkhead` and `@Asynchronous`; `@Fallback` stays active per spec §11.
+`MP_Fault_Tolerance_NonFallback_Enabled=false` (dotted alias: `mp.fault.tolerance.nonFallback.enabled=false`) disables `@Retry`, `@Timeout`, `@CircuitBreaker`, `@Bulkhead` and `@Asynchronous`; `@Fallback` stays active per spec §11. `mp.fault.tolerance.metrics.enabled=false` silences the §9 / §10 recorders.
 
 == Next step
 
 * xref:concepts.adoc[Concepts] — composition order, circuit breaker states, `@Asynchronous` semantics.
 * xref:usage.adoc[Usage] — robust REST clients, typed `FallbackHandler`, virtual threads.
-* xref:reference.adoc[Reference] — every annotation, every parameter, every `fault-tolerance/*` key.
+* xref:reference.adoc[Reference] — every annotation, every parameter, every MicroProfile Config key.

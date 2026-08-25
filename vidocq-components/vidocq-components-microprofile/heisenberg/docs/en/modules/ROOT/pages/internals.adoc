@@ -1,12 +1,12 @@
 = Internals
-:description: Invocation pipeline, pure Java 25 engines, virtual threads, StateRegistry, no hot-path locking.
+:description: Invocation pipeline, pure Java 25 engines, virtual threads, shared state registries, no hot-path locking.
 
 [.lead]
 Heisenberg strictly separates pure automata (`heisenberg-core`) from the CDI integration (`heisenberg-cdi-vauban`). This page describes the invocation sequence, the role of each engine, the shared state management for `@CircuitBreaker` and `@Bulkhead`, and the threading invariants required by virtual threads.
 
 == `heisenberg-core` / `heisenberg-cdi-vauban` split
 
-`heisenberg-core` is plain Java — no CDI, no `@Inject`. It is usable outside a container, for instance in a JUnit 5 test to verify a `RetryEngine`'s logic without deploying the application.
+`heisenberg-core` is plain Java — no CDI, no `@Inject`. It is usable outside a container, which is how the project's own JUnit 5 tests verify a `RetryEngine`'s logic without deploying an application. Its `io.vidocq.heisenberg.internal` package is exported only to the CDI module — it is not application API.
 
 `heisenberg-cdi-vauban` is the integration layer: a single CDI `@Interceptor` (`FaultToleranceInterceptor`) orchestrates the engines, a Build Compatible Extension (`HeisenbergExtension`) declares it at startup, two `@ApplicationScoped` beans (`StateRegistryBean`, `BulkheadStateRegistryBean`) maintain the shared state.
 
@@ -19,21 +19,21 @@ flowchart LR
   Around["FaultToleranceInterceptor.around()"]
   Composer["PolicyComposer<br/>resolves config + §2.5 order"]
   Fb["FallbackResolver"]
-  Cb["CircuitBreakerEngine"]
-  Bh["BulkheadEngine"]
-  To["TimeoutEngine"]
   Rt["RetryEngine"]
+  Cb["CircuitBreakerEngine"]
+  To["TimeoutEngine"]
+  Bh["BulkheadEngine"]
   Target["target method"]
   Metrics["FtMetricsRecorder<br/>(composite)"]
 
   Bean --> Around
   Around --> Composer
   Composer --> Fb
-  Fb --> Cb
-  Cb --> Bh
-  Bh --> To
-  To --> Rt
-  Rt --> Target
+  Fb --> Rt
+  Rt --> Cb
+  Cb --> To
+  To --> Bh
+  Bh --> Target
 
   Around -.emits.-> Metrics
 ....
@@ -43,8 +43,8 @@ flowchart LR
 . Each engine applies its logic:
 .. `RetryEngine` loops up to `maxRetries` with `delay + jitter` randomness.
 .. `TimeoutEngine` runs the attempt on a virtual thread and calls `Thread.join(Duration)`; on expiry, it raises `TimeoutException` and interrupts the worker.
-.. `BulkheadEngine` acquires a `Semaphore` (sync mode) or pushes onto a bounded `LinkedBlockingQueue` (async mode).
-.. `CircuitBreakerEngine` reads/updates the three-state machine via `LongAdder` (lock-free counters).
+.. `BulkheadEngine` acquires a fair `Semaphore` (sync mode); in async mode a second bounded `Semaphore` models the `waitingTaskQueue`.
+.. `CircuitBreakerEngine` reads/updates the three-state machine held by the shared registry; its sliding window counts requests and failures with `AtomicInteger` counters.
 .. `FallbackResolver` resolves `fallbackMethod` or instantiates the `FallbackHandler<T>` through CDI lookup.
 . `FtMetricsRecorder` emits §9 (MP Metrics) and §10 (OpenTelemetry) metrics on every transition.
 
@@ -61,19 +61,19 @@ flowchart LR
 | `Thread worker = Thread.ofVirtual().start(task)`. `worker.join(Duration.ofMillis(timeoutMs))`. If not done: `worker.interrupt()` and `TimeoutException`.
 
 | `CircuitBreakerEngine`
-| Finite-state machine: `AtomicReference<State>` for the transition, `LongAdder` for success/failure counters. No lock — lock-free CAS.
+| Finite-state machine (CLOSED/OPEN/HALF_OPEN) stored in the shared registry as a `volatile` per-method snapshot; sliding window backed by a `ConcurrentLinkedDeque` plus `AtomicInteger` request/failure counters. No lock.
 
 | `BulkheadEngine`
-| `Semaphore` with `value` permits. Async mode: `LinkedBlockingQueue<Runnable>` bounded to `waitingTaskQueue`.
+| Fair `Semaphore` with `value` permits. Async mode: a second fair `Semaphore` bounds the waiting queue to `waitingTaskQueue` permits.
 
 | `FallbackResolver`
 | `MethodHandle` resolved once at construction (via `MethodHandles.privateLookupIn`). No `Proxy.newProxyInstance`.
 
 | `PolicyComposer`
-| `switch` on sealed types (`AnnotationPresence`). Builds an immutable `PolicyChain`.
+| Builds the chain inside out by nesting `Invocation` lambdas (`@Bulkhead` first, `@Fallback` / `@Asynchronous` last), from the annotation snapshot read by `AnnotationReader`.
 |===
 
-== Shared `StateRegistry`
+== Shared state registries
 
 `@CircuitBreaker` and `@Bulkhead` need state shared across all invocations of a given method — whether it is called from a `@RequestScoped`, `@ApplicationScoped` or `@Dependent` bean. MP FT spec §5.4 / §9.6 explicitly states that the state is attached to the _method signature_, not to the instance.
 
@@ -82,10 +82,10 @@ flowchart LR
 | Bean | Role
 
 | `StateRegistryBean` (`@ApplicationScoped`)
-| Map `(BeanClass, Method) → CircuitBreakerState`. Read/write via `ConcurrentHashMap.computeIfAbsent`.
+| Implements `CircuitBreakerStateRegistry`. Keyed by `beanClass#method`; `ConcurrentHashMap.computeIfAbsent` returns a per-breaker snapshot (`volatile` state, opened-at timestamp, HALF_OPEN success counter).
 
 | `BulkheadStateRegistryBean` (`@ApplicationScoped`)
-| Map `(BeanClass, Method) → BulkheadState` (Semaphore + Queue).
+| Implements `BulkheadStateRegistry`. Keyed by `beanClass#method`; fair concurrency `Semaphore`, plus a fair waiting-queue `Semaphore` in async mode.
 |===
 
 Consequence: a `@RequestScoped` bean recreated on every request _shares_ its `@CircuitBreaker` with previous requests — this is intentional and spec-compliant.
@@ -98,8 +98,8 @@ Consequence: a `@RequestScoped` bean recreated on every request _shares_ its `@C
 Every policy that needs to block (`@Timeout`, `@Asynchronous`, `@Bulkhead` async mode) uses `Thread.ofVirtual()`. No platform thread pool is created by Heisenberg.
 
 * `TimeoutEngine` — `Thread.ofVirtual().start(task)` + `join(Duration)`. Memory cost is in the order of a few kB per attempt (stack pinning included).
-* `AsyncEngine` (built into the interceptor) — `Thread.ofVirtual().start(...)` to run the full chain.
-* `BulkheadEngine` (async) — the queue is drained by virtual threads created on demand.
+* `AsynchronousEngine` (`heisenberg-core`) — `Thread.ofVirtual().start(...)` to run the full chain and complete the returned `CompletionStage`.
+* `BulkheadEngine` (async) — waiting invocations block on the fair `Semaphore` from their own virtual thread; no dispatcher thread exists.
 
 [NOTE]
 ====
@@ -108,10 +108,10 @@ Every policy that needs to block (`@Timeout`, `@Asynchronous`, `@Bulkhead` async
 
 === No `synchronized`, no `ThreadLocal`
 
-The repo `CLAUDE.md` mandates strictly:
+The repo `CLAUDE.md` mandates strictly, and the engines follow through:
 
-* no `synchronized` — `ReentrantLock` with `tryLock` when a lock is unavoidable;
-* no `ThreadLocal` — `ScopedValue` (JEP 506, finalised Java 25) for the invocation context;
+* no `synchronized` — `ReentrantLock` with `tryLock` when a lock is unavoidable (so far, none has been);
+* no `ThreadLocal` — invocation state travels through explicit parameters and captured lambdas;
 * no `setAccessible(true)` — `MethodHandles.privateLookupIn` for private fallbacks;
 * no `java.lang.reflect.Proxy` — direct `MethodHandle`.
 
@@ -119,36 +119,33 @@ This discipline guarantees that virtual threads are never _pinned_ to their carr
 
 === Lock-free counters
 
-`CircuitBreakerEngine` uses `LongAdder` for the `successCount` and `failureCount` counters, and an `AtomicReference<State>` for state transitions. Every transition goes through `compareAndSet` — no lock, no blocking.
+`CircuitBreakerEngine` counts requests and failures with `AtomicInteger` counters behind a `ConcurrentLinkedDeque` sliding window; the shared registry keeps each breaker's state in a `volatile` snapshot field. No lock is taken on the hot path.
 
 == Vauban BCE: `HeisenbergExtension`
 
-Startup orchestration is carried by `io.vidocq.heisenberg.cdi.HeisenbergExtension`, a CDI 4.1 Build Compatible Extension:
+Startup orchestration is carried by `io.vidocq.heisenberg.cdi.internal.HeisenbergExtension`, a CDI 4.1 Build Compatible Extension that uses only the `@Enhancement` phase — two hooks:
 
 [source,java]
 ----
-// Pseudo-declaration — the real BCE uses the @Discovery,
-// @Enhancement, @Registration and @Synthesis hooks of CDI 4.1 Lite.
+// Simplified from the real extension — both hooks are @Enhancement.
 
-@Discovery
-public void declareInterceptor(ScannedTypes types) {
-    // Declares FaultToleranceInterceptor.class
+@Enhancement(types = FaultToleranceInterceptor.class)
+public void configureInterceptorPriority(ClassConfig classConfig) {
+    // Rewrites the interceptor's @Priority when
+    // mp.fault.tolerance.interceptor.priority differs from the default 4010.
 }
 
-@Validation
-public void validateAnnotations(BeanInfo bean) {
-    // Verifies that @Asynchronous methods return CompletionStage|Future,
-    // that @Bulkhead.value >= 1, that @Fallback.value and fallbackMethod are exclusive, etc.
-    // Raises FaultToleranceDefinitionException if not.
-}
-
-@Synthesis
-public void synthesizeStateRegistry(SyntheticComponents synth) {
-    // Synthesises StateRegistryBean and BulkheadStateRegistryBean if absent.
+@Enhancement(types = Object.class, withSubtypes = true,
+        withAnnotations = { Retry.class, Timeout.class, CircuitBreaker.class,
+                            Bulkhead.class, Asynchronous.class, Fallback.class })
+public void addFaultToleranceBinding(ClassConfig classConfig) {
+    // Validates the FT definitions (@Asynchronous return type, @Bulkhead
+    // bounds, @Fallback method signature, ...) and adds the
+    // @FaultToleranceBinding marker so CDI selects the interceptor.
 }
 ----
 
-Startup validation is crucial: any malformed annotation (`@Asynchronous void m()`, `@Bulkhead(value=0)`, `@Fallback` with two conflicting parameters) immediately aborts application startup — no late runtime surprise.
+Startup validation is crucial: any malformed annotation (`@Asynchronous void m()`, `@Bulkhead(value=0)`, a `@Fallback` whose fallback method does not match the guarded signature) raises `FaultToleranceDefinitionException` and immediately aborts application startup — no late runtime surprise.
 
 == Optional observability
 
@@ -160,7 +157,7 @@ The `io.vidocq.heisenberg.api.FtMetricsRecorder` SPI is implemented in parallel 
 | Recorder | Module
 
 | `DiracFtMetricsRecorder`
-| `dirac-cdi-vauban` — MP Metrics §9, counters `ft.invocations.total`, `ft.retry.retries.total`, etc.
+| `heisenberg-cdi-vauban` — MP Metrics §9 via Dirac, counters `ft.invocations.total`, `ft.retry.retries.total`, etc.
 
 | `OtelFtMetricsRecorder`
 | `heisenberg-cdi-vauban` — OpenTelemetry §10, via `GlobalOpenTelemetry`. Declared `requires static io.opentelemetry.api`.
@@ -168,24 +165,11 @@ The `io.vidocq.heisenberg.api.FtMetricsRecorder` SPI is implemented in parallel 
 
 The `FaultToleranceInterceptor` injects `@Any Instance<FtMetricsRecorder>`. If several recorders are present, `MetricsRecorderResolver.resolve()` wraps them in a `CompositeFtMetricsRecorder` (fan-out) — this avoids `AmbiguousResolutionException` and publishes MP Metrics and OTel simultaneously.
 
-If no recorder is present (OpenTelemetry absent, Dirac absent), a `NoopFtMetricsRecorder` is used — invocation cost is negligible. The `run-tck-no-observability.sh` script validates this no-observability path.
+If no recorder is present (OpenTelemetry absent, Dirac absent), the `FtMetricsRecorder.NOOP` constant is used — invocation cost is negligible. The `run-tck-no-observability.sh` script validates this no-observability path.
 
-== Sealed types and pattern matching
+== Records and exhaustive switches
 
-The public API uses sealed types to expose an exhaustive model to the compiler.
-
-[source,java]
-----
-public sealed interface PolicyResult<T>
-    permits PolicyResult.Success, PolicyResult.Failure, PolicyResult.Fallback {
-
-    record Success<T>(T value) implements PolicyResult<T> {}
-    record Failure<T>(Throwable error) implements PolicyResult<T> {}
-    record Fallback<T>(T value, Throwable suppressedError) implements PolicyResult<T> {}
-}
-----
-
-`PolicyComposer` uses an exhaustive `switch` on this — the MP FT 4.1 spec is frozen, so static exhaustivity is appropriate.
+The internal model leans on records and enums rather than a sealed result hierarchy. Policy configurations are immutable records — `RetryConfig`, `TimeoutConfig`, `CircuitBreakerConfig`, `BulkheadConfig`, `FallbackConfig` — that validate their bounds in compact constructors. State is enum-driven: `CircuitBreakerState` (CLOSED/OPEN/HALF_OPEN) and the `FtMetricsRecorder` enums (`RetryResult`, `CBCallResult`, `CBState`) feed exhaustive `switch` expressions in `PolicyComposer` and the recorders — the MP FT 4.1 spec is frozen, so static exhaustivity is appropriate. The records and `CircuitBreakerState` live in the qualified-export `io.vidocq.heisenberg.internal` package (the recorder enums are nested in the public `FtMetricsRecorder`); the application-facing API remains the spec annotations plus the small `io.vidocq.heisenberg.api` SPI.
 
 == Going further
 

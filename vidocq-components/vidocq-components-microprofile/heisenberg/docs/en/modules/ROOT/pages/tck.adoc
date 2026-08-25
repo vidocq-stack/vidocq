@@ -2,7 +2,7 @@
 :description: Status, runner execution, no-observability mode, in-reactor runner behind the tck profile, documented exclusions.
 
 [.lead]
-The official MicroProfile Fault Tolerance 4.1 TCK validates that an implementation honours the semantics of §2.5 (composition), §4 (Retry), §5 (CircuitBreaker), §6 (Asynchronous), §7 (Timeout), §8 (Fallback), §9 (Bulkhead), §10 (Metrics) and §11 (OpenTelemetry) over a set of reference applications. Heisenberg passes *463 / 463* on version 4.1 (May 2026).
+The official MicroProfile Fault Tolerance 4.1 TCK validates that an implementation honours the semantics of §2.5 (composition), §3 (Retry), §4 (Timeout), §5 (CircuitBreaker), §6 (Fallback), §7 (Bulkhead), §8 (Asynchronous), §9 (MP Metrics), §10 (OpenTelemetry) and §11 (disabling every policy except `@Fallback`) over a set of reference applications. Heisenberg passes *463 / 463* on version 4.1 (May 2026).
 
 == Status
 
@@ -79,7 +79,7 @@ The `run-tck-no-observability.sh` script wraps the main runner and **excludes** 
 ./run-tck-no-observability.sh -Dtest=RetryTest
 ----
 
-Why this mode exists: it validates that fault tolerance _works_ even when no observability dependency is present on the classpath. Heisenberg declares OpenTelemetry as `requires static` (Java static module); if OTel is absent, CDI silently ignores `OtelFtMetricsRecorder`, and the `NoopFtMetricsRecorder` is used. This mode proves that this absence does not affect the Retry, Timeout, CircuitBreaker, Bulkhead, Fallback, Asynchronous policies.
+Why this mode exists: it validates that fault tolerance _works_ even when no observability dependency is present on the classpath. Heisenberg declares OpenTelemetry as `requires static` (Java static module); if OTel is absent, CDI silently ignores `OtelFtMetricsRecorder`, and the `FtMetricsRecorder.NOOP` constant is used. This mode proves that this absence does not affect the Retry, Timeout, CircuitBreaker, Bulkhead, Fallback, Asynchronous policies.
 
 Exclusions applied by the wrapper:
 

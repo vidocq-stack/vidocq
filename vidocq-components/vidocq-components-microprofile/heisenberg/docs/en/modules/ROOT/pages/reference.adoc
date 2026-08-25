@@ -2,7 +2,7 @@
 :description: Maven artifacts, exported Java modules, supported annotations, canonical composition order, MicroProfile Config keys.
 
 [.lead]
-This page consolidates Heisenberg's public surface: Maven artifacts, Java modules, full table of MP FT 4.1 annotations with the canonical composition order, and the `fault-tolerance/*` keys recognised by xref:ravel::index.adoc[Ravel].
+This page consolidates Heisenberg's public surface: Maven artifacts, Java modules, full table of MP FT 4.1 annotations with the canonical composition order, and the MicroProfile Config keys recognised through xref:ravel::index.adoc[Ravel].
 
 == Maven artifacts
 
@@ -12,7 +12,7 @@ This page consolidates Heisenberg's public surface: Maven artifacts, Java module
 
 | `io.vidocq.heisenberg`
 | `heisenberg-api`
-| Stable public SPI. Typed re-exposure of the spec + types `StateRegistry`, `PolicyContext`, `FtMetricsRecorder`.
+| Stable public SPI: `FtMetricsRecorder` (metrics recorder) and `FaultToleranceException`; re-exports the MP FT 4.1 spec API (`requires transitive`).
 
 | `io.vidocq.heisenberg`
 | `heisenberg-core`
@@ -48,16 +48,16 @@ All versions at `{project-version}` (latest release on Maven Central: `{release-
 | Module | Contents
 
 | `io.vidocq.heisenberg.api`
-| `io.vidocq.heisenberg.api.*` — public SPI: `StateRegistry`, `PolicyContext`, `FtMetricsRecorder`, configurations `RetryConfig`, `TimeoutConfig`, `CircuitBreakerConfig`, `BulkheadConfig` (immutable records), sealed interface `PolicyResult` (`Success`, `Failure`, `Fallback`).
+| `io.vidocq.heisenberg.api` — public SPI: `FtMetricsRecorder` (metrics SPI with its `NOOP` constant and the `RetryResult`, `CBCallResult`, `CBState` enums) and `FaultToleranceException`. Re-exports the spec annotations via `requires transitive microprofile.fault.tolerance.api`.
 
 | `io.vidocq.heisenberg.core`
-| Internal implementations: engines, `PolicyComposer`, in-memory `StateRegistry`. Packages `io.vidocq.heisenberg.internal.*` are not exported.
+| Internal implementations: engines, `PolicyComposer`, the `CircuitBreakerStateRegistry` / `BulkheadStateRegistry` interfaces and the immutable `*Config` records. The `io.vidocq.heisenberg.internal` package is exported only to `io.vidocq.heisenberg.cdi.vauban`.
 
 | `io.vidocq.heisenberg.cdi.vauban`
 | CDI integration: `FaultToleranceInterceptor`, `HeisenbergExtension` (BCE), `StateRegistryBean`, `BulkheadStateRegistryBean`, `MetricsRecorderResolver`, `CompositeFtMetricsRecorder`.
 |===
 
-`io.vidocq.heisenberg.internal.*` is never exported. Any application class depending on it indicates a regression to fix.
+`io.vidocq.heisenberg.internal` is invisible to application modules (qualified export to `io.vidocq.heisenberg.cdi.vauban` only). Any application class depending on it indicates a regression to fix.
 
 == MicroProfile Fault Tolerance 4.1 annotations
 
@@ -77,14 +77,14 @@ Summary table of the six annotations, in wrapping order from the outside in.
 | Provides an alternative result on failure. Parameters: `fallbackMethod` or `FallbackHandler<T>` class.
 | ✅
 
+| `@Retry`
+| Method or class
+| Bounded retries with delay, jitter, `retryOn` / `abortOn`.
+| ✅
+
 | `@CircuitBreaker`
 | Method or class
 | CLOSED/OPEN/HALF_OPEN breaker over a sliding window.
-| ✅
-
-| `@Bulkhead`
-| Method or class
-| Isolation via semaphore (sync) or bounded queue (async).
 | ✅
 
 | `@Timeout`
@@ -92,9 +92,9 @@ Summary table of the six annotations, in wrapping order from the outside in.
 | Bounds an attempt's duration — virtual thread + `join(Duration)`.
 | ✅
 
-| `@Retry`
+| `@Bulkhead`
 | Method or class
-| Bounded retries with delay, jitter, `retryOn` / `abortOn`.
+| Isolation via semaphore (sync) or semaphore-bounded waiting queue (async).
 | ✅
 |===
 
@@ -203,23 +203,23 @@ All keys are read through `ConfigProvider.getConfig()`. Precedence: *method* > *
 |===
 | Key | Effect
 
-| `fault-tolerance/<Annotation>/<param>`
+| `<Annotation>/<param>`
 | Global value.
 
-| `fault-tolerance/<FQCN>/<Annotation>/<param>`
+| `<FQCN>/<Annotation>/<param>`
 | Class override.
 
-| `fault-tolerance/<FQCN>/<method>/<Annotation>/<param>`
+| `<FQCN>/<method>/<Annotation>/<param>`
 | Method override — highest precedence.
 
-| `fault-tolerance/MP_Fault_Tolerance_NonFallback_Enabled`
-| Boolean. `false` disables `@Retry`, `@Timeout`, `@CircuitBreaker`, `@Bulkhead`, `@Asynchronous`; `@Fallback` stays active (spec §11).
+| `MP_Fault_Tolerance_NonFallback_Enabled`
+| Boolean. `false` disables `@Retry`, `@Timeout`, `@CircuitBreaker`, `@Bulkhead`, `@Asynchronous`; `@Fallback` stays active (spec §11). Dotted alias: `mp.fault.tolerance.nonFallback.enabled`.
 
-| `fault-tolerance/MP_Fault_Tolerance_Metrics_Enabled`
-| Boolean. `false` disables §9 and §10 recorders.
+| `mp.fault.tolerance.metrics.enabled`
+| Boolean. `false` disables §9 and §10 recorders. Default `true`.
 
-| `fault-tolerance/MP_Fault_Tolerance_Interceptor_Priority`
-| Interceptor priority (`@Priority`).
+| `mp.fault.tolerance.interceptor.priority`
+| Interceptor priority (`@Priority`). Default `4010` (`Platform.AFTER + 10`); `Integer.MAX_VALUE` disables the interceptor entirely.
 |===
 
 Examples with their parameters:
@@ -227,18 +227,18 @@ Examples with their parameters:
 [source,properties]
 ----
 # Global
-fault-tolerance/Retry/maxRetries=5
-fault-tolerance/Timeout/value=2000
-fault-tolerance/CircuitBreaker/failureRatio=0.6
+Retry/maxRetries=5
+Timeout/value=2000
+CircuitBreaker/failureRatio=0.6
 
 # Per class
-fault-tolerance/io.example.CatalogClient/Retry/maxRetries=2
+io.example.CatalogClient/Retry/maxRetries=2
 
 # Per method (highest precedence)
-fault-tolerance/io.example.CatalogClient/fetch/Retry/maxRetries=1
-fault-tolerance/io.example.CatalogClient/fetch/Retry/delay=500
-fault-tolerance/io.example.CatalogClient/fetch/CircuitBreaker/delay=30000
-fault-tolerance/io.example.CatalogClient/fetch/Bulkhead/value=20
+io.example.CatalogClient/fetch/Retry/maxRetries=1
+io.example.CatalogClient/fetch/Retry/delay=500
+io.example.CatalogClient/fetch/CircuitBreaker/delay=30000
+io.example.CatalogClient/fetch/Bulkhead/value=20
 ----
 
 == Exceptions
@@ -265,24 +265,20 @@ fault-tolerance/io.example.CatalogClient/fetch/Bulkhead/value=20
 
 == Vidocq SPI exposed by `heisenberg-api`
 
-Public interfaces implementable by a third-party module — for instance an alternative metrics recorder.
+The public surface of `heisenberg-api` is deliberately small — two types, plus the re-exported spec annotations.
 
 [cols="2,3"]
 |===
 | Type | Role
 
 | `io.vidocq.heisenberg.api.FtMetricsRecorder`
-| Metrics recorder. Default implementations: `DiracFtMetricsRecorder` (MP Metrics) and `OtelFtMetricsRecorder` (OpenTelemetry). Several implementations are composed via `CompositeFtMetricsRecorder`.
+| Metrics recorder SPI, implementable by a third-party module. Provided implementations (in `heisenberg-cdi-vauban`): `DiracFtMetricsRecorder` (MP Metrics) and `OtelFtMetricsRecorder` (OpenTelemetry); several recorders are composed via `CompositeFtMetricsRecorder`, and the `FtMetricsRecorder.NOOP` constant is used when none is present.
 
-| `io.vidocq.heisenberg.api.StateRegistry`
-| Shared state registry for `@CircuitBreaker` and `@Bulkhead`. Implemented by `StateRegistryBean` (CDI `@ApplicationScoped`).
-
-| `io.vidocq.heisenberg.api.PolicyContext`
-| Invocation context: bean, method, parameters, resolved configuration.
-
-| `io.vidocq.heisenberg.api.PolicyResult`
-| Sealed result interface: `Success<T>`, `Failure`, `Fallback<T>`.
+| `io.vidocq.heisenberg.api.FaultToleranceException`
+| Base Heisenberg exception for configuration errors detected at container startup — distinct from the spec-defined runtime exceptions above.
 |===
+
+The shared state registries (`CircuitBreakerStateRegistry`, `BulkheadStateRegistry`), the policy engines and the policy configuration records are internal (`io.vidocq.heisenberg.internal`, exported only to the CDI module) — they are not extension points.
 
 == Compatibility
 

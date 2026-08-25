@@ -202,42 +202,27 @@ Every parameter is overridable through xref:ravel::index.adoc[Ravel] (MicroProfi
 [source,properties]
 ----
 # Global — every @Retry in the application
-fault-tolerance/Retry/maxRetries=5
+Retry/maxRetries=5
 
 # Per class — all methods of CatalogClient
-fault-tolerance/io.example.CatalogClient/Retry/maxRetries=2
+io.example.CatalogClient/Retry/maxRetries=2
 
 # Per method — highest precedence
-fault-tolerance/io.example.CatalogClient/fetch/Retry/maxRetries=1
-fault-tolerance/io.example.CatalogClient/fetch/CircuitBreaker/delay=60000
+io.example.CatalogClient/fetch/Retry/maxRetries=1
+io.example.CatalogClient/fetch/CircuitBreaker/delay=60000
 
 # Turn off tolerance except @Fallback (useful in integration)
-fault-tolerance/MP_Fault_Tolerance_NonFallback_Enabled=false
+MP_Fault_Tolerance_NonFallback_Enabled=false
 ----
 
 == Test without a container
 
-The `heisenberg-core` engines are pure Java — usable without CDI in a JUnit 5 test to validate a policy's logic without deploying the application.
+The `heisenberg-core` engines (`RetryEngine`, `TimeoutEngine`, `CircuitBreakerEngine`, `BulkheadEngine`) are pure Java with no CDI dependency — that is how Heisenberg unit-tests them internally. They are **not** application API, though: the `io.vidocq.heisenberg.internal` package is exported only to the `io.vidocq.heisenberg.cdi.vauban` module, and its types (`RetryConfig` and the other policy records included) are internal. Application code compiles against the `org.eclipse.microprofile.faulttolerance.*` annotations only — they are the whole public API.
 
-[source,java]
-----
-import io.vidocq.heisenberg.core.RetryEngine;
-import io.vidocq.heisenberg.api.RetryConfig;
-
-class RetryEngineTest {
-    @org.junit.jupiter.api.Test
-    void retriesUpToMaxRetries() {
-        var cfg = RetryConfig.builder().maxRetries(3).delayMillis(0).build();
-        var engine = new RetryEngine(cfg);
-        // engine.execute(() -> { ... }) — see Javadoc
-    }
-}
-----
-
-For CDI integration tests, use Vauban embedded rather than Arquillian — see xref:vauban::index.adoc[Vauban].
+To exercise a policy without deploying the full application, run the annotated bean in embedded Vauban rather than Arquillian — see xref:vauban::index.adoc[Vauban].
 
 == Going further
 
 * xref:concepts.adoc[Concepts] — composition order, CircuitBreaker states, async semantics.
 * xref:reference.adoc[Reference] — full parameter list per annotation, MP Config keys table.
-* xref:internals.adoc[Internals] — virtual threads, StateRegistry, metrics.
+* xref:internals.adoc[Internals] — virtual threads, shared state registries, metrics.

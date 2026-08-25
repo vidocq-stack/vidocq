@@ -44,7 +44,7 @@ Heisenberg established that **uncertainty is intrinsic, not a flaw of the instru
 | Repository | https://codefloe.com/Vidocq/heisenberg
 | Java | 25 (LTS)
 | Java modules | `io.vidocq.heisenberg.api`, `io.vidocq.heisenberg.core`, `io.vidocq.heisenberg.cdi.vauban`
-| Public packages | `io.vidocq.heisenberg.api.*` (stable SPI), `io.vidocq.heisenberg.cdi.*` (CDI integration)
+| Public packages | `io.vidocq.heisenberg.api` (stable SPI: `FtMetricsRecorder`, `FaultToleranceException`). The CDI module exports `io.vidocq.heisenberg.cdi.internal` so the container can invoke the interceptor without `opens` — internal by contract, not application API.
 | Runtime dependencies | `microprofile-fault-tolerance-api` 4.1, `jakarta.enterprise.cdi-api` 4.1 (provided), `jakarta.interceptor-api` 2.2 (provided), `ravel-mp-config-api` (MicroProfile Config 3.1), `opentelemetry-api` 1.39 (`requires static`)
 | jlink-ready | ✅ — every sub-module has its `module-info.java`, no `Automatic-Module-Name` fallback in production.
 | MP FT 4.1 TCK | ✅ 463 / 463 — see xref:tck.adoc[detailed status]
@@ -53,8 +53,8 @@ Heisenberg established that **uncertainty is intrinsic, not a flaw of the instru
 == Three identity traits
 
 . **Zero third-party implementation library** — only the specified Jakarta EE and MicroProfile APIs are compiled. No SmallRye Fault Tolerance, no Hystrix, no Resilience4j. The automata (retry, circuit breaker, bulkhead) are hand-written in `heisenberg-core`.
-. **Native virtual threads for `@Asynchronous` and `@Timeout`** — `Thread.ofVirtual()` + `join(Duration)` bound each attempt; no platform thread pool is created. No `synchronized`, no `ThreadLocal` — `ReentrantLock`, `Semaphore`, `LongAdder`, `ConcurrentHashMap` and `ScopedValue` are preferred.
-. **Ravel config + Vauban BCE** — all `fault-tolerance/...` keys are resolved through xref:ravel::index.adoc[Ravel] (MicroProfile Config 3.1); the single interceptor is registered by a xref:vauban::index.adoc[Vauban] Build Compatible Extension that scans and indexes annotations at startup.
+. **Native virtual threads for `@Asynchronous` and `@Timeout`** — `Thread.ofVirtual()` + `join(Duration)` bound each attempt; no platform thread pool is created. No `synchronized`, no `ThreadLocal` in the policy engines — fair `Semaphore`, `ConcurrentHashMap`, atomics (`AtomicInteger`, `AtomicReference`, `AtomicBoolean`) and `volatile` snapshots instead.
+. **Ravel config + Vauban BCE** — all MP FT config keys (`<FQCN>/<method>/<Annotation>/<param>`, `MP_Fault_Tolerance_NonFallback_Enabled`, `mp.fault.tolerance.interceptor.priority`, …) are resolved through xref:ravel::index.adoc[Ravel] (MicroProfile Config 3.1); the interceptor binding is added by a xref:vauban::index.adoc[Vauban] Build Compatible Extension that scans annotated classes at startup.
 
 == Position in the ecosystem
 
@@ -63,22 +63,22 @@ Heisenberg established that **uncertainty is intrinsic, not a flaw of the instru
 flowchart LR
   App["Application CDI bean<br/>annotated method"]
   Interceptor["FaultToleranceInterceptor<br/>(heisenberg-cdi-vauban)"]
+  Async["@Asynchronous<br/>(when present)"]
   Fallback["@Fallback"]
-  CB["@CircuitBreaker"]
   Retry["@Retry"]
+  CB["@CircuitBreaker"]
   Timeout["@Timeout"]
   Bulkhead["@Bulkhead"]
-  Async["@Asynchronous"]
   Method["target method"]
 
   App --> Interceptor
-  Interceptor --> Fallback
-  Fallback --> CB
-  CB --> Retry
-  Retry --> Timeout
+  Interceptor --> Async
+  Async --> Fallback
+  Fallback --> Retry
+  Retry --> CB
+  CB --> Timeout
   Timeout --> Bulkhead
-  Bulkhead --> Async
-  Async --> Method
+  Bulkhead --> Method
 
   Interceptor -. "config" .-> Ravel["Ravel<br/>MicroProfile Config"]
   Interceptor -. "BCE" .-> Vauban["Vauban<br/>CDI Lite"]
@@ -88,15 +88,15 @@ flowchart LR
   class Interceptor rt
 ....
 
-The chain wrapping order follows MP FT 4.1 spec §2.5 — `@Fallback` is the outermost wrapper, the target method is at the core. xref:cassini::index.adoc[Cassini] and any application HTTP client benefit from fault tolerance without code change. xref:humboldt::index.adoc[Humboldt] (OpenTelemetry) and the Dirac MP Metrics implementation can collect the §9 and §10 metrics; the `run-tck-no-observability.sh` script disables them to validate that tolerance works with zero observability dependency on the classpath.
+The chain wrapping order follows MP FT 4.1 spec §2.5 — `@Fallback` is the outermost policy and the target method is at the core; `@Asynchronous`, when present, wraps the whole chain in a virtual thread. xref:cassini::index.adoc[Cassini] and any application HTTP client benefit from fault tolerance without code change. xref:humboldt::index.adoc[Humboldt] (OpenTelemetry) and the Dirac MP Metrics implementation can collect the §9 and §10 metrics; the `run-tck-no-observability.sh` script disables them to validate that tolerance works with zero observability dependency on the classpath.
 
 == Quick links
 
 * xref:getting-started.adoc[Getting started] — first guarded method, first `@Retry + @CircuitBreaker + @Fallback` chain.
 * xref:concepts.adoc[Concepts] — annotations, composition order, circuit breaker states.
 * xref:usage.adoc[Usage] — robust REST clients, `@Asynchronous`, `FallbackHandler`, MP Config overrides.
-* xref:reference.adoc[Reference] — artifacts, Java modules, annotations, `fault-tolerance/*` keys.
-* xref:internals.adoc[Internals] — pure engines, `StateRegistry`, virtual threads.
+* xref:reference.adoc[Reference] — artifacts, Java modules, annotations, MicroProfile Config keys.
+* xref:internals.adoc[Internals] — pure engines, shared state registries, virtual threads.
 * xref:tck.adoc[TCK] — execution, status, `no-observability` mode.
 * xref:migration.adoc[Migration] — from SmallRye Fault Tolerance or Resilience4j.
 
