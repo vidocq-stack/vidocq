@@ -8,8 +8,9 @@ compatibility request once Vidocq 0.3.0 is released.
 > Status: **pre-filing.** All seven constituent specification TCKs pass; the
 > profile-level composite TCK is at 10/13 on JDK 25 — every test reachable on
 > JDK 25 passes, the remaining 3 being the documented JDK 25 TCK-helper
-> incompatibility (see [Status](#status)). The request is not yet filed — it
-> certifies a *released* product, and 0.3.0 is not cut.
+> incompatibility, for which the challenge is now **filed and accepted**
+> (see [Status](#status)). The compatibility request itself is not yet filed —
+> it certifies a *released* product, and 0.3.0 is not cut.
 
 ## 1. What Core Profile 11 certification requires
 
@@ -89,10 +90,31 @@ isolated bricks.
 
 Signature tests are mandatory. They compare the API surface on the runtime's class
 path against a recorded signature, using `jakarta.tck:sigtest-maven-plugin` with
-`java.base` extracted via `jimage`. The Annotations TCK is signature-only and
-already green on JDK 25, proving the mechanism. The Core Profile bundle ships
-`common-annotations-11.0.0-sigtest.sig`; wiring the profile signature tests into the
-composite runner (with the same jimage-backed `sigTestClasspath`) is pending.
+`java.base` extracted via `jimage`. **There is no profile-level signature test**:
+the Core Profile TCK's own `doc/asciidoc/sigtest.asciidoc` states the profile "has
+no API artifact other than the utility api jar that is a combination of the
+various component specifications" and defers entirely to each constituent's own
+signature test. Status, each verified by actually running it (not just reading a
+prior report):
+
+| Spec | Signature test | Result |
+|---|---|---|
+| Annotations 3.0 | `CAJSigTestIT` (`vidocq-runtime-tck-annotations`) | ✅ 1/1 pass |
+| JSON-P 2.1 | `JSONPSigTest` (`champollion-tck`, profile `jsonp-tck`) | ✅ 1/1 pass |
+| JSON-B 3.0 | `JSONBSigTest` (`champollion-tck`, profile `jsonb-tck`) | ✅ 1/1 pass |
+| RESTful WS 4.0 | `JAXRSSigTestIT` (`cassini-tck`) | ⏭️ excluded — documented TCK Process 1.4.1 challenge (TCK-environment limitation, needs a full `ts_home` layout; see `cassini/main/TCK.md` §2.2) |
+| CDI 4.1 Lite (+ Interceptors 2.2) | `cdi-sigtest` profile (`vauban/vauban-tck-runner`, `mvn -Pcdi-sigtest verify -pl vauban-tck-runner`) | ✅ 0 failures against `cdi-api-jdk17.sig` |
+
+The RESTful WS exclusion is a pre-existing, separately-documented challenge (not
+new). The CDI signature test checks `jakarta.decorator`, `jakarta.enterprise.**`
+and `jakarta.interceptor` against the official `cdi-api-jdk17.sig` (bundled inside
+the `jakarta.enterprise:cdi-tck-core-impl:4.1.0` artifact — no separate EFTL
+download needed). Vauban depends on the pristine `jakarta.enterprise.cdi-api` /
+`jakarta.enterprise.lang-model` jars unmodified, so this asserts the untouched
+official API rather than a Vauban-authored reimplementation, same principle as
+the Champollion and Annotations signature tests. **All five constituent
+signature-test requirements are now satisfied** (four green, one excluded under
+a pre-existing documented challenge).
 
 ## 6. The JDK 25 issue
 
@@ -109,12 +131,23 @@ RETAIN_CLASS_REFERENCE` on JDK 25. This is not an OpenJDK bug to report (JDK 25
 follows the spec); it is a TCK-helper defect that surfaces on a JDK-25-native
 implementation.
 
-**Resolution path:** file a TCK **challenge** against the Core Profile TCK
-(`ee.jakarta.tck.core.common.Utils` must create its `StackWalker` with
-`RETAIN_CLASS_REFERENCE`) via the appeals process
-(`doc/asciidoc/appeals-process.asciidoc` in the TCK bundle; challenges go to
-`eclipse-ee4j/jakartaee-tck`). A challenge, once accepted, excludes the affected
-tests from the compatibility requirement.
+**Resolution path — done:** the challenge was filed and is **accepted**:
+[`jakartaee/platform-tck#2730`](https://github.com/jakartaee/platform-tck/issues/2730)
+(labels `challenge`, `accepted`; state OPEN — the issue was originally raised
+against `eclipse-ee4j/jakartaee-tck` and cloned/transferred to `platform-tck`,
+where Platform TCK challenges are tracked). The maintainers confirmed the exact
+same fix (`StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE)`)
+already exists on `platform-tck`'s `main` branch, via a **pre-existing** commit
+([`9597841`](https://github.com/jakartaee/platform-tck/commit/9597841d73e5ad16569161a9ae5951fb0665e707),
+PR #1736, fixing #1735, merged January 2025) — it predates our challenge and
+was never tied to it, but covers the identical root cause. That fix has **not
+yet shipped in an official Core Profile TCK release**: `jakarta-core-profile-tck-11.0.0`
+was cut before it landed. The challenge stays open pending a corrected TCK
+release (tracked on the TCK committee's call agenda as of 2026-07-15); once
+released, the 3 affected tests can be re-verified and the challenge closed.
+Per the appeals process, an *accepted* challenge already excludes the affected
+tests from the compatibility requirement even before the corrected release
+ships.
 
 ## 7. Public results summary
 
@@ -155,8 +188,16 @@ Compatible* logo and be listed as a compatible product.
   178/179 (0 fail), JSON-B 289/295 (0 fail), REST 4.0 2538.
 - Core Profile composite: **10/13** — every test reachable on JDK 25 passes. The
   3 not passing are the JDK 25 `getDescriptor()` TCK-helper incompatibility
-  (challenge; §6), unreachable on JDK 25 regardless of conformance. The former
-  Cassini gaps (client JSON-B entity (de)serialisation, `Accept` negotiation) are
-  fixed — Jakarta REST 4.0 TCK stays 2538/2538.
+  (challenge accepted; §6), unreachable on JDK 25 regardless of conformance. The
+  former Cassini gaps (client JSON-B entity (de)serialisation, `Accept`
+  negotiation) are fixed — Jakarta REST 4.0 TCK stays 2538/2538.
+- Challenge: **filed and accepted** — `jakartaee/platform-tck#2730` (§6). Open
+  pending an official corrected Core Profile TCK release; the fix itself
+  already exists upstream.
+- Signature tests: **all 5 satisfied** (Annotations, JSON-P, JSON-B, CDI 4.1 Lite
+  verified green by direct run — CDI via the new `cdi-sigtest` profile in
+  `vauban-tck-runner`, 0 failures against `cdi-api-jdk17.sig`; RESTful WS
+  excluded via a documented pre-existing TCK-harness challenge). No open items
+  remain in this requirement (§5).
 - Not started: EFTL re-run, hosted results page, the certification issue — all
   post-0.3.0.

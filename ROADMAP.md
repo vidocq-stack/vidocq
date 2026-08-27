@@ -33,6 +33,23 @@ Additional infrastructure bricks delivered as Vidocq extensions, useful to the e
 | JTA transactions | [mansart-transactions](../mansart) | `vidocq-runtime-mansart-transactions-extension` ✅ |
 | Jakarta Persistence 3.2 (JPA) | [mansart-persistence](../mansart) | ❌ M7 Mansart pending |
 
+## Jakarta EE Core Profile 11 certification
+
+Beyond MicroProfile 7.1, Vidocq targets **Jakarta EE Core Profile 11**
+certification for the assembled runtime. Full process, TCK binaries, and
+detailed results: [`CERTIFICATION.md`](CERTIFICATION.md); running instructions:
+[`TCK.md`](vidocq-runtime-integration-tests/TCK.md).
+
+| Item | Status |
+|---|---|
+| Constituent spec TCKs (Annotations, CDI 4.1 Lite + Interceptors 2.2, DI 2.0, JSON-P 2.1, JSON-B 3.0, REST 4.0) | ✅ all seven green |
+| Core Profile composite TCK (`vidocq-runtime-tck-coreprofile`) | 10/13 — every test reachable on JDK 25 passes |
+| TCK challenge (JDK 25 `Utils.getDescriptor()` incompatibility) | ✅ filed & **accepted** — [`jakartaee/platform-tck#2730`](https://github.com/jakartaee/platform-tck/issues/2730); open pending an official corrected TCK release (fix already exists upstream) |
+| Signature tests (Annotations, JSON-P, JSON-B, REST, CDI) | ✅ all 5 satisfied — Annotations/JSON-P/JSON-B/CDI verified green by direct run (CDI via the new `cdi-sigtest` profile in `vauban-tck-runner`); RESTful WS excluded via a pre-existing documented challenge (`CERTIFICATION.md` §5) |
+| EFTL-signed binaries re-run | ❌ not started (post-0.3.0) |
+| Public results summary page | ❌ not started (post-0.3.0) |
+| Certification issue on `jakartaee/platform` | ❌ not started — requires a released Vidocq 0.3.0 |
+
 ## Reactor modules
 
 ```
@@ -73,6 +90,9 @@ vidocq-runtime-integration-tests/         Arquillian ITs + cross-extension (humb
 
 - [ ] MicroProfile 7.1 TCK per implemented spec. See `TCK.md` for tracking
       (each extension has its out-of-reactor TCK runner, model `champollion-tck`).
+- [ ] Jakarta EE Core Profile 11 certification — see the dedicated section above
+      and `CERTIFICATION.md`. Remaining: EFTL re-run, public results page, file
+      the `jakartaee/platform` issue (all gated on the Vidocq 0.3.0 release).
 - [ ] End-to-end JMH benchmarks (cold start, cross-extension throughput, memory
       footprint vs Quarkus/Helidon). No perf number in docs without a `BENCH.md` entry.
 - [ ] GraalVM native-image AOT: prerequisite = no runtime reflection in any
