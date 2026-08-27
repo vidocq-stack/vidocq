@@ -120,8 +120,11 @@ that can pass on JDK 25 passes:
 
 - **3** fail on a JDK 25 vs TCK-helper incompatibility — `Utils.getDescriptor()`
   needs `RETAIN_CLASS_REFERENCE` on JDK 25 (a documented contract JDK ≤ 21
-  enforced leniently). Not a Vidocq defect; resolved through a TCK challenge
-  (`CERTIFICATION.md` §6). Unreachable on JDK 25 regardless of conformance.
+  enforced leniently). Not a Vidocq defect; challenge **filed and accepted** as
+  [`jakartaee/platform-tck#2730`](https://github.com/jakartaee/platform-tck/issues/2730)
+  (`CERTIFICATION.md` §6) — open pending an official corrected TCK release (the
+  fix already exists upstream, merged pre-existing commit `9597841`).
+  Unreachable on JDK 25 regardless of conformance.
 
 The former Cassini gaps are closed: the JAX-RS client now serialises/deserialises
 POJO entities through JSON-B (honouring a `ContextResolver<Jsonb>`) and emits a
