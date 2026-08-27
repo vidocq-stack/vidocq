@@ -201,6 +201,11 @@
                                 <include>**/*Test.class</include>
                                 <include>**/*Tests.class</include>
                                 <include>**/*IT.class</include>
+                                <!-- Test classes of the official TCK whose names do not follow the
+                                     *Test suffix convention (silently skipped before 2026-08-27,
+                                     see BUG-20260827-01). Keep in sync with the vidocq runner. -->
+                                <include>**/EmptyValuesTestProgrammaticLookup.class</include>
+                                <include>**/TestCustomConfigProfile.class</include>
                             </includes>
                             <excludes>
                                 <!-- Le smoke test JUnit est réservé au profil 'smoke'. -->

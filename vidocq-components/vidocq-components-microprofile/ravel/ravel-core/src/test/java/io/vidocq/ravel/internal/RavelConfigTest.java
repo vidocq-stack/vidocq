@@ -32,6 +32,7 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -71,6 +72,27 @@ class RavelConfigTest {
     }
 
     // --------- getValue / getOptionalValue / empty handling -----------
+
+    @Test
+    void getValue_array_of_separators_only_is_missing() {
+        // §5.4 (BUG-20260827-01, TCK EmptyValuesTestProgrammaticLookup): a value made only of
+        // separators splits to zero elements and must be treated exactly like an empty value.
+        Config cfg = newConfig(List.of(MapConfigSource.of("s", 100,
+                Map.of("comma", ",", "double", ",,"))));
+        assertThrows(NoSuchElementException.class, () -> cfg.getValue("comma", String[].class));
+        assertThrows(NoSuchElementException.class, () -> cfg.getValue("double", String[].class));
+        assertThrows(NoSuchElementException.class, () -> cfg.getValues("comma", String.class));
+    }
+
+    @Test
+    void getOptionalValue_array_of_separators_only_is_empty() {
+        Config cfg = newConfig(List.of(MapConfigSource.of("s", 100,
+                Map.of("comma", ",", "double", ",,", "escaped", "\\,"))));
+        assertTrue(cfg.getOptionalValue("comma", String[].class).isEmpty());
+        assertTrue(cfg.getOptionalValues("double", String.class).isEmpty());
+        // An escaped comma is a real single element, not a separator.
+        assertArrayEquals(new String[] {","}, cfg.getOptionalValue("escaped", String[].class).orElseThrow());
+    }
 
     @Test
     void getValue_missing_key_throws() {

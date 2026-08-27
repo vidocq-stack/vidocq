@@ -79,3 +79,36 @@
        from the jar's APT bean index) is already registered; Vauban also
        validates observer-method non-event parameters as real injection points
        (MissingValueOnObserverMethodInjectionTest).
+
+## BUG-20260827-01 — separator-only values (`","`, `",,"`) are not treated as absent for array/list lookups
+
+- **Date** : 2026-08-27
+- **Statut** : FIXED (branch pr/ybl/config-empty-values — ArrayConverter returns null for zero elements; ravel-tck 378/378 on 2026-08-27)
+- **Module touché** : ravel-core `RavelConfig.getValue` / `getOptionalValue` / `getValues` / `getOptionalValues` (array and collection conversion path)
+- **Symptôme** : MP Config TCK 3.1.1 `emptyvalue.EmptyValuesTestProgrammaticLookup` — 4 failures
+  out of 29 (`testCommaStringGetValueArray`, `testDoubleCommaStringGetValueArray` expect
+  `NoSuchElementException`; `testCommaStringGetOptionalValue`,
+  `testDoubleCommaStringGetOptionalValues` expect an empty `Optional`). A property whose raw
+  value is only separators (`my.prop=,` or `my.prop=,,`) yields zero elements once split; the
+  spec (§ Empty values / converters for arrays) requires such a value to be considered
+  **missing** for array/list/set lookups, exactly like `""`. Ravel currently returns a present,
+  empty array / list.
+- **Reproduction minimale** :
+  ```
+  cd vidocq && ./mvnw -Ptck -pl vidocq-runtime-integration-tests/vidocq-runtime-tck-ravel-config test \
+    -Dtest=EmptyValuesTestProgrammaticLookup -Dsurefire.failIfNoSpecifiedTests=false
+  # 29 run, 4 failures. Same suite passes for "" (empty) and "foo," / ",bar" (trailing/leading separator).
+  ```
+- **Hypothèse de cause** : the array/collection branch of the lookup only maps `""` to
+  "absent" (before splitting); after splitting on unescaped commas an all-empty element list
+  must also be mapped to "absent" (throw `NoSuchElementException` in `getValue(s)`, return
+  `Optional.empty()` in `getOptionalValue(s)`).
+- **Investigations** :
+  - 2026-08-27 : discovered during the MP 7.1 conformance audit. The suite had **never run**:
+    both `ravel-tck/pom.xml` and the vidocq runner restrict surefire to `**/*Test.class`,
+    `**/*Tests.class`, `**/*IT.class`, which silently drops
+    `EmptyValuesTestProgrammaticLookup` (28 tests) and `TestCustomConfigProfile` (1 test, passes).
+    The documented 349/349 is therefore 349 out of 378 — WildFly 38 runs 378 on the same TCK.
+    Fix both include lists (add `**/EmptyValuesTestProgrammaticLookup.class` and
+    `**/TestCustomConfigProfile.class`, or switch to `**/*.class` with TestNG's own
+    `@Test` filtering) together with the code fix so the regression stays visible.

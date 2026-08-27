@@ -55,6 +55,12 @@ final class ArrayConverter<T> implements Converter<T> {
         if (value == null) return null;
         if (value.isEmpty()) return null; // §2.1.4 — empty string = missing
         List<String> parts = ArraySplitter.split(value);
+        if (parts.isEmpty()) {
+            // §5.4 — a value made only of separators ("," / ",,") splits to zero elements and is
+            // treated like an empty value: null = missing (getValue throws, getOptionalValue is
+            // empty). MP Config TCK EmptyValuesTestProgrammaticLookup; BUG-20260827-01.
+            return null;
+        }
         Object arr = Array.newInstance(componentType, parts.size());
         for (int i = 0; i < parts.size(); i++) {
             Object element = elementConverter.convert(parts.get(i));
