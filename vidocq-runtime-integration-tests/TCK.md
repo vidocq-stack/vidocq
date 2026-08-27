@@ -5,7 +5,7 @@ Unlike the per-brick TCK runners that live in each implementation repository
 (knock-tck, dirac-tck, …) and certify one implementation in isolation, these runners
 certify **the assembled Vidocq runtime**: the exact boot path a real application uses.
 
-Status: **1837 official TCK tests green** (2026-07-13), all 8 runners on the
+Status: **1868 official TCK tests green** (2026-08-27), all 8 runners on the
 embedded Vidocq container, no suite exclusion.
 
 ## How the TCKs run
@@ -45,7 +45,7 @@ neither downloads nor runs anything TCK-related.
 ./mvnw -Ptck -pl vidocq-runtime-integration-tests -amd test
 ```
 
-## Results (2026-07-13)
+## Results (2026-08-27 — full re-run on the assembled runtime)
 
 | Runner | Spec (MicroProfile 7.1) | Tests | Container |
 |---|---|---:|---|
@@ -53,11 +53,30 @@ neither downloads nor runs anything TCK-related.
 | `vidocq-runtime-tck-dirac-metrics` | Metrics 5.1 | 127 | Vidocq embedded |
 | `vidocq-runtime-tck-cyrano-restclient` | Rest Client 4.0 | 235 | Vidocq embedded |
 | `vidocq-runtime-tck-heisenberg-faulttolerance` | Fault Tolerance 4.1 | 463 | Vidocq embedded |
-| `vidocq-runtime-tck-grimm-openapi` | OpenAPI 4.1 | 344 | Vidocq embedded |
+| `vidocq-runtime-tck-grimm-openapi` | OpenAPI 4.1 (TCK 4.1.1) | 346 | Vidocq embedded |
 | `vidocq-runtime-tck-cervantes-jwt` | JWT Auth 2.1 | 206 | Vidocq embedded |
 | `vidocq-runtime-tck-humboldt-telemetry` | Telemetry 2.1 | 85 | Vidocq embedded |
-| `vidocq-runtime-tck-ravel-config` | Config 3.1 | 349 | Vidocq embedded |
-| **Total** | | **1837** | |
+| `vidocq-runtime-tck-ravel-config` | Config 3.1 | 378 | Vidocq embedded |
+| **Total** | | **1868** | |
+
+### 2026-08-27 audit — two counting errors corrected
+
+- **Config: 349 was 349 out of 378.** Both the ravel harness and this runner
+  restricted surefire to `**/*Test.class`, `**/*Tests.class`, `**/*IT.class`, which
+  silently skipped `emptyvalue.EmptyValuesTestProgrammaticLookup` (28 tests) and
+  `profile.TestCustomConfigProfile` (1 test). Running them exposed a real defect —
+  separator-only values (`","`, `",,"`) were not treated as missing for array/list
+  lookups (ravel `BUG-20260827-01`, fixed). Both include lists now name the two
+  classes explicitly; the suite is 378/378, the same count WildFly 38 certifies.
+- **OpenAPI: the runner pinned TCK 4.0.2** (with a comment wrongly stating "MP 7.1
+  pins OpenAPI 4.0"); MicroProfile 7.1 pins OpenAPI 4.1. Bumped to 4.1.1: 346/346
+  (WildFly 38: 346).
+
+Reference counts used for the audit come from WildFly 38.0.0.Final's MicroProfile 7.1
+certification (`wildfly/certifications`, branch `MP7.1`): Config 378, Fault Tolerance
+439 (4.1.2), Health 28, JWT 192, OpenAPI 346, Rest Client 235, Telemetry 77. Where
+Vidocq runs more tests (FT 463, JWT 206, Telemetry 85) it is because WildFly excludes
+optional groups Vidocq keeps.
 
 Seven of the eight suites run with **zero test exclusions**. Notably, the OpenAPI
 suite previously passed 307 tests with 2 excluded classes under the old ad hoc
@@ -193,6 +212,6 @@ fixed the spec way:
   Config (reflectively; system properties and env vars remain the fallback on
   Config-less runtimes).
 
-The per-brick runners stay green after these changes: ravel 349/349 (Weld),
+The per-brick runners stay green after these changes: ravel 378/378 (Weld),
 cyrano 168/168, dirac 127/127, heisenberg 463/463 — so both CDI paths of the
 same extensions are certified.

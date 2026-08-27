@@ -7,7 +7,7 @@ New in the `{project-version}` development line — everything listed here lande
 == Runtime
 
 * [.tag-new]#NEW# **`vidocq:modularize` Maven goal** — generates build-time module descriptors for non-modular dependencies, so third-party classpath jars fit the strict Java Modules graph. See xref:modules/vidocq-runtime-maven-plugin.adoc[the Maven plugin page].
-* [.tag-new]#NEW# **1837 official MicroProfile 7.1 TCK tests green on the assembled runtime** — all eight component specs, run through the in-reactor `-Ptck` runners. Jakarta Core Profile 11 certification is in preparation (composite TCK 10/13 on JDK 25). See xref:tck.adoc[the TCK page].
+* [.tag-new]#NEW# **1868 official MicroProfile 7.1 TCK tests green on the assembled runtime** — all eight component specs, run through the in-reactor `-Ptck` runners. Jakarta Core Profile 11 certification is in preparation (composite TCK 10/13 on JDK 25). See xref:tck.adoc[the TCK page].
 * [.tag-new]#NEW# **`vidocq:check-module-info` / `complete-module-info`** — consumer `module-info.java` verification rolled out reactor-wide.
 * CLI hotfixes `0.2.1` → `0.2.3` (scaffolding fixes; `vidocq create` still pins the released `{release-version}` parent).
 

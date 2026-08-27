@@ -28,8 +28,9 @@
     </description>
 
     <properties>
-        <!-- MicroProfile 7.1 pins OpenAPI 4.0 -->
-        <microprofile.openapi.tck.version>4.0.2</microprofile.openapi.tck.version>
+        <!-- MicroProfile 7.1 pins OpenAPI 4.1 (4.1.1 = TCK fixes only). The runner was stuck on
+             4.0.2 until 2026-08-27; 4.1.1 adds 2 tests (346 vs 344). -->
+        <microprofile.openapi.tck.version>4.1.1</microprofile.openapi.tck.version>
         <!-- Fixed port mirrored in the test.url system property (AppTestBase). -->
         <grimm.tck.port>18085</grimm.tck.port>
     </properties>

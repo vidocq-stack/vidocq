@@ -130,6 +130,11 @@
                         <include>**/*Test.class</include>
                         <include>**/*Tests.class</include>
                         <include>**/*IT.class</include>
+                        <!-- Test classes of the official TCK whose names do not follow the *Test
+                             suffix convention: 28 + 1 tests silently skipped until 2026-08-27
+                             (the documented 349 was 349 out of 378). Keep in sync with ravel-tck. -->
+                        <include>**/EmptyValuesTestProgrammaticLookup.class</include>
+                        <include>**/TestCustomConfigProfile.class</include>
                     </includes>
                     <trimStackTrace>false</trimStackTrace>
                     <systemPropertyVariables>

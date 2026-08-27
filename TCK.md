@@ -8,14 +8,14 @@
 | TCK | `jakarta.ws.rs:jakarta-restful-ws-tck:4.0.1` |
 | JDK | Eclipse Temurin 25 |
 | TCK `@Test` tests | **2670** |
-| Tests applicable to the profile | **2535** (134 excluded via `@Tag`, 6 official challenges — detail in §3) |
-| **Passed** | **2535** |
+| Tests applicable to the profile | **2539** (131 skipped: out-of-profile `@Tag`s + the 3 remaining challenges — detail in §3) |
+| **Passed** | **2539** |
 | Failures + Errors | **0** |
-| Skipped | **135** (134 out-of-profile tags + 6 challenges + 1 internal dispensation) |
+| Skipped | **131** (out-of-profile tags + 3 challenges; the signature test runs since 2026-08-27) |
 | **Conformance score** | **100.00 %** of applicable tests |
 
 ```
-[INFO] Tests run: 2670, Failures: 0, Errors: 0, Skipped: 135
+[INFO] Tests run: 2670, Failures: 0, Errors: 0, Skipped: 131
 [INFO] BUILD SUCCESS
 ```
 
@@ -59,7 +59,7 @@ justification:
 | Test | Category | Reason |
 |---|---|---|
 | `spec.resource.requestmatching.JAXRSClientIT#locatorNameTooLongAgainTest` | spec interpretation | Per the literal §3.7.2 step 2(g), `@GET @Path("locator/locator/locator")` matches `/locator/locator/locator` → 200 expected. The test imposes a segment-by-segment interpretation that is non-portable (Jersey/RESTEasy implement it this way but §3.7.2 does not require it). |
-| `signaturetest.jaxrs.JAXRSSigTestIT#signatureTest` | TCK environment | TDK 2.5 sigtest requires a complete TCK layout (`sig-test.map`, `sig-test-pkg-list.txt`, `ts_home`). The `jakarta.ws.rs` API is not modified by Cassini (comes directly from `jakarta.ws.rs:jakarta.ws.rs-api:4.0.0`) — this test evaluates the TCK environment, not Cassini conformance. |
+| ~~`signaturetest.jaxrs.JAXRSSigTestIT#signatureTest`~~ | — | **Lifted (2026-08-27)**: not a challenge. The test loads `sig-test.map`, `sig-test-pkg-list.txt` and `jakarta.ws.rs.sig_4.0.0` from the classpath; those ship only in the EFTL TCK jar. `run-official-tck-restful-4.0.sh` now fetches the EFTL bundle (SHA-256 checked) and the `tck-official` profile copies the resources onto the test classpath (`tck.eftl.jar`). Result: **PASS** (all `jakarta.ws.rs.*` packages). |
 | `jaxrs31.ee.multipart.MultipartSupportIT#basicTest` + `multiFormParamTest` | client harness | Cassini SERVER fully implements §3.5.4 EntityPart (RFC 7578 parser/writer). The test is blocked by the Jersey CLIENT which rewrites the `Content-Type` without honouring the `boundary` injected by our `ClientRequestFilter` (mediaType rewritten after filter, before writeTo). |
 | `jaxrs21.ee.sse.{ssebroadcaster,sseeventsink,sseeventsource}.JAXRSClientIT#{sseBroadcastTest,closeTest}` | streaming infrastructure | §11 real SSE streaming. `CassiniSseEventSink` buffers then emits in bulk at the end of the resource method. Streaming chunked-transfer during method execution requires a major refactor of the Chappe engine (async handler + chunked transfer streaming). Out of scope for MVP. |
 
@@ -194,7 +194,7 @@ This script:
 
 Expected result:
 ```
-[INFO] Tests run: 2670, Failures: 0, Errors: 0, Skipped: 135
+[INFO] Tests run: 2670, Failures: 0, Errors: 0, Skipped: 131
 [INFO] BUILD SUCCESS
 ```
 

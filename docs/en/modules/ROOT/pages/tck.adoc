@@ -94,9 +94,9 @@ Unlike the Jakarta suites above (run per brick), the MicroProfile TCKs are run *
 ./mvnw -Ptck -pl vidocq-runtime-integration-tests -amd test
 ----
 
-Status: **1837 official TCK tests green** across all eight MicroProfile 7.1 component specs (Config 3.1: 349, Fault Tolerance 4.1: 463, OpenAPI: 344, Rest Client 4.0: 235, JWT Auth 2.1: 206, Metrics 5.1: 127, Telemetry 2.1: 85, Health 4.0: 28), with no suite exclusion except the documented `ejb`/`jacc`/`servlet` categories of the JWT suite. Run details and per-module reports: `vidocq-runtime-integration-tests/TCK.md` in the repo.
+Status: **1868 official TCK tests green** (re-run 2026-08-27) across all eight MicroProfile 7.1 component specs (Config 3.1: 378, Fault Tolerance 4.1: 463, OpenAPI 4.1: 346, Rest Client 4.0: 235, JWT Auth 2.1: 206, Metrics 5.1: 127, Telemetry 2.1: 85, Health 4.0: 28), with no suite exclusion except the documented `ejb`/`jacc`/`servlet` categories of the JWT suite. Run details and per-module reports: `vidocq-runtime-integration-tests/TCK.md` in the repo.
 
-Two additional runners are not MicroProfile: Jakarta Annotations 3.0 (signature test, 1/1) and the **Jakarta Core Profile 11 composite TCK** (10/13 on JDK 25). All seven constituent Core Profile spec TCKs pass; the profile-level certification request is *pre-filing* — it certifies a released product, and will be filed with the next release.
+Two additional runners are not MicroProfile: Jakarta Annotations 3.0 (signature test, 1/1) and the **Jakarta Core Profile 11 composite TCK** (10/13 on JDK 25 — the 3 others hit a TCK-helper defect on JDK 25, challenge drafted in `CERTIFICATION.md` §6). All seven constituent Core Profile spec TCKs pass, including their API signature tests (Annotations, CDI 4.1, JSON-P, JSON-B, REST); the profile-level certification request is *pre-filing* — it certifies a released product, and will be filed with the next release.
 
 NOTE: To be precise about wording: Vidocq *passes* these official TCK suites; no formal MicroProfile compatibility filing has been made yet. The per-brick runners listed on each component's TCK page remain the authority for each individual implementation.
 
