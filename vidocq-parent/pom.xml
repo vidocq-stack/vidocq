@@ -8,7 +8,7 @@
     <packaging>pom</packaging>
 
     <name>Vidocq :: Parent</name>
-    <description>POM parent commun à tous les projets de l'écosystème Vidocq — Java 25, Maven Central, profils release/snapshot/quality.</description>
+    <description>Common parent POM for all Vidocq ecosystem projects - Java 25, Maven Central, release/snapshot/quality profiles.</description>
     <url>https://codefloe.com/Vidocq/vidocq-parent</url>
 
     <scm>
@@ -83,7 +83,7 @@
 
         <junit.version>6.0.3</junit.version>
 
-        <!-- Versions des plugins Maven — overridables par propriété dans les enfants -->
+        <!-- Maven plugin versions - overridable via property in child modules -->
         <!-- 3.15.0: required for Maven 4, which enables Reproducible Builds by
              default and thereby the compiler-plugin's JDK-8318913 module-info
              patch; the ASM 9.6 bundled with 3.13.0 cannot read Java 25 classes. -->
@@ -94,9 +94,9 @@
              here to avoid duplicate module names on the module path. Empty = no exclusion. -->
         <vidocq.javamodules.excludes></vidocq.javamodules.excludes>
         <maven.surefire.plugin.version>3.5.5</maven.surefire.plugin.version>
-        <!-- Pinné explicitement pour les modules *-maven-plugin de l'écosystème
-             (cassini, chappe, vauban, vidocq, champollion×2) ; sinon Maven 3.9 utilise
-             une version par défaut potentiellement plus ancienne. -->
+        <!-- Explicitly pinned for the ecosystem's *-maven-plugin modules
+             (cassini, chappe, vauban, vidocq, champollion x2); otherwise Maven 3.9
+             falls back to a potentially older default version. -->
         <maven.plugin.plugin.version>3.15.2</maven.plugin.plugin.version>
         <maven.jar.plugin.version>3.4.2</maven.jar.plugin.version>
         <maven.clean.plugin.version>3.4.0</maven.clean.plugin.version>
@@ -107,11 +107,11 @@
         <maven.javadoc.plugin.version>3.11.2</maven.javadoc.plugin.version>
         <maven.gpg.plugin.version>3.2.7</maven.gpg.plugin.version>
         <central.publishing.plugin.version>0.10.0</central.publishing.plugin.version>
-        <!-- 3.1.1 pinné pour que toutes les releases (via Vidocq/ci/release-maven@v1)
-             utilisent une version éprouvée et stable sur Maven 3.9.x. -->
+        <!-- 3.1.1 pinned so that all releases (via Vidocq/ci/release-maven@v1)
+             use a proven, stable version on Maven 3.9.x. -->
         <maven.release.plugin.version>3.1.1</maven.release.plugin.version>
-        <!-- 2.18.0 : nécessaire pour versions:set-property utilisé par
-             le script de release lorsque la dep upstream est exprimée via property. -->
+        <!-- 2.18.0: required for versions:set-property, used by the release
+             script when the upstream dependency is expressed via a property. -->
         <versions.plugin.version>2.18.0</versions.plugin.version>
         <jacoco.version>0.8.13</jacoco.version>
         <!-- mycila license-maven-plugin: build-time only, no runtime dependency.
@@ -126,7 +126,7 @@
             `-Dcentral.publishing.autoPublish=true`. Default `false`: a release
             uploads the bundle, Sonatype validates it (~10 min), and it stays
             in state VALIDATED on central.sonatype.com/publishing waiting for
-            a manual "Publish" click. This is the safe default — set to `true`
+            a manual "Publish" click. This is the safe default - set to `true`
             in the workflow input only when you want the wait-for-Central
             polling step to converge automatically.
         -->
@@ -214,8 +214,8 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-deploy-plugin</artifactId>
-                    <!-- 3.1.4 : fixe les bugs `deployAtEnd` sur Maven 4 ; 3.1.3
-                         BUILD SUCCESS sans rien pousser sur la registry. -->
+                    <!-- 3.1.4: fixes the `deployAtEnd` bugs on Maven 4; 3.1.3
+                         reports BUILD SUCCESS without pushing anything to the registry. -->
                     <version>${maven.deploy.plugin.version}</version>
                     <configuration>
                         <deployAtEnd>false</deployAtEnd>
@@ -247,7 +247,7 @@
                 -->
                 <!-- Version managed here (not only in the release profile) so that
                      modules declaring the plugin with skipPublishing=true get a
-                     version in the default effective model — otherwise Maven 4
+                     version in the default effective model - otherwise Maven 4
                      emits a model-validation warning per module. -->
                 <plugin>
                     <groupId>org.sonatype.central</groupId>
@@ -458,7 +458,7 @@
                         Defensive: explicitly skip maven-deploy-plugin in the
                         release profile. central-publishing-maven-plugin's
                         <extensions>true</extensions> normally swaps it out, but
-                        under Maven 4 we cannot rely on that — being explicit
+                        under Maven 4 we cannot rely on that - being explicit
                         prevents any chance of a parallel deploy to a non-existent
                         repository.
                     -->
