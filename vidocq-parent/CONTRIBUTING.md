@@ -21,14 +21,14 @@ redistributed under any of these three licences at the recipient's option.
 ## Before your first PR — the three signing requirements
 
 Every pull request must pass the automated governance gate
-(`governance-checks` in [`Vidocq/ci`](https://codeberg.org/Vidocq/ci)), which
+(`governance-checks` in [`Vidocq/ci`](https://codefloe.com/Vidocq/ci)), which
 verifies **all three** of the following. A PR failing any of them is blocked
 before the build even starts:
 
 | # | Requirement | How |
 |---|-------------|-----|
-| 1 | **CLA signed** (one-time) | Open a signature PR against [`Vidocq/governance`](https://codeberg.org/Vidocq/governance) |
-| 2 | **GPG-signed commits** | `git commit -S` — your public key must be registered in [`Vidocq/governance`](https://codeberg.org/Vidocq/governance) |
+| 1 | **CLA signed** (one-time) | Open a signature PR against [`Vidocq/governance`](https://codefloe.com/Vidocq/governance) |
+| 2 | **GPG-signed commits** | `git commit -S` — your public key must be registered in [`Vidocq/governance`](https://codefloe.com/Vidocq/governance) **and** on your Codefloe account (Settings → SSH / GPG Keys) with a verified e-mail matching your committer e-mail — `main` requires server-verified signatures |
 | 3 | **DCO sign-off** | `git commit -s` — adds the `Signed-off-by` trailer (see below) |
 
 Recommended one-time setup in your clone:
@@ -48,10 +48,10 @@ git push --force-with-lease
 ## Contributor License Agreement (CLA) and GPG key
 
 The CLA text, the list of signatories, and the contributors' GPG public keys
-are maintained centrally in [`Vidocq/governance`](https://codeberg.org/Vidocq/governance).
+are maintained centrally in [`Vidocq/governance`](https://codefloe.com/Vidocq/governance).
 Sign the CLA and register your GPG public key there **before** opening your
 first pull request — the GPG setup guide is in that repository's
-[CONTRIBUTING.md](https://codeberg.org/Vidocq/governance/src/branch/main/CONTRIBUTING.md#set-up-gpg-commit-signing).
+[CONTRIBUTING.md](https://codefloe.com/Vidocq/governance/src/branch/main/CONTRIBUTING.md#set-up-gpg-commit-signing).
 
 ## Developer Certificate of Origin (DCO)
 
@@ -112,6 +112,23 @@ By making a contribution to this project, I certify that:
     maintained indefinitely and may be redistributed consistent with
     this project or the open source license(s) involved.
 ```
+
+## Merging a pull request
+
+`main` is protected with `require_signed_commits`, and Codefloe has no instance
+signing key: a server-side merge, squash or rebase would produce an unsigned
+commit and be rejected. Pull requests are therefore merged **fast-forward only**
+(the default merge style on this repository), which keeps every original
+signature. Two comment commands are available on this repository (pilot of the
+`Vidocq/ci` merge-bot, restricted to members with write access):
+
+| Command | Effect |
+|---------|--------|
+| `/rebase` | Rebase the PR branch on `main`, re-sign every replayed commit with the Vidocq CI Bot key, force-push |
+| `/merge` | Same as `/rebase`, then wait for the required checks and fast-forward merge |
+
+The author, message and `Signed-off-by` trailer of each commit are preserved;
+only the signature (and committer) becomes the CI bot's.
 
 ## Code conventions
 
