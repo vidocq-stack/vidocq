@@ -191,8 +191,10 @@ Compatible* logo and be listed as a compatible product.
   Full campaign in one continuous session on Temurin 25.0.4+7 / macOS (Apple M5):
   all 7 EFTL zips SHA-256 **and** GPG verified, every TCK artifact in the local
   repository either byte-identical to its EFTL counterpart or installed from the
-  EFTL bundle directly. Runner poms are aligned on the EFTL versions
-  (`jakarta.inject-tck` 2.0.2, JSON-P TCK 2.1.1).
+  EFTL bundle directly. The JSON-P runner pom is aligned on the EFTL version
+  (JSON-P TCK 2.1.1, on Central). `jakarta.inject-tck` 2.0.2 is EFTL-only (not on
+  Central), so the vauban runner defaults to 2.0.1 and certifying runs install the
+  EFTL artifact and override with `-Datinject.tck.version=2.0.2`.
 - Constituent TCKs: **all seven green** — Annotations 1/1, CDI 4.1 Lite 774/774
   (incl. Interceptors 2.2), Dependency Injection 2.0 (atinject, TCK 2.0.2) pass,
   JSON-P 179/179 api + 18/18 pluggability (TCK 2.1.1, 0 fail), JSON-B 295 run

@@ -108,7 +108,7 @@ uses the EFTL-signed binaries.
 |------|--------|--------|
 | Annotations 3.0 (signature) | `vidocq-runtime-tck-annotations` | 1/1 (JDK 25) |
 | CDI 4.1 Lite (+ Interceptors 2.2) | `vauban/vauban-tck-runner` | 774/774 |
-| Dependency Injection 2.0 (atinject) | `vauban/vauban-atinject-tck-runner` | pass (TCK 2.0.2 EFTL) |
+| Dependency Injection 2.0 (atinject) | `vauban/vauban-atinject-tck-runner` | pass (EFTL TCK 2.0.2 via `-Datinject.tck.version=2.0.2`; pom defaults to 2.0.1, the latest on Central) |
 | JSON Processing 2.1 | `champollion/champollion-tck` | 179/179 api + 18/18 pluggability (TCK 2.1.1 EFTL, 0 fail) |
 | JSON Binding 3.0 | `champollion/champollion-tck` | 295 run, 0 fail, 5 skipped |
 | RESTful Web Services 4.0 | `cassini/cassini-tck` | 2670 run, 0 fail, 131 skipped |
