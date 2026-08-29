@@ -167,10 +167,10 @@ OS:                 <e.g. macOS 15 / Linux>
 Core Profile TCK:   <n>/<n> passed  (minus challenged: Utils.getDescriptor ×3)
   Annotations 3.0 TCK:  1/1
   CDI 4.1 Lite TCK:     774/774
-  Dependency Injection 2.0 TCK: pass
-  JSON-P 2.1 TCK:       178/179 (0 fail)
-  JSON-B 3.0 TCK:       289/295 (0 fail)
-  REST 4.0 TCK:         2538
+  Dependency Injection 2.0 TCK: pass (jakarta.inject-tck 2.0.2)
+  JSON-P 2.1 TCK:       179/179 api + 18/18 pluggability (TCK 2.1.1, 0 fail)
+  JSON-B 3.0 TCK:       295 run, 0 fail, 5 skipped
+  REST 4.0 TCK:         2670 run, 0 fail, 131 skipped
 ```
 
 ## 8. Filing
@@ -187,15 +187,21 @@ Compatible* logo and be listed as a compatible product.
 
 ## Status
 
-- Constituent TCKs: **all seven green** (re-run 2026-08-27 on clean `main`) —
-  Annotations 1/1, CDI 4.1 Lite 774/774 (incl. Interceptors 2.2), Dependency
-  Injection 2.0 (atinject) pass, JSON-P 179/179, JSON-B 290/295 (5 upstream-disabled,
-  0 fail), REST 4.0 2538 (2670 run, 0 fail, 132 documented skips).
+- **Dress rehearsal (2026-08-29, certifying conditions): zero unexpected failures.**
+  Full campaign in one continuous session on Temurin 25.0.4+7 / macOS (Apple M5):
+  all 7 EFTL zips SHA-256 **and** GPG verified, every TCK artifact in the local
+  repository either byte-identical to its EFTL counterpart or installed from the
+  EFTL bundle directly. Runner poms are aligned on the EFTL versions
+  (`jakarta.inject-tck` 2.0.2, JSON-P TCK 2.1.1).
+- Constituent TCKs: **all seven green** — Annotations 1/1, CDI 4.1 Lite 774/774
+  (incl. Interceptors 2.2), Dependency Injection 2.0 (atinject, TCK 2.0.2) pass,
+  JSON-P 179/179 api + 18/18 pluggability (TCK 2.1.1, 0 fail), JSON-B 295 run
+  (0 fail, 5 skipped), REST 4.0 2670 run (0 fail, 131 skipped).
 - Core Profile composite: **10/13** — every test reachable on JDK 25 passes. The
   3 not passing are the JDK 25 `getDescriptor()` TCK-helper incompatibility
   (challenge accepted; §6), unreachable on JDK 25 regardless of conformance. The
   former Cassini gaps (client JSON-B entity (de)serialisation, `Accept`
-  negotiation) are fixed — Jakarta REST 4.0 TCK stays 2538/2538.
+  negotiation) are fixed — Jakarta REST 4.0 TCK stays at 0 failures.
 - Challenge: **filed and accepted** — `jakartaee/platform-tck#2730` (§6). Open
   pending an official corrected Core Profile TCK release; the fix itself
   already exists upstream.
@@ -203,5 +209,6 @@ Compatible* logo and be listed as a compatible product.
   JSON-B, CDI 4.1 Lite (`cdi-sigtest` profile in `vauban-tck-runner`, 0 failures
   against `cdi-api-jdk17.sig`) and RESTful WS (`JAXRSSigTestIT` unskipped, EFTL
   resources). No open items remain in this requirement (§5).
-- Not started: EFTL re-run, hosted results page, the certification issue — all
-  post-0.3.0.
+- Not started: hosted results page, the certification issue — both post-0.3.0
+  (the EFTL re-run itself is done; it will be repeated on the released 0.3.0
+  binaries for the certifying claim).

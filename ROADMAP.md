@@ -46,7 +46,7 @@ detailed results: [`CERTIFICATION.md`](CERTIFICATION.md); running instructions:
 | Core Profile composite TCK (`vidocq-runtime-tck-coreprofile`) | 10/13 — every test reachable on JDK 25 passes |
 | TCK challenge (JDK 25 `Utils.getDescriptor()` incompatibility) | ✅ filed & **accepted** — [`jakartaee/platform-tck#2730`](https://github.com/jakartaee/platform-tck/issues/2730); open pending an official corrected TCK release (fix already exists upstream) |
 | Signature tests (Annotations, JSON-P, JSON-B, REST, CDI) | ✅ all 5 satisfied — Annotations/JSON-P/JSON-B/CDI verified green by direct run (CDI via the new `cdi-sigtest` profile in `vauban-tck-runner`); RESTful WS excluded via a pre-existing documented challenge (`CERTIFICATION.md` §5) |
-| EFTL-signed binaries re-run | ❌ not started (post-0.3.0) |
+| EFTL-signed binaries re-run | ✅ dress rehearsal done (2026-08-29): all 7 EFTL zips SHA-256+GPG verified, full campaign zero unexpected failures, runner poms aligned on EFTL versions (inject-tck 2.0.2, JSON-P TCK 2.1.1); to be repeated on the released 0.3.0 for the certifying claim |
 | Public results summary page | ❌ not started (post-0.3.0) |
 | Certification issue on `jakartaee/platform` | ❌ not started — requires a released Vidocq 0.3.0 |
 
@@ -91,8 +91,9 @@ vidocq-runtime-integration-tests/         Arquillian ITs + cross-extension (humb
 - [ ] MicroProfile 7.1 TCK per implemented spec. See `TCK.md` for tracking
       (each extension has its out-of-reactor TCK runner, model `champollion-tck`).
 - [ ] Jakarta EE Core Profile 11 certification — see the dedicated section above
-      and `CERTIFICATION.md`. Remaining: EFTL re-run, public results page, file
-      the `jakartaee/platform` issue (all gated on the Vidocq 0.3.0 release).
+      and `CERTIFICATION.md`. Remaining: public results page, file the
+      `jakartaee/platform` issue, certifying EFTL re-run on the released 0.3.0
+      binaries (dress rehearsal already green, 2026-08-29).
 - [ ] End-to-end JMH benchmarks (cold start, cross-extension throughput, memory
       footprint vs Quarkus/Helidon). No perf number in docs without a `BENCH.md` entry.
 - [ ] GraalVM native-image AOT: prerequisite = no runtime reflection in any
