@@ -65,6 +65,11 @@ on:
         type: string
         required: true
         default:     "0.2.0"
+      heisenberg_release:
+        description: "io.vidocq.heisenberg:* (all artifacts under io.vidocq.heisenberg) — stable version (must be released on Central first)"
+        type: string
+        required: true
+        default:     "0.2.0"
       humboldt_release:
         description: "io.vidocq.humboldt:* (all artifacts under io.vidocq.humboldt) — stable version (must be released on Central first)"
         type: string
@@ -118,13 +123,14 @@ jobs:
             io.vidocq.cyrano=${{ inputs.cyrano_release }}
             io.vidocq.dirac=${{ inputs.dirac_release }}
             io.vidocq.grimm=${{ inputs.grimm_release }}
+            io.vidocq.heisenberg=${{ inputs.heisenberg_release }}
             io.vidocq.humboldt=${{ inputs.humboldt_release }}
             io.vidocq.knock=${{ inputs.knock_release }}
             io.vidocq.mansart=${{ inputs.mansart_release }}
             io.vidocq.ravel=${{ inputs.ravel_release }}
             io.vidocq.vauban=${{ inputs.vauban_release }}
           excluded-modules: |
-            vidocq-runtime-h2-jpms-repackaged
+            vidocq-runtime-integration-tests
             vidocq-runtime-it-cyrano-jpms
             vidocq-runtime-examples
           central-username: ${{ secrets.CENTRAL_USERNAME }}
