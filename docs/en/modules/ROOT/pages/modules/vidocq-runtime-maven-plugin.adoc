@@ -62,7 +62,7 @@ xref:usage.adoc#multi-module-applications-scanned-dependencies[Usage — Multi-m
 ====
 
 [#modularize]
-== `vidocq:modularize` goal [.tag-new]#NEW#
+== `vidocq:modularize` goal
 
 A dependency jar without `module-info.class` is an *automatic module*: its name is derived from the file name (it therefore changes with the version), it reads every module, it exports every package — and `jlink` refuses to link it at all.
 

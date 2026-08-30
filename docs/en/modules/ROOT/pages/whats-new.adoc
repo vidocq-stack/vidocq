@@ -4,25 +4,4 @@
 [.lead]
 New in the `{project-version}` development line — everything listed here landed **after the {release-version} release** and is not part of it. Sections carrying the [.tag-new]#NEW# badge across the documentation point to these features. When the next release train ships, this page is frozen with it and restarts empty on the dev line.
 
-== Runtime
-
-* [.tag-new]#NEW# **`vidocq:modularize` Maven goal** — generates build-time module descriptors for non-modular dependencies, so third-party classpath jars fit the strict Java Modules graph. See xref:modules/vidocq-runtime-maven-plugin.adoc[the Maven plugin page].
-* [.tag-new]#NEW# **1868 official MicroProfile 7.1 TCK tests green on the assembled runtime** — all eight component specs, run through the in-reactor `-Ptck` runners. Jakarta Core Profile 11 certification is in preparation (composite TCK 10/13 on JDK 25). See xref:tck.adoc[the TCK page].
-* [.tag-new]#NEW# **`vidocq:check-module-info` / `complete-module-info`** — consumer `module-info.java` verification rolled out reactor-wide.
-* CLI hotfixes `0.2.1` → `0.2.3` (scaffolding fixes; `vidocq create` still pins the released `{release-version}` parent).
-
-== Dependency injection — Vauban
-
-* [.tag-new]#NEW# **Client-proxy weaving tiers** — a normal-scoped bean without a usable no-arg constructor gets its `ProxyLink` entry constructor woven automatically at `process-classes`, with a clear unproxyable-bean diagnostic. See xref:vauban::internals.adoc#weaving-tiers[Vauban internals].
-
-== Persistence — Mansart
-
-* [.tag-new]#NEW# **Named datasources routing actually works end to end** — on 0.2.0, `@Repository(dataStore = "...")` silently hit the default datasource (MANSART-005); the dev line routes it to its named pool (`vidocq.pool.<name>.*`), pairing with the PostgreSQL Dev Services one-container-per-datasource provisioning. See xref:mansart::usage.adoc[Mansart usage].
-
-== New brick
-
-* [.tag-new]#NEW# **Erasmus** — Jakarta Validation 3.1 implementation, in development (engine, the 21 built-in constraints, custom/composed constraints, interpolation). Not released yet. See xref:erasmus::index.adoc[the Erasmus docs].
-
-== Documentation
-
-* Versioned documentation ({release-version} + `dev`), full-text search, tutorials section, and this page.
+_Nothing documented yet for this cycle. Add entries here (and place [.tag-new]#NEW# badges on the relevant pages) as features land on main._

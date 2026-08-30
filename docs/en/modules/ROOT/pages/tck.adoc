@@ -85,7 +85,7 @@ cd vidocq-servlet-chappe-tck-runner
 ./run-official-tck-servlet6.1.sh
 ----
 
-== MicroProfile TCKs on the assembled runtime [.tag-new]#NEW#
+== MicroProfile TCKs on the assembled runtime
 
 Unlike the Jakarta suites above (run per brick), the MicroProfile TCKs are run **against the assembled Vidocq runtime** — the exact boot path a real application uses. Eight runner modules live in `vidocq-runtime-integration-tests/vidocq-runtime-tck-*`, guarded behind the `tck` Maven profile so a normal `mvn install` downloads and runs nothing:
 
