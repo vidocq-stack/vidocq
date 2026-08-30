@@ -7,7 +7,7 @@
     <parent>
         <groupId>io.vidocq.runtime</groupId>
         <artifactId>vidocq-runtime-devservices</artifactId>
-        <version>0.3.0-SNAPSHOT</version>
+        <version>0.4.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>vidocq-runtime-devservice-keycloak</artifactId>
