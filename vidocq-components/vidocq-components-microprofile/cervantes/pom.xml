@@ -8,13 +8,13 @@
     <parent>
         <groupId>io.vidocq</groupId>
         <artifactId>vidocq-parent</artifactId>
-        <version>0.3.0-SNAPSHOT</version>
+        <version>0.3.0</version>
         <relativePath/>
     </parent>
 
     <groupId>io.vidocq.cervantes</groupId>
     <artifactId>cervantes-parent</artifactId>
-    <version>0.3.0-SNAPSHOT</version>
+    <version>0.3.0</version>
     <packaging>pom</packaging>
 
     <name>Cervantes</name>
@@ -68,10 +68,10 @@
         <jakarta.ws.rs.version>4.0.0</jakarta.ws.rs.version>
 
         <!-- Implémentations Vidocq upstream -->
-        <champollion.version>0.3.0-SNAPSHOT</champollion.version>
-        <ravel.version>0.3.0-SNAPSHOT</ravel.version>
-        <vauban.version>0.3.0-SNAPSHOT</vauban.version>
-        <cassini.version>0.3.0-SNAPSHOT</cassini.version>
+        <champollion.version>0.3.0</champollion.version>
+        <ravel.version>0.3.0</ravel.version>
+        <vauban.version>0.3.0</vauban.version>
+        <cassini.version>0.3.0</cassini.version>
 
         <!-- JMH pour cervantes-bench -->
         <jmh.version>1.37</jmh.version>

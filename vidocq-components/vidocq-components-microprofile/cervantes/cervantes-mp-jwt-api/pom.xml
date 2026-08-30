@@ -7,7 +7,7 @@
     <parent>
         <groupId>io.vidocq.cervantes</groupId>
         <artifactId>cervantes-parent</artifactId>
-        <version>0.3.0-SNAPSHOT</version>
+        <version>0.3.0</version>
     </parent>
 
     <artifactId>cervantes-mp-jwt-api</artifactId>
