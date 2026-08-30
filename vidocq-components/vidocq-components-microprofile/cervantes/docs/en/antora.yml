@@ -8,5 +8,5 @@ asciidoc:
   attributes:
     lang: en
     spec-mp-jwt: MicroProfile JWT 2.1
-    project-version: 0.3.0-SNAPSHOT
-    release-version: 0.2.0
+    project-version: 0.4.0-SNAPSHOT
+    release-version: 0.3.0
