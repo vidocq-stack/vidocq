@@ -34,7 +34,7 @@ on:
         description: "io.vidocq.vauban:* (all artifacts under io.vidocq.vauban) — stable version (must be released on Central first)"
         type: string
         required: true
-        default:     "0.1.1"
+        default:     "0.2.0"
 
 jobs:
   release:
@@ -62,6 +62,9 @@ jobs:
             mansart-pool-tests
             mansart-pool-bench
             mansart-data-tests
+            mansart-data-external-lib
+            mansart-data-external-it
+            mansart-transactions-cdi-module-it
             mansart-transactions-tests
           central-username: ${{ secrets.CENTRAL_USERNAME }}
           central-password: ${{ secrets.CENTRAL_PASSWORD }}
