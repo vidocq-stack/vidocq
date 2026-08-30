@@ -8,13 +8,13 @@
     <parent>
         <groupId>io.vidocq</groupId>
         <artifactId>vidocq-parent</artifactId>
-        <version>0.3.0-SNAPSHOT</version>
+        <version>0.3.0</version>
         <relativePath/>
     </parent>
 
     <groupId>io.vidocq.ravel</groupId>
     <artifactId>ravel-parent</artifactId>
-    <version>0.3.0-SNAPSHOT</version>
+    <version>0.3.0</version>
     <packaging>pom</packaging>
 
     <name>Ravel</name>
@@ -62,7 +62,7 @@
         <jakarta.annotation.version>3.0.0</jakarta.annotation.version>
 
         <!-- Vidocq upstream — utilisé par ravel-cdi-vauban -->
-        <vauban.version>0.3.0-SNAPSHOT</vauban.version>
+        <vauban.version>0.3.0</vauban.version>
 
         <!-- JMH pour ravel-bench -->
         <jmh.version>1.37</jmh.version>
