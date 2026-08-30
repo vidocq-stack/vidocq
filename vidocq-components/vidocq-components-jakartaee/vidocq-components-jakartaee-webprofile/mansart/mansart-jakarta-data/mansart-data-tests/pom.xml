@@ -5,7 +5,7 @@
     <parent>
         <groupId>io.vidocq.mansart</groupId>
         <artifactId>mansart-jakarta-data</artifactId>
-        <version>0.3.0-SNAPSHOT</version>
+        <version>0.3.0</version>
     </parent>
 
     <artifactId>mansart-data-tests</artifactId>
@@ -15,7 +15,7 @@
     <properties>
         <maven.deploy.skip>true</maven.deploy.skip>
         <!-- Test-only CDI container for the multi-dataStore routing tests (MANSART-005). -->
-        <vauban.version>0.3.0-SNAPSHOT</vauban.version>
+        <vauban.version>0.3.0</vauban.version>
     </properties>
 
     <dependencies>
