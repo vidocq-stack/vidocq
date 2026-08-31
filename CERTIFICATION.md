@@ -203,7 +203,13 @@ Compatible* logo and be listed as a compatible product.
   confirmed live via the `X-Chappe-Build: Chappe/0.3.0+e1c8685e` response header
   (no `-SNAPSHOT` suffix). `vauban-tck-runner`/`vidocq-runtime-tck-*` are
   in-reactor at their respective repos and were already aligned by the release
-  tag itself. All 7 EFTL zips SHA-256-verified 7/7 beforehand (§3).
+  tag itself. All 7 EFTL zips SHA-256-verified 7/7 beforehand (§3), and GPG
+  signature-verified 7/7: 2 (Core Profile 11, REST 4.0.1) against the current
+  Jakarta EE Specification Committee key (`4C0C9898D7A2A593`), 5 (Annotations,
+  CDI, Dependency Injection, JSON-P, JSON-B) against the committee's previous,
+  since-expired key (`ABE05725E77C2B44`, fetched from `keys.openpgp.org`) —
+  "Good signature ... [expired]" is the expected result given their earlier
+  release dates, not a red flag.
   Results are byte-for-byte identical to the 2026-08-29 dress rehearsal (run on
   0.3.0-SNAPSHOT source builds) — no regression introduced between the
   rehearsal and the actual release. `jakarta.inject-tck` 2.0.2 is EFTL-only (not
@@ -226,5 +232,10 @@ Compatible* logo and be listed as a compatible product.
   (`cdi-sigtest` profile in `vauban-tck-runner`, 0 failures against
   `cdi-api-jdk17.sig`) and RESTful WS (`JAXRSSigTestIT` unskipped, EFTL
   resources). No open items remain in this requirement (§5).
-- Remaining: hosted public results page (§7 content ready above), and filing the
-  certification issue on `jakartaee/platform` (§8).
+- Remaining: filing the certification issue on `jakartaee/platform` (§8).
+
+## 9. Public results page
+
+Published: <https://vidocq.dev/certification/> (`Vidocq/pages`, PR #11, merged
+2026-08-31). Content mirrors §7 above plus the SHA-256/GPG verification
+summary.
