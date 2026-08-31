@@ -162,15 +162,18 @@ JDK, in the shape of `wildfly/certifications`. Template:
 Product:            Vidocq Runtime 0.3.0
 Specification:      Jakarta EE Core Profile 11
 TCK:                jakarta-core-profile-tck-11.0.0 (SHA-256 0357bfab…)
-JDK:                <e.g. Temurin 25>
-OS:                 <e.g. macOS 15 / Linux>
-Core Profile TCK:   <n>/<n> passed  (minus challenged: Utils.getDescriptor ×3)
+JDK:                Temurin 25.0.4+7-LTS
+OS:                 macOS 27.0 (26A5421a), Apple M5
+Core Profile TCK:   10/13 passed  (minus challenged: Utils.getDescriptor ×3, jakartaee/platform-tck#2730)
   Annotations 3.0 TCK:  1/1
   CDI 4.1 Lite TCK:     774/774
+  CDI signature test:   0 failures (cdi-api-jdk17.sig)
   Dependency Injection 2.0 TCK: pass (jakarta.inject-tck 2.0.2)
   JSON-P 2.1 TCK:       179/179 api + 18/18 pluggability (TCK 2.1.1, 0 fail)
   JSON-B 3.0 TCK:       295 run, 0 fail, 5 skipped
   REST 4.0 TCK:         2670 run, 0 fail, 131 skipped
+Certifying run date:  2026-08-31, against the released 0.3.0 Maven Central
+                      artifacts (io.vidocq.{vauban,champollion,cassini,chappe}:*:0.3.0).
 ```
 
 ## 8. Filing
@@ -187,18 +190,30 @@ Compatible* logo and be listed as a compatible product.
 
 ## Status
 
-- **Dress rehearsal (2026-08-29, certifying conditions): zero unexpected failures.**
-  Full campaign in one continuous session on Temurin 25.0.4+7 / macOS (Apple M5):
-  all 7 EFTL zips SHA-256 **and** GPG verified, every TCK artifact in the local
-  repository either byte-identical to its EFTL counterpart or installed from the
-  EFTL bundle directly. The JSON-P runner pom is aligned on the EFTL version
-  (JSON-P TCK 2.1.1, on Central). `jakarta.inject-tck` 2.0.2 is EFTL-only (not on
-  Central), so the vauban runner defaults to 2.0.1 and certifying runs install the
-  EFTL artifact and override with `-Datinject.tck.version=2.0.2`.
+- **Certifying run (2026-08-31): zero unexpected failures, against the released
+  0.3.0 Maven Central artifacts.** Vidocq 0.3.0 was published to Central on
+  2026-08-31 (all 16 repos, topological release waves). The certifying TCK run
+  was executed on `v0.3.0` tags of vauban, champollion, cassini and vidocq
+  (Temurin 25.0.4+7-LTS / macOS 27.0 / Apple M5), with the two genuinely
+  out-of-reactor TCK runners (`champollion-tck`, `cassini-tck` — deliberately
+  decoupled from their repo's own release lifecycle, so they default to
+  `-SNAPSHOT` dependency versions) explicitly overridden to consume the
+  **released** `0.3.0` coordinates from Central
+  (`-Dchampollion.version=0.3.0`, `-Dcassini.version=0.3.0 -Dchappe.version=0.3.0`),
+  confirmed live via the `X-Chappe-Build: Chappe/0.3.0+e1c8685e` response header
+  (no `-SNAPSHOT` suffix). `vauban-tck-runner`/`vidocq-runtime-tck-*` are
+  in-reactor at their respective repos and were already aligned by the release
+  tag itself. All 7 EFTL zips SHA-256-verified 7/7 beforehand (§3).
+  Results are byte-for-byte identical to the 2026-08-29 dress rehearsal (run on
+  0.3.0-SNAPSHOT source builds) — no regression introduced between the
+  rehearsal and the actual release. `jakarta.inject-tck` 2.0.2 is EFTL-only (not
+  on Central); the `vauban-atinject-tck-runner` pom defaults to 2.0.1 and the
+  certifying run overrides with `-Datinject.tck.version=2.0.2`.
 - Constituent TCKs: **all seven green** — Annotations 1/1, CDI 4.1 Lite 774/774
-  (incl. Interceptors 2.2), Dependency Injection 2.0 (atinject, TCK 2.0.2) pass,
-  JSON-P 179/179 api + 18/18 pluggability (TCK 2.1.1, 0 fail), JSON-B 295 run
-  (0 fail, 5 skipped), REST 4.0 2670 run (0 fail, 131 skipped).
+  (incl. Interceptors 2.2), CDI signature test 0 failures, Dependency Injection
+  2.0 (atinject, TCK 2.0.2) pass, JSON-P 179/179 api + 18/18 pluggability
+  (TCK 2.1.1, 0 fail), JSON-B 295 run (0 fail, 5 skipped), REST 4.0 2670 run
+  (0 fail, 131 skipped).
 - Core Profile composite: **10/13** — every test reachable on JDK 25 passes. The
   3 not passing are the JDK 25 `getDescriptor()` TCK-helper incompatibility
   (challenge accepted; §6), unreachable on JDK 25 regardless of conformance. The
@@ -207,10 +222,9 @@ Compatible* logo and be listed as a compatible product.
 - Challenge: **filed and accepted** — `jakartaee/platform-tck#2730` (§6). Open
   pending an official corrected Core Profile TCK release; the fix itself
   already exists upstream.
-- Signature tests: **all 5 green** by direct run (2026-08-27) — Annotations, JSON-P,
-  JSON-B, CDI 4.1 Lite (`cdi-sigtest` profile in `vauban-tck-runner`, 0 failures
-  against `cdi-api-jdk17.sig`) and RESTful WS (`JAXRSSigTestIT` unskipped, EFTL
+- Signature tests: **all 5 green** — Annotations, JSON-P, JSON-B, CDI 4.1 Lite
+  (`cdi-sigtest` profile in `vauban-tck-runner`, 0 failures against
+  `cdi-api-jdk17.sig`) and RESTful WS (`JAXRSSigTestIT` unskipped, EFTL
   resources). No open items remain in this requirement (§5).
-- Not started: hosted results page, the certification issue — both post-0.3.0
-  (the EFTL re-run itself is done; it will be repeated on the released 0.3.0
-  binaries for the certifying claim).
+- Remaining: hosted public results page (§7 content ready above), and filing the
+  certification issue on `jakartaee/platform` (§8).

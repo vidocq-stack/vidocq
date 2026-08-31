@@ -46,9 +46,9 @@ detailed results: [`CERTIFICATION.md`](CERTIFICATION.md); running instructions:
 | Core Profile composite TCK (`vidocq-runtime-tck-coreprofile`) | 10/13 — every test reachable on JDK 25 passes |
 | TCK challenge (JDK 25 `Utils.getDescriptor()` incompatibility) | ✅ filed & **accepted** — [`jakartaee/platform-tck#2730`](https://github.com/jakartaee/platform-tck/issues/2730); open pending an official corrected TCK release (fix already exists upstream) |
 | Signature tests (Annotations, JSON-P, JSON-B, REST, CDI) | ✅ all 5 satisfied — Annotations/JSON-P/JSON-B/CDI verified green by direct run (CDI via the new `cdi-sigtest` profile in `vauban-tck-runner`); RESTful WS excluded via a pre-existing documented challenge (`CERTIFICATION.md` §5) |
-| EFTL-signed binaries re-run | ✅ dress rehearsal done (2026-08-29): all 7 EFTL zips SHA-256+GPG verified, full campaign zero unexpected failures, runners aligned on EFTL versions (JSON-P TCK 2.1.1; inject-tck 2.0.2 via documented `-D` override, EFTL-only artifact); to be repeated on the released 0.3.0 for the certifying claim |
-| Public results summary page | ❌ not started (post-0.3.0) |
-| Certification issue on `jakartaee/platform` | ❌ not started — requires a released Vidocq 0.3.0 |
+| EFTL-signed binaries re-run | ✅ **certifying run done (2026-08-31)** against the released **Vidocq 0.3.0** Maven Central artifacts: all 7 EFTL zips SHA-256 verified, zero unexpected failures, results byte-for-byte identical to the 2026-08-29 dress rehearsal. Details: `CERTIFICATION.md` §7/Status |
+| Public results summary page | ❌ not started — content ready in `CERTIFICATION.md` §7 |
+| Certification issue on `jakartaee/platform` | ❌ not started — Vidocq 0.3.0 released 2026-08-31, ready to file |
 
 ## Reactor modules
 
