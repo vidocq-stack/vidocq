@@ -232,7 +232,9 @@ Compatible* logo and be listed as a compatible product.
   (`cdi-sigtest` profile in `vauban-tck-runner`, 0 failures against
   `cdi-api-jdk17.sig`) and RESTful WS (`JAXRSSigTestIT` unskipped, EFTL
   resources). No open items remain in this requirement (§5).
-- Remaining: filing the certification issue on `jakartaee/platform` (§8).
+- Certification issue: **filed** — [`jakartaee/platform#1351`](https://github.com/jakartaee/platform/issues/1351)
+  (2026-08-31, labeled `certification`). Awaiting approval by lazy consensus
+  (14 days) or majority vote of the specification project (§8).
 
 ## 9. Public results page
 
