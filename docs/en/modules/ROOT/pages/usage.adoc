@@ -140,7 +140,7 @@ module com.acme.rest.adapter {
 ----
 
 [NOTE]
-.New in 0.3.0-SNAPSHOT
+.New in 0.3.0
 ====
 The classes that `vidocq:generate` produces for scanned dependencies (client proxies,
 interceptors) live in packages *owned by those dependencies*. Since 0.3.0 the plugin keeps them

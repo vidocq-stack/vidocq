@@ -162,7 +162,7 @@
                                 </goals>
                                 <configuration>
                                     <launcher>todo-app</launcher>
-                                    <imageTag>vidocq/todo-app:0.3.0-SNAPSHOT</imageTag>
+                                    <imageTag>vidocq/todo-app:${project.version}</imageTag>
                                     <!-- build=false par défaut : on génère seulement le Dockerfile.
                                          Mettre <build>true</build> ou -Dvidocq.docker.build=true
                                          pour invoquer 'docker build' dans la foulée. -->

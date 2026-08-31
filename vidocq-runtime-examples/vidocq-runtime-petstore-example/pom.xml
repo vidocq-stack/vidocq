@@ -217,7 +217,7 @@
                                 </goals>
                                 <configuration>
                                     <launcher>petstore-app</launcher>
-                                    <imageTag>vidocq/petstore-app:0.3.0-SNAPSHOT</imageTag>
+                                    <imageTag>vidocq/petstore-app:${project.version}</imageTag>
                                     <!-- build=false by default: only the Dockerfile is generated.
                                          Set -Dvidocq.docker.build=true to invoke 'docker build'. -->
                                 </configuration>

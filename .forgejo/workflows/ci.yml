@@ -11,6 +11,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check documented version numbers stay in sync
+        run: ./check-doc-versions.sh
+
       - name: Fetch Vidocq/ci action (Forgejo mirror, basic-auth)
         shell: bash
         env:

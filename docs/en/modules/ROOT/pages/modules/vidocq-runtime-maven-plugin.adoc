@@ -50,7 +50,7 @@
 |===
 
 [NOTE]
-.Scanned dependencies and Java Modules — new in 0.3.0-SNAPSHOT
+.Scanned dependencies and Java Modules — new in 0.3.0
 ====
 When `vidocq:generate` runs with `<scanDependencies>`, the classes it produces for a scanned
 dependency belong to *that dependency's* packages. The plugin now keeps the module path

@@ -88,6 +88,12 @@ jobs:
           echo "docs-only=$docs_only" >> "$GITHUB_OUTPUT"
           echo "docs-only: $docs_only"
 
+      - name: Check documented version numbers stay in sync
+        # Runs unconditionally, including on docs-only PRs — that's exactly where
+        # this class of drift (docs citing a stale "latest release"/"current
+        # snapshot") went unnoticed before. See check-doc-versions.sh.
+        run: ./check-doc-versions.sh
+
       - uses: https://codefloe.com/Vidocq/ci/setup-maven@main
         if: steps.changes.outputs.docs-only != 'true'
 

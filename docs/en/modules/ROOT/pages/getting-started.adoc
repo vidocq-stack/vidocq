@@ -227,7 +227,7 @@ The CLI is a convenience, not a requirement. The project above is plain Maven â€
 </project>
 ----
 
-NOTE: Dependency versions are pinned on purpose: the released parent's `dependencyManagement` uses `${project.version}`, so an app relying on it must inherit the parent's version. The two `vidocq-runtime-maven-plugin` configuration blocks work around known 0.2.0 issues (fixed in the next release).
+NOTE: Dependency versions are pinned on purpose: the released parent's `dependencyManagement` uses `${project.version}`, so an app relying on it must inherit the parent's version. The two `vidocq-runtime-maven-plugin` configuration blocks work around known 0.2.0 issues (fixed in 0.3.0).
 
 `src/main/java/module-info.java`:
 
