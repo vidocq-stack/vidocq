@@ -12,7 +12,7 @@ Lite). Each MicroProfile/Jakarta spec ships as an independent **extension** disc
 - **Zero runtime dependencies** in the core; functionality is added through extensions.
 - **Virtual-thread native**: use `ScopedValue` (JEP 487) for `@RequestScoped` context — never `ThreadLocal` (pinning).
 - **Compile-time over reflection**: Vauban generates proxies/interceptors via the JDK 25 Class-File API; extensions use APT codegen, not runtime reflection (GraalVM-friendly).
-- **English only** for code, comments, Javadoc, commits, and docs (see `~/.claude/CLAUDE.md`).
+- **English only** for code, comments, Javadoc, commits, docs, **and CodeFloe issues/PRs** (title, body, comments) (see `~/.claude/CLAUDE.md`).
 
 ## Build, test & run
 
@@ -21,6 +21,14 @@ Lite). Each MicroProfile/Jakarta spec ships as an independent **extension** disc
 - Dev mode (live run of an example/app): `./mvnw vidocq:dev` — reads `vidocq.mainModule` / `vidocq.mainClass` properties (see `vidocq-runtime-examples/vidocq-runtime-mansart-h2-example/pom.xml`).
 - Commits must be **DCO signed-off**: `git commit -s` (see `CONTRIBUTING.md`).
 - TCK runners (e.g. Servlet 6.1, MicroProfile per-spec) live **outside the Maven reactor** because ShrinkWrap cannot parse Model 4.x POMs — launch them via their dedicated `run-official-tck-*.sh` scripts, never `mvn` from the root.
+
+## Forge & tooling (CodeFloe)
+
+The `vidocq` project (and its org) is hosted on **CodeFloe** (`https://codefloe.com`), a
+**Forgejo** instance — not GitHub. Use the **`tea` CLI** (already authenticated, login
+`codefloe`, set as default via `tea login list`) to interact with issues, pull requests,
+CI/Actions runs, and repo/org config — do **not** use `gh` or GitHub MCP tools for this
+repo. Common commands: `tea issues`, `tea pulls`, `tea issues create`, `tea pr create`.
 
 ## Architecture & reactor layout
 
