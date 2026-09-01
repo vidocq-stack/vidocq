@@ -50,6 +50,15 @@ detailed results: [`CERTIFICATION.md`](CERTIFICATION.md); running instructions:
 | Public results summary page | ✅ live at [vidocq.dev/certification](https://vidocq.dev/certification/) (`Vidocq/pages` PR #11, merged 2026-08-31) |
 | Certification issue on `jakartaee/platform` | ✅ **filed** — [`jakartaee/platform#1351`](https://github.com/jakartaee/platform/issues/1351) (2026-08-31); awaiting lazy-consensus approval (14 days) or majority vote |
 
+## Jakarta EE Web Profile 11 (planning)
+
+Beyond Core Profile 11, going toward **Jakarta EE Web Profile 11** is being planned.
+Gap analysis, per-spec status, and tracking issues: [`WEB-PROFILE.md`](WEB-PROFILE.md)
+(umbrella issue [vidocq#67](https://codefloe.com/Vidocq/vidocq/issues/67)). The pivotal
+gap is CDI 4.1 **Full** (Vauban implements Lite only), whose Portable Extensions
+sub-problem has a dedicated design doc: [`vauban/CDI-FULL.md`](https://codefloe.com/Vidocq/vauban/CDI-FULL.md)
+([vauban#38](https://codefloe.com/Vidocq/vauban/issues/38), [vauban#39](https://codefloe.com/Vidocq/vauban/issues/39)).
+
 ## Reactor modules
 
 ```
