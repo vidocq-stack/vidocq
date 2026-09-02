@@ -107,6 +107,28 @@ vidocq-runtime-integration-tests/         Arquillian ITs + cross-extension (humb
       footprint vs Quarkus/Helidon). No perf number in docs without a `BENCH.md` entry.
 - [ ] GraalVM native-image AOT: prerequisite = no runtime reflection in any
       extension. Incremental validation (Chappe + Cassini first).
+- [ ] **Cross-brick codegen rationalisation study** (tracked in #70) — the ecosystem carries 9
+      independent annotation processors (vauban, cassini, cyrano, grimm, dirac,
+      champollion-jsonb, champollion-protobuf, mansart-data, vidocq-datasources)
+      and 7 Maven plugins, each re-implementing the same build-time mechanics:
+      annotated-element scanning and `TypeMirror` validation, Java source emission
+      via `StringBuilder` + `Filer.createSourceFile` (no shared renderer),
+      hand-written `META-INF/services` files (~10 modules), class/jar scanning on
+      the Maven side (`chappe IndexMojo`, `cassini GenerateAdaptersMojo`,
+      `mansart RepositoryClassScanner`, `vidocq ServiceUsesScanner`) alongside
+      `vauban-indexer` (consumed only by vidocq and the examples), and per-module
+      Class-File API helpers (13 modules). ~80 runtime `getAnnotation()` call sites
+      remain in the `*-core` modules. Driver: code quality and rationalisation —
+      a shared transverse library is preferred over duplicated functions (internal
+      dependencies already exist, e.g. `vidocq-parent` → `vauban` → MP bricks).
+      Deliverables, in order: (1) inventory of duplicated LOC and divergence risks
+      per mechanic; (2) the study's outcome recorded as an ADR in `vidocq-docs`
+      (`docs/adr/0005-shared-codegen-library.md`) deciding on a build-time-only
+      common library (candidate scope: element scanning, source rendering,
+      service-file writer, Class-File API helpers, generalised `vauban-indexer`;
+      must settle host repository, coordinates and dependency direction);
+      (3) migration plan brick by brick. No refactor before the ADR is accepted.
+      Synergy with the GraalVM item above (removing runtime reflection).
 
 ## Bugs & incidents
 
