@@ -1,29 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!--
-    POM racine agrégateur ET parent des trois sous-réactors.
-    Les trois sous-projets (mansart-pool, mansart-jakarta-data, mansart-transactions) parentent
-    ce POM (qui lui-même parente vidocq-parent), formant ainsi un réacteur Maven UNIFIÉ.
-    Cela permet à `mvn versions:set` de versionner les 21 modules en une seule passe,
-    condition nécessaire au bon fonctionnement du CI de release.
-
-    Ce POM est déployé sur Maven Central (maven.deploy.skip=false) : packaging=pom, donc
-    seul le .pom est publié (pas de jar). C'est OBLIGATOIRE car il est le parent de
-    mansart-pool / mansart-jakarta-data / mansart-transactions — un consommateur externe
-    (CI vidocq résolvant mansart depuis central-snapshots, hors reactor local) a besoin de
-    toute la chaîne de parents pour lire le descripteur d'un artefact enfant. L'exclure
-    cassait la résolution (mansart-root:pom absent → mansart-pool-api irrésoluble).
-
-    Pattern : Maven 4 <modules> + packaging=pom, sans dependencyManagement ni
-    pluginManagement propres (chaque sous-réacteur a le sien, calibré à ses besoins).
--->
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>io.vidocq</groupId>
-        <artifactId>vidocq-parent</artifactId>
-        <version>0.3.0-SNAPSHOT</version>
-        <relativePath />
+        <groupId>org.sonatype.oss</groupId>
+        <artifactId>oss-parent</artifactId>
+        <version>11</version>
     </parent>
 
     <groupId>io.vidocq.mansart</groupId>
@@ -31,14 +13,15 @@
     <version>0.3.0-SNAPSHOT</version>
     <packaging>pom</packaging>
 
-    <name>Mansart :: Workspace</name>
-    <description>Aggregator for the three independent Mansart reactors — pool, jakarta-data, transactions.</description>
+    <name>Mansart Root</name>
+    <description>Mansart is a reference implementation for the Jakarta EE platform, focused on Java Modules, virtual threads, and clean architecture.</description>
     <url>https://codefloe.com/Vidocq/mansart</url>
 
     <scm>
         <connection>scm:git:https://codefloe.com/Vidocq/mansart.git</connection>
         <developerConnection>scm:git:ssh://git@codefloe.com/Vidocq/mansart.git</developerConnection>
         <url>https://codefloe.com/Vidocq/mansart</url>
+        <tag>HEAD</tag>
     </scm>
 
     <developers>
@@ -77,15 +60,109 @@
         </license>
     </licenses>
 
-    <properties>
-        <!-- Parent pom (packaging=pom): deploy the .pom so external consumers can resolve
-             the parent chain of mansart-pool/-jakarta-data/-transactions from central-snapshots. -->
-        <maven.deploy.skip>false</maven.deploy.skip>
-    </properties>
-
     <modules>
         <module>mansart-pool</module>
-        <module>mansart-jakarta-data</module>
         <module>mansart-transactions</module>
+        <module>mansart-jakarta-data</module>
     </modules>
+
+    <properties>
+        <maven.compiler.source>25</maven.compiler.source>
+        <maven.compiler.target>25</maven.compiler.target>
+        <maven.compiler.release>25</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.junit.jupiter</groupId>
+                <artifactId>junit-jupiter</artifactId>
+                <version>5.11.4</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.assertj</groupId>
+                <artifactId>assertj-core</artifactId>
+                <version>3.27.0</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.junit.vintage</groupId>
+                <artifactId>junit-vintage-engine</artifactId>
+                <version>5.11.4</version>
+                <scope>test</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>3.13.0</version>
+                    <configuration>
+                        <release>25</release>
+                    </configuration>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <version>3.5.2</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
+
+    <profiles>
+        <profile>
+            <id>release</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-source-plugin</artifactId>
+                        <version>3.3.1</version>
+                        <executions>
+                            <execution>
+                                <id>attach-sources</id>
+                                <goals>
+                                    <goal>jar-no-fork</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-javadoc-plugin</artifactId>
+                        <version>3.7.0</version>
+                        <executions>
+                            <execution>
+                                <id>attach-javadocs</id>
+                                <goals>
+                                    <goal>jar</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-gpg-plugin</artifactId>
+                        <version>3.2.6</version>
+                        <executions>
+                            <execution>
+                                <id>sign-artifacts</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>sign</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

@@ -56,7 +56,19 @@ elif grep -q "<module>$MOD</module>" "$H/pom.xml" 2>/dev/null; then
     # the exact thing M0 forbids, invisible to the check meant to forbid it.
     d="the runner is listed in the ROOT pom <modules> — only the parent belongs there"
 else
-    ( cd "$H/$MOD" && "$H/scripts/build.sh" test-compile ) >/dev/null 2>&1 && r=0 || d="test-compile fails IN $MOD"
+    if ( cd "$H/$MOD" && "$H/scripts/build.sh" test-compile ) >/dev/null 2>&1; then r=0
+    else
+        d="test-compile fails IN $MOD"
+        # Nearly always the same cause: java sources that should not exist yet.
+        # The TCK tests come from the jar; an ArchiveAppender injects OUR
+        # implementation, and there is none until M1. A run wrote four classes
+        # against invented ShrinkWrap types and could not compile.
+        n=$(find "$H/$MOD/src/test/java" -name '*.java' 2>/dev/null | wc -l | tr -d ' ')
+        [ "${n:-0}" -gt 0 ] && d="$d
+             hint: $n java source(s) under src/test/java. M0 needs NONE — the run
+             that worked shipped zero. Delete them; the appender belongs to M1,
+             when there is an implementation to inject."
+    fi
 fi
 ck M0-T002 "runner compiles in its own directory" $r "$d"
 
@@ -78,7 +90,7 @@ ck M0-T003 "TCK jar declared and resolving ($COORD)" $r "$d"
 r=1; d=""
 RUN="$(ls "$H/$MOD"/run-official-tck-*.sh 2>/dev/null | head -1)"
 if [ -z "$RUN" ]; then d="no run-official-tck-*.sh in $MOD"
-elif [ ! -x "$RUN" ]; then d="$(basename "$RUN") is not executable"
+elif [ ! -x "$RUN" ]; then d="$(basename "$RUN") is not executable — chmod +x it"
 elif [ ! -f "$H/$MOD/src/test/resources/arquillian.xml" ]; then d="src/test/resources/arquillian.xml missing"
 elif ls "$H/scripts"/run-official-tck-*.sh >/dev/null 2>&1; then
     # A run left a copy in scripts/. Two scripts with the same name, one of them
