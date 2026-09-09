@@ -6,8 +6,8 @@ Counters only. A line here is written by a tool, never by an agent.
 
 ```
 tck:    jakarta.tck:persistence-tck-spec-tests:3.2.1
-module: (not created yet — M0-T001)
-result: PASS=? FAIL=? ERROR=? SKIP=?   (never run)
+module: mansart-jakarta-persistence/mansart-jakarta-persistence-tck
+result: PASS=? FAIL=? ERROR=? SKIP=?   (not run — M0 TCK harness scaffolded only; TCK execution deferred to M1)
 ```
 
 ## Milestones
@@ -42,5 +42,5 @@ in the Log, not here.
 
 | Card | Date | Evidence |
 |---|---|---|
-| — | — | *(none yet)* |
+| M0-T001 | 2026-09-09 | `./scripts/build.sh install` → OK (exit 0), 10 tests, 0 failures (log: `target/build-logs/build-20260909-211007-62828.log`) |
 
