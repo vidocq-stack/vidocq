@@ -198,7 +198,8 @@ if bundled or dupes:
 m0_rows = []
 _v = os.path.join(os.path.dirname(os.path.abspath(status_p)), "scripts", "verify-m0.sh")
 if os.path.isfile(_v):
-    _r = _sp.run([_v, code], capture_output=True, text=True)
+    _env = dict(os.environ, VERIFY_M0_NO_SYNC="1")  # else it calls us back
+    _r = _sp.run([_v, code], capture_output=True, text=True, env=_env)
     for line in (_r.stdout or "").splitlines():
         m = re.match(r"\s*(M0-T\d{3})\s+PASS\s+(.*)", line)
         if m:

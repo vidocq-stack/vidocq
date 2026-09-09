@@ -164,4 +164,14 @@ ck M0-T006 "the counter measures the implementation, not the harness" $r "$d"
 
 echo
 printf 'M0: %d pass, %d fail\n' "$pass" "$fail"
+
+# Refresh STATUS from what was just measured. An agent committed a working
+# runner and left STATUS reading "0 done": the counts are computed at generation
+# time, so they are stale from the moment anything changes. Making every
+# verification refresh them removes the window entirely — nobody has to remember.
+# VERIFY_M0_NO_SYNC breaks the cycle when spec-tasks.sh is the one calling us.
+if [ -z "${VERIFY_M0_NO_SYNC:-}" ] && [ -x "$H/scripts/spec-tasks.sh" ]; then
+    VERIFY_M0_NO_SYNC=1 "$H/scripts/spec-tasks.sh" "$CODE" >/dev/null 2>&1 \
+        && echo "STATUS-$CODE.md refreshed"
+fi
 [ "$fail" -eq 0 ]

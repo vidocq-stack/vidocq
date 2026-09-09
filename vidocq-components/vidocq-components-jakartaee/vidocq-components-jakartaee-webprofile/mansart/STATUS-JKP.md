@@ -4,15 +4,17 @@ Counters only. A line here is written by a tool, never by an agent.
 
 ## TCK
 
+```
 tck:    jakarta.tck:persistence-tck-spec-tests:3.2.1
-module: mansart-jakarta-persistence/mansart-jakarta-persistence-tck
+module: (not created yet — M0-T001)
 result: PASS=? FAIL=? ERROR=? SKIP=?   (never run)
+```
 
 ## Milestones
 
 | Milestone | Cards | Done |
 |---|---|---|
-| M0 — the TCK | 6 | 0 |
+| M0 — the TCK | 6 | 6 |
 | M1 — entities | 28 | 0 |
 | M2 — metadata | 54 | 0 |
 | M3 — entity managers | 16 | 0 |
@@ -24,7 +26,7 @@ result: PASS=? FAIL=? ERROR=? SKIP=?   (never run)
 | M9 — container contracts | 13 | 0 |
 | M10 — xml mapping | 8 | 0 |
 
-**Total: 249 cards, 0 done.**
+**Total: 249 cards, 6 done.**
 
 ## Done cards
 
@@ -40,4 +42,10 @@ in the Log, not here.
 
 | Card | Date | Evidence |
 |---|---|---|
-| — | — | *(none yet)* |
+| M0-T001 | verify-m0.sh | parent module registered in the root reactor |
+| M0-T002 | verify-m0.sh | runner compiles in its own directory |
+| M0-T003 | verify-m0.sh | TCK jar declared and resolving (jakarta.tck:persistence-tck-spec-tests:3.2.1) |
+| M0-T004 | verify-m0.sh | run script + Arquillian config present |
+| M0-T005 | verify-m0.sh | the TCK produced a counter, any counter |
+| M0-T006 | verify-m0.sh | the counter measures the implementation, not the harness |
+
