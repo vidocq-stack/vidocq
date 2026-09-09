@@ -36,7 +36,7 @@ Three pathologies, all measured, all of which the guard must make impossible:
   **75 times**, across three spellings differing only by a stderr redirect.
 - **476 `read_file` calls, 40% of them re-reading an unchanged file.**
 - **262 Maven runs, all logged `exit_code: 0`** — while 38 outputs contained
-  `BUILD FAILURE`, 3 compile errors, 17 test failures. See §7.
+  `BUILD FAILURE`, 3 compile errors, 17 test failures. See §8.
 
 ---
 
@@ -59,16 +59,21 @@ Same quality, opposite cost profiles. Hence:
 
 | Agent | Model | Writes | Exists because |
 | --- | --- | --- | --- |
-| `lead` (primary) | Qwen3.6 | `TASKS-XXX.md`, `STATUS-XXX.md`, `docs/spec-notes/` | Decides and never types. Fastest prefill = cheapest primary. |
+| `lead` (primary) | Qwen3.6 | `TASKS-XXX.md`, `STATUS-XXX.md` | Decides and never types. Fastest prefill = cheapest primary. |
 | `recon` | Instruct 80B | nothing | Answers "where is X" so the primary never greps. |
+| `noter` | Instruct 80B | `docs/spec-notes/XXX/` only | `recon` may not write, and the lead must never hold a chapter. |
+| `planner` | Instruct 80B | `.fragments/<group>.md` only | Turns one group of notes into card rows. Never sees the whole plan. |
 | `tdd` | Instruct 80B | `**/src/test/**` only | Writes the failing test **before** the code. |
 | `impl` | Instruct 80B | production code, never tests | 9× faster per task than the 35B, same score. |
 | `verify` | Instruct 80B | nothing | Runs build/tests/Sonar, returns numbers only. |
 | `thinker` | Qwen3.6 | nothing | Only after two failed attempts. Native thinking. |
+| `tck-runner` | Instruct 80B | nothing | Runs the official TCK, reports the counter, fixes nothing. |
 
-The 8B vision model is **not** in the roster: oMLX has markitdown enabled
-(PDF → text, 25 MB, 5 files/request), which covers spec PDFs. Add vision only if
-a genuinely graphical diagram ever blocks a card.
+The 8B vision model is **not** in the roster, and neither is a PDF converter.
+This section originally claimed oMLX exposed markitdown for spec PDFs — it does
+not, and no converter exists on this machine. Jakarta publishes every spec as
+HTML, which the fetcher now prefers: stdlib only, and headings survive the split.
+Add vision only if a genuinely graphical diagram ever blocks a card.
 
 ```mermaid
 flowchart TB
@@ -77,9 +82,11 @@ flowchart TB
     end
     subgraph S["SUBAGENT CONTEXTS — discarded on return"]
         RECON["recon · 80B<br/>finds, summarises"]
+        NOTER["noter · 80B<br/>one chapter -> one note"]
         TDD["tdd · 80B<br/>failing test first"]
         IMPL["impl · 80B<br/>production code"]
         VERIFY["verify · 80B<br/>build · tests · sonar"]
+        TCK["tck-runner · 80B<br/>official TCK counter"]
         THINK["thinker · Qwen3.6<br/>after 2 failures"]
     end
     T[("TASKS-XXX.md")]
@@ -92,8 +99,12 @@ flowchart TB
     LEAD -- "one card" --> IMPL
     LEAD -- "before DONE" --> VERIFY
     LEAD -- "stuck" --> THINK
-    LEAD --> T & ST & N
+    LEAD --> T & ST
+    SH["scripts/spec-note.sh<br/>sequential, watchdog"] -- "one chapter" --> NOTER
+    NOTER --> N
+    N -. "the only spec the lead sees" .-> LEAD
     VERIFY -. "numbers only" .-> ST
+    TCK -. "PASS/FAIL/ERROR" .-> ST
     IMPL -. "denied by guard" .-x TDD
 ```
 
@@ -110,9 +121,11 @@ A spec gets a **three-letter code** (`JKP` = Jakarta Persistence). You pass it;
 
 | File | Owner | Content |
 | --- | --- | --- |
-| `TASKS-XXX.md` | `lead` | Milestones `M1..Mx`, cards `M1-T001`, `M1-T002`… Normal English, this is the contract. |
+| `TASKS-XXX.md` | `spec-tasks.sh` | Milestones `M0..Mx`, cards `M0-T001`… Assembled by script from planner fragments; **no model writes this file**. |
+| `docs/spec-src/XXX/milestones.tsv` | you | `<name><TAB><note globs>`, one line per milestone, **in dependency order**. The one judgement the script cannot make. |
 | `STATUS-XXX.md` | `lead` + `verify` | Current card, measured counters, one line per finished card. |
-| `docs/spec-notes/XXX/<chapter>.md` | `lead` | One note per spec chapter, 200 lines max. The only thing read when planning. |
+| `docs/spec-notes/XXX/<chapter>.md` | `noter` | One note per spec chapter, 200 lines max. The only thing read when planning. |
+| `docs/spec-src/XXX/spec-meta.json` | `spec-fetch.py` | Chapter list **and TCK coordinates**. What makes the harness reusable: `/tck` reads it instead of guessing. |
 | `BUG.md` | `lead` | **Existing file, existing format** (34 entries). Bugs get ids `XXX-Bnnn`. |
 
 No `BUGS-XXX.md`: the workspace `CLAUDE.md` already mandates one `BUG.md` per
@@ -126,6 +139,7 @@ per-spec filtering for free.
 | Command | Does |
 | --- | --- |
 | `/spec-add <url\|path> <XXX>` | Fetch → markitdown → split → one note per chapter → derive `TASKS-XXX.md` + empty `STATUS-XXX.md`. |
+| `/tck XXX` | Run the official TCK, report the counter. Fixes nothing. |
 | `/next XXX` | One card, end to end, then **stop**. |
 | `/fixbug XXX-Bnnn` | Same engine, entry point is a `BUG.md` id instead of a card. |
 | `/status XXX` | Read-only summary. No model call beyond formatting. |
@@ -140,20 +154,68 @@ the spec" in one call dies of compaction before writing a single card.
 
 ```mermaid
 flowchart LR
-    URL["spec PDF/HTML"] --> MD["markitdown<br/>(oMLX)"]
-    MD --> SPLIT["split by chapter<br/>deterministic, no model"]
-    SPLIT --> C1["chapter 1"] & C2["chapter 2"] & CN["chapter n"]
-    C1 --> R1["recon · 80B<br/>note ≤200 lines"]
-    C2 --> R2["recon · 80B"]
-    CN --> RN["recon · 80B"]
-    R1 & R2 & RN --> NOTES[("docs/spec-notes/XXX/")]
-    NOTES --> LEAD["lead · Qwen3.6<br/>derives M1..Mx + cards"]
-    LEAD --> TASKS[("TASKS-XXX.md")]
+    URL["spec URL<br/>HTML preferred over PDF"] --> FETCH["scripts/spec-fetch.py<br/>split on headings<br/>+ split any chapter >45 KB"]
+    FETCH --> SRC[("docs/spec-src/XXX/<br/>+ spec-meta.json")]
+    SRC --> SH["scripts/spec-note.sh<br/>ONE @noter at a time<br/>timeout 600 s per call"]
+    SH --> NOTES[("docs/spec-notes/XXX/")]
+    NOTES --> LEAD["lead · Qwen3.6<br/>derives M0..Mx + cards"]
+    LEAD --> TASKS[("TASKS-XXX.md<br/>M0 = TCK")]
 ```
 
-The primary reads **only the notes**, never the spec. Each `recon` call is a
+The primary reads **only the notes**, never the spec. Each `noter` call is a
 fresh short context that is thrown away. Restartable: a chapter whose note
-already exists is skipped.
+already exists is skipped, so an interrupted run resumes where it stopped.
+
+Four rules in that diagram were each bought with a failed run:
+
+- **The dispatch loop is a shell, not the lead.** The lead once fired all 39
+  noter calls at a server with `max_concurrent_requests: 2`: 9 active, 7 queued,
+  prompt processing down from 1 730 to **170 tok/s**, and one call never came
+  back — the run stayed "alive" for **51 minutes without writing a file**.
+  Sequential is not the slow option: ~47 s per note, 24 chapters in ~20 min,
+  against 90 minutes of nothing. **Do not parallelise AI calls against a server
+  that serialises them** — no throughput gained, all observability lost.
+- **A hard `timeout` per call.** A hung call must die in 600 s, not never.
+- **Split any chapter over 45 KB.** Given 80 KB, a noter read it and replied
+  *"what would you like me to do with this specification?"* — the spec had pushed
+  its system prompt out of reach. The task is also repeated in the message.
+- **Count `REPORTED-BUT-MISSING` separately from failure.** An agent claiming it
+  wrote a file is not evidence; the script `ls` it afterwards. The final line is
+  `notes: n/total written, n skipped, n timed out, n reported-but-missing`.
+
+Front matter (preamble, license, bibliography, appendices) is filtered **by
+pattern**, before any model call: 39 chapters become 24 at zero token cost.
+
+### From notes to cards — the same lesson, one level up
+
+The lead then had to turn 24 notes into `TASKS-XXX.md`, and failed three times
+with **exit code 0 and no error**. Not a context problem: all 24 notes measure
+**34 913 tokens** (server `count_tokens`) against a 65 536 limit, and it died at
+21 000. The ceiling was `output: 12288` — a reasoning model asked to emit a
+hundred-card document in one response, truncated mid-generation, surfacing as an
+empty turn. Raising it to 32 768 moved the wall without removing it.
+
+So `scripts/spec-tasks.sh` takes the document away from the model entirely:
+
+- **one `@planner` call per milestone group**, sequential, watchdog per call;
+- the planner emits **rows only** — `| title | spec sections | done-when |`;
+- **no id column**: the script assigns `M3-T007`, so no model can invent a
+  duplicate id;
+- **rows that do not match the shape are deleted**, never trusted. Prose is
+  dropped rather than assembled;
+- **M0 is generated from `spec-meta.json` with no model at all.** A previous run
+  wrote `jakarta.tack:persistence-tck` — a typo inside Maven coordinates, failing
+  hours later for no visible reason. Coordinates are now copied by `python3`;
+- **milestone order comes from `milestones.tsv`**, not from a model. Ordering is
+  a judgement, so it lives in a ten-line file you can edit; fanning out calls is
+  mechanical, so it lives in the shell;
+- the script **counts what it cannot judge**: cards bundling 4+ requirements in
+  one done-when, and duplicate titles across groups.
+
+A dry run at `--timeout 1` — ten deliberate failures, zero tokens — caught the bug
+that mattered: the loop processed *one* group and stopped, because `opencode` was
+reading the TSV from stdin and swallowing it. `</dev/null` fixed it. Rehearse the
+plumbing before spending a single token on it.
 
 ---
 
@@ -223,7 +285,40 @@ red build, not a warning.
 
 ---
 
-## 7. Enforcement, and the Maven exit-code fix
+## 7. The TCK is milestone zero
+
+The first `TASKS-JKP.md` this harness generated contained **58 cards and zero
+occurrences of the word "TCK"** — a plan describing what to implement, with no
+way for anyone to know it worked. That is exactly how attempt 1 reached 2/1745
+and attempt 3 marked 24 cards DONE against a real counter of 2.
+
+The fix belongs in the harness, not in a hand-written module, or the next spec
+starts from nothing again:
+
+- **`scripts/tck-find.py <keyword>`** scans the local M2 for TCK artifacts and the
+  repo for runners worth copying. Verified generic: `persistence` →
+  `jakarta.tck:persistence-tck:3.2.1`, `data` → `jakarta.data:jakarta-data-tck:1.0.1`,
+  unknown keyword → exit 1 with a clear message. It also surfaces the two runners
+  that already pass here (`mansart-data-tck` at 74/74, `mansart-transactions-tck`),
+  so an agent copies a working layout instead of inventing one.
+- **`spec-fetch.py` writes the coordinates into `spec-meta.json`**, keyword derived
+  from the url. `/tck` reads that file rather than guessing.
+- **`/tck XXX` + agent `tck-runner`**: runs, writes nothing, reports four lines.
+  Written into its prompt: *ZERO PASS IS A VALID RESULT*, and `ERROR=all` (the
+  harness does not compile) is not the same information as a conformance failure.
+- **M0 is always the TCK**, before any implementation milestone. `M0`'s done-when
+  is "the TCK produces a counter, any counter".
+
+On spec dependencies, the answer was smaller than expected: **JNDI is not a
+Jakarta spec** — `javax.naming` ships in the JDK. The TCK's `jakarta.tck:common`
+drags in the whole EE platform (`ejb`, `jms`, `servlet`, `el`…), but that is the
+shared base of every Jakarta TCK, not what JPA needs at runtime. What JPA actually
+requires — Transactions, CDI, Annotations, JDBC, a pool — already exists in this
+ecosystem as `mansart-transactions`, `vauban` and `mansart-pool`.
+
+---
+
+## 8. Enforcement, and the Maven exit-code fix
 
 OpenCode 1.18.20 exposes `tool.execute.before` / `tool.execute.after` /
 `permission.ask` (verified in `@opencode-ai/plugin`), so the V3 guard ports over.
@@ -271,11 +366,11 @@ real exit code.
 
 ---
 
-## 8. rtk and context-mode
+## 9. rtk and context-mode
 
 - **rtk** stays: the `rtk-rewrite.js` plugin offers every bash command to
   `rtk rewrite`. The guard must therefore normalise `rtk` away before comparing
-  commands (see §7), or duplicate-detection silently stops working.
+  commands (see §8), or duplicate-detection silently stops working.
 - **context-mode** is how a subagent handles a large output without pouring it
   into a context: process it and print only the answer. Applies to build logs,
   Sonar reports, long greps. `verify` uses it by default; combined with
@@ -283,7 +378,7 @@ real exit code.
 
 ---
 
-## 9. Measured environment facts
+## 10. Measured environment facts
 
 **SonarQube is up.** Container `vidocq-sonar`, image `sonarqube:community`,
 version 26.5.0, **published on port 9001** (not 9000), volumes
@@ -309,11 +404,18 @@ Note the cohabitation tax: prefill drops ~10-20% versus a model measured alone
 (2 056 vs 2 515 for the 35B), which is the real price of keeping both resident,
 and it is worth it against reload-per-switch.
 
-**Spec source is a URL.** `/spec-add <url-to-pdf> <XXX>` downloads the spec PDF,
-caches it locally, and feeds it to markitdown. `ee/` is empty and no spec ships
-with the repo, so nothing is read from the working tree.
+**An oMLX upgrade wipes the prefix cache.** 0.6.2 → 0.6.4 took it from 42 GB to
+12 MB. Any cache measurement spanning an upgrade compares two different machines;
+`max_concurrent_requests` (2) and `hot_cache_max_size` (8 GB) survived it.
 
-## 10. Built and verified so far
+**Spec source is a URL, and HTML beats PDF.** `/spec-add <url> <XXX>` downloads
+the spec and caches it under `docs/spec-src/XXX/`. Given a PDF url it switches to
+the HTML edition Jakarta publishes alongside it — there is no PDF converter on
+this machine, and HTML keeps the headings the splitter needs. Measured on JPA
+3.2: 2.5 MB, 1.22 M characters, 20 chapters, 39 after the 45 KB split. `ee/` is
+empty and no spec ships with the repo, so nothing is read from the working tree.
+
+## 11. Built and verified so far
 
 **Refusal works, and it teaches.** Verified end to end on 2026-09-09 with
 `opencode run` against `Qwen3-Next-80B-Instruct`: throwing from
@@ -328,16 +430,20 @@ OK (exit 0)
 log: …/target/build-logs/build-20260909-115802-88440.log
 ```
 
-So the guard is a teaching layer, not just a wall. Everything in §7 stands.
+So the guard is a teaching layer, not just a wall. Everything in §8 stands.
 
 | Piece | State |
 | --- | --- |
 | `scripts/build.sh` | done — **10/10** on its contract, real failure → exit 1 + 3-line cause, 66-line log → 2 lines of stdout, JDK pinned from `.sdkmanrc` |
 | `scripts/test-build-sh.sh` | done — run it before trusting any change to build.sh |
 | `.sdkmanrc` | added (`java=25.0.3-tem`, `maven=3.9.16`), taken from `ybl/jpa-opencode` |
-| `.opencode/guard-rules.js` | done — the six rules as pure functions |
+| `.opencode/guard-rules.mjs` | done — the six rules as pure functions, **outside `plugin/`** (see traps below) |
 | `.opencode/plugin/mansart-guard.js` | done — wires the rules into `tool.execute.before` |
 | `scripts/test-guard.mjs` | done — **44/44** |
+| `scripts/spec-fetch.py` | done — HTML preferred, splits >45 KB chapters, writes `spec-meta.json` with TCK coordinates |
+| `scripts/spec-note.sh` | done — 24 notes, **1 463 lines**, 35 min, 0 reported-but-missing |
+| `scripts/spec-tasks.sh` | done — 11 milestones, **248 cards**, 10/10 groups, M0 generated with no model |
+| `scripts/tck-find.py` | done — generic, verified on `persistence` and `data` |
 | `.opencode/package.json` | `{"type":"module"}`, else Node reparses the plugin on every load |
 | `opencode.json` (project) | declares the two working models; **no secret** — baseURL and apiKey inherited from the global provider |
 | `~/.config/opencode/opencode.json` | cleaned: it declared two models deleted from oMLX. Now the 5 real ones, default `Qwen3.6`, small/vision `Qwen3-VL-8B`. Backup kept as `opencode.json.BEFORE-CLEANUP-*` |
@@ -367,15 +473,20 @@ with `jdk: <version>` so a wrong compiler is visible in the 3-line verdict.
 Plugin discovery: `.opencode/plugin/` at the project root is picked up
 (`[mansart-guard] loaded (dir=…)` on every run).
 
-## 11. Agents and commands — written and loaded
+## 12. Agents and commands — written and loaded
 
 `.opencode/agent/*.md` and `.opencode/command/*.md`, frontmatter + caveman English
-body. `opencode agent list` shows all six: `lead` (primary), `recon`, `tdd`,
-`impl`, `verify`, `thinker` (subagents).
+body. `opencode agent list` shows all nine: `lead` (primary), `recon`, `noter`,
+`planner`, `tdd`, `impl`, `verify`, `thinker`, `tck-runner` (subagents). Six
+commands: `/spec-add`, `/tck`, `/next`, `/fixbug`, `/status`, `/push`.
 
-Enforcement is layered, not repeated: `recon`/`verify`/`thinker` have
-`tools: {write,edit,patch: false}` so they *cannot* write at all; `tdd` and `impl`
-can write, and stay in their lane by instruction plus the guard.
+Enforcement is layered, not repeated: `recon`/`verify`/`thinker`/`tck-runner`
+have `tools: {write,edit,patch: false}` so they *cannot* write at all; `tdd`,
+`impl` and `noter` can write, and stay in their lane by instruction plus the
+guard. `noter` is the sharpest case: it is never *handed* an output path, it
+**derives** it from the chapter path (`spec-src/XXX/f.md` → `spec-notes/XXX/f.md`).
+A note once landed one directory too high, was reported as success, and held the
+count at 8 of 11 for twenty minutes. You cannot mistype a path you never receive.
 
 `scripts/sonar.sh` is written and **verified against the real server**: it starts
 `vidocq-sonar` if OrbStack stopped it, waits for `status: UP`, and scans. Two
@@ -391,10 +502,31 @@ things learned running it:
 `/status JKP` was run end to end: `$ARGUMENTS` substitutes, the command routes to
 `lead`, and the output respects the required shape.
 
-## 12. Open points
+## 13. Open points
 
-- **`/spec-add` is untested end to end** — no spec PDF has been ingested yet. The
-  markitdown call in step 2 is the part most likely to need adjusting.
+- **Card granularity is unsolved, and prompting will not solve it.** The pipeline
+  produces 248 cards shaped like spec sections, 39 of them bundling four or more
+  requirements in one done-when. Hardening the planner prompt (verb-first titles,
+  one assertion per card, the failed example quoted with its correction) killed
+  the duplicate titles (3+ → 0) and trimmed the count (309 → 248) but **left the
+  shape untouched** — seven of ten groups returned the identical card count. The
+  control run settles it: the 35B reasoning model produced **12 cards where the
+  80B produced 54**, with the same defect. Two models, two architectures, one
+  conclusion: **generating cards from section-structured notes is a
+  structure-preserving transformation**. The `noter` works because its task is
+  line-by-line; ask a model to group and arbitrate and it mirrors its input.
+  Remaining options, both untried: a deterministic splitter (one card per note
+  line — 1 463 cards, worse), or letting `/next` split a card at execution time.
+- **Note density is proven.** 24 notes, 1 463 lines, against 367 lines for 11
+  chapters before the 45 KB split. That fix worked.
+- **The roster may have the models backwards for `noter`.** Under load, the lead
+  replaying a near-identical context reaches **17 250 tok/s** of apparent prefill
+  (almost all cache hits), while the noter, reading 39 different chapters, gets
+  **274 tok/s** with no cache at all. The role that benefits least from the prefix
+  cache was handed to the model that prefills slowest. Testable — same chapter,
+  both models — and untested.
+- **`/next` and `/tck` have never run.** Everything above is scaffolding for a
+  loop that has not yet delivered a card, against a counter still at zero.
 - **`impl` writing into `src/test/` is prevented by instruction, not by tooling.**
   OpenCode's `permission.edit` is per-agent but not per-path here, and the guard
   cannot see which agent issued a call. If an `impl` ever edits a test to go

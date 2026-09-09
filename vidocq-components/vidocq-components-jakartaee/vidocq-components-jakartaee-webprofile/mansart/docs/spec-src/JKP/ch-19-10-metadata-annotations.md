@@ -1,0 +1,647 @@
+# 10. Metadata Annotations
+
+This chapter and chapter Chapter 11
+define the metadata annotations introduced by this specification.
+
+The XML schema defined in chapter
+Chapter 12 provides an alternative to the use of metadata annotations.
+
+These annotations and types are in the package jakarta.persistence.
+
+10.1. Entity
+
+The Entity annotation specifies that the
+class is an entity. This annotation is applied to the entity class.
+
+The name annotation element specifies the
+entity name. If the name element is not specified, the entity name
+defaults to the unqualified name of the entity class. This name is used
+to refer to the entity in queries.
+
+@Documented
+@Target(TYPE)
+@Retention(RUNTIME)
+public @interface Entity {
+ String name() default "";
+}
+
+10.2. Callback Annotations
+
+The EntityListeners annotation specifies
+the callback listener classes to be used for an entity or mapped
+superclass. The EntityListeners annotation may be applied to an entity
+class or mapped superclass.
+
+@Target({TYPE})
+@Retention(RUNTIME)
+public @interface EntityListeners {
+ Class[] value();
+}
+
+The ExcludeSuperclassListeners annotation
+specifies that the invocation of superclass listeners is to be excluded
+for the entity class (or mapped superclass) and its subclasses.
+
+@Target({TYPE})
+@Retention(RUNTIME)
+public @interface ExcludeSuperclassListeners {
+}
+
+The ExcludeDefaultListeners annotation
+specifies that the invocation of default listeners is to be excluded for
+the entity class (or mapped superclass) and its subclasses.
+
+@Target({TYPE})
+@Retention(RUNTIME)
+public @interface ExcludeDefaultListeners {
+}
+
+The following annotations are used to specify
+callback methods for the corresponding lifecycle events. These
+annotations may be applied to methods of an entity class, of a mapped
+superclass, or of an entity listener class.
+
+@Target({METHOD})
+@Retention(RUNTIME)
+public @interface PrePersist {}
+
+@Target({METHOD})
+@Retention(RUNTIME)
+public @interface PostPersist {}
+
+@Target({METHOD})
+@Retention(RUNTIME)
+public @interface PreRemove {}
+
+@Target({METHOD})
+@Retention(RUNTIME)
+public @interface PostRemove {}
+
+@Target({METHOD})
+@Retention(RUNTIME)
+public @interface PreUpdate {}
+
+@Target({METHOD})
+@Retention(RUNTIME)
+public @interface PostUpdate {}
+
+@Target({METHOD})
+@Retention(RUNTIME)
+public @interface PostLoad {}
+
+10.3. EntityGraph Annotations
+
+10.3.1. NamedEntityGraph and NamedEntityGraphs Annotations
+
+The NamedEntityGraph annotation defines a named entity graph. The
+annotation must be applied to the root entity of the graph, and specifies
+the limits of the graph of associated attributes and entities fetched when
+an operation which retrieves an instance or instances of the root entity is
+executed.
+
+The name element assigns a name to the entity graph, and is used to
+identify the entity graph in calls to EntityManager.getEntityGraph().
+If no name is explicitly specified, the name defaults to the entity name
+of the annotated root entity. Entity graph names must be unique within the
+persistence unit.
+
+The attributeNodes element lists attributes
+of the annotated entity class that are to be included in the entity
+graph.
+
+The includeAllAttributes element specifies
+that all attributes of the annotated entity class are to be included in
+the entity graph. An attributeNode element may still be used in
+conjunction with this element to specify a subgraph for the attribute.
+
+The subgraphs element specifies a list of
+subgraphs, further specifying attributes that are managed types. These
+subgraphs are referenced by name from NamedAttributeNode definitions.
+
+The subclassSubgraphs element specifies a
+list of subgraphs that add additional attributes for subclasses of the
+root entity to which the annotation is applied.
+
+The NamedEntityGraphs annotation can be
+used to specify multiple named entity graphs for the entity to which it
+is applied.
+
+@Target({TYPE})
+@Retention(RUNTIME)
+@Repeatable(NamedEntityGraphs.class)
+public @interface NamedEntityGraph {
+ String name() default "";
+ NamedAttributeNode[] attributeNodes() default {};
+ boolean includeAllAttributes() default false;
+ NamedSubgraph[] subgraphs() default {};
+ NamedSubgraph[] subclassSubgraphs() default {};
+}
+
+@Target({TYPE})
+@Retention(RUNTIME)
+public @interface NamedEntityGraphs {
+ NamedEntityGraph[] value();
+}
+
+10.3.2. NamedAttributeNode Annotation
+
+The NamedAttributeNode annotation is used
+to specify an attribute node of within an entity graph or subgraph.
+
+The value element specifies the name of the
+corresponding attribute.
+
+The subgraph element is used to refer to a
+NamedSubgraph specification that further characterizes an attribute
+node corresponding to a managed type (entity or embeddable). The value
+of the subgraph element must correspond to the name used for the
+subgraph in the NamedSubgraph element. If the referenced attribute is
+an entity which has entity subclasses, there may be more than one
+NamedSubgraph element with this name, and the subgraph element is
+considered to refer to all of these.
+
+The keySubgraph element is used to refer to
+a NamedSubgraph specification that further characterizes an attribute
+node corresponding to the key of a Map-valued attribute. The value of
+the the keySubgraph element must correspond to the name used for the
+subgraph in the NamedSubgraph element. If the referenced attribute is
+an entity which has entity subclasses, there may be more than one
+NamedSubgraph element with this name, and the keySubgraph element is
+considered to refer to all of these.
+
+@Target({})
+@Retention(RUNTIME)
+public @interface NamedAttributeNode {
+ String value();
+ String subgraph() default "";
+ String keySubgraph() default "";
+}
+
+10.3.3. NamedSubgraph Annotation
+
+The NamedSubgraph annotation is used to
+further define an attribute node. It is referenced by its name from the
+subgraph or keySubgraph element of a NamedAttributeNode element.
+
+The name element is the name used to
+reference the subgraph from a NamedAttributeNode definition. In the
+case of entity inheritance, multiple subgraph elements have the same
+name.
+
+The type element must be specified when the
+subgraph corresponds to a subclass of the entity type corresponding to
+the referencing attribute node.
+
+The attributeNodes element lists attributes
+of the class that must be included. If the subgraph corresponds to a
+subclass of the class referenced by the corresponding attribute node,
+only subclass-specific attributes are listed.
+
+@Target({})
+@Retention(RUNTIME)
+public @interface NamedSubgraph {
+ String name();
+ Class type() default void.class;
+ NamedAttributeNode[] attributeNodes();
+}
+
+10.4. Annotations for Queries
+
+The following annotations are used to declare named queries.
+
+10.4.1. NamedQuery Annotation
+
+The NamedQuery annotation declared a named query written in the Jakarta
+Persistence query language.
+
+The name element assigns a name to the query, which is used to identify
+the query in calls to EntityManager.createNamedQuery().
+
+The query element must specify a query string itself, written in the
+Jakarta Persistence query language.
+
+The resultClass element specifies the Java class of each query result.
+The query result class may be overridden by explicitly passing a Class
+object to EntityManager.createNamedQuery(String, Class). If the
+resultClass element of a NamedQuery annotation is not specified, the
+persistence implementation is entitled to default the result class to
+Object or Object[].
+
+The lockMode element specifies a lock mode for the entity instances in
+results returned by the query. If a lock mode other than NONE is
+specified, the query may only be executed within a persistence context
+with an associated active transaction.
+
+The hints elements may be used to specify query properties and hints.
+Properties defined by this specification must be observed by the provider;
+hints defined by this specification should be observed by the provider
+when possible. Vendor-specific hints that are not recognized by a provider
+must be ignored.
+
+The NamedQuery and NamedQueries annotations can be applied to an entity
+or mapped superclass.
+
+@Target({TYPE})
+@Retention(RUNTIME)
+@Repeatable(NamedQueries.class)
+public @interface NamedQuery {
+ String name();
+ String query();
+ Class<?> resultClass() default void.class;
+ LockModeType lockMode() default NONE;
+ QueryHint[] hints() default {};
+}
+
+@Target({})
+@Retention(RUNTIME)
+public @interface QueryHint {
+ String name();
+ String value();
+}
+
+@Target({TYPE})
+@Retention(RUNTIME)
+public @interface NamedQueries {
+ NamedQuery[] value ();
+}
+
+10.4.2. NamedNativeQuery Annotation
+
+The NamedNativeQuery annotation defines a named native SQL query.
+
+The name element assigns a name to the query, which is used to identify
+the query in calls to EntityManager.createNamedQuery().
+
+The query element must specify the query string itself, written in the
+native SQL dialect of the database.
+
+The resultClass element specifies the class of each query result. If a
+result set mapping is specified, the specified result class must agree
+with the type inferred from the result set mapping. If a resultClass is
+not explicitly specified, then it is inferred from the result set mapping,
+if any, or defaults to Object or Object[]. The query result class may
+be overridden by explicitly passing a Class object to
+EntityManager.createNamedQuery(String, Class).
+
+The resultSetMapping element specifies the name of a SqlResultSetMapping
+specification defined elsewhere in metadata. The named SqlResultSetMapping
+is used to interpret the result set of the native SQL query. Alternatively,
+the elements entities, classes, and columns may be used to specify a
+result set mapping. These elements may not be used in conjunction with
+resultSetMapping.
+
+The hints element may be used to specify query properties and hints.
+Hints defined by this specification should be observed by the provider
+when possible. Vendor-specific hints which are not recognized by the
+provider must be ignored.
+
+The NamedNativeQuery and NamedNativeQueries annotations can be applied
+to an entity or mapped superclass.
+
+@Target({TYPE})
+@Retention(RUNTIME)
+@Repeatable(NamedNativeQueries.class)
+public @interface NamedNativeQuery {
+ String name();
+ String query();
+ QueryHint[] hints() default {};
+ Class resultClass() default void.class;
+ String resultSetMapping() default "";
+ EntityResult[] entities() default {};
+ ConstructorResult[] classes() default {};
+ ColumnResult[] columns() default {};
+}
+
+@Target({TYPE})
+@Retention(RUNTIME)
+public @interface NamedNativeQueries {
+ NamedNativeQuery[] value ();
+}
+
+10.4.3. NamedStoredProcedureQuery Annotation
+
+The NamedStoredProcedureQuery annotation is
+used to specify a stored procedure, its parameters, and its result type.
+
+The name element is the name that is passed
+as an argument to the createNamedStoredProcedureQuery method to create
+an executable StoredProcedureQuery object.
+
+The procedureName element is the name of
+the stored procedure in the database.
+
+The parameters of the stored procedure are
+specified by the parameters element. All parameters must be specified
+in the order in which they occur in the parameter list of the stored
+procedure.
+
+The resultClasses element refers to the
+class (or classes) that are used to map the results. The
+resultSetMappings element names one or more result set mappings, as
+defined by the SqlResultSetMapping annotation.
+
+If there are multiple result sets, it is
+assumed that they will be mapped using the same mechanism—e.g., either
+all via a set of result class mappings or all via a set of result set
+mappings. The order of the specification of these mappings must be the
+same as the order in which the result sets will be returned by the
+stored procedure invocation. If the stored procedure returns one or more
+result sets and no resultClasses or resultSetMappings element is
+specified, any result set will be returned as a list of type Object[]
+. The combining of different strategies for the mapping of stored
+procedure result sets is undefined.
+
+The hints element may be used to specify
+query properties and hints. Properties defined by this specification
+must be observed by the provider. Vendor-specific hints that are not
+recognized by a provider must be ignored.
+
+The NamedStoredProcedureQuery and
+NamedStoredProcedureQueries annotations can be applied to an entity or
+mapped superclass.
+
+@Target(TYPE)
+@Retention(RUNTIME)
+@Repeatable(NamedStoredProcedureQueries.class)
+public @interface NamedStoredProcedureQuery {
+ String name();
+ String procedureName();
+ StoredProcedureParameter[] parameters() default {};
+ Class[] resultClasses() default {};
+ String[] resultSetMappings() default {};
+ QueryHint[] hints() default {};
+}
+
+@Target(TYPE)
+@Retention(RUNTIME)
+public @interface NamedStoredProcedureQueries {
+ NamedStoredProcedureQuery [] value;
+}
+
+All parameters of a named stored procedure
+query must be specified using the StoredProcedureParameter annotation.
+The name element refers to the name of the parameter as defined by the
+stored procedure in the database. If a parameter name is not specified,
+it is assumed that the stored procedure uses positional parameters. The
+mode element specifies whether the parameter is an IN, INOUT, OUT, or
+REF_CURSOR parameter. REF_CURSOR parameters are used by some databases
+to return result sets from stored procedures. The type element refers
+to the JDBC type for the parameter.
+
+@Target({})
+@Retention(RUNTIME)
+public @interface StoredProcedureParameter {
+ String name() default "";
+ ParameterMode mode() default ParameterMode.IN;
+ Class type();
+}
+
+public enum ParameterMode {
+ IN,
+ INOUT,
+ OUT,
+ REF_CURSOR
+}
+
+10.4.4. Annotations for SQL Result Set Mappings
+
+The SqlResultSetMapping annotation is used to specify the mapping of
+the result set of a native SQL query or stored procedure.
+
+@Target({TYPE})
+@Retention(RUNTIME)
+@Repeatable(SqlResultSetMappings.class)
+public @interface SqlResultSetMapping {
+ String name();
+ EntityResult[] entities() default {};
+ ConstructorResult[] classes() default {};
+ ColumnResult[] columns() default {};
+}
+
+@Target({TYPE})
+@Retention(RUNTIME)
+public @interface SqlResultSetMappings {
+ SqlResultSetMapping[] value();
+}
+
+The name element is the name given to the result set mapping, and is
+used to identify it when calling methods of the EntityManager which
+create instances of Query and StoredProcedureQuery. The entities,
+classes, and columns elements are used to specify the mapping of
+result set columns to entities, to constructors, and to scalar values,
+respectively.
+
+@Target({})
+@Retention(RUNTIME)
+public @interface EntityResult {
+ Class entityClass();
+ LockModeType lockMode() default LockModeType.OPTIMISTIC;
+ FieldResult[] fields() default {};
+ String discriminatorColumn() default "";
+}
+
+The entityClass element specifies the class of the result.
+
+The lockMode element specifies the LockModeType obtained when the
+native SQL query is executed.
+
+The fields element is used to map the columns specified in the SELECT
+list of the query to the properties or fields of the entity class.
+
+The discriminatorColumn element is used to specify the column name
+(or alias) of the column in the SELECT list that is used to determine
+the type of the entity instance.
+
+@Target({})
+@Retention(RUNTIME)
+public @interface FieldResult {
+ String name();
+ String column();
+}
+
+The name element is the name of the persistent field or property of
+the class.
+
+The column element specifies the name of the corresponding column in
+the SELECT list—i.e., column alias, if applicable.
+
+@Target(value={})
+@Retention(RUNTIME)
+public @interface ConstructorResult {
+ Class targetClass();
+ ColumnResult[] columns();
+}
+
+The targetClass element specifies the class whose constructor is to
+be invoked.
+
+The columns element specifies the mapping of columns in the SELECT
+list to the arguments of the intended constructor.
+
+@Target({})
+@Retention(RUNTIME)
+public @interface ColumnResult {
+ String name();
+ Class type() default void.class;
+}
+
+The name element specifies the name of the column in the SELECT list.
+
+The type element specifies the Java type to which the column type is
+to be mapped. If the type element is not specified, the default JDBC
+type mapping for the column will be used.
+
+10.5. References to EntityManager and EntityManagerFactory
+
+These annotations are used to express
+dependencies on entity managers and entity manager factories.
+
+10.5.1. PersistenceContext Annotation
+
+The PersistenceContext annotation is used
+to express a dependency on a container-managed entity manager and its
+associated persistence context.
+
+The name element refers to the name by
+which the entity manager is to be accessed in the environment
+referencing context, and is not needed when dependency injection is
+used.
+
+The optional unitName element refers to the
+name of the persistence unit. If the unitName element is specified,
+the persistence unit for the entity manager that is accessible in JNDI
+must have the same name.
+
+The type element specifies whether a
+transaction-scoped or extended persistence context is to be used. If the
+type element is not specified, a transaction-scoped persistence
+context is used.
+
+The synchronizationType element specifies
+whether the persistence context is always automatically synchronized
+with the current transaction or whether the persistence context must be
+explicitly joined to the current transaction by means of the
+EntityManager joinTransaction method.
+
+The optional properties element may be used
+to specify properties for the container or persistence provider.
+Properties defined by this specification must be observed by the
+provider. Vendor specific properties may be included in the set of
+properties, and are passed to the persistence provider by the container
+when the entity manager is created. Properties that are not recognized
+by a vendor must be ignored.
+
+@Target({TYPE, METHOD, FIELD})
+@Retention(RUNTIME)
+@Repeatable(PersistenceContexts.class)
+public @interface PersistenceContext {
+ String name() default "";
+ String unitName() default "";
+ PersistenceContextType type() default TRANSACTION;
+ SynchronizationType synchronization() default SYNCHRONIZED;
+ PersistenceProperty[] properties() default {};
+}
+
+public enum PersistenceContextType {
+ TRANSACTION,
+ EXTENDED
+}
+
+public enum SynchronizationType {
+ SYNCHRONIZED,
+ UNSYNCHRONIZED
+}
+
+@Target({})
+@Retention(RUNTIME)
+public @interface PersistenceProperty {
+ String name();
+ String value();
+}
+
+The PersistenceContexts annotation declares
+one or more PersistenceContext annotations. It is used to express a
+dependency on multiple persistence contexts[104].
+
+@Target({TYPE})
+@Retention(RUNTIME)
+public @interface PersistenceContexts {
+ PersistenceContext[] value();
+}
+
+10.5.2. PersistenceUnit Annotation
+
+The PersistenceUnit annotation is used to
+express a dependency on an entity manager factory and its associated
+persistence unit.
+
+The name element refers to the name by
+which the entity manager factory is to be accessed in the environment
+referencing context, and is not needed when dependency injection is
+used.
+
+The optional unitName element refers to the
+name of the persistence unit as defined in the persistence.xml file.
+If the unitName element is specified, the persistence unit for the
+entity manager factory that is accessible in JNDI must have the same
+name.
+
+@Target({TYPE, METHOD, FIELD})
+@Retention(RUNTIME)
+@Repeatable(PersistenceUnits.class)
+public @interface PersistenceUnit {
+ String name() default "";
+ String unitName() default "";
+}
+
+The PersistenceUnits annotation declares
+one or more PersistenceUnit annotations. It is used to express a
+dependency on multiple persistence units[105].
+
+@Target(TYPE)
+@Retention(RUNTIME)
+public @interface PersistenceUnits {
+ PersistenceUnit[] value();
+}
+
+10.6. Annotations for Attribute Converter Classes
+
+The Converter annotation declares that the annotated class is a converter
+and specifies whether the converter is applied automatically. Every converter
+class must implement AttributeConverter and must be annotated with the
+Converter annotation or declared as a converter in the XML descriptor. The
+target type for a converter is determined by the actual type argument of the
+first type parameter of AttributeConverter.
+
+@Target({TYPE})
+@Retention(RUNTIME)
+public @interface Converter {
+ boolean autoApply() default false;
+}
+
+If the autoApply element is specified as true, the persistence provider
+must automatically apply the converter to every mapped attribute of the
+specified target type belonging to any entity in the persistence unit, except
+for attributes for which conversion is overridden by means of the Convert
+annotation (or XML equivalent). The Convert annotation is described in
+Section 11.1.10. The Convert annotation may be used to override or disable
+auto-apply conversion on a per-attribute basis.
+
+In determining whether a converter applies to an attribute, the provider
+must treat primitive types and wrapper types as equivalent.
+
+A converter never applies to id attributes, version attributes,
+relationship attributes, or to attributes explicitly annotated as
+Enumerated or Temporal (or designated as such via XML).
+
+A converter never applies to any attribute annotated
+@Convert(disableConversion=true) or to an attribute for which the
+Convert annotation explicitly specifies a different converter.
+
+If autoApply is false, the converter applies only to attributes of the
+target type for which conversion is explicitly enabled via the Convert
+annotation (or corresponding XML element).
+
+If there is more than one converter defined for the same target type,
+the Convert annotation must be used to explicitly specify which
+converter applies.

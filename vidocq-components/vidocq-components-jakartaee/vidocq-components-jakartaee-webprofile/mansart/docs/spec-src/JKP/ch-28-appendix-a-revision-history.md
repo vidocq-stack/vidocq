@@ -1,0 +1,258 @@
+# Appendix A: Revision History
+
+This appendix lists the significant changes that have been made during the development of the Jakarta Persistence specification.
+
+A.1. Jakarta Persistence 3.2
+
+Added support for Java record types as embeddable classes
+
+Added support for java.time.Instant and java.time.Year and clarified JDBC mappings for basic types
+
+Added union, intersect, except, cast, left, right, and replace for Jakarta Persistence QL and criteria queries
+
+Added || string concatenation operator and id and version functions to Jakarta Persistence QL
+
+Added CriteriaSelect to the Criteria API
+
+Added extract() to CriteriaBuilder
+
+Added subquery(EntityType) to CommonAbstractCriteria
+
+Added support for specifying null precedence when ordering Jakarta Persistence QL and criteria queries
+
+Added getSingleResultOrNull() to Query, TypedQuery, StoredProcedureQuery
+
+Added entities(), classes() and columns() to NamedNativeQuery
+
+Added lockMode() to EntityResult with the default being OPTIMISTIC
+
+Added getVersion(), isLoaded(), load(), isInstance() and getClass() methods to PersistenceUnitUtil
+
+Added overload of entity() accepting an entity name to Metamodel
+
+Added javax.annotation.processing.Generated to the list of defined annotations on StaticMetamodel
+
+Added joins on EntityTypes
+
+Added constants for managed types, named queries, named graphs and named result set mappings to generated StaticMetamodel
+
+Added LocalDateTime and Instant to supported Version types
+
+Added where(), having(), and(), or(), array(), tuple() overloads accepting List to CriteriaQuery and CriteriaBuilder
+
+Added equalTo() and notEqualTo() to Expression
+
+Added concat() overload accepting list of expressions to CriteriaBuilder
+
+Added Graph interface as parent of EntityGraph and Subgraph and moved common operations there
+
+Added addAttributeNode(), removeAttributeNode(), addTreatedSubgraph(), addElementSubgraph(), addTreatedElementSubgraph(),
+addMapKeySubgraph(), and addTreatedMapKeySubgraph() methods to Graph
+
+Added find(), refresh(), lock() overloads to EntityManager taking newly introduced FindOptions, RefreshOptions,
+and LockOptions respectively
+
+Added setCacheStoreMode(), and setCacheRetreiveMode() methods to EntityManager and Query
+
+Added getReference overload to EntityManager
+
+Added runWithConnection() and callWithConnection() to EntityManager
+
+Added runInTransaction() and callInTransaction() to EntityManagerFactory
+
+Added getName() to EntityManagerFactory
+
+Added setTimeout(Integer) and getTimeout() to EntityTransaction
+
+Added programmatic API to obtain EntityManagerFactory using PersistenceConfiguration
+
+Added constants for properties defined by the specification to the PersistenceConfiguration
+
+Added SchemaManager API
+
+Added options member to elements which result in DDL generation
+
+Added EnumeratedValue allowing custom mapping of fields of Java enums
+
+Added comment and check members to @Table and @Column annotations, along with @CheckConstraint
+
+Added secondPrecision to @Column annotation and clarified semantics of @Column members
+
+Added factory-level access to named queries and named entity graphs, along with TypedQueryReference
+
+Added integration points for dependency injection
+
+Allowed scalar expressions in the ORDER BY clause in Jakarta Persistence QL
+
+Made the name member of TableGenerator and SequenceGenerator optional and allow usage of these annotations
+at the java package level
+
+Made identification variables and the SELECT clause in Jakarta Persistence QL optional
+
+Clarified the primary key types supported for each GenerationType
+
+Clarified availability of SEQUENCE, TABLE and UUID generated IDs on PrePersist
+
+Clarified semantics of numeric literals and numeric type promotions, and added support for bi and bd suffixes
+
+Clarified semantics of Convert/Converter annotations
+
+Clarified rules around distinction of entity names and identification variables and case-sensitivity in Jakarta Persistence QL queries
+
+Clarified the semantics of Bindable.ENTITY_TYPE in javadoc
+
+Clarified the semantics of collection-valued query parameters
+
+Entity and embeddable classes may now be static inner classes
+
+Primary key classes are no longer required to be public and serializable
+
+Pulled getParameters() up from CriteriaQuery to CommonAbstractCriteria
+
+Updated persistence and object/relational mapping schemas
+
+Fixed wildcard types in addSubgraph and addAttributeNode in Graph
+
+Fixed lower type bounds to the Path.get entity argument X
+
+Fixed example code in the javadoc of AttributeOverrides
+
+Fixed maxOccurs of the version element in ORM schema to allow at most one element
+
+Partially fixed raw types warnings through the API
+
+Improved AsciiDoc formatting and fixed typos through the specification document
+
+A.1.1. Deprecations
+
+Deprecated usage of Calendar, Date, Time, Timestamp, Temporal, MapKeyTemporal and TemporalType
+in new applications in favour of java.time API
+
+Deprecated use of Byte[] and Character[] arrays types for basic attributes, in favor of primitive array types
+
+Deprecated multiselect methods in CriteriaQuery. The preference is to use array or tuple method defined in CriteriaBuilder
+
+A.1.2. Deprecations for removal
+
+Deprecated addSubclassSubgraph() in EntityGraph for removal; addTreatedSubgraph() method should be used as direct replacement
+
+Deprecated addSubgraph(Attribute, Class) and addKeySubgraph() in Graph/EntityGraph/SubGraph for removal; addTreatedSubgraph(Attribute, Class)
+and addMapKeySubgraph() methods should be used as direct replacements
+
+Deprecated jakarta.persistence.spi.PersistenceUnitTransactionType for removal; jakarta.persistence.PersistenceUnitTransactionType
+methods should be used as direct replacement
+
+Deprecated default public no-arg constructor in jakarta.persistence.Persistence and PERSISTENCE_PROVIDER and providers fields
+in this class for removal with no replacement. This class is not designed for extensibility
+
+A.2. Jakarta Persistence 3.1
+
+EntityManagerFactory and EntityManager interfaces extend java.lang.AutoCloseable interface
+
+Fixed ClassTransformer.transform to throw Persistence API specific exception
+
+Added support for java.util.UUID and GenerationType.UUID
+
+Added CEILING, EXP, FLOOR, LN, POWER, ROUND, and SIGN
+numeric functions to Jakarta Persistence QL and ceiling(), exp(),
+floor(), ln(), power(), round(), and sign() to Criteria API
+
+Added LOCAL DATE, LOCAL DATETIME, and LOCAL TIME functions to Jakarta Persistence QL and
+corresponding localDate(), localDateTime(), and localTime() to Criteria API
+
+Added EXTRACT function to Jakarta Persistence QL
+
+Added support for Expressions as conditions in Criteria CASE expressions
+
+Clarified mixing types of query input parameters
+
+Added missing definition of single_valued_embeddable_object_field in Jakarta Persistence QL BNF
+
+Clarified definition of the Basic type
+
+Clarified the order of parameters in the LOCATE function
+
+Clarified SqlResultSetMapping with multiple EntityResults and conflicting aliases
+
+A.3. Jakarta Persistence 3.0
+
+Created document from Java Persistence 2.2 Final Release specification.
+
+The document was converted to Asciidoc format.
+
+Packages of all API classes were changed to jakarta.persistence. These changes are reflected in the specification document.
+
+Schema namespaces were changed from http://xmlns.jcp.org/xml/ns/persistence and http://xmlns.jcp.org/xml/ns/persistence/orm
+to https://jakarta.ee/xml/ns/persistence and https://jakarta.ee/xml/ns/persistence/orm
+
+References to schema versions lower than 2.2 were removed.
+
+A.4. Java Persistence 2.2 (Maintenance Release Draft)
+
+Created document from Java Persistence 2.1
+Final Release specification.
+
+The following annotations have been marked @Repeatable:
+
+AssociationOverride
+
+AttributeOverride
+
+Convert
+
+JoinColumn
+
+MapKeyJoinColumn
+
+NamedEntityGraph
+
+NamedNativeQuery
+
+NamedQuery
+
+NamedStoredProcedureQuery
+
+PersistenceContext
+
+PersistenceUnit
+
+PrimaryKeyJoinColumn
+
+SecondaryTable
+
+SqlResultSetMapping
+
+SequenceGenerator
+
+TableGenerator
+
+Added SequenceGenerators and TableGenerators annotations.
+
+Added support for CDI injection into
+AttributeConverter classes.
+
+Added support for the mapping of the following java.time types:
+
+java.time.LocalDate
+
+java.time.LocalTime
+
+java.time.LocalDateTime
+
+java.time.OffsetTime
+
+java.time.OffsetDateTime
+
+Added default Stream getResultStream() method
+to Query interface.
+
+Added default Stream<X> getResultStream()
+method to TypedQuery interface.
+
+Replaced reference to JAR file specification
+in persistence provider bootstrapping section with more general
+reference to Java SE service provider requirements.
+
+Updated persistence.xml and orm.xml schemas to 2.2 versions.
+
+Updated Related Documents.

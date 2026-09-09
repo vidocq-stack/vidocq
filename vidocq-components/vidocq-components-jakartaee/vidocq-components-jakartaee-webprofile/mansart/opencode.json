@@ -5,11 +5,17 @@
       "models": {
         "Qwen3.6-35B-A3B-MTPLX-Optimized-Speed": {
           "name": "Qwen3.6 35B (lead)",
-          "limit": { "context": 65536, "output": 12288 }
+          "limit": {
+            "context": 65536,
+            "output": 32768
+          }
         },
         "Qwen3-Next-80B-A3B-Instruct-4bit": {
           "name": "Qwen3-Next 80B Instruct (workers)",
-          "limit": { "context": 65536, "output": 12288 }
+          "limit": {
+            "context": 65536,
+            "output": 32768
+          }
         }
       }
     }

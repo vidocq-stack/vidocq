@@ -11,3 +11,6 @@ mansart-transactions/.tck-cache/
 
 # Claude Code / tooling local
 .claude/
+
+# spec pipeline intermediates (regenerable)
+docs/spec-notes/*/.fragments/
