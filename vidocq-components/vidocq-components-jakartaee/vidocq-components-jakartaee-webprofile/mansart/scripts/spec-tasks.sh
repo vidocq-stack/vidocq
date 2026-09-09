@@ -115,11 +115,11 @@ L += ["## M0 — the TCK", "",
 if coord:
     L += ["TCK: `{}`".format(coord), "",
           "| Card | Title | Spec sections | Done-when |", "|---|---|---|---|",
-          "| M0-T001 | Create the parent module `{}` (packaging pom) and register it in the ROOT pom's `<modules>` | — | `<module>{}</module>` is in the root pom and `./scripts/build.sh -N validate` exits 0. Mirror `mansart-jakarta-data`: the parent aggregates implementation modules, **never the -tck one**. |".format(parent_module or module, parent_module or module),
-          "| M0-T002 | Create the TCK runner at **`{}`** — standalone POM, OUT of the reactor | — | That exact directory holds a pom.xml, it is NOT listed in the parent's `<modules>`, and `./scripts/build.sh test-compile` exits 0 there. **The path is not yours to choose**: it comes from `docs/spec-src/{}/module.conf`. |".format(module, code),
-          "| M0-T003 | Depend on `{}` — **and on nothing that does not exist yet** | — | `./scripts/build.sh dependency:resolve` lists the TCK jar and resolves everything. Declaring implementation modules before M1 creates them makes M0 unbuildable — an agent declared six and the build failed. **Removing the TCK dependency to go green is not a fix either.** |".format(coord),
-          "| M0-T004 | Arquillian container + ArchiveAppender + run script | — | The run script starts the suite and writes a log, exit code recorded |",
-          "| M0-T005 | First run | — | **The TCK produces a counter, ANY counter. PASS=0 is success: the instrument exists.** The implementation is wired in later, by M1. |", ""]
+          "| M0-T001 | Create the parent module `{}` (packaging pom) and register it in the ROOT pom's `<modules>` | — | `./scripts/verify-m0.sh {} ` reports **M0-T001 PASS**. Mirror `mansart-jakarta-data`: the parent aggregates implementation modules, **never the -tck one**. |".format(parent_module or module, code),
+          "| M0-T002 | Create the TCK runner at **`{}`** — standalone POM, OUT of the reactor | — | `./scripts/verify-m0.sh {}` reports **M0-T002 PASS** (it compiles the module *in its own directory* — a root build cannot satisfy this card). **The path is not yours to choose**: it comes from `docs/spec-src/{}/module.conf`. |".format(module, code, code),
+          "| M0-T003 | Depend on `{}` — **and on nothing that does not exist yet** | — | `./scripts/verify-m0.sh {}` reports **M0-T003 PASS**. Declaring implementation modules before M1 creates them makes M0 unbuildable — an agent declared six and the build failed. **Removing the TCK dependency to go green is not a fix either.** |".format(coord, code),
+          "| M0-T004 | Arquillian config + run script, copied from a runner that already passes | — | `./scripts/verify-m0.sh {}` reports **M0-T004 PASS** |".format(code),
+          "| M0-T005 | First run | — | `./scripts/verify-m0.sh {}` reports **M0-T005 PASS**: a counter FOR THIS MODULE appears in the build log. **ANY counter. PASS=0 is success: the instrument exists.** The implementation is wired in by M1. |".format(code), ""]
     if runners:
         L += ["Copy the layout from a runner that already passes here: " +
               ", ".join("`{}`".format(r) for r in runners), ""]

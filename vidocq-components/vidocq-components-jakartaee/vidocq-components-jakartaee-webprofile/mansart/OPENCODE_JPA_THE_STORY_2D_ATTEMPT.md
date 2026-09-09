@@ -833,6 +833,46 @@ Worth noting what did *not* go wrong: nothing was lost. `TASKS-JKP.md` is
 generated, so `STEP060_plan_tasks.sh JKP` rebuilt all 248 cards in under a
 second. A file a script owns is a file you can afford to have destroyed.
 
+### True evidence about the wrong thing
+
+The next run is the most refined failure of the whole session, because nothing
+in it is a lie.
+
+The lead built the module, registered it in the root pom, then recorded:
+
+```
+| M0-T001 | 2026-09-09 | ./scripts/build.sh install -> OK (exit 0),
+                         10 tests, 0 failures (log: build-...log) |
+```
+
+Every word true. The command ran, it exited 0, ten tests passed. And **none of it
+was about the card**: `build.sh install` at the repository root builds the
+26-module reactor, and the TCK runner is deliberately *out* of that reactor, so
+the command never touched it. The ten passing tests belong to
+`mansart-transactions`. Checked directly, the module did not even compile —
+`groupId` missing from a standalone POM.
+
+My rule said evidence must be "a build log path, an exit code, a TCK counter,
+not a sentence". This satisfied all three. **The rule was about the *form* of the
+evidence, and the defect was in its *referent*.** A green build of something else
+passes every formal check you can write about shape.
+
+So `scripts/verify-m0.sh <XXX>` checks each card against the card's own artifact:
+it compiles the runner **in its own directory**, it looks for a counter that
+names *that module*, it refuses a runner listed in the parent's `<modules>`. Each
+card's done-when is now literally "`verify-m0.sh JKP` reports M0-T002 PASS", and
+that is not something a root build can produce. Run against the empty tree it
+prints five FAILs with the reason for each — which is also what tells an agent
+what to do next.
+
+Two smaller things from the same run. The counts in STATUS stayed at zero while a
+Done row existed, because they are computed at generation time and the agent
+appended without regenerating — `/tck` now re-runs the generator, which preserves
+rows. And told to write its brief to `tasks/<XXX>/<CARD>.md`, the agent created
+`tasks/001/CARD.md`; the path now comes from `scripts/task-file.sh JKP M0-T001`,
+which creates the directory and prints the answer. Same lesson as the noter, a
+third time: **a path an agent composes is a path an agent gets wrong.**
+
 ### The order only existed in my head
 
 By this point the pipeline was six scripts deep — fetch, note, detect, install,

@@ -420,6 +420,21 @@ starts from nothing again:
   the runner inside it but *outside* the reactor (`mansart-data-tck` is not in
   the parent's). A run produced the leaf with no branch — a directory Maven never
   sees. M0-T001 now creates and registers the parent; M0-T002 creates the runner.
+- **`scripts/verify-m0.sh <XXX>` decides whether an M0 card is done**, card by
+  card, against **the card's own artifact**. It compiles the runner *in its own
+  directory*, and looks for a counter naming *that module*. This exists because
+  an agent recorded `./scripts/build.sh install → OK (exit 0), 10 tests, 0
+  failures` as evidence for M0-T001: true in every word, and about the 26-module
+  root reactor, which does not contain the out-of-reactor runner. The ten tests
+  were `mansart-transactions`'. The module itself did not compile. My rule
+  ("evidence is a log path, an exit code, a counter") constrained the *form* of
+  the evidence while the defect was in its *referent*. Each M0 done-when is now
+  "`verify-m0.sh <XXX>` reports M0-T00n PASS" — unsatisfiable by a build of
+  something else.
+- **`scripts/task-file.sh <XXX> <CARD>`** prints and creates the work-order path.
+  Told the pattern `tasks/<XXX>/<CARD>.md`, an agent wrote `tasks/001/CARD.md`.
+  A path an agent composes is a path an agent gets wrong — the third instance in
+  this project, after the noter and the module directory.
 - **A card must be achievable when it is scheduled.** M0-T001 once said "builds,
   exit 0" for a runner whose template depends on `-core`, `-cdi`, `-dialect-h2`
   — modules M1..M10 have not written yet. The agent could not satisfy it and
