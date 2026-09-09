@@ -1,0 +1,122 @@
+// mansart-guard rules — pure functions, unit-testable.
+// NOT under .opencode/plugin/: OpenCode treats EVERY export of a plugin file as a
+// plugin, calls it with {directory}, and dies on the first one returning null
+// (`plugin config hook failed: null is not an object`). Rules live here, the
+// plugin file exports exactly one thing.
+//
+// Every rule here exists because it was measured on this repo (Vibe V3 logs,
+// 10 sessions / 1 701 steps), not because it sounded prudent:
+//
+//   - 262 Maven runs logged exit_code 0 while 38 had failed  -> raw maven denied
+//   - 218 find calls, the same one 75 times in 3 spellings   -> 3rd search denied
+//   - 476 read_file calls, 40% re-reading an unchanged file  -> re-read denied
+//   - 28% of primary context was raw bash output             -> long cat denied
+//
+// Contract: the guard NEVER hard-fails a session. Any internal error lets the
+// call through with a warning — the path denylist stays the hard guarantee.
+// Refusal works by throwing: OpenCode surfaces the message to the model, which
+// then corrects itself (verified 2026-09-09).
+
+import { statSync, readFileSync } from "node:fs"
+
+const STRIP_PREFIX = [/^\s*cd\s+[^&|;]+&&\s*/, /^\s*rtk\s+/]
+const STRIP_SUFFIX = [/\s*2>\s*\/dev\/null\s*$/, /\s*2>&1\s*$/, /\s*>\s*\/dev\/null\s*2>&1\s*$/]
+
+/** Reduce a command to a comparable form. Without this, the 75 duplicate
+ *  searches of V3 look like 3 different commands. */
+export function normalise(cmd) {
+  let c = String(cmd ?? "").trim()
+  for (let i = 0; i < 4; i++) {
+    const before = c
+    for (const re of STRIP_PREFIX) c = c.replace(re, "")
+    for (const re of STRIP_SUFFIX) c = c.replace(re, "")
+    c = c.trim()
+    if (c === before) break
+  }
+  return c.replace(/\s+/g, " ")
+}
+
+/** Maven outside scripts/build.sh — piped or not. */
+export function isRawMaven(cmd) {
+  const c = normalise(cmd)
+  if (/scripts\/(build|sonar)\.sh/.test(c)) return false
+  return /(^|[|;&]\s*)(\.\/)?mvnw?\b/.test(c)
+}
+
+const TCK_PATH = /[\w./-]*[\w-]+-tck\//
+
+/** A shell write into a TCK tree. The path denylist on write/edit cannot see
+ *  a redirect, so this is the only layer that can express it. */
+export function isTckWrite(cmd) {
+  const c = normalise(cmd)
+  if (!TCK_PATH.test(c)) return false
+  if (/>>?\s*[^|;&]*[\w-]+-tck\//.test(c)) return true // > or >> into tck
+  if (/\btee\b[^|;&]*[\w-]+-tck\//.test(c)) return true
+  if (/\b(cp|mv|rsync|install)\b[^|;&]*[\w-]+-tck\//.test(c)) return true
+  if (/\bsed\b[^|;&]*-i[^|;&]*[\w-]+-tck\//.test(c)) return true
+  return false
+}
+
+/** Archive/bytecode dumps: fine once, then it belongs in a spec note. */
+export function isArchiveDump(cmd) {
+  const c = normalise(cmd)
+  if (/\bjar\s+[a-z]*t[a-z]*f?\b/.test(c)) return true
+  if (/\bunzip\s+-l\b/.test(c)) return true
+  if (/\bjavap\b/.test(c)) return true
+  return false
+}
+
+const MAX_CAT_LINES = 200
+
+/** Whole-file read of a file longer than 200 lines -> {path, lines}, else null.
+ *
+ *  Matches `cat X` AND `read X` — because `rtk rewrite` turns `cat BUG.md` into
+ *  `rtk read BUG.md`, normalise() strips the `rtk`, and a cat-only pattern would
+ *  silently stop firing. Measured: `rtk read` does not truncate (346 lines in,
+ *  346 out), so the rule is still needed after the rewrite. */
+export function longCatTarget(cmd) {
+  const c = normalise(cmd)
+  const m = c.match(/^(?:cat|read)\s+((?:-{1,2}[A-Za-z-]+(?:\s+\S+)?\s+)*)([^\s|;&<>-][^\s|;&<>]*)/)
+  if (!m) return null
+  const path = m[2]
+  try {
+    const st = statSync(path)
+    if (!st.isFile()) return null
+    const lines = readFileSync(path, "utf8").split("\n").length
+    return lines > MAX_CAT_LINES ? { path, lines } : null
+  } catch {
+    return null // missing/unreadable: not our business
+  }
+}
+
+export function makeSessionState() {
+  return { searches: new Map(), reads: new Map() }
+}
+
+const SEARCH_CMD = /^(find|grep|rg|ag|fd|ls\s+-R)\b/
+
+/** 3rd identical search in a session -> "deny". Two are tolerated: a repeat is
+ *  often legitimate, a third means the result was never kept. */
+export function searchVerdict(cmd, state) {
+  const c = normalise(cmd)
+  if (!SEARCH_CMD.test(c)) return "allow"
+  const n = (state.searches.get(c) ?? 0) + 1
+  state.searches.set(c, n)
+  return n >= 3 ? "deny" : "allow"
+}
+
+/** Re-read of a file unchanged since the last read (same mtime+size). */
+export function rereadVerdict(path, state) {
+  let key
+  try {
+    const st = statSync(path)
+    if (!st.isFile()) return "allow"
+    key = `${st.mtimeMs}:${st.size}`
+  } catch {
+    return "allow"
+  }
+  const seen = state.reads.get(path)
+  state.reads.set(path, key)
+  return seen === key ? "deny" : "allow"
+}
+

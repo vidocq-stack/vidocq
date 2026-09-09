@@ -2,6 +2,43 @@
 
 Contributor guidance for agents working on this repository. See also the companion `CLAUDE.md` file.
 
+## HARD RULES — read first
+
+Short on purpose. Break one and the guard stops you anyway.
+
+**BUILD**
+- NEVER `mvn` / `mvnw`. ONLY `./scripts/build.sh`. Piped mvn returns the pipe exit
+  code (always 0) — that is how 38 failed builds got logged green.
+- Sonar: ONLY `./scripts/sonar.sh <module>`.
+- Build red = card NOT done. No exception.
+
+**CONTEXT — keep it small**
+- NEVER `cat` a file over 200 lines. `sed -n '<a>,<b>p'` or `grep -n`.
+- NEVER re-read a file you already read and nobody changed. It is still in context.
+- Same search twice means you dropped the result. Third time is denied.
+- NEVER paste a build log to your parent. Give the log path.
+- Subagent answers in 3 LINES. Not 4. Not a summary of a summary.
+
+**WRITE — stay in your lane**
+- `tdd` writes `src/test/` only. `impl` writes `src/main/` only.
+- `*-tck/` is READ-ONLY. Forever. Change the implementation, not the suite.
+- During a sonar fix, tests are READ-ONLY for everyone.
+- NEVER weaken a test to go green. That is the one unforgivable move.
+
+**COMMIT**
+- English. Conventional Commits + card id. GPG-signed (`-S`). DCO `Signed-off-by`.
+  `Co-Authored-By` naming the model. Signature fails = card not done.
+- Commit yes. Push NEVER — the human runs `/push`.
+
+**PROJECT**
+- TDD: failing test first, always.
+- Strict Java Modules. No unjustified `opens`. No new dependency without asking.
+- No runtime reflection on entities. No ASM/ByteBuddy. Class-File API or APT.
+- Virtual threads for IO.
+- English everywhere: code, javadoc, comments, commits, markdown.
+
+Full reasoning behind these: `OPENCODE_CODE_HARNESS-BUILD.md` (humans only).
+
 ## Documentation (Antora) conventions
 
 The project documentation lives in `docs/en` as an Antora component and is
