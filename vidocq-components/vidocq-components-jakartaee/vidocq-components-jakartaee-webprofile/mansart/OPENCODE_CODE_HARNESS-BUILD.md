@@ -317,8 +317,14 @@ starts from nothing again:
   and an unknown keyword → exit 1 with the reason. It also surfaces the two runners
   that already pass here (`mansart-data-tck` at 74/74, `mansart-transactions-tck`),
   so an agent copies a working layout instead of inventing one.
-- **`spec-fetch.py` writes the coordinates into `spec-meta.json`**, keyword derived
-  from the url. `/tck` reads that file rather than guessing.
+- **`spec-fetch.py` writes the coordinates into `spec-meta.json`**, keyword and
+  version derived from the url. `/tck` reads that file rather than guessing.
+  **`spec-fetch.py <XXX> --refresh-tck`** redoes the lookup alone — no download,
+  no re-split — because the TCK moves (installed, upgraded, purged) while the
+  spec text never does. Without it, refreshing coordinates meant re-running the
+  whole ingestion, and the shortcut was to hand-edit `spec-meta.json`: a file
+  that is sometimes generated and sometimes typed is a file nobody can trust.
+  It prints `before:` / `after:` and exits 1 when nothing runnable matches.
 - **`/tck XXX` + agent `tck-runner`**: runs, writes nothing, reports four lines.
   Written into its prompt: *ZERO PASS IS A VALID RESULT*, and `ERROR=all` (the
   harness does not compile) is not the same information as a conformance failure.

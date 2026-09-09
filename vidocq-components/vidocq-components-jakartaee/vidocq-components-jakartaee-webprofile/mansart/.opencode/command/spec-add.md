@@ -20,6 +20,12 @@ context. YOU NEVER READ THE SPEC. You read notes about it. That is the whole poi
    Read the printed `tck:` line. You will need it in step 4.
    Wrong keyword guessed from the url? Re-run with --tck-keyword <k>.
 
+   TCK coordinates only, on an already-ingested spec (it moved, got installed,
+   got purged) — do NOT re-ingest and NEVER hand-edit spec-meta.json:
+       python3 scripts/spec-fetch.py <XXX> --refresh-tck
+   Exit 1 means no runnable TCK for this spec version; that is information, not
+   a failure. Then re-run scripts/spec-tasks.sh <XXX> to regenerate M0.
+
 2. LIST chapters
    ls docs/spec-src/<XXX>/
    SKIP chapters that are front matter: preamble, license, foreword, colophon,

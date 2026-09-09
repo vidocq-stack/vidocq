@@ -143,9 +143,91 @@ def split_chapters(text, outdir, min_chars=400):
     return written
 
 
+def lookup_tck(url, code, kw_override=None):
+    """Ask tck-find.py which TCK measures THIS spec at THIS version.
+
+    The version is not optional. Derived from the url
+    (.../specifications/<name>/<version>/...), it is passed as a hard constraint:
+    the richest jar in this M2 was jakarta.persistence:...-spec-tests
+    4.0.0-SNAPSHOT with 321 test classes — the TCK of the *next* spec version. A
+    3.2 implementation measured against it would report a real-looking counter
+    that means nothing.
+    """
+    kw = kw_override
+    if not kw:
+        m = re.search(r"/specifications/([a-z0-9-]+)/", url)
+        kw = m.group(1) if m else code.lower()
+    mv = re.search(r"/specifications/[a-z0-9-]+/([0-9]+(?:\.[0-9]+)*)/", url)
+    spec_version = mv.group(1) if mv else None
+
+    tck = {"keyword": kw, "spec_version": spec_version, "found": False}
+    try:
+        import subprocess
+        r = subprocess.run(
+            [sys.executable, os.path.join(ROOT, "scripts", "tck-find.py"), kw, "--json"]
+            + (["--spec-version", spec_version] if spec_version else []),
+            capture_output=True, text=True, timeout=60)
+        if r.stdout.strip():
+            tck = json.loads(r.stdout)
+    except Exception as e:
+        tck["error"] = str(e)[:200]
+    # tck-find reports what it found; the spec says what we were looking for.
+    # Keep both, or a refreshed file silently loses the version constraint.
+    tck["keyword"], tck["spec_version"] = kw, spec_version
+    return tck
+
+
+def refresh_tck(code, kw_override=None):
+    """Re-run the TCK lookup for an already-ingested spec. No re-download.
+
+    WHY: the TCK moves — it gets installed, upgraded, purged — while the spec
+    text never does. Without this, refreshing coordinates meant re-running the
+    whole ingestion, and the shortcut was to hand-edit spec-meta.json. A file
+    that is sometimes generated and sometimes typed is a file nobody can trust.
+    """
+    meta_p = os.path.join(ROOT, "docs", "spec-src", code, "spec-meta.json")
+    if not os.path.isfile(meta_p):
+        print(f"no {meta_p} — run the full ingestion first")
+        return 3
+    with open(meta_p, encoding="utf-8") as f:
+        meta = json.load(f)
+    url = meta.get("url", "")
+    before = ((meta.get("tck") or {}).get("recommended") or {})
+    meta["tck"] = lookup_tck(url, code, kw_override)
+    with open(meta_p, "w", encoding="utf-8") as f:
+        json.dump(meta, f, indent=2)
+
+    t = meta["tck"]
+    fmt = lambda r: "{}:{}:{}".format(r["groupId"], r["artifactId"], r["version"]) if r else "none"
+    print(f"spec:   {t.get('keyword')} {t.get('spec_version') or '(no version in url)'}")
+    print(f"before: {fmt(before)}")
+    print(f"after:  {fmt(t.get('recommended'))}"
+          + ("" if t.get("runnable") else "   NOT RUNNABLE: " + (t.get("reason") or "?")))
+    print(f"wrote:  {os.path.relpath(meta_p, ROOT)}")
+    print("next:   ./scripts/spec-tasks.sh " + code + "   (regenerates M0)")
+    return 0 if t.get("runnable") else 1
+
+
 def main():
-    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    argv, args, kw_override, skip = sys.argv[1:], [], None, False
+    for i, a in enumerate(argv):        # --tck-keyword takes a VALUE: skipping it
+        if skip:                        # is what keeps it out of the positionals
+            skip = False
+            continue
+        if a == "--tck-keyword":
+            kw_override = argv[i + 1] if i + 1 < len(argv) else None
+            skip = True
+            continue
+        if not a.startswith("--"):
+            args.append(a)
     force = "--force" in sys.argv
+
+    if "--refresh-tck" in sys.argv:
+        if len(args) != 1 or not re.fullmatch(r"[A-Z]{3}", args[0]):
+            print("usage: scripts/spec-fetch.py <XXX> --refresh-tck [--tck-keyword k]")
+            return 2
+        return refresh_tck(args[0], kw_override)
+
     if len(args) != 2:
         print(__doc__)
         return 2
@@ -185,30 +267,7 @@ def main():
     chapters = split_chapters(text, outdir)
 
     # --- metadata, including the TCK: a spec with no running TCK has no metric --
-    kw = None
-    for i, a in enumerate(sys.argv):
-        if a == "--tck-keyword" and i + 1 < len(sys.argv):
-            kw = sys.argv[i + 1]
-    if not kw:  # derive from the url: .../specifications/<name>/<version>/...
-        m = re.search(r"/specifications/([a-z0-9-]+)/", url)
-        kw = m.group(1) if m else code.lower()
-    # The spec version pins the TCK version. Without it the richest jar wins, and
-    # here that was jakarta.persistence:...-spec-tests:4.0.0-SNAPSHOT (321 test
-    # classes) — the TCK of the NEXT spec. A 3.2 implementation would have been
-    # measured against 4.0.
-    mv = re.search(r"/specifications/[a-z0-9-]+/([0-9]+(?:\.[0-9]+)*)/", url)
-    spec_version = mv.group(1) if mv else None
-    tck = {"keyword": kw, "spec_version": spec_version, "found": False}
-    try:
-        import subprocess
-        r = subprocess.run(
-            [sys.executable, os.path.join(ROOT, "scripts", "tck-find.py"), kw, "--json"]
-            + (["--spec-version", spec_version] if spec_version else []),
-            capture_output=True, text=True, timeout=60)
-        if r.stdout.strip():
-            tck = json.loads(r.stdout)
-    except Exception as e:
-        tck["error"] = str(e)[:200]
+    tck = lookup_tck(url, code, kw_override)
 
     meta = {
         "code": code,
