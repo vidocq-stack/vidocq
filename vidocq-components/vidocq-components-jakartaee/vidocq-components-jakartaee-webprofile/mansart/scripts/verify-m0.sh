@@ -116,6 +116,12 @@ else
     # of surefire's default include patterns (*Test, Test*, *Tests, *TestCase).
     # A runner copied from another spec inherits that spec's <includes> and
     # silently selects nothing: BUILD SUCCESS, zero tests, zero errors.
+    if [ -f "$H/$MOD/pom.xml" ] && ! grep -q 'dependenciesToScan' "$H/$MOD/pom.xml"; then
+        d="$d
+             hint: no <dependenciesToScan> in the runner pom. The TCK tests live
+             inside a jar; surefire only scans this module's own classes unless
+             told otherwise, so the run exits 0 with Tests run: 0."
+    fi
     if [ -f "$H/$MOD/pom.xml" ] && ! grep -q 'Client\.class' "$H/$MOD/pom.xml"; then
         d="$d
              hint: no <include>**/Client.class</include> in the runner pom. Jakarta
