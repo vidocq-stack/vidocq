@@ -469,6 +469,38 @@ starts from nothing again:
   class with no no-arg constructor" and "throw TransactionRequiredException
   outside a transaction" are independent, and forcing an order there would be
   false precision.
+- **A counter is not a metric until you know what would change it.** M0-T005
+  passed on 991 tests / 989 errors that all shared one cause: the TCK believed it
+  ran inside a JakartaEE container and every test failed at setup demanding an
+  injected EntityManager. That 989 would have stayed 989 whatever M1 implemented.
+  Re-run with `platform.mode=standalone` the count is identical and the cause is
+  *no persistence provider* — the number M1 actually moves. Hence **M0-T006**:
+  `platform.mode=standalone`, `persistence.unit.name=JPATCK`, a `persistence.xml`
+  declaring `JPATCK` and `JPATCK2`, and **no `<provider>` until ours exists** — a
+  run shipped `org.eclipse.persistence.jpa.PersistenceProvider`, which measures
+  EclipseLink's conformance, and a unit named `default` that the TCK never looks
+  up.
+- **Four ways to satisfy the metric without measuring anything**, all seen, all
+  now checked: a local `Client.java` holding `assertTrue(true)` (its name matches
+  the required include, so it reports a passing test while no TCK test runs); a
+  foreign `<provider>`; an uncalibrated counter; and `<include>**/Client.class</include>`
+  with **no `<dependenciesToScan>`** — the TCK classes live in a jar, and surefire
+  scans only the module's own classes unless told otherwise, so the build exits 0
+  with `Tests run: 0`. That last one is instructive: the runner had been correctly
+  stripped of its Jakarta Data leftovers and lost the one thing the copy got right
+  along with them. **Removing a copy's mistakes also removes what it did well.**
+- **`verify-m0.sh` refreshes `STATUS` as part of verifying.** An agent committed a
+  working runner while STATUS read `0 done` — the file was not even in its commit.
+  Counts are computed at generation time, so they go stale the moment anything
+  changes, and staying current depended on someone remembering which script to
+  re-run. Measuring and recording are now one act. It paid on first use:
+  `ORDER VIOLATION: M0-T006 is done but M0-T005 is not`, from rows nobody typed.
+- **`/tck` finishes its own wiring.** A run stopped at five of six cards and
+  reported success — obeying a step that said *"do not fix failures, that is
+  /next"*, which conflated two opposite things. A **wiring** failure
+  (`verify-m0.sh` FAIL: the instrument is not built) is `/tck`'s job; a
+  **conformance** failure (the TCK counter) is `/next`'s. Step 3b is now a loop of
+  up to six verify-and-fix rounds.
 - **M0 is always the TCK**, before any implementation milestone, and it has three
   shapes because **"no TCK installed" is not "no TCK exists"** — the gap between
   those two is where a project invents a substitute metric:
@@ -513,7 +545,9 @@ Guard rules: deny direct/piped `mvn`; deny writes into TCK paths; deny a third
 identical search in a session; deny re-reading a file unchanged since last read
 (same mtime+size+window); deny `cat` of a file over 200 lines (use `sed -n`);
 **deny `write`/`edit`/`patch` on a generated file** — `TASKS-*.md` and the
-planner `.fragments/`. That last rule is the first one covering the write tools
+planner `.fragments/`; and **deny `grep` given a pattern starting with `-`**,
+answering `use grep -e '<pattern>'` — an agent ran `grep "-suite.xml"` twice and
+got `invalid option -- t` twice, two round trips for zero information. That last rule is the first one covering the write tools
 rather than bash: an agent overwrote a 248-card plan with a one-card brief, and
 the refusal now names `tasks/<XXX>/<CARD>.md` as the place to write instead.
 Forbidding is half a fix; offering a destination is the other half.
@@ -621,6 +655,9 @@ So the guard is a teaching layer, not just a wall. Everything in §9 stands.
 | `scripts/tck-install.py` | done — discovers, verifies sha256, installs; 4 spec families tested, JavaTest family refused explicitly |
 | `scripts/tck-module.py` | done — reads the repo layout, proposes `module.conf` |
 | `scripts/steps/STEP0*.sh` | done — the six pipeline steps, each printing the next (see §6) |
+| `scripts/verify-m0.sh` | done — six checks against each card's own artifact; refreshes STATUS as part of verifying |
+| `scripts/task-file.sh` | done — prints and creates `tasks/<XXX>/<CARD>.md` |
+| `.opencode/command/refresh.md` | done — `/refresh XXX` measures, records, reports four lines |
 | `.opencode/package.json` | `{"type":"module"}`, else Node reparses the plugin on every load |
 | `opencode.json` (project) | declares the two working models; **no secret** — baseURL and apiKey inherited from the global provider |
 | `~/.config/opencode/opencode.json` | cleaned: it declared two models deleted from oMLX. Now the 5 real ones, default `Qwen3.6`, small/vision `Qwen3-VL-8B`. Backup kept as `opencode.json.BEFORE-CLEANUP-*` |
@@ -654,8 +691,8 @@ Plugin discovery: `.opencode/plugin/` at the project root is picked up
 
 `.opencode/agent/*.md` and `.opencode/command/*.md`, frontmatter + caveman English
 body. `opencode agent list` shows all nine: `lead` (primary), `recon`, `noter`,
-`planner`, `tdd`, `impl`, `verify`, `thinker`, `tck-runner` (subagents). Six
-commands: `/spec-add`, `/tck`, `/next`, `/fixbug`, `/status`, `/push`.
+`planner`, `tdd`, `impl`, `verify`, `thinker`, `tck-runner` (subagents). Seven
+commands: `/spec-add`, `/tck`, `/refresh`, `/next`, `/fixbug`, `/status`, `/push`.
 
 Enforcement is layered, not repeated: `recon`/`verify`/`thinker`/`tck-runner`
 have `tools: {write,edit,patch: false}` so they *cannot* write at all; `tdd`,
@@ -711,10 +748,18 @@ things learned running it:
   outside the repository). A harness that only works with the suite pre-installed
   by hand proves nothing, so M0-T001 is now "install it" and the whole chain is
   exercised from zero. Nothing about JPA resolves from the local M2 today.
-- **`impl` writing into `src/test/` is prevented by instruction, not by tooling.**
-  OpenCode's `permission.edit` is per-agent but not per-path here, and the guard
-  cannot see which agent issued a call. If an `impl` ever edits a test to go
-  green, this is the hole it went through.
+- **No per-agent enforcement exists — measured, not assumed.** Two probes:
+  `tool.execute.before` receives exactly `["tool","sessionID","callID"]`, so the
+  guard cannot tell the lead from `@impl`; and a per-path `permission.edit` map
+  (`"**/*.java": deny`) is silently ignored — the agent wrote the file and
+  reported success. So both "`impl` must not touch tests" and "the lead must not
+  type code" are written rules with no enforcer, which is why the lead does most
+  of the typing itself. The route that remains is structural: a shell calling
+  `@impl` once per artifact, as `spec-note.sh` and `spec-tasks.sh` already did for
+  two other loops. Not built.
+- **No single `/tck` run has completed M0 unaided.** The six cards were reached
+  across several runs, each ending in a harness fix rather than a module fix. The
+  tree is reset so the claim can actually be tested.
 - **Thermal drift**: this machine loses up to 61% throughput after ~1 h of
   sustained load and recovers in ~3 min idle. It does not change the design, but
   it explains slow sessions — and it invalidates any benchmark run back-to-back.

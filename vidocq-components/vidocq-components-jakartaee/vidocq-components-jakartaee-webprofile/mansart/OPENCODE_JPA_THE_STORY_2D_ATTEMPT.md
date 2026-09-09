@@ -972,6 +972,131 @@ version, because `tck-find` returns what it *found* while the spec says what was
 *being looked for*; both are now kept, or a refresh quietly drops the constraint
 that stops a 3.2 implementation being measured against a 4.0 TCK.
 
+### Four ways to fake a counter
+
+The runs after that produced a module that was structurally perfect — right path,
+parent registered, out of both reactors, TCK resolving — and still could not be
+trusted. Four defects, each one a different way to satisfy the metric without
+measuring anything.
+
+**A tautology named like a test.** `src/test/java/.../Client.java`, containing
+`assertTrue(true)`. Innocuous on its face, except the surefire include the TCK
+requires is `**/Client.class` — so this class runs, reports `Tests run: 1,
+Failures: 0`, and M0-T005 goes green while not a single TCK test is selected.
+The counter now has to come from `ee.jakarta.tck.*`, and `verify-m0.sh` names
+this file explicitly when it does not.
+
+**A competitor's provider.** `persistence.xml` declared
+`<provider>org.eclipse.persistence.jpa.PersistenceProvider</provider>` — testing
+EclipseLink's conformance in the belief of testing ours. In the same file, the
+unit was named `default` where the TCK looks up `JPATCK`, so it would never have
+been loaded at all, and `version="3.0"` for a 3.2 implementation.
+
+**A counter that cannot move.** M0-T005 passed on 991 tests / 989 errors, all
+sharing one cause: *"The test is running in JakartaEE environment, but
+PMClientBase.em has not been initialized"*. The TCK believed it was inside a
+container and every test failed at setup, demanding an injected EntityManager.
+That 989 would have stayed 989 whatever M1 implemented. Re-run with
+`-Dplatform.mode=standalone`, the count is identical and the cause is different —
+no persistence provider — and only the second one responds to an implementation.
+Hence M0-T006: **a counter is not a metric until you know what would change it.**
+
+**And a green build with nothing in it.** A later runner had the `Client.class`
+include and no `<dependenciesToScan>`: the TCK classes live inside a jar, and
+surefire scans only the module's own classes unless told otherwise. Exit 0,
+`Tests run: 0`. Instructive by accident — that runner was *correctly* stripped of
+the Jakarta Data leftovers, and lost the one thing the copy had got right along
+with them. **Removing a copy's mistakes also removes what it did well**, so the
+card must state the requirement rather than trust the template to carry it.
+
+Three of these four passed `verify-m0.sh` at the time. Every hardening in this
+section is a check that reads what a file *says* rather than that it exists —
+the same form-versus-referent mistake, three more times, in my own checker.
+
+### The command that told the agent to stop
+
+A run reached five of six cards and reported success. It was obeying: step 5 of
+`/tck` said *"STOP. Do NOT start fixing failures — that is /next."* One rule, two
+opposite situations:
+
+| failure | means | whose job |
+| --- | --- | --- |
+| `verify-m0.sh` says FAIL | the instrument is not built | **`/tck`** |
+| the TCK counter — PASS=0, 989 errors | the implementation is missing | `/next` |
+
+Telling an agent "do not fix failures" without that distinction forbids it from
+finishing its own work. Step 3b is now a loop — verify, fix what the FAIL line
+names, verify again, up to six attempts — and step 5 states the test in one line:
+*did `verify-m0.sh` say PASS on every card?*
+
+### M0 is done, and the counter is honest
+
+```
+verify-m0.sh JKP -> 6 pass, 0 fail
+Tests run: 991, Failures: 0, Errors: 989, Skipped: 2
+```
+
+989 errors is the correct baseline: `platform.mode=standalone`, `JPATCK` and
+`JPATCK2` declared, no foreign provider, so a test fails because **there is no
+implementation** — not because the TCK wanted a container. The instrument exists
+and it is calibrated. Every card after this one can be measured instead of
+asserted.
+
+Three days of work to reach a number that reads 989 errors. Attempt 1 started
+coding on day one and finished at 2/1745.
+
+### The last one was mine, again
+
+The agent committed a working runner and `STATUS` still read **0 done** — the
+file was not even in its commit. The counts are computed at generation time, so
+they are stale the moment anything changes, and staying current depended on
+somebody remembering which script to re-run. Nobody does.
+
+`verify-m0.sh` now refreshes `STATUS` itself at the end of every verification.
+**Measuring and recording became the same act**, which is the only version of
+this that survives contact with a real session. It paid immediately: the first
+refresh surfaced `ORDER VIOLATION: M0-T006 is done but M0-T005 is not`, computed
+from rows nobody typed.
+
+And the scripts themselves were still only ever run *by me, from outside the
+harness* — which is exactly how STATUS came to be stale in the first place. They
+are now a command: `/refresh XXX` measures, records, and reports four lines
+(`M0:`, `cards:`, `order:`, `next:`). It writes nothing itself.
+
+### Why the lead does not delegate — measured, not guessed
+
+The founding number of this project is that 72% of the primary's context was
+delegable work it did itself. The lead here shows the same behaviour, and
+`lead.md` has said *"YOU never write: java, xml, pom"* from the start. Two probes
+settled why that rule has no teeth.
+
+**The guard cannot see who is calling.** `tool.execute.before` receives exactly:
+
+```
+input = ["tool", "sessionID", "callID"]
+```
+
+No agent identity. The guard cannot distinguish a `write` from the lead from one
+by `@impl`, so per-agent path rules are impossible to enforce there.
+
+**Per-path permissions are silently ignored.** Configuring the lead with
+
+```yaml
+permission:
+  edit:
+    "**/*.java": deny
+```
+
+then asking it to create a `.java` file: *"Wrote file successfully."*
+
+So "the lead must not type code" is a written rule with no enforcer — and this
+document's own thesis is that written rules steer while only the guard catches.
+The remaining route is structural, the same one that worked twice already for
+`spec-note.sh` and `spec-tasks.sh`: **take the lead out of the loop** and let a
+shell call `@impl` once per artifact. Not yet built, and the honest reason it is
+listed here rather than done is that `/tck` finishing its own job mattered more
+first.
+
 ---
 
 ## 9. What is true today
@@ -981,19 +1106,33 @@ Verified, not assumed:
 - `scripts/build.sh` — 10/10 contract, real exit codes, JDK pinned
 - `scripts/sonar.sh` — real scan against SonarQube 26.5.0, dashboard produced
 - `.opencode/guard-rules.mjs` + plugin — 44/44, refusal verified end to end
-- `scripts/tck-find.py` — generic TCK lookup, verified on two different specs
-- eight agents loaded, six commands, `/status` and `/spec-add` run for real
+- `scripts/tck-find.py` — counts test classes inside the jar; discovery verified
+  on nine specs, install on four families
+- `scripts/tck-install.py` — spec page → sha256 → coordinates read from each jar
+- `scripts/tck-module.py`, `scripts/task-file.sh` — paths read from the repo,
+  never composed by an agent
+- `scripts/verify-m0.sh` — six mechanical checks, each against the card's own
+  artifact; refreshes STATUS as part of verifying
+- `scripts/steps/STEP010..060` — the pipeline order, executable
+- nine agents loaded, seven commands (`/refresh` added), `/status`, `/spec-add`,
+  `/tck` and `/refresh` all run for real
 - global OpenCode config repaired (it declared two models deleted from oMLX)
-
 - `scripts/spec-note.sh` — 24 notes, 1 463 lines, 35 min, 0 reported-but-missing
-- `scripts/spec-tasks.sh` — 11 milestones, 248 cards, 10/10 groups, M0 generated
+- `scripts/spec-tasks.sh` — 11 milestones, 249 cards, 10/10 groups, M0 generated
   without a model
 
-`TASKS-JKP.md` exists again, and its worth is uneven — **M0 is exact**
-(coordinates copied by script, five cards, a done-when a tool can check), the 248
-cards below it are a coverage map with the right spec sections and the wrong
-granularity. Said plainly rather than dressed up: the plan is good enough to
-start M0 and not good enough to be called a plan.
+**And the number this whole project exists for:**
+
+```
+M0: 6 pass, 0 fail
+Tests run: 991, Failures: 0, Errors: 989, Skipped: 2
+```
+
+`TASKS-JKP.md`'s worth is uneven — **M0 is exact** (coordinates copied by script,
+six cards, every done-when a script's verdict), the 243 cards below it are a
+coverage map with the right spec sections and the wrong granularity. Said plainly
+rather than dressed up: the plan is good enough to start, and not good enough to
+be called a plan.
 
 ## 10. What is not solved
 
@@ -1008,13 +1147,23 @@ start M0 and not good enough to be called a plan.
   accepts any non-empty file, so a partial note left by a kill would be skipped
   as done. Quarantining a timed-out note as `.partial` is a four-line fix, not
   yet written.
-- **`impl` is kept out of `src/test/` by instruction, not by tooling.**
-  `permission.edit` is per-agent, not per-path, and the guard cannot see which
-  agent issued a call. If an `impl` ever edits a test to go green, that is the
-  hole.
+- **No per-agent enforcement exists, and it is now measured rather than assumed.**
+  `tool.execute.before` receives `["tool","sessionID","callID"]` — no agent
+  identity — and a per-path `permission.edit` map is silently ignored (the write
+  succeeded). So "`impl` must not touch tests" and "the lead must not type code"
+  are both written rules with no enforcer. The route that remains is structural:
+  a shell that calls `@impl` once per artifact, the way `spec-note.sh` and
+  `spec-tasks.sh` already removed the lead from two other loops. Not built.
 - **KV quantisation and ANE prefill remain untested**, not disproven.
-- **`/next` has never run.** Everything above is scaffolding for a loop that has
-  not yet delivered a single card.
+- **`/next` has never run.** M0 built the instrument; no implementation card has
+  been attempted, so the 989 errors have never had a chance to move.
+- **No single `/tck` run has yet completed M0 unaided.** The six cards were
+  reached across several runs, each ending in a fix to the harness rather than to
+  the module — which is the point of the exercise, but means the claim "the
+  command works from zero" is still unproven. That is the next thing to test, and
+  the tree is reset for it.
 
 The measure of this harness is not that it exists. It is whether the TCK counter
-moves — and that number is still zero.
+moves — and the counter now exists, calibrated, at **989 errors out of 991**.
+That is the honest starting line, and the first number in three attempts that
+means anything at all.
