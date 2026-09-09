@@ -14,7 +14,7 @@ result: PASS=? FAIL=? ERROR=? SKIP=?   (never run)
 
 | Milestone | Cards | Done |
 |---|---|---|
-| M0 — the TCK | 5 | 5 |
+| M0 — the TCK | 5 | 0 |
 | M1 — entities | 28 | 0 |
 | M2 — metadata | 54 | 0 |
 | M3 — entity managers | 16 | 0 |
@@ -26,7 +26,7 @@ result: PASS=? FAIL=? ERROR=? SKIP=?   (never run)
 | M9 — container contracts | 13 | 0 |
 | M10 — xml mapping | 8 | 0 |
 
-**Total: 248 cards, 5 done.**
+**Total: 248 cards, 0 done.**
 
 ## Done cards
 
@@ -42,9 +42,5 @@ in the Log, not here.
 
 | Card | Date | Evidence |
 |---|---|---|
-| M0-T001 | PASS | Parent module registered in root reactor |
-| M0-T002 | PASS | Runner compiles in its own directory |
-| M0-T003 | PASS | TCK jar declared and resolving (jakarta.tck:persistence-tck-spec-tests:3.2.1) |
-| M0-T004 | PASS | Run script + Arquillian config present |
-| M0-T005 | PENDING | No counter yet — requires M1+ implementation module to inject |
+| — | — | *(none yet)* |
 
