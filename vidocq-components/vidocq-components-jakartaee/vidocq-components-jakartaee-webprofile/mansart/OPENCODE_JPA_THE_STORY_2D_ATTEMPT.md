@@ -636,6 +636,57 @@ done-when: scripts/tck-find.py persistence --spec-version 3.2 exits 0 and
 
 A done-when that is a script's exit code. Nobody can argue with it — including me.
 
+### Can the local model just work it out?
+
+Purging the TCK left a hole: M0-T001 became "install the TCK" and no command
+could do it. My first instinct was to write the Eclipse URL into a script. The
+objection was sharper than the proposal — *the user should not have to know
+that; tomorrow this harness runs Bean Validation.*
+
+Checking three spec pages settled it immediately. The distribution names share
+**no pattern at all**:
+
+```
+persistence 3.2       jakarta-persistence-tck-3.2.1.zip
+bean-validation 3.1   validation-tck-dist-3.1.1.zip
+data 1.0              data-tck-1.0.0.zip
+```
+
+Any convention inferred from one fails on the other two. A hardcoded pattern
+would have been a bug with a two-spec fuse on it.
+
+But the answer was not "let the model figure it out" either. **The spec page
+links its own TCK** — and the page url was already sitting in `spec-meta.json`,
+one directory up from the document we ingested. And every jar inside the
+archive carries its exact Maven coordinates in
+`META-INF/maven/<groupId>/<artifactId>/pom.properties`. So the whole chain is
+deterministic once you stop guessing and start reading:
+
+```
+spec-meta.json url -> landing page -> href containing "tck" ending .zip
+                   -> published .sha256 verifies the download
+                   -> each jar's pom.properties gives g:a:v
+                   -> mvn install:install-file
+                   -> tck-find.py counts test classes    <- the verdict
+```
+
+Verified end to end from the emptied M2: 4.3 MB, sha256 verified, 3/3 jars
+installed, **161 test classes confirmed**, `spec-meta.json` refreshed, M0
+regenerated back to "build the runner".
+
+So where does the local model belong? Exactly one place, and the script says it
+out loud: **exit 5, no archive linked on the page.** That is open-ended — a
+moved download, a spec hosted elsewhere — and it is what WebFetch is for. Even
+there the agent reports a url and stops; it never fabricates a coordinate.
+
+The rule that falls out of it is worth more than the script: **trust a model to
+search, never to conclude.** This session already paid for the second half — an
+agent reported *"TCK execution runs successfully"* over one skipped test, and
+another "resolved" a missing dependency by deleting it. Discovery is a judgement
+under uncertainty, which is what models are for. A verdict is a count, which is
+what scripts are for. The done-when of the install card is a script's exit code
+precisely so the search above it can be delegated safely.
+
 ### The file I edited by hand, and the command that should have existed
 
 Refreshing those coordinates exposed a hole I had walked straight through.

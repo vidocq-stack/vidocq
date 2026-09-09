@@ -11,8 +11,19 @@ A run that scores 0 is a SUCCESS for this command: the instrument now exists.
 1. READ the metadata — never guess coordinates
    cat docs/spec-src/$ARGUMENTS/spec-meta.json
    No file? Run /spec-add first. STOP.
-   tck.found == false? Say the spec has no local TCK, say the keyword tried,
-   and STOP. Do not invent a runner.
+
+   tck.runnable == false? The TCK is NOT INSTALLED — which is not the same as
+   "this spec has no TCK". Install it, do not shrug and do not invent a metric:
+       python3 scripts/tck-install.py $ARGUMENTS
+   It reads the archive link off the spec page (nothing is hardcoded: the file
+   names share no pattern across specs), verifies the published sha256, reads
+   each jar's own Maven coordinates, installs them, and ends by calling
+   tck-find.py — an install is not a metric.
+   Then: python3 scripts/spec-fetch.py $ARGUMENTS --refresh-tck
+
+   Exit 5 means the spec page links no archive. THAT is where you use WebFetch:
+   find the official distribution for this spec version, report the url, and
+   STOP. Never fabricate a coordinate or a runner.
 
 2. IS THE RUNNER WIRED?
    Look for the module named in STATUS-$ARGUMENTS.md, or a *-tck module matching

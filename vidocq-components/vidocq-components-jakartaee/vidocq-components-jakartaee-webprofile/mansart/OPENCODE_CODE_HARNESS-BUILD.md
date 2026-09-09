@@ -332,6 +332,19 @@ starts from nothing again:
 - **`/tck XXX` + agent `tck-runner`**: runs, writes nothing, reports four lines.
   Written into its prompt: *ZERO PASS IS A VALID RESULT*, and `ERROR=all` (the
   harness does not compile) is not the same information as a conformance failure.
+- **`scripts/tck-install.py <XXX>` obtains the TCK.** Nothing is hardcoded,
+  because nothing *can* be — measured on three specs, the distribution names
+  share no pattern: `jakarta-persistence-tck-3.2.1.zip`,
+  `validation-tck-dist-3.1.1.zip`, `data-tck-1.0.0.zip`. A convention guessed
+  from one fails on the other two. So the script **reads**: the spec landing page
+  (one level up from the document url already in `spec-meta.json`) links its own
+  TCK archive, the published `.sha256` verifies it, and every jar inside carries
+  its exact coordinates in `META-INF/maven/<g>/<a>/pom.properties`. Discovery
+  reads, it never infers. It ends by calling `tck-find.py`: **an install is not a
+  metric**. Exit 5 — no archive linked — is the one point where an agent with
+  WebFetch takes over, and even then it reports a url and stops.
+  Verified end to end from an empty M2: 4.3 MB downloaded, sha256 verified,
+  3/3 jars installed, 161 test classes confirmed.
 - **M0 is always the TCK**, before any implementation milestone, and it has three
   shapes because **"no TCK installed" is not "no TCK exists"** — the gap between
   those two is where a project invents a substitute metric:

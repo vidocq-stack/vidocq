@@ -45,9 +45,32 @@
   "chapter_count": 39,
   "tck": {
     "keyword": "persistence",
-    "found": false,
-    "artifacts": [],
-    "recommended": null,
+    "found": true,
+    "artifacts": [
+      {
+        "groupId": "jakarta.tck",
+        "artifactId": "persistence-tck-common",
+        "versions": [
+          "3.2.1"
+        ],
+        "matching_version": "3.2.1",
+        "test_classes": 0
+      },
+      {
+        "groupId": "jakarta.tck",
+        "artifactId": "persistence-tck-spec-tests",
+        "versions": [
+          "3.2.1"
+        ],
+        "matching_version": "3.2.1",
+        "test_classes": 161
+      }
+    ],
+    "recommended": {
+      "groupId": "jakarta.tck",
+      "artifactId": "persistence-tck-spec-tests",
+      "version": "3.2.1"
+    },
     "repo_runners": [
       {
         "path": "mansart-jakarta-data/mansart-data-tck",
@@ -64,8 +87,7 @@
         ]
       }
     ],
-    "runnable": false,
-    "reason": "no TCK jar with test classes for persistence 3.2 in the local M2",
+    "runnable": true,
     "spec_version": "3.2"
   }
 }
