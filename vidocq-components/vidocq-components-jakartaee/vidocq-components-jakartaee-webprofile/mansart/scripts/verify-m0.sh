@@ -50,6 +50,11 @@ r=1; d=""
 if [ ! -f "$H/$MOD/pom.xml" ]; then d="$MOD/pom.xml missing"
 elif grep -q "<module>${MOD##*/}</module>" "$H/$PARENT/pom.xml" 2>/dev/null; then
     d="the runner is listed in $PARENT/pom.xml <modules> — it must stay OUT of the reactor"
+elif grep -q "<module>$MOD</module>" "$H/pom.xml" 2>/dev/null; then
+    # A run registered BOTH the parent and the runner in the root pom. T001 only
+    # looked for the parent, so it passed while the runner sat in the reactor —
+    # the exact thing M0 forbids, invisible to the check meant to forbid it.
+    d="the runner is listed in the ROOT pom <modules> — only the parent belongs there"
 else
     ( cd "$H/$MOD" && "$H/scripts/build.sh" test-compile ) >/dev/null 2>&1 && r=0 || d="test-compile fails IN $MOD"
 fi
