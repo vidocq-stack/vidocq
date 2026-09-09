@@ -84,7 +84,7 @@ done < "$PLAN"
 
 # --- assembly: ids, M0 and STATUS are the script's job, never a model's ----
 python3 - "$CODE" "$META" "$PLAN" "$FRAG" "$OUT" "$STATUS" <<'PY'
-import collections, json, os, re, subprocess as _sp, sys
+import collections, datetime as _dt, json, os, re, subprocess as _sp, sys
 code, meta_p, plan_p, frag_d, out_p, status_p = sys.argv[1:7]
 meta = json.load(open(meta_p))
 tck  = meta.get("tck", {})
@@ -203,7 +203,11 @@ if os.path.isfile(_v):
     for line in (_r.stdout or "").splitlines():
         m = re.match(r"\s*(M0-T\d{3})\s+PASS\s+(.*)", line)
         if m:
-            m0_rows.append("| {} | verify-m0.sh | {} |".format(m.group(1), m.group(2).strip()))
+            # The column is Date, so put a date in it. The first version wrote
+            # "verify-m0.sh" there — provenance in the wrong slot, which reads as
+            # a bug to anyone opening the file. Provenance goes with the evidence.
+            m0_rows.append("| {} | {} | verify-m0.sh: {} |".format(
+                m.group(1), _dt.date.today().isoformat(), m.group(2).strip()))
 
 done_rows, in_done = [], False
 if os.path.exists(status_p):
