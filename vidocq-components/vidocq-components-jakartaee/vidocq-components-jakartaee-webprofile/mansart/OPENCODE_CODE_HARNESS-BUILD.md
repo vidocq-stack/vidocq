@@ -141,7 +141,8 @@ per-spec filtering for free.
 | Command | Does |
 | --- | --- |
 | `/spec-add <url\|path> <XXX>` | Fetch → markitdown → split → one note per chapter → derive `TASKS-XXX.md` + empty `STATUS-XXX.md`. |
-| `/tck XXX` | Run the official TCK, report the counter. Fixes nothing. |
+| `/tck XXX` | Wire the runner, run the official TCK, report the counter. Loops on `verify-m0.sh` until every card passes. |
+| `/refresh XXX` | Re-measure and refresh `TASKS`/`STATUS` from what is true. Writes nothing itself — `verify-m0.sh` does both in one step, because anything generated goes stale the moment something changes and nobody remembers which script to re-run. |
 | `/next XXX` | One card, end to end, then **stop**. |
 | `/fixbug XXX-Bnnn` | Same engine, entry point is a `BUG.md` id instead of a card. |
 | `/status XXX` | Read-only summary. No model call beyond formatting. |
