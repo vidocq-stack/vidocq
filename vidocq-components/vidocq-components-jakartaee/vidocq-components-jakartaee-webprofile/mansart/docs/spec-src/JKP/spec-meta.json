@@ -85,13 +85,6 @@
         "scripts": [
           "run-official-tck-transactions-2.0.sh"
         ]
-      },
-      {
-        "path": "mansart-jakarta-persistence/mansart-jakarta-persistence-tck",
-        "has_tests": true,
-        "scripts": [
-          "run-official-tck-persistence-3.2.sh"
-        ]
       }
     ],
     "runnable": true,

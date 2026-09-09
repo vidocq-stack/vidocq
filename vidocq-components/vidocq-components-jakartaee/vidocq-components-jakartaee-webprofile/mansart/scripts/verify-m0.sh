@@ -101,7 +101,12 @@ for f in $(ls -t "$H"/target/build-logs/*.log 2>/dev/null | head -40); do
     # name matches the **/Client.class include, so it runs and reports
     # "Tests run: 1, Failures: 0" even when no TCK test is selected at all.
     # A card satisfied by a tautology is worse than a card left undone.
-    if grep -q "$ARTIFACT" "$f" && grep -qE 'Tests run: [0-9]+' "$f" \
+    # ...and NEWER THAN THE POM. Delete the module, rebuild it with the same
+    # artifactId, and a log from the previous incarnation would satisfy this card
+    # without a single test having run. A counter must be about the runner that
+    # exists now.
+    if [ "$f" -nt "$H/$MOD/pom.xml" ] \
+       && grep -q "$ARTIFACT" "$f" && grep -qE 'Tests run: [0-9]+' "$f" \
        && grep -q 'ee\.jakarta\.tck\.' "$f"; then LOG="$f"; break; fi
 done
 # No counter on disk? RUN THE SUITE. A run wired all six cards correctly and
