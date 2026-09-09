@@ -108,6 +108,22 @@ else
 fi
 ck M0-T005 "the TCK produced a counter, any counter" $r "$d"
 
+# T006 — a counter that measures the implementation, not the harness.
+# By default the TCK thinks it runs inside a JakartaEE container: every test
+# fails at setup demanding an injected EntityManager, and the score stays put
+# whatever gets implemented. platform.mode=standalone moves the failure to the
+# real cause — no persistence provider — which is the number M1 will move.
+r=1; d=""
+if [ ! -f "$H/$MOD/pom.xml" ]; then d="no runner yet"
+elif ! grep -q 'platform\.mode' "$H/$MOD/pom.xml"; then
+    d="platform.mode is not set in the runner pom — the TCK defaults to jakartaEE and every test fails asking for a container-injected EntityManager"
+elif ! grep -qE 'platform\.mode>[[:space:]]*standalone' "$H/$MOD/pom.xml"; then
+    d="platform.mode is set but not to 'standalone'"
+elif ! find "$H/$MOD/src/test/resources" -name 'persistence.xml' 2>/dev/null | grep -q .; then
+    d="no persistence.xml under src/test/resources — standalone mode needs one (the TCK ships a template at ee/jakarta/tck/persistence/common/template/standalone/persistence.xml)"
+else r=0; d="platform.mode=standalone with a persistence.xml"; fi
+ck M0-T006 "the counter measures the implementation, not the harness" $r "$d"
+
 echo
 printf 'M0: %d pass, %d fail\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
