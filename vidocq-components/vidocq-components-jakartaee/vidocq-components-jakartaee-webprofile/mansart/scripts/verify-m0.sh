@@ -80,6 +80,10 @@ RUN="$(ls "$H/$MOD"/run-official-tck-*.sh 2>/dev/null | head -1)"
 if [ -z "$RUN" ]; then d="no run-official-tck-*.sh in $MOD"
 elif [ ! -x "$RUN" ]; then d="$(basename "$RUN") is not executable"
 elif [ ! -f "$H/$MOD/src/test/resources/arquillian.xml" ]; then d="src/test/resources/arquillian.xml missing"
+elif ls "$H/scripts"/run-official-tck-*.sh >/dev/null 2>&1; then
+    # A run left a copy in scripts/. Two scripts with the same name, one of them
+    # never executed, is how a fix gets applied to the wrong file for an hour.
+    d="a stray copy sits in scripts/ ($(basename "$(ls "$H"/scripts/run-official-tck-*.sh | head -1)")) — the run script belongs in $MOD and nowhere else"
 else r=0; fi
 ck M0-T004 "run script + Arquillian config present" $r "$d"
 
@@ -100,6 +104,18 @@ for f in $(ls -t "$H"/target/build-logs/*.log 2>/dev/null | head -40); do
     if grep -q "$ARTIFACT" "$f" && grep -qE 'Tests run: [0-9]+' "$f" \
        && grep -q 'ee\.jakarta\.tck\.' "$f"; then LOG="$f"; break; fi
 done
+# No counter on disk? RUN THE SUITE. A run wired all six cards correctly and
+# never executed the TCK, so the card sat at FAIL until a human ran it by hand —
+# and a checker that needs a human to produce the evidence it checks is a checker
+# that cannot finish anything. The measurement IS the verification here.
+if [ -z "$LOG" ] && [ -n "$RUN" ] && [ "${VERIFY_M0_NO_RUN:-}" != "1" ]; then
+    printf '  M0-T005  .... no counter on disk; running the suite once (up to 30 min)\n'
+    ( cd "$H/$MOD" && timeout 1800 "$H/scripts/build.sh" -Ptck-run test ) >/dev/null 2>&1
+    for f in $(ls -t "$H"/target/build-logs/*.log 2>/dev/null | head -5); do
+        if grep -q "$ARTIFACT" "$f" && grep -qE 'Tests run: [0-9]+' "$f" \
+           && grep -q 'ee\.jakarta\.tck\.' "$f"; then LOG="$f"; break; fi
+    done
+fi
 if [ -z "$RUN" ]; then d="nothing to run yet"
 elif [ -n "$LOG" ]; then r=0
     d="$(grep -oE 'Tests run: [0-9]+, Failures: [0-9]+, Errors: [0-9]+, Skipped: [0-9]+' "$LOG" | tail -1) ($(basename "$LOG"))"
