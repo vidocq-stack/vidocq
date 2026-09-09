@@ -26,8 +26,13 @@ A run that scores 0 is a SUCCESS for this command: the instrument now exists.
    STOP. Never fabricate a coordinate or a runner.
 
 2. IS THE RUNNER WIRED?
-   Look for the module named in STATUS-$ARGUMENTS.md, or a *-tck module matching
-   the spec. Missing? Then this is the M0 card: build it, do not run it.
+   THE PATH IS NOT YOURS TO CHOOSE:
+       python3 scripts/tck-module.py $ARGUMENTS
+   It prints the module path, read from docs/spec-src/$ARGUMENTS/module.conf
+   (derived from the runners this repo already has). Build EXACTLY there.
+   An agent once invented ee/jakarta/tck/persistence/mansart-jkp-tck — the TCK's
+   own Java package path, with the harness's 3-letter code as a module name.
+   Directory exists with a pom.xml? The runner is wired; go to step 3.
 
    TO WIRE IT — copy, do not invent:
    - Copy the layout of an existing runner from tck.repo_runners (they work:
@@ -43,8 +48,11 @@ A run that scores 0 is a SUCCESS for this command: the instrument now exists.
    It cannot write. It cannot fix. It reports.
 
 4. RECORD in STATUS-$ARGUMENTS.md
-   Line: <date> | TCK <version> | PASS=<n> FAIL=<n> ERROR=<n> | <sha>
-   This counter is the progress of the whole spec. Never write a number the
-   runner did not give you.
+   Append ONE ROW PER FINISHED CARD to the "Done cards" table:
+       | M0-T00n | <date> | <the command and what it printed> |
+   NEVER edit the milestone counts — they are computed from those rows by
+   scripts/spec-tasks.sh. A count with no rows behind it says "4 done" without
+   saying which four, which is how a card gets marked done with nothing to show.
+   Evidence means a build log path, an exit code, a TCK counter. Not a sentence.
 
 5. STOP. Report the 4 lines. Do NOT start fixing failures — that is /next.

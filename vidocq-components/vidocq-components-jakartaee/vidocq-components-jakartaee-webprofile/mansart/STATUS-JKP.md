@@ -28,7 +28,13 @@ result: PASS=? FAIL=? ERROR=? SKIP=?   (never run)
 
 **Total: 248 cards, 0 done.**
 
-## Log
+## Done cards
 
-*(one line per finished card, appended by /next)*
+One line per finished card, WITH the evidence that closed it: a build log,
+a TCK counter, a command and its exit code. A card with no evidence line is
+not done, whatever an agent reported.
+
+| Card | Date | Evidence |
+|---|---|---|
+| — | — | *(none yet)* |
 

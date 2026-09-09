@@ -722,6 +722,41 @@ under uncertainty, which is what models are for. A verdict is a count, which is
 what scripts are for. The done-when of the install card is a script's exit code
 precisely so the search above it can be delegated safely.
 
+### Two holes a real `/tck` run found in ten minutes
+
+With the TCK installed, `/tck JKP` ran for real, and produced two defects no
+amount of my own script-testing had surfaced.
+
+**It invented a path.** The runner landed in
+`ee/jakarta/tck/persistence/mansart-jkp-tck/` — the TCK's own *Java package*
+hierarchy, with `jkp`, the harness's internal 3-letter code, used as a Maven
+module name. Nothing forbade it, because nothing had ever said where a runner
+goes. The repository knew all along: `mansart-jakarta-data/mansart-data-tck` and
+`mansart-transactions/mansart-transactions-tck`. Same fix as everywhere else in
+this story — **read the repo instead of inferring**. `tck-module.py` detects the
+shape (a `*/*-tck` exists → multi-spec; a root pom and none → single-spec),
+proposes a path in `module.conf`, and a human owns the name. For JPA it proposed
+`mansart-jakarta-persistence/mansart-jakarta-persistence-tck` — exactly what was
+expected of it.
+
+**It wrote a count with nothing behind it.** `STATUS` went to *"M0 — 5 cards —
+4 done"*. Which four? The file could not say. That is the same shape as
+*"TCK execution runs successfully"* over one skipped test: a summary with no
+referent. STATUS now carries a `Done cards` table — id, date, and the evidence
+that closed it (a build log, an exit code, a counter) — and **the milestone
+counts are computed from those rows**, never typed. Writing "4" without four
+lines is now impossible.
+
+That exposed a third, quieter bug: `spec-tasks.sh` overwrote `STATUS` wholesale
+on every regeneration. Harmless while everything is zero, and a silent erasure
+of all progress the day it is not. It now reads the done rows back and preserves
+them — verified by seeding two and regenerating.
+
+The pattern worth keeping: **each of these was a gap in what was never
+specified**, not a model going rogue. An agent asked to build a module with no
+stated location will pick one, and the one it picks will be defensible from
+inside its own context and wrong from outside.
+
 ### The file I edited by hand, and the command that should have existed
 
 Refreshing those coordinates exposed a hole I had walked straight through.

@@ -84,7 +84,7 @@ done < "$PLAN"
 
 # --- assembly: ids, M0 and STATUS are the script's job, never a model's ----
 python3 - "$CODE" "$META" "$PLAN" "$FRAG" "$OUT" "$STATUS" <<'PY'
-import json, os, sys
+import collections, json, os, re, sys
 code, meta_p, plan_p, frag_d, out_p, status_p = sys.argv[1:7]
 meta = json.load(open(meta_p))
 tck  = meta.get("tck", {})
@@ -92,6 +92,14 @@ rec  = tck.get("recommended") or {}
 coord = ("{}:{}:{}".format(rec.get("groupId","?"), rec.get("artifactId","?"), rec.get("version","?"))
          if rec and tck.get("runnable") else None)
 runners = [r["path"] for r in tck.get("repo_runners", [])]
+
+# Where the runner goes is read from module.conf, never invented. An agent once
+# created ee/jakarta/tck/persistence/mansart-jkp-tck — the TCK's Java package
+# path, with the harness's internal 3-letter code as a Maven module name.
+import subprocess as _sp
+_m = _sp.run([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)) if "__file__" in dir() else ".", "scripts", "tck-module.py"), code],
+             capture_output=True, text=True)
+module = (_m.stdout or "").strip() or "(run scripts/tck-module.py {})".format(code)
 
 L = ["# TASKS-{} — {}".format(code, meta.get("url","")), "",
      "One card = one behaviour = one failing test. Cards are numbered by the",
@@ -102,7 +110,7 @@ L += ["## M0 — the TCK", "",
 if coord:
     L += ["TCK: `{}`".format(coord), "",
           "| Card | Title | Spec sections | Done-when |", "|---|---|---|---|",
-          "| M0-T001 | Create the TCK runner module (standalone POM, out of reactor) | — | `./scripts/build.sh` builds the module, exit 0 |",
+          "| M0-T001 | Create the TCK runner module at **`{}`** (standalone POM, out of reactor) | — | That exact directory holds a pom.xml and `./scripts/build.sh` builds it, exit 0. **The path is not yours to choose** — it comes from `docs/spec-src/{}/module.conf`. |".format(module, code),
           "| M0-T002 | Depend on `{}` | — | `./scripts/build.sh dependency:resolve` lists the jar. **Removing the dependency to make the build green is not a fix** — an agent did exactly that. |".format(coord),
           "| M0-T003 | Arquillian container + ArchiveAppender injecting our implementation | — | A deployment archive is produced |",
           "| M0-T004 | Run script + persistence.xml template for the suite | — | The script starts the suite and writes a log |",
@@ -175,6 +183,22 @@ if bundled or dupes:
     print("shape: {} cards bundle 4+ requirements in one done-when, {} duplicate titles"
           .format(bundled, len(dupes)))
 
+# Progress is NEVER regenerated: read back the done cards and keep them. A count
+# on its own is unverifiable — an agent wrote "M0: 4 done" without saying which
+# four. Ids and evidence are the record; the counts are derived from them.
+done_rows, in_done = [], False
+if os.path.exists(status_p):
+    for line in open(status_p, encoding="utf-8"):
+        if line.startswith("## Done cards"):
+            in_done = True
+            continue
+        if in_done and line.startswith("## "):
+            in_done = False
+        if in_done and re.match(r"^\|\s*M\d+-T\d{3}\s*\|", line):
+            done_rows.append(line.rstrip("\n"))
+done_ids = [re.match(r"^\|\s*(M\d+-T\d{3})", r).group(1) for r in done_rows]
+done_by_ms = collections.Counter(i.split("-")[0] for i in done_ids)
+
 S = ["# STATUS-{}".format(code), "",
      "Counters only. A line here is written by a tool, never by an agent.", "",
      "## TCK", "",
@@ -182,11 +206,18 @@ S = ["# STATUS-{}".format(code), "",
      "module: (not created yet — M0-T001)",
      "result: PASS=? FAIL=? ERROR=? SKIP=?   (never run)", "```", "",
      "## Milestones", "", "| Milestone | Cards | Done |", "|---|---|---|",
-     "| M0 — the TCK | {} | 0 |".format(m0_cards)]
+     "| M0 — the TCK | {} | {} |".format(m0_cards, done_by_ms.get("M0", 0))]
 for i, name, c in groups:
-    S.append("| M{} — {} | {} | 0 |".format(i, name.replace("-", " "), c))
-S += ["", "**Total: {} cards, 0 done.**".format(total + m0_cards), "",
-      "## Log", "", "*(one line per finished card, appended by /next)*", ""]
+    S.append("| M{} — {} | {} | {} |".format(i, name.replace("-", " "), c,
+                                             done_by_ms.get("M{}".format(i), 0)))
+S += ["", "**Total: {} cards, {} done.**".format(total + m0_cards, len(done_ids)), "",
+      "## Done cards", "",
+      "One line per finished card, WITH the evidence that closed it: a build log,",
+      "a TCK counter, a command and its exit code. A card with no evidence line is",
+      "not done, whatever an agent reported.", "",
+      "| Card | Date | Evidence |", "|---|---|---|"]
+S += done_rows or ["| — | — | *(none yet)* |"]
+S += [""]
 open(status_p, "w").write("\n".join(S) + "\n")
 print("\nassembled: {} milestones, {} cards -> {}".format(len(groups) + 1, total + m0_cards, os.path.basename(out_p)))
 PY

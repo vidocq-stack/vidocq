@@ -123,6 +123,7 @@ A spec gets a **three-letter code** (`JKP` = Jakarta Persistence). You pass it;
 | --- | --- | --- |
 | `TASKS-XXX.md` | `spec-tasks.sh` | Milestones `M0..Mx`, cards `M0-T001`… Assembled by script from planner fragments; **no model writes this file**. |
 | `docs/spec-src/XXX/milestones.tsv` | you | `<name><TAB><note globs>`, one line per milestone, **in dependency order**. The one judgement the script cannot make. |
+| `docs/spec-src/XXX/module.conf` | you | Where the TCK runner module lives. Proposed by `tck-module.py` from the runners already in the repo, edited by a human, read by everything downstream. |
 | `STATUS-XXX.md` | `lead` + `verify` | Current card, measured counters, one line per finished card. |
 | `docs/spec-notes/XXX/<chapter>.md` | `noter` | One note per spec chapter, 200 lines max. The only thing read when planning. |
 | `docs/spec-src/XXX/spec-meta.json` | `spec-fetch.py` | Chapter list **and TCK coordinates**. What makes the harness reusable: `/tck` reads it instead of guessing. |
@@ -371,6 +372,19 @@ starts from nothing again:
   depended upon. The script detects it (0 installable jars), says so, exits 7,
   and points at `mansart-transactions-tck`, the runner of that family this repo
   already has.
+- **`scripts/tck-module.py <XXX>` decides where the runner module goes**, because
+  an agent left to itself created `ee/jakarta/tck/persistence/mansart-jkp-tck` —
+  the TCK's own Java package path, with the harness's internal 3-letter code used
+  as a Maven module name. Neither was forbidden anywhere. The repo already
+  answers: `mansart-jakarta-data/mansart-data-tck`,
+  `mansart-transactions/mansart-transactions-tck`, so the layout is
+  `<top-level module>/<name>-tck`. The script tells the two shapes apart by
+  looking — **at least one `*/*-tck` exists → multi-spec** (parent module plus
+  tck submodule), **a root pom.xml and none → single-spec** (runner at the root)
+  — and writes a *proposal* to `docs/spec-src/<XXX>/module.conf`, which a human
+  edits: naming is a judgement (this repo says `mansart-jakarta-data` but
+  `mansart-transactions`). M0-T001 then names the exact path, and `/tck` reads
+  the file instead of choosing.
 - **M0 is always the TCK**, before any implementation milestone, and it has three
   shapes because **"no TCK installed" is not "no TCK exists"** — the gap between
   those two is where a project invents a substitute metric:

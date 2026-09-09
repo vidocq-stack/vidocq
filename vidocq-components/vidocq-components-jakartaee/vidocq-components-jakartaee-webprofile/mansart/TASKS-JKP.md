@@ -13,7 +13,7 @@ TCK: `jakarta.tck:persistence-tck-spec-tests:3.2.1`
 
 | Card | Title | Spec sections | Done-when |
 |---|---|---|---|
-| M0-T001 | Create the TCK runner module (standalone POM, out of reactor) | — | `./scripts/build.sh` builds the module, exit 0 |
+| M0-T001 | Create the TCK runner module at **`mansart-jakarta-persistence/mansart-jakarta-persistence-tck`** (standalone POM, out of reactor) | — | That exact directory holds a pom.xml and `./scripts/build.sh` builds it, exit 0. **The path is not yours to choose** — it comes from `docs/spec-src/JKP/module.conf`. |
 | M0-T002 | Depend on `jakarta.tck:persistence-tck-spec-tests:3.2.1` | — | `./scripts/build.sh dependency:resolve` lists the jar. **Removing the dependency to make the build green is not a fix** — an agent did exactly that. |
 | M0-T003 | Arquillian container + ArchiveAppender injecting our implementation | — | A deployment archive is produced |
 | M0-T004 | Run script + persistence.xml template for the suite | — | The script starts the suite and writes a log |
