@@ -804,6 +804,27 @@ Worth admitting in passing: checking that failing build, I typed
 founding bug of this entire project, committed by its author, at the command
 line, while verifying a fix for it.
 
+### The order only existed in my head
+
+By this point the pipeline was six scripts deep — fetch, note, detect, install,
+module path, plan — and every one of them worked. But the *order* lived nowhere:
+not in a file, not in a command, only in my messages and my memory. That is not a
+harness, it is a habit with good tooling attached. It is also how a working
+system quietly becomes unusable by anyone else, including the same person three
+weeks later.
+
+`scripts/steps/STEP010..STEP060` fixes it the cheapest possible way: a thin
+wrapper per step that says what it does, calls the real script, propagates its
+exit code and **prints the next step**. Numbering leaves gaps of ten so one can
+be inserted without renaming the rest.
+
+The property that matters most is the exit codes carrying meaning rather than
+just failure. `STEP030_detect_tck.sh` exiting **1** is not an error — it is the
+normal path to `STEP040_install_tck.sh`, and it is precisely the distinction
+between "no TCK installed" and "no TCK exists" that this whole section was about.
+An agent, or a person, can follow the chain without knowing any of the history
+behind it.
+
 ### The file I edited by hand, and the command that should have existed
 
 Refreshing those coordinates exposed a hole I had walked straight through.

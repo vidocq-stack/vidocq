@@ -36,7 +36,7 @@ Three pathologies, all measured, all of which the guard must make impossible:
   **75 times**, across three spellings differing only by a stderr redirect.
 - **476 `read_file` calls, 40% of them re-reading an unchanged file.**
 - **262 Maven runs, all logged `exit_code: 0`** — while 38 outputs contained
-  `BUILD FAILURE`, 3 compile errors, 17 test failures. See §8.
+  `BUILD FAILURE`, 3 compile errors, 17 test failures. See §9.
 
 ---
 
@@ -144,7 +144,7 @@ per-spec filtering for free.
 | `/next XXX` | One card, end to end, then **stop**. |
 | `/fixbug XXX-Bnnn` | Same engine, entry point is a `BUG.md` id instead of a card. |
 | `/status XXX` | Read-only summary. No model call beyond formatting. |
-| `/push XXX` | Explicit. `/next` commits, it never pushes (see §6). |
+| `/push XXX` | Explicit. `/next` commits, it never pushes (see §7). |
 
 ---
 
@@ -220,7 +220,37 @@ plumbing before spending a single token on it.
 
 ---
 
-## 6. `/next XXX` — one card
+## 6. The pipeline as numbered steps
+
+Every script above was, for a long time, only ordered inside my head and in chat
+messages. That is not a harness — it is a habit. `scripts/steps/` makes the order
+executable: each step is a thin wrapper that says what it does, calls the real
+script, propagates its exit code, and **prints the next step**. Numbering leaves
+gaps of ten so a step can be inserted without renaming the others.
+
+| Step | Calls | In → out | Exit codes worth knowing |
+| --- | --- | --- | --- |
+| `STEP010_fetch_spec.sh <url> <XXX>` | `spec-fetch.py` | url → `docs/spec-src/XXX/` + `spec-meta.json` | 3 = only a PDF and no converter |
+| `STEP020_note_chapters.sh <XXX>` | `spec-note.sh` | chapters → `docs/spec-notes/XXX/` | non-zero = a note is missing; re-run, it resumes |
+| `STEP030_detect_tck.sh <XXX>` | `tck-find.py` | `spec-meta.json` → verdict | **0 = runnable, 1 = not installed** — information, not failure |
+| `STEP040_install_tck.sh <XXX>` | `tck-install.py`, then `--refresh-tck` | spec page → jars in the M2 | 5 = no archive linked (WebFetch takes over) · 7 = JavaTest TCK, not Maven |
+| `STEP050_module_path.sh <XXX>` | `tck-module.py` | repo layout → `module.conf` | 0, and **read the file — the name is yours** |
+| `STEP060_plan_tasks.sh <XXX>` | `spec-tasks.sh` | notes + `milestones.tsv` → `TASKS`/`STATUS` | reports ORDER VIOLATION and shape counts |
+
+Then the card loop is OpenCode's: `/tck XXX`, then `/next XXX` per card, each of
+those using `scripts/build.sh` and `scripts/sonar.sh` — the two scripts that are
+*not* pipeline steps, because they run inside every card rather than once.
+
+Three properties on purpose. **Every step is re-runnable**: notes and fragments
+are cached, `module.conf` is kept unless `--force`, progress in STATUS survives.
+**Every step names the next one**, so neither a human nor an agent has to hold
+the order. And **exit codes carry meaning rather than just failure** — STEP030
+exiting 1 is the normal path to STEP040, which is exactly the distinction between
+"no TCK installed" and "no TCK exists".
+
+---
+
+## 7. `/next XXX` — one card
 
 ```mermaid
 sequenceDiagram
@@ -286,7 +316,7 @@ red build, not a warning.
 
 ---
 
-## 7. The TCK is milestone zero
+## 8. The TCK is milestone zero
 
 The first `TASKS-JKP.md` this harness generated contained **58 cards and zero
 occurrences of the word "TCK"** — a plan describing what to implement, with no
@@ -423,7 +453,7 @@ ecosystem as `mansart-transactions`, `vauban` and `mansart-pool`.
 
 ---
 
-## 8. Enforcement, and the Maven exit-code fix
+## 9. Enforcement, and the Maven exit-code fix
 
 OpenCode 1.18.20 exposes `tool.execute.before` / `tool.execute.after` /
 `permission.ask` (verified in `@opencode-ai/plugin`), so the V3 guard ports over.
@@ -471,11 +501,11 @@ real exit code.
 
 ---
 
-## 9. rtk and context-mode
+## 10. rtk and context-mode
 
 - **rtk** stays: the `rtk-rewrite.js` plugin offers every bash command to
   `rtk rewrite`. The guard must therefore normalise `rtk` away before comparing
-  commands (see §8), or duplicate-detection silently stops working.
+  commands (see §9), or duplicate-detection silently stops working.
 - **context-mode** is how a subagent handles a large output without pouring it
   into a context: process it and print only the answer. Applies to build logs,
   Sonar reports, long greps. `verify` uses it by default; combined with
@@ -483,7 +513,7 @@ real exit code.
 
 ---
 
-## 10. Measured environment facts
+## 11. Measured environment facts
 
 **SonarQube is up.** Container `vidocq-sonar`, image `sonarqube:community`,
 version 26.5.0, **published on port 9001** (not 9000), volumes
@@ -520,7 +550,7 @@ this machine, and HTML keeps the headings the splitter needs. Measured on JPA
 3.2: 2.5 MB, 1.22 M characters, 20 chapters, 39 after the 45 KB split. `ee/` is
 empty and no spec ships with the repo, so nothing is read from the working tree.
 
-## 11. Built and verified so far
+## 12. Built and verified so far
 
 **Refusal works, and it teaches.** Verified end to end on 2026-09-09 with
 `opencode run` against `Qwen3-Next-80B-Instruct`: throwing from
@@ -535,7 +565,7 @@ OK (exit 0)
 log: …/target/build-logs/build-20260909-115802-88440.log
 ```
 
-So the guard is a teaching layer, not just a wall. Everything in §8 stands.
+So the guard is a teaching layer, not just a wall. Everything in §9 stands.
 
 | Piece | State |
 | --- | --- |
@@ -548,7 +578,10 @@ So the guard is a teaching layer, not just a wall. Everything in §8 stands.
 | `scripts/spec-fetch.py` | done — HTML preferred, splits >45 KB chapters, writes `spec-meta.json` with TCK coordinates |
 | `scripts/spec-note.sh` | done — 24 notes, **1 463 lines**, 35 min, 0 reported-but-missing |
 | `scripts/spec-tasks.sh` | done — 11 milestones, **248 cards**, 10/10 groups, M0 generated with no model |
-| `scripts/tck-find.py` | done — generic, verified on `persistence` and `data` |
+| `scripts/tck-find.py` | done — counts test classes in the jar; verified on `persistence`, `data`, and 9 specs for discovery |
+| `scripts/tck-install.py` | done — discovers, verifies sha256, installs; 4 spec families tested, JavaTest family refused explicitly |
+| `scripts/tck-module.py` | done — reads the repo layout, proposes `module.conf` |
+| `scripts/steps/STEP0*.sh` | done — the six pipeline steps, each printing the next (see §6) |
 | `.opencode/package.json` | `{"type":"module"}`, else Node reparses the plugin on every load |
 | `opencode.json` (project) | declares the two working models; **no secret** — baseURL and apiKey inherited from the global provider |
 | `~/.config/opencode/opencode.json` | cleaned: it declared two models deleted from oMLX. Now the 5 real ones, default `Qwen3.6`, small/vision `Qwen3-VL-8B`. Backup kept as `opencode.json.BEFORE-CLEANUP-*` |
@@ -578,7 +611,7 @@ with `jdk: <version>` so a wrong compiler is visible in the 3-line verdict.
 Plugin discovery: `.opencode/plugin/` at the project root is picked up
 (`[mansart-guard] loaded (dir=…)` on every run).
 
-## 12. Agents and commands — written and loaded
+## 13. Agents and commands — written and loaded
 
 `.opencode/agent/*.md` and `.opencode/command/*.md`, frontmatter + caveman English
 body. `opencode agent list` shows all nine: `lead` (primary), `recon`, `noter`,
@@ -607,7 +640,7 @@ things learned running it:
 `/status JKP` was run end to end: `$ARGUMENTS` substitutes, the command routes to
 `lead`, and the output respects the required shape.
 
-## 13. Open points
+## 14. Open points
 
 - **Card granularity is unsolved, and prompting will not solve it.** The pipeline
   produces 248 cards shaped like spec sections, 39 of them bundling four or more
