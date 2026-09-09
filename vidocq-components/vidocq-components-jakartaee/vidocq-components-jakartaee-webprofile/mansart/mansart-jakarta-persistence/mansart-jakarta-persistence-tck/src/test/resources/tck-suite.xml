@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
+<!--
+  Jakarta Persistence 3.2 TCK suite definition.
+
+  M6 placeholder: only the Mansart smoke test is wired in. Once the BCE
+  (mansart-jakarta-persistence-cdi) is implemented, swap this for the official
+  persistence-tck-suite.xml shipped with the TCK distribution.
+-->
+<suite name="mansart-jakarta-persistence-tck-3.2" verbose="1">
+
+    <test name="mansart-smoke" verbose="2">
+        <classes>
+            <class name="io.vidocq.mansart.persistence.tck.MansartCdiBootstrapSmokeTest"/>
+            <class name="io.vidocq.mansart.persistence.tck.MansartArquillianSmokeTest"/>
+            <class name="io.vidocq.mansart.persistence.tck.RuntimeRepoArquillianTest"/>
+            <class name="io.vidocq.mansart.persistence.tck.MultiDataStoreArquillianTest"/>
+        </classes>
+    </test>
+
+    <!--
+    <test name="jakarta-persistence-tck-3.2">
+        <packages>
+            <package name="ee.jakarta.tck.persistence.*"/>
+        </packages>
+    </test>
+    -->
+</suite>

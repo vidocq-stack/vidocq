@@ -86,6 +86,7 @@
     <modules>
         <module>mansart-pool</module>
         <module>mansart-jakarta-data</module>
+        <module>mansart-jakarta-persistence</module>
         <module>mansart-transactions</module>
     </modules>
 </project>
