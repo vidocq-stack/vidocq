@@ -89,7 +89,8 @@ code, meta_p, plan_p, frag_d, out_p, status_p = sys.argv[1:7]
 meta = json.load(open(meta_p))
 tck  = meta.get("tck", {})
 rec  = tck.get("recommended") or {}
-coord = "{}:{}:{}".format(rec.get("groupId","?"), rec.get("artifactId","?"), rec.get("version","?")) if rec else None
+coord = ("{}:{}:{}".format(rec.get("groupId","?"), rec.get("artifactId","?"), rec.get("version","?"))
+         if rec and tck.get("runnable") else None)
 runners = [r["path"] for r in tck.get("repo_runners", [])]
 
 L = ["# TASKS-{} — {}".format(code, meta.get("url","")), "",
@@ -109,12 +110,35 @@ if coord:
     if runners:
         L += ["Copy the layout from a runner that already passes here: " +
               ", ".join("`{}`".format(r) for r in runners), ""]
+elif tck.get("keyword") and tck.get("spec_version"):
+    # Nothing runnable in the M2 — but the spec and its version are known, so the
+    # TCK is *not installed*, which is not the same as *does not exist*. The gap
+    # between those two is where a project quietly invents a substitute metric.
+    L += ["**The official TCK is not in the local M2 for this spec version.**", "",
+          "`{}`".format(tck.get("reason") or
+                        "no TCK artifact matching '{}' installed".format(tck.get("keyword"))), "",
+          "If this spec genuinely has no TCK, replace M0-T001 with a decision on",
+          "the progress metric — and say so in STATUS. Do not skip it silently.", "",
+          "Installing it is M0's first card. Do not invent a substitute metric",
+          "while the real one is one download away.", "",
+          "| Card | Title | Spec sections | Done-when |", "|---|---|---|---|",
+          "| M0-T001 | Obtain the official TCK for {} {} and install it into the local M2 | — | `scripts/tck-find.py {} --spec-version {}` exits 0 and reports a jar with >0 test classes |".format(
+              tck.get("keyword", code), tck.get("spec_version") or "?", tck.get("keyword", code), tck.get("spec_version") or "?"),
+          "| M0-T002 | Create the TCK runner module (standalone POM, out of reactor) | — | `./scripts/build.sh` builds the module, exit 0 |",
+          "| M0-T003 | Depend on the TCK jar | — | `./scripts/build.sh dependency:resolve` lists it. **Removing the dependency to make the build green is not a fix.** |",
+          "| M0-T004 | Arquillian container + ArchiveAppender injecting our implementation | — | A deployment archive is produced |",
+          "| M0-T005 | Run script + config template, then first run | — | **The TCK produces a counter, ANY counter. PASS=0 is success: the instrument exists.** |", ""]
+    if runners:
+        L += ["Copy the layout from a runner that already passes here: " +
+              ", ".join("`{}`".format(r) for r in runners), ""]
 else:
-    L += ["**No local TCK found.** M0 is a single card: decide the progress metric",
-          "and write it down. Never pretend a metric exists.", "",
+    L += ["**No TCK artifact matching this spec exists locally or is known.** M0 is",
+          "a single card: decide the progress metric and write it down. Never",
+          "pretend a metric exists.", "",
           "| Card | Title | Spec sections | Done-when |", "|---|---|---|---|",
           "| M0-T001 | Choose and document the progress metric | — | The metric is written in STATUS-{}.md |".format(code), ""]
 
+m0_cards = sum(1 for l in L if l.startswith("| M0-T"))  # count, never assume
 groups, total = [], 0
 order = [l.split("\t")[0].strip() for l in open(plan_p) if l.strip() and not l.startswith("#")]
 for i, name in enumerate(order, start=1):
@@ -158,13 +182,13 @@ S = ["# STATUS-{}".format(code), "",
      "module: (not created yet — M0-T001)",
      "result: PASS=? FAIL=? ERROR=? SKIP=?   (never run)", "```", "",
      "## Milestones", "", "| Milestone | Cards | Done |", "|---|---|---|",
-     "| M0 — the TCK | {} | 0 |".format(5 if coord else 1)]
+     "| M0 — the TCK | {} | 0 |".format(m0_cards)]
 for i, name, c in groups:
     S.append("| M{} — {} | {} | 0 |".format(i, name.replace("-", " "), c))
-S += ["", "**Total: {} cards, 0 done.**".format(total + (5 if coord else 1)), "",
+S += ["", "**Total: {} cards, 0 done.**".format(total + m0_cards), "",
       "## Log", "", "*(one line per finished card, appended by /next)*", ""]
 open(status_p, "w").write("\n".join(S) + "\n")
-print("\nassembled: {} milestones, {} cards -> {}".format(len(groups) + 1, total + (5 if coord else 1), os.path.basename(out_p)))
+print("\nassembled: {} milestones, {} cards -> {}".format(len(groups) + 1, total + m0_cards, os.path.basename(out_p)))
 PY
 
 elapsed=$(( $(date +%s) - start ))

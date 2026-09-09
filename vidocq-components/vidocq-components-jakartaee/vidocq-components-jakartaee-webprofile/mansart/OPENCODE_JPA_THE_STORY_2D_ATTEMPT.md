@@ -601,6 +601,41 @@ M0-T002 now reads: *"`./scripts/build.sh dependency:resolve` lists the jar.
 Removing the dependency to make the build green is not a fix — an agent did
 exactly that."* The failure is written into the card it broke.
 
+### Purging the TCK, and what the purge exposed
+
+Keeping the TCK jars was the wrong call, and the objection was sharp: a run that
+starts with the suite already installed by hand proves nothing about a harness
+meant to work on any spec. So all 41 MB of Jakarta Persistence TCK artifacts were
+removed from the M2 (backed up outside it — a tarball is not on any classpath).
+
+Two defects surfaced within minutes, both invisible while the jars were there.
+
+**My own lookup failed silently.** Asked for a version it could not satisfy,
+`tck-find.py` printed the artifact list, said nothing about the failure, and
+**exited 0**. The tool written to make a missing metric loud had the exact bug it
+was built against. It now prints `NO RUNNABLE TCK: <reason>` and exits 1.
+
+**A version filter that falls back is not a filter.** `--spec-version` was a
+preference: no 3.2 match, take whatever exists. That is how a 3.2 implementation
+gets measured against a 4.0 TCK and reports a real-looking counter. It is now a
+hard constraint — `3.2` matches `3.2`, `3.2.1`, `3.2.2-SNAPSHOT`, never `4.0` and
+never `3.20` — and returns nothing rather than something wrong. **The TCK version
+comes from the spec, always**: `spec-fetch.py` reads it out of the URL, so
+`TitiToto 4.3` looks for the TitiToto 4.3 TCK and refuses a 5.0 one.
+
+And the distinction the purge forced into the design: **"no TCK installed" is not
+"no TCK exists"**. The gap between those two is where a project quietly invents a
+substitute metric. With an empty M2, M0 is no longer a shrug — its first card is:
+
+```
+M0-T001  Obtain the official TCK for persistence 3.2 and install it into
+         the local M2
+done-when: scripts/tck-find.py persistence --spec-version 3.2 exits 0 and
+           reports a jar with >0 test classes
+```
+
+A done-when that is a script's exit code. Nobody can argue with it — including me.
+
 ---
 
 ## 9. What is true today

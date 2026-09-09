@@ -9,15 +9,23 @@ generator; do not renumber by hand.
 
 No card below M0 can be called done without a counter to check it against.
 
-TCK: `jakarta.tck:persistence-tck-spec-tests:3.2.1`
+**The official TCK is not in the local M2 for this spec version.**
+
+`no TCK jar with test classes for persistence 3.2 in the local M2`
+
+If this spec genuinely has no TCK, replace M0-T001 with a decision on
+the progress metric — and say so in STATUS. Do not skip it silently.
+
+Installing it is M0's first card. Do not invent a substitute metric
+while the real one is one download away.
 
 | Card | Title | Spec sections | Done-when |
 |---|---|---|---|
-| M0-T001 | Create the TCK runner module (standalone POM, out of reactor) | — | `./scripts/build.sh` builds the module, exit 0 |
-| M0-T002 | Depend on `jakarta.tck:persistence-tck-spec-tests:3.2.1` | — | `./scripts/build.sh dependency:resolve` lists the jar. **Removing the dependency to make the build green is not a fix** — an agent did exactly that. |
-| M0-T003 | Arquillian container + ArchiveAppender injecting our implementation | — | A deployment archive is produced |
-| M0-T004 | Run script + persistence.xml template for the suite | — | The script starts the suite and writes a log |
-| M0-T005 | First run | — | **The TCK produces a counter, ANY counter. PASS=0 is success: the instrument exists.** |
+| M0-T001 | Obtain the official TCK for persistence 3.2 and install it into the local M2 | — | `scripts/tck-find.py persistence --spec-version 3.2` exits 0 and reports a jar with >0 test classes |
+| M0-T002 | Create the TCK runner module (standalone POM, out of reactor) | — | `./scripts/build.sh` builds the module, exit 0 |
+| M0-T003 | Depend on the TCK jar | — | `./scripts/build.sh dependency:resolve` lists it. **Removing the dependency to make the build green is not a fix.** |
+| M0-T004 | Arquillian container + ArchiveAppender injecting our implementation | — | A deployment archive is produced |
+| M0-T005 | Run script + config template, then first run | — | **The TCK produces a counter, ANY counter. PASS=0 is success: the instrument exists.** |
 
 Copy the layout from a runner that already passes here: `mansart-jakarta-data/mansart-data-tck`, `mansart-transactions/mansart-transactions-tck`
 

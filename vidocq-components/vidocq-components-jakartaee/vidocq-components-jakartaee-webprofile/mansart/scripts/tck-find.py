@@ -62,6 +62,7 @@ def scan_m2(keyword):
             seen.add((group, name))  # TCK_ROOTS overlap: jakarta/tck is under jakarta
             v = pick_version(versions)
             out.append({"groupId": group, "artifactId": name, "versions": versions,
+                        "matching_version": v,
                         "test_classes": count_test_classes(dirpath, name, v)})
             dirnames[:] = []
     return sorted(out, key=lambda a: (len(a["artifactId"]), a["artifactId"]))
@@ -77,6 +78,8 @@ def count_test_classes(art_dir, name, version):
     persistence-tck-spec-tests 2.4 MB / **161**. Only the last one runs anything.
     Names lie about which artifact carries the suite; the jar does not.
     """
+    if not version:
+        return -1
     jar = os.path.join(art_dir, version, "{}-{}.jar".format(name, version))
     if not os.path.isfile(jar):
         return -1
@@ -106,11 +109,26 @@ def scan_repo_runners():
 SPEC_VERSION = None  # set from --spec-version; keeps a 3.2 spec off a 4.0 TCK
 
 
+def version_matches(candidate, wanted):
+    """3.2 matches 3.2, 3.2.1, 3.2.2-SNAPSHOT — never 3.20 or 4.0."""
+    head = candidate.split("-")[0]
+    return head == wanted or head.startswith(wanted + ".")
+
+
 def pick_version(versions):
+    """Newest release, or newest snapshot if that is all there is.
+
+    SPEC_VERSION is a HARD filter, not a preference: the TCK of Jakarta
+    Persistence 3.2 is the only thing that can measure an implementation of
+    Jakarta Persistence 3.2. Falling back to another version silently would
+    produce a counter that looks real and means nothing — the 4.0.0-SNAPSHOT
+    jar on this machine holds 321 test classes against 161 for 3.2.1.
+    Returns None when nothing matches, and the caller must then say so.
+    """
     if SPEC_VERSION:
-        matching = [v for v in versions if v.startswith(SPEC_VERSION)]
-        if matching:
-            versions = matching
+        versions = [v for v in versions if version_matches(v, SPEC_VERSION)]
+        if not versions:
+            return None
     """Prefer a release over a SNAPSHOT, highest first."""
     releases = [v for v in versions if "SNAPSHOT" not in v]
     return sorted(releases or versions)[-1]
@@ -149,9 +167,8 @@ def main():
         # classes) — the TCK of the NEXT spec version. Test count alone would
         # have pointed a 3.2 implementation at 4.0.
         def rank(a):
-            v = pick_version(a["versions"])
-            matches = bool(SPEC_VERSION and v.startswith(SPEC_VERSION))
-            return (matches, "SNAPSHOT" not in v, a["test_classes"], -len(a["artifactId"]))
+            v = a["matching_version"] or ""
+            return ("SNAPSHOT" not in v, a["test_classes"], -len(a["artifactId"]))
         main_art = max(with_tests, key=rank)
     else:
         with_jar = [a for a in arts if a.get("test_classes", -1) == 0]
@@ -166,12 +183,23 @@ def main():
         "recommended": None,
         "repo_runners": runners,
     }
-    if main_art:
+    if main_art and main_art.get("matching_version"):
         result["recommended"] = {
             "groupId": main_art["groupId"],
             "artifactId": main_art["artifactId"],
-            "version": pick_version(main_art["versions"]),
+            "version": main_art["matching_version"],
         }
+    # "artifacts exist" is not "a TCK we can run". Say which, so the plan can
+    # make installing it a card instead of pretending the metric is there.
+    result["runnable"] = bool(result["recommended"]
+                              and (main_art or {}).get("test_classes", 0) > 0)
+    if not result["runnable"]:
+        seen_versions = sorted({v for a in arts for v in a["versions"]})
+        result["reason"] = (
+            "no TCK jar with test classes for {} {} in the local M2".format(
+                keyword, SPEC_VERSION or "(any version)")
+            + (" — versions present: " + ", ".join(seen_versions) if seen_versions else ""))
+        result["found"] = False
 
     if as_json:
         print(json.dumps(result, indent=2))
@@ -188,6 +216,13 @@ def main():
         print(f"  {a['groupId']}:{a['artifactId']}")
         print(f"    versions: {', '.join(a['versions'])}")
     r = result["recommended"]
+    if not result["runnable"]:
+        # Loud, and exit 1. An earlier version printed nothing here and returned
+        # 0 — a lookup that finds no usable TCK must never look like a success.
+        print("\nNO RUNNABLE TCK: " + result["reason"])
+        print("the artifacts above (if any) carry no test class for this spec version.")
+        print("next step: install the official TCK into the local M2, then re-run.")
+        return 1
     if r:
         n = next((a["test_classes"] for a in arts
                   if a["artifactId"] == r["artifactId"] and a["groupId"] == r["groupId"]), -1)

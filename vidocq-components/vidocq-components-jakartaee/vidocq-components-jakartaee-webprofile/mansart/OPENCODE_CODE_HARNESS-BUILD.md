@@ -305,8 +305,16 @@ starts from nothing again:
   Ranking by test count alone then picked a **4.0.0-SNAPSHOT** jar — 321 classes,
   the TCK of the *next* spec — so the spec version pins the TCK version
   (`spec-fetch.py` derives it from the URL) and a release beats a SNAPSHOT.
-  Verified: `persistence` → `jakarta.tck:persistence-tck-spec-tests:3.2.1`,
-  `data` → `jakarta.data:jakarta.data-tck:1.0.1`, unknown keyword → exit 1. It also surfaces the two runners
+  **The TCK version comes from the spec, never from what happens to be
+  installed.** `--spec-version` is a hard constraint, not a preference: `3.2`
+  matches `3.2`, `3.2.1`, `3.2.2-SNAPSHOT`, never `4.0` and never `3.20`; no
+  match returns nothing rather than something wrong. `spec-fetch.py` derives it
+  from the URL, so `TitiToto 4.3` looks for the TitiToto 4.3 TCK.
+  A lookup that finds nothing usable prints `NO RUNNABLE TCK: <reason>` and
+  **exits 1** — the earlier version printed the artifact list, said nothing, and
+  exited 0, which is the very failure this script exists to prevent.
+  Verified: `data` → `jakarta.data:jakarta.data-tck:1.0.1`; `persistence 9.9`
+  and an unknown keyword → exit 1 with the reason. It also surfaces the two runners
   that already pass here (`mansart-data-tck` at 74/74, `mansart-transactions-tck`),
   so an agent copies a working layout instead of inventing one.
 - **`spec-fetch.py` writes the coordinates into `spec-meta.json`**, keyword derived
@@ -314,8 +322,14 @@ starts from nothing again:
 - **`/tck XXX` + agent `tck-runner`**: runs, writes nothing, reports four lines.
   Written into its prompt: *ZERO PASS IS A VALID RESULT*, and `ERROR=all` (the
   harness does not compile) is not the same information as a conformance failure.
-- **M0 is always the TCK**, before any implementation milestone. `M0`'s done-when
-  is "the TCK produces a counter, any counter".
+- **M0 is always the TCK**, before any implementation milestone, and it has three
+  shapes because **"no TCK installed" is not "no TCK exists"** — the gap between
+  those two is where a project invents a substitute metric:
+  a runnable jar in the M2 → build the runner; the spec and version known but no
+  jar → **M0-T001 is "obtain and install the official TCK", done-when
+  `tck-find.py <kw> --spec-version <x.y>` exits 0 with >0 test classes**; nothing
+  known at all → decide and document a metric, explicitly.
+  The last card is always "the TCK produces a counter, ANY counter".
 
 On spec dependencies, the answer was smaller than expected: **JNDI is not a
 Jakarta spec** — `javax.naming` ships in the JDK. The TCK's `jakarta.tck:common`
@@ -538,6 +552,10 @@ things learned running it:
   — zero official tests, so no counter at all, which is not the same thing as
   `PASS=0`. M0-T002 was "satisfied" by deleting the TCK dependency; the card now
   says in its own text that this is not a fix.
+- **The M2 has been purged of the Jakarta Persistence TCK** (41 MB, backed up
+  outside the repository). A harness that only works with the suite pre-installed
+  by hand proves nothing, so M0-T001 is now "install it" and the whole chain is
+  exercised from zero. Nothing about JPA resolves from the local M2 today.
 - **`impl` writing into `src/test/` is prevented by instruction, not by tooling.**
   OpenCode's `permission.edit` is per-agent but not per-path here, and the guard
   cannot see which agent issued a call. If an `impl` ever edits a test to go
