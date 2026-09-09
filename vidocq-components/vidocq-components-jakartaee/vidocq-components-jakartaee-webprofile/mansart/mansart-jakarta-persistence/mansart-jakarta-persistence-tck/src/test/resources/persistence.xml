@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Persistence configuration for Jakarta Persistence TCK
+    SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+-->
+<persistence xmlns="https://jakarta.ee/xml/ns/persistence"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xsi:schemaLocation="https://jakarta.ee/xml/ns/persistence
+                                 https://jakarta.ee/xml/ns/persistence/persistence_3_1.xsd"
+             version="3.1">
+    <persistence-unit name="JPATCK" transaction-type="RESOURCE_LOCAL">
+        <class>ee.jakarta.tck.persistence.common.entity.Person</class>
+        <!-- The TCK adds classes dynamically via the persistence.xml extension point -->
+    </persistence-unit>
+    <persistence-unit name="JPATCK2" transaction-type="RESOURCE_LOCAL">
+        <class>ee.jakarta.tck.persistence.common.entity.Person</class>
+    </persistence-unit>
+</persistence>

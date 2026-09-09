@@ -4,11 +4,9 @@ Counters only. A line here is written by a tool, never by an agent.
 
 ## TCK
 
-```
 tck:    jakarta.tck:persistence-tck-spec-tests:3.2.1
-module: (not created yet — M0-T001)
+module: mansart-jakarta-persistence/mansart-jakarta-persistence-tck
 result: PASS=? FAIL=? ERROR=? SKIP=?   (never run)
-```
 
 ## Milestones
 
@@ -43,4 +41,3 @@ in the Log, not here.
 | Card | Date | Evidence |
 |---|---|---|
 | — | — | *(none yet)* |
-
