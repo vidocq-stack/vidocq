@@ -325,6 +325,10 @@ starts from nothing again:
   whole ingestion, and the shortcut was to hand-edit `spec-meta.json`: a file
   that is sometimes generated and sometimes typed is a file nobody can trust.
   It prints `before:` / `after:` and exits 1 when nothing runnable matches.
+  Both scripts had the same argument bug: a flag taking a value
+  (`--tck-keyword`, `--spec-version`) left that value in the positional list, so
+  the command printed usage instead of running. Fixed in both; worth checking in
+  any new script before blaming a model for "not calling it right".
 - **`/tck XXX` + agent `tck-runner`**: runs, writes nothing, reports four lines.
   Written into its prompt: *ZERO PASS IS A VALID RESULT*, and `ERROR=all` (the
   harness does not compile) is not the same information as a conformance failure.
