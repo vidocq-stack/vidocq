@@ -35,39 +35,59 @@ A run that scores 0 is a SUCCESS for this command: the instrument now exists.
    find the official distribution for this spec version, report the url, and
    STOP. Never fabricate a coordinate or a runner.
 
-2. IS THE RUNNER WIRED?
+2. WIRE THE RUNNER — FOUR DELEGATIONS. YOU TYPE NOTHING.
+
+   YOU DO NOT WRITE ANY FILE IN THIS STEP. Not the pom, not the xml, not the
+   script. You issue four @impl calls, one per artifact, and you check the result
+   with verify-m0.sh. The whole point of this harness is that your context is
+   re-sent every step and @impl's is thrown away: typing it yourself costs you
+   the context you need to notice what went wrong.
+
    THE PATH IS NOT YOURS TO CHOOSE:
        python3 scripts/tck-module.py $ARGUMENTS
-   It prints the module path, read from docs/spec-src/$ARGUMENTS/module.conf
-   (derived from the runners this repo already has). Build EXACTLY there.
-   An agent once invented ee/jakarta/tck/persistence/mansart-jkp-tck — the TCK's
-   own Java package path, with the harness's 3-letter code as a module name.
-   Directory exists with a pom.xml? The runner is wired; go to step 3.
+   It prints <parent>/<runner>, read from module.conf. Use it verbatim. An agent
+   once invented ee/jakarta/tck/persistence/mansart-jkp-tck.
+   Directory exists with a pom.xml? Skip to step 3.
 
-   TO WIRE IT — copy, then ADAPT. Copying is right; copying unchanged is the trap.
-   A delivered runner still declared `<suite name="mansart-data-tck-1.0-official">`,
-   scanned `ee.jakarta.tck.data.standalone.*` and included
-   `**/standalone/entity/EntityTests.class` — all three from Jakarta Data.
-   After every copy, replace: the suite name, the packages/classes, the surefire
-   <includes>, and the artifactIds in the tck-run profile.
-   AND KNOW THIS: Jakarta TCK test classes are named `Client` (160 in the
-   persistence jar). They match NO default surefire pattern, so without
-   <include>**/Client.class</include> the run exits 0 having selected nothing.
-   Zero tests is NOT "waiting for the implementation" — it is a wiring bug.
-   - Copy the layout of an existing runner from tck.repo_runners (they work:
-     mansart-data-tck scores 74/74).
-   - TWO PIECES, and the repo shows both: a PARENT module in the reactor
-     (mansart-jakarta-data is in the root pom's <modules>) and the runner
-     INSIDE it but OUT of the reactor (mansart-data-tck is NOT in the parent's
-     <modules>). Missing parent = a module Maven never sees. Read the root
-     pom.xml and mansart-jakarta-data/pom.xml before writing either.
-   - Depend on tck.recommended coordinates.
-   - DO NOT depend on implementation modules that do not exist yet. An agent
-     declared six (-core, -cdi, -dialect-h2, ...) copied from the data runner;
-     none existed, and the build could never go green. M1 wires them later.
-   - Arquillian + an ArchiveAppender that injects our implementation.
-   - A run-official-tck-<spec>.sh next to the POM.
-   Delegate the writing to @impl, one piece at a time. You do not type it.
+   Read these two first, and tell @impl to read them too — they are the working
+   reference, and copying them is right:
+       pom.xml  (the root reactor)      mansart-jakarta-data/pom.xml
+       mansart-jakarta-data/mansart-data-tck/pom.xml   (and its run script)
+
+   @impl 1 — THE PARENT, and its registration
+     Create <parent>/pom.xml, packaging pom, no <modules>, and add
+     <module><parent></module> to the ROOT pom.xml.
+     TWO PIECES: the parent is IN the reactor, the runner is NOT. A run built the
+     runner with no parent and nothing in the root pom — a directory Maven never
+     sees. Another registered BOTH, putting the runner in the reactor.
+
+   @impl 2 — THE RUNNER POM
+     <parent>/<runner>/pom.xml, standalone Model 4.0.0, NOT in the parent's
+     <modules>. Depend on tck.recommended, and ON NOTHING THAT DOES NOT EXIST
+     YET — a run declared six implementation modules copied from the data runner;
+     none existed, so the build could never be green.
+     Surefire needs BOTH or the suite selects nothing and still exits 0:
+       <include>**/Client.class</include>        (Jakarta TCK tests are named Client)
+       <dependenciesToScan>                       (they live in the jar)
+     Plus <systemPropertyVariables>: platform.mode=standalone and
+     persistence.unit.name=JPATCK.
+
+   @impl 3 — THE RESOURCES
+     src/test/resources/arquillian.xml and src/test/resources/persistence.xml.
+     persistence.xml declares JPATCK and JPATCK2, RESOURCE_LOCAL, NO <provider>
+     until ours exists — a run shipped EclipseLink's, which measures EclipseLink.
+     WRITE NO JAVA. The tests come from the TCK jar; an ArchiveAppender injects
+     our implementation and there is none until M1. The run that reached 6/6
+     shipped zero .java files; the run that wrote four invented ShrinkWrap types
+     and could not compile.
+
+   @impl 4 — THE RUN SCRIPT
+     <parent>/<runner>/run-official-tck-<spec>.sh, copied from the data runner's
+     and adapted, `chmod +x`. IN THE MODULE, not in scripts/ — a run left a copy
+     in both.
+     Copying is right; copying UNCHANGED is the trap: replace the <suite name=>,
+     the packages/classes, the includes and the artifactIds. A delivered runner
+     still said mansart-data-tck-1.0-official.
 
 3. RUN
    @tck-runner: "run <module>/run-official-tck-*.sh, report the 4 lines"
