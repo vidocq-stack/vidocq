@@ -127,6 +127,7 @@ A spec gets a **three-letter code** (`JKP` = Jakarta Persistence). You pass it;
 | `STATUS-XXX.md` | `lead` + `verify` | Current card, measured counters, one line per finished card. |
 | `docs/spec-notes/XXX/<chapter>.md` | `noter` | One note per spec chapter, 200 lines max. The only thing read when planning. |
 | `docs/spec-src/XXX/spec-meta.json` | `spec-fetch.py` | Chapter list **and TCK coordinates**. What makes the harness reusable: `/tck` reads it instead of guessing. |
+| `tasks/XXX/<CARD>.md` | `lead`, agents | The per-card work order: what was read, decided, tried. Free form, never generated, never parsed. **This exists because an agent with something to write and no place to put it writes over whatever is nearest** — a lead overwrote the 248-card `TASKS-JKP.md` with a one-card brief. |
 | `BUG.md` | `lead` | **Existing file, existing format** (34 entries). Bugs get ids `XXX-Bnnn`. |
 
 No `BUGS-XXX.md`: the workspace `CLAUDE.md` already mandates one `BUG.md` per
@@ -477,7 +478,12 @@ spellings — an exact string compare would have caught none of them.
 
 Guard rules: deny direct/piped `mvn`; deny writes into TCK paths; deny a third
 identical search in a session; deny re-reading a file unchanged since last read
-(same mtime+size+window); deny `cat` of a file over 200 lines (use `sed -n`).
+(same mtime+size+window); deny `cat` of a file over 200 lines (use `sed -n`);
+**deny `write`/`edit`/`patch` on a generated file** — `TASKS-*.md` and the
+planner `.fragments/`. That last rule is the first one covering the write tools
+rather than bash: an agent overwrote a 248-card plan with a one-card brief, and
+the refusal now names `tasks/<XXX>/<CARD>.md` as the place to write instead.
+Forbidding is half a fix; offering a destination is the other half.
 Declared non-strict: **a crash in the guard lets the call through with a
 warning**. A buggy guard must never brick a session; the path denylist stays the
 hard guarantee.

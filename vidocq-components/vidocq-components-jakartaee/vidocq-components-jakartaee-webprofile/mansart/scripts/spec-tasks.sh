@@ -103,6 +103,10 @@ module = (_m.stdout or "").strip() or "(run scripts/tck-module.py {})".format(co
 parent_module = module.split("/")[0] if "/" in module else None
 
 L = ["# TASKS-{} — {}".format(code, meta.get("url","")), "",
+     "> **GENERATED FILE — do not edit.** Assembled by `scripts/spec-tasks.sh`",
+     "> from the planner fragments; any edit is erased by the next regeneration.",
+     "> A card's detailed work order goes in `tasks/{}/<CARD>.md`, which is".format(code),
+     "> yours to write. The guard refuses writes to this file.", "",
      "One card = one behaviour = one failing test. Cards are numbered by the",
      "generator; do not renumber by hand.", "", "---", ""]
 

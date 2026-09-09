@@ -50,3 +50,7 @@ ONE card. Then STOP. Do not start the next one.
 
 9. STOP. Report 3 lines: card, numbers, sha.
    Say: "run /push $ARGUMENTS when you want it pushed".
+
+WHERE YOU WRITE: never TASKS-*.md (generated, the guard refuses it). Per-card
+briefs go to tasks/<XXX>/<CARD>.md. STATUS-<XXX>.md: append Done rows only, and
+only when the card's own done-when command exited 0.

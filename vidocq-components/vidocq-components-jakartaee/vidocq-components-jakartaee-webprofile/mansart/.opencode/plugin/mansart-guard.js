@@ -15,6 +15,7 @@
 // the model, which then corrects itself (verified 2026-09-09).
 
 import {
+  generatedFileVerdict,
   isRawMaven, isTckWrite, isArchiveDump, longCatTarget,
   makeSessionState, searchVerdict, rereadVerdict,
 } from "../guard-rules.mjs"
@@ -67,6 +68,12 @@ export const MansartGuard = async ({ directory }) => {
                 "agent — in V3 the same find ran 75 times.",
             )
           return
+        }
+
+        if (input.tool === "write" || input.tool === "edit" || input.tool === "patch") {
+          const path = output.args?.filePath ?? output.args?.path
+          const why = generatedFileVerdict(path)
+          if (why) throw new Deny(why)
         }
 
         if (input.tool === "read" || input.tool === "read_file") {

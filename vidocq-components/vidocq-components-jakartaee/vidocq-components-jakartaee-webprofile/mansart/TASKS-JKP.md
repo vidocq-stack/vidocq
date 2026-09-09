@@ -1,5 +1,10 @@
 # TASKS-JKP — https://jakarta.ee/specifications/persistence/3.2/jakarta-persistence-spec-3.2.html
 
+> **GENERATED FILE — do not edit.** Assembled by `scripts/spec-tasks.sh`
+> from the planner fragments; any edit is erased by the next regeneration.
+> A card's detailed work order goes in `tasks/JKP/<CARD>.md`, which is
+> yours to write. The guard refuses writes to this file.
+
 One card = one behaviour = one failing test. Cards are numbered by the
 generator; do not renumber by hand.
 

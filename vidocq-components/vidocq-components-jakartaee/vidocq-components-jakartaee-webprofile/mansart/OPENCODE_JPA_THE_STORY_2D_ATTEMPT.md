@@ -804,6 +804,35 @@ Worth admitting in passing: checking that failing build, I typed
 founding bug of this entire project, committed by its author, at the command
 line, while verifying a fix for it.
 
+### An agent with nowhere to write
+
+The next run got further than any before it — root pom updated, parent module
+created, runner created, `build.sh` verified — and destroyed the plan on the way.
+`TASKS-JKP.md`, 248 cards, was **overwritten with a single-card work order**:
+"M0-T001 — Wire the Jakarta Persistence 3.2 TCK Runner", four files to create, a
+done-when. As a brief it was good. As a file it erased everything.
+
+The reflex is to call this a rogue agent. It is not. The lead had a legitimate
+need — write down a detailed work order before delegating to `@impl` — and
+exactly one file it knew was for tasks. **An agent with something to write and no
+place to put it writes over whatever is nearest.** Nothing in the harness had
+ever offered it a destination.
+
+So the fix is two-sided, and the second half is the one that is easy to forget:
+
+- the guard now refuses `write`/`edit`/`patch` on `TASKS-*.md` and on the planner
+  fragments — the first rule covering the write tools rather than bash;
+- `tasks/<XXX>/<CARD>.md` exists, is documented, and is named **in the refusal
+  message itself**, so a denied agent is told where to go rather than just no.
+
+The file also now opens with `GENERATED FILE — do not edit`, because a rule an
+agent can read where it is about to act beats a rule in a document it will not
+open.
+
+Worth noting what did *not* go wrong: nothing was lost. `TASKS-JKP.md` is
+generated, so `STEP060_plan_tasks.sh JKP` rebuilt all 248 cards in under a
+second. A file a script owns is a file you can afford to have destroyed.
+
 ### The order only existed in my head
 
 By this point the pipeline was six scripts deep — fetch, note, detect, install,
