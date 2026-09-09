@@ -1,0 +1,321 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  This module is intentionally OUT of the parent reactor (Model 4.0.0 standalone, no <parent>).
+  Reason: ShrinkWrap Maven Resolver 3.3 (transitive of the official Jakarta TCK harness) cannot
+  parse Maven Model 4.1.0 POMs. See ../../CLAUDE.md (root) for the full rationale and the
+  official-TCK install procedure in this module's README.md.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>io.vidocq.mansart</groupId>
+    <artifactId>mansart-jakarta-persistence-tck</artifactId>
+    <version>0.3.0-SNAPSHOT</version>
+    <packaging>jar</packaging>
+
+    <name>Mansart :: Jakarta Persistence :: Jakarta Persistence 3.2 TCK runner</name>
+    <description>Arquillian harness for the official Jakarta Persistence 3.2 TCK.</description>
+
+    <properties>
+        <maven.deploy.skip>true</maven.deploy.skip>
+        <maven.compiler.release>25</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+        <jakarta.persistence.version>3.2.0</jakarta.persistence.version>
+        <jakarta.persistence.tck.version>3.2.1</jakarta.persistence.tck.version>
+        <jakarta.cdi.version>4.1.0</jakarta.cdi.version>
+
+        <mansart.version>0.3.0-SNAPSHOT</mansart.version>
+        <vauban.version>0.3.0-SNAPSHOT</vauban.version>
+
+        <arquillian.version>1.9.1.Final</arquillian.version>
+        <shrinkwrap.version>1.2.6</shrinkwrap.version>
+        <testng.version>7.10.2</testng.version>
+        <h2.version>2.3.232</h2.version>
+        <postgresql.version>42.7.4</postgresql.version>
+        <testcontainers.version>1.20.4</testcontainers.version>
+
+        <!-- Removed in M6.3 — kept for documentation / older references:
+             weld.version (5.1.5.Final), arquillian.weld.version (4.0.1.Final).
+             We use Vauban as the CDI runtime and a ported Vauban Arquillian connector. -->
+
+        <maven.compiler.plugin.version>3.13.0</maven.compiler.plugin.version>
+        <maven.surefire.plugin.version>3.5.2</maven.surefire.plugin.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.jboss.arquillian</groupId>
+                <artifactId>arquillian-bom</artifactId>
+                <version>${arquillian.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <dependencies>
+        <!-- Jakarta Persistence API + TCK -->
+        <dependency>
+            <groupId>jakarta.persistence</groupId>
+            <artifactId>jakarta.persistence-api</artifactId>
+            <version>${jakarta.persistence.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.tck</groupId>
+            <artifactId>persistence-tck-spec-tests</artifactId>
+            <version>${jakarta.persistence.tck.version}</version>
+        </dependency>
+        <!-- CDI API (always resolvable from Central) -->
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+            <version>${jakarta.cdi.version}</version>
+        </dependency>
+
+        <!-- Vauban CDI 4.1 Lite container — the Vidocq-ecosystem CDI runtime under which the
+             Mansart BCE wires repositories. -->
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-core</artifactId>
+            <version>${vauban.version}</version>
+        </dependency>
+
+        <!-- TestNG suite runner — used by the smoke harness too -->
+        <dependency>
+            <groupId>org.testng</groupId>
+            <artifactId>testng</artifactId>
+            <version>${testng.version}</version>
+        </dependency>
+
+        <!-- Backing database — H2 in-memory by default -->
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <version>${h2.version}</version>
+        </dependency>
+
+        <!--
+          M6.5 — PostgreSQL backing for the TCK. Compiled in unconditionally so that
+          PostgresDataSourceProducer compiles even when the `tck-pg` profile is OFF.
+          The producer is only WIRED into the deployment when system property
+          `mansart.tck.dialect=pg` is set (positioned by the tck-pg profile below).
+          Cost: ~30 MB of test-scope deps on the classpath, no runtime impact when unused.
+        -->
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <version>${postgresql.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>postgresql</artifactId>
+            <version>${testcontainers.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.annotation</groupId>
+            <artifactId>jakarta.annotation-api</artifactId>
+            <version>3.0.0</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Arquillian core + TestNG container + ShrinkWrap (always available
+             on Central; used by the M6.2 smoke harness). The official TCK suite
+             dependencies stay behind the `tck-run` profile below. -->
+        <dependency>
+            <groupId>org.jboss.arquillian.testng</groupId>
+            <artifactId>arquillian-testng-container</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.jboss.shrinkwrap</groupId>
+            <artifactId>shrinkwrap-api</artifactId>
+            <version>${shrinkwrap.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.jboss.shrinkwrap</groupId>
+            <artifactId>shrinkwrap-impl-base</artifactId>
+            <version>${shrinkwrap.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <profiles>
+        <!--
+          Enable with `mvn -Ptck-run test` to pull in the official Jakarta Persistence 3.2 TCK suite
+          alongside the Mansart smoke harness. The TCK jar is on Maven Central as
+          `jakarta.tck:persistence-tck-spec-tests:3.2.1`.
+        -->
+        <profile>
+            <id>tck-run</id>
+            <dependencies>
+                <dependency>
+                    <groupId>jakarta.tck</groupId>
+                    <artifactId>persistence-tck-spec-tests</artifactId>
+                    <version>${jakarta.persistence.tck.version}</version>
+                    <scope>test</scope>
+                </dependency>
+                <!-- TCK uses JUnit 5 + Arquillian JUnit 5 -->
+                <dependency>
+                    <groupId>org.junit.jupiter</groupId>
+                    <artifactId>junit-jupiter</artifactId>
+                    <version>5.11.4</version>
+                    <scope>test</scope>
+                </dependency>
+                <dependency>
+                    <groupId>org.jboss.arquillian.junit5</groupId>
+                    <artifactId>arquillian-junit5-container</artifactId>
+                    <scope>test</scope>
+                </dependency>
+                <!-- Servlet API needed by the signature TCK harness even for standalone tests. -->
+                <dependency>
+                    <groupId>jakarta.servlet</groupId>
+                    <artifactId>jakarta.servlet-api</artifactId>
+                    <version>6.1.0</version>
+                    <scope>test</scope>
+                </dependency>
+                <!-- Ant — pulled in by the signature TCK runner (heritage from CTS). -->
+                <dependency>
+                    <groupId>org.apache.ant</groupId>
+                    <artifactId>ant</artifactId>
+                    <version>1.10.15</version>
+                    <scope>test</scope>
+                </dependency>
+            </dependencies>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <!-- Drop the TestNG suite XML so surefire auto-discovers JUnit 5 tests
+                                 from the TCK jar via dependenciesToScan. The Mansart TestNG
+                                 smoke tests still get picked up because surefire detects both
+                                 providers when both are on the classpath. -->
+                            <suiteXmlFiles combine.self="override"/>
+                            <dependenciesToScan>
+                                <dependency>jakarta.tck:persistence-tck-spec-tests</dependency>
+                            </dependenciesToScan>
+                            <!-- M6.3 first attempt: run the standalone EntityTests subset
+                                 (real CRUD validation against Mansart). SignatureTests is
+                                 deferred — it requires jimage.dir + cts-tooling setup that
+                                 is heavier than necessary for an initial pass. -->
+                            <includes>
+                                <include>**/standalone/entity/EntityTests.class</include>
+                            </includes>
+                            <systemPropertyVariables>
+                                <!-- M7-26: jimage.dir must be a WRITABLE directory the
+                                     signature runner can extract module classes into.
+                                     Placeholder when SignatureTests is not in `<includes>`;
+                                     the `tck-sig` profile overrides this to the actual cache. -->
+                                <jimage.dir>${project.build.directory}/jimage-cache</jimage.dir>
+                            </systemPropertyVariables>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <!--
+          M6.5 — Switch the TCK harness from H2 to PostgreSQL via Testcontainers.
+          Cumulative with `tck-run` (use `mvn -Ptck-run,tck-pg test`). Requires Docker on the host.
+          The PG deps are compiled unconditionally above (test scope); this profile only flips
+          the system property `mansart.tck.dialect=pg` read by MansartTckArchiveAppender, which
+          swaps the deployment's DataSource producer + DialectFactory ServiceLoader registration.
+        -->
+        <profile>
+            <id>tck-pg</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <systemPropertyVariables>
+                                <mansart.tck.dialect>pg</mansart.tck.dialect>
+                            </systemPropertyVariables>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <!--
+          M7-26 — Activate the official Jakarta Persistence 3.2 SignatureTests subset.
+          Cumulative with `tck-run` (use `mvn -Ptck-run,tck-sig test`).
+
+          The signature TCK runner uses the legacy CTS sigtest tool (Ant-based), which
+          cross-checks the binary signatures of all jakarta.persistence.* packages on the deployment
+          classpath against the canonical signature file `jakarta.persistence.sig_21` (or `_17`)
+          shipped in the TCK jar. It needs:
+            - `jimage.dir` — a writable directory where it can extract Java SE module classes.
+            - All of jakarta.persistence + sub-packages reachable on the test classpath.
+
+          The signature file ships only `_17` and `_21`. On Java 25 the runner picks `_21`
+          (closest available; jakarta.persistence 3.2 didn't add new API after Java 21).
+        -->
+        <profile>
+            <id>tck-sig</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <includes combine.children="append">
+                                <include>**/standalone/signature/SignatureTests.class</include>
+                            </includes>
+                            <systemPropertyVariables>
+                                <jimage.dir>${project.build.directory}/jimage-cache</jimage.dir>
+                                <!-- The runner builds the signature resource name from
+                                     `java.specification.version`. The TCK 3.2.1 jar only
+                                     ships `jakarta.persistence.sig_17` and `jakarta.persistence.sig_21` —
+                                     Jakarta Persistence 3.2 was finalized under Java 21. On Java 25
+                                     the lookup `jakarta.persistence.sig_25` would be null → NPE in
+                                     writeStreamToSigFile. We force the version to 21; jakarta.persistence
+                                     3.2 added no new API after that, so the signature comparison
+                                     is still correct. -->
+                                <java.specification.version>21</java.specification.version>
+                            </systemPropertyVariables>
+                            <!-- The sigtest-maven-plugin (CTS heritage) reads JDK-internal
+                                 annotations (e.g. jdk.internal.vm.annotation.Stable) via
+                                 setAccessible(true) on JDK 17+. Java 25 strongly enforces module
+                                 boundaries and refuses without these flags. The error message
+                                 emitted by the runner names the exact required exports/opens. -->
+                            <argLine>--add-exports java.base/jdk.internal.vm.annotation=ALL-UNNAMED --add-opens java.base/jdk.internal.vm.annotation=ALL-UNNAMED</argLine>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>${maven.compiler.plugin.version}</version>
+                <configuration>
+                    <release>25</release>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>${maven.surefire.plugin.version}</version>
+                <configuration>
+                    <suiteXmlFiles>
+                        <suiteXmlFile>src/test/resources/tck-suite.xml</suiteXmlFile>
+                    </suiteXmlFiles>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
