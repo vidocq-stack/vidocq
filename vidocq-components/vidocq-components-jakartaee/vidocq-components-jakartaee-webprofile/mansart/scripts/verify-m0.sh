@@ -124,9 +124,24 @@ elif ! grep -q 'platform\.mode' "$H/$MOD/pom.xml"; then
     d="platform.mode is not set in the runner pom — the TCK defaults to jakartaEE and every test fails asking for a container-injected EntityManager"
 elif ! grep -qE 'platform\.mode>[[:space:]]*standalone' "$H/$MOD/pom.xml"; then
     d="platform.mode is set but not to 'standalone'"
-elif ! find "$H/$MOD/src/test/resources" -name 'persistence.xml' 2>/dev/null | grep -q .; then
-    d="no persistence.xml under src/test/resources — standalone mode needs one (the TCK ships a template at ee/jakarta/tck/persistence/common/template/standalone/persistence.xml)"
-else r=0; d="platform.mode=standalone with a persistence.xml"; fi
+elif ! grep -q 'persistence\.unit\.name' "$H/$MOD/pom.xml"; then
+    d="persistence.unit.name is not set — the TCK needs to be told which unit to use"
+else
+    PXML="$(find "$H/$MOD/src/test/resources" -name 'persistence.xml' 2>/dev/null | head -1)"
+    if [ -z "$PXML" ]; then
+        d="no persistence.xml under src/test/resources (the TCK ships a template: unzip -p .../persistence-tck-common-*.jar ee/jakarta/tck/persistence/common/template/standalone/persistence.xml)"
+    # The unit NAMES are not a detail: the TCK asks for JPATCK by name. A file
+    # declaring "default" is a persistence.xml that no test will ever load.
+    elif ! grep -q 'persistence-unit name="JPATCK"' "$PXML"; then
+        d="$(basename "$PXML") declares no persistence-unit named JPATCK — the TCK looks that name up, so a unit called anything else is never loaded"
+    # And the provider decides WHOSE conformance is being measured. Declaring
+    # another implementation turns the whole suite into a test of that project:
+    # a run was delivered naming org.eclipse.persistence.jpa.PersistenceProvider.
+    elif grep -qE '<provider>(?!.*(io\.vidocq|mansart))' "$PXML" 2>/dev/null ||
+         grep -E '<provider>' "$PXML" | grep -qvE 'io\.vidocq|mansart'; then
+        d="$(basename "$PXML") names a foreign <provider> ($(grep -oE '<provider>[^<]*' "$PXML" | head -1 | cut -c11-)) — that measures THAT project's conformance, not ours. Leave it out until our provider exists."
+    else r=0; d="platform.mode=standalone, persistence.unit.name set, JPATCK declared"; fi
+fi
 ck M0-T006 "the counter measures the implementation, not the harness" $r "$d"
 
 echo
