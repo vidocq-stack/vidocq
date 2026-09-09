@@ -73,8 +73,11 @@ A run that scores 0 is a SUCCESS for this command: the instrument now exists.
    @tck-runner: "run <module>/run-official-tck-*.sh, report the 4 lines"
    It cannot write. It cannot fix. It reports.
 
-3b. VERIFY — the card is done when a script says so, not when you say so
+3b. VERIFY AND FIX — loop here until every card passes
    ./scripts/verify-m0.sh $ARGUMENTS
+   Every FAIL line names what is missing, and often how to fix it. Fix, re-run,
+   repeat — up to 6 times. This loop is the command; leaving it early with FAILs
+   on the board is the one way to get this wrong.
    It prints PASS/FAIL per M0 card, checking the CARD'S OWN artifact: it compiles
    the runner IN ITS OWN DIRECTORY, and looks for a counter naming that module.
    An agent once ran `build.sh install` at the repo root, got exit 0 and "10
@@ -104,4 +107,18 @@ A run that scores 0 is a SUCCESS for this command: the instrument now exists.
    scripts/spec-tasks.sh reports it as an ORDER VIOLATION and it will be visible.
    (M1..Mx are NOT chains: independent behaviours, any order.)
 
-5. STOP. Report the 4 lines. Do NOT start fixing failures — that is /next.
+5. STOP — but know WHICH failure you are stopping on. Two kinds, opposite duties:
+
+   A WIRING failure is verify-m0.sh reporting FAIL: the instrument is not built
+   yet. THAT IS THIS COMMAND'S JOB. Do not stop, do not report, do not hand it
+   to /next. The FAIL line names exactly what is missing; fix that, re-run
+   verify-m0.sh, repeat. Up to 6 attempts. Only after 6 do you stop and report
+   the remaining FAIL line verbatim.
+   A run stopped at 5 of 6 cards and reported success because this step used to
+   say "do not fix failures" without distinguishing the two.
+
+   A CONFORMANCE failure is the TCK's own counter: PASS=0, or 989 errors. THAT
+   is /next's job, and stopping is right. Report the 4 lines and stop.
+
+   The test: did verify-m0.sh say PASS on every card? If not, you are not done —
+   whatever the TCK counter says.
