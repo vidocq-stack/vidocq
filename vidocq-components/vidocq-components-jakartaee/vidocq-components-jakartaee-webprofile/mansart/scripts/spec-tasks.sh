@@ -200,6 +200,19 @@ if os.path.exists(status_p):
 done_ids = [re.match(r"^\|\s*(M\d+-T\d{3})", r).group(1) for r in done_rows]
 done_by_ms = collections.Counter(i.split("-")[0] for i in done_ids)
 
+# M0 is a CHAIN, not a set: the parent module carries the runner, which carries
+# the POM, which carries the TCK dependency, which is what the wiring assembles
+# against. "T004 done, T003 open" describes a state that cannot exist.
+# M1..Mx are sets: independent behaviours, any order. Only M0 is checked.
+SEQUENTIAL = {"M0"}
+gaps = []
+for ms in SEQUENTIAL:
+    nums = sorted(int(i.split("-T")[1]) for i in done_ids if i.startswith(ms + "-"))
+    if nums:
+        missing = [n for n in range(1, max(nums)) if n not in nums]
+        gaps += ["{}-T{:03d} is done but {}-T{:03d} is not".format(ms, max(nums), ms, n)
+                 for n in missing]
+
 S = ["# STATUS-{}".format(code), "",
      "Counters only. A line here is written by a tool, never by an agent.", "",
      "## TCK", "",
@@ -224,7 +237,14 @@ S += ["", "**Total: {} cards, {} done.**".format(total + m0_cards, len(done_ids)
       "| Card | Date | Evidence |", "|---|---|---|"]
 S += done_rows or ["| — | — | *(none yet)* |"]
 S += [""]
+if gaps:
+    S += ["### ORDER VIOLATION", "",
+          "M0 is a chain: each card is the ground the next one stands on. A gap",
+          "means something was reported done against a state that did not exist.", ""]
+    S += ["- " + g for g in gaps] + [""]
 open(status_p, "w").write("\n".join(S) + "\n")
+for g in gaps:
+    print("ORDER VIOLATION: " + g)
 print("\nassembled: {} milestones, {} cards -> {}".format(len(groups) + 1, total + m0_cards, os.path.basename(out_p)))
 PY
 

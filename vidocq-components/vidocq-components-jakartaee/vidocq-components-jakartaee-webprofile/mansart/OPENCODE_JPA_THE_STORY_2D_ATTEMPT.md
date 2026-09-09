@@ -785,6 +785,20 @@ are achievable before any implementation exists: create the parent module and
 register it, create the runner standalone, depend on the TCK *and on nothing
 that does not exist yet*.
 
+One more question exposed the next gap: *can M0-T004 be done without M0-T003?*
+Physically nothing prevented it, and the harness would have counted it. But M0
+is a **chain** — parent module, then runner, then POM, then TCK dependency, then
+the wiring that assembles against it — so a gap describes a state that cannot
+exist. `spec-tasks.sh` now reports `ORDER VIOLATION: M0-T004 is done but
+M0-T003 is not`, on stdout and inside STATUS itself. Verified by seeding a gap.
+
+The restraint matters as much as the check: **M1..Mx are not chains**. "Reject
+an entity class with no no-arg constructor" and "throw
+TransactionRequiredException outside a transaction" are independent behaviours,
+doable in any order. Enforcing a sequence there would invent a constraint the
+spec does not have — and a harness that lies about dependencies is no better
+than an agent that lies about a build.
+
 Worth admitting in passing: checking that failing build, I typed
 `build.sh … | tail -6; echo $?` and read `0`. That is tail's exit code — the
 founding bug of this entire project, committed by its author, at the command

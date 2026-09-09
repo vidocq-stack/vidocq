@@ -396,6 +396,15 @@ starts from nothing again:
   M0-T003 now reads "depend on the TCK **and on nothing that does not exist
   yet**", and STATUS states the rule: a row is written only when the done-when
   command exited 0.
+- **M0 is a chain; M1..Mx are sets.** Each M0 card is the ground the next stands
+  on — no parent module, no runner; no runner, no POM; no POM, no TCK
+  dependency; no dependency, nothing for the wiring to assemble against. So a
+  done M0-T004 with M0-T003 open describes a state that cannot exist, and
+  `spec-tasks.sh` reports it as an **ORDER VIOLATION**, on stdout and in STATUS.
+  The implementation milestones are deliberately *not* checked: "reject an entity
+  class with no no-arg constructor" and "throw TransactionRequiredException
+  outside a transaction" are independent, and forcing an order there would be
+  false precision.
 - **M0 is always the TCK**, before any implementation milestone, and it has three
   shapes because **"no TCK installed" is not "no TCK exists"** — the gap between
   those two is where a project invents a substitute metric:

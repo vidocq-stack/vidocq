@@ -66,4 +66,11 @@ A run that scores 0 is a SUCCESS for this command: the instrument now exists.
    it done — the evidence contradicted the card in the same sentence. Blocked?
    Say so in the Log. A blocked card is not a done card.
 
+   M0 IS A CHAIN — T001, then T002, then T003, then T004, then T005. No skipping.
+   Each card is the ground the next stands on: no parent module, no runner; no
+   runner, no POM; no POM, no TCK dependency; no dependency, nothing for the
+   wiring to assemble against. NEVER close a card whose predecessor is open —
+   scripts/spec-tasks.sh reports it as an ORDER VIOLATION and it will be visible.
+   (M1..Mx are NOT chains: independent behaviours, any order.)
+
 5. STOP. Report the 4 lines. Do NOT start fixing failures — that is /next.
