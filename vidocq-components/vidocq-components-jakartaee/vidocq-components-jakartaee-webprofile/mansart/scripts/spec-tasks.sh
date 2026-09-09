@@ -100,6 +100,7 @@ import subprocess as _sp
 _m = _sp.run([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)) if "__file__" in dir() else ".", "scripts", "tck-module.py"), code],
              capture_output=True, text=True)
 module = (_m.stdout or "").strip() or "(run scripts/tck-module.py {})".format(code)
+parent_module = module.split("/")[0] if "/" in module else None
 
 L = ["# TASKS-{} — {}".format(code, meta.get("url","")), "",
      "One card = one behaviour = one failing test. Cards are numbered by the",
@@ -110,11 +111,11 @@ L += ["## M0 — the TCK", "",
 if coord:
     L += ["TCK: `{}`".format(coord), "",
           "| Card | Title | Spec sections | Done-when |", "|---|---|---|---|",
-          "| M0-T001 | Create the TCK runner module at **`{}`** (standalone POM, out of reactor) | — | That exact directory holds a pom.xml and `./scripts/build.sh` builds it, exit 0. **The path is not yours to choose** — it comes from `docs/spec-src/{}/module.conf`. |".format(module, code),
-          "| M0-T002 | Depend on `{}` | — | `./scripts/build.sh dependency:resolve` lists the jar. **Removing the dependency to make the build green is not a fix** — an agent did exactly that. |".format(coord),
-          "| M0-T003 | Arquillian container + ArchiveAppender injecting our implementation | — | A deployment archive is produced |",
-          "| M0-T004 | Run script + persistence.xml template for the suite | — | The script starts the suite and writes a log |",
-          "| M0-T005 | First run | — | **The TCK produces a counter, ANY counter. PASS=0 is success: the instrument exists.** |", ""]
+          "| M0-T001 | Create the parent module `{}` (packaging pom) and register it in the ROOT pom's `<modules>` | — | `<module>{}</module>` is in the root pom and `./scripts/build.sh -N validate` exits 0. Mirror `mansart-jakarta-data`: the parent aggregates implementation modules, **never the -tck one**. |".format(parent_module or module, parent_module or module),
+          "| M0-T002 | Create the TCK runner at **`{}`** — standalone POM, OUT of the reactor | — | That exact directory holds a pom.xml, it is NOT listed in the parent's `<modules>`, and `./scripts/build.sh test-compile` exits 0 there. **The path is not yours to choose**: it comes from `docs/spec-src/{}/module.conf`. |".format(module, code),
+          "| M0-T003 | Depend on `{}` — **and on nothing that does not exist yet** | — | `./scripts/build.sh dependency:resolve` lists the TCK jar and resolves everything. Declaring implementation modules before M1 creates them makes M0 unbuildable — an agent declared six and the build failed. **Removing the TCK dependency to go green is not a fix either.** |".format(coord),
+          "| M0-T004 | Arquillian container + ArchiveAppender + run script | — | The run script starts the suite and writes a log, exit code recorded |",
+          "| M0-T005 | First run | — | **The TCK produces a counter, ANY counter. PASS=0 is success: the instrument exists.** The implementation is wired in later, by M1. |", ""]
     if runners:
         L += ["Copy the layout from a runner that already passes here: " +
               ", ".join("`{}`".format(r) for r in runners), ""]
@@ -215,6 +216,11 @@ S += ["", "**Total: {} cards, {} done.**".format(total + m0_cards, len(done_ids)
       "One line per finished card, WITH the evidence that closed it: a build log,",
       "a TCK counter, a command and its exit code. A card with no evidence line is",
       "not done, whatever an agent reported.", "",
+      "**A row goes here ONLY when the card's own done-when command exited 0.**",
+      "An agent once wrote `M0-T001 ... Build fails with exit 1 (expected)` and",
+      "counted it done: the evidence contradicted the card in the same sentence.",
+      "If the done-when cannot pass yet, the card is not done — say what blocks it",
+      "in the Log, not here.", "",
       "| Card | Date | Evidence |", "|---|---|---|"]
 S += done_rows or ["| — | — | *(none yet)* |"]
 S += [""]

@@ -384,7 +384,18 @@ starts from nothing again:
   — and writes a *proposal* to `docs/spec-src/<XXX>/module.conf`, which a human
   edits: naming is a judgement (this repo says `mansart-jakarta-data` but
   `mansart-transactions`). M0-T001 then names the exact path, and `/tck` reads
-  the file instead of choosing.
+  the file instead of choosing. **The module is two pieces, not one**: a parent
+  in the reactor (`mansart-jakarta-data` is in the root pom's `<modules>`) and
+  the runner inside it but *outside* the reactor (`mansart-data-tck` is not in
+  the parent's). A run produced the leaf with no branch — a directory Maven never
+  sees. M0-T001 now creates and registers the parent; M0-T002 creates the runner.
+- **A card must be achievable when it is scheduled.** M0-T001 once said "builds,
+  exit 0" for a runner whose template depends on `-core`, `-cdi`, `-dialect-h2`
+  — modules M1..M10 have not written yet. The agent could not satisfy it and
+  marked it done anyway, with `Build fails with exit 1` in the evidence column.
+  M0-T003 now reads "depend on the TCK **and on nothing that does not exist
+  yet**", and STATUS states the rule: a row is written only when the done-when
+  command exited 0.
 - **M0 is always the TCK**, before any implementation milestone, and it has three
   shapes because **"no TCK installed" is not "no TCK exists"** — the gap between
   those two is where a project invents a substitute metric:

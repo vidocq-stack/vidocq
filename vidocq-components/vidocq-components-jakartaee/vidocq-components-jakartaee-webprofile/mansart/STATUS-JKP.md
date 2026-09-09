@@ -34,6 +34,12 @@ One line per finished card, WITH the evidence that closed it: a build log,
 a TCK counter, a command and its exit code. A card with no evidence line is
 not done, whatever an agent reported.
 
+**A row goes here ONLY when the card's own done-when command exited 0.**
+An agent once wrote `M0-T001 ... Build fails with exit 1 (expected)` and
+counted it done: the evidence contradicted the card in the same sentence.
+If the done-when cannot pass yet, the card is not done — say what blocks it
+in the Log, not here.
+
 | Card | Date | Evidence |
 |---|---|---|
 | — | — | *(none yet)* |

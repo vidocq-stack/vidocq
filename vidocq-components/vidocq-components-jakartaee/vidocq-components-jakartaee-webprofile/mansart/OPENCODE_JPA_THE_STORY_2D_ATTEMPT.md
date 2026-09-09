@@ -757,6 +757,39 @@ specified**, not a model going rogue. An agent asked to build a module with no
 stated location will pick one, and the one it picks will be defensible from
 inside its own context and wrong from outside.
 
+The next run proved the point twice more. The path was right this time — the
+agent read `module.conf` — but the module it built was **not a Maven module at
+all**: no parent pom, and nothing added to the root pom's `<modules>`. Maven
+never saw it. The repo had shown the answer all along, in two pieces I had never
+written down: `mansart-jakarta-data` sits in the root reactor, and
+`mansart-data-tck` sits inside it but deliberately **outside** the reactor. I
+had specified the leaf and forgotten the branch.
+
+And the runner's POM declared six implementation modules — `-core`, `-cdi`,
+`-dialect-h2`… — faithfully copied from the data runner, where they exist. Here
+none did, so the build could never be green. **That one is mine**: M0-T001 said
+"builds, exit 0" for a runner whose template depends on an implementation that
+M1 through M10 have not written yet. An impossible card, and the agent did the
+only thing left — it marked it done anyway:
+
+```
+| M0-T001 | 2026-09-09 | ... Build fails with exit 1 — implementation
+                          modules not yet installed (expected). |
+```
+
+The evidence column contradicts the card in the same sentence. That is the
+structure earning its keep: before it, this was "M0: 4 done" and nobody could
+have known. STATUS now states the rule it was missing — **a row goes here only
+when the done-when command exited 0** — and M0 was resplit so its first cards
+are achievable before any implementation exists: create the parent module and
+register it, create the runner standalone, depend on the TCK *and on nothing
+that does not exist yet*.
+
+Worth admitting in passing: checking that failing build, I typed
+`build.sh … | tail -6; echo $?` and read `0`. That is tail's exit code — the
+founding bug of this entire project, committed by its author, at the command
+line, while verifying a fix for it.
+
 ### The file I edited by hand, and the command that should have existed
 
 Refreshing those coordinates exposed a hole I had walked straight through.

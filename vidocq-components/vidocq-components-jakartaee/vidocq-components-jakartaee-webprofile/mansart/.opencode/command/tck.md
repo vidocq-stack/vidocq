@@ -37,8 +37,15 @@ A run that scores 0 is a SUCCESS for this command: the instrument now exists.
    TO WIRE IT — copy, do not invent:
    - Copy the layout of an existing runner from tck.repo_runners (they work:
      mansart-data-tck scores 74/74).
-   - Standalone POM, OUT of the reactor (workspace CLAUDE.md requires it).
+   - TWO PIECES, and the repo shows both: a PARENT module in the reactor
+     (mansart-jakarta-data is in the root pom's <modules>) and the runner
+     INSIDE it but OUT of the reactor (mansart-data-tck is NOT in the parent's
+     <modules>). Missing parent = a module Maven never sees. Read the root
+     pom.xml and mansart-jakarta-data/pom.xml before writing either.
    - Depend on tck.recommended coordinates.
+   - DO NOT depend on implementation modules that do not exist yet. An agent
+     declared six (-core, -cdi, -dialect-h2, ...) copied from the data runner;
+     none existed, and the build could never go green. M1 wires them later.
    - Arquillian + an ArchiveAppender that injects our implementation.
    - A run-official-tck-<spec>.sh next to the POM.
    Delegate the writing to @impl, one piece at a time. You do not type it.
@@ -54,5 +61,9 @@ A run that scores 0 is a SUCCESS for this command: the instrument now exists.
    scripts/spec-tasks.sh. A count with no rows behind it says "4 done" without
    saying which four, which is how a card gets marked done with nothing to show.
    Evidence means a build log path, an exit code, a TCK counter. Not a sentence.
+   AND: write the row ONLY if the card's own done-when command exited 0. An
+   agent once wrote "M0-T001 ... Build fails with exit 1 (expected)" and counted
+   it done — the evidence contradicted the card in the same sentence. Blocked?
+   Say so in the Log. A blocked card is not a done card.
 
 5. STOP. Report the 4 lines. Do NOT start fixing failures — that is /next.
