@@ -92,13 +92,25 @@ r=1; d=""
 # Scan back for the newest log that names THIS artifact and holds a counter.
 LOG=""
 for f in $(ls -t "$H"/target/build-logs/*.log 2>/dev/null | head -40); do
-    if grep -q "$ARTIFACT" "$f" && grep -qE 'Tests run: [0-9]+' "$f"; then LOG="$f"; break; fi
+    # The counter must come from the OFFICIAL suite. A delivered runner shipped
+    # src/test/java/.../Client.java containing assertTrue(true) — a class whose
+    # name matches the **/Client.class include, so it runs and reports
+    # "Tests run: 1, Failures: 0" even when no TCK test is selected at all.
+    # A card satisfied by a tautology is worse than a card left undone.
+    if grep -q "$ARTIFACT" "$f" && grep -qE 'Tests run: [0-9]+' "$f" \
+       && grep -q 'ee\.jakarta\.tck\.' "$f"; then LOG="$f"; break; fi
 done
 if [ -z "$RUN" ]; then d="nothing to run yet"
 elif [ -n "$LOG" ]; then r=0
     d="$(grep -oE 'Tests run: [0-9]+, Failures: [0-9]+, Errors: [0-9]+, Skipped: [0-9]+' "$LOG" | tail -1) ($(basename "$LOG"))"
 else
-    d="no build log names $ARTIFACT with a counter (a counter from another module is not this card)"
+    d="no build log shows a counter from the OFFICIAL suite (ee.jakarta.tck.*) for $ARTIFACT"
+    if find "$H/$MOD/src/test/java" -name 'Client.java' 2>/dev/null | grep -q .; then
+        d="$d
+             refusing: this module declares its own Client.java. That name matches
+             the **/Client.class include, so it counts as a test result while no
+             TCK test runs. Delete it — a smoke test must not be named Client."
+    fi
     # The most likely cause, and it is never obvious: Jakarta TCK test classes
     # are named Client — 160 of them in the persistence jar — which matches NONE
     # of surefire's default include patterns (*Test, Test*, *Tests, *TestCase).
