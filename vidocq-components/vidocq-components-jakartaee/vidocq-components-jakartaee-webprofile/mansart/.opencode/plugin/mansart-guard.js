@@ -16,6 +16,7 @@
 
 import {
   generatedFileVerdict,
+  grepDashPattern,
   isRawMaven, isTckWrite, isArchiveDump, longCatTarget,
   makeSessionState, searchVerdict, rereadVerdict,
 } from "../guard-rules.mjs"
@@ -60,6 +61,13 @@ export const MansartGuard = async ({ directory }) => {
             throw new Deny(
               `${long.path} is ${long.lines} lines. Use sed -n '<a>,<b>p' or grep -n instead — ` +
                 "a full cat is 28% of what blew up the primary context.",
+            )
+
+          const dash = grepDashPattern(cmd)
+          if (dash)
+            throw new Deny(
+              `grep reads ${dash} as options, not as a pattern — it fails with ` +
+                `"invalid option". Use: grep -e '${dash}'   (or grep -- '${dash}').`,
             )
 
           if (searchVerdict(cmd, st) === "deny")

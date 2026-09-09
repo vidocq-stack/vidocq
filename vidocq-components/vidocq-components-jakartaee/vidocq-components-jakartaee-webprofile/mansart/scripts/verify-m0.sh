@@ -21,6 +21,13 @@ CONF="$H/docs/spec-src/$CODE/module.conf"
 [ -f "$CONF" ] || { echo "no $CONF — run scripts/steps/STEP050_module_path.sh $CODE"; exit 3; }
 MOD="$(sed -n 's/^ *tck_module *= *//p' "$CONF" | tr -d ' ')"
 PARENT="${MOD%%/*}"
+# Identify the module by its artifactId, not by its path: Maven logs
+# "---< io.vidocq.mansart:mansart-jakarta-persistence-tck >---", never the
+# directory. A first version grepped the path, found nothing, and reported FAIL
+# on a run that had produced 991 tests — the checker lying in the safe direction
+# is still the checker lying.
+ARTIFACT="$(sed -n 's:.*<artifactId>\(.*\)</artifactId>.*:\1:p' "$H/$MOD/pom.xml" 2>/dev/null | head -1)"
+[ -n "$ARTIFACT" ] || ARTIFACT="${MOD##*/}"
 [ -n "$MOD" ] || { echo "module.conf has no tck_module"; exit 3; }
 
 pass=0; fail=0
@@ -73,13 +80,20 @@ ck M0-T004 "run script + Arquillian config present" $r "$d"
 
 # T005 — the suite produced a counter. ANY counter. Zero is a pass.
 r=1; d=""
-LOG="$(ls -t "$H"/target/build-logs/*.log 2>/dev/null | head -1)"
+# NOT the newest log: this script itself runs build.sh twice (T002, T003), so the
+# newest log is always one of its own compile runs and holds no counter. A first
+# version read it, found nothing, and reported FAIL on a tree that had just
+# produced 991 tests. A checker lying in the safe direction is still lying.
+# Scan back for the newest log that names THIS artifact and holds a counter.
+LOG=""
+for f in $(ls -t "$H"/target/build-logs/*.log 2>/dev/null | head -40); do
+    if grep -q "$ARTIFACT" "$f" && grep -qE 'Tests run: [0-9]+' "$f"; then LOG="$f"; break; fi
+done
 if [ -z "$RUN" ]; then d="nothing to run yet"
-elif [ -z "$LOG" ]; then d="no build log"
-elif grep -qE 'Tests run: [0-9]+' "$LOG" && grep -q "$MOD" "$LOG"; then r=0
-    d="$(grep -oE 'Tests run: [0-9]+, Failures: [0-9]+, Errors: [0-9]+' "$LOG" | tail -1)"
+elif [ -n "$LOG" ]; then r=0
+    d="$(grep -oE 'Tests run: [0-9]+, Failures: [0-9]+, Errors: [0-9]+, Skipped: [0-9]+' "$LOG" | tail -1) ($(basename "$LOG"))"
 else
-    d="the latest build log shows no counter FOR $MOD (a counter from another module is not this card)"
+    d="no build log names $ARTIFACT with a counter (a counter from another module is not this card)"
     # The most likely cause, and it is never obvious: Jakarta TCK test classes
     # are named Client — 160 of them in the persistence jar — which matches NONE
     # of surefire's default include patterns (*Test, Test*, *Tests, *TestCase).

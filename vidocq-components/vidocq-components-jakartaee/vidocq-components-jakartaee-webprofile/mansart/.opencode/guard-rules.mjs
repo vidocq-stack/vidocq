@@ -147,3 +147,28 @@ export function generatedFileVerdict(path) {
     return `${path} is planner output, rewritten by scripts/spec-tasks.sh. Do not edit it.`
   return null
 }
+
+
+/**
+ * `grep "-suite.xml"` — the pattern starts with a dash, so grep reads it as
+ * options and dies with `invalid option -- t`. The agent ran the identical
+ * command twice and got the identical usage dump twice: two failures, zero
+ * information, and a wasted round trip each time.
+ *
+ * A single-dash token holding a character no short option uses (a dot, a slash,
+ * a star, an equals) is a pattern, not a flag. Returns the offending token.
+ */
+export function grepDashPattern(cmd) {
+  const c = normalise(cmd)
+  if (!/\b(grep|egrep|fgrep|rg)\b/.test(c)) return null
+  const tokens = c.match(/(?:"[^"]*"|'[^']*'|\S)+/g) ?? []
+  for (let i = 0; i < tokens.length; i++) {
+    const prev = (tokens[i - 1] ?? "").replace(/^["']|["']$/g, "")
+    if (/^(-e|-f|--regexp|--file)$/.test(prev)) continue // the pattern is declared, fine
+    const raw = tokens[i].replace(/^["']|["']$/g, "")
+    if (raw === "--") return null // everything after -- is a pattern, on purpose
+    if (!raw.startsWith("-") || raw.startsWith("--") || raw === "-") continue
+    if (/[.\/*=\[\]]/.test(raw.slice(1))) return raw
+  }
+  return null
+}

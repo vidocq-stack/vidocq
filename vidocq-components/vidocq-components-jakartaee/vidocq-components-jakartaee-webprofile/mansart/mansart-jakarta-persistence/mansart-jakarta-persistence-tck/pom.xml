@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  This module is intentionally OUT of the parent reactor (Model 4.0.0 standalone, no <parent>).
+  Reason: ShrinkWrap Maven Resolver 3.3 (transitive of the official Jakarta TCK harness) cannot
+  parse Maven Model 4.1.0 POMs. See ../../CLAUDE.md (root) for the full rationale and the
+  official-TCK install procedure in this module's README.md.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>io.vidocq.mansart</groupId>
+    <artifactId>mansart-jakarta-persistence-tck</artifactId>
+    <version>0.3.0-SNAPSHOT</version>
+    <packaging>jar</packaging>
+
+    <name>Mansart :: Jakarta Persistence 3.2 TCK runner</name>
+    <description>Arquillian harness for the official Jakarta Persistence 3.2 TCK.</description>
+
+    <properties>
+        <maven.deploy.skip>true</maven.deploy.skip>
+        <maven.compiler.release>25</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+        <jakarta.persistence.version>3.2.0</jakarta.persistence.version>
+        <jakarta.persistence.tck.version>3.2.1</jakarta.persistence.tck.version>
+        <mansart.version>0.3.0-SNAPSHOT</mansart.version>
+        <vauban.version>0.3.0-SNAPSHOT</vauban.version>
+        <arquillian.version>1.9.1.Final</arquillian.version>
+        <shrinkwrap.version>1.2.6</shrinkwrap.version>
+        <testng.version>7.10.2</testng.version>
+        <h2.version>2.3.232</h2.version>
+        <maven.compiler.plugin.version>3.13.0</maven.compiler.plugin.version>
+        <maven.surefire.plugin.version>3.5.2</maven.surefire.plugin.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.jboss.arquillian</groupId>
+                <artifactId>arquillian-bom</artifactId>
+                <version>${arquillian.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <dependencies>
+        <!-- Jakarta Persistence API -->
+        <dependency>
+            <groupId>jakarta.persistence</groupId>
+            <artifactId>jakarta.persistence-api</artifactId>
+            <version>${jakarta.persistence.version}</version>
+        </dependency>
+
+        <!-- Vauban CDI 4.1 Lite container: the Vidocq-ecosystem CDI runtime under which
+             the Mansart BCE wires repositories. -->
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-core</artifactId>
+            <version>${vauban.version}</version>
+        </dependency>
+
+        <!-- Vauban indexer: used by the ported Arquillian connector to scan
+              ShrinkWrap deployments at runtime. -->
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-indexer</artifactId>
+            <version>${vauban.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- TestNG suite runner: used by the smoke harness too -->
+        <dependency>
+            <groupId>org.testng</groupId>
+            <artifactId>testng</artifactId>
+            <version>${testng.version}</version>
+        </dependency>
+
+        <!-- Backing database: H2 in-memory by default -->
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <version>${h2.version}</version>
+        </dependency>
+
+        <!-- Arquillian core + TestNG container + ShrinkWrap -->
+        <dependency>
+            <groupId>org.jboss.arquillian.testng</groupId>
+            <artifactId>arquillian-testng-container</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.jboss.shrinkwrap</groupId>
+            <artifactId>shrinkwrap-api</artifactId>
+            <version>${shrinkwrap.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.jboss.shrinkwrap</groupId>
+            <artifactId>shrinkwrap-impl-base</artifactId>
+            <version>${shrinkwrap.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- TCK-specific: official TCK JAR (must be here to be resolved by dependency:resolve and pick up by surefire)-->
+        <dependency>
+            <groupId>jakarta.tck</groupId>
+            <artifactId>persistence-tck-spec-tests</artifactId>
+            <version>${jakarta.persistence.tck.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <profiles>
+        <!--
+          Enable with `mvn -Ptck-run test` to pull in the official Jakarta Persistence 3.2 TCK suite
+          alongside the Mansart smoke harness.
+        -->
+        <profile>
+            <id>tck-run</id>
+            <dependencies>
+                <dependency>
+                    <groupId>jakarta.tck</groupId>
+                    <artifactId>persistence-tck-spec-tests</artifactId>
+                    <version>${jakarta.persistence.tck.version}</version>
+                    <scope>test</scope>
+                </dependency>
+                <!-- TCK uses JUnit 5 + Arquillian JUnit 5 for common test infrastructure, even though
+                      the tests themselves are TestNG: these are needed for the Arquillian container -->
+                <dependency>
+                    <groupId>org.junit.jupiter</groupId>
+                    <artifactId>junit-jupiter</artifactId>
+                    <version>5.11.4</version>
+                    <scope>test</scope>
+                </dependency>
+                <dependency>
+                    <groupId>org.jboss.arquillian.junit5</groupId>
+                    <artifactId>arquillian-junit5-container</artifactId>
+                    <scope>test</scope>
+                </dependency>
+            </dependencies>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <suiteXmlFiles combine.self="override"/>
+                            <dependenciesToScan>
+                                <dependency>jakarta.tck:persistence-tck-spec-tests</dependency>
+                            </dependenciesToScan>
+                            <includes>
+                                <include>**/Client.class</include>
+                            </includes>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>${maven.compiler.plugin.version}</version>
+                <configuration>
+                    <release>25</release>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>${maven.surefire.plugin.version}</version>
+                <configuration>
+                    <suiteXmlFiles>
+                        <suiteXmlFile>src/test/resources/tck-suite.xml</suiteXmlFile>
+                    </suiteXmlFiles>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
