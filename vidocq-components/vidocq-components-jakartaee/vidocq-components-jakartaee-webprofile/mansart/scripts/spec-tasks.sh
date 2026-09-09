@@ -84,7 +84,7 @@ done < "$PLAN"
 
 # --- assembly: ids, M0 and STATUS are the script's job, never a model's ----
 python3 - "$CODE" "$META" "$PLAN" "$FRAG" "$OUT" "$STATUS" <<'PY'
-import collections, json, os, re, sys
+import collections, json, os, re, subprocess as _sp, sys
 code, meta_p, plan_p, frag_d, out_p, status_p = sys.argv[1:7]
 meta = json.load(open(meta_p))
 tck  = meta.get("tck", {})
@@ -96,7 +96,6 @@ runners = [r["path"] for r in tck.get("repo_runners", [])]
 # Where the runner goes is read from module.conf, never invented. An agent once
 # created ee/jakarta/tck/persistence/mansart-jkp-tck — the TCK's Java package
 # path, with the harness's internal 3-letter code as a Maven module name.
-import subprocess as _sp
 _m = _sp.run([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)) if "__file__" in dir() else ".", "scripts", "tck-module.py"), code],
              capture_output=True, text=True)
 module = (_m.stdout or "").strip() or "(run scripts/tck-module.py {})".format(code)
@@ -118,8 +117,8 @@ if coord:
           "| M0-T001 | Create the parent module `{}` (packaging pom) and register it in the ROOT pom's `<modules>` | — | `./scripts/verify-m0.sh {} ` reports **M0-T001 PASS**. Mirror `mansart-jakarta-data`: the parent aggregates implementation modules, **never the -tck one**. |".format(parent_module or module, code),
           "| M0-T002 | Create the TCK runner at **`{}`** — standalone POM, OUT of the reactor | — | `./scripts/verify-m0.sh {}` reports **M0-T002 PASS** (it compiles the module *in its own directory* — a root build cannot satisfy this card). **The path is not yours to choose**: it comes from `docs/spec-src/{}/module.conf`. |".format(module, code, code),
           "| M0-T003 | Depend on `{}` — **and on nothing that does not exist yet** | — | `./scripts/verify-m0.sh {}` reports **M0-T003 PASS**. Declaring implementation modules before M1 creates them makes M0 unbuildable — an agent declared six and the build failed. **Removing the TCK dependency to go green is not a fix either.** |".format(coord, code),
-          "| M0-T004 | Arquillian config + run script, copied from a runner that already passes | — | `./scripts/verify-m0.sh {}` reports **M0-T004 PASS** |".format(code),
-          "| M0-T005 | First run | — | `./scripts/verify-m0.sh {}` reports **M0-T005 PASS**: a counter FOR THIS MODULE appears in the build log. **ANY counter. PASS=0 is success: the instrument exists.** The implementation is wired in by M1. |".format(code), ""]
+          "| M0-T004 | Arquillian config + run script, copied from a runner that already passes — **then adapted** | — | `./scripts/verify-m0.sh {}` reports **M0-T004 PASS**. Copying is right; copying *unchanged* is the trap. After copying, EVERY occurrence of the other spec must be replaced: the `<suite name=>`, the `<package>`/`<class>` entries, the surefire `<includes>`, the artifactIds in the `tck-run` profile. A runner was once delivered still naming `mansart-data-tck-1.0-official` and scanning `ee.jakarta.tck.data.standalone.*`. |".format(code),
+          "| M0-T005 | First run | — | `./scripts/verify-m0.sh {}` reports **M0-T005 PASS**: a counter FOR THIS MODULE appears in the build log. **ANY counter. PASS=0 is success: the instrument exists.** Jakarta TCK test classes are named `Client` and match **no** default surefire pattern, so the suite needs `<include>**/Client.class</include>`; without it the run exits 0 having selected nothing. A missing counter here is a wiring problem, **not** a missing implementation — M1 changes the score, not whether the instrument runs. |".format(code), ""]
     if runners:
         L += ["Copy the layout from a runner that already passes here: " +
               ", ".join("`{}`".format(r) for r in runners), ""]
@@ -191,6 +190,19 @@ if bundled or dupes:
 # Progress is NEVER regenerated: read back the done cards and keep them. A count
 # on its own is unverifiable — an agent wrote "M0: 4 done" without saying which
 # four. Ids and evidence are the record; the counts are derived from them.
+# M0's done rows are GENERATED from scripts/verify-m0.sh, never written by an
+# agent. An agent recorded "| M0-T005 | PENDING | requires M1+ |" and the counter
+# read 5 done: it counted ROWS, so an honest admission became a success. The
+# checker is the only thing allowed to say PASS.
+m0_rows = []
+_v = os.path.join(os.path.dirname(os.path.abspath(status_p)), "scripts", "verify-m0.sh")
+if os.path.isfile(_v):
+    _r = _sp.run([_v, code], capture_output=True, text=True)
+    for line in (_r.stdout or "").splitlines():
+        m = re.match(r"\s*(M0-T\d{3})\s+PASS\s+(.*)", line)
+        if m:
+            m0_rows.append("| {} | verify-m0.sh | {} |".format(m.group(1), m.group(2).strip()))
+
 done_rows, in_done = [], False
 if os.path.exists(status_p):
     for line in open(status_p, encoding="utf-8"):
@@ -200,7 +212,13 @@ if os.path.exists(status_p):
         if in_done and line.startswith("## "):
             in_done = False
         if in_done and re.match(r"^\|\s*M\d+-T\d{3}\s*\|", line):
-            done_rows.append(line.rstrip("\n"))
+            row = line.rstrip("\n")
+            if re.match(r"^\|\s*M0-T", row):
+                continue                      # M0 is regenerated from the checker
+            if "PENDING" in row or "BLOCKED" in row or "FAIL" in row:
+                continue                      # not a done card, whatever the column says
+            done_rows.append(row)
+done_rows = m0_rows + done_rows
 done_ids = [re.match(r"^\|\s*(M\d+-T\d{3})", r).group(1) for r in done_rows]
 done_by_ms = collections.Counter(i.split("-")[0] for i in done_ids)
 

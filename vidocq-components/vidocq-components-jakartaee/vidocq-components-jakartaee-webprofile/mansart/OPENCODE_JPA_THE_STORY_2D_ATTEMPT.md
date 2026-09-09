@@ -873,6 +873,57 @@ rows. And told to write its brief to `tasks/<XXX>/<CARD>.md`, the agent created
 which creates the directory and prints the answer. Same lesson as the noter, a
 third time: **a path an agent composes is a path an agent gets wrong.**
 
+### The copy that was never adapted
+
+The run after that got four of five M0 cards to a real PASS — verified
+independently, not claimed — and reported the fifth as **PENDING** rather than
+done. Honest, and a first.
+
+Its reason was wrong, though: *"no counter — requires M1+ implementation module
+to inject"*. Running the suite myself: `build.sh -Ptck-run test` exits 0, no
+errors, **no counter at all**. Nothing about M1 is involved. The runner had been
+copied from `mansart-data-tck` and never adapted:
+
+```
+<suite name="mansart-data-tck-1.0-official">     ← Jakarta Data
+  <package name="ee.jakarta.tck.data.standalone.*"/>
+<include>**/standalone/entity/EntityTests.class</include>
+```
+
+And underneath it, a fact nobody would guess: **Jakarta TCK test classes are
+named `Client`** — 160 of them in the persistence jar — which matches *none* of
+surefire's default patterns (`*Test`, `Test*`, `*Tests`, `*TestCase`). Without
+`<include>**/Client.class</include>` the suite selects nothing and the build
+still exits 0. Green, silent, empty. One missing line stood between that runner
+and the counter, and it was diagnosed as a missing implementation.
+
+"Copy a runner that already works" is the right instruction — it is how the data
+runner reached 74/74. But **copying is only half of it**, and the half nobody
+writes down is what must change afterwards: the suite name, the packages, the
+includes, the artifactIds. The cards now list them, and `verify-m0.sh` prints the
+`Client.class` hint when a counter is missing, because a checker that only says
+FAIL leaves the next agent to rediscover this from scratch.
+
+### The count that turned an admission into a success
+
+The same run exposed a defect that was mine, and it is the sharpest one yet. The
+agent wrote, truthfully:
+
+```
+| M0-T005 | PENDING | No counter yet — requires M1+ ... |
+| M0 — the TCK | 5 | 5 |     ← five done
+```
+
+My counter counted **rows**, not passes. The agent admitted it was not done; my
+script converted the admission into a success. Every safeguard in this project
+exists to stop an agent overclaiming, and here the harness overclaimed on the
+agent's behalf, against the agent's own words.
+
+Fixed by removing the agent from the loop, one more time: **M0's done rows are
+now generated from `verify-m0.sh` itself**. No agent writes them; a row exists
+because a checker printed PASS. Rows for other milestones are still appended by
+hand, but any row saying PENDING, BLOCKED or FAIL is dropped rather than counted.
+
 ### The order only existed in my head
 
 By this point the pipeline was six scripts deep — fetch, note, detect, install,

@@ -431,6 +431,23 @@ starts from nothing again:
   the evidence while the defect was in its *referent*. Each M0 done-when is now
   "`verify-m0.sh <XXX>` reports M0-T00n PASS" — unsatisfiable by a build of
   something else.
+- **M0's done rows are generated from `verify-m0.sh`, not written by an agent.**
+  An agent recorded `| M0-T005 | PENDING | requires M1+ |` — an honest admission —
+  and the milestone read **5 done**, because the counter counted rows. The harness
+  overclaimed on the agent's behalf, against the agent's own words. Rows for other
+  milestones are still appended by hand, but any row saying PENDING, BLOCKED or
+  FAIL is dropped rather than counted.
+- **"Copy a working runner" is only half an instruction.** A delivered runner
+  still declared `<suite name="mansart-data-tck-1.0-official">`, scanned
+  `ee.jakarta.tck.data.standalone.*` and included
+  `**/standalone/entity/EntityTests.class` — three leftovers from Jakarta Data.
+  The cards now list what must change after a copy: suite name, packages,
+  surefire `<includes>`, artifactIds. And the fact none of that reveals:
+  **Jakarta TCK test classes are named `Client`** (160 in the persistence jar),
+  matching no default surefire pattern, so without
+  `<include>**/Client.class</include>` the suite selects nothing and the build
+  exits 0. `verify-m0.sh` prints that hint when a counter is missing — a checker
+  that only says FAIL makes the next agent rediscover it.
 - **`scripts/task-file.sh <XXX> <CARD>`** prints and creates the work-order path.
   Told the pattern `tasks/<XXX>/<CARD>.md`, an agent wrote `tasks/001/CARD.md`.
   A path an agent composes is a path an agent gets wrong — the third instance in

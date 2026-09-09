@@ -44,7 +44,16 @@ A run that scores 0 is a SUCCESS for this command: the instrument now exists.
    own Java package path, with the harness's 3-letter code as a module name.
    Directory exists with a pom.xml? The runner is wired; go to step 3.
 
-   TO WIRE IT — copy, do not invent:
+   TO WIRE IT — copy, then ADAPT. Copying is right; copying unchanged is the trap.
+   A delivered runner still declared `<suite name="mansart-data-tck-1.0-official">`,
+   scanned `ee.jakarta.tck.data.standalone.*` and included
+   `**/standalone/entity/EntityTests.class` — all three from Jakarta Data.
+   After every copy, replace: the suite name, the packages/classes, the surefire
+   <includes>, and the artifactIds in the tck-run profile.
+   AND KNOW THIS: Jakarta TCK test classes are named `Client` (160 in the
+   persistence jar). They match NO default surefire pattern, so without
+   <include>**/Client.class</include> the run exits 0 having selected nothing.
+   Zero tests is NOT "waiting for the implementation" — it is a wiring bug.
    - Copy the layout of an existing runner from tck.repo_runners (they work:
      mansart-data-tck scores 74/74).
    - TWO PIECES, and the repo shows both: a PARENT module in the reactor

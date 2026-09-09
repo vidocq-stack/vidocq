@@ -78,7 +78,19 @@ if [ -z "$RUN" ]; then d="nothing to run yet"
 elif [ -z "$LOG" ]; then d="no build log"
 elif grep -qE 'Tests run: [0-9]+' "$LOG" && grep -q "$MOD" "$LOG"; then r=0
     d="$(grep -oE 'Tests run: [0-9]+, Failures: [0-9]+, Errors: [0-9]+' "$LOG" | tail -1)"
-else d="the latest build log shows no counter FOR $MOD (a counter from another module is not this card)"
+else
+    d="the latest build log shows no counter FOR $MOD (a counter from another module is not this card)"
+    # The most likely cause, and it is never obvious: Jakarta TCK test classes
+    # are named Client — 160 of them in the persistence jar — which matches NONE
+    # of surefire's default include patterns (*Test, Test*, *Tests, *TestCase).
+    # A runner copied from another spec inherits that spec's <includes> and
+    # silently selects nothing: BUILD SUCCESS, zero tests, zero errors.
+    if [ -f "$H/$MOD/pom.xml" ] && ! grep -q 'Client\.class' "$H/$MOD/pom.xml"; then
+        d="$d
+             hint: no <include>**/Client.class</include> in the runner pom. Jakarta
+             TCK tests are named Client and match no default surefire pattern, so
+             the suite selects nothing and still exits 0."
+    fi
 fi
 ck M0-T005 "the TCK produced a counter, any counter" $r "$d"
 
