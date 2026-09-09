@@ -192,11 +192,18 @@ def main():
     if not kw:  # derive from the url: .../specifications/<name>/<version>/...
         m = re.search(r"/specifications/([a-z0-9-]+)/", url)
         kw = m.group(1) if m else code.lower()
-    tck = {"keyword": kw, "found": False}
+    # The spec version pins the TCK version. Without it the richest jar wins, and
+    # here that was jakarta.persistence:...-spec-tests:4.0.0-SNAPSHOT (321 test
+    # classes) — the TCK of the NEXT spec. A 3.2 implementation would have been
+    # measured against 4.0.
+    mv = re.search(r"/specifications/[a-z0-9-]+/([0-9]+(?:\.[0-9]+)*)/", url)
+    spec_version = mv.group(1) if mv else None
+    tck = {"keyword": kw, "spec_version": spec_version, "found": False}
     try:
         import subprocess
         r = subprocess.run(
-            [sys.executable, os.path.join(ROOT, "scripts", "tck-find.py"), kw, "--json"],
+            [sys.executable, os.path.join(ROOT, "scripts", "tck-find.py"), kw, "--json"]
+            + (["--spec-version", spec_version] if spec_version else []),
             capture_output=True, text=True, timeout=60)
         if r.stdout.strip():
             tck = json.loads(r.stdout)

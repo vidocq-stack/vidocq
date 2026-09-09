@@ -102,7 +102,7 @@ if coord:
     L += ["TCK: `{}`".format(coord), "",
           "| Card | Title | Spec sections | Done-when |", "|---|---|---|---|",
           "| M0-T001 | Create the TCK runner module (standalone POM, out of reactor) | — | `./scripts/build.sh` builds the module, exit 0 |",
-          "| M0-T002 | Depend on `{}` | — | The TCK jar resolves from the local M2 |".format(coord),
+          "| M0-T002 | Depend on `{}` | — | `./scripts/build.sh dependency:resolve` lists the jar. **Removing the dependency to make the build green is not a fix** — an agent did exactly that. |".format(coord),
           "| M0-T003 | Arquillian container + ArchiveAppender injecting our implementation | — | A deployment archive is produced |",
           "| M0-T004 | Run script + persistence.xml template for the suite | — | The script starts the suite and writes a log |",
           "| M0-T005 | First run | — | **The TCK produces a counter, ANY counter. PASS=0 is success: the instrument exists.** |", ""]

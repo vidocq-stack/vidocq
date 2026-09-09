@@ -53,14 +53,16 @@
         "versions": [
           "3.2.1",
           "3.2.2-SNAPSHOT"
-        ]
+        ],
+        "test_classes": -1
       },
       {
         "groupId": "jakarta.persistence",
         "artifactId": "persistence-tck",
         "versions": [
           "3.2.0"
-        ]
+        ],
+        "test_classes": -1
       },
       {
         "groupId": "jakarta.tck",
@@ -68,14 +70,16 @@
         "versions": [
           "3.2.1",
           "3.2.2-SNAPSHOT"
-        ]
+        ],
+        "test_classes": 0
       },
       {
         "groupId": "jakarta.persistence",
         "artifactId": "persistence-tck-dist",
         "versions": [
           "4.0.0-SNAPSHOT"
-        ]
+        ],
+        "test_classes": 0
       },
       {
         "groupId": "jakarta.tck",
@@ -85,7 +89,8 @@
           "3.2.1",
           "3.2.2-SNAPSHOT",
           "4.0.0-SNAPSHOT"
-        ]
+        ],
+        "test_classes": 0
       },
       {
         "groupId": "jakarta.persistence",
@@ -93,21 +98,24 @@
         "versions": [
           "3.2.0-SNAPSHOT",
           "4.0.0-SNAPSHOT"
-        ]
+        ],
+        "test_classes": -1
       },
       {
         "groupId": "jakarta.persistence",
         "artifactId": "persistence-tck-parent",
         "versions": [
           "4.0.0-SNAPSHOT"
-        ]
+        ],
+        "test_classes": -1
       },
       {
         "groupId": "jakarta.persistence",
         "artifactId": "jakarta.persistence-tck",
         "versions": [
           "3.2.0"
-        ]
+        ],
+        "test_classes": -1
       },
       {
         "groupId": "jakarta.tck",
@@ -117,7 +125,8 @@
           "3.2.1",
           "3.2.2-SNAPSHOT",
           "4.0.0-SNAPSHOT"
-        ]
+        ],
+        "test_classes": 161
       },
       {
         "groupId": "jakarta.persistence",
@@ -125,14 +134,16 @@
         "versions": [
           "3.2.0-SNAPSHOT",
           "4.0.0-SNAPSHOT"
-        ]
+        ],
+        "test_classes": -1
       },
       {
         "groupId": "jakarta.persistence",
         "artifactId": "persistence-tck-user-guide",
         "versions": [
           "4.0.0-SNAPSHOT"
-        ]
+        ],
+        "test_classes": -1
       },
       {
         "groupId": "jakarta.persistence",
@@ -140,33 +151,37 @@
         "versions": [
           "3.2.0-SNAPSHOT",
           "4.0.0-SNAPSHOT"
-        ]
+        ],
+        "test_classes": -1
       },
       {
         "groupId": "jakarta.persistence",
         "artifactId": "persistence-tck-user-guide-parent",
         "versions": [
           "4.0.0-SNAPSHOT"
-        ]
+        ],
+        "test_classes": -1
       },
       {
         "groupId": "jakarta.persistence",
         "artifactId": "jakarta.persistence-tck-user-guide",
         "versions": [
           "3.2.1"
-        ]
+        ],
+        "test_classes": -1
       },
       {
         "groupId": "jakarta.tck",
         "artifactId": "jakarta.persistence-tck-user-guide-parent",
         "versions": [
           "3.2.1"
-        ]
+        ],
+        "test_classes": -1
       }
     ],
     "recommended": {
       "groupId": "jakarta.tck",
-      "artifactId": "persistence-tck",
+      "artifactId": "persistence-tck-spec-tests",
       "version": "3.2.1"
     },
     "repo_runners": [
@@ -184,6 +199,7 @@
           "run-official-tck-transactions-2.0.sh"
         ]
       }
-    ]
+    ],
+    "spec_version": "3.2"
   }
 }

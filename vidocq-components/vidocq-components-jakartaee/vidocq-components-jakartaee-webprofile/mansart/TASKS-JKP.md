@@ -9,12 +9,12 @@ generator; do not renumber by hand.
 
 No card below M0 can be called done without a counter to check it against.
 
-TCK: `jakarta.tck:persistence-tck:3.2.1`
+TCK: `jakarta.tck:persistence-tck-spec-tests:3.2.1`
 
 | Card | Title | Spec sections | Done-when |
 |---|---|---|---|
 | M0-T001 | Create the TCK runner module (standalone POM, out of reactor) | — | `./scripts/build.sh` builds the module, exit 0 |
-| M0-T002 | Depend on `jakarta.tck:persistence-tck:3.2.1` | — | The TCK jar resolves from the local M2 |
+| M0-T002 | Depend on `jakarta.tck:persistence-tck-spec-tests:3.2.1` | — | `./scripts/build.sh dependency:resolve` lists the jar. **Removing the dependency to make the build green is not a fix** — an agent did exactly that. |
 | M0-T003 | Arquillian container + ArchiveAppender injecting our implementation | — | A deployment archive is produced |
 | M0-T004 | Run script + persistence.xml template for the suite | — | The script starts the suite and writes a log |
 | M0-T005 | First run | — | **The TCK produces a counter, ANY counter. PASS=0 is success: the instrument exists.** |

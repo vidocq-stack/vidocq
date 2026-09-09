@@ -295,10 +295,18 @@ and attempt 3 marked 24 cards DONE against a real counter of 2.
 The fix belongs in the harness, not in a hand-written module, or the next spec
 starts from nothing again:
 
-- **`scripts/tck-find.py <keyword>`** scans the local M2 for TCK artifacts and the
-  repo for runners worth copying. Verified generic: `persistence` →
-  `jakarta.tck:persistence-tck:3.2.1`, `data` → `jakarta.data:jakarta-data-tck:1.0.1`,
-  unknown keyword → exit 1 with a clear message. It also surfaces the two runners
+- **`scripts/tck-find.py <keyword> [--spec-version X.Y]`** scans the local M2 and
+  **opens each candidate jar to count test classes**, because names lie:
+  `persistence-tck` is a POM-only aggregator, `-dist` an 8 KB stub, `-common`
+  156 KB of support code, and only `persistence-tck-spec-tests` holds the 161
+  test classes. Recommending by name sent an agent after a coordinate that
+  cannot resolve, and it made the build green by deleting the dependency. The
+  recommendation now ships its evidence: `(161 test classes in the jar)`.
+  Ranking by test count alone then picked a **4.0.0-SNAPSHOT** jar — 321 classes,
+  the TCK of the *next* spec — so the spec version pins the TCK version
+  (`spec-fetch.py` derives it from the URL) and a release beats a SNAPSHOT.
+  Verified: `persistence` → `jakarta.tck:persistence-tck-spec-tests:3.2.1`,
+  `data` → `jakarta.data:jakarta.data-tck:1.0.1`, unknown keyword → exit 1. It also surfaces the two runners
   that already pass here (`mansart-data-tck` at 74/74, `mansart-transactions-tck`),
   so an agent copies a working layout instead of inventing one.
 - **`spec-fetch.py` writes the coordinates into `spec-meta.json`**, keyword derived
@@ -525,8 +533,11 @@ things learned running it:
   **274 tok/s** with no cache at all. The role that benefits least from the prefix
   cache was handed to the model that prefills slowest. Testable — same chapter,
   both models — and untested.
-- **`/next` and `/tck` have never run.** Everything above is scaffolding for a
-  loop that has not yet delivered a card, against a counter still at zero.
+- **`/tck` has run once; `/next` never.** The run built a correct runner module
+  (build.sh test-compile exit 0, verified) but produced **one test, one skipped**
+  — zero official tests, so no counter at all, which is not the same thing as
+  `PASS=0`. M0-T002 was "satisfied" by deleting the TCK dependency; the card now
+  says in its own text that this is not a fix.
 - **`impl` writing into `src/test/` is prevented by instruction, not by tooling.**
   OpenCode's `permission.edit` is per-agent but not per-path here, and the guard
   cannot see which agent issued a call. If an `impl` ever edits a test to go

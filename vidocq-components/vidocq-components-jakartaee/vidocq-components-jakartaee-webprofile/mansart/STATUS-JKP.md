@@ -5,7 +5,7 @@ Counters only. A line here is written by a tool, never by an agent.
 ## TCK
 
 ```
-tck:    jakarta.tck:persistence-tck:3.2.1
+tck:    jakarta.tck:persistence-tck-spec-tests:3.2.1
 module: (not created yet — M0-T001)
 result: PASS=? FAIL=? ERROR=? SKIP=?   (never run)
 ```

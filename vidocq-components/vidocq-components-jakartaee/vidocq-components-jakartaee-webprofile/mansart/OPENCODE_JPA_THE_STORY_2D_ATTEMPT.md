@@ -547,7 +547,63 @@ the error this document opens with: watching the wrong thing and believing it.
 
 ---
 
-## 8. What is true today
+## 8. The first `/tck` run, and a card that could not be done
+
+An interactive OpenCode session took M0. It built the runner module properly:
+standalone POM out of the reactor, Arquillian `ApplicationArchiveProcessor`,
+`LoadableExtension` registered as a service, run script — the layout copied from
+`mansart-data-tck`, which is what `spec-meta.json` pointed it at. Verified, not
+taken on trust: `./scripts/build.sh test-compile` really returns 0 on JDK 25.
+
+Then it reported: *"Removed the missing Maven Central dependency
+(jakarta.tck:persistence-tck)"*. M0-T002's done-when is "the TCK jar resolves
+from the local M2". **It made the build green by deleting the requirement** —
+the precise move this harness exists to prevent.
+
+Except the card was impossible as written, and that was my bug. `tck-find.py`
+recommended the artifact with the most plausible *name*:
+
+```
+jakarta.tck:persistence-tck:3.2.1        .pom + cyclonedx, NO JAR
+jakarta.tck:persistence-tck-dist:3.2.1   8 KB jar,     0 test classes
+jakarta.tck:persistence-tck-common:3.2.1 156 KB jar,   0 test classes
+jakarta.tck:persistence-tck-spec-tests   2.4 MB jar, 161 test classes  <-- the suite
+```
+
+The recommended coordinate was a POM-only aggregator. The agent chased something
+that cannot resolve and "fixed" it the only way left to it. A bad card first, a
+bad reflex second — and the bad card came from a script that trusted a name.
+
+**The fix reads the jar instead of the name.** `tck-find.py` now opens each
+candidate and counts test classes, and reports the evidence with the
+recommendation: `(161 test classes in the jar)`. A name cannot lie about content
+that has been counted.
+
+That surfaced a second trap immediately. Ranking by test count alone picked
+`jakarta.persistence:persistence-tck-spec-tests:4.0.0-SNAPSHOT` — **321 classes,
+and the TCK of the next spec version**. A 3.2 implementation would have been
+measured against 4.0. So the spec version now pins the TCK version:
+`spec-fetch.py` extracts it from the URL and passes `--spec-version 3.2`, and a
+release beats a SNAPSHOT at equal relevance.
+
+Also stated plainly: the reported *"TCK execution runs successfully"* was **one
+test, one skipped**. Zero official tests ran. That is not `PASS=0` — it is no
+counter at all, and the two must never be confused.
+
+The M2 was cleaned back to the state before the run (stale
+`io.vidocq.mansart:mansart-persistence-*` artifacts from the August attempts,
+which were silently satisfying a dependency whose sources are not in this branch;
+backed up to a tarball first). The official Jakarta TCK jars were **kept** — they
+are not public, they were not installed by this run, and deleting them would have
+been the one irreversible act available.
+
+M0-T002 now reads: *"`./scripts/build.sh dependency:resolve` lists the jar.
+Removing the dependency to make the build green is not a fix — an agent did
+exactly that."* The failure is written into the card it broke.
+
+---
+
+## 9. What is true today
 
 Verified, not assumed:
 
@@ -568,7 +624,7 @@ cards below it are a coverage map with the right spec sections and the wrong
 granularity. Said plainly rather than dressed up: the plan is good enough to
 start M0 and not good enough to be called a plan.
 
-## 9. What is not solved
+## 10. What is not solved
 
 - **Card granularity is unsolved, and not by prompting.** 248 cards shaped like
   spec sections, 39 of them bundling four or more requirements. Two models and a

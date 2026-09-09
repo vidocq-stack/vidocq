@@ -8,13 +8,14 @@ Why it matters: a spec without a running TCK has no progress metric. Attempt 1
 of this project reached "2/1745" and attempt 3 marked 24 cards DONE while the
 real counter said 2. The TCK is the only thing that can contradict an agent.
 
-Usage:  scripts/tck-find.py <keyword> [--json]
+Usage:  scripts/tck-find.py <keyword> [--spec-version X.Y] [--json]
         scripts/tck-find.py persistence
         scripts/tck-find.py data --json
 
 Exit codes: 0 = found, 1 = nothing found (not an error — the spec may have no TCK)
 """
 import json
+import zipfile
 import os
 import re
 import sys
@@ -59,9 +60,32 @@ def scan_m2(keyword):
                 continue
             group = os.path.relpath(os.path.dirname(dirpath), M2).replace(os.sep, ".")
             seen.add((group, name))  # TCK_ROOTS overlap: jakarta/tck is under jakarta
-            out.append({"groupId": group, "artifactId": name, "versions": versions})
+            v = pick_version(versions)
+            out.append({"groupId": group, "artifactId": name, "versions": versions,
+                        "test_classes": count_test_classes(dirpath, name, v)})
             dirnames[:] = []
     return sorted(out, key=lambda a: (len(a["artifactId"]), a["artifactId"]))
+
+
+def count_test_classes(art_dir, name, version):
+    """How many test classes the jar actually holds. -1 = no jar at all.
+
+    WHY: `jakarta.tck:persistence-tck:3.2.1` is a POM-only aggregator — no jar.
+    Recommending it sent an agent chasing a coordinate that cannot resolve, and
+    it "fixed" the red build by deleting the TCK dependency. Measured here:
+    persistence-tck-dist 8 KB / 0 tests, persistence-tck-common 156 KB / 0,
+    persistence-tck-spec-tests 2.4 MB / **161**. Only the last one runs anything.
+    Names lie about which artifact carries the suite; the jar does not.
+    """
+    jar = os.path.join(art_dir, version, "{}-{}.jar".format(name, version))
+    if not os.path.isfile(jar):
+        return -1
+    try:
+        with zipfile.ZipFile(jar) as z:
+            return sum(1 for n in z.namelist()
+                       if n.endswith("Client.class") or n.endswith("Test.class"))
+    except Exception:
+        return -1
 
 
 def scan_repo_runners():
@@ -79,23 +103,61 @@ def scan_repo_runners():
     return runners
 
 
+SPEC_VERSION = None  # set from --spec-version; keeps a 3.2 spec off a 4.0 TCK
+
+
 def pick_version(versions):
+    if SPEC_VERSION:
+        matching = [v for v in versions if v.startswith(SPEC_VERSION)]
+        if matching:
+            versions = matching
     """Prefer a release over a SNAPSHOT, highest first."""
     releases = [v for v in versions if "SNAPSHOT" not in v]
     return sorted(releases or versions)[-1]
 
 
 def main():
-    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    argv, args = sys.argv[1:], []
+    skip = False
+    for n, a in enumerate(argv):          # --spec-version takes a VALUE: skip it,
+        if skip:                          # else "3.2" looked like a second keyword
+            skip = False
+            continue
+        if a == "--spec-version":
+            skip = True
+            continue
+        if not a.startswith("--"):
+            args.append(a)
     as_json = "--json" in sys.argv
     if len(args) != 1:
         print(__doc__)
         return 2
     keyword = args[0]
 
+    global SPEC_VERSION
+    for n, a in enumerate(sys.argv):
+        if a == "--spec-version" and n + 1 < len(sys.argv):
+            SPEC_VERSION = sys.argv[n + 1]
+
     arts = scan_m2(keyword)
     runners = scan_repo_runners()
-    main_art = next((a for a in arts if a["artifactId"].endswith("-tck")), arts[0] if arts else None)
+    # Pick what actually runs tests, not what is named most plausibly.
+    with_tests = [a for a in arts if a.get("test_classes", -1) > 0]
+    if with_tests:
+        # A release beats a SNAPSHOT even with fewer tests: measured here, the
+        # richest jar was jakarta.persistence:...-spec-tests:4.0.0-SNAPSHOT (321
+        # classes) — the TCK of the NEXT spec version. Test count alone would
+        # have pointed a 3.2 implementation at 4.0.
+        def rank(a):
+            v = pick_version(a["versions"])
+            matches = bool(SPEC_VERSION and v.startswith(SPEC_VERSION))
+            return (matches, "SNAPSHOT" not in v, a["test_classes"], -len(a["artifactId"]))
+        main_art = max(with_tests, key=rank)
+    else:
+        with_jar = [a for a in arts if a.get("test_classes", -1) == 0]
+        main_art = (with_jar[0] if with_jar
+                    else next((a for a in arts if a["artifactId"].endswith("-tck")),
+                              arts[0] if arts else None))
 
     result = {
         "keyword": keyword,
@@ -126,7 +188,12 @@ def main():
         print(f"  {a['groupId']}:{a['artifactId']}")
         print(f"    versions: {', '.join(a['versions'])}")
     r = result["recommended"]
-    print(f"\nrecommended: {r['groupId']}:{r['artifactId']}:{r['version']}")
+    if r:
+        n = next((a["test_classes"] for a in arts
+                  if a["artifactId"] == r["artifactId"] and a["groupId"] == r["groupId"]), -1)
+        how = (f"{n} test classes in the jar" if n > 0
+               else "jar present but no test class" if n == 0 else "NO JAR — nothing will run")
+        print(f"\nrecommended: {r['groupId']}:{r['artifactId']}:{r['version']}  ({how})")
     if runners:
         print("\nin-repo runners to copy (module layout, Arquillian wiring, run script):")
         for run in runners:
