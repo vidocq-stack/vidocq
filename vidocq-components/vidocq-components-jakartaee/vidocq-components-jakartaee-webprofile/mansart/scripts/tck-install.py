@@ -100,6 +100,21 @@ def coordinates(jar_bytes):
     return (g.strip(), a.strip(), v.strip()) if g and a and v else None
 
 
+def is_related(coord, keyword):
+    """Is this jar part of the TCK, or a library it happens to ship?
+
+    Measured: the Bean Validation archive holds 42 jars of which 8 carry no
+    coordinates at all, and the Transactions archive holds 13 of which the only
+    one with coordinates is `jaxen:jaxen:1.1.6` — a third-party XPath library.
+    Installing every jar that has a pom.properties would pollute the M2 with
+    other projects' artifacts and still miss the TCK.
+    """
+    g, a, _ = coord
+    hay = (g + ":" + a).lower()
+    kw = (keyword or "").lower()
+    return "tck" in hay or (kw and kw in hay) or hay.startswith("jakarta.")
+
+
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     dry = "--dry-run" in sys.argv
@@ -133,11 +148,7 @@ def main():
     for l in links:
         print(f"  {l}")
     url = links[0]
-    if dry:
-        print("\n--dry-run: nothing downloaded")
-        return 0
-
-    print(f"\ndownloading {url}")
+    print(f"\ndownloading {url}" + ("  (--dry-run: classify only)" if dry else ""))
     blob = fetch(url)
     ok = verify_sha256(blob, url)
     print(f"sha256: {'verified' if ok else ('MISMATCH' if ok is False else 'no digest published')}")
@@ -152,16 +163,23 @@ def main():
         jars = [n for n in z.namelist()
                 if n.endswith(".jar") and "-sources" not in n and "-javadoc" not in n]
         print(f"archive: {len(blob) / 1e6:.1f} MB, {len(jars)} jars to install")
-        installed, skipped = 0, []
+        installed, skipped, foreign, nometa = 0, [], [], []
         for j in jars:
             data = z.read(j)
             co = coordinates(data)
             if not co:
-                skipped.append(os.path.basename(j) + " (no pom.properties)")
+                nometa.append(os.path.basename(j))
+                continue
+            if not is_related(co, kw):
+                foreign.append("{}:{}:{}".format(*co))
                 continue
             g, a, v = co
             path = os.path.join(tmp, os.path.basename(j))
             open(path, "wb").write(data)
+            if dry:
+                installed += 1
+                print(f"  would install {g}:{a}:{v}")
+                continue
             r = subprocess.run(
                 [os.path.join(ROOT, "scripts", "build.sh"),
                  "install:install-file", f"-Dfile={path}",
@@ -174,11 +192,34 @@ def main():
             else:
                 skipped.append(f"{g}:{a}:{v} (mvn exit {r.returncode})")
         for s in skipped:
-            print(f"  SKIPPED {s}")
-        print(f"\ninstalled {installed}/{len(jars)}")
+            print(f"  FAILED  {s}")
+        if foreign:
+            print(f"  left alone ({len(foreign)} third-party jars shipped with the "
+                  f"TCK, not ours to install): " + ", ".join(foreign[:4])
+                  + (" ..." if len(foreign) > 4 else ""))
+        if nometa:
+            print(f"  no Maven metadata ({len(nometa)}): " + ", ".join(nometa[:4])
+                  + (" ..." if len(nometa) > 4 else ""))
+        print(f"\ninstalled {installed} of {len(jars)} jars in the archive")
+
+        if installed == 0:
+            # A whole family of TCKs is not consumed through Maven at all:
+            # Transactions 2.0 ships lib/jtatck.jar with javatest, tsharness and
+            # sigtest, driven by an Ant harness and a ts.jte file. Saying
+            # "installed 0" and stopping is right; pretending otherwise is not.
+            print("\nNO MAVEN-CONSUMABLE TCK IN THIS ARCHIVE.")
+            print("It looks like a JavaTest/TSharness distribution (lib/*.jar + an")
+            print("Ant harness), not a set of Maven artifacts. That TCK is run, not")
+            print("depended upon. This repo already has a runner of that family to")
+            print("copy: mansart-transactions/mansart-transactions-tck.")
+            return 7
     finally:
         if not keep:
             shutil.rmtree(tmp, ignore_errors=True)
+
+    if dry:
+        print("\n--dry-run: nothing was installed")
+        return 0
 
     # The verdict belongs to the checker, never to the installer.
     print("\nverifying with tck-find.py — an install is not a metric:")

@@ -679,6 +679,41 @@ out loud: **exit 5, no archive linked on the page.** That is open-ended — a
 moved download, a spec hosted elsewhere — and it is what WebFetch is for. Even
 there the agent reports a url and stops; it never fabricates a coordinate.
 
+### "Does that hold for five specs?"
+
+It did not, and the question was the whole value. Discovery held 9/9 — but the
+*install* step rested on an assumption I had verified on exactly one archive:
+that every jar carries its coordinates. Tested on four more:
+
+| spec | jars | installable | the rest |
+| --- | --- | --- | --- |
+| data 1.0 | 1 | 1 | — |
+| cdi 4.1 | 4 | 4 | — |
+| bean-validation 3.1 | 42 | 6 | 28 third-party, 8 with no metadata |
+| transactions 2.0 | 13 | **0** | not a Maven TCK at all |
+
+Bean Validation ships slf4j, jQuery and AssertJ inside its TCK archive — a jar
+with a `pom.properties` is not therefore *ours*, and installing all 34 would
+have pushed other projects' artifacts into the M2. Transactions is worse and
+more interesting: its only jar carrying coordinates is `jaxen:jaxen:1.1.6`, an
+XPath library. My installer would have installed jaxen, called it a day, and
+missed the TCK entirely — because Transactions 2.0 is a **JavaTest/TSharness
+distribution**, `lib/jtatck.jar` plus an Ant harness, a TCK that is *run* rather
+than depended upon. A whole family of specs my design had not imagined.
+
+The design held where it mattered: the verdict is `tck-find.py`, so even the
+broken version would have failed loudly rather than reporting a fake success.
+But "fails loudly" is not "works". Now the script installs only jars that belong
+to the spec, names the third-party ones it deliberately left alone, and when
+nothing is Maven-consumable it says so and exits 7, pointing at
+`mansart-transactions-tck` — the runner of that family this repo already has.
+
+Two verifications, two different outcomes: the one I ran (one spec) confirmed my
+design, the one I was pushed to run (five specs) refuted it. The generalisable
+part is not the fix. It is that **a harness claimed to work "for any spec" has
+to be tried on specs you did not design it against**, and that the person asking
+"does that hold for five?" is doing the most valuable work in the room.
+
 The rule that falls out of it is worth more than the script: **trust a model to
 search, never to conclude.** This session already paid for the second half — an
 agent reported *"TCK execution runs successfully"* over one skipped test, and

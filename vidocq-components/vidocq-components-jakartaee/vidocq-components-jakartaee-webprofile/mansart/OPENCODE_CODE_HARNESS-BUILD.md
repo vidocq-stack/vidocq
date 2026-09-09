@@ -345,6 +345,32 @@ starts from nothing again:
   WebFetch takes over, and even then it reports a url and stops.
   Verified end to end from an empty M2: 4.3 MB downloaded, sha256 verified,
   3/3 jars installed, 161 test classes confirmed.
+
+  **Tested on nine specs, and the first version was wrong on two of them.**
+  Discovery works 9/9 (persistence, data, bean-validation, transactions, cdi,
+  jsonb, restful-ws, servlet, pages) — and the names confirm no pattern exists:
+  `cdi-tck-4.1.0-dist.zip`, `validation-tck-dist-3.1.1.zip`,
+  `jakarta-transactions-tck-2.0.0.zip`, `data-tck-1.0.0.zip`. Installation is
+  the part that needed hardening:
+
+  | spec | jars | installed | left alone |
+  | --- | --- | --- | --- |
+  | persistence 3.2 | 3 | 3 | — |
+  | data 1.0 | 1 | 1 | — |
+  | cdi 4.1 | 4 | 4 | — |
+  | bean-validation 3.1 | 42 | 6 | 28 third-party, 8 without metadata |
+  | transactions 2.0 | 13 | **0** | not a Maven TCK at all |
+
+  Two rules came out of it. **A jar carrying coordinates is not necessarily
+  ours**: the Bean Validation archive ships slf4j, jQuery, AssertJ; the
+  Transactions archive's only jar with a `pom.properties` is
+  `jaxen:jaxen:1.1.6`. Installing everything with metadata would pollute the M2
+  with other projects' artifacts and still miss the TCK. And **a whole family of
+  TCKs is not consumed through Maven**: Transactions 2.0 is a JavaTest/TSharness
+  distribution — `lib/jtatck.jar` plus an Ant harness — which is *run*, not
+  depended upon. The script detects it (0 installable jars), says so, exits 7,
+  and points at `mansart-transactions-tck`, the runner of that family this repo
+  already has.
 - **M0 is always the TCK**, before any implementation milestone, and it has three
   shapes because **"no TCK installed" is not "no TCK exists"** — the gap between
   those two is where a project invents a substitute metric:
