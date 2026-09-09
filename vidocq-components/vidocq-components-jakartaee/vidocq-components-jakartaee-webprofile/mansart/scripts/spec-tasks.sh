@@ -206,8 +206,12 @@ if os.path.isfile(_v):
             # The column is Date, so put a date in it. The first version wrote
             # "verify-m0.sh" there — provenance in the wrong slot, which reads as
             # a bug to anyone opening the file. Provenance goes with the evidence.
+            # Date AND time: several verifications land on the same day, and
+            # "which run produced this row" is the question you actually ask when
+            # a card flips back to FAIL.
             m0_rows.append("| {} | {} | verify-m0.sh: {} |".format(
-                m.group(1), _dt.date.today().isoformat(), m.group(2).strip()))
+                m.group(1), _dt.datetime.now().strftime("%Y-%m-%d %H:%M"),
+                m.group(2).strip()))
 
 done_rows, in_done = [], False
 if os.path.exists(status_p):
