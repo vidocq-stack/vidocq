@@ -97,7 +97,7 @@ class OtlpHttpMetricExporterE2ETest {
 
             // flush triggers an immediate collect+export cycle
             p.flush().join(3, TimeUnit.SECONDS);
-            waitForCallCount(1);
+            waitForReceivedBodies(1);
         }
 
         assertTrue(receivedBodies.size() >= 1, "at least one POST expected");
@@ -113,9 +113,9 @@ class OtlpHttpMetricExporterE2ETest {
         assertTrue(body.contains("\"service.name\""));
     }
 
-    private void waitForCallCount(int expected) {
+    private void waitForReceivedBodies(int expected) {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
-        while (System.nanoTime() < deadline && callCount.get() < expected) {
+        while (System.nanoTime() < deadline && receivedBodies.size() < expected) {
             try { Thread.sleep(20); } catch (InterruptedException ie) {
                 Thread.currentThread().interrupt(); return;
             }

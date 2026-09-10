@@ -91,7 +91,7 @@ class OtlpHttpLogExporterE2ETest {
                     .setBody("hello over OTLP")
                     .setAttribute(AttributeKey.stringKey("http.status"), "200")
                     .emit();
-            waitForCallCount(1);
+            waitForReceivedBodies(1);
         }
 
         assertTrue(receivedBodies.size() >= 1, "at least one POST expected");
@@ -105,9 +105,9 @@ class OtlpHttpLogExporterE2ETest {
         assertTrue(body.contains("\"observedTimeUnixNano\""));
     }
 
-    private void waitForCallCount(int expected) {
+    private void waitForReceivedBodies(int expected) {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
-        while (System.nanoTime() < deadline && callCount.get() < expected) {
+        while (System.nanoTime() < deadline && receivedBodies.size() < expected) {
             try { Thread.sleep(20); } catch (InterruptedException ie) {
                 Thread.currentThread().interrupt(); return;
             }

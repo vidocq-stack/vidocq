@@ -104,7 +104,7 @@ class OtlpHttpSpanExporterE2ETest {
 
             // SimpleSpanProcessor exports synchronously; the HTTP round-trip happens
             // on an exporter-side VT — we wait until the fake server counts 1 call.
-            waitForCallCount(1);
+            waitForReceivedBodies(1);
         }
 
         assertEquals(1, receivedBodies.size());
@@ -134,7 +134,7 @@ class OtlpHttpSpanExporterE2ETest {
             Span s = t.spanBuilder("retry-test").startSpan();
             s.end();
             // At least 3 expected calls (503 + 503 + 200)
-            waitForCallCount(3);
+            waitForReceivedBodies(3);
         }
         assertTrue(callCount.get() >= 3, "callCount = " + callCount.get());
     }
@@ -152,7 +152,7 @@ class OtlpHttpSpanExporterE2ETest {
                 .addSpanProcessor(SimpleSpanProcessor.create(exporter))
                 .build()) {
             p.get("x").spanBuilder("hdr").startSpan().end();
-            waitForCallCount(1);
+            waitForReceivedBodies(1);
         }
         assertNotNull(receivedAuthHeaders);
         assertEquals(1, receivedAuthHeaders.size());
@@ -169,9 +169,9 @@ class OtlpHttpSpanExporterE2ETest {
                 "5s ceiling reached for large attempts");
     }
 
-    private void waitForCallCount(int expected) {
+    private void waitForReceivedBodies(int expected) {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
-        while (System.nanoTime() < deadline && callCount.get() < expected) {
+        while (System.nanoTime() < deadline && receivedBodies.size() < expected) {
             try {
                 Thread.sleep(20);
             } catch (InterruptedException ie) {
