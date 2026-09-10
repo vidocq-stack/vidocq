@@ -15,7 +15,9 @@
 // the model, which then corrects itself (verified 2026-09-09).
 
 import {
+  normalise,
   generatedFileVerdict,
+  traceDocVerdict,
   frozenModuleVerdict,
   grepDashPattern,
   isRawMaven, isTckWrite, isArchiveDump, longCatTarget,
@@ -86,6 +88,10 @@ export const MansartGuard = async ({ directory }) => {
                 "a full cat is 28% of what blew up the primary context.",
             )
 
+          const traced = (normalise(cmd).match(/OPENCODE_[A-Z0-9_-]+\.md/i) ?? [])[0]
+          if (traced && /^(cat|read|sed|head|tail|less|grep|rg)\b/.test(normalise(cmd)))
+            throw new Deny(traceDocVerdict(traced))
+
           const dash = grepDashPattern(cmd)
           if (dash)
             throw new Deny(
@@ -109,6 +115,8 @@ export const MansartGuard = async ({ directory }) => {
 
         if (input.tool === "read" || input.tool === "read_file") {
           const path = output.args?.filePath ?? output.args?.path
+          const trace = traceDocVerdict(path)
+          if (trace) throw new Deny(trace)
           if (typeof path === "string" && rereadVerdict(path, st) === "deny")
             throw new Deny(`${path} is unchanged since you read it — it is still in your context.`)
         }

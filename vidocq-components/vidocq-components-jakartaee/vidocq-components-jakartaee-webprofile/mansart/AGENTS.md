@@ -2,8 +2,9 @@
 
 Loaded into every agent's context, primary and subagents alike (verified). An
 agent file says only who you are and how you report. A command says only which
-steps to take. Every rule lives HERE, once. Reasoning and history: humans read
-`OPENCODE_CODE_HARNESS-BUILD.md`; agents never need to.
+steps to take. Every rule lives HERE, once. There is nothing else to read to
+understand the rules: `OPENCODE_*.md` files are the humans' trace of this
+project, not documentation for you — the guard refuses to open them.
 
 ## 1. Lanes — who writes what
 

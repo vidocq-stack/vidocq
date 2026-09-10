@@ -200,3 +200,21 @@ export function frozenModuleVerdict(path, frozen) {
   }
   return null
 }
+
+
+/**
+ * OPENCODE_*.md are the humans' trace of this project — design reasoning,
+ * field notes, ~2 000 lines between them. They are not documentation for an
+ * agent: everything an agent must know is in AGENTS.md, once. Opening one
+ * pours a thousand lines of history into a context that is re-sent every step.
+ */
+export function traceDocVerdict(path) {
+  if (typeof path !== "string") return null
+  const base = path.split("/").pop() ?? ""
+  if (/^OPENCODE_[A-Z0-9_-]+\.md$/i.test(base))
+    return (
+      `${base} is the humans' trace of this project, not documentation for you. ` +
+      "Every rule you need is in AGENTS.md. Nothing in this file changes what to do next."
+    )
+  return null
+}

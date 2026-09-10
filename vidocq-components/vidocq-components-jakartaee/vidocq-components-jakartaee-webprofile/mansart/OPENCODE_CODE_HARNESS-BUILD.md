@@ -15,7 +15,11 @@ of 6–9 Sep 2026. Nothing here is a preference.
 > rule lives in `AGENTS.md`, once. Seventeen files that each restated the rules
 > had drifted into contradicting each other — that is why the lead typed instead
 > of delegating. Consolidated: 819 lines became ~490, and the war stories moved
-> here, where humans read them. Agents do not read this file.
+> here, where humans read them. Agents do not read this file — and since this
+> revision the guard refuses to open any `OPENCODE_*.md`, by the read tool or
+> by `cat`/`sed`/`grep`: these files are the humans' trace of the project, not
+> documentation, and one of them is a thousand lines of history poured into a
+> context that is re-sent every step.
 
 ---
 
