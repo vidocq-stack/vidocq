@@ -1,0 +1,15 @@
+/**
+ * Vidocq Runtime extension for Mansart Jakarta Persistence integration.
+ */
+module io.vidocq.runtime.extensions.jakartaee.web.mansart.persistence {
+    requires transitive io.vidocq.runtime.spi;
+    requires transitive io.vidocq.mansart.persistence.api;
+    requires transitive io.vidocq.mansart.persistence.core;
+    requires transitive jakarta.enterprise.cdi.api;
+    requires transitive jakarta.persistence;
+
+    exports io.vidocq.runtime.extensions.jakartaee.web.mansart.persistence;
+
+    provides io.vidocq.runtime.spi.VidocqExtension 
+        with io.vidocq.runtime.extensions.jakartaee.web.mansart.persistence.MansartPersistenceIntegrationExtension;
+}
