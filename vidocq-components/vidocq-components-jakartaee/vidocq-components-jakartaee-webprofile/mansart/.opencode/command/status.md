@@ -2,17 +2,14 @@
 description: Read-only summary of a spec's progress
 agent: lead
 ---
-ARGS: $ARGUMENTS
-Expected: <XXX>
+ARGS: $ARGUMENTS   (<XXX>)
 
-READ ONLY. Change nothing. Call no subagent. Run no build.
-
-grep the counters out of STATUS-$ARGUMENTS.md and TASKS-$ARGUMENTS.md.
+READ ONLY. No subagent, no build, no write. grep -n STATUS-$ARGUMENTS.md.
 
 REPORT:
-  milestone: <current M> — <n done>/<n total> cards
-  last card: <id> <date> <sha>
-  blocked: <ids, or none>
+  milestones: <the Milestones table rows with done > 0, or "none started">
+  total: <the **Total:** line>
+  last row: <last line of "Done cards">
+  order: <"clean" or ORDER VIOLATION lines>
   open bugs: <count of $ARGUMENTS-B* not FIXED in BUG.md>
-
-Numbers only. No opinion on whether it is going well.
+Numbers only. No opinion.

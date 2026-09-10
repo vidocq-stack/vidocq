@@ -1117,6 +1117,16 @@ still told the lead to append STATUS rows that `verify-m0.sh` now writes, and
 described "a chain T001 to T005" for six cards. Each of these was true when
 written and false by the time an agent read it.
 
+The structural fix came from a question — *one document, read through
+`AGENTS.md`?* — and a probe: OpenCode injects `AGENTS.md` into every agent,
+subagents included (`recon` quoted a marker it had never read from disk). So
+every rule restated in an agent or command file was a copy waiting to drift.
+Consolidated: `AGENTS.md` is the single rulebook (lanes, script-owned files,
+hard rules, commands and their done-whens), agent files shrank to a role and a
+report format, commands to their steps. 819 lines across seventeen files became
+about 490, and the anecdotes moved to the design document, where a human reads
+them once instead of every agent reading them on every call.
+
 **A harness accretes rules faster than it reconciles them.** Every fix here was
 local and correct, and the files drifted apart anyway. The reconciliation is the
 work nobody schedules — it took the fourth "why does he not delegate?" to force

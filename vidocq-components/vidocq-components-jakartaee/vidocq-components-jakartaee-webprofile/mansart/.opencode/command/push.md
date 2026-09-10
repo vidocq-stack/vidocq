@@ -2,13 +2,10 @@
 description: Push the current branch. The only command that publishes.
 agent: lead
 ---
-ARGS: $ARGUMENTS
-Expected: <XXX>
+ARGS: $ARGUMENTS   (<XXX>)
 
-/next commits but NEVER pushes. Pushing publishes; a human decides that.
-
-1. git status --short. Uncommitted changes? List them and ASK before anything.
-2. git log --oneline origin/HEAD..HEAD — show what will be published.
-3. Every commit signed? git log --show-signature -1. Unsigned -> STOP.
-4. Push the current branch to its remote. Never force. Never to main.
-5. Report: branch, number of commits, remote.
+1. git status --short — uncommitted changes? List them, ASK, do nothing else.
+2. git log --oneline @{upstream}..HEAD — show what will be published.
+3. git log --show-signature -1 — unsigned? STOP.
+4. Push the current branch to its remote. Never force. Never main.
+5. Report: branch, commits, remote.

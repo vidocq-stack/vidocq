@@ -8,9 +8,14 @@ Every rule below is anchored on a number measured on this machine, either from
 the Vibe V3 session logs (`ybl/jpa-vibe:VIBE_V3.md`) or from the oMLX model bench
 of 6–9 Sep 2026. Nothing here is a preference.
 
-> **Reading order.** `AGENTS.md` is the contract agents load; it is short and
-> written in caveman English. This file is the reasoning behind it, for humans.
-> Agents do not read this file.
+> **Reading order.** `AGENTS.md` is the one rulebook, and OpenCode injects it
+> into **every** agent's context, subagents included (verified with a marker:
+> `recon` quoted it without reading a file). So an agent file says only who the
+> agent is and how it reports; a command says only which steps to take; every
+> rule lives in `AGENTS.md`, once. Seventeen files that each restated the rules
+> had drifted into contradicting each other — that is why the lead typed instead
+> of delegating. Consolidated: 819 lines became ~490, and the war stories moved
+> here, where humans read them. Agents do not read this file.
 
 ---
 

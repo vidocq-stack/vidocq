@@ -2,59 +2,26 @@
 description: Do ONE card end to end (TDD, build, sonar, commit) then STOP
 agent: lead
 ---
-ARGS: $ARGUMENTS
-Expected: <XXX>   e.g. JKP
+ARGS: $ARGUMENTS   (<XXX>)
 
-ONE card. Then STOP. Do not start the next one.
+ONE card, then STOP. AGENTS.md §1-4 apply.
 
-1. PICK
-   ./scripts/verify-m0.sh $ARGUMENTS   -> M0 must be 6 pass. Not? STOP: run /tck.
-   Read STATUS-$ARGUMENTS.md "Done cards", then TASKS-$ARGUMENTS.md.
-   Take the first M1+ card without a Done row. Say its id out loud.
-   Nothing left? Say so and STOP.
-
-2. LOCATE
-   @recon: "card <id> says <one line>. Which files? 3 lines."
-
-3. RED
-   @tdd: "write the failing test for card <id>: <requirement>".
-   No RED test? STOP. There is nothing to implement.
-
-4. GREEN
-   @impl: "make it pass. Do not touch tests."
-   Failed twice? @thinker, then ONE more @impl. Still failed? Write it in
-   STATUS-$ARGUMENTS.md as BLOCKED with the error, and STOP.
-
-5. MEASURE
-   @verify: build + tests on the touched module.
-   Red? back to step 4.
-
-6. SONAR
-   @verify: ./scripts/sonar.sh <module>
-   New issues? @impl fixes them — TESTS ARE READ-ONLY IN THIS PHASE. Max 2 tries.
-   Then @verify re-scans. Still failing after 2? BLOCKED in STATUS, STOP.
-   Sonar not configured? Say "sonar: skipped", continue.
-
-7. COMMIT (never push)
-   git add only the files impl and tdd touched. Never -A.
-   Message, English, Conventional Commits:
-     <type>(<scope>): <what> [$ARGUMENTS <card-id>]
-
-     Co-Authored-By: <the model that wrote the code>
-   Commit with: git commit -S -s
-   -s fills Signed-off-by from git config. NEVER hardcode a name or email.
-   Signature fails -> the card is NOT done. Report and STOP.
-
-8. STATUS
-   Append ONE row to the "Done cards" table of STATUS-$ARGUMENTS.md:
-     | <card> | <YYYY-MM-DD HH:MM> | verify: tests run=<n> failures=<n> errors=<n>; sha <short> |
-   Numbers come from @verify. Never from your own impression. Never touch the
-   counts — they are computed. Then: ./scripts/verify-m0.sh $ARGUMENTS refreshes
-   them (it keeps your row).
-
-9. STOP. Report 3 lines: card, numbers, sha.
-   Say: "run /push $ARGUMENTS when you want it pushed".
-
-WHERE YOU WRITE: never TASKS-*.md (generated, the guard refuses it). Per-card
-briefs go to tasks/<XXX>/<CARD>.md. STATUS-<XXX>.md: append Done rows only, and
-only when the card's own done-when command exited 0.
+1. PICK   ./scripts/verify-m0.sh $ARGUMENTS must be 6 pass — else STOP: run /tck.
+          First M1+ card in TASKS-$ARGUMENTS.md with no row in STATUS "Done
+          cards". Say its id. None left? STOP.
+2. LOCATE @recon: "card <id>: <one line>. Which files? 3 lines."
+3. RED    @tdd: "failing test for card <id>: <requirement>". No RED? STOP.
+4. GREEN  @impl: "make it pass, do not touch tests". Failed twice -> @thinker,
+          then ONE more @impl. Still red -> note BLOCKED + error in the STATUS
+          Log section, STOP.
+5. MEASURE @verify: build + tests on the module. Red -> step 4.
+6. SONAR  @verify: ./scripts/sonar.sh <module>. New issues -> @impl fixes, tests
+          READ-ONLY, max 2 tries, @verify re-scans. Not configured -> "skipped".
+7. COMMIT git add ONLY the files tdd and impl touched (never -A).
+          <type>(<scope>): <what> [$ARGUMENTS <card-id>]  +  Co-Authored-By: <model>
+          git commit -S -s. Signature fails -> not done, STOP.
+8. STATUS append ONE row to "Done cards":
+          | <card> | <YYYY-MM-DD HH:MM> | verify: run=<n> failures=<n> errors=<n>; sha <short> |
+          Numbers from @verify only. Counts are computed: never touch them.
+          ./scripts/verify-m0.sh $ARGUMENTS refreshes them and keeps your row.
+9. STOP.  3 lines: card, numbers, sha. "run /push $ARGUMENTS when you want it pushed".
