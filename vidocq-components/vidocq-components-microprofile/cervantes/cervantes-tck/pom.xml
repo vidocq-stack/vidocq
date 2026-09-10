@@ -32,13 +32,13 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.release>25</maven.compiler.release>
-        <cervantes.version>0.3.0-SNAPSHOT</cervantes.version>
+        <cervantes.version>0.4.0-SNAPSHOT</cervantes.version>
         <microprofile.jwt.version>2.1</microprofile.jwt.version>
-        <vauban.version>0.3.0-SNAPSHOT</vauban.version>
-        <ravel.version>0.3.0-SNAPSHOT</ravel.version>
-        <champollion.version>0.3.0-SNAPSHOT</champollion.version>
-        <cassini.version>0.3.0-SNAPSHOT</cassini.version>
-        <chappe.version>0.3.0-SNAPSHOT</chappe.version>
+        <vauban.version>0.4.0-SNAPSHOT</vauban.version>
+        <ravel.version>0.4.0-SNAPSHOT</ravel.version>
+        <champollion.version>0.4.0-SNAPSHOT</champollion.version>
+        <cassini.version>0.4.0-SNAPSHOT</cassini.version>
+        <chappe.version>0.4.0-SNAPSHOT</chappe.version>
     </properties>
 
     <repositories>
