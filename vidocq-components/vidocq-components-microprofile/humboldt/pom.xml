@@ -8,13 +8,13 @@
     <parent>
         <groupId>io.vidocq</groupId>
         <artifactId>vidocq-parent</artifactId>
-        <version>0.3.0-SNAPSHOT</version>
+        <version>0.4.0-SNAPSHOT</version>
         <relativePath/>
     </parent>
 
     <groupId>io.vidocq.humboldt</groupId>
     <artifactId>humboldt-parent</artifactId>
-    <version>0.3.0-SNAPSHOT</version>
+    <version>0.4.0-SNAPSHOT</version>
     <packaging>pom</packaging>
 
     <name>Humboldt</name>
@@ -70,10 +70,10 @@
         <jakarta.ws.rs.version>4.0.0</jakarta.ws.rs.version>
 
         <!-- Vidocq ecosystem -->
-        <chappe.version>0.3.0-SNAPSHOT</chappe.version>
-        <vauban.version>0.3.0-SNAPSHOT</vauban.version>
-        <champollion.version>0.3.0-SNAPSHOT</champollion.version>
-        <ravel.version>0.3.0-SNAPSHOT</ravel.version>
+        <chappe.version>0.4.0-SNAPSHOT</chappe.version>
+        <vauban.version>0.4.0-SNAPSHOT</vauban.version>
+        <champollion.version>0.4.0-SNAPSHOT</champollion.version>
+        <ravel.version>0.4.0-SNAPSHOT</ravel.version>
     </properties>
 
     <!--
