@@ -1168,6 +1168,28 @@ has to be written like one.**
 And one rule for me, from the user: he launches `/tck` in his own OpenCode. I
 fix, reset, and hand over.
 
+### Sixteen seconds, and a wrong verdict delivered with confidence
+
+His first launch stopped after sixteen seconds: *"Exit 7: JavaTest-style TCK —
+the Jakarta Persistence 3.2 TCK distribution contains no Maven-consumable
+artifacts."* False, and the lead was right to stop on it: my script had said so.
+
+Two defects stacked. The lead ran `STEP040` although `STEP030` had just exited 0
+— a slip, but one a script can absorb: the install step is now idempotent and
+says "already installed, nothing to do". And `tck-install.py` had installed
+**0 of 3 jars because all three `mvn install:install-file` calls failed**, then
+reported that as "not a Maven TCK". The same code path, exit 7, for "no
+coordinates in the archive" and "Maven broke three times" — one of them a
+diagnosis, the other a mystery, and the message chose the diagnosis.
+
+The mystery was small once looked at: the install ran from the repository root,
+so Maven loaded the whole reactor first, whose parent chain reaches
+`org.sonatype.oss:oss-parent:11` — unresolvable that morning. `install-file`
+needs no project at all; run from an empty directory it works. **A tool that
+reports a conclusion should be able to say which of its assumptions it did not
+check.** Exit 7 still means "no Maven artifacts"; a failed install is now exit 8
+with the pointer to the Maven log.
+
 **A harness accretes rules faster than it reconciles them.** Every fix here was
 local and correct, and the files drifted apart anyway. The reconciliation is the
 work nobody schedules — it took the fourth "why does he not delegate?" to force

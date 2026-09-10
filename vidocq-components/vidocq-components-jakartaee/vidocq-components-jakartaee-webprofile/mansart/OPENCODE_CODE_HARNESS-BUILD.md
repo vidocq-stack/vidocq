@@ -796,6 +796,14 @@ things learned running it:
   the guard protects `spec-meta.json` and refuses a `Client.java` in a runner;
   the include must be exactly `**/Client.class`; no suite run without a compiling
   module.
+- **`STEP040` is idempotent and `tck-install.py` tells a failed install from a
+  non-Maven archive.** A run called the install step with the TCK already
+  installed; the re-install failed three times because `install-file` ran from
+  the repository root, where Maven loads the reactor and its parent chain
+  (`org.sonatype.oss:oss-parent:11`, unresolvable that morning); the script
+  reported "not a Maven TCK", exit 7, and the lead — correctly — stopped. Now:
+  already runnable → exit 0 without doing anything; install runs from an empty
+  temp dir (no project needed); every-install-failed → exit 8 with the log.
 - **No single `/tck` run has completed M0 unaided.** The six cards were reached
   across several runs, each ending in a harness fix rather than a module fix. The
   tree is reset so the claim can actually be tested.

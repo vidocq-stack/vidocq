@@ -185,7 +185,13 @@ def main():
                  "install:install-file", f"-Dfile={path}",
                  f"-DgroupId={g}", f"-DartifactId={a}", f"-Dversion={v}",
                  "-Dpackaging=jar"],
-                capture_output=True, text=True, cwd=ROOT, timeout=600)
+                # cwd is the TEMP dir on purpose: run from the repo root, Maven
+                # loads the whole reactor first — and its parent chain reaches
+                # org.sonatype.oss:oss-parent:11, which was unresolvable one
+                # morning. Three installs failed for a reason unrelated to the
+                # TCK, and the command reading exit 7 gave up. install-file
+                # needs no project at all.
+                capture_output=True, text=True, cwd=tmp, timeout=600)
             if r.returncode == 0:
                 installed += 1
                 print(f"  installed {g}:{a}:{v}")
@@ -202,6 +208,14 @@ def main():
                   + (" ..." if len(nometa) > 4 else ""))
         print(f"\ninstalled {installed} of {len(jars)} jars in the archive")
 
+        if installed == 0 and skipped:
+            # Coordinates were found and every install FAILED: that is a Maven
+            # problem, not a JavaTest distribution. A first version reported
+            # exit 7 ("not a Maven TCK") for three mvn failures, and the command
+            # reading it gave up on a perfectly consumable suite.
+            print("\nINSTALL FAILED for every jar (mvn exit != 0). The archive IS Maven-consumable;")
+            print("the install step is broken. See target/build-logs/ for the mvn error.")
+            return 8
         if installed == 0:
             # A whole family of TCKs is not consumed through Maven at all:
             # Transactions 2.0 ships lib/jtatck.jar with javatest, tsharness and

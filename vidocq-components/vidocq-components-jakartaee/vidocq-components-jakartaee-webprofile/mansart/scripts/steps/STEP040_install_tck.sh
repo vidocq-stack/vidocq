@@ -9,6 +9,13 @@ set -uo pipefail
 H="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 [ $# -ge 1 ] || { echo "usage: $(basename "$0") <XXX> [--dry-run]"; exit 2; }
 echo "== STEP040 install TCK: $1"
+# Idempotent: a lead ran this step although STEP030 had just exited 0, and a
+# failed re-install then read as "no Maven TCK". Already runnable = nothing to do.
+if "$H/scripts/steps/STEP030_detect_tck.sh" "$1" >/dev/null 2>&1; then
+    echo "   already installed and runnable — nothing to do (STEP030 exits 0)"
+    echo "next: STEP050_module_path.sh $1"
+    exit 0
+fi
 python3 "$H/scripts/tck-install.py" "$@"; rc=$?
 if [ $rc -eq 0 ]; then
     python3 "$H/scripts/spec-fetch.py" "$1" --refresh-tck
