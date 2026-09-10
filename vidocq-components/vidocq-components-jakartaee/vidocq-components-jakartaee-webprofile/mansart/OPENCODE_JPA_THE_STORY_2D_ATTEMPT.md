@@ -1190,6 +1190,40 @@ reports a conclusion should be able to say which of its assumptions it did not
 check.** Exit 7 still means "no Maven artifacts"; a failed install is now exit 8
 with the pointer to the Maven log.
 
+### Zero tests, green build, and the provider nobody declared
+
+His next launch went the way it should: `STEP030` ok, `STEP040` "nothing to
+do", `STEP070` calling `impl` four times — **5 of 6 in two minutes, every file
+written by the subagent**, and the lead's bash call survived well past the two
+minutes I had feared. Then the same wall as my own run: T005, `Tests run: 0`,
+`BUILD SUCCESS`.
+
+The pom was right everywhere I had learned to look: include exactly
+`**/Client.class`, `dependenciesToScan` without a version, standalone mode,
+JPATCK. The build log had the answer in one line I had never read:
+
+```
+[INFO] Using auto detected provider org.apache.maven.surefire.testng.TestNGProvider
+[INFO] Running TestSuite
+```
+
+Surefire chooses its provider from the classpath. The runner declared TestNG —
+faithfully copied from `mansart-data-tck`, which I keep calling the working
+reference — and nothing else, so surefire ran the suite as TestNG and found no
+TestNG tests. The 160 `Client` classes are **JUnit 5**. Read off the jars:
+persistence 3.2 has 118 classes referencing `org.junit.jupiter` and none
+referencing `org.testng`; data 1.0 has 22 and none. The TestNG in the data
+runner is a leftover; what made yesterday's 991 tests run was a `junit-jupiter`
+dependency added "for smoke tests". The reference worked by accident, and the
+copy reproduced everything except the accident.
+
+The framework is a fact of the jar, so `tck-find.py` now reads it there and
+records `test_framework: junit5` in `spec-meta.json`; the checker demands the
+matching provider dependency and names the auto-detected one when it is wrong;
+the wiring prompts state it. **"Copy the working reference" carries the
+reference's accidents too — and the accidents are exactly the part nobody
+documents.**
+
 **A harness accretes rules faster than it reconciles them.** Every fix here was
 local and correct, and the files drifted apart anyway. The reconciliation is the
 work nobody schedules — it took the fourth "why does he not delegate?" to force

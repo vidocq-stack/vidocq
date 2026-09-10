@@ -69,9 +69,23 @@
     "recommended": {
       "groupId": "jakarta.tck",
       "artifactId": "persistence-tck-spec-tests",
-      "version": "3.2.1"
+      "version": "3.2.1",
+      "test_framework": "junit5",
+      "test_framework_evidence": {
+        "framework": "junit5",
+        "junit5": 118,
+        "testng": 0,
+        "junit4": 0
+      }
     },
     "repo_runners": [
+      {
+        "path": "mansart-jakarta-persistence/mansart-jakarta-persistence-tck",
+        "has_tests": true,
+        "scripts": [
+          "run-official-tck-persistence-3.2.sh"
+        ]
+      },
       {
         "path": "mansart-jakarta-data/mansart-data-tck",
         "has_tests": true,

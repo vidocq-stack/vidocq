@@ -804,6 +804,15 @@ things learned running it:
   reported "not a Maven TCK", exit 7, and the lead — correctly — stopped. Now:
   already runnable → exit 0 without doing anything; install runs from an empty
   temp dir (no project needed); every-install-failed → exit 8 with the log.
+- **The TCK's test framework is read from the jar, and the runner must declare
+  its provider.** Surefire auto-detects its provider from the classpath: a runner
+  declaring only TestNG (copied from `mansart-data-tck`) ran the Persistence 3.2
+  suite as `Tests run: 0, BUILD SUCCESS` — the `Client` classes are JUnit 5 (118
+  classes reference `org.junit.jupiter`, 0 `org.testng`; data 1.0: 22 / 0, its
+  TestNG is a leftover). `tck-find.py` records `test_framework` in
+  `spec-meta.json`; `verify-m0.sh` requires `org.junit.jupiter:junit-jupiter`
+  (or `org.testng:testng`) accordingly and quotes the `Using auto detected
+  provider` line when it is wrong; `STEP070` states it in the wiring prompt.
 - **No single `/tck` run has completed M0 unaided.** The six cards were reached
   across several runs, each ending in a harness fix rather than a module fix. The
   tree is reset so the claim can actually be tested.

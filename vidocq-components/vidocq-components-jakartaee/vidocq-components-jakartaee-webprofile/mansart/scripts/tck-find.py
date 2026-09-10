@@ -68,6 +68,35 @@ def scan_m2(keyword):
     return sorted(out, key=lambda a: (len(a["artifactId"]), a["artifactId"]))
 
 
+def test_framework(art_dir, name, version):
+    """Which test framework the TCK's classes reference: junit5 | testng | junit4.
+
+    WHY: surefire picks its provider from the classpath. A runner declaring only
+    TestNG (copied from a sibling runner) auto-selected the TestNG provider and
+    ran the Persistence 3.2 suite as "Tests run: 0, BUILD SUCCESS" — the 160
+    Client classes are JUnit 5 and were never looked at. Measured on the jars:
+    persistence 3.2 -> 141 classes reference org.junit.jupiter, 0 org.testng;
+    data 1.0 -> 22 / 0. The framework is a fact of the jar, so read it there.
+    """
+    jar = os.path.join(art_dir, version or "", "{}-{}.jar".format(name, version))
+    if not version or not os.path.isfile(jar):
+        return None
+    j5 = tn = j4 = 0
+    try:
+        with zipfile.ZipFile(jar) as z:
+            for n, entry in enumerate(z.namelist()):
+                if not entry.endswith(".class") or n > 600:
+                    continue
+                b = z.read(entry)
+                j5 += b"org/junit/jupiter" in b
+                tn += b"org/testng" in b
+                j4 += b"Lorg/junit/Test;" in b
+    except Exception:
+        return None
+    best = max((j5, "junit5"), (tn, "testng"), (j4, "junit4"))
+    return {"framework": best[1], "junit5": j5, "testng": tn, "junit4": j4} if best[0] else None
+
+
 def count_test_classes(art_dir, name, version):
     """How many test classes the jar actually holds. -1 = no jar at all.
 
@@ -189,6 +218,11 @@ def main():
             "artifactId": main_art["artifactId"],
             "version": main_art["matching_version"],
         }
+        fw = test_framework(os.path.join(M2, *main_art["groupId"].split("."), main_art["artifactId"]),
+                            main_art["artifactId"], main_art["matching_version"])
+        if fw:
+            result["recommended"]["test_framework"] = fw["framework"]
+            result["recommended"]["test_framework_evidence"] = fw
     # "artifacts exist" is not "a TCK we can run". Say which, so the plan can
     # make installing it a card instead of pretending the metric is there.
     result["runnable"] = bool(result["recommended"]
@@ -229,6 +263,9 @@ def main():
         how = (f"{n} test classes in the jar" if n > 0
                else "jar present but no test class" if n == 0 else "NO JAR — nothing will run")
         print(f"\nrecommended: {r['groupId']}:{r['artifactId']}:{r['version']}  ({how})")
+        if r.get("test_framework"):
+            e = r["test_framework_evidence"]
+            print(f"test framework: {r['test_framework']}  (classes referencing junit5={e['junit5']} testng={e['testng']} junit4={e['junit4']}) — the runner must declare its provider dependency, or surefire runs 0 tests")
     if runners:
         print("\nin-repo runners to copy (module layout, Arquillian wiring, run script):")
         for run in runners:

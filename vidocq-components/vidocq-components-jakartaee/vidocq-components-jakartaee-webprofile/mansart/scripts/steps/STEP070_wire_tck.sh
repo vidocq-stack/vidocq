@@ -35,6 +35,40 @@ PY
 REFPARENT="${REF%%/*}"
 REFSCRIPT="$(ls "$REF"/run-official-tck-*.sh 2>/dev/null | head -1)"
 LOGD="$H/target/wire-logs"; mkdir -p "$LOGD"
+LOCK="$LOGD/STEP070.lock"
+
+# DETACH. The lead runs this from OpenCode's bash tool, which has its own
+# timeout (~10 min): it killed the script in fix round 3 and left an impl call
+# orphaned mid-edit, while the lead went on to "verify" over it. So the work
+# runs in its own session, the tool call returns at once, and the lead waits
+# with STEP071 in short, bounded calls.
+if [ "${STEP070_FG:-}" != "1" ]; then
+    if [ -f "$LOCK" ] && kill -0 "$(cat "$LOCK" 2>/dev/null)" 2>/dev/null; then
+        echo "STEP070 already running (pid $(cat "$LOCK")) — wait with ./scripts/steps/STEP071_wait_tck.sh $CODE"; exit 3
+    fi
+    : > "$LOGD/STEP070.log"
+    STEP070_FG=1 python3 -c '
+import os, subprocess, sys
+script, code, timeout, rounds, log = sys.argv[1:6]
+out = open(log, "ab")
+p = subprocess.Popen(["bash", script, code, "--timeout", timeout, "--rounds", rounds],
+                     stdout=out, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
+                     start_new_session=True, env=dict(os.environ, STEP070_FG="1"))
+' "$0" "$CODE" "$TIMEOUT" "$ROUNDS" "$LOGD/STEP070.log"
+    echo "== STEP070 started in the background — log: target/wire-logs/STEP070.log"
+    echo "   wait with: ./scripts/steps/STEP071_wait_tck.sh $CODE   (call it again while it says RUNNING)"
+    echo "   do NOT run verify-m0.sh or the suite yourself meanwhile: verify-m0.sh refuses while the lock is held"
+    exit 0
+fi
+echo $$ > "$LOCK"
+trap 'pkill -P $$ 2>/dev/null; rm -f "$LOCK"' EXIT
+export VERIFY_M0_LOCK_OK=1
+FW="$(python3 -c "import json;print(((json.load(open('$META')).get('tck') or {}).get('recommended') or {}).get('test_framework',''))" 2>/dev/null)"
+case "$FW" in
+  junit5) PROVIDER="org.junit.jupiter:junit-jupiter (scope test) — the TCK test classes are JUnit 5; without it surefire auto-selects another provider and runs 0 tests" ;;
+  testng) PROVIDER="org.testng:testng (scope test) — the TCK test classes are TestNG" ;;
+  *)      PROVIDER="org.junit.jupiter:junit-jupiter (scope test)" ;;
+esac
 
 COMMON="RULES (AGENTS.md applies): write ONLY the file(s) named here, nothing else. Never edit docs/spec-src/ (spec-meta.json is generated). The TCK Maven groupId is $(echo "$COORD" | cut -d: -f1) — 'ee.jakarta.tck' is the Java PACKAGE of the test classes, never a groupId. Never touch $REFPARENT/, mansart-transactions/ or mansart-pool/ — they are frozen. Never write Java. Do not run mvn. When done, ls -la what you wrote and report 3 lines."
 
@@ -65,7 +99,7 @@ impl "2-runner-pom" "Create the TCK runner POM for the $KW $VER spec.
 READ FIRST: $REF/pom.xml — it is the working reference (its suite passes). Copy its shape, then ADAPT every trace of the other spec.
 WRITE: $MOD/pom.xml. Requirements:
 - modelVersion 4.0.0, NO <parent> element, standalone; groupId io.vidocq.mansart, artifactId $RUNNER, version 0.3.0-SNAPSHOT, maven.compiler.release 25, maven.deploy.skip true.
-- dependencies: jakarta.persistence:jakarta.persistence-api:3.2.0 (scope provided), $COORD (scope test), jakarta.tck:persistence-tck-common:${COORD##*:} (scope test), the Arquillian/TestNG/H2 test dependencies the reference uses. NOTHING ELSE. Do NOT depend on any io.vidocq.mansart implementation module: none exists yet.
+- dependencies: jakarta.persistence:jakarta.persistence-api:3.2.0 (scope provided), $COORD (scope test), jakarta.tck:persistence-tck-common:${COORD##*:} (scope test), $PROVIDER, plus the Arquillian and H2 test dependencies the reference uses. NOTHING ELSE. Do NOT depend on any io.vidocq.mansart implementation module: none exists yet.
 - surefire (a 'tck-run' profile like the reference): <includes><include>**/Client.class</include></includes> — EXACTLY that pattern, do not narrow it to a package (the 160 Client classes live in sub-packages); <dependenciesToScan><dependency>${COORD%:*}</dependency></dependenciesToScan> (groupId:artifactId, no version); <systemPropertyVariables><platform.mode>standalone</platform.mode><persistence.unit.name>JPATCK</persistence.unit.name></systemPropertyVariables>.
 - It must NOT be listed in any <modules>. Do not edit $PARENT/pom.xml or the root pom.
 $COMMON"
@@ -101,6 +135,7 @@ for r in $(seq 1 "$ROUNDS"); do
 $fails
 KNOWN-GOOD VALUES — do not change any of these while fixing:
 - TCK dependency: groupId $(echo "$COORD" | cut -d: -f1), artifactId $(echo "$COORD" | cut -d: -f2), version ${COORD##*:}, scope test. Also jakarta.tck:persistence-tck-common:${COORD##*:} test.
+- test provider dependency: $PROVIDER
 - surefire include EXACTLY <include>**/Client.class</include>; <dependenciesToScan><dependency>${COORD%:*}</dependency></dependenciesToScan>
 - system properties platform.mode=standalone, persistence.unit.name=JPATCK
 - persistence.xml: units JPATCK and JPATCK2, RESOURCE_LOCAL, no <provider>

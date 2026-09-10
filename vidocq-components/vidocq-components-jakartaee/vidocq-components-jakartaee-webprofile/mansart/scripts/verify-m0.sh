@@ -17,6 +17,16 @@ H="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CODE="${1:-}"
 printf '%s' "$CODE" | grep -qE '^[A-Z]{3}$' || { echo "usage: scripts/verify-m0.sh <XXX>"; exit 2; }
 
+# Two writers on one module is how a fix lands in the wrong file: a lead ran this
+# verifier while an impl call of a dying STEP070 was still editing the pom.
+LOCK="$H/target/wire-logs/STEP070.lock"
+if [ "${VERIFY_M0_LOCK_OK:-}" != "1" ] && [ -f "$LOCK" ] && kill -0 "$(cat "$LOCK" 2>/dev/null)" 2>/dev/null; then
+    echo "STEP070 is still wiring this runner (pid $(cat "$LOCK")). Not verifying on top of it."
+    echo "wait with: ./scripts/steps/STEP071_wait_tck.sh $CODE"
+    exit 3
+fi
+META="$H/docs/spec-src/$CODE/spec-meta.json"
+FW="$(python3 -c "import json;print(((json.load(open('$META')).get('tck') or {}).get('recommended') or {}).get('test_framework',''))" 2>/dev/null)"
 CONF="$H/docs/spec-src/$CODE/module.conf"
 [ -f "$CONF" ] || { echo "no $CONF — run scripts/steps/STEP050_module_path.sh $CODE"; exit 3; }
 MOD="$(sed -n 's/^ *tck_module *= *//p' "$CONF" | tr -d ' ')"
@@ -85,6 +95,13 @@ elif ! grep -q "<groupId>$(echo "$COORD" | cut -d: -f1)</groupId>" "$H/$MOD/pom.
     # A fix round rewrote jakarta.tck into ee.jakarta.tck — the Java PACKAGE of
     # the test classes mistaken for the Maven groupId. Say it in the message.
     d="the TCK dependency's groupId must be exactly $(echo "$COORD" | cut -d: -f1). (ee.jakarta.tck is the Java package of the test classes seen in logs — it is NOT a Maven coordinate; never use it as a groupId)"
+elif [ "$FW" = "junit5" ] && ! grep -qE 'junit-jupiter|junit-platform' "$H/$MOD/pom.xml"; then
+    # Surefire picks its provider from the classpath. A runner declaring only
+    # TestNG (copied from mansart-data-tck) ran this JUnit 5 suite as
+    # "Tests run: 0, BUILD SUCCESS": the provider never looked at the classes.
+    d="the TCK tests are JUnit 5 (spec-meta test_framework=junit5) but the runner declares no org.junit.jupiter:junit-jupiter — surefire auto-selects another provider and runs 0 tests. Add org.junit.jupiter:junit-jupiter (scope test). TestNG may stay; it is harmless."
+elif [ "$FW" = "testng" ] && ! grep -q '<artifactId>testng</artifactId>' "$H/$MOD/pom.xml"; then
+    d="the TCK tests are TestNG (spec-meta test_framework=testng) but the runner declares no org.testng:testng — surefire runs 0 tests"
 else
     ( cd "$H/$MOD" && "$H/scripts/build.sh" dependency:resolve ) >/dev/null 2>&1 && r=0 || d="dependency:resolve fails"
 fi
@@ -149,6 +166,9 @@ else
     d="no build log shows TCK test classes running for $ARTIFACT (the log must list classes from the Java package ee.jakarta.tck — a package, NOT a Maven groupId: the dependency stays $(echo "$COORD" | cut -d: -f1))"
     [ "$COMPILED" = "1" ] || d="$d
              (suite not run: the runner does not compile — fix M0-T002 first)"
+    PROV="$(grep -h -m1 'Using auto detected provider' $(ls -t "$H"/target/build-logs/*.log 2>/dev/null | head -3) 2>/dev/null | head -1 | sed 's/.*provider //')"
+    [ -n "$PROV" ] && d="$d
+             surefire ran with provider: $PROV — the TCK tests are ${FW:-unknown}; a mismatched provider selects 0 tests"
     [ "$INCLUDE_OK" = "1" ] || d="$d
              hint: the surefire include must be EXACTLY <include>**/Client.class</include>.
              A narrower pattern such as **/ee/jakarta/tck/persistence/Client.class matches
