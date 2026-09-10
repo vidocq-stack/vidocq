@@ -1224,6 +1224,17 @@ the wiring prompts state it. **"Copy the working reference" carries the
 reference's accidents too — and the accidents are exactly the part nobody
 documents.**
 
+One more thing that run showed. The lead's bash tool has a timeout of its own —
+about ten minutes — and it killed `STEP070` in fix round 3, leaving an `impl`
+call orphaned mid-edit while the lead, seeing the script gone, went on to
+"verify" over it and then to patch the module by hand, at one point asking
+permission to read `/Users/yblazazart/…` — a path with an extra syllable it had
+composed itself. **A path an agent composes is a path an agent gets wrong**, for
+the fourth time. `STEP070` now detaches into its own session and returns at
+once; `STEP071` waits in bounded calls; `verify-m0.sh` refuses to run while the
+wiring lock is held. The tool that supervises must not be the thing the tool
+timeout kills.
+
 **A harness accretes rules faster than it reconciles them.** Every fix here was
 local and correct, and the files drifted apart anyway. The reconciliation is the
 work nobody schedules — it took the fourth "why does he not delegate?" to force
