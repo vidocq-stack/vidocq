@@ -62,7 +62,7 @@
         <jakarta.annotation.version>3.0.0</jakarta.annotation.version>
 
         <!-- Vidocq upstream — utilisé par ravel-cdi-vauban -->
-        <vauban.version>0.3.0-SNAPSHOT</vauban.version>
+        <vauban.version>0.4.0-SNAPSHOT</vauban.version>
 
         <!-- JMH pour ravel-bench -->
         <jmh.version>1.37</jmh.version>
