@@ -80,13 +80,6 @@
     },
     "repo_runners": [
       {
-        "path": "mansart-jakarta-persistence/mansart-jakarta-persistence-tck",
-        "has_tests": true,
-        "scripts": [
-          "run-official-tck-persistence-3.2.sh"
-        ]
-      },
-      {
         "path": "mansart-jakarta-data/mansart-data-tck",
         "has_tests": true,
         "scripts": [
