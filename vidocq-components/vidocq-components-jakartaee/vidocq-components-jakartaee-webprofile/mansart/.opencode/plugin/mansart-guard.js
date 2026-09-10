@@ -16,6 +16,7 @@
 
 import {
   normalise,
+  runnerClientVerdict,
   generatedFileVerdict,
   traceDocVerdict,
   frozenModuleVerdict,
@@ -109,7 +110,7 @@ export const MansartGuard = async ({ directory }) => {
 
         if (input.tool === "write" || input.tool === "edit" || input.tool === "patch") {
           const path = output.args?.filePath ?? output.args?.path
-          const why = generatedFileVerdict(path) ?? frozenModuleVerdict(path, frozen)
+          const why = generatedFileVerdict(path) ?? runnerClientVerdict(path) ?? frozenModuleVerdict(path, frozen)
           if (why) throw new Deny(why)
         }
 

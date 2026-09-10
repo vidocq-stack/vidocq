@@ -783,6 +783,19 @@ things learned running it:
   read-only, the *runner* is ours and `impl` builds it; the lead writes only
   `tasks/<XXX>/<CARD>.md`; `/tck` is a verify-and-fix loop with four explicit
   `@impl` calls and no STATUS writes at all.
+- **`STEP070_wire_tck.sh` drives the four `impl` calls; the lead only runs it.**
+  Asked to delegate, the lead read the references itself and wrote the four
+  delegations as text, then ended its turn (trace in OpenCode's SQLite store:
+  zero child sessions). A shell dispatches: four sequential `opencode run
+  --agent impl` calls with a watchdog, then verify-and-fix rounds. First real
+  run: 5/6 in ninety seconds, all written by `impl`.
+- **An error message an agent acts on is an instruction.** *"no counter from
+  the OFFICIAL suite (ee.jakarta.tck.*)"* made `impl` rewrite the Maven groupId
+  to `ee.jakarta.tck` — the Java package — in the pom and in `spec-meta.json`.
+  Messages now name the exact expected value and say what the look-alike is;
+  the guard protects `spec-meta.json` and refuses a `Client.java` in a runner;
+  the include must be exactly `**/Client.class`; no suite run without a compiling
+  module.
 - **No single `/tck` run has completed M0 unaided.** The six cards were reached
   across several runs, each ending in a harness fix rather than a module fix. The
   tree is reset so the claim can actually be tested.

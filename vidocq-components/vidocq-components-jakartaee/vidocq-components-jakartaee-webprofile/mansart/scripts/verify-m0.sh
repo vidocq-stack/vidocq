@@ -30,7 +30,7 @@ ARTIFACT="$(sed -n 's:.*<artifactId>\(.*\)</artifactId>.*:\1:p' "$H/$MOD/pom.xml
 [ -n "$ARTIFACT" ] || ARTIFACT="${MOD##*/}"
 [ -n "$MOD" ] || { echo "module.conf has no tck_module"; exit 3; }
 
-pass=0; fail=0
+pass=0; fail=0; COMPILED=0
 ck() { # ck <card> <label> <0|1> [detail]
     if [ "$3" -eq 0 ]; then pass=$((pass+1)); printf '  %-8s PASS  %s\n' "$1" "$2"
     else fail=$((fail+1)); printf '  %-8s FAIL  %s%s\n' "$1" "$2" "${4:+ — $4}"; fi
@@ -56,7 +56,7 @@ elif grep -q "<module>$MOD</module>" "$H/pom.xml" 2>/dev/null; then
     # the exact thing M0 forbids, invisible to the check meant to forbid it.
     d="the runner is listed in the ROOT pom <modules> — only the parent belongs there"
 else
-    if ( cd "$H/$MOD" && "$H/scripts/build.sh" test-compile ) >/dev/null 2>&1; then r=0
+    if ( cd "$H/$MOD" && "$H/scripts/build.sh" test-compile ) >/dev/null 2>&1; then r=0; COMPILED=1
     else
         d="test-compile fails IN $MOD"
         # Nearly always the same cause: java sources that should not exist yet.
@@ -79,8 +79,12 @@ import json;t=json.load(open('$H/docs/spec-src/$CODE/spec-meta.json')).get('tck'
 r=t.get('recommended') or {};print('%s:%s:%s'%(r.get('groupId'),r.get('artifactId'),r.get('version')) if r else '')" 2>/dev/null)"
 if [ -z "$COORD" ] || [ "$COORD" = "None:None:None" ]; then d="no TCK coordinate in spec-meta.json"
 elif [ ! -f "$H/$MOD/pom.xml" ]; then d="no runner yet"
-elif ! grep -q "${COORD#*:}" "$H/$MOD/pom.xml" 2>/dev/null && ! grep -q "$(echo "$COORD" | cut -d: -f2)" "$H/$MOD/pom.xml"; then
+elif ! grep -q "<artifactId>$(echo "$COORD" | cut -d: -f2)</artifactId>" "$H/$MOD/pom.xml" 2>/dev/null; then
     d="$COORD is not declared in the runner pom"
+elif ! grep -q "<groupId>$(echo "$COORD" | cut -d: -f1)</groupId>" "$H/$MOD/pom.xml" 2>/dev/null; then
+    # A fix round rewrote jakarta.tck into ee.jakarta.tck — the Java PACKAGE of
+    # the test classes mistaken for the Maven groupId. Say it in the message.
+    d="the TCK dependency's groupId must be exactly $(echo "$COORD" | cut -d: -f1). (ee.jakarta.tck is the Java package of the test classes seen in logs — it is NOT a Maven coordinate; never use it as a groupId)"
 else
     ( cd "$H/$MOD" && "$H/scripts/build.sh" dependency:resolve ) >/dev/null 2>&1 && r=0 || d="dependency:resolve fails"
 fi
@@ -125,7 +129,12 @@ done
 # never executed the TCK, so the card sat at FAIL until a human ran it by hand —
 # and a checker that needs a human to produce the evidence it checks is a checker
 # that cannot finish anything. The measurement IS the verification here.
-if [ -z "$LOG" ] && [ -n "$RUN" ] && [ "${VERIFY_M0_NO_RUN:-}" != "1" ]; then
+INCLUDE_OK=1
+if [ -f "$H/$MOD/pom.xml" ] && grep -q 'Client\.class' "$H/$MOD/pom.xml" \
+   && ! grep -qE '<include>\*\*/Client\.class</include>' "$H/$MOD/pom.xml"; then INCLUDE_OK=0; fi
+if [ -z "$LOG" ] && [ -n "$RUN" ] && [ "$COMPILED" = "1" ] && [ "$INCLUDE_OK" = "1" ] \
+   && ! find "$H/$MOD/src" -name 'Client.java' 2>/dev/null | grep -q . \
+   && [ "${VERIFY_M0_NO_RUN:-}" != "1" ]; then
     printf '  M0-T005  .... no counter on disk; running the suite once (up to 30 min)\n'
     ( cd "$H/$MOD" && timeout 1800 "$H/scripts/build.sh" -Ptck-run test ) >/dev/null 2>&1
     for f in $(ls -t "$H"/target/build-logs/*.log 2>/dev/null | head -5); do
@@ -137,7 +146,13 @@ if [ -z "$RUN" ]; then d="nothing to run yet"
 elif [ -n "$LOG" ]; then r=0
     d="$(grep -oE 'Tests run: [0-9]+, Failures: [0-9]+, Errors: [0-9]+, Skipped: [0-9]+' "$LOG" | tail -1) ($(basename "$LOG"))"
 else
-    d="no build log shows a counter from the OFFICIAL suite (ee.jakarta.tck.*) for $ARTIFACT"
+    d="no build log shows TCK test classes running for $ARTIFACT (the log must list classes from the Java package ee.jakarta.tck — a package, NOT a Maven groupId: the dependency stays $(echo "$COORD" | cut -d: -f1))"
+    [ "$COMPILED" = "1" ] || d="$d
+             (suite not run: the runner does not compile — fix M0-T002 first)"
+    [ "$INCLUDE_OK" = "1" ] || d="$d
+             hint: the surefire include must be EXACTLY <include>**/Client.class</include>.
+             A narrower pattern such as **/ee/jakarta/tck/persistence/Client.class matches
+             only that one package, not the 160 Client classes in its sub-packages: 0 tests."
     if find "$H/$MOD/src/test/java" -name 'Client.java' 2>/dev/null | grep -q .; then
         d="$d
              refusing: this module declares its own Client.java. That name matches

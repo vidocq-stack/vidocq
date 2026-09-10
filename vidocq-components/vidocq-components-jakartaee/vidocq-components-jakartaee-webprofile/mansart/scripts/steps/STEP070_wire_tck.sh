@@ -36,7 +36,7 @@ REFPARENT="${REF%%/*}"
 REFSCRIPT="$(ls "$REF"/run-official-tck-*.sh 2>/dev/null | head -1)"
 LOGD="$H/target/wire-logs"; mkdir -p "$LOGD"
 
-COMMON="RULES (AGENTS.md applies): write ONLY the file(s) named here, nothing else. Never touch $REFPARENT/, mansart-transactions/ or mansart-pool/ — they are frozen. Never write Java. Do not run mvn. When done, ls -la what you wrote and report 3 lines."
+COMMON="RULES (AGENTS.md applies): write ONLY the file(s) named here, nothing else. Never edit docs/spec-src/ (spec-meta.json is generated). The TCK Maven groupId is $(echo "$COORD" | cut -d: -f1) — 'ee.jakarta.tck' is the Java PACKAGE of the test classes, never a groupId. Never touch $REFPARENT/, mansart-transactions/ or mansart-pool/ — they are frozen. Never write Java. Do not run mvn. When done, ls -la what you wrote and report 3 lines."
 
 impl() { # impl <label> <prompt>
     printf '  [%s] %-38s ' "$(date +%H:%M:%S)" "$1"
@@ -66,7 +66,7 @@ READ FIRST: $REF/pom.xml — it is the working reference (its suite passes). Cop
 WRITE: $MOD/pom.xml. Requirements:
 - modelVersion 4.0.0, NO <parent> element, standalone; groupId io.vidocq.mansart, artifactId $RUNNER, version 0.3.0-SNAPSHOT, maven.compiler.release 25, maven.deploy.skip true.
 - dependencies: jakarta.persistence:jakarta.persistence-api:3.2.0 (scope provided), $COORD (scope test), jakarta.tck:persistence-tck-common:${COORD##*:} (scope test), the Arquillian/TestNG/H2 test dependencies the reference uses. NOTHING ELSE. Do NOT depend on any io.vidocq.mansart implementation module: none exists yet.
-- surefire (a 'tck-run' profile like the reference): <includes><include>**/Client.class</include></includes>; <dependenciesToScan><dependency>${COORD%:*}</dependency></dependenciesToScan>; <systemPropertyVariables><platform.mode>standalone</platform.mode><persistence.unit.name>JPATCK</persistence.unit.name></systemPropertyVariables>.
+- surefire (a 'tck-run' profile like the reference): <includes><include>**/Client.class</include></includes> — EXACTLY that pattern, do not narrow it to a package (the 160 Client classes live in sub-packages); <dependenciesToScan><dependency>${COORD%:*}</dependency></dependenciesToScan> (groupId:artifactId, no version); <systemPropertyVariables><platform.mode>standalone</platform.mode><persistence.unit.name>JPATCK</persistence.unit.name></systemPropertyVariables>.
 - It must NOT be listed in any <modules>. Do not edit $PARENT/pom.xml or the root pom.
 $COMMON"
 have "$MOD/pom.xml"
@@ -99,7 +99,12 @@ for r in $(seq 1 "$ROUNDS"); do
     fails="$(printf '%s\n' "$out" | grep -E 'FAIL|hint:|refusing|stray' | sed 's/^ *//')"
     impl "fix-round-$r" "verify-m0.sh reports these failures for the TCK runner $MOD. Fix EXACTLY what each line names, in the files it names, nothing else:
 $fails
-Context: reference runner $REF; TCK artifact $COORD; the suite is selected by <include>**/Client.class</include> plus <dependenciesToScan>; platform.mode=standalone and persistence.unit.name=JPATCK are surefire system properties; persistence.xml declares JPATCK and JPATCK2 with no <provider>. Never write Java. Never touch a delivered module.
+KNOWN-GOOD VALUES — do not change any of these while fixing:
+- TCK dependency: groupId $(echo "$COORD" | cut -d: -f1), artifactId $(echo "$COORD" | cut -d: -f2), version ${COORD##*:}, scope test. Also jakarta.tck:persistence-tck-common:${COORD##*:} test.
+- surefire include EXACTLY <include>**/Client.class</include>; <dependenciesToScan><dependency>${COORD%:*}</dependency></dependenciesToScan>
+- system properties platform.mode=standalone, persistence.unit.name=JPATCK
+- persistence.xml: units JPATCK and JPATCK2, RESOURCE_LOCAL, no <provider>
+- NO java source in the runner, no class named Client, NO dependency on any io.vidocq.mansart module (none exists yet), reference runner $REF.
 $COMMON"
 done
 echo; echo "== M0 NOT complete after $ROUNDS rounds — last verify output above; logs in $LOGD/"

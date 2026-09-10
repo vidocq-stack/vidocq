@@ -1127,6 +1127,47 @@ report format, commands to their steps. 819 lines across seventeen files became
 about 490, and the anecdotes moved to the design document, where a human reads
 them once instead of every agent reading them on every call.
 
+### The lead described the delegation instead of doing it
+
+Even reconciled, the next clean run ended in 66 seconds with nothing on disk.
+The session trace (OpenCode now keeps it in SQLite) showed the lead running
+STEP030 and `tck-module.py` correctly, reading the twelve reference files it had
+been told to leave to `@impl`, then emitting a text that began *"@impl 1 — PARENT
+MODULE: Create the parent module…"* — the four delegations, written as prose —
+and ending its turn. Zero child sessions. Describing the action instead of
+performing it, which is the failure mode of a small model handed a long
+procedure. One more thing the trace showed: OpenCode treats an `@impl` inside a
+command's text as a subagent mention and injects *"call the task tool with
+subagent: impl"* on its own. The lead obeyed neither.
+
+Dispatching four mechanical calls is a shell's job — the lesson of
+`spec-note.sh` and `spec-tasks.sh`, one level up. `STEP070_wire_tck.sh` calls
+`opencode run --agent impl` four times, one artifact each, then runs verify-and-
+fix rounds where each FAIL line is the next instruction. `/tck` became three
+script calls and a report, with no `@` in it.
+
+Run for real, it reached **5 of 6 in ninety seconds** — every artifact written by
+`impl`, not the lead. Then the fix rounds made it worse, and the reason was my
+error messages. T005 said *"no counter from the OFFICIAL suite (ee.jakarta.tck.*)"*;
+`impl` read `ee.jakarta.tck` as a Maven groupId, rewrote the dependency — and
+rewrote `spec-meta.json` too, a script-owned file the guard was not protecting.
+Round four added a `Client.java` with a `main()` and a dependency on a module
+that does not exist. Each round compounded the previous one's misreading of a
+message I had written for a human. The round-one miss itself was a narrowed
+include, `**/ee/jakarta/tck/persistence/Client.class`, which matches one package
+and none of the 160 Client classes beneath it: zero tests, exit 0.
+
+So: the guard now refuses `spec-meta.json` and any `Client.java` under a runner;
+the checker names the exact groupId and says in the same sentence that
+`ee.jakarta.tck` is a package, not a coordinate; it checks the include is exactly
+`**/Client.class`; and it no longer spends five minutes running a suite whose
+module does not compile. The fix prompts carry a block of known-good values that
+must not change. **An error message an agent will act on is an instruction, and
+has to be written like one.**
+
+And one rule for me, from the user: he launches `/tck` in his own OpenCode. I
+fix, reset, and hand over.
+
 **A harness accretes rules faster than it reconciles them.** Every fix here was
 local and correct, and the files drifted apart anyway. The reconciliation is the
 work nobody schedules — it took the fourth "why does he not delegate?" to force
