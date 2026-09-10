@@ -5,7 +5,7 @@
 
   <groupId>io.vidocq.grimm</groupId>
   <artifactId>grimm-tck</artifactId>
-  <version>0.3.0-SNAPSHOT</version>
+  <version>0.4.0-SNAPSHOT</version>
   <packaging>jar</packaging>
 
   <name>grimm-tck</name>
@@ -17,9 +17,9 @@
     <!-- MUST track the reactor version: out-of-reactor runners freeze internal
          versions and silently validate stale M2 jars otherwise (same trap as
          cassini-tck and foy-tck). -->
-    <grimm.version>0.3.0-SNAPSHOT</grimm.version>
+    <grimm.version>0.4.0-SNAPSHOT</grimm.version>
     <microprofile.openapi.version>4.1</microprofile.openapi.version>
-    <ravel.mp.config.version>0.3.0-SNAPSHOT</ravel.mp.config.version>
+    <ravel.mp.config.version>0.4.0-SNAPSHOT</ravel.mp.config.version>
   </properties>
 
   <dependencies>
@@ -119,22 +119,22 @@
         <dependency>
           <groupId>io.vidocq.runtime</groupId>
           <artifactId>vidocq-runtime-core</artifactId>
-          <version>0.3.0-SNAPSHOT</version>
+          <version>0.4.0-SNAPSHOT</version>
           <scope>test</scope>
         </dependency>
         <dependency>
           <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
           <artifactId>vidocq-runtime-cassini-rest-extension</artifactId>
-          <version>0.3.0-SNAPSHOT</version>
+          <version>0.4.0-SNAPSHOT</version>
           <scope>test</scope>
         </dependency>
         <dependency>
           <groupId>io.vidocq.runtime.extensions.essentials</groupId>
           <artifactId>vidocq-runtime-chappe-webserver-extension</artifactId>
-          <version>0.3.0-SNAPSHOT</version>
+          <version>0.4.0-SNAPSHOT</version>
           <scope>test</scope>
         </dependency>
-        <!-- WORKAROUND: the 0.3.0-SNAPSHOT pom of vidocq-runtime-cassini-rest-extension
+        <!-- WORKAROUND: the 0.4.0-SNAPSHOT pom of vidocq-runtime-cassini-rest-extension
              published on central-snapshots (timestamp 20260608.152249-5) is INVALID
              (unmanaged dependency version) — the resolver prefers it over the locally
              installed snapshot and silently drops its transitive dependencies
@@ -144,25 +144,25 @@
         <dependency>
           <groupId>io.vidocq.cassini</groupId>
           <artifactId>cassini-api</artifactId>
-          <version>0.3.0-SNAPSHOT</version>
+          <version>0.4.0-SNAPSHOT</version>
           <scope>test</scope>
         </dependency>
         <dependency>
           <groupId>io.vidocq.cassini</groupId>
           <artifactId>cassini-core</artifactId>
-          <version>0.3.0-SNAPSHOT</version>
+          <version>0.4.0-SNAPSHOT</version>
           <scope>test</scope>
         </dependency>
         <dependency>
           <groupId>io.vidocq.cassini</groupId>
           <artifactId>cassini-cdi-vauban</artifactId>
-          <version>0.3.0-SNAPSHOT</version>
+          <version>0.4.0-SNAPSHOT</version>
           <scope>test</scope>
         </dependency>
         <dependency>
           <groupId>io.vidocq.cassini</groupId>
           <artifactId>cassini-chappe</artifactId>
-          <version>0.3.0-SNAPSHOT</version>
+          <version>0.4.0-SNAPSHOT</version>
           <scope>test</scope>
         </dependency>
         <dependency>
