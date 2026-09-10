@@ -22,8 +22,13 @@ Short on purpose. Break one and the guard stops you anyway.
   own artifact. A green build of something else is not evidence: an agent ran
   `build.sh install` at the root, reported "10 tests, 0 failures" from another
   module entirely, and every word of it was true.
-- `STATUS-*.md`: APPEND a row to "Done cards" — and only if the card's own
-  done-when command exited 0. Never touch the counts: they are computed.
+- `STATUS-*.md`: M0 rows are written by `scripts/verify-m0.sh`, never by you.
+  M1+ rows: APPEND one to "Done cards", only if the card's done-when command
+  exited 0. Never touch the counts: they are computed.
+- NEVER edit a delivered module — `mansart-jakarta-data`, `mansart-transactions`,
+  `mansart-pool`, or any file under them. A run "fixed" a junit version in two of
+  them, both TCK-passing. The guard refuses it. A new spec gets a NEW parent
+  module and ONE line in the root pom; nothing else moves.
 
 **CONTEXT — keep it small**
 - NEVER `cat` a file over 200 lines. `sed -n '<a>,<b>p'` or `grep -n`.
@@ -34,7 +39,9 @@ Short on purpose. Break one and the guard stops you anyway.
 
 **WRITE — stay in your lane**
 - `tdd` writes `src/test/` only. `impl` writes `src/main/` only.
-- `*-tck/` is READ-ONLY. Forever. Change the implementation, not the suite.
+- The official TCK SUITE (the jar, its sources) is READ-ONLY. Forever. Change
+  the implementation, not the suite. Our RUNNER module (`<parent>/<name>-tck/`)
+  is ours: `/tck` creates it through `impl`; nothing else edits it.
 - During a sonar fix, tests are READ-ONLY for everyone.
 - NEVER weaken a test to go green. That is the one unforgivable move.
 

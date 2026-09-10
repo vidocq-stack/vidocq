@@ -195,6 +195,21 @@ else
 fi
 ck M0-T006 "the counter measures the implementation, not the harness" $r "$d"
 
+# SCOPE — did this work stay in its lane? A run edited two delivered modules'
+# poms on its way here. Anything modified outside the parent module, the root
+# pom, the harness files and the spec's own docs is a violation, and it fails
+# the whole verification whatever the six cards say.
+if command -v git >/dev/null 2>&1 && git -C "$H" rev-parse >/dev/null 2>&1; then
+    stray="$(git -C "$H" status --porcelain 2>/dev/null | awk '{print $2}' \
+        | grep -vE "^($PARENT/|pom\.xml$|STATUS-$CODE\.md$|TASKS-$CODE\.md$|tasks/|docs/spec-src/$CODE/|docs/spec-notes/$CODE/|target/|scripts/|\.opencode/|AGENTS\.md$|OPENCODE_)" || true)"
+    if [ -n "$stray" ]; then
+        fail=$((fail + 1))
+        printf '  SCOPE    FAIL  files changed outside this spec'"'"'s lane:\n'
+        printf '%s\n' "$stray" | sed 's/^/             /'
+        printf '             delivered modules are frozen — revert these (git checkout -- <file>)\n'
+    fi
+fi
+
 echo
 printf 'M0: %d pass, %d fail\n' "$pass" "$fail"
 

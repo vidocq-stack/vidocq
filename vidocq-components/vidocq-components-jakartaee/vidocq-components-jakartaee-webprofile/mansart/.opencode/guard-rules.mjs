@@ -172,3 +172,31 @@ export function grepDashPattern(cmd) {
   }
   return null
 }
+
+
+/**
+ * A new spec gets a NEW parent module and one line in the root pom. Every module
+ * that existed before is delivered, TCK-passing, and frozen for the harness.
+ *
+ * WHY: a /tck run "fixed" a junit version in mansart-jakarta-data/pom.xml and
+ * mansart-transactions/mansart-transactions-tests/pom.xml on its way to wiring
+ * the persistence runner — two modules at 74/74 and 5/5 that nobody asked it
+ * to touch. Nothing forbade it, because "stay in your module" was written down
+ * and enforced nowhere.
+ *
+ * `frozen` is computed by the plugin at load: the root pom's <modules> minus
+ * every parent named in docs/spec-src/XXX/module.conf. Pure function otherwise.
+ */
+export function frozenModuleVerdict(path, frozen) {
+  if (typeof path !== "string" || !frozen || frozen.length === 0) return null
+  const rel = path.replace(/^\.\//, "")
+  for (const m of frozen) {
+    if (rel === m || rel.startsWith(m + "/") || rel.includes("/" + m + "/"))
+      return (
+        `${m} is a delivered module (in the root reactor, not this spec's). It is frozen: ` +
+        "a run once changed a junit version in two delivered, TCK-passing modules while " +
+        "wiring a new runner. Your work lives under the parent named in module.conf."
+      )
+  }
+  return null
+}

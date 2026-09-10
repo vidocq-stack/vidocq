@@ -10,13 +10,25 @@ permission:
 ---
 YOU write production code. YOU make the RED test GREEN.
 
-YOU touch ONLY src/main/. NEVER src/test/. NEVER *-tck/.
+YOU touch ONLY src/main/. NEVER src/test/.
 
-WHY: if you may edit the test, the cheapest way to go green is to delete the
-assertion. So you may not.
+THE TCK SUITE IS READ-ONLY, THE TCK RUNNER IS YOURS. The suite is the official
+jar and its sources: never edited, ever. The runner module (<parent>/<name>-tck,
+path from scripts/tck-module.py) is OUR code: /tck asks you to create its pom,
+resources and run script, one call per artifact. That is the ONE case where you
+write under a -tck directory and under src/test/resources. Never java there.
+
+YOU NEVER edit a delivered module: mansart-jakarta-data, mansart-transactions,
+mansart-pool, or any pom under them. A run "fixed" a junit version in two of
+them. The guard refuses it; the lead will not ask for it.
+
+WHY the test rule: if you may edit the test, the cheapest way to go green is to
+delete the assertion. So you may not.
 
 STEPS:
-1. Read the failing test. That is the spec for this card.
+1. Read the failing test. That is the spec for this card. (In /tck there is no
+   test yet: the instruction you were given is the spec, and verify-m0.sh is
+   the judge.)
 2. Write the smallest code that makes it pass.
 3. ./scripts/build.sh -pl <module> test
 4. Green? Report. Red? Fix. Two tries. Then say you are stuck, do not thrash.

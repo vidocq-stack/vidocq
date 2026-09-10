@@ -757,6 +757,23 @@ things learned running it:
   of the typing itself. The route that remains is structural: a shell calling
   `@impl` once per artifact, as `spec-note.sh` and `spec-tasks.sh` already did for
   two other loops. Not built.
+- **Delivered modules are frozen, by the guard.** A `/tck` run "fixed" a junit
+  version in `mansart-jakarta-data/pom.xml` and
+  `mansart-transactions/mansart-transactions-tests/pom.xml` — two delivered,
+  TCK-passing modules — on its way to wiring the persistence runner. The plugin
+  now computes at load *root `<modules>` minus every parent named in a
+  `module.conf`* and refuses any write under the rest; verified end to end (the
+  model was denied and explained the rule back). `verify-m0.sh` adds a SCOPE
+  check that fails the run if `git status` shows files outside the spec's lane.
+- **The agent files contradicted each other, which is why the lead typed.**
+  `impl.md` said *never touch `*-tck/`* while `/tck` asked `@impl` to create the
+  runner; `AGENTS.md` said `*-tck/` is read-only forever; `lead.md` said the lead
+  writes `TASKS`/`STATUS`/notes, three files it may no longer touch; `/tck`
+  still told the lead to append STATUS rows that `verify-m0.sh` now writes, and
+  named a chain ending at T005 with six cards. Resolved: the *suite* is
+  read-only, the *runner* is ours and `impl` builds it; the lead writes only
+  `tasks/<XXX>/<CARD>.md`; `/tck` is a verify-and-fix loop with four explicit
+  `@impl` calls and no STATUS writes at all.
 - **No single `/tck` run has completed M0 unaided.** The six cards were reached
   across several runs, each ending in a harness fix rather than a module fix. The
   tree is reset so the claim can actually be tested.

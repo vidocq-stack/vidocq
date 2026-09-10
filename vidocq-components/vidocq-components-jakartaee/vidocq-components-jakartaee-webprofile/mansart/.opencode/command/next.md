@@ -8,8 +8,9 @@ Expected: <XXX>   e.g. JKP
 ONE card. Then STOP. Do not start the next one.
 
 1. PICK
-   Read TASKS-$ARGUMENTS.md and STATUS-$ARGUMENTS.md.
-   Take the first card not DONE. Say its id out loud.
+   ./scripts/verify-m0.sh $ARGUMENTS   -> M0 must be 6 pass. Not? STOP: run /tck.
+   Read STATUS-$ARGUMENTS.md "Done cards", then TASKS-$ARGUMENTS.md.
+   Take the first M1+ card without a Done row. Say its id out loud.
    Nothing left? Say so and STOP.
 
 2. LOCATE
@@ -45,8 +46,11 @@ ONE card. Then STOP. Do not start the next one.
    Signature fails -> the card is NOT done. Report and STOP.
 
 8. STATUS
-   Update STATUS-$ARGUMENTS.md: card DONE, date, commit sha, the verify numbers.
-   Numbers come from @verify. Never from your own impression.
+   Append ONE row to the "Done cards" table of STATUS-$ARGUMENTS.md:
+     | <card> | <YYYY-MM-DD HH:MM> | verify: tests run=<n> failures=<n> errors=<n>; sha <short> |
+   Numbers come from @verify. Never from your own impression. Never touch the
+   counts — they are computed. Then: ./scripts/verify-m0.sh $ARGUMENTS refreshes
+   them (it keeps your row).
 
 9. STOP. Report 3 lines: card, numbers, sha.
    Say: "run /push $ARGUMENTS when you want it pushed".

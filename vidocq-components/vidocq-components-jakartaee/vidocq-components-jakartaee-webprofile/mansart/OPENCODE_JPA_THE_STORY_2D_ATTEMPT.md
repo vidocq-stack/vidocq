@@ -1097,6 +1097,31 @@ shell call `@impl` once per artifact. Not yet built, and the honest reason it is
 listed here rather than done is that `/tck` finishing its own job mattered more
 first.
 
+### Collateral damage, and a review of every file
+
+A from-zero run reached 5 of 6 — and modified `mansart-jakarta-data/pom.xml`
+and `mansart-transactions/mansart-transactions-tests/pom.xml`, replacing
+`${junit.version}` with `5.11.4` in two delivered, TCK-passing modules nobody
+had mentioned. "Stay in your module" had been written nowhere and enforced
+nowhere. The guard now freezes every root module that no `module.conf` claims,
+and `verify-m0.sh` fails the run if `git status` strays outside the lane.
+
+That prompted a full read of the nine agents, seven commands and `AGENTS.md`
+side by side, which no single fix had ever done. They contradicted each other,
+and the contradictions explain the delegation problem better than any probe:
+`impl.md` said *never touch `*-tck/`* while `/tck` asked `@impl` to build the
+`-tck` runner — so the lead, reading both, did it itself. `AGENTS.md` agreed
+with `impl.md`. `lead.md` listed `TASKS`, `STATUS` and the notes as the files it
+writes — three files the guard or the generator had since taken away. `/tck`
+still told the lead to append STATUS rows that `verify-m0.sh` now writes, and
+described "a chain T001 to T005" for six cards. Each of these was true when
+written and false by the time an agent read it.
+
+**A harness accretes rules faster than it reconciles them.** Every fix here was
+local and correct, and the files drifted apart anyway. The reconciliation is the
+work nobody schedules — it took the fourth "why does he not delegate?" to force
+it.
+
 ---
 
 ## 9. What is true today

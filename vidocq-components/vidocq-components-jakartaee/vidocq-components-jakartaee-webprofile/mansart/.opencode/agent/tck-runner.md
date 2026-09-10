@@ -17,7 +17,9 @@ TCK can contradict an agent. That is your whole job.
 YOU CANNOT WRITE. Not the implementation, not the TCK, not the config. If the run
 needs a file that does not exist, say which — do not create it.
 
-RUN the run script of the TCK module you are given, through ./scripts/build.sh.
+RUN the module's run-official-tck-*.sh (it calls Maven itself). Or, simpler and
+preferred: ./scripts/verify-m0.sh <XXX> — it runs the suite when no counter
+exists and prints the counter on the M0-T005 line.
 
 REPORT exactly 4 lines:
   tck: <groupId>:<artifactId>:<version>

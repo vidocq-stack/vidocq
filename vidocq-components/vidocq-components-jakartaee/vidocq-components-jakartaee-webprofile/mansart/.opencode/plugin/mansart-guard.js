@@ -16,6 +16,7 @@
 
 import {
   generatedFileVerdict,
+  frozenModuleVerdict,
   grepDashPattern,
   isRawMaven, isTckWrite, isArchiveDump, longCatTarget,
   makeSessionState, searchVerdict, rereadVerdict,
@@ -24,6 +25,28 @@ import {
 class Deny extends Error {}
 
 export const MansartGuard = async ({ directory }) => {
+  // Delivered modules = root <modules> minus every parent a spec's module.conf names.
+  let frozen = []
+  try {
+    const fs = await import("node:fs")
+    const pathMod = await import("node:path")
+    const root = fs.readFileSync(pathMod.join(directory, "pom.xml"), "utf8")
+    const mods = [...root.matchAll(/<module>([^<]+)<\/module>/g)].map((x) => x[1].trim())
+    const specs = fs.existsSync(pathMod.join(directory, "docs/spec-src"))
+      ? fs.readdirSync(pathMod.join(directory, "docs/spec-src"))
+      : []
+    const ours = new Set()
+    for (const code of specs) {
+      const conf = pathMod.join(directory, "docs/spec-src", code, "module.conf")
+      if (!fs.existsSync(conf)) continue
+      const line = fs.readFileSync(conf, "utf8").split("\n").find((l) => /^\s*tck_module\s*=/.test(l))
+      if (line) ours.add(line.split("=")[1].trim().split("/")[0])
+    }
+    frozen = mods.filter((m) => !ours.has(m))
+  } catch (e) {
+    console.error(`[mansart-guard] frozen modules not computed: ${e?.message ?? e}`)
+  }
+
   const sessions = new Map()
   const stateFor = (id) => {
     if (!sessions.has(id)) sessions.set(id, makeSessionState())
@@ -80,7 +103,7 @@ export const MansartGuard = async ({ directory }) => {
 
         if (input.tool === "write" || input.tool === "edit" || input.tool === "patch") {
           const path = output.args?.filePath ?? output.args?.path
-          const why = generatedFileVerdict(path)
+          const why = generatedFileVerdict(path) ?? frozenModuleVerdict(path, frozen)
           if (why) throw new Deny(why)
         }
 
