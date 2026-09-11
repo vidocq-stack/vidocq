@@ -48,10 +48,13 @@ The contract (deliberately identical to Quarkus' `@QuarkusMain`):
   there (as a CDI bean when it is one); its return value is the exit code;
 * a plain server without post-boot logic just calls `Vidocq.run(args)`.
 
-`Vidocq.run()` picks the application modules of the boot layer automatically (the
-caller's module, every non-runtime module carrying `META-INF/vauban-beans.list`, and the
-modules owning the beans that `vidocq:generate` scanned from dependencies); override
-with `-Dvidocq.app.modules=<name,name>` or an explicit `-Dvidocq.app.path=<archives>`.
+`Vidocq.run()` picks the application modules of the boot layer automatically, with the
+policy of Vauban's xref:vauban::se.adoc[Java SE launcher]: every module moves except the
+Vidocq bricks, the platform and Jakarta modules, automatic modules, modules with a `javax.`,
+`sun.` or `com.sun.` package, and what those kept modules read. The caller's module always
+moves. CDI-agnostic libraries move too, so Vauban places the client proxies that must live in
+their packages, with zero `opens`. Override with `-Dvidocq.app.modules=<name,name>` or an
+explicit `-Dvidocq.app.path=<archives>`.
 A legacy main that boots the runtime directly still works — unwoven beans are then
 covered by the load-time weaving agent (with the JDK's dynamic-agent warning) and the
 log suggests migrating to the trampoline.

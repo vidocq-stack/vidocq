@@ -119,10 +119,8 @@ public final class VidocqAppLayer {
     /**
      * The trampoline path ({@code Vidocq.run()} from a plain IDE launch): the caller's
      * module was resolved into the boot layer together with the rest of the application.
-     * This re-resolves the application archives — the caller's own, plus every module of
-     * the caller's layer that carries {@code META-INF/vauban-beans.list} and is not a
-     * runtime/platform module — into a fresh Vauban layer. Module names deliberately
-     * shadow their boot-layer twins.
+     * This re-resolves the application archives, chosen by {@link #applicationPaths}, into a
+     * fresh Vauban layer. Module names deliberately shadow their boot-layer twins.
      *
      * <p>{@code -Dvidocq.app.modules=<name,name>} overrides the detection with an
      * explicit module list.
@@ -137,43 +135,42 @@ public final class VidocqAppLayer {
             return false; // class-path launch — nothing to re-layer, agent net applies
         }
         var explicit = System.getProperty("vidocq.app.modules", "").strip();
-        var explicitNames = explicit.isEmpty() ? null
-                : java.util.Set.of(explicit.split("\\s*,\\s*"));
-
         var configuration = callerLayer.configuration();
-        // Packages of the beans declared by the caller's archive: a scanned dependency's
-        // beans (vidocq:generate scanDependencies) are listed in the CALLER's
-        // vauban-beans.list, so the owning modules must be re-layered too.
-        var callerBeanPackages = explicitNames != null ? java.util.Set.<String>of()
-                : beanPackagesOf(configuration, callerModule.getName());
-        var paths = new java.util.LinkedHashSet<Path>();
-        for (var resolved : configuration.modules()) {
-            var name = resolved.name();
-            var location = resolved.reference().location()
-                    .filter(uri -> "file".equals(uri.getScheme()))
-                    .orElse(null);
-            if (location == null) continue;
-            boolean isApp;
-            if (explicitNames != null) {
-                isApp = explicitNames.contains(name);
-            } else if (name.equals(callerModule.getName())) {
-                isApp = true;
-            } else if (isRuntimeModule(name)) {
-                isApp = false;
-            } else {
-                isApp = hasBeansList(resolved.reference())
-                        || resolved.reference().descriptor().packages().stream()
-                                .anyMatch(callerBeanPackages::contains);
-            }
-            if (isApp) {
-                paths.add(Path.of(location));
-            }
-        }
+        var paths = explicit.isEmpty()
+                ? applicationPaths(configuration, callerModule.getName())
+                : explicitPaths(configuration, java.util.Set.of(explicit.split("\\s*,\\s*")));
         if (paths.isEmpty()) {
             return false;
         }
-        return installLayer(List.copyOf(paths), callerLayer,
+        return installLayer(paths, callerLayer,
                 "boot-layer detection from " + callerModule.getName());
+    }
+
+    /** The {@code file:} locations of the modules named by {@code -Dvidocq.app.modules}. */
+    private static List<Path> explicitPaths(java.lang.module.Configuration configuration,
+            java.util.Set<String> names) {
+        var paths = new java.util.LinkedHashSet<Path>();
+        for (var resolved : configuration.modules()) {
+            if (names.contains(resolved.name())) {
+                resolved.reference().location()
+                        .filter(uri -> "file".equals(uri.getScheme()))
+                        .ifPresent(uri -> paths.add(Path.of(uri)));
+            }
+        }
+        return List.copyOf(paths);
+    }
+
+    /**
+     * The {@code file:} locations of the modules of {@code configuration} to re-layer for an
+     * application whose trampoline lives in {@code callerModule}: Vauban's re-layer policy, the
+     * one of its Java SE launcher, with the Vidocq bricks kept as well and the caller as a root.
+     * A CDI-agnostic library that only the application reads moves with it, so the Vauban loader
+     * can place the client proxies that must live in its packages (vauban#53).
+     */
+    static List<Path> applicationPaths(java.lang.module.Configuration configuration,
+            String callerModule) {
+        return VaubanLayerFactory.applicationPaths(configuration, RUNTIME_MODULE_PREFIXES,
+                java.util.Set.of(callerModule));
     }
 
     private static boolean installLayer(List<Path> paths, ModuleLayer parentLayer, String origin) {
@@ -215,7 +212,7 @@ public final class VidocqAppLayer {
         }
     }
 
-    /** Runtime and platform module-name prefixes never re-layered by the detection. */
+    /** The Vidocq bricks: module-name prefixes kept in the boot layer on top of Vauban's own rules. */
     private static final List<String> RUNTIME_MODULE_PREFIXES = List.of(
             "java.", "jdk.", "jakarta.", "org.eclipse.",
             "io.vidocq.vauban", "io.vidocq.cassini", "io.vidocq.chappe",
@@ -225,43 +222,6 @@ public final class VidocqAppLayer {
             "io.vidocq.mansart",
             "io.vidocq.runtime.core", "io.vidocq.runtime.spi",
             "io.vidocq.runtime.extensions");
-
-    private static boolean isRuntimeModule(String moduleName) {
-        return RUNTIME_MODULE_PREFIXES.stream().anyMatch(moduleName::startsWith);
-    }
-
-    private static boolean hasBeansList(java.lang.module.ModuleReference reference) {
-        try (var reader = reference.open()) {
-            return reader.find("META-INF/vauban-beans.list").isPresent();
-        } catch (IOException e) {
-            return false;
-        }
-    }
-
-    /** Packages of every bean declared in {@code moduleName}'s vauban-beans.list. */
-    private static java.util.Set<String> beanPackagesOf(
-            java.lang.module.Configuration configuration, String moduleName) {
-        var resolved = configuration.findModule(moduleName).orElse(null);
-        if (resolved == null) return java.util.Set.of();
-        var packages = new java.util.LinkedHashSet<String>();
-        try (var reader = resolved.reference().open()) {
-            var list = reader.open("META-INF/vauban-beans.list").orElse(null);
-            if (list == null) return java.util.Set.of();
-            try (list; var buffered = new java.io.BufferedReader(
-                    new java.io.InputStreamReader(list, java.nio.charset.StandardCharsets.UTF_8))) {
-                String line;
-                while ((line = buffered.readLine()) != null) {
-                    line = line.strip();
-                    if (line.isEmpty() || line.startsWith("#")) continue;
-                    int lastDot = line.lastIndexOf('.');
-                    if (lastDot > 0) packages.add(line.substring(0, lastDot));
-                }
-            }
-        } catch (IOException e) {
-            return java.util.Set.of();
-        }
-        return packages;
-    }
 
     /**
      * Invokes the {@value #APP_MAIN_PROPERTY} class' {@code main(String[])} through the

@@ -41,7 +41,7 @@ flowchart TB
     subgraph child["child ModuleLayer — VaubanClassLoader (self-first)"]
         APP["application modules<br/>woven at definition"]
     end
-    TRAMP -- "Vidocq.run()" --> DET["boot-layer detection<br/>(caller + vauban-beans.list modules)"]
+    TRAMP -- "Vidocq.run()" --> DET["boot-layer detection<br/>(Vauban re-layer policy)"]
     DET -- "same archives,<br/>re-resolved" --> child
     APP -- requires --> RT
 ....
