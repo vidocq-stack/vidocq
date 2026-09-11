@@ -26,6 +26,7 @@
  */
 module it.beanb {
     requires io.vidocq.vauban.core;
+    requires io.vidocq.vauban.classloader;   // the launcher, exercised by the layer IT
     requires it.liba;
 
     requires jakarta.cdi;
