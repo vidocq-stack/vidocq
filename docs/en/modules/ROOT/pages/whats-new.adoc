@@ -4,4 +4,11 @@
 [.lead]
 New in the `{project-version}` development line — everything listed here landed **after the {release-version} release** and is not part of it. Sections carrying the [.tag-new]#NEW# badge across the documentation point to these features. When the next release train ships, this page is frozen with it and restarts empty on the dev line.
 
-_Nothing documented yet for this cycle. Add entries here (and place [.tag-new]#NEW# badges on the relevant pages) as features land on main._
+== Vauban
+
+Client proxies for third-party produced types, without `opens` (vauban#42, the jakartaee/cdi#1015 case):
+
+* **Java SE launcher and placed proxies** — `java -p mods -m io.vidocq.vauban.classloader/io.vidocq.vauban.classloader.Launch app/app.Main` runs the application inside a Vauban layer. There, a client proxy that must live in a third-party type's package is *placed* into it by the loader that owns the package — zero `opens`, no agent, no rewritten jar — and the third-party constructor never runs for the proxy (vauban#24, extended to types you do not compile). Unwoven beans are woven at definition, so IDE runs no longer need the load-time agent. xref:vauban::se.adoc[Vauban in Java SE], xref:vauban::internals.adoc#proxy-strategies[client-proxy strategies].
+* **Build-time proxies for cross-module producers** — a fully-public class or an interface produced from a CDI-agnostic module gets its proxy at compile time in the producer's package; no `java.lang.reflect.Proxy` on the build-time path. The eligibility check covers inherited members.
+* **`vauban:enhance-dependencies`** (opt-in) — a copy of a dependency jar with the proxy co-located in the type's package; the copy records its provenance in the manifest (`Vauban-Enhanced-From`, `Vauban-Enhanced-Digest`) and drops the inherited signature. The AOT path when a placed class cannot be defined at runtime.
+* **Boot-time opens are opt-in** — `-Dvauban.opens.auto=true`; left off, the container refuses and names every remedy, the launcher first. xref:vauban::reference.adoc[Reference].
