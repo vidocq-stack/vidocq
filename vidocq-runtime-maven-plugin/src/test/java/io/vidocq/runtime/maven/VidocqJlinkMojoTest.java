@@ -19,6 +19,7 @@
  */
 package io.vidocq.runtime.maven;
 
+import io.vidocq.vauban.maven.modularize.ModularizedJars;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -40,7 +41,7 @@ class VidocqJlinkMojoTest {
         Path dir = ModularizedJars.root(buildDir);
         Files.createDirectories(dir);
         Files.writeString(dir.resolve("report.txt"), """
-                # vidocq:modularize report
+                # vauban:modularize report
 
                 kept automatic: langchain4j-core-1.7.1.jar — ServiceLoader of \
                 dev.langchain4j.spi.ServiceHelper from langchain4j.core cannot be declared \
@@ -51,7 +52,7 @@ class VidocqJlinkMojoTest {
     }
 
     /**
-     * Advising "run vidocq:modularize" for a jar the goal already decided it cannot patch sends the
+     * Advising "run vauban:modularize" for a jar the goal already decided it cannot patch sends the
      * user round a loop that cannot terminate; the recorded reason has to replace the hint.
      */
     @Test
@@ -63,7 +64,7 @@ class VidocqJlinkMojoTest {
 
         assertTrue(message.contains("kept it automatic on purpose"), message);
         assertTrue(message.contains("module cycle"), message);
-        assertFalse(message.contains("run vidocq:modularize"), message);
+        assertFalse(message.contains("run vauban:modularize"), message);
     }
 
     @Test
@@ -73,7 +74,7 @@ class VidocqJlinkMojoTest {
         String message = VidocqJlinkMojo.automaticModulesMessage(
                 List.of("some.other (file:///m2/some-other-1.0.jar)"), buildDir);
 
-        assertTrue(message.contains("run vidocq:modularize"), message);
+        assertTrue(message.contains("run vauban:modularize"), message);
         assertTrue(message.contains("some.other"), message);
         assertFalse(message.contains("kept it automatic on purpose"), message);
     }
@@ -84,6 +85,6 @@ class VidocqJlinkMojoTest {
         String message = VidocqJlinkMojo.automaticModulesMessage(
                 List.of("langchain4j.core (file:///m2/langchain4j-core-1.7.1.jar)"), buildDir);
 
-        assertTrue(message.contains("run vidocq:modularize"), message);
+        assertTrue(message.contains("run vauban:modularize"), message);
     }
 }

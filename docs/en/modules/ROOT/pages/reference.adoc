@@ -23,7 +23,7 @@ Operational reference for Vidocq Runtime — Maven coordinates, MicroProfile Con
 | Aggregator of the shipped extensions, grouped by domain (essentials, jakartaee-core, jakartaee-web, microprofile, module-repackaged)
 
 | `io.vidocq.runtime:vidocq-runtime-maven-plugin:{project-version}`
-| Maven plugin — `generate`, `package`, `dev`, `checkpom`, `modularize`, `jlink`, `jpackage`, `docker`, `check-module-info`, `complete-module-info`
+| Maven plugin — `generate`, `package`, `dev`, `checkpom`, `jlink`, `jpackage`, `docker`, `check-module-info`, `complete-module-info` (`modularize` moved to the Vauban plugin)
 
 | `io.vidocq.runtime:vidocq-runtime-examples:{project-version}`
 | Examples (`vidocq-runtime-cassini-rest-example`, `vidocq-runtime-cervantes-jwt-example`, `vidocq-runtime-knock-health-example`, `vidocq-runtime-mansart-h2-example`, `vidocq-runtime-petstore-example`, plus the `vidocq-runtime-external-rest-lib` helper library)
@@ -143,8 +143,8 @@ extension claims through `VidocqExtension.configKeys()`.
 | `vidocq:checkpom`
 | Verifies every `vidocq-runtime-<name>-extension` declared in the pom is correctly wired (bound to `validate` via `pluginManagement`).
 
-| `vidocq:modularize`
-| Patches the non-modular jars of the runtime closure with a generated `module-info` (default phase `prepare-package`).
+| `vauban:modularize` (Vauban plugin)
+| Patches the non-modular jars of the runtime closure with a synthesized `module-info` (default phase `prepare-package`). Lives in `io.vidocq.vauban:vauban-maven-plugin`, not in this one.
 
 | `vidocq:jlink`
 | Standalone Java image (`target/dist/`) with binary launcher.

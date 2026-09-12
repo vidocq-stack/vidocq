@@ -19,6 +19,7 @@
  */
 package io.vidocq.runtime.maven;
 
+import io.vidocq.vauban.maven.modularize.ModularizedJars;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
@@ -124,7 +125,7 @@ public class VidocqPackageMojo extends AbstractMojo {
             // cross-module classes (target/vidocq-patches/<artifactId>) is copied as an
             // enriched jar carrying its own generated classes — no JPMS split package,
             // no --patch-module needed at launch. A dependency patched with a generated
-            // module-info by vidocq:modularize (target/vidocq-modularized/) ships as that
+            // module-info by vauban:modularize (target/vauban-modularized/) ships as that
             // copy, under the original file name.
             for (var artifact : project.getArtifacts()) {
                 if (artifact.getFile() != null && "jar".equals(artifact.getType())) {
@@ -132,7 +133,7 @@ public class VidocqPackageMojo extends AbstractMojo {
                     Path src = ModularizedJars.resolve(buildDir.toPath(), original);
                     if (!src.equals(original)) {
                         getLog().info("Packaging modularized copy of " + original.getFileName()
-                                + " (vidocq:modularize generated its module descriptor)");
+                                + " (vauban:modularize generated its module descriptor)");
                     }
                     Path patchDir = JpmsPatches.patchDirFor(buildDir.toPath(), artifact.getArtifactId());
                     if (Files.isDirectory(patchDir)) {

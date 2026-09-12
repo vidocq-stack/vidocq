@@ -19,7 +19,8 @@
  */
 package io.vidocq.runtime.maven;
 
-import io.vidocq.runtime.maven.modularize.Modularizer;
+import io.vidocq.vauban.maven.modularize.ModularizedJars;
+import io.vidocq.vauban.maven.modularize.Modularizer;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
@@ -62,9 +63,9 @@ import java.util.stream.Stream;
  *
  * <p>All dependency jars and the application artifact must be
  * <b>named Java modules</b> (presence of a {@code module-info.class}). TEA
- * automatic modules are rejected by {@code jlink}. Run {@code vidocq:modularize}
+ * automatic modules are rejected by {@code jlink}. Run {@code vauban:modularize}
  * first to patch the non-modular dependencies: this goal stages the copies it
- * produced in {@code target/vidocq-modularized/} instead of the original jars.</p>
+ * produced in {@code target/vauban-modularized/} instead of the original jars.</p>
  */
 @Mojo(name = "jlink",
       defaultPhase = LifecyclePhase.PACKAGE,
@@ -165,14 +166,14 @@ public class VidocqJlinkMojo extends AbstractMojo {
                     getLog().info("Staging sealed copy of " + artifact.getArtifactId()
                             + " (resource package closed, adapters via provides)");
                 }
-                // Prefer the copy patched with a generated module-info by vidocq:modularize:
+                // Prefer the copy patched with a generated module-info by vauban:modularize:
                 // jlink rejects automatic modules, so this is what makes a non-modular
                 // dependency stageable at all.
                 Path modularized = ModularizedJars.resolve(buildDir.toPath(), f.toPath());
                 if (!modularized.equals(f.toPath())) {
                     src = modularized;
                     getLog().info("Staging modularized copy of " + artifact.getArtifactId()
-                            + " (vidocq:modularize generated its module descriptor)");
+                            + " (vauban:modularize generated its module descriptor)");
                 }
                 // Stage an enriched copy when vidocq:generate parked cross-module classes
                 // for this dependency: the generated classes ship inside the module that
@@ -204,7 +205,7 @@ public class VidocqJlinkMojo extends AbstractMojo {
     /**
      * The failure raised when jars stayed automatic in the staged image.
      *
-     * <p>Telling the user to "run vidocq:modularize" is actively wrong for a jar that
+     * <p>Telling the user to "run vauban:modularize" is actively wrong for a jar that
      * {@code modularize} <em>deliberately</em> left automatic — a {@code ServiceLoader} cycle has no
      * legal explicit descriptor, so running the goal again changes nothing. The report the goal
      * already wrote is therefore read back and its {@code kept automatic: … — <reason>} line quoted
@@ -226,18 +227,18 @@ public class VidocqJlinkMojo extends AbstractMojo {
             } else {
                 anyKept = true;
                 sb.append("\n  ").append(entry)
-                        .append("\n      vidocq:modularize kept it automatic on purpose: ").append(reason);
+                        .append("\n      vauban:modularize kept it automatic on purpose: ").append(reason);
             }
         }
         if (anyKept) {
             sb.append("\n  A jar kept automatic has no legal explicit descriptor, so re-running")
-                    .append(" vidocq:modularize cannot fix it: exclude the artifact from the image,")
+                    .append(" vauban:modularize cannot fix it: exclude the artifact from the image,")
                     .append(" drop the dependency, or set vidocq.modularize.forceExplicit=true when")
                     .append(" you know the failing lookup is one your application never reaches.");
         }
         if (!unexplained.isEmpty()) {
             sb.append("\n  Convert into proper Java modules (add a module-info.java) — run")
-                    .append(" vidocq:modularize (mode all-automatic) before jlink, or exclude the")
+                    .append(" vauban:modularize (mode all-automatic) before jlink, or exclude the")
                     .append(" artifact: ").append(String.join(", ", unexplained)).append('.');
         }
         return sb.toString();

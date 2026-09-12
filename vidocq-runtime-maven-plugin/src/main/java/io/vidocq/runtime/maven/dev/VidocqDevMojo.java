@@ -20,7 +20,7 @@
 package io.vidocq.runtime.maven.dev;
 
 import io.vidocq.runtime.maven.JpmsPatches;
-import io.vidocq.runtime.maven.ModularizedJars;
+import io.vidocq.vauban.maven.modularize.ModularizedJars;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
@@ -208,7 +208,7 @@ public class VidocqDevMojo extends AbstractMojo {
             for (var artifact : project.getArtifacts()) {
                 if (artifact.getFile() != null) {
                     // Same file the module path uses (see buildModulePath): a modularized
-                    // copy when vidocq:modularize produced one, the original jar otherwise —
+                    // copy when vauban:modularize produced one, the original jar otherwise —
                     // otherwise --patch-module would target a jar that is not on the path.
                     jarsByArtifactId.put(artifact.getArtifactId(),
                             ModularizedJars.resolve(buildDirPath(), artifact.getFile().toPath()));
