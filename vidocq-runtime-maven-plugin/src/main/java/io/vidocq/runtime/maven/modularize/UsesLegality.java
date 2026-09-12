@@ -35,8 +35,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * Decides which of the scanned {@code uses} directives a generated descriptor may legally declare.
@@ -94,10 +92,6 @@ final class UsesLegality {
     private record Mod(String name, boolean automatic, Set<String> requires,
                        Set<String> requiresTransitive, Map<String, Set<String>> exports) {}
 
-    /** {@code requires [transitive|static] name;} in a ModiTect-generated descriptor source. */
-    private static final Pattern REQUIRES =
-            Pattern.compile("requires\\s+((?:transitive|static)\\s+)*([\\w.$]+)\\s*;");
-
     /**
      * Types a class literal scan can produce that are never a service: {@code ServiceLoader.load(x)}
      * on a variable resolves to the static type of the argument.
@@ -120,12 +114,12 @@ final class UsesLegality {
      *
      * @param closure       every jar of the dependency closure
      * @param patched       the jars that are going to become explicit modules
-     * @param moduleNames   the module name chosen for each patched jar
-     * @param descriptors   the generated descriptor source of each patched jar, read for its
-     *                      jdeps-derived {@code requires}
+     * @param synthesized   the descriptor synthesized for each patched jar — its name, its derived
+     *                      {@code requires} and its {@code exports}, as the module system will read
+     *                      them once the jar is patched
      */
-    static UsesLegality of(List<Path> closure, Set<Path> patched, Map<Path, String> moduleNames,
-                           Map<Path, String> descriptors) {
+    static UsesLegality of(List<Path> closure, Set<Path> patched,
+                           Map<Path, ModuleDescriptor> synthesized) {
         Map<Path, Mod> byJar = new LinkedHashMap<>();
         Map<String, Mod> byName = new HashMap<>();
         Map<String, Mod> exporterOfPackage = new HashMap<>();
@@ -137,18 +131,11 @@ final class UsesLegality {
             }
             Set<String> packages = descriptor.packages();
             Mod mod;
-            if (patched.contains(jar)) {
-                // Patched jars export every package unqualified (PackageNamePattern "*"), and their
-                // requires are the ones jdeps just derived.
-                Map<String, Set<String>> exports = new HashMap<>();
-                for (String p : packages) {
-                    exports.put(p, Set.of());
-                }
-                Set<String> requires = new HashSet<>();
-                Set<String> transitive = new HashSet<>();
-                parseRequires(descriptors.getOrDefault(jar, ""), requires, transitive);
-                mod = new Mod(moduleNames.getOrDefault(jar, descriptor.name()), false,
-                        requires, transitive, exports);
+            ModuleDescriptor patchedWith = patched.contains(jar) ? synthesized.get(jar) : null;
+            if (patchedWith != null) {
+                // A patched jar is read exactly as it will be once written: the synthesized
+                // descriptor already carries the derived requires and the exports.
+                mod = explicit(patchedWith);
             } else if (descriptor.isAutomatic()) {
                 mod = new Mod(descriptor.name(), true, Set.of(), Set.of(), Map.of());
             } else {
@@ -301,16 +288,4 @@ final class UsesLegality {
         return new Mod(descriptor.name(), descriptor.isAutomatic(), requires, transitive, exports);
     }
 
-    /** Collects the {@code requires} of a generated descriptor source. */
-    private static void parseRequires(String source, Set<String> requires, Set<String> transitive) {
-        Matcher m = REQUIRES.matcher(source);
-        while (m.find()) {
-            String modifiers = m.group(1) == null ? "" : m.group(1);
-            String name = m.group(2);
-            requires.add(name);
-            if (modifiers.contains("transitive")) {
-                transitive.add(name);
-            }
-        }
-    }
 }

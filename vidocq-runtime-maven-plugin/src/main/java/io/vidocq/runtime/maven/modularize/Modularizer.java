@@ -22,19 +22,13 @@ package io.vidocq.runtime.maven.modularize;
 import io.vidocq.runtime.maven.ModularizedJars;
 import io.vidocq.vauban.maven.module.ModuleAnalysisResult;
 import io.vidocq.vauban.maven.module.ModuleAnalyzer;
+import io.vidocq.vauban.maven.module.ModuleDescriptorSynthesizer;
 import io.vidocq.vauban.maven.module.SplitPackage;
-import org.moditect.commands.AddModuleInfo;
-import org.moditect.commands.GenerateModuleInfo;
-import org.moditect.model.DependencePattern;
-import org.moditect.model.DependencyDescriptor;
-import org.moditect.model.GeneratedModuleInfo;
-import org.moditect.model.PackageNamePattern;
-import org.moditect.spi.log.Log;
 
 import java.io.IOException;
+import java.lang.module.ModuleDescriptor;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -47,10 +41,12 @@ import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 /**
- * Patches non-modular dependency jars with a generated {@code module-info}
- * (ModiTect: {@code jdeps}-derived requires, all packages exported, META-INF/services
- * promoted to {@code provides}). Output goes to {@code target/vidocq-modularized/}
- * under the ORIGINAL file name so {@link ModularizedJars#resolve} substitutes it.
+ * Patches non-modular dependency jars with a synthesized {@code module-info}: {@code requires}
+ * derived from the types each jar uses, every package exported, {@code META-INF/services} promoted
+ * to {@code provides}, and the {@code uses} this build scanned for. The descriptor itself is built
+ * by {@link ModuleDescriptorSynthesizer}, with the JDK alone. Output goes to
+ * {@code target/vidocq-modularized/} under the ORIGINAL file name so
+ * {@link ModularizedJars#resolve} substitutes it.
  */
 public final class Modularizer {
 
@@ -102,9 +98,9 @@ public final class Modularizer {
      * @param artifactIdByJar artifact id per jar, used by the include/exclude filters and the
      *                        {@code moduleNames} overrides; the file name is used as a fallback
      * @param buildDir        the project {@code target/} directory
-     * @param log             receives one line per patched jar plus ModiTect's own output
+     * @param log             receives one line per patched jar, plus what the synthesis reports
      * @throws IllegalStateException if two automatic jars of the closure share a package
-     * @throws IOException           if a jar cannot be read, or jdeps/ModiTect fails on one
+     * @throws IOException           if a jar cannot be read, or holds no class in any package
      */
     public static Result run(List<Path> closure, Map<Path, String> artifactIdByJar, Path buildDir,
                              Options options, Consumer<String> log) throws IOException {
@@ -127,15 +123,14 @@ public final class Modularizer {
         assertNoSplitPackage(infos);
 
         // 5. generate every candidate descriptor, before writing any of them
-        Generated generated =
-                generateAll(closure, selection.selected(), artifactIdByJar, buildDir, options, log);
+        Generated generated = generateAll(closure, selection.selected(), artifactIdByJar, options, log);
 
         // 6. keep only the `uses` the module system will accept, demote what has none it may declare
         Legality legality = resolveLegality(closure, generated, options);
 
         // 7. write the survivors
         StringBuilder report = new StringBuilder("# vidocq:modularize report\n");
-        List<Path> patched = write(legality, generated, outDir, report, log);
+        List<Path> patched = write(legality, generated, closure, options, outDir, report, log);
 
         // 8. account for everything that was left alone, with the reason when there is one
         List<Path> allSkipped = report(selection, legality, generated, report, log);
@@ -149,7 +144,8 @@ public final class Modularizer {
 
     /** Phase 5: one generated descriptor, module name and service scan per selected jar. */
     private record Generated(Map<Path, JarModuleInfo> infoByJar, Map<Path, String> moduleNames,
-                             Map<Path, String> descriptors, Map<Path, Set<String>> scannedServices) {}
+                             Map<Path, ModuleDescriptor> descriptors,
+                             Map<Path, Set<String>> scannedServices) {}
 
     /** Phase 6: what may still be patched, the surviving {@code uses}, and what was demoted. */
     private record Legality(Set<Path> candidates, UsesLegality.Verdict verdict,
@@ -185,25 +181,13 @@ public final class Modularizer {
     }
 
     /**
-     * Phase 5: runs ModiTect over every selected jar and scans the closure for {@code uses}.
+     * Phase 5: synthesizes a descriptor for every selected jar and scans the closure for {@code uses}.
      * Nothing is written to the output directory yet — which jars end up explicit decides what the
      * others may legally declare, so the whole set has to exist on paper before any of it is real.
      */
     private static Generated generateAll(List<Path> closure, List<JarModuleInfo> selected,
-                                         Map<Path, String> artifactIdByJar, Path buildDir,
-                                         Options options, Consumer<String> log) throws IOException {
-        // ModiTect recreates <dir>/<moduleName> under both of these, so neither may be outDir:
-        // ModularizedJars.resolve substitutes a file of that directory for a dependency jar by
-        // file name, and a directory named after a module would shadow nothing but confuse the
-        // report that lives there beside the patched jars.
-        Path scratch = buildDir.resolve("vidocq-modularize-work");
-        Path workDir = Files.createDirectories(scratch.resolve("work"));
-        Path genDir = Files.createDirectories(scratch.resolve("generated"));
-
-        Set<DependencyDescriptor> deps = new LinkedHashSet<>();
-        for (Path jar : closure) {
-            deps.add(new DependencyDescriptor(jar, false, null));
-        }
+                                         Map<Path, String> artifactIdByJar, Options options,
+                                         Consumer<String> log) throws IOException {
         // Built once over the whole closure: a service-lookup helper is regularly in another jar
         // than the code that names the service type (langchain4j-core's ServiceHelper, called
         // from langchain4j), so the call graph has to be closure-wide to be seen whole. Reading
@@ -211,42 +195,18 @@ public final class Modularizer {
         ServiceUsesScanner usesScanner = selected.isEmpty()
                 ? ServiceUsesScanner.over(List.of(), log)
                 : ServiceUsesScanner.over(closure, log);
-        Log mlog = new ConsumerLog(log);
         Map<Path, JarModuleInfo> infoByJar = new LinkedHashMap<>();
         Map<Path, String> moduleNames = new LinkedHashMap<>();
-        Map<Path, String> descriptors = new LinkedHashMap<>();
+        Map<Path, ModuleDescriptor> descriptors = new LinkedHashMap<>();
         Map<Path, Set<String>> scannedServices = new LinkedHashMap<>();
         for (JarModuleInfo info : selected) {
             String artifactId = artifactIdOf(artifactIdByJar, info.jar());
             String name = options.moduleNames().getOrDefault(artifactId, info.moduleName());
-            try {
-                GeneratedModuleInfo gen = new GenerateModuleInfo(
-                        info.jar(), name, options.openModules(), deps,
-                        // `parsePatterns` (plural) is the parser for the ";"-terminated ModiTect
-                        // configuration form; `parsePattern` would take the ";" for pattern text
-                        // and silently match nothing, dropping every exports directive.
-                        PackageNamePattern.parsePatterns("*;"),          // export everything
-                        // "The opens table for an open module must be 0 length": an `open module`
-                        // already opens everything, and a redundant `opens` makes the descriptor
-                        // unreadable. Only a closed module gets the open-everything patterns.
-                        options.openModules() ? List.of() : PackageNamePattern.parsePatterns("*;"),
-                        DependencePattern.parsePatterns("*;"),           // keep every jdeps requires
-                        workDir, genDir, Set.of(), Set.of(), Set.of(),
-                        // addServiceUses stays false: ModiTect's own scanner runs on a shaded ASM
-                        // that rejects any class file newer than it knows ("Unsupported class file
-                        // major version 69"), which would break modularize on every jar built with
-                        // a recent JDK. The `uses` directives are appended below instead, scanned
-                        // with the JDK Class-File API — see ServiceUsesScanner.
-                        false,
-                        List.of("--multi-release", options.release(), "--ignore-missing-deps"),
-                        mlog).run();
-                descriptors.put(info.jar(), Files.readString(gen.getPath()));
-            } catch (RuntimeException e) {
-                // ModiTect reports every jdeps and compilation failure as an unchecked
-                // exception naming nothing; `run` promises IOException, so name the jar.
-                throw new IOException("vidocq:modularize — jdeps/ModiTect failed for "
-                        + info.jar().getFileName() + ": " + e.getMessage(), e);
-            }
+            // Synthesized without any `uses` yet: which of them may legally be declared depends on
+            // the `requires` this very pass derives, so the directives are only known once the whole
+            // post-patch graph exists. Phase 7 synthesizes again with the legal ones.
+            descriptors.put(info.jar(), synthesize(info.jar(), name, closure, options, Set.of(), log)
+                    .descriptor());
             infoByJar.put(info.jar(), info);
             moduleNames.put(info.jar(), name);
             scannedServices.put(info.jar(), usesScanner.scan(info.jar()));
@@ -255,17 +215,30 @@ public final class Modularizer {
     }
 
     /**
+     * One descriptor, with the notes the synthesis produced routed to the build log — a package no
+     * module of the closure owns, a service file naming a provider the jar does not contain.
+     */
+    private static ModuleDescriptorSynthesizer.Result synthesize(
+            Path jar, String moduleName, List<Path> closure, Options options, Set<String> uses,
+            Consumer<String> log) throws IOException {
+        ModuleDescriptorSynthesizer.Result result = ModuleDescriptorSynthesizer.synthesize(
+                new ModuleDescriptorSynthesizer.Request(jar, moduleName, options.openModules(),
+                        closure, uses, versionOf(jar)));
+        result.notes().forEach(log);
+        return result;
+    }
+
+    /**
      * Phase 6: keeps only the {@code uses} the module system will accept, and demotes back to
      * automatic the jars left with a lookup they cannot legally declare.
      */
     private static Legality resolveLegality(List<Path> closure, Generated generated,
                                             Options options) {
-        Map<Path, String> moduleNames = generated.moduleNames();
-        Map<Path, String> descriptors = generated.descriptors();
+        Map<Path, ModuleDescriptor> descriptors = generated.descriptors();
         Map<Path, Set<String>> scannedServices = generated.scannedServices();
         Set<Path> candidates = new LinkedHashSet<>(descriptors.keySet());
         UsesLegality.Verdict verdict =
-                UsesLegality.of(closure, candidates, moduleNames, descriptors).check(scannedServices);
+                UsesLegality.of(closure, candidates, descriptors).check(scannedServices);
         // Kept for the demotion messages: the second pass no longer analyses the demoted jars.
         UsesLegality.Verdict firstPass = verdict;
         List<Path> demoted = new ArrayList<>();
@@ -285,45 +258,69 @@ public final class Modularizer {
             // airtight is that jdeps emits plain `requires` only: no still-patched jar reaches its
             // exporter *through* a demoted one, so demotion cannot take readability away. Should a
             // generated descriptor ever carry `requires transitive`, iterate to a fixed point.
-            verdict = UsesLegality.of(closure, candidates, moduleNames, descriptors)
-                    .check(scannedServices);
+            verdict = UsesLegality.of(closure, candidates, descriptors).check(scannedServices);
         }
         return new Legality(candidates, verdict, firstPass, demoted);
     }
 
     /** Phase 7: writes one patched jar per surviving candidate and appends its descriptor. */
-    private static List<Path> write(Legality legality, Generated generated, Path outDir,
-                                    StringBuilder report, Consumer<String> log) throws IOException {
+    private static List<Path> write(Legality legality, Generated generated, List<Path> closure,
+                                    Options options, Path outDir, StringBuilder report,
+                                    Consumer<String> log) throws IOException {
         List<Path> patched = new ArrayList<>();
         for (Path jar : legality.candidates()) {
             JarModuleInfo info = generated.infoByJar().get(jar);
             String name = generated.moduleNames().get(jar);
             // An automatic module may consume any service; an explicit one may only consume what
             // it declares. Without these directives the very jar we just promoted fails its own
-            // lookup with "module … does not declare 'uses'".
-            String source = withUses(generated.descriptors().get(jar),
-                    legality.verdict().legal().getOrDefault(jar, Set.of()));
-            try {
-                // `base` keeps module-info.class at the jar root. Passing a JVM version instead
-                // would hide the descriptor under META-INF/versions/<n> and stamp the jar
-                // `Multi-Release: true` — a gratuitous change of shape for a jar that has none.
-                // `release` stays what it is: the JDK level jdeps analyses against.
-                new AddModuleInfo(source, null, versionOf(jar), jar, outDir,
-                        "base", true, Instant.EPOCH).run();
-            } catch (RuntimeException e) {
-                throw new IOException("vidocq:modularize — ModiTect failed for "
-                        + jar.getFileName() + ": " + e.getMessage(), e);
-            }
-            Path out = outDir.resolve(jar.getFileName().toString());
-            if (!Files.isRegularFile(out)) {
-                throw new IOException("ModiTect did not produce " + out);
-            }
+            // lookup with "module … does not declare 'uses'". They are known only now, which is
+            // why the descriptor is synthesized a second time — same inputs, plus the legal `uses`.
+            Set<String> uses = legality.verdict().legal().getOrDefault(jar, Set.of());
+            ModuleDescriptorSynthesizer.Result synthesized =
+                    synthesize(jar, name, closure, options, uses, log);
+            Path out = ModuleDescriptorSynthesizer.writeJarWithDescriptor(
+                    jar, synthesized.moduleInfo(), outDir);
             patched.add(out);
             report.append("\n## ").append(jar.getFileName()).append(" → module ").append(name)
-                    .append(" (").append(info.kind()).append(")\n").append(source).append('\n');
+                    .append(" (").append(info.kind()).append(")\n")
+                    .append(render(synthesized.descriptor())).append('\n');
             log.accept("modularized " + jar.getFileName() + " as " + name);
         }
         return patched;
+    }
+
+    /**
+     * The descriptor as a reader expects to see it. The report is read by humans deciding whether a
+     * patched jar is right, so it shows module-info source rather than a {@code toString}.
+     */
+    private static String render(ModuleDescriptor descriptor) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(descriptor.isOpen() ? "open module " : "module ").append(descriptor.name());
+        descriptor.rawVersion().ifPresent(v -> sb.append("@").append(v));
+        sb.append(" {\n");
+        descriptor.requires().stream()
+                .sorted(java.util.Comparator.comparing(ModuleDescriptor.Requires::name))
+                .forEach(r -> {
+                    sb.append("    requires ");
+                    if (r.modifiers().contains(ModuleDescriptor.Requires.Modifier.TRANSITIVE)) {
+                        sb.append("transitive ");
+                    }
+                    if (r.modifiers().contains(ModuleDescriptor.Requires.Modifier.STATIC)) {
+                        sb.append("static ");
+                    }
+                    sb.append(r.name()).append(";\n");
+                });
+        descriptor.exports().stream().map(ModuleDescriptor.Exports::source).sorted()
+                .forEach(p -> sb.append("    exports ").append(p).append(";\n"));
+        descriptor.opens().stream().map(ModuleDescriptor.Opens::source).sorted()
+                .forEach(p -> sb.append("    opens ").append(p).append(";\n"));
+        descriptor.uses().stream().sorted()
+                .forEach(u -> sb.append("    uses ").append(u).append(";\n"));
+        descriptor.provides().stream()
+                .sorted(java.util.Comparator.comparing(ModuleDescriptor.Provides::service))
+                .forEach(p -> sb.append("    provides ").append(p.service()).append(" with ")
+                        .append(String.join(", ", p.providers())).append(";\n"));
+        return sb.append("}\n").toString();
     }
 
     /**
@@ -362,33 +359,6 @@ public final class Modularizer {
             report.append("\nskipped: ").append(s.getFileName()).append('\n');
         }
         return allSkipped;
-    }
-
-    /**
-     * Inserts one {@code uses <service>;} line per scanned service into the body of the
-     * ModiTect-generated descriptor source, just before its closing brace.
-     *
-     * @return {@code source} unchanged when there is nothing to add
-     */
-    private static String withUses(String source, Set<String> services) {
-        if (services.isEmpty()) {
-            return source;
-        }
-        int close = source.lastIndexOf('}');
-        if (close < 0) {
-            // Not a body we recognise; a malformed descriptor is ModiTect's to report, not ours.
-            return source;
-        }
-        StringBuilder sb = new StringBuilder(source.substring(0, close));
-        for (String service : services) {
-            String directive = "uses " + service + ";";
-            // Belt and braces: should ModiTect ever emit the directive itself, a second copy would
-            // make the descriptor unreadable ("duplicate uses").
-            if (!source.contains(directive)) {
-                sb.append("    ").append(directive).append('\n');
-            }
-        }
-        return sb.append(source.substring(close)).toString();
     }
 
     /**
@@ -437,13 +407,5 @@ public final class Modularizer {
     private static String versionOf(Path jar) {
         Matcher m = VERSION_IN_FILE_NAME.matcher(jar.getFileName().toString());
         return m.find() ? m.group(1) : null;
-    }
-
-    /** Bridges ModiTect logging onto the mojo log. */
-    private record ConsumerLog(Consumer<String> sink) implements Log {
-        @Override public void debug(CharSequence m) {}
-        @Override public void info(CharSequence m) { sink.accept(String.valueOf(m)); }
-        @Override public void warn(CharSequence m) { sink.accept("WARN " + m); }
-        @Override public void error(CharSequence m) { sink.accept("ERROR " + m); }
     }
 }

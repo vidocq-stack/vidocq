@@ -134,7 +134,7 @@ Automatic modules work on the module path, so `vidocq:dev` and a plain `--module
 
 | `<release>`
 | `${maven.compiler.release}` (else `25`)
-| JDK release `jdeps` analyses multi-release jars against.
+| Accepted, no longer used: every multi-release variant is analysed whatever its release. Kept so an existing configuration keeps building.
 
 | `<allowedLicenses>`
 | empty

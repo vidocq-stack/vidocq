@@ -105,10 +105,12 @@ JAX-RS resource dispatch (Cassini) uses APT-generated adapters with direct typed
 The goals above are about the directives **your** `module-info.java` is missing. `vidocq:modularize`
 answers the opposite problem: a third-party jar that has **no** `module-info.class` at all. On the
 module path such a jar is an *automatic module* — it works, but it reads every module, exports every
-package, and `jlink` refuses to link it. This goal patches a copy of it with a generated descriptor
-(ModiTect: `jdeps`-derived `requires`, every package exported, `META-INF/services` promoted to
-`provides`, `open module` by default) into `target/vidocq-modularized/`, under the **original file
-name**.
+package, and `jlink` refuses to link it. This goal patches a copy of it with a synthesized descriptor —
+`requires` derived from the types the jar uses, every package exported, `META-INF/services`
+promoted to `provides`, `open module` by default — into `target/vidocq-modularized/`, under the
+**original file name**. The descriptor is built with the JDK alone (Class-File API for the bytes,
+`ModuleFinder` to attribute each package to its owning module); nothing generates a
+`module-info.java` and compiles it.
 
 The descriptor also carries `uses` directives, scanned off the bytecode of the whole dependency
 closure with the JDK Class-File API. They are not optional: an automatic module may consume any
@@ -264,7 +266,7 @@ gate is off — nothing is redistributed by the goal itself.
 | `vidocq.modularize.skip` | `false` | Skip the goal entirely. |
 | `<includes>` / `<excludes>` | empty | Restrict patching to / away from these `artifactId`s. Both only ever *restrict*: an explicit module named in `<includes>` still stays untouched. |
 | `vidocq.modularize.open` (`<openModules>`) | `true` | Generate `open module` descriptors (a reflective library keeps working). `false` generates a closed module that `exports` every package. |
-| `<release>` | `${maven.compiler.release}` (else `25`) | JDK release `jdeps` analyses multi-release jars against. |
+| `<release>` | `${maven.compiler.release}` (else `25`) | Accepted, no longer used. Every multi-release variant of a jar is analysed, whatever its release, so there is nothing to select. Kept so an existing configuration keeps building. |
 | `vidocq.modularize.forceExplicit` (`<forceExplicit>`) | `false` | Patch a jar even when one of its own `ServiceLoader` lookups cannot be declared legally — see *Why some jars stay automatic*. The illegal directives are dropped either way. |
 
 ### Dev mode needs an earlier binding

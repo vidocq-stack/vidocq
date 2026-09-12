@@ -541,7 +541,7 @@ class ModularizerTest {
         // Nothing invented means nothing to drop, and so no reason to demote either jar.
         assertEquals(2, result.patched().size(), result.report());
         assertFalse(result.report().contains("kept automatic"), result.report());
-        // ModiTect's own jdeps chatter also comes through the log, so only our warnings count.
+        // The synthesis reports its own notes through the same log, so only our warnings count.
         assertTrue(log.stream().noneMatch(l -> l.startsWith("WARN dropped uses:")
                 || l.startsWith("WARN kept automatic:")), log.toString());
     }

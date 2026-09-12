@@ -52,8 +52,8 @@ import java.util.jar.JarFile;
  * locating the {@code ServiceLoader} lookups in the bytecode with the JDK Class-File API
  * (JEP 484).
  *
- * <p>Needed because {@code jdeps} does not report service uses, and ModiTect's own scanner runs
- * on a shaded ASM that refuses class files newer than its own release.
+ * <p>Needed because a service lookup leaves no trace a dependency analysis can pick up: the type
+ * appears as an ordinary class constant, and nothing in the bytecode says it is a service.
  *
  * <h2>Which module needs the directive</h2>
  *
@@ -78,7 +78,7 @@ import java.util.jar.JarFile;
  * which can pick up unrelated constants. That is the right way to be wrong here — a superfluous
  * {@code uses} is inert (nothing ever resolves it), a missing one turns the jar's own lookup into
  * a {@code ServiceConfigurationError}. A service type held in a variable rather than written as a
- * class literal cannot be seen at all; no bytecode scanner can, ModiTect included.
+ * class literal cannot be seen at all; no bytecode scanner can.
  */
 final class ServiceUsesScanner {
 

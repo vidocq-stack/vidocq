@@ -492,7 +492,7 @@
         <!-- vidocq:modularize -->
         <mojo>
             <goal>modularize</goal>
-            <description>Patch the non-modular dependency jars of the runtime closure with a generated module-info (ModiTect: jdeps-derived requires, exports of every package, META-INF/services promoted to provides, open module) into target/vidocq-modularized/. vidocq:dev, vidocq:jlink and vidocq:package prefer those copies. Fails on split packages. Nothing is redistributed.</description>
+            <description>Patch the non-modular dependency jars of the runtime closure with a synthesized module-info (requires derived from the types each jar uses, exports of every package, META-INF/services promoted to provides, open module) into target/vidocq-modularized/. vidocq:dev, vidocq:jlink and vidocq:package prefer those copies. Fails on split packages. Nothing is redistributed.</description>
             <requiresDependencyResolution>runtime</requiresDependencyResolution>
             <requiresDirectInvocation>false</requiresDirectInvocation>
             <requiresProject>true</requiresProject>

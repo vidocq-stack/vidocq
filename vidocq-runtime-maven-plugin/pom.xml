@@ -45,22 +45,6 @@
             <artifactId>vauban-maven-plugin</artifactId>
             <version>${vauban.version}</version>
         </dependency>
-        <!-- Build-time only: generates module-info for non-modular dependency jars
-             (vidocq:modularize). Never reaches an application runtime. -->
-        <dependency>
-            <groupId>org.moditect</groupId>
-            <artifactId>moditect</artifactId>
-            <version>1.2.2.Final</version>
-            <exclusions>
-                <!-- ModiTect's CLI argument parser. This plugin calls the GenerateModuleInfo and
-                     AddModuleInfo commands directly, never the CLI, so jcommander is dead weight
-                     on the plugin classpath. -->
-                <exclusion>
-                    <groupId>org.jcommander</groupId>
-                    <artifactId>jcommander</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
 
         <!-- Maven Plugin API (provided by Maven at runtime) -->
         <dependency>
