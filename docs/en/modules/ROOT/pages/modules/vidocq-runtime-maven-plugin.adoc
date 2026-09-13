@@ -95,7 +95,7 @@ coordinates, the goal prefix, the property names and the output directory move.
 |===
 
 `vidocq:dev`, `vidocq:jlink` and `vidocq:package` still prefer the patched copies automatically,
-reading the new directory. The goal's own reference is in the Vauban documentation.
+reading the new directory. The goal's own reference is in the Vauban documentation: xref:vauban::reference.adoc#modularize[`vauban:modularize` in detail].
 
 == `vidocq:jlink` goal
 
