@@ -52,6 +52,30 @@
     </modules>
 
     <properties>
+        <!--
+            The TCK runners this repository's pull requests are gated on (Vidocq/vauban#85,
+            Vidocq/GestionProjet#9). Read by the shared pr-validate workflow, which runs
+            `mvn -pl <module> -Ptck test` for each. These certify the ASSEMBLED runtime.
+
+            Six of the ten runners, measured at 84 s together for 1086 conformance tests. The four
+            left out, each for a stated reason rather than by omission:
+
+              * vidocq-runtime-tck-humboldt-telemetry  (256 s) — the MP Telemetry TCK's own
+                InMemorySpanExporter.assertSpanCount uses Awaitility pollDelay(3, SECONDS), a firm
+                floor paid on every call whatever the implementation does; 99 % of its time is that
+                wait. Nothing here can make it faster.
+              * vidocq-runtime-tck-heisenberg-faulttolerance (183 s) — fault tolerance IS durations:
+                testTimeout, testRetryWithDelay, testBulkheadPressure. Incompressible by nature.
+              * vidocq-runtime-tck-cyrano-restclient   (183 s) — green, simply long.
+              * vidocq-runtime-tck-coreprofile — RED on JDK 25: the TCK's own
+                ee.jakarta.tck.core.common.Utils throws "No access to RETAIN_CLASS_REFERENCE".
+                Deterministic, not environmental. Left out until that is settled upstream — a
+                permanently red gate teaches people to ignore red.
+
+            The three slow ones belong in a nightly or main-branch job: their duration is imposed
+            from outside and will not say anything new about one pull request.
+        -->
+        <ci.tck.modules>vidocq-runtime-integration-tests/vidocq-runtime-tck-ravel-config,vidocq-runtime-integration-tests/vidocq-runtime-tck-annotations,vidocq-runtime-integration-tests/vidocq-runtime-tck-grimm-openapi,vidocq-runtime-integration-tests/vidocq-runtime-tck-dirac-metrics,vidocq-runtime-integration-tests/vidocq-runtime-tck-cervantes-jwt,vidocq-runtime-integration-tests/vidocq-runtime-tck-knock-health</ci.tck.modules>
         <vauban.version>0.4.0-SNAPSHOT</vauban.version>
         <chappe.version>0.4.0-SNAPSHOT</chappe.version>
         <cassini.version>0.4.0-SNAPSHOT</cassini.version>
