@@ -57,8 +57,17 @@
             Vidocq/GestionProjet#9). Read by the shared pr-validate workflow, which runs
             `mvn -pl <module> -Ptck test` for each. These certify the ASSEMBLED runtime.
 
-            Six of the ten runners, measured at 84 s together for 1086 conformance tests. The four
-            left out, each for a stated reason rather than by omission:
+            Five of the ten runners: every MicroProfile TCK they need is on Maven Central, so a
+            clean runner can fetch them. About 45 s together, for 1085 conformance tests.
+
+            The five left out, each for a stated reason rather than by omission:
+
+              * vidocq-runtime-tck-annotations — its TCK, jakarta.annotation:jakarta-annotations-tck
+                :3.0.0, is NOT on Maven Central (HTTP 404); it only resolves where someone installed
+                it by hand. It ran in 9 s on a developer machine that already had it, which is
+                exactly how it slipped into the first version of this list and turned the gate red.
+                A runner that needs a non-public artefact cannot gate a pull request until that
+                artefact is cached in the runner image.
 
               * vidocq-runtime-tck-humboldt-telemetry  (256 s) — the MP Telemetry TCK's own
                 InMemorySpanExporter.assertSpanCount uses Awaitility pollDelay(3, SECONDS), a firm
@@ -75,7 +84,7 @@
             The three slow ones belong in a nightly or main-branch job: their duration is imposed
             from outside and will not say anything new about one pull request.
         -->
-        <ci.tck.modules>vidocq-runtime-integration-tests/vidocq-runtime-tck-ravel-config,vidocq-runtime-integration-tests/vidocq-runtime-tck-annotations,vidocq-runtime-integration-tests/vidocq-runtime-tck-grimm-openapi,vidocq-runtime-integration-tests/vidocq-runtime-tck-dirac-metrics,vidocq-runtime-integration-tests/vidocq-runtime-tck-cervantes-jwt,vidocq-runtime-integration-tests/vidocq-runtime-tck-knock-health</ci.tck.modules>
+        <ci.tck.modules>vidocq-runtime-integration-tests/vidocq-runtime-tck-ravel-config,vidocq-runtime-integration-tests/vidocq-runtime-tck-grimm-openapi,vidocq-runtime-integration-tests/vidocq-runtime-tck-dirac-metrics,vidocq-runtime-integration-tests/vidocq-runtime-tck-cervantes-jwt,vidocq-runtime-integration-tests/vidocq-runtime-tck-knock-health</ci.tck.modules>
         <vauban.version>0.4.0-SNAPSHOT</vauban.version>
         <chappe.version>0.4.0-SNAPSHOT</chappe.version>
         <cassini.version>0.4.0-SNAPSHOT</cassini.version>

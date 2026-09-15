@@ -1,9 +1,9 @@
 # The full TCK of the assembled runtime, nightly.
 #
-# Pull requests are gated on the six quick runners (see `ci.tck.modules` in pom.xml,
-# about 50 s for 1086 conformance tests). This job runs those AND the three that are
-# too slow to sit on a pull request — together about twelve minutes, which is nothing
-# once a night and is the only thing that checks `main` at all: `ci.yml` runs no TCK.
+# Pull requests are gated on the five quick runners (see `ci.tck.modules` in pom.xml,
+# about 45 s for 1085 conformance tests). This job runs those AND the three that are
+# too slow to sit on a pull request — eight in all, about twelve minutes, which is
+# nothing once a night and is the only thing that checks `main`: `ci.yml` runs no TCK.
 #
 # Why the three are here rather than there, measured rather than assumed:
 #
@@ -15,6 +15,10 @@
 #   * heisenberg-faulttolerance (~183 s) — fault tolerance IS durations: testTimeout,
 #     testRetryWithDelay, testBulkheadPressure. Incompressible by nature.
 #   * cyrano-restclient (~183 s) — green, simply long.
+#
+# vidocq-runtime-tck-annotations is in neither list either, for a different reason: its TCK
+# (jakarta.annotation:jakarta-annotations-tck:3.0.0) is NOT on Maven Central — it resolves only
+# where someone installed it by hand. Add it back once the runner image caches it.
 #
 # vidocq-runtime-tck-coreprofile is in NEITHER list: it is deterministically red on
 # JDK 25, because the TCK's own ee.jakarta.tck.core.common.Utils throws "No access to
@@ -56,15 +60,11 @@ jobs:
       - name: Build & install the runtime
         run: mvn -B -ntp -U install -DskipTests
 
-      # The six that also gate pull requests — cheap, and this is the only thing that
+      # The five that also gate pull requests — cheap, and this is the only thing that
       # runs them against `main`.
       - name: MicroProfile Config (ravel)
         uses: ./.ci-action/run-tck
         with: { module: vidocq-runtime-integration-tests/vidocq-runtime-tck-ravel-config, pre-install: 'false' }
-
-      - name: Jakarta Annotations
-        uses: ./.ci-action/run-tck
-        with: { module: vidocq-runtime-integration-tests/vidocq-runtime-tck-annotations, pre-install: 'false' }
 
       - name: MicroProfile OpenAPI (grimm)
         uses: ./.ci-action/run-tck

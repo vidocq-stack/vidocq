@@ -20,7 +20,12 @@ Lite). Each MicroProfile/Jakarta spec ships as an independent **extension** disc
 - Build everything: `mvn clean install` (uses Maven Model 4.0.0; internal module versions are pinned explicitly in root `dependencyManagement`).
 - Dev mode (live run of an example/app): `./mvnw vidocq:dev` — reads `vidocq.mainModule` / `vidocq.mainClass` properties (see `vidocq-runtime-examples/vidocq-runtime-mansart-h2-example/pom.xml`).
 - Commits must be **DCO signed-off**: `git commit -s` (see `CONTRIBUTING.md`).
-- TCK runners (e.g. Servlet 6.1, MicroProfile per-spec) live **outside the Maven reactor** because ShrinkWrap cannot parse Model 4.x POMs — launch them via their dedicated `run-official-tck-*.sh` scripts, never `mvn` from the root.
+- **This repository's own TCK runners are in the reactor**, behind the `tck` profile of
+  `vidocq-runtime-integration-tests`: `mvn -Ptck -pl vidocq-runtime-integration-tests/vidocq-runtime-tck-<x> test`.
+  They certify the *assembled runtime*. Five of them gate every pull request (`ci.tck.modules` in the
+  root pom, ~45 s); `tck-nightly.yml` runs eight. The per-brick runners of the other repositories
+  (Servlet 6.1, the official per-spec suites) are a different matter — several stay outside their
+  reactor and are launched by their own `run-official-tck-*.sh`.
 
 ## Forge & tooling (CodeFloe)
 
