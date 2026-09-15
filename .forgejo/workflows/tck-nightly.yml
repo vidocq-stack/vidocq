@@ -1,0 +1,108 @@
+# The full TCK of the assembled runtime, nightly.
+#
+# Pull requests are gated on the six quick runners (see `ci.tck.modules` in pom.xml,
+# about 50 s for 1086 conformance tests). This job runs those AND the three that are
+# too slow to sit on a pull request — together about twelve minutes, which is nothing
+# once a night and is the only thing that checks `main` at all: `ci.yml` runs no TCK.
+#
+# Why the three are here rather than there, measured rather than assumed:
+#
+#   * humboldt-telemetry (~256 s) — the MP Telemetry TCK's own
+#     InMemorySpanExporter.assertSpanCount uses Awaitility pollDelay(3, SECONDS), a
+#     firm floor paid on every call whatever the implementation does; 99 % of its time
+#     is that wait. Running it with otel.metric.export.interval=500 changed nothing
+#     (240 s against 256 s, inside the noise). The faster we are, the longer it waits.
+#   * heisenberg-faulttolerance (~183 s) — fault tolerance IS durations: testTimeout,
+#     testRetryWithDelay, testBulkheadPressure. Incompressible by nature.
+#   * cyrano-restclient (~183 s) — green, simply long.
+#
+# vidocq-runtime-tck-coreprofile is in NEITHER list: it is deterministically red on
+# JDK 25, because the TCK's own ee.jakarta.tck.core.common.Utils throws "No access to
+# RETAIN_CLASS_REFERENCE". A job that is red every night teaches people to ignore it.
+# Add it back here the day that is settled upstream — it is tracked in
+# Vidocq/GestionProjet#9.
+name: TCK nightly
+
+on:
+  schedule:
+    # 03:00 UTC, when the shared runners are idle.
+    - cron: '0 3 * * *'
+  # So a maintainer can ask for a full conformance run without waiting for the night.
+  workflow_dispatch:
+
+jobs:
+  tck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch Vidocq/ci action (Forgejo mirror, basic-auth)
+        shell: bash
+        env:
+          MIRROR_URL:  ${{ secrets.MIRROR_ASD_URL }}
+          MIRROR_USER: ${{ secrets.MIRROR_ASD_USER }}
+          MIRROR_PASS: ${{ secrets.MIRROR_ASD_PASSWORD }}
+        run: |
+          set -euo pipefail
+          enc_pass=$(python3 -c "import os,urllib.parse;print(urllib.parse.quote(os.environ['MIRROR_PASS'], safe=''))")
+          host="${MIRROR_URL#https://}"; host="${host#http://}"; host="${host%/}"
+          git clone --depth=1 --branch main \
+            "https://${MIRROR_USER}:${enc_pass}@${host}/Vidocq/ci.git" \
+            .ci-action
+
+      - uses: ./.ci-action/setup-maven
+
+      # Once, for every runner below: they resolve the runtime from ~/.m2.
+      - name: Build & install the runtime
+        run: mvn -B -ntp -U install -DskipTests
+
+      # The six that also gate pull requests — cheap, and this is the only thing that
+      # runs them against `main`.
+      - name: MicroProfile Config (ravel)
+        uses: ./.ci-action/run-tck
+        with: { module: vidocq-runtime-integration-tests/vidocq-runtime-tck-ravel-config, pre-install: 'false' }
+
+      - name: Jakarta Annotations
+        uses: ./.ci-action/run-tck
+        with: { module: vidocq-runtime-integration-tests/vidocq-runtime-tck-annotations, pre-install: 'false' }
+
+      - name: MicroProfile OpenAPI (grimm)
+        uses: ./.ci-action/run-tck
+        with: { module: vidocq-runtime-integration-tests/vidocq-runtime-tck-grimm-openapi, pre-install: 'false' }
+
+      - name: MicroProfile Metrics (dirac)
+        uses: ./.ci-action/run-tck
+        with: { module: vidocq-runtime-integration-tests/vidocq-runtime-tck-dirac-metrics, pre-install: 'false' }
+
+      - name: MicroProfile JWT (cervantes)
+        uses: ./.ci-action/run-tck
+        with: { module: vidocq-runtime-integration-tests/vidocq-runtime-tck-cervantes-jwt, pre-install: 'false' }
+
+      - name: MicroProfile Health (knock)
+        uses: ./.ci-action/run-tck
+        with: { module: vidocq-runtime-integration-tests/vidocq-runtime-tck-knock-health, pre-install: 'false' }
+
+      # And the three a pull request cannot afford.
+      - name: MicroProfile Rest Client (cyrano)
+        uses: ./.ci-action/run-tck
+        with: { module: vidocq-runtime-integration-tests/vidocq-runtime-tck-cyrano-restclient, pre-install: 'false' }
+
+      - name: MicroProfile Fault Tolerance (heisenberg)
+        uses: ./.ci-action/run-tck
+        with: { module: vidocq-runtime-integration-tests/vidocq-runtime-tck-heisenberg-faulttolerance, pre-install: 'false' }
+
+      - name: MicroProfile Telemetry (humboldt)
+        uses: ./.ci-action/run-tck
+        with: { module: vidocq-runtime-integration-tests/vidocq-runtime-tck-humboldt-telemetry, pre-install: 'false' }
+
+      # Failure only: a nightly that reports every green night is noise nobody reads,
+      # and noise is how a red night gets missed.
+      - name: Notify Slack on failure
+        if: failure()
+        uses: ./.ci-action/notify-slack
+        with:
+          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+          status: failure
+          repo: ${{ github.repository }}
+          ref: ${{ github.ref_name }}
+          run-url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_number }}
