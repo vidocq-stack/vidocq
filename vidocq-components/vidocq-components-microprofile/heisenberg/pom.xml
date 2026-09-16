@@ -86,6 +86,24 @@
 
         <!-- JMH pour heisenberg-bench -->
         <jmh.version>1.37</jmh.version>
+
+        <!--
+            The TCK this repository's pull requests are gated on (Vidocq/GestionProjet#9). Read by
+            the shared pr-validate workflow, which skips the step when this property is absent.
+
+            The certification profile is named explicitly because a plain `-Ptck` would not run it:
+            the root `tck` profile only adds heisenberg-tck to the reactor, and inside heisenberg-tck
+            the `smoke` profile is activeByDefault. `-Ptck` alone would therefore pass on a subset
+            while reporting success — the vacuous gate this campaign exists to remove.
+
+            Measured on a clean local repository (empty ~/.m2, the state of a CI runner): the
+            official MicroProfile Fault Tolerance 4.1 TCK runs 463 tests in 174 s, all green, every
+            artefact resolved from Maven Central. That cost is deliberate and irreducible: fault
+            tolerance IS durations (testTimeout, testRetryWithDelay, testBulkheadPressure), so the
+            suite spends most of its time waiting on purpose. Three minutes on a pull request buys
+            the only automated proof that this implementation still conforms.
+        -->
+        <ci.tck.command>mvn -B -ntp -P tck,tck-official -pl heisenberg-tck test</ci.tck.command>
     </properties>
 
     <!--
