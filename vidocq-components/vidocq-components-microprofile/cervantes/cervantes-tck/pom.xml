@@ -78,29 +78,6 @@
             <version>${cervantes.version}</version>
         </dependency>
 
-        <!-- Cassini TCK harness (CassiniTestHarness) — installed via run script.
-             Excludes its transitive Arquillian 1.8.0.Final to avoid classpath collision
-             with the 1.10.1.Final used by arquillian-testng-container. -->
-        <dependency>
-            <groupId>io.vidocq.cassini</groupId>
-            <artifactId>cassini-tck</artifactId>
-            <version>${cassini.version}</version>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.jboss.arquillian.container</groupId>
-                    <artifactId>arquillian-container-spi</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>org.jboss.arquillian.core</groupId>
-                    <artifactId>arquillian-core-api</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>org.jboss.arquillian.core</groupId>
-                    <artifactId>arquillian-core-spi</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
-
         <!-- Cassini (JAX-RS runtime) -->
         <dependency>
             <groupId>io.vidocq.cassini</groupId>
