@@ -269,13 +269,19 @@
                 <!--
                     Custom Arquillian container: starts Cassini (Jakarta REST) + KnockHealthResource
                     per deployment and exposes the URI to the TCK through @ArquillianResource.
-                    Reuses CassiniTestHarness (cassini-tck), already proven in the Vidocq ecosystem.
-                    No third-party "weld embedded" or "managed servlet" container - Knock ships
-                    its own runner compliant with MP Health 4.0 spec section 3.
+                    Reuses CassiniTestHarness (cassini-testing), already proven in the Vidocq
+                    ecosystem. No third-party "weld embedded" or "managed servlet" container -
+                    Knock ships its own runner compliant with MP Health 4.0 spec section 3.
+
+                    The harness used to come from cassini-tck, a module carrying
+                    maven.deploy.skip: it reached no public repository, so this suite could only
+                    ever run where someone had built Cassini by hand — on a clean runner it died
+                    in one second on "cassini-tck:pom (absent)". It now comes from the published
+                    cassini-testing. See Vidocq/cassini#36.
                 -->
                 <dependency>
                     <groupId>io.vidocq.cassini</groupId>
-                    <artifactId>cassini-tck</artifactId>
+                    <artifactId>cassini-testing</artifactId>
                     <version>${cassini.version}</version>
                     <scope>test</scope>
                 </dependency>

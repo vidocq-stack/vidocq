@@ -75,6 +75,23 @@
         <vauban.version>0.4.0-SNAPSHOT</vauban.version>
         <champollion.version>0.4.0-SNAPSHOT</champollion.version>
         <cassini.version>0.4.0-SNAPSHOT</cassini.version>
+
+        <!--
+            The TCK this repository's pull requests are gated on (Vidocq/GestionProjet#9). Read by
+            the shared pr-validate workflow, which skips the step when this property is absent.
+
+            The certification profile is named explicitly because a plain `-Ptck` would not run it:
+            the root `tck` profile only adds knock-tck to the reactor, and inside knock-tck the
+            `smoke` profile is activeByDefault. `-Ptck` alone would therefore pass on a subset while
+            reporting success — the vacuous gate this campaign exists to remove.
+
+            This became possible only once knock-tck stopped depending on io.vidocq.cassini:
+            cassini-tck, which is published nowhere, and took the harness from the published
+            cassini-testing instead (Vidocq/cassini#36). Measured against a clean local repository,
+            the state of a CI runner, the suite previously failed in one second on an unresolvable
+            artefact — it had never run outside a developer machine.
+        -->
+        <ci.tck.command>mvn -B -ntp -P tck,tck-official -pl knock-tck test</ci.tck.command>
     </properties>
 
     <!--

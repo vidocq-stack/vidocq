@@ -19,7 +19,7 @@
  */
 package io.vidocq.knock.tck.arquillian;
 
-import io.vidocq.cassini.tck.CassiniTestHarness;
+import io.vidocq.cassini.testing.CassiniTestHarness;
 import io.vidocq.knock.jaxrs.KnockHealthResource;
 import io.vidocq.knock.runtime.HealthCheckRegistries;
 import io.vidocq.knock.spi.HealthCheckRegistry;
