@@ -74,6 +74,24 @@
         <vauban.version>0.4.0-SNAPSHOT</vauban.version>
         <champollion.version>0.4.0-SNAPSHOT</champollion.version>
         <ravel.version>0.4.0-SNAPSHOT</ravel.version>
+
+        <!--
+            The TCK this repository's pull requests are gated on (Vidocq/GestionProjet#9). Read by
+            the shared pr-validate workflow, which skips the step when this property is absent.
+
+            The certification profile is named explicitly because a plain `-Ptck` would not run it:
+            the root `tck` profile only adds humboldt-tck to the reactor, and inside humboldt-tck the
+            `tck-smoke` profile is activeByDefault. `-Ptck` alone would therefore pass on a subset
+            while reporting success — the vacuous gate this campaign exists to remove.
+
+            Measured on a clean local repository (empty ~/.m2, the state of a CI runner): the
+            official MicroProfile Telemetry 2.1 TCK runs 85 tests in 241 s, all green, every artefact
+            resolved from Maven Central. Nothing on our side can shorten that: the TCK's own
+            InMemorySpanExporter.assertSpanCount uses Awaitility pollDelay(3, SECONDS), a firm floor
+            paid on every call whatever the implementation does — the faster we are, the longer it
+            waits. Four minutes on a pull request buys the only automated proof of conformance.
+        -->
+        <ci.tck.command>mvn -B -ntp -P tck,tck-official -pl humboldt-tck test</ci.tck.command>
     </properties>
 
     <!--
