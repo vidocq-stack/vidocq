@@ -19,6 +19,7 @@
  */
 package io.vidocq.runtime.maven.idea;
 
+import io.vidocq.runtime.maven.idea.RunConfigurationRenderer.Kind;
 import org.apache.maven.model.Build;
 import org.apache.maven.model.Model;
 import org.apache.maven.model.Plugin;
@@ -44,6 +45,7 @@ import java.util.stream.Stream;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -97,7 +99,7 @@ class VidocqIdeaMojoTest {
                     files.map(p -> p.getFileName().toString()).sorted().toList());
         }
         assertEquals(RunConfigurationRenderer.file(new IdeaApplication("com.example:alpha", "com.example.alpha.AlphaApp",
-                        "AlphaApp", "alpha", "alpha/pom.xml", "vidocq:generate"), null, true),
+                        "AlphaApp", "alpha", "alpha/pom.xml", "vidocq:generate"), Kind.APPLICATION, null, true),
                 read("AlphaApp.run.xml"));
         assertTrue(read("Beta server.run.xml").contains(
                 "file=\"$PROJECT_DIR$/apps/beta/pom.xml\" goal=\"vidocq:generate\""));
@@ -159,7 +161,8 @@ class VidocqIdeaMojoTest {
     void aHandWrittenFileIsLeftAloneInBothModes() throws Exception {
         Files.createDirectories(root.resolve(".run"));
         String handWritten = RunConfigurationRenderer.body(new IdeaApplication("com.example:alpha",
-                "com.example.alpha.AlphaApp", "AlphaApp", "alpha", "alpha/pom.xml", "vidocq:generate"), "temurin-25", true);
+                "com.example.alpha.AlphaApp", "AlphaApp", "alpha", "alpha/pom.xml", "vidocq:generate"),
+                Kind.APPLICATION, "temurin-25", true);
         Files.writeString(root.resolve(".run/AlphaApp.run.xml"), handWritten);
 
         run();
@@ -190,7 +193,8 @@ class VidocqIdeaMojoTest {
     void aHandWrittenFileThatPinsItsJdkIsAdoptedOnceTheJreIsDeclared() throws Exception {
         Files.createDirectories(root.resolve(".run"));
         String handWritten = RunConfigurationRenderer.body(new IdeaApplication("com.example:alpha",
-                "com.example.alpha.AlphaApp", "AlphaApp", "alpha", "alpha/pom.xml", "vidocq:generate"), "temurin-25", true);
+                "com.example.alpha.AlphaApp", "AlphaApp", "alpha", "alpha/pom.xml", "vidocq:generate"),
+                Kind.APPLICATION, "temurin-25", true);
         Files.writeString(root.resolve(".run/AlphaApp.run.xml"), handWritten);
         mojo.setJre("temurin-25");
 
@@ -204,7 +208,8 @@ class VidocqIdeaMojoTest {
     void aFileThatPinsItsJdkAndHasOtherChangesKeepsItsPinWhenRegenerated() throws Exception {
         Files.createDirectories(root.resolve(".run"));
         String handWritten = RunConfigurationRenderer.body(new IdeaApplication("com.example:alpha",
-                "com.example.alpha.AlphaApp", "AlphaApp", "alpha", "alpha/pom.xml", "vidocq:generate"), "a&b", true)
+                "com.example.alpha.AlphaApp", "AlphaApp", "alpha", "alpha/pom.xml", "vidocq:generate"),
+                Kind.APPLICATION, "a&b", true)
                 .replace("<module name=\"alpha\" />", "<option name=\"VM_PARAMETERS\" value=\"-Xmx1g\" />\n    <module name=\"alpha\" />");
         Files.writeString(root.resolve(".run/AlphaApp.run.xml"), handWritten);
 
@@ -263,7 +268,7 @@ class VidocqIdeaMojoTest {
         Files.createDirectories(root.resolve(".run"));
         Files.writeString(root.resolve(".run/AlphaApp.run.xml"), RunConfigurationRenderer.body(new IdeaApplication(
                 "com.example:alpha", "com.example.alpha.AlphaApp", "AlphaApp", "alpha", "alpha/pom.xml",
-                "vidocq:generate"), "temurin-25", true));
+                "vidocq:generate"), Kind.APPLICATION, "temurin-25", true));
         mojo.setCheck("strict");
 
         assertThrows(MojoFailureException.class, () -> mojo.run(projects, projects, new Properties(), root));
@@ -401,7 +406,7 @@ class VidocqIdeaMojoTest {
     void orphansAreReportedAndNeverDeleted() throws Exception {
         run();
         String gone = RunConfigurationRenderer.file(new IdeaApplication("com.example:gone", "com.example.Gone",
-                "Gone", "gone", "gone/pom.xml", "vidocq:generate"), null, true);
+                "Gone", "gone", "gone/pom.xml", "vidocq:generate"), Kind.APPLICATION, null, true);
         Files.writeString(root.resolve(".run/Gone.run.xml"), gone);
         Files.writeString(root.resolve(".run/Mine.run.xml"), "<component name=\"ProjectRunConfigurationManager\"/>");
 
@@ -610,6 +615,10 @@ class VidocqIdeaMojoTest {
     private VidocqIdeaMojo newMojo() {
         VidocqIdeaMojo created = new VidocqIdeaMojo();
         created.setLog(log);
+        // The Application kind: what a file on disk is, and what the goal does to it, does not depend on the
+        // kind, and its XML is the one these expectations name. The Maven kind, which is the default, has its
+        // own tests at the end of this class.
+        created.setKind("application");
         created.setGenerateBeforeLaunch(true);
         return created;
     }
@@ -650,5 +659,102 @@ class VidocqIdeaMojoTest {
 
     private static String read(Path file) throws IOException {
         return Files.readString(file, StandardCharsets.UTF_8);
+    }
+
+    // --- the Maven kind, which is the default -----------------------------------------------------------
+
+    /**
+     * Clicking Run in IntelliJ builds with the IDE, which never runs {@code vidocq:generate}: the bean index
+     * then misses the beans of the dependency jars and the server answers 404 (Vidocq/vidocq#83). The default
+     * configuration is therefore a Maven run of {@code vidocq:run}, which compiles, indexes and forks the JVM
+     * exactly as the command line does.
+     */
+    @Test
+    void theDefaultKindIsAMavenRunOfVidocqRun() throws Exception {
+        VidocqIdeaMojo maven = new VidocqIdeaMojo();
+        maven.setLog(log);
+        maven.setGenerateBeforeLaunch(true);
+        maven.setCheck("false");
+
+        maven.run(projects, projects, new Properties(), root);
+
+        String alpha = read("AlphaApp.run.xml");
+        assertEquals(RunConfigurationRenderer.file(new IdeaApplication("com.example:alpha",
+                "com.example.alpha.AlphaApp", "AlphaApp", "alpha", "alpha/pom.xml", "vidocq:generate"),
+                Kind.MAVEN, null, true), alpha);
+        assertTrue(alpha.contains("type=\"MavenRunConfiguration\" factoryName=\"Maven\""), alpha);
+        assertTrue(alpha.contains("<option value=\"vidocq:run\" />"), alpha);
+        assertTrue(alpha.contains("<option name=\"pomFileName\" value=\"alpha/pom.xml\" />"), alpha);
+        assertFalse(alpha.contains("MAIN_CLASS_NAME"), "the Maven kind runs a goal, not a main class: " + alpha);
+        assertFalse(alpha.contains("Maven.BeforeRunTask"), "vidocq:run indexes by itself: " + alpha);
+        assertTrue(log.has("INFO", "Vidocq idea: writing Maven run configurations of 2 application(s) in "
+                + root.toRealPath() + "/.run"), log.toString());
+        assertTrue(log.has("INFO", "Vidocq idea: IntelliJ needs JDK 25 or newer as the Maven runner JRE (Settings >"
+                + " Build, Execution, Deployment > Build Tools > Maven > Runner), which is also the JDK the"
+                + " application runs on: vidocq:run forks it from the JVM running Maven."), log.toString());
+
+        maven.setCheck("strict");
+        maven.run(projects, projects, new Properties(), root);
+
+        assertTrue(log.has("INFO", "Vidocq idea: 2 run configuration(s) in " + root.toRealPath()
+                + "/.run are up to date."), log.toString());
+    }
+
+    @Test
+    void theMavenKindPinsTheJdkAsTheMavenRunnerJre() throws Exception {
+        VidocqIdeaMojo maven = newMojo();
+        maven.setKind("maven");
+        maven.setJre("temurin-25");
+        maven.setCheck("false");
+
+        maven.run(projects, projects, new Properties(), root);
+
+        String alpha = read("AlphaApp.run.xml");
+        assertTrue(alpha.contains("<option name=\"jreName\" value=\"temurin-25\" />"), alpha);
+        assertFalse(alpha.contains("ALTERNATIVE_JRE_PATH"), alpha);
+        assertFalse(log.hasContaining("WARN", "do not pin a JDK"), log.toString());
+    }
+
+    @Test
+    void theMavenKindWarnsWhenItPinsNoJdk() throws Exception {
+        mojo.setKind("maven");
+
+        run();
+
+        assertTrue(log.has("WARN", "Vidocq idea: vidocq.idea.jre is not set, so the run configurations written do"
+                + " not pin a JDK: IntelliJ runs Maven on its Maven runner JRE, which can be another JDK than the"
+                + " one it is built and tested with. To launch on a known JDK, declare <vidocq.idea.jre> in the"
+                + " top-level pom with the name of an IntelliJ SDK of Java 25 or newer that exists on every machine,"
+                + " for example <vidocq.idea.jre>temurin-25</vidocq.idea.jre>."), log.toString());
+    }
+
+    /** The kind is a property of the build, not of a file: changing it updates the files the goal owns. */
+    @Test
+    void changingTheKindUpdatesTheFilesTheGoalOwns() throws Exception {
+        run();
+        String application = read("AlphaApp.run.xml");
+        mojo.setKind("maven");
+
+        assertThrows(MojoFailureException.class, this::check);
+        assertTrue(log.has("ERROR", "Vidocq idea: .run/AlphaApp.run.xml is out of date for com.example:alpha:"),
+                log.toString());
+
+        run();
+
+        assertNotEquals(application, read("AlphaApp.run.xml"));
+        assertTrue(read("AlphaApp.run.xml").contains("type=\"MavenRunConfiguration\""), read("AlphaApp.run.xml"));
+        assertTrue(log.has("INFO", "Vidocq idea: 2 run configuration(s): 2 updated"), log.toString());
+    }
+
+    @Test
+    void anUnknownKindFailsBeforeAnythingIsWritten() {
+        mojo.setKind("gradle");
+
+        MojoFailureException failure = assertThrows(MojoFailureException.class,
+                () -> mojo.run(projects, projects, new Properties(), root));
+
+        assertEquals("Vidocq idea: vidocq.idea.kind must be maven or application, not \"gradle\".",
+                failure.getMessage());
+        assertFalse(Files.exists(root.resolve(".run")));
     }
 }

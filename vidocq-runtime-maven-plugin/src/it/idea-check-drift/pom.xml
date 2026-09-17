@@ -10,6 +10,9 @@
     <version>1.0</version>
 
     <properties>
+        <!-- These expectations are those of an Application run configuration; the Maven kind, which is the
+             default, has its own build (idea-maven-kind). -->
+        <vidocq.idea.kind>application</vidocq.idea.kind>
         <vidocq.mainClass>com.example.drift.DriftApp</vidocq.mainClass>
         <vidocq.idea.configurationName>Drift</vidocq.idea.configurationName>
     </properties>

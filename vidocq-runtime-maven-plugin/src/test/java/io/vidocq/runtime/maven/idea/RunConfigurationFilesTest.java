@@ -20,13 +20,16 @@
 package io.vidocq.runtime.maven.idea;
 
 import io.vidocq.runtime.maven.idea.RunConfigurationFiles.State;
+import io.vidocq.runtime.maven.idea.RunConfigurationRenderer.Kind;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.EnumSet;
 import java.util.Set;
 
 import static io.vidocq.runtime.maven.idea.RunConfigurationRendererTest.MCP_TIME_SERVER;
+import static io.vidocq.runtime.maven.idea.RunConfigurationRendererTest.MEASURED_MAVEN_REFERENCE;
 import static io.vidocq.runtime.maven.idea.RunConfigurationRendererTest.MEASURED_REFERENCE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -44,7 +47,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class RunConfigurationFilesTest {
 
-    static final String BODY = RunConfigurationRenderer.body(MCP_TIME_SERVER, null, true);
+    static final String BODY = RunConfigurationRenderer.body(MCP_TIME_SERVER, Kind.APPLICATION, null, true);
 
     @Test
     void anAbsentFileIsMissing() {
@@ -75,14 +78,14 @@ class RunConfigurationFilesTest {
     void aGeneratedFileWithAnotherBodyIsOutdated() {
         String stale = RunConfigurationRenderer.file(new IdeaApplication("io.vidocq.tools:mcp-time-server",
                 "io.vidocq.tools.lc4jcdi.mcptimeserver.OldApp", "McpTimeServerApp", "mcp-time-server",
-                "mcp-time-server/pom.xml", "vidocq:generate"), null, true);
+                "mcp-time-server/pom.xml", "vidocq:generate"), Kind.APPLICATION, null, true);
 
         assertEquals(State.OUTDATED, RunConfigurationFiles.classify(bytes(stale), BODY));
     }
 
     @Test
     void anUnmarkedFileWithTheExpectedBodyIsAdopted() {
-        String pinned = RunConfigurationRenderer.body(MCP_TIME_SERVER, "temurin-25", true);
+        String pinned = RunConfigurationRenderer.body(MCP_TIME_SERVER, Kind.APPLICATION, "temurin-25", true);
 
         assertEquals(State.UNMARKED, RunConfigurationFiles.classify(bytes(MEASURED_REFERENCE), pinned));
     }
@@ -136,13 +139,29 @@ class RunConfigurationFilesTest {
     void thePinnedJdkOfAFileIsRead() {
         assertEquals("temurin-25", RunConfigurationFiles.pinnedJre(bytes(MEASURED_REFERENCE)));
         assertEquals("temurin-25", RunConfigurationFiles.pinnedJre(bytes(file(
-                RunConfigurationRenderer.body(MCP_TIME_SERVER, "temurin-25", true)))));
+                RunConfigurationRenderer.body(MCP_TIME_SERVER, Kind.APPLICATION, "temurin-25", true)))));
         assertEquals("a \"b\" & <c>", RunConfigurationFiles.pinnedJre(bytes(
-                RunConfigurationRenderer.body(MCP_TIME_SERVER, "a \"b\" & <c>", true))));
+                RunConfigurationRenderer.body(MCP_TIME_SERVER, Kind.APPLICATION, "a \"b\" & <c>", true))));
         assertNull(RunConfigurationFiles.pinnedJre(bytes(BODY)));
         assertNull(RunConfigurationFiles.pinnedJre(bytes(MEASURED_REFERENCE.replace(
                 "ALTERNATIVE_JRE_PATH_ENABLED\" value=\"true\"", "ALTERNATIVE_JRE_PATH_ENABLED\" value=\"false\""))));
         assertNull(RunConfigurationFiles.pinnedJre(bytes(MEASURED_REFERENCE.replace("value=\"temurin-25\"", "value=\"\""))));
+    }
+
+    /**
+     * A Maven configuration pins its JDK as the Maven runner JRE. The names IntelliJ reserves for its own
+     * JDKs pin nothing: they are what it uses when the user chose no JRE.
+     */
+    @Test
+    void thePinnedJdkOfAMavenConfigurationIsItsRunnerJre() {
+        assertEquals("temurin-25", RunConfigurationFiles.pinnedJre(bytes(
+                RunConfigurationRenderer.body(MCP_TIME_SERVER, Kind.MAVEN, "temurin-25", true))));
+        assertNull(RunConfigurationFiles.pinnedJre(bytes(MEASURED_MAVEN_REFERENCE)));
+        for (String own : List.of("#USE_PROJECT_JDK", "#JAVA_HOME", "#JAVA_INTERNAL")) {
+            assertNull(RunConfigurationFiles.pinnedJre(bytes(RunConfigurationRenderer
+                    .body(MCP_TIME_SERVER, Kind.MAVEN, "temurin-25", true)
+                    .replace("value=\"temurin-25\"", "value=\"" + own + "\""))), own);
+        }
     }
 
     private static String file(String body) {

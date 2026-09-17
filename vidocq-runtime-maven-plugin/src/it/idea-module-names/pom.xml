@@ -10,6 +10,12 @@
     <version>1.0</version>
     <packaging>pom</packaging>
 
+    <properties>
+        <!-- These expectations are those of an Application run configuration; the Maven kind, which is the
+             default, has its own build (idea-maven-kind). -->
+        <vidocq.idea.kind>application</vidocq.idea.kind>
+    </properties>
+
     <modules>
         <module>apps/beta</module>
         <module>vendor/beta</module>

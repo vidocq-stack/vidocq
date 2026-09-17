@@ -3,24 +3,15 @@
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
-    <!-- Two Vidocq applications, one of them nested two levels down, and a library that declares the plugin
-         without a main class. The plugin is only in <pluginManagement> here, which is what "mvn vidocq:idea"
-         at the root needs to resolve the prefix. -->
+    <!-- The default kind: a Maven run configuration of vidocq:run on the application's own pom. No
+         vidocq.idea.jre, so the goal also warns that the written file pins no JDK. -->
     <groupId>com.example.it</groupId>
-    <artifactId>two-applications</artifactId>
+    <artifactId>maven-kind</artifactId>
     <version>1.0</version>
     <packaging>pom</packaging>
 
-    <properties>
-        <!-- These expectations are those of an Application run configuration; the Maven kind, which is the
-             default, has its own build (idea-maven-kind). -->
-        <vidocq.idea.kind>application</vidocq.idea.kind>
-    </properties>
-
     <modules>
-        <module>alpha</module>
-        <module>apps/beta</module>
-        <module>library</module>
+        <module>server</module>
     </modules>
 
     <build>

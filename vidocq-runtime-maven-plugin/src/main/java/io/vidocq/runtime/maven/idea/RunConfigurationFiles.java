@@ -40,6 +40,8 @@ final class RunConfigurationFiles {
             "^\\s*<option name=\"ALTERNATIVE_JRE_PATH\" value=\"([^\"]*)\"\\s*/>\\s*$", Pattern.MULTILINE);
     private static final Pattern JRE_ENABLED = Pattern.compile(
             "^\\s*<option name=\"ALTERNATIVE_JRE_PATH_ENABLED\" value=\"true\"\\s*/>\\s*$", Pattern.MULTILINE);
+    private static final Pattern JRE_NAME = Pattern.compile(
+            "^\\s*<option name=\"jreName\" value=\"([^\"]*)\"\\s*/>\\s*$", Pattern.MULTILINE);
 
     /** What a file on disk is, compared with the body {@code vidocq:idea} would write. */
     enum State {
@@ -116,16 +118,24 @@ final class RunConfigurationFiles {
 
     /**
      * The JDK a file pins, as IntelliJ stores it: {@code ALTERNATIVE_JRE_PATH} with
-     * {@code ALTERNATIVE_JRE_PATH_ENABLED} set to {@code true}; {@code null} when it pins none.
+     * {@code ALTERNATIVE_JRE_PATH_ENABLED} set to {@code true} in an Application configuration, the
+     * {@code jreName} of the Maven runner settings in a Maven one. {@code null} when it pins none — a
+     * {@code jreName} that names one of IntelliJ's own JDKs ({@code #USE_PROJECT_JDK}, {@code #JAVA_HOME},
+     * {@code #JAVA_INTERNAL}) pins nothing.
      */
     static String pinnedJre(byte[] onDisk) {
         String body = shownBody(onDisk);
         Matcher path = JRE_PATH.matcher(body);
-        if (!path.find() || !JRE_ENABLED.matcher(body).find()) {
+        if (path.find() && JRE_ENABLED.matcher(body).find()) {
+            String jre = unescapeAttribute(path.group(1));
+            return jre.isBlank() ? null : jre;
+        }
+        Matcher name = JRE_NAME.matcher(body);
+        if (!name.find()) {
             return null;
         }
-        String jre = unescapeAttribute(path.group(1));
-        return jre.isBlank() ? null : jre;
+        String jre = unescapeAttribute(name.group(1));
+        return jre.isBlank() || jre.startsWith("#") ? null : jre;
     }
 
     /** Undoes {@link RunConfigurationRenderer#escapeAttribute(String)}, and {@code &apos;}. */

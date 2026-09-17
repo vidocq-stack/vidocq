@@ -22,6 +22,7 @@ package io.vidocq.runtime.maven.idea;
 import io.vidocq.runtime.maven.idea.IdeaApplications.Diagnostic;
 import io.vidocq.runtime.maven.idea.IdeaApplications.Discovery;
 import io.vidocq.runtime.maven.idea.RunConfigurationFiles.State;
+import io.vidocq.runtime.maven.idea.RunConfigurationRenderer.Kind;
 import org.apache.maven.execution.MavenSession;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecution;
@@ -58,10 +59,12 @@ import java.util.stream.Stream;
  * mvn vidocq:idea -Dvidocq.idea.check=true
  * mvn vidocq:idea -Dvidocq.idea.check=strict</pre>
  *
- * <p>Each configuration runs the application's main class after two before-launch steps: IntelliJ's Make,
- * then {@code vidocq:generate} on the application's pom, which completes the bean index for dependencies
- * that Vauban's annotation processor never saw. That second step exists only until the runtime indexes
- * them at launch (Vidocq/vidocq#83); {@code -Dvidocq.idea.generateBeforeLaunch=false} leaves it out.
+ * <p>By default each configuration is an IntelliJ <b>Maven</b> run of {@code vidocq:run} on the
+ * application's own pom: Maven compiles, indexes and forks the JVM exactly as on the command line, so the
+ * run can never miss the bean index of the dependency jars (Vidocq/vidocq#83) — the IDE's own build never
+ * runs {@code vidocq:generate}. {@code -Dvidocq.idea.kind=application} writes an <b>Application</b> run of
+ * the main class instead, with two before-launch steps: IntelliJ's Make, then {@code vidocq:generate} on
+ * the application's pom; {@code -Dvidocq.idea.generateBeforeLaunch=false} leaves that second step out.
  *
  * <p>The goal writes nothing else: never {@code .idea/}, {@code *.iml} or any other project file, which
  * belong to IntelliJ's own Maven import (the retired {@code maven-idea-plugin} competed with it). It never
@@ -80,6 +83,12 @@ import java.util.stream.Stream;
 public class VidocqIdeaMojo extends AbstractMojo {
 
     private static final String PREFIX = "Vidocq idea: ";
+
+    /**
+     * {@link #kind}, parsed once at the start of {@link #run}: every method that renders a body reads it, and
+     * the goal runs once per lookup.
+     */
+    private Kind renderKind = Kind.MAVEN;
 
     @Parameter(defaultValue = "${session}", readonly = true, required = true)
     private MavenSession session;
@@ -108,12 +117,23 @@ public class VidocqIdeaMojo extends AbstractMojo {
     @Parameter(property = "vidocq.idea.check", defaultValue = "false")
     private String check;
 
-    /** Add the {@code vidocq:generate} Maven step before launch. */
+    /**
+     * {@code maven} (default): an IntelliJ Maven run configuration of {@code vidocq:run} on the application's
+     * pom, which compiles, indexes and forks the JVM as the command line does. {@code application}: an
+     * IntelliJ Application run configuration of the main class, with Make and {@code vidocq:generate} before
+     * launch.
+     */
+    @Parameter(property = "vidocq.idea.kind", defaultValue = "maven")
+    private String kind;
+
+    /** Add the {@code vidocq:generate} Maven step before launch; the {@code application} kind only. */
     @Parameter(property = "vidocq.idea.generateBeforeLaunch", defaultValue = "true")
     private boolean generateBeforeLaunch;
 
     /**
-     * An IntelliJ SDK name (for example {@code temurin-25}) written as the configurations' alternative JRE.
+     * An IntelliJ SDK name (for example {@code temurin-25}) written as the configurations' JDK: the
+     * alternative JRE of an Application configuration, the Maven runner JRE of a Maven one — which is the JDK
+     * the application runs on too, since {@code vidocq:run} forks it from the JVM running Maven.
      * Declare it in the top-level pom: the name must exist on every machine that uses the files. Unset,
      * IntelliJ launches the application on the module SDK; the configuration verified in IntelliJ pinned its
      * JDK, so the goal warns after writing one that does not.
@@ -184,6 +204,7 @@ public class VidocqIdeaMojo extends AbstractMojo {
     void run(List<MavenProject> projects, List<MavenProject> allProjects, Properties userProperties, Path executionRoot)
             throws MojoExecutionException, MojoFailureException {
         Mode mode = mode(check);
+        renderKind = kind(kind);
         Path directory = projectDirectory(projects, executionRoot);
         boolean partialReactor = allProjects.size() > projects.size();
 
@@ -215,7 +236,8 @@ public class VidocqIdeaMojo extends AbstractMojo {
             case WRITE -> "writing";
             case CHECK -> "checking";
             case STRICT_CHECK -> "strictly checking";
-        } + " run configurations of " + targets.size() + " application(s) in " + runDirectory);
+        } + " " + (renderKind == Kind.MAVEN ? "Maven" : "Application") + " run configurations of " + targets.size()
+                + " application(s) in " + runDirectory);
 
         if (mode == Mode.WRITE) {
             write(targets.values(), runDirectory, targets);
@@ -226,6 +248,11 @@ public class VidocqIdeaMojo extends AbstractMojo {
 
     /** What {@code vidocq.idea.check} asks for. */
     enum Mode { WRITE, CHECK, STRICT_CHECK }
+
+    static Kind kind(String kind) throws MojoFailureException {
+        return Kind.parse(kind).orElseThrow(() -> new MojoFailureException(PREFIX
+                + "vidocq.idea.kind must be maven or application, not \"" + kind + "\"."));
+    }
 
     static Mode mode(String check) throws MojoFailureException {
         String value = check == null ? "" : check.strip().toLowerCase(Locale.ROOT);
@@ -258,7 +285,7 @@ public class VidocqIdeaMojo extends AbstractMojo {
                         + " their poms.");
             }
             Path file = runDirectory.resolve(fileName);
-            String body = RunConfigurationRenderer.body(application, jre, generateBeforeLaunch);
+            String body = RunConfigurationRenderer.body(application, renderKind, jre, generateBeforeLaunch);
             byte[] onDisk = Files.isRegularFile(file) ? read(file) : null;
             targets.put(key, new Target(application, ".run/" + fileName, file, body, onDisk,
                     RunConfigurationFiles.classify(onDisk, body)));
@@ -387,16 +414,26 @@ public class VidocqIdeaMojo extends AbstractMojo {
 
         int written = created + updated;
         if (written > 0) {
-            getLog().info(PREFIX + "IntelliJ needs JDK 25 or newer as the SDK used by Make"
-                    + (generateBeforeLaunch ? " and as the Maven runner JRE used by the vidocq:generate step (Settings"
-                    + " > Build, Execution, Deployment > Build Tools > Maven > Runner)" : "") + "."
-                    + (jre == null ? "" : " The application runs on the '" + jre + "' SDK, which must exist under that"
-                    + " name on every machine."));
+            if (renderKind == Kind.MAVEN) {
+                getLog().info(PREFIX + "IntelliJ needs JDK 25 or newer as the Maven runner JRE (Settings > Build,"
+                        + " Execution, Deployment > Build Tools > Maven > Runner), which is also the JDK the"
+                        + " application runs on: vidocq:run forks it from the JVM running Maven."
+                        + (jre == null ? "" : " These configurations use the '" + jre + "' SDK, which must exist under"
+                        + " that name on every machine."));
+            } else {
+                getLog().info(PREFIX + "IntelliJ needs JDK 25 or newer as the SDK used by Make"
+                        + (generateBeforeLaunch ? " and as the Maven runner JRE used by the vidocq:generate step"
+                        + " (Settings > Build, Execution, Deployment > Build Tools > Maven > Runner)" : "") + "."
+                        + (jre == null ? "" : " The application runs on the '" + jre + "' SDK, which must exist under"
+                        + " that name on every machine."));
+            }
             if (jre == null) {
-                // The configuration measured to work in IntelliJ pinned its JDK; a launch on the module SDK has
-                // not been verified there.
+                // The configuration measured to work in IntelliJ pinned its JDK; a launch on the JDK IntelliJ
+                // picks by itself has not been verified there.
                 getLog().warn(PREFIX + "vidocq.idea.jre is not set, so the run configurations written do not pin a"
-                        + " JDK: IntelliJ launches the application on the module SDK, which can be another JDK than the"
+                        + " JDK: IntelliJ " + (renderKind == Kind.MAVEN
+                        ? "runs Maven on its Maven runner JRE" : "launches the application on the module SDK")
+                        + ", which can be another JDK than the"
                         + " one it is built and tested with. To launch on a known JDK, declare <vidocq.idea.jre> in the"
                         + " top-level pom with the name of an IntelliJ SDK of Java 25 or newer that exists on every"
                         + " machine, for example <vidocq.idea.jre>temurin-25</vidocq.idea.jre>.");
@@ -436,7 +473,8 @@ public class VidocqIdeaMojo extends AbstractMojo {
                 .replace(">", "&gt;") + "</vidocq.idea.jre>";
         // Without a marker, a file whose content becomes the expected one is adopted as it is.
         if (target.state() == State.FOREIGN && RunConfigurationFiles.shownBody(target.onDisk())
-                .equals(RunConfigurationRenderer.body(target.application(), pinned, generateBeforeLaunch))) {
+                .equals(RunConfigurationRenderer.body(target.application(), renderKind, pinned,
+                generateBeforeLaunch))) {
             return subject + " differs from what vidocq:idea writes only by its JDK '" + pinned + "': declare "
                     + declaration + " in the top-level pom and run \"mvn vidocq:idea\" to adopt it as it is.";
         }
@@ -571,6 +609,7 @@ public class VidocqIdeaMojo extends AbstractMojo {
     // execute() flow is the first thing a reader sees.
     void setProjectDirectory(File projectDirectory) { this.projectDirectory = projectDirectory; }
     void setCheck(String check) { this.check = check; }
+    void setKind(String kind) { this.kind = kind; }
     void setGenerateBeforeLaunch(boolean generateBeforeLaunch) { this.generateBeforeLaunch = generateBeforeLaunch; }
     void setJre(String jre) { this.jre = jre; }
     void setSkip(boolean skip) { this.skip = skip; }

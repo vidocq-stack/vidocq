@@ -101,7 +101,7 @@ class PluginDescriptorIdeaTest {
     void everyParameterIsAFieldOfAnAssignableType() throws Exception {
         Map<String, String> parameters = parameters();
 
-        assertEquals(List.of("session", "reactorProjects", "mojoExecution", "projectDirectory", "check",
+        assertEquals(List.of("session", "reactorProjects", "mojoExecution", "projectDirectory", "check", "kind",
                 "generateBeforeLaunch", "jre", "skip"), new ArrayList<>(parameters.keySet()));
         for (Map.Entry<String, String> parameter : parameters.entrySet()) {
             Field field = VidocqIdeaMojo.class.getDeclaredField(parameter.getKey());
@@ -132,6 +132,8 @@ class PluginDescriptorIdeaTest {
         assertProperty(entries.get("projectDirectory"), "${vidocq.idea.projectDirectory}", "");
         assertProperty(entries.get("check"), "${vidocq.idea.check}", "false");
         assertEquals("java.lang.String", parameters().get("check"), "false, true or strict");
+        assertProperty(entries.get("kind"), "${vidocq.idea.kind}", "maven");
+        assertEquals("java.lang.String", parameters().get("kind"), "maven or application");
         assertProperty(entries.get("generateBeforeLaunch"), "${vidocq.idea.generateBeforeLaunch}", "true");
         assertProperty(entries.get("jre"), "${vidocq.idea.jre}", "");
         assertProperty(entries.get("skip"), "${vidocq.idea.skip}", "false");
