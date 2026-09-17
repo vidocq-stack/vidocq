@@ -55,7 +55,8 @@ import java.util.stream.Stream;
  * opens as the project (usually the reactor root):
  *
  * <pre>mvn vidocq:idea
- * mvn vidocq:idea -Dvidocq.idea.check=true</pre>
+ * mvn vidocq:idea -Dvidocq.idea.check=true
+ * mvn vidocq:idea -Dvidocq.idea.check=strict</pre>
  *
  * <p>Each configuration runs the application's main class after two before-launch steps: IntelliJ's Make,
  * then {@code vidocq:generate} on the application's pom, which completes the bean index for dependencies
@@ -98,9 +99,14 @@ public class VidocqIdeaMojo extends AbstractMojo {
     @Parameter(property = "vidocq.idea.projectDirectory")
     private File projectDirectory;
 
-    /** Write nothing; fail when {@code .run/} differs from what the goal would write. */
+    /**
+     * {@code false} writes the files. {@code true} writes nothing and fails where a write would change
+     * {@code .run/}; a file that belongs to the user (written by hand, or edited since it was generated) is
+     * reported as not verified. {@code strict} also fails on such a file when its content differs from what
+     * the goal would write.
+     */
     @Parameter(property = "vidocq.idea.check", defaultValue = "false")
-    private boolean check;
+    private String check;
 
     /** Add the {@code vidocq:generate} Maven step before launch. */
     @Parameter(property = "vidocq.idea.generateBeforeLaunch", defaultValue = "true")
@@ -176,6 +182,7 @@ public class VidocqIdeaMojo extends AbstractMojo {
      */
     void run(List<MavenProject> projects, List<MavenProject> allProjects, Properties userProperties, Path executionRoot)
             throws MojoExecutionException, MojoFailureException {
+        Mode mode = mode(check);
         Path directory = projectDirectory(projects, executionRoot);
         boolean partialReactor = allProjects.size() > projects.size();
 
@@ -203,14 +210,31 @@ public class VidocqIdeaMojo extends AbstractMojo {
             reportOrphans(runDirectory, targets);
             return;
         }
-        getLog().info(PREFIX + (check ? "checking" : "writing") + " run configurations of " + targets.size()
-                + " application(s) in " + runDirectory);
+        getLog().info(PREFIX + switch (mode) {
+            case WRITE -> "writing";
+            case CHECK -> "checking";
+            case STRICT_CHECK -> "strictly checking";
+        } + " run configurations of " + targets.size() + " application(s) in " + runDirectory);
 
-        if (check) {
-            check(directory, targets.values(), runDirectory, targets);
-        } else {
+        if (mode == Mode.WRITE) {
             write(targets.values(), runDirectory, targets);
+        } else {
+            check(directory, targets.values(), runDirectory, targets, mode == Mode.STRICT_CHECK);
         }
+    }
+
+    /** What {@code vidocq.idea.check} asks for. */
+    enum Mode { WRITE, CHECK, STRICT_CHECK }
+
+    static Mode mode(String check) throws MojoFailureException {
+        String value = check == null ? "" : check.strip().toLowerCase(Locale.ROOT);
+        return switch (value) {
+            case "", "false" -> Mode.WRITE;
+            case "true" -> Mode.CHECK;
+            case "strict" -> Mode.STRICT_CHECK;
+            default -> throw new MojoFailureException(PREFIX + "vidocq.idea.check must be false, true or strict, not \""
+                    + check + "\".");
+        };
     }
 
     /** One application and the file that holds its configuration. */
@@ -241,28 +265,42 @@ public class VidocqIdeaMojo extends AbstractMojo {
         return targets;
     }
 
-    private void check(Path directory, Iterable<Target> targets, Path runDirectory, Map<String, Target> byKey)
-            throws MojoExecutionException, MojoFailureException {
+    /**
+     * Fails exactly where a write would change a file. A file that belongs to the user is never written, so the
+     * default check only lists it as not verified; a strict check also fails on it when its content differs.
+     */
+    private void check(Path directory, Iterable<Target> targets, Path runDirectory, Map<String, Target> byKey,
+                       boolean strict) throws MojoExecutionException, MojoFailureException {
         int failures = 0;
+        int userOwnedFailures = 0;
         int checked = 0;
-        int userOwned = 0;
+        List<String> unverified = new ArrayList<>();
         for (Target target : targets) {
+            String about = target.application().coordinates();
             if (target.state().userOwned()) {
-                warnUserOwned(target);
-                userOwned++;
+                if (!strict) {
+                    warnUserOwned(target);
+                    unverified.add(target.shownPath());
+                    continue;
+                }
+                checked++;
+                if (!RunConfigurationFiles.shownBody(target.onDisk()).equals(target.body())) {
+                    getLog().error(PREFIX + target.shownPath() + (target.state() == State.EDITED
+                            ? " was edited after vidocq:idea generated it"
+                            : " was not generated by vidocq:idea") + " and differs from what vidocq:idea writes for "
+                            + about + ":");
+                    logDiff(target);
+                    failures++;
+                    userOwnedFailures++;
+                }
                 continue;
             }
             checked++;
-            String about = target.application().coordinates();
             switch (target.state()) {
                 case MISSING -> getLog().error(PREFIX + target.shownPath() + " is missing for " + about + ".");
                 case OUTDATED -> {
                     getLog().error(PREFIX + target.shownPath() + " is out of date for " + about + ":");
-                    getLog().error("  --- on disk");
-                    getLog().error("  +++ expected");
-                    for (String line : LineDiff.diff(RunConfigurationFiles.shownBody(target.onDisk()), target.body())) {
-                        getLog().error("  " + line);
-                    }
+                    logDiff(target);
                 }
                 case UNMARKED -> getLog().error(PREFIX + target.shownPath() + " has the expected content but no"
                         + " vidocq:idea marker; run \"mvn vidocq:idea\" to adopt it.");
@@ -279,10 +317,25 @@ public class VidocqIdeaMojo extends AbstractMojo {
         if (failures > 0) {
             throw new MojoFailureException(PREFIX + failures + " of " + total + " run configuration(s) in .run/"
                     + " do not match the Maven projects. Run \"mvn vidocq:idea\" in " + directory
-                    + " and commit .run/.");
+                    + " and commit .run/." + (userOwnedFailures == 0 ? "" : " " + userOwnedFailures + " of them"
+                    + " belong(s) to you, and vidocq:idea leaves such files untouched: delete them first to regenerate"
+                    + " them, or check with -Dvidocq.idea.check=true to keep your changes."));
         }
-        getLog().info(PREFIX + checked + " run configuration(s) in " + runDirectory + " are up to date"
-                + (userOwned > 0 ? "; " + userOwned + " belong(s) to you and were not checked." : "."));
+        if (unverified.isEmpty()) {
+            getLog().info(PREFIX + checked + " run configuration(s) in " + runDirectory + " are up to date.");
+        } else {
+            getLog().warn(PREFIX + checked + " run configuration(s) in " + runDirectory + " are up to date; "
+                    + unverified.size() + " NOT verified because " + (unverified.size() == 1 ? "it belongs" : "they belong")
+                    + " to you: " + String.join(", ", unverified) + ". -Dvidocq.idea.check=strict fails on such files.");
+        }
+    }
+
+    private void logDiff(Target target) {
+        getLog().error("  --- on disk");
+        getLog().error("  +++ expected");
+        for (String line : LineDiff.diff(RunConfigurationFiles.shownBody(target.onDisk()), target.body())) {
+            getLog().error("  " + line);
+        }
     }
 
     private void write(Iterable<Target> targets, Path runDirectory, Map<String, Target> byKey)
@@ -479,7 +532,7 @@ public class VidocqIdeaMojo extends AbstractMojo {
     // Package-private accessors used in unit tests — keep at the bottom so the
     // execute() flow is the first thing a reader sees.
     void setProjectDirectory(File projectDirectory) { this.projectDirectory = projectDirectory; }
-    void setCheck(boolean check) { this.check = check; }
+    void setCheck(String check) { this.check = check; }
     void setGenerateBeforeLaunch(boolean generateBeforeLaunch) { this.generateBeforeLaunch = generateBeforeLaunch; }
     void setJre(String jre) { this.jre = jre; }
     void setSkip(boolean skip) { this.skip = skip; }

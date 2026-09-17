@@ -131,6 +131,7 @@ class PluginDescriptorIdeaTest {
         assertEquals("${mojoExecution}", entries.get("mojoExecution").getAttribute("default-value"));
         assertProperty(entries.get("projectDirectory"), "${vidocq.idea.projectDirectory}", "");
         assertProperty(entries.get("check"), "${vidocq.idea.check}", "false");
+        assertEquals("java.lang.String", parameters().get("check"), "false, true or strict");
         assertProperty(entries.get("generateBeforeLaunch"), "${vidocq.idea.generateBeforeLaunch}", "true");
         assertProperty(entries.get("jre"), "${vidocq.idea.jre}", "");
         assertProperty(entries.get("skip"), "${vidocq.idea.skip}", "false");
