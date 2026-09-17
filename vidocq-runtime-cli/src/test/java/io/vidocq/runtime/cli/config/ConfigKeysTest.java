@@ -50,9 +50,16 @@ class ConfigKeysTest {
     }
 
     @Test
+    void theLaunchModeKeyIsRecognized() {
+        // read by vidocq-runtime-core (launch mode), so `vidocq doctor` must not flag it
+        assertTrue(ConfigKeys.isKnown("vidocq.launch.mode"));
+    }
+
+    @Test
     void unknownVidocqNamespacesAreRejected() {
         assertFalse(ConfigKeys.isKnown("vidocq.htpp.port"));
         assertFalse(ConfigKeys.isKnown("vidocq.bogus"));
+        assertFalse(ConfigKeys.isKnown("vidocq.lanch.mode"), "a typo in the namespace is still reported");
     }
 
     @Test

@@ -51,7 +51,7 @@ public final class ConfigKeys {
             "chappe", "checkpom", "compress", "config", "console", "data", "dev",
             "distDir", "distName", "docker", "http", "icon",
             "includeResources", "installerDir", "jlink", "jpackageType",
-            "jvmArgs", "launcher", "log", "mainClass", "mainModule", "pool",
+            "jvmArgs", "launch", "launcher", "log", "mainClass", "mainModule", "pool",
             "profile", "rest", "runtimeImage", "scriptName", "stripDebug",
             "vendor");
 
