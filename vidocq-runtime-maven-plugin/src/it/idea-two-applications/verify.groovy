@@ -34,6 +34,8 @@ Files.walk(root).withCloseable { s -> assert s.noneMatch { it.fileName.toString(
 
 String log = root.resolve('build.log').toFile().text
 assert log.contains('Vidocq idea: 2 run configuration(s): 2 created')
+assert log.contains('[WARNING] Vidocq idea: vidocq.idea.jre is not set, so the run configurations written do not pin a JDK') :
+        'a configuration without a pinned JDK is a warning'
 assert log.contains('run configuration(s) in ') && log.contains('/.run are up to date.')
 assert log.contains('alpha is a module of ') : 'invocation 3 fails because alpha is a module of the root reactor'
 return true

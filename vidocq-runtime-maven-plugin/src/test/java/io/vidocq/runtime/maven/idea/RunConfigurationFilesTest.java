@@ -30,6 +30,7 @@ import static io.vidocq.runtime.maven.idea.RunConfigurationRendererTest.MCP_TIME
 import static io.vidocq.runtime.maven.idea.RunConfigurationRendererTest.MEASURED_REFERENCE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -128,6 +129,20 @@ class RunConfigurationFilesTest {
     void theShownBodyDropsTheMarkerAndNormalisesLineEndings() {
         assertEquals(BODY, RunConfigurationFiles.shownBody(bytes(file(BODY).replace("\n", "\r\n") + "\r\n")));
         assertEquals(MEASURED_REFERENCE, RunConfigurationFiles.shownBody(bytes(MEASURED_REFERENCE)));
+    }
+
+    /** The JDK a file pins, as IntelliJ stores it: an enabled alternative JRE, with its attribute escaping undone. */
+    @Test
+    void thePinnedJdkOfAFileIsRead() {
+        assertEquals("temurin-25", RunConfigurationFiles.pinnedJre(bytes(MEASURED_REFERENCE)));
+        assertEquals("temurin-25", RunConfigurationFiles.pinnedJre(bytes(file(
+                RunConfigurationRenderer.body(MCP_TIME_SERVER, "temurin-25", true)))));
+        assertEquals("a \"b\" & <c>", RunConfigurationFiles.pinnedJre(bytes(
+                RunConfigurationRenderer.body(MCP_TIME_SERVER, "a \"b\" & <c>", true))));
+        assertNull(RunConfigurationFiles.pinnedJre(bytes(BODY)));
+        assertNull(RunConfigurationFiles.pinnedJre(bytes(MEASURED_REFERENCE.replace(
+                "ALTERNATIVE_JRE_PATH_ENABLED\" value=\"true\"", "ALTERNATIVE_JRE_PATH_ENABLED\" value=\"false\""))));
+        assertNull(RunConfigurationFiles.pinnedJre(bytes(MEASURED_REFERENCE.replace("value=\"temurin-25\"", "value=\"\""))));
     }
 
     private static String file(String body) {
