@@ -21,9 +21,6 @@ package io.vidocq.runtime.examples.knock;
 
 import io.vidocq.runtime.core.Vidocq;
 
-import java.io.IOException;
-import java.util.logging.LogManager;
-
 /**
  * Boots the Vidocq runtime for the Health example. Used as the jlink image main class to validate,
  * on the strict module path, that {@code GET /api/health} serves WITHOUT knock-jaxrs opening its
@@ -32,9 +29,7 @@ import java.util.logging.LogManager;
  * A 200 response proves the field was injected with zero reflection / zero opens.
  */
 public class KnockHealthExampleApp {
-    public static void main(String[] args) throws IOException {
-        LogManager.getLogManager().readConfiguration(
-                KnockHealthExampleApp.class.getResourceAsStream("/logging.properties"));
+    public static void main(String[] args) {
         Vidocq.main(args);
     }
 }

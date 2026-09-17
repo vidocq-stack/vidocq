@@ -18,7 +18,6 @@
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
 module io.vidocq.runtime.examples.rest {
-    requires java.logging;
     requires jakarta.cdi;
     requires jakarta.inject;
     requires jakarta.ws.rs;
@@ -48,9 +47,4 @@ module io.vidocq.runtime.examples.rest {
     // record via publicLookup (an export suffices, no opens) — same pattern as
     // cassini-examples.
     exports io.vidocq.runtime.examples.rest.model;
-
-    // java.util.logging.LogManager instantiates StdoutHandler by reflection via
-    // Class.newInstance() when loading logging.properties — requires that
-    // the package is exported to java.logging.
-    exports io.vidocq.runtime.logging to java.logging;
 }
