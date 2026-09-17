@@ -32,6 +32,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.regex.Pattern;
@@ -91,14 +92,19 @@ final class IdeaApplications {
     /**
      * Discovers the applications among {@code projects}, in reactor order.
      *
+     * @param projects         the selected projects of the build
+     * @param allProjects      every project of the build, selected or not: IntelliJ imports them all, and names
+     *                         their modules together
      * @param projectDirectory the directory IntelliJ opens; every application pom must be inside it
      * @param userProperties   the command-line properties, only to report the ones that are ignored
      */
-    static Discovery discover(List<MavenProject> projects, Path projectDirectory, Properties userProperties) {
+    static Discovery discover(List<MavenProject> projects, List<MavenProject> allProjects, Path projectDirectory,
+                              Properties userProperties) {
         List<IdeaApplication> applications = new ArrayList<>();
         List<Diagnostic> diagnostics = new ArrayList<>();
         List<String> errors = new ArrayList<>();
         Path directory = realPath(projectDirectory);
+        Map<String, String> moduleNames = IntelliJModuleNames.firstImport(allProjects);
 
         for (MavenProject project : projects) {
             String coordinates = project.getGroupId() + ":" + project.getArtifactId();
@@ -150,6 +156,7 @@ final class IdeaApplications {
                     generateGoal(plugin, coordinates, diagnostics)));
 
             if (project.getProperties().getProperty("vidocq.idea.moduleName") == null) {
+                reportRenamedModule(project, coordinates, moduleNames, allProjects, diagnostics);
                 String reason = splitReason(project);
                 if (reason != null) {
                     String artifactId = project.getArtifactId();
@@ -268,6 +275,41 @@ final class IdeaApplications {
                     + " shared settings, such as <scanDependencies>, to the plugin-level <configuration>."));
         }
         return "vidocq:generate";
+    }
+
+    /**
+     * Warns when IntelliJ's first import would not name the module after the artifactId, which the generated
+     * configuration uses by default: another project gets the same name ignoring case, or IntelliJ does not
+     * accept the artifactId as a name.
+     */
+    private static void reportRenamedModule(MavenProject project, String coordinates, Map<String, String> moduleNames,
+                                            List<MavenProject> allProjects, List<Diagnostic> diagnostics) {
+        String artifactId = project.getArtifactId();
+        String intelliJName = moduleNames.get(IntelliJModuleNames.key(project));
+        if (intelliJName == null || intelliJName.equals(artifactId)) {
+            return;
+        }
+        String why;
+        boolean accepted = IntelliJModuleNames.isAccepted(artifactId);
+        if (accepted) {
+            String name = IntelliJModuleNames.originalName(project);
+            List<String> others = allProjects.stream()
+                    .filter(other -> other.getFile() != null
+                            && !IntelliJModuleNames.key(other).equals(IntelliJModuleNames.key(project))
+                            && IntelliJModuleNames.originalName(other).equalsIgnoreCase(name))
+                    .map(other -> other.getGroupId() + ":" + other.getArtifactId())
+                    .toList();
+            why = String.join(", ", others) + (others.size() == 1 ? " gets" : " get")
+                    + " the same module name, ignoring case, and a first import numbers them";
+        } else {
+            why = "IntelliJ does not accept '" + artifactId + "' as a module name and names the module after its"
+                    + " directory";
+        }
+        diagnostics.add(new Diagnostic(Level.WARN, PREFIX + "IntelliJ may import " + coordinates + " as the module '"
+                + intelliJName + "', not '" + artifactId + "' (" + why + "; a module imported earlier keeps its"
+                + " name). If Run on its main class does not reuse the generated configuration, "
+                + (accepted ? "give these projects artifactIds that differ by more than case, or " : "")
+                + "set <vidocq.idea.moduleName> in its pom to the module name IntelliJ shows."));
     }
 
     /**

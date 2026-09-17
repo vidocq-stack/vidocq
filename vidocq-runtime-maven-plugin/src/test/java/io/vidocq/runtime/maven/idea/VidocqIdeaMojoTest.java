@@ -239,7 +239,7 @@ class VidocqIdeaMojoTest {
         Path alpha = root.resolve("alpha");
 
         MojoFailureException failure = assertThrows(MojoFailureException.class,
-                () -> mojo.run(projects.subList(1, 2), new Properties(), alpha, false));
+                () -> mojo.run(projects.subList(1, 2), projects.subList(1, 2), new Properties(), alpha));
 
         assertEquals("Vidocq idea: " + alpha.toRealPath() + " is a module of " + root.toRealPath().resolve("pom.xml")
                 + ". IntelliJ usually opens the reactor root, where the generated $PROJECT_DIR$ paths would point at the"
@@ -253,7 +253,7 @@ class VidocqIdeaMojoTest {
         Path alpha = root.resolve("alpha");
         mojo.setProjectDirectory(alpha.toFile());
 
-        mojo.run(projects.subList(1, 2), new Properties(), alpha, false);
+        mojo.run(projects.subList(1, 2), projects.subList(1, 2), new Properties(), alpha);
 
         assertTrue(read(alpha.resolve(".run/AlphaApp.run.xml")).contains("file=\"$PROJECT_DIR$/pom.xml\""));
         assertFalse(log.hasContaining("WARN", "is not the directory of a project of this build"), log.toString());
@@ -269,7 +269,7 @@ class VidocqIdeaMojoTest {
         app.getProperties().setProperty("vidocq.mainClass", "com.example.App");
         mojo.setProjectDirectory(above.toFile());
 
-        mojo.run(List.of(app), new Properties(), reactor, false);
+        mojo.run(List.of(app), List.of(app), new Properties(), reactor);
 
         assertTrue(read(above.resolve(".run/App.run.xml")).contains("file=\"$PROJECT_DIR$/reactor/app/pom.xml\""));
         assertTrue(log.has("WARN", "Vidocq idea: " + above.toRealPath() + " is not the directory of a project of"
@@ -348,7 +348,7 @@ class VidocqIdeaMojoTest {
 
     @Test
     void aPartialReactorIsReported() throws Exception {
-        mojo.run(projects, new Properties(), root, true);
+        mojo.run(projects.subList(1, 3), projects, new Properties(), root);
 
         assertTrue(log.has("INFO", "Vidocq idea: partial build (-pl, -rf or similar): only the applications of the"
                 + " selected projects are covered."), log.toString());
@@ -356,7 +356,7 @@ class VidocqIdeaMojoTest {
 
     @Test
     void noApplicationIsAWarningNotAFailure() throws Exception {
-        mojo.run(List.of(projects.get(0), projects.get(3)), new Properties(), root, false);
+        mojo.run(List.of(projects.get(0), projects.get(3)), List.of(projects.get(0), projects.get(3)), new Properties(), root);
 
         assertTrue(log.has("WARN", "Vidocq idea: no Vidocq application in this build: a module needs"
                 + " vidocq-runtime-maven-plugin in its <build><plugins> and a vidocq.mainClass property."), log.toString());
@@ -429,7 +429,7 @@ class VidocqIdeaMojoTest {
         MavenProject alpha = projects.get(1);
         alpha.getProperties().setProperty("vidocq.idea.exclude", "true");
 
-        mojo.run(List.of(alpha, projects.get(2)), new Properties(), root, true);
+        mojo.run(List.of(alpha, projects.get(2)), projects, new Properties(), root);
 
         try (Stream<Path> files = Files.list(root.resolve(".run"))) {
             assertEquals(List.of("Beta server.run.xml"), files.map(p -> p.getFileName().toString()).toList());
@@ -458,13 +458,13 @@ class VidocqIdeaMojoTest {
 
     private void run() throws MojoExecutionException, MojoFailureException {
         mojo.setCheck(false);
-        mojo.run(projects, new Properties(), root, false);
+        mojo.run(projects, projects, new Properties(), root);
     }
 
     private void check() throws MojoExecutionException, MojoFailureException {
         mojo.setCheck(true);
         try {
-            mojo.run(projects, new Properties(), root, false);
+            mojo.run(projects, projects, new Properties(), root);
         } finally {
             mojo.setCheck(false);
         }

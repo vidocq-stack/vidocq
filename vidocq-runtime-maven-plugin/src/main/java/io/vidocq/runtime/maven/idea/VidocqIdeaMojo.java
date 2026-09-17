@@ -133,10 +133,8 @@ public class VidocqIdeaMojo extends AbstractMojo {
                     + " but execution '" + mojoExecution.getExecutionId() + "' binds it to the build. Remove that"
                     + " <execution> from the pom.");
         }
-        boolean partialReactor = session.getAllProjects() != null
-                && session.getProjects().size() < session.getAllProjects().size();
-        run(reactorProjects, session.getUserProperties(), Path.of(session.getExecutionRootDirectory()),
-                partialReactor);
+        List<MavenProject> allProjects = session.getAllProjects() != null ? session.getAllProjects() : reactorProjects;
+        run(reactorProjects, allProjects, session.getUserProperties(), Path.of(session.getExecutionRootDirectory()));
     }
 
     private String skipSource() {
@@ -169,12 +167,19 @@ public class VidocqIdeaMojo extends AbstractMojo {
         return "<skip>true</skip> in the configuration of vidocq-runtime-maven-plugin";
     }
 
-    /** The goal without its Maven session: the projects of the build, in reactor order. */
-    void run(List<MavenProject> projects, Properties userProperties, Path executionRoot, boolean partialReactor)
+    /**
+     * The goal without its Maven session.
+     *
+     * @param projects    the selected projects of the build, in reactor order
+     * @param allProjects every project of the build; more than {@code projects} with {@code -pl}, {@code -rf}
+     *                    and the like
+     */
+    void run(List<MavenProject> projects, List<MavenProject> allProjects, Properties userProperties, Path executionRoot)
             throws MojoExecutionException, MojoFailureException {
         Path directory = projectDirectory(projects, executionRoot);
+        boolean partialReactor = allProjects.size() > projects.size();
 
-        Discovery discovery = IdeaApplications.discover(projects, directory, userProperties);
+        Discovery discovery = IdeaApplications.discover(projects, allProjects, directory, userProperties);
         discovery.diagnostics().forEach(this::log);
         if (!discovery.errors().isEmpty()) {
             discovery.errors().forEach(getLog()::error);

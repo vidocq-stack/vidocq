@@ -176,7 +176,7 @@ class IdeaApplicationsTest {
         MavenProject alpha = application("alpha", "com.example.alpha.AlphaApp");
         Path link = Files.createSymbolicLink(links.resolve("root"), root);
 
-        Discovery discovery = IdeaApplications.discover(List.of(alpha), link, new Properties());
+        Discovery discovery = IdeaApplications.discover(List.of(alpha), List.of(alpha), link, new Properties());
 
         assertEquals(List.of(), discovery.errors());
         assertEquals("alpha/pom.xml", discovery.applications().get(0).pomPath());
@@ -333,7 +333,7 @@ class IdeaApplicationsTest {
         userProperties.setProperty("vidocq.idea.moduleName", "other");
         userProperties.setProperty("vidocq.idea.exclude", "true");
 
-        Discovery discovery = IdeaApplications.discover(List.of(alpha), root, userProperties);
+        Discovery discovery = IdeaApplications.discover(List.of(alpha), List.of(alpha), root, userProperties);
 
         assertEquals("com.example.alpha.AlphaApp", discovery.applications().get(0).mainClass());
         assertEquals("alpha", discovery.applications().get(0).moduleName());
@@ -384,6 +384,59 @@ class IdeaApplicationsTest {
                 "'executions.main' and 'executions.test' (compile and testCompile use different compilerArgs)");
     }
 
+    /**
+     * IntelliJ numbers the modules of all the projects whose artifactIds are equal ignoring case, even in
+     * other groups ({@code MavenModuleNameMapper}, IDEA-320329): on a first import no module is called
+     * {@code beta} any more, and Run on the main class silently creates a temporary configuration. The
+     * comparison covers every project of the build, including those that {@code -pl} leaves out.
+     */
+    @Test
+    void anApplicationWhoseModuleIntelliJNumbersIsReported() throws IOException {
+        MavenProject beta = application("apps/beta", "com.example.beta.BetaApp");
+        MavenProject library = project("library");
+        library.getModel().setGroupId("com.lib");
+        library.getModel().setArtifactId("Beta");
+
+        Discovery discovery = IdeaApplications.discover(List.of(beta), List.of(beta, library), root, new Properties());
+
+        assertEquals("beta", discovery.applications().get(0).moduleName());
+        assertHas(discovery, Level.WARN, "Vidocq idea: IntelliJ may import com.example:beta as the module"
+                + " 'beta (1) (com.example)', not 'beta' (com.lib:Beta gets the same module name, ignoring case, and a"
+                + " first import numbers them; a module imported earlier keeps its name). If Run on its main class"
+                + " does not reuse the generated configuration, give these projects artifactIds that differ by more"
+                + " than case, or set <vidocq.idea.moduleName> in its pom to the module name IntelliJ shows.");
+    }
+
+    @Test
+    void noModuleNameWarningWithDistinctArtifactIdsOrAnExplicitModuleName() throws IOException {
+        MavenProject alpha = application("alpha", "com.example.alpha.AlphaApp");
+        MavenProject named = application("apps/beta", "com.example.beta.BetaApp");
+        named.getProperties().setProperty("vidocq.idea.moduleName", "beta (1) (com.example)");
+        MavenProject library = project("library");
+        library.getModel().setArtifactId("BETA");
+
+        Discovery discovery = IdeaApplications.discover(List.of(alpha, named), List.of(alpha, named, library), root,
+                new Properties());
+
+        assertTrue(discovery.diagnostics().stream().noneMatch(d -> d.message().contains("IntelliJ may import")),
+                discovery.diagnostics().toString());
+    }
+
+    /** {@code Unknown} is a valid artifactId for Maven, but not a module name for IntelliJ. */
+    @Test
+    void anArtifactIdIntelliJDoesNotAcceptAsAModuleNameIsReported() throws IOException {
+        MavenProject server = application("server", "com.example.App");
+        server.getModel().setArtifactId("Unknown");
+
+        Discovery discovery = discover(server);
+
+        assertHas(discovery, Level.WARN, "Vidocq idea: IntelliJ may import com.example:Unknown as the module 'server',"
+                + " not 'Unknown' (IntelliJ does not accept 'Unknown' as a module name and names the module after its"
+                + " directory; a module imported earlier keeps its name). If Run on its main class does not reuse the"
+                + " generated configuration, set <vidocq.idea.moduleName> in its pom to the module name IntelliJ"
+                + " shows.");
+    }
+
     @Test
     void noSplitWarningWithEqualLevelsOrAnExplicitModuleName() throws IOException {
         MavenProject equal = application("equal", "com.example.App");
@@ -420,7 +473,7 @@ class IdeaApplicationsTest {
     // ---- fixtures ----
 
     private Discovery discover(MavenProject... projects) {
-        return IdeaApplications.discover(List.of(projects), root, new Properties());
+        return IdeaApplications.discover(List.of(projects), List.of(projects), root, new Properties());
     }
 
     private MavenProject application(String directory, String mainClass) throws IOException {

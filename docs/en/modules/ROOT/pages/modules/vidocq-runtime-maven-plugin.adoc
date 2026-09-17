@@ -260,7 +260,8 @@ so that the committed files do not depend on how Maven was invoked.
 | `vidocq.idea.moduleName`
 | `artifactId`
 | IntelliJ module that holds the main class. Set it when IntelliJ names the module differently, for example
-  `<artifactId>.main` when it splits main and test sources into two modules.
+  `<artifactId>.main` when it splits main and test sources into two modules, or `beta (1) (com.example)` when
+  another project has the same artifactId, ignoring case.
 
 | `vidocq.idea.exclude`
 | `false`
@@ -358,8 +359,12 @@ Each of them must be JDK 25 or newer. The goal cannot see IntelliJ's SDKs and pr
   clash or a module split into `<name>.main` and `<name>.test` does not match. An unknown name fails at Run
   with "Module '<name>' doesn't exist in the project"; a split module silently gets a new temporary configuration without the Maven
   step. The goal warns when the pom shows a known split trigger (different main and test compiler levels, test
-  compiler arguments, different compile and test-compile arguments or toolchains): set
-  `vidocq.idea.moduleName` then.
+  compiler arguments, different compile and test-compile arguments or toolchains), and when a first import
+  would name the module otherwise: IntelliJ numbers every module whose artifactId equals another one ignoring
+  case, in any group (`beta (1) (com.example)`, `Beta (2) (com.vendor)`), and uses the directory name for the
+  artifactId `Unknown`. The goal compares every project of the build, including those `-pl` leaves out. A
+  module imported before keeps its earlier name, so the name can differ between machines: prefer artifactIds
+  that differ by more than case, or set `vidocq.idea.moduleName` to the name IntelliJ shows.
 * **Reload** — IntelliJ reloads a changed `.run` file by itself, but may miss files in a new `.run/` directory or
   several files written at once. When a configuration does not appear, use File > Reload All from Disk.
 * **Same name** — a temporary or local configuration with the same name, created earlier from the gutter, can
