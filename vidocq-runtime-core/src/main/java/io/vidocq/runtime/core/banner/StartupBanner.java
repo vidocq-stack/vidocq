@@ -315,8 +315,9 @@ public final class StartupBanner {
     }
 
     /**
-     * The custom banner: {@value #LOCATION_KEY} when set (a missing file logs a warning and gives the
-     * built-in banner), otherwise a {@value #CUSTOM_RESOURCE} resource of the application.
+     * The custom banner: {@value #LOCATION_KEY} when set (a missing file, or a value that is no file
+     * location, logs a warning and gives the built-in banner), otherwise a {@value #CUSTOM_RESOURCE}
+     * resource of the application.
      */
     static Optional<String> customBanner(Function<String, Optional<String>> config) {
         Optional<String> location = config.apply(LOCATION_KEY).map(String::strip).filter(l -> !l.isEmpty());
@@ -328,16 +329,37 @@ public final class StartupBanner {
         if (value.startsWith("classpath:")) {
             String resource = value.substring("classpath:".length());
             text = readResource(contextLoader(), resource.startsWith("/") ? resource.substring(1) : resource);
-        } else if (value.startsWith("file:")) {
-            text = readFile(value.startsWith("file://") ? Path.of(URI.create(value)) : Path.of(value.substring("file:".length())));
         } else {
-            text = readFile(Path.of(value));
+            Path path;
+            try {
+                path = filePath(value);
+            } catch (RuntimeException invalid) {
+                // an unencoded space in a file:// URI, an authority, a NUL character: the art and the identity still print
+                LOG.log(System.Logger.Level.WARNING, "Banner {0}={1} is not a file location ({2}); using the built-in banner",
+                        LOCATION_KEY, value, invalid.getMessage());
+                return Optional.empty();
+            }
+            text = readFile(path);
         }
         if (text.isEmpty()) {
             LOG.log(System.Logger.Level.WARNING, "Banner {0}={1} not found; using the built-in banner",
                     LOCATION_KEY, value);
         }
         return text;
+    }
+
+    /**
+     * The file of a {@code file://} URI, of {@code file:<path>} or of a plain path.
+     *
+     * @throws IllegalArgumentException when the value names no file: a URI that does not parse or has an
+     *                                  authority, a query or a fragment, or a path the file system rejects
+     *                                  ({@link java.nio.file.InvalidPathException})
+     */
+    static Path filePath(String value) {
+        if (value.startsWith("file://")) {
+            return Path.of(URI.create(value));
+        }
+        return Path.of(value.startsWith("file:") ? value.substring("file:".length()) : value);
     }
 
     private static ClassLoader contextLoader() {

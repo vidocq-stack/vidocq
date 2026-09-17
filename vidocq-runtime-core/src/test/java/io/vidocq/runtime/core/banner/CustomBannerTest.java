@@ -19,9 +19,13 @@
  */
 package io.vidocq.runtime.core.banner;
 
+import io.vidocq.runtime.core.BannerMode;
+import io.vidocq.runtime.core.banner.BannerTestSupport.Out;
 import io.vidocq.runtime.core.banner.BannerTestSupport.Records;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.net.URL;
 import java.net.URLClassLoader;
@@ -36,6 +40,7 @@ import static io.vidocq.runtime.core.banner.BannerTestSupport.ESC;
 import static io.vidocq.runtime.core.banner.BannerTestSupport.config;
 import static io.vidocq.runtime.core.banner.BannerTestSupport.identity;
 import static io.vidocq.runtime.core.banner.BannerTestSupport.jar;
+import static io.vidocq.runtime.core.banner.BannerTestSupport.launch;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -136,6 +141,64 @@ class CustomBannerTest {
             assertTrue(block.startsWith("__     ___     _\n"), block);
             assertEquals(List.of("Banner vidocq.banner.location=file:custom/nope.txt not found; using the built-in banner"),
                     records.messages(Level.WARNING));
+        }
+    }
+
+    @Test
+    void aFileWithASpaceIsReadAsAnEncodedUriAPrefixedPathOrAPlainPath() throws Exception {
+        Path banner = Files.writeString(dir.resolve("my banner.txt"), "SPACED\n", StandardCharsets.UTF_8);
+
+        for (String location : List.of(banner.toUri().toString(), "file:" + banner, banner.toString())) {
+            try (Records records = new Records()) {
+                String block = StartupBanner.render(ID, config(Map.of(StartupBanner.LOCATION_KEY, location)), false);
+
+                assertTrue(block.startsWith("SPACED\n Vidocq "), location + " -> " + block);
+                assertEquals(List.of(), records.messages(Level.WARNING), location);
+            }
+        }
+        assertTrue(banner.toUri().toString().startsWith("file:///") && banner.toUri().toString().contains("%20"),
+                "the URI form is the encoded file:/// one: " + banner.toUri());
+    }
+
+    /** A space left unencoded in a URI, an authority, a query, a NUL character: none is a file. */
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "file:///tmp/my banner.txt",
+            "file:///C:/Program Files/app/banner.txt",
+            "file://relative/banner.txt",
+            "file:///tmp/banner.txt?v=1",
+            "file:custom/\0banner.txt",
+            "custom/\0banner.txt"})
+    void anUnparsableLocationWarnsAndFallsBackToTheBuiltInArt(String location) {
+        try (Records records = new Records()) {
+            String block = StartupBanner.render(ID, config(Map.of(StartupBanner.LOCATION_KEY, location)), false);
+
+            assertTrue(block.startsWith("__     ___     _\n"), block);
+            assertTrue(block.contains("\n Vidocq 0.4.0-SNAPSHOT (9beafc47+dirty, built 2026-09-17T14:02:11Z)\n"), block);
+            List<String> warnings = records.messages(Level.WARNING);
+            assertEquals(1, warnings.size(), warnings.toString());
+            assertTrue(warnings.getFirst().startsWith("Banner vidocq.banner.location=" + location + " is not a file location ("),
+                    warnings.getFirst());
+            assertTrue(warnings.getFirst().endsWith("); using the built-in banner"), warnings.getFirst());
+        }
+    }
+
+    @Test
+    void anUnparsableLocationStillPrintsTheArtAndTheIdentity() {
+        Out out = new Out();
+        StartupBanner.reset();
+        try (Records records = new Records()) {
+            assertTrue(StartupBanner.showOnce(config(Map.of(StartupBanner.LOCATION_KEY, "file:///tmp/my banner.txt")),
+                    () -> launch(BannerMode.CONSOLE), BannerTestSupport::pipe, out.stream));
+
+            List<String> lines = out.text().lines().toList();
+            assertEquals("__     ___     _", lines.getFirst(), out.text());
+            assertTrue(lines.stream().anyMatch(l -> l.startsWith(" Vidocq ")), out.text());
+            assertTrue(lines.getLast().startsWith(" Java "), out.text());
+            assertTrue(StartupBanner.emittedIdentity().isPresent());
+            assertEquals(1, records.messages(Level.WARNING).size());
+        } finally {
+            StartupBanner.reset();
         }
     }
 }

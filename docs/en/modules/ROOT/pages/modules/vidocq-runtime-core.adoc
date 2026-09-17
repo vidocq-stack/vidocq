@@ -197,7 +197,7 @@ VidocqBootstrap.create()
 
 | `vidocq.banner.location` [.tag-new]#NEW#
 | (empty)
-| A custom banner: `classpath:<resource>`, `file:<path>` or `<path>`. When unset, a `vidocq-banner.txt` resource of the application is used if there is one.
+| A custom banner: `classpath:<resource>`, `file:<path>` or `<path>`, which take the path as written, or an encoded `file://` URI (`file:///opt/my%20app/banner.txt`). When unset, a `vidocq-banner.txt` resource of the application is used if there is one. A missing file, or a value that names no file (such as a `file://` URI with a raw space), logs a warning and prints the built-in art.
 
 | `vidocq.console.color`
 | `auto`
