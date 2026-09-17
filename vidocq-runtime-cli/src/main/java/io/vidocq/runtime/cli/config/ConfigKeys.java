@@ -47,7 +47,7 @@ public final class ConfigKeys {
      * keys consumed across the runtime, Maven plugin and bundled extensions.
      */
     static final Set<String> KNOWN_NAMESPACES = Set.of(
-            "app", "appName", "appDescription", "appVersion",
+            "app", "appName", "appDescription", "appVersion", "banner",
             "chappe", "checkpom", "compress", "config", "console", "data", "dev",
             "distDir", "distName", "docker", "http", "icon",
             "includeResources", "installerDir", "jlink", "jpackageType",

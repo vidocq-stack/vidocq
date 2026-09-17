@@ -197,10 +197,13 @@ public final class CommandRunner {
     }
 
     private static void bootRuntime(AtomicReference<VidocqBootstrap> ref) {
+        // configure() prints the startup banner: the spinner starts after it, or the banner's
+        // first line would stick to a spinner frame.
+        VidocqBootstrap bootstrap = VidocqBootstrap.create().configure();
         BootSpinner spinner = new BootSpinner("Booting Vidocq…");
         spinner.start();
         try {
-            ref.set(VidocqBootstrap.create().configure().start());
+            ref.set(bootstrap.start());
         } finally {
             spinner.stop();
         }

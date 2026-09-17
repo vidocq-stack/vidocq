@@ -43,6 +43,13 @@ class ConfigKeysTest {
     }
 
     @Test
+    void coreBannerKeysAreRecognized() {
+        // read by vidocq-runtime-core (startup banner)
+        assertTrue(ConfigKeys.isKnown("vidocq.banner.mode"));
+        assertTrue(ConfigKeys.isKnown("vidocq.banner.location"));
+    }
+
+    @Test
     void unknownVidocqNamespacesAreRejected() {
         assertFalse(ConfigKeys.isKnown("vidocq.htpp.port"));
         assertFalse(ConfigKeys.isKnown("vidocq.bogus"));
