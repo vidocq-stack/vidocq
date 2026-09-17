@@ -254,6 +254,7 @@ git.dirty=false
 ----
 
 * `git.dirty` is `true` when tracked files had uncommitted changes; untracked files do not count.
+* `git.build.time` is the time of the build that wrote the file. On its own, the plugin leaves an existing file alone when only that time would change, so a build without `mvn clean` keeps the time of the first build of the same commit and dirty state. `vidocq-runtime-parent` (the Vidocq runtime modules and the applications created by `vidocq create`) deletes the file at the `validate` phase, so every build writes its own time; for a brick built directly from `vidocq-parent`, `built` can be that first build.
 * Releases have no `git.build.time` and stay byte-for-byte reproducible (`project.build.outputTimestamp` is the commit time in the `release` profile).
 * The file name carries the artifactId: on the class path, a shared name would make every jar read the first one found. The banner reads each file inside the jar of its own module.
 * `-Dmaven.gitcommitid.skip=true` builds without it; the banner then falls back to the jar date.

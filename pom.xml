@@ -587,5 +587,44 @@
                 </plugin>
             </plugins>
         </pluginManagement>
+
+        <plugins>
+            <!--
+              Fresh build time in the build identity file. vidocq-parent's
+              git-commit-id-maven-plugin (execution vidocq-build-info, at initialize)
+              writes META-INF/vidocq/build-info/<artifactId>.properties, but leaves an
+              existing file alone when only git.build.time would change: without
+              `mvn clean`, every build of the same commit and dirty state kept the time
+              of the first one, and the startup banner said "built <earlier time>" for
+              classes compiled later. Deleting the file at validate makes each build
+              write its own time. Inherited by this reactor and by the applications
+              created by `vidocq create`. Releases are unaffected: their file has no
+              git.build.time and is rewritten byte for byte.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-clean-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>vidocq-build-info-refresh</id>
+                        <phase>validate</phase>
+                        <goals>
+                            <goal>clean</goal>
+                        </goals>
+                        <configuration>
+                            <excludeDefaultDirectories>true</excludeDefaultDirectories>
+                            <filesets>
+                                <fileset>
+                                    <directory>${project.build.outputDirectory}/META-INF/vidocq/build-info</directory>
+                                    <includes>
+                                        <include>${project.artifactId}.properties</include>
+                                    </includes>
+                                </fileset>
+                            </filesets>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
     </build>
 </project>
