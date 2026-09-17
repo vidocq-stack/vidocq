@@ -70,18 +70,23 @@ final class BannerTestSupport {
         return new StartupBanner.Launch(override, false, false, mode, debug, null, null);
     }
 
-    /** A mode read from a signal, as {@link LaunchModeResolver} returns it. */
+    /** A mode read from a deliberate signal, as {@link LaunchModeResolver} returns it. */
     static LaunchModeResolver.Resolution mode(LaunchMode mode, String reason) {
-        return new LaunchModeResolver.Resolution(mode, reason, true);
+        return new LaunchModeResolver.Resolution(mode, reason, true, mode == LaunchMode.DEV);
     }
 
     static LaunchModeResolver.Resolution dev(String reason) {
         return mode(LaunchMode.DEV, reason);
     }
 
+    /** A dev read from the shape of a build tree: no developer is known to be watching. */
+    static LaunchModeResolver.Resolution devFromBuildTree(String reason) {
+        return new LaunchModeResolver.Resolution(LaunchMode.DEV, reason, true, false);
+    }
+
     /** The {@code prod} no signal proves, which never shows without its reason. */
     static LaunchModeResolver.Resolution prodByAbsence() {
-        return new LaunchModeResolver.Resolution(LaunchMode.PROD, LaunchModeResolver.NO_SIGNAL, false);
+        return new LaunchModeResolver.Resolution(LaunchMode.PROD, LaunchModeResolver.NO_SIGNAL, false, false);
     }
 
     static ConsoleSupport console(boolean terminal, String noColor, String term, String os, String... arguments) {

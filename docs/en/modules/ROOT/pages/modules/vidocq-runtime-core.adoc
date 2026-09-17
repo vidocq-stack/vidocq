@@ -239,7 +239,7 @@ A custom banner that shows no context line gets that record too; an agent with n
 | Nothing.
 |===
 
-A terminal means that `System.console()` exists and `isTerminal()` is true: redirecting standard input or standard output turns the art off. A dev launch is a launch whose <<launch-mode,mode>> resolves to `dev`. IntelliJ's Run console is not a terminal, so this is what shows the art on an IDE Run.
+A terminal means that `System.console()` exists and `isTerminal()` is true: redirecting standard input or standard output turns the art off. A dev launch is a <<launch-mode,mode>> of `dev` read from a deliberate signal — `vidocq.launch.mode`, a profile, the dev reload loop, or IntelliJ's Run console, which is not a terminal and is what shows the art on an IDE Run. A `dev` read from the shape of a build tree does not show the art without a terminal: a piped CI job runs out of `target/classes` too.
 
 The banner is printed once per JVM: a hot reload or a second deployment in the same JVM prints nothing more. It never fails the boot. Its logger, `io.vidocq.runtime.core.banner.StartupBanner`, can be silenced through the logging configuration.
 

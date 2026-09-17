@@ -47,6 +47,7 @@ import static io.vidocq.runtime.core.banner.BannerTestSupport.IDEA_AGENT;
 import static io.vidocq.runtime.core.banner.BannerTestSupport.config;
 import static io.vidocq.runtime.core.banner.BannerTestSupport.console;
 import static io.vidocq.runtime.core.banner.BannerTestSupport.dev;
+import static io.vidocq.runtime.core.banner.BannerTestSupport.devFromBuildTree;
 import static io.vidocq.runtime.core.banner.BannerTestSupport.launch;
 import static io.vidocq.runtime.core.banner.BannerTestSupport.mode;
 import static io.vidocq.runtime.core.banner.BannerTestSupport.prodByAbsence;
@@ -93,6 +94,8 @@ class StartupBannerTest {
         assertFalse(launch(null, mode(LaunchMode.TEST, "JUnit on the stack"), null).devLaunch());
         assertFalse(launch(null, prodByAbsence(), null).devLaunch());
         assertFalse(launch(null).devLaunch(), "an unresolved mode is no dev launch");
+        assertFalse(launch(null, devFromBuildTree("target/classes with a pom.xml above"), null).devLaunch(),
+                "classes in a build tree are also what a piped CI job runs: no art without a terminal");
     }
 
     @Test

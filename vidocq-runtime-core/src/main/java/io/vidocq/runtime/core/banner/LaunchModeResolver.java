@@ -118,8 +118,12 @@ public final class LaunchModeResolver {
      *                  {@code IntelliJ agent}, {@value #NO_SIGNAL})
      * @param signalled whether something was found: {@code false} only for a {@code prod} that
      *                  rests on the absence of any signal, which is never claimed without its reason
+     * @param watched   whether the signal means a developer is at the console — the launch-mode key, a
+     *                  profile, the dev reload loop, IntelliJ's Run console — rather than the shape of a
+     *                  build tree. Only a watched dev launch shows the art without a terminal: classes
+     *                  under {@code target/classes} are also what a CI job or a piped run uses.
      */
-    public record Resolution(LaunchMode mode, String reason, boolean signalled) {
+    public record Resolution(LaunchMode mode, String reason, boolean signalled, boolean watched) {
 
         /** {@code dev (IntelliJ agent)}, {@code prod (no dev or test signal)}. */
         public String text() {
@@ -148,7 +152,7 @@ public final class LaunchModeResolver {
             return profile;
         }
         if (inputs.reloadFile() != null && !inputs.reloadFile().isBlank()) {
-            return new Resolution(LaunchMode.DEV, "dev reload loop", true);
+            return new Resolution(LaunchMode.DEV, "dev reload loop", true, true);
         }
         Resolution test = fromTestRun(inputs);
         if (test != null) {
@@ -158,7 +162,7 @@ public final class LaunchModeResolver {
         if (dev != null) {
             return dev;
         }
-        return new Resolution(LaunchMode.PROD, NO_SIGNAL, false);
+        return new Resolution(LaunchMode.PROD, NO_SIGNAL, false, false);
     }
 
     /** (a) {@value #MODE_KEY}; an unknown value logs one warning and lets the detection decide. */
@@ -168,7 +172,7 @@ public final class LaunchModeResolver {
         }
         Optional<LaunchMode> mode = LaunchMode.parse(value);
         if (mode.isPresent()) {
-            return new Resolution(mode.get(), MODE_KEY, true);
+            return new Resolution(mode.get(), MODE_KEY, true, true);
         }
         LOG.log(System.Logger.Level.WARNING, "Configuration key ''{0}'' has an unknown value ''{1}''"
                 + " (expected dev, test or prod); detecting the launch mode", MODE_KEY, value);
@@ -178,7 +182,7 @@ public final class LaunchModeResolver {
     /** (b) {@value #PROFILE_KEY} when it names a mode; another profile is not one. */
     static Resolution fromProfile(String profile) {
         return LaunchMode.parse(profile)
-                .map(mode -> new Resolution(mode, "profile " + mode.label(), true))
+                .map(mode -> new Resolution(mode, "profile " + mode.label(), true, true))
                 .orElse(null);
     }
 
@@ -190,11 +194,11 @@ public final class LaunchModeResolver {
             }
             for (Map.Entry<String, String> framework : TEST_FRAMES.entrySet()) {
                 if (frame.startsWith(framework.getKey())) {
-                    return new Resolution(LaunchMode.TEST, framework.getValue() + " on the stack", true);
+                    return new Resolution(LaunchMode.TEST, framework.getValue() + " on the stack", true, false);
                 }
             }
         }
-        return inputs.testRuntime() ? new Resolution(LaunchMode.TEST, "JUnit on the class path", true) : null;
+        return inputs.testRuntime() ? new Resolution(LaunchMode.TEST, "JUnit on the class path", true, false) : null;
     }
 
     /** (e) an application archive inside a build tree, or IntelliJ's Run console. */
@@ -203,7 +207,7 @@ public final class LaunchModeResolver {
         if (archives != null) {
             return archives;
         }
-        return inputs.intellijConsole() ? new Resolution(LaunchMode.DEV, "IntelliJ agent", true) : null;
+        return inputs.intellijConsole() ? new Resolution(LaunchMode.DEV, "IntelliJ agent", true, true) : null;
     }
 
     /**
@@ -234,13 +238,13 @@ public final class LaunchModeResolver {
         }
         String buildFile = buildFileAbove(candidate);
         if (shape != null && buildFile != null) {
-            return new Resolution(LaunchMode.DEV, shape + " with a " + buildFile + " above", true);
+            return new Resolution(LaunchMode.DEV, shape + " with a " + buildFile + " above", true, false);
         }
         if (shape != null) {
-            return new Resolution(LaunchMode.DEV, shape, true);
+            return new Resolution(LaunchMode.DEV, shape, true, false);
         }
         if (buildFile != null) {
-            return new Resolution(LaunchMode.DEV, "a " + buildFile + " above the classes", true);
+            return new Resolution(LaunchMode.DEV, "a " + buildFile + " above the classes", true, false);
         }
         return null;
     }

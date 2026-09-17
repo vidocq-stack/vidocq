@@ -99,9 +99,13 @@ public final class StartupBanner {
                          LaunchModeResolver.Resolution launchMode, DebugAgent debug, Module appModule,
                          ModuleLayer appLayer) {
 
-        /** Whether the launch was resolved as a development one, which shows the art without a terminal. */
+        /**
+         * Whether a developer is at the console, which shows the art without a terminal: a dev mode read
+         * from a deliberate signal, not from the shape of a build tree (a piped CI job runs out of
+         * {@code target/classes} too).
+         */
         public boolean devLaunch() {
-            return launchMode != null && launchMode.mode() == LaunchMode.DEV;
+            return launchMode != null && launchMode.mode() == LaunchMode.DEV && launchMode.watched();
         }
     }
 
