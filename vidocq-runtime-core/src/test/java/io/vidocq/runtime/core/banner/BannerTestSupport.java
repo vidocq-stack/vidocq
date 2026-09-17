@@ -49,6 +49,10 @@ final class BannerTestSupport {
 
     /** The ANSI escape character. */
     static final String ESC = String.valueOf((char) 27);
+    /** First line of the built-in art (the top hat's crown next to the word). */
+    static final String ART_FIRST_LINE = "   _________      __     ___     _";
+    /** Number of lines of the built-in art, brim included. */
+    static final int ART_LINES = 7;
     static final String IDEA_AGENT = "-javaagent:/Applications/IntelliJ IDEA.app/Contents/lib/idea_rt.jar=51234:/x";
 
     private BannerTestSupport() {}

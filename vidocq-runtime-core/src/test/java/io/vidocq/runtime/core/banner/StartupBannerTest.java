@@ -36,6 +36,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
 
+import static io.vidocq.runtime.core.banner.BannerTestSupport.ART_FIRST_LINE;
+import static io.vidocq.runtime.core.banner.BannerTestSupport.ART_LINES;
 import static io.vidocq.runtime.core.banner.BannerTestSupport.ESC;
 import static io.vidocq.runtime.core.banner.BannerTestSupport.IDEA_AGENT;
 import static io.vidocq.runtime.core.banner.BannerTestSupport.config;
@@ -117,7 +119,7 @@ class StartupBannerTest {
         assertTrue(text.contains("Vidocq "), text);
         assertEquals(colours, text.contains(ESC), text);
         if (colours) {
-            assertTrue(text.contains(ESC + "[36m__     ___     _" + ESC + "[0m\n"), "art in cyan: " + text);
+            assertTrue(text.contains(ESC + "[36m" + ART_FIRST_LINE + ESC + "[0m\n"), "art in cyan: " + text);
             assertTrue(text.contains("\n " + ESC + "[1mVidocq "), "identity in bold: " + text);
             assertTrue(text.contains("\n " + ESC + "[2mJava "), "context faint: " + text);
         }
@@ -139,10 +141,10 @@ class StartupBannerTest {
 
         assertEquals(1, prints[0]);
         List<String> lines = out.text().lines().toList();
-        assertEquals(8, lines.size(), out.text());
-        assertEquals("__     ___     _", lines.getFirst());
-        assertTrue(lines.get(6).startsWith(" Vidocq "), lines.get(6));
-        assertTrue(lines.get(7).startsWith(" Java " + Runtime.version()), lines.get(7));
+        assertEquals(ART_LINES + 2, lines.size(), out.text());
+        assertEquals(ART_FIRST_LINE, lines.getFirst());
+        assertTrue(lines.get(ART_LINES).startsWith(" Vidocq "), lines.get(ART_LINES));
+        assertTrue(lines.get(ART_LINES + 1).startsWith(" Java " + Runtime.version()), lines.get(ART_LINES + 1));
     }
 
     @Test
@@ -155,7 +157,7 @@ class StartupBannerTest {
             assertEquals("", out.text());
             List<String> identity = records.identityRecords();
             assertEquals(1, identity.size(), identity.toString());
-            assertTrue(identity.getFirst().startsWith("\n__     ___     _\n"), identity.getFirst());
+            assertTrue(identity.getFirst().startsWith("\n" + ART_FIRST_LINE + "\n"), identity.getFirst());
             assertTrue(identity.getFirst().contains("\n Vidocq "), identity.getFirst());
             assertFalse(identity.getFirst().contains(ESC));
             assertFalse(identity.getFirst().endsWith("\n"));
@@ -206,7 +208,7 @@ class StartupBannerTest {
 
         StartupBanner.show(config(Map.of(StartupBanner.MODE_KEY, " Console ")), launch(null), pipe(), out.stream);
 
-        assertTrue(out.text().startsWith("__     ___     _\n"), out.text());
+        assertTrue(out.text().startsWith(ART_FIRST_LINE + "\n"), out.text());
     }
 
     @Test

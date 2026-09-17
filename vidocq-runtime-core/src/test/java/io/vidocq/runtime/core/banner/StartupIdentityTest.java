@@ -154,15 +154,15 @@ class StartupIdentityTest {
     // ------------------------------------------------------------------ built-in art
 
     @Test
-    void theBuiltInArtIsSixPrintableAsciiLinesOfAtMost43Columns() throws IOException {
+    void theBuiltInArtIsAtMostSevenPrintableAsciiLinesOfAtMost54Columns() throws IOException {
         String resource = artResource();
         List<String> lines = StartupBanner.artLines(resource);
 
-        assertTrue(lines.size() <= 6, lines.size() + " lines");
-        assertEquals("__     ___     _", lines.getFirst());
-        assertEquals("                         \\\\         |_|", lines.getLast(), "the magnifier handle is two backslashes");
+        assertTrue(lines.size() <= 7, lines.size() + " lines");
+        assertEquals(BannerTestSupport.ART_FIRST_LINE, lines.getFirst(), "the top hat's crown starts the art");
+        assertTrue(lines.getLast().startsWith(" `-._") && lines.getLast().endsWith("_.-'"), "the hat brim sweeps under the word: " + lines.getLast());
         for (String line : lines) {
-            assertTrue(line.length() <= 43, line);
+            assertTrue(line.length() <= 54, line);
             assertFalse(line.endsWith(" "), "trailing space: [" + line + "]");
             for (char c : line.toCharArray()) {
                 assertTrue(c >= 0x20 && c <= 0x7E, "not printable ASCII: " + (int) c + " in " + line);
@@ -171,16 +171,16 @@ class StartupIdentityTest {
     }
 
     @Test
-    void theBlockWithARealisticIdentityFitsIn8LinesOf80Columns() {
+    void theBlockWithARealisticIdentityFitsIn9LinesOf80Columns() {
         StartupIdentity id = identity(SNAPSHOT_DIRTY, "Eclipse Adoptium", "profile dev",
                 "io.vidocq.tools.lc4jcdi.mcptimeserver", "0.1.0-SNAPSHOT");
 
         String block = StartupBanner.render(id, BannerTestSupport.config(Map.of()), false);
 
         List<String> lines = block.lines().toList();
-        assertTrue(lines.size() <= 8, block);
+        assertTrue(lines.size() <= 9, block);
         lines.forEach(line -> assertTrue(line.length() <= 80, line));
-        assertEquals(" Vidocq 0.4.0-SNAPSHOT (9beafc47+dirty, built 2026-09-17T14:02:11Z)", lines.get(6));
+        assertEquals(" Vidocq 0.4.0-SNAPSHOT (9beafc47+dirty, built 2026-09-17T14:02:11Z)", lines.get(7));
     }
 
     @Test

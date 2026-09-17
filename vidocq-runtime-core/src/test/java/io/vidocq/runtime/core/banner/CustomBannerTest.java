@@ -36,6 +36,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
 
+import static io.vidocq.runtime.core.banner.BannerTestSupport.ART_FIRST_LINE;
 import static io.vidocq.runtime.core.banner.BannerTestSupport.ESC;
 import static io.vidocq.runtime.core.banner.BannerTestSupport.config;
 import static io.vidocq.runtime.core.banner.BannerTestSupport.identity;
@@ -138,7 +139,7 @@ class CustomBannerTest {
         try (Records records = new Records()) {
             String block = StartupBanner.render(ID, config(Map.of(StartupBanner.LOCATION_KEY, "file:custom/nope.txt")), false);
 
-            assertTrue(block.startsWith("__     ___     _\n"), block);
+            assertTrue(block.startsWith(ART_FIRST_LINE + "\n"), block);
             assertEquals(List.of("Banner vidocq.banner.location=file:custom/nope.txt not found; using the built-in banner"),
                     records.messages(Level.WARNING));
         }
@@ -173,7 +174,7 @@ class CustomBannerTest {
         try (Records records = new Records()) {
             String block = StartupBanner.render(ID, config(Map.of(StartupBanner.LOCATION_KEY, location)), false);
 
-            assertTrue(block.startsWith("__     ___     _\n"), block);
+            assertTrue(block.startsWith(ART_FIRST_LINE + "\n"), block);
             assertTrue(block.contains("\n Vidocq 0.4.0-SNAPSHOT (9beafc47+dirty, built 2026-09-17T14:02:11Z)\n"), block);
             List<String> warnings = records.messages(Level.WARNING);
             assertEquals(1, warnings.size(), warnings.toString());
@@ -192,7 +193,7 @@ class CustomBannerTest {
                     () -> launch(BannerMode.CONSOLE), BannerTestSupport::pipe, out.stream));
 
             List<String> lines = out.text().lines().toList();
-            assertEquals("__     ___     _", lines.getFirst(), out.text());
+            assertEquals(ART_FIRST_LINE, lines.getFirst(), out.text());
             assertTrue(lines.stream().anyMatch(l -> l.startsWith(" Vidocq ")), out.text());
             assertTrue(lines.getLast().startsWith(" Java "), out.text());
             assertTrue(StartupBanner.emittedIdentity().isPresent());
