@@ -42,7 +42,10 @@ import static io.vidocq.runtime.core.banner.BannerTestSupport.ESC;
 import static io.vidocq.runtime.core.banner.BannerTestSupport.IDEA_AGENT;
 import static io.vidocq.runtime.core.banner.BannerTestSupport.config;
 import static io.vidocq.runtime.core.banner.BannerTestSupport.console;
+import static io.vidocq.runtime.core.banner.BannerTestSupport.dev;
 import static io.vidocq.runtime.core.banner.BannerTestSupport.launch;
+import static io.vidocq.runtime.core.banner.BannerTestSupport.mode;
+import static io.vidocq.runtime.core.banner.BannerTestSupport.prodByAbsence;
 import static io.vidocq.runtime.core.banner.BannerTestSupport.pipe;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -71,18 +74,18 @@ class StartupBannerTest {
             "AUTO,    false, false, false, true,  CONSOLE",
             "AUTO,    false, false, false, false, IDENTITY_ONLY"})
     void decisionTable(BannerMode mode, boolean embedded, boolean test, boolean terminal, boolean dev, Output expected) {
-        Launch launch = new Launch(null, embedded, test, dev, null, null, null);
+        Launch launch = new Launch(null, embedded, test,
+                dev ? dev("IntelliJ agent") : prodByAbsence(), null, null, null);
 
         assertEquals(expected, StartupBanner.decide(mode, launch, terminal));
     }
 
     @Test
-    void devLaunchIsADevProfileTheReloadLoopOrIntellijsRunConsole() {
-        assertTrue(StartupBanner.devLaunch("dev", null, pipe()));
-        assertTrue(StartupBanner.devLaunch(null, "/tmp/reload", pipe()));
-        assertTrue(StartupBanner.devLaunch(null, null, console(false, null, null, "Mac OS X", IDEA_AGENT)));
-        assertFalse(StartupBanner.devLaunch("prod", null, pipe()));
-        assertFalse(StartupBanner.devLaunch(null, null, pipe()));
+    void aDevLaunchIsWhatTheLaunchModeResolverCallsDev() {
+        assertTrue(launch(null, dev("dev reload loop"), null).devLaunch());
+        assertFalse(launch(null, mode(LaunchMode.TEST, "JUnit on the stack"), null).devLaunch());
+        assertFalse(launch(null, prodByAbsence(), null).devLaunch());
+        assertFalse(launch(null).devLaunch(), "an unresolved mode is no dev launch");
     }
 
     @Test
@@ -176,6 +179,24 @@ class StartupBannerTest {
             assertTrue(identity.getFirst().matches("Vidocq .+ \\| Java .+"), identity.getFirst());
             assertFalse(identity.getFirst().contains("\n"));
             assertTrue(StartupBanner.emittedIdentity().isPresent());
+        }
+    }
+
+    @Test
+    void theLaunchModeAndTheDebuggerAreOnTheContextLineOfBothOutputs() {
+        Out out = new Out();
+
+        StartupBanner.show(config(Map.of()), launch(BannerMode.CONSOLE, dev("IntelliJ agent"),
+                new DebugAgent("*:18095", false)), pipe(), out.stream);
+
+        String context = out.text().lines().toList().get(ART_LINES + 1);
+        assertTrue(context.contains(" | dev (IntelliJ agent) | debug *:18095"), context);
+        try (Records records = new Records()) {
+            StartupBanner.show(config(Map.of()), launch(null, mode(LaunchMode.PROD, "profile prod"),
+                    new DebugAgent("127.0.0.1:18095", true)), pipe(), out.stream);
+
+            String line = records.identityRecords().getFirst();
+            assertTrue(line.contains(" | prod (profile prod) | debug 127.0.0.1:18095 suspend=y"), line);
         }
     }
 

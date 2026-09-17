@@ -82,6 +82,11 @@ class CustomBannerTest {
         assertEquals("mcp-time-server", StartupBanner.placeholder("app.name", ID, false, config));
         assertEquals("0.1.0-SNAPSHOT", StartupBanner.placeholder("app.version", ID, false, config));
         assertEquals(null, StartupBanner.placeholder("vidocq.launch", ID, false, config));
+        assertEquals(null, StartupBanner.placeholder("vidocq.debug", ID, false, config));
+        StartupIdentity inDev = identity(jar("0.4.0-SNAPSHOT", "9beafc47", true, null, null, null), null,
+                BannerTestSupport.dev("IntelliJ agent"), "debug *:5005", "mcp-time-server", "0.1.0-SNAPSHOT");
+        assertEquals("dev (IntelliJ agent)", StartupBanner.placeholder("vidocq.launch", inDev, false, config));
+        assertEquals("debug *:5005", StartupBanner.placeholder("vidocq.debug", inDev, false, config));
         assertEquals("18090", StartupBanner.placeholder("vidocq.chappe.listener.default.port", ID, false, config));
         assertEquals("", StartupBanner.placeholder("ansi.red", ID, false, config), "no colour: empty");
         assertEquals(ESC + "[31m", StartupBanner.placeholder("ansi.red", ID, true, config));

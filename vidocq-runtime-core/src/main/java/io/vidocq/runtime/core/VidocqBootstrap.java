@@ -21,6 +21,7 @@ package io.vidocq.runtime.core;
 
 import io.vidocq.vauban.core.container.VaubanContainer;
 import io.vidocq.vauban.core.container.VaubanContainerBuilder;
+import io.vidocq.runtime.core.banner.LaunchModeResolver;
 import io.vidocq.runtime.core.banner.StartupBanner;
 import io.vidocq.runtime.core.config.ConfigKeyAudit;
 import io.vidocq.runtime.core.config.VidocqConfigImpl;
@@ -67,7 +68,8 @@ public final class VidocqBootstrap {
             ConsoleLogging.LOG_CONSOLE_KEY,
             ConsoleSupport.COLOR_KEY,
             StartupBanner.MODE_KEY,
-            StartupBanner.LOCATION_KEY);
+            StartupBanner.LOCATION_KEY,
+            LaunchModeResolver.MODE_KEY);
 
     private final CountDownLatch shutdownLatch = new CountDownLatch(1);
     private Thread shutdownHook;

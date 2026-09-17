@@ -44,7 +44,7 @@ import java.util.function.Supplier;
  *
  * <pre>
  *  Vidocq 0.4.0-SNAPSHOT (9beafc47+dirty, built 2026-09-17T14:02:11Z)
- *  Java 25+36-LTS | profile dev | mcp-time-server 0.1.0-SNAPSHOT
+ *  Java 25+36-LTS | dev (IntelliJ agent) | debug *:5005 | mcp-time-server 0.1.0-SNAPSHOT
  * </pre>
  *
  * <p>{@link #showOnce} runs in {@code VidocqBootstrap.configure()}, right after the configuration is
@@ -65,9 +65,6 @@ public final class StartupBanner {
     static final String ART_RESOURCE = "art.txt";
     /** Present on the class path or module path of a JUnit Platform test run (Surefire, an IDE). */
     static final String TEST_RUNTIME_PROBE = "org/junit/platform/launcher/Launcher.class";
-    /** Set by {@code vidocq:dev} for its reload loop. */
-    static final String RELOAD_FILE_PROPERTY = "vidocq.dev.reload.file";
-    static final String PROFILE_KEY = "vidocq.profile";
     /** The width of the generated lines. */
     static final int WIDTH = 80;
 
@@ -93,28 +90,31 @@ public final class StartupBanner {
      * @param override           the mode forced by {@code VidocqBootstrap.banner(BannerMode)}, or {@code null}
      * @param embeddedDeployment {@code configure(List)}: Arquillian, the TCK
      * @param testRuntime        a JUnit Platform launcher is present
-     * @param devLaunch          a dev launch is detected
-     * @param profile            {@code vidocq.profile}, or {@code null}
+     * @param launchMode         the resolved {@link LaunchMode} and the signal it was read from
+     * @param debug              the JDWP agent of this JVM, or {@code null} when it runs without one
      * @param appModule          the application module, or {@code null}
      * @param appLayer           the application layer installed by Vidocq, or {@code null}
      */
-    public record Launch(BannerMode override, boolean embeddedDeployment, boolean testRuntime, boolean devLaunch,
-                         String profile, Module appModule, ModuleLayer appLayer) {}
+    public record Launch(BannerMode override, boolean embeddedDeployment, boolean testRuntime,
+                         LaunchModeResolver.Resolution launchMode, DebugAgent debug, Module appModule,
+                         ModuleLayer appLayer) {
+
+        /** Whether the launch was resolved as a development one, which shows the art without a terminal. */
+        public boolean devLaunch() {
+            return launchMode != null && launchMode.mode() == LaunchMode.DEV;
+        }
+    }
 
     private StartupBanner() {}
 
-    /**
-     * The launch of this JVM.
-     *
-     * <p>A dev launch is, until a launch-mode resolver exists, {@code vidocq.profile=dev}, the
-     * {@code vidocq:dev} reload loop ({@value #RELOAD_FILE_PROPERTY}) or IntelliJ's Run console,
-     * which is not a terminal.
-     */
+    /** The launch of this JVM: its {@link LaunchModeResolver resolved mode} and its debugger. */
     public static Launch launch(VidocqConfig config, BannerMode override, boolean embeddedDeployment,
                                 Module appModule, ModuleLayer appLayer) {
-        String profile = config.getValue(PROFILE_KEY).map(String::strip).filter(p -> !p.isEmpty()).orElse(null);
-        boolean devLaunch = devLaunch(profile, System.getProperty(RELOAD_FILE_PROPERTY), ConsoleSupport.current());
-        return new Launch(override, embeddedDeployment, testRuntime(), devLaunch, profile, appModule, appLayer);
+        ConsoleSupport console = ConsoleSupport.current();
+        LaunchModeResolver.Resolution launchMode = LaunchModeResolver.resolve(
+                LaunchModeResolver.Inputs.current(config::getValue, appModule, console));
+        return new Launch(override, embeddedDeployment, testRuntime(), launchMode,
+                DebugAgent.detect(console.jvmArguments()).orElse(null), appModule, appLayer);
     }
 
     /** Shows the banner unless this JVM already did; never throws. */
@@ -193,10 +193,6 @@ public final class StartupBanner {
 
     static boolean testRuntime() {
         return ClassLoader.getSystemResource(TEST_RUNTIME_PROBE) != null;
-    }
-
-    static boolean devLaunch(String profile, String reloadFile, ConsoleSupport console) {
-        return "dev".equals(profile) || reloadFile != null || console.intellijConsole();
     }
 
     /** {@value #MODE_KEY}, {@code auto} when unset; an unknown value logs one warning and means {@code auto}. */
@@ -288,7 +284,8 @@ public final class StartupBanner {
             case "java.version" -> identity.java();
             case "app.name" -> identity.appName();
             case "app.version" -> identity.appVersion();
-            case "vidocq.launch" -> identity.launch();
+            case "vidocq.launch" -> identity.launch() == null ? null : identity.launch().text();
+            case "vidocq.debug" -> identity.debug();
             default -> {
                 try {
                     yield config.apply(key).orElse(null);

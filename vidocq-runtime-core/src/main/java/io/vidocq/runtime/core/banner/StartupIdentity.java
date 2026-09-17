@@ -37,13 +37,15 @@ import java.util.Set;
  * @param vidocq      the build of {@code io.vidocq.runtime.core}, the module that carries the banner
  * @param javaVersion {@code Runtime.version()} of the running JVM
  * @param javaVendor  {@code java.vendor}, or {@code null}
- * @param launch      {@code profile <p>}, {@code dev launch}, or {@code null}
+ * @param launch      the resolved {@link LaunchMode} and its reason, or {@code null} when unknown
+ * @param debug       the debugger segment ({@code debug *:5005}), or {@code null} without a JDWP agent
  * @param appName     the application's artifactId (packaged) or module name, or {@code null}
  * @param appVersion  the application's version, or {@code null}
  * @param bricks      the bricks worth a look, as {@code <brick> <describe()>}
  */
-public record StartupIdentity(BuildInfo vidocq, String javaVersion, String javaVendor, String launch,
-                              String appName, String appVersion, List<String> bricks) {
+public record StartupIdentity(BuildInfo vidocq, String javaVersion, String javaVendor,
+                              LaunchModeResolver.Resolution launch, String debug, String appName, String appVersion,
+                              List<String> bricks) {
 
     /**
      * One known class per brick, for class-path launches, where no module tells the bricks apart.
@@ -71,7 +73,8 @@ public record StartupIdentity(BuildInfo vidocq, String javaVersion, String javaV
             appVersion = info.version();
         }
         return new StartupIdentity(vidocq, Runtime.version().toString(),
-                BuildInfo.real(System.getProperty("java.vendor")), launchText(launch.profile(), launch.devLaunch()),
+                BuildInfo.real(System.getProperty("java.vendor")), launch.launchMode(),
+                launch.debug() == null ? null : launch.debug().segment(),
                 appName, appVersion, bricks(vidocq, StartupBanner.class.getModule(), launch));
     }
 
@@ -97,33 +100,48 @@ public record StartupIdentity(BuildInfo vidocq, String javaVersion, String javaV
         return java(true);
     }
 
-    /** {@code Java <version> [(<vendor>)] [| <launch>] [| <app> [<version>]]}, whatever its width. */
+    /**
+     * {@code Java <version> [(<vendor>)] [| <mode> (<reason>)] [| debug <address>] [| <app> [<version>]]},
+     * whatever its width.
+     */
     public String contextLine() {
-        return context(true, appName);
+        return context(true, appName, true, true);
     }
 
     /**
-     * The richest context line of at most {@code max} columns: the JVM vendor goes first, then the
-     * module segments of the application name are abbreviated, then the name is cut with
-     * {@code ...}, always keeping the application version; the whole line is cut last.
+     * The richest context line of at most {@code max} columns: the debugger goes first, then the
+     * reason of the launch mode, then the JVM vendor, then the module segments of the application
+     * name are abbreviated, then the name is cut with {@code ...}, always keeping the application
+     * version; the whole line is cut last.
+     *
+     * <p>A {@code prod} that no signal proves has no short form: the whole segment goes with its
+     * reason rather than claim, in one word, more than is known.
      */
     public String contextLine(int max) {
-        String line = context(true, appName);
+        String line = context(true, appName, true, true);
         if (line.length() <= max) {
             return line;
         }
-        line = context(false, appName);
+        line = context(true, appName, true, false);
+        if (line.length() <= max) {
+            return line;
+        }
+        line = context(true, appName, false, false);
+        if (line.length() <= max) {
+            return line;
+        }
+        line = context(false, appName, false, false);
         if (line.length() <= max || appName == null) {
             return StartupBanner.fit(line, max);
         }
         String name = abbreviate(appName);
-        line = context(false, name);
+        line = context(false, name, false, false);
         if (line.length() <= max) {
             return line;
         }
         int kept = name.length() - (line.length() - max) - 3;
         if (kept >= MIN_NAME_COLUMNS) {
-            return context(false, name.substring(0, kept) + "...");
+            return context(false, name.substring(0, kept) + "...", false, false);
         }
         return StartupBanner.fit(line, max);
     }
@@ -131,14 +149,6 @@ public record StartupIdentity(BuildInfo vidocq, String javaVersion, String javaV
     /** {@code Vidocq bricks: <brick> <describe()>, ...}, when some brick is worth a look. */
     public Optional<String> bricksLine() {
         return bricks.isEmpty() ? Optional.empty() : Optional.of("Vidocq bricks: " + String.join(", ", bricks));
-    }
-
-    /** {@code profile <p>} when a profile is set, {@code dev launch} when one is detected, otherwise {@code null}. */
-    static String launchText(String profile, boolean devLaunch) {
-        if (profile != null && !profile.isBlank()) {
-            return "profile " + profile.strip();
-        }
-        return devLaunch ? "dev launch" : null;
     }
 
     /** {@code io.vidocq.tools.lc4jcdi.mcptimeserver} becomes {@code i.v.t.l.mcptimeserver}. */
@@ -231,11 +241,15 @@ public record StartupIdentity(BuildInfo vidocq, String javaVersion, String javaV
         return "Java " + javaVersion + (withVendor && javaVendor != null ? " (" + javaVendor + ")" : "");
     }
 
-    private String context(boolean withVendor, String name) {
-        List<String> parts = new ArrayList<>(3);
+    private String context(boolean withVendor, String name, boolean withReason, boolean withDebug) {
+        List<String> parts = new ArrayList<>(4);
         parts.add(java(withVendor));
-        if (launch != null) {
-            parts.add(launch);
+        String mode = launch == null ? null : withReason ? launch.text() : launch.shortText();
+        if (mode != null) {
+            parts.add(mode);
+        }
+        if (withDebug && debug != null) {
+            parts.add(debug);
         }
         if (name != null) {
             parts.add(appVersion == null ? name : name + " " + appVersion);

@@ -61,8 +61,27 @@ final class BannerTestSupport {
         return key -> Optional.ofNullable(values.get(key));
     }
 
+    /** A launch whose mode was not resolved: the context line has no launch segment. */
     static StartupBanner.Launch launch(BannerMode override) {
-        return new StartupBanner.Launch(override, false, false, false, null, null, null);
+        return launch(override, null, null);
+    }
+
+    static StartupBanner.Launch launch(BannerMode override, LaunchModeResolver.Resolution mode, DebugAgent debug) {
+        return new StartupBanner.Launch(override, false, false, mode, debug, null, null);
+    }
+
+    /** A mode read from a signal, as {@link LaunchModeResolver} returns it. */
+    static LaunchModeResolver.Resolution mode(LaunchMode mode, String reason) {
+        return new LaunchModeResolver.Resolution(mode, reason, true);
+    }
+
+    static LaunchModeResolver.Resolution dev(String reason) {
+        return mode(LaunchMode.DEV, reason);
+    }
+
+    /** The {@code prod} no signal proves, which never shows without its reason. */
+    static LaunchModeResolver.Resolution prodByAbsence() {
+        return new LaunchModeResolver.Resolution(LaunchMode.PROD, LaunchModeResolver.NO_SIGNAL, false);
     }
 
     static ConsoleSupport console(boolean terminal, String noColor, String term, String os, String... arguments) {
@@ -86,8 +105,14 @@ final class BannerTestSupport {
                 null, Path.of(path).toUri(), true, null, null);
     }
 
-    static StartupIdentity identity(BuildInfo vidocq, String vendor, String launch, String appName, String appVersion) {
-        return new StartupIdentity(vidocq, "25+36-LTS", vendor, launch, appName, appVersion, List.of());
+    static StartupIdentity identity(BuildInfo vidocq, String vendor, LaunchModeResolver.Resolution launch,
+                                    String appName, String appVersion) {
+        return identity(vidocq, vendor, launch, null, appName, appVersion);
+    }
+
+    static StartupIdentity identity(BuildInfo vidocq, String vendor, LaunchModeResolver.Resolution launch,
+                                    String debug, String appName, String appVersion) {
+        return new StartupIdentity(vidocq, "25+36-LTS", vendor, launch, debug, appName, appVersion, List.of());
     }
 
     static Instant instant(String value) {

@@ -28,8 +28,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import static io.vidocq.runtime.core.banner.BannerTestSupport.dev;
 import static io.vidocq.runtime.core.banner.BannerTestSupport.identity;
 import static io.vidocq.runtime.core.banner.BannerTestSupport.jar;
+import static io.vidocq.runtime.core.banner.BannerTestSupport.mode;
+import static io.vidocq.runtime.core.banner.BannerTestSupport.prodByAbsence;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -46,65 +49,82 @@ class StartupIdentityTest {
 
     @Test
     void contextLineParts() {
-        assertEquals("Java 25+36-LTS (Eclipse Adoptium) | profile dev | mcp-time-server 0.1.0-SNAPSHOT",
-                identity(SNAPSHOT_DIRTY, "Eclipse Adoptium", "profile dev", "mcp-time-server", "0.1.0-SNAPSHOT")
+        assertEquals("Java 25+36-LTS (Eclipse Adoptium) | dev (profile dev) | mcp-time-server 0.1.0-SNAPSHOT",
+                identity(SNAPSHOT_DIRTY, "Eclipse Adoptium", dev("profile dev"), "mcp-time-server", "0.1.0-SNAPSHOT")
                         .contextLine());
-        assertEquals("Java 25+36-LTS | dev launch | io.vidocq.tools.lc4jcdi.mcptimeserver",
-                identity(SNAPSHOT_DIRTY, null, "dev launch", "io.vidocq.tools.lc4jcdi.mcptimeserver", null).contextLine());
+        assertEquals("Java 25+36-LTS | dev (IntelliJ agent) | io.vidocq.tools.lc4jcdi.mcptimeserver",
+                identity(SNAPSHOT_DIRTY, null, dev("IntelliJ agent"), "io.vidocq.tools.lc4jcdi.mcptimeserver", null)
+                        .contextLine());
+        assertEquals("Java 25+36-LTS | prod (no dev or test signal)",
+                identity(SNAPSHOT_DIRTY, null, prodByAbsence(), null, null).contextLine(),
+                "a prod nothing proves says what it rests on");
         assertEquals("Java 25+36-LTS", identity(SNAPSHOT_DIRTY, null, null, null, "1.0").contextLine());
     }
 
     @Test
-    void launchText() {
-        assertEquals("profile dev", StartupIdentity.launchText("dev", true));
-        assertEquals("profile prod", StartupIdentity.launchText("prod", false));
-        assertEquals("dev launch", StartupIdentity.launchText(null, true));
-        assertEquals("dev launch", StartupIdentity.launchText(" ", true));
-        assertNull(StartupIdentity.launchText(null, false), "no signal proves nothing: never 'prod' by default");
+    void theDebuggerIsShownInEveryMode() {
+        assertEquals("Java 25+36-LTS | prod (profile prod) | debug *:5005 suspend=y | mcp-time-server 0.1.0-SNAPSHOT",
+                identity(SNAPSHOT_DIRTY, null, mode(LaunchMode.PROD, "profile prod"), "debug *:5005 suspend=y",
+                        "mcp-time-server", "0.1.0-SNAPSHOT").contextLine());
+        assertNull(identity(SNAPSHOT_DIRTY, null, dev("IntelliJ agent"), null, "app", "1.0").debug());
     }
 
     @Test
-    void theVendorGoesFirst() {
-        StartupIdentity id = identity(SNAPSHOT_DIRTY, "Eclipse Adoptium", "profile dev", "mcp-time-server",
-                "0.1.0-SNAPSHOT");
+    void theDebuggerGoesFirstThenTheReasonThenTheVendor() {
+        StartupIdentity id = identity(SNAPSHOT_DIRTY, "Eclipse Adoptium", dev("profile dev"), "debug *:5005",
+                "mcp-time-server", "0.1.0-SNAPSHOT");
 
-        // with the vendor the rendered line would be 81 columns
-        assertEquals("Java 25+36-LTS | profile dev | mcp-time-server 0.1.0-SNAPSHOT", id.contextLine(79));
-        assertEquals("Java 25+36-LTS (Eclipse Adoptium) | mcp-time-server 0.1.0-SNAPSHOT",
-                identity(SNAPSHOT_DIRTY, "Eclipse Adoptium", null, "mcp-time-server", "0.1.0-SNAPSHOT").contextLine(79));
+        assertEquals("Java 25+36-LTS (Eclipse Adoptium) | dev (profile dev) | debug *:5005"
+                + " | mcp-time-server 0.1.0-SNAPSHOT", id.contextLine(101));
+        assertEquals("Java 25+36-LTS (Eclipse Adoptium) | dev (profile dev) | mcp-time-server 0.1.0-SNAPSHOT",
+                id.contextLine(100));
+        assertEquals("Java 25+36-LTS (Eclipse Adoptium) | dev | mcp-time-server 0.1.0-SNAPSHOT", id.contextLine(85));
+        assertEquals("Java 25+36-LTS | dev | mcp-time-server 0.1.0-SNAPSHOT", id.contextLine(71));
+    }
+
+    @Test
+    void aProdNoSignalProvesLosesItsSegmentRatherThanItsReason() {
+        StartupIdentity id = identity(SNAPSHOT_DIRTY, "Eclipse Adoptium", prodByAbsence(), "debug *:5005",
+                "app", "1.0");
+
+        assertEquals("Java 25+36-LTS (Eclipse Adoptium) | prod (no dev or test signal) | app 1.0",
+                id.contextLine(88));
+        assertEquals("Java 25+36-LTS (Eclipse Adoptium) | app 1.0", id.contextLine(73),
+                "'prod' alone would claim more than the absence of a signal proves");
     }
 
     @Test
     void thenTheModuleNameIsAbbreviatedToKeepTheVersion() {
-        StartupIdentity id = identity(SNAPSHOT_DIRTY, "Eclipse Adoptium", "dev launch",
+        StartupIdentity id = identity(SNAPSHOT_DIRTY, "Eclipse Adoptium", dev("IntelliJ agent"),
                 "io.vidocq.tools.lc4jcdi.mcptimeserver.administration", "0.1.0-SNAPSHOT");
 
-        assertEquals("Java 25+36-LTS | dev launch | i.v.t.l.m.administration 0.1.0-SNAPSHOT", id.contextLine(70));
+        assertEquals("Java 25+36-LTS | dev | i.v.t.l.m.administration 0.1.0-SNAPSHOT", id.contextLine(65));
         assertEquals("i.v.t.l.mcptimeserver", StartupIdentity.abbreviate("io.vidocq.tools.lc4jcdi.mcptimeserver"));
         assertEquals("app", StartupIdentity.abbreviate("app"));
     }
 
     @Test
     void thenTheNameIsCutBeforeTheVersion() {
-        StartupIdentity id = identity(SNAPSHOT_DIRTY, "Eclipse Adoptium", "dev launch",
+        StartupIdentity id = identity(SNAPSHOT_DIRTY, "Eclipse Adoptium", dev("IntelliJ agent"),
                 "vidocq-runtime-cassini-rest-example", "0.4.0-SNAPSHOT");
 
-        assertEquals("Java 25+36-LTS | dev launch | vidocq-runtime-cassini-rest-exa... 0.4.0-SNAPSHOT", id.contextLine(79));
+        assertEquals("Java 25+36-LTS | dev | vidocq-runtime-cassini-rest-exa... 0.4.0-SNAPSHOT",
+                id.contextLine(72));
     }
 
     @Test
     void thenTheLineIsCut() {
-        StartupIdentity id = identity(SNAPSHOT_DIRTY, "Eclipse Adoptium",
-                "profile a-profile-name-so-long-that-the-application-cannot-fit-anymore",
+        StartupIdentity id = identity(SNAPSHOT_DIRTY, "Eclipse Adoptium", dev("IntelliJ agent"),
                 "an-application-whose-artifact-id-has-no-dots-to-abbreviate", "0.1.0-SNAPSHOT");
 
-        String line = id.contextLine(79);
+        String line = id.contextLine(40);
 
-        assertEquals(79, line.length());
-        assertTrue(line.startsWith("Java 25+36-LTS | profile a-profile-name-so-long"), line);
+        assertEquals(40, line.length());
+        assertTrue(line.startsWith("Java 25+36-LTS | dev | an-applica"), line);
         assertTrue(line.endsWith("..."), line);
-        assertEquals("Java 25+36-LTS | profile " + "p".repeat(51) + "...",
-                identity(SNAPSHOT_DIRTY, null, "profile " + "p".repeat(80), null, null).contextLine(79));
+        assertEquals("Java 25+36-LTS | dev",
+                identity(SNAPSHOT_DIRTY, null, dev("p".repeat(80)), null, null).contextLine(79),
+                "a reason that cannot fit is dropped, never cut");
     }
 
     // ------------------------------------------------------------------ bricks line
@@ -132,19 +152,20 @@ class StartupIdentityTest {
     void theBricksLineIsOneRecordOnlyWhenABrickIsWorthALook() {
         assertEquals(Optional.empty(), identity(SNAPSHOT_DIRTY, null, null, null, null).bricksLine());
         assertEquals(Optional.of("Vidocq bricks: chappe 0.4.0-SNAPSHOT (2d8ec095+dirty), vauban 0.3.0"),
-                new StartupIdentity(SNAPSHOT_DIRTY, "25", null, null, null, null,
+                new StartupIdentity(SNAPSHOT_DIRTY, "25", null, null, null, null, null,
                         List.of("chappe 0.4.0-SNAPSHOT (2d8ec095+dirty)", "vauban 0.3.0")).bricksLine());
     }
 
     @Test
     void theIdentityOfThisJvmIsCollectedFromItsArchives() {
-        StartupIdentity id = StartupIdentity.collect(new StartupBanner.Launch(null, false, true, false, "dev",
-                StartupBanner.class.getModule(), null));
+        StartupIdentity id = StartupIdentity.collect(new StartupBanner.Launch(null, false, true,
+                dev("profile dev"), new DebugAgent("*:18095", true), StartupBanner.class.getModule(), null));
 
         assertTrue(id.identityLine().startsWith("Vidocq "), id.identityLine());
         assertFalse(id.identityLine().contains("null"), id.identityLine());
         assertEquals(Runtime.version().toString(), id.javaVersion());
-        assertEquals("profile dev", id.launch());
+        assertEquals("dev (profile dev)", id.launch().text());
+        assertEquals("debug *:18095 suspend=y", id.debug());
         if (StartupBanner.class.getModule().isNamed()) {
             assertEquals("io.vidocq.runtime.core", id.appName(), "an exploded module is named by its module name");
         }
@@ -172,8 +193,8 @@ class StartupIdentityTest {
 
     @Test
     void theBlockWithARealisticIdentityFitsIn8LinesOf80Columns() {
-        StartupIdentity id = identity(SNAPSHOT_DIRTY, "Eclipse Adoptium", "profile dev",
-                "io.vidocq.tools.lc4jcdi.mcptimeserver", "0.1.0-SNAPSHOT");
+        StartupIdentity id = identity(SNAPSHOT_DIRTY, "Eclipse Adoptium", dev("target/classes with a pom.xml above"),
+                "debug *:5005 suspend=y", "io.vidocq.tools.lc4jcdi.mcptimeserver", "0.1.0-SNAPSHOT");
 
         String block = StartupBanner.render(id, BannerTestSupport.config(Map.of()), false);
 

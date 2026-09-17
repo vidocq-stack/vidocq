@@ -110,7 +110,8 @@ class BuildInfoTest {
                     (mask & 128) != 0 ? Instant.parse("2026-09-15T15:53:21Z") : null,
                     null);
             String lines = StartupBanner.identityLines(
-                    identity(info, "Eclipse Adoptium", "profile dev", "io.vidocq.tools.lc4jcdi.mcptimeserver", "0.1.0-SNAPSHOT"),
+                    identity(info, "Eclipse Adoptium", BannerTestSupport.dev("profile dev"), "debug *:5005",
+                            "io.vidocq.tools.lc4jcdi.mcptimeserver", "0.1.0-SNAPSHOT"),
                     false);
             assertFalse(lines.contains("null"), lines);
             for (String line : lines.lines().toList()) {

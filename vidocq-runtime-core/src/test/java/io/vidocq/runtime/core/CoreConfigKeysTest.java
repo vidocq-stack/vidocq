@@ -62,6 +62,17 @@ class CoreConfigKeysTest {
     }
 
     @Test
+    void theLaunchModeKeyIsDeclaredAndATypoIsStillReported() {
+        Set<String> declared = VidocqBootstrap.declaredConfigKeys(List.of());
+
+        assertEquals(List.of("vidocq.launch.moed"),
+                ConfigKeyAudit.unconsumedKeys(List.of("vidocq.launch.mode", "vidocq.launch.moed"), declared));
+        assertEquals("Configuration key 'vidocq.launch.moed' is read by no extension and has no effect. "
+                + "Known keys in this namespace: vidocq.launch.mode",
+                ConfigKeyAudit.warningFor("vidocq.launch.moed", declared));
+    }
+
+    @Test
     void coreKeysAreMergedWithTheExtensionsKeys() {
         VidocqExtension chappe = new VidocqExtension() {
             @Override
