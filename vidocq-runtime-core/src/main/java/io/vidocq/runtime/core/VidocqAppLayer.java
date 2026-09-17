@@ -218,6 +218,20 @@ public final class VidocqAppLayer {
         }
     }
 
+    /**
+     * Opens the class' package to the runtime module, on top of {@link #exportToRuntime}. An
+     * export is enough to reach a {@code public} member; a main that is not public — which
+     * Java 25 accepts — additionally needs {@code setAccessible}, which a named module grants
+     * only for an open package (vidocq#88).
+     */
+    static void openToRuntime(Class<?> layerClass) {
+        var layer = installed;
+        if (layer != null && layerClass.getModule().getLayer() == layer.layer()) {
+            layer.controller().addOpens(layerClass.getModule(),
+                    layerClass.getPackageName(), VidocqAppLayer.class.getModule());
+        }
+    }
+
     /** The Vidocq bricks: module-name prefixes kept in the boot layer on top of Vauban's own rules. */
     private static final List<String> RUNTIME_MODULE_PREFIXES = List.of(
             "java.", "jdk.", "jakarta.", "org.eclipse.",
@@ -230,9 +244,9 @@ public final class VidocqAppLayer {
             "io.vidocq.runtime.extensions");
 
     /**
-     * Invokes the {@value #APP_MAIN_PROPERTY} class' {@code main(String[])} through the
-     * installed layer loader. Returns {@code false} when no application main is
-     * configured.
+     * Invokes the {@value #APP_MAIN_PROPERTY} class' main method through the installed layer
+     * loader, in any of the shapes the Java SE launcher accepts ({@link ApplicationMain}).
+     * Returns {@code false} when no application main is configured.
      */
     static boolean runAppMainIfConfigured(String[] args) {
         var mainName = System.getProperty(APP_MAIN_PROPERTY, "").strip();
@@ -242,8 +256,15 @@ public final class VidocqAppLayer {
         try {
             var mainClass = Class.forName(mainName, false,
                     Thread.currentThread().getContextClassLoader());
-            exportToRuntime(mainClass);
-            mainClass.getMethod("main", String[].class).invoke(null, (Object) args);
+            var main = ApplicationMain.of(mainClass);
+            // The class named by the property is instantiated for an instance main, but the
+            // method can be declared higher up, in another package of another module: both
+            // sides have to be reachable (vidocq#88).
+            for (var type : main.typesToOpen()) {
+                exportToRuntime(type);
+                openToRuntime(type);
+            }
+            main.invoke(args);
             return true;
         } catch (ReflectiveOperationException e) {
             var cause = e instanceof java.lang.reflect.InvocationTargetException ite

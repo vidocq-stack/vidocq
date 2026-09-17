@@ -45,6 +45,30 @@ public class App {
 
 `Vidocq.main` is a simple facade over `VidocqBootstrap`. User code does not need a `@SpringBootApplication` nor an application class — extensions and beans are discovered from the module path (`ServiceLoader` + the compile-time bean index). For a zero-config IDE launch, annotate a trampoline `main` with `@VidocqMain` and call `Vidocq.run(App.class, args)` — the application is then re-loaded inside the Vauban application layer.
 
+[#main-shapes]
+=== Which main methods are accepted [.tag-new]#NEW#
+
+Vidocq chooses the application's main itself whenever the application is handed over as a path rather than as a module to launch: `mvn vidocq:run`, `vidocq:dev` with `-Dvidocq.dev.hotReload=false`, and the packaged launcher of an application that has no `@VidocqMain` trampoline. All three pass `-Dvidocq.app.main`, and the runtime reaches that main by reflection, inside the application layer. (With a trampoline the script launches `--module app/acme.App` and the JVM launcher makes the choice; `vidocq:dev`'s hot-reload loop, the default, ignores `vidocq.app.main` on purpose and reboots the layer instead.)
+
+The choice accepts the four shapes the Java SE launcher accepts since Java 25 (JEP 512), and, like the launcher, never requires `public`:
+
+[source,java]
+----
+static void main(String[] args) { }   // and public, protected or package-private
+static void main() { }
+void main(String[] args) { }          // an instance method: run on a fresh instance
+void main() { }
+----
+
+Selection follows the launcher's own algorithm, and its consequences are worth knowing:
+
+* `main(String[])` is searched before `main()`, and each search walks the class, then its superclasses, then the interfaces it implements. A `default void main()` on an implemented interface therefore starts the application; a `static` main declared in an interface never does.
+* A main declared in the class ends the search whether or not it can be used. A `private main(String[])` that hides a perfectly good inherited one sends the launch to `main()` — which is what `java` does too.
+* An instance main is run on an instance built with the class' no-argument constructor, which must not be private.
+* A method named `main` that is `private` or that returns something other than `void` is not a main method. The failure names it, and the class that declares it, rather than reporting that nothing was found.
+
+This matters in an IDE on JDK 25: the inspection that flags the `public` of a main as an unnecessary modifier is right, and following it no longer breaks the launch. For an application module the layer defines, the controller exports and opens the package of the class named by `vidocq.app.main` and the package of the class that declares the selected method — two different packages, in two different modules, as soon as the main is inherited.
+
 == Lifecycle hooks
 
 An extension subscribes to phases by overriding the `VidocqExtension` methods:
