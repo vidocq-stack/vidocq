@@ -13,3 +13,7 @@ Client proxies for third-party produced types, without `opens` (vauban#42, the j
 * **Build-time proxies for cross-module producers** — a fully-public class or an interface produced from a CDI-agnostic module gets its proxy at compile time in the producer's package; no `java.lang.reflect.Proxy` on the build-time path. The eligibility check covers inherited members.
 * **`vauban:enhance-dependencies`** (opt-in) — a copy of a dependency jar with the proxy co-located in the type's package; the copy records its provenance in the manifest (`Vauban-Enhanced-From`, `Vauban-Enhanced-Digest`) and drops the inherited signature. The AOT path when a placed class cannot be defined at runtime.
 * **Boot-time opens are opt-in** — `-Dvauban.opens.auto=true`; left off, the container refuses and names every remedy, the launcher first. xref:vauban::reference.adoc[Reference].
+
+== Vidocq Runtime
+
+* **`vidocq:idea`** (experimental) — one IntelliJ IDEA shared run configuration per application of the reactor, written into `.run/` from what the poms already declare: the main class, the IntelliJ module, Make, then `vidocq:generate` before launch. It never overwrites a file you wrote or edited, never touches `.idea/`, and `-Dvidocq.idea.check=true` fails a CI build when `.run/` no longer matches the poms. xref:modules/vidocq-runtime-maven-plugin.adoc#idea[The `vidocq:idea` goal].

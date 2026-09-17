@@ -79,7 +79,8 @@ inherited indexer entry is preserved. Canonical example:
 ## Maven plugin goals (`vidocq-runtime-maven-plugin`)
 
 `generate` (bean index + codegen), `package` (fat-jar/ZIP distribution), `checkpom`
-(wired in `validate` via `pluginManagement`), `jlink`, `jpackage`, `docker`, `dev`.
+(wired in `validate` via `pluginManagement`), `jlink`, `jpackage`, `docker`, `dev`,
+`idea` (experimental, command line only: IntelliJ run configurations in `.run/`, never `.idea/`).
 
 ## Documentation (Antora) conventions
 

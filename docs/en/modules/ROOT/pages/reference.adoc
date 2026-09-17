@@ -160,6 +160,9 @@ extension claims through `VidocqExtension.configKeys()`.
 
 | `vidocq:complete-module-info`
 | Opt-in companion of `check-module-info` — rewrites `src/main/java/module-info.java` to add the missing directives.
+
+| `vidocq:idea` [.tag-new]#NEW#
+| Experimental — IntelliJ IDEA shared run configurations (`.run/*.run.xml`) for the reactor's applications, or a CI check of them. xref:modules/vidocq-runtime-maven-plugin.adoc#idea[Details].
 |===
 
 See xref:modules/vidocq-runtime-maven-plugin.adoc[the dedicated page] for the exhaustive parameter list.
