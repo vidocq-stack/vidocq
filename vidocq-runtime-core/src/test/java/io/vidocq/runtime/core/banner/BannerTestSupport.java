@@ -121,9 +121,9 @@ final class BannerTestSupport {
         }
     }
 
-    /** The records of the banner's logger, while open. */
+    /** The records of one logger, while open; the banner's unless another name is given. */
     static final class Records implements AutoCloseable {
-        private final Logger logger = Logger.getLogger(StartupBanner.class.getName());
+        private final Logger logger;
         private final List<LogRecord> records = new ArrayList<>();
         private final Handler handler = new Handler() {
             @Override
@@ -145,6 +145,11 @@ final class BannerTestSupport {
         };
 
         Records() {
+            this(StartupBanner.class.getName());
+        }
+
+        Records(String loggerName) {
+            logger = Logger.getLogger(loggerName);
             handler.setLevel(Level.ALL);
             logger.addHandler(handler);
         }
