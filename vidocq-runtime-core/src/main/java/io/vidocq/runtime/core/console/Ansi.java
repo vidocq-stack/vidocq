@@ -35,6 +35,14 @@ public final class Ansi {
     public static final String GREEN = "[32m";
     /** Cyan. */
     public static final String CYAN = "[36m";
+    /** Bold. */
+    public static final String BOLD = "\u001B[1m";
+    /** Red. */
+    public static final String RED = "\u001B[31m";
+    /** Blue. */
+    public static final String BLUE = "\u001B[34m";
+    /** Magenta. */
+    public static final String MAGENTA = "\u001B[35m";
     /** Faint (dim). */
     public static final String FAINT = "[2m";
 

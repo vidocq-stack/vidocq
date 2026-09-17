@@ -52,6 +52,8 @@ public final class Vidocq {
 
     /** The bootstrap of the current deployment — target of {@link #waitForExit()}. */
     private static volatile VidocqBootstrap current;
+    /** The module of the class that called {@link #run}: the application the banner names. */
+    private static volatile Module applicationModule;
 
     private Vidocq() {}
 
@@ -85,6 +87,7 @@ public final class Vidocq {
         ConsoleLogging.installIfDefault();
         var caller = StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE)
                 .getCallerClass();
+        applicationModule = caller.getModule();
         ensureLayer(caller);
         String reloadFile = System.getProperty(VidocqDevReloadLoop.RELOAD_FILE_PROPERTY, "").strip();
         if (!reloadFile.isEmpty()) {
@@ -106,6 +109,7 @@ public final class Vidocq {
         ConsoleLogging.installIfDefault();
         var caller = StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE)
                 .getCallerClass();
+        applicationModule = caller.getModule();
         ensureLayer(caller);
         var bootstrap = bootAndRegister();
         try {
@@ -126,6 +130,47 @@ public final class Vidocq {
         if (bootstrap != null) {
             bootstrap.awaitShutdown();
         }
+    }
+
+    /**
+     * The application module, or {@code null}: the module of the class that called {@link #run}, else
+     * the module of {@code -Dvidocq.app.main}, else the {@code -m} module unless it is the runtime's.
+     * Never guessed among the application archives.
+     */
+    static Module applicationModule() {
+        Module caller = applicationModule;
+        if (caller != null && caller.isNamed()) {
+            return caller;
+        }
+        Module main = moduleOfClass(System.getProperty(VidocqAppLayer.APP_MAIN_PROPERTY, "").strip());
+        if (main != null) {
+            return main;
+        }
+        String launched = System.getProperty("jdk.module.main");
+        if (launched == null || launched.isBlank() || launched.startsWith("io.vidocq.runtime.")) {
+            return null;
+        }
+        return ModuleLayer.boot().findModule(launched).orElse(null);
+    }
+
+    /** The module holding the package of {@code className}, found without loading the class. */
+    private static Module moduleOfClass(String className) {
+        int dot = className.lastIndexOf('.');
+        if (dot <= 0) {
+            return null;
+        }
+        String packageName = className.substring(0, dot);
+        for (ModuleLayer layer : java.util.Arrays.asList(VidocqAppLayer.installedLayer(), ModuleLayer.boot())) {
+            if (layer == null) {
+                continue;
+            }
+            for (Module module : layer.modules()) {
+                if (module.getPackages().contains(packageName)) {
+                    return module;
+                }
+            }
+        }
+        return null;
     }
 
     private static void ensureLayer(Class<?> caller) {

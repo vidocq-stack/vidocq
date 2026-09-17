@@ -49,6 +49,19 @@ class CoreConfigKeysTest {
     }
 
     @Test
+    void bannerKeysAreDeclaredAndAMistakenKeyNamesTheCandidates() {
+        Set<String> declared = VidocqBootstrap.declaredConfigKeys(List.of());
+
+        List<String> unconsumed = ConfigKeyAudit.unconsumedKeys(List.of("vidocq.banner.mode", "vidocq.banner.location",
+                "vidocq.banner.enabled", "vidocq.app.path", "vidocq.app.port"), declared);
+
+        assertEquals(List.of("vidocq.banner.enabled"), unconsumed, "vidocq.app.* is claimed by nobody: not audited");
+        assertEquals("Configuration key 'vidocq.banner.enabled' is read by no extension and has no effect. "
+                + "Known keys in this namespace: vidocq.banner.location, vidocq.banner.mode",
+                ConfigKeyAudit.warningFor("vidocq.banner.enabled", declared));
+    }
+
+    @Test
     void coreKeysAreMergedWithTheExtensionsKeys() {
         VidocqExtension chappe = new VidocqExtension() {
             @Override

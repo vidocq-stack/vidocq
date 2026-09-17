@@ -21,6 +21,7 @@ package io.vidocq.runtime.core;
 
 import io.vidocq.vauban.core.container.VaubanContainer;
 import io.vidocq.vauban.core.container.VaubanContainerBuilder;
+import io.vidocq.runtime.core.banner.StartupBanner;
 import io.vidocq.runtime.core.config.ConfigKeyAudit;
 import io.vidocq.runtime.core.config.VidocqConfigImpl;
 import io.vidocq.runtime.core.console.ConsoleLogging;
@@ -64,7 +65,9 @@ public final class VidocqBootstrap {
      */
     static final Set<String> CORE_CONFIG_KEYS = Set.of(
             ConsoleLogging.LOG_CONSOLE_KEY,
-            ConsoleSupport.COLOR_KEY);
+            ConsoleSupport.COLOR_KEY,
+            StartupBanner.MODE_KEY,
+            StartupBanner.LOCATION_KEY);
 
     private final CountDownLatch shutdownLatch = new CountDownLatch(1);
     private Thread shutdownHook;
@@ -74,6 +77,10 @@ public final class VidocqBootstrap {
     private List<VidocqExtension> extensions = List.of();
     private List<String> additionalBeanClassNames;
     private VaubanContainer container;
+    /** The banner mode forced by the embedding code, or {@code null} when the configuration decides. */
+    private BannerMode bannerOverride;
+    /** {@link #configure(List)}: an Arquillian or TCK deployment, which gets the one-line banner. */
+    private boolean embeddedDeployment;
     /**
      * Top-chrono taken during the construction of the bootstrap (= just after the entry
      * from {@code Vidocq.main()} via {@link #create()}). Comparable to {@code
@@ -93,11 +100,23 @@ public final class VidocqBootstrap {
     }
 
     /**
-     * Phase 1: loads the configuration and discovers the extensions.
+     * Forces the startup banner mode, whatever {@code vidocq.banner.mode} says: for code that embeds
+     * Vidocq and owns its standard output, such as a tool whose output is data
+     * ({@code VidocqBootstrap.create().banner(BannerMode.OFF).configure()}).
+     *
+     * @param mode the mode, or {@code null} to let the configuration decide
+     * @return this bootstrap
+     */
+    public VidocqBootstrap banner(BannerMode mode) {
+        this.bannerOverride = mode;
+        return this;
+    }
+
+    /**
+     * Phase 1: loads the configuration, prints the startup banner (once per JVM) and discovers the
+     * extensions.
      */
     public VidocqBootstrap configure() {
-        LOG.log(System.Logger.Level.INFO, "Vidocq - Configuration phase");
-
         // Universal-loader mode: embedders that skip Vidocq.main (the CLI boots
         // in-process) still get the application layer when -Dvidocq.app.path is set —
         // configuration sources below read through the loader installed here. No-op when
@@ -107,6 +126,11 @@ public final class VidocqBootstrap {
         this.config = new VidocqConfigImpl();
         // vidocq.properties is visible from here: vidocq.log.console and vidocq.console.color.
         ConsoleLogging.applyConfiguration(config);
+        // The banner needs the configuration (vidocq.banner.*) and comes before the first boot log line.
+        VidocqConfig loaded = config;
+        StartupBanner.showOnce(loaded, () -> StartupBanner.launch(loaded, bannerOverride, embeddedDeployment,
+                Vidocq.applicationModule(), VidocqAppLayer.installedLayer()));
+        LOG.log(System.Logger.Level.INFO, "Vidocq - Configuration phase");
         this.configuration = new VidocqConfigurationImpl(config);
         this.extensions = ExtensionLoader.load();
 
@@ -122,6 +146,7 @@ public final class VidocqBootstrap {
      * Used by the Arquillian container to inject deployment classes.
      */
     public VidocqBootstrap configure(java.util.List<String> additionalBeanClassNames) {
+        this.embeddedDeployment = true;
         configure();
         this.additionalBeanClassNames = additionalBeanClassNames;
         return this;

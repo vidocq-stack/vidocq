@@ -190,6 +190,12 @@ public final class VidocqAppLayer {
         }
     }
 
+    /** The application layer installed by this JVM, or {@code null}. */
+    static ModuleLayer installedLayer() {
+        var layer = installed;
+        return layer == null ? null : layer.layer();
+    }
+
     static boolean alreadyInLayer() {
         for (var l = Thread.currentThread().getContextClassLoader(); l != null; l = l.getParent()) {
             if (l instanceof io.vidocq.vauban.classloader.VaubanClassLoader) {
