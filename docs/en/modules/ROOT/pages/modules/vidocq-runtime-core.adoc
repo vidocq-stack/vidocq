@@ -144,7 +144,7 @@ The *context line* is `Java <version> (<vendor>) | <mode> (<reason>) | debug <ad
 * the <<launch-mode-debugger,debugger>>, when the JVM runs with a JDWP agent;
 * the application: the module of the class that calls `Vidocq.run`, else the module of `-Dvidocq.app.main`, else the module launched with `java -m`. It is named by the `artifactId` of its `pom.properties` when packaged, by its module name otherwise.
 
-Both lines stay within 80 columns. For the context line, the debugger goes first, then the reason of the launch mode — and with it the whole segment when the mode is a `prod` that no signal proves — then the JVM vendor, then the segments of a module name are abbreviated (`i.v.t.l.mcptimeserver`), then the name is cut with `...`, always before the application version; the whole line is cut last. A long directory path drops its `last Maven build` label before being cut. The single INFO line is never cut: it carries the mode, its reason and the debugger whatever their length.
+Both lines stay within 80 columns. For the context line, what is given up goes in this order: the JVM vendor, then the segments of a module name are abbreviated (`i.v.t.l.mcptimeserver`), then the name is cut with `...` — always before the application version — then the debugger, then the reason of the launch mode, and with it the whole segment when the mode is a `prod` that no signal proves; the whole line is cut last. The vendor goes first because the line is read to know where the process runs and how to attach to it: 19 columns of `(Eclipse Adoptium)` never cost the address of a debugger, nor the mode and the reason it was read from. A long directory path drops its `last Maven build` label before being cut. The single INFO line is never cut: it carries the mode, its reason and the debugger whatever their length.
 
 The Vidocq bricks have their own versions. When a brick (Vauban, Chappe, Cassini, ...) has another version than the runtime, was built from a modified tree, or is a snapshot without a commit, one more INFO record lists them:
 
@@ -200,7 +200,7 @@ A profile that is no mode (`staging`) is not a signal: the detection goes on wit
 Reading the archives is bounded: at most four of them, their shape is a string comparison, and only one of them has its parents probed for a build file — a handful of `stat` calls, once per JVM. Nothing in the resolution throws: a probe that fails is a signal that was not found, and the worst case is the `prod` above.
 
 [#launch-mode-debugger]
-==== Debugger
+==== Debugger [.tag-new]#NEW#
 
 When the JVM runs with a JDWP agent (`-agentlib:jdwp=…`, or the older `-Xrunjdwp:…`), the context line also carries what a debugger has to attach to, in every mode and not only in `dev`:
 
@@ -211,7 +211,14 @@ When the JVM runs with a JDWP agent (`-agentlib:jdwp=…`, or the older `-Xrunjd
 
 The address is repeated exactly as the agent was given it (`address=*:5005` shows `*:5005`, `address=127.0.0.1:5005` shows `127.0.0.1:5005`), and `suspend=y` is added when the JVM waits for the debugger before running. An agent with no address shows `debug` alone: the JVM then chooses the port, and only its own `Listening for transport dt_socket at address: …` line tells which.
 
-The debugger is the first segment dropped when the line does not fit in 80 columns, so a console banner with a long application name may show the mode without it; the single INFO line always carries both.
+The debugger outlives the JVM vendor and the whole application name: it is given up only when even a cut name leaves no room — a long reason and a long address do not both fit behind a long module name in 80 columns. Whenever what was printed does not carry the address, one more INFO record repeats it, so a launch with a debugger never hides how to attach to it:
+
+[source,text]
+----
+Vidocq debugger: attach to 127.0.0.1:18098
+----
+
+A custom banner that shows no context line gets that record too; an agent with no address says so instead of an address. The single INFO line of the log output always carries the segment itself, so it never needs the record.
 
 === When the art appears
 
