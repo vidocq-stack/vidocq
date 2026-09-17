@@ -137,6 +137,11 @@
             target/it-repo, never in the user's local repository; the inner builds copy anything else from
             the outer local repository (src/it/settings.xml).
 
+            -DskipTests skips these builds as well as the unit tests; so does -Dinvoker.skip=true. The CI builds
+            that pass -DskipTests, such as the nightly TCK job (`install -DskipTests`) and every lifecycle build
+            of the Vidocq/ci release action, therefore run none of them. They still resolve maven-invoker-plugin
+            and its Groovy runtime, which a CI runner downloads on first use.
+
             No fixture may be named *.run.xml: IntelliJ loads such files anywhere in the project content, so
             they would appear as run configurations of this repository. Seeds and expected contents are .txt
             files, copied into .run/ by prebuild.groovy.
@@ -148,6 +153,11 @@
                     <name>env.CI</name>
                 </property>
             </activation>
+            <properties>
+                <!-- maven-invoker-plugin reads invoker.skip only (skipInstallation, skipInvocation); a
+                     -Dinvoker.skip on the command line still wins over this default. -->
+                <invoker.skip>${skipTests}</invoker.skip>
+            </properties>
             <build>
                 <plugins>
                     <plugin>
