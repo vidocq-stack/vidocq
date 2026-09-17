@@ -58,6 +58,17 @@ public record DebugAgent(String address, boolean suspend) {
         return "debug" + (address == null ? "" : " " + address) + (suspend ? " suspend=y" : "");
     }
 
+    /**
+     * {@code attach to *:5005, suspend=y}, for the record of its own the banner logs when its
+     * context line could not carry the segment.
+     */
+    public String attachment() {
+        String where = address == null
+                ? "the JDWP agent was given no address, see the JVM's own 'Listening for transport' line"
+                : "attach to " + address;
+        return where + (suspend ? ", suspend=y" : "");
+    }
+
     /** The options of a JDWP argument ({@code transport=dt_socket,address=*:5005}), or {@code null}. */
     static String options(String argument) {
         if (argument == null) {

@@ -154,22 +154,31 @@ public final class StartupBanner {
             return;
         }
         StartupIdentity identity = StartupIdentity.collect(launch);
-        switch (output) {
-            case IDENTITY_ONLY -> LOG.log(System.Logger.Level.INFO,
-                    identity.identityLine() + " | " + identity.contextLine());
+        String shown = switch (output) {
+            case IDENTITY_ONLY -> {
+                String line = identity.identityLine() + " | " + identity.contextLine();
+                LOG.log(System.Logger.Level.INFO, line);
+                yield line;
+            }
             // the formatter prefixes the first line only: a leading newline keeps the art in column 0
-            case LOG -> LOG.log(System.Logger.Level.INFO, "\n" + render(identity, config, false).stripTrailing());
+            case LOG -> {
+                String text = render(identity, config, false);
+                LOG.log(System.Logger.Level.INFO, "\n" + text.stripTrailing());
+                yield text;
+            }
             case CONSOLE -> {
                 boolean colors = console.colors(config.apply(ConsoleSupport.COLOR_KEY)
                         .flatMap(ConsoleSupport.ColorMode::parse).orElse(ConsoleSupport.ColorMode.AUTO));
-                out.print(render(identity, config, colors));
+                String text = render(identity, config, colors);
+                out.print(text);
                 out.flush();
+                yield text;
             }
-            case NONE -> {
-                // handled above
-            }
-        }
+            // handled above
+            case NONE -> "";
+        };
         emitted = identity;
+        debuggerRecord(launch, identity, shown).ifPresent(record -> LOG.log(System.Logger.Level.INFO, record));
         Optional<String> bricks = identity.bricksLine();
         if (bricks.isPresent()) {
             LOG.log(System.Logger.Level.INFO, bricks.get());
@@ -249,6 +258,20 @@ public final class StartupBanner {
             lines.removeLast();
         }
         return lines;
+    }
+
+    /**
+     * One INFO record repeating what a debugger has to attach to, when {@code shown} does not
+     * carry it: a custom banner that says nothing of it, or a context line too narrow to keep the
+     * segment. What was asked for — the way in, in a development launch — is never lost to a
+     * width; a line that already shows it is not repeated.
+     */
+    static Optional<String> debuggerRecord(Launch launch, StartupIdentity identity, String shown) {
+        DebugAgent agent = launch.debug();
+        if (agent == null || (identity.debug() != null && shown.contains(identity.debug()))) {
+            return Optional.empty();
+        }
+        return Optional.of("Vidocq debugger: " + agent.attachment());
     }
 
     /** {@code line}, cut to {@code max} columns with {@code ...}. */

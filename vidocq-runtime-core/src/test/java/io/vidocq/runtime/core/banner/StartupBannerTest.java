@@ -28,12 +28,16 @@ import io.vidocq.runtime.core.console.ConsoleSupport;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.logging.Level;
 
 import static io.vidocq.runtime.core.banner.BannerTestSupport.ART_FIRST_LINE;
@@ -53,6 +57,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** The output decision, the colour policy, the once-per-JVM guard and invalid values. */
 class StartupBannerTest {
+
+    @TempDir
+    Path dir;
 
     @BeforeEach
     @AfterEach
@@ -198,6 +205,46 @@ class StartupBannerTest {
             String line = records.identityRecords().getFirst();
             assertTrue(line.contains(" | prod (profile prod) | debug 127.0.0.1:18095 suspend=y"), line);
         }
+    }
+
+    @Test
+    void aDebuggerTheBannerCouldNotShowComesBackOnARecordOfItsOwn() throws Exception {
+        Out out = new Out();
+        try (Records records = new Records()) {
+            StartupBanner.show(config(Map.of()), launch(BannerMode.CONSOLE, dev("IntelliJ agent"),
+                    new DebugAgent("*:18095", false)), pipe(), out.stream);
+
+            assertTrue(records.identityRecords().isEmpty(),
+                    "the context line carries it: " + records.identityRecords());
+        }
+        Path banner = Files.writeString(dir.resolve("identity-only.txt"), "  MCP TIME SERVER ${vidocq.identity}");
+        try (Records records = new Records()) {
+            StartupBanner.show(config(Map.of(StartupBanner.LOCATION_KEY, banner.toString())),
+                    launch(BannerMode.CONSOLE, dev("IntelliJ agent"), new DebugAgent("*:18095", true)),
+                    pipe(), out.stream);
+
+            assertEquals(List.of("Vidocq debugger: attach to *:18095, suspend=y"), records.identityRecords(),
+                    "a banner that shows no context line still says how to attach");
+        }
+    }
+
+    @Test
+    void theDebuggerRecordRepeatsOnlyWhatWasNotShown() {
+        StartupIdentity withAgent = BannerTestSupport.identity(BannerTestSupport.jar("0.4.0", null, false, null,
+                null, null), null, dev("IntelliJ agent"), "debug *:5005", "app", "1.0");
+
+        assertEquals(Optional.empty(), StartupBanner.debuggerRecord(
+                launch(null, dev("IntelliJ agent"), null), withAgent, "no agent, nothing to say"));
+        assertEquals(Optional.empty(), StartupBanner.debuggerRecord(
+                launch(null, dev("IntelliJ agent"), new DebugAgent("*:5005", false)), withAgent,
+                " Java 25 | dev (IntelliJ agent) | debug *:5005 | app 1.0\n"));
+        assertEquals(Optional.of("Vidocq debugger: attach to *:5005"), StartupBanner.debuggerRecord(
+                launch(null, dev("IntelliJ agent"), new DebugAgent("*:5005", false)), withAgent,
+                " Java 25 | dev (IntelliJ agent) | app 1.0\n"));
+        assertEquals(Optional.of("Vidocq debugger: the JDWP agent was given no address,"
+                        + " see the JVM's own 'Listening for transport' line"),
+                StartupBanner.debuggerRecord(launch(null, dev("IntelliJ agent"), new DebugAgent(null, false)),
+                        withAgent, " Java 25 | dev (IntelliJ agent) | app 1.0\n"));
     }
 
     @Test
