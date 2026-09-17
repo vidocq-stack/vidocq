@@ -119,6 +119,9 @@
              Header template lives at <repo-root>/etc/license-header.txt. -->
         <license.maven.plugin.version>5.1.1</license.maven.plugin.version>
         <license.year>2026</license.year>
+        <!-- git-commit-id-maven-plugin: writes the per-artifact build identity
+             file (see <build><plugins>). Latest 9.x line. -->
+        <git-commit-id.plugin.version>9.2.0</git-commit-id.plugin.version>
 
         <!--
             central-publishing-maven-plugin's autoPublish flag, exposed as a
@@ -351,14 +354,82 @@
                     </execution>
                 </executions>
             </plugin>
+
+            <!--
+                Build identity, inherited and ACTIVE in every child reactor: each
+                jar carries META-INF/vidocq/build-info/<artifactId>.properties
+                (git.build.version, git.build.time, git.commit.id.abbrev,
+                git.commit.time, git.dirty), read by the Vidocq startup banner.
+                The file name is per artifact because, on the class path, a fixed
+                name would make every brick read the first jar's file.
+                - pom-packaged modules are skipped (skipPoms, default true);
+                - -Dmaven.gitcommitid.skip=true disables it;
+                - outside a git repository the build still succeeds, with only
+                  git.build.version and git.build.time.
+                Do NOT set project.build.outputTimestamp outside the release
+                profile: once set, the plugin writes it as git.build.time instead
+                of the wall-clock time, and two local builds of the same commit
+                become indistinguishable.
+            -->
+            <plugin>
+                <groupId>io.github.git-commit-id</groupId>
+                <artifactId>git-commit-id-maven-plugin</artifactId>
+                <version>${git-commit-id.plugin.version}</version>
+                <executions>
+                    <execution>
+                        <id>vidocq-build-info</id>
+                        <phase>initialize</phase>
+                        <goals><goal>revision</goal></goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <abbrevLength>8</abbrevLength>
+                    <dateFormat>yyyy-MM-dd'T'HH:mm:ssXXX</dateFormat>
+                    <dateFormatTimeZone>UTC</dateFormatTimeZone>
+                    <failOnNoGitDirectory>false</failOnNoGitDirectory>
+                    <failOnUnableToExtractRepoInfo>false</failOnUnableToExtractRepoInfo>
+                    <generateGitPropertiesFile>true</generateGitPropertiesFile>
+                    <generateGitPropertiesFilename>${project.build.outputDirectory}/META-INF/vidocq/build-info/${project.artifactId}.properties</generateGitPropertiesFilename>
+                    <includeOnlyProperties>
+                        <includeOnlyProperty>^git.build.version$</includeOnlyProperty>
+                        <includeOnlyProperty>^git.build.time$</includeOnlyProperty>
+                        <includeOnlyProperty>^git.commit.id.abbrev$</includeOnlyProperty>
+                        <includeOnlyProperty>^git.commit.time$</includeOnlyProperty>
+                        <includeOnlyProperty>^git.dirty$</includeOnlyProperty>
+                    </includeOnlyProperties>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
 
     <profiles>
         <profile>
             <id>release</id>
+            <properties>
+                <!-- Reproducible release jars: every zip entry is stamped with the
+                     commit time (set by git-commit-id-maven-plugin at initialize).
+                     Release-only on purpose, see the plugin in <build><plugins>. -->
+                <project.build.outputTimestamp>${git.commit.time}</project.build.outputTimestamp>
+            </properties>
             <build>
                 <plugins>
+                    <!-- Same identity file minus git.build.time, so that two builds
+                         of the same commit are byte-for-byte identical. The version
+                         is immutable on Central; commit, dirty and commit time are
+                         enough to identify a release. -->
+                    <plugin>
+                        <groupId>io.github.git-commit-id</groupId>
+                        <artifactId>git-commit-id-maven-plugin</artifactId>
+                        <configuration>
+                            <includeOnlyProperties combine.self="override">
+                                <includeOnlyProperty>^git.build.version$</includeOnlyProperty>
+                                <includeOnlyProperty>^git.commit.id.abbrev$</includeOnlyProperty>
+                                <includeOnlyProperty>^git.commit.time$</includeOnlyProperty>
+                                <includeOnlyProperty>^git.dirty$</includeOnlyProperty>
+                            </includeOnlyProperties>
+                        </configuration>
+                    </plugin>
+
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-source-plugin</artifactId>
