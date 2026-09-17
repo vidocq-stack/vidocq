@@ -114,14 +114,18 @@ public class VidocqIdeaMojo extends AbstractMojo {
     @Parameter(property = "vidocq.idea.jre")
     private String jre;
 
-    /** Skip the goal entirely. */
+    /**
+     * Skip the goal entirely. Maven reads the property from the command line, then from the properties of the
+     * top-level project, which is the first selected project when {@code -pl} leaves the root out; to leave one
+     * module out, its pom sets {@code vidocq.idea.exclude} instead.
+     */
     @Parameter(property = "vidocq.idea.skip", defaultValue = "false")
     private boolean skip;
 
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
         if (skip) {
-            getLog().info(PREFIX + "skipped (-Dvidocq.idea.skip=true)");
+            getLog().info(PREFIX + "skipped (" + skipSource() + ")");
             return;
         }
         if (mojoExecution != null && mojoExecution.getSource() != MojoExecution.Source.CLI) {
@@ -133,6 +137,36 @@ public class VidocqIdeaMojo extends AbstractMojo {
                 && session.getProjects().size() < session.getAllProjects().size();
         run(reactorProjects, session.getUserProperties(), Path.of(session.getExecutionRootDirectory()),
                 partialReactor);
+    }
+
+    private String skipSource() {
+        if (session == null) {
+            return skipSource(null, null, null);
+        }
+        MavenProject project = session.getCurrentProject() != null
+                ? session.getCurrentProject()
+                : session.getTopLevelProject();
+        return skipSource(session.getUserProperties(), session.getSystemProperties(), project);
+    }
+
+    /**
+     * Where a true {@code vidocq.idea.skip} came from, in the order Maven evaluates the parameter: the command
+     * line, the system properties, the properties of the project the goal runs on (the top-level project of
+     * the build), otherwise the plugin configuration.
+     */
+    static String skipSource(Properties userProperties, Properties systemProperties, MavenProject project) {
+        String key = IdeaApplications.SKIP_PROPERTY;
+        if (userProperties != null && Boolean.parseBoolean(userProperties.getProperty(key))) {
+            return "-D" + key + "=" + userProperties.getProperty(key) + " on the command line";
+        }
+        if (systemProperties != null && Boolean.parseBoolean(systemProperties.getProperty(key))) {
+            return "system property " + key + "=" + systemProperties.getProperty(key);
+        }
+        if (project != null && Boolean.parseBoolean(project.getProperties().getProperty(key))) {
+            return key + "=" + project.getProperties().getProperty(key) + " in the properties of "
+                    + project.getGroupId() + ":" + project.getArtifactId() + ", the top-level project of this build";
+        }
+        return "<skip>true</skip> in the configuration of vidocq-runtime-maven-plugin";
     }
 
     /** The goal without its Maven session: the projects of the build, in reactor order. */

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <!-- Two applications. alpha leaves itself out with vidocq.idea.exclude; beta declares vidocq.idea.skip, the
+         goal's own switch, which Maven reads from the top-level project only. -->
+    <groupId>com.example.it</groupId>
+    <artifactId>module-exclusion</artifactId>
+    <version>1.0</version>
+    <packaging>pom</packaging>
+
+    <modules>
+        <module>alpha</module>
+        <module>beta</module>
+    </modules>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>io.vidocq.runtime</groupId>
+                    <artifactId>vidocq-runtime-maven-plugin</artifactId>
+                    <version>@project.version@</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
+</project>

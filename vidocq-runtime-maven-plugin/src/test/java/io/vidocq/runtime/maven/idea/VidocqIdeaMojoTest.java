@@ -388,8 +388,54 @@ class VidocqIdeaMojoTest {
 
         mojo.execute();
 
-        assertTrue(log.has("INFO", "Vidocq idea: skipped (-Dvidocq.idea.skip=true)"), log.toString());
+        assertTrue(log.has("INFO", "Vidocq idea: skipped (<skip>true</skip> in the configuration of"
+                + " vidocq-runtime-maven-plugin)"), log.toString());
         assertFalse(Files.exists(root.resolve(".run")));
+    }
+
+    /**
+     * Maven evaluates {@code ${vidocq.idea.skip}} against the command line, then against the properties of the
+     * top-level project: the message names the source that is actually true, so that a skip caused by a pom is
+     * not blamed on a {@code -D} nobody passed.
+     */
+    @Test
+    void theSkipMessageNamesWhereTheValueCameFrom() {
+        Properties commandLine = new Properties();
+        commandLine.setProperty("vidocq.idea.skip", "true");
+        Properties system = new Properties();
+        system.setProperty("vidocq.idea.skip", "true");
+        Properties falseOnTheCommandLine = new Properties();
+        falseOnTheCommandLine.setProperty("vidocq.idea.skip", "false");
+        MavenProject alpha = projects.get(1);
+        alpha.getProperties().setProperty("vidocq.idea.skip", "true");
+
+        assertEquals("-Dvidocq.idea.skip=true on the command line",
+                VidocqIdeaMojo.skipSource(commandLine, system, alpha));
+        assertEquals("system property vidocq.idea.skip=true",
+                VidocqIdeaMojo.skipSource(new Properties(), system, alpha));
+        assertEquals("vidocq.idea.skip=true in the properties of com.example:alpha, the top-level project of this build",
+                VidocqIdeaMojo.skipSource(falseOnTheCommandLine, new Properties(), alpha));
+        assertEquals("<skip>true</skip> in the configuration of vidocq-runtime-maven-plugin",
+                VidocqIdeaMojo.skipSource(null, null, projects.get(2)));
+    }
+
+    /**
+     * With {@code -pl alpha,apps/beta}, alpha is the top-level project. Its own opt-out leaves alpha out and
+     * nothing else: before {@code vidocq.idea.exclude} existed, the module setting had the goal's property
+     * name and skipped the whole goal there.
+     */
+    @Test
+    void theFirstSelectedProjectLeavesOnlyItselfOut() throws Exception {
+        MavenProject alpha = projects.get(1);
+        alpha.getProperties().setProperty("vidocq.idea.exclude", "true");
+
+        mojo.run(List.of(alpha, projects.get(2)), new Properties(), root, true);
+
+        try (Stream<Path> files = Files.list(root.resolve(".run"))) {
+            assertEquals(List.of("Beta server.run.xml"), files.map(p -> p.getFileName().toString()).toList());
+        }
+        assertTrue(log.has("INFO", "Vidocq idea: com.example:alpha excluded (vidocq.idea.exclude=true in its pom)"),
+                log.toString());
     }
 
     /**

@@ -538,7 +538,7 @@
                 <parameter><name>check</name><type>boolean</type><required>false</required><editable>true</editable><description>Write nothing; fail when .run/ differs from what the goal would write.</description></parameter>
                 <parameter><name>generateBeforeLaunch</name><type>boolean</type><required>false</required><editable>true</editable><description>Add the vidocq:generate Maven step before launch.</description></parameter>
                 <parameter><name>jre</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>IntelliJ SDK name written as the configurations' alternative JRE. Unset: IntelliJ uses the module SDK.</description></parameter>
-                <parameter><name>skip</name><type>boolean</type><required>false</required><editable>true</editable><description>Skip the goal entirely.</description></parameter>
+                <parameter><name>skip</name><type>boolean</type><required>false</required><editable>true</editable><description>Skip the goal entirely. Read from the command line, then from the properties of the top-level project (the first selected project when -pl leaves the root out). To leave one module out, set vidocq.idea.exclude in its pom instead.</description></parameter>
             </parameters>
             <configuration>
                 <session implementation="org.apache.maven.execution.MavenSession" default-value="${session}"/>

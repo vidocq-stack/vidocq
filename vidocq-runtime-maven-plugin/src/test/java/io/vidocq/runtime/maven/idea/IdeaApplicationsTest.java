@@ -210,14 +210,42 @@ class IdeaApplicationsTest {
     }
 
     @Test
-    void aModuleCanOptOutInItsPom() throws IOException {
+    void aModuleIsLeftOutByItsPom() throws IOException {
         MavenProject alpha = application("alpha", "com.example.alpha.AlphaApp");
-        alpha.getProperties().setProperty("vidocq.idea.skip", "true");
+        alpha.getProperties().setProperty("vidocq.idea.exclude", "true");
 
         Discovery discovery = discover(alpha);
 
         assertEquals(List.of(), discovery.applications());
-        assertHas(discovery, Level.INFO, "Vidocq idea: com.example:alpha skipped (vidocq.idea.skip=true in its pom)");
+        assertHas(discovery, Level.INFO, "Vidocq idea: com.example:alpha excluded (vidocq.idea.exclude=true in its pom)");
+    }
+
+    /**
+     * {@code vidocq.idea.skip} is the goal's own switch. Maven evaluates a goal parameter against the command
+     * line, then the properties of the top-level project, which is the first selected project when
+     * {@code -pl} leaves the root out: a module setting with that name would skip the whole goal there. The
+     * module setting is therefore {@code vidocq.idea.exclude}, and a module pom that sets
+     * {@code vidocq.idea.skip} is reported instead of silently doing nothing.
+     */
+    @Test
+    void theGoalSkipPropertyInAModulePomDoesNotLeaveItOutAndIsReported() throws IOException {
+        MavenProject alpha = application("alpha", "com.example.alpha.AlphaApp");
+        alpha.getProperties().setProperty("vidocq.idea.skip", "true");
+        alpha.setOriginalModel(alpha.getModel().clone());
+        MavenProject inheriting = application("inheriting", "com.example.App");
+        inheriting.getProperties().setProperty("vidocq.idea.skip", "true");
+        inheriting.setOriginalModel(new Model());
+
+        Discovery discovery = discover(alpha, inheriting);
+
+        assertEquals(List.of("com.example:alpha", "com.example:inheriting"),
+                discovery.applications().stream().map(IdeaApplication::coordinates).toList());
+        assertHas(discovery, Level.WARN, "Vidocq idea: com.example:alpha sets vidocq.idea.skip=true in its pom,"
+                + " which does not leave a module out: that property skips the whole goal, from the command line"
+                + " or from the top-level project of the build. Set <vidocq.idea.exclude>true</vidocq.idea.exclude>"
+                + " to leave out this module and the modules that inherit its properties.");
+        assertTrue(discovery.diagnostics().stream().noneMatch(d -> d.message().contains("com.example:inheriting sets")),
+                "only the pom that declares the property is reported: " + discovery.diagnostics());
     }
 
     @Test
@@ -303,11 +331,15 @@ class IdeaApplicationsTest {
         Properties userProperties = new Properties();
         userProperties.setProperty("vidocq.mainClass", "com.example.Other");
         userProperties.setProperty("vidocq.idea.moduleName", "other");
+        userProperties.setProperty("vidocq.idea.exclude", "true");
 
         Discovery discovery = IdeaApplications.discover(List.of(alpha), root, userProperties);
 
         assertEquals("com.example.alpha.AlphaApp", discovery.applications().get(0).mainClass());
         assertEquals("alpha", discovery.applications().get(0).moduleName());
+        assertHas(discovery, Level.WARN, "Vidocq idea: ignoring -Dvidocq.idea.exclude from the command line:"
+                + " application settings are read from each module's pom, so that the files in .run/ do not"
+                + " depend on how Maven was invoked.");
         assertHas(discovery, Level.WARN, "Vidocq idea: ignoring -Dvidocq.mainClass from the command line:"
                 + " application settings are read from each module's pom, so that the files in .run/ do not"
                 + " depend on how Maven was invoked.");

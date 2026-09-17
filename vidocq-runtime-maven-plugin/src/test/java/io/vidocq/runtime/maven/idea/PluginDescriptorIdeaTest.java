@@ -41,6 +41,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -133,6 +134,29 @@ class PluginDescriptorIdeaTest {
         assertProperty(entries.get("generateBeforeLaunch"), "${vidocq.idea.generateBeforeLaunch}", "true");
         assertProperty(entries.get("jre"), "${vidocq.idea.jre}", "");
         assertProperty(entries.get("skip"), "${vidocq.idea.skip}", "false");
+    }
+
+    /**
+     * Maven evaluates a goal parameter's {@code ${property}} against the command line, then the properties of
+     * the top-level project, which {@code -pl} can make any module. A property that is also a per-module
+     * setting would then configure the whole goal from one module's pom: {@code vidocq.idea.skip} once did,
+     * and skipped the goal for every application.
+     */
+    @Test
+    void noGoalParameterReadsAModuleSetting() {
+        List<String> expressions = new ArrayList<>();
+        for (Element entry : children(child(idea, "configuration"))) {
+            String text = entry.getTextContent().strip();
+            if (text.startsWith("${") && text.endsWith("}")) {
+                expressions.add(text.substring(2, text.length() - 1));
+            }
+        }
+
+        assertTrue(expressions.contains("vidocq.idea.skip"), expressions.toString());
+        for (String moduleSetting : IdeaApplications.MODULE_PROPERTIES) {
+            assertFalse(expressions.contains(moduleSetting), moduleSetting + " is read per module, not by the goal");
+        }
+        assertTrue(IdeaApplications.MODULE_PROPERTIES.contains("vidocq.idea.exclude"));
     }
 
     private static void assertProperty(Element entry, String expression, String defaultValue) {

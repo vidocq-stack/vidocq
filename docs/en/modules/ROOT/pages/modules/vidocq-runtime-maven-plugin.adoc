@@ -238,7 +238,7 @@ A project of the build gets a run configuration when:
 . its packaging is not `pom`;
 . `vidocq-runtime-maven-plugin` is in its effective `<build><plugins>` (inherited declarations and active
   profiles count, `<pluginManagement>` alone does not): the before-launch step runs `vidocq:generate` on its pom;
-. its pom does not set `vidocq.idea.skip` to `true`;
+. its pom does not set `vidocq.idea.exclude` to `true`;
 . it declares an application main class: the plugin-level `<mainClass>` if set, otherwise the
   `vidocq.mainClass` property. The runtime's own `io.vidocq.runtime.core.Vidocq` does not count, and a legacy
   `module/Class` value keeps its class — the rule `vidocq:package` applies.
@@ -246,8 +246,8 @@ A project of the build gets a run configuration when:
 A `<mainClass>` set on an execution (for example the `jlink` one) is not read; when it is the module's only main
 class, the goal warns. These values
 are read from each module's pom, never from the command line: a `-Dvidocq.mainClass`, `-Dvidocq.mainModule`,
-`-Dvidocq.idea.configurationName` or `-Dvidocq.idea.moduleName` is ignored with a warning, so that the committed
-files do not depend on how Maven was invoked.
+`-Dvidocq.idea.configurationName`, `-Dvidocq.idea.moduleName` or `-Dvidocq.idea.exclude` is ignored with a warning,
+so that the committed files do not depend on how Maven was invoked.
 
 [cols="2,1,3"]
 |===
@@ -262,9 +262,9 @@ files do not depend on how Maven was invoked.
 | IntelliJ module that holds the main class. Set it when IntelliJ names the module differently, for example
   `<artifactId>.main` when it splits main and test sources into two modules.
 
-| `vidocq.idea.skip`
+| `vidocq.idea.exclude`
 | `false`
-| No run configuration for this module. In the top-level pom it skips the whole goal (see below).
+| No run configuration for this module, nor for the modules that inherit its properties.
 |===
 
 === Goal parameters
@@ -295,7 +295,10 @@ files do not depend on how Maven was invoked.
 |===
 
 Maven evaluates them against the top-level project of the build — the first selected project when `-pl` leaves
-the root out.
+the root out. That is why no goal property is also a module setting: `vidocq.idea.skip` in the pom of the first
+selected module would skip the goal for every application. To leave a module out, set `vidocq.idea.exclude` in
+its pom; a module pom that sets `vidocq.idea.skip` gets a warning. When the goal is skipped, it says where
+`vidocq.idea.skip` came from: the command line, a system property, or the properties of the top-level project.
 
 === Files that belong to you
 

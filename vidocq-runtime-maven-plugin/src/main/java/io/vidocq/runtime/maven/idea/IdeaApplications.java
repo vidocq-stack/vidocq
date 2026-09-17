@@ -20,6 +20,7 @@
 package io.vidocq.runtime.maven.idea;
 
 import io.vidocq.runtime.maven.ApplicationMainClass;
+import org.apache.maven.model.Model;
 import org.apache.maven.model.Plugin;
 import org.apache.maven.model.PluginExecution;
 import org.apache.maven.model.Profile;
@@ -44,12 +45,13 @@ import java.util.regex.Pattern;
  *   <li>{@value #PLUGIN_KEY} is in its effective {@code <build><plugins>} (inherited declarations and
  *       active profiles count, {@code <pluginManagement>} alone does not): the before-launch step runs
  *       {@code vidocq:generate} on its pom, which must resolve the plugin and its configuration there;</li>
- *   <li>its pom does not set {@code vidocq.idea.skip} to {@code true};</li>
+ *   <li>its pom does not set {@value #EXCLUDE_PROPERTY} to {@code true};</li>
  *   <li>it declares an application main class ({@link ApplicationMainClass#declared(MavenProject)}).</li>
  * </ol>
  * Every value is read from the project's own model, never from the command line: on an aggregator a
  * {@code -D} would apply to every module at once, and the committed files would depend on how Maven was
- * invoked.
+ * invoked. No goal parameter may read one of these {@link #MODULE_PROPERTIES}: Maven evaluates a goal
+ * parameter against the properties of the top-level project, which {@code -pl} can make any module.
  *
  * <p>The result is pure data (applications, diagnostics to log, configuration errors), so that the goal
  * can report every problem before it writes anything.
@@ -57,15 +59,23 @@ import java.util.regex.Pattern;
 final class IdeaApplications {
 
     static final String PLUGIN_KEY = ApplicationMainClass.PLUGIN_KEY;
+    /** Leaves a module, and the modules that inherit its properties, out of the goal. */
+    static final String EXCLUDE_PROPERTY = "vidocq.idea.exclude";
+    /** The goal's own switch ({@code VidocqIdeaMojo#skip}); never a module setting. */
+    static final String SKIP_PROPERTY = "vidocq.idea.skip";
+    /**
+     * Settings read from each module's own model. A command-line {@code -D} does not change them, and no goal
+     * parameter reads them.
+     */
+    static final List<String> MODULE_PROPERTIES = List.of(ApplicationMainClass.PROPERTY,
+            ApplicationMainClass.MODULE_PROPERTY, "vidocq.idea.configurationName", "vidocq.idea.moduleName",
+            EXCLUDE_PROPERTY);
 
     private static final String COMPILER_KEY = "org.apache.maven.plugins:maven-compiler-plugin";
     private static final String PREFIX = "Vidocq idea: ";
     private static final Pattern JAVA_NAME = Pattern.compile(
             "([\\p{javaJavaIdentifierStart}][\\p{javaJavaIdentifierPart}]*\\.)*"
                     + "[\\p{javaJavaIdentifierStart}][\\p{javaJavaIdentifierPart}]*");
-    /** Application settings that a command-line {@code -D} must not change. */
-    private static final List<String> POM_ONLY_KEYS = List.of(ApplicationMainClass.PROPERTY,
-            ApplicationMainClass.MODULE_PROPERTY, "vidocq.idea.configurationName", "vidocq.idea.moduleName");
 
     enum Level { DEBUG, INFO, WARN }
 
@@ -92,6 +102,15 @@ final class IdeaApplications {
 
         for (MavenProject project : projects) {
             String coordinates = project.getGroupId() + ":" + project.getArtifactId();
+            // Declared in this pom, not inherited: the pom to fix is reported once.
+            Model own = project.getOriginalModel();
+            if (own != null && Boolean.parseBoolean(own.getProperties().getProperty(SKIP_PROPERTY))) {
+                diagnostics.add(new Diagnostic(Level.WARN, PREFIX + coordinates + " sets " + SKIP_PROPERTY
+                        + "=true in its pom, which does not leave a module out: that property skips the whole"
+                        + " goal, from the command line or from the top-level project of the build. Set <"
+                        + EXCLUDE_PROPERTY + ">true</" + EXCLUDE_PROPERTY + "> to leave out this module and the"
+                        + " modules that inherit its properties."));
+            }
             if ("pom".equals(project.getPackaging())) {
                 diagnostics.add(new Diagnostic(Level.DEBUG, notAnApplication(coordinates, "packaging pom")));
                 continue;
@@ -102,9 +121,9 @@ final class IdeaApplications {
                         "vidocq-runtime-maven-plugin is not in its <build><plugins>")));
                 continue;
             }
-            if (Boolean.parseBoolean(project.getProperties().getProperty("vidocq.idea.skip"))) {
+            if (Boolean.parseBoolean(project.getProperties().getProperty(EXCLUDE_PROPERTY))) {
                 diagnostics.add(new Diagnostic(Level.INFO, PREFIX + coordinates
-                        + " skipped (vidocq.idea.skip=true in its pom)"));
+                        + " excluded (" + EXCLUDE_PROPERTY + "=true in its pom)"));
                 continue;
             }
             String declared = ApplicationMainClass.declared(project);
@@ -148,7 +167,7 @@ final class IdeaApplications {
             }
         }
 
-        for (String key : POM_ONLY_KEYS) {
+        for (String key : MODULE_PROPERTIES) {
             if (userProperties.getProperty(key) != null) {
                 diagnostics.add(new Diagnostic(Level.WARN, PREFIX + "ignoring -D" + key + " from the command line:"
                         + " application settings are read from each module's pom, so that the files in .run/ do"
