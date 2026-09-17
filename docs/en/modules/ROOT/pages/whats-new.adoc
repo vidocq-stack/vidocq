@@ -4,6 +4,10 @@
 [.lead]
 New in the `{project-version}` development line — everything listed here landed **after the {release-version} release** and is not part of it. Sections carrying the [.tag-new]#NEW# badge across the documentation point to these features. When the next release train ships, this page is frozen with it and restarts empty on the dev line.
 
+== Vidocq Runtime
+
+* **Readable console logs by default** — when the application has not configured logging, Vidocq replaces the JDK's two-line records on standard error (red in an IDE) with one aligned line per record on standard output: `[LEVEL][timestamp][thread][class#method] : message`, with a coloured level on a terminal or in IntelliJ's Run console. Any logging setup of the application wins (`logging.properties`, an SLF4J or Log4j bridge, `vidocq.log.console=jdk`); `vidocq.console.color` and `NO_COLOR` control the colours. The examples no longer carry their own copies of a stdout handler and formatter. xref:modules/vidocq-runtime-core.adoc#console-logging[Console logging].
+
 == Vauban
 
 Client proxies for third-party produced types, without `opens` (vauban#42, the jakartaee/cdi#1015 case):

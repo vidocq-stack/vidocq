@@ -95,6 +95,14 @@ The `io.vidocq.runtime.extensions.*` modules each correspond to a built-in exten
 | `vidocq.config.dir`
 | (empty)
 | External override directory (`ExternalFileConfigSource`, ordinal 250).
+
+| `vidocq.log.console` [.tag-new]#NEW#
+| `auto`
+| `auto`: one aligned line per record on stdout when the application has not configured logging; `jdk`: keep the JDK console handler. See xref:modules/vidocq-runtime-core.adoc#console-logging[Console logging].
+
+| `vidocq.console.color` [.tag-new]#NEW#
+| `auto`
+| Console colours: `auto`, `always` or `never`. A non-empty `NO_COLOR` environment variable always disables them.
 |===
 
 TLS is not implemented yet: `vidocq.https.port`, `vidocq.tls.cert` and `vidocq.tls.key` are
@@ -105,7 +113,8 @@ TLS is not implemented yet: `vidocq.https.port`, `vidocq.tls.cert` and `vidocq.t
 A `vidocq.*` key that no extension consumes is applied by nobody: the application silently keeps
 the default, and the mistake stays invisible whenever the configured value happens to *be* the
 default. Since 0.3.0 the runtime reports such a key as a startup warning, for every namespace an
-extension claims through `VidocqExtension.configKeys()`.
+extension claims through `VidocqExtension.configKeys()`. The core claims `vidocq.log.` and
+`vidocq.console.` itself, so a typo such as `vidocq.console.colour` is reported too.
 ====
 
 [NOTE]

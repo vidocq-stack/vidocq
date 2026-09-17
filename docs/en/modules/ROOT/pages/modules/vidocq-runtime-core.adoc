@@ -24,7 +24,8 @@
 . **CDI start** — `builder.build()` boots xref:vauban::index.adoc[Vauban].
 . **onStart** — each extension receives the `ExtensionContext` (container, bean manager, config): the Chappe extension opens the HTTP listeners, Cassini mounts the REST routes, Mansart opens the JDBC pool.
 
-* Warn about configured `vidocq.*` keys no extension consumes (`ConfigKeyAudit`, based on `VidocqExtension.configKeys()`).
+* Warn about configured `vidocq.*` keys nobody consumes (`ConfigKeyAudit`, based on the core's own keys and `VidocqExtension.configKeys()`).
+* Print readable console logs when the application has not configured logging (<<console-logging>>).
 * Manage the shutdown cycle — `onStop()` runs in reverse priority order, virtual threads drain cleanly.
 * Install the Vauban application layer when the launch vehicle requires it (`VidocqAppLayer`, `Vidocq.run`), including the `vidocq:dev` hot-reload loop (`VidocqDevReloadLoop`).
 
@@ -75,6 +76,92 @@ Boot itself is intentionally sequential on a single thread (easier diagnosis, re
 * the xref:chappe::index.adoc[Chappe] HTTP I/O — one virtual thread per inbound connection;
 * the xref:mansart::index.adoc[Mansart] JDBC housekeeping;
 * request-time work of extensions such as `vidocq-runtime-knock-health-extension`, whose health checks execute on the incoming request's virtual thread.
+
+[#console-logging]
+== Console logging [.tag-new]#NEW#
+
+When the application has not configured logging, Vidocq prints one aligned line per record on standard output. The JDK default would print two lines per record on standard error, which an IDE shows in red. Vidocq keeps logging through `System.Logger` and `java.util.logging`: only the console handler of the root logger changes.
+
+.The `vidocq-runtime-cassini-rest-example` boot (messages shortened)
+[source,text]
+----
+[INFO ][2026-09-17 18:10:10.880][main           ][i.v.r.c.VidocqAppLayer#installLayer          ] : Application layer ready: modules [...]
+[INFO ][2026-09-17 18:10:10.885][main           ][i.v.r.c.VidocqBootstrap#configure            ] : Vidocq - Configuration phase
+[INFO ][2026-09-17 18:10:10.890][main           ][i.v.r.c.ExtensionLoader#load                 ] : Discovered 4 extension(s):
+[INFO ][2026-09-17 18:10:10.937][main           ][CassiniScopeExtension#addPathDefaultScope    ] :   @Path class ... defaulting to @RequestScoped
+[INFO ][2026-09-17 18:10:10.987][main           ][i.v.r.e.e.c.ChappeServerBootstrap#onStart    ] : Chappe listener 'default' started on http://localhost:8080/
+[INFO ][2026-09-17 18:10:10.989][main           ][i.v.r.c.VidocqBootstrap#start                ] : Vidocq - Started in 102.615 ms (process running for 183 ms)
+----
+
+=== Format
+
+`[LEVEL][timestamp][thread][source] : message`, one line per record:
+
+[cols="1,4"]
+|===
+| Column | Content
+
+| Level
+| `ERROR`, `WARN`, `INFO`, `CONF`, `DEBUG` or `TRACE`, from JUL's `SEVERE`, `WARNING`, `INFO`, `CONFIG`, `FINE` and `FINER`/`FINEST`. These are the `System.Logger` names Vidocq's code uses, never localized (no `INFOS` on a French JVM). Padded to 5 columns.
+
+| Timestamp
+| `yyyy-MM-dd HH:mm:ss.SSS`, in local time.
+
+| Thread
+| The thread that logged, padded to 15 columns. A longer name keeps its end after a `~`. An unnamed virtual thread shows `virtual-<id>`.
+
+| Source
+| `class#method`, padded to 45 columns. Packages are always abbreviated to their first letter (`i.v.r.c.VidocqBootstrap#configure`), so a class always looks the same. When that is still too wide, the packages are dropped (`CassiniScopeExtension#addProviderDefaultScope`), then the method is cut with a `~`. A class name that does not fit alone keeps its end after a `~`. The logger name stands in when the class is unknown.
+
+| Message
+| Formatted with its `{0}` parameters. The extra lines of a message and the stack trace follow unchanged.
+|===
+
+Every level goes to standard output, flushed after each record: the logs stay in one stream, in order, with what the application prints.
+
+=== When Vidocq steps back
+
+Vidocq replaces the JDK's default console handler first thing in `Vidocq.main`, in both `Vidocq.run` overloads and in `VidocqBootstrap.create()`, and only when the application has chosen nothing. The JDK default stays untouched when any of these holds:
+
+* `java.util.logging.config.file`, `java.util.logging.config.class`, `java.util.logging.manager` or `java.util.logging.SimpleFormatter.format` is set;
+* `System.LoggerFinder` is not the JDK's `java.util.logging` one, for example with an SLF4J or Log4j `System.Logger` provider on the module path;
+* the root logger's handlers are not exactly one `ConsoleHandler` with a `SimpleFormatter`, for example after `SLF4JBridgeHandler.install()` or `LogManager.readConfiguration(...)`;
+* `vidocq.log.console=jdk`.
+
+An application that calls `LogManager.readConfiguration` after the boot still replaces Vidocq's handler.
+
+=== Configuration
+
+[cols="2,1,4"]
+|===
+| Key | Default | Description
+
+| `vidocq.log.console` [.tag-new]#NEW#
+| `auto`
+| `auto`: Vidocq's console output, unless the application configured logging (above). `jdk`: the JDK's console handler, untouched.
+
+| `vidocq.console.color` [.tag-new]#NEW#
+| `auto`
+| Colours of the level: `auto`, `always` or `never`.
+|===
+
+The first install happens before the configuration is loaded, so only `-D` system properties and environment variables (`VIDOCQ_LOG_CONSOLE`, `VIDOCQ_CONSOLE_COLOR`) are visible then. Once `vidocq.properties` is loaded, both keys apply from the configuration as well: `vidocq.log.console=jdk` there puts the JDK handler back before any extension is configured. An unknown value logs a warning and falls back to `auto`.
+
+=== Colours
+
+Only the level is coloured: `ERROR` bold red, `WARN` yellow, `INFO` green, `CONF` cyan, `DEBUG` and `TRACE` faint.
+
+* A non-empty `NO_COLOR` environment variable always wins: no colour, even with `always`.
+* `always` colours the level wherever the output goes; `never` never does.
+* `auto` needs `TERM` other than `dumb`, and either IntelliJ's Run console or a terminal on an operating system other than Windows. IntelliJ's Run console is not a terminal but decodes ANSI escapes; Vidocq recognises it by the `-javaagent:…idea_rt.jar` argument IntelliJ adds to the JVM. A terminal means `System.console()` exists and `isTerminal()` is true, so output piped to a file or a container log stays plain.
+
+=== Keeping full control
+
+Vidocq never overrides a logging setup the application chose. To keep the JDK output or to use your own:
+
+* **`logging.properties`** — pass `-Djava.util.logging.config.file=conf/logging.properties`, or load it with `LogManager.readConfiguration(...)`.
+* **SLF4J, Logback, Log4j** — put a `System.Logger` provider on the module path (`slf4j-jdk-platform-logging`, `log4j-jpl`), or route `java.util.logging` with `SLF4JBridgeHandler.removeHandlersForRootLogger()` then `SLF4JBridgeHandler.install()`.
+* **The JDK default, unchanged** — set `vidocq.log.console=jdk` (`-Dvidocq.log.console=jdk`, `VIDOCQ_LOG_CONSOLE=jdk` or `vidocq.properties`).
 
 == Next steps
 
