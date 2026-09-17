@@ -513,5 +513,43 @@
                 <skip implementation="boolean" default-value="false">${vidocq.moduleinfo.skip}</skip>
             </configuration>
         </mojo>
+
+        <!-- vidocq:idea — experimental. IntelliJ IDEA shared run configurations (.run/*.run.xml) for the
+             reactor's Vidocq applications. Aggregator with no default phase: run it from the directory
+             IntelliJ opens. Maven 3 ignores requiresDirectInvocation, so the mojo itself refuses an execution
+             that does not come from the command line. -->
+        <mojo>
+            <goal>idea</goal>
+            <description>Experimental. Write one IntelliJ IDEA shared run configuration per Vidocq application of the reactor into .run/ (Make, then vidocq:generate, before launch), or verify them with vidocq.idea.check. Never writes .idea/ or project files, and never overwrites a file that was written by hand or edited since it was generated.</description>
+            <requiresDependencyResolution>none</requiresDependencyResolution>
+            <requiresDirectInvocation>true</requiresDirectInvocation>
+            <requiresProject>true</requiresProject>
+            <requiresOnline>false</requiresOnline>
+            <aggregator>true</aggregator>
+            <implementation>io.vidocq.runtime.maven.idea.VidocqIdeaMojo</implementation>
+            <language>java</language>
+            <instantiationStrategy>per-lookup</instantiationStrategy>
+            <threadSafe>true</threadSafe>
+            <parameters>
+                <parameter><name>session</name><type>org.apache.maven.execution.MavenSession</type><required>true</required><editable>false</editable><description>The Maven session (command-line properties, selected projects)</description></parameter>
+                <parameter><name>reactorProjects</name><type>java.util.List</type><required>true</required><editable>false</editable><description>The projects of this build, in reactor order</description></parameter>
+                <parameter><name>mojoExecution</name><type>org.apache.maven.plugin.MojoExecution</type><required>true</required><editable>false</editable><description>This execution, to refuse a binding to a lifecycle phase</description></parameter>
+                <parameter><name>projectDirectory</name><type>java.io.File</type><required>false</required><editable>true</editable><description>The directory IntelliJ opens: .run/ is written there and $PROJECT_DIR$ paths are relative to it. Default: the directory Maven was launched in, which must not be a module of an enclosing reactor.</description></parameter>
+                <parameter><name>check</name><type>boolean</type><required>false</required><editable>true</editable><description>Write nothing; fail when .run/ differs from what the goal would write.</description></parameter>
+                <parameter><name>generateBeforeLaunch</name><type>boolean</type><required>false</required><editable>true</editable><description>Add the vidocq:generate Maven step before launch.</description></parameter>
+                <parameter><name>jre</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>IntelliJ SDK name written as the configurations' alternative JRE. Unset: IntelliJ uses the module SDK.</description></parameter>
+                <parameter><name>skip</name><type>boolean</type><required>false</required><editable>true</editable><description>Skip the goal entirely.</description></parameter>
+            </parameters>
+            <configuration>
+                <session implementation="org.apache.maven.execution.MavenSession" default-value="${session}"/>
+                <reactorProjects implementation="java.util.List" default-value="${reactorProjects}"/>
+                <mojoExecution implementation="org.apache.maven.plugin.MojoExecution" default-value="${mojoExecution}"/>
+                <projectDirectory implementation="java.io.File">${vidocq.idea.projectDirectory}</projectDirectory>
+                <check implementation="boolean" default-value="false">${vidocq.idea.check}</check>
+                <generateBeforeLaunch implementation="boolean" default-value="true">${vidocq.idea.generateBeforeLaunch}</generateBeforeLaunch>
+                <jre implementation="java.lang.String">${vidocq.idea.jre}</jre>
+                <skip implementation="boolean" default-value="false">${vidocq.idea.skip}</skip>
+            </configuration>
+        </mojo>
     </mojos>
 </plugin>
