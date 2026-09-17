@@ -70,16 +70,38 @@ class StartupIdentityTest {
     }
 
     @Test
-    void theDebuggerGoesFirstThenTheReasonThenTheVendor() {
+    void theVendorGoesFirstThenTheNameThenTheDebuggerThenTheReason() {
         StartupIdentity id = identity(SNAPSHOT_DIRTY, "Eclipse Adoptium", dev("profile dev"), "debug *:5005",
                 "mcp-time-server", "0.1.0-SNAPSHOT");
 
         assertEquals("Java 25+36-LTS (Eclipse Adoptium) | dev (profile dev) | debug *:5005"
                 + " | mcp-time-server 0.1.0-SNAPSHOT", id.contextLine(101));
-        assertEquals("Java 25+36-LTS (Eclipse Adoptium) | dev (profile dev) | mcp-time-server 0.1.0-SNAPSHOT",
-                id.contextLine(100));
-        assertEquals("Java 25+36-LTS (Eclipse Adoptium) | dev | mcp-time-server 0.1.0-SNAPSHOT", id.contextLine(85));
-        assertEquals("Java 25+36-LTS | dev | mcp-time-server 0.1.0-SNAPSHOT", id.contextLine(71));
+        assertEquals("Java 25+36-LTS | dev (profile dev) | debug *:5005 | mcp-time-server 0.1.0-SNAPSHOT",
+                id.contextLine(100), "the vendor is worth neither the debugger nor the reason");
+        assertEquals("Java 25+36-LTS | dev (profile dev) | debug *:5005 | mcp-time-se... 0.1.0-SNAPSHOT",
+                id.contextLine(81), "the name is cut while the debugger still fits");
+        assertEquals("Java 25+36-LTS | dev (profile dev) | mcp-time-server 0.1.0-SNAPSHOT", id.contextLine(70),
+                "then the debugger goes, and the name comes back whole");
+        assertEquals("Java 25+36-LTS | dev | mcp-time-server 0.1.0-SNAPSHOT", id.contextLine(60),
+                "the reason goes last, the mode itself stays");
+    }
+
+    @Test
+    void atTheWidthOfTheBlockTheModeAndTheDebuggerSurviveTheVendor() {
+        int max = StartupBanner.WIDTH - 1;
+
+        assertEquals("Java 25+36-LTS | dev (IntelliJ agent) | debug *:5005 | todo 1.0",
+                identity(SNAPSHOT_DIRTY, "Eclipse Adoptium", dev("IntelliJ agent"), "debug *:5005", "todo", "1.0")
+                        .contextLine(max),
+                "a 19-column vendor never costs the address a debugger attaches to");
+        assertEquals("Java 25+36-LTS | dev (profile dev) | debug *:18099 | vidocq-r... 0.4.0-SNAPSHOT",
+                identity(SNAPSHOT_DIRTY, "Eclipse Adoptium", dev("profile dev"), "debug *:18099",
+                        "vidocq-runtime-cassini-rest-example", "0.4.0-SNAPSHOT").contextLine(max),
+                "the application name is cut before the debugger is given up");
+        assertEquals("Java 25+36-LTS | prod (no dev or test signal) | acme-orders-gateway-api 1.4.2",
+                identity(SNAPSHOT_DIRTY, "Eclipse Adoptium", prodByAbsence(), null, "acme-orders-gateway-api", "1.4.2")
+                        .contextLine(max),
+                "nor the mode the launch was resolved to");
     }
 
     @Test
@@ -87,9 +109,9 @@ class StartupIdentityTest {
         StartupIdentity id = identity(SNAPSHOT_DIRTY, "Eclipse Adoptium", prodByAbsence(), "debug *:5005",
                 "app", "1.0");
 
-        assertEquals("Java 25+36-LTS (Eclipse Adoptium) | prod (no dev or test signal) | app 1.0",
-                id.contextLine(88));
-        assertEquals("Java 25+36-LTS (Eclipse Adoptium) | app 1.0", id.contextLine(73),
+        assertEquals("Java 25+36-LTS | prod (no dev or test signal) | debug *:5005 | app 1.0", id.contextLine(70));
+        assertEquals("Java 25+36-LTS | prod (no dev or test signal) | app 1.0", id.contextLine(60));
+        assertEquals("Java 25+36-LTS | app 1.0", id.contextLine(50),
                 "'prod' alone would claim more than the absence of a signal proves");
     }
 
@@ -108,7 +130,7 @@ class StartupIdentityTest {
         StartupIdentity id = identity(SNAPSHOT_DIRTY, "Eclipse Adoptium", dev("IntelliJ agent"),
                 "vidocq-runtime-cassini-rest-example", "0.4.0-SNAPSHOT");
 
-        assertEquals("Java 25+36-LTS | dev | vidocq-runtime-cassini-rest-exa... 0.4.0-SNAPSHOT",
+        assertEquals("Java 25+36-LTS | dev (IntelliJ agent) | vidocq-runtime... 0.4.0-SNAPSHOT",
                 id.contextLine(72));
     }
 
@@ -202,6 +224,9 @@ class StartupIdentityTest {
         assertTrue(lines.size() <= 8, block);
         lines.forEach(line -> assertTrue(line.length() <= 80, line));
         assertEquals(" Vidocq 0.4.0-SNAPSHOT (9beafc47+dirty, built 2026-09-17T14:02:11Z)", lines.get(6));
+        assertEquals(" Java 25+36-LTS | dev | io.vidocq.tools.lc4jcdi.mcptimeserver 0.1.0-SNAPSHOT", lines.get(7),
+                "a 41-column reason and a 22-column debugger do not fit behind a 37-column module name:"
+                        + " StartupBanner.debuggerRecord then repeats the address on a record of its own");
     }
 
     @Test

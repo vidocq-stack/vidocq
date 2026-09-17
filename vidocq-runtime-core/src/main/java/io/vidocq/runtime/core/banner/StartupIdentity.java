@@ -109,10 +109,15 @@ public record StartupIdentity(BuildInfo vidocq, String javaVersion, String javaV
     }
 
     /**
-     * The richest context line of at most {@code max} columns: the debugger goes first, then the
-     * reason of the launch mode, then the JVM vendor, then the module segments of the application
-     * name are abbreviated, then the name is cut with {@code ...}, always keeping the application
-     * version; the whole line is cut last.
+     * The richest context line of at most {@code max} columns. What is given up, in order: the JVM
+     * vendor, then the module segments of the application name are abbreviated, then the name is
+     * cut with {@code ...} (always keeping the application version), then the debugger, then the
+     * reason of the launch mode — and with it the whole segment when the mode is a {@code prod}
+     * that no signal proves; the whole line is cut last.
+     *
+     * <p>The vendor goes before the launch and the debugger because the line is read to know where
+     * the process runs and how to attach to it: a 19-column {@code (Eclipse Adoptium)} never costs
+     * the address of a debugger or the reason of a mode that would have fitted without it.
      *
      * <p>A {@code prod} that no signal proves has no short form: the whole segment goes with its
      * reason rather than claim, in one word, more than is known.
@@ -122,28 +127,39 @@ public record StartupIdentity(BuildInfo vidocq, String javaVersion, String javaV
         if (line.length() <= max) {
             return line;
         }
-        line = context(true, appName, true, false);
+        String fitted = withoutVendor(max, true, true);
+        if (fitted == null) {
+            fitted = withoutVendor(max, true, false);
+        }
+        if (fitted == null) {
+            fitted = withoutVendor(max, false, false);
+        }
+        return fitted != null ? fitted : StartupBanner.fit(context(false, appName, false, false), max);
+    }
+
+    /**
+     * The line without the JVM vendor, the application name abbreviated then cut to keep the
+     * version, or {@code null} when not even the cut name brings it within {@code max} columns.
+     */
+    private String withoutVendor(int max, boolean withReason, boolean withDebug) {
+        String line = context(false, appName, withReason, withDebug);
         if (line.length() <= max) {
             return line;
         }
-        line = context(true, appName, false, false);
-        if (line.length() <= max) {
-            return line;
-        }
-        line = context(false, appName, false, false);
-        if (line.length() <= max || appName == null) {
-            return StartupBanner.fit(line, max);
+        if (appName == null) {
+            return null;
         }
         String name = abbreviate(appName);
-        line = context(false, name, false, false);
+        line = context(false, name, withReason, withDebug);
         if (line.length() <= max) {
             return line;
         }
         int kept = name.length() - (line.length() - max) - 3;
-        if (kept >= MIN_NAME_COLUMNS) {
-            return context(false, name.substring(0, kept) + "...", false, false);
+        if (kept < MIN_NAME_COLUMNS) {
+            return null;
         }
-        return StartupBanner.fit(line, max);
+        String cut = context(false, name.substring(0, kept) + "...", withReason, withDebug);
+        return cut.length() <= max ? cut : null;
     }
 
     /** {@code Vidocq bricks: <brick> <describe()>, ...}, when some brick is worth a look. */
