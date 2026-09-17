@@ -25,6 +25,7 @@
 . **onStart** — each extension receives the `ExtensionContext` (container, bean manager, config): the Chappe extension opens the HTTP listeners, Cassini mounts the REST routes, Mansart opens the JDBC pool.
 
 * Warn about configured `vidocq.*` keys nobody consumes (`ConfigKeyAudit`, based on the core's own keys and `VidocqExtension.configKeys()`).
+* Print the startup banner with the exact Vidocq version and build (<<startup-banner>>).
 * Print readable console logs when the application has not configured logging (<<console-logging>>).
 * Manage the shutdown cycle — `onStop()` runs in reverse priority order, virtual threads drain cleanly.
 * Install the Vauban application layer when the launch vehicle requires it (`VidocqAppLayer`, `Vidocq.run`), including the `vidocq:dev` hot-reload loop (`VidocqDevReloadLoop`).
@@ -76,6 +77,195 @@ Boot itself is intentionally sequential on a single thread (easier diagnosis, re
 * the xref:chappe::index.adoc[Chappe] HTTP I/O — one virtual thread per inbound connection;
 * the xref:mansart::index.adoc[Mansart] JDBC housekeeping;
 * request-time work of extensions such as `vidocq-runtime-knock-health-extension`, whose health checks execute on the incoming request's virtual thread.
+
+[#startup-banner]
+== Startup banner [.tag-new]#NEW#
+
+Vidocq tells which Vidocq is starting, once per JVM, right after the configuration is loaded and before `Vidocq - Configuration phase`. Two `0.4.0-SNAPSHOT` builds are told apart by their commit, so the version is in the output before anything later can fail.
+
+When someone is watching (a terminal, a dev launch), the art and two lines go to standard output:
+
+.`vidocq-runtime-cassini-rest-example` in a terminal
+[source,text]
+----
+__     ___     _
+\ \   / (_) __| |   ___       ___ __ _
+ \ \ / /| |/ _` |  /   \     / __/ _` |
+  \ V / | | (_| | |     |   | (_| (_| |
+   \_/  |_|\__,_|  \___/\    \___\__, |
+                         \\         |_|
+ Vidocq 0.4.0-SNAPSHOT (9beafc47, built 2026-09-17T16:36:42Z)
+ Java 25+36-LTS | vidocq-runtime-cassini-rest-example 0.4.0-SNAPSHOT
+----
+
+Everywhere else (a container, CI, a pipe, `> file`, tests) there is no art, only one log line:
+
+[source,text]
+----
+[INFO ][2026-09-17 18:38:35.246][main           ][i.v.r.c.b.StartupBanner#show                 ] : Vidocq 0.4.0-SNAPSHOT (9beafc47, built 2026-09-17T16:36:42Z) | Java 25+36-LTS (Eclipse Adoptium) | vidocq-runtime-cassini-rest-example 0.4.0-SNAPSHOT
+----
+
+=== What it shows
+
+The *identity line* is `Vidocq <version>`, followed by details only for a snapshot or a build from a modified working tree:
+
+[cols="2,3"]
+|===
+| Build | Identity line
+
+| Clean release
+| `Vidocq 0.3.0`
+
+| Snapshot
+| `Vidocq 0.4.0-SNAPSHOT (9beafc47, built 2026-09-17T14:02:11Z)`
+
+| Built from a modified tree
+| `Vidocq 0.4.0-SNAPSHOT (9beafc47+dirty, built 2026-09-17T14:02:11Z)`
+
+| Without a build time
+| `Vidocq 0.4.0-SNAPSHOT (9beafc47, committed 2026-08-30T20:07:01Z)`
+
+| Jar without a build identity file (built with an older `vidocq-parent`)
+| `Vidocq 0.4.0-SNAPSHOT (jar dated 2026-09-15T15:53:21Z)`
+
+| Classes recompiled by an IDE
+| `Vidocq version unknown (classes in vidocq-runtime-core/target/classes)`
+
+| Classes directory with a version from the last Maven build
+| `Vidocq 0.4.0-SNAPSHOT? (last Maven build, classes in vauban-api/target/classes)`
+|===
+
+Times are UTC, to the second. A directory of classes shows where the classes come from rather than a commit: an IDE recompiles without Maven, so its build identity file and its version may be older than the classes, hence the `?`.
+
+The *context line* is `Java <version> (<vendor>) | <launch> | <application> <version>`:
+
+* the Java version and vendor of the running JVM;
+* `profile <name>` when `vidocq.profile` is set, otherwise `dev launch` when a dev launch is detected, otherwise nothing (never `prod` by default);
+* the application: the module of the class that calls `Vidocq.run`, else the module of `-Dvidocq.app.main`, else the module launched with `java -m`. It is named by the `artifactId` of its `pom.properties` when packaged, by its module name otherwise.
+
+Both lines stay within 80 columns. For the context line, the JVM vendor goes first (as above), then the segments of a module name are abbreviated (`i.v.t.l.mcptimeserver`), then the name is cut with `...`, always before the application version; the whole line is cut last. A long directory path drops its `last Maven build` label before being cut.
+
+The Vidocq bricks have their own versions. When a brick (Vauban, Chappe, Cassini, ...) has another version than the runtime, was built from a modified tree, or is a snapshot without a commit, one more INFO record lists them:
+
+[source,text]
+----
+Vidocq bricks: chappe 0.4.0-SNAPSHOT (2d8ec095+dirty, built 2026-09-16T08:48:26Z), vauban 0.3.0
+----
+
+=== When the art appears
+
+[cols="1,3"]
+|===
+| `vidocq.banner.mode` | Output
+
+| `auto` (default)
+| One INFO line for an embedded deployment (Arquillian, the TCK: `configure(List)`) and for a JUnit test run. The art and the two lines on standard output when standard output is a terminal or on a dev launch. One INFO line everywhere else.
+
+| `console`
+| The art and the two lines on standard output, in one write.
+
+| `log`
+| The art and the two lines in one INFO record, which starts with a line break so that the art stays in column 0. Never coloured.
+
+| `off`
+| Nothing.
+|===
+
+A terminal means that `System.console()` exists and `isTerminal()` is true: redirecting standard input or standard output turns the art off. A dev launch is, for now, `vidocq.profile=dev`, the `vidocq:dev` reload loop, or IntelliJ's Run console. IntelliJ's Run console is not a terminal, so this is what shows the art on an IDE Run; Vidocq recognises it by the `-javaagent:…idea_rt.jar` argument IntelliJ adds to the JVM.
+
+The banner is printed once per JVM: a hot reload or a second deployment in the same JVM prints nothing more. It never fails the boot. Its logger, `io.vidocq.runtime.core.banner.StartupBanner`, can be silenced through the logging configuration.
+
+Code that embeds Vidocq and owns its standard output (a tool whose output is data, a CLI plugin) sets the mode itself; this wins over the configuration:
+
+[source,java]
+----
+VidocqBootstrap.create()
+        .banner(BannerMode.OFF)
+        .configure()
+        .start();
+----
+
+=== Configuration
+
+[cols="2,1,4"]
+|===
+| Key | Default | Description
+
+| `vidocq.banner.mode` [.tag-new]#NEW#
+| `auto`
+| `auto`, `console`, `log` or `off` (above). An unknown value logs a warning and means `auto`.
+
+| `vidocq.banner.location` [.tag-new]#NEW#
+| (empty)
+| A custom banner: `classpath:<resource>`, `file:<path>` or `<path>`. When unset, a `vidocq-banner.txt` resource of the application is used if there is one.
+
+| `vidocq.console.color`
+| `auto`
+| Colours, shared with the console logs (<<console-logging>>).
+|===
+
+Like every key, they can be set with `-D`, an environment variable (`VIDOCQ_BANNER_MODE`), `vidocq.properties` or a profile (`%dev.vidocq.banner.mode`). There is no `vidocq.banner.enabled`: the startup audit reports it with the known keys of the namespace.
+
+=== Colours
+
+On a terminal or in IntelliJ's Run console, the art is cyan, `Vidocq <version>` bold, the build details yellow and the context line faint. The policy is the one of the console logs: a non-empty `NO_COLOR` environment variable always wins, `vidocq.console.color=always` or `never` forces the choice, and `auto` needs `TERM` other than `dumb` and IntelliJ's Run console or a terminal on an operating system other than Windows. Output piped to a file or a container log never carries escape sequences.
+
+=== Custom banner
+
+A `vidocq-banner.txt` file at the root of the application's resources replaces the art, with no configuration; `vidocq.banner.location` points to another file. The file is read as UTF-8 through the context class loader, as `vidocq.properties` is. Its lines are printed as they are, after placeholder substitution:
+
+[cols="2,3"]
+|===
+| Placeholder | Value
+
+| `${vidocq.version}` | `0.4.0-SNAPSHOT`
+| `${vidocq.build}` | `9beafc47+dirty, built 2026-09-17T14:02:11Z`, empty for a clean release
+| `${vidocq.identity}` | the whole identity line
+| `${java.version}` | `Java 25+36-LTS (Eclipse Adoptium)`
+| `${app.name}`, `${app.version}` | the application's name and version
+| `${vidocq.launch}` | `profile dev`, `dev launch` or empty
+| `${ansi.bold}`, `${ansi.faint}`, `${ansi.red}`, `${ansi.green}`, `${ansi.yellow}`, `${ansi.blue}`, `${ansi.magenta}`, `${ansi.cyan}`, `${ansi.reset}` | the escape sequence, or empty when colours are off
+| `${<configuration key>}` | the configured value
+| `${<key>:<default>}` | `<default>` when the key has no value
+|===
+
+An unknown placeholder becomes empty, and a `${` without its closing brace on the same line is printed as is. Vidocq appends its identity and context lines after the file, so the version survives any custom banner, unless the file places `${vidocq.identity}` itself.
+
+.`src/main/resources/vidocq-banner.txt`
+[source,text]
+----
+${ansi.cyan}  T O D O   S E R V I C E${ansi.reset}
+  port ${vidocq.chappe.listener.default.port:8080} - ${app.name} ${app.version}
+----
+
+[#build-identity]
+=== Build identity [.tag-new]#NEW#
+
+Every jar built with `io.vidocq:vidocq-parent` (Vidocq, Vauban, Cassini, Chappe, and the applications created by `vidocq create`, through `vidocq-runtime-parent`) carries a build identity file, `META-INF/vidocq/build-info/<artifactId>.properties`, written by `git-commit-id-maven-plugin` at the `initialize` phase:
+
+[source,properties]
+----
+#Generated by Git-Commit-Id-Plugin
+git.build.time=2026-09-17T14\:02\:11Z
+git.build.version=0.4.0-SNAPSHOT
+git.commit.id.abbrev=9beafc47
+git.commit.time=2026-09-15T14\:08\:34Z
+git.dirty=false
+----
+
+* `git.dirty` is `true` when tracked files had uncommitted changes; untracked files do not count.
+* Releases have no `git.build.time` and stay byte-for-byte reproducible (`project.build.outputTimestamp` is the commit time in the `release` profile).
+* The file name carries the artifactId: on the class path, a shared name would make every jar read the first one found. The banner reads each file inside the jar of its own module.
+* `-Dmaven.gitcommitid.skip=true` builds without it; the banner then falls back to the jar date.
+
+To find the commit a snapshot was built from, read the file in the jar, then look the commit up in the repository of that brick:
+
+[source,bash]
+----
+unzip -p ~/.m2/repository/io/vidocq/runtime/vidocq-runtime-core/0.4.0-SNAPSHOT/vidocq-runtime-core-0.4.0-SNAPSHOT.jar \
+    META-INF/vidocq/build-info/vidocq-runtime-core.properties
+git log -1 9beafc47
+----
 
 [#console-logging]
 == Console logging [.tag-new]#NEW#

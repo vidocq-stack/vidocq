@@ -103,6 +103,14 @@ The `io.vidocq.runtime.extensions.*` modules each correspond to a built-in exten
 | `vidocq.console.color` [.tag-new]#NEW#
 | `auto`
 | Console colours: `auto`, `always` or `never`. A non-empty `NO_COLOR` environment variable always disables them.
+
+| `vidocq.banner.mode` [.tag-new]#NEW#
+| `auto`
+| Startup banner: `auto` (the art on a terminal or a dev launch, one INFO line elsewhere), `console`, `log` or `off`. See xref:modules/vidocq-runtime-core.adoc#startup-banner[Startup banner].
+
+| `vidocq.banner.location` [.tag-new]#NEW#
+| (empty)
+| Custom banner: `classpath:<resource>`, `file:<path>` or `<path>`; a `vidocq-banner.txt` resource is used without configuration.
 |===
 
 TLS is not implemented yet: `vidocq.https.port`, `vidocq.tls.cert` and `vidocq.tls.key` are
@@ -113,8 +121,9 @@ TLS is not implemented yet: `vidocq.https.port`, `vidocq.tls.cert` and `vidocq.t
 A `vidocq.*` key that no extension consumes is applied by nobody: the application silently keeps
 the default, and the mistake stays invisible whenever the configured value happens to *be* the
 default. Since 0.3.0 the runtime reports such a key as a startup warning, for every namespace an
-extension claims through `VidocqExtension.configKeys()`. The core claims `vidocq.log.` and
-`vidocq.console.` itself, so a typo such as `vidocq.console.colour` is reported too.
+extension claims through `VidocqExtension.configKeys()`. The core claims `vidocq.log.`,
+`vidocq.console.` and `vidocq.banner.` itself, so a typo such as `vidocq.console.colour` or
+`vidocq.banner.enabled` is reported too.
 ====
 
 [NOTE]

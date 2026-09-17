@@ -236,6 +236,8 @@ vidocq create --name my-api -g com.acme -x cassini-rest -x knock-health
 
 Boots the runtime and watches your sources, restarting the runtime context on a
 reload-worthy change so configuration and resources are re-applied without leaving the CLI.
+The runtime prints its xref:modules/vidocq-runtime-core.adoc#startup-banner[startup banner]
+first; the boot spinner then runs until the runtime has started. A reload prints no second banner.
 
 [cols="1,2"]
 |===
