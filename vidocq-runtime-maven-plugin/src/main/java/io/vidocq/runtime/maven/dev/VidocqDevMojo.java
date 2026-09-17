@@ -20,6 +20,7 @@
 package io.vidocq.runtime.maven.dev;
 
 import io.vidocq.runtime.maven.ApplicationLaunch;
+import io.vidocq.runtime.maven.ConsoleColors;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
@@ -388,6 +389,13 @@ public class VidocqDevMojo extends AbstractMojo {
                 props.put(pair.substring(0, eq).trim(), pair.substring(eq + 1).trim());
             }
         }
+        // The child inherits Maven's streams, so it inherits Maven's colour policy: without this, an IDE
+        // Maven console (no TTY, no idea_rt.jar agent) turns the runtime's colours off while Maven's own
+        // lines stay coloured.
+        ConsoleColors.forChild(props.containsKey(ConsoleColors.COLOR_KEY)).ifPresent(choice -> {
+            props.put(ConsoleColors.COLOR_KEY, choice.mode());
+            getLog().debug("dev: " + choice.logLine());
+        });
         return props;
     }
 

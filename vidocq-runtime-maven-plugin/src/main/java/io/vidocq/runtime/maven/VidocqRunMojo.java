@@ -257,7 +257,7 @@ public class VidocqRunMojo extends AbstractMojo {
 
     /**
      * The child's system properties: what {@code vidocq.run.systemProperties} declares, then every
-     * {@code -Dvidocq.*} of the Maven command line that is not a build setting.
+     * {@code -Dvidocq.*} of the Maven command line that is not a build setting, then the colour policy.
      */
     private Map<String, String> buildSystemProperties() {
         Map<String, String> properties = new LinkedHashMap<>();
@@ -270,6 +270,10 @@ public class VidocqRunMojo extends AbstractMojo {
             }
         }
         forwarded(session == null ? new Properties() : session.getUserProperties()).forEach(properties::putIfAbsent);
+        ConsoleColors.forChild(properties.containsKey(ConsoleColors.COLOR_KEY)).ifPresent(choice -> {
+            properties.put(ConsoleColors.COLOR_KEY, choice.mode());
+            getLog().debug(PREFIX + choice.logLine());
+        });
         return properties;
     }
 
