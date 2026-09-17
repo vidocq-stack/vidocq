@@ -30,13 +30,14 @@ import java.util.concurrent.TimeUnit;
 /**
  * Forked child JVM launched exactly like the production runtime — strict
  * module-path, no classpath. The dev mode kills and respawns this process on
- * every accepted source changes (Approach A in {@code DEBUGMODE.md}).
+ * every accepted source changes (Approach A in {@code DEBUGMODE.md}); {@code vidocq:run}
+ * starts one and waits for it.
  *
  * <p>{@link #stop(Duration)} sends a SIGTERM-equivalent ({@link Process#destroy()})
  * and waits for the screed drain to complete. If the child has not exited after
  * the grace period, {@link Process#destroyForcibly()} takes over.</p>
  */
-final class ChildJvm {
+public final class ChildJvm {
 
     /** Java executable, resolved once from {@code java.home}. */
     private static final String JAVA_BIN = resolveJavaBin();
@@ -65,13 +66,28 @@ final class ChildJvm {
      *       {@code --module mainModule[/mainClass]}.</li>
      * </ul>
      */
-    static ChildJvm of(List<Path> modulePath,
-                       List<Path> appPath,
-                       String mainModule,
-                       String mainClass,
-                       List<String> extraJvmArgs,
-                       Map<String, String> systemProps,
-                       Path workingDir) {
+    public static ChildJvm of(List<Path> modulePath,
+                              List<Path> appPath,
+                              String mainModule,
+                              String mainClass,
+                              List<String> extraJvmArgs,
+                              Map<String, String> systemProps,
+                              Path workingDir) {
+        return of(modulePath, appPath, mainModule, mainClass, extraJvmArgs, systemProps, workingDir, List.of());
+    }
+
+    /**
+     * Same launch, with {@code appArgs} appended after the main module reference: they reach the
+     * application's {@code main(String[])} exactly as they would on a command line.
+     */
+    public static ChildJvm of(List<Path> modulePath,
+                              List<Path> appPath,
+                              String mainModule,
+                              String mainClass,
+                              List<String> extraJvmArgs,
+                              Map<String, String> systemProps,
+                              Path workingDir,
+                              List<String> appArgs) {
         boolean layerMode = appPath != null && !appPath.isEmpty();
         List<String> command = new ArrayList<>();
         command.add(JAVA_BIN);
@@ -108,6 +124,9 @@ final class ChildJvm {
                     : mainModule + "/" + mainClass;
         }
         command.add(moduleRef);
+        if (appArgs != null) {
+            command.addAll(appArgs);
+        }
 
         ProcessBuilder pb = new ProcessBuilder(command)
                 .directory(workingDir.toFile())
@@ -117,17 +136,17 @@ final class ChildJvm {
     }
 
     /** The assembled command line (tests). */
-    List<String> command() {
+    public List<String> command() {
         return List.copyOf(builder.command());
     }
 
     /** Start the child process. Returns the spawned PID for logging. */
-    long start() throws IOException {
+    public long start() throws IOException {
         process = builder.start();
         return process.pid();
     }
 
-    boolean isAlive() {
+    public boolean isAlive() {
         return process != null && process.isAlive();
     }
 
@@ -137,7 +156,7 @@ final class ChildJvm {
      * it. This ordering matches what the user gets from Ctrl+C in a normal
      * Vidocq run — chappe's shutdown hook drains in-flight connections.
      */
-    void stop(Duration grace) throws InterruptedException {
+    public void stop(Duration grace) throws InterruptedException {
         if (process == null || !process.isAlive()) {
             return;
         }
@@ -147,6 +166,14 @@ final class ChildJvm {
             process.destroyForcibly();
             process.waitFor(5, TimeUnit.SECONDS);
         }
+    }
+
+    /**
+     * Waits for the child to exit and returns its exit code — what {@code vidocq:run} propagates as
+     * the result of the goal. Returns {@code 0} when no process was ever started.
+     */
+    public int waitFor() throws InterruptedException {
+        return process == null ? 0 : process.waitFor();
     }
 
     private static String joinPath(List<Path> entries) {

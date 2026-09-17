@@ -19,8 +19,7 @@
  */
 package io.vidocq.runtime.maven.dev;
 
-import io.vidocq.runtime.maven.JpmsPatches;
-import io.vidocq.vauban.maven.modularize.ModularizedJars;
+import io.vidocq.runtime.maven.ApplicationLaunch;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
@@ -36,7 +35,6 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -204,17 +202,7 @@ public class VidocqDevMojo extends AbstractMojo {
         // that vidocq:generate parked for scanned dependencies (target/vidocq-patches)
         // to their owning module, exactly like the packaging goals do by enrichment.
         try {
-            Map<String, Path> jarsByArtifactId = new HashMap<>();
-            for (var artifact : project.getArtifacts()) {
-                if (artifact.getFile() != null) {
-                    // Same file the module path uses (see buildModulePath): a modularized
-                    // copy when vauban:modularize produced one, the original jar otherwise —
-                    // otherwise --patch-module would target a jar that is not on the path.
-                    jarsByArtifactId.put(artifact.getArtifactId(),
-                            ModularizedJars.resolve(buildDirPath(), artifact.getFile().toPath()));
-                }
-            }
-            List<String> patchArgs = JpmsPatches.patchModuleArgs(buildDirPath(), jarsByArtifactId);
+            List<String> patchArgs = ApplicationLaunch.patchModuleArgs(project, buildDirPath());
             if (!patchArgs.isEmpty()) {
                 jvmArgs = new ArrayList<>(jvmArgs);
                 jvmArgs.addAll(patchArgs);
@@ -368,23 +356,10 @@ public class VidocqDevMojo extends AbstractMojo {
      * runtime/compile artifact.
      */
     private List<Path> buildModulePath() {
-        List<Path> entries = new ArrayList<>();
-        if (!layerMode) {
-            // Legacy shape only — in layer mode the application classes travel through
-            // -Dvidocq.app.path instead (a module must not be on both paths).
-            entries.add(classesDir.toPath());
-        }
-        for (var artifact : project.getArtifacts()) {
-            if (artifact.getFile() != null && "jar".equals(artifact.getType())) {
-                Path jar = artifact.getFile().toPath();
-                Path resolved = ModularizedJars.resolve(buildDirPath(), jar);
-                if (!resolved.equals(jar)) {
-                    getLog().info("dev: using modularized copy of " + jar.getFileName());
-                }
-                entries.add(resolved);
-            }
-        }
-        return entries;
+        // In layer mode the application classes travel through -Dvidocq.app.path instead: a module must
+        // not be on both paths.
+        return ApplicationLaunch.modulePath(project, buildDirPath(), classesDir.toPath(), layerMode,
+                jar -> getLog().info("dev: using modularized copy of " + jar.getFileName()));
     }
 
     /**
@@ -398,7 +373,7 @@ public class VidocqDevMojo extends AbstractMojo {
 
     /** The application archives of the layer mode: the project's own build output. */
     private List<Path> buildAppPath() {
-        return layerMode ? List.of(classesDir.toPath()) : List.of();
+        return ApplicationLaunch.appPath(classesDir.toPath(), layerMode);
     }
 
     private Map<String, String> buildSystemProperties() {

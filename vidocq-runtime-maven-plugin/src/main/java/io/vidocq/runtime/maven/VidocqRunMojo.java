@@ -1,0 +1,331 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.runtime.maven;
+
+import io.vidocq.runtime.maven.dev.ChildJvm;
+import org.apache.maven.execution.MavenSession;
+import org.apache.maven.plugin.AbstractMojo;
+import org.apache.maven.plugin.MojoExecutionException;
+import org.apache.maven.plugins.annotations.Execute;
+import org.apache.maven.plugins.annotations.LifecyclePhase;
+import org.apache.maven.plugins.annotations.Mojo;
+import org.apache.maven.plugins.annotations.Parameter;
+import org.apache.maven.plugins.annotations.ResolutionScope;
+import org.apache.maven.project.MavenProject;
+
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Path;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+
+/**
+ * Runs the application once, in a forked JVM, the way the production launcher does — and the way an
+ * IDE should: the goal forks the lifecycle up to {@code process-classes}, so {@code mvn vidocq:run}
+ * alone compiles the module <em>and</em> runs {@code vidocq:generate}, whose bean index covers the beans
+ * of the dependency jars. An IDE Run that builds with the IDE never runs {@code vidocq:generate} and the
+ * server answers 404 (Vidocq/vidocq#83); a Run that is a Maven run of this goal cannot.
+ *
+ * <p>The child JVM has exactly the shape of the one {@code vidocq:dev} forks — module path, resolved
+ * {@code ALL-MODULE-PATH}, application classes handed to the runtime through {@code -Dvidocq.app.path},
+ * inherited I/O — without the source watcher, the reload file and {@code -Dvidocq.profile=dev}. The goal
+ * blocks until the application exits, propagates its exit code, and stops it on Ctrl+C.
+ *
+ * <pre>mvn vidocq:run
+ * mvn vidocq:run -Dvidocq.run.debug=true
+ * mvn vidocq:run -Dvidocq.run.args="--port 8081"</pre>
+ */
+@Mojo(name = "run",
+        defaultPhase = LifecyclePhase.NONE,
+        requiresDependencyResolution = ResolutionScope.RUNTIME,
+        requiresDirectInvocation = true,
+        threadSafe = true)
+@Execute(phase = LifecyclePhase.PROCESS_CLASSES)
+public class VidocqRunMojo extends AbstractMojo {
+
+    private static final String PREFIX = "Vidocq run: ";
+
+    /**
+     * Command-line properties that configure the build, never the application: they stay in the Maven
+     * JVM. Everything else under {@code vidocq.} is forwarded to the child (see {@link #forwarded}).
+     */
+    private static final List<String> BUILD_PREFIXES = List.of("vidocq.run.", "vidocq.dev.", "vidocq.idea.",
+            "vidocq.docker.", "vidocq.jlink.", "vidocq.checkpom.", "vidocq.moduleinfo.", "vidocq.package.");
+
+    private static final List<String> BUILD_KEYS = List.of("vidocq.mainModule", "vidocq.mainClass",
+            "vidocq.appName", "vidocq.appVersion", "vidocq.appDescription", "vidocq.compress", "vidocq.distDir",
+            "vidocq.distName", "vidocq.icon", "vidocq.installerDir", "vidocq.jpackageType", "vidocq.jvmArgs",
+            "vidocq.launcher", "vidocq.runtimeImage", "vidocq.scriptName", "vidocq.stripDebug", "vidocq.vendor");
+
+    @Parameter(defaultValue = "${project}", readonly = true, required = true)
+    private MavenProject project;
+
+    @Parameter(defaultValue = "${session}", readonly = true, required = true)
+    private MavenSession session;
+
+    /**
+     * Java module containing the main class. Required — Vidocq apps are always launched on the module
+     * path, never the class path.
+     */
+    @Parameter(property = "vidocq.mainModule", required = true)
+    private String mainModule;
+
+    /**
+     * Fully-qualified main class. Optional: when omitted, the runtime links on the
+     * {@code ModuleMainClass} attribute baked into the application's {@code module-info.class}.
+     */
+    @Parameter(property = "vidocq.mainClass")
+    private String mainClass;
+
+    /** Extra JVM args passed verbatim to the child (split on whitespace). */
+    @Parameter(property = "vidocq.run.jvmArgs", defaultValue = "")
+    private String extraJvmArgs;
+
+    /** Application arguments, appended after the main module (split on whitespace). */
+    @Parameter(property = "vidocq.run.args", defaultValue = "")
+    private String appArgs;
+
+    /**
+     * Extra {@code -Dkey=value} system properties for the child, as {@code key=value,key2=value2}. A
+     * {@code -Dvidocq.*} on the Maven command line reaches the application by itself.
+     */
+    @Parameter(property = "vidocq.run.systemProperties", defaultValue = "")
+    private String extraSystemProperties;
+
+    /**
+     * Open a JDWP debug agent on the child JVM and print its address. Off by default — unlike
+     * {@code vidocq:dev}, {@code vidocq:run} is also how the application runs in CI and in scripts.
+     */
+    @Parameter(property = "vidocq.run.debug", defaultValue = "false")
+    private boolean debug;
+
+    /** JDWP listen port for the debug agent. */
+    @Parameter(property = "vidocq.run.debug.port", defaultValue = "5005")
+    private int debugPort;
+
+    /** Suspend the child JVM until a debugger attaches ({@code suspend=y}), to debug boot itself. */
+    @Parameter(property = "vidocq.run.debug.suspend", defaultValue = "false")
+    private boolean debugSuspend;
+
+    /**
+     * Grace period given to the child after {@link Process#destroy()} — on Ctrl+C, or when the build is
+     * interrupted — before it is force-killed.
+     */
+    @Parameter(property = "vidocq.run.gracePeriodMillis", defaultValue = "5000")
+    private long gracePeriodMillis;
+
+    /** Skip the goal entirely. */
+    @Parameter(property = "vidocq.run.skip", defaultValue = "false")
+    private boolean skip;
+
+    @Parameter(defaultValue = "${project.build.outputDirectory}", readonly = true)
+    private File classesDir;
+
+    @Parameter(defaultValue = "${project.basedir}", readonly = true)
+    private File baseDir;
+
+    @Parameter(defaultValue = "${project.build.directory}", readonly = true)
+    private File buildDir;
+
+    @Override
+    public void execute() throws MojoExecutionException {
+        if (skip) {
+            getLog().info(PREFIX + "skipped (vidocq.run.skip=true)");
+            return;
+        }
+        Path projectDir = baseDir.toPath();
+        Path build = buildDirPath();
+        Path classes = classesDir.toPath();
+        // Universal-loader mode, as vidocq:dev and the production launcher use it: the application
+        // classes stay off the module path and boot in a Vauban-defined module layer.
+        List<Path> modulePath = ApplicationLaunch.modulePath(project, build, classes, true,
+                jar -> getLog().info(PREFIX + "using the modularized copy of " + jar.getFileName()));
+        List<Path> appPath = ApplicationLaunch.appPath(classes, true);
+        Map<String, String> systemProperties = buildSystemProperties();
+        List<String> jvmArgs = buildJvmArgs();
+
+        try {
+            List<String> patchArgs = ApplicationLaunch.patchModuleArgs(project, build);
+            if (!patchArgs.isEmpty()) {
+                jvmArgs.addAll(patchArgs);
+                getLog().info(PREFIX + "JPMS: " + patchArgs.size() / 2
+                        + " --patch-module option(s) added for generated classes");
+            }
+        } catch (IOException e) {
+            throw new MojoExecutionException("Failed to compute --patch-module options", e);
+        }
+
+        getLog().info(PREFIX + "main module : " + mainModule
+                + (mainClass != null && !mainClass.isBlank() ? ("/" + mainClass) : ""));
+        getLog().info(PREFIX + "module path entries: " + modulePath.size());
+        if (debug) {
+            getLog().info(PREFIX + "debug agent (JDWP) on port " + debugPort
+                    + (debugSuspend ? " — the JVM suspends until a debugger attaches" : " — attach any time"));
+        }
+
+        await(ChildJvm.of(modulePath, appPath, mainModule, mainClass, jvmArgs, systemProperties,
+                projectDir, splitArgs(appArgs)));
+    }
+
+    /**
+     * Starts the child, waits for it, and turns its exit code into the goal's result: zero passes, anything
+     * else fails the build. Ctrl+C is not a failure — the shutdown hook stopped the application on purpose.
+     */
+    void await(ChildJvm child) throws MojoExecutionException {
+        AtomicReference<ChildJvm> running = new AtomicReference<>();
+        // Ctrl+C reaches Maven, not only the child: the hook stops the application the way a SIGTERM
+        // would, so its own shutdown hooks drain before the JVM is force-killed.
+        AtomicBoolean stopped = new AtomicBoolean();
+        Thread hook = new Thread(() -> {
+            stopped.set(true);
+            stop(running.getAndSet(null));
+        }, "vidocq-run-shutdown");
+        Runtime.getRuntime().addShutdownHook(hook);
+
+        int exitCode;
+        try {
+            long pid = child.start();
+            running.set(child);
+            getLog().info(PREFIX + "started, pid=" + pid + " (Ctrl+C to stop).");
+            exitCode = child.waitFor();
+        } catch (IOException e) {
+            throw new MojoExecutionException("Cannot start the application JVM", e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            stop(running.getAndSet(null));
+            getLog().info(PREFIX + "interrupted — the application was stopped.");
+            return;
+        } finally {
+            running.set(null);
+            try {
+                Runtime.getRuntime().removeShutdownHook(hook);
+            } catch (IllegalStateException shuttingDown) {
+                // The hook is running: it stops the child itself.
+            }
+        }
+
+        if (exitCode != 0 && !stopped.get()) {
+            throw new MojoExecutionException(PREFIX + "the application exited with code " + exitCode
+                    + ". Its own output, above, says why; the build fails because a non-zero exit code is a"
+                    + " failed run.");
+        }
+        getLog().info(PREFIX + "the application exited with code " + exitCode + ".");
+    }
+
+    private void stop(ChildJvm child) {
+        if (child == null) {
+            return;
+        }
+        try {
+            child.stop(Duration.ofMillis(gracePeriodMillis));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    /**
+     * {@code ${project.build.directory}}, falling back to the parent of the (always injected) classes
+     * directory ({@code target/classes} → {@code target}) when Maven did not inject it.
+     */
+    private Path buildDirPath() {
+        return (buildDir != null ? buildDir : classesDir.getParentFile()).toPath();
+    }
+
+    /**
+     * The child's system properties: what {@code vidocq.run.systemProperties} declares, then every
+     * {@code -Dvidocq.*} of the Maven command line that is not a build setting.
+     */
+    private Map<String, String> buildSystemProperties() {
+        Map<String, String> properties = new LinkedHashMap<>();
+        if (extraSystemProperties != null && !extraSystemProperties.isBlank()) {
+            for (String pair : extraSystemProperties.split(",")) {
+                int equals = pair.indexOf('=');
+                if (equals > 0) {
+                    properties.put(pair.substring(0, equals).strip(), pair.substring(equals + 1).strip());
+                }
+            }
+        }
+        forwarded(session == null ? new Properties() : session.getUserProperties()).forEach(properties::putIfAbsent);
+        return properties;
+    }
+
+    /**
+     * The {@code -Dvidocq.*} properties of the Maven command line that configure the application, not the
+     * build: the child is another JVM, so they would not reach it otherwise.
+     */
+    static Map<String, String> forwarded(Properties userProperties) {
+        Map<String, String> forwarded = new LinkedHashMap<>();
+        for (String key : userProperties.stringPropertyNames()) {
+            if (!key.startsWith("vidocq.") || BUILD_KEYS.contains(key)
+                    || BUILD_PREFIXES.stream().anyMatch(key::startsWith)) {
+                continue;
+            }
+            forwarded.put(key, userProperties.getProperty(key));
+        }
+        return forwarded;
+    }
+
+    /** The verbatim {@code vidocq.run.jvmArgs}, then the JDWP agent when {@link #debug} is on. */
+    private List<String> buildJvmArgs() {
+        List<String> args = splitArgs(extraJvmArgs);
+        if (debug) {
+            args.add("-agentlib:jdwp=transport=dt_socket,server=y,suspend="
+                    + (debugSuspend ? "y" : "n") + ",address=*:" + debugPort);
+        }
+        return args;
+    }
+
+    private static List<String> splitArgs(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return new ArrayList<>();
+        }
+        return new ArrayList<>(Arrays.asList(raw.strip().split("\\s+")));
+    }
+
+    // Package-private accessors used in unit tests — keep at the bottom so the execute() flow is the
+    // first thing a reader sees.
+    void setProject(MavenProject project) { this.project = project; }
+    void setSession(MavenSession session) { this.session = session; }
+    void setMainModule(String mainModule) { this.mainModule = mainModule; }
+    void setMainClass(String mainClass) { this.mainClass = mainClass; }
+    void setBaseDir(File baseDir) { this.baseDir = baseDir; }
+    void setBuildDir(File buildDir) { this.buildDir = buildDir; }
+    void setClassesDir(File classesDir) { this.classesDir = classesDir; }
+    void setExtraJvmArgs(String extraJvmArgs) { this.extraJvmArgs = extraJvmArgs; }
+    void setAppArgs(String appArgs) { this.appArgs = appArgs; }
+    void setExtraSystemProperties(String extraSystemProperties) { this.extraSystemProperties = extraSystemProperties; }
+    void setSkip(boolean skip) { this.skip = skip; }
+    void setGracePeriodMillis(long gracePeriodMillis) { this.gracePeriodMillis = gracePeriodMillis; }
+    void setDebugOptions(boolean debug, int port, boolean suspend) {
+        this.debug = debug;
+        this.debugPort = port;
+        this.debugSuspend = suspend;
+    }
+    List<String> debugJvmArgs() { return buildJvmArgs(); }
+    Map<String, String> debugSystemProperties() { return buildSystemProperties(); }
+    List<String> debugAppArgs() { return splitArgs(appArgs); }
+}

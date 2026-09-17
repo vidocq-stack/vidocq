@@ -66,6 +66,59 @@
             </configuration>
         </mojo>
 
+        <!-- vidocq:run — one forked run of the application, the shape vidocq:dev forks without the watcher.
+             Forks the lifecycle up to process-classes, so `mvn vidocq:run` alone compiles and indexes
+             (vidocq:generate binds to that phase): an IDE Run that is a Maven run of this goal cannot miss
+             the bean index of the dependency jars (Vidocq/vidocq#83). -->
+        <mojo>
+            <goal>run</goal>
+            <description>Run the Vidocq application once in a forked JVM (compiles and indexes first)</description>
+            <requiresDependencyResolution>runtime</requiresDependencyResolution>
+            <requiresDirectInvocation>true</requiresDirectInvocation>
+            <requiresProject>true</requiresProject>
+            <requiresOnline>false</requiresOnline>
+            <aggregator>false</aggregator>
+            <executePhase>process-classes</executePhase>
+            <implementation>io.vidocq.runtime.maven.VidocqRunMojo</implementation>
+            <language>java</language>
+            <instantiationStrategy>per-lookup</instantiationStrategy>
+            <threadSafe>true</threadSafe>
+            <parameters>
+                <parameter><name>project</name><type>org.apache.maven.project.MavenProject</type><required>true</required><editable>false</editable><description>The Maven project</description></parameter>
+                <parameter><name>session</name><type>org.apache.maven.execution.MavenSession</type><required>true</required><editable>false</editable><description>The Maven session, for the -Dvidocq.* properties forwarded to the application</description></parameter>
+                <parameter><name>mainModule</name><type>java.lang.String</type><required>true</required><editable>true</editable><description>Java module containing the main class (required — Vidocq runs on the module path)</description></parameter>
+                <parameter><name>mainClass</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>Fully-qualified main class. Optional if the module declares ModuleMainClass.</description></parameter>
+                <parameter><name>extraJvmArgs</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>Extra JVM args passed verbatim to the forked JVM, split on whitespace.</description></parameter>
+                <parameter><name>appArgs</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>Application arguments, appended after the main module and split on whitespace.</description></parameter>
+                <parameter><name>extraSystemProperties</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>Comma-separated key=value system properties forwarded to the forked JVM as -Dkey=value.</description></parameter>
+                <parameter><name>debug</name><type>boolean</type><required>false</required><editable>true</editable><description>Open a JDWP debug agent on the forked JVM and print its address (default false).</description></parameter>
+                <parameter><name>debugPort</name><type>int</type><required>false</required><editable>true</editable><description>JDWP listen port for the debug agent (default 5005).</description></parameter>
+                <parameter><name>debugSuspend</name><type>boolean</type><required>false</required><editable>true</editable><description>Suspend the forked JVM until a debugger attaches (jdwp suspend=y).</description></parameter>
+                <parameter><name>gracePeriodMillis</name><type>long</type><required>false</required><editable>true</editable><description>Grace period given to the application after SIGTERM (Ctrl+C) before it is force-killed.</description></parameter>
+                <parameter><name>skip</name><type>boolean</type><required>false</required><editable>true</editable><description>Skip the goal entirely.</description></parameter>
+                <parameter><name>classesDir</name><type>java.io.File</type><required>false</required><editable>false</editable><description>Compiled classes directory of the project.</description></parameter>
+                <parameter><name>baseDir</name><type>java.io.File</type><required>false</required><editable>false</editable><description>Project base directory, the working directory of the forked JVM.</description></parameter>
+                <parameter><name>buildDir</name><type>java.io.File</type><required>false</required><editable>false</editable><description>Build directory (hosts vidocq-patches/ for cross-module generated classes).</description></parameter>
+            </parameters>
+            <configuration>
+                <project implementation="org.apache.maven.project.MavenProject" default-value="${project}"/>
+                <session implementation="org.apache.maven.execution.MavenSession" default-value="${session}"/>
+                <mainModule implementation="java.lang.String">${vidocq.mainModule}</mainModule>
+                <mainClass implementation="java.lang.String">${vidocq.mainClass}</mainClass>
+                <extraJvmArgs implementation="java.lang.String" default-value="">${vidocq.run.jvmArgs}</extraJvmArgs>
+                <appArgs implementation="java.lang.String" default-value="">${vidocq.run.args}</appArgs>
+                <extraSystemProperties implementation="java.lang.String" default-value="">${vidocq.run.systemProperties}</extraSystemProperties>
+                <debug implementation="boolean" default-value="false">${vidocq.run.debug}</debug>
+                <debugPort implementation="int" default-value="5005">${vidocq.run.debug.port}</debugPort>
+                <debugSuspend implementation="boolean" default-value="false">${vidocq.run.debug.suspend}</debugSuspend>
+                <gracePeriodMillis implementation="long" default-value="5000">${vidocq.run.gracePeriodMillis}</gracePeriodMillis>
+                <skip implementation="boolean" default-value="false">${vidocq.run.skip}</skip>
+                <classesDir implementation="java.io.File" default-value="${project.build.outputDirectory}"/>
+                <baseDir implementation="java.io.File" default-value="${project.basedir}"/>
+                <buildDir implementation="java.io.File" default-value="${project.build.directory}"/>
+            </configuration>
+        </mojo>
+
         <!-- vidocq:generate -->
         <mojo>
             <goal>generate</goal>
