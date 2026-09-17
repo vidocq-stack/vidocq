@@ -123,6 +123,28 @@ class VidocqRunMojoTest {
         assertFalse(properties.containsKey("vidocq.profile"), "vidocq:run never forces a profile: " + properties);
     }
 
+    /**
+     * An explicit colour policy reaches the child even by the one route {@link VidocqRunMojo#forwarded} does
+     * not see: {@code MAVEN_OPTS}, which sets the property on the Maven JVM without making it a user property.
+     */
+    @Test
+    void anExplicitColourPolicyReachesTheChild() {
+        String previous = System.getProperty(ConsoleColors.COLOR_KEY);
+        try {
+            System.setProperty(ConsoleColors.COLOR_KEY, "always");
+            VidocqRunMojo mojo = new VidocqRunMojo();
+            mojo.setExtraSystemProperties("");
+
+            assertEquals("always", mojo.debugSystemProperties().get(ConsoleColors.COLOR_KEY));
+        } finally {
+            if (previous == null) {
+                System.clearProperty(ConsoleColors.COLOR_KEY);
+            } else {
+                System.setProperty(ConsoleColors.COLOR_KEY, previous);
+            }
+        }
+    }
+
     @Test
     void skipRunsNothing() throws Exception {
         VidocqRunMojo mojo = new VidocqRunMojo();

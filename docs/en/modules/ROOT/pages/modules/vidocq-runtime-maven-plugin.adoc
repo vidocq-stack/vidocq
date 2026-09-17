@@ -294,9 +294,11 @@ console is neither a terminal nor an IntelliJ Run console, so the runtime's `aut
 off while Maven's own `[INFO]` lines stayed coloured. The signal read is the `jansi.mode` system property that
 Maven sets for itself, with the `style.color` user property as a fallback.
 
-Two things always win, and the goal then passes nothing: an explicit `-Dvidocq.console.color=…`, and a
-non-empty `NO_COLOR` in the environment, which the runtime honours on its own. The goal says what it decided,
-and why, on one `-X` debug line.
+Two things always win. An explicit `-Dvidocq.console.color=…` on the Maven command line is not second-guessed:
+the goal passes that very value on to the forked JVM, since the property you set belongs to the Maven JVM and
+the application runs in another one. And a non-empty `NO_COLOR` in the environment stops the decision — nothing
+is passed, because the runtime honours `NO_COLOR` on its own, over any mode. The goal says what it decided, and
+why, on one `-X` debug line.
 
 [#idea]
 == `vidocq:idea` goal [.tag-new]#NEW#

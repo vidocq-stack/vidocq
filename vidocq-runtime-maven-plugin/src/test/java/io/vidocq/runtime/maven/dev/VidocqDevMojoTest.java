@@ -19,6 +19,7 @@
  */
 package io.vidocq.runtime.maven.dev;
 
+import io.vidocq.runtime.maven.ConsoleColors;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -30,6 +31,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 class VidocqDevMojoTest {
 
@@ -92,5 +94,70 @@ class VidocqDevMojoTest {
         assertEquals("-Xmx256m", args.get(0));
         assertEquals("-XX:+UseZGC", args.get(1));
         assertTrue(args.get(2).startsWith("-agentlib:jdwp="));
+    }
+
+    /**
+     * {@code mvn vidocq:dev -Dvidocq.console.color=always} sets the property on the <em>Maven</em> JVM, and
+     * the application runs in another one: unless the goal passes it on, asking for colour explicitly used to
+     * turn colour off, because nothing else seeds it (unlike {@code vidocq:run}, which forwards every
+     * application {@code -Dvidocq.*} of the command line).
+     */
+    @Test
+    void anExplicitColourPolicyReachesTheChild() {
+        withProperties("always", "strip", () -> {
+            VidocqDevMojo mojo = new VidocqDevMojo();
+            mojo.setProfile("dev");
+            mojo.setExtraSystemProperties("");
+
+            assertEquals("always", mojo.debugSystemProperties().get(ConsoleColors.COLOR_KEY));
+        });
+    }
+
+    /** What {@code vidocq.dev.systemProperties} declares for the child is never second-guessed. */
+    @Test
+    void aDeclaredColourPolicyIsNotOverwritten() {
+        withProperties("always", "force", () -> {
+            VidocqDevMojo mojo = new VidocqDevMojo();
+            mojo.setProfile("dev");
+            mojo.setExtraSystemProperties("vidocq.console.color=never");
+
+            assertEquals("never", mojo.debugSystemProperties().get(ConsoleColors.COLOR_KEY));
+        });
+    }
+
+    /** With nothing asked, the child still inherits Maven's own policy — the IDE Maven console case. */
+    @Test
+    void mavensOwnColoursReachTheChild() {
+        assumeTrue(System.getenv("NO_COLOR") == null || System.getenv("NO_COLOR").isEmpty(),
+                "NO_COLOR stops the decision");
+        withProperties(null, "force", () -> {
+            VidocqDevMojo mojo = new VidocqDevMojo();
+            mojo.setProfile("dev");
+            mojo.setExtraSystemProperties("");
+
+            assertEquals("always", mojo.debugSystemProperties().get(ConsoleColors.COLOR_KEY));
+        });
+    }
+
+    /** Runs {@code body} with {@code vidocq.console.color} and {@code jansi.mode} set, then restores them. */
+    private static void withProperties(String colorKey, String jansiMode, Runnable body) {
+        String previousColor = System.getProperty(ConsoleColors.COLOR_KEY);
+        String previousJansi = System.getProperty("jansi.mode");
+        try {
+            set(ConsoleColors.COLOR_KEY, colorKey);
+            set("jansi.mode", jansiMode);
+            body.run();
+        } finally {
+            set(ConsoleColors.COLOR_KEY, previousColor);
+            set("jansi.mode", previousJansi);
+        }
+    }
+
+    private static void set(String key, String value) {
+        if (value == null) {
+            System.clearProperty(key);
+        } else {
+            System.setProperty(key, value);
+        }
     }
 }

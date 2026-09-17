@@ -39,7 +39,7 @@ class ConsoleColorsTest {
 
     @Test
     void mavenColoured_colonTheChildColoursToo() {
-        Optional<Choice> choice = ConsoleColors.forChild(false, "force", "always", null);
+        Optional<Choice> choice = ConsoleColors.forChild(false, null, "force", "always", null);
 
         assertEquals("always", choice.orElseThrow().mode());
         assertEquals("Maven's own output is coloured (jansi.mode=force)", choice.orElseThrow().reason());
@@ -51,51 +51,73 @@ class ConsoleColorsTest {
     void mavenNotColoured_colonTheChildDoesNotEither() {
         // -B, --color=never or -Dstyle.color=never: Maven strips its own colours, and a log file or a CI
         // console must not get escape sequences from the application either.
-        assertEquals("never", ConsoleColors.forChild(false, "strip", null, null).orElseThrow().mode());
+        assertEquals("never", ConsoleColors.forChild(false, null, "strip", null, null).orElseThrow().mode());
         assertEquals("Maven's own output is not coloured (jansi.mode=strip)",
-                ConsoleColors.forChild(false, "strip", null, null).orElseThrow().reason());
+                ConsoleColors.forChild(false, null, "strip", null, null).orElseThrow().reason());
     }
 
     @Test
     void noSignal_colonNothingIsPassedAndTheRuntimeDecides() {
-        assertEquals(Optional.empty(), ConsoleColors.forChild(false, null, null, null));
-        assertEquals(Optional.empty(), ConsoleColors.forChild(false, "", " ", ""));
-        assertEquals(Optional.empty(), ConsoleColors.forChild(false, null, "auto", null));
-        assertEquals(Optional.empty(), ConsoleColors.forChild(false, "unknown-mode", null, null));
+        assertEquals(Optional.empty(), ConsoleColors.forChild(false, null, null, null, null));
+        assertEquals(Optional.empty(), ConsoleColors.forChild(false, null, "", " ", ""));
+        assertEquals(Optional.empty(), ConsoleColors.forChild(false, null, null, "auto", null));
+        assertEquals(Optional.empty(), ConsoleColors.forChild(false, null, "unknown-mode", null, null));
     }
 
     /** Maven 4 replaces jansi with JLine: {@code style.color}, which {@code MavenCli} reads, still answers. */
     @Test
     void withoutJansi_colonTheStyleColorPropertyAnswers() {
-        assertEquals("always", ConsoleColors.forChild(false, null, "always", null).orElseThrow().mode());
-        assertEquals("always", ConsoleColors.forChild(false, null, "YES", null).orElseThrow().mode());
-        assertEquals("always", ConsoleColors.forChild(false, null, "force", null).orElseThrow().mode());
-        assertEquals("never", ConsoleColors.forChild(false, null, "never", null).orElseThrow().mode());
-        assertEquals("never", ConsoleColors.forChild(false, null, " None ", null).orElseThrow().mode());
+        assertEquals("always", ConsoleColors.forChild(false, null, null, "always", null).orElseThrow().mode());
+        assertEquals("always", ConsoleColors.forChild(false, null, null, "YES", null).orElseThrow().mode());
+        assertEquals("always", ConsoleColors.forChild(false, null, null, "force", null).orElseThrow().mode());
+        assertEquals("never", ConsoleColors.forChild(false, null, null, "never", null).orElseThrow().mode());
+        assertEquals("never", ConsoleColors.forChild(false, null, null, " None ", null).orElseThrow().mode());
         assertEquals("Maven's own output is coloured (style.color=always)",
-                ConsoleColors.forChild(false, null, "always", null).orElseThrow().reason());
+                ConsoleColors.forChild(false, null, null, "always", null).orElseThrow().reason());
     }
 
     /** {@code jansi.mode} is the only signal that catches {@code --color}, so it wins over the user property. */
     @Test
     void jansiMode_winsOverTheStyleColorProperty() {
-        assertEquals("always", ConsoleColors.forChild(false, "force", "never", null).orElseThrow().mode());
-        assertEquals("never", ConsoleColors.forChild(false, "strip", "always", null).orElseThrow().mode());
+        assertEquals("always", ConsoleColors.forChild(false, null, "force", "never", null).orElseThrow().mode());
+        assertEquals("never", ConsoleColors.forChild(false, null, "strip", "always", null).orElseThrow().mode());
     }
 
+    /** What the goal already puts in the child's properties is its own business, and is left alone. */
     @Test
-    void anExplicitColourPolicy_isNeverOverwritten() {
-        assertEquals(Optional.empty(), ConsoleColors.forChild(true, "force", "always", null));
-        assertEquals(Optional.empty(), ConsoleColors.forChild(true, "strip", "never", null));
+    void aPolicyTheChildAlreadyCarries_isNeverOverwritten() {
+        assertEquals(Optional.empty(), ConsoleColors.forChild(true, null, "force", "always", null));
+        assertEquals(Optional.empty(), ConsoleColors.forChild(true, "never", "force", "always", null));
+        assertEquals(Optional.empty(), ConsoleColors.forChild(true, null, "strip", "never", null));
+    }
+
+    /**
+     * {@code mvn vidocq:dev -Dvidocq.console.color=always} sets it on the Maven JVM, and the application
+     * runs in another one: the answer has to be passed on, not merely left undecided, or asking for colour
+     * explicitly would turn colour off (Vidocq/vidocq#83 follow-up).
+     */
+    @Test
+    void anExplicitColourPolicy_isPassedOnAsItStands() {
+        Optional<Choice> choice = ConsoleColors.forChild(false, "always", "strip", "never", null);
+
+        assertEquals("always", choice.orElseThrow().mode());
+        assertEquals("-Dvidocq.console.color=always was asked of Maven", choice.orElseThrow().reason());
+        // Every mode the runtime knows travels, `auto` included: it asks the child to decide for itself.
+        assertEquals("never", ConsoleColors.forChild(false, " NEVER ", "force", null, null).orElseThrow().mode());
+        assertEquals("auto", ConsoleColors.forChild(false, "auto", "force", null, null).orElseThrow().mode());
+        // NO_COLOR does not silence it: the runtime honours NO_COLOR over any mode anyway.
+        assertEquals("always", ConsoleColors.forChild(false, "always", "strip", null, "1").orElseThrow().mode());
+        // An empty value is not a request.
+        assertEquals(Optional.empty(), ConsoleColors.forChild(false, "  ", null, null, null));
     }
 
     /** The child honours {@code NO_COLOR} itself, and it wins over every mode: saying it again hides why. */
     @Test
     void noColor_stopsTheDecision() {
-        assertEquals(Optional.empty(), ConsoleColors.forChild(false, "force", "always", "1"));
-        assertEquals(Optional.empty(), ConsoleColors.forChild(false, "strip", null, "yes"));
+        assertEquals(Optional.empty(), ConsoleColors.forChild(false, null, "force", "always", "1"));
+        assertEquals(Optional.empty(), ConsoleColors.forChild(false, null, "strip", null, "yes"));
         // NO_COLOR= (empty) is not a request, as ConsoleSupport reads it.
-        assertEquals("always", ConsoleColors.forChild(false, "force", null, "").orElseThrow().mode());
+        assertEquals("always", ConsoleColors.forChild(false, null, "force", null, "").orElseThrow().mode());
     }
 
     @Test

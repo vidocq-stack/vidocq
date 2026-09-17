@@ -42,8 +42,11 @@ import java.util.Optional;
  * answers instead; when that is unset too nothing is passed and the runtime decides for itself, as it
  * does outside Maven.
  *
- * <p>Two things always win: an explicit {@code vidocq.console.color}, which is never overwritten, and
- * {@code NO_COLOR}, which the child honours on its own and which stops the decision here.
+ * <p>Two things always win: an explicit {@code vidocq.console.color}, which is passed on as it stands
+ * instead of being decided — the Maven JVM holding it is not the one that prints the application's logs,
+ * so a goal that only refrained from deciding would answer {@code -Dvidocq.console.color=always} by
+ * turning colours off — and {@code NO_COLOR}, which the child honours on its own and which stops the
+ * decision here.
  */
 public final class ConsoleColors {
 
@@ -59,8 +62,9 @@ public final class ConsoleColors {
     /**
      * What to pass to the child, and why — the reason is logged once, at debug level.
      *
-     * @param mode   {@code always} or {@code never}, a value of {@code ConsoleSupport.ColorMode}
-     * @param reason what Maven's output does, and what said so
+     * @param mode   a value of {@code ConsoleSupport.ColorMode}: {@code always} or {@code never} when
+     *               decided from Maven's own output, or verbatim what was explicitly asked
+     * @param reason what Maven's output does, and what said so, or who asked explicitly
      */
     public record Choice(String mode, String reason) {
 
@@ -76,24 +80,33 @@ public final class ConsoleColors {
     /**
      * The decision for this Maven JVM, or empty when nothing should be passed.
      *
-     * @param alreadySet whether the child already carries {@value #COLOR_KEY}, which is then left alone
+     * @param alreadySet whether the child's system properties already carry {@value #COLOR_KEY}, which is
+     *                   then left alone — the Maven JVM's own property is not that, and is read here
      */
     public static Optional<Choice> forChild(boolean alreadySet) {
-        return forChild(alreadySet || System.getProperty(COLOR_KEY) != null, System.getProperty(JANSI_MODE),
+        return forChild(alreadySet, System.getProperty(COLOR_KEY), System.getProperty(JANSI_MODE),
                 System.getProperty(STYLE_COLOR), System.getenv("NO_COLOR"));
     }
 
     /**
      * The decision from its raw inputs.
      *
-     * @param alreadySet  whether {@value #COLOR_KEY} is already set, here or for the child
+     * @param alreadySet  whether the child's system properties already carry {@value #COLOR_KEY}
+     * @param asked       the {@value #COLOR_KEY} the Maven JVM was given, or {@code null}
      * @param jansiMode   the {@value #JANSI_MODE} system property Maven set, or {@code null}
      * @param styleColor  the {@value #STYLE_COLOR} user property, or {@code null}
      * @param noColor     the {@code NO_COLOR} environment variable, or {@code null}
      */
-    static Optional<Choice> forChild(boolean alreadySet, String jansiMode, String styleColor, String noColor) {
+    static Optional<Choice> forChild(boolean alreadySet, String asked, String jansiMode, String styleColor,
+            String noColor) {
         if (alreadySet) {
             return Optional.empty();
+        }
+        String explicit = normalize(asked);
+        if (!explicit.isEmpty()) {
+            // Asked of Maven, meant for the application: the child is another JVM, so the answer only
+            // reaches it if it is passed on. Deciding instead would answer a settled question.
+            return Optional.of(new Choice(explicit, "-D" + COLOR_KEY + "=" + explicit + " was asked of Maven"));
         }
         if (noColor != null && !noColor.isEmpty()) {
             // The child reads NO_COLOR itself and it wins over every mode: saying it again would only
