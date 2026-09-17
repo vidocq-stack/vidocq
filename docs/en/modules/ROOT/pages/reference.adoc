@@ -104,6 +104,10 @@ The `io.vidocq.runtime.extensions.*` modules each correspond to a built-in exten
 | `auto`
 | Console colours: `auto`, `always` or `never`. A non-empty `NO_COLOR` environment variable always disables them.
 
+| `vidocq.launch.mode` [.tag-new]#NEW#
+| (detected)
+| Launch mode shown by the startup banner: `dev`, `test` or `prod`, forced instead of detected. An unknown value logs a warning and lets the detection decide. See xref:modules/vidocq-runtime-core.adoc#launch-mode[Launch mode].
+
 | `vidocq.banner.mode` [.tag-new]#NEW#
 | `auto`
 | Startup banner: `auto` (the art on a terminal or a dev launch, one INFO line elsewhere), `console`, `log` or `off`. See xref:modules/vidocq-runtime-core.adoc#startup-banner[Startup banner].
@@ -122,8 +126,8 @@ A `vidocq.*` key that no extension consumes is applied by nobody: the applicatio
 the default, and the mistake stays invisible whenever the configured value happens to *be* the
 default. Since 0.3.0 the runtime reports such a key as a startup warning, for every namespace an
 extension claims through `VidocqExtension.configKeys()`. The core claims `vidocq.log.`,
-`vidocq.console.` and `vidocq.banner.` itself, so a typo such as `vidocq.console.colour` or
-`vidocq.banner.enabled` is reported too.
+`vidocq.console.`, `vidocq.banner.` and `vidocq.launch.` itself, so a typo such as `vidocq.console.colour`
+or `vidocq.banner.enabled` is reported too.
 ====
 
 [NOTE]
