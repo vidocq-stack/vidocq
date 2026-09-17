@@ -1,8 +1,8 @@
 = vidocq-runtime-maven-plugin
-:description: Vidocq Runtime Maven plugin — generate, package, dev, jlink, jpackage, docker, idea.
+:description: Vidocq Runtime Maven plugin — generate, package, dev, run, jlink, jpackage, docker, idea.
 
 [.lead]
-`vidocq-runtime-maven-plugin` is the Maven plugin that turns an application into a deployable standalone distribution. It exposes ten goals: `generate`, `package`, `dev`, `checkpom`, `jlink`, `jpackage`, `docker`, `check-module-info`, `complete-module-info`, `idea`. (`modularize` moved to the Vauban plugin — see below.) Also see `vidocq/JLINK.md` for internal details.
+`vidocq-runtime-maven-plugin` is the Maven plugin that turns an application into a deployable standalone distribution. It exposes eleven goals: `generate`, `package`, `dev`, `run`, `checkpom`, `jlink`, `jpackage`, `docker`, `check-module-info`, `complete-module-info`, `idea`. (`modularize` moved to the Vauban plugin — see below.) Also see `vidocq/JLINK.md` for internal details.
 
 == Coordinates
 
@@ -26,6 +26,9 @@
 
 | `vidocq:dev`
 | Dev/watch mode — forks a child JVM with `-Dvidocq.profile=dev`, recompiles and hot-reloads on change.
+
+| `vidocq:run` [.tag-new]#NEW#
+| Runs the application once in a forked JVM, after compiling and indexing it: the goal forks the lifecycle up to `process-classes`, so `mvn vidocq:run` alone is a complete run. See <<run,the `vidocq:run` goal>>.
 
 | `vidocq:checkpom`
 | Verifies every `vidocq-runtime-<name>-extension` declared in the pom is correctly wired (annotation processor paths, codegen bundles). Bound to `validate` via `pluginManagement`.
@@ -172,22 +175,159 @@ docker run --rm -p 8080:8080 \
     example/my-app:1.0.0
 ----
 
+[#run]
+== `vidocq:run` goal [.tag-new]#NEW#
+
+`vidocq:run` runs the application once, in a JVM it forks the way the production launcher does. Before that it
+forks the lifecycle up to `process-classes`, so a single command compiles the module, completes the bean index
+with `vidocq:generate` and starts the application:
+
+[source,bash]
+----
+mvn vidocq:run                                          # compile, index, run
+mvn vidocq:run -Dvidocq.run.debug=true                  # … with a JDWP agent on port 5005
+mvn vidocq:run -Dvidocq.run.args="--seed data.json"     # … with application arguments
+mvn vidocq:run -Dvidocq.chappe.listener.default.port=8081
+----
+
+That forked lifecycle is the reason the goal exists. An IDE that builds with its own compiler never runs
+`vidocq:generate`: the bean index then misses the beans of the dependency jars and the server answers 404
+(Vidocq/vidocq#83). A Run in the IDE that is a *Maven* run of this goal cannot — which is what
+<<idea,`vidocq:idea`>> now writes.
+
+The forked JVM is the one `vidocq:dev` forks, without the source watcher, the reload file and
+`-Dvidocq.profile=dev`: the module path of the packaged distribution (every runtime dependency, the modularized
+copy of a jar when `vauban:modularize` produced one, plus the `--patch-module` options of the classes
+`vidocq:generate` parked for a scanned dependency), `--add-modules ALL-MODULE-PATH`, the application classes
+handed to the runtime through `-Dvidocq.app.path` so that they boot in a Vauban-defined module layer, the
+project directory as the working directory, and inherited I/O — the application writes straight to Maven's
+console.
+
+The goal blocks until the application exits:
+
+* **Ctrl+C** stops it. A shutdown hook sends the equivalent of a `SIGTERM`, so the runtime drains as it does in
+  production, and force-kills the JVM only after `vidocq.run.gracePeriodMillis`. An interrupted run is not a
+  failed build.
+* **The exit code is the goal's result.** Zero passes; anything else fails the build with the code in the
+  message, the application's own output being just above it in the log.
+
+=== Goal parameters
+
+Every one of them is a property: set it on the command line, or in the module's `<properties>` for the value a
+run always uses.
+
+[cols="2,1,3"]
+|===
+| Property | Default | Meaning
+
+| `vidocq.mainModule`
+| _(required)_
+| The Java module of the application — the same property `vidocq:generate` and `vidocq:package` read.
+
+| `vidocq.mainClass`
+| _(unset)_
+| The main class. Optional: the runtime links on the `ModuleMainClass` attribute of the module descriptor.
+
+| `vidocq.run.jvmArgs`
+| _(empty)_
+| Extra JVM arguments, passed verbatim and split on whitespace.
+
+| `vidocq.run.args`
+| _(empty)_
+| Application arguments, appended after the main module and split on whitespace.
+
+| `vidocq.run.systemProperties`
+| _(empty)_
+| Extra `-Dkey=value` for the forked JVM, as `key=value,key2=value2`.
+
+| `vidocq.run.debug`
+| `false`
+| Add a JDWP agent (`server=y`, `address=*:<port>`) and print its address. Off by default: `vidocq:run` is also
+  how the application runs in CI and in scripts.
+
+| `vidocq.run.debug.port`
+| `5005`
+| The port the debug agent listens on.
+
+| `vidocq.run.debug.suspend`
+| `false`
+| `true` suspends the JVM until a debugger attaches, to debug the boot itself.
+
+| `vidocq.run.gracePeriodMillis`
+| `5000`
+| How long the application has to stop after Ctrl+C before it is force-killed.
+
+| `vidocq.run.skip`
+| `false`
+| Skip the goal.
+|===
+
+=== The properties the application sees
+
+The application runs in another JVM, so a `-D` of the Maven command line does not reach it by itself. The goal
+forwards the ones that configure the application: every `-Dvidocq.*` that is not a setting of this plugin
+(`vidocq.run.*`, `vidocq.dev.*`, `vidocq.idea.*`, `vidocq.docker.*`, `vidocq.jlink.*`, `vidocq.mainClass`,
+`vidocq.mainModule`, and the other packaging settings). So `mvn vidocq:run
+-Dvidocq.chappe.listener.default.port=8081` listens on 8081. Anything else goes through
+`vidocq.run.systemProperties`, and the forked JVM inherits Maven's environment as it is.
+
+[#run-colours]
+=== Colours in the forked JVM [.tag-new]#NEW#
+
+The forked JVM writes to Maven's own console, so it takes Maven's colour policy — `vidocq:run` and `vidocq:dev`
+both pass it as `-Dvidocq.console.color`:
+
+[cols="2,3"]
+|===
+| Maven's own output | The forked JVM
+
+| coloured (`-Dstyle.color=always`, `--color=always`, a terminal, or an IDE Maven console)
+| `-Dvidocq.console.color=always`
+| not coloured (`-Dstyle.color=never`, `--color=never`, `-B`)
+| `-Dvidocq.console.color=never`
+| nothing asked either way
+| nothing is passed: the runtime decides for itself, as it does outside Maven
+|===
+
+This is what brings the colours back in an IDE: IntelliJ runs Maven with `-Dstyle.color=always`, but its Maven
+console is neither a terminal nor an IntelliJ Run console, so the runtime's `auto` policy would turn colours
+off while Maven's own `[INFO]` lines stayed coloured. The signal read is the `jansi.mode` system property that
+Maven sets for itself, with the `style.color` user property as a fallback.
+
+Two things always win, and the goal then passes nothing: an explicit `-Dvidocq.console.color=…`, and a
+non-empty `NO_COLOR` in the environment, which the runtime honours on its own. The goal says what it decided,
+and why, on one `-X` debug line.
+
 [#idea]
 == `vidocq:idea` goal [.tag-new]#NEW#
 
 *Experimental.* `vidocq:idea` writes one IntelliJ IDEA shared run configuration (`.run/<name>.run.xml`) per
-Vidocq application of the reactor, from what the poms already declare. Clicking Run on the main class then
-compiles the module, completes the bean index with `vidocq:generate` and starts the application. The goal
-exists because that Maven step before launch is needed today; once the runtime indexes dependencies at
-launch (Vidocq/vidocq#83), the step goes away and so may the goal.
+Vidocq application of the reactor, from what the poms already declare. By default that configuration is a
+**Maven** run of <<run,`vidocq:run`>> on the application's own pom, so that clicking Run compiles the module,
+completes the bean index and starts the application — all three through Maven.
 
 [source,bash]
 ----
 mvn vidocq:idea                                          # write or update .run/*.run.xml
 mvn vidocq:idea -Dvidocq.idea.check=true                 # CI: fail when .run/ does not match the poms
 mvn vidocq:idea -Dvidocq.idea.check=strict               # CI: also fail on files you wrote or edited
-mvn vidocq:idea -Dvidocq.idea.generateBeforeLaunch=false # no Maven step before launch
+mvn vidocq:idea -Dvidocq.idea.kind=application           # an Application run of the main class instead
 ----
+
+[IMPORTANT]
+.Why the Maven kind is the default [.tag-new]#NEW#
+====
+The IDE build never runs `vidocq:generate`. IntelliJ's Make compiles the module with its own compiler, and
+`vidocq:generate`, which completes the bean index with the beans of the dependency jars a build-time
+annotation processor never saw, is a Maven goal bound to `process-classes`. An Application run configuration
+therefore has to carry a Maven step before launch, and anything that bypasses it — a Run from the gutter, a
+temporary configuration, a module IntelliJ split in two — starts an application whose bean index is
+incomplete: the server answers 404 (Vidocq/vidocq#83).
+
+A Maven run configuration has no such hole: `vidocq:run` forks the lifecycle up to `process-classes` itself,
+then forks the JVM exactly as the command line does. IntelliJ also disables its own Build step for a Maven
+configuration, so the IDE build is not even in the picture.
+====
 
 Run it from the command line, in the directory IntelliJ opens as the project — usually the reactor root —
 and commit `.run/`. Maven resolves the `vidocq:` prefix from the pom it is launched on: when the plugin is
@@ -197,11 +337,67 @@ the goal by its coordinates (`mvn io.vidocq.runtime:vidocq-runtime-maven-plugin:
 === What it generates
 
 For an application `mcp-time-server` whose pom sets `vidocq.mainClass`, with
-`<vidocq.idea.jre>temurin-25</vidocq.idea.jre>` in the top-level pom, `.run/McpTimeServerApp.run.xml`:
+`<vidocq.idea.jre>temurin-25</vidocq.idea.jre>` in the top-level pom, `.run/McpTimeServerApp.run.xml` — a Maven
+run of `vidocq:run` on `mcp-time-server/pom.xml`, from the project directory (shortened here; the file also
+carries the options IntelliJ leaves at their default, in the order it writes them):
 
 [source,xml]
 ----
-<!-- Generated by vidocq:idea. Run "mvn vidocq:idea" to update it; once edited, it is left alone. sha256:25171e23… -->
+<!-- Generated by vidocq:idea. Run "mvn vidocq:idea" to update it; once edited, it is left alone. sha256:2636c212… -->
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="McpTimeServerApp" type="MavenRunConfiguration" factoryName="Maven">
+    <MavenSettings>
+      <option name="myGeneralSettings" />
+      <option name="myRunnerSettings">
+        <MavenRunnerSettings>
+          <option name="jreName" value="temurin-25" />
+          <!-- … -->
+        </MavenRunnerSettings>
+      </option>
+      <option name="myRunnerParameters">
+        <MavenRunnerParameters>
+          <option name="goals">
+            <list>
+              <option value="vidocq:run" />
+            </list>
+          </option>
+          <option name="pomFileName" value="mcp-time-server/pom.xml" />
+          <option name="workingDirPath" value="$PROJECT_DIR$" />
+          <!-- … -->
+        </MavenRunnerParameters>
+      </option>
+    </MavenSettings>
+    <method v="2" />
+  </configuration>
+</component>
+----
+
+* **Before launch** — nothing, and that is the point: IntelliJ disables its Build step for a Maven run
+  configuration, and `vidocq:run` compiles and indexes by itself.
+* **JDK** — `vidocq.idea.jre` writes an IntelliJ SDK *name* (such as `temurin-25`) as the Maven runner JRE,
+  which is also the JDK the application runs on: `vidocq:run` forks it from the JVM running Maven. Declare it in
+  the top-level pom, since that name must exist on every machine; an absolute path is accepted with a warning.
+  Without it, IntelliJ runs Maven on the JDK of its Maven settings, which can be another one than the JDK you
+  build and test with, and the goal warns.
+* **Maven settings** — `myGeneralSettings` is left empty on purpose. A run configuration that carries its own
+  replaces the user's Maven settings (settings file, local repository, offline mode, threads) with what the file
+  holds, and those belong to the machine, not to the repository.
+* **Format** — the one IntelliJ writes itself: the element order, the options left at their default and the
+  2-space indentation of `XmlSerializer`, LF, no XML declaration. Measured against IntelliJ IDEA 2026.2.3's own
+  serialiser — a generated file deserialised and serialised back comes out identical — so IntelliJ has no reason
+  to rewrite it, and the marker it carries survives.
+* **File name** — the configuration name with the characters IntelliJ replaces in file names (`/ \ ? < > : * | "`
+  and control characters) turned into `_`, truncated to 255 characters. Two names that differ only by case
+  fail the goal: they are one file on macOS and Windows.
+
+==== The `application` kind
+
+`-Dvidocq.idea.kind=application` writes what the goal wrote before: an Application run configuration of the
+main class, with two before-launch steps — IntelliJ's Make, then `vidocq:generate` on the application's own
+pom.
+
+[source,xml]
+----
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="McpTimeServerApp" type="Application" factoryName="Application">
     <option name="ALTERNATIVE_JRE_PATH" value="temurin-25" />
@@ -217,24 +413,14 @@ For an application `mcp-time-server` whose pom sets `vidocq.mainClass`, with
 ----
 
 Apart from the marker line, this is the configuration verified in IntelliJ IDEA 2026.2: Run on the main class
-built the module, completed the bean index and started the application.
-
-* **Before launch** — IntelliJ's Make, then `vidocq:generate` on the application's own pom. When a single
-  execution of the plugin that runs `generate` carries a configuration of its own (for example
-  `<scanDependencies>` on an execution rather than at plugin level), the goal is written
-  `vidocq:generate@<execution id>`: a goal run on its own would not see that configuration. With several such
-  executions it stays `vidocq:generate` and the goal warns.
-* **JDK** — `vidocq.idea.jre` writes an IntelliJ SDK *name* (such as `temurin-25`) as the alternative JRE;
-  declare it in the top-level pom, since that name must exist on every machine. An absolute path is accepted
-  with a warning. Without it, the file pins no JDK and IntelliJ launches the application on the module SDK, which
-  can be another JDK than the one you build and test with. That launch has not been verified in IntelliJ yet, so
-  the goal warns whenever it writes a configuration that pins no JDK.
-* **Format** — the one IntelliJ writes itself (2-space indentation, LF, no XML declaration), so IntelliJ has no
-  reason to rewrite the file. The first line is a marker carrying the SHA-256 of the rest of the file. A nested
-  main class is written with dots, as IntelliJ stores it.
-* **File name** — the configuration name with the characters IntelliJ replaces in file names (`/ \ ? < > : * | "`
-  and control characters) turned into `_`, truncated to 255 characters. Two names that differ only by case
-  fail the goal: they are one file on macOS and Windows.
+built the module, completed the bean index and started the application. It runs the application in the JVM
+IntelliJ starts, which is faster to launch, but every Run that bypasses the before-launch step starts it with
+an incomplete bean index. When a single execution of the plugin that runs `generate` carries a configuration of
+its own (for example `<scanDependencies>` on an execution rather than at plugin level), the step is written
+`vidocq:generate@<execution id>`: a goal run on its own would not see that configuration. With several such
+executions it stays `vidocq:generate` and the goal warns. `-Dvidocq.idea.generateBeforeLaunch=false` leaves the
+step out; it does not concern the Maven kind. Here `vidocq.idea.jre` is the alternative JRE of the
+configuration, and without it IntelliJ launches the application on the module SDK.
 
 The goal never writes `.idea/`, `*.iml` or any other project file — those belong to IntelliJ's own Maven
 import — nor run configuration templates, nor Eclipse launch configurations. It never deletes a file, and it
@@ -289,9 +475,14 @@ so that the committed files do not depend on how Maven was invoked.
   verified. `strict`: also fail on those files when their content differs from what the goal writes. Any other
   value fails the goal.
 
+| `vidocq.idea.kind` [.tag-new]#NEW#
+| `maven`
+| `maven`: a Maven run configuration of `vidocq:run` on the application's pom. `application`: an Application run
+  configuration of the main class, with Make and `vidocq:generate` before launch. Any other value fails the goal.
+
 | `vidocq.idea.generateBeforeLaunch`
 | `true`
-| Add the `vidocq:generate` step before launch.
+| Add the `vidocq:generate` step before launch. The `application` kind only.
 
 | `vidocq.idea.jre`
 | _(unset)_
@@ -357,16 +548,25 @@ count: run the goal and its CI check with the same active profiles.
 
 === JDK
 
-The Vidocq plugin and runtime are compiled for Java 25. IntelliJ uses three JDKs, and the file can only choose
-the third:
+The Vidocq plugin and runtime are compiled for Java 25, and the JDK that runs each step is IntelliJ's business,
+not the file's — except where `vidocq.idea.jre` says otherwise.
 
-[cols="1,2"]
+[cols="1,2,2"]
 |===
-| Step | JDK
+| Step | Maven kind | `application` kind
 
-| Make | the module SDK (the project SDK unless the pom declares a JDK toolchain)
-| `vidocq:generate` before launch | the Maven runner JRE (Settings > Build, Execution, Deployment > Build Tools > Maven > Runner)
-| the application | `vidocq.idea.jre` when set, else the module SDK (not verified in IntelliJ yet)
+| Build
+| none (IntelliJ disables its Build step)
+| Make, on the module SDK — the project SDK unless the pom declares a JDK toolchain
+
+| Maven
+| `vidocq.idea.jre` when set, else the Maven runner JRE (Settings > Build, Execution, Deployment > Build Tools >
+  Maven > Runner)
+| the Maven runner JRE, for the `vidocq:generate` step
+
+| The application
+| the JVM running Maven, which `vidocq:run` forks
+| `vidocq.idea.jre` when set, else the module SDK (not verified in IntelliJ yet)
 |===
 
 Each of them must be JDK 25 or newer. The goal cannot see IntelliJ's SDKs and prints this reminder after a write.

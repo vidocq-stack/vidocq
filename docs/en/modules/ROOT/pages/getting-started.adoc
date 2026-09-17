@@ -122,6 +122,8 @@ mvn vidocq:dev
 
 Dev mode launches the application on its module path and watches your sources. It uses the `vidocq.mainModule` / `vidocq.mainClass` properties already set in the generated pom.
 
+To run the application once, without the watcher, use `mvn vidocq:run` [.tag-new]#NEW#: it compiles, completes the bean index and forks the same JVM, and its exit code is the build's. It is also what an IDE should run — `mvn vidocq:idea` writes exactly that run configuration. See xref:modules/vidocq-runtime-maven-plugin.adoc#run[the `vidocq:run` goal].
+
 NOTE: `vidocq dev` and `vidocq start` (the CLI commands, as opposed to the Maven goal) boot the runtime from the CLI's own module path and therefore do not see the extensions declared in your pom. Prefer `mvn vidocq:dev` and the packaged launcher for extension-based apps.
 
 == Step 6 — Add extensions as you grow

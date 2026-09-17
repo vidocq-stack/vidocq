@@ -140,6 +140,9 @@ extension claims through `VidocqExtension.configKeys()`.
 | `vidocq:dev`
 | Dev/watch mode — forks a child JVM with `-Dvidocq.profile=dev`, recompiles and hot-reloads on change.
 
+| `vidocq:run` [.tag-new]#NEW#
+| One run of the application in a forked JVM, after a lifecycle forked up to `process-classes`: `mvn vidocq:run` compiles, indexes and runs. See xref:modules/vidocq-runtime-maven-plugin.adoc#run[the goal's reference].
+
 | `vidocq:checkpom`
 | Verifies every `vidocq-runtime-<name>-extension` declared in the pom is correctly wired (bound to `validate` via `pluginManagement`).
 

@@ -80,7 +80,9 @@ inherited indexer entry is preserved. Canonical example:
 
 `generate` (bean index + codegen), `package` (fat-jar/ZIP distribution), `checkpom`
 (wired in `validate` via `pluginManagement`), `jlink`, `jpackage`, `docker`, `dev`,
-`idea` (experimental, command line only: IntelliJ run configurations in `.run/`, never `.idea/`).
+`run` (one forked run, after a forked lifecycle up to `process-classes`: compiles and indexes first),
+`idea` (experimental, command line only: IntelliJ run configurations in `.run/`, never `.idea/`;
+a Maven run of `vidocq:run` by default, `-Dvidocq.idea.kind=application` for the main-class kind).
 
 ## Documentation (Antora) conventions
 
