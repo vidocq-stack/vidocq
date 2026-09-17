@@ -36,6 +36,13 @@ class ConfigKeysTest {
     }
 
     @Test
+    void coreConsoleKeysAreRecognized() {
+        // read by vidocq-runtime-core (console logging), so `vidocq doctor` must not flag them
+        assertTrue(ConfigKeys.isKnown("vidocq.log.console"));
+        assertTrue(ConfigKeys.isKnown("vidocq.console.color"));
+    }
+
+    @Test
     void unknownVidocqNamespacesAreRejected() {
         assertFalse(ConfigKeys.isKnown("vidocq.htpp.port"));
         assertFalse(ConfigKeys.isKnown("vidocq.bogus"));

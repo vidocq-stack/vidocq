@@ -23,6 +23,8 @@ import io.vidocq.vauban.core.container.VaubanContainer;
 import io.vidocq.vauban.core.container.VaubanContainerBuilder;
 import io.vidocq.runtime.core.config.ConfigKeyAudit;
 import io.vidocq.runtime.core.config.VidocqConfigImpl;
+import io.vidocq.runtime.core.console.ConsoleLogging;
+import io.vidocq.runtime.core.console.ConsoleSupport;
 import io.vidocq.runtime.spi.ExtensionContext;
 import io.vidocq.runtime.spi.VidocqConfiguration;
 import io.vidocq.runtime.spi.VidocqExtension;
@@ -30,7 +32,9 @@ import io.vidocq.runtime.spi.config.VidocqConfig;
 
 import java.lang.management.ManagementFactory;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 
 /**
@@ -54,6 +58,14 @@ public final class VidocqBootstrap {
 
     private static final System.Logger LOG = System.getLogger(VidocqBootstrap.class.getName());
 
+    /**
+     * The configuration keys the core reads itself. The audit merges them with every extension's
+     * {@link VidocqExtension#configKeys()}, so a typo under these namespaces is reported too.
+     */
+    static final Set<String> CORE_CONFIG_KEYS = Set.of(
+            ConsoleLogging.LOG_CONSOLE_KEY,
+            ConsoleSupport.COLOR_KEY);
+
     private final CountDownLatch shutdownLatch = new CountDownLatch(1);
     private Thread shutdownHook;
 
@@ -75,6 +87,8 @@ public final class VidocqBootstrap {
      * Creates a new bootstrap instance.
      */
     public static VidocqBootstrap create() {
+        // Embedders that skip Vidocq.main get the console logging too, before the first log line.
+        ConsoleLogging.installIfDefault();
         return new VidocqBootstrap();
     }
 
@@ -91,6 +105,8 @@ public final class VidocqBootstrap {
         VidocqAppLayer.installIfConfigured();
 
         this.config = new VidocqConfigImpl();
+        // vidocq.properties is visible from here: vidocq.log.console and vidocq.console.color.
+        ConsoleLogging.applyConfiguration(config);
         this.configuration = new VidocqConfigurationImpl(config);
         this.extensions = ExtensionLoader.load();
 
@@ -188,16 +204,22 @@ public final class VidocqBootstrap {
      */
     private void auditConfigKeys() {
         try {
-            java.util.Set<String> declared = new java.util.HashSet<>();
-            for (VidocqExtension ext : extensions) {
-                declared.addAll(ext.configKeys());
-            }
+            Set<String> declared = declaredConfigKeys(extensions);
             for (String key : ConfigKeyAudit.unconsumedKeys(config.getPropertyNames(), declared)) {
                 LOG.log(System.Logger.Level.WARNING, ConfigKeyAudit.warningFor(key, declared));
             }
         } catch (RuntimeException e) {
             LOG.log(System.Logger.Level.DEBUG, "Configuration key audit skipped", e);
         }
+    }
+
+    /** The keys the core itself reads, audited like the extensions' {@code configKeys()}. */
+    static Set<String> declaredConfigKeys(List<VidocqExtension> extensions) {
+        Set<String> declared = new HashSet<>(CORE_CONFIG_KEYS);
+        for (VidocqExtension ext : extensions) {
+            declared.addAll(ext.configKeys());
+        }
+        return declared;
     }
 
     /**

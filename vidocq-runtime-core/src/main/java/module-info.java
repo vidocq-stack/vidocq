@@ -26,6 +26,9 @@ module io.vidocq.runtime.core {
     // layer defined by the VaubanClassLoader.
     requires io.vidocq.vauban.classloader;
     requires java.management;
+    // Console logging (io.vidocq.runtime.core.console): one aligned line per record on stdout,
+    // installed over the JDK default console handler only.
+    requires java.logging;
 
     exports io.vidocq.runtime.core;
     exports io.vidocq.runtime.core.config;

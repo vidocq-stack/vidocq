@@ -19,6 +19,7 @@
  */
 package io.vidocq.runtime.core;
 
+import io.vidocq.runtime.core.console.ConsoleLogging;
 import io.vidocq.runtime.spi.VidocqApp;
 
 /**
@@ -55,6 +56,8 @@ public final class Vidocq {
     private Vidocq() {}
 
     public static void main(String[] args) {
+        // Before the first log line (VidocqAppLayer logs "Application layer ready").
+        ConsoleLogging.installIfDefault();
         // Dev-mode hot reload (-Dvidocq.dev.reload.file=…): boot/stop cycles over a
         // re-created application layer, in this same JVM.
         String reloadFile = System.getProperty(VidocqDevReloadLoop.RELOAD_FILE_PROPERTY, "").strip();
@@ -79,6 +82,7 @@ public final class Vidocq {
      * See {@link #run(Class, String...)} for the application-callback variant.
      */
     public static void run(String... args) {
+        ConsoleLogging.installIfDefault();
         var caller = StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE)
                 .getCallerClass();
         ensureLayer(caller);
@@ -99,6 +103,7 @@ public final class Vidocq {
      * blocks with {@link #waitForExit()}.
      */
     public static int run(Class<? extends VidocqApp> appClass, String... args) {
+        ConsoleLogging.installIfDefault();
         var caller = StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE)
                 .getCallerClass();
         ensureLayer(caller);

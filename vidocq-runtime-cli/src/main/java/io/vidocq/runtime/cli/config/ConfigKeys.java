@@ -48,10 +48,10 @@ public final class ConfigKeys {
      */
     static final Set<String> KNOWN_NAMESPACES = Set.of(
             "app", "appName", "appDescription", "appVersion",
-            "chappe", "checkpom", "compress", "config", "data", "dev",
+            "chappe", "checkpom", "compress", "config", "console", "data", "dev",
             "distDir", "distName", "docker", "http", "icon",
             "includeResources", "installerDir", "jlink", "jpackageType",
-            "jvmArgs", "launcher", "mainClass", "mainModule", "pool",
+            "jvmArgs", "launcher", "log", "mainClass", "mainModule", "pool",
             "profile", "rest", "runtimeImage", "scriptName", "stripDebug",
             "vendor");
 
