@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <!-- A single-module application at the root. Its committed .run/Drift.run.xml was generated while the
+         main class was still com.example.drift.OldApp. -->
+    <groupId>com.example.it</groupId>
+    <artifactId>check-drift</artifactId>
+    <version>1.0</version>
+
+    <properties>
+        <vidocq.mainClass>com.example.drift.DriftApp</vidocq.mainClass>
+        <vidocq.idea.configurationName>Drift</vidocq.idea.configurationName>
+    </properties>
+
+    <build>
+        <plugins>
+                <plugin>
+                    <groupId>io.vidocq.runtime</groupId>
+                    <artifactId>vidocq-runtime-maven-plugin</artifactId>
+                <version>@project.version@</version>
+            </plugin>
+        </plugins>
+    </build>
+</project>

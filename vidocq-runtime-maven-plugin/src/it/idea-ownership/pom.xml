@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <!-- .run/AlphaApp.run.xml was written by hand (VM options added); .run/BetaApp.run.xml has exactly the
+         content vidocq:idea generates for the JRE pinned below, but no marker. -->
+    <groupId>com.example.it</groupId>
+    <artifactId>ownership</artifactId>
+    <version>1.0</version>
+    <packaging>pom</packaging>
+
+    <properties>
+        <vidocq.idea.jre>temurin-25</vidocq.idea.jre>
+    </properties>
+
+    <modules>
+        <module>alpha</module>
+        <module>beta</module>
+    </modules>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>io.vidocq.runtime</groupId>
+                    <artifactId>vidocq-runtime-maven-plugin</artifactId>
+                    <version>@project.version@</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
+</project>

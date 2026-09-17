@@ -125,4 +125,55 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <!--
+            Integration tests of the goals on real Maven builds (src/it, one directory per build), run by
+            maven-invoker-plugin against the packaged plugin and its hand-written descriptor.
+
+            A profile, so that `mvn -o ... verify` keeps working on a machine whose local repository lacks
+            the invoker plugin and its Groovy runtime. Active on any CI runner (Forgejo sets CI=true for
+            every step) and on demand with -Pit. invoker:install stages the plugin and its dependencies in
+            target/it-repo, never in the user's local repository; the inner builds copy anything else from
+            the outer local repository (src/it/settings.xml).
+
+            No fixture may be named *.run.xml: IntelliJ loads such files anywhere in the project content, so
+            they would appear as run configurations of this repository. Seeds and expected contents are .txt
+            files, copied into .run/ by prebuild.groovy.
+        -->
+        <profile>
+            <id>it</id>
+            <activation>
+                <property>
+                    <name>env.CI</name>
+                </property>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-invoker-plugin</artifactId>
+                        <version>3.10.1</version>
+                        <configuration>
+                            <cloneProjectsTo>${project.build.directory}/it</cloneProjectsTo>
+                            <localRepositoryPath>${project.build.directory}/it-repo</localRepositoryPath>
+                            <settingsFile>src/it/settings.xml</settingsFile>
+                            <preBuildHookScript>prebuild</preBuildHookScript>
+                            <postBuildHookScript>verify</postBuildHookScript>
+                            <showErrors>true</showErrors>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <id>integration-tests</id>
+                                <goals>
+                                    <goal>install</goal>
+                                    <goal>run</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <!-- Two Vidocq applications, one of them nested two levels down, and a library that declares the plugin
+         without a main class. The plugin is only in <pluginManagement> here, which is what "mvn vidocq:idea"
+         at the root needs to resolve the prefix. -->
+    <groupId>com.example.it</groupId>
+    <artifactId>two-applications</artifactId>
+    <version>1.0</version>
+    <packaging>pom</packaging>
+
+    <modules>
+        <module>alpha</module>
+        <module>apps/beta</module>
+        <module>library</module>
+    </modules>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>io.vidocq.runtime</groupId>
+                    <artifactId>vidocq-runtime-maven-plugin</artifactId>
+                    <version>@project.version@</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
+</project>

@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.example.it</groupId>
+        <artifactId>two-applications</artifactId>
+        <version>1.0</version>
+        <relativePath>../../pom.xml</relativePath>
+    </parent>
+    <artifactId>beta</artifactId>
+
+    <properties>
+        <vidocq.mainModule>com.example.beta</vidocq.mainModule>
+        <vidocq.mainClass>com.example.beta.BetaApp</vidocq.mainClass>
+        <vidocq.idea.configurationName>Beta server</vidocq.idea.configurationName>
+    </properties>
+
+    <build>
+        <plugins>
+                <plugin>
+                    <groupId>io.vidocq.runtime</groupId>
+                    <artifactId>vidocq-runtime-maven-plugin</artifactId>
+                <!-- Execution-level only: the before-launch step must run vidocq:generate@generate to see it. -->
+                <executions>
+                    <execution>
+                        <id>generate</id>
+                        <goals>
+                            <goal>generate</goal>
+                        </goals>
+                        <configuration>
+                            <scanDependencies>
+                                <scanDependency>com.example.it:*</scanDependency>
+                            </scanDependencies>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>
