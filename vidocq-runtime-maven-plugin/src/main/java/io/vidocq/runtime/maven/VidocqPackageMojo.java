@@ -271,15 +271,11 @@ public class VidocqPackageMojo extends AbstractMojo {
     /**
      * The application main class to run through the layer, derived from {@code mainClass}
      * — {@code null} when it is the runtime's own main (the default) or blank. A legacy
-     * {@code module/class} reference keeps only its class part.
+     * {@code module/class} reference keeps only its class part. The rule is shared with
+     * {@code vidocq:idea}, see {@link ApplicationMainClass}.
      */
     private String appMainProperty() {
-        if (mainClass == null || mainClass.isBlank()
-                || "io.vidocq.runtime.core.Vidocq".equals(mainClass)) {
-            return null;
-        }
-        int slash = mainClass.indexOf('/');
-        return slash >= 0 ? mainClass.substring(slash + 1) : mainClass;
+        return ApplicationMainClass.normalize(mainClass);
     }
 
     private void createZip(Path sourceDir, Path zipFile) throws IOException {

@@ -89,6 +89,25 @@ class VidocqPackageMojoTest {
         assertEquals("app.sh", binDir.resolve("app.sh").getFileName().toString());
     }
 
+    /**
+     * The layer launchers name the application main class through the rule shared with
+     * {@code vidocq:idea} ({@link ApplicationMainClass}): a legacy {@code module/class} value keeps its
+     * class, and the runtime's own main class is no application main class at all.
+     */
+    @Test
+    void layerLaunchers_nameTheApplicationMainClassThroughTheSharedRule(@TempDir Path binDir) throws Exception {
+        VidocqPackageMojo mojo = mojoWith(null);
+        setBoolean(mojo, "layerMode", true);
+
+        mojo.generateShScript(binDir);
+        assertTrue(Files.readString(binDir.resolve("app.sh")).contains("-Dvidocq.app.main=io.repro.app.Main \\"));
+
+        set(mojo, "mainClass", "io.vidocq.runtime.core.Vidocq");
+        mojo.generateShScript(binDir);
+        assertFalse(Files.readString(binDir.resolve("app.sh")).contains("-Dvidocq.app.main="),
+                "the runtime's own main class must not be passed as the application main class");
+    }
+
     private static VidocqPackageMojo mojoWith(String jvmArgs) throws Exception {
         VidocqPackageMojo mojo = new VidocqPackageMojo();
         set(mojo, "scriptName", "app");
@@ -101,5 +120,11 @@ class VidocqPackageMojoTest {
         Field f = VidocqPackageMojo.class.getDeclaredField(field);
         f.setAccessible(true);
         f.set(mojo, value);
+    }
+
+    private static void setBoolean(VidocqPackageMojo mojo, String field, boolean value) throws Exception {
+        Field f = VidocqPackageMojo.class.getDeclaredField(field);
+        f.setAccessible(true);
+        f.setBoolean(mojo, value);
     }
 }
