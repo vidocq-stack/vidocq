@@ -67,6 +67,31 @@ class DevServiceManagerTest {
         assertEquals(List.of("start:a"), events); // b skipped, never started
     }
 
+    /**
+     * The application cannot tell a dev-service datasource from a hand-set {@code -D}: the manager keeps which
+     * provider supplied each key, so the goal can say so. A key two providers supply is the later one's, as its value
+     * is.
+     */
+    @Test
+    void recordsWhichProviderSuppliedEachKey() throws Exception {
+        List<String> events = new ArrayList<>();
+        FakeDevService postgres = new FakeDevService("postgres", 100, true,
+                Map.of("vidocq.pool.url", "jdbc:postgresql://localhost:5440/vidocq", "shared", "1"),
+                false, null, events);
+        FakeDevService keycloak = new FakeDevService("keycloak", 200, true,
+                Map.of("mp.jwt.verify.issuer", "http://localhost:8180/realms/vidocq", "shared", "2"),
+                false, null, events);
+        FakeDevService skipped = new FakeDevService("skipped", 300, false, Map.of("skipped.key", "3"),
+                false, null, events);
+
+        DevServiceManager mgr = DevServiceManager.start(List.of(keycloak, skipped, postgres), ctx(), LOG);
+
+        assertEquals(Map.of("vidocq.pool.url", "postgres",
+                "mp.jwt.verify.issuer", "keycloak",
+                "shared", "keycloak"), mgr.providers());
+        assertEquals("2", mgr.collectedProperties().get("shared"), "the value and its provider agree");
+    }
+
     @Test
     void laterProviderSeesEarlierProviderOutput() throws Exception {
         List<String> events = new ArrayList<>();
@@ -113,6 +138,7 @@ class DevServiceManagerTest {
     void noProvidersIsAnEmptyButValidRun() throws Exception {
         DevServiceManager mgr = DevServiceManager.start(List.of(), ctx(), LOG);
         assertTrue(mgr.collectedProperties().isEmpty());
+        assertTrue(mgr.providers().isEmpty());
         mgr.close();
         assertFalse(mgr.collectedProperties().containsKey("anything"));
     }

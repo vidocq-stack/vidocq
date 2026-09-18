@@ -72,6 +72,12 @@ import java.util.concurrent.atomic.AtomicReference;
         threadSafe = false)
 public class VidocqDevMojo extends AbstractMojo {
 
+    /**
+     * Prefix of the markers that say which dev service provided a key the child sees:
+     * {@code vidocq.dev.provided.<key>=<provider id>}.
+     */
+    static final String DEV_PROVIDED_PREFIX = "vidocq.dev.provided.";
+
     @Parameter(defaultValue = "${project}", readonly = true, required = true)
     private MavenProject project;
 
@@ -235,13 +241,14 @@ public class VidocqDevMojo extends AbstractMojo {
 
         // Provision dev-mode services (Postgres, Keycloak, …) ONCE, before the first fork. Their
         // connection coordinates are folded into the child's system properties; an explicit -D or a
-        // vidocq.dev.systemProperties entry always wins (putIfAbsent). The containers live for the
-        // whole session — source reloads respawn the child but never touch them.
+        // vidocq.dev.systemProperties entry always wins (putIfAbsent), and each key the child does get from
+        // a provider is marked vidocq.dev.provided.<key>=<id>. The containers live for the whole session —
+        // source reloads respawn the child but never touch them.
         DevServiceManager devs = null;
         if (devServices) {
             DefaultDevServiceContext devCtx = new DefaultDevServiceContext(projectDir, sysProps);
             devs = DevServiceManager.start(devCtx, getLog());
-            devs.collectedProperties().forEach(sysProps::putIfAbsent);
+            foldDevServiceProperties(sysProps, devs);
             reportConnectionInformation(devs.collectedProperties());
         }
         final DevServiceManager devServicesRef = devs;
@@ -442,6 +449,26 @@ public class VidocqDevMojo extends AbstractMojo {
             return new ArrayList<>();
         }
         return new ArrayList<>(Arrays.asList(raw.trim().split("\\s+")));
+    }
+
+    /**
+     * Folds the dev services' properties into the child's system properties, and marks each key the child gets
+     * from a provider with {@code vidocq.dev.provided.<key>=<provider id>}, for example
+     * {@code vidocq.dev.provided.vidocq.pool.audit.url=postgres}.
+     *
+     * <p>A value the child already gets, such as a {@code vidocq.dev.systemProperties} entry, always wins, and its
+     * key is not marked: the child does not see the provider's value there. The marker is how the
+     * application tells a dev-service datasource from a hand-set one, and only says who provided the key, never what:
+     * it is read like any other configuration, and {@code vidocq.dev.*} is exempt from the configuration key audit.</p>
+     */
+    // package-private for the unit test.
+    static void foldDevServiceProperties(Map<String, String> sysProps, DevServiceManager devs) {
+        Map<String, String> providers = devs.providers();
+        devs.collectedProperties().forEach((key, value) -> {
+            if (sysProps.putIfAbsent(key, value) == null && value != null) {
+                sysProps.putIfAbsent(DEV_PROVIDED_PREFIX + key, providers.get(key));
+            }
+        });
     }
 
     /**

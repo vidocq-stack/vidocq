@@ -155,23 +155,36 @@ final class DevServicesReport {
         return new Coordinates(name, url, host, port, fields.get("username"), fields.get("password"));
     }
 
-    /** Extracts the authority ({@code host[:port]}) from a {@code jdbc:xxx://authority/db?…} URL. */
+    /**
+     * Extracts the authority ({@code host[:port]}) from a {@code jdbc:xxx://[userinfo@]authority/db?…} URL, without
+     * its user info.
+     *
+     * <p>Everything is read before the first {@code ?} or {@code ;}, where the parameters and settings start (SQL
+     * Server writes {@code jdbc:sqlserver://host:1433;databaseName=…}), since a parameter may hold an {@code @}, such
+     * as an e-mail address. The user info runs through the <b>last</b> {@code @} there, as a password may hold a
+     * {@code /} or a {@code :}: an {@code @} in the path is taken for its end too, which hides more than needed,
+     * never less.</p>
+     */
     private static String authorityOf(String jdbcUrl) {
         if (jdbcUrl == null) {
             return null;
         }
-        int slashes = jdbcUrl.indexOf("//");
-        if (slashes < 0) {
-            return null;
-        }
-        int start = slashes + 2;
-        int end = jdbcUrl.length();
-        for (int i = start; i < jdbcUrl.length(); i++) {
+        int headEnd = jdbcUrl.length();
+        for (int i = 0; i < jdbcUrl.length(); i++) {
             char ch = jdbcUrl.charAt(i);
-            if (ch == '/' || ch == '?') {
-                end = i;
+            if (ch == '?' || ch == ';') {
+                headEnd = i;
                 break;
             }
+        }
+        int slashes = jdbcUrl.indexOf("//");
+        if (slashes < 0 || slashes >= headEnd) {
+            return null;
+        }
+        int start = Math.max(slashes + 2, jdbcUrl.lastIndexOf('@', headEnd - 1) + 1);
+        int end = start;
+        while (end < headEnd && jdbcUrl.charAt(end) != '/') {
+            end++;
         }
         String authority = jdbcUrl.substring(start, end);
         return authority.isEmpty() ? null : authority;

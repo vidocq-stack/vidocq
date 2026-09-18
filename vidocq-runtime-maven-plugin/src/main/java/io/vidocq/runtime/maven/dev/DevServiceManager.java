@@ -42,11 +42,15 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * applicable provider that fails aborts the whole run after rolling back the ones already started. The
  * collected properties are injected into the child as {@code -D} values; {@link #close()} stops every
  * started provider in reverse order and is idempotent (shutdown hook + {@code finally}).</p>
+ *
+ * <p>The manager also keeps which provider supplied each key ({@link #providers()}): the application cannot
+ * tell a dev-service value from a hand-set {@code -D}, so the goal marks the ones it passes on.</p>
  */
 final class DevServiceManager implements AutoCloseable {
 
     private final List<DevService> started = new ArrayList<>();
     private final Map<String, String> collected = new LinkedHashMap<>();
+    private final Map<String, String> providers = new LinkedHashMap<>();
     private final AtomicBoolean closed = new AtomicBoolean(false);
 
     private DevServiceManager() {}
@@ -76,6 +80,7 @@ final class DevServiceManager implements AutoCloseable {
                 mgr.started.add(p);
                 if (props != null && !props.isEmpty()) {
                     mgr.collected.putAll(props);
+                    props.keySet().forEach(key -> mgr.providers.put(key, p.id()));
                     ctx.merge(props);
                 }
                 log.info("DevService '" + p.id() + "' started");
@@ -91,6 +96,14 @@ final class DevServiceManager implements AutoCloseable {
     /** The {@code key=value} pairs to expose to the child JVM (provider outputs only). */
     Map<String, String> collectedProperties() {
         return Collections.unmodifiableMap(collected);
+    }
+
+    /**
+     * The {@linkplain DevService#id() id} of the provider that supplied each key of {@link #collectedProperties()},
+     * such as {@code vidocq.pool.url -> postgres}. A key two providers supplied is the later one's, as its value is.
+     */
+    Map<String, String> providers() {
+        return Collections.unmodifiableMap(providers);
     }
 
     @Override

@@ -20,7 +20,14 @@ application JVM. Each provider:
 2. provisions the service (a Testcontainers container) and returns a map of `key=value`
    coordinates,
 3. those coordinates are injected into the child JVM as `-D` system properties (folded with
-   `putIfAbsent`, so an explicit `-D` or `vidocq.dev.systemProperties` entry always wins).
+   `putIfAbsent`, so an explicit `-D` or `vidocq.dev.systemProperties` entry always wins),
+4. and each key the child does get from a provider is marked with
+   `-Dvidocq.dev.provided.<key>=<provider id>`, for example
+   `vidocq.dev.provided.vidocq.pool.audit.url=postgres`. The application cannot otherwise tell a
+   dev-service datasource from a hand-set one: the Mansart pool extension reads the marker to show
+   `dev service postgres, localhost:54219` in the startup report and the dev console. A key an
+   explicit value kept is not marked, and the marker names the provider only, never a value
+   (`vidocq.dev.*` keys are exempt from the configuration key audit).
 
 This keeps the heavy machinery (Testcontainers, the Docker client) entirely **off the runtime
 module-path** and out of the AOT / native image — the application module-path is identical to
@@ -192,7 +199,8 @@ datasource.analytics.url=jdbc:postgresql://localhost:54219/analytics
 ```
 
 The block and the file are **provider-agnostic**: they render whatever `vidocq.pool[.<name>].*`
-coordinates the dev services published, host and port parsed from the JDBC URL.
+coordinates the dev services published, host and port parsed from the JDBC URL (any user info in
+the URL is left out of the host).
 
 ### Stable port for external tooling
 
