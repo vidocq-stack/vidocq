@@ -24,6 +24,9 @@
  */
 module io.vidocq.runtime.extensions.jakartaee.web.mansart.pool {
     requires transitive io.vidocq.runtime.spi;
+    // MansartPoolExtension is its own dev console panel: its report section, shown live. Transitive, since
+    // the exported MansartPoolExtension is a DevConsolePanel.
+    requires transitive io.vidocq.runtime.spi.devconsole;
     requires io.vidocq.vauban.core;
     requires io.vidocq.mansart.pool.api;
     requires io.vidocq.mansart.pool.core;
