@@ -58,8 +58,8 @@ import java.util.Map;
  *
  * <p>ASCII, two-space indents, no colour: the report is read in log files and Windows consoles. Every value
  * is {@linkplain #clean(String) cleaned} (no control character can break a line or forge a record) and cut to
- * {@value #MAX_VALUE} characters; a list or a table stops after {@value #MAX_ITEMS} items with how many more
- * there are.
+ * {@value #MAX_VALUE} characters; a list, a table or the recall of the anomalies stops after {@value #MAX_ITEMS}
+ * items with how many more there are.
  */
 public final class StartupReportRenderer {
 
@@ -160,12 +160,17 @@ public final class StartupReportRenderer {
             out.addAll(headline(section.id(), timed(section)));
             lines(section.lines(), out);
         }
+        List<Anomaly> all = report.anomalies();
+        List<Anomaly> recalled = all.subList(0, Math.min(MAX_ITEMS, all.size()));
         List<Line> anomalies = new ArrayList<>();
-        int column = INDENT + keyWidth(report.anomalies().stream().map(Anomaly::code).toList());
-        for (Anomaly anomaly : report.anomalies()) {
+        int column = INDENT + keyWidth(recalled.stream().map(Anomaly::code).toList());
+        for (Anomaly anomaly : recalled) {
             anomalies.add(new Row(anomaly.code(), oneLine(firstSentence(clean(anomaly.message())), WIDTH - column)));
         }
-        out.addAll(headline("anomalies", anomalies.isEmpty() ? "none" : anomalies.size() + " (logged above)"));
+        if (all.size() > MAX_ITEMS) {
+            anomalies.add(new Text(more(all.size() - MAX_ITEMS)));
+        }
+        out.addAll(headline("anomalies", all.isEmpty() ? "none" : all.size() + " (logged above)"));
         lines(anomalies, out);
         return String.join("\n", out);
     }
@@ -355,8 +360,30 @@ public final class StartupReportRenderer {
         if (value == null) {
             return "";
         }
-        StringBuilder cleaned = new StringBuilder(Math.min(value.length(), MAX_VALUE + 1));
-        for (int i = 0; i < value.length() && cleaned.length() <= MAX_VALUE; ) {
+        String cleaned = replaceUnsafe(value, MAX_VALUE + 1);
+        if (cleaned.length() <= MAX_VALUE) {
+            return cleaned;
+        }
+        int end = MAX_VALUE - CUT.length();
+        if (Character.isLowSurrogate(cleaned.charAt(end))) {
+            end--;
+        }
+        return cleaned.substring(0, end) + CUT;
+    }
+
+    /**
+     * {@link #clean(String)} without the cut: {@code value} whole, every character that could break its line or
+     * forge a record replaced by {@code ?}. For a record of its own, such as an anomaly, whose whole text matters.
+     * {@code null} gives an empty string.
+     */
+    public static String cleanUncut(String value) {
+        return value == null ? "" : replaceUnsafe(value, Integer.MAX_VALUE);
+    }
+
+    /** {@code value} with every unsafe character replaced, read until the result has {@code limit} characters. */
+    private static String replaceUnsafe(String value, int limit) {
+        StringBuilder cleaned = new StringBuilder(Math.min(value.length(), limit));
+        for (int i = 0; i < value.length() && cleaned.length() < limit; ) {
             int codePoint = value.codePointAt(i);
             i += Character.charCount(codePoint);
             if (unsafe(codePoint)) {
@@ -365,14 +392,7 @@ public final class StartupReportRenderer {
                 cleaned.appendCodePoint(codePoint);
             }
         }
-        if (cleaned.length() <= MAX_VALUE) {
-            return cleaned.toString();
-        }
-        int end = MAX_VALUE - CUT.length();
-        if (Character.isLowSurrogate(cleaned.charAt(end))) {
-            end--;
-        }
-        return cleaned.substring(0, end) + CUT;
+        return cleaned.toString();
     }
 
     private static boolean unsafe(int codePoint) {

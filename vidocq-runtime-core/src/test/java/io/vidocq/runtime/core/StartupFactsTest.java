@@ -34,6 +34,7 @@ import java.io.File;
 import java.lang.classfile.ClassFile;
 import java.lang.classfile.attribute.ModuleAttribute;
 import java.lang.classfile.attribute.ModuleRequireInfo;
+import java.lang.constant.ClassDesc;
 import java.lang.constant.ModuleDesc;
 import java.net.URI;
 import java.nio.file.Files;
@@ -66,7 +67,7 @@ class StartupFactsTest {
 
             assertEquals("2 modules (vidocq.app.path=..." + File.separator + "zeta.app" + File.pathSeparator + "..."
                     + File.separator + "alpha.lib)", layer.summary());
-            assertEquals("2 modules (vidocq.app.path=zeta.app" + File.pathSeparator + "alpha.lib)", layer.headline());
+            assertEquals("2 modules (vidocq.app.path, 2 archives)", layer.headline());
             assertEquals(List.of(new Cells(List.of("zeta.app", "zeta.app", "directory")),
                     new Cells(List.of("alpha.lib", "alpha.lib", "directory")),
                     new Row("weaving", "none")), layer.lines());
@@ -80,6 +81,31 @@ class StartupFactsTest {
         }
         assertNull(VidocqAppLayer.installation(), "a reload forgets the layer it tears down");
         assertEquals("no application layer", StartupFacts.layer("none", new DisplayPaths(dir, null)).summary());
+    }
+
+    @Test
+    void theApplicationModuleComesFirstWhereverItsArchiveIs() throws Exception {
+        Path lib = module("alpha.lib");
+        Path other = module("beta.lib");
+        Path app = module("zeta.app", "zeta.app.Main");
+        String previousPath = System.getProperty(VidocqAppLayer.APP_PATH_PROPERTY);
+        String previousMain = System.getProperty(VidocqAppLayer.APP_MAIN_PROPERTY);
+        System.setProperty(VidocqAppLayer.APP_PATH_PROPERTY, String.join(File.pathSeparator, lib.toString(),
+                app.toString(), other.toString()));
+        try {
+            assertTrue(VidocqAppLayer.installIfConfigured());
+            DisplayPaths paths = new DisplayPaths(dir, null);
+            assertEquals(List.of("alpha.lib", "zeta.app", "beta.lib"), names(StartupFacts.layer(null, paths)),
+                    "no application module known: the order of the archives");
+
+            System.setProperty(VidocqAppLayer.APP_MAIN_PROPERTY, "zeta.app.Main");
+
+            assertEquals(List.of("zeta.app", "alpha.lib", "beta.lib"), names(StartupFacts.layer(null, paths)));
+        } finally {
+            VidocqAppLayer.resetForReload();
+            restore(VidocqAppLayer.APP_PATH_PROPERTY, previousPath);
+            restore(VidocqAppLayer.APP_MAIN_PROPERTY, previousMain);
+        }
     }
 
     @Test
@@ -108,16 +134,20 @@ class StartupFactsTest {
         Section extensions = StartupFacts.extensions(List.of(first, second, third), List.of(2_000_000L),
                 "onStart second");
 
+        // the boot layer for all three, or the class path: either way, no layer is repeated on every line
         String module = StartupFacts.where(first.getClass().getModule());
-        assertEquals(List.of(new Cells(List.of("1000", "first", "onStart 2 ms", module, "vidocq.first.*")),
-                new Cells(List.of("1000", "second", "onStart failed", module, "")),
-                new Cells(List.of("1000", "third", "not started", module, ""))), extensions.lines());
+        assertEquals(List.of(new Cells(List.of("1000", "first", "onStart 2 ms", module + "  vidocq.first.*")),
+                new Cells(List.of("1000", "second", "onStart failed", module)),
+                new Cells(List.of("1000", "third", "not started", module))), extensions.lines());
     }
 
     @Test
     void aModuleIsPlacedInItsLayer() {
-        assertEquals("java.base (boot layer)", StartupFacts.where(String.class.getModule()));
-        assertEquals("class path", StartupFacts.where(new ClassLoader() {}.getUnnamedModule()));
+        assertEquals("java.base", StartupFacts.where(String.class.getModule()));
+        assertEquals("boot layer", StartupFacts.layerOf(String.class.getModule()));
+        Module unnamed = new ClassLoader() {}.getUnnamedModule();
+        assertEquals("class path", StartupFacts.where(unnamed));
+        assertNull(StartupFacts.layerOf(unnamed));
     }
 
     @Test
@@ -127,13 +157,32 @@ class StartupFactsTest {
         assertEquals("sjar", StartupFacts.kind(URI.create("file:/x/lib.sjar"), Path.of("/x/lib.sjar")));
     }
 
-    /** A directory holding only the {@code module-info.class} of {@code name}. */
-    private Path module(String name) throws Exception {
+    /** A directory holding the {@code module-info.class} of {@code name}, and an empty class of each name given. */
+    private Path module(String name, String... classNames) throws Exception {
         Path classes = Files.createDirectories(dir.resolve(name));
         Files.write(classes.resolve("module-info.class"), ClassFile.of().buildModule(
                 ModuleAttribute.of(ModuleDesc.of(name), module -> module.requires(
                         ModuleRequireInfo.of(ModuleDesc.of("java.base"), ClassFile.ACC_MANDATED, null)))));
+        for (String className : classNames) {
+            Path file = classes.resolve(className.replace('.', '/') + ".class");
+            Files.createDirectories(file.getParent());
+            Files.write(file, ClassFile.of().build(ClassDesc.of(className), type -> type.withFlags(ClassFile.ACC_PUBLIC)));
+        }
         return classes;
+    }
+
+    /** The module names of the rows of a {@code layer} section, in order. */
+    private static List<String> names(Section layer) {
+        return layer.lines().stream().filter(Cells.class::isInstance).map(line -> ((Cells) line).cells().getFirst())
+                .toList();
+    }
+
+    private static void restore(String key, String value) {
+        if (value == null) {
+            System.clearProperty(key);
+        } else {
+            System.setProperty(key, value);
+        }
     }
 
     private static ConfigSource source(String name, int ordinal, Map<String, String> values) {

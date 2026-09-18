@@ -100,8 +100,9 @@ public interface StartupReportSection {
 
     /**
      * Something wrong that does not stop the boot. Logged at once as its own WARNING record,
-     * {@code [CODE] message}, at every {@link Verbosity}, {@link Verbosity#OFF} included, and recalled
-     * in the report's {@code anomalies} section.
+     * {@code [CODE] message hint}, at every {@link Verbosity}, {@link Verbosity#OFF} included, and
+     * recalled in the report's {@code anomalies} section. Its code, message and hint have their control
+     * characters replaced, like every value, so that the record stays one line; they are not cut.
      *
      * @param code    a stable code, such as {@code VAUBAN-003}; never {@code null}
      * @param message what is broken and its probable cause; never {@code null}

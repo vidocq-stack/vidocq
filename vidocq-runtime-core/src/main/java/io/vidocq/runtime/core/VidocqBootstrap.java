@@ -325,7 +325,8 @@ public final class VidocqBootstrap {
 
     /**
      * Has the contributors write their sections, at every level, then assembles the report of this boot and logs
-     * it, unless its level is {@code off}; the report of a boot that went well never fails it.
+     * it, unless its level is {@code off}; the report of a boot that went well never fails it. When it cannot be
+     * written, the boot still keeps a report, with what its header knows and no section.
      */
     private void report(StartupRecorder recorder) {
         try {
@@ -342,6 +343,28 @@ public final class VidocqBootstrap {
             StartupRecorder.log(report);
         } catch (RuntimeException | LinkageError e) {
             StartupRecorder.skipped(e);
+            if (startupReport == null) {
+                startupReport = headerOnly(recorder);
+            }
+        }
+    }
+
+    /**
+     * The report of a boot that went well but whose report could not be written: the launch, the level, the
+     * phases and the anomalies, no section; {@code null} if even that cannot be had. Never throws.
+     */
+    private StartupReport headerOnly(StartupRecorder recorder) {
+        try {
+            recorder.end();
+            String runtime;
+            try {
+                runtime = runtime();
+            } catch (RuntimeException | LinkageError unknown) {
+                runtime = null;
+            }
+            return recorder.report(launchMode(), launchReason(), verbosity, runtime, List.of(), null);
+        } catch (RuntimeException | LinkageError unreported) {
+            return null;
         }
     }
 
@@ -368,7 +391,8 @@ public final class VidocqBootstrap {
 
     /**
      * The report of this boot, at every level, {@code off} included: complete once {@link #start()} returned,
-     * partial, with its {@link StartupReport#failedPhase() failed phase}, once a phase failed; empty before.
+     * partial, with its {@link StartupReport#failedPhase() failed phase}, once a phase failed; empty before. A
+     * boot that went well but whose report could not be written keeps its header facts, with no section.
      */
     Optional<StartupReport> startupReport() {
         return Optional.ofNullable(startupReport);
@@ -426,14 +450,15 @@ public final class VidocqBootstrap {
     /**
      * The launch of this boot: its {@link LaunchModeResolver resolved mode} and its debugger. Never
      * fails the boot: a launch that cannot be read has no mode, which the extensions see as
-     * {@code prod}, and the banner shows what it knows.
+     * {@code prod}, and the banner shows what it knows. That fallback is a WARNING with its cause, never
+     * a DEBUG line nobody sees: a dev launch silently running as {@code prod} would be a mystery.
      */
     private StartupBanner.Launch resolveLaunch(VidocqConfig config) {
         try {
             return StartupBanner.launch(config, bannerOverride, embeddedDeployment,
                     Vidocq.applicationModule(), VidocqAppLayer.installedLayer());
         } catch (RuntimeException | LinkageError e) {
-            LOG.log(System.Logger.Level.DEBUG, "Launch mode not resolved", e);
+            LOG.log(System.Logger.Level.WARNING, "Launch mode not resolved, this boot runs as prod", e);
             return new StartupBanner.Launch(bannerOverride, embeddedDeployment, false, null, null, null, null);
         }
     }
@@ -491,10 +516,13 @@ public final class VidocqBootstrap {
      * warning of its own ({@code VIDOCQ-CFG-002}).
      */
     static void auditConfigKeys(VidocqConfig config, List<VidocqExtension> extensions) {
-        auditConfigKeys(config, extensions, StartupAnomalies::warn);
+        auditConfigKeys(config, extensions, new StartupRecorder()::anomaly);
     }
 
-    /** {@link #auditConfigKeys(VidocqConfig, List)}, each anomaly handed to {@code anomalies} to be logged. */
+    /**
+     * {@link #auditConfigKeys(VidocqConfig, List)}, each anomaly handed to {@code anomalies} to be logged: a
+     * {@link StartupRecorder}, which cleans the key names and the failure the messages quote.
+     */
     static void auditConfigKeys(VidocqConfig config, List<VidocqExtension> extensions,
                                 BiConsumer<String, String> anomalies) {
         try {

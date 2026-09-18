@@ -199,6 +199,51 @@ class StartupReportBootTest {
         }
     }
 
+    @Test
+    void aBootWhoseReportCannotBeWrittenStillKeepsItsHeader() {
+        System.setProperty(MODE_KEY, "dev");
+        System.setProperty(REPORT_KEY, "summary");
+        System.setProperty(TYPO_KEY, "detailed");
+        // started, the extension can no longer give its name: the report cannot list it
+        VidocqExtension unnamed = new Named("unnamed", 5) {
+            private boolean started;
+
+            @Override
+            public String name() {
+                if (started) {
+                    throw new NoClassDefFoundError("com/acme/Name");
+                }
+                return super.name();
+            }
+
+            @Override
+            public void onStart(ExtensionContext context) {
+                started = true;
+            }
+        };
+        try (LogRecords records = new LogRecords(REPORT_LOGGER)) {
+            VidocqBootstrap bootstrap = bootstrap(unnamed).configure().start();
+            try {
+                List<String> warnings = records.messages(REPORT_LOGGER, Level.WARNING);
+                assertEquals(1, warnings.size(), warnings.toString());
+                assertTrue(warnings.getFirst().startsWith("Startup report skipped: java.lang.NoClassDefFoundError"),
+                        warnings.getFirst());
+                assertEquals(List.of(), records.messages(REPORT_LOGGER, Level.INFO));
+                StartupReport report = bootstrap.startupReport().orElseThrow();
+                assertFalse(report.failed(), "the boot itself went well");
+                assertEquals(LaunchMode.DEV, report.launchMode());
+                assertEquals("vidocq.launch.mode", report.launchReason());
+                assertEquals(Verbosity.SUMMARY, report.verbosity());
+                assertEquals(List.of(), report.sections());
+                assertEquals(List.of("VIDOCQ-CFG-003"), report.anomalyCodes());
+                assertEquals(List.of("configure", "weaving", "scan", "beforeStart", "build", "extensions", "audit",
+                        "report"), report.phases().stream().map(Phase::name).toList());
+            } finally {
+                bootstrap.shutdown();
+            }
+        }
+    }
+
     // ------------------------------------------------------------------------------------------ failure
 
     @Test

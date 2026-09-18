@@ -61,7 +61,10 @@ final class StartupFacts {
                 extensions(extensions, onStartNanos, failed));
     }
 
-    /** The application layer Vidocq installed, if any, its modules in the order of their archives. */
+    /**
+     * The application layer Vidocq installed, if any: the application's module first, then the others in the order
+     * of their archives.
+     */
     static Section layer(String weaving, DisplayPaths paths) {
         VidocqAppLayer.Installation installation = VidocqAppLayer.installation();
         ModuleLayer layer = VidocqAppLayer.installedLayer();
@@ -69,11 +72,16 @@ final class StartupFacts {
             return CoreSections.layer(null, List.of(), List.of(), weaving, paths);
         }
         return CoreSections.layer(installation.origin(), installation.listed() ? installation.archives() : List.of(),
-                modules(layer, installation.archives()), weaving, paths);
+                modules(layer, installation.archives(), applicationName()), weaving, paths);
     }
 
-    /** The modules of {@code layer}: those of the given archives in their order, then the others by name. */
-    static List<CoreSections.LayerModule> modules(ModuleLayer layer, List<String> archives) {
+    /**
+     * The modules of {@code layer}: the application's first, then those of the given archives in their order, then
+     * the others by name.
+     *
+     * @param application the name of the application module, or {@code null} when there is none to name
+     */
+    static List<CoreSections.LayerModule> modules(ModuleLayer layer, List<String> archives, String application) {
         List<Path> order = new ArrayList<>();
         for (String archive : archives) {
             order.add(absolute(archive));
@@ -85,11 +93,26 @@ final class StartupFacts {
             Path file = file(location);
             int index = file == null ? -1 : order.indexOf(file);
             String kind = file != null ? kind(location, file) : location == null ? "-" : location.getScheme();
-            placed.add(new Placed(index < 0 ? Integer.MAX_VALUE : index,
+            int rank = resolved.name().equals(application) ? -1 : index < 0 ? Integer.MAX_VALUE : index;
+            placed.add(new Placed(rank,
                     new CoreSections.LayerModule(resolved.name(), file == null ? null : file.toString(), kind)));
         }
         placed.sort(Comparator.comparingInt(Placed::index).thenComparing(p -> p.module().name()));
         return placed.stream().map(Placed::module).toList();
+    }
+
+    /**
+     * The name of the application module: the module of the class that called {@code Vidocq.run}, else that of
+     * {@code vidocq.app.main}, else the launched module ({@link Vidocq#applicationModule()}); {@code null} when
+     * there is none.
+     */
+    private static String applicationName() {
+        try {
+            Module application = Vidocq.applicationModule();
+            return application == null ? null : application.getName();
+        } catch (RuntimeException | LinkageError unknown) {
+            return null;
+        }
     }
 
     /** The configuration sources in lookup order, the provider that replaced the native ones, the audit. */
@@ -133,26 +156,32 @@ final class StartupFacts {
                 namespaces = List.of();
             }
             String name = VidocqBootstrap.nameOf(extension);
-            facts.add(new CoreSections.Extension(name, priorityOf(extension), where(extension.getClass().getModule()),
+            Module module = extension.getClass().getModule();
+            facts.add(new CoreSections.Extension(name, priorityOf(extension), where(module), layerOf(module),
                     namespaces, i < onStartNanos.size() ? onStartNanos.get(i) : -1,
                     i == onStartNanos.size() && ("onStart " + name).equals(failed)));
         }
         return CoreSections.extensions(facts);
     }
 
-    /** {@code io.vidocq.chappe (boot layer)}, {@code com.acme (application layer)}, {@code class path}. */
+    /** The name of {@code module}, {@code io.vidocq.chappe}, or {@code class path} for an unnamed module. */
     static String where(Module module) {
-        if (!module.isNamed()) {
-            return "class path";
+        return module.isNamed() ? module.getName() : "class path";
+    }
+
+    /**
+     * {@value CoreSections#BOOT_LAYER} or {@value CoreSections#APPLICATION_LAYER} for a named module of one of
+     * them, else {@code null}.
+     */
+    static String layerOf(Module module) {
+        ModuleLayer layer = module.isNamed() ? module.getLayer() : null;
+        if (layer == null) {
+            return null;
         }
-        ModuleLayer layer = module.getLayer();
         if (layer == ModuleLayer.boot()) {
-            return module.getName() + " (boot layer)";
+            return CoreSections.BOOT_LAYER;
         }
-        if (layer != null && layer == VidocqAppLayer.installedLayer()) {
-            return module.getName() + " (application layer)";
-        }
-        return module.getName();
+        return layer == VidocqAppLayer.installedLayer() ? CoreSections.APPLICATION_LAYER : null;
     }
 
     /** {@code directory} for a directory of classes, else the extension of the file: {@code jar}. */

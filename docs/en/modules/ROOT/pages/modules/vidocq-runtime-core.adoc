@@ -404,10 +404,10 @@ configuration
   audited     vidocq.banner.*, vidocq.chappe.*, vidocq.console.*, vidocq.http.*, vidocq.launch.*,
               vidocq.log.*, vidocq.startup.*
 extensions
-  100    chappe-engine        onStart 0 ms   io.vidocq.runtime.extensions.essentials.chappe (boot layer)
-  500    rest-cassini         onStart 1 ms   io.vidocq.runtime.extensions.jakartaee.core.cassini (boot layer)
-  7000   chappe-mount-config  onStart 16 ms  io.vidocq.runtime.extensions.essentials.chappe (boot layer)
-  10000  chappe-bootstrap     onStart 7 ms   io.vidocq.runtime.extensions.essentials.chappe (boot layer)       vidocq.chappe.*, vidocq.http.*
+  100    chappe-engine        onStart 0 ms   io.vidocq.runtime.extensions.essentials.chappe
+  500    rest-cassini         onStart 1 ms   io.vidocq.runtime.extensions.jakartaee.core.cassini
+  7000   chappe-mount-config  onStart 16 ms  io.vidocq.runtime.extensions.essentials.chappe
+  10000  chappe-bootstrap     onStart 7 ms   io.vidocq.runtime.extensions.essentials.chappe  vidocq.chappe.*, vidocq.http.*
 anomalies     none
 [INFO ][2026-09-18 14:18:49.713][main           ][i.v.r.c.VidocqBootstrap#start                ] : Vidocq - Started in 113.185 ms (process running for 210 ms)
 ----
@@ -434,7 +434,7 @@ The whole report is one log record: one timestamp, printed in one piece, and not
 
 | `layer`
 | How many modules the application layer has and how they were found: `boot-layer detection from <module>`, or `vidocq.app.path=` followed by file names; `no application layer` without one.
-| One line per module: its name, its archive and its kind (`directory`, `jar`, or `jrt` in a jlink image). Then `weaving`: `none`, who weaves the beans of an IDE build (`Vauban class loader, 1 planned bean: ...`, or the load-time weaving agent), or `failed (VAUBAN-009)`.
+| The same count and origin; for `vidocq.app.path`, how many archives it lists instead of their names: `2 modules (vidocq.app.path, 2 archives)`. Then one line per module: its name, its archive and its kind (`directory`, `jar`, or `jrt` in a jlink image), the application's module first, the others in the order of their archives. Then `weaving`: `none`, who weaves the beans of an IDE build (`Vauban class loader, 1 planned bean: ...`, or the load-time weaving agent), or `failed (VAUBAN-009)`.
 
 | `configuration`
 | —
@@ -442,7 +442,7 @@ The whole report is one log record: one timestamp, printed in one piece, and not
 
 | `extensions`
 | The extensions, in the order they started.
-| One line per extension: its priority, its name, how long its `onStart` took (`onStart failed`, or `not started` after a failure), its module and layer, the namespaces it declares in `configKeys()`.
+| One line per extension: its priority, its name, how long its `onStart` took (`onStart failed`, or `not started` after a failure), its module, then the namespaces it declares in `configKeys()`. The module is followed by its layer, `(boot layer)` or `(application layer)`, only when the extensions are not all in the boot layer.
 
 | a contributed section
 | Its summary line, when it has one.
@@ -450,7 +450,7 @@ The whole report is one log record: one timestamp, printed in one piece, and not
 
 | `anomalies`
 | `none`, or how many and their codes: `2: VIDOCQ-CFG-001, VIDOCQ-CFG-003 (logged above)`, a code logged twice written `VIDOCQ-CFG-003 x2`.
-| One line per anomaly: its code and the first sentence of its message.
+| One line per anomaly: its code and the first sentence of its message; after 50, `... and N more`.
 |===
 
 The contributed sections follow the sections of the core: first those of the extensions that contribute one, in the order they started, then those of the other libraries. The report is made of what the boot already holds — the layer's resolved modules, the loaded extensions, the configuration sources — and its own time is the `report` phase of the detailed report.
@@ -494,7 +494,7 @@ An anomaly is something wrong that does not stop the boot. Each one is its own W
 [WARN ][2026-09-18 14:19:46.775][main           ][i.v.r.c.r.StartupAnomalies#warn              ] : [VIDOCQ-CFG-003] Configuration key 'vidocq.startup.reprot' is read by nothing and has no effect. Known keys in this namespace: vidocq.startup.report
 ----
 
-It is logged at every report level, `off` included, and before the report, so a boot that fails later still shows it, and a log pipeline can alert on its code. The report only recalls the codes, in its `anomalies` section. A library can report anomalies of its own, under its own codes, from its section of the report (xref:modules/vidocq-runtime-spi.adoc#startup-report-contributors[Contributing to the startup report]).
+It is logged at every report level, `off` included, and before the report, so a boot that fails later still shows it, and a log pipeline can alert on its code. It is always one line: a line break or another control character in what it quotes, a configured value or a key name, becomes `?`, so no anomaly can start a line that looks like another record. It is never cut. The report only recalls the codes, in its `anomalies` section. A library can report anomalies of its own, under its own codes, from its section of the report (xref:modules/vidocq-runtime-spi.adoc#startup-report-contributors[Contributing to the startup report]).
 
 The core raises these codes.
 
@@ -580,10 +580,10 @@ Vidocq startup report (partial)
   phases      configure 19 ms | weaving 2 ms | scan 4 ms | beforeStart 0 ms | build 54 ms
 ...
 extensions
-  100    chappe-engine        onStart 0 ms    io.vidocq.runtime.extensions.essentials.chappe (boot layer)
-  500    rest-cassini         onStart 0 ms    io.vidocq.runtime.extensions.jakartaee.core.cassini (boot layer)
-  7000   chappe-mount-config  onStart 15 ms   io.vidocq.runtime.extensions.essentials.chappe (boot layer)
-  10000  chappe-bootstrap     onStart failed  io.vidocq.runtime.extensions.essentials.chappe (boot layer)       vidocq.chappe.*, vidocq.http.*
+  100    chappe-engine        onStart 0 ms    io.vidocq.runtime.extensions.essentials.chappe
+  500    rest-cassini         onStart 0 ms    io.vidocq.runtime.extensions.jakartaee.core.cassini
+  7000   chappe-mount-config  onStart 15 ms   io.vidocq.runtime.extensions.essentials.chappe
+  10000  chappe-bootstrap     onStart failed  io.vidocq.runtime.extensions.essentials.chappe  vidocq.chappe.*, vidocq.http.*
 anomalies     none
 Exception in thread "main" io.vidocq.chappe.api.ChappeException$ServerException: Failed to bind to 127.0.0.1:18082
 	at io.vidocq.chappe.core@0.4.0-SNAPSHOT/io.vidocq.chappe.core.ChappeServer.start(ChappeServer.java:102)
@@ -604,7 +604,7 @@ The report goes to logs that are shared, pasted into issues and kept. It prints 
 * **No system property, environment variable or JVM argument as it is** — a `-D` can carry a password. Only what is derived from them: `IntelliJ agent`, `target/classes with a pom.xml above`.
 * **No secret.** A contributor reports a secret as `configured` or `not configured`; the API has no way to pass its value.
 * **No directory in the summary**, the default of a packaged application: the core's sections print file names only (`vidocq.app.path=.../app`). The detailed report prints a path relative to the working directory, or under `~` for the home directory, or else absolute; a path of more than four names keeps its first two and its last one: `~/.m2/.../langchain4j-cdi-mcp-server-1.4.0-SNAPSHOT.jar`.
-* **No forged line.** Every value is cleaned before it is printed: control characters — line breaks, `ESC`, and the invisible formatting characters such as bidirectional overrides — become `?`, so no value can start a line that looks like another record. A value longer than 200 characters is cut and ends with `...`; a list or a table stops after 50 items with `... and N more`.
+* **No forged line.** Every value is cleaned before it is printed: control characters — line breaks, `ESC`, and the invisible formatting characters such as bidirectional overrides — become `?`, so no value can start a line that looks like another record. A value longer than 200 characters is cut and ends with `...`; a list, a table or the anomalies of the detailed report stop after 50 items with `... and N more`. The anomaly records are cleaned the same way, and never cut.
 
 === Loggers
 

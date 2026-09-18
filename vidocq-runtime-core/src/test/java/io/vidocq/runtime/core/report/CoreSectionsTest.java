@@ -55,13 +55,21 @@ class CoreSectionsTest {
 
         assertEquals("3 modules (vidocq.app.path=" + local(".../app") + File.pathSeparator + local(".../lib.jar") + ")",
                 layer.summary());
-        assertEquals("3 modules (vidocq.app.path=" + file("opt/acme/app") + File.pathSeparator + file("opt/acme/lib.jar")
-                + ")", layer.headline());
+        assertEquals("3 modules (vidocq.app.path, 2 archives)", layer.headline(), "the table lists the archives");
         assertEquals(List.of(
                 new Cells(List.of("com.acme.app", local("app/target/classes"), "directory")),
                 new Cells(List.of("com.acme.lib", local("~/.m2/.../lib-1.0.jar"), "jar")),
                 new Cells(List.of("com.acme.image", "-", "jrt")),
                 new Row("weaving", "none")), layer.lines());
+    }
+
+    @Test
+    void theDetailedHeadlineCountsTheArchivesItDoesNotName() {
+        Section layer = CoreSections.layer("vidocq.app.path", List.of(file("opt/acme/app")),
+                List.of(new LayerModule("com.acme.app", file("opt/acme/app"), "directory")), null, PATHS);
+
+        assertEquals("1 module (vidocq.app.path, 1 archive)", layer.headline());
+        assertEquals("1 module (vidocq.app.path=" + local(".../app") + ")", layer.summary());
     }
 
     @Test
@@ -125,17 +133,41 @@ class CoreSectionsTest {
     @Test
     void theExtensionsAreNamedInTheSummaryAndDetailedOnePerLine() {
         Section extensions = CoreSections.extensions(List.of(
-                new Extension("chappe-engine", 100, "io.vidocq.chappe (boot layer)", List.of("vidocq.chappe.*"), 3_400_000,
-                        false),
-                new Extension("rest-cassini", 500, "class path", List.of(), -1, true),
-                new Extension("chappe-bootstrap", 10000, "class path", List.of(), -1, false)));
+                new Extension("chappe-engine", 100, "io.vidocq.chappe", "boot layer", List.of("vidocq.chappe.*"),
+                        3_400_000, false),
+                new Extension("rest-cassini", 500, "class path", null, List.of(), -1, true),
+                new Extension("chappe-bootstrap", 10000, "com.acme.app", "application layer", List.of(), -1, false)));
 
         assertEquals("chappe-engine, rest-cassini, chappe-bootstrap", extensions.summary());
         assertNull(extensions.headline());
         assertEquals(List.of(
-                new Cells(List.of("100", "chappe-engine", "onStart 3 ms", "io.vidocq.chappe (boot layer)", "vidocq.chappe.*")),
-                new Cells(List.of("500", "rest-cassini", "onStart failed", "class path", "")),
-                new Cells(List.of("10000", "chappe-bootstrap", "not started", "class path", ""))), extensions.lines());
+                new Cells(List.of("100", "chappe-engine", "onStart 3 ms", "io.vidocq.chappe (boot layer)  vidocq.chappe.*")),
+                new Cells(List.of("500", "rest-cassini", "onStart failed", "class path")),
+                new Cells(List.of("10000", "chappe-bootstrap", "not started", "com.acme.app (application layer)"))),
+                extensions.lines(), "the layers differ: each is named");
+    }
+
+    @Test
+    void extensionsAllInTheBootLayerNameTheirModuleAlone() {
+        Section extensions = CoreSections.extensions(List.of(
+                new Extension("chappe-engine", 100, "io.vidocq.runtime.extensions.essentials.chappe", "boot layer",
+                        List.of(), 0, false),
+                new Extension("rest-cassini", 500, "io.vidocq.runtime.extensions.jakartaee.core.cassini", "boot layer",
+                        List.of(), 1_000_000, false),
+                new Extension("chappe-bootstrap", 10000, "io.vidocq.runtime.extensions.essentials.chappe", "boot layer",
+                        List.of("vidocq.chappe.*", "vidocq.http.*"), 7_000_000, false)));
+        StartupReport report = new StartupReport(LaunchMode.DEV, "vidocq.launch.mode", Verbosity.DETAILED, List.of(),
+                List.of(extensions), List.of(), null, null);
+
+        List<String> lines = StartupReportRenderer.render(report).lines().toList();
+
+        // the namespaces follow the module: the module column is not padded to line them up
+        assertEquals(List.of("extensions",
+                "  100    chappe-engine     onStart 0 ms  io.vidocq.runtime.extensions.essentials.chappe",
+                "  500    rest-cassini      onStart 1 ms  io.vidocq.runtime.extensions.jakartaee.core.cassini",
+                "  10000  chappe-bootstrap  onStart 7 ms  io.vidocq.runtime.extensions.essentials.chappe  vidocq.chappe.*,"
+                        + " vidocq.http.*"),
+                lines.subList(lines.indexOf("extensions"), lines.indexOf("anomalies     none")));
     }
 
     @Test

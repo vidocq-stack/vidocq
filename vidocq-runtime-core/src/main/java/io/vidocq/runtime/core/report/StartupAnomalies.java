@@ -25,7 +25,9 @@ package io.vidocq.runtime.core.report;
  * <p>An anomaly is one WARNING record of {@value #LOGGER_NAME}, emitted where it is detected, its code
  * first: {@code [VIDOCQ-CFG-001] Invalid value ...}. One record and one line each, so that it survives a
  * boot that fails before any report, and so that it can be alerted on by its code. It is logged whatever
- * the level of the startup report, {@code off} included.
+ * the level of the startup report, {@code off} included, and always through
+ * {@link StartupRecorder#anomaly(String, String, String, String, Throwable)}, which cleans it first: the
+ * {@code warn} methods here are that recorder's, and nothing else logs an anomaly.
  */
 public final class StartupAnomalies {
 
@@ -52,13 +54,16 @@ public final class StartupAnomalies {
 
     private StartupAnomalies() {}
 
-    /** Logs {@code [code] message} at WARNING on {@value #LOGGER_NAME}. */
-    public static void warn(String code, String message) {
+    /** Logs {@code [code] message}, already cleaned by the recorder, at WARNING on {@value #LOGGER_NAME}. */
+    static void warn(String code, String message) {
         LOG.log(System.Logger.Level.WARNING, withCode(code, message));
     }
 
-    /** Logs {@code [code] message} at WARNING on {@value #LOGGER_NAME}, with the stack trace of {@code thrown}. */
-    public static void warn(String code, String message, Throwable thrown) {
+    /**
+     * Logs {@code [code] message}, already cleaned by the recorder, at WARNING on {@value #LOGGER_NAME}, with the
+     * stack trace of {@code thrown}.
+     */
+    static void warn(String code, String message, Throwable thrown) {
         LOG.log(System.Logger.Level.WARNING, withCode(code, message), thrown);
     }
 

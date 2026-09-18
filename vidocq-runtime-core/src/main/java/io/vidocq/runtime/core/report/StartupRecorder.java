@@ -113,6 +113,11 @@ public final class StartupRecorder {
      * Logs an anomaly at once, {@code [code] message}, then its hint, as one WARNING record of
      * {@value StartupAnomalies#LOGGER_NAME}, and keeps it for the report's {@code anomalies} section.
      *
+     * <p>Every anomaly comes through here, the core's and the contributors' alike, and here its code, message
+     * and hint are {@linkplain StartupReportRenderer#cleanUncut(String) cleaned}: a configured value or a key
+     * name quoted in a message cannot break the record's line or forge another record. Nothing is cut, the
+     * record being the whole account of the anomaly; the report cuts what it recalls.
+     *
      * @param code    the code
      * @param message what is broken and its probable cause
      * @param hint    how to fix it, or {@code null}
@@ -129,14 +134,17 @@ public final class StartupRecorder {
      * @param thrown what caused the anomaly, or {@code null}
      */
     public void anomaly(String code, String message, String hint, String source, Throwable thrown) {
-        String text = hint == null ? message : message + " " + hint;
+        String cleanCode = StartupReportRenderer.cleanUncut(code);
+        String cleanMessage = StartupReportRenderer.cleanUncut(message);
+        String cleanHint = hint == null ? null : StartupReportRenderer.cleanUncut(hint);
+        String text = cleanHint == null ? cleanMessage : cleanMessage + " " + cleanHint;
         if (thrown == null) {
-            StartupAnomalies.warn(code, text);
+            StartupAnomalies.warn(cleanCode, text);
         } else {
-            StartupAnomalies.warn(code, text, thrown);
+            StartupAnomalies.warn(cleanCode, text, thrown);
         }
         synchronized (anomalies) {
-            anomalies.add(new Anomaly(code, message, hint, source));
+            anomalies.add(new Anomaly(cleanCode, cleanMessage, cleanHint, source));
         }
     }
 

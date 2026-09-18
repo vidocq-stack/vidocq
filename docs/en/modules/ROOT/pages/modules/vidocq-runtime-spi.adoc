@@ -192,7 +192,7 @@ A library that is not an extension declares its contributor as a service. Its se
 | For HTTP servers and routing bricks: Vidocq prints each route with the base URI of its listener, whichever section declared it. `handler` is the binary name of the class, then `#` and the method.
 
 | `anomaly(code, message, hint)`
-| Something wrong that does not stop the boot, under a code of your own, such as `TRANSLATE-001`. Logged at once, at every level, as one WARNING record `[CODE] message hint` on `io.vidocq.startup.anomaly`, and recalled in the `anomalies` section. `hint` may be `null`.
+| Something wrong that does not stop the boot, under a code of your own, such as `TRANSLATE-001`. Logged at once, at every level, as one WARNING record `[CODE] message hint` on `io.vidocq.startup.anomaly`, its control characters replaced with `?` so that it stays one line, never cut; recalled in the `anomalies` section. `hint` may be `null`.
 |===
 
 === A minimal contributor

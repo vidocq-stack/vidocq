@@ -192,6 +192,23 @@ class StartupReportRendererTest {
         assertTrue(lines.stream().allMatch(line -> line.length() <= StartupReportRenderer.WIDTH), lines.toString());
     }
 
+    @Test
+    void theDetailedAnomaliesStopAtFifty() {
+        Anomaly[] anomalies = IntStream.range(0, 60)
+                .mapToObj(i -> new Anomaly("VIDOCQ-CFG-003", "Configuration key 'vidocq.startup.k" + i
+                        + "' is read by nothing and has no effect.", null, "core"))
+                .toArray(Anomaly[]::new);
+
+        List<String> lines = StartupReportRenderer.render(report(Verbosity.DETAILED, List.of(), anomalies))
+                .lines().toList();
+
+        List<String> recalled = lines.subList(lines.indexOf("anomalies     60 (logged above)") + 1, lines.size());
+        assertEquals(51, recalled.size(), recalled.toString());
+        assertEquals("  VIDOCQ-CFG-003  Configuration key 'vidocq.startup.k49' is read by nothing and has no effect.",
+                recalled.get(49));
+        assertEquals("  ... and 10 more", recalled.getLast());
+    }
+
     // ------------------------------------------------------------------------------------------- values
 
     @Test

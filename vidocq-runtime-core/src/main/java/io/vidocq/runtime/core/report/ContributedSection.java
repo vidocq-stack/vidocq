@@ -38,9 +38,8 @@ import java.util.Map;
  * route is joined with the base URI of its listener whichever section declared it.
  *
  * <p>Nothing is formatted here: {@link StartupReportRenderer} cleans and cuts every value when it prints the
- * section. An anomaly is the exception: it is logged at once, through the {@link StartupRecorder}, its code,
- * message and hint cleaned first, since it reaches the log before any report. Every method accepts
- * {@code null} and never throws.
+ * section. An anomaly is logged at once, through the {@link StartupRecorder}, which cleans it as it cleans every
+ * anomaly, since it reaches the log before any report. Every method accepts {@code null} and never throws.
  */
 final class ContributedSection implements StartupReportSection {
 
@@ -138,9 +137,7 @@ final class ContributedSection implements StartupReportSection {
 
     @Override
     public StartupReportSection anomaly(String code, String message, String hint) {
-        recorder.anomaly(StartupReportRenderer.clean(String.valueOf(code)),
-                StartupReportRenderer.clean(String.valueOf(message)),
-                hint == null ? null : StartupReportRenderer.clean(hint), id);
+        recorder.anomaly(String.valueOf(code), String.valueOf(message), hint, id);
         return this;
     }
 

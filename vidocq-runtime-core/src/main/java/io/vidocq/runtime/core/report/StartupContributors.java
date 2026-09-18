@@ -220,10 +220,9 @@ public final class StartupContributors {
         List<Contributor> unique = new ArrayList<>();
         for (Contributor contributor : found) {
             String id = contributor.id();
-            String shownId = StartupReportRenderer.clean(id);
             if (CORE_IDS.contains(id)) {
                 recorder.anomaly(StartupAnomalies.DUPLICATE_ID, "Contributor " + contributor.className() + " uses id '"
-                        + shownId + "', which names a section of the core; it is skipped", null, StartupRecorder.CORE);
+                        + id + "', which names a section of the core; it is skipped", null, StartupRecorder.CORE);
                 continue;
             }
             String owner = owners.putIfAbsent(id, contributor.className());
@@ -231,7 +230,7 @@ public final class StartupContributors {
                 unique.add(contributor);
             } else if (!owner.equals(contributor.className())) {
                 recorder.anomaly(StartupAnomalies.DUPLICATE_ID, "Contributors " + owner + " and "
-                        + contributor.className() + " both use id '" + shownId + "'; " + contributor.className()
+                        + contributor.className() + " both use id '" + id + "'; " + contributor.className()
                         + " is skipped", null, StartupRecorder.CORE);
             }
         }
@@ -259,7 +258,7 @@ public final class StartupContributors {
             } catch (RuntimeException | LinkageError e) {
                 context.dropped(section);
                 recorder.anomaly(StartupAnomalies.CONTRIBUTOR_FAILED, "Startup report contributor '"
-                        + StartupReportRenderer.clean(contributor.id()) + "' (" + contributor.className()
+                        + contributor.id() + "' (" + contributor.className()
                         + ") failed; its section is skipped", null, StartupRecorder.CORE, e);
             } finally {
                 context.release();
@@ -291,8 +290,8 @@ public final class StartupContributors {
                 StartupRecorder.CORE, e);
     }
 
-    /** What went wrong, on one clean line: the message of {@code e}, else its class. */
+    /** What went wrong: the message of {@code e}, else its class; the recorder cleans it with the anomaly. */
     private static String describe(Throwable e) {
-        return StartupReportRenderer.clean(e.getMessage() != null ? e.getMessage() : e.getClass().getName());
+        return e.getMessage() != null ? e.getMessage() : e.getClass().getName();
     }
 }

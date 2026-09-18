@@ -186,6 +186,54 @@ class StartupReportActivationTest {
         }
     }
 
+    @Test
+    void aLineBreakInAValueOrAKeyNeverForgesARecord() {
+        String forgedKey = "vidocq.startup.re\nport";
+        System.setProperty(REPORT_KEY, "x\n[WARN ][2026-09-18 14:19:46.775][main] : forged");
+        System.setProperty(forgedKey, "detailed");
+        try (Anomalies anomalies = new Anomalies()) {
+            VidocqBootstrap bootstrap = VidocqBootstrap.create().banner(BannerMode.OFF).configure().start();
+            try {
+                List<String> warnings = anomalies.warnings();
+                assertEquals(List.of(
+                        "[VIDOCQ-CFG-001] Invalid value 'x?[WARN ][2026-09-18 14:19:46.775][main] : forged' for"
+                                + " vidocq.startup.report (auto, off, summary, detailed): using auto",
+                        "[VIDOCQ-CFG-003] Configuration key 'vidocq.startup.re?port' is read by nothing and has no"
+                                + " effect. Known keys in this namespace: vidocq.startup.report"), warnings);
+                assertTrue(warnings.stream().allMatch(warning -> warning.lines().count() == 1), warnings.toString());
+                assertTrue(bootstrap.startupReport().orElseThrow().anomalies().stream()
+                                .noneMatch(anomaly -> anomaly.message().contains("\n")),
+                        "the report keeps the anomalies as they were logged");
+            } finally {
+                bootstrap.shutdown();
+            }
+        } finally {
+            System.clearProperty(forgedKey);
+        }
+    }
+
+    @Test
+    void theFailureOfTheAuditIsCleanedToo() {
+        VidocqExtension broken = new VidocqExtension() {
+            @Override
+            public String name() {
+                return "broken";
+            }
+
+            @Override
+            public Set<String> configKeys() {
+                throw new IllegalStateException("no keys\n[WARN ] forged");
+            }
+        };
+        try (Anomalies anomalies = new Anomalies()) {
+            VidocqBootstrap.auditConfigKeys(new VidocqConfigImpl(), List.of(broken));
+
+            assertEquals(List.of("[VIDOCQ-CFG-002] Configuration key audit failed:"
+                    + " java.lang.IllegalStateException: no keys?[WARN ] forged; keys that nothing reads are not"
+                    + " reported"), anomalies.warnings());
+        }
+    }
+
     /** The WARNING records of {@value #ANOMALY_LOGGER}, while open. */
     static final class Anomalies implements AutoCloseable {
         private final Logger logger = Logger.getLogger(ANOMALY_LOGGER);
