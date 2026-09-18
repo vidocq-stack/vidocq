@@ -22,6 +22,7 @@ package io.vidocq.runtime.core.banner;
 import io.vidocq.runtime.core.banner.BannerTestSupport.Records;
 import io.vidocq.runtime.core.banner.LaunchModeResolver.Inputs;
 import io.vidocq.runtime.core.banner.LaunchModeResolver.Resolution;
+import io.vidocq.runtime.spi.report.LaunchMode;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;

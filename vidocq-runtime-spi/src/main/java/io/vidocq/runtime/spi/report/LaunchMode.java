@@ -17,16 +17,21 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
-package io.vidocq.runtime.core.banner;
+package io.vidocq.runtime.spi.report;
 
 import java.util.Locale;
 import java.util.Optional;
 
 /**
- * How this JVM was launched, as {@link LaunchModeResolver} reads it from the signals of the launch.
+ * How this JVM was launched, as Vidocq reads it once per boot from the signals of the launch:
+ * {@code vidocq.launch.mode}, a {@code vidocq.profile} that names a mode, the {@code vidocq:dev}
+ * reload loop, a test framework on the booting thread, an application loaded from a build tree.
  *
- * <p>It is an observation, not a setting: nothing in the runtime behaves differently because of it.
- * It is printed so that a log or a screenshot says which of the three it was.
+ * <p>It is an observation, not a setting: it decides what the startup banner and the startup report
+ * show by default, and an extension reads it through
+ * {@link io.vidocq.runtime.spi.ExtensionContext#launchMode()} or
+ * {@link StartupReportContext#launchMode()} to offer what only makes sense in development. The
+ * container, the configuration and the extensions' lifecycle are the same in every mode.
  */
 public enum LaunchMode {
 
@@ -37,12 +42,20 @@ public enum LaunchMode {
     /** Everything else: a packaged application, a container, CI. */
     PROD;
 
-    /** The name as it is written in {@code vidocq.launch.mode} and on the context line. */
+    /**
+     * The name as it is written in {@code vidocq.launch.mode} and on the banner's context line:
+     * {@code dev}, {@code test} or {@code prod}.
+     */
     public String label() {
         return name().toLowerCase(Locale.ROOT);
     }
 
-    /** The mode named by {@code value}, ignoring case and surrounding blanks; empty when it names none. */
+    /**
+     * The mode named by {@code value}, ignoring case and surrounding blanks.
+     *
+     * @param value a {@link #label() label} such as {@code " Dev "}, or {@code null}
+     * @return the mode, or empty when {@code value} is {@code null}, blank or names no mode
+     */
     public static Optional<LaunchMode> parse(String value) {
         if (value == null || value.isBlank()) {
             return Optional.empty();

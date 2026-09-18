@@ -21,6 +21,7 @@ package io.vidocq.runtime.spi;
 
 import io.vidocq.vauban.core.container.VaubanContainer;
 import io.vidocq.runtime.spi.config.VidocqConfig;
+import io.vidocq.runtime.spi.report.LaunchMode;
 import jakarta.enterprise.inject.spi.BeanManager;
 
 /**
@@ -54,5 +55,19 @@ public interface ExtensionContext {
      */
     default BeanManager beanManager() {
         return container().getBeanManager();
+    }
+
+    /**
+     * How this JVM was launched, as Vidocq resolved it for this boot: what an extension reads to
+     * offer what only makes sense in development, rather than guessing from {@code vidocq.profile}.
+     *
+     * <p>The context Vidocq passes to {@link VidocqExtension#onStart} returns the resolved mode; this
+     * default, {@link LaunchMode#PROD}, only answers for contexts that do not know it, such as a
+     * test double written before this method existed.
+     *
+     * @return the launch mode, never {@code null}
+     */
+    default LaunchMode launchMode() {
+        return LaunchMode.PROD;
     }
 }

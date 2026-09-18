@@ -25,6 +25,7 @@ import io.vidocq.runtime.core.banner.BannerTestSupport.Records;
 import io.vidocq.runtime.core.banner.StartupBanner.Launch;
 import io.vidocq.runtime.core.banner.StartupBanner.Output;
 import io.vidocq.runtime.core.console.ConsoleSupport;
+import io.vidocq.runtime.spi.report.LaunchMode;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

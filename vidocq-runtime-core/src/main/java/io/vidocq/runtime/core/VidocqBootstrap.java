@@ -31,6 +31,7 @@ import io.vidocq.runtime.spi.ExtensionContext;
 import io.vidocq.runtime.spi.VidocqConfiguration;
 import io.vidocq.runtime.spi.VidocqExtension;
 import io.vidocq.runtime.spi.config.VidocqConfig;
+import io.vidocq.runtime.spi.report.LaunchMode;
 
 import java.lang.management.ManagementFactory;
 import java.util.Collections;
@@ -83,6 +84,8 @@ public final class VidocqBootstrap {
     private BannerMode bannerOverride;
     /** {@link #configure(List)}: an Arquillian or TCK deployment, which gets the one-line banner. */
     private boolean embeddedDeployment;
+    /** The launch of this boot, resolved by {@link #configure()}; {@code null} before. */
+    private StartupBanner.Launch launch;
     /**
      * Top-chrono taken during the construction of the bootstrap (= just after the entry
      * from {@code Vidocq.main()} via {@link #create()}). Comparable to {@code
@@ -115,8 +118,8 @@ public final class VidocqBootstrap {
     }
 
     /**
-     * Phase 1: loads the configuration, prints the startup banner (once per JVM) and discovers the
-     * extensions.
+     * Phase 1: loads the configuration, resolves the launch mode, prints the startup banner (once per
+     * JVM) and discovers the extensions.
      */
     public VidocqBootstrap configure() {
         // Universal-loader mode: embedders that skip Vidocq.main (the CLI boots
@@ -128,10 +131,12 @@ public final class VidocqBootstrap {
         this.config = new VidocqConfigImpl();
         // vidocq.properties is visible from here: vidocq.log.console and vidocq.console.color.
         ConsoleLogging.applyConfiguration(config);
+        // Every boot resolves its own launch, the reloads of the dev loop included: the extensions read
+        // it through ExtensionContext.launchMode(), and the configuration may have changed since.
+        StartupBanner.Launch resolved = resolveLaunch(config);
+        this.launch = resolved;
         // The banner needs the configuration (vidocq.banner.*) and comes before the first boot log line.
-        VidocqConfig loaded = config;
-        StartupBanner.showOnce(loaded, () -> StartupBanner.launch(loaded, bannerOverride, embeddedDeployment,
-                Vidocq.applicationModule(), VidocqAppLayer.installedLayer()));
+        StartupBanner.showOnce(config, () -> resolved);
         LOG.log(System.Logger.Level.INFO, "Vidocq - Configuration phase");
         this.configuration = new VidocqConfigurationImpl(config);
         this.extensions = ExtensionLoader.load();
@@ -199,7 +204,7 @@ public final class VidocqBootstrap {
         this.container = builder.build();
 
         // Notify extensions
-        ExtensionContext context = new ExtensionContextImpl(container, configuration, config);
+        ExtensionContext context = extensionContext();
         for (VidocqExtension ext : extensions) {
             LOG.log(System.Logger.Level.INFO, "Starting extension: {0}", ext.name());
             ext.onStart(context);
@@ -219,6 +224,31 @@ public final class VidocqBootstrap {
                 "Vidocq - Started in " + ms + "." + String.format("%03d", us)
                         + " ms (process running for " + jvmUptime + " ms)");
         return this;
+    }
+
+    /**
+     * The launch of this boot: its {@link LaunchModeResolver resolved mode} and its debugger. Never
+     * fails the boot: a launch that cannot be read has no mode, which the extensions see as
+     * {@code prod}, and the banner shows what it knows.
+     */
+    private StartupBanner.Launch resolveLaunch(VidocqConfig config) {
+        try {
+            return StartupBanner.launch(config, bannerOverride, embeddedDeployment,
+                    Vidocq.applicationModule(), VidocqAppLayer.installedLayer());
+        } catch (RuntimeException | LinkageError e) {
+            LOG.log(System.Logger.Level.DEBUG, "Launch mode not resolved", e);
+            return new StartupBanner.Launch(bannerOverride, embeddedDeployment, false, null, null, null, null);
+        }
+    }
+
+    /** The launch mode of this boot: {@code prod} before {@link #configure()}, or when it could not be read. */
+    LaunchMode launchMode() {
+        return launch == null || launch.launchMode() == null ? LaunchMode.PROD : launch.launchMode().mode();
+    }
+
+    /** The context every extension's {@code onStart} receives. */
+    ExtensionContext extensionContext() {
+        return new ExtensionContextImpl(container, configuration, config, launchMode());
     }
 
     /**

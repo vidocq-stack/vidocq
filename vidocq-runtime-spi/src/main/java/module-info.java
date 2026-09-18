@@ -22,6 +22,8 @@ module io.vidocq.runtime.spi {
 
     exports io.vidocq.runtime.spi;
     exports io.vidocq.runtime.spi.config;
+    // Startup report: contributors, and the launch mode the extensions read too.
+    exports io.vidocq.runtime.spi.report;
 
     uses io.vidocq.runtime.spi.VidocqExtension;
     uses io.vidocq.runtime.spi.config.ConfigSource;

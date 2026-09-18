@@ -21,6 +21,7 @@ package io.vidocq.runtime.core.banner;
 
 import io.vidocq.runtime.core.BannerMode;
 import io.vidocq.runtime.core.console.ConsoleSupport;
+import io.vidocq.runtime.spi.report.LaunchMode;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;

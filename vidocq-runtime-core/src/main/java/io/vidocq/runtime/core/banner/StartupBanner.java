@@ -23,6 +23,7 @@ import io.vidocq.runtime.core.BannerMode;
 import io.vidocq.runtime.core.console.Ansi;
 import io.vidocq.runtime.core.console.ConsoleSupport;
 import io.vidocq.runtime.spi.config.VidocqConfig;
+import io.vidocq.runtime.spi.report.LaunchMode;
 
 import java.io.IOException;
 import java.io.InputStream;

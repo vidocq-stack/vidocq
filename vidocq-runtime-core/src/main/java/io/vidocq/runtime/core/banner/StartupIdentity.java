@@ -19,6 +19,8 @@
  */
 package io.vidocq.runtime.core.banner;
 
+import io.vidocq.runtime.spi.report.LaunchMode;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;

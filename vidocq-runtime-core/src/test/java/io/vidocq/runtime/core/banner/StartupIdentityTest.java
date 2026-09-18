@@ -19,6 +19,7 @@
  */
 package io.vidocq.runtime.core.banner;
 
+import io.vidocq.runtime.spi.report.LaunchMode;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;

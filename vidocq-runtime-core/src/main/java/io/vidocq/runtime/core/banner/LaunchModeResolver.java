@@ -20,6 +20,7 @@
 package io.vidocq.runtime.core.banner;
 
 import io.vidocq.runtime.core.console.ConsoleSupport;
+import io.vidocq.runtime.spi.report.LaunchMode;
 
 import java.io.File;
 import java.lang.module.ModuleReference;

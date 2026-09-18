@@ -17,25 +17,21 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
-package io.vidocq.runtime.core;
-
-import io.vidocq.vauban.core.container.VaubanContainer;
-import io.vidocq.runtime.spi.ExtensionContext;
-import io.vidocq.runtime.spi.VidocqConfiguration;
-import io.vidocq.runtime.spi.config.VidocqConfig;
-import io.vidocq.runtime.spi.report.LaunchMode;
+package io.vidocq.runtime.spi.report;
 
 /**
- * Implementation of the extension context provided during {@code onStart}.
+ * How much the startup report shows on this boot, resolved by Vidocq from {@code vidocq.startup.report}
+ * and the {@link LaunchMode}.
  *
- * @param container     the built container
- * @param configuration the legacy configuration
- * @param config        the configuration
- * @param launchMode    the launch mode the bootstrap resolved for this boot
+ * <p>Every level calls the {@linkplain StartupReportContributor contributors}: only the rendering
+ * changes, and an {@linkplain StartupReportSection#anomaly anomaly} is logged whatever the level.
  */
-record ExtensionContextImpl(
-        VaubanContainer container,
-        VidocqConfiguration configuration,
-        VidocqConfig config,
-        LaunchMode launchMode
-) implements ExtensionContext {}
+public enum Verbosity {
+
+    /** No report: only the anomalies are logged, each as its own warning. */
+    OFF,
+    /** One line per section: a contributor's {@linkplain StartupReportSection#summary summary line}. */
+    SUMMARY,
+    /** Every section in full: a contributor's summary line, then its rows and lists. */
+    DETAILED
+}
