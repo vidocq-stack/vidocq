@@ -36,9 +36,11 @@ import java.util.function.Function;
  * being initialised. The core also has every contributor of a boot whose console is on write all its rows, since
  * the console shows them whatever level the report is logged at.
  *
- * <p>The enable and port rules are the console's too: each implements them, on purpose, and neither publishes
- * them. Both test suites read one table of cases ({@code devconsole-enabled.csv}, {@code devconsole-port.csv}).
- * The console, not the core, reports an invalid value ({@code VIDOCQ-DEVC-003}) and declares the keys.
+ * <p>The enable, port and host rules are the console's too: each implements them, on purpose, and neither publishes
+ * them. Both test suites read one table of cases per rule ({@code devconsole-enabled.csv},
+ * {@code devconsole-port.csv}, {@code devconsole-host.csv}), so that the banner never promises an address the
+ * console does not listen on. The console, not the core, reports an invalid value ({@code VIDOCQ-DEVC-003}) and
+ * declares the keys; both use the default instead.
  *
  * <p>Nothing here throws, and nothing does I/O: a probe that fails is a console that is not there.
  */
@@ -54,12 +56,12 @@ final class DevConsoleProbe {
     static final String HOST_KEY = "vidocq.devconsole.host";
     /** The port of an unset or invalid {@value #PORT_KEY}. */
     static final int DEFAULT_PORT = 8888;
-    /** The host of an unset or blank {@value #HOST_KEY}: loopback only. */
+    /** The host of an unset, blank or invalid {@value #HOST_KEY}: loopback only. */
     static final String DEFAULT_HOST = "127.0.0.1";
 
     private static final String SEGMENT = "devconsole ";
     private static final int MAX_PORT = 65_535;
-    /** The longest host shown: a DNS name has at most 253 characters, an IPv6 literal far fewer. */
+    /** The longest host accepted: a DNS name has at most 253 characters, an IPv6 literal far fewer. */
     private static final int MAX_HOST = 255;
 
     private DevConsoleProbe() {}
@@ -131,19 +133,26 @@ final class DevConsoleProbe {
     }
 
     /**
-     * The configured host, stripped, or {@value #DEFAULT_HOST} when it is unset or blank.
+     * The host rule: the configured host, stripped, an IPv6 literal without its brackets, when it has only the
+     * characters of a host name or an address literal, ASCII letters and digits and {@code .-_:%[]}, at most 255 of
+     * them; otherwise, unset, blank or invalid, {@value #DEFAULT_HOST}, which the console listens on then.
      *
      * @param value {@value #HOST_KEY}, or {@code null}
      */
     static String host(String value) {
-        return value == null || value.isBlank() ? DEFAULT_HOST : value.strip();
+        if (value == null || value.isBlank() || !printable(value.strip())) {
+            return DEFAULT_HOST;
+        }
+        String host = value.strip();
+        return host.length() > 2 && host.startsWith("[") && host.endsWith("]")
+                ? host.substring(1, host.length() - 1) : host;
     }
 
     /**
      * The banner segment of a console configured on {@code host} and {@code port}: {@code devconsole :8888} on a
      * loopback address, {@code devconsole dev.example.com:8888} or {@code devconsole [fe80::1]:8888} otherwise.
      * {@code null} for port {@code 0}, which only the bind knows, and for a host that has characters no host name
-     * has, which could break the line.
+     * has, which could break the line, and which the console does not listen on.
      */
     static String segment(String host, int port) {
         if (port <= 0 || port > MAX_PORT || host == null || !printable(host)) {
@@ -172,12 +181,16 @@ final class DevConsoleProbe {
         }
     }
 
-    /** Whether {@code host} has only the characters of a host name or an address literal, and a sane length. */
+    /**
+     * Whether {@code host} has only the characters of a host name or an address literal, ASCII letters and digits
+     * and {@code .-_:%[]}, and a sane length: the console refuses any other.
+     */
     private static boolean printable(String host) {
         if (host.isEmpty() || host.length() > MAX_HOST) {
             return false;
         }
-        return host.codePoints().allMatch(c -> Character.isLetterOrDigit(c) || ".-_:%[]".indexOf(c) >= 0);
+        return host.codePoints().allMatch(c -> c < 0x80
+                && (Character.isLetterOrDigit(c) || ".-_:%[]".indexOf(c) >= 0));
     }
 
     /** {@code key}, stripped, or {@code null} when it is unset, blank or cannot be read. */

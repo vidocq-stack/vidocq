@@ -29,12 +29,15 @@ import java.util.Locale;
  * <p>A driver takes credentials in several places, and each is removed:
  * <ol>
  *   <li><b>User info</b>, looked for only before the first {@code ?} or {@code ;}, since a parameter may hold an
- *       {@code @}, such as an e-mail address: after {@code //}, everything from the start of the authority through the
- *       last {@code @}, as in {@code jdbc:mysql://app:secret@host/db}; with no {@code //} before the {@code @}, the
- *       Oracle form, {@code user/password} between the colon that opens it and the {@code @}, as in
- *       {@code jdbc:oracle:thin:scott/tiger@host:1521:orcl}, which keeps {@code jdbc:oracle:thin:@host:1521:orcl}.
- *       A password may hold a {@code /}, as a base64 one does, so an {@code @} in a path is taken for the end of the
- *       user info too: {@code jdbc:postgresql://host/db@x} shows as {@code jdbc:postgresql://x}, more hidden than
+ *       {@code @}, such as an e-mail address: everything from where the shape of the URL starts it through the last
+ *       {@code @}, whatever it holds in between. It starts after the {@code //} that opens the authority, as in
+ *       {@code jdbc:mysql://app:secret@host/db}, when nothing but the sub-protocol and colon-separated names precede
+ *       that {@code //}, as in {@code jdbc:h2:tcp://}; otherwise the URL has the Oracle form, {@code user/password}
+ *       after the colon that opens it, as in {@code jdbc:oracle:thin:scott/tiger@host:1521:orcl}, which keeps
+ *       {@code jdbc:oracle:thin:@host:1521:orcl}. A password may hold a {@code /}, a {@code //}, a {@code +} or an
+ *       {@code =}, as a base64 one does: {@code jdbc:oracle:thin:scott/Xy7+//Qp4==@host:1521:orcl} keeps
+ *       {@code jdbc:oracle:thin:@host:1521:orcl} too. So an {@code @} in a path is taken for the end of the user
+ *       info as well: {@code jdbc:postgresql://host/db@x} shows as {@code jdbc:postgresql://x}, more hidden than
  *       needed, never less.</li>
  *   <li><b>Parameters and settings</b>: every {@code ?}/{@code &} parameter and every {@code ;} setting whose key
  *       holds, ignoring case, {@code password}, {@code passwd}, {@code pwd}, {@code secret}, {@code token} or
@@ -44,15 +47,17 @@ import java.util.Locale;
  *
  * <p>A password may also hold a {@code ?} or a {@code ;}, which MySQL and Oracle accept in user info, as in
  * {@code jdbc:mysql://app:pa;ss@host/db}: its {@code @} then lies past the part user info is looked for in, and what
- * precedes the {@code ;} would be shown. So an {@code @} past that part is allowed in one place only, the value of a
+ * precedes the {@code ;} would be shown. So an {@code @} past that part is allowed in two places only, the value of a
  * parameter or setting whose key holds {@code user} or {@code mail}, ignoring case, such as
- * {@code ?user=app@example.com} or Azure SQL's {@code ;user=admin@server}; anywhere else, in a key, in an entry with no
- * {@code =}, or in the value of any other kept entry, the URL fails closed. What still gets through is a password that
- * itself holds {@code ;user=} or the like before its {@code @}.
+ * {@code ?user=app@example.com} or Azure SQL's {@code ;user=admin@server}, and the value of a secret one, which is
+ * removed whole, such as {@code ;password=P@ss}; anywhere else, in a key, in an entry with no {@code =}, secret-named
+ * or not, or in the value of any other kept entry, the URL fails closed. What still gets through is a password that
+ * itself holds {@code ;user=}, {@code ;pwd=} or the like before its {@code @}.
  *
  * <p>It never throws. A URL it cannot read, one with unbalanced braces, one with an {@code @} past the user info part
- * that is not in a user or e-mail value, or one whose part before the first {@code ?} or {@code ;} still holds a
- * secret key after the user info is gone, as MySQL's {@code address=(password=…)} would, is shown as
+ * that is not in a user or e-mail value, one with an {@code @} before where its user info starts, which leaves no
+ * telling which {@code @} ends it, or one whose part before the first {@code ?} or {@code ;} still holds a secret
+ * key after the user info is gone, as MySQL's {@code address=(password=…)} would, is shown as
  * {@code jdbc:<sub-protocol>:…}: fail closed.
  *
  * <p>Package-private for now: it moves to the SPI when a second extension needs it.
@@ -180,7 +185,7 @@ final class JdbcUrls {
 
         int at = head.lastIndexOf('@');
         if (at >= 0) {
-            int slashes = head.indexOf("//");
+            int slashes = authorityOpener(head, subEnd);
             if (slashes >= 0 && slashes < at) {
                 head = head.substring(0, slashes + 2) + head.substring(at + 1);
                 removed = true;
@@ -188,6 +193,9 @@ final class JdbcUrls {
                 // Oracle: [user[/password]]@ opened by a colon; a password may hold a colon, not the user
                 int slash = head.indexOf('/', subEnd);
                 int colon = head.lastIndexOf(':', slash >= 0 && slash < at ? slash : at);
+                if (head.indexOf('@', subEnd) < colon) {
+                    return null;
+                }
                 removed = at > colon + 1;
                 head = head.substring(0, colon + 1) + head.substring(at);
             }
@@ -212,7 +220,10 @@ final class JdbcUrls {
             if (separator == '?') {
                 queryOpened = true;
             }
-            if (isSecret(entry)) {
+            if (atOutsideValue(entry)) {
+                // before isSecret: removing pwd@host alone, as a secret-named entry, would show the pa of pa;pwd@host
+                return null;
+            } else if (isSecret(entry)) {
                 removed = true;
             } else if (mayCloseUserInfo(entry)) {
                 return null;
@@ -226,6 +237,30 @@ final class JdbcUrls {
             start = end;
         }
         return new Redacted(out.toString(), removed);
+    }
+
+    /**
+     * Where the {@code //} that opens the authority of a URL starts, as in {@code jdbc:mysql://} or
+     * {@code jdbc:h2:tcp://}: the first {@code //} after the sub-protocol, when a colon comes right before it and
+     * only names, letters, digits, {@code .}, {@code _} or {@code -} separated by colons, lie between the two. Any
+     * other {@code //} is part of what follows the opener, such as the password of {@code scott/Xy7+//Qp4==}.
+     *
+     * @param head   the URL before its first {@code ?} or {@code ;}
+     * @param subEnd the index of the colon that ends the sub-protocol
+     * @return the index, or {@code -1} when the URL opens no authority
+     */
+    private static int authorityOpener(String head, int subEnd) {
+        int slashes = head.indexOf("//", subEnd);
+        if (slashes < 0 || head.charAt(slashes - 1) != ':') {
+            return -1;
+        }
+        for (int i = subEnd; i < slashes; i++) {
+            char c = head.charAt(i);
+            if (!(c < 128 && (Character.isLetterOrDigit(c) || ":._-".indexOf(c) >= 0))) {
+                return -1;
+            }
+        }
+        return slashes;
     }
 
     /**
@@ -265,21 +300,30 @@ final class JdbcUrls {
     }
 
     /**
-     * Whether a parameter or setting that is kept holds an {@code @} that may close user info whose password holds a
-     * {@code ?} or a {@code ;}: an {@code @} anywhere but in the value of a user or e-mail entry, such as
-     * {@code user=app@example.com}. {@code ss@host/db}, what follows the {@code ;} of {@code app:pa;ss@host/db}, is
-     * one.
+     * Whether an entry holds an {@code @} outside any value: in an entry with no {@code =}, or before its {@code =}.
+     * No key holds one, so it may close user info whose password holds a {@code ?} or a {@code ;}, even when the
+     * entry reads as a secret one, as {@code pwd@host/db} in {@code app:pa;pwd@host/db}.
      */
-    private static boolean mayCloseUserInfo(String entry) {
+    private static boolean atOutsideValue(String entry) {
         int at = entry.indexOf('@');
         if (at < 0) {
             return false;
         }
         int equals = entry.indexOf('=');
-        if (equals < 0 || at < equals) {
-            return true;
+        return equals < 0 || at < equals;
+    }
+
+    /**
+     * Whether a {@code key=value} entry that is kept, one with no {@code @} {@linkplain #atOutsideValue outside its
+     * value}, holds an {@code @} that may close user info whose password holds a {@code ?} or a {@code ;}: an
+     * {@code @} in the value of any entry but a user or e-mail one, such as {@code user=app@example.com}.
+     * {@code x=1@host/db}, what follows the {@code ;} of {@code app:pa;x=1@host/db}, is one.
+     */
+    private static boolean mayCloseUserInfo(String entry) {
+        if (entry.indexOf('@') < 0) {
+            return false;
         }
-        String key = entry.substring(0, equals).toLowerCase(Locale.ROOT);
+        String key = entry.substring(0, entry.indexOf('=')).toLowerCase(Locale.ROOT);
         for (String atValue : AT_VALUE_KEYS) {
             if (key.contains(atValue)) {
                 return false;

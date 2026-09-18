@@ -144,9 +144,13 @@ public final class DevConsoleExtension implements VidocqExtension, StartupReport
         return PRIORITY;
     }
 
+    /**
+     * The console's three keys, each named: a mistyped {@code vidocq.devconsole.*} key, which nothing reads, is
+     * reported by the key audit ({@code VIDOCQ-CFG-003}), with these three as the known keys.
+     */
     @Override
     public Set<String> configKeys() {
-        return Set.of("vidocq.devconsole.*");
+        return Set.of(DevConsoleSettings.ENABLED_KEY, DevConsoleSettings.PORT_KEY, DevConsoleSettings.HOST_KEY);
     }
 
     @Override

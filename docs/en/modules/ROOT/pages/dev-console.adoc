@@ -71,10 +71,17 @@ When the console is off, its section of the startup report says why, and nothing
 
 | `vidocq.devconsole.host` [.tag-new]#NEW#
 | `127.0.0.1`
-| The address the console listens on: a host name or an IP address, an IPv6 literal with or without its brackets. Any address that is not a loopback one raises <<vidocq-devc-002>>. A value with characters that no host name or address has is reported as <<vidocq-devc-003>> and means `127.0.0.1`.
+| The address the console listens on: a host name or an IP address, an IPv6 literal with or without its brackets. Any address that is not a loopback one raises <<vidocq-devc-002>>. A value with anything but ASCII letters, digits and `.-_:%[]`, or longer than 255 characters, is reported as <<vidocq-devc-003>> and means `127.0.0.1`, on the banner too; write a name with a letter outside ASCII in its ASCII form, `hôte.example` as `xn--hte-kna.example`.
 |===
 
-Like every key, they can be set with `-D`, an environment variable (`VIDOCQ_DEVCONSOLE_PORT`), `vidocq.properties` or a profile (`%dev.vidocq.devconsole.port`). Check the spelling of the keys yourself: the console claims the whole `vidocq.devconsole.` prefix, so the key audit, xref:modules/vidocq-runtime-core.adoc#vidocq-cfg-003[`VIDOCQ-CFG-003`], reports none of these keys, a mistyped one included. A `vidocq.devconsole.prot=18090` raises no warning; nothing reads it, and the console listens on `8888`. Without the console on the module path, nothing claims the namespace, and a configured `vidocq.devconsole.*` key is not audited either.
+Like every key, they can be set with `-D`, an environment variable (`VIDOCQ_DEVCONSOLE_PORT`), `vidocq.properties` or a profile (`%dev.vidocq.devconsole.port`). The console declares these three keys, so the key audit reports a mistyped one as xref:modules/vidocq-runtime-core.adoc#vidocq-cfg-003[`VIDOCQ-CFG-003`]: nothing reads a `vidocq.devconsole.prot=18090`, and the console listens on `8888`, but the boot says so.
+
+[source,text]
+----
+[VIDOCQ-CFG-003] Configuration key 'vidocq.devconsole.prot' is read by nothing and has no effect. Known keys in this namespace: vidocq.devconsole.enabled, vidocq.devconsole.host, vidocq.devconsole.port
+----
+
+Without the console on the module path, nothing claims the namespace, and a configured `vidocq.devconsole.*` key is not audited.
 
 The console declares its listener, `dev`, itself: `vidocq.chappe.listeners` must not list it (xref:modules/vidocq-runtime-extensions.adoc#extension-listeners[A listener of an extension's own]).
 
@@ -118,6 +125,9 @@ The xref:modules/vidocq-runtime-core.adoc#startup-banner[banner], printed before
 
 | `vidocq.devconsole.host=0.0.0.0`, port `18093`
 | `devconsole 0.0.0.0:18093`
+
+| `vidocq.devconsole.host=hôte`, port `8888`
+| `devconsole :8888`: the console refuses that host (<<vidocq-devc-003>>) and listens on `127.0.0.1`
 
 | `vidocq.devconsole.port=0`
 | none: the port is only known once bound

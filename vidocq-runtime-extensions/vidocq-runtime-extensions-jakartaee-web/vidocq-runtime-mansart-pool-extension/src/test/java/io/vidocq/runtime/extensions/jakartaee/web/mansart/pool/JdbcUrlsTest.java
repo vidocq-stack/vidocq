@@ -37,10 +37,18 @@ import static org.junit.jupiter.api.Assertions.assertNull;
  */
 class JdbcUrlsTest {
 
-    /** Every secret the cases below hide somewhere in a URL: none may survive the redaction. */
+    /**
+     * Every password and secret value the cases below hide in a URL: of each one a URL holds, no fragment, no three
+     * characters of it in a row, may survive its redaction.
+     */
     private static final List<String> SECRETS =
-            List.of("s3cret", "t1ger", "k3y", "hunter2", "tok-9", "c0nf",
-                    "pa;ss", "pa?ss", "ti;g", "ti?g", "Xy7", "Qp4");
+            List.of("s3cret", "s3@cret", "t1ger", "t1:ger", "k3y", "hunter2", "tok-9", "c0nf", "P@s3cret", "s3;cret",
+                    "pa;ss", "pa?ss", "ti;ger", "ti?ger", "ti;g=Qp4", "Xy7", "Qp4", "Xy7/Qp4", "s3@Xy7/Qp4",
+                    "Xy7;9=Qp4", "s3@Xy7;9=Qp4", "Xy7+//Qp4==", "ab//cd", "Zq@9//Kw;Rt?Ux=Vy+Wp",
+                    "Zq@9//Kw?Rt;Ux=Vy+Wp", "R2q?qmpwD", "R2q;secret", "R2q;xpwd", "R2q?pwd@x=1");
+
+    /** How long a piece of a secret must be to count as a leak. */
+    private static final int FRAGMENT = 3;
 
     /** The URL, what the report shows of it, and whether credentials were removed. */
     static Stream<Arguments> urls() {
@@ -82,6 +90,14 @@ class JdbcUrlsTest {
                         "jdbc:oracle:thin:@//db.example:1521/svc", true),
                 Arguments.of("jdbc:oracle:thin:scott/t1:ger@db.example:1521:orcl",
                         "jdbc:oracle:thin:@db.example:1521:orcl", true),
+                // a password may hold a //, as a base64 one does: user info starts where the shape of the URL says,
+                // after the // that follows the sub-protocol or after the colon before Oracle's user/, never at a //
+                // of the password, and runs through the last @ before ? or ;, whatever it holds
+                Arguments.of("jdbc:oracle:thin:scott/Xy7+//Qp4==@db:1521:orcl", "jdbc:oracle:thin:@db:1521:orcl", true),
+                Arguments.of("jdbc:oracle:thin:scott/ab//cd@//db.example:1521/svc",
+                        "jdbc:oracle:thin:@//db.example:1521/svc", true),
+                Arguments.of("jdbc:mysql://app:Xy7+//Qp4==@db.example/app", "jdbc:mysql://db.example/app", true),
+                Arguments.of("jdbc:mysql://app:ab//cd@db.example/app", "jdbc:mysql://db.example/app", true),
                 // ?password= and its kin
                 Arguments.of("jdbc:postgresql://h/db?user=app&password=s3cret&ssl=true",
                         "jdbc:postgresql://h/db?user=app&ssl=true", true),
@@ -117,6 +133,21 @@ class JdbcUrlsTest {
                 Arguments.of("jdbc:oracle:thin:scott/ti?ger@db.example:1521:orcl", "jdbc:oracle:…", false),
                 Arguments.of("jdbc:oracle:thin:scott/ti;g=Qp4@db.example:1521:orcl", "jdbc:oracle:…", false),
                 Arguments.of("jdbc:postgresql://h/db?ApplicationName=Xy7@host", "jdbc:postgresql:…", false),
+                // a password with an @, a //, a ;, a ?, an = and a +, in either form
+                Arguments.of("jdbc:mysql://app:Zq@9//Kw;Rt?Ux=Vy+Wp@db.example:3306/app", "jdbc:mysql:…", false),
+                Arguments.of("jdbc:mysql://app:Zq@9//Kw?Rt;Ux=Vy+Wp@db.example:3306/app", "jdbc:mysql:…", false),
+                Arguments.of("jdbc:oracle:thin:scott/Zq@9//Kw;Rt?Ux=Vy+Wp@db.example:1521:orcl", "jdbc:oracle:…",
+                        false),
+                Arguments.of("jdbc:oracle:thin:scott/Zq@9//Kw?Rt;Ux=Vy+Wp@//db.example:1521/svc", "jdbc:oracle:…",
+                        false),
+                // past a ? or a ;, an @ in an entry with no =, or before its =, is in no value: it may close user
+                // info, even when the entry names a secret, so fail closed rather than remove the entry alone
+                Arguments.of("jdbc:mysql://app:R2q?qmpwD@db.example:3306/app", "jdbc:mysql:…", false),
+                Arguments.of("jdbc:mysql://app:R2q;secret@db.example/app", "jdbc:mysql:…", false),
+                Arguments.of("jdbc:oracle:thin:scott/R2q;xpwd@db.example:1521:orcl", "jdbc:oracle:…", false),
+                Arguments.of("jdbc:mysql://app:R2q?pwd@x=1@db.example/app", "jdbc:mysql:…", false),
+                // an @ before where user info starts leaves no telling which @ closes it
+                Arguments.of("jdbc:weird:app@s3cret:t1ger@host", "jdbc:weird:…", false),
                 Arguments.of("jdbc:", "jdbc:…", false),
                 Arguments.of("s3cret", "jdbc:…", false),
                 Arguments.of(null, "jdbc:…", false));
@@ -131,7 +162,14 @@ class JdbcUrlsTest {
         assertEquals(shown, JdbcUrls.redact(url), url);
         assertEquals(removed, redacted.credentialsRemoved(), url);
         for (String secret : SECRETS) {
-            assertFalse(redacted.url().contains(secret), secret + " left in " + redacted.url());
+            if (url == null || !url.contains(secret)) {
+                continue;
+            }
+            for (int i = 0; i + FRAGMENT <= secret.length(); i++) {
+                String fragment = secret.substring(i, i + FRAGMENT);
+                assertFalse(redacted.url().contains(fragment),
+                        fragment + " of " + secret + " left in " + redacted.url());
+            }
         }
     }
 

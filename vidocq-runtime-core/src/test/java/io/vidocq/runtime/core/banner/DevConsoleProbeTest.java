@@ -37,9 +37,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 /**
- * What the core knows of the dev console before any extension is loaded: whether its class is there, the enable
- * and port rules it shares with the console (the tables of {@code devconsole-enabled.csv} and
- * {@code devconsole-port.csv}), and the banner segment that promises the configured address.
+ * What the core knows of the dev console before any extension is loaded: whether its class is there, the enable,
+ * port and host rules it shares with the console (the tables of {@code devconsole-enabled.csv},
+ * {@code devconsole-port.csv} and {@code devconsole-host.csv}), and the banner segment that promises the configured
+ * address.
  */
 class DevConsoleProbeTest {
 
@@ -62,11 +63,25 @@ class DevConsoleProbeTest {
         assertEquals(asked, DevConsoleProbe.port(port));
     }
 
+    @ParameterizedTest
+    @CsvFileSource(resources = "/devconsole-host.csv", nullValues = "(unset)", useHeadersInDisplayName = true)
+    void theHostRule(String host, String listened, boolean valid) {
+        assertEquals(listened, DevConsoleProbe.host(host));
+    }
+
     @Test
     void anUnsetOrBlankHostIsTheLoopbackAddress() {
         assertEquals("127.0.0.1", DevConsoleProbe.host(null));
         assertEquals("127.0.0.1", DevConsoleProbe.host("  "));
         assertEquals("0.0.0.0", DevConsoleProbe.host(" 0.0.0.0 "));
+    }
+
+    @Test
+    void aHostTheConsoleRefusesIsTheLoopbackAddress() {
+        assertEquals("127.0.0.1", DevConsoleProbe.host("hôte"), "the console listens on 127.0.0.1 instead");
+        assertEquals("127.0.0.1", DevConsoleProbe.host("x\u202Ey"), "a bidirectional override");
+        assertEquals("127.0.0.1", DevConsoleProbe.host("h".repeat(256)), "longer than any host name");
+        assertEquals("h".repeat(255), DevConsoleProbe.host("h".repeat(255)));
     }
 
     // ------------------------------------------------------------------ the banner segment
@@ -95,6 +110,8 @@ class DevConsoleProbeTest {
         assertNull(DevConsoleProbe.segment("evil\n[VIDOCQ-FAKE] forged", 8888));
         assertNull(DevConsoleProbe.segment("a host", 8888));
         assertNull(DevConsoleProbe.segment("x‮y", 8888), "a bidirectional override");
+        assertNull(DevConsoleProbe.segment("hôte", 8888), "a letter outside ASCII, which the console refuses");
+        assertNull(DevConsoleProbe.segment("١٢٧.٠.٠.١", 8888), "digits outside ASCII");
     }
 
     // ------------------------------------------------------------------ the probe
@@ -126,6 +143,22 @@ class DevConsoleProbeTest {
             assertNull(console.segment(), "a free port is only known once bound");
             assertNull(DevConsoleProbe.probe(config(Map.of(DevConsoleProbe.ENABLED_KEY, "false")), LaunchMode.DEV,
                     loader));
+        }
+    }
+
+    @Test
+    void theBannerPromisesTheHostTheConsoleListensOn() throws Exception {
+        try (URLClassLoader loader = DevConsoleFixture.withConsole(dir)) {
+            StartupBanner.DevConsole refused = DevConsoleProbe.probe(config(Map.of(DevConsoleProbe.HOST_KEY, "hôte")),
+                    LaunchMode.DEV, loader);
+            StartupBanner.DevConsole bracketed = DevConsoleProbe.probe(
+                    config(Map.of(DevConsoleProbe.HOST_KEY, "[fe80::1]")), LaunchMode.DEV, loader);
+
+            assertEquals(new StartupBanner.DevConsole("127.0.0.1", 8888), refused,
+                    "the console reports VIDOCQ-DEVC-003 and listens on 127.0.0.1");
+            assertEquals("devconsole :8888", refused.segment());
+            assertEquals(new StartupBanner.DevConsole("fe80::1", 8888), bracketed, "listened on without brackets");
+            assertEquals("devconsole [fe80::1]:8888", bracketed.segment());
         }
     }
 

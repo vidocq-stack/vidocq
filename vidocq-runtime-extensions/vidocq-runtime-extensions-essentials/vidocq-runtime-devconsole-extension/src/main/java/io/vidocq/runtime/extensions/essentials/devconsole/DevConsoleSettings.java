@@ -31,11 +31,11 @@ import java.util.Optional;
  * The console's settings for one boot, read from {@value #ENABLED_KEY}, {@value #PORT_KEY} and {@value #HOST_KEY}
  * and the launch mode.
  *
- * <p>The enable and port rules are the core's too: the core reads them before any extension is loaded, to promise
- * the console's address on the banner and to have every row of the report collected for it. Each implements them, on
- * purpose, and neither publishes them; both test suites read one table of cases, the core's
- * {@code devconsole-enabled.csv} and {@code devconsole-port.csv}. The console, not the core, reports a value it does
- * not accept ({@code VIDOCQ-DEVC-003}), and uses the default instead.
+ * <p>The enable, port and host rules are the core's too: the core reads them before any extension is loaded, to
+ * promise the console's address on the banner and to have every row of the report collected for it. Each implements
+ * them, on purpose, and neither publishes them; both test suites read one table of cases per rule, the core's
+ * {@code devconsole-enabled.csv}, {@code devconsole-port.csv} and {@code devconsole-host.csv}. The console, not the
+ * core, reports a value it does not accept ({@code VIDOCQ-DEVC-003}); both use the default instead.
  *
  * @param enabled    {@code auto}, {@code true} or {@code false}, as resolved: an invalid value reads {@code auto}
  * @param on         whether the console starts on this boot
@@ -91,8 +91,7 @@ record DevConsoleSettings(String enabled, boolean on, LaunchMode launchMode, Str
             case "false" -> "false";
             default -> "auto";
         };
-        return new DevConsoleSettings(resolved, enabled(enabled, mode), mode,
-                validHost(host) ? host(host) : DEFAULT_HOST, port(port), invalid);
+        return new DevConsoleSettings(resolved, enabled(enabled, mode), mode, host(host), port(port), invalid);
     }
 
     /**
@@ -149,13 +148,13 @@ record DevConsoleSettings(String enabled, boolean on, LaunchMode launchMode, Str
     }
 
     /**
-     * The host to listen on: the configured one, stripped, an IPv6 literal without its brackets, or
-     * {@value #DEFAULT_HOST} when it is unset or blank.
+     * The host rule: the configured host, stripped, an IPv6 literal without its brackets, when it is one
+     * {@linkplain #validHost accepted}; otherwise, unset, blank or invalid, {@value #DEFAULT_HOST}.
      *
      * @param value {@value #HOST_KEY}, or {@code null}
      */
     static String host(String value) {
-        if (value == null || value.isBlank()) {
+        if (value == null || value.isBlank() || !validHost(value)) {
             return DEFAULT_HOST;
         }
         String host = value.strip();
@@ -165,7 +164,8 @@ record DevConsoleSettings(String enabled, boolean on, LaunchMode launchMode, Str
 
     /**
      * Whether {@code value} is one {@value #HOST_KEY} accepts: unset, blank, or the characters of a host name or an
-     * address literal only, letters, digits, {@code .-_:%[]}, and a sane length. The name is not resolved.
+     * address literal only, ASCII letters and digits and {@code .-_:%[]}, at most 255 of them. The name is not
+     * resolved; one with a letter outside ASCII is written in its ASCII form, {@code xn--…}.
      */
     static boolean validHost(String value) {
         if (value == null || value.isBlank()) {

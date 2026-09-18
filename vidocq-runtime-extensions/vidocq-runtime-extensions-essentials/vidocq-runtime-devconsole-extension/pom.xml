@@ -33,6 +33,12 @@
             <artifactId>chappe-api</artifactId>
         </dependency>
 
+        <!-- For the tests only: the key audit the console's configKeys() are declared for (VIDOCQ-CFG-003). -->
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-core</artifactId>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
@@ -45,15 +51,26 @@
             <testResource>
                 <directory>src/test/resources</directory>
             </testResource>
-            <!-- The enable and port rules are implemented twice, on purpose: by the core, for the banner, and here.
-                 Both test suites read the core's one table of cases, so that the two cannot drift apart. -->
+            <!-- The enable, port and host rules are implemented twice, on purpose: by the core, for the banner, and
+                 here. Both test suites read the core's tables of cases, so that the two cannot drift apart. -->
             <testResource>
                 <directory>${project.basedir}/../../../vidocq-runtime-core/src/test/resources</directory>
                 <includes>
                     <include>devconsole-enabled.csv</include>
                     <include>devconsole-port.csv</include>
+                    <include>devconsole-host.csv</include>
                 </includes>
             </testResource>
         </testResources>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!-- The module does not require the core: its tests read it for the key audit only. -->
+                    <argLine>--add-reads io.vidocq.runtime.extensions.essentials.devconsole=io.vidocq.runtime.core</argLine>
+                </configuration>
+            </plugin>
+        </plugins>
     </build>
 </project>

@@ -19,6 +19,7 @@
  */
 package io.vidocq.runtime.extensions.essentials.devconsole;
 
+import io.vidocq.runtime.core.config.ConfigKeyAudit;
 import io.vidocq.runtime.extensions.essentials.chappe.ChappeEngineExtension;
 import io.vidocq.runtime.extensions.essentials.chappe.ChappeServerBootstrap;
 import io.vidocq.runtime.spi.report.LaunchMode;
@@ -44,6 +45,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.logging.Level;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -365,10 +367,23 @@ class DevConsoleExtensionTest {
         assertEquals("devconsole", console.id());
         assertEquals("Dev console", console.title());
         assertEquals(9000, console.priority());
-        assertEquals(java.util.Set.of("vidocq.devconsole.*"), console.configKeys());
+        assertEquals(Set.of("vidocq.devconsole.enabled", "vidocq.devconsole.port", "vidocq.devconsole.host"),
+                console.configKeys());
         RecordingSection section = new RecordingSection(console.id(), console.title());
         console.contribute(new ConsoleReportContext(LaunchMode.DEV), section);
         assertEquals("not started", section.toSection().summary());
         assertEquals("Dev console", section.toSection().headline());
+    }
+
+    @Test
+    void aMistypedKeyIsReportedByTheKeyAudit() {
+        Set<String> declared = new DevConsoleExtension().configKeys();
+
+        assertEquals(List.of("vidocq.devconsole.prot"), ConfigKeyAudit.unconsumedKeys(List.of(
+                "vidocq.devconsole.enabled", "vidocq.devconsole.port", "vidocq.devconsole.host",
+                "vidocq.devconsole.prot"), declared));
+        assertEquals("[VIDOCQ-CFG-003] Configuration key 'vidocq.devconsole.prot' is read by nothing and has no "
+                + "effect. Known keys in this namespace: vidocq.devconsole.enabled, vidocq.devconsole.host, "
+                + "vidocq.devconsole.port", ConfigKeyAudit.warningFor("vidocq.devconsole.prot", declared));
     }
 }

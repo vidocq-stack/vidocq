@@ -136,7 +136,7 @@ The `io.vidocq.runtime.extensions.*` modules each correspond to a built-in exten
 
 | `vidocq.devconsole.host` [.tag-new]#NEW#
 | `127.0.0.1`
-| Address of the dev console. Not a loopback address: `VIDOCQ-DEVC-002`.
+| Address of the dev console. Not a loopback address: `VIDOCQ-DEVC-002`. Anything but ASCII letters, digits and `.-_:%[]`: `VIDOCQ-DEVC-003`, and `127.0.0.1`.
 |===
 
 TLS is not implemented yet: `vidocq.https.port`, `vidocq.tls.cert` and `vidocq.tls.key` are

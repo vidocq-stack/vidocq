@@ -107,6 +107,6 @@ class ExtensionContextLaunchModeTest {
     @Test
     void theContextOfTheBootstrapCarriesTheModeItIsGiven() {
         assertEquals(LaunchMode.DEV,
-                new ExtensionContextImpl(null, null, null, LaunchMode.DEV, Optional::empty).launchMode());
+                new ExtensionContextImpl(null, null, null, LaunchMode.DEV, () -> Optional.empty()).launchMode());
     }
 }

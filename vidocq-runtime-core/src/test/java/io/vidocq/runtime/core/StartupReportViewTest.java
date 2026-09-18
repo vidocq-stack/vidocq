@@ -272,7 +272,7 @@ class StartupReportViewTest {
         private final BiConsumer<StartupReportContext, StartupReportSection> body;
         private String title;
         private Runnable whileContributing = () -> {};
-        private Supplier<Optional<StartupReportView>> report = Optional::empty;
+        private Supplier<Optional<StartupReportView>> report = () -> Optional.empty();
         private final List<Boolean> presentInOnStart = new ArrayList<>();
 
         Glue(String id, BiConsumer<StartupReportContext, StartupReportSection> body) {

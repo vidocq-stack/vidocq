@@ -31,9 +31,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * The console's settings: the enable and port rules it shares with the core (the tables of
- * {@code devconsole-enabled.csv} and {@code devconsole-port.csv}, read from the core's test resources), the host,
- * and the {@code VIDOCQ-DEVC-003} messages of the values it does not accept.
+ * The console's settings: the enable, port and host rules it shares with the core (the tables of
+ * {@code devconsole-enabled.csv}, {@code devconsole-port.csv} and {@code devconsole-host.csv}, read from the core's
+ * test resources), and the {@code VIDOCQ-DEVC-003} messages of the values it does not accept.
  */
 class DevConsoleSettingsTest {
 
@@ -56,6 +56,18 @@ class DevConsoleSettingsTest {
     void thePortRuleIsTheCores(String port, int asked, boolean valid) {
         assertEquals(asked, DevConsoleSettings.port(port));
         assertEquals(valid, DevConsoleSettings.validPort(port));
+    }
+
+    @ParameterizedTest
+    @CsvFileSource(resources = "/devconsole-host.csv", nullValues = "(unset)", useHeadersInDisplayName = true)
+    void theHostRuleIsTheCores(String host, String listened, boolean valid) {
+        assertEquals(listened, DevConsoleSettings.host(host));
+        assertEquals(valid, DevConsoleSettings.validHost(host));
+        DevConsoleSettings settings = DevConsoleSettings.resolve(
+                FakeExtensionContext.of(LaunchMode.DEV, host == null ? new String[0]
+                        : new String[] {DevConsoleSettings.HOST_KEY, host}).config(), LaunchMode.DEV);
+        assertEquals(listened, settings.host());
+        assertEquals(valid, settings.invalid().isEmpty(), settings.invalid().toString());
     }
 
     @Test
@@ -113,5 +125,8 @@ class DevConsoleSettingsTest {
         assertTrue(DevConsoleSettings.validHost("fe80::1%lo0"));
         assertFalse(DevConsoleSettings.validHost("a host"));
         assertFalse(DevConsoleSettings.validHost("x\u202Ey"));
+        assertEquals("127.0.0.1", DevConsoleSettings.host("x\u202Ey"), "what it refuses, it does not listen on");
+        assertEquals("127.0.0.1", DevConsoleSettings.host("h".repeat(256)), "longer than any host name");
+        assertEquals("h".repeat(255), DevConsoleSettings.host("h".repeat(255)));
     }
 }

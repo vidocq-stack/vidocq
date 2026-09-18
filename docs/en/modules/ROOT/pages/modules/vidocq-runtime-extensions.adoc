@@ -227,7 +227,7 @@ mansart-pool  Mansart pools | 1 ms
   ...
 ----
 
-A URL loses its user info (`//user:password@`, Oracle's `user/password@`) and every parameter or setting whose key holds `password`, `passwd`, `pwd`, `secret`, `token` or `credential`: `jdbc:postgresql://audit:s3cret@db.example:5432/audit?sslpassword=k3y&ssl=true` shows as `jdbc:postgresql://db.example:5432/audit?ssl=true`. A URL that cannot be read shows as `jdbc:<sub-protocol>:…`. The error of `xa=true` for a URL whose `XADataSource` cannot be guessed quotes the URL the same way.
+A URL loses its user info (`//user:password@`, Oracle's `user/password@`) and every parameter or setting whose key holds `password`, `passwd`, `pwd`, `secret`, `token` or `credential`: `jdbc:postgresql://audit:s3cret@db.example:5432/audit?sslpassword=k3y&ssl=true` shows as `jdbc:postgresql://db.example:5432/audit?ssl=true`. The user info runs to the last `@` before the first `?` or `;`, whatever the password holds, a `/`, a `//`, a `+`, an `=` or an `@`: `jdbc:oracle:thin:scott/Xy7+//Qp4==@db:1521:orcl` shows as `jdbc:oracle:thin:@db:1521:orcl`. A URL that cannot be read shows as `jdbc:<sub-protocol>:…`, and so does one whose password holds a `?` or a `;`. The error of `xa=true` for a URL whose `XADataSource` cannot be guessed quotes the URL the same way.
 
 [#mansart-pool-live]
 === Live values [.tag-new]#NEW#
