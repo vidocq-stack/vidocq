@@ -126,6 +126,11 @@ class DevConsoleExtensionTest {
         return "http://127.0.0.1:" + port + "/";
     }
 
+    private static List<Object> panelIds(Map<String, Object> snapshot) {
+        return ((List<?>) snapshot.get("panels")).stream().<Object>map(panel -> ((Map<?, ?>) panel).get("id"))
+                .toList();
+    }
+
     @Test
     void aDevBootListensOnLoopbackAndPrintsItsUrl() throws Exception {
         FakeExtensionContext context = context(LaunchMode.DEV, DevConsoleSettings.PORT_KEY, "0");
@@ -137,13 +142,20 @@ class DevConsoleExtensionTest {
 
         HttpResponse<String> booting = get(url(port) + "api/snapshot");
         assertEquals(200, booting.statusCode());
-        assertEquals("booting", Json.object(booting.body()).get("state"));
+        Map<String, Object> first = Json.object(booting.body());
+        assertEquals("booting", first.get("state"));
+        assertEquals(List.of("jvm"), panelIds(first), "the console's own panel, from the first poll");
+        Map<?, ?> jvm = (Map<?, ?>) ((List<?>) first.get("panels")).get(0);
+        assertEquals("JVM", jvm.get("title"));
+        assertEquals(true, jvm.get("live"));
+        assertTrue(((List<?>) ((Map<?, ?>) jvm.get("sample")).get("values")).stream()
+                .anyMatch(value -> "heap.used".equals(((Map<?, ?>) value).get("key"))), jvm.toString());
 
         context.writeReport(FakeReportView.of(boot.console(), new TestPanels.PoolPanel()));
         Map<String, Object> ready = Json.object(get(url(port) + "api/snapshot").body());
         assertEquals("ready", ready.get("state"));
         assertEquals(url(port), ((Map<?, ?>) ready.get("console")).get("url"));
-        assertEquals("acme-pool", ((Map<?, ?>) ((List<?>) ready.get("panels")).get(0)).get("id"));
+        assertEquals(List.of("acme-pool", "jvm"), panelIds(ready), "the contributed panels, then the JVM last");
 
         ReportSection section = boot.section().toSection();
         assertEquals(url(port), section.summary());
@@ -163,6 +175,29 @@ class DevConsoleExtensionTest {
         assertEquals("default-src 'self'; frame-ancestors 'none'",
                 page.headers().firstValue("Content-Security-Policy").orElse(null));
         assertEquals("nosniff", page.headers().firstValue("X-Content-Type-Options").orElse(null));
+    }
+
+    @Test
+    void theConsolesPageIsItsIndexWithItsScriptAndStyle() throws Exception {
+        Boot boot = boot(context(LaunchMode.DEV, DevConsoleSettings.PORT_KEY, "0"));
+        String root = url(boot.console().boundPort());
+
+        HttpResponse<String> index = get(root);
+        HttpResponse<String> script = get(root + "console.js");
+        HttpResponse<String> style = get(root + "console.css");
+
+        assertEquals(200, index.statusCode());
+        assertTrue(index.headers().firstValue("Content-Type").orElse("").startsWith("text/html"), index.headers()
+                .toString());
+        assertTrue(index.body().contains("<meta charset=\"utf-8\">"), index.body());
+        assertTrue(index.body().contains("<title>Vidocq dev console</title>"), index.body());
+        assertEquals(200, script.statusCode());
+        assertTrue(script.headers().firstValue("Content-Type").orElse("").startsWith("text/javascript"),
+                "a module script with nosniff needs a JavaScript type: " + script.headers());
+        assertEquals(200, style.statusCode());
+        assertTrue(style.headers().firstValue("Content-Type").orElse("").startsWith("text/css"),
+                style.headers().toString());
+        assertEquals("no-cache", script.headers().firstValue("Cache-Control").orElse(null));
     }
 
     @Test

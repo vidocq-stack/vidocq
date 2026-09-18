@@ -77,7 +77,9 @@ import java.util.regex.Pattern;
  * <h2>What it serves</h2>
  * <p>See {@link ConsoleHandler}: {@code GET /api/snapshot}, the {@link Snapshot} of the boot, and the page, from the
  * resources under {@value #PAGE_RESOURCES}; nothing else, and only to a request that names the console's own
- * address.
+ * address. The page, {@code index.html}, {@code console.css} and the ES module {@code console.js}, loads nothing
+ * from another site: it polls the snapshot and draws the report first, then one tab per panel, the console's own
+ * {@linkplain JvmPanel JVM panel} last, keeping five minutes of history in the browser.
  */
 public final class DevConsoleExtension implements VidocqExtension, StartupReportContributor {
 
@@ -192,10 +194,11 @@ public final class DevConsoleExtension implements VidocqExtension, StartupReport
 
     /**
      * The console's own panels, shown after the contributed ones from the first poll, the boot facts of each written
-     * once per boot.
+     * once per boot: the {@linkplain JvmPanel JVM}. The report's own panel, {@code startup}, is the snapshot's
+     * {@code startup} member, which the page shows first.
      */
     private static List<PanelEntry> ownPanels(LaunchMode mode) {
-        return List.of();
+        return List.of(PanelEntry.builtIn(new JvmPanel(), mode));
     }
 
     /**

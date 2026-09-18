@@ -1,0 +1,65 @@
+<!--
+
+    Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+
+    This program and the accompanying materials are made available under the
+    terms of the Eclipse Public License 2.0 which is available at
+    https://www.eclipse.org/legal/epl-2.0/
+
+    This Source Code may also be made available under the following Secondary
+    Licenses when the conditions for such availability set forth in the Eclipse
+    Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+    or any later version, which is available at
+    https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+
+    It is also made available under the European Union Public Licence v. 1.2,
+    which is available at
+    https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+
+    SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+
+    The Vidocq dev console. Plain HTML, one stylesheet and one ES module, all served by the console itself:
+    no build step, nothing loaded from another site. console.js polls api/snapshot and draws it.
+
+-->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="referrer" content="no-referrer">
+<title>Vidocq dev console</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="console.css">
+<script type="module" src="console.js"></script>
+</head>
+<body>
+<div class="shell">
+  <header class="topbar">
+    <div class="brand">
+      <h1>Vidocq dev console</h1>
+      <span class="url" id="url"></span>
+      <span class="version" id="version"></span>
+    </div>
+    <span class="state" id="state" data-s="connecting" aria-live="polite"><span class="dot"></span><span id="state-text">connecting…</span></span>
+    <button id="pause" type="button" aria-pressed="false">Pause</button>
+  </header>
+
+  <p class="banner" id="port-banner" role="status" hidden></p>
+
+  <div class="app">
+    <nav class="rail" aria-label="Panels">
+      <h2>Panels</h2>
+      <div class="tabs" role="tablist" id="tabs"></div>
+      <p class="rail-note">A panel appears when its extension is on the module path. The console shows the report of
+        this boot and samples the live values once a second, reading memory only.</p>
+    </nav>
+
+    <main class="panel" id="panel" role="tabpanel">
+      <noscript><p class="summary">The dev console draws its panels with JavaScript: enable it for this page.</p></noscript>
+    </main>
+  </div>
+</div>
+</body>
+</html>
