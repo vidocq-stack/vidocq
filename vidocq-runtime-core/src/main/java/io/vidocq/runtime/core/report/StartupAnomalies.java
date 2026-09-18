@@ -40,6 +40,13 @@ public final class StartupAnomalies {
     public static final String UNREAD_KEY = "VIDOCQ-CFG-003";
     /** Load-time weaving was needed and could not be prepared. */
     public static final String WEAVING_FAILED = "VAUBAN-009";
+    /**
+     * A startup report contributor could not be loaded, created or identified, or failed while it wrote its
+     * section, which is skipped; logged with the stack trace when there is one.
+     */
+    public static final String CONTRIBUTOR_FAILED = "VIDOCQ-RPT-001";
+    /** Two startup report contributors of different classes use the same id; the second is skipped. */
+    public static final String DUPLICATE_ID = "VIDOCQ-RPT-002";
 
     private static final System.Logger LOG = System.getLogger(LOGGER_NAME);
 
@@ -48,6 +55,11 @@ public final class StartupAnomalies {
     /** Logs {@code [code] message} at WARNING on {@value #LOGGER_NAME}. */
     public static void warn(String code, String message) {
         LOG.log(System.Logger.Level.WARNING, withCode(code, message));
+    }
+
+    /** Logs {@code [code] message} at WARNING on {@value #LOGGER_NAME}, with the stack trace of {@code thrown}. */
+    public static void warn(String code, String message, Throwable thrown) {
+        LOG.log(System.Logger.Level.WARNING, withCode(code, message), thrown);
     }
 
     /** {@code [code] message}, the shape of every anomaly. */

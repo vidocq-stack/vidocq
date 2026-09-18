@@ -33,6 +33,7 @@ import io.vidocq.runtime.core.report.CoreSections;
 import io.vidocq.runtime.core.report.DisplayPaths;
 import io.vidocq.runtime.core.report.Section;
 import io.vidocq.runtime.core.report.StartupAnomalies;
+import io.vidocq.runtime.core.report.StartupContributors;
 import io.vidocq.runtime.core.report.StartupRecorder;
 import io.vidocq.runtime.core.report.StartupReport;
 import io.vidocq.runtime.core.report.VerbosityResolver;
@@ -42,8 +43,10 @@ import io.vidocq.runtime.spi.VidocqExtension;
 import io.vidocq.runtime.spi.config.VidocqConfig;
 import io.vidocq.runtime.spi.report.LaunchMode;
 import io.vidocq.runtime.spi.report.Verbosity;
+import jakarta.enterprise.inject.spi.BeanManager;
 
 import java.lang.management.ManagementFactory;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -65,16 +68,19 @@ import java.util.function.Predicate;
  *   <li>Creation of the {@link VaubanContainerBuilder}, {@code extension.beforeStart(builder)}</li>
  *   <li>Build the {@link VaubanContainer} (CDI boot)</li>
  *   <li>{@code extension.onStart(context)}</li>
- *   <li>The audit of the configuration keys, then the startup report</li>
+ *   <li>The audit of the configuration keys, then the startup report and its contributors</li>
  *   <li>Registering the shutdown hook</li>
  *   <li>Block on {@link #awaitShutdown()}</li>
  * </ol>
  *
  * <p>The startup report is one INFO record of {@code io.vidocq.startup}, just before
  * {@code Vidocq - Started in}, which stays the last line of a boot; its level is
- * {@code vidocq.startup.report}. A boot that fails, in {@link #configure()} or in {@link #start()}, logs
- * one WARNING record naming the phase that failed, the time spent and the anomalies already logged (in a
- * dev launch, with the partial report), then lets the same exception through, untouched.
+ * {@code vidocq.startup.report}. Its {@link io.vidocq.runtime.spi.report.StartupReportContributor contributors},
+ * the extensions that are ones then the services of the context class loader, are called at every level, after
+ * every {@code onStart}, each isolated: one that fails loses its section, never the boot. A boot that fails, in
+ * {@link #configure()} or in {@link #start()}, logs one WARNING record naming the phase that failed, the time
+ * spent and the anomalies already logged (in a dev launch, with the partial report), then lets the same
+ * exception through, untouched.
  *
  * <p><b>Vidocq lifecycle orchestrator.</b></p>
  */
@@ -318,14 +324,17 @@ public final class VidocqBootstrap {
     }
 
     /**
-     * Assembles the report of this boot and logs it, unless its level is {@code off}; the report of a boot
-     * that went well never fails it.
+     * Has the contributors write their sections, at every level, then assembles the report of this boot and logs
+     * it, unless its level is {@code off}; the report of a boot that went well never fails it.
      */
     private void report(StartupRecorder recorder) {
         try {
             recorder.begin("report");
-            List<Section> sections = StartupFacts.coreSections(recorder.weaving(), config, extensions,
-                    recorder.onStartNanos(), null, DisplayPaths.current());
+            List<Section> contributed = StartupContributors.contribute(extensions,
+                    Thread.currentThread().getContextClassLoader(), verbosity, launchMode(), beanManager(), recorder);
+            List<Section> sections = new ArrayList<>(StartupFacts.coreSections(recorder.weaving(), config, extensions,
+                    recorder.onStartNanos(), null, DisplayPaths.current()));
+            sections.addAll(contributed);
             String runtime = runtime();
             recorder.end();
             StartupReport report = recorder.report(launchMode(), launchReason(), verbosity, runtime, sections, null);
@@ -384,6 +393,15 @@ public final class VidocqBootstrap {
             return null;
         }
         return CoreSections.runtime(BuildInfo.ofClass(StartupBanner.class).version(), Runtime.version().toString());
+    }
+
+    /** The bean manager of the container the contributors read, or {@code null} when it cannot be had. */
+    private BeanManager beanManager() {
+        try {
+            return container == null ? null : container.getBeanManager();
+        } catch (RuntimeException | LinkageError unavailable) {
+            return null;
+        }
     }
 
     /** Why this boot has its launch mode, as the report's header prints it. */

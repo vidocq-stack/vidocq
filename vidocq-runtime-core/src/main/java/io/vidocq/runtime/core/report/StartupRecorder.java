@@ -62,7 +62,10 @@ public final class StartupRecorder {
         this.phaseStart = System.nanoTime();
     }
 
-    /** Names what the current phase is doing, such as {@code onStart chappe-bootstrap}, for a failure. */
+    /**
+     * Names what the current phase is doing, such as {@code onStart chappe-bootstrap}, for a failure;
+     * {@code null} names the phase alone again.
+     */
     public void step(String step) {
         this.step = step;
     }
@@ -116,7 +119,22 @@ public final class StartupRecorder {
      * @param source  {@value #CORE}, or the id of a contributor
      */
     public void anomaly(String code, String message, String hint, String source) {
-        StartupAnomalies.warn(code, hint == null ? message : message + " " + hint);
+        anomaly(code, message, hint, source, null);
+    }
+
+    /**
+     * {@link #anomaly(String, String, String, String)}, the WARNING record carrying the stack trace of
+     * {@code thrown}.
+     *
+     * @param thrown what caused the anomaly, or {@code null}
+     */
+    public void anomaly(String code, String message, String hint, String source, Throwable thrown) {
+        String text = hint == null ? message : message + " " + hint;
+        if (thrown == null) {
+            StartupAnomalies.warn(code, text);
+        } else {
+            StartupAnomalies.warn(code, text, thrown);
+        }
         synchronized (anomalies) {
             anomalies.add(new Anomaly(code, message, hint, source));
         }

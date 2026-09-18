@@ -67,7 +67,9 @@ public interface StartupReportContext {
     /**
      * The absolute URLs of the routes whose handler class has this binary name, as the other
      * sections of the report declare them with {@link StartupReportSection#route} and
-     * {@link StartupReportSection#listener}.
+     * {@link StartupReportSection#listener}. Only the sections written so far, this one included, are
+     * known: the contributors called last see every route. A route whose listener no section declared has no
+     * absolute URL and is left out.
      *
      * @param handlerClassName the binary name of a resource or handler class
      * @return the URLs, an empty immutable list when there are none

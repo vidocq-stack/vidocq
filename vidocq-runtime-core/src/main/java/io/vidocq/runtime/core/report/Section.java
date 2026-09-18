@@ -39,7 +39,8 @@ import java.util.Objects;
  * @param summary  the value of the one line the section has in the summary report, or {@code null} when it has
  *                 none there
  * @param lines    the lines under the first one in the detailed report, in order
- * @param nanos    how long the section took to write, or {@code -1} when that was not measured
+ * @param nanos    how long the section took to write, or {@code -1} when that was not measured; a contributor's
+ *                 section is timed, and the detailed report prints its time after the headline
  */
 public record Section(String id, String headline, String summary, List<Line> lines, long nanos) {
 

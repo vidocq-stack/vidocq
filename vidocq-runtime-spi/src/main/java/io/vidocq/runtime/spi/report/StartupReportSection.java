@@ -90,7 +90,10 @@ public interface StartupReportSection {
      * @param listener the listener name, such as {@code default}
      * @param method   the HTTP method, such as {@code POST}
      * @param path     the path on that listener, such as {@code /mcp}
-     * @param handler  what handles it, such as {@code McpEndpoint#handlePost}
+     * @param handler  what handles it: the binary name of its class, then {@code #} and its method, such
+     *                 as {@code com.acme.McpEndpoint#handlePost}. The class is what
+     *                 {@link StartupReportContext#routeUrls} matches; the report prints its simple name,
+     *                 {@code McpEndpoint#handlePost}
      * @return this section
      */
     StartupReportSection route(String listener, String method, String path, String handler);

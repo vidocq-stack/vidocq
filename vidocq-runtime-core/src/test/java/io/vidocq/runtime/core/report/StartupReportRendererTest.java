@@ -105,8 +105,9 @@ class StartupReportRendererTest {
                                 new Row("server", "langchain4j-cdi unknown")), 3 * MS)),
                 List.of(), null, "0.4.0-SNAPSHOT on Java 25");
 
-        // The design's sample, with ASCII separators, and the kind column of its first layer row one column
-        // further, where the widest archive puts the column of the three other rows.
+        // The design's sample, with ASCII separators, the kind column of its first layer row one column
+        // further, where the widest archive puts the column of the three other rows, and the time the mcp
+        // contributor took after its title.
         assertEquals("""
                 Vidocq startup report
                   launch      dev (auto: io.vidocq.tools.lc4jcdi.mcptimeserver from mcp-time-server/target/classes,
@@ -127,7 +128,7 @@ class StartupReportRendererTest {
                   500    rest-cassini         onStart 21 ms
                   7000   chappe-mount-config  onStart 0 ms
                   10000  chappe-bootstrap     onStart 15 ms
-                mcp           MCP server (langchain4j-cdi, optional adapter)
+                mcp           MCP server (langchain4j-cdi, optional adapter) | 3 ms
                   2 tools, 1 prompts, 0 resources, 1 resource templates at http://localhost:8081/mcp
                   protocols           2025-03-26 (legacy), 2026-07-28 (modern)
                   tools               convert_time, current_time

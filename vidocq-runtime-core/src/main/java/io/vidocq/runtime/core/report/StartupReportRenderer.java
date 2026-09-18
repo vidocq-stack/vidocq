@@ -49,10 +49,12 @@ import java.util.Map;
  * </pre>
  *
  * <p>{@code detailed}: the header block ({@code launch}, {@code vidocq}, {@code phases}) indented by two, then
- * every section with its id in column 0 and its headline in column 14, then its lines indented by two. The
- * values of the rows and lists of a section start in one column: two spaces after its widest key, never
- * before column 14; a value longer than the line wraps in that column, at a space, within {@value #WIDTH}
- * columns. The rows of a table share their column widths, two spaces wider than their widest cell.
+ * every section with its id in column 0 and its headline in column 14, followed by the time the section took to
+ * write when it was measured ({@code MCP server | 3 ms}, {@code | 62 ms, slow} beyond {@value #SLOW_MILLIS} ms),
+ * then its lines indented by two. The values of the rows and lists of a section start in one column: two spaces
+ * after its widest key, never before column 14; a value longer than the line wraps in that column, at a space,
+ * within {@value #WIDTH} columns. The rows of a table share their column widths, two spaces wider than their
+ * widest cell.
  *
  * <p>ASCII, two-space indents, no colour: the report is read in log files and Windows consoles. Every value
  * is {@linkplain #clean(String) cleaned} (no control character can break a line or forge a record) and cut to
@@ -69,6 +71,8 @@ public final class StartupReportRenderer {
     public static final int MAX_VALUE = 200;
     /** The most items of a list, or rows of a table, that are printed. */
     public static final int MAX_ITEMS = 50;
+    /** A section that took longer than this to write is marked {@code slow}; it is not an anomaly. */
+    public static final long SLOW_MILLIS = 50;
 
     /** Between the parts of a header line: {@code dev (reason) | report detailed | override ...}. */
     static final String SEPARATOR = " | ";
@@ -153,7 +157,7 @@ public final class StartupReportRenderer {
         }
         lines(header, out);
         for (Section section : report.sections()) {
-            out.addAll(headline(section.id(), section.headline()));
+            out.addAll(headline(section.id(), timed(section)));
             lines(section.lines(), out);
         }
         List<Line> anomalies = new ArrayList<>();
@@ -166,14 +170,31 @@ public final class StartupReportRenderer {
         return String.join("\n", out);
     }
 
-    /** A section's first line: its id in column 0, then its headline in column 14 or two spaces further. */
+    /**
+     * A section's first line: its id in column 0, then its headline, already {@linkplain #clean(String) clean}, in
+     * column 14 or two spaces further.
+     */
     private static List<String> headline(String id, String headline) {
         String key = clean(id);
         if (headline == null) {
             return List.of(key);
         }
         String lead = key + " ".repeat(Math.max(GAP, HEADLINE_COLUMN - key.length()));
-        return wrap(lead, clean(headline));
+        return wrap(lead, headline);
+    }
+
+    /**
+     * The clean headline of {@code section}, then how long it took to write when that was measured, as
+     * contributors' sections are: {@code MCP server | 3 ms}, {@code 62 ms, slow}.
+     */
+    private static String timed(Section section) {
+        String headline = section.headline() == null ? null : clean(section.headline());
+        if (section.nanos() < 0) {
+            return headline;
+        }
+        long millis = section.nanos() / 1_000_000;
+        String took = millis + " ms" + (section.nanos() > SLOW_MILLIS * 1_000_000 ? ", slow" : "");
+        return headline == null ? took : headline + SEPARATOR + took;
     }
 
     /** The lines of a section, indented by two: rows and lists aligned on one column, tables on theirs. */
