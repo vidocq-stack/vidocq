@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.runtime.extensions.essentials</groupId>
+        <artifactId>vidocq-runtime-extensions-essentials</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vidocq-runtime-devconsole-extension</artifactId>
+    <name>Vidocq :: Core Extensions :: Dev console</name>
+    <description>The dev console: a read-only page on a loopback listener of its own that shows the startup
+        report of the running boot and the live values of the dev console panels, on in a dev launch only by
+        default.</description>
+
+    <dependencies>
+        <!-- DevConsolePanel, PanelSample and the startup report view it reads. -->
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-devconsole-spi</artifactId>
+        </dependency>
+        <!-- ChappeMountPoint: the "dev" listener of its own, and the page and snapshot mounted on it. -->
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.essentials</groupId>
+            <artifactId>vidocq-runtime-chappe-webserver-extension</artifactId>
+        </dependency>
+        <!-- Handler, Response, StaticFileHandler. -->
+        <dependency>
+            <groupId>io.vidocq.chappe</groupId>
+            <artifactId>chappe-api</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <testResources>
+            <testResource>
+                <directory>src/test/resources</directory>
+            </testResource>
+            <!-- The enable and port rules are implemented twice, on purpose: by the core, for the banner, and here.
+                 Both test suites read the core's one table of cases, so that the two cannot drift apart. -->
+            <testResource>
+                <directory>${project.basedir}/../../../vidocq-runtime-core/src/test/resources</directory>
+                <includes>
+                    <include>devconsole-enabled.csv</include>
+                    <include>devconsole-port.csv</include>
+                </includes>
+            </testResource>
+        </testResources>
+    </build>
+</project>

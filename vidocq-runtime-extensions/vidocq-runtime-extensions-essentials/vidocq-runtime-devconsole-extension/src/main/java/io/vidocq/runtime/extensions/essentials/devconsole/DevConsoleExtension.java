@@ -1,0 +1,345 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.runtime.extensions.essentials.devconsole;
+
+import io.vidocq.chappe.api.Handler;
+import io.vidocq.chappe.api.StaticFileHandler;
+import io.vidocq.runtime.extensions.essentials.chappe.ChappeListener;
+import io.vidocq.runtime.extensions.essentials.chappe.ChappeMountPoint;
+import io.vidocq.runtime.extensions.essentials.chappe.ListenerOptions;
+import io.vidocq.runtime.spi.ExtensionContext;
+import io.vidocq.runtime.spi.VidocqExtension;
+import io.vidocq.runtime.spi.report.LaunchMode;
+import io.vidocq.runtime.spi.report.StartupReportContext;
+import io.vidocq.runtime.spi.report.StartupReportContributor;
+import io.vidocq.runtime.spi.report.StartupReportSection;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.InetSocketAddress;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.HexFormat;
+import java.util.List;
+import java.util.Objects;
+import java.util.Properties;
+import java.util.Set;
+import java.util.function.LongSupplier;
+import java.util.random.RandomGenerator;
+import java.util.regex.Pattern;
+
+/**
+ * The dev console: a read-only page, on a listener of its own, that shows the startup report of the running boot and
+ * the live values of the {@linkplain io.vidocq.runtime.spi.devconsole.DevConsolePanel dev console panels}.
+ *
+ * <h2>When it is on</h2>
+ * <p>{@value DevConsoleSettings#ENABLED_KEY} is {@code auto} by default: on in a dev launch, off otherwise;
+ * {@code true} and {@code false} force it. It listens on {@value DevConsoleSettings#HOST_KEY}, {@code 127.0.0.1} by
+ * default, and {@value DevConsoleSettings#PORT_KEY}, {@code 8888} by default, {@code 0} for a free one. An invalid
+ * value is reported ({@code VIDOCQ-DEVC-003}) and its default used.
+ *
+ * <h2>Lifecycle</h2>
+ * <p>Priority {@value #PRIORITY}: after {@code chappe-engine} (100), which installs the mount point, and before
+ * {@code chappe-bootstrap} (10,000), which starts the servers. Everything happens in {@link #onStart}, the first phase
+ * that knows the launch mode: the console declares its listener, {@value #LISTENER}, with
+ * {@link ChappeMountPoint#declareListener(ChappeListener, ListenerOptions)}, and mounts itself at its root. Chappe then
+ * starts it with the other listeners and hands the console the address it bound ({@link #bound}), from which the
+ * console prints its URL, {@code Vidocq dev console: http://127.0.0.1:8888/}, on the first boot of the JVM and again
+ * only when it changes. A configured port that is taken does not stop the application: the console listens on a free
+ * port, and says so loudly, with a boxed WARNING, a {@code VIDOCQ-DEVC-004} anomaly and a banner on its page. For
+ * port {@code 0}, a dev reload asks again for the port the previous boot bound, so that an open tab keeps working.
+ * Every dev reload creates a new console, a new listener and a new boot id; {@link #onStop} runs once the servers
+ * are down.
+ *
+ * <h2>Its section of the report</h2>
+ * <p>The console is also the contributor of the report's {@value #ID} section: the URL, or why it is off, and its
+ * anomalies, {@code VIDOCQ-DEVC-001} when it is on outside a dev launch, {@code VIDOCQ-DEVC-002} when it listens on
+ * an address that is not a loopback one, {@code VIDOCQ-DEVC-003} and {@code VIDOCQ-DEVC-004}. That section is shown
+ * with the report on the page, not as a panel.
+ *
+ * <h2>What it serves</h2>
+ * <p>See {@link ConsoleHandler}: {@code GET /api/snapshot}, the {@link Snapshot} of the boot, and the page, from the
+ * resources under {@value #PAGE_RESOURCES}; nothing else, and only to a request that names the console's own
+ * address.
+ */
+public final class DevConsoleExtension implements VidocqExtension, StartupReportContributor {
+
+    /** The name of the extension and the id of its section of the report. */
+    static final String ID = "devconsole";
+    /** The logger of the console's own records: its URL, a taken port, a panel that fails. */
+    static final String LOGGER_NAME = "io.vidocq.devconsole";
+    /** The Chappe listener the console declares for itself. */
+    static final String LISTENER = "dev";
+    /** After {@code chappe-engine} (100), before {@code chappe-bootstrap} (10,000). */
+    static final int PRIORITY = 9000;
+    /** Where the page's files are: not a package, so nothing to open. */
+    static final String PAGE_RESOURCES = "META-INF/resources/devconsole";
+
+    /** The console is on outside a dev launch. */
+    static final String ON_OUTSIDE_DEV = "VIDOCQ-DEVC-001";
+    /** The console listens on an address that is not a loopback one. */
+    static final String NOT_LOOPBACK = "VIDOCQ-DEVC-002";
+    /** A {@code vidocq.devconsole.*} value the console does not accept. */
+    static final String INVALID_VALUE = "VIDOCQ-DEVC-003";
+    /** The configured port was taken: the console listens on another one. */
+    static final String PORT_TAKEN = "VIDOCQ-DEVC-004";
+
+    /** How long stopping the console's server waits for a request in flight: never Chappe's 30 seconds. */
+    private static final Duration GRACE_PERIOD = Duration.ofSeconds(1);
+    /** The build identity file of this module, for its version on the class path. */
+    private static final String BUILD_INFO =
+            "/META-INF/vidocq/build-info/vidocq-runtime-devconsole-extension.properties";
+    /** A URL {@link ChappeListener#httpUrl} writes: a loopback name or an address, a port, nothing after the slash. */
+    private static final Pattern PRINTABLE_URL = Pattern.compile(
+            "http://(localhost|[0-9]{1,3}(\\.[0-9]{1,3}){3}|\\[[0-9a-f:.]+(%25[0-9A-Za-z._~-]+)?]):[0-9]{1,5}/");
+    private static final System.Logger LOG = System.getLogger(LOGGER_NAME);
+    private static final String VIDOCQ_VERSION = version();
+
+    private final ConsoleMemory memory;
+    private final LongSupplier clock;
+
+    private volatile DevConsoleSettings settings;
+    private volatile Snapshot snapshot;
+    private volatile InetSocketAddress boundAddress;
+    private volatile String url;
+    private volatile String notStarted;
+
+    /** The console Vidocq loads as a service, remembering what it printed across the dev reloads of this JVM. */
+    public DevConsoleExtension() {
+        this(ConsoleMemory.JVM);
+    }
+
+    /** @param memory what outlives a dev reload */
+    DevConsoleExtension(ConsoleMemory memory) {
+        this.memory = Objects.requireNonNull(memory, "memory");
+        this.clock = System::currentTimeMillis;
+    }
+
+    @Override
+    public String name() {
+        return ID;
+    }
+
+    @Override
+    public int priority() {
+        return PRIORITY;
+    }
+
+    @Override
+    public Set<String> configKeys() {
+        return Set.of("vidocq.devconsole.*");
+    }
+
+    @Override
+    public String id() {
+        return ID;
+    }
+
+    @Override
+    public String title() {
+        return "Dev console";
+    }
+
+    /**
+     * Resolves the settings and, when the console is on, declares its listener and mounts the snapshot and the page on
+     * it. Never fails the boot: a listener that cannot be declared leaves the console off, with a WARNING.
+     */
+    @Override
+    public void onStart(ExtensionContext context) {
+        DevConsoleSettings resolved = DevConsoleSettings.resolve(context.config(), context.launchMode());
+        settings = resolved;
+        if (!resolved.on()) {
+            return;
+        }
+        int port = resolved.port() == 0 ? memory.portForAnyPort() : resolved.port();
+        Snapshot boot = new Snapshot(HexFormat.of().toHexDigits(RandomGenerator.getDefault().nextLong()),
+                VIDOCQ_VERSION, context.startupReport(), ownPanels(resolved.launchMode()), clock);
+        Handler page = StaticFileHandler.builder()
+                .addClasspath(DevConsoleExtension.class.getClassLoader(), PAGE_RESOURCES)
+                .indexFile("index.html")
+                .cacheControl("no-cache")
+                .build();
+        snapshot = boot;
+        try {
+            ChappeMountPoint mountPoint = ChappeMountPoint.instance();
+            mountPoint.declareListener(ChappeListener.http(LISTENER, resolved.host(), port),
+                    new ListenerOptions(true, true, GRACE_PERIOD, this::bound));
+            mountPoint.mount(LISTENER, "", new ConsoleHandler(new HostGuard(resolved.host()), this::boundPort, boot,
+                    page));
+        } catch (RuntimeException failed) {
+            snapshot = null;
+            notStarted = String.valueOf(failed.getMessage());
+            LOG.log(System.Logger.Level.WARNING, "Vidocq dev console not started: " + notStarted);
+        }
+    }
+
+    /**
+     * The console's own panels, shown after the contributed ones from the first poll, the boot facts of each written
+     * once per boot.
+     */
+    private static List<PanelEntry> ownPanels(LaunchMode mode) {
+        return List.of();
+    }
+
+    /**
+     * Called by Chappe on the boot thread once the console's listener is bound: records where, prints the URL when
+     * it is new, and tells loudly when the configured port was taken.
+     *
+     * @param address the address the listener bound
+     */
+    void bound(InetSocketAddress address) {
+        DevConsoleSettings resolved = settings;
+        String bound = ChappeListener.httpUrl(address);
+        boundAddress = address;
+        url = bound;
+        memory.bound(address.getPort());
+        Snapshot boot = snapshot;
+        if (boot != null) {
+            boot.bound(bound, resolved.port(), address.getPort());
+        }
+        if (memory.toPrint(bound)) {
+            LOG.log(System.Logger.Level.INFO, "Vidocq dev console: " + bound);
+        }
+        if (portTaken(resolved, address)) {
+            LOG.log(System.Logger.Level.WARNING, portTakenWarning(resolved.port(), address.getPort(), bound));
+        }
+    }
+
+    /** The port the console listens on, {@code 0} until it is bound. */
+    int boundPort() {
+        InetSocketAddress address = boundAddress;
+        return address == null ? 0 : address.getPort();
+    }
+
+    /**
+     * Writes the console's section: its URL, or why it is off or not started, and its anomalies. Called by Vidocq
+     * once every {@code onStart} ran, the console's listener bound.
+     */
+    @Override
+    public void contribute(StartupReportContext context, StartupReportSection section) {
+        DevConsoleSettings resolved = settings;
+        if (resolved == null) {
+            section.summary("not started");
+            return;
+        }
+        for (String invalid : resolved.invalid()) {
+            section.anomaly(INVALID_VALUE, invalid, null);
+        }
+        if (!resolved.on()) {
+            section.summary(resolved.offReason());
+            return;
+        }
+        InetSocketAddress address = boundAddress;
+        section.row("enabled", resolved.enabled())
+                .row("configured", hostAndPort(resolved.host(), resolved.port()));
+        if (address == null) {
+            section.summary("not started");
+            if (notStarted != null) {
+                section.row("reason", notStarted);
+            }
+            return;
+        }
+        String bound = url;
+        section.summary(bound).listener(LISTENER, bound);
+        if (resolved.launchMode() != LaunchMode.DEV) {
+            section.anomaly(ON_OUTSIDE_DEV, "The dev console is on in a " + resolved.launchMode().label()
+                    + " launch: it shows the startup report and the live values of this application on "
+                    + hostAndPort(resolved.host(), address.getPort()),
+                    "Remove " + DevConsoleSettings.ENABLED_KEY + "=true outside development");
+        }
+        if (!address.getAddress().isLoopbackAddress()) {
+            section.anomaly(NOT_LOOPBACK, "The dev console listens on "
+                    + hostAndPort(address.getAddress().getHostAddress(), address.getPort())
+                    + ", which is not a loopback address: whoever reaches this machine can read the startup report "
+                    + "and the live values of this application",
+                    "Remove " + DevConsoleSettings.HOST_KEY + ", or set it to " + DevConsoleSettings.DEFAULT_HOST);
+        }
+        if (portTaken(resolved, address)) {
+            section.anomaly(PORT_TAKEN, "The dev console's port " + resolved.port() + " is taken: it listens on port "
+                    + address.getPort() + " instead, " + bound,
+                    "Free port " + resolved.port() + ", or set " + DevConsoleSettings.PORT_KEY
+                            + " to another port, 0 for any free one");
+        }
+    }
+
+    /** Forgets this boot: the server is already down, {@code chappe-bootstrap} stops before the console. */
+    @Override
+    public void onStop() {
+        snapshot = null;
+        boundAddress = null;
+        url = null;
+    }
+
+    private static boolean portTaken(DevConsoleSettings resolved, InetSocketAddress address) {
+        return resolved != null && resolved.port() != 0 && resolved.port() != address.getPort();
+    }
+
+    /**
+     * The WARNING of a taken port: one line to find it in a log, then a box that holds numbers and the URL only, never
+     * a string of the configuration, and the URL only when it has the shape {@link ChappeListener#httpUrl} gives it.
+     */
+    static String portTakenWarning(int configured, int bound, String url) {
+        List<String> lines = new ArrayList<>();
+        lines.add("");
+        lines.add("DEV CONSOLE: port " + configured + " is taken");
+        lines.add("It listens on port " + bound + " instead" + (PRINTABLE_URL.matcher(url).matches() ? ":" : "."));
+        if (PRINTABLE_URL.matcher(url).matches()) {
+            lines.add("");
+            lines.add(url);
+        }
+        lines.add("");
+        int width = 56;
+        for (String line : lines) {
+            width = Math.max(width, line.length() + 6);
+        }
+        String rule = "+" + "-".repeat(width - 2) + "+";
+        StringBuilder warning = new StringBuilder("Vidocq dev console: port " + configured
+                + " is taken, listening on port " + bound + " instead");
+        warning.append('\n').append(rule);
+        for (String line : lines) {
+            warning.append('\n').append("|   ").append(line).append(" ".repeat(width - 5 - line.length())).append('|');
+        }
+        return warning.append('\n').append(rule).toString();
+    }
+
+    /** {@code host:port}, an IPv6 literal bracketed. */
+    private static String hostAndPort(String host, int port) {
+        boolean ipv6 = host.indexOf(':') >= 0 && !host.startsWith("[");
+        return (ipv6 ? "[" + host + "]" : host) + ":" + port;
+    }
+
+    /** The version of Vidocq: this module's, from its descriptor on the module path, else from its build identity. */
+    private static String version() {
+        Module module = DevConsoleExtension.class.getModule();
+        if (module.getDescriptor() != null && module.getDescriptor().rawVersion().isPresent()) {
+            return module.getDescriptor().rawVersion().get();
+        }
+        try (InputStream in = DevConsoleExtension.class.getResourceAsStream(BUILD_INFO)) {
+            if (in == null) {
+                return null;
+            }
+            Properties info = new Properties();
+            info.load(in);
+            return info.getProperty("git.build.version");
+        } catch (IOException | RuntimeException unreadable) {
+            return null;
+        }
+    }
+}
