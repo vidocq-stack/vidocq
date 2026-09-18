@@ -22,6 +22,8 @@ module io.vidocq.runtime.extensions.essentials.chappe {
     requires io.vidocq.vauban.core;
     requires transitive io.vidocq.chappe.api;
     requires static java.net.http;
+    // for the tests only, which read the log records; nothing in the module logs through java.util.logging
+    requires static java.logging;
 
     exports io.vidocq.runtime.extensions.essentials.chappe;
     exports io.vidocq.runtime.extensions.essentials.chappe.spi;

@@ -9,8 +9,8 @@ One Chappe server (`fr.vidocq.chappe.api.Server`) is started per declared listen
 | Phase | Extension | Priority | Action |
 |---|---|---|---|
 | configure | `ChappeEngineExtension` | 100 | installs `ChappeMountPoint` |
-| onStart | contributors | 500–9 999 | call `mount(...)` |
-| onStart | `ChappeServerBootstrap` | 10 000 | starts one `Server` per listener |
+| onStart | contributors | 500–9 999 | call `mount(...)`, may `declareListener(...)` |
+| onStart | `ChappeServerBootstrap` | 10 000 | starts one `Server` per listener, logs the address it bound |
 | onStop | `ChappeServerBootstrap` | 10 000 | stops the servers |
 
 ## Usage from a contributor extension
@@ -23,6 +23,39 @@ public void onStart(ExtensionContext ctx) {
     // or: mp.router(ChappeListener.DEFAULT).get("/hello", h -> Response.ok("hi"));
 }
 ```
+
+## A listener of an extension's own
+
+An extension that serves something apart from the application, such as the dev console, declares its
+listener from its `onStart` (priority between 100 and 10 000), then mounts on it by name:
+
+```java
+@Override
+public void onStart(ExtensionContext ctx) {
+    ChappeMountPoint mp = ChappeMountPoint.instance();
+    mp.declareListener(ChappeListener.http("dev", "127.0.0.1", 8888),
+            new ListenerOptions(true, true, Duration.ofSeconds(1), this::bound));
+    mp.router("dev").get("/api/snapshot", snapshot);
+}
+```
+
+`ListenerOptions` (or `ListenerOptions.DEFAULTS`, which starts it like a configured listener):
+
+| Option | Effect |
+|---|---|
+| `anyPortWhenTaken` | the port is in use: listen on a free port instead of failing the boot, with a WARNING naming both ports |
+| `quiet` | the `Chappe listener '…' started on …` line is logged at DEBUG, for an extension that prints its own |
+| `shutdownGracePeriod` | how long stopping the server waits for the requests in flight; `null` keeps Chappe's 30 s |
+| `onBound` | called on the boot thread once the server listens, with the address it bound; it cannot mount any more, and an exception it throws is logged, never fatal |
+
+A name has one owner. The extension's listeners start first, then the configuration's, and
+`vidocq.chappe.listeners` must not list a name an extension declared: the boot fails with
+`listener 'dev' is declared by an extension (DevConsoleExtension); remove it from vidocq.chappe.listeners`.
+The listener named `default` is always the application's.
+
+Every listener logs the address it bound, not the one it was given: `port=0` prints the real port. A
+wildcard host reads `localhost`, an IPv6 address is bracketed (`http://[::1]:8888/`), and
+`ChappeListener.httpUrl(InetSocketAddress)` builds the same URL from the address `onBound` receives.
 
 ## Configuration
 

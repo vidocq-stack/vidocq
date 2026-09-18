@@ -63,7 +63,7 @@ The `io.vidocq.runtime.extensions.*` modules each correspond to a built-in exten
 
 | `vidocq.chappe.listeners`
 | `default`
-| CSV list of listeners to start.
+| CSV list of listeners to start. It cannot list a listener an extension declares itself [.tag-new]#NEW#, such as the dev console's `dev` (xref:modules/vidocq-runtime-extensions.adoc#extension-listeners[A listener of an extension's own]).
 
 | `vidocq.chappe.listener.<name>.host` +
 `vidocq.chappe.listener.<name>.port`

@@ -25,7 +25,6 @@ import io.vidocq.chappe.api.WebSocketHandler;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -44,13 +43,20 @@ import java.util.Objects;
  * <p>Thread-safety: all contributions must be made during the phase
  * {@code onStart} (single-threaded orchestrated by {@code VidocqBootstrap}). The instance is
  * then frozen when the server starts.</p>
+ *
+ * <p>An extension may also bring a listener of its own, with
+ * {@link #declareListener(ChappeListener, ListenerOptions)}: {@link ChappeServerBootstrap} starts it with
+ * those of the configuration ({@code vidocq.chappe.listeners}).</p>
  */
 public final class ChappeMountPoint {
 
     private static volatile ChappeMountPoint instance;
 
+    /** Names the class that declares a listener, for the error when the configuration lists it too. */
+    private static final StackWalker CALLER = StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE);
+
     private final Map<String, Router.Builder> routers = new LinkedHashMap<>();
-    private final Map<String, ChappeListener> listeners = new LinkedHashMap<>();
+    private final Map<String, Declaration> listeners = new LinkedHashMap<>();
     private final List<Runnable> beforeStartHooks = new ArrayList<>();
     private final List<Runnable> afterStopHooks = new ArrayList<>();
     private volatile boolean frozen;
@@ -79,12 +85,80 @@ public final class ChappeMountPoint {
     }
 
     /**
-     * Declared a listener. Called by {@link ChappeServerBootstrap} at startup.
+     * A listener and how to start it.
+     *
+     * @param listener the listener
+     * @param options how {@link ChappeServerBootstrap} starts it, {@link ListenerOptions#DEFAULTS} for the
+     *        configuration's
+     * @param owner the simple name of the class that declared it, {@code null} for a listener of the
+     *        configuration
+     */
+    record Declaration(ChappeListener listener, ListenerOptions options, String owner) {}
+
+    /**
+     * Declares a listener of the configuration ({@code vidocq.chappe.listeners}). Called by
+     * {@link ChappeServerBootstrap} at startup, after every extension declared its own: a name an extension
+     * declared cannot be listed there too. A name the configuration lists twice is declared once, from the
+     * same keys.
+     *
+     * @throws IllegalStateException when an extension declared a listener of that name, or once frozen
      */
     void declareListener(ChappeListener listener) {
+        Objects.requireNonNull(listener, "listener");
         ensureOpen();
-        listeners.put(listener.name(), listener);
-        routers.computeIfAbsent(listener.name(), n -> Router.builder());
+        Declaration existing = listeners.get(listener.name());
+        if (existing != null) {
+            if (existing.owner() != null) {
+                throw declaredTwice(listener.name(), existing.owner());
+            }
+            return;
+        }
+        declare(new Declaration(listener, ListenerOptions.DEFAULTS, null));
+    }
+
+    /**
+     * Declares a listener of an extension's own, next to the application's: {@link ChappeServerBootstrap}
+     * starts one server for it, with {@code options}, and the extension mounts on it by its name, like on any
+     * other listener. Callable until the mount point is frozen, from {@code onStart} of an extension that runs
+     * after {@link ChappeEngineExtension} (priority 100) and before {@link ChappeServerBootstrap} (10,000).
+     *
+     * <p>A name has one owner: the listener belongs to the extension, and {@code vidocq.chappe.listeners} must
+     * not list it; the boot fails if it does, naming the class that declared it. The listener named
+     * {@value ChappeListener#DEFAULT} is the application's.
+     *
+     * @param listener the listener; its port may be {@code 0}, for a free one
+     * @param options how to start it, {@link ListenerOptions#DEFAULTS} to start it like a configured one
+     * @throws IllegalArgumentException for the listener named {@value ChappeListener#DEFAULT}
+     * @throws IllegalStateException when the name is already declared, or once frozen
+     */
+    public void declareListener(ChappeListener listener, ListenerOptions options) {
+        Objects.requireNonNull(listener, "listener");
+        Objects.requireNonNull(options, "options");
+        ensureOpen();
+        if (ChappeListener.DEFAULT.equals(listener.name())) {
+            throw new IllegalArgumentException("the listener '" + ChappeListener.DEFAULT
+                    + "' is the application's, configured by vidocq.chappe.listener.default.*; declare another name");
+        }
+        Class<?> caller = CALLER.getCallerClass();
+        String owner = caller.getSimpleName().isEmpty() ? caller.getName() : caller.getSimpleName();
+        Declaration existing = listeners.get(listener.name());
+        if (existing != null) {
+            throw existing.owner() == null
+                    ? declaredTwice(listener.name(), owner)
+                    : new IllegalStateException("listener '" + listener.name()
+                            + "' is already declared by an extension (" + existing.owner() + ")");
+        }
+        declare(new Declaration(listener, options, owner));
+    }
+
+    private void declare(Declaration declaration) {
+        listeners.put(declaration.listener().name(), declaration);
+        routers.computeIfAbsent(declaration.listener().name(), n -> Router.builder());
+    }
+
+    private static IllegalStateException declaredTwice(String name, String owner) {
+        return new IllegalStateException("listener '" + name + "' is declared by an extension (" + owner
+                + "); remove it from vidocq.chappe.listeners");
     }
 
     /**
@@ -162,7 +236,12 @@ public final class ChappeMountPoint {
     // --- Internal accessors for ChappeServerBootstrap ---
 
     Collection<ChappeListener> listeners() {
-        return Collections.unmodifiableCollection(listeners.values());
+        return listeners.values().stream().map(Declaration::listener).toList();
+    }
+
+    /** Every declared listener, in declaration order: the extensions' first, then the configuration's. */
+    List<Declaration> declarations() {
+        return List.copyOf(listeners.values());
     }
 
     Router buildRouter(String listenerName) {

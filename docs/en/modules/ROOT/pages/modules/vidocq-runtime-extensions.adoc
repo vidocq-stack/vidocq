@@ -116,6 +116,48 @@ The `vidocq-runtime-chappe-webserver-extension` extension illustrates the patter
 | shuts servers down cleanly
 |===
 
+Every listener logs the address it actually bound [.tag-new]#NEW#, not the one it was given: with `port=0`, the line shows the real port.
+
+----
+Chappe listener 'default' started on http://localhost:43127/
+----
+
+A wildcard host reads `localhost` and an IPv6 address is bracketed, `http://[::1]:8080/`.
+
+[#extension-listeners]
+=== A listener of an extension's own [.tag-new]#NEW#
+
+An extension that serves something apart from the application, as the dev console does, declares its own listener from its `onStart`, between priority 100 and 10000, then mounts on it by name like on any other:
+
+[source,java]
+----
+ChappeMountPoint mp = ChappeMountPoint.instance();
+mp.declareListener(ChappeListener.http("dev", "127.0.0.1", 8888),
+        new ListenerOptions(true, true, Duration.ofSeconds(1), this::bound));
+mp.router("dev").get("/api/snapshot", snapshot);
+----
+
+[cols="1,3"]
+|===
+| `ListenerOptions` | Effect
+
+| `anyPortWhenTaken`
+| When the port is in use, listen on a free port instead of failing the boot, and log a WARNING naming both ports.
+
+| `quiet`
+| Log the `Chappe listener '…' started on …` line at DEBUG, for an extension that prints its own.
+
+| `shutdownGracePeriod`
+| How long stopping the server waits for the requests in flight. `null` keeps Chappe's 30 seconds.
+
+| `onBound`
+| Called on the boot thread once the server listens, with the address it bound: the real port when the declared one was `0` or taken. Nothing can be mounted any more, and an exception it throws is logged as a WARNING, never fatal.
+|===
+
+`ListenerOptions.DEFAULTS` starts the listener like one of the configuration. `ChappeListener.httpUrl(address)` turns the address `onBound` receives into the URL the log line shows.
+
+A listener name has one owner. The extensions' listeners start first, then those of `vidocq.chappe.listeners`, which must not list a name an extension declared: the boot fails with `listener 'dev' is declared by an extension (DevConsoleExtension); remove it from vidocq.chappe.listeners`. The listener named `default` is always the application's.
+
 Other extensions follow comparable scheduling logic with their own priorities.
 
 == Activation by dependency

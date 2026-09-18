@@ -25,6 +25,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -94,6 +96,8 @@ class ChappeMountPointTest {
                 () -> mp.addBeforeStartHook(() -> {}));
         assertThrows(IllegalStateException.class,
                 () -> mp.declareListener(ChappeListener.http("x", "0.0.0.0", 1234)));
+        assertThrows(IllegalStateException.class,
+                () -> mp.declareListener(ChappeListener.http("y", "127.0.0.1", 0), ListenerOptions.DEFAULTS));
     }
 
     @Test
@@ -123,5 +127,91 @@ class ChappeMountPointTest {
     @Test
     void buildRouterForUnknownListenerReturnsEmpty() {
         assertNotNull(mp.buildRouter("ghost"));
+    }
+
+    // --- listeners declared by an extension ---------------------------------------------------------
+
+    @Test
+    void extensionDeclaresAListenerWithItsOptions() {
+        ListenerOptions options = new ListenerOptions(true, true, Duration.ofSeconds(1), _ -> {});
+        mp.declareListener(ChappeListener.http("dev", "127.0.0.1", 8888), options);
+
+        List<ChappeMountPoint.Declaration> declared = mp.declarations();
+        assertEquals(1, declared.size());
+        assertEquals("dev", declared.get(0).listener().name());
+        assertSame(options, declared.get(0).options());
+        assertEquals(getClass().getSimpleName(), declared.get(0).owner(),
+                "the class that declared it, named when the configuration lists it too");
+        assertNotNull(mp.buildRouter("dev"));
+    }
+
+    @Test
+    void configuredListenerHasDefaultOptionsAndNoOwner() {
+        mp.declareListener(ChappeListener.http("admin", "127.0.0.1", 9090));
+
+        ChappeMountPoint.Declaration declared = mp.declarations().get(0);
+        assertSame(ListenerOptions.DEFAULTS, declared.options());
+        assertNull(declared.owner());
+    }
+
+    @Test
+    void aNameIsDeclaredByOneExtensionOnly() {
+        mp.declareListener(ChappeListener.http("dev", "127.0.0.1", 8888), ListenerOptions.DEFAULTS);
+
+        var ex = assertThrows(IllegalStateException.class,
+                () -> mp.declareListener(ChappeListener.http("dev", "127.0.0.1", 8889), ListenerOptions.DEFAULTS));
+        assertTrue(ex.getMessage().contains("'dev'"), ex.getMessage());
+        assertEquals(8888, mp.listeners().iterator().next().port(), "the first declaration is kept");
+    }
+
+    @Test
+    void configurationCannotListAListenerAnExtensionDeclared() {
+        mp.declareListener(ChappeListener.http("dev", "127.0.0.1", 8888), ListenerOptions.DEFAULTS);
+
+        var ex = assertThrows(IllegalStateException.class,
+                () -> mp.declareListener(ChappeListener.http("dev", "0.0.0.0", 9000)));
+        assertEquals("listener 'dev' is declared by an extension (ChappeMountPointTest); "
+                + "remove it from vidocq.chappe.listeners", ex.getMessage());
+    }
+
+    @Test
+    void extensionCannotDeclareAListenerTheConfigurationLists() {
+        mp.declareListener(ChappeListener.http("admin", "127.0.0.1", 9090));
+
+        var ex = assertThrows(IllegalStateException.class,
+                () -> mp.declareListener(ChappeListener.http("admin", "127.0.0.1", 0), ListenerOptions.DEFAULTS));
+        assertTrue(ex.getMessage().contains("vidocq.chappe.listeners"), ex.getMessage());
+    }
+
+    @Test
+    void aNameRepeatedInTheConfigurationIsDeclaredOnce() {
+        mp.declareListener(ChappeListener.http("default", "0.0.0.0", 8081));
+        mp.declareListener(ChappeListener.http("default", "0.0.0.0", 8081));
+        assertEquals(1, mp.listeners().size());
+    }
+
+    @Test
+    void theDefaultListenerIsTheApplications() {
+        var ex = assertThrows(IllegalArgumentException.class,
+                () -> mp.declareListener(ChappeListener.http(ChappeListener.DEFAULT, "127.0.0.1", 0),
+                        ListenerOptions.DEFAULTS));
+        assertTrue(ex.getMessage().contains("default"), ex.getMessage());
+        assertTrue(mp.listeners().isEmpty());
+    }
+
+    @Test
+    void listenersKeepTheirDeclarationOrder() {
+        mp.declareListener(ChappeListener.http("dev", "127.0.0.1", 0), ListenerOptions.DEFAULTS);
+        mp.declareListener(ChappeListener.http("default", "0.0.0.0", 8080));
+        mp.declareListener(ChappeListener.http("admin", "127.0.0.1", 9090));
+        assertEquals(List.of("dev", "default", "admin"),
+                mp.listeners().stream().map(ChappeListener::name).toList());
+    }
+
+    @Test
+    void nullDeclarationArgumentsRejected() {
+        assertThrows(NullPointerException.class, () -> mp.declareListener(null, ListenerOptions.DEFAULTS));
+        assertThrows(NullPointerException.class,
+                () -> mp.declareListener(ChappeListener.http("dev", "127.0.0.1", 0), null));
     }
 }

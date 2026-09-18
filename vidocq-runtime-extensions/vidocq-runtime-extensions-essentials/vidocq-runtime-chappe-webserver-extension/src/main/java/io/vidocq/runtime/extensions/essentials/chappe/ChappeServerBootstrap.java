@@ -25,9 +25,13 @@ import io.vidocq.runtime.spi.ExtensionContext;
 import io.vidocq.runtime.spi.VidocqExtension;
 import io.vidocq.runtime.spi.config.VidocqConfig;
 
+import java.net.BindException;
+import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -35,6 +39,15 @@ import java.util.Optional;
  * contributing extensions called {@link ChappeMountPoint#mount}.
  * <p>
  * Priority 10,000: runs after all contributors (REST, Servlet, etc.).
+ * </p>
+ * <p>
+ * The listeners are those an extension declared with
+ * {@link ChappeMountPoint#declareListener(ChappeListener, ListenerOptions)}, then those of the configuration,
+ * each started once, in that order. Each one logs the address it bound, {@code http://127.0.0.1:43127/} for
+ * a port {@code 0}, at INFO or, for a {@link ListenerOptions#quiet() quiet} one, at DEBUG; the address is
+ * read once, after the start, and handed to {@link ListenerOptions#onBound() onBound}. A taken port fails
+ * the boot, unless the declaration {@link ListenerOptions#anyPortWhenTaken() allows any port}: the listener
+ * then binds a free port, with a WARNING naming both.
  * </p>
  *
  * <h3>Configuration</h3>
@@ -59,6 +72,8 @@ public final class ChappeServerBootstrap implements VidocqExtension {
     static final String HTTP_PORT_ALIAS = "vidocq.http.port";
 
     private final List<Server> servers = new ArrayList<>();
+    /** The address each listener bound, by name, read once after its start: a stopped server forgets it. */
+    private final Map<String, InetSocketAddress> boundAddresses = new LinkedHashMap<>();
     private ChappeMountPoint mountPoint;
 
     @Override
@@ -86,9 +101,9 @@ public final class ChappeServerBootstrap implements VidocqExtension {
     @Override
     public void onStart(ExtensionContext context) {
         this.mountPoint = ChappeMountPoint.instance();
-        List<ChappeListener> listeners = resolveListeners(context.config());
 
-        for (ChappeListener l : listeners) {
+        // after the extensions' own listeners: a name the configuration shares with one of them fails here
+        for (ChappeListener l : resolveListeners(context.config())) {
             mountPoint.declareListener(l);
         }
         mountPoint.freeze();
@@ -97,19 +112,71 @@ public final class ChappeServerBootstrap implements VidocqExtension {
             runHookSilently(h, "beforeStart");
         }
 
-        for (ChappeListener l : listeners) {
-            Router router = mountPoint.buildRouter(l.name());
-            Server server = Server.builder()
-                    .host(l.host())
-                    .port(l.port())
-                    .handler(router)
-                    .build();
-            server.start();
-            servers.add(server);
-            LOG.log(System.Logger.Level.INFO,
-                    "Chappe listener '" + l.name() + "' started on http://"
-                            + displayHost(l.host()) + ":" + l.port() + "/");
+        for (ChappeMountPoint.Declaration d : mountPoint.declarations()) {
+            start(d.listener(), d.options(), mountPoint.buildRouter(d.listener().name()));
         }
+    }
+
+    /** Starts one listener, on a free port when its own is taken and its options allow it, then says where. */
+    private void start(ChappeListener l, ListenerOptions options, Router router) {
+        Server server;
+        boolean fellBack = false;
+        try {
+            server = startServer(l, l.port(), options, router);
+        } catch (RuntimeException failed) {
+            if (!options.anyPortWhenTaken() || l.port() == 0 || !portTaken(failed)) {
+                throw failed;
+            }
+            try {
+                server = startServer(l, 0, options, router);
+            } catch (RuntimeException alsoFailed) {
+                failed.addSuppressed(alsoFailed);
+                throw failed;
+            }
+            fellBack = true;
+        }
+        servers.add(server);
+        InetSocketAddress bound = server.localAddress();
+        boundAddresses.put(l.name(), bound);
+
+        if (fellBack) {
+            LOG.log(System.Logger.Level.WARNING, "Chappe listener '" + l.name() + "': port " + l.port()
+                    + " is taken, listening on port " + bound.getPort() + " instead");
+        }
+        LOG.log(options.quiet() ? System.Logger.Level.DEBUG : System.Logger.Level.INFO,
+                "Chappe listener '" + l.name() + "' started on " + ChappeListener.httpUrl(bound));
+
+        if (options.onBound() != null) {
+            try {
+                options.onBound().accept(bound);
+            } catch (RuntimeException e) {
+                LOG.log(System.Logger.Level.WARNING,
+                        "Chappe listener '" + l.name() + "': its onBound callback failed", e);
+            }
+        }
+    }
+
+    private static Server startServer(ChappeListener l, int port, ListenerOptions options, Router router) {
+        Server.Builder builder = Server.builder()
+                .host(l.host())
+                .port(port)
+                .handler(router);
+        if (options.shutdownGracePeriod() != null) {
+            builder.shutdownGracePeriod(options.shutdownGracePeriod());
+        }
+        Server server = builder.build();
+        server.start();
+        return server;
+    }
+
+    /** Whether a start failed because the address is in use, which Chappe reports only as its cause. */
+    private static boolean portTaken(Throwable failure) {
+        for (Throwable t = failure; t != null; t = t.getCause()) {
+            if (t instanceof BindException) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override
@@ -124,6 +191,7 @@ public final class ChappeServerBootstrap implements VidocqExtension {
             }
         }
         servers.clear();
+        boundAddresses.clear();
 
         if (mountPoint != null) {
             for (Runnable h : mountPoint.afterStopHooks()) {
@@ -161,12 +229,14 @@ public final class ChappeServerBootstrap implements VidocqExtension {
         return out;
     }
 
-    private static String displayHost(String host) {
-        if (host == null) return "localhost";
-        return switch (host) {
-            case "0.0.0.0", "::", "::0", "0:0:0:0:0:0:0:0" -> "localhost";
-            default -> host;
-        };
+    /** The servers started, in start order (tests). */
+    List<Server> servers() {
+        return List.copyOf(servers);
+    }
+
+    /** The address each listener bound, by name, in start order (tests). */
+    Map<String, InetSocketAddress> boundAddresses() {
+        return Collections.unmodifiableMap(new LinkedHashMap<>(boundAddresses));
     }
 
     private static void runHookSilently(Runnable r, String phase) {

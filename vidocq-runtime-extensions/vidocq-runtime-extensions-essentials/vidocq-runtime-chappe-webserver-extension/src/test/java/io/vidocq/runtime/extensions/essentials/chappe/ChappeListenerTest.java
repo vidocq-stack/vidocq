@@ -21,6 +21,10 @@ package io.vidocq.runtime.extensions.essentials.chappe;
 
 import org.junit.jupiter.api.Test;
 
+import java.net.Inet6Address;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 class ChappeListenerTest {
@@ -67,5 +71,55 @@ class ChappeListenerTest {
     @Test
     void defaultConstantExposedAsDefault() {
         assertEquals("default", ChappeListener.DEFAULT);
+    }
+
+    // --- httpUrl: the address a listener bound, as a browser opens it ------------------------------
+
+    @Test
+    void ipv4LiteralStaysLiteral() throws Exception {
+        assertEquals("http://127.0.0.1:8888/",
+                ChappeListener.httpUrl(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 8888)));
+    }
+
+    @Test
+    void ipv4WildcardReadsLocalhost() {
+        assertEquals("http://localhost:8080/", ChappeListener.httpUrl(new InetSocketAddress(8080)));
+    }
+
+    @Test
+    void ipv6WildcardReadsLocalhost() throws Exception {
+        assertEquals("http://localhost:8080/",
+                ChappeListener.httpUrl(new InetSocketAddress(InetAddress.getByName("::"), 8080)));
+    }
+
+    @Test
+    void ipv6LiteralIsBracketedAndCompressed() throws Exception {
+        assertEquals("http://[::1]:8888/",
+                ChappeListener.httpUrl(new InetSocketAddress(InetAddress.getByName("::1"), 8888)));
+        assertEquals("http://[2001:db8::1:0:0:1]:80/",
+                ChappeListener.httpUrl(new InetSocketAddress(InetAddress.getByName("2001:db8:0:0:1:0:0:1"), 80)));
+        assertEquals("http://[2001:db8:0:1:1:1:1:1]:80/",
+                ChappeListener.httpUrl(new InetSocketAddress(InetAddress.getByName("2001:db8:0:1:1:1:1:1"), 80)),
+                "a single zero group is not compressed (RFC 5952)");
+        assertEquals("http://[fe80::]:80/",
+                ChappeListener.httpUrl(new InetSocketAddress(InetAddress.getByName("fe80::"), 80)));
+    }
+
+    @Test
+    void ipv6ZoneIsPercentEncoded() throws Exception {
+        InetAddress scoped = Inet6Address.getByAddress(null,
+                InetAddress.getByName("fe80::1").getAddress(), 1);
+        assertEquals("http://[fe80::1%251]:80/", ChappeListener.httpUrl(new InetSocketAddress(scoped, 80)));
+    }
+
+    @Test
+    void unresolvedHostKeepsItsName() {
+        assertEquals("http://example.invalid:80/",
+                ChappeListener.httpUrl(InetSocketAddress.createUnresolved("example.invalid", 80)));
+    }
+
+    @Test
+    void nullAddressRejected() {
+        assertThrows(NullPointerException.class, () -> ChappeListener.httpUrl(null));
     }
 }
