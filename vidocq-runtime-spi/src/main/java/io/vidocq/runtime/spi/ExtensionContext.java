@@ -22,7 +22,11 @@ package io.vidocq.runtime.spi;
 import io.vidocq.vauban.core.container.VaubanContainer;
 import io.vidocq.runtime.spi.config.VidocqConfig;
 import io.vidocq.runtime.spi.report.LaunchMode;
+import io.vidocq.runtime.spi.report.StartupReportView;
 import jakarta.enterprise.inject.spi.BeanManager;
+
+import java.util.Optional;
+import java.util.function.Supplier;
 
 /**
  * Context provided to extensions during the {@link VidocqExtension#onStart} phase.
@@ -69,5 +73,24 @@ public interface ExtensionContext {
      */
     default LaunchMode launchMode() {
         return LaunchMode.PROD;
+    }
+
+    /**
+     * The startup report of this boot, read-only, for an extension that shows it, such as the dev
+     * console.
+     *
+     * <p>Vidocq writes the report after every {@link VidocqExtension#onStart}, so the view is empty until
+     * then, {@code onStart} included, and again once Vidocq has stopped: an extension keeps the supplier
+     * and asks it when it needs the report, on a request for instance. The supplier may be asked from any
+     * thread.
+     *
+     * <p>The context Vidocq passes to {@link VidocqExtension#onStart} answers the report of its boot; this
+     * default always answers empty, for contexts that have no report, such as a test double written
+     * before this method existed.
+     *
+     * @return the supplier of the view, never {@code null}
+     */
+    default Supplier<Optional<StartupReportView>> startupReport() {
+        return Optional::empty;
     }
 }
