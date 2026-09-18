@@ -37,7 +37,8 @@ The seventh method, `configKeys()`, lets an extension declare the `vidocq.*` key
 * `container()` — the initialized Vauban `VaubanContainer`;
 * `beanManager()` — shortcut to the CDI `BeanManager`;
 * `configuration()` — the legacy `VidocqConfiguration` (string properties);
-* `config()` — the typed `VidocqConfig` API (`Optional`-returning `getValue(key, type)`, aligned with MicroProfile Config concepts).
+* `config()` — the typed `VidocqConfig` API (`Optional`-returning `getValue(key, type)`, aligned with MicroProfile Config concepts);
+* `launchMode()` [.tag-new]#NEW# — how this JVM was launched, `DEV`, `TEST` or `PROD` (xref:modules/vidocq-runtime-core.adoc#launch-mode[Launch mode]).
 
 == Discovery and ordering
 

@@ -24,8 +24,9 @@
 . **CDI start** — `builder.build()` boots xref:vauban::index.adoc[Vauban].
 . **onStart** — each extension receives the `ExtensionContext` (container, bean manager, config): the Chappe extension opens the HTTP listeners, Cassini mounts the REST routes, Mansart opens the JDBC pool.
 
-* Warn about configured `vidocq.*` keys nobody consumes (`ConfigKeyAudit`, based on the core's own keys and `VidocqExtension.configKeys()`).
+* Warn about configured `vidocq.*` keys nobody consumes (`ConfigKeyAudit`, based on the core's own keys and `VidocqExtension.configKeys()`), as <<vidocq-cfg-003>>.
 * Print the startup banner with the exact Vidocq version and build (<<startup-banner>>).
+* Log the startup report, one record that says what has just started, just before `Vidocq - Started in`, and report a boot that fails (<<startup-report>>).
 * Print readable console logs when the application has not configured logging (<<console-logging>>).
 * Manage the shutdown cycle — `onStop()` runs in reverse priority order, virtual threads drain cleanly.
 * Install the Vauban application layer when the launch vehicle requires it (`VidocqAppLayer`, `Vidocq.run`), including the `vidocq:dev` hot-reload loop (`VidocqDevReloadLoop`).
@@ -180,7 +181,7 @@ Vidocq bricks: chappe 0.4.0-SNAPSHOT (2d8ec095+dirty, built 2026-09-16T08:48:26Z
 [#launch-mode]
 === Launch mode [.tag-new]#NEW#
 
-Vidocq says which of `dev`, `test` and `prod` it is running in, and in parentheses the signal it read it from — the claim and its evidence, never one without the other. It is an observation, not a switch: nothing in the runtime behaves differently because of it, it is printed so that a log or a screenshot says what the launch was.
+Vidocq says which of `dev`, `test` and `prod` it is running in, and in parentheses the signal it read it from — the claim and its evidence, never one without the other. It is an observation, not a switch: the container, the configuration and the extensions' lifecycle are the same in every mode. It decides what is printed — the art of the banner, and the default level of the <<startup-report,startup report>> — so that a log or a screenshot says what the launch was. An extension reads it with `ExtensionContext.launchMode()` [.tag-new]#NEW# to offer what only makes sense in development (xref:modules/vidocq-runtime-spi.adoc#launch-mode-api[Reading the launch mode]).
 
 The first signal found wins:
 
@@ -217,11 +218,11 @@ The first signal found wins:
 | `no dev or test signal`
 |===
 
-A profile that is no mode (`staging`) is not a signal: the detection goes on without it. An unknown `vidocq.launch.mode` logs one warning and does the same.
+A profile that is no mode (`staging`) is not a signal: the detection goes on without it. `vidocq.launch.mode=auto` [.tag-new]#NEW#, the default, lets the detection decide too; any other value that names no mode is reported as <<vidocq-cfg-001>> and does the same.
 
 `prod` is the only mode that rests on an absence, and it never shows without saying so: when the context line is too narrow for `prod (no dev or test signal)`, the whole segment goes rather than leave a bare `prod` claiming more than is known.
 
-Reading the archives is bounded: at most four of them, their shape is a string comparison, and only one of them has its parents probed for a build file — a handful of `stat` calls, once per JVM. Nothing in the resolution throws: a probe that fails is a signal that was not found, and the worst case is the `prod` above.
+Reading the archives is bounded: at most four of them, their shape is a string comparison, and only one of them has its parents probed for a build file — a handful of `stat` calls, once per boot: every reload of the dev loop reads its launch again. Nothing in the resolution throws: a probe that fails is a signal that was not found, and the worst case is the `prod` above.
 
 [#launch-mode-debugger]
 ==== Debugger [.tag-new]#NEW#
@@ -292,8 +293,8 @@ VidocqBootstrap.create()
 | A custom banner: `classpath:<resource>`, `file:<path>` or `<path>`, which take the path as written, or an encoded `file://` URI (`file:///opt/my%20app/banner.txt`). When unset, a `vidocq-banner.txt` resource of the application is used if there is one. A missing file, or a value that names no file (such as a `file://` URI with a raw space), logs a warning and prints the built-in art.
 
 | `vidocq.launch.mode` [.tag-new]#NEW#
-| (detected)
-| `dev`, `test` or `prod`, forced instead of detected (<<launch-mode>>). An unknown value logs a warning and lets the detection decide. It changes what is printed, nothing else.
+| `auto`
+| `dev`, `test` or `prod`, forced instead of detected; `auto` detects it (<<launch-mode>>). Another value is reported as <<vidocq-cfg-001>> and means `auto`. It changes what is printed — the banner, the level of the <<startup-report,startup report>> — and what `ExtensionContext.launchMode()` tells the extensions; the runtime itself behaves the same.
 
 | `vidocq.console.color`
 | `auto`
@@ -364,6 +365,276 @@ unzip -p ~/.m2/repository/io/vidocq/runtime/vidocq-runtime-core/0.4.0-SNAPSHOT/v
     META-INF/vidocq/build-info/vidocq-runtime-core.properties
 git log -1 9beafc47
 ----
+
+[#startup-report]
+== Startup report [.tag-new]#NEW#
+
+At the end of every boot, just before `Vidocq - Started in`, one INFO record says what has just started: the launch, the application layer, the configuration sources, the extensions, and a section for every library that contributes one. It is written for the moment something does not work — a key that nothing reads, an extension that did not start, a module that is not where it was expected — and for the bug report that has to say what ran. `Vidocq - Started in` stays the last line of a boot.
+
+A packaged application gets the summary, one line per section:
+
+.The `vidocq-runtime-cassini-rest-example` jlink image (`prod`)
+[source,text]
+----
+[INFO ][2026-09-18 14:18:32.141][main           ][i.v.r.c.r.StartupRecorder#log                ] : Vidocq startup report
+  launch      prod (auto: no dev or test signal) | report summary | details -Dvidocq.startup.report=detailed
+  layer       2 modules (boot-layer detection from io.vidocq.runtime.examples.rest)
+  extensions  chappe-engine, rest-cassini, chappe-mount-config, chappe-bootstrap
+  anomalies   none
+[INFO ][2026-09-18 14:18:32.142][main           ][i.v.r.c.VidocqBootstrap#start                ] : Vidocq - Started in 112.956 ms (process running for 539 ms)
+----
+
+The first boot of a dev launch gets the detailed report:
+
+.The same example launched from its `target/classes` (`dev`), its library jar taken from the local repository
+[source,text]
+----
+[INFO ][2026-09-18 14:18:49.712][main           ][i.v.r.c.r.StartupRecorder#log                ] : Vidocq startup report
+  launch      dev (auto: target/classes with a pom.xml above) | report detailed |
+              override -Dvidocq.launch.mode=prod
+  vidocq      0.4.0-SNAPSHOT on Java 25.0.3+9-LTS
+  phases      configure 20 ms | weaving 2 ms | scan 4 ms | beforeStart 0 ms | build 55 ms |
+              extensions 24 ms | audit 0 ms | report 2 ms
+layer         2 modules (boot-layer detection from io.vidocq.runtime.examples.rest)
+  io.vidocq.runtime.examples.rest    target/classes                                                 directory
+  io.vidocq.runtime.examples.extlib  ~/.m2/.../vidocq-runtime-external-rest-lib-0.4.0-SNAPSHOT.jar  jar
+  weaving     none
+configuration
+  sources     SystemProperties 400, Environment 300, ExternalFile(absent) 250, PropertiesFile 100
+  audited     vidocq.banner.*, vidocq.chappe.*, vidocq.console.*, vidocq.http.*, vidocq.launch.*,
+              vidocq.log.*, vidocq.startup.*
+extensions
+  100    chappe-engine        onStart 0 ms   io.vidocq.runtime.extensions.essentials.chappe (boot layer)
+  500    rest-cassini         onStart 1 ms   io.vidocq.runtime.extensions.jakartaee.core.cassini (boot layer)
+  7000   chappe-mount-config  onStart 16 ms  io.vidocq.runtime.extensions.essentials.chappe (boot layer)
+  10000  chappe-bootstrap     onStart 7 ms   io.vidocq.runtime.extensions.essentials.chappe (boot layer)       vidocq.chappe.*, vidocq.http.*
+anomalies     none
+[INFO ][2026-09-18 14:18:49.713][main           ][i.v.r.c.VidocqBootstrap#start                ] : Vidocq - Started in 113.185 ms (process running for 210 ms)
+----
+
+The whole report is one log record: one timestamp, printed in one piece, and nothing else can come between its lines. It is plain ASCII, indented with spaces and never coloured, so it reads the same in a terminal, a log file and a Windows console, through Vidocq's <<console-logging,console output>> or the JDK's own formatter.
+
+=== What it shows
+
+[cols="1,2,3"]
+|===
+| Section | `summary` | `detailed`
+
+| `launch`
+| The <<launch-mode,launch mode>> and the signal it was read from, the report level, and how to see more: `details -Dvidocq.startup.report=detailed`.
+| The same, with how to force the other mode instead: `override -Dvidocq.launch.mode=prod`.
+
+| `vidocq`
+| —
+| The Vidocq version and the Java version, taken from the <<startup-banner,banner>> when it printed them.
+
+| `phases`
+| — (`Started in` gives the total)
+| The time each phase took: `configure`, `weaving`, `scan`, `beforeStart`, `build`, `extensions` (every `onStart`), `audit`, and `report` (the report itself, its contributors included).
+
+| `layer`
+| How many modules the application layer has and how they were found: `boot-layer detection from <module>`, or `vidocq.app.path=` followed by file names; `no application layer` without one.
+| One line per module: its name, its archive and its kind (`directory`, `jar`, or `jrt` in a jlink image). Then `weaving`: `none`, who weaves the beans of an IDE build (`Vauban class loader, 1 planned bean: ...`, or the load-time weaving agent), or `failed (VAUBAN-009)`.
+
+| `configuration`
+| —
+| The configuration sources in lookup order, each with its ordinal; the provider whose sources replaced the native ones, if any; the namespaces whose keys are audited (<<vidocq-cfg-003>>). Never a value.
+
+| `extensions`
+| The extensions, in the order they started.
+| One line per extension: its priority, its name, how long its `onStart` took (`onStart failed`, or `not started` after a failure), its module and layer, the namespaces it declares in `configKeys()`.
+
+| a contributed section
+| Its summary line, when it has one.
+| Its title and how long it took to write (`slow` beyond 50 ms, which is not an anomaly), its summary line, then everything else it wrote. See xref:modules/vidocq-runtime-spi.adoc#startup-report-contributors[Contributing to the startup report].
+
+| `anomalies`
+| `none`, or how many and their codes: `2: VIDOCQ-CFG-001, VIDOCQ-CFG-003 (logged above)`, a code logged twice written `VIDOCQ-CFG-003 x2`.
+| One line per anomaly: its code and the first sentence of its message.
+|===
+
+The contributed sections follow the sections of the core: first those of the extensions that contribute one, in the order they started, then those of the other libraries. The report is made of what the boot already holds — the layer's resolved modules, the loaded extensions, the configuration sources — and its own time is the `report` phase of the detailed report.
+
+[#startup-report-level]
+=== Report level
+
+`vidocq.startup.report` chooses how much is printed: `auto` (the default), `off`, `summary` or `detailed`. An explicit level is honoured on every boot. `auto` follows the <<launch-mode,launch mode>>:
+
+[cols="3,1"]
+|===
+| Launch | `auto` gives
+
+| `dev`, first boot of the JVM
+| `detailed`
+
+| `dev`, every reload of the `vidocq dev` or `vidocq:dev` loop
+| `summary`
+
+| `test`
+| `summary`
+
+| `prod`
+| `summary`
+
+| An embedded deployment (`VidocqBootstrap.configure(List)`: the Arquillian container, the TCK)
+| `off`
+|===
+
+A dev launch shows everything once, then one line per section on every reload. An embedded deployment boots hundreds of times in one JVM, so it prints no report unless `vidocq.startup.report` asks for one — the banner is reduced to one line there too.
+
+`off` only removes the report. The contributors are still called, and every anomaly is still logged as its own warning. A value that is none of the four is reported as <<vidocq-cfg-001>> and read as `auto`. Like every key, it can be set with `-D`, an environment variable (`VIDOCQ_STARTUP_REPORT`) or `vidocq.properties`.
+
+[#startup-anomalies]
+=== Anomalies
+
+An anomaly is something wrong that does not stop the boot. Each one is its own WARNING record on the logger `io.vidocq.startup.anomaly`, logged the moment it is detected, its code first:
+
+[source,text]
+----
+[WARN ][2026-09-18 14:19:46.775][main           ][i.v.r.c.r.StartupAnomalies#warn              ] : [VIDOCQ-CFG-003] Configuration key 'vidocq.startup.reprot' is read by nothing and has no effect. Known keys in this namespace: vidocq.startup.report
+----
+
+It is logged at every report level, `off` included, and before the report, so a boot that fails later still shows it, and a log pipeline can alert on its code. The report only recalls the codes, in its `anomalies` section. A library can report anomalies of its own, under its own codes, from its section of the report (xref:modules/vidocq-runtime-spi.adoc#startup-report-contributors[Contributing to the startup report]).
+
+The core raises these codes.
+
+[#vidocq-cfg-001]
+==== VIDOCQ-CFG-001 — invalid value
+
+`vidocq.startup.report` or `vidocq.launch.mode` has a value that it does not accept. The key is read as `auto`, and the boot goes on.
+
+[source,text]
+----
+[VIDOCQ-CFG-001] Invalid value 'detaild' for vidocq.startup.report (auto, off, summary, detailed): using auto
+----
+
+It is logged while the configuration is read, before the banner. Fix the value; the message lists the accepted ones.
+
+[#vidocq-cfg-002]
+==== VIDOCQ-CFG-002 — audit failed
+
+The audit of the configured keys could not run: a configuration source could not list its keys, or an extension's `configKeys()` threw. Keys that nothing reads are then not reported on this boot, and the boot goes on.
+
+[source,text]
+----
+[VIDOCQ-CFG-002] Configuration key audit failed: java.lang.IllegalStateException: ...; keys that nothing reads are not reported
+----
+
+[#vidocq-cfg-003]
+==== VIDOCQ-CFG-003 — key read by nothing
+
+A configured `vidocq.*` key, under a namespace that the core or a loaded extension claims, is read by nothing: the application keeps the default without a word, and the mistake stays invisible whenever the configured value happens to be the default. The message lists the keys known in that namespace.
+
+[source,text]
+----
+[VIDOCQ-CFG-003] Configuration key 'vidocq.startup.reprot' is read by nothing and has no effect. Known keys in this namespace: vidocq.startup.report
+----
+
+The core claims `vidocq.log.`, `vidocq.console.`, `vidocq.banner.`, `vidocq.launch.` and `vidocq.startup.`; every extension claims the namespaces of its `configKeys()` (xref:modules/vidocq-runtime-spi.adoc#configuration-keys-audit[Configuration keys audit]). The detailed report lists the audited namespaces. Build-time keys such as `vidocq.mainClass` and the `vidocq.dev.*` keys are never reported.
+
+[#vauban-009]
+==== VAUBAN-009 — load-time weaving failed
+
+The beans of the bean index need load-time weaving, as those of an IDE build do, and it could not be prepared: `vauban-weaver` is not on the module path, `META-INF/vauban-beans.list` cannot be read, or the JVM refused the weaving agent. The message is Vauban's reason; the `layer` section of the detailed report shows `weaving failed (VAUBAN-009)`, and the beans that needed weaving may then fail the deployment.
+
+[source,text]
+----
+[VAUBAN-009] Load-time weaving could not be installed (...). Either build with Maven/Gradle (build-time weaving), run with -javaagent:vauban-weaver.jar=<plan>, or add the (ProxyLink) constructors manually.
+----
+
+Build with Maven or Gradle, which weave at compile time, or launch through a `@VidocqMain` trampoline, whose application layer weaves without an agent.
+
+[#vidocq-rpt-001]
+==== VIDOCQ-RPT-001 — contributor failed
+
+A startup report contributor could not be loaded or created, has no id (`null` or blank), threw from `id()`, `title()` or `order()`, or threw a `RuntimeException` or a `LinkageError` from `contribute`. The record carries the stack trace. Its section is left out, the anomalies it already reported stay, and the boot goes on. Any other `Error` is not caught.
+
+[source,text]
+----
+[VIDOCQ-RPT-001] Startup report contributor 'translate' (com.example.translate.report.TranslateReport) failed; its section is skipped
+----
+
+[#vidocq-rpt-002]
+==== VIDOCQ-RPT-002 — duplicate section id
+
+Two contributors of different classes use the same id: the second one is skipped. So is a contributor whose id names a section of the core (`launch`, `vidocq`, `phases`, `layer`, `configuration`, `extensions` or `anomalies`). The same class found twice is not an anomaly: see xref:modules/vidocq-runtime-spi.adoc#report-twins[Layer twins].
+
+[source,text]
+----
+[VIDOCQ-RPT-002] Contributors com.example.translate.report.TranslateReport and com.acme.i18n.TranslateReport both use id 'translate'; com.acme.i18n.TranslateReport is skipped
+----
+
+[#startup-report-failure]
+=== When the boot fails
+
+A boot that fails, in `configure()` or in `start()`, logs one WARNING record on `io.vidocq.startup` before the exception goes on, at every report level: what was running, the time since the bootstrap was created, the exception class and the codes of the anomalies already logged. In a dev launch, the partial report follows in the same record, unless the report level is `off`:
+
+.A dev launch whose port is already taken (shortened)
+[source,text]
+----
+[WARN ][2026-09-18 14:19:58.822][main           ][i.v.r.c.r.StartupRecorder#logFailure         ] : Vidocq startup failed in onStart chappe-bootstrap after 1129 ms (io.vidocq.chappe.api.ChappeException$ServerException); anomalies already logged: none
+Vidocq startup report (partial)
+  launch      dev (auto: target/classes with a pom.xml above) | report detailed |
+              override -Dvidocq.launch.mode=prod
+  vidocq      0.4.0-SNAPSHOT on Java 25.0.3+9-LTS
+  phases      configure 19 ms | weaving 2 ms | scan 4 ms | beforeStart 0 ms | build 54 ms
+...
+extensions
+  100    chappe-engine        onStart 0 ms    io.vidocq.runtime.extensions.essentials.chappe (boot layer)
+  500    rest-cassini         onStart 0 ms    io.vidocq.runtime.extensions.jakartaee.core.cassini (boot layer)
+  7000   chappe-mount-config  onStart 15 ms   io.vidocq.runtime.extensions.essentials.chappe (boot layer)
+  10000  chappe-bootstrap     onStart failed  io.vidocq.runtime.extensions.essentials.chappe (boot layer)       vidocq.chappe.*, vidocq.http.*
+anomalies     none
+Exception in thread "main" io.vidocq.chappe.api.ChappeException$ServerException: Failed to bind to 127.0.0.1:18082
+	at io.vidocq.chappe.core@0.4.0-SNAPSHOT/io.vidocq.chappe.core.ChappeServer.start(ChappeServer.java:102)
+	...
+Caused by: java.net.BindException: Address already in use
+----
+
+What was running is a phase — `configure`, `weaving`, `scan`, `beforeStart`, `build`, `extensions`, `audit`, `report` — or, more precisely, the extension or the contributor it was calling: `configure rest-cassini`, `beforeStart rest-cassini`, `onStart chappe-bootstrap`, `contributor mcp`. The exception is the one that was thrown, untouched: not wrapped, nothing added to it, with its own stack trace. The contributors are not called when the boot fails before the report, since the container and the routes may be incomplete: a partial report has the sections of the core only.
+
+The report of a boot that went well never fails it: if the report cannot be produced, one WARNING, `Startup report skipped: ...`, says why, and the boot goes on.
+
+[#startup-report-never-printed]
+=== What is never printed
+
+The report goes to logs that are shared, pasted into issues and kept. It prints names and counts, never what an application keeps to itself:
+
+* **No configuration value.** The `configuration` section names the sources and their ordinals, never what they hold. The only configured values the report shows are the launch mode, when `vidocq.launch.mode` or a `vidocq.profile` named after a mode set it, the report level, and `vidocq.app.path`, whose archives the summary prints as file names.
+* **No system property, environment variable or JVM argument as it is** — a `-D` can carry a password. Only what is derived from them: `IntelliJ agent`, `target/classes with a pom.xml above`.
+* **No secret.** A contributor reports a secret as `configured` or `not configured`; the API has no way to pass its value.
+* **No directory in the summary**, the default of a packaged application: the core's sections print file names only (`vidocq.app.path=.../app`). The detailed report prints a path relative to the working directory, or under `~` for the home directory, or else absolute; a path of more than four names keeps its first two and its last one: `~/.m2/.../langchain4j-cdi-mcp-server-1.4.0-SNAPSHOT.jar`.
+* **No forged line.** Every value is cleaned before it is printed: control characters — line breaks, `ESC`, and the invisible formatting characters such as bidirectional overrides — become `?`, so no value can start a line that looks like another record. A value longer than 200 characters is cut and ends with `...`; a list or a table stops after 50 items with `... and N more`.
+
+=== Loggers
+
+[cols="2,3"]
+|===
+| Logger | Records
+
+| `io.vidocq.startup`
+| The report, one INFO record; the failure of a boot, one WARNING record.
+
+| `io.vidocq.startup.anomaly`
+| One WARNING record per anomaly, `[CODE] ...`.
+|===
+
+To hide the report, prefer `vidocq.startup.report=off`, which keeps everything else. Through the logging configuration, `io.vidocq.startup.level=WARNING` hides the report and keeps the warnings; `OFF` would silence the failure record and, since `io.vidocq.startup.anomaly` inherits the level of `io.vidocq.startup`, the anomalies as well.
+
+=== Configuration
+
+[cols="2,1,4"]
+|===
+| Key | Default | Description
+
+| `vidocq.startup.report` [.tag-new]#NEW#
+| `auto`
+| `auto`, `off`, `summary` or `detailed` (<<startup-report-level>>). Another value is reported as <<vidocq-cfg-001>> and means `auto`.
+
+| `vidocq.launch.mode` [.tag-new]#NEW#
+| `auto`
+| The launch mode that `auto` follows, detected unless forced (<<launch-mode>>).
+|===
 
 [#console-logging]
 == Console logging [.tag-new]#NEW#

@@ -25,7 +25,7 @@ List indexed from the existing sources:
 | The extension point — lifecycle interface with `name()`, `priority()` (lower runs first, default 1000), `configure(VidocqConfiguration)`, `beforeStart(VaubanContainerBuilder)`, `onStart(ExtensionContext)`, `onStop()` and `configKeys()`. Discovered via `ServiceLoader`.
 
 | `ExtensionContext`
-| Handed to `onStart` — `container()` (Vauban), `beanManager()`, `configuration()` (legacy string API), `config()` (typed API).
+| Handed to `onStart` — `container()` (Vauban), `beanManager()`, `configuration()` (legacy string API), `config()` (typed API), `launchMode()` [.tag-new]#NEW# (<<launch-mode-api>>).
 
 | `VidocqConfiguration`
 | String-property view passed to `configure` — `property(key)` returns `Optional<String>`, plus `property(key, default)` and `portFor(extensionName, defaultPort)`.
@@ -41,6 +41,18 @@ List indexed from the existing sources:
 
 | `VidocqApp` / `@VidocqMain`
 | Application-side entry points — the class run inside the Vauban application layer by `Vidocq.run(Class, args)`, and the zero-config IDE trampoline annotation.
+
+| `report.StartupReportContributor` [.tag-new]#NEW#
+| Adds a section to the startup report — `id()`, `title()`, `order()`, `contribute(context, section)`. Implemented by an extension, or declared as a service (<<startup-report-contributors>>).
+
+| `report.StartupReportContext` [.tag-new]#NEW#
+| What a contributor reads — `verbosity()`, `launchMode()`, `hasBeanOfType(String)`, `lookup(Class)`, `routeUrls(String)`.
+
+| `report.StartupReportSection` [.tag-new]#NEW#
+| Where a contributor writes — `summary`, `row`, `list`, `secret`, `listener`, `route`, `anomaly`.
+
+| `report.Verbosity` / `report.LaunchMode` [.tag-new]#NEW#
+| The level of the report (`OFF`, `SUMMARY`, `DETAILED`) and the launch mode (`DEV`, `TEST`, `PROD`, with `label()` and `parse(String)`).
 |===
 
 == Writing an extension — skeleton
@@ -102,9 +114,198 @@ That is all. At startup the runtime's `ExtensionLoader` discovers the `provides`
 
 Priorities express real ordering constraints between extensions. The built-in HTTP stack illustrates the idiom: the Chappe engine prepares the server at priority 100, contributors such as the Cassini REST extension mount their handlers around priority 500, and the listener bootstrap opens the sockets last at priority 10 000. Pick a value between the extensions you must run after and before; unrelated extensions can keep the default 1000.
 
+[#configuration-keys-audit]
 == Configuration keys audit
 
-Declaring your keys in `configKeys()` is optional but recommended: the runtime's `ConfigKeyAudit` compares every configured `vidocq.*` key against the union of declared keys and warns at startup about keys nobody consumes — the typical typo that otherwise silently keeps the default. Entries ending in `*` declare a prefix (`"vidocq.greeting.*"`).
+Declaring your keys in `configKeys()` is optional but recommended: the runtime's `ConfigKeyAudit` compares every configured `vidocq.*` key against the union of declared keys and warns at startup about keys nobody consumes — the typical typo that otherwise silently keeps the default. The warning carries the code xref:modules/vidocq-runtime-core.adoc#vidocq-cfg-003[`VIDOCQ-CFG-003`] [.tag-new]#NEW#. Entries ending in `*` declare a prefix (`"vidocq.greeting.*"`).
+
+[#launch-mode-api]
+== Reading the launch mode [.tag-new]#NEW#
+
+`ExtensionContext.launchMode()` returns the xref:modules/vidocq-runtime-core.adoc#launch-mode[launch mode] Vidocq resolved for this boot: `LaunchMode.DEV`, `TEST` or `PROD`, from the package `io.vidocq.runtime.spi.report`. An extension reads it to offer what only makes sense while developing, rather than reading `vidocq.profile` itself:
+
+[source,java]
+----
+@Override
+public void onStart(ExtensionContext ctx) {
+    if (ctx.launchMode() == LaunchMode.DEV) {
+        // what only makes sense while developing
+    }
+}
+----
+
+It is an observation, and the same for every extension of a boot: the reloads of the dev loop read it again. `launchMode()` is a `default` method that returns `PROD`, so an `ExtensionContext` written by hand, such as a test fake, compiles unchanged.
+
+[#startup-report-contributors]
+== Contributing to the startup report [.tag-new]#NEW#
+
+The xref:modules/vidocq-runtime-core.adoc#startup-report[startup report] that ends every boot has a section for every library that contributes one: what it found, what it serves, what is wrong with it. The contract is the package `io.vidocq.runtime.spi.report` of this module, so a contributor needs `requires io.vidocq.runtime.spi`, like an extension, and nothing else: never `vidocq-runtime-core`, which implements it.
+
+A contributor is normally a Vidocq extension. An extension that also implements `StartupReportContributor` is found with no second declaration, and its section comes first, in the order the extensions start:
+
+[source,java]
+----
+public class GreetingExtension implements VidocqExtension, StartupReportContributor {
+    // name(), onStart(...) as above, then id() and contribute(...)
+}
+----
+
+A library that is not an extension declares its contributor as a service. Its section comes after those of the extensions, by ascending `order()` (1000 by default), then by `id()`.
+
+=== The contract
+
+[cols="1,3"]
+|===
+| Method | Contract
+
+| `StartupReportContributor.id()`
+| A stable lowercase id, such as `translate`: the name of the section, and what keeps it from appearing twice. `null` or blank skips the contributor (xref:modules/vidocq-runtime-core.adoc#vidocq-rpt-001[`VIDOCQ-RPT-001`]); an id already taken by another class, or by a section of the core, skips the second one (xref:modules/vidocq-runtime-core.adoc#vidocq-rpt-002[`VIDOCQ-RPT-002`]).
+
+| `title()`, `order()`
+| The title printed after the id in the detailed report, the id by default; the position among the contributors declared as services.
+
+| `contribute(context, section)`
+| Writes the section. Called once per boot, on the booting thread, after every `onStart` and before `Vidocq - Started in`, at every report level, `OFF` included, so that an anomaly is never lost.
+
+| `StartupReportContext.verbosity()`, `launchMode()`
+| The level of this report, and the launch mode of this boot. The header already gives the reason of the mode: a section never repeats it.
+
+| `hasBeanOfType(String)`
+| Whether an enabled bean has a bean type of this binary name, its class or one of its interfaces. It compares names and never creates the bean.
+
+| `lookup(Class)`
+| The bean of this type with the default qualifier; empty when there is none, when several resolve, or when creating it fails. A `@Dependent` instance it creates is destroyed when `contribute` returns.
+
+| `routeUrls(String)`
+| The absolute URLs of the routes of a handler class, as the sections written so far declare them with `route` and `listener`: the contributors called last see every route.
+
+| `StartupReportSection.summary(text)`
+| The one line that stands for the section, printed at `SUMMARY` and `DETAILED`; the last call wins.
+
+| `row(key, value)`, `list(key, items)`
+| A row, a list: `DETAILED` only.
+
+| `secret(key, configured)`
+| `configured` or `not configured`, `DETAILED` only. The value never reaches the report.
+
+| `listener(name, boundBaseUri)`, `route(listener, method, path, handler)`
+| For HTTP servers and routing bricks: Vidocq prints each route with the base URI of its listener, whichever section declared it. `handler` is the binary name of the class, then `#` and the method.
+
+| `anomaly(code, message, hint)`
+| Something wrong that does not stop the boot, under a code of your own, such as `TRANSLATE-001`. Logged at once, at every level, as one WARNING record `[CODE] message hint` on `io.vidocq.startup.anomaly`, and recalled in the `anomalies` section. `hint` may be `null`.
+|===
+
+=== A minimal contributor
+
+A translation library, which is not an extension, says how many languages its `Translator` bean knows, and warns when the bean is missing:
+
+.`src/main/java/com/example/translate/report/TranslateReport.java`
+[source,java]
+----
+package com.example.translate.report;
+
+import com.example.translate.Translator;
+import io.vidocq.runtime.spi.report.StartupReportContext;
+import io.vidocq.runtime.spi.report.StartupReportContributor;
+import io.vidocq.runtime.spi.report.StartupReportSection;
+
+public final class TranslateReport implements StartupReportContributor {
+
+    @Override
+    public String id() {
+        return "translate";
+    }
+
+    @Override
+    public String title() {
+        return "Translation library";
+    }
+
+    @Override
+    public void contribute(StartupReportContext context, StartupReportSection section) {
+        Translator translator = context.lookup(Translator.class).orElse(null);
+        if (translator == null) {
+            section.anomaly("TRANSLATE-001", "No Translator bean is deployed, so /translate answers 404.",
+                    "Add translate-cdi to the application.");
+            return;
+        }
+        section.summary(translator.languages().size() + " languages, default " + translator.defaultLanguage())
+                .row("default", translator.defaultLanguage())
+                .list("languages", translator.languages())
+                .secret("apiKey", translator.hasApiKey());
+    }
+}
+----
+
+It is declared twice, because the JDK reads one declaration or the other depending on where the jar is: `provides` in `module-info.java` on the module path, where the JDK ignores `META-INF/services` for the classes of a named module, and a `META-INF/services` file on the class path.
+
+.`src/main/java/module-info.java`
+[source,java]
+----
+module com.example.translate {
+    requires io.vidocq.runtime.spi;
+    // ... the library's own requires and exports
+
+    provides io.vidocq.runtime.spi.report.StartupReportContributor
+        with com.example.translate.report.TranslateReport;
+}
+----
+
+.`src/main/resources/META-INF/services/io.vidocq.runtime.spi.report.StartupReportContributor`
+[source,text]
+----
+com.example.translate.report.TranslateReport
+----
+
+The summary report gets its summary line:
+
+[source,text]
+----
+  extensions  chappe-engine, rest-cassini, chappe-mount-config, chappe-bootstrap
+  translate   2 languages, default en
+  anomalies   none
+----
+
+The detailed report gets its title and the time it took to write, then everything it wrote, aligned by Vidocq:
+
+[source,text]
+----
+translate     Translation library | 0 ms
+  2 languages, default en
+  default     en
+  languages   en, fr
+  apiKey      not configured
+anomalies     none
+----
+
+Without the bean, the anomaly is logged the moment it is reported, and recalled at the end of the report:
+
+[source,text]
+----
+[WARN ][2026-09-18 14:37:31.305][main           ][i.v.r.c.r.StartupAnomalies#warn              ] : [TRANSLATE-001] No Translator bean is deployed, so /translate answers 404. Add translate-cdi to the application.
+...
+translate     Translation library | 0 ms
+anomalies     1 (logged above)
+  TRANSLATE-001  No Translator bean is deployed, so /translate answers 404.
+----
+
+=== Rules
+
+* **Read memory only.** No I/O, no network, no blocking call, no bean you do not need: `contribute` runs on the booting thread, before `Vidocq - Started in`. Its time is printed in the detailed report, followed by `slow` beyond 50 ms.
+* **Pass plain values.** Never format, pad, truncate or log: Vidocq aligns the rows, replaces control characters with `?`, cuts a value at 200 characters and a list at 50 items.
+* **Keep the summary line short and public.** It is printed by default in production: counts and names, no absolute path, no configured value. A secret goes through `secret(key, configured)`, which never takes its value.
+* **Skip what will not be printed.** Rows and lists only appear at `DETAILED`; a contributor that has to compute them can test `context.verbosity()` first.
+* **A failure costs the section, never the boot.** A `RuntimeException` or a `LinkageError` thrown by the contributor, or while it is loaded or created (a `ServiceConfigurationError` included), drops its section with xref:modules/vidocq-runtime-core.adoc#vidocq-rpt-001[`VIDOCQ-RPT-001`] and its stack trace; the anomalies it already reported stay. Any other `Error` is not caught.
+
+[#report-twins]
+=== Layer twins
+
+`Vidocq.run` loads the application's modules a second time, in the Vauban application layer, so the service loader can find the same contributor class twice: once in that layer, once in the boot layer, the application layer's first. Vidocq keeps one contributor per class name — the first found — before creating either, so each section appears once. For the same reason, an extension that is also declared as a contributor service is called once, as an extension.
+
+What the rule means for a contributor:
+
+* Two contributor classes must not share an id: only the same class found twice is a twin, and a different class with the same id is skipped with xref:modules/vidocq-runtime-core.adoc#vidocq-rpt-002[`VIDOCQ-RPT-002`].
+* The two copies of a class are two different `Class` objects. To test whether a bean exists, `hasBeanOfType(String)` compares binary names, so it answers the same whichever copy asks.
 
 == Next steps
 

@@ -14,7 +14,7 @@ Operational reference for Vidocq Runtime — Maven coordinates, MicroProfile Con
 | Parent POM (Model 4.0.0)
 
 | `io.vidocq.runtime:vidocq-runtime-spi:{project-version}`
-| Public SPI (`VidocqExtension`, `ExtensionContext`, `VidocqConfig`)
+| Public SPI (`VidocqExtension`, `ExtensionContext`, `VidocqConfig`, the startup report contributors [.tag-new]#NEW#)
 
 | `io.vidocq.runtime:vidocq-runtime-core:{project-version}`
 | Runtime engine (boot orchestrator, lifecycle)
@@ -39,7 +39,7 @@ Operational reference for Vidocq Runtime — Maven coordinates, MicroProfile Con
 | Module | Contents
 
 | `io.vidocq.runtime.spi`
-| Public SPI interfaces (`VidocqExtension`, `ExtensionContext`, `VidocqConfiguration`, `config.*`). Must be declared `requires` in any extension.
+| Public SPI interfaces (`VidocqExtension`, `ExtensionContext`, `VidocqConfiguration`, `config.*`, `report.*` [.tag-new]#NEW#). Must be declared `requires` in any extension, and in any startup report contributor.
 
 | `io.vidocq.runtime.core`
 | Orchestration engine — `io.vidocq.runtime.core.Vidocq` (the `main`/`run` entry point), `VidocqBootstrap`, `ExtensionLoader`, built-in config sources.
@@ -105,8 +105,12 @@ The `io.vidocq.runtime.extensions.*` modules each correspond to a built-in exten
 | Console colours: `auto`, `always` or `never`. A non-empty `NO_COLOR` environment variable always disables them.
 
 | `vidocq.launch.mode` [.tag-new]#NEW#
-| (detected)
-| Launch mode shown by the startup banner: `dev`, `test` or `prod`, forced instead of detected. An unknown value logs a warning and lets the detection decide. See xref:modules/vidocq-runtime-core.adoc#launch-mode[Launch mode].
+| `auto`
+| Launch mode shown by the startup banner and the startup report, and returned by `ExtensionContext.launchMode()`: `dev`, `test` or `prod`, forced instead of detected; `auto` detects it. Another value is reported as `VIDOCQ-CFG-001` and means `auto`. See xref:modules/vidocq-runtime-core.adoc#launch-mode[Launch mode].
+
+| `vidocq.startup.report` [.tag-new]#NEW#
+| `auto`
+| Level of the startup report: `auto` (`detailed` on the first boot of a dev launch, `summary` otherwise, `off` for an embedded deployment), `off`, `summary` or `detailed`. Another value is reported as `VIDOCQ-CFG-001` and means `auto`. See xref:modules/vidocq-runtime-core.adoc#startup-report[Startup report].
 
 | `vidocq.banner.mode` [.tag-new]#NEW#
 | `auto`
@@ -122,12 +126,13 @@ TLS is not implemented yet: `vidocq.https.port`, `vidocq.tls.cert` and `vidocq.t
 
 [NOTE]
 ====
-A `vidocq.*` key that no extension consumes is applied by nobody: the application silently keeps
+A `vidocq.*` key that nothing consumes is applied by nobody: the application silently keeps
 the default, and the mistake stays invisible whenever the configured value happens to *be* the
 default. Since 0.3.0 the runtime reports such a key as a startup warning, for every namespace an
 extension claims through `VidocqExtension.configKeys()`. The core claims `vidocq.log.`,
-`vidocq.console.`, `vidocq.banner.` and `vidocq.launch.` itself, so a typo such as `vidocq.console.colour`
-or `vidocq.banner.enabled` is reported too.
+`vidocq.console.`, `vidocq.banner.`, `vidocq.launch.` and `vidocq.startup.` itself, so a typo such as
+`vidocq.console.colour`, `vidocq.banner.enabled` or `vidocq.startup.reprot` is reported too. The warning
+carries the code xref:modules/vidocq-runtime-core.adoc#vidocq-cfg-003[`VIDOCQ-CFG-003`] [.tag-new]#NEW#.
 ====
 
 [NOTE]
@@ -246,7 +251,7 @@ Source: `vidocq-runtime-spi/src/main/java/io/vidocq/runtime/spi/`.
 | Lifecycle interface — `name()`, `priority()` (lower runs first, default 1000), `configure(VidocqConfiguration)`, `beforeStart(VaubanContainerBuilder)`, `onStart(ExtensionContext)`, `onStop()`, `configKeys()`. Registered with `provides … with …` in `module-info.java` (or `META-INF/services`), discovered via `ServiceLoader`.
 
 | `ExtensionContext`
-| Passed to `onStart` — `container()`, `beanManager()`, `configuration()` (legacy), `config()` (typed).
+| Passed to `onStart` — `container()`, `beanManager()`, `configuration()` (legacy), `config()` (typed), `launchMode()` [.tag-new]#NEW#.
 
 | `VidocqConfiguration`
 | String-property configuration passed to `configure` — `property(key)` returns `Optional<String>`, `property(key, default)`, `portFor(extensionName, defaultPort)`.
@@ -259,6 +264,43 @@ Source: `vidocq-runtime-spi/src/main/java/io/vidocq/runtime/spi/`.
 
 | `@VidocqMain`
 | Annotation for the zero-config IDE trampoline `main` — boots the runtime in the Vauban layer.
+
+| `report.StartupReportContributor` [.tag-new]#NEW#
+| Adds a section to the startup report. Implemented by an extension, or declared as a service with `provides … with …` in `module-info.java` and `META-INF/services`. See xref:modules/vidocq-runtime-spi.adoc#startup-report-contributors[Contributing to the startup report].
+
+| `report.StartupReportContext` / `report.StartupReportSection` [.tag-new]#NEW#
+| What a contributor reads (level, launch mode, beans, routes) and where it writes (summary line, rows, lists, secrets, listeners, routes, anomalies).
+
+| `report.Verbosity` / `report.LaunchMode` [.tag-new]#NEW#
+| `OFF`, `SUMMARY`, `DETAILED`; `DEV`, `TEST`, `PROD`.
+|===
+
+[#startup-anomaly-codes]
+== Startup anomaly codes [.tag-new]#NEW#
+
+Each is one WARNING record on `io.vidocq.startup.anomaly`, its code first, logged at every level of the startup report. See xref:modules/vidocq-runtime-core.adoc#startup-anomalies[Anomalies].
+
+[cols="1,3"]
+|===
+| Code | Raised when
+
+| xref:modules/vidocq-runtime-core.adoc#vidocq-cfg-001[`VIDOCQ-CFG-001`]
+| `vidocq.startup.report` or `vidocq.launch.mode` has a value it does not accept; `auto` is used.
+
+| xref:modules/vidocq-runtime-core.adoc#vidocq-cfg-002[`VIDOCQ-CFG-002`]
+| The audit of the configured keys failed; unread keys are not reported on this boot.
+
+| xref:modules/vidocq-runtime-core.adoc#vidocq-cfg-003[`VIDOCQ-CFG-003`]
+| A configured key under an audited namespace is read by nothing.
+
+| xref:modules/vidocq-runtime-core.adoc#vauban-009[`VAUBAN-009`]
+| Load-time weaving was needed and could not be prepared.
+
+| xref:modules/vidocq-runtime-core.adoc#vidocq-rpt-001[`VIDOCQ-RPT-001`]
+| A startup report contributor could not be loaded, created or identified, or failed; its section is skipped.
+
+| xref:modules/vidocq-runtime-core.adoc#vidocq-rpt-002[`VIDOCQ-RPT-002`]
+| Two contributors of different classes use the same id, or one uses the id of a section of the core; the second is skipped.
 |===
 
 == Bugs and benchmarks
