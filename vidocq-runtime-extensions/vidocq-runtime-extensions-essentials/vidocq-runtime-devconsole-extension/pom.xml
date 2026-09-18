@@ -68,6 +68,8 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
                     <!-- The module does not require the core: its tests read it for the key audit only. -->
+                    <!-- Replaces any inherited argLine (none today): a later jacoco or agent argLine
+                         must be added here too, or it is silently dropped for this module. -->
                     <argLine>--add-reads io.vidocq.runtime.extensions.essentials.devconsole=io.vidocq.runtime.core</argLine>
                 </configuration>
             </plugin>
