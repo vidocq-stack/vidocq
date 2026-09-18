@@ -68,7 +68,7 @@ final class BannerTestSupport {
     }
 
     static StartupBanner.Launch launch(BannerMode override, LaunchModeResolver.Resolution mode, DebugAgent debug) {
-        return new StartupBanner.Launch(override, false, false, mode, debug, null, null);
+        return new StartupBanner.Launch(override, false, false, mode, debug, null, null, null);
     }
 
     /** A mode read from a deliberate signal, as {@link LaunchModeResolver} returns it. */
@@ -118,7 +118,13 @@ final class BannerTestSupport {
 
     static StartupIdentity identity(BuildInfo vidocq, String vendor, LaunchModeResolver.Resolution launch,
                                     String debug, String appName, String appVersion) {
-        return new StartupIdentity(vidocq, "25+36-LTS", vendor, launch, debug, appName, appVersion, List.of());
+        return identity(vidocq, vendor, launch, debug, null, appName, appVersion);
+    }
+
+    static StartupIdentity identity(BuildInfo vidocq, String vendor, LaunchModeResolver.Resolution launch,
+                                    String debug, String devConsole, String appName, String appVersion) {
+        return new StartupIdentity(vidocq, "25+36-LTS", vendor, launch, debug, devConsole, appName, appVersion,
+                List.of());
     }
 
     static Instant instant(String value) {

@@ -95,10 +95,11 @@ public final class StartupBanner {
      * @param debug              the JDWP agent of this JVM, or {@code null} when it runs without one
      * @param appModule          the application module, or {@code null}
      * @param appLayer           the application layer installed by Vidocq, or {@code null}
+     * @param devConsole         the dev console of this boot, or {@code null} when it is not there or is off
      */
     public record Launch(BannerMode override, boolean embeddedDeployment, boolean testRuntime,
                          LaunchModeResolver.Resolution launchMode, DebugAgent debug, Module appModule,
-                         ModuleLayer appLayer) {
+                         ModuleLayer appLayer, DevConsole devConsole) {
 
         /**
          * Whether a developer is at the console, which shows the art without a terminal: a dev mode read
@@ -110,16 +111,39 @@ public final class StartupBanner {
         }
     }
 
+    /**
+     * The dev console a boot starts, as it is configured: the core reads it before any extension is loaded, to
+     * promise its address on the context line and to have every row of the report collected for it. The bind
+     * happens later, and the console's own URL record says where it really listens.
+     *
+     * @param host the configured host, {@code 127.0.0.1} by default
+     * @param port the configured port, {@code 8888} by default; {@code 0} for a free one
+     */
+    public record DevConsole(String host, int port) {
+
+        /**
+         * The context line segment, {@code devconsole :8888} on a loopback address, {@code devconsole
+         * <host>:<port>} otherwise; {@code null} for a free port, which only the bind knows.
+         */
+        public String segment() {
+            return DevConsoleProbe.segment(host, port);
+        }
+    }
+
     private StartupBanner() {}
 
-    /** The launch of this JVM: its {@link LaunchModeResolver resolved mode} and its debugger. */
+    /**
+     * The launch of this JVM: its {@link LaunchModeResolver resolved mode}, its debugger and its dev console,
+     * looked for with the context class loader, which sees the extensions of the boot.
+     */
     public static Launch launch(VidocqConfig config, BannerMode override, boolean embeddedDeployment,
                                 Module appModule, ModuleLayer appLayer) {
         ConsoleSupport console = ConsoleSupport.current();
         LaunchModeResolver.Resolution launchMode = LaunchModeResolver.resolve(
                 LaunchModeResolver.Inputs.current(config::getValue, appModule, console));
         return new Launch(override, embeddedDeployment, testRuntime(), launchMode,
-                DebugAgent.detect(console.jvmArguments()).orElse(null), appModule, appLayer);
+                DebugAgent.detect(console.jvmArguments()).orElse(null), appModule, appLayer,
+                DevConsoleProbe.probe(config::getValue, launchMode.mode(), contextLoader()));
     }
 
     /** Shows the banner unless this JVM already did; never throws. */

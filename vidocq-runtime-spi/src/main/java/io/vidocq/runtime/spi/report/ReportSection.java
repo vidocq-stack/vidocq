@@ -33,8 +33,8 @@ import java.util.Objects;
  * </pre>
  *
  * @param id       the name of the section, printed first, such as {@code layer}; never {@code null}
- * @param headline what follows the id on the first line of the section in the detailed report, or
- *                 {@code null} for the id alone
+ * @param headline what follows the id on the first line of the section in the detailed report, without the
+ *                 time its contributor took to write it, or {@code null} for the id alone
  * @param summary  the value of the one line the section has in the summary report, or {@code null} when
  *                 it has none there
  * @param lines    the lines under the first one in the detailed report, in order; never {@code null}, an

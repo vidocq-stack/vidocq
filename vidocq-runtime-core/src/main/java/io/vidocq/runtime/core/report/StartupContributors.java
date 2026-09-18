@@ -58,9 +58,12 @@ import java.util.Set;
  */
 public final class StartupContributors {
 
-    /** The ids of the sections the core writes itself: no contributor may take one. */
+    /**
+     * The ids no contributor may take: those of the sections the core writes itself, and those of the dev
+     * console's own panels, {@code startup} and {@code jvm}, which it shows next to the contributed ones.
+     */
     static final Set<String> CORE_IDS = Set.of("launch", "vidocq", "phases", CoreSections.LAYER,
-            CoreSections.CONFIGURATION, CoreSections.EXTENSIONS, "anomalies");
+            CoreSections.CONFIGURATION, CoreSections.EXTENSIONS, "anomalies", "startup", "jvm");
     /**
      * How many providers the service loader may fail to load before discovery stops: a service file that cannot
      * be read fails again on every attempt.
@@ -80,19 +83,35 @@ public final class StartupContributors {
     record Contributor(StartupReportContributor instance, String id, String title, String className) {}
 
     /**
+     * What the contributors of a boot wrote: their sections, and the contributors that wrote them, the very
+     * instances, in the same order. A contributor that failed has neither.
+     *
+     * @param sections     the sections, in the order of the report
+     * @param contributors the contributors whose sections these are, one per section
+     */
+    public record Contributed(List<Section> sections, List<StartupReportContributor> contributors) {
+
+        public Contributed {
+            sections = List.copyOf(sections);
+            contributors = List.copyOf(contributors);
+        }
+    }
+
+    /**
      * Finds the contributors of a boot, has each write its section, and returns the sections in the order of the
-     * report. Never throws for a contributor: see the class description.
+     * report, with the contributors that wrote them. Never throws for a contributor: see the class description.
      *
      * @param extensions the extensions, in the order they started
      * @param loader     the loader whose services are looked up: the context class loader of the boot
-     * @param verbosity  the level of the report
+     * @param verbosity  the level the contributors are given: that of the report, or {@code detailed} when every
+     *                   row is wanted whatever the report shows, as for the dev console
      * @param launchMode the launch mode of the boot
      * @param beans      the bean manager of the container, or {@code null}
      * @param recorder   the recorder of the boot, which logs and keeps the anomalies
      */
-    public static List<Section> contribute(List<? extends VidocqExtension> extensions, ClassLoader loader,
-                                           Verbosity verbosity, LaunchMode launchMode, BeanManager beans,
-                                           StartupRecorder recorder) {
+    public static Contributed contribute(List<? extends VidocqExtension> extensions, ClassLoader loader,
+                                         Verbosity verbosity, LaunchMode launchMode, BeanManager beans,
+                                         StartupRecorder recorder) {
         return call(discover(extensions, loader, recorder), new ContributorContext(verbosity, launchMode, beans),
                 recorder);
     }
@@ -240,11 +259,11 @@ public final class StartupContributors {
     // ---------------------------------------------------------------------------------------------- calls
 
     /**
-     * Has each contributor write its section, in order, and returns the sections of those that did not fail.
-     * An {@link Error} other than a {@link LinkageError} goes through, the {@code recorder} naming the
-     * contributor it came from.
+     * Has each contributor write its section, in order, and returns the sections of those that did not fail, with
+     * those contributors. An {@link Error} other than a {@link LinkageError} goes through, the {@code recorder}
+     * naming the contributor it came from.
      */
-    static List<Section> call(List<Contributor> contributors, ContributorContext context, StartupRecorder recorder) {
+    static Contributed call(List<Contributor> contributors, ContributorContext context, StartupRecorder recorder) {
         record Written(Contributor contributor, ContributedSection section, long nanos) {}
         List<Written> written = new ArrayList<>();
         for (Contributor contributor : contributors) {
@@ -271,10 +290,12 @@ public final class StartupContributors {
         }
         Map<String, String> listeners = ContributedSection.listeners(kept);
         List<Section> sections = new ArrayList<>();
+        List<StartupReportContributor> instances = new ArrayList<>();
         for (Written section : written) {
             sections.add(section.section().toSection(section.contributor().title(), section.nanos(), listeners));
+            instances.add(section.contributor().instance());
         }
-        return sections;
+        return new Contributed(sections, instances);
     }
 
     // ---------------------------------------------------------------------------------------------- anomalies

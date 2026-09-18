@@ -106,6 +106,60 @@ class StartupIdentityTest {
     }
 
     @Test
+    void theDevConsoleFollowsTheDebugger() {
+        assertEquals("Java 25+36-LTS | dev (vidocq:dev reload loop) | debug *:5005 | devconsole :8888 | app 1.0",
+                identity(SNAPSHOT_DIRTY, null, dev("vidocq:dev reload loop"), "debug *:5005", "devconsole :8888",
+                        "app", "1.0").contextLine());
+        assertEquals("Java 25+36-LTS | dev (IntelliJ agent) | devconsole 0.0.0.0:9000",
+                identity(SNAPSHOT_DIRTY, null, dev("IntelliJ agent"), null, "devconsole 0.0.0.0:9000", null, null)
+                        .contextLine());
+    }
+
+    @Test
+    void theDevConsoleGoesAfterTheNameAndBeforeTheDebugger() {
+        StartupIdentity id = identity(SNAPSHOT_DIRTY, "Eclipse Adoptium", dev("profile dev"), "debug *:5005",
+                "devconsole :8888", "mcp-time-server", "0.1.0-SNAPSHOT");
+
+        assertEquals("Java 25+36-LTS | dev (profile dev) | debug *:5005 | devconsole :8888"
+                + " | mcp-time-server 0.1.0-SNAPSHOT", id.contextLine(119), "the vendor goes first");
+        assertEquals("Java 25+36-LTS | dev (profile dev) | debug *:5005 | devconsole :8888"
+                + " | mcp-time-se... 0.1.0-SNAPSHOT", id.contextLine(100),
+                "the name is cut while the console still fits");
+        assertEquals("Java 25+36-LTS | dev (profile dev) | debug *:5005 | mcp-time-server 0.1.0-SNAPSHOT",
+                id.contextLine(82), "then the console goes, and the name comes back whole");
+        assertEquals("Java 25+36-LTS | dev (profile dev) | mcp-time-server 0.1.0-SNAPSHOT", id.contextLine(70),
+                "then the debugger");
+        assertEquals("Java 25+36-LTS | dev | mcp-time-server 0.1.0-SNAPSHOT", id.contextLine(60),
+                "and the reason last");
+    }
+
+    @Test
+    void atTheWidthOfTheBlockTheDevConsoleDropsBeforeTheDebugger() {
+        int max = StartupBanner.WIDTH - 1;
+
+        assertEquals("Java 25+36-LTS | dev (IntelliJ agent) | debug *:5005 | todo 1.0",
+                identity(SNAPSHOT_DIRTY, "Eclipse Adoptium", dev("IntelliJ agent"), "debug *:5005",
+                        "devconsole :8888", "todo", "1.0").contextLine(max),
+                "the configured port is a promise the console's own URL record keeps; the debugger's address is"
+                        + " what attaching needs");
+        assertEquals("Java 25+36-LTS | dev (IntelliJ agent) | devconsole :8888 | todo 1.0",
+                identity(SNAPSHOT_DIRTY, "Eclipse Adoptium", dev("IntelliJ agent"), null, "devconsole :8888",
+                        "todo", "1.0").contextLine(max),
+                "without a debugger, the console fits once the vendor is gone");
+    }
+
+    @Test
+    void aFreePortHasNoSegment() {
+        StartupIdentity id = StartupIdentity.collect(new StartupBanner.Launch(null, false, true, dev("profile dev"),
+                null, null, null, new StartupBanner.DevConsole("127.0.0.1", 0)));
+
+        assertNull(id.devConsole(), "port 0 is only known once bound: the console's URL record gives it");
+        assertFalse(id.contextLine().contains("devconsole"), id.contextLine());
+        assertNull(StartupIdentity.collect(BannerTestSupport.launch(null, dev("profile dev"), null)).devConsole(),
+                "no console, no segment");
+    }
+
+    @Test
     void aProdNoSignalProvesLosesItsSegmentRatherThanItsReason() {
         StartupIdentity id = identity(SNAPSHOT_DIRTY, "Eclipse Adoptium", prodByAbsence(), "debug *:5005",
                 "app", "1.0");
@@ -175,20 +229,22 @@ class StartupIdentityTest {
     void theBricksLineIsOneRecordOnlyWhenABrickIsWorthALook() {
         assertEquals(Optional.empty(), identity(SNAPSHOT_DIRTY, null, null, null, null).bricksLine());
         assertEquals(Optional.of("Vidocq bricks: chappe 0.4.0-SNAPSHOT (2d8ec095+dirty), vauban 0.3.0"),
-                new StartupIdentity(SNAPSHOT_DIRTY, "25", null, null, null, null, null,
+                new StartupIdentity(SNAPSHOT_DIRTY, "25", null, null, null, null, null, null,
                         List.of("chappe 0.4.0-SNAPSHOT (2d8ec095+dirty)", "vauban 0.3.0")).bricksLine());
     }
 
     @Test
     void theIdentityOfThisJvmIsCollectedFromItsArchives() {
         StartupIdentity id = StartupIdentity.collect(new StartupBanner.Launch(null, false, true,
-                dev("profile dev"), new DebugAgent("*:18095", true), StartupBanner.class.getModule(), null));
+                dev("profile dev"), new DebugAgent("*:18095", true), StartupBanner.class.getModule(), null,
+                new StartupBanner.DevConsole("127.0.0.1", 18096)));
 
         assertTrue(id.identityLine().startsWith("Vidocq "), id.identityLine());
         assertFalse(id.identityLine().contains("null"), id.identityLine());
         assertEquals(Runtime.version().toString(), id.javaVersion());
         assertEquals("dev (profile dev)", id.launch().text());
         assertEquals("debug *:18095 suspend=y", id.debug());
+        assertEquals("devconsole :18096", id.devConsole());
         if (StartupBanner.class.getModule().isNamed()) {
             assertEquals("io.vidocq.runtime.core", id.appName(), "an exploded module is named by its module name");
         }

@@ -26,8 +26,11 @@ import io.vidocq.runtime.core.banner.BannerTestSupport.Records;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.PrintStream;
+import java.net.URLClassLoader;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.logging.Level;
 
@@ -83,6 +86,32 @@ class VidocqBootstrapBannerTest {
             assertEquals(1, identity.size(), identity.toString());
             assertTrue(identity.getFirst().startsWith("Vidocq "), identity.getFirst());
             assertTrue(identity.getFirst().contains(" | Java " + Runtime.version()), identity.getFirst());
+        }
+    }
+
+    @Test
+    void aDevLaunchWithTheDevConsolePromisesItsConfiguredAddress(@TempDir Path dir) throws Exception {
+        String mode = System.getProperty(LaunchModeResolver.MODE_KEY);
+        Thread thread = Thread.currentThread();
+        ClassLoader previous = thread.getContextClassLoader();
+        try (Records records = new Records(); URLClassLoader console = DevConsoleFixture.withConsole(dir)) {
+            System.setProperty(LaunchModeResolver.MODE_KEY, "dev");
+            thread.setContextClassLoader(console);
+
+            // a test runtime gets the single line, which is never cut
+            VidocqBootstrap.create().configure();
+
+            List<String> identity = records.identityRecords();
+            assertEquals(1, identity.size(), identity.toString());
+            assertTrue(identity.getFirst().contains(" | dev (vidocq.launch.mode) | "), identity.getFirst());
+            assertTrue(identity.getFirst().contains(" | devconsole :8888"), identity.getFirst());
+        } finally {
+            thread.setContextClassLoader(previous);
+            if (mode == null) {
+                System.clearProperty(LaunchModeResolver.MODE_KEY);
+            } else {
+                System.setProperty(LaunchModeResolver.MODE_KEY, mode);
+            }
         }
     }
 

@@ -1,0 +1,29 @@
+# The dev console's port rule, one case per line. The core (its banner segment) and the console itself each
+# implement the rule, and neither publishes it: both test suites read this one table.
+#
+# Read it with @CsvFileSource(nullValues = "(unset)", useHeadersInDisplayName = true): (unset) is a key that
+# is not configured, "" an empty value. Surrounding blanks outside quotes are ignored by the reader; quoted
+# ones are part of the value.
+#
+# vidocq.devconsole.port: 8888 by default; 0 binds a free port; ASCII digits only, surrounding blanks ignored;
+# a value outside 0..65535, or that is no number, reads as 8888, and the console raises VIDOCQ-DEVC-003 for it
+# (valid = false).
+port,port asked,valid
+(unset),8888,true
+"",8888,true
+"  ",8888,true
+8888,8888,true
+0,0,true
+1,1,true
+9000,9000,true
+" 9000 ",9000,true
+65535,65535,true
+08080,8080,true
+65536,8888,false
+-1,8888,false
++9000,8888,false
+99999999999,8888,false
+9000.0,8888,false
+0x2328,8888,false
+http,8888,false
+9 000,8888,false

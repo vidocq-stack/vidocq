@@ -59,12 +59,15 @@ public interface StartupReportView {
     List<ReportAnomaly> anomalies();
 
     /**
-     * The sections of the report, in the order the detailed report prints them: the core's, then the
-     * contributors' in the order they were called. The anomalies the report recalls are not a section
-     * here: {@link #anomalies()} has them.
+     * The sections of the report, in the order the detailed report prints them: the lines of its header first,
+     * as sections of their own ({@code launch}, {@code vidocq} when the boot read the runtime, {@code phases}),
+     * then the core's sections, then the contributors' in the order they were called. The anomalies the report
+     * recalls are not a section here: {@link #anomalies()} has them.
      *
      * <p>A contributor's rows and lists are there as far as it wrote them: below
-     * {@link Verbosity#DETAILED} it may skip them (see {@link StartupReportContext#verbosity()}).
+     * {@link Verbosity#DETAILED} it may skip them (see {@link StartupReportContext#verbosity()}). While the
+     * dev console is on, Vidocq gives every contributor {@link Verbosity#DETAILED}, whatever level the report
+     * is logged at.
      *
      * @return the sections, an immutable list
      */
@@ -81,9 +84,9 @@ public interface StartupReportView {
 
     /**
      * The contributors this boot called, the very instances, in the order of their sections: the
-     * extensions that are contributors first, then the services. A reader may look for another interface
-     * they implement, such as a dev console panel, but never calls
-     * {@link StartupReportContributor#contribute contribute}: the report is written.
+     * extensions that are contributors first, then the services. One that failed has no section, and is
+     * not here either. A reader may look for another interface they implement, such as a dev console
+     * panel, but never calls {@link StartupReportContributor#contribute contribute}: the report is written.
      *
      * <p>They belong to this boot: after a dev reload, the view of the next boot has its own.
      *

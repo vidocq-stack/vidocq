@@ -65,6 +65,24 @@ class VidocqAppLayerSelectionTest {
     }
 
     @Test
+    @DisplayName("the dev console and its panel SPI stay, so that a panel of the application is the console's type")
+    void theDevConsoleAndItsPanelSpiStay(@TempDir Path dir) throws Exception {
+        var app = explodedModule(dir, "acme.app", List.of("io.vidocq.runtime.spi.devconsole",
+                "io.vidocq.runtime.extensions.essentials.devconsole"), "acme.app.Main");
+        var spi = explodedModule(dir, "io.vidocq.runtime.spi.devconsole", List.of(),
+                "io.vidocq.runtime.spi.devconsole.Panel");
+        var console = explodedModule(dir, "io.vidocq.runtime.extensions.essentials.devconsole",
+                List.of("io.vidocq.runtime.spi.devconsole"), "io.vidocq.runtime.extensions.essentials.devconsole.Console");
+
+        var config = ModuleLayer.boot().configuration().resolve(
+                ModuleFinder.of(app, spi, console), ModuleFinder.of(), Set.of("acme.app"));
+
+        assertEquals(Set.of(real(app)), relayered(VidocqAppLayer.applicationPaths(config, "acme.app")),
+                "a panel SPI re-layered with the application would be a second DevConsolePanel type, which the"
+                        + " console, kept in the boot layer, would no longer recognise after a reload");
+    }
+
+    @Test
     @DisplayName("the caller's module moves even when its name falls under a runtime prefix, and what it reads moves too")
     void theCallerAlwaysMoves(@TempDir Path dir) throws Exception {
         var app = explodedModule(dir, "io.vidocq.cassini.demo", List.of("acme.pricing"), "io.vidocq.cassini.demo.Main");

@@ -84,7 +84,7 @@ class StartupBannerTest {
             "AUTO,    false, false, false, false, IDENTITY_ONLY"})
     void decisionTable(BannerMode mode, boolean embedded, boolean test, boolean terminal, boolean dev, Output expected) {
         Launch launch = new Launch(null, embedded, test,
-                dev ? dev("IntelliJ agent") : prodByAbsence(), null, null, null);
+                dev ? dev("IntelliJ agent") : prodByAbsence(), null, null, null, null);
 
         assertEquals(expected, StartupBanner.decide(mode, launch, terminal));
     }

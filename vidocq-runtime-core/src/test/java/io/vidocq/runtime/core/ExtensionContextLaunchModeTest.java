@@ -31,6 +31,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
+import java.util.Optional;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /** {@link ExtensionContext#launchMode()}: {@code prod} unless Vidocq knows better, the resolved mode when it does. */
@@ -104,6 +106,7 @@ class ExtensionContextLaunchModeTest {
 
     @Test
     void theContextOfTheBootstrapCarriesTheModeItIsGiven() {
-        assertEquals(LaunchMode.DEV, new ExtensionContextImpl(null, null, null, LaunchMode.DEV).launchMode());
+        assertEquals(LaunchMode.DEV,
+                new ExtensionContextImpl(null, null, null, LaunchMode.DEV, Optional::empty).launchMode());
     }
 }

@@ -133,7 +133,7 @@ class StartupContributorsTest {
         assertEquals(List.of(ContributorFixtures.TWIN_ID), ids(found));
         assertSame(child, found.getFirst().instance().getClass().getClassLoader(), "the first copy, the child layer's");
         assertEquals(List.of(), recorder.anomalies(), "the parent layer's copy, which throws, is never created");
-        List<Section> sections = StartupContributors.call(found, context(Verbosity.SUMMARY), recorder);
+        List<Section> sections = StartupContributors.call(found, context(Verbosity.SUMMARY), recorder).sections();
         assertEquals(ContributorFixtures.TWIN_SUMMARY, sections.getFirst().summary());
     }
 
@@ -202,6 +202,19 @@ class StartupContributorsTest {
     }
 
     @Test
+    void theDevConsolePanelsOfTheCoreAreReservedToo() {
+        Contributing startup = new Contributing("startup");
+        Contributing jvm = new Contributing("jvm") {};
+
+        List<Contributor> found = StartupContributors.discover(List.of(startup, jvm), loader(), recorder);
+
+        assertEquals(List.of(), ids(found), "the dev console shows its own 'startup' and 'jvm' panels");
+        assertEquals(List.of(RPT_002, RPT_002), codes());
+        assertEquals("[VIDOCQ-RPT-002] Contributor " + Contributing.class.getName() + " uses id 'startup', which"
+                + " names a section of the core; it is skipped", messages().getFirst());
+    }
+
+    @Test
     void theSameClassTwiceIsATwinAndNotADuplicate() {
         List<Contributor> found = StartupContributors.discover(
                 List.of(new Contributing("same"), new Contributing("same")), loader(), recorder);
@@ -218,7 +231,7 @@ class StartupContributorsTest {
                         contributor("mcp", "MCP server", (context, section) -> section.summary("2 tools")
                                 .row("mrtr", "REPLAY")),
                         contributor("plain", "plain", (context, section) -> section.summary("no title"))),
-                context(Verbosity.DETAILED), recorder);
+                context(Verbosity.DETAILED), recorder).sections();
 
         assertEquals(List.of("mcp", "plain"), sections.stream().map(Section::id).toList());
         Section mcp = sections.getFirst();
@@ -233,7 +246,8 @@ class StartupContributorsTest {
     void aFailingContributorLosesItsSectionAndKeepsItsAnomalies() {
         IllegalStateException boom = new IllegalStateException("boom");
         List<String> called = new ArrayList<>();
-        List<Section> sections = StartupContributors.call(List.of(
+        Contributor after = contributor("after", "after", (context, section) -> called.add("after"));
+        StartupContributors.Contributed contributed = StartupContributors.call(List.of(
                         contributor("failing", "failing", (context, section) -> {
                             section.summary("half written").anomaly("ACME-001", "Something is off.", null);
                             throw boom;
@@ -241,10 +255,12 @@ class StartupContributorsTest {
                         contributor("linkage", "linkage", (context, section) -> {
                             throw new NoClassDefFoundError("com/acme/Gone");
                         }),
-                        contributor("after", "after", (context, section) -> called.add("after"))),
+                        after),
                 context(Verbosity.DETAILED), recorder);
 
-        assertEquals(List.of("after"), sections.stream().map(Section::id).toList());
+        assertEquals(List.of("after"), contributed.sections().stream().map(Section::id).toList());
+        assertEquals(List.of(after.instance()), contributed.contributors(),
+                "the instances whose sections the report has, and only those");
         assertEquals(List.of("after"), called);
         assertEquals(List.of("ACME-001", RPT_001, RPT_001), codes());
         assertEquals("failing", recorder.anomalies().getFirst().source());
@@ -295,7 +311,7 @@ class StartupContributorsTest {
                             seen.add(context.routeUrls("McpEndpoint"));
                             seen.add(context.routeUrls(null));
                         })),
-                context(Verbosity.DETAILED), recorder);
+                context(Verbosity.DETAILED), recorder).sections();
 
         assertEquals(List.of(List.of("http://localhost:8081/mcp"), List.of(), List.of(), List.of()), seen);
         assertEquals(List.of(new Section.Cells(List.of("POST", "http://localhost:8081/mcp", "McpEndpoint#handlePost")),

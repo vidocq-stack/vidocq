@@ -1,0 +1,35 @@
+# The dev console's enable rule, one case per line. The core (its banner segment, its detailed collection of
+# the report's rows) and the console itself each implement the rule, and neither publishes it: both test
+# suites read this one table, so that the two implementations cannot drift apart.
+#
+# Read it with @CsvFileSource(nullValues = "(unset)", useHeadersInDisplayName = true): (unset) is a key that
+# is not configured, "" an empty value. Surrounding blanks outside quotes are ignored by the reader; quoted
+# ones are part of the value.
+#
+# vidocq.devconsole.enabled: auto (the default) is on when the launch mode is dev; true and false force it;
+# case and surrounding blanks are ignored; any other value reads as auto, and the console raises
+# VIDOCQ-DEVC-003 for it (valid = false).
+enabled,launch mode,console on,valid
+(unset),dev,true,true
+(unset),test,false,true
+(unset),prod,false,true
+"",dev,true,true
+"   ",prod,false,true
+auto,dev,true,true
+auto,test,false,true
+auto,prod,false,true
+" Auto ",dev,true,true
+AUTO,prod,false,true
+true,dev,true,true
+true,test,true,true
+true,prod,true,true
+" TRUE ",prod,true,true
+false,dev,false,true
+false,prod,false,true
+False,dev,false,true
+yes,dev,true,false
+yes,prod,false,false
+on,prod,false,false
+1,dev,true,false
+0,dev,true,false
+dev,prod,false,false

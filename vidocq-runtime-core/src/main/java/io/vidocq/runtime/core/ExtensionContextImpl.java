@@ -24,6 +24,10 @@ import io.vidocq.runtime.spi.ExtensionContext;
 import io.vidocq.runtime.spi.VidocqConfiguration;
 import io.vidocq.runtime.spi.config.VidocqConfig;
 import io.vidocq.runtime.spi.report.LaunchMode;
+import io.vidocq.runtime.spi.report.StartupReportView;
+
+import java.util.Optional;
+import java.util.function.Supplier;
 
 /**
  * Implementation of the extension context provided during {@code onStart}.
@@ -32,10 +36,18 @@ import io.vidocq.runtime.spi.report.LaunchMode;
  * @param configuration the legacy configuration
  * @param config        the configuration
  * @param launchMode    the launch mode the bootstrap resolved for this boot
+ * @param startupReport the startup report of this boot, read-only: empty until the bootstrap has written it, and
+ *                      again once it stops; {@code null} reads as always empty
  */
 record ExtensionContextImpl(
         VaubanContainer container,
         VidocqConfiguration configuration,
         VidocqConfig config,
-        LaunchMode launchMode
-) implements ExtensionContext {}
+        LaunchMode launchMode,
+        Supplier<Optional<StartupReportView>> startupReport
+) implements ExtensionContext {
+
+    ExtensionContextImpl {
+        startupReport = startupReport == null ? Optional::empty : startupReport;
+    }
+}
