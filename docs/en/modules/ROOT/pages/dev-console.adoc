@@ -163,6 +163,8 @@ Two applications in dev mode on one machine both want port `8888`. A dev tool mu
 
 The page itself carries a banner with both ports. The box never quotes the configuration: it prints the two port numbers and a URL whose shape the console checked, so nothing configured can draw inside it. Only the application's own listeners still fail the boot on a taken port, as they always did.
 
+Falling back costs about one second of boot: before the console takes a free port, Chappe retries the bind with a backoff, five attempts with pauses of 100 to 400 ms, as it does for any port (1,387 ms against 358 ms in one measured boot). A dev reload pays that second again for as long as the port stays taken: the console keeps the port it bound across reloads only for port `0` (<<url-record>>), and asks for the configured port on every boot, so that it gets it back once it is free. Until then, each reload falls back to a free port chosen anew, usually another one, so the URL record, the box and <<vidocq-devc-004>> come again with the new port, and an open tab has to be pointed at it.
+
 [#the-page]
 == The page [.tag-new]#NEW#
 
@@ -227,7 +229,7 @@ The console's own panel, always last, read from the JVM's management beans — t
 The console shows what the application is made of, so it is built to be seen by you only:
 
 * **Loopback by default.** It listens on `127.0.0.1`. Another address raises <<vidocq-devc-002>>, in every mode.
-* **Its own address only.** A request is answered only when its `Host` header names the console: `localhost`, `127.0.0.1`, `[::1]` or the configured host, optionally with the port it bound; when the configured host is not a loopback one, any IP address too. Anything else gets `403`. This stops DNS rebinding, where a page of another site has its name resolved to `127.0.0.1` to reach local ports: the browser still sends that site's name.
+* **Its own address only.** A request is answered only when its `Host` header names the console: `localhost`, `127.0.0.1`, `[::1]` or the host it listens on, optionally with the port it bound; when that host is not a loopback one, any IP address too. The host it listens on is the configured one only when the console accepted it: a value refused by the ASCII-only rule of <<configuration>> is reported as <<vidocq-devc-003>> and replaced by `127.0.0.1`, for the bind, the banner and this check alike. Anything else gets `403`. This stops DNS rebinding, where a page of another site has its name resolved to `127.0.0.1` to reach local ports: the browser still sends that site's name.
 * **Read-only.** `GET` and `HEAD` only, anything else gets `405`; there is no endpoint that changes anything.
 * **No reading from another site.** No CORS header, so another site's page can send a request but never read the answer. Every answer carries `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer` and `Content-Security-Policy: default-src 'self'; frame-ancestors 'none'`.
 * **No secret.** A section reports a secret only as `configured` or `not configured`: the API has no way to pass its value. A configuration value that may carry one, such as a JDBC URL, is shown in a dev launch only, without its credentials; outside it, the panel says what it is, such as the database kind. The console never shows JVM arguments or system properties, nor the message of an exception thrown by a panel.
@@ -272,7 +274,10 @@ A `vidocq.devconsole.*` key has a value the console does not accept; the default
 ----
 [VIDOCQ-DEVC-003] Invalid value 'yes' for vidocq.devconsole.enabled (auto, true, false): using auto
 [VIDOCQ-DEVC-003] Invalid value '99999' for vidocq.devconsole.port (0 to 65535): using 8888
+[VIDOCQ-DEVC-003] Invalid value 'a host' for vidocq.devconsole.host (a host name or an IP address): using 127.0.0.1
 ----
+
+A host is refused for any character but ASCII letters, digits and `.-_:%[]`, or beyond 255 characters: the console listens on `127.0.0.1` instead, and the banner says so too (<<banner-segment>>). A mistyped key, rather than a wrong value, is the key audit's to report: xref:modules/vidocq-runtime-core.adoc#vidocq-cfg-003[`VIDOCQ-CFG-003`] (<<configuration>>).
 
 [#vidocq-devc-004]
 === VIDOCQ-DEVC-004 — port taken [.tag-new]#NEW#

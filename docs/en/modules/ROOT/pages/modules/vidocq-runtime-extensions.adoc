@@ -146,7 +146,7 @@ mp.router("dev").get("/api/snapshot", snapshot);
 | `ListenerOptions` | Effect
 
 | `anyPortWhenTaken`
-| When the port is in use, listen on a free port instead of failing the boot, and log a WARNING naming both ports.
+| When the port is in use, listen on a free port instead of failing the boot, and log a WARNING naming both ports. Chappe first retries the bind with a backoff, as for any listener, so falling back costs about one second.
 
 | `quiet`
 | Log the `Chappe listener '…' started on …` line at DEBUG, for an extension that prints its own.
