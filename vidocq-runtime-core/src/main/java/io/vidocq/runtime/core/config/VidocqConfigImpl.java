@@ -59,6 +59,8 @@ import java.util.ServiceLoader;
 public final class VidocqConfigImpl implements VidocqConfig {
 
     private final List<ConfigSource> sources;
+    /** The class names of the providers whose sources replaced the native ones; empty for the native sources. */
+    private final List<String> sourceProviders;
 
     /**
      * Auto-discovery: first searches for {@link ConfigSourceProvider}
@@ -72,9 +74,22 @@ public final class VidocqConfigImpl implements VidocqConfig {
      * Forces an explicit list of sources (test mode).
      */
     public VidocqConfigImpl(List<ConfigSource> sources) {
-        List<ConfigSource> copy = new ArrayList<>(sources);
+        this(new Discovery(sources, List.of()));
+    }
+
+    private VidocqConfigImpl(Discovery discovery) {
+        List<ConfigSource> copy = new ArrayList<>(discovery.sources());
         copy.sort(Comparator.comparingInt(ConfigSource::getOrdinal).reversed());
         this.sources = Collections.unmodifiableList(copy);
+        this.sourceProviders = List.copyOf(discovery.providers());
+    }
+
+    /**
+     * The class names of the {@link ConfigSourceProvider}s whose sources replaced Vidocq's native ones, in
+     * discovery order; empty when the native sources are used. The startup report names them.
+     */
+    public List<String> sourceProviders() {
+        return sourceProviders;
     }
 
     @Override
@@ -124,7 +139,10 @@ public final class VidocqConfigImpl implements VidocqConfig {
 
     // ---------- helpers ----------
 
-    private static List<ConfigSource> discover() {
+    /** The sources found, and the providers they came from when a provider replaced the native ones. */
+    private record Discovery(List<ConfigSource> sources, List<String> providers) {}
+
+    private static Discovery discover() {
         ClassLoader cl = Thread.currentThread().getContextClassLoader();
         if (cl == null) cl = VidocqConfigImpl.class.getClassLoader();
 
@@ -132,19 +150,21 @@ public final class VidocqConfigImpl implements VidocqConfig {
         // with native sources, to respect the ordinal semantics of the
         // external motor and avoid double counting.
         List<ConfigSource> fromProviders = new ArrayList<>();
+        List<String> providers = new ArrayList<>();
         for (ConfigSourceProvider p : ServiceLoader.load(ConfigSourceProvider.class)) {
+            providers.add(p.getClass().getName());
             for (ConfigSource s : p.getConfigSources(cl)) {
                 fromProviders.add(s);
             }
         }
-        if (!fromProviders.isEmpty()) return fromProviders;
+        if (!fromProviders.isEmpty()) return new Discovery(fromProviders, providers);
 
         // Fallback: native Vidocq sources (Sys, Env, ExternalFile, PropertiesFile).
         List<ConfigSource> natives = new ArrayList<>();
         for (ConfigSource s : ServiceLoader.load(ConfigSource.class)) {
             natives.add(s);
         }
-        return natives;
+        return new Discovery(natives, List.of());
     }
 
     private static List<String> splitList(String raw) {

@@ -21,13 +21,20 @@ package io.vidocq.runtime.core;
 
 import io.vidocq.vauban.core.container.VaubanContainer;
 import io.vidocq.vauban.core.container.VaubanContainerBuilder;
+import io.vidocq.runtime.core.banner.BuildInfo;
 import io.vidocq.runtime.core.banner.LaunchModeResolver;
 import io.vidocq.runtime.core.banner.StartupBanner;
+import io.vidocq.runtime.core.banner.StartupIdentity;
 import io.vidocq.runtime.core.config.ConfigKeyAudit;
 import io.vidocq.runtime.core.config.VidocqConfigImpl;
 import io.vidocq.runtime.core.console.ConsoleLogging;
 import io.vidocq.runtime.core.console.ConsoleSupport;
+import io.vidocq.runtime.core.report.CoreSections;
+import io.vidocq.runtime.core.report.DisplayPaths;
+import io.vidocq.runtime.core.report.Section;
 import io.vidocq.runtime.core.report.StartupAnomalies;
+import io.vidocq.runtime.core.report.StartupRecorder;
+import io.vidocq.runtime.core.report.StartupReport;
 import io.vidocq.runtime.core.report.VerbosityResolver;
 import io.vidocq.runtime.spi.ExtensionContext;
 import io.vidocq.runtime.spi.VidocqConfiguration;
@@ -40,9 +47,11 @@ import java.lang.management.ManagementFactory;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BiConsumer;
 import java.util.function.Predicate;
 
 /**
@@ -56,9 +65,16 @@ import java.util.function.Predicate;
  *   <li>Creation of the {@link VaubanContainerBuilder}, {@code extension.beforeStart(builder)}</li>
  *   <li>Build the {@link VaubanContainer} (CDI boot)</li>
  *   <li>{@code extension.onStart(context)}</li>
+ *   <li>The audit of the configuration keys, then the startup report</li>
  *   <li>Registering the shutdown hook</li>
  *   <li>Block on {@link #awaitShutdown()}</li>
  * </ol>
+ *
+ * <p>The startup report is one INFO record of {@code io.vidocq.startup}, just before
+ * {@code Vidocq - Started in}, which stays the last line of a boot; its level is
+ * {@code vidocq.startup.report}. A boot that fails, in {@link #configure()} or in {@link #start()}, logs
+ * one WARNING record naming the phase that failed, the time spent and the anomalies already logged (in a
+ * dev launch, with the partial report), then lets the same exception through, untouched.
  *
  * <p><b>Vidocq lifecycle orchestrator.</b></p>
  */
@@ -101,6 +117,12 @@ public final class VidocqBootstrap {
     private StartupBanner.Launch launch;
     /** How much the startup report of this boot shows, resolved by {@link #configure()}; nothing before. */
     private Verbosity verbosity = Verbosity.OFF;
+    /** What this boot records for its report, from {@link #configure()} on. */
+    private StartupRecorder recorder;
+    /** The report of this boot, once {@link #start()} ended or a phase failed. */
+    private StartupReport startupReport;
+    /** The extensions to boot instead of those the {@link java.util.ServiceLoader} finds, for tests. */
+    private List<VidocqExtension> givenExtensions;
     /**
      * Top-chrono taken during the construction of the bootstrap (= just after the entry
      * from {@code Vidocq.main()} via {@link #create()}). Comparable to {@code
@@ -134,9 +156,24 @@ public final class VidocqBootstrap {
 
     /**
      * Phase 1: loads the configuration, resolves the launch mode and the level of the startup report, prints
-     * the startup banner (once per JVM) and discovers the extensions.
+     * the startup banner (once per JVM) and discovers the extensions. A failure is reported (see the class
+     * description) and thrown as it is.
      */
     public VidocqBootstrap configure() {
+        StartupRecorder recorder = new StartupRecorder();
+        this.recorder = recorder;
+        recorder.begin("configure");
+        try {
+            configure(recorder);
+        } catch (RuntimeException | Error e) {
+            bootFailed(e);
+            throw e;
+        }
+        recorder.end();
+        return this;
+    }
+
+    private void configure(StartupRecorder recorder) {
         // Universal-loader mode: embedders that skip Vidocq.main (the CLI boots
         // in-process) still get the application layer when -Dvidocq.app.path is set —
         // configuration sources below read through the loader installed here. No-op when
@@ -147,9 +184,10 @@ public final class VidocqBootstrap {
         // vidocq.properties is visible from here: vidocq.log.console and vidocq.console.color.
         ConsoleLogging.applyConfiguration(config);
         // An invalid value of either key is reported once per boot, then read as auto.
-        checkedSetting(config, LaunchModeResolver.MODE_KEY, LaunchModeResolver::isSetting, LaunchModeResolver.ACCEPTED);
+        checkedSetting(config, LaunchModeResolver.MODE_KEY, LaunchModeResolver::isSetting, LaunchModeResolver.ACCEPTED,
+                recorder::anomaly);
         String report = checkedSetting(config, VerbosityResolver.KEY, VerbosityResolver::isSetting,
-                VerbosityResolver.ACCEPTED);
+                VerbosityResolver.ACCEPTED, recorder::anomaly);
         // Every boot resolves its own launch, the reloads of the dev loop included: the extensions read
         // it through ExtensionContext.launchMode(), and the configuration may have changed since.
         StartupBanner.Launch resolved = resolveLaunch(config);
@@ -160,13 +198,12 @@ public final class VidocqBootstrap {
         StartupBanner.showOnce(config, () -> resolved);
         LOG.log(System.Logger.Level.INFO, "Vidocq - Configuration phase");
         this.configuration = new VidocqConfigurationImpl(config);
-        this.extensions = ExtensionLoader.load();
+        this.extensions = givenExtensions != null ? givenExtensions : ExtensionLoader.load();
 
         for (VidocqExtension ext : extensions) {
+            recorder.step("configure " + nameOf(ext));
             ext.configure(configuration);
         }
-
-        return this;
     }
 
     /**
@@ -181,22 +218,55 @@ public final class VidocqBootstrap {
     }
 
     /**
-     * Phase 2: booting the CDI container and starting the extensions.
+     * Phase 2: booting the CDI container and starting the extensions, then the startup report. A failure is
+     * reported (see the class description) and thrown as it is.
      */
     public VidocqBootstrap start() {
         LOG.log(System.Logger.Level.INFO, "Vidocq - Starting");
+        if (recorder == null) {
+            recorder = new StartupRecorder();
+        }
+        StartupRecorder recorder = this.recorder;
+        try {
+            boot(recorder);
+            report(recorder);
+        } catch (RuntimeException | Error e) {
+            bootFailed(e);
+            throw e;
+        }
 
+        // Shutdown hook
+        shutdownHook = new Thread(this::shutdown, "vidocq-shutdown");
+        Runtime.getRuntime().addShutdownHook(shutdownHook);
+
+        long elapsed = System.nanoTime() - startTime;
+        long ms = elapsed / 1_000_000;
+        long us = (elapsed / 1_000) % 1_000;
+        long jvmUptime = ManagementFactory.getRuntimeMXBean().getUptime();
+        LOG.log(System.Logger.Level.INFO,
+                "Vidocq - Started in " + ms + "." + String.format("%03d", us)
+                        + " ms (process running for " + jvmUptime + " ms)");
+        return this;
+    }
+
+    /** Weaving, container, extensions and audit, each a phase of {@code recorder}. */
+    private void boot(StartupRecorder recorder) {
         // vauban#24 load-time weaving (IDE builds): must run before ANY extension code —
         // e.g. Cassini inspects @Path classes in beforeStart, and a bean class loaded
         // before the weaving agent is attached can no longer gain its (ProxyLink)
         // constructor. Vauban's container builder re-runs this as a no-op backstop.
+        recorder.begin("weaving");
         var weaving = io.vidocq.vauban.core.weaving.LoadTimeWeaving.prepare(
                 Thread.currentThread().getContextClassLoader());
         if (weaving.failure() != null) {
-            StartupAnomalies.warn(StartupAnomalies.WEAVING_FAILED, weaving.failure());
+            recorder.anomaly(StartupAnomalies.WEAVING_FAILED, weaving.failure());
         }
+        recorder.weaving(CoreSections.weaving(weaving.planned(), weaving.failure() != null,
+                VidocqAppLayer.alreadyInLayer()));
+        recorder.end();
 
         // Build CDI container
+        recorder.begin("scan");
         VaubanContainerBuilder builder = VaubanContainer.builder()
                 .scanClasspath();
 
@@ -217,34 +287,122 @@ public final class VidocqBootstrap {
                 }
             }
         }
+        recorder.end();
 
+        recorder.begin("beforeStart");
         for (VidocqExtension ext : extensions) {
+            recorder.step("beforeStart " + nameOf(ext));
             ext.beforeStart(builder);
         }
+        recorder.end();
 
+        recorder.begin("build");
         this.container = builder.build();
+        recorder.end();
 
         // Notify extensions
+        recorder.begin("extensions");
         ExtensionContext context = extensionContext();
         for (VidocqExtension ext : extensions) {
             LOG.log(System.Logger.Level.INFO, "Starting extension: {0}", ext.name());
+            recorder.step("onStart " + nameOf(ext));
+            long started = System.nanoTime();
             ext.onStart(context);
+            recorder.onStart(System.nanoTime() - started);
         }
+        recorder.end();
 
-        auditConfigKeys(config, extensions);
+        recorder.begin("audit");
+        auditConfigKeys(config, extensions, recorder::anomaly);
+        recorder.end();
+    }
 
-        // Shutdown hook
-        shutdownHook = new Thread(this::shutdown, "vidocq-shutdown");
-        Runtime.getRuntime().addShutdownHook(shutdownHook);
+    /**
+     * Assembles the report of this boot and logs it, unless its level is {@code off}; the report of a boot
+     * that went well never fails it.
+     */
+    private void report(StartupRecorder recorder) {
+        try {
+            recorder.begin("report");
+            List<Section> sections = StartupFacts.coreSections(recorder.weaving(), config, extensions,
+                    recorder.onStartNanos(), null, DisplayPaths.current());
+            String runtime = runtime();
+            recorder.end();
+            StartupReport report = recorder.report(launchMode(), launchReason(), verbosity, runtime, sections, null);
+            this.startupReport = report;
+            StartupRecorder.log(report);
+        } catch (RuntimeException | LinkageError e) {
+            StartupRecorder.skipped(e);
+        }
+    }
 
-        long elapsed = System.nanoTime() - startTime;
-        long ms = elapsed / 1_000_000;
-        long us = (elapsed / 1_000) % 1_000;
-        long jvmUptime = ManagementFactory.getRuntimeMXBean().getUptime();
-        LOG.log(System.Logger.Level.INFO,
-                "Vidocq - Started in " + ms + "." + String.format("%03d", us)
-                        + " ms (process running for " + jvmUptime + " ms)");
+    /**
+     * Logs the failure of this boot, with its partial report, before the caller rethrows {@code failure}.
+     * Never throws: nothing may hide the failure itself.
+     */
+    private void bootFailed(Throwable failure) {
+        StartupRecorder recorder = this.recorder;
+        if (recorder == null) {
+            return;
+        }
+        try {
+            String failed = recorder.failing();
+            List<Section> sections = StartupFacts.coreSections(recorder.weaving(), config, extensions,
+                    recorder.onStartNanos(), failed, DisplayPaths.current());
+            StartupReport partial = recorder.report(launchMode(), launchReason(), verbosity, runtime(), sections, failed);
+            this.startupReport = partial;
+            StartupRecorder.logFailure(partial, System.nanoTime() - startTime, failure);
+        } catch (RuntimeException | LinkageError unreported) {
+            // the failure of the boot is what matters, and the caller rethrows it untouched
+        }
+    }
+
+    /**
+     * The report of this boot, at every level, {@code off} included: complete once {@link #start()} returned,
+     * partial, with its {@link StartupReport#failedPhase() failed phase}, once a phase failed; empty before.
+     */
+    Optional<StartupReport> startupReport() {
+        return Optional.ofNullable(startupReport);
+    }
+
+    /** Boots {@code extensions} instead of those the {@link java.util.ServiceLoader} finds: for tests. */
+    VidocqBootstrap extensions(List<VidocqExtension> extensions) {
+        this.givenExtensions = List.copyOf(extensions);
         return this;
+    }
+
+    /**
+     * The Vidocq version and the JVM for the {@code vidocq} line of the detailed report: those of the banner
+     * when it printed its identity, else read for a detailed report only.
+     */
+    private String runtime() {
+        Optional<StartupIdentity> identity = StartupBanner.emittedIdentity();
+        if (identity.isPresent()) {
+            return CoreSections.runtime(identity.get().vidocq().version(), identity.get().javaVersion());
+        }
+        if (verbosity != Verbosity.DETAILED) {
+            return null;
+        }
+        return CoreSections.runtime(BuildInfo.ofClass(StartupBanner.class).version(), Runtime.version().toString());
+    }
+
+    /** Why this boot has its launch mode, as the report's header prints it. */
+    private String launchReason() {
+        LaunchModeResolver.Resolution resolution = launch == null ? null : launch.launchMode();
+        if (resolution == null) {
+            return CoreSections.launchReason(null, false);
+        }
+        return CoreSections.launchReason(resolution.reason(), LaunchModeResolver.MODE_KEY.equals(resolution.reason()));
+    }
+
+    /** The name of {@code extension}, its class name when it has none it can give. */
+    static String nameOf(VidocqExtension extension) {
+        try {
+            String name = extension.name();
+            return name != null ? name : extension.getClass().getName();
+        } catch (RuntimeException unnamed) {
+            return extension.getClass().getName();
+        }
     }
 
     /**
@@ -267,7 +425,8 @@ public final class VidocqBootstrap {
      * {@code valid} rejects is reported as {@code VIDOCQ-CFG-001}; the resolvers then read it as
      * {@code auto}.
      */
-    private static String checkedSetting(VidocqConfig config, String key, Predicate<String> valid, String accepted) {
+    private static String checkedSetting(VidocqConfig config, String key, Predicate<String> valid, String accepted,
+                                         BiConsumer<String, String> anomalies) {
         String value;
         try {
             value = config.getValue(key).map(String::strip).filter(v -> !v.isEmpty()).orElse(null);
@@ -275,7 +434,7 @@ public final class VidocqBootstrap {
             return null;
         }
         if (!valid.test(value)) {
-            StartupAnomalies.warn(StartupAnomalies.INVALID_VALUE, StartupAnomalies.invalidValue(key, value, accepted));
+            anomalies.accept(StartupAnomalies.INVALID_VALUE, StartupAnomalies.invalidValue(key, value, accepted));
         }
         return value;
     }
@@ -314,13 +473,19 @@ public final class VidocqBootstrap {
      * warning of its own ({@code VIDOCQ-CFG-002}).
      */
     static void auditConfigKeys(VidocqConfig config, List<VidocqExtension> extensions) {
+        auditConfigKeys(config, extensions, StartupAnomalies::warn);
+    }
+
+    /** {@link #auditConfigKeys(VidocqConfig, List)}, each anomaly handed to {@code anomalies} to be logged. */
+    static void auditConfigKeys(VidocqConfig config, List<VidocqExtension> extensions,
+                                BiConsumer<String, String> anomalies) {
         try {
             Set<String> declared = declaredConfigKeys(extensions);
             for (String key : ConfigKeyAudit.unconsumedKeys(config.getPropertyNames(), declared)) {
-                StartupAnomalies.warn(StartupAnomalies.UNREAD_KEY, ConfigKeyAudit.messageFor(key, declared));
+                anomalies.accept(StartupAnomalies.UNREAD_KEY, ConfigKeyAudit.messageFor(key, declared));
             }
         } catch (RuntimeException e) {
-            StartupAnomalies.warn(StartupAnomalies.AUDIT_FAILED, "Configuration key audit failed: " + e
+            anomalies.accept(StartupAnomalies.AUDIT_FAILED, "Configuration key audit failed: " + e
                     + "; keys that nothing reads are not reported");
         }
     }

@@ -64,6 +64,23 @@ public final class VidocqAppLayer {
     private static volatile VaubanLayerFactory.AppLayer installed;
     /** The context loader that was active before the layer install (reload restores it). */
     private static volatile ClassLoader parentLoaderBeforeInstall;
+    /** How the installed layer was found, for the startup report; {@code null} without a layer. */
+    private static volatile Installation installation;
+
+    /**
+     * How the application layer was found, as the startup report prints it: strings only, so that the
+     * report keeps nothing of a layer the dev reload tears down.
+     *
+     * @param origin   {@value #APP_PATH_PROPERTY}, or {@code boot-layer detection from <module>}
+     * @param archives the archives resolved into the layer, as they were given
+     * @param listed   whether {@code origin} is the property that lists {@code archives}
+     */
+    record Installation(String origin, List<String> archives, boolean listed) {
+
+        Installation {
+            archives = List.copyOf(archives);
+        }
+    }
 
     private VidocqAppLayer() {}
 
@@ -79,6 +96,7 @@ public final class VidocqAppLayer {
             return;
         }
         installed = null;
+        installation = null;
         Thread.currentThread().setContextClassLoader(parentLoaderBeforeInstall);
         try {
             layer.loader().close();
@@ -113,7 +131,8 @@ public final class VidocqAppLayer {
             // class-path launch — the runtime lives in the unnamed module
             parentLayer = ModuleLayer.boot();
         }
-        return installLayer(paths, parentLayer, APP_PATH_PROPERTY + "=" + property);
+        return installLayer(paths, parentLayer, APP_PATH_PROPERTY + "=" + property,
+                new Installation(APP_PATH_PROPERTY, paths.stream().map(Path::toString).toList(), true));
     }
 
     /**
@@ -142,8 +161,9 @@ public final class VidocqAppLayer {
         if (paths.isEmpty()) {
             return false;
         }
-        return installLayer(paths, callerLayer,
-                "boot-layer detection from " + callerModule.getName());
+        String origin = "boot-layer detection from " + callerModule.getName();
+        return installLayer(paths, callerLayer, origin,
+                new Installation(origin, paths.stream().map(Path::toString).toList(), false));
     }
 
     /** The {@code file:} locations of the modules named by {@code -Dvidocq.app.modules}. */
@@ -173,7 +193,8 @@ public final class VidocqAppLayer {
                 java.util.Set.of(callerModule));
     }
 
-    private static boolean installLayer(List<Path> paths, ModuleLayer parentLayer, String origin) {
+    private static boolean installLayer(List<Path> paths, ModuleLayer parentLayer, String origin,
+            Installation found) {
         try {
             var parentLoader = Thread.currentThread().getContextClassLoader();
             var appLayer = VaubanLayerFactory.createAppLayer(paths, parentLayer,
@@ -181,6 +202,7 @@ public final class VidocqAppLayer {
             parentLoaderBeforeInstall = parentLoader;
             Thread.currentThread().setContextClassLoader(appLayer.loader());
             installed = appLayer;
+            installation = found;
             LOG.log(System.Logger.Level.INFO, "Application layer ready: modules {0} ({1})",
                     appLayer.moduleNames(), origin);
             return true;
@@ -194,6 +216,11 @@ public final class VidocqAppLayer {
     static ModuleLayer installedLayer() {
         var layer = installed;
         return layer == null ? null : layer.layer();
+    }
+
+    /** How the installed application layer was found, or {@code null} when there is none. */
+    static Installation installation() {
+        return installed == null ? null : installation;
     }
 
     static boolean alreadyInLayer() {

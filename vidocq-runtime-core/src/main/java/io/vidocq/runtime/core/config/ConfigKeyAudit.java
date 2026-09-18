@@ -119,6 +119,18 @@ public final class ConfigKeyAudit {
                 + "Known keys in this namespace: " + candidates;
     }
 
+    /**
+     * The namespaces the audit covers for these declared keys, as the startup report prints them:
+     * {@code vidocq.startup.*}, sorted.
+     *
+     * @param declaredKeys the keys the core reads and every loaded extension's {@code configKeys()}
+     */
+    public static List<String> auditedNamespaces(Set<String> declaredKeys) {
+        return claimedNamespaces(declaredKeys).stream()
+                .map(namespace -> namespace.endsWith(".") ? namespace + "*" : namespace)
+                .toList();
+    }
+
     /** The {@code vidocq.<namespace>.} scope of a key, or the key itself when it has no namespace. */
     private static String namespaceOf(String key) {
         int dot = key.indexOf('.', NAMESPACE_PREFIX.length());
