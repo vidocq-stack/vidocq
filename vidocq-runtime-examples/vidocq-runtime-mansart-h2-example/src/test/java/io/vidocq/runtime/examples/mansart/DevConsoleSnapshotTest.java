@@ -1,0 +1,274 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.runtime.examples.mansart;
+
+import io.vidocq.runtime.core.VidocqBootstrap;
+import jakarta.json.bind.Jsonb;
+import jakarta.json.bind.JsonbBuilder;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.logging.Handler;
+import java.util.logging.Level;
+import java.util.logging.LogRecord;
+import java.util.logging.Logger;
+import java.util.logging.SimpleFormatter;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
+
+/**
+ * This application in a dev launch, with the dev console on the module path as an ordinary dependency: the console
+ * prints one URL, and the snapshot it serves there shows both Mansart pools and the JVM, and never a pool password.
+ *
+ * <p>The application boots in this JVM, on the module path, as the child JVM of {@code mvn vidocq:dev} starts it. The
+ * surefire configuration of this module sets:
+ * <ul>
+ *   <li>{@code vidocq.launch.mode=dev}, the one launch in which the console's {@code auto} turns it on;</li>
+ *   <li>{@code vidocq.devconsole.port=0}, so that the console takes a free port, and the application's own listener
+ *       on {@code 127.0.0.1:0}, never 8080;</li>
+ *   <li>a password for each pool, {@code @Default} and {@code audit}, as {@code -D} arguments on the command line,
+ *       where a dev service puts the password it injects: the JVM's input arguments and its system properties then
+ *       hold both, and the console must show neither.</li>
+ * </ul>
+ * The console's URL is read from its record on the {@code io.vidocq.devconsole} logger, the one a developer clicks.
+ */
+class DevConsoleSnapshotTest {
+
+    /** The console's logger: its URL record. */
+    private static final String CONSOLE_LOGGER = "io.vidocq.devconsole";
+    /** The console's URL record, the URL last. */
+    private static final Pattern URL_RECORD = Pattern.compile("Vidocq dev console: (http://127\\.0\\.0\\.1:(\\d+)/)");
+    /** The pool passwords the surefire configuration passes on the command line. */
+    private static final List<String> PASSWORD_KEYS = List.of("vidocq.pool.password", "vidocq.pool.audit.password");
+
+    /** Kept strongly: JUL holds its loggers weakly, and the handler would go with a collected one. */
+    private static Logger consoleLogger;
+    private static final List<LogRecord> RECORDS = new ArrayList<>();
+    private static final Handler CAPTURE = new Handler() {
+        @Override
+        public void publish(LogRecord record) {
+            synchronized (RECORDS) {
+                RECORDS.add(record);
+            }
+        }
+
+        @Override
+        public void flush() {
+            // nothing buffered
+        }
+
+        @Override
+        public void close() {
+            // nothing to release
+        }
+    };
+
+    private static VidocqBootstrap bootstrap;
+    /** The raw body of {@code GET /api/snapshot}, read once the boot is over. */
+    private static String body;
+    /** The same body, parsed: maps, lists, strings, numbers and booleans. */
+    private static Map<?, ?> snapshot;
+
+    @BeforeAll
+    static void bootInDevModeAndReadTheSnapshot() throws Exception {
+        consoleLogger = Logger.getLogger(CONSOLE_LOGGER);
+        CAPTURE.setLevel(Level.ALL);
+        consoleLogger.addHandler(CAPTURE);
+        bootstrap = VidocqBootstrap.create().configure().start();
+        body = get(consoleUrl() + "api/snapshot", "application/json");
+        try (Jsonb jsonb = JsonbBuilder.create()) {
+            snapshot = (Map<?, ?>) jsonb.fromJson(body, Object.class);
+        }
+    }
+
+    @AfterAll
+    static void shutDown() {
+        try {
+            if (bootstrap != null) {
+                bootstrap.shutdown();
+            }
+        } finally {
+            if (consoleLogger != null) {
+                consoleLogger.removeHandler(CAPTURE);
+            }
+        }
+    }
+
+    @Test
+    void printsOneClickableUrl() {
+        List<String> urls = consoleMessages().stream().filter(m -> m.startsWith("Vidocq dev console: http")).toList();
+        assertEquals(1, urls.size(), "one URL record: " + urls);
+        Matcher record = URL_RECORD.matcher(urls.getFirst());
+        assertTrue(record.matches(), "the URL last, nothing after its final slash: " + urls.getFirst());
+        assertTrue(Integer.parseInt(record.group(2)) > 0, "the port the console bound, not the 0 it asked for");
+    }
+
+    @Test
+    void servesThePageFromTheModulePath() throws IOException {
+        // the page is a resource of the console's jar, outside any package: readable on the module path
+        assertTrue(get(consoleUrl(), "text/html").contains("console.js"), "the page loads its module");
+        assertTrue(get(consoleUrl() + "console.js", "text/javascript").contains("api/snapshot"),
+                "the module polls the snapshot");
+    }
+
+    @Test
+    void theSnapshotIsTheReportOfThisDevBoot() {
+        assertEquals("ready", snapshot.get("state"), "the report of the boot is written once start() returns");
+        Map<?, ?> startup = (Map<?, ?>) snapshot.get("startup");
+        assertEquals("dev", startup.get("launchMode"));
+        assertEquals(consoleUrl(), ((Map<?, ?>) snapshot.get("console")).get("url"));
+    }
+
+    @Test
+    void showsTheTwoPoolsLive() {
+        Map<?, ?> panel = panel("mansart-pool");
+        List<?> groups = (List<?>) ((Map<?, ?>) panel.get("sample")).get("groups");
+        assertEquals(List.of("@Default", "audit"), groups.stream().map(g -> ((Map<?, ?>) g).get("name")).toList(),
+                "one group per pool, the unnamed one first");
+        // the live pools of vidocq.properties: vidocq.pool.maxSize=8, vidocq.pool.audit.maxSize=4
+        assertEquals(8, max(value((Map<?, ?>) groups.get(0), "active")));
+        assertEquals(4, max(value((Map<?, ?>) groups.get(1), "active")));
+    }
+
+    @Test
+    void showsTheHeapLive() {
+        Map<?, ?> sample = (Map<?, ?>) panel("jvm").get("sample");
+        Map<?, ?> heap = value(sample, "heap.used");
+        assertEquals("gauge", heap.get("kind"));
+        assertTrue(((Number) heap.get("value")).longValue() > 0, "some heap is in use: " + heap);
+    }
+
+    @Test
+    void neverShowsAPoolPassword() {
+        List<String> passwords = PASSWORD_KEYS.stream().map(DevConsoleSnapshotTest::password).toList();
+        // both pools read their password: the console says so, and only so
+        List<?> lines = (List<?>) panel("mansart-pool").get("lines");
+        assertTrue(lines.contains(List.of("@Default password", "configured")), "lines: " + lines);
+        assertTrue(lines.contains(List.of("audit password", "configured")), "lines: " + lines);
+        // the detailed report is part of the document searched below
+        assertTrue(((String) ((Map<?, ?>) snapshot.get("startup")).get("text")).contains("mansart-pool"),
+                "the full report is in the snapshot");
+
+        List<String> strings = new ArrayList<>();
+        strings(snapshot, strings);
+        for (String password : passwords) {
+            assertFalse(body.contains(password), "the snapshot holds a pool password");
+            for (String string : strings) {
+                assertFalse(string.contains(password), "a string of the snapshot holds a pool password: " + string);
+            }
+        }
+    }
+
+    /** The URL the console logged. */
+    private static String consoleUrl() {
+        for (String message : consoleMessages()) {
+            Matcher record = URL_RECORD.matcher(message);
+            if (record.matches()) {
+                return record.group(1);
+            }
+        }
+        return fail("no dev console URL on " + CONSOLE_LOGGER + ": " + consoleMessages());
+    }
+
+    private static List<String> consoleMessages() {
+        SimpleFormatter formatter = new SimpleFormatter();
+        synchronized (RECORDS) {
+            return RECORDS.stream().filter(r -> r.getLevel() == Level.INFO).map(formatter::formatMessage).toList();
+        }
+    }
+
+    /** A password the surefire configuration set, so that its absence below means something. */
+    private static String password(String key) {
+        String password = System.getProperty(key);
+        assertNotNull(password, key + " is set on the command line by the surefire configuration");
+        assertTrue(password.length() >= 8, key + " is long enough to be found only where it leaks");
+        return password;
+    }
+
+    private static Map<?, ?> panel(String id) {
+        for (Object panel : (List<?>) snapshot.get("panels")) {
+            if (id.equals(((Map<?, ?>) panel).get("id"))) {
+                return (Map<?, ?>) panel;
+            }
+        }
+        return fail("no panel '" + id + "' in " + body);
+    }
+
+    /** The value {@code key} of a sample or of one of its groups. */
+    private static Map<?, ?> value(Map<?, ?> sampleOrGroup, String key) {
+        for (Object value : (List<?>) sampleOrGroup.get("values")) {
+            if (key.equals(((Map<?, ?>) value).get("key"))) {
+                return (Map<?, ?>) value;
+            }
+        }
+        return fail("no value '" + key + "' in " + sampleOrGroup);
+    }
+
+    /** The maximum of a gauge, whichever {@link Number} JSON-B read it as. */
+    private static long max(Map<?, ?> gauge) {
+        return ((Number) gauge.get("max")).longValue();
+    }
+
+    /** Every string of a parsed document, the member names included. */
+    private static void strings(Object node, List<String> out) {
+        switch (node) {
+            case Map<?, ?> map -> map.forEach((name, member) -> {
+                out.add(String.valueOf(name));
+                strings(member, out);
+            });
+            case List<?> list -> list.forEach(element -> strings(element, out));
+            case String string -> out.add(string);
+            case null, default -> {
+                // numbers, booleans and nulls hold no text
+            }
+        }
+    }
+
+    /** The body of a {@code GET} that must answer 200 with {@code contentType}. */
+    private static String get(String url, String contentType) throws IOException {
+        HttpURLConnection connection = (HttpURLConnection) URI.create(url).toURL().openConnection();
+        connection.setConnectTimeout(2_000);
+        connection.setReadTimeout(10_000);
+        try {
+            assertEquals(200, connection.getResponseCode(), url);
+            assertTrue(connection.getContentType().startsWith(contentType), url + ": " + connection.getContentType());
+            try (InputStream in = connection.getInputStream()) {
+                return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+            }
+        } finally {
+            connection.disconnect();
+        }
+    }
+}

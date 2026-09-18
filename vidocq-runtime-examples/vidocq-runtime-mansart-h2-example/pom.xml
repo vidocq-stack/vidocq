@@ -151,6 +151,20 @@
             <artifactId>vidocq-runtime-flyway-migration-extension</artifactId>
             <version>${project.version}</version>
         </dependency>
+
+        <!-- The dev console: during `mvn vidocq:dev`, the startup report, the two pools live and the JVM at
+             http://127.0.0.1:8888/. An ordinary dependency, with no codegen bundle and no `requires`: Vidocq finds it
+             as a service, and its default, `auto`, keeps it off outside a dev launch. -->
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.essentials</groupId>
+            <artifactId>vidocq-runtime-devconsole-extension</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
@@ -193,6 +207,23 @@
                             <version>${project.version}</version>
                         </path>
                     </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!-- DevConsoleSnapshotTest boots this application in a dev launch, as `mvn vidocq:dev` starts it,
+                         with the dev console on a free port and the application's listener off port 8080. -->
+                    <systemPropertyVariables>
+                        <vidocq.launch.mode>dev</vidocq.launch.mode>
+                        <vidocq.devconsole.port>0</vidocq.devconsole.port>
+                        <vidocq.chappe.listener.default.host>127.0.0.1</vidocq.chappe.listener.default.host>
+                        <vidocq.chappe.listener.default.port>0</vidocq.chappe.listener.default.port>
+                    </systemPropertyVariables>
+                    <!-- A password for each pool, on the command line, where a dev service puts the one it injects:
+                         the JVM's input arguments hold them too, and the test checks the console shows neither. -->
+                    <argLine>-Dvidocq.pool.password=devc-it-default-7Qx4 -Dvidocq.pool.audit.password=devc-it-audit-9Kp2</argLine>
                 </configuration>
             </plugin>
             <plugin>

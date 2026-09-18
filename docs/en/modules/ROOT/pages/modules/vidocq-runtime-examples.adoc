@@ -68,6 +68,8 @@ curl -X POST http://localhost:8080/api/products \
 curl http://localhost:8080/api/products
 ----
 
+In dev mode, `mvn vidocq:dev`, the example also serves the xref:dev-console.adoc[dev console] [.tag-new]#NEW#: it logs `Vidocq dev console: http://127.0.0.1:8888/`, a page with the startup report, the two pools, `@Default` and `audit`, live, and the JVM. Its `DevConsoleSnapshotTest` boots the example in a dev launch, reads that URL from the log, and checks the snapshot the page polls: both pools, the heap, and no pool password anywhere in it.
+
 The example demonstrates the `@TransactionScoped` scope and the xref:mansart::index.adoc[Mansart] transactional bridge. It also served as the reproduction harness for bug VAU-INJ-001 (normal-scope proxy resolution) — see `vidocq/VAUBAN-BUGS.md`.
 
 == Next steps
