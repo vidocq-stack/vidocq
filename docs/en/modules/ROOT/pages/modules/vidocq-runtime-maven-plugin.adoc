@@ -276,6 +276,11 @@ forwards the ones that configure the application: every `-Dvidocq.*` that is not
 -Dvidocq.chappe.listener.default.port=8081` listens on 8081. Anything else goes through
 `vidocq.run.systemProperties`, and the forked JVM inherits Maven's environment as it is.
 
+[.tag-new]#NEW# `vidocq:dev` forwards the same set, by the same rule. Before, a `-Dvidocq.*` of the command line
+never reached the JVM it forks: `mvn vidocq:dev -Dvidocq.chappe.listener.default.port=8081` still listened on the
+default port, silently. A `vidocq.dev.systemProperties` entry and the goal's own values (`vidocq.profile=dev`)
+win over the command line, as `vidocq.run.systemProperties` does for `vidocq:run`.
+
 [#run-colours]
 === Colours in the forked JVM [.tag-new]#NEW#
 

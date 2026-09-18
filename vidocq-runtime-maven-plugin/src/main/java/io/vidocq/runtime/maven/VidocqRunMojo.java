@@ -284,9 +284,10 @@ public class VidocqRunMojo extends AbstractMojo {
 
     /**
      * The {@code -Dvidocq.*} properties of the Maven command line that configure the application, not the
-     * build: the child is another JVM, so they would not reach it otherwise.
+     * build: the child is another JVM, so they would not reach it otherwise. {@code vidocq:dev} forwards the
+     * same set, so a key behaves the same whichever goal starts the application.
      */
-    static Map<String, String> forwarded(Properties userProperties) {
+    public static Map<String, String> forwarded(Properties userProperties) {
         Map<String, String> forwarded = new LinkedHashMap<>();
         for (String key : userProperties.stringPropertyNames()) {
             if (!key.startsWith("vidocq.") || BUILD_KEYS.contains(key)

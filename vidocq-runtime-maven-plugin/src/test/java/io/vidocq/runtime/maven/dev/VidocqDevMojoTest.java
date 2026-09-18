@@ -32,6 +32,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -39,6 +40,40 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 class VidocqDevMojoTest {
+
+    @Test
+    void commandLineVidocqPropertiesReachTheChild() {
+        // mvn vidocq:dev -Dvidocq.devconsole.port=18096 -Dvidocq.chappe.listener.default.port=18094 used to be
+        // silently ignored: the child JVM never saw either key and bound the defaults, 8888 and 8080.
+        Properties commandLine = new Properties();
+        commandLine.setProperty("vidocq.devconsole.port", "18096");
+        commandLine.setProperty("vidocq.chappe.listener.default.port", "18094");
+        commandLine.setProperty("vidocq.dev.debugPort", "18095");      // configures the goal, not the application
+        commandLine.setProperty("vidocq.mainModule", "acme.app");      // idem
+        commandLine.setProperty("maven.repo.local", "/tmp/repo");      // not a vidocq key
+
+        Map<String, String> child = new LinkedHashMap<>();
+        VidocqDevMojo.forwardCommandLine(child, commandLine);
+
+        assertEquals(Map.of("vidocq.devconsole.port", "18096", "vidocq.chappe.listener.default.port", "18094"), child,
+                "the application's vidocq.* keys are forwarded, the goal's own parameters and foreign keys are not");
+    }
+
+    @Test
+    void whatTheChildAlreadyGetsWinsOverTheCommandLine() {
+        Properties commandLine = new Properties();
+        commandLine.setProperty("vidocq.profile", "staging");
+        commandLine.setProperty("vidocq.devconsole.port", "18096");
+
+        Map<String, String> child = new LinkedHashMap<>();
+        child.put("vidocq.profile", "dev");                   // the goal's own value
+        child.put("vidocq.devconsole.port", "9000");          // a vidocq.dev.systemProperties entry
+        VidocqDevMojo.forwardCommandLine(child, commandLine);
+
+        assertEquals("dev", child.get("vidocq.profile"));
+        assertEquals("9000", child.get("vidocq.devconsole.port"),
+                "as in vidocq:run, a property the child already gets is not replaced by the command line");
+    }
 
     @Test
     void connectionReportFallsBackToClassesDirParentWhenBuildDirIsNull(@TempDir Path tmp) throws Exception {

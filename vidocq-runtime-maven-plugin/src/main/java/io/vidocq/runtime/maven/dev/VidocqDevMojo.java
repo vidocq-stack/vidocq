@@ -22,6 +22,8 @@ package io.vidocq.runtime.maven.dev;
 import io.vidocq.runtime.maven.ApplicationLaunch;
 import io.vidocq.runtime.maven.ConsoleColors;
 import io.vidocq.runtime.maven.JdwpAgent;
+import io.vidocq.runtime.maven.VidocqRunMojo;
+import org.apache.maven.execution.MavenSession;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
@@ -40,6 +42,7 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -80,6 +83,10 @@ public class VidocqDevMojo extends AbstractMojo {
 
     @Parameter(defaultValue = "${project}", readonly = true, required = true)
     private MavenProject project;
+
+    /** The Maven session, for the {@code -Dvidocq.*} properties forwarded to the application. */
+    @Parameter(defaultValue = "${session}", readonly = true, required = true)
+    private MavenSession session;
 
     /**
      * Java module containing the main class. Required — Vidocq apps are
@@ -390,6 +397,17 @@ public class VidocqDevMojo extends AbstractMojo {
         return ApplicationLaunch.appPath(classesDir.toPath(), layerMode);
     }
 
+    /**
+     * Adds the {@code -Dvidocq.*} properties of the Maven command line that configure the application — the
+     * same set {@code vidocq:run} forwards ({@link VidocqRunMojo#forwarded}). The child is another JVM, so
+     * {@code mvn vidocq:dev -Dvidocq.devconsole.port=9000} would otherwise never reach it. What the child
+     * already gets wins, a {@code vidocq.dev.systemProperties} entry included, as it does for {@code vidocq:run};
+     * it runs before the colour policy is chosen, so an explicit {@code -Dvidocq.console.color} is seen there.
+     */
+    static void forwardCommandLine(Map<String, String> props, Properties userProperties) {
+        VidocqRunMojo.forwarded(userProperties).forEach(props::putIfAbsent);
+    }
+
     private Map<String, String> buildSystemProperties() {
         Map<String, String> props = new LinkedHashMap<>();
         props.put("vidocq.profile", profile);
@@ -402,6 +420,7 @@ public class VidocqDevMojo extends AbstractMojo {
                 props.put(pair.substring(0, eq).trim(), pair.substring(eq + 1).trim());
             }
         }
+        forwardCommandLine(props, session == null ? new Properties() : session.getUserProperties());
         // The child inherits Maven's streams, so it inherits Maven's colour policy: without this, an IDE
         // Maven console (no TTY, no idea_rt.jar agent) turns the runtime's colours off while Maven's own
         // lines stay coloured.
