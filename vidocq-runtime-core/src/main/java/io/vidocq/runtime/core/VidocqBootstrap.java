@@ -27,11 +27,14 @@ import io.vidocq.runtime.core.config.ConfigKeyAudit;
 import io.vidocq.runtime.core.config.VidocqConfigImpl;
 import io.vidocq.runtime.core.console.ConsoleLogging;
 import io.vidocq.runtime.core.console.ConsoleSupport;
+import io.vidocq.runtime.core.report.StartupAnomalies;
+import io.vidocq.runtime.core.report.VerbosityResolver;
 import io.vidocq.runtime.spi.ExtensionContext;
 import io.vidocq.runtime.spi.VidocqConfiguration;
 import io.vidocq.runtime.spi.VidocqExtension;
 import io.vidocq.runtime.spi.config.VidocqConfig;
 import io.vidocq.runtime.spi.report.LaunchMode;
+import io.vidocq.runtime.spi.report.Verbosity;
 
 import java.lang.management.ManagementFactory;
 import java.util.Collections;
@@ -39,6 +42,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Predicate;
 
 /**
  * Vidocq lifecycle orchestrator.
@@ -70,7 +75,15 @@ public final class VidocqBootstrap {
             ConsoleSupport.COLOR_KEY,
             StartupBanner.MODE_KEY,
             StartupBanner.LOCATION_KEY,
-            LaunchModeResolver.MODE_KEY);
+            LaunchModeResolver.MODE_KEY,
+            VerbosityResolver.KEY);
+
+    /**
+     * Whether a bootstrap of this JVM was configured already. The dev reload loop boots again in the same
+     * JVM, and only its first boot gets the detailed startup report by default: this is the one piece of
+     * report state that is the JVM's rather than a boot's.
+     */
+    private static final AtomicBoolean BOOTED = new AtomicBoolean();
 
     private final CountDownLatch shutdownLatch = new CountDownLatch(1);
     private Thread shutdownHook;
@@ -86,6 +99,8 @@ public final class VidocqBootstrap {
     private boolean embeddedDeployment;
     /** The launch of this boot, resolved by {@link #configure()}; {@code null} before. */
     private StartupBanner.Launch launch;
+    /** How much the startup report of this boot shows, resolved by {@link #configure()}; nothing before. */
+    private Verbosity verbosity = Verbosity.OFF;
     /**
      * Top-chrono taken during the construction of the bootstrap (= just after the entry
      * from {@code Vidocq.main()} via {@link #create()}). Comparable to {@code
@@ -118,8 +133,8 @@ public final class VidocqBootstrap {
     }
 
     /**
-     * Phase 1: loads the configuration, resolves the launch mode, prints the startup banner (once per
-     * JVM) and discovers the extensions.
+     * Phase 1: loads the configuration, resolves the launch mode and the level of the startup report, prints
+     * the startup banner (once per JVM) and discovers the extensions.
      */
     public VidocqBootstrap configure() {
         // Universal-loader mode: embedders that skip Vidocq.main (the CLI boots
@@ -131,10 +146,16 @@ public final class VidocqBootstrap {
         this.config = new VidocqConfigImpl();
         // vidocq.properties is visible from here: vidocq.log.console and vidocq.console.color.
         ConsoleLogging.applyConfiguration(config);
+        // An invalid value of either key is reported once per boot, then read as auto.
+        checkedSetting(config, LaunchModeResolver.MODE_KEY, LaunchModeResolver::isSetting, LaunchModeResolver.ACCEPTED);
+        String report = checkedSetting(config, VerbosityResolver.KEY, VerbosityResolver::isSetting,
+                VerbosityResolver.ACCEPTED);
         // Every boot resolves its own launch, the reloads of the dev loop included: the extensions read
         // it through ExtensionContext.launchMode(), and the configuration may have changed since.
         StartupBanner.Launch resolved = resolveLaunch(config);
         this.launch = resolved;
+        this.verbosity = VerbosityResolver.resolve(report, launchMode(), embeddedDeployment,
+                BOOTED.compareAndSet(false, true));
         // The banner needs the configuration (vidocq.banner.*) and comes before the first boot log line.
         StartupBanner.showOnce(config, () -> resolved);
         LOG.log(System.Logger.Level.INFO, "Vidocq - Configuration phase");
@@ -172,7 +193,7 @@ public final class VidocqBootstrap {
         var weaving = io.vidocq.vauban.core.weaving.LoadTimeWeaving.prepare(
                 Thread.currentThread().getContextClassLoader());
         if (weaving.failure() != null) {
-            LOG.log(System.Logger.Level.WARNING, weaving.failure());
+            StartupAnomalies.warn(StartupAnomalies.WEAVING_FAILED, weaving.failure());
         }
 
         // Build CDI container
@@ -210,7 +231,7 @@ public final class VidocqBootstrap {
             ext.onStart(context);
         }
 
-        auditConfigKeys();
+        auditConfigKeys(config, extensions);
 
         // Shutdown hook
         shutdownHook = new Thread(this::shutdown, "vidocq-shutdown");
@@ -241,6 +262,37 @@ public final class VidocqBootstrap {
         }
     }
 
+    /**
+     * The value of {@code key}, stripped, or {@code null} when it is unset or cannot be read. A value
+     * {@code valid} rejects is reported as {@code VIDOCQ-CFG-001}; the resolvers then read it as
+     * {@code auto}.
+     */
+    private static String checkedSetting(VidocqConfig config, String key, Predicate<String> valid, String accepted) {
+        String value;
+        try {
+            value = config.getValue(key).map(String::strip).filter(v -> !v.isEmpty()).orElse(null);
+        } catch (RuntimeException unreadable) {
+            return null;
+        }
+        if (!valid.test(value)) {
+            StartupAnomalies.warn(StartupAnomalies.INVALID_VALUE, StartupAnomalies.invalidValue(key, value, accepted));
+        }
+        return value;
+    }
+
+    /** Lets the next {@link #configure()} be the first boot of the JVM again. */
+    static void forgetEarlierBoots() {
+        BOOTED.set(false);
+    }
+
+    /**
+     * How much the startup report of this boot shows: {@link Verbosity#OFF} before {@link #configure()}.
+     * An embedded deployment shows nothing unless {@code vidocq.startup.report} asks for it.
+     */
+    Verbosity verbosity() {
+        return verbosity;
+    }
+
     /** The launch mode of this boot: {@code prod} before {@link #configure()}, or when it could not be read. */
     LaunchMode launchMode() {
         return launch == null || launch.launchMode() == null ? LaunchMode.PROD : launch.launchMode().mode();
@@ -252,21 +304,24 @@ public final class VidocqBootstrap {
     }
 
     /**
-     * Warns about every configured {@code vidocq.*} key that no loaded extension consumes.
+     * Warns about every configured {@code vidocq.*} key that nothing consumes, neither the core nor a
+     * loaded extension ({@code VIDOCQ-CFG-003}).
      *
      * <p>Such a key is applied by nobody: the application silently keeps the default, and the
      * mistake stays invisible whenever the configured value happens to <em>be</em> the default —
      * how a documented {@code vidocq.http.port} sat inert in real applications for weeks
-     * (Vidocq/chappe#7). Reporting is best-effort and never fails the boot.
+     * (Vidocq/chappe#7). Reporting is best-effort and never fails the boot: an audit that fails is a
+     * warning of its own ({@code VIDOCQ-CFG-002}).
      */
-    private void auditConfigKeys() {
+    static void auditConfigKeys(VidocqConfig config, List<VidocqExtension> extensions) {
         try {
             Set<String> declared = declaredConfigKeys(extensions);
             for (String key : ConfigKeyAudit.unconsumedKeys(config.getPropertyNames(), declared)) {
-                LOG.log(System.Logger.Level.WARNING, ConfigKeyAudit.warningFor(key, declared));
+                StartupAnomalies.warn(StartupAnomalies.UNREAD_KEY, ConfigKeyAudit.messageFor(key, declared));
             }
         } catch (RuntimeException e) {
-            LOG.log(System.Logger.Level.DEBUG, "Configuration key audit skipped", e);
+            StartupAnomalies.warn(StartupAnomalies.AUDIT_FAILED, "Configuration key audit failed: " + e
+                    + "; keys that nothing reads are not reported");
         }
     }
 

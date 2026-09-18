@@ -41,8 +41,9 @@ import java.util.function.Function;
  *
  * <p>The decision is a pure function of {@link Inputs}: first match wins, in this order.
  * <ol>
- *   <li>{@value #MODE_KEY} set to {@code dev}, {@code test} or {@code prod} (another value logs
- *       one warning and falls through to the detection);</li>
+ *   <li>{@value #MODE_KEY} set to {@code dev}, {@code test} or {@code prod} ({@code auto}, the default,
+ *       and any other value fall through to the detection: the bootstrap reports an invalid one, see
+ *       {@link #isSetting(String)});</li>
  *   <li>{@value #PROFILE_KEY} that <em>is</em> {@code dev}, {@code test} or {@code prod} — both
  *       dev tools set it; another profile ({@code staging}) is not a mode and falls through;</li>
  *   <li>{@value #RELOAD_FILE_PROPERTY}, the {@code vidocq:dev} reload loop: {@code dev};</li>
@@ -54,13 +55,15 @@ import java.util.function.Function;
  *
  * <p>Reading the archives is bounded: at most {@value #MAX_ARCHIVES} of them are looked at, their
  * shape is a string comparison, and only the first directory has its parents probed for a build
- * file — a handful of {@code stat} calls, once per JVM. Nothing here throws: a failing probe is
- * a signal that was not found.
+ * file — a handful of {@code stat} calls, once per boot. Nothing here throws or logs: a failing probe
+ * is a signal that was not found.
  */
 public final class LaunchModeResolver {
 
-    /** Configuration key of the launch mode: {@code dev}, {@code test} or {@code prod}. */
+    /** Configuration key of the launch mode: {@code auto}, {@code dev}, {@code test} or {@code prod}. */
     public static final String MODE_KEY = "vidocq.launch.mode";
+    /** The values {@value #MODE_KEY} accepts, as they are written. */
+    public static final String ACCEPTED = "auto, dev, test, prod";
     /** Configuration key of the active profile, a launch signal when it is a mode name. */
     public static final String PROFILE_KEY = "vidocq.profile";
     /** Set by {@code vidocq:dev} for its reload loop. */
@@ -79,8 +82,6 @@ public final class LaunchModeResolver {
     static final int MAX_ARCHIVES = 4;
     /** How many frames of the booting thread are read. */
     static final int MAX_FRAMES = 128;
-
-    private static final System.Logger LOG = System.getLogger(LaunchModeResolver.class.getName());
 
     /**
      * What the decision is made of, so that it can be made without a JVM in that state.
@@ -166,18 +167,18 @@ public final class LaunchModeResolver {
         return new Resolution(LaunchMode.PROD, NO_SIGNAL, false, false);
     }
 
-    /** (a) {@value #MODE_KEY}; an unknown value logs one warning and lets the detection decide. */
+    /**
+     * Whether {@code value} is a value of {@value #MODE_KEY}: unset, blank, {@code auto} or a mode, ignoring
+     * case and surrounding blanks. Another value is an invalid one, which the detection replaces.
+     */
+    public static boolean isSetting(String value) {
+        return value == null || value.isBlank() || value.strip().equalsIgnoreCase("auto")
+                || LaunchMode.parse(value).isPresent();
+    }
+
+    /** (a) {@value #MODE_KEY}; {@code auto} or a value that names no mode lets the detection decide. */
     static Resolution fromConfiguration(String value) {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
-        Optional<LaunchMode> mode = LaunchMode.parse(value);
-        if (mode.isPresent()) {
-            return new Resolution(mode.get(), MODE_KEY, true, true);
-        }
-        LOG.log(System.Logger.Level.WARNING, "Configuration key ''{0}'' has an unknown value ''{1}''"
-                + " (expected dev, test or prod); detecting the launch mode", MODE_KEY, value);
-        return null;
+        return LaunchMode.parse(value).map(mode -> new Resolution(mode, MODE_KEY, true, true)).orElse(null);
     }
 
     /** (b) {@value #PROFILE_KEY} when it names a mode; another profile is not one. */

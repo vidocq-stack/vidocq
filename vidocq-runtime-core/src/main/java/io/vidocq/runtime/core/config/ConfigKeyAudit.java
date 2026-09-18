@@ -19,20 +19,23 @@
  */
 package io.vidocq.runtime.core.config;
 
+import io.vidocq.runtime.core.report.StartupAnomalies;
+
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 
 /**
- * Finds the configured {@code vidocq.*} keys that no loaded extension consumes.
+ * Finds the configured {@code vidocq.*} keys that nothing consumes: neither the core nor a loaded
+ * extension.
  *
  * <p>A key nobody reads is applied by nobody: the application silently keeps the default value,
  * and the mistake is invisible whenever the configured value happens to <em>be</em> the default.
  * That is how a documented {@code vidocq.http.port} could sit inert in applications for weeks
  * (Vidocq/chappe#7) — the whole class of typos and renamed keys has the same shape.
  *
- * <p>Auditing is <strong>opt-in per namespace</strong>: a key is only reported when some loaded
- * extension claims its {@code vidocq.<namespace>.} namespace through
+ * <p>Auditing is <strong>opt-in per namespace</strong>: a key is only reported when the core or some
+ * loaded extension claims its {@code vidocq.<namespace>.} namespace, the extensions through
  * {@link io.vidocq.runtime.spi.VidocqExtension#configKeys()}. An extension that declares nothing
  * therefore costs nothing and can never provoke a false warning — the cost of a wrong warning here
  * is higher than the cost of a missed one, since it would train users to ignore the log.
@@ -64,8 +67,8 @@ public final class ConfigKeyAudit {
      * The configured keys that fall under a claimed namespace yet match no declared key.
      *
      * @param propertyNames the configured property names, as reported by the config sources
-     * @param declaredKeys  the union of every loaded extension's {@code configKeys()}; an entry
-     *                      ending in {@code *} is a prefix
+     * @param declaredKeys  the keys the core reads and every loaded extension's {@code configKeys()};
+     *                      an entry ending in {@code *} is a prefix
      * @return the unconsumed keys, sorted and deduplicated; empty when there is nothing to report
      */
     public static List<String> unconsumedKeys(Iterable<String> propertyNames, Set<String> declaredKeys) {
@@ -94,16 +97,25 @@ public final class ConfigKeyAudit {
 
     /**
      * Formats the startup warning for one unconsumed key: it names the offending key and the
-     * candidates it could have meant, so the reader is not left to grep the reference table.
+     * candidates it could have meant, so the reader is not left to grep the reference table. Its code,
+     * {@code VIDOCQ-CFG-003}, comes first.
      */
     public static String warningFor(String key, Set<String> declaredKeys) {
+        return StartupAnomalies.withCode(StartupAnomalies.UNREAD_KEY, messageFor(key, declaredKeys));
+    }
+
+    /**
+     * The {@linkplain #warningFor warning} for one unconsumed key, without its code. "Read by nothing":
+     * the keys the core reads itself are audited alongside the extensions' ones.
+     */
+    public static String messageFor(String key, Set<String> declaredKeys) {
         String namespace = namespaceOf(key);
         String candidates = declaredKeys.stream()
                 .filter(d -> namespaceOf(d).equals(namespace))
                 .sorted()
                 .reduce((a, b) -> a + ", " + b)
                 .orElse("(none)");
-        return "Configuration key '" + key + "' is read by no extension and has no effect. "
+        return "Configuration key '" + key + "' is read by nothing and has no effect. "
                 + "Known keys in this namespace: " + candidates;
     }
 

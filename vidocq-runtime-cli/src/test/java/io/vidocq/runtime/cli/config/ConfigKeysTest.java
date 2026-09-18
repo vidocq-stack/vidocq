@@ -56,6 +56,13 @@ class ConfigKeysTest {
     }
 
     @Test
+    void theStartupReportKeyIsRecognized() {
+        // read by vidocq-runtime-core (startup report), so `vidocq doctor` must not flag it
+        assertTrue(ConfigKeys.isKnown("vidocq.startup.report"));
+        assertFalse(ConfigKeys.isKnown("vidocq.startpu.report"), "a typo in the namespace is still reported");
+    }
+
+    @Test
     void unknownVidocqNamespacesAreRejected() {
         assertFalse(ConfigKeys.isKnown("vidocq.htpp.port"));
         assertFalse(ConfigKeys.isKnown("vidocq.bogus"));

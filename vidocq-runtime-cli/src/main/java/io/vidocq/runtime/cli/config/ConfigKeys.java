@@ -52,7 +52,7 @@ public final class ConfigKeys {
             "distDir", "distName", "docker", "http", "icon",
             "includeResources", "installerDir", "jlink", "jpackageType",
             "jvmArgs", "launch", "launcher", "log", "mainClass", "mainModule", "pool",
-            "profile", "rest", "runtimeImage", "scriptName", "stripDebug",
+            "profile", "rest", "runtimeImage", "scriptName", "startup", "stripDebug",
             "vendor");
 
     private ConfigKeys() {}

@@ -56,7 +56,7 @@ class CoreConfigKeysTest {
                 "vidocq.banner.enabled", "vidocq.app.path", "vidocq.app.port"), declared);
 
         assertEquals(List.of("vidocq.banner.enabled"), unconsumed, "vidocq.app.* is claimed by nobody: not audited");
-        assertEquals("Configuration key 'vidocq.banner.enabled' is read by no extension and has no effect. "
+        assertEquals("[VIDOCQ-CFG-003] Configuration key 'vidocq.banner.enabled' is read by nothing and has no effect. "
                 + "Known keys in this namespace: vidocq.banner.location, vidocq.banner.mode",
                 ConfigKeyAudit.warningFor("vidocq.banner.enabled", declared));
     }
@@ -67,9 +67,20 @@ class CoreConfigKeysTest {
 
         assertEquals(List.of("vidocq.launch.moed"),
                 ConfigKeyAudit.unconsumedKeys(List.of("vidocq.launch.mode", "vidocq.launch.moed"), declared));
-        assertEquals("Configuration key 'vidocq.launch.moed' is read by no extension and has no effect. "
+        assertEquals("[VIDOCQ-CFG-003] Configuration key 'vidocq.launch.moed' is read by nothing and has no effect. "
                 + "Known keys in this namespace: vidocq.launch.mode",
                 ConfigKeyAudit.warningFor("vidocq.launch.moed", declared));
+    }
+
+    @Test
+    void theStartupReportKeyIsDeclaredAndATypoIsReported() {
+        Set<String> declared = VidocqBootstrap.declaredConfigKeys(List.of());
+
+        assertEquals(List.of("vidocq.startup.reprot"),
+                ConfigKeyAudit.unconsumedKeys(List.of("vidocq.startup.report", "vidocq.startup.reprot"), declared));
+        assertEquals("[VIDOCQ-CFG-003] Configuration key 'vidocq.startup.reprot' is read by nothing and has no effect. "
+                + "Known keys in this namespace: vidocq.startup.report",
+                ConfigKeyAudit.warningFor("vidocq.startup.reprot", declared));
     }
 
     @Test

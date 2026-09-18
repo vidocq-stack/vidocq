@@ -28,6 +28,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.NullSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -76,6 +78,9 @@ class LaunchModeResolverTest {
                         List.of(), false), LaunchMode.DEV, "vidocq.launch.mode"),
                 // (a) an invalid value is no signal: the detection goes on
                 Arguments.of("an invalid configured mode", inputs("wild", "test", null, false, NO_FRAME,
+                        List.of(), false), LaunchMode.TEST, "profile test"),
+                // (a) auto, the default written out, asks for the detection
+                Arguments.of("auto", inputs(" Auto ", "test", null, false, NO_FRAME,
                         List.of(), false), LaunchMode.TEST, "profile test"),
                 // (b) the profile, when it is a mode
                 Arguments.of("the profile", inputs(null, "dev", null, false, NO_FRAME, List.of(), false),
@@ -142,16 +147,29 @@ class LaunchModeResolverTest {
     }
 
     @Test
-    void anInvalidConfiguredModeWarnsOnceAndLetsTheDetectionDecide() {
+    void anInvalidConfiguredModeLetsTheDetectionDecideWithoutLogging() {
+        // the bootstrap reports it once per boot (VIDOCQ-CFG-001): the resolution stays a pure function
         try (Records records = new Records(LaunchModeResolver.class.getName())) {
             Resolution resolution = LaunchModeResolver.resolve(
                     inputs("staging", null, null, false, NO_FRAME, List.of(), false));
 
-            assertEquals(List.of("Configuration key 'vidocq.launch.mode' has an unknown value 'staging'"
-                    + " (expected dev, test or prod); detecting the launch mode"), records.messages(Level.WARNING));
+            assertEquals(List.of(), records.messages(Level.WARNING));
             assertEquals(LaunchMode.PROD, resolution.mode());
             assertEquals("no dev or test signal", resolution.reason());
         }
+    }
+
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(strings = {"", "  ", "auto", " AUTO ", "dev", "test", "prod", " Prod "})
+    void aValueOfTheKeyIsAcceptedSilently(String value) {
+        assertTrue(LaunchModeResolver.isSetting(value), value);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"staging", "development", "de v", "detailed", "true"})
+    void anyOtherValueIsInvalid(String value) {
+        assertFalse(LaunchModeResolver.isSetting(value), value);
     }
 
     @Test
