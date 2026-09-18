@@ -1,0 +1,680 @@
+= Writing a dev console panel [.tag-new]#NEW#
+:description: How an extension shows its section of the startup report live in the dev console: where the panel lives, boot facts and live values, charts, the rules, a worked example, tests and a checklist.
+
+[.lead]
+A panel is a section of the xref:modules/vidocq-runtime-core.adoc#startup-report[startup report] that the xref:dev-console.adoc[dev console] also shows live. Your extension already says, once per boot, what it found; as a panel, it also says, about once a second, what it is doing — how many connections are in use, how many requests are waiting — and names the values the page should plot. This page is for the author of an extension. It walks through the Mansart pool panel, the first one shipped, and ends with a checklist.
+
+[#in-short]
+== In short [.tag-new]#NEW#
+
+[source,java]
+----
+public final class AcmeCacheExtension implements VidocqExtension, DevConsolePanel {
+
+    private static final List<Chart> CHARTS = List.of(
+            new Chart("entries", "Entries", List.of(Series.area("entries"), Series.ceiling("entries"))));
+
+    private volatile AcmeCache cache;           // set in onStart, cleared first in onStop
+
+    // name(), onStart(...), onStop() as in any extension
+
+    public String id() { return "acme-cache"; }                               // the section, the tab
+
+    public void contribute(StartupReportContext context, StartupReportSection section) {
+        AcmeCache c = cache;                                                  // boot facts, once per boot
+        section.summary(c == null ? "not started" : c.capacity() + " entries max");
+    }
+
+    public List<Chart> charts() { return CHARTS; }                            // what the page plots
+
+    public void sample(PanelSample out) {                                     // live values, every poll
+        AcmeCache c = cache;
+        if (c == null) return;
+        out.gauge("entries", c.size(), c.capacity(), Unit.COUNT)
+           .counter("hits", c.hits(), Unit.COUNT);
+    }
+}
+----
+
+`DevConsolePanel` extends `StartupReportContributor`: a panel is a contributor with two more methods, `sample` and `charts`. It lives in the package `io.vidocq.runtime.spi.devconsole` of the artifact `io.vidocq.runtime:vidocq-runtime-devconsole-spi`, which the extension module depends on:
+
+[source,xml,subs=attributes+]
+----
+<dependency>
+    <groupId>io.vidocq.runtime</groupId>
+    <artifactId>vidocq-runtime-devconsole-spi</artifactId>
+    <version>{project-version}</version>
+</dependency>
+----
+
+[source,java]
+----
+module io.vidocq.runtime.extensions.jakartaee.web.mansart.pool {
+    requires transitive io.vidocq.runtime.spi;
+    requires transitive io.vidocq.runtime.spi.devconsole;   // transitive: the exported extension class is a panel
+    // ...
+}
+----
+
+It is a hard requirement, since a class does not load without the interfaces it implements, and a light one: the module holds five small types and brings only `io.vidocq.runtime.spi`. The console itself stays the application's choice: without it, the panel is a contributor like any other, and its `sample` is never called.
+
+[#where-it-lives]
+== Where the panel lives [.tag-new]#NEW#
+
+**In the runtime extension of the brick**, the module under `vidocq-runtime-extensions` that adapts a component — Mansart, Knock, Cassini — to Vidocq. Never in the component, and never in an artifact of its own.
+
+The runtime extension is the indirection between the component and Vidocq. It is the one module that knows both: it configures the component from `vidocq.*` keys, adapts it to the container and to Chappe, and reads what the component publishes. What the component has to say in the startup report and in the console is one more such adaptation, so it belongs there:
+
+* **Not in the component.** A component such as Knock or Mansart is used outside Vidocq and depends on no Vidocq SPI. What a panel needs from it is public, read-only state: counters kept in memory, a registry, a snapshot. When the component does not publish what the panel needs, the component gains that public accessor, and the panel stays in the extension.
+* **Not in an artifact of its own.** The panel is there exactly when the brick is: the application that adds the extension gets its section and its panel, and has nothing else to know about, to add, or to keep at the same version. The runtime extension exists already for every brick, `vidocq-runtime-knock-health-extension` under `vidocq-runtime-extensions-microprofile` for Knock, so a panel never needs a new module.
+
+The console finds a panel the way the report finds a contributor: it keeps the contributors the boot called that are panels, the very instances. There is nothing new to declare, and there are two cases.
+
+[#extension-is-the-panel]
+=== The extension class is the panel [.tag-new]#NEW#
+
+An extension with a `VidocqExtension` class implements `DevConsolePanel` next to it. It is found with no second declaration, and its section comes with those of the extensions, in the order they start:
+
+[source,java]
+----
+public final class MansartPoolExtension implements VidocqExtension, DevConsolePanel {
+----
+
+This is the case of the Mansart pool extension, and of most extensions. The panel reads the fields the extension already fills in its lifecycle, and clears them in its `onStop`.
+
+[#wrapper-panel]
+=== A wrapper without an extension class [.tag-new]#NEW#
+
+Some extensions have no Java class at all. The Knock, Dirac and Heisenberg extensions are *wrappers*: a `pom.xml` and a `module-info` that bring the component in, which then integrates through standard CDI and JAX-RS discovery alone.
+
+Knock's ADR-002 (`docs/adr/ADR-002-vidocq-runtime-integration-strategy.md` in the `knock` repository) chose that shape, its option B, with "No own Java classes", over a `KnockExtension implements VidocqExtension`, its option A. It also gives its own way out for a need that only Vidocq has: an optional module on the Vidocq side, next to the component. Its example is a `vidocq-runtime-knock-secure-extension` that "_in addition_ to the wrapper exposes a `ContainerRequestFilter`". A panel takes that way out. The Vidocq side of a brick is its runtime extension, the indirection that configures the component and adapts it to Vidocq, so the panel goes there. It does not go into a second artifact beside the wrapper: an application opts into a filter, but a panel comes with the brick.
+
+So a wrapper keeps its shape. It gains no `VidocqExtension`, no lifecycle and no priority, which keeps option A rejected. It gains exactly one class, the panel, declared as a `StartupReportContributor` service. That class departs from option B's "No own Java classes". When a wrapper gains it, record the change where the class-less shape is written down: add a note to Knock's ADR-002, and update the comments in the wrapper's `pom.xml` and `module-info` that say it has no Java class of its own.
+
+A wrapper around a component, Ledger, whose `@ApplicationScoped` `LedgerStats` bean keeps its counters in memory:
+
+.`src/main/java/io/vidocq/runtime/extensions/ledger/LedgerPanel.java`
+[source,java]
+----
+public final class LedgerPanel implements DevConsolePanel {
+
+    private static final List<Chart> CHARTS = List.of(
+            new Chart("writes", "Writes", List.of(Series.rate("appended"), Series.rate("rejected"))),
+            new Chart("writers", "Writers", List.of(Series.area("writers"), Series.ceiling("writers"))));
+
+    /** The component's statistics, found once per boot by contribute(); read by sample(). */
+    private volatile LedgerStats stats;
+
+    @Override
+    public String id() {
+        return "ledger";
+    }
+
+    @Override
+    public String title() {
+        return "Ledger";
+    }
+
+    @Override
+    public void contribute(StartupReportContext context, StartupReportSection section) {
+        LedgerStats found = context.lookup(LedgerStats.class).orElse(null);   // @ApplicationScoped
+        stats = found;
+        if (found == null) {
+            section.summary("no ledger deployed");
+            return;
+        }
+        section.summary(found.journals().size() + " journals, " + found.maxWriters() + " writers max")
+                .list("journals", found.journals());
+    }
+
+    @Override
+    public List<Chart> charts() {
+        return CHARTS;
+    }
+
+    @Override
+    public void sample(PanelSample out) {
+        LedgerStats s = stats;
+        if (s == null) {
+            return;
+        }
+        out.counter("appended", s.appended(), Unit.COUNT)
+                .counter("rejected", s.rejected(), Unit.COUNT)
+                .gauge("writers", s.writers(), s.maxWriters(), Unit.COUNT);
+    }
+}
+----
+
+It is declared twice, as every service contributor is (xref:modules/vidocq-runtime-spi.adoc#startup-report-contributors[Contributing to the startup report]): `provides` for the module path, where the JDK ignores `META-INF/services` in a named module, and the file for the class path.
+
+.`src/main/java/module-info.java`
+[source,java]
+----
+module io.vidocq.runtime.extensions.ledger {
+    requires transitive com.example.ledger;
+    requires io.vidocq.runtime.spi.devconsole;
+
+    provides io.vidocq.runtime.spi.report.StartupReportContributor
+            with io.vidocq.runtime.extensions.ledger.LedgerPanel;
+}
+----
+
+.`src/main/resources/META-INF/services/io.vidocq.runtime.spi.report.StartupReportContributor`
+[source,text]
+----
+io.vidocq.runtime.extensions.ledger.LedgerPanel
+----
+
+Ledger uses the standard layout. The Knock, Dirac and Heisenberg wrappers do not: they keep their `module-info.java` in a source root of its own, `src/main/module-info`, which an execution of the compiler compiles in the `prepare-package` phase. Because they have no `src/main/java`, their pom also points the javadoc `sourcepath` at that folder alone. Their first class goes into `src/main/java`, and its `provides` goes into the existing `src/main/module-info/module-info.java`, the way the Cyrano extension has both roots. Drop the `sourcepath` override at the same time. The parent pom already points javadoc at `src/main/java`, and with the override kept, the javadoc jar leaves the new class out.
+
+What changes for a service:
+
+* **No lifecycle.** The core creates the instance once per boot, calls its `contribute` after every `onStart`, and the console keeps that instance for the boot; a dev reload creates a new one. So the panel finds what it reads in `contribute`, with `context.lookup(Type.class)`, which returns the bean of the default qualifier. Keep a normal-scoped bean (`@ApplicationScoped`), whose client proxy stays valid while the container runs, or values copied from it; never a `@Dependent` instance, which `lookup` destroys when `contribute` returns.
+* **No `onStop` to clear its fields.** None is needed: a stopping boot withdraws its report first, so that the console samples no contributed panel any more, and closes the console's listener before any other extension stops.
+* **Its place in the report** comes after the sections of the extensions, by `order()`, then `id()`.
+
+A wrapper that only has boot facts to show implements `StartupReportContributor` alone, declared the same way: every section is a panel of the console, with its boot facts. Knock is such a case for now: its checks can be listed by probe, but their status is only known by running them, which a sample must not do (<<rule-memory-only>>), until Knock keeps its last result in memory. Implement `DevConsolePanel` when there is something to sample.
+
+[#two-halves]
+== Two halves: boot facts and live values [.tag-new]#NEW#
+
+[cols="1,1,3"]
+|===
+| Method | Called | For
+
+| `contribute(context, section)`
+| Once per boot, on the booting thread, after every `onStart`.
+| The *boot facts*: what the boot found, as rows, lists and secrets, and what is wrong with it, as anomalies. They are both the section of the report written to the log and the boot facts of the panel: one contract, two renderings. Whenever the console is on, Vidocq gives the contributors the `DETAILED` level, so that every row reaches the console even on a reload that logs the summary only; what the log prints still follows its own level.
+
+| `charts()`
+| Once per boot, after the report is written.
+| The charts the page draws: which values, how. It may depend on what the boot found. None by default.
+
+| `sample(out)`
+| On every poll of the page, about once a second per open tab: on the console's request threads, possibly several at once, and only once the report of the boot is written.
+| The *live values*: what changes while the application runs.
+|===
+
+The boot facts are drawn from what `contribute` writes: the summary is the headline of the panel, the anomalies come first, and the rows follow as a table. When the sample has groups, a row whose key is a group's name is shown in that group's header, and a row whose key starts with the name and a space goes to that group's card, without the name: the Mansart pool panel writes `@Default` and `@Default size`, and the card of the pool `@Default` shows its URL in its header and `size` in its boot facts. The other rows stay in the panel's own table.
+
+[#values]
+== Values [.tag-new]#NEW#
+
+`PanelSample` takes each value under a key, and every method returns a scope, so that calls chain. A value is one of these kinds:
+
+[cols="2,3,3"]
+|===
+| Method | For | The page shows
+
+| `gauge(key, value, unit)`
+| A level that goes up and down: the threads alive, the borrowers waiting.
+| The number.
+
+| `gauge(key, value, max, unit)`
+| A level with the most it can reach: the active connections of a pool of 8, the heap out of its maximum.
+| The number and a fill bar; a `CEILING` series draws the max as a dashed rule.
+
+| `counter(key, total, unit)`
+| A total that only grows during a boot, as the component keeps it: the borrows so far.
+| The total and `+N since last poll`; a `RATE` series plots its growth per second.
+
+| `duration(key, value)`
+| A duration, such as a mean over the whole boot.
+| Formatted, never plotted.
+
+| `text(key, value)`
+| A short text: a state, a mode.
+| As it is.
+
+| `absent(key, reason)`
+| A value the panel cannot give now: `leak detection off`, `no borrow yet`, a figure the JVM does not publish.
+| The reason, greyed. Never a zero, which would read as a measure.
+
+| `table(key, columns, rows)`
+| A small table: the entries of a registry.
+| A table.
+
+| `group(name)`
+| One named item among several of the same kind: a pool, a garbage collector.
+| A card per group, with its values, its charts and its boot facts.
+|===
+
+* **Units.** `COUNT` (a number of things), `BYTES` (shown as a size), `NANOS` (shown as a duration; the rate of a counter of nanoseconds is the share of wall time spent) and `RATIO` (0 to 1, shown as a percentage: a CPU load is a `RATIO` gauge with a max of 1).
+* **Keys.** A lowercase letter, then up to 39 lowercase letters, digits, dots or hyphens: `[a-z][a-z0-9.-]{0,39}`, such as `heap.used` or `mean-borrow`. Any other key throws `IllegalArgumentException`, which fails the sample, so that the mistake shows at once in development. `PanelSample.requireKey(key)` checks one. A key written twice in one scope keeps the last value.
+* **Groups.** One level only: `group` on a group throws `IllegalStateException`. The name is what the page prints, such as `audit` or `G1 Young Generation`, neither `null` nor blank. Calling `group` again with the same name returns the same scope, and groups keep the order of their first call.
+* **What the console keeps.** 64 groups, 64 values per scope, 100 rows of 8 columns per table; the rest is dropped and the sample flagged `truncated`. Every string is cleaned of control characters and cut at 200 characters, as the report does. A gauge that is not a finite number is shown as absent, a max that is not a finite number above zero is left out, and a `null` duration or text is absent.
+* **No time, no rate.** The console stamps each poll with its own clock and the page computes the rates. A panel never adds a timestamp nor divides by time, so that a missed poll or a debugger paused on a breakpoint does no harm. A counter that goes down reads as a count that started again: its rate has a gap there.
+
+[#charts]
+== Charts [.tag-new]#NEW#
+
+A `Chart` has an id, a title and the series it plots, in drawing order. Each `Series` names a value key and a style:
+
+[cols="1,2,3"]
+|===
+| Style | Plots | For
+
+| `AREA`
+| A gauge, filled down to zero.
+| A level: the heap in use, the active connections.
+
+| `STACKED`
+| A gauge, filled on top of the `AREA` or `STACKED` series before it.
+| One part of a whole: the idle connections over the active ones.
+
+| `LINE`
+| A gauge, as a line.
+| A level that is not part of a whole: the borrowers waiting, the threads.
+
+| `RATE`
+| A counter, as its growth per second between two polls; for a counter of `NANOS`, the share of wall time spent.
+| Throughput: borrows per second, timeouts per second, the time a garbage collector took.
+
+| `CEILING`
+| The max of a gauge, as a dashed rule.
+| What a level can reach: the size of a pool over its connections.
+|===
+
+[source,java]
+----
+new Chart("connections", "Connections", List.of(
+        Series.area("active"), Series.stacked("idle"), Series.line("waiting"), Series.ceiling("active")))
+----
+
+* **Checked where it is written.** The constructors throw `IllegalArgumentException` for an id or a key that breaks the key rule, a blank title, no series, the same key twice in the same style, or a `STACKED` series with no `AREA` or `STACKED` series before it. Build the charts in a `static final` field: a mistake then fails the extension's tests, not the page.
+* **Repeated per group.** A chart plots the values of the panel's own scope, and is repeated for every group that holds at least one of its keys: the Mansart pool panel declares `connections` once, and the page draws it for each pool.
+* **A key the sample does not write, or writes as another kind, draws nothing.** `AREA`, `STACKED`, `LINE` and `CEILING` need a gauge, `CEILING` a gauge with a max, and `RATE` a counter.
+* **The page keeps the history,** five minutes of it, in the browser; a panel never keeps one.
+
+A *lifetime mean* — a mean over the whole boot, such as Mansart's mean borrow time — is sampled as a `duration` and shown as a number, never plotted. After an hour, one more minute of slow borrows barely moves a mean of the whole hour: its curve would stay flat while the last minutes get worse, and a flat line reads as "nothing happens". Plot what changes between two polls, a level or the rate of a counter. A mean over the last minutes would need the component to keep a total of the time spent, and a series style that divides its growth by the count's: neither exists yet.
+
+[#rules]
+== The rules [.tag-new]#NEW#
+
+Each has its reason. The console enforces what it can; the rest is up to the panel.
+
+[#rule-memory-only]
+=== `sample()` reads memory only [.tag-new]#NEW#
+
+No I/O, no network, no blocking call, no lock the application may hold, no bean created, nothing logged; well under a millisecond.
+
+*Why:* the page polls about once a second, per open tab, on the request threads, several at once. A panel that ran a query, called a service or ran the health checks on each poll would make the console a load generator, and its figures would measure the console. A panel that took a lock the application holds could stall the application's own threads. A value that only I/O could give is left out, or written `absent` with the reason; when it matters, the component keeps it in memory and the panel reads that. `contribute` follows the same rule, for the report's sake. The console times every sample and flags one above 5 ms `slow`.
+
+[#rule-volatile-snapshot]
+=== State is published through a `volatile` immutable snapshot [.tag-new]#NEW#
+
+What `sample` reads is one `volatile` field that holds an immutable value — a record, a `List.copyOf` — assigned once complete, and cleared first thing in `onStop`, before what it refers to is closed. `sample` reads the field once, into a local variable, and works from that.
+
+*Why:* the polls arrive on Chappe's virtual threads, while the boot thread fills the extension's fields and, on a dev reload, tears the extension down. A `volatile` field makes what the boot thread wrote visible to the request threads; an immutable value never changes under the reader, so a poll never walks a collection that `onStop` is clearing (a `ConcurrentModificationException`); one read gives one consistent state, where two reads could straddle a reload; and clearing it before closing means a late poll finds nothing rather than a closed pool.
+
+[#rule-no-class-across-reloads]
+=== Nothing of the application outlives a reload [.tag-new]#NEW#
+
+No `static` field holds a `Class`, a bean, a proxy or any object of the application.
+
+*Why:* the SPI and the runtime extensions stay in the boot layer across dev reloads, while the application's modules are loaded again in a new layer. A static field of an extension outlives the reload: holding a `Class` of the previous application, or an object whose class is one, keeps that whole layer in memory, and hands the next boot objects of classes it no longer uses. Keep per-boot state in instance fields; a static field may keep a plain value, as the console keeps the port it bound.
+
+[#rule-secrets]
+=== Secrets never leave, configuration only in `dev` [.tag-new]#NEW#
+
+* A secret — a password, a token, a key — is written only as `section.secret(key, configured)`, which prints `configured` or `not configured` and takes no value. `sample` never writes one.
+* Never render a configuration object's `toString()`: Mansart's `PoolConfig` prints its password. Write the fields you mean, one by one.
+* A JDBC URL goes through a redactor first. The Mansart pool extension's `JdbcUrls.redact` removes the user info (`//user:password@`, Oracle's `user/password@`) and every `?`, `&` or `;` entry whose key holds `password`, `passwd`, `pwd`, `secret`, `token` or `credential`, and shows `jdbc:<sub-protocol>:…` for a URL it cannot read: it fails closed. It is package-private in that extension until a second extension needs it, and then moves to the SPI; until then, an extension that shows a URL removes its credentials the same way, and fails closed too.
+* A configuration value that may carry one, such as a JDBC URL or a user name, is written only when `context.launchMode()` is `LaunchMode.DEV`. Outside it, write what it is — the database kind, `h2 mem`, `postgresql` — which is all a production log needs.
+* Driver or client properties: their keys, never their values.
+
+*Why:* the report goes to logs that are shared, pasted into issues and kept, and the page is served to a browser. A value that was never written cannot leak.
+
+[#rule-ids]
+=== Ids are stable and lowercase [.tag-new]#NEW#
+
+`id()` is the name of the section and of the panel, such as `mansart-pool`: lowercase, stable across boots and releases, and unique. `startup`, `jvm` and `devconsole` are the console's. Chart ids and value keys follow the key rule, and stay the same from one boot to the next.
+
+*Why:* the id is how a reader finds the section in a log, and how the report keeps a section from appearing twice: a second contributor with the same id is skipped as xref:modules/vidocq-runtime-core.adoc#vidocq-rpt-002[`VIDOCQ-RPT-002`], and so is one that takes `startup` or `jvm`. The page keys its history by panel, group and value key: a key that changes between two polls starts a new curve.
+
+[#rule-failure]
+=== A failure costs one sample [.tag-new]#NEW#
+
+A `RuntimeException` or a `LinkageError` thrown by `sample` drops that poll's live values, never the page: the tab shows the class of the exception, never its message, which may carry a secret, and the boot facts stay. The console logs xref:dev-console.adoc#vidocq-devc-005[`VIDOCQ-DEVC-005`] once per panel and boot, its stack trace at DEBUG, and calls the panel again on the next poll. `charts()` that throws leaves the panel without charts. A failing `contribute` costs the section, as for any contributor (xref:modules/vidocq-runtime-core.adoc#vidocq-rpt-001[`VIDOCQ-RPT-001`]).
+
+[#worked-example]
+== Worked example: the Mansart pool panel [.tag-new]#NEW#
+
+`MansartPoolExtension`, in `vidocq-runtime-mansart-pool-extension`, opens one pool for `vidocq.pool.url` and one per `vidocq.pool.<name>.url`. Its panel shows each of them. The excerpts below are its code.
+
+[#example-step-1]
+=== Step 1: the extension is the panel [.tag-new]#NEW#
+
+[source,java]
+----
+public final class MansartPoolExtension implements VidocqExtension, DevConsolePanel {
+
+    @Override
+    public String name() {
+        return "mansart-pool";
+    }
+
+    @Override
+    public String id() {
+        return "mansart-pool";
+    }
+
+    @Override
+    public String title() {
+        return "Mansart pools";
+    }
+----
+
+The module requires `io.vidocq.runtime.spi.devconsole` transitively, since it exports the extension class, and its pom depends on `vidocq-runtime-devconsole-spi`. Nothing else is declared: the extension is already a service.
+
+[#example-step-2]
+=== Step 2: publish the state `sample()` reads [.tag-new]#NEW#
+
+One record per open pool, built once when the pool opens, that holds no secret — the URL is already redacted:
+
+[source,java]
+----
+private record PoolView(String label, boolean isDefault, MansartDataSource pool, String safeUrl, String kind,
+                        boolean urlCredentials, String devService) {}
+
+private volatile List<PoolView> views = List.of();
+----
+
+The pools open in `beforeStart`, before the container, so that the extensions after this one find them. The list is published once they are all open:
+
+[source,java]
+----
+@Override
+public void beforeStart(VaubanContainerBuilder builder) {
+    List<PoolView> opened = new ArrayList<>();
+    if (poolConfig != null) {
+        this.pool = MansartDataSource.of(poolConfig);
+        // ...
+        opened.add(view(DEFAULT_LABEL, true, PREFIX, pool));
+    }
+    for (Map.Entry<String, PoolConfig> e : namedConfigs.entrySet()) {
+        MansartDataSource ds = MansartDataSource.of(e.getValue());
+        // ...
+        opened.add(view(e.getKey(), false, PREFIX + e.getKey() + ".", ds));
+    }
+    views = List.copyOf(opened);
+}
+----
+
+and emptied before any pool is closed:
+
+[source,java]
+----
+@Override
+public void onStop() {
+    // First, before any pool is closed: a dev console poll from now on reads no pool.
+    views = List.of();
+    namedWithoutBean = Set.of();
+    prefillFailed = Set.of();
+    // ... then close the pools
+}
+----
+
+The unnamed pool is labelled `@Default`, which no pool name can be mistaken for, a pool named `default` included. Named pools follow in name order.
+
+[#example-step-3]
+=== Step 3: the boot facts [.tag-new]#NEW#
+
+`contribute` reads the list once, writes the summary at every level, the rows of each pool at `DETAILED` only, then the anomalies found in `onStart`:
+
+[source,java]
+----
+@Override
+public void contribute(StartupReportContext context, StartupReportSection section) {
+    List<PoolView> opened = views;
+    if (opened.isEmpty()) {
+        section.summary("idle: no vidocq.pool[.<name>].url");
+        return;
+    }
+    int max = opened.stream().mapToInt(v -> v.pool().config().maxSize()).sum();
+    section.summary(opened.size() + (opened.size() == 1 ? " pool (" : " pools (")
+            + opened.stream().map(PoolView::label).collect(Collectors.joining(", ")) + "), "
+            + max + (max == 1 ? " connection max" : " connections max"));
+    if (context.verbosity() == Verbosity.DETAILED) {
+        boolean dev = context.launchMode() == LaunchMode.DEV;
+        for (PoolView v : opened) {
+            rows(section, v, dev);
+        }
+    }
+    // ... MANSART-POOL-001 and MANSART-POOL-002
+}
+----
+
+Every row of a pool starts with its label, which is how the page puts it on the pool's card. The URL and the user are configuration values, written in a dev launch only; outside it, the pool's row names the database kind:
+
+[source,java]
+----
+private static void rows(StartupReportSection section, PoolView v, boolean dev) {
+    PoolConfig c = v.pool().config();
+    String label = v.label();
+    section.row(label, dev ? v.safeUrl() : v.kind());
+    if (dev) {
+        section.row(label + " user", c.username() != null ? c.username() : "not set");
+    }
+    // ... size, timeouts, checks, xa, and the dev service that provided the pool, in dev only
+    section.secret(label + " password", c.password() != null);
+    if (v.urlCredentials()) {
+        section.secret(label + " url credentials", true);
+    }
+    // the keys only, never the values: a driver property may be a password
+    section.list(label + " driver properties", new TreeSet<>(c.driverProperties().keySet()));
+}
+----
+
+The H2 example, launched in dev, logs:
+
+[source,text]
+----
+mansart-pool  Mansart pools | 1 ms
+  2 pools (@Default, audit), 12 connections max
+  @Default           jdbc:h2:mem:mansart-vidocq-demo;DB_CLOSE_DELAY=-1
+  @Default user      sa
+  @Default size      min idle 0 (boot only), max 8
+  @Default timeouts  acquire PT5S, idle PT10M, lifetime PT30M
+  @Default checks    validation PERIODIC PT1S, leaks off
+  @Default xa        org.h2.jdbcx.JdbcDataSource
+  @Default password  not configured
+  audit              jdbc:h2:mem:mansart-vidocq-audit;DB_CLOSE_DELAY=-1
+  ...
+----
+
+In `prod`, the same rows read `@Default  h2 mem`, and there is no `user` row.
+
+[#example-step-4]
+=== Step 4: the live values, one group per pool [.tag-new]#NEW#
+
+`sample` reads the list once and writes one group per pool, from the pool's own counters: `MansartDataSource.snapshot()` reads them without a lock and without I/O.
+
+[source,java]
+----
+@Override
+public void sample(PanelSample sample) {
+    List<PoolView> opened = views;
+    for (PoolView v : opened) {
+        PoolConfig c = v.pool().config();
+        PoolMetrics m = v.pool().snapshot();
+        PanelSample pool = sample.group(v.label())
+                .gauge("active", m.active(), c.maxSize(), Unit.COUNT)
+                .gauge("idle", m.idle(), c.maxSize(), Unit.COUNT)
+                .gauge("waiting", m.waiting(), Unit.COUNT)
+                .counter("borrows", m.totalBorrows(), Unit.COUNT)
+                .counter("timeouts", m.totalTimeouts(), Unit.COUNT);
+        if (c.leakDetectionThreshold().isZero()) {
+            pool.absent("leaks", "leak detection off");
+        } else {
+            pool.counter("leaks", m.totalLeaks(), Unit.COUNT);
+        }
+        if (m.totalBorrows() == 0) {
+            pool.absent("mean-borrow", "no borrow yet");
+        } else {
+            pool.duration("mean-borrow", m.meanBorrowDuration());
+        }
+    }
+}
+----
+
+* `active` and `idle` have `maxSize` as their max, for the fill bar and the ceiling; `waiting` is an estimate and has none.
+* `leaks` is absent, with the reason, while leak detection is off: `0` would claim that leaks were looked for.
+* `mean-borrow` is a mean over the pool's whole life: a `duration`, never a chart.
+
+What the snapshot carries for one pool:
+
+[source,json]
+----
+{"name": "@Default", "values": [
+  {"key": "active", "kind": "gauge", "value": 0, "max": 8, "unit": "count"},
+  {"key": "idle", "kind": "gauge", "value": 1, "max": 8, "unit": "count"},
+  {"key": "waiting", "kind": "gauge", "value": 0, "unit": "count"},
+  {"key": "borrows", "kind": "counter", "value": 1, "unit": "count"},
+  {"key": "timeouts", "kind": "counter", "value": 0, "unit": "count"},
+  {"key": "leaks", "kind": "absent", "reason": "leak detection off"},
+  {"key": "mean-borrow", "kind": "duration", "nanos": 867083}]}
+----
+
+The panel's documentation also says how *not* to read these gauges: `maxSize - active - idle` is not free capacity, since a borrower still opening its connection counts in none of them, and a snapshot is not atomic, since each figure is read on its own.
+
+[#example-step-5]
+=== Step 5: two charts, repeated per pool [.tag-new]#NEW#
+
+[source,java]
+----
+private static final List<Chart> CHARTS = List.of(
+        new Chart("connections", "Connections", List.of(Series.area("active"), Series.stacked("idle"),
+                Series.line("waiting"), Series.ceiling("active"))),
+        new Chart("throughput", "Throughput", List.of(Series.rate("borrows"), Series.rate("timeouts"))));
+
+@Override
+public List<Chart> charts() {
+    return CHARTS;
+}
+----
+
+`connections` stacks the idle connections on the active ones under the dashed `maxSize`, with the waiting borrowers as a line; `throughput` plots borrows and timeouts per second. Both are declared once and drawn on each pool's card, since each group holds their keys.
+
+[#testing]
+== Testing a panel [.tag-new]#NEW#
+
+A panel needs neither the console nor a running application to be tested: call `contribute` with a section that records what it receives, and `sample` with a sample that does the same. The Mansart pool extension keeps both in its test sources, `RecordedSection` and `RecordedSample`: copy them into your extension's tests.
+
+The recording sample checks every key as the console does, and keeps each value as a record, so that a test compares values whole:
+
+[source,java]
+----
+final class RecordedSample implements PanelSample {
+
+    sealed interface Value permits Gauge, Counter, Elapsed, Text, Absent, Table {}
+
+    record Gauge(double value, Double max, Unit unit) implements Value {}
+    record Counter(long total, Unit unit) implements Value {}
+    // ... Elapsed, Text, Absent, Table
+
+    private final boolean group;
+    private final Map<String, Value> values = new LinkedHashMap<>();
+    private final Map<String, RecordedSample> groups = new LinkedHashMap<>();
+
+    private PanelSample put(String key, Value value) {
+        values.put(PanelSample.requireKey(key), value);
+        return this;
+    }
+
+    @Override
+    public PanelSample gauge(String key, double value, double max, Unit unit) {
+        return put(key, new Gauge(value, max, Objects.requireNonNull(unit, "unit")));
+    }
+
+    @Override
+    public PanelSample group(String name) {
+        if (group) {
+            throw new IllegalStateException("groups do not nest");
+        }
+        if (name == null || name.isBlank()) {
+            throw new IllegalArgumentException("a group has a name");
+        }
+        return groups.computeIfAbsent(name, n -> new RecordedSample(true));
+    }
+    // ... the other kinds, and keys(), value(key), groupNames(), written(name) for the assertions
+}
+----
+
+The recording section keeps the summary, the rows in order and the anomalies, a secret as the report prints it, `configured` or `not configured`; a `StartupReportContext` record gives the launch mode and the level. Then the tests drive the extension as Vidocq would — `configure`, `beforeStart`, `onStart` — and read what it wrote:
+
+[source,java]
+----
+@Test
+void inDevTheBootFactsShowTheUrlWithoutItsCredentialsAndTheUser() {
+    bootTwoPools();   // configure + beforeStart, one pool's URL and password carrying secrets
+
+    RecordedSection section = new RecordedSection();
+    ext.contribute(ReportContext.detailed(LaunchMode.DEV), section);
+
+    assertEquals("2 pools (@Default, audit), 12 connections max", section.summary());
+    assertEquals("jdbc:postgresql://db.example:5432/audit?ssl=true", section.value("audit"));
+    assertEquals("configured", section.value("audit password"));
+    for (String secret : List.of("s3cret", "k3y", PASSWORD)) {
+        assertFalse(section.everything().contains(secret), secret + " written: " + section.everything());
+    }
+}
+
+@Test
+void everyChartPlotsValuesTheSampleWrites() {
+    boot("vidocq.pool.url", h2("default"), "vidocq.pool.audit.url", h2("audit"));
+    RecordedSample sample = new RecordedSample();
+    ext.sample(sample);
+
+    for (String pool : sample.groupNames()) {
+        RecordedSample group = sample.written(pool);
+        for (Chart chart : ext.charts()) {
+            for (Series series : chart.series()) {
+                RecordedSample.Value value = group.value(series.key());
+                if (series.style() == Series.Style.RATE) {
+                    assertInstanceOf(Counter.class, value, chart.id() + " " + series);
+                } else {
+                    Gauge gauge = assertInstanceOf(Gauge.class, value, chart.id() + " " + series);
+                    if (series.style() == Series.Style.CEILING) {
+                        assertNotNull(gauge.max(), chart.id() + ": a ceiling needs a max");
+                    }
+                }
+            }
+        }
+    }
+}
+----
+
+The tests worth writing for any panel, as `MansartPoolPanelTest` has them:
+
+* the boot facts in a dev launch, and outside it: no URL, no user, no configured value;
+* a search of everything written for each secret the test configured;
+* below `DETAILED`, the summary and the anomalies only;
+* the live values of each group, with a known state: the pool test holds a connection and samples, then releases it and samples again;
+* every chart plots values the sample writes, of the right kind;
+* once `onStop` ran, `sample` writes nothing and `contribute` says so;
+* each anomaly, with its message and hint.
+
+Then see it for real: add `vidocq-runtime-devconsole-extension` to an application that uses your extension, run `mvn vidocq:dev`, open the URL, and read `GET /api/snapshot` — the document the page draws — to check what your panel sends.
+
+[#checklist]
+== Checklist [.tag-new]#NEW#
+
+Before shipping a panel, check that:
+
+. **It lives in the brick's runtime extension**, not in the component and not in a new artifact; the module requires `io.vidocq.runtime.spi.devconsole` (transitively when the panel class is exported) and the pom depends on `vidocq-runtime-devconsole-spi`.
+. **It is found**: the extension class implements `DevConsolePanel`, or the wrapper's one class is declared with `provides` in its `module-info` *and* in `META-INF/services`, and its `pom.xml` and `module-info` comments no longer say it has no class, and Knock's ADR-002 has a note recording the class. Its section is in the detailed report.
+. **Its `id()` is stable, lowercase and unique**, not `startup`, `jvm` or `devconsole`, and `title()` names it for a person.
+. **`contribute` reads memory only**, writes a short summary with no configured value, its rows for `DETAILED`, and its anomalies under a code of its own.
+. **`sample` reads memory only**: no I/O, network, blocking call, application lock, bean creation or logging, and it is never flagged `slow`.
+. **Its state is one `volatile` immutable snapshot**, assigned once complete, cleared first thing in `onStop`, read once per call.
+. **No `static` field holds a `Class`, a bean or any object of the application.**
+. **No secret is ever written**: secrets through `secret(key, configured)` only, no `toString()` of a configuration object, URLs without their credentials, configuration values in `dev` only, property keys without their values.
+. **Every key follows `[a-z][a-z0-9.-]{0,39}`, every series names a value the sample writes with the right kind**, a `CEILING` a gauge with a max, a `RATE` a counter, and no lifetime mean is plotted; the rows of a group start with its name.
+. **It is tested** against a recording section and a recording sample — in `dev` and outside, the secrets searched for, the charts against the sample, empty after `onStop` — and seen once in a real `mvn vidocq:dev` page.
+
+== Next steps [.tag-new]#NEW#
+
+* xref:dev-console.adoc[The dev console] [.tag-new]#NEW# — what the user sees
+* xref:modules/vidocq-runtime-spi.adoc#dev-console-panels[The panel SPI] [.tag-new]#NEW# — the types, one by one
+* xref:modules/vidocq-runtime-spi.adoc#startup-report-contributors[Contributing to the startup report] — the contract a panel extends

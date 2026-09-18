@@ -113,7 +113,7 @@ The `vidocq-runtime-spi` module exposes the contribution interfaces. The main ty
 | Lifecycle interface with `name()`, `priority()`, `configure(VidocqConfiguration)`, `beforeStart(VaubanContainerBuilder)`, `onStart(ExtensionContext)`, `onStop()` and `configKeys()`. Registered via `provides … with …` in `module-info.java` (or `META-INF/services`), loaded through `ServiceLoader`.
 
 | `io.vidocq.runtime.spi.ExtensionContext`
-| Handed to `onStart` — access to the Vauban `container()`, the CDI `beanManager()`, the legacy `configuration()`, the typed `config()` and the `launchMode()` [.tag-new]#NEW#.
+| Handed to `onStart` — access to the Vauban `container()`, the CDI `beanManager()`, the legacy `configuration()`, the typed `config()`, the `launchMode()` [.tag-new]#NEW# and the `startupReport()` [.tag-new]#NEW# of the boot.
 
 | `io.vidocq.runtime.spi.VidocqConfiguration`
 | String-property view passed to `configure`: `property(key)` returns `Optional<String>`, plus `property(key, default)` and `portFor(extensionName, defaultPort)` helpers.
@@ -123,6 +123,9 @@ The `vidocq-runtime-spi` module exposes the contribution interfaces. The main ty
 
 | `io.vidocq.runtime.spi.report.StartupReportContributor` [.tag-new]#NEW#
 | Adds a section to the startup report logged at the end of the boot; implemented by an extension or declared as a service. See xref:modules/vidocq-runtime-spi.adoc#startup-report-contributors[Contributing to the startup report].
+
+| `io.vidocq.runtime.spi.devconsole.DevConsolePanel` [.tag-new]#NEW#
+| A contributor whose section the dev console also shows live, from `vidocq-runtime-devconsole-spi`. See xref:dev-console-panels.adoc[Writing a dev console panel].
 |===
 
 Source: `vidocq-runtime-spi/src/main/java/io/vidocq/runtime/spi/`.

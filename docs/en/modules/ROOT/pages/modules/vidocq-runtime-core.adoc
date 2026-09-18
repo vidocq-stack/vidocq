@@ -20,13 +20,14 @@
 * Run the lifecycle in order (`VidocqBootstrap`):
 
 . **configure** — each extension reads its keys: `ext.configure(configuration)`.
-. **beforeStart** — create the `VaubanContainerBuilder` (bean index from `META-INF/vauban-beans.list`, no classpath scanning) and let each extension enrich it: `ext.beforeStart(builder)`.
+. **beforeStart** — create the `VaubanContainerBuilder` (bean index from `META-INF/vauban-beans.list`, no classpath scanning) and let each extension enrich it: `ext.beforeStart(builder)`. The Mansart pool extension opens its JDBC pools here, so that the extensions after it and the container find them open.
 . **CDI start** — `builder.build()` boots xref:vauban::index.adoc[Vauban].
-. **onStart** — each extension receives the `ExtensionContext` (container, bean manager, config): the Chappe extension opens the HTTP listeners, Cassini mounts the REST routes, Mansart opens the JDBC pool.
+. **onStart** — each extension receives the `ExtensionContext` (container, bean manager, config): Cassini mounts the REST routes, and the Chappe extension opens the HTTP listeners last.
 
 * Warn about configured `vidocq.*` keys nobody consumes (`ConfigKeyAudit`, based on the core's own keys and `VidocqExtension.configKeys()`), as <<vidocq-cfg-003>>.
 * Print the startup banner with the exact Vidocq version and build (<<startup-banner>>).
 * Log the startup report, one record that says what has just started, just before `Vidocq - Started in`, and report a boot that fails (<<startup-report>>).
+* Give the extensions a read-only view of that report, `ExtensionContext.startupReport()` [.tag-new]#NEW#, which the xref:dev-console.adoc[dev console] shows while the application runs.
 * Print readable console logs when the application has not configured logging (<<console-logging>>).
 * Manage the shutdown cycle — `onStop()` runs in reverse priority order, virtual threads drain cleanly.
 * Install the Vauban application layer when the launch vehicle requires it (`VidocqAppLayer`, `Vidocq.run`), including the `vidocq:dev` hot-reload loop (`VidocqDevReloadLoop`).
@@ -162,14 +163,15 @@ The *identity line* is `Vidocq <version>`, followed by details only for a snapsh
 
 Times are UTC, to the second. A directory of classes shows where the classes come from rather than a commit: an IDE recompiles without Maven, so its build identity file and its version may be older than the classes, hence the `?`.
 
-The *context line* is `Java <version> (<vendor>) | <mode> (<reason>) | debug <address> | <application> <version>`:
+The *context line* is `Java <version> (<vendor>) | <mode> (<reason>) | debug <address> | devconsole <address> | <application> <version>`:
 
 * the Java version and vendor of the running JVM;
 * the <<launch-mode,launch mode>> — `dev`, `test` or `prod` — with, in parentheses, the signal it was read from: `dev (IntelliJ agent)`, `prod (no dev or test signal)`;
 * the <<launch-mode-debugger,debugger>>, when the JVM runs with a JDWP agent;
+* the xref:dev-console.adoc#banner-segment[dev console] [.tag-new]#NEW#, when it is on the module path and on for this launch: `devconsole :8888` for a loopback host, `devconsole <host>:<port>` otherwise, nothing for port `0`. It is the configured address, a promise made before the bind; the console's own `Vidocq dev console: http://…/` record, logged once it listens, is the one to trust;
 * the application: the module of the class that calls `Vidocq.run`, else the module of `-Dvidocq.app.main`, else the module launched with `java -m`. It is named by the `artifactId` of its `pom.properties` when packaged, by its module name otherwise.
 
-Both lines stay within 80 columns. For the context line, what is given up goes in this order: the JVM vendor, then the segments of a module name are abbreviated (`i.v.t.l.mcptimeserver`), then the name is cut with `...` — always before the application version — then the debugger, then the reason of the launch mode, and with it the whole segment when the mode is a `prod` that no signal proves; the whole line is cut last. The vendor goes first because the line is read to know where the process runs and how to attach to it: 19 columns of `(Eclipse Adoptium)` never cost the address of a debugger, nor the mode and the reason it was read from. A long directory path drops its `last Maven build` label before being cut. The single INFO line is never cut: it carries the mode, its reason and the debugger whatever their length.
+Both lines stay within 80 columns. For the context line, what is given up goes in this order: the JVM vendor, then the segments of a module name are abbreviated (`i.v.t.l.mcptimeserver`), then the name is cut with `...` — always before the application version — then the dev console [.tag-new]#NEW#, and the name comes back whole if it then fits, then the debugger, then the reason of the launch mode, and with it the whole segment when the mode is a `prod` that no signal proves; the whole line is cut last. The vendor goes first because the line is read to know where the process runs and how to attach to it: 19 columns of `(Eclipse Adoptium)` never cost the address of a debugger, nor the mode and the reason it was read from. A long directory path drops its `last Maven build` label before being cut. The single INFO line is never cut: it carries the mode, its reason, the debugger and the dev console whatever their length.
 
 The Vidocq bricks have their own versions. When a brick (Vauban, Chappe, Cassini, ...) has another version than the runtime, was built from a modified tree, or is a snapshot without a commit, one more INFO record lists them:
 
@@ -482,6 +484,8 @@ The contributed sections follow the sections of the core: first those of the ext
 
 A dev launch shows everything once, then one line per section on every reload. An embedded deployment boots hundreds of times in one JVM, so it prints no report unless `vidocq.startup.report` asks for one — the banner is reduced to one line there too.
 
+While the xref:dev-console.adoc[dev console] is on [.tag-new]#NEW#, the contributors are given the `detailed` level whatever the report prints, so that the console has every row even on a reload that logs the summary; what the log prints still follows the level above.
+
 `off` only removes the report. The contributors are still called, and every anomaly is still logged as its own warning. A value that is none of the four is reported as <<vidocq-cfg-001>> and read as `auto`. Like every key, it can be set with `-D`, an environment variable (`VIDOCQ_STARTUP_REPORT`) or `vidocq.properties`.
 
 [#startup-anomalies]
@@ -557,7 +561,7 @@ A startup report contributor could not be loaded or created, has no id (`null` o
 [#vidocq-rpt-002]
 ==== VIDOCQ-RPT-002 — duplicate section id
 
-Two contributors of different classes use the same id: the second one is skipped. So is a contributor whose id names a section of the core (`launch`, `vidocq`, `phases`, `layer`, `configuration`, `extensions` or `anomalies`). The same class found twice is not an anomaly: see xref:modules/vidocq-runtime-spi.adoc#report-twins[Layer twins].
+Two contributors of different classes use the same id: the second one is skipped. So is a contributor whose id names a section of the core (`launch`, `vidocq`, `phases`, `layer`, `configuration`, `extensions` or `anomalies`), or one of the xref:dev-console.adoc[dev console]'s own panels, `startup` and `jvm` [.tag-new]#NEW#. The same class found twice is not an anomaly: see xref:modules/vidocq-runtime-spi.adoc#report-twins[Layer twins].
 
 [source,text]
 ----
@@ -600,7 +604,7 @@ The report of a boot that went well never fails it: if the report cannot be prod
 
 The report goes to logs that are shared, pasted into issues and kept. It prints names and counts, never what an application keeps to itself:
 
-* **No configuration value.** The `configuration` section names the sources and their ordinals, never what they hold. The only configured values the report shows are the launch mode, when `vidocq.launch.mode` or a `vidocq.profile` named after a mode set it, the report level, and `vidocq.app.path`, whose archives the summary prints as file names.
+* **No configuration value.** The `configuration` section names the sources and their ordinals, never what they hold. The only configured values the core's sections show are the launch mode, when `vidocq.launch.mode` or a `vidocq.profile` named after a mode set it, the report level, and `vidocq.app.path`, whose archives the summary prints as file names. A contributor shows a configured value that may carry a secret, such as a JDBC URL or a user name, in a `dev` launch only, without its credentials [.tag-new]#NEW#; outside it, it says what the value is, such as the database kind (xref:dev-console-panels.adoc#rule-secrets[the rule]).
 * **No system property, environment variable or JVM argument as it is** — a `-D` can carry a password. Only what is derived from them: `IntelliJ agent`, `target/classes with a pom.xml above`.
 * **No secret.** A contributor reports a secret as `configured` or `not configured`; the API has no way to pass its value.
 * **No directory in the summary**, the default of a packaged application: the core's sections print file names only (`vidocq.app.path=.../app`). The detailed report prints a path relative to the working directory, or under `~` for the home directory, or else absolute; a path of more than four names keeps its first two and its last one: `~/.m2/.../langchain4j-cdi-mcp-server-1.4.0-SNAPSHOT.jar`.

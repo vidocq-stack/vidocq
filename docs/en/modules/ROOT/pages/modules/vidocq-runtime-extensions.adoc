@@ -22,6 +22,10 @@
 | `essentials`
 | Wires xref:chappe::index.adoc[Chappe] as HTTP/1.1, H2, H3 transport. Configures bind via `vidocq.http.host` / `vidocq.http.port`.
 
+| `vidocq-runtime-devconsole-extension` [.tag-new]#NEW#
+| `essentials`
+| The xref:dev-console.adoc[dev console]: a read-only page, on a loopback listener of its own, with the startup report of the running boot and the live values of the extensions. On in a dev launch only.
+
 | `vidocq-runtime-migration-extension`
 | `essentials`
 | Schema-migration facade — runs the configured migration engine before the datasource opens.
@@ -40,7 +44,7 @@
 
 | `vidocq-runtime-mansart-pool-extension`
 | `jakartaee-web`
-| JDBC connection pooling via xref:mansart::index.adoc[Mansart] Pool (companion `-datasources-codegen` artefact for multi-datasource holders).
+| JDBC connection pooling via xref:mansart::index.adoc[Mansart] Pool (companion `-datasources-codegen` artefact for multi-datasource holders). Its section of the startup report is a live dev console panel [.tag-new]#NEW# (<<mansart-pool-panel>>).
 
 | `vidocq-runtime-mansart-data-extension`
 | `jakartaee-web`
@@ -159,6 +163,132 @@ mp.router("dev").get("/api/snapshot", snapshot);
 A listener name has one owner. The extensions' listeners start first, then those of `vidocq.chappe.listeners`, which must not list a name an extension declared: the boot fails with `listener 'dev' is declared by an extension (DevConsoleExtension); remove it from vidocq.chappe.listeners`. The listener named `default` is always the application's.
 
 Other extensions follow comparable scheduling logic with their own priorities.
+
+[#mansart-pool-panel]
+== Mansart pools in the startup report and the dev console [.tag-new]#NEW#
+
+`vidocq-runtime-mansart-pool-extension` writes the section `mansart-pool`, *Mansart pools*, of the xref:modules/vidocq-runtime-core.adoc#startup-report[startup report], and the xref:dev-console.adoc[dev console] shows it live, one card per pool. The pools open in `beforeStart`, before the container, so that the extensions after this one find them.
+
+The unnamed pool, the one of `vidocq.pool.url` injected as `@Default`, is labelled `@Default`; named pools, `vidocq.pool.<name>.url`, follow under their name, in name order. A pool named `default` is never mistaken for the unnamed one.
+
+[#mansart-pool-boot-facts]
+=== Boot facts [.tag-new]#NEW#
+
+The summary names the pools and their total size: `2 pools (@Default, audit), 12 connections max`, or `idle: no vidocq.pool[.<name>].url` when no pool is configured. The detailed report, which the console always has, adds for each pool:
+
+[cols="1,3"]
+|===
+| Row | Value
+
+| `<label>`
+| In a `dev` launch, the JDBC URL without its credentials; otherwise, the database kind only: `h2 mem`, `postgresql`.
+
+| `<label> user`
+| The user name, in a `dev` launch only.
+
+| `<label> size`
+| `min idle 0 (boot only), max 8`: `minIdle` is only honoured when the pool opens.
+
+| `<label> timeouts`
+| `acquire PT5S, idle PT10M, lifetime PT30M`.
+
+| `<label> checks`
+| The validation mode and timeout, and leak detection: `validation PERIODIC PT1S, leaks off`.
+
+| `<label> xa`
+| The `XADataSource` class, when XA is on.
+
+| `<label> source`
+| The dev service that provided the pool, and where it listens: `dev service postgres, localhost:54213`. In a `dev` launch only, when `vidocq:dev` marked the pool's URL with `vidocq.dev.provided.<key>=<provider id>`.
+
+| `<label> password`
+| `configured` or `not configured`, never the password.
+
+| `<label> url credentials`
+| `configured`, when the URL itself carried credentials, which the URL row no longer shows.
+
+| `<label> driver properties`
+| The keys of the driver properties, never their values.
+|===
+
+.The H2 example launched in dev (the second pool shortened)
+[source,text]
+----
+mansart-pool  Mansart pools | 1 ms
+  2 pools (@Default, audit), 12 connections max
+  @Default           jdbc:h2:mem:mansart-vidocq-demo;DB_CLOSE_DELAY=-1
+  @Default user      sa
+  @Default size      min idle 0 (boot only), max 8
+  @Default timeouts  acquire PT5S, idle PT10M, lifetime PT30M
+  @Default checks    validation PERIODIC PT1S, leaks off
+  @Default xa        org.h2.jdbcx.JdbcDataSource
+  @Default password  not configured
+  audit              jdbc:h2:mem:mansart-vidocq-audit;DB_CLOSE_DELAY=-1
+  ...
+----
+
+A URL loses its user info (`//user:password@`, Oracle's `user/password@`) and every parameter or setting whose key holds `password`, `passwd`, `pwd`, `secret`, `token` or `credential`: `jdbc:postgresql://audit:s3cret@db.example:5432/audit?sslpassword=k3y&ssl=true` shows as `jdbc:postgresql://db.example:5432/audit?ssl=true`. A URL that cannot be read shows as `jdbc:<sub-protocol>:…`. The error of `xa=true` for a URL whose `XADataSource` cannot be guessed quotes the URL the same way.
+
+[#mansart-pool-live]
+=== Live values [.tag-new]#NEW#
+
+One group per pool, read from the pool's own counters, without a lock and without I/O:
+
+[cols="1,1,3"]
+|===
+| Key | Kind | Value
+
+| `active`, `idle`
+| gauge, max `maxSize`
+| The connections lent, and those ready to lend.
+
+| `waiting`
+| gauge
+| The borrowers waiting for a connection, an estimate.
+
+| `borrows`, `timeouts`
+| counter
+| The borrows so far, and those that gave up after `acquireTimeout`.
+
+| `leaks`
+| counter
+| The connections held beyond `leakDetectionThreshold`; `leak detection off` while the threshold is `PT0S`, the default.
+
+| `mean-borrow`
+| duration
+| The mean borrow time over the pool's whole life, waiting and opening a connection included; `no borrow yet` before the first. Shown as a number, never plotted.
+|===
+
+Two charts per pool: *Connections* — active, idle stacked on it, waiting, under the dashed `maxSize` — and *Throughput* — borrows and timeouts per second.
+
+Two readings of the gauges would be wrong:
+
+* `maxSize - active - idle` is not free capacity: a borrower that is still opening its connection counts in none of them.
+* The figures are not read at one instant: each is read on its own, so `active + idle` can dip, or briefly exceed what the pool holds, while a connection moves from one to the other.
+
+[#mansart-pool-001]
+=== MANSART-POOL-001 — pre-fill opened nothing [.tag-new]#NEW#
+
+A pool whose `minIdle` asks for connections at boot opened none of them. The pool gives up its pre-fill at the first failure, without a word, and opens connections on demand only, so the first requests pay for them, and fail if the cause is still there:
+
+[source,text]
+----
+[MANSART-POOL-001] Pool 'ghost' opened none of the 1 connection its minIdle asks for at boot: the pool gave up at the first failure and opens connections on demand only Check vidocq.pool.ghost.url, the credentials and the JDBC driver on the module path
+----
+
+Check the URL, the credentials and the JDBC driver of that pool.
+
+[#mansart-pool-002]
+=== MANSART-POOL-002 — named pool without its bean [.tag-new]#NEW#
+
+A named pool is open, but no `@Named("<name>") DataSource` bean serves it: the bean is generated at compile time by `vidocq-runtime-mansart-pool-datasources-codegen`, which the application's annotation processor paths lack. An injection or a repository routed to that pool fails on its first use:
+
+[source,text]
+----
+[MANSART-POOL-002] Named pool 'ghost' is open, but no @Named("ghost") DataSource bean serves it: an injection or a repository routed to it fails on first use Add vidocq-runtime-mansart-pool-datasources-codegen to the annotationProcessorPaths of the application
+----
+
+When the container cannot say which beans it has, no pool is flagged: the report never guesses.
 
 == Activation by dependency
 

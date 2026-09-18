@@ -1,0 +1,307 @@
+= Dev console [.tag-new]#NEW#
+:description: A read-only page, on a loopback listener of its own, that shows the startup report of the running boot and the live values of the extensions while you develop.
+
+[.lead]
+The dev console is a page that the application serves to your browser while you develop: the startup report of the boot that is running, with its anomalies first, then one tab per extension that has something to show — its boot facts and, for the extensions that give them, live values and charts, such as the connections of each Mansart pool — and the JVM last. It listens on a port of its own, on the loopback address, it only reads, and it is on in a `dev` launch only.
+
+[#getting-it]
+== Getting it [.tag-new]#NEW#
+
+The console is an ordinary dependency of the application:
+
+[source,xml,subs=attributes+]
+----
+<dependency>
+    <groupId>io.vidocq.runtime.extensions.essentials</groupId>
+    <artifactId>vidocq-runtime-devconsole-extension</artifactId>
+    <version>{project-version}</version>
+</dependency>
+----
+
+It has no codegen bundle to add to the annotation processor paths. It is packaged with the application like any extension: in production, its default, `auto`, keeps it off. It serves its page through Chappe, on a listener of its own, and brings the Chappe webserver extension with it. An application that already serves HTTP has it anyway; one that does not should know that Chappe then also starts its `default` listener, `0.0.0.0:8080` unless configured otherwise, in every launch mode.
+
+Then run the application in dev mode:
+
+[source,bash]
+----
+mvn vidocq:dev
+----
+
+The banner promises the console, and one INFO record gives its address once it listens:
+
+[source,text]
+----
+ Java 25.0.3+9-LTS | dev (vidocq.launch.mode) | devconsole :8888
+...
+[INFO ][2026-09-18 21:28:11.834][main           ][i.v.r.e.e.d.DevConsoleExtension#bound        ] : Vidocq dev console: http://127.0.0.1:8888/
+----
+
+Open that URL. The browser is never opened for you.
+
+[#when-it-is-on]
+== When it is on [.tag-new]#NEW#
+
+`vidocq.devconsole.enabled` is `auto` by default: the console starts when the xref:modules/vidocq-runtime-core.adoc#launch-mode[launch mode] of the boot is `dev` — `mvn vidocq:dev`, a run from an IDE, `-Dvidocq.launch.mode=dev` — and stays off in `test` and `prod`. `true` and `false` force it on or off, whatever the mode.
+
+`auto` also turns it on for a `dev` read from the shape of a build tree, such as an application run from `target/classes` by a CI job. That is accepted: the console listens on the loopback address only, and a port that is already taken never stops the application (<<port-taken>>).
+
+When the console is off, its section of the startup report says why, and nothing listens:
+
+[source,text]
+----
+  devconsole  off (auto, launch mode prod)
+----
+
+`off (vidocq.devconsole.enabled=false)` when it was forced off. Every dev reload starts a new console, with a new listener; a reload whose boot fails takes the console down with it, and the page says so (<<the-page>>).
+
+[#configuration]
+== Configuration [.tag-new]#NEW#
+
+[cols="2,1,4"]
+|===
+| Key | Default | Description
+
+| `vidocq.devconsole.enabled` [.tag-new]#NEW#
+| `auto`
+| `auto`: on when the launch mode is `dev`, off otherwise. `true` or `false` force it on or off; on outside a dev launch, the console raises <<vidocq-devc-001>>. Case and surrounding blanks are ignored. Another value is reported as <<vidocq-devc-003>> and means `auto`.
+
+| `vidocq.devconsole.port` [.tag-new]#NEW#
+| `8888`
+| The port the console listens on, from `0` to `65535`. `0` takes a free port, and the dev reloads ask for the same one again, so that an open tab keeps working. Another value is reported as <<vidocq-devc-003>> and means `8888`. A port that is taken falls back to a free one (<<port-taken>>).
+
+| `vidocq.devconsole.host` [.tag-new]#NEW#
+| `127.0.0.1`
+| The address the console listens on: a host name or an IP address, an IPv6 literal with or without its brackets. Any address that is not a loopback one raises <<vidocq-devc-002>>. A value with characters that no host name or address has is reported as <<vidocq-devc-003>> and means `127.0.0.1`.
+|===
+
+Like every key, they can be set with `-D`, an environment variable (`VIDOCQ_DEVCONSOLE_PORT`), `vidocq.properties` or a profile (`%dev.vidocq.devconsole.port`). Check the spelling of the keys yourself: the console claims the whole `vidocq.devconsole.` prefix, so the key audit, xref:modules/vidocq-runtime-core.adoc#vidocq-cfg-003[`VIDOCQ-CFG-003`], reports none of these keys, a mistyped one included. A `vidocq.devconsole.prot=18090` raises no warning; nothing reads it, and the console listens on `8888`. Without the console on the module path, nothing claims the namespace, and a configured `vidocq.devconsole.*` key is not audited either.
+
+The console declares its listener, `dev`, itself: `vidocq.chappe.listeners` must not list it (xref:modules/vidocq-runtime-extensions.adoc#extension-listeners[A listener of an extension's own]).
+
+[#where-it-listens]
+== Where it listens [.tag-new]#NEW#
+
+[#url-record]
+=== The URL record [.tag-new]#NEW#
+
+Once its listener is bound, the console logs one INFO record on the logger `io.vidocq.devconsole`, with the URL last and nothing after its final `/`, so that a terminal or an IDE console makes it a link:
+
+[source,text]
+----
+Vidocq dev console: http://127.0.0.1:8888/
+----
+
+It is the address the console really bound: the free port chosen for `0` or for a taken port, `localhost` for a wildcard address such as `0.0.0.0`, an IPv6 address in brackets. It is logged on the first boot of the JVM, and again on a dev reload only when the URL has changed; with port `0`, a reload asks for the port the previous boot bound, so the URL does not change and the tab you have open keeps working. Chappe's own `listener 'dev' started` line is logged at DEBUG, to leave this record alone.
+
+The detailed startup report has the console's section:
+
+[source,text]
+----
+devconsole    Dev console | 0 ms
+  http://127.0.0.1:8888/
+  enabled     auto
+  configured  127.0.0.1:8888
+  dev         http://127.0.0.1:8888/
+----
+
+[#banner-segment]
+=== The banner segment [.tag-new]#NEW#
+
+The xref:modules/vidocq-runtime-core.adoc#startup-banner[banner], printed before any extension is loaded, already names the console on its context line, after the debugger:
+
+[cols="2,3"]
+|===
+| Configuration | Segment
+
+| `127.0.0.1`, `localhost` or `::1`, port `8888`
+| `devconsole :8888`
+
+| `vidocq.devconsole.host=0.0.0.0`, port `18093`
+| `devconsole 0.0.0.0:18093`
+
+| `vidocq.devconsole.port=0`
+| none: the port is only known once bound
+
+| the console absent, or off
+| none
+|===
+
+The segment is the *configured* address, a promise made before the bind: the URL record is the one to trust, and it always prints on the first boot. When the 80 columns of the banner cannot hold everything, the segment goes before the debugger's address, which is what attaching a debugger needs (xref:modules/vidocq-runtime-core.adoc#startup-banner[What the banner shows]). The single INFO line of a log output keeps it: `... | prod (vidocq.launch.mode) | devconsole 0.0.0.0:18093`.
+
+[#port-taken]
+=== When the port is taken [.tag-new]#NEW#
+
+Two applications in dev mode on one machine both want port `8888`. A dev tool must never stop an application from starting, so the second console listens on a free port instead, and says so loudly, three times. Chappe names both ports, then the console logs its URL and a boxed WARNING that holds numbers and the URL only, then the startup report raises <<vidocq-devc-004>>:
+
+.Port 18092 held by another process
+[source,text]
+----
+[WARN ][2026-09-18 21:28:01.448][main           ][i.v.r.e.e.c.ChappeServerBootstrap#start      ] : Chappe listener 'dev': port 18092 is taken, listening on port 57738 instead
+[INFO ][2026-09-18 21:28:01.449][main           ][i.v.r.e.e.d.DevConsoleExtension#bound        ] : Vidocq dev console: http://127.0.0.1:57738/
+[WARN ][2026-09-18 21:28:01.450][main           ][i.v.r.e.e.d.DevConsoleExtension#bound        ] : Vidocq dev console: port 18092 is taken, listening on port 57738 instead
++------------------------------------------------------+
+|                                                      |
+|   DEV CONSOLE: port 18092 is taken                   |
+|   It listens on port 57738 instead:                  |
+|                                                      |
+|   http://127.0.0.1:57738/                            |
+|                                                      |
++------------------------------------------------------+
+[INFO ][2026-09-18 21:28:01.451][main           ][i.v.r.e.e.c.ChappeServerBootstrap#start      ] : Chappe listener 'default' started on http://localhost:18090/
+[WARN ][2026-09-18 21:28:01.457][main           ][i.v.r.c.r.StartupAnomalies#warn              ] : [VIDOCQ-DEVC-004] The dev console's port 18092 is taken: it listens on port 57738 instead, http://127.0.0.1:57738/ Free port 18092, or set vidocq.devconsole.port to another port, 0 for any free one
+----
+
+The page itself carries a banner with both ports. The box never quotes the configuration: it prints the two port numbers and a URL whose shape the console checked, so nothing configured can draw inside it. Only the application's own listeners still fail the boot on a taken port, as they always did.
+
+[#the-page]
+== The page [.tag-new]#NEW#
+
+The page is plain HTML, one stylesheet and one JavaScript module, all served by the console: no build step, and nothing loaded from another site, not even a font. It reads one document, `GET /api/snapshot`, about once a second.
+
+* **Tabs.** *Startup* first, then one tab per section of the startup report, in the order of the report, and the console's own *JVM* last. The page keeps the selected tab and the pause in the browser's `localStorage`, and nothing else.
+* **Polling.** One request at a time. None while the tab is hidden, or while *Pause* is pressed.
+* **A reload.** When the application stops answering, during a dev reload, the page greys the last data under `reloading…` and retries every second; after a minute it says `unreachable` and retries every five seconds. A new boot is recognised by its id: the page draws its boot facts again and starts its charts over.
+* **Charts.** The page keeps five minutes of history, 300 points per value, in the browser only: nothing is stored on the server. Time is the server's clock, so a missed poll or a debugger paused on a breakpoint leaves a gap, never a lie.
+* **Themes.** Light and dark follow the system's preference.
+
+[#startup-tab]
+=== Startup [.tag-new]#NEW#
+
+The xref:modules/vidocq-runtime-core.adoc#startup-report[startup report] of the boot that is running, whatever the level the log printed: the launch mode and the signal it was read from, the anomalies first, with their code, message, hint and the section that raised them, then the sections of the core — `launch`, `vidocq`, `phases`, `layer`, `configuration`, `extensions` — as tables, and the console's own section. The full report, as the detailed level renders it, closes the tab, with a button that copies it for a bug report. Until the boot has written its report, the tab says `booting…`.
+
+A reload of the dev loop logs the summary report only; the console still has every row, since Vidocq collects them all for it whenever it is on.
+
+[#panels]
+=== Panels [.tag-new]#NEW#
+
+Every section that a library adds to the startup report is a panel, with the boot facts it wrote: its summary line, its rows and its anomalies. A section that is also a dev console panel adds live values:
+
+* a level (a *gauge*), such as the active connections: its number, and a fill bar when it has a maximum;
+* a total that only grows (a *counter*), such as the borrows so far: its total, and `+N since last poll`;
+* a *duration*, formatted;
+* an *absent* value, greyed with its reason, such as `leak detection off`: never a zero that would read as a measure;
+* *tables*;
+* *charts* of the values that change, drawn from the page's own history: a level, or the growth per second of a counter;
+* one card per *group*, such as one per pool, with its values, its charts, and the boot facts that belong to it.
+
+When a panel's sampling fails, its tab shows the class of the exception, never its message, and keeps its boot facts; the console logs <<vidocq-devc-005>> once and tries again on the next poll. A sample that took more than 5 ms is flagged `slow`, and one that went past the console's limits is flagged as such.
+
+The panels shipped today:
+
+[cols="1,3"]
+|===
+| Panel | Shows
+
+| *Mansart pools*
+| One card per pool of `vidocq-runtime-mansart-pool-extension`: its size, timeouts and checks, its URL without credentials in a dev launch, the active and idle connections out of its maximum, the borrowers waiting, borrows, timeouts and leaks, and the mean borrow time. See xref:modules/vidocq-runtime-extensions.adoc#mansart-pool-panel[the Mansart pool section].
+
+| *JVM*
+| The console's own, below.
+|===
+
+An extension adds its panel with the xref:dev-console-panels.adoc[panel SPI].
+
+[#jvm-panel]
+=== JVM [.tag-new]#NEW#
+
+The console's own panel, always last, read from the JVM's management beans — the same figures that Dirac's base metrics read, with nothing to add to the application.
+
+* **Boot facts:** the Java version and vendor, the VM, the garbage collectors, the maximum heap, the processors, the process id, and `source JMX`. Never a JVM argument or a system property: a `-D` can carry a password, as the dev services' do.
+* **Live values:** the heap in use (out of its maximum, or of what is committed when the JVM has no maximum), the heap committed, the non-heap in use, the threads (with daemon threads and the peak), the classes loaded, the uptime, the CPU load of the process and of the system as percentages, and the load average. A figure the JVM does not publish is `not available`, never a zero.
+* **One group per garbage collector:** its collections, and its time as the JVM counts it: pause time for G1, Parallel and Serial; ZGC and Shenandoah publish their pauses as collectors of their own, which get their own card.
+* **Charts:** memory (heap in use, committed, and the maximum as a ceiling), non-heap, threads, CPU, and per collector the share of time it took and its collections per second.
+
+[#security]
+== Security [.tag-new]#NEW#
+
+The console shows what the application is made of, so it is built to be seen by you only:
+
+* **Loopback by default.** It listens on `127.0.0.1`. Another address raises <<vidocq-devc-002>>, in every mode.
+* **Its own address only.** A request is answered only when its `Host` header names the console: `localhost`, `127.0.0.1`, `[::1]` or the configured host, optionally with the port it bound; when the configured host is not a loopback one, any IP address too. Anything else gets `403`. This stops DNS rebinding, where a page of another site has its name resolved to `127.0.0.1` to reach local ports: the browser still sends that site's name.
+* **Read-only.** `GET` and `HEAD` only, anything else gets `405`; there is no endpoint that changes anything.
+* **No reading from another site.** No CORS header, so another site's page can send a request but never read the answer. Every answer carries `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer` and `Content-Security-Policy: default-src 'self'; frame-ancestors 'none'`.
+* **No secret.** A section reports a secret only as `configured` or `not configured`: the API has no way to pass its value. A configuration value that may carry one, such as a JDBC URL, is shown in a dev launch only, without its credentials; outside it, the panel says what it is, such as the database kind. The console never shows JVM arguments or system properties, nor the message of an exception thrown by a panel.
+* **Text stays text.** Everything a panel writes reaches the page as text, never as markup, with control characters replaced and cut at 200 characters.
+* **A warning outside development.** Forced on in a `test` or `prod` launch, the console raises <<vidocq-devc-001>>, naming where it listens.
+
+[#anomalies]
+== Anomaly codes [.tag-new]#NEW#
+
+The first four are anomalies of the console's section of the startup report: each is one WARNING record on `io.vidocq.startup.anomaly`, logged the moment it is found and recalled by the report (xref:modules/vidocq-runtime-core.adoc#startup-anomalies[Anomalies]). The fifth comes later, from a poll, on the console's own logger.
+
+[#vidocq-devc-001]
+=== VIDOCQ-DEVC-001 — on outside development [.tag-new]#NEW#
+
+`vidocq.devconsole.enabled=true` turned the console on in a `test` or `prod` launch. It names where the console listens, the configured host and the bound port:
+
+[source,text]
+----
+[VIDOCQ-DEVC-001] The dev console is on in a prod launch: it shows the startup report and the live values of this application on 0.0.0.0:18093 Remove vidocq.devconsole.enabled=true outside development
+----
+
+Remove the key, or scope it to a profile: `%dev.vidocq.devconsole.enabled=true`.
+
+[#vidocq-devc-002]
+=== VIDOCQ-DEVC-002 — not a loopback address [.tag-new]#NEW#
+
+The console listens on an address that is not a loopback one, in any mode, so whoever reaches the machine can read the page:
+
+[source,text]
+----
+[VIDOCQ-DEVC-002] The dev console listens on [0:0:0:0:0:0:0:0]:18093, which is not a loopback address: whoever reaches this machine can read the startup report and the live values of this application Remove vidocq.devconsole.host, or set it to 127.0.0.1
+----
+
+The address is the one bound, as the JVM writes it: `0.0.0.0` reads as the IPv6 wildcard.
+
+[#vidocq-devc-003]
+=== VIDOCQ-DEVC-003 — invalid value [.tag-new]#NEW#
+
+A `vidocq.devconsole.*` key has a value the console does not accept; the default is used, and the message says which:
+
+[source,text]
+----
+[VIDOCQ-DEVC-003] Invalid value 'yes' for vidocq.devconsole.enabled (auto, true, false): using auto
+[VIDOCQ-DEVC-003] Invalid value '99999' for vidocq.devconsole.port (0 to 65535): using 8888
+----
+
+[#vidocq-devc-004]
+=== VIDOCQ-DEVC-004 — port taken [.tag-new]#NEW#
+
+The configured port was taken: the console listens on a free port instead (<<port-taken>>).
+
+[source,text]
+----
+[VIDOCQ-DEVC-004] The dev console's port 18092 is taken: it listens on port 57738 instead, http://127.0.0.1:57738/ Free port 18092, or set vidocq.devconsole.port to another port, 0 for any free one
+----
+
+[#vidocq-devc-005]
+=== VIDOCQ-DEVC-005 — a panel failed to sample [.tag-new]#NEW#
+
+A panel's `sample()` threw a `RuntimeException` or a `LinkageError`, an invalid value key included. That poll misses the panel's live values, its boot facts stay, and the console calls it again on the next poll. The WARNING is logged on `io.vidocq.devconsole` once per panel and boot, with the class of the exception only; its stack trace follows at DEBUG on the same logger:
+
+[source,text]
+----
+[VIDOCQ-DEVC-005] Panel 'acme-cache' failed to sample: IllegalArgumentException
+----
+
+It is a bug of the panel: see xref:dev-console-panels.adoc[Writing a dev console panel].
+
+[#loggers]
+== Loggers [.tag-new]#NEW#
+
+[cols="2,3"]
+|===
+| Logger | Records
+
+| `io.vidocq.devconsole`
+| The URL record (INFO), the boxed WARNING of a taken port, a console that could not start (WARNING), <<vidocq-devc-005>>, and the stack trace of a failed sample (DEBUG).
+
+| `io.vidocq.startup.anomaly`
+| <<vidocq-devc-001>> to <<vidocq-devc-004>>, as every startup anomaly.
+|===
+
+== Next steps [.tag-new]#NEW#
+
+* xref:dev-console-panels.adoc[Writing a dev console panel] [.tag-new]#NEW# — show the live values of an extension
+* xref:modules/vidocq-runtime-core.adoc#startup-report[Startup report] — what the *Startup* tab shows
+* xref:modules/vidocq-runtime-maven-plugin.adoc[vidocq-runtime-maven-plugin] — `vidocq:dev`

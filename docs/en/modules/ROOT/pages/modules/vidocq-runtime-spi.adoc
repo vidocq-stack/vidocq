@@ -25,7 +25,7 @@ List indexed from the existing sources:
 | The extension point — lifecycle interface with `name()`, `priority()` (lower runs first, default 1000), `configure(VidocqConfiguration)`, `beforeStart(VaubanContainerBuilder)`, `onStart(ExtensionContext)`, `onStop()` and `configKeys()`. Discovered via `ServiceLoader`.
 
 | `ExtensionContext`
-| Handed to `onStart` — `container()` (Vauban), `beanManager()`, `configuration()` (legacy string API), `config()` (typed API), `launchMode()` [.tag-new]#NEW# (<<launch-mode-api>>).
+| Handed to `onStart` — `container()` (Vauban), `beanManager()`, `configuration()` (legacy string API), `config()` (typed API), `launchMode()` [.tag-new]#NEW# (<<launch-mode-api>>), `startupReport()` [.tag-new]#NEW# (<<startup-report-view>>).
 
 | `VidocqConfiguration`
 | String-property view passed to `configure` — `property(key)` returns `Optional<String>`, plus `property(key, default)` and `portFor(extensionName, defaultPort)`.
@@ -53,7 +53,15 @@ List indexed from the existing sources:
 
 | `report.Verbosity` / `report.LaunchMode` [.tag-new]#NEW#
 | The level of the report (`OFF`, `SUMMARY`, `DETAILED`) and the launch mode (`DEV`, `TEST`, `PROD`, with `label()` and `parse(String)`).
+
+| `report.StartupReportView` [.tag-new]#NEW#
+| The startup report of the running boot, read-only (<<startup-report-view>>).
+
+| `report.ReportAnomaly`, `report.ReportSection`, `report.ReportLine` [.tag-new]#NEW#
+| The text-only records of that view.
 |===
+
+The dev console panel SPI, `DevConsolePanel` and the types it writes, is a module of its own, `vidocq-runtime-devconsole-spi` [.tag-new]#NEW# (<<dev-console-panels>>).
 
 == Writing an extension — skeleton
 
@@ -159,13 +167,13 @@ A library that is not an extension declares its contributor as a service. Its se
 | Method | Contract
 
 | `StartupReportContributor.id()`
-| A stable lowercase id, such as `translate`: the name of the section, and what keeps it from appearing twice. `null` or blank skips the contributor (xref:modules/vidocq-runtime-core.adoc#vidocq-rpt-001[`VIDOCQ-RPT-001`]); an id already taken by another class, or by a section of the core, skips the second one (xref:modules/vidocq-runtime-core.adoc#vidocq-rpt-002[`VIDOCQ-RPT-002`]).
+| A stable lowercase id, such as `translate`: the name of the section, and what keeps it from appearing twice. `null` or blank skips the contributor (xref:modules/vidocq-runtime-core.adoc#vidocq-rpt-001[`VIDOCQ-RPT-001`]); an id already taken by another class, or by a section of the core, skips the second one (xref:modules/vidocq-runtime-core.adoc#vidocq-rpt-002[`VIDOCQ-RPT-002`]). `startup` and `jvm` are taken too [.tag-new]#NEW#: they are the dev console's own panels.
 
 | `title()`, `order()`
 | The title printed after the id in the detailed report, the id by default; the position among the contributors declared as services.
 
 | `contribute(context, section)`
-| Writes the section. Called once per boot, on the booting thread, after every `onStart` and before `Vidocq - Started in`, at every report level, `OFF` included, so that an anomaly is never lost.
+| Writes the section. Called once per boot, on the booting thread, after every `onStart` and before `Vidocq - Started in`, at every report level, `OFF` included, so that an anomaly is never lost. While the xref:dev-console.adoc[dev console] is on, its level is `DETAILED` [.tag-new]#NEW#, whatever the report prints, so that the console gets every row.
 
 | `StartupReportContext.verbosity()`, `launchMode()`
 | The level of this report, and the launch mode of this boot. The header already gives the reason of the mode: a section never repeats it.
@@ -306,6 +314,84 @@ What the rule means for a contributor:
 
 * Two contributor classes must not share an id: only the same class found twice is a twin, and a different class with the same id is skipped with xref:modules/vidocq-runtime-core.adoc#vidocq-rpt-002[`VIDOCQ-RPT-002`].
 * The two copies of a class are two different `Class` objects. To test whether a bean exists, `hasBeanOfType(String)` compares binary names, so it answers the same whichever copy asks.
+
+[#startup-report-view]
+== Reading the startup report [.tag-new]#NEW#
+
+`ExtensionContext.startupReport()` gives an extension the startup report of its boot, read-only, as a `StartupReportView` of the package `io.vidocq.runtime.spi.report`. It is what the xref:dev-console.adoc[dev console] shows; any development tool may read it the same way. Exporting the core's report classes would have let any extension add an anomaly or a section to a report that is written: the view holds text, and nothing in it can be changed.
+
+The report is written after every `onStart`, so the view is not there yet when `onStart` runs. `startupReport()` returns a supplier: keep it, and ask it when the report is needed, on a request for instance, from any thread.
+
+[source,java]
+----
+private volatile Supplier<Optional<StartupReportView>> report = () -> Optional.empty();
+
+@Override
+public void onStart(ExtensionContext ctx) {
+    report = ctx.startupReport();
+}
+
+// later, on a request
+report.get().ifPresent(view -> render(view.sections(), view.anomalies()));
+----
+
+[cols="1,3"]
+|===
+| Method | Returns
+
+| `launchMode()`, `launchReason()`
+| The launch mode of the boot, and why, as the header prints it: `vidocq.launch.mode`, `auto: IntelliJ agent`.
+
+| `anomalies()`
+| Every anomaly of the boot, the core's and the contributors', in the order they were logged, as `ReportAnomaly(code, message, hint, source)`. The detailed report recalls the first 50; this list has them all.
+
+| `sections()`
+| The sections in the order of the detailed report — the lines of its header (`launch`, `vidocq`, `phases`) as sections of their own, then the core's, then the contributors' — as `ReportSection(id, headline, summary, lines)`. A `ReportLine(key, values)` with a `null` key is a row of a table or a line of text. The anomalies are not a section here.
+
+| `detailedText()`
+| The whole report as the log prints it at `DETAILED`, whatever level this boot logged it at: the text a user copies into a bug report.
+
+| `contributors()`
+| The contributors this boot called, the very instances, in the order of their sections. A reader may look for another interface they implement, as the console looks for `DevConsolePanel`, and never calls `contribute`: the report is written.
+|===
+
+The supplier is empty until the report is written, and again once Vidocq stops, which withdraws the view first. A view belongs to one boot and never changes: a dev reload publishes a view of its own. Its values are text written by the application and its libraries: a reader escapes them for where it shows them, and never renders them as markup. `startupReport()` is a `default` method that answers empty, so an `ExtensionContext` written by hand, such as a test fake, compiles unchanged.
+
+[#dev-console-panels]
+== Dev console panels [.tag-new]#NEW#
+
+A startup report contributor that the dev console also shows live implements `DevConsolePanel`. The panel SPI is a module of its own, so that only the extensions that have a panel depend on it:
+
+[cols="1,3"]
+|===
+| Artefact | `io.vidocq.runtime:vidocq-runtime-devconsole-spi:{project-version}`
+| Java module | `io.vidocq.runtime.spi.devconsole`, one exported package of the same name, `requires transitive io.vidocq.runtime.spi`
+| Source | `vidocq-runtime-devconsole-spi/src/main/java/io/vidocq/runtime/spi/devconsole/`
+|===
+
+The module name falls under the `io.vidocq.runtime.spi` prefix, which keeps a module in the boot layer across dev reloads: the console and every panel see the same `DevConsolePanel` type after any number of reloads.
+
+[cols="1,3"]
+|===
+| Type | Role
+
+| `DevConsolePanel` [.tag-new]#NEW#
+| Extends `StartupReportContributor`. `contribute` writes the boot facts once per boot, for the report and the console alike; `sample(PanelSample)` writes the live values on every poll, from memory only; `charts()` names the values the page plots, none by default. Found as any contributor is: nothing new to declare.
+
+| `PanelSample` [.tag-new]#NEW#
+| Where `sample` writes, every method returning a scope so that calls chain: `gauge(key, value, unit)`, `gauge(key, value, max, unit)`, `counter(key, total, unit)`, `duration(key, value)`, `text(key, value)`, `absent(key, reason)`, `table(key, columns, rows)`, and `group(name)`, one level deep. `requireKey(key)` checks the rule of every key, `[a-z][a-z0-9.-]{0,39}`.
+
+| `Unit` [.tag-new]#NEW#
+| What a number measures: `COUNT`, `BYTES`, `NANOS`, `RATIO` (0 to 1, shown as a percentage).
+
+| `Chart` [.tag-new]#NEW#
+| A chart the page draws from successive samples: an id, a title, and its series in drawing order, checked when it is built. Repeated once per group that holds one of its keys.
+
+| `Series`, `Series.Style` [.tag-new]#NEW#
+| A value a chart plots and how: `AREA`, `STACKED`, `LINE` and `CEILING` for a gauge, `RATE` for a counter. `Series.area(key)`, `stacked`, `line`, `rate`, `ceiling`.
+|===
+
+Where a panel lives, how to write one, its rules, a worked example and how to test it: xref:dev-console-panels.adoc[Writing a dev console panel].
 
 == Next steps
 

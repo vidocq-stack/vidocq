@@ -16,11 +16,14 @@ Operational reference for Vidocq Runtime — Maven coordinates, MicroProfile Con
 | `io.vidocq.runtime:vidocq-runtime-spi:{project-version}`
 | Public SPI (`VidocqExtension`, `ExtensionContext`, `VidocqConfig`, the startup report contributors [.tag-new]#NEW#)
 
+| `io.vidocq.runtime:vidocq-runtime-devconsole-spi:{project-version}` [.tag-new]#NEW#
+| Dev console panel SPI (`DevConsolePanel`, `PanelSample`, `Chart`, `Series`, `Unit`): what a runtime extension implements to show its section of the startup report live. See xref:dev-console-panels.adoc[Writing a dev console panel].
+
 | `io.vidocq.runtime:vidocq-runtime-core:{project-version}`
 | Runtime engine (boot orchestrator, lifecycle)
 
 | `io.vidocq.runtime.extensions:vidocq-runtime-extensions:{project-version}`
-| Aggregator of the shipped extensions, grouped by domain (essentials, jakartaee-core, jakartaee-web, microprofile, module-repackaged)
+| Aggregator of the shipped extensions, grouped by domain (essentials, jakartaee-core, jakartaee-web, microprofile, module-repackaged). The dev console [.tag-new]#NEW# is `io.vidocq.runtime.extensions.essentials:vidocq-runtime-devconsole-extension` (xref:dev-console.adoc[Dev console]).
 
 | `io.vidocq.runtime:vidocq-runtime-maven-plugin:{project-version}`
 | Maven plugin — `generate`, `package`, `dev`, `checkpom`, `jlink`, `jpackage`, `docker`, `check-module-info`, `complete-module-info` (`modularize` moved to the Vauban plugin)
@@ -40,6 +43,9 @@ Operational reference for Vidocq Runtime — Maven coordinates, MicroProfile Con
 
 | `io.vidocq.runtime.spi`
 | Public SPI interfaces (`VidocqExtension`, `ExtensionContext`, `VidocqConfiguration`, `config.*`, `report.*` [.tag-new]#NEW#). Must be declared `requires` in any extension, and in any startup report contributor.
+
+| `io.vidocq.runtime.spi.devconsole` [.tag-new]#NEW#
+| The dev console panel SPI, `requires transitive io.vidocq.runtime.spi`. Must be declared `requires` in an extension that implements `DevConsolePanel`. Its name keeps it in the boot layer across dev reloads, with the console.
 
 | `io.vidocq.runtime.core`
 | Orchestration engine — `io.vidocq.runtime.core.Vidocq` (the `main`/`run` entry point), `VidocqBootstrap`, `ExtensionLoader`, built-in config sources.
@@ -119,6 +125,18 @@ The `io.vidocq.runtime.extensions.*` modules each correspond to a built-in exten
 | `vidocq.banner.location` [.tag-new]#NEW#
 | (empty)
 | Custom banner: `classpath:<resource>`, `file:<path>` or `<path>`; a `vidocq-banner.txt` resource is used without configuration.
+
+| `vidocq.devconsole.enabled` [.tag-new]#NEW#
+| `auto`
+| Dev console: `auto` (on in a dev launch, off otherwise), `true` or `false`. Another value is reported as `VIDOCQ-DEVC-003` and means `auto`. Read by `vidocq-runtime-devconsole-extension`. See xref:dev-console.adoc#configuration[Dev console].
+
+| `vidocq.devconsole.port` [.tag-new]#NEW#
+| `8888`
+| Port of the dev console, `0` for a free one that the dev reloads keep. A taken port falls back to a free one (`VIDOCQ-DEVC-004`).
+
+| `vidocq.devconsole.host` [.tag-new]#NEW#
+| `127.0.0.1`
+| Address of the dev console. Not a loopback address: `VIDOCQ-DEVC-002`.
 |===
 
 TLS is not implemented yet: `vidocq.https.port`, `vidocq.tls.cert` and `vidocq.tls.key` are
@@ -251,7 +269,7 @@ Source: `vidocq-runtime-spi/src/main/java/io/vidocq/runtime/spi/`.
 | Lifecycle interface — `name()`, `priority()` (lower runs first, default 1000), `configure(VidocqConfiguration)`, `beforeStart(VaubanContainerBuilder)`, `onStart(ExtensionContext)`, `onStop()`, `configKeys()`. Registered with `provides … with …` in `module-info.java` (or `META-INF/services`), discovered via `ServiceLoader`.
 
 | `ExtensionContext`
-| Passed to `onStart` — `container()`, `beanManager()`, `configuration()` (legacy), `config()` (typed), `launchMode()` [.tag-new]#NEW#.
+| Passed to `onStart` — `container()`, `beanManager()`, `configuration()` (legacy), `config()` (typed), `launchMode()` [.tag-new]#NEW#, `startupReport()` [.tag-new]#NEW#.
 
 | `VidocqConfiguration`
 | String-property configuration passed to `configure` — `property(key)` returns `Optional<String>`, `property(key, default)`, `portFor(extensionName, defaultPort)`.
@@ -273,12 +291,40 @@ Source: `vidocq-runtime-spi/src/main/java/io/vidocq/runtime/spi/`.
 
 | `report.Verbosity` / `report.LaunchMode` [.tag-new]#NEW#
 | `OFF`, `SUMMARY`, `DETAILED`; `DEV`, `TEST`, `PROD`.
+
+| `report.StartupReportView` [.tag-new]#NEW#
+| The startup report of the running boot, read-only, from `ExtensionContext.startupReport()`: launch mode and reason, anomalies, sections, the detailed text, and the contributors the boot called. See xref:modules/vidocq-runtime-spi.adoc#startup-report-view[Reading the startup report].
+
+| `report.ReportAnomaly` / `report.ReportSection` / `report.ReportLine` [.tag-new]#NEW#
+| Its text-only records: an anomaly (code, message, hint, source), a section (id, headline, summary, lines), a line (key, values).
+|===
+
+[#devconsole-spi]
+== Dev console SPI (`vidocq-runtime-devconsole-spi`) [.tag-new]#NEW#
+
+Source: `vidocq-runtime-devconsole-spi/src/main/java/io/vidocq/runtime/spi/devconsole/`. How to use it: xref:dev-console-panels.adoc[Writing a dev console panel].
+
+[cols="1,3"]
+|===
+| Type | Role
+
+| `DevConsolePanel` [.tag-new]#NEW#
+| A `StartupReportContributor` that the dev console also shows live: `sample(PanelSample)` on every poll, `charts()` once per boot.
+
+| `PanelSample` [.tag-new]#NEW#
+| Where `sample` writes: `gauge`, `counter`, `duration`, `text`, `absent`, `table`, `group`; `requireKey(key)`, the rule of every key.
+
+| `Unit` [.tag-new]#NEW#
+| `COUNT`, `BYTES`, `NANOS`, `RATIO`.
+
+| `Chart` / `Series` / `Series.Style` [.tag-new]#NEW#
+| A chart the page draws from successive samples; a value it plots, in the style `AREA`, `STACKED`, `LINE`, `RATE` or `CEILING`.
 |===
 
 [#startup-anomaly-codes]
 == Startup anomaly codes [.tag-new]#NEW#
 
-Each is one WARNING record on `io.vidocq.startup.anomaly`, its code first, logged at every level of the startup report. See xref:modules/vidocq-runtime-core.adoc#startup-anomalies[Anomalies].
+Each is one WARNING record on `io.vidocq.startup.anomaly`, its code first, logged at every level of the startup report, except `VIDOCQ-DEVC-005`, which the dev console logs on `io.vidocq.devconsole` when a panel fails to sample. See xref:modules/vidocq-runtime-core.adoc#startup-anomalies[Anomalies].
 
 [cols="1,3"]
 |===
@@ -300,7 +346,28 @@ Each is one WARNING record on `io.vidocq.startup.anomaly`, its code first, logge
 | A startup report contributor could not be loaded, created or identified, or failed; its section is skipped.
 
 | xref:modules/vidocq-runtime-core.adoc#vidocq-rpt-002[`VIDOCQ-RPT-002`]
-| Two contributors of different classes use the same id, or one uses the id of a section of the core; the second is skipped.
+| Two contributors of different classes use the same id, or one uses the id of a section of the core, or `startup` or `jvm` [.tag-new]#NEW#, the dev console's own panels; the second is skipped.
+
+| xref:dev-console.adoc#vidocq-devc-001[`VIDOCQ-DEVC-001`] [.tag-new]#NEW#
+| The dev console is on in a `test` or `prod` launch.
+
+| xref:dev-console.adoc#vidocq-devc-002[`VIDOCQ-DEVC-002`] [.tag-new]#NEW#
+| The dev console listens on an address that is not a loopback one.
+
+| xref:dev-console.adoc#vidocq-devc-003[`VIDOCQ-DEVC-003`] [.tag-new]#NEW#
+| A `vidocq.devconsole.*` key has a value the console does not accept; its default is used.
+
+| xref:dev-console.adoc#vidocq-devc-004[`VIDOCQ-DEVC-004`] [.tag-new]#NEW#
+| The dev console's port was taken; it listens on a free one.
+
+| xref:dev-console.adoc#vidocq-devc-005[`VIDOCQ-DEVC-005`] [.tag-new]#NEW#
+| A dev console panel failed to sample; that poll misses its live values.
+
+| xref:modules/vidocq-runtime-extensions.adoc#mansart-pool-001[`MANSART-POOL-001`] [.tag-new]#NEW#
+| A Mansart pool opened none of the connections its `minIdle` asks for at boot.
+
+| xref:modules/vidocq-runtime-extensions.adoc#mansart-pool-002[`MANSART-POOL-002`] [.tag-new]#NEW#
+| A named Mansart pool is open, but no `@Named` `DataSource` bean serves it.
 |===
 
 == Bugs and benchmarks

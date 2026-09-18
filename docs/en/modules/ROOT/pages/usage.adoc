@@ -222,6 +222,11 @@ Endpoints exposed by `vidocq-runtime-knock-health-extension`: `/health`, `/healt
 
 The `vidocq-runtime-grimm-openapi-extension` extension serves the OpenAPI document, generated from Jakarta REST + MicroProfile OpenAPI annotations, at `/openapi`; the companion `vidocq-runtime-grimm-openapi-ui-extension` serves Swagger UI at `/openapi/ui`.
 
+[#dev-console]
+== Dev console [.tag-new]#NEW#
+
+While you develop, add `vidocq-runtime-devconsole-extension` and run `mvn vidocq:dev`: the application logs `Vidocq dev console: http://127.0.0.1:8888/`, a read-only page with the startup report of the running boot and the live values of the extensions — the connections of each Mansart pool, the heap, the threads, the garbage collectors. It is on in a dev launch only, on the loopback address. See xref:dev-console.adoc[Dev console]; an extension adds its own panel as xref:dev-console-panels.adoc[Writing a dev console panel] describes.
+
 == Profiles
 
 MicroProfile convention: prefix a key with `%<profile>.` to scope it.

@@ -38,7 +38,8 @@ The seventh method, `configKeys()`, lets an extension declare the `vidocq.*` key
 * `beanManager()` — shortcut to the CDI `BeanManager`;
 * `configuration()` — the legacy `VidocqConfiguration` (string properties);
 * `config()` — the typed `VidocqConfig` API (`Optional`-returning `getValue(key, type)`, aligned with MicroProfile Config concepts);
-* `launchMode()` [.tag-new]#NEW# — how this JVM was launched, `DEV`, `TEST` or `PROD` (xref:modules/vidocq-runtime-core.adoc#launch-mode[Launch mode]).
+* `launchMode()` [.tag-new]#NEW# — how this JVM was launched, `DEV`, `TEST` or `PROD` (xref:modules/vidocq-runtime-core.adoc#launch-mode[Launch mode]);
+* `startupReport()` [.tag-new]#NEW# — the startup report of this boot, read-only, once it is written (xref:modules/vidocq-runtime-spi.adoc#startup-report-view[Reading the startup report]).
 
 == Discovery and ordering
 
