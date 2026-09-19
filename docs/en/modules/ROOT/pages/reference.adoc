@@ -25,6 +25,9 @@ Operational reference for Vidocq Runtime — Maven coordinates, MicroProfile Con
 | `io.vidocq.runtime.extensions:vidocq-runtime-extensions:{project-version}`
 | Aggregator of the shipped extensions, grouped by domain (essentials, jakartaee-core, jakartaee-web, microprofile, module-repackaged). The dev console [.tag-new]#NEW# is `io.vidocq.runtime.extensions.essentials:vidocq-runtime-devconsole-extension` (xref:dev-console.adoc[Dev console]).
 
+| `io.vidocq.runtime.extensions.essentials:vidocq-runtime-langchain4j-cdi-mcp-extension:{project-version}` [.tag-new]#NEW#
+| langchain4j-cdi MCP server extension. Built in the reactor, not published while langchain4j-cdi is a SNAPSHOT: see xref:modules/vidocq-runtime-extensions.adoc#langchain4j-cdi-mcp[langchain4j-cdi MCP server]
+
 | `io.vidocq.runtime:vidocq-runtime-maven-plugin:{project-version}`
 | Maven plugin — `generate`, `package`, `dev`, `checkpom`, `jlink`, `jpackage`, `docker`, `check-module-info`, `complete-module-info` (`modularize` moved to the Vauban plugin)
 
@@ -137,6 +140,10 @@ The `io.vidocq.runtime.extensions.*` modules each correspond to a built-in exten
 | `vidocq.devconsole.host` [.tag-new]#NEW#
 | `127.0.0.1`
 | Address of the dev console. Not a loopback address: `VIDOCQ-DEVC-002`. Anything but ASCII letters, digits and `.-_:%[]`: `VIDOCQ-DEVC-003`, and `127.0.0.1`.
+
+| `vidocq.mcp.serverName` / `vidocq.mcp.serverVersion` [.tag-new]#NEW#
+| `langchain4j-cdi` / `unknown`
+| Name and version the langchain4j-cdi MCP server advertises. Read by `vidocq-runtime-langchain4j-cdi-mcp-extension`, with seven other `vidocq.mcp.*` keys: `allowedOrigins`, `mrtrMode`, `requestStateSecret`, `requestStateTtl`, `continuationTimeout`, `cacheTtl`, `cacheScope`. See xref:modules/vidocq-runtime-extensions.adoc#langchain4j-cdi-mcp-configuration[its configuration].
 |===
 
 TLS is not implemented yet: `vidocq.https.port`, `vidocq.tls.cert` and `vidocq.tls.key` are
@@ -368,6 +375,21 @@ Each is one WARNING record on `io.vidocq.startup.anomaly`, its code first, logge
 
 | xref:modules/vidocq-runtime-extensions.adoc#mansart-pool-002[`MANSART-POOL-002`] [.tag-new]#NEW#
 | A named Mansart pool is open, but no `@Named` `DataSource` bean serves it.
+
+| xref:modules/vidocq-runtime-extensions.adoc#vidocq-mcp-001[`VIDOCQ-MCP-001`] [.tag-new]#NEW#
+| The langchain4j-cdi MCP server module does not provide `McpServerSPI`, or is not open.
+
+| xref:modules/vidocq-runtime-extensions.adoc#vidocq-mcp-002[`VIDOCQ-MCP-002`] [.tag-new]#NEW#
+| The langchain4j-cdi MCP extension is present but no `McpEndpoint` bean exists.
+
+| xref:modules/vidocq-runtime-extensions.adoc#vidocq-mcp-003[`VIDOCQ-MCP-003`] [.tag-new]#NEW#
+| langchain4j-cdi's MCP server is loaded twice, in the boot layer and in the application layer.
+
+| xref:modules/vidocq-runtime-extensions.adoc#vidocq-mcp-004[`VIDOCQ-MCP-004`] [.tag-new]#NEW#
+| `vidocq.mcp.*` keys are set and the application also produces `@Named("mcp-server")`; the keys win.
+
+| xref:modules/vidocq-runtime-extensions.adoc#vidocq-mcp-005[`VIDOCQ-MCP-005`] [.tag-new]#NEW#
+| An MCP tool, prompt or resource template argument has no name.
 |===
 
 == Bugs and benchmarks

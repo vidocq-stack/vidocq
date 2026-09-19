@@ -38,6 +38,10 @@
 | `essentials`
 | Liquibase-based schema migrations.
 
+| `vidocq-runtime-langchain4j-cdi-mcp-extension` [.tag-new]#NEW#
+| `essentials`
+| Hosts a langchain4j-cdi MCP server: one dependency brings the server, its CDI 4.1 invoker, Jakarta REST and the server's bean list; `vidocq.mcp.*` keys configure it. Not on Maven Central yet. See <<langchain4j-cdi-mcp>>.
+
 | `vidocq-runtime-cassini-rest-extension`
 | `jakartaee-core`
 | Wires xref:cassini::index.adoc[Cassini] for Jakarta REST 4.0. Static routing generated at build (companion `-codegen` artefact), CDI bridged via Vauban.
@@ -289,6 +293,192 @@ A named pool is open, but no `@Named("<name>") DataSource` bean serves it: the b
 ----
 
 When the container cannot say which beans it has, no pool is flagged: the report never guesses.
+
+[#langchain4j-cdi-mcp]
+== langchain4j-cdi MCP server [.tag-new]#NEW#
+
+`vidocq-runtime-langchain4j-cdi-mcp-extension` hosts a langchain4j-cdi MCP server on Vidocq: the `@Tool`, `@Prompt`, `@Resource` and `@ResourceTemplate` methods of the application's CDI beans are served over the Model Context Protocol at `/mcp`, in its `2026-07-28` and `2025-03-26` revisions. One dependency brings everything the server needs.
+
+[IMPORTANT]
+====
+The extension is not on Maven Central yet. It depends on langchain4j-cdi `1.4.0-SNAPSHOT`, the version that carries the MCP `2026-07-28` work and declares `provides org.mcpjava.server.spi.McpServerSPI` in its module descriptor. Until langchain4j-cdi releases it, the extension is built in the Vidocq reactor and left out of Vidocq releases: build Vidocq with `mvn install` to use it.
+====
+
+[source,xml,subs=attributes+]
+----
+<dependency>
+    <groupId>io.vidocq.runtime.extensions.essentials</groupId>
+    <artifactId>vidocq-runtime-langchain4j-cdi-mcp-extension</artifactId>
+    <version>{project-version}</version>
+</dependency>
+----
+
+The application's `module-info.java` still reads the MCP server, whose annotations and types it compiles against; `mcp.server.api` comes with it. It never requires the extension, which the runtime finds as a service.
+
+[source,java]
+----
+module com.example.time {
+    requires io.vidocq.runtime.core;
+    requires dev.langchain4j.cdi.mcp.server;
+}
+----
+
+Compile the application with `-parameters`, or name every argument with `@ToolArg(name = ...)`, `@PromptArg(name = ...)` or `@ResourceTemplateArg(name = ...)`: an argument without a name is advertised as `arg0` and never bound (<<vidocq-mcp-005>>).
+
+[#langchain4j-cdi-mcp-dependencies]
+=== What the dependency brings [.tag-new]#NEW#
+
+[cols="2,3"]
+|===
+| Brought | Replaces, in the application
+
+| langchain4j-cdi's MCP server and its CDI 4.1 invoker, `dev.langchain4j.cdi.mcp:langchain4j-cdi-mcp-server` and `langchain4j-cdi-mcp-invoker-cdi41`
+| The two langchain4j-cdi dependencies.
+
+| The Cassini REST extension, with Chappe and the Champollion JSON-P and JSON-B providers, and the Jakarta REST 4.0, JSON-P 2.1 and JSON-B 3.0 APIs
+| `parsson`, `yasson`, and the Jakarta API versions the application pinned.
+
+| `META-INF/vauban-beans.list`, generated from the langchain4j-cdi jar when the extension is built
+| `scanDependencies` on `vidocq:generate`. The goal has nothing left to index for MCP, and an IDE launch without a Maven step finds `/mcp`.
+|===
+
+[#langchain4j-cdi-mcp-layer]
+=== Where the server lives [.tag-new]#NEW#
+
+The extension's module, `io.vidocq.runtime.extensions.essentials.langchain4jcdi.mcp`, is kept in the boot layer like every `io.vidocq.runtime.extensions` module, and it reads `dev.langchain4j.cdi.mcp.server` and the invoker. A module kept in the boot layer keeps what it reads, so the MCP server lives in the boot layer in every launch shape: `vidocq:dev`, `vidocq:run`, the generated launcher and a `@VidocqMain` trampoline started from the IDE. The application layer holds the application's modules only, and the report's `layer` section shows it.
+
+Two hand-made layouts break this:
+
+* The langchain4j-cdi jars in the `-Dvidocq.app.path` directory, next to the application. The JVM stops before `main` with `FindException: Module dev.langchain4j.cdi.mcp.server not found, required by io.vidocq.runtime.extensions.essentials.langchain4jcdi.mcp`. `vidocq:package` never builds this layout: dependencies go to `lib/`.
+* `-Dvidocq.app.modules` naming a `dev.langchain4j.cdi.mcp.*` module. langchain4j-cdi is then loaded a second time, in the application layer. The MCP calls still work, the `mcp` section reads `loaded twice` and <<vidocq-mcp-003>> is reported.
+
+[#langchain4j-cdi-mcp-configuration]
+=== Configuration [.tag-new]#NEW#
+
+[cols="2,1,3"]
+|===
+| Key | Default | Meaning
+
+| `vidocq.mcp.serverName`
+| `langchain4j-cdi`
+| The server name advertised to clients (`serverInfo` of `initialize`).
+
+| `vidocq.mcp.serverVersion`
+| `unknown`
+| The server version advertised to clients.
+
+| `vidocq.mcp.allowedOrigins`
+| (empty)
+| Comma-separated `Origin` values the DNS rebinding protection accepts, or `*` for all. Empty accepts a present `Origin` only when its host and the `Host` header's host are both loopback.
+
+| `vidocq.mcp.mrtrMode`
+| `REPLAY`
+| How a tool's client interactions (elicitation, sampling, roots) are served to `2026-07-28` clients: `REPLAY` re-executes the call with the answers carried in a signed request state, `CONTINUATION` parks it until they arrive and needs sticky routing.
+
+| `vidocq.mcp.requestStateSecret`
+| (random per JVM)
+| The key that signs the `REPLAY` request state, at least 32 bytes in UTF-8. Set it when several instances serve the same clients. A secret: never printed.
+
+| `vidocq.mcp.requestStateTtl`
+| `PT10M`
+| How long a signed request state stays valid, ISO-8601.
+
+| `vidocq.mcp.continuationTimeout`
+| `PT5M`
+| How long a `CONTINUATION` waits for its answers, ISO-8601.
+
+| `vidocq.mcp.cacheTtl`
+| `PT0S`
+| The `ttlMs` caching hint of the cacheable `2026-07-28` results (the lists and `resources/read`), ISO-8601; `PT0S` means stale at once.
+
+| `vidocq.mcp.cacheScope`
+| `public`
+| The `cacheScope` hint of the same results: `public` (no user-specific data) or `private`.
+|===
+
+With no key set, the extension adds nothing and the server keeps its defaults, or the application's own `@Named("mcp-server") McpServerConfig` producer. With one key or more, the extension publishes the whole configuration as that bean; when the application produces one as well, the keys win (<<vidocq-mcp-004>>). A value a key does not accept stops the boot with an error that names the key and what it accepts, never the value. A misspelled key under `vidocq.mcp.` is reported as xref:modules/vidocq-runtime-core.adoc#vidocq-cfg-003[`VIDOCQ-CFG-003`].
+
+[#langchain4j-cdi-mcp-report]
+=== The `mcp` section of the startup report [.tag-new]#NEW#
+
+The summary line counts what the server serves, and the detailed report describes it. Without an `McpEndpoint` bean the summary reads `not deployed`; with langchain4j-cdi loaded twice, `loaded twice` and nothing else.
+
+.A trampoline launch with `-Dvidocq.mcp.serverName=time-server -Dvidocq.mcp.serverVersion=1.2.3`
+[source,text]
+----
+mcp           MCP server (langchain4j-cdi) | 3 ms
+  2 tools, 1 prompt, 0 resources, 1 resource template
+  endpoint            /mcp (Jakarta REST path; absolute URL once the rest section declares routes)
+  protocols           2026-07-28 (modern), 2025-03-26 (legacy)
+  server              time-server 1.2.3 (vidocq.mcp.*)
+  tools               convert_time, current_time
+  prompts             plan_meeting
+  resource templates  time://zone/{zone}
+  invoker             CDI 4.1 invoker registered (built at the first call)
+  mrtr                REPLAY, request state TTL PT10M
+  requestStateSecret  not configured
+  request state key   random per-JVM key (single instance only)
+  allowed origins     loopback only
+  cache hints         ttl PT0S, public
+----
+
+`server` says where the configuration comes from: `vidocq.mcp.*`, `application bean` or `defaults`. The request-state secret is only ever printed as `configured` or `not configured`; session ids, tool descriptions, schemas and headers are never printed. The section reads what the server holds in memory and creates none of its session or transport beans.
+
+The anomalies below are each one WARNING record on `io.vidocq.startup.anomaly`, logged at every level of the report (xref:modules/vidocq-runtime-core.adoc#startup-anomalies[Anomalies]). They cover what the extension makes possible or alone can see; langchain4j-cdi's own failures stay in its logs.
+
+[#vidocq-mcp-001]
+=== VIDOCQ-MCP-001 — the MCP server module cannot serve from the boot layer [.tag-new]#NEW#
+
+The descriptor of `dev.langchain4j.cdi.mcp.server` does not declare `provides org.mcpjava.server.spi.McpServerSPI`, or the module is not open. In the boot layer the JDK ignores `META-INF/services`, so every tool or prompt that builds a `ToolResponse`, a `PromptResponse` or a `TextContent` fails:
+
+[source,text]
+----
+[VIDOCQ-MCP-001] Module dev.langchain4j.cdi.mcp.server does not provide org.mcpjava.server.spi.McpServerSPI: tools and prompts that build a ToolResponse, a PromptResponse or a TextContent fail with "No McpServerSPI implementation found". Use a langchain4j-cdi version whose dev.langchain4j.cdi.mcp.server module is open and provides org.mcpjava.server.spi.McpServerSPI.
+----
+
+Use a langchain4j-cdi version that declares both.
+
+[#vidocq-mcp-002]
+=== VIDOCQ-MCP-002 — the server is not deployed [.tag-new]#NEW#
+
+The extension is present but no `McpEndpoint` bean exists, so `/mcp` answers 404. The bean list names the classes of the langchain4j-cdi version the extension was built with: an application that forces another langchain4j-cdi version can lose them. The section reads `not deployed`:
+
+[source,text]
+----
+[VIDOCQ-MCP-002] The langchain4j-cdi MCP server extension is present but no McpEndpoint bean exists: /mcp is not served. Align the langchain4j-cdi version with the one this extension is built with: its bean list names the classes of that version.
+----
+
+[#vidocq-mcp-003]
+=== VIDOCQ-MCP-003 — the server is loaded twice [.tag-new]#NEW#
+
+`-Dvidocq.app.modules` put a `dev.langchain4j.cdi.mcp.*` module in the application layer, so langchain4j-cdi is loaded twice: its beans come from the application layer while the extension reads the boot-layer copy. The calls still work; the section reads `loaded twice` and shows nothing else:
+
+[source,text]
+----
+[VIDOCQ-MCP-003] langchain4j-cdi's MCP server is loaded twice: its beans come from the application layer while this extension links to the boot-layer copy, so the mcp section is left empty. Do not list dev.langchain4j.cdi.mcp.* modules in -Dvidocq.app.modules.
+----
+
+[#vidocq-mcp-004]
+=== VIDOCQ-MCP-004 — keys and an application producer [.tag-new]#NEW#
+
+`vidocq.mcp.*` keys are set and the application also produces a `@Named("mcp-server") McpServerConfig`. The keys win:
+
+[source,text]
+----
+[VIDOCQ-MCP-004] vidocq.mcp.* keys are set and the application also produces a @Named("mcp-server") McpServerConfig: the keys win and the application's producer is not used. Keep either the vidocq.mcp.* keys or the application's @Named("mcp-server") producer.
+----
+
+Keep one of the two.
+
+[#vidocq-mcp-005]
+=== VIDOCQ-MCP-005 — arguments without a name [.tag-new]#NEW#
+
+A tool, prompt or resource template argument has no explicit name and its class was compiled without `-parameters`: clients see it as `arg0`, and its value is never bound. One record names every method concerned:
+
+[source,text]
+----
+[VIDOCQ-MCP-005] 2 MCP method(s) have parameters without a name (TimeTools#convertTime, TimeTools#currentTime): clients see them as arg0, arg1, ... and their values are never bound. Compile the application with -parameters, or name each argument with @ToolArg(name = ...), @PromptArg(name = ...) or @ResourceTemplateArg(name = ...).
+----
 
 == Activation by dependency
 
