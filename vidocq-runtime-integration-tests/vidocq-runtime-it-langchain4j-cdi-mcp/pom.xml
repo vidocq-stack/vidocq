@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Vidocq/vidocq#94, I1 to I3: an MCP server application that depends on the langchain4j-cdi MCP extension alone,
+    launched as a separate JVM in the three launch shapes (flat trampoline, vidocq.app.path, IDE without
+    ALL-MODULE-PATH), then called over HTTP on a loopback port of 18090-18099.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.runtime</groupId>
+        <artifactId>vidocq-runtime-integration-tests</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vidocq-runtime-it-langchain4j-cdi-mcp</artifactId>
+    <name>Vidocq Runtime :: IT :: langchain4j-cdi MCP server in every launch shape</name>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-core</artifactId>
+        </dependency>
+        <!-- The only MCP dependency, as an application declares it. -->
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.essentials</groupId>
+            <artifactId>vidocq-runtime-langchain4j-cdi-mcp-extension</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <executions>
+                    <!-- Inherited from vidocq-parent: not wanted here. -->
+                    <execution>
+                        <id>copy-compile-deps-to-module-path</id>
+                        <phase>none</phase>
+                    </execution>
+                    <!-- The lib/ directory of the launched JVMs: what the application needs at run time, no test jar. -->
+                    <execution>
+                        <id>copy-launch-lib</id>
+                        <phase>process-test-classes</phase>
+                        <goals>
+                            <goal>copy-dependencies</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>${project.build.directory}/it-lib</outputDirectory>
+                            <includeScope>runtime</includeScope>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <systemPropertyVariables>
+                        <it.lib>${project.build.directory}/it-lib</it.lib>
+                        <it.app>${project.build.outputDirectory}</it.app>
+                        <it.logs>${project.build.directory}/it-logs</it.logs>
+                    </systemPropertyVariables>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
