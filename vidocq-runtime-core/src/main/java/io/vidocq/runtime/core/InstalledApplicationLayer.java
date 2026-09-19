@@ -17,17 +17,25 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
-module io.vidocq.runtime.spi {
-    requires transitive io.vidocq.vauban.core;
+package io.vidocq.runtime.core;
 
-    exports io.vidocq.runtime.spi;
-    exports io.vidocq.runtime.spi.config;
-    // Startup report: contributors, and the launch mode the extensions read too.
-    exports io.vidocq.runtime.spi.report;
+import io.vidocq.runtime.spi.ApplicationLayer;
 
-    uses io.vidocq.runtime.spi.VidocqExtension;
-    uses io.vidocq.runtime.spi.config.ConfigSource;
-    uses io.vidocq.runtime.spi.config.ConfigSourceProvider;
-    // ApplicationLayer.current(): the runtime says where it booted the application (vidocq#96).
-    uses io.vidocq.runtime.spi.ApplicationLayer;
+import java.util.Optional;
+
+/**
+ * The {@link ApplicationLayer} of this JVM: the layer {@link VidocqAppLayer} installed, read at each call,
+ * so that a dev reload's new layer is the one an extension sees. Found by {@link java.util.ServiceLoader}:
+ * an extension calls {@link ApplicationLayer#current()}, never this class.
+ */
+public final class InstalledApplicationLayer implements ApplicationLayer {
+
+    /** Called by {@link java.util.ServiceLoader}. */
+    public InstalledApplicationLayer() {
+    }
+
+    @Override
+    public Optional<ModuleLayer> layer() {
+        return Optional.ofNullable(VidocqAppLayer.installedLayer());
+    }
 }

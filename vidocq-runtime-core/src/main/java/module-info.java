@@ -41,6 +41,9 @@ module io.vidocq.runtime.core {
     // Startup report sections of libraries that are not extensions (extensions implement it directly).
     uses io.vidocq.runtime.spi.report.StartupReportContributor;
 
+    // The application layer, for an extension that lists a directory of the application (vidocq#96).
+    provides io.vidocq.runtime.spi.ApplicationLayer with io.vidocq.runtime.core.InstalledApplicationLayer;
+
     provides io.vidocq.runtime.spi.config.ConfigSource with
             io.vidocq.runtime.core.config.SystemPropertiesConfigSource,
             io.vidocq.runtime.core.config.EnvConfigSource,
