@@ -19,9 +19,14 @@
  */
 package io.vidocq.runtime.extensions.essentials.langchain4jcdi.mcp;
 
+import dev.langchain4j.cdi.mcp.server.transport.McpEndpoint;
 import dev.langchain4j.cdi.mcp.server.transport.McpServerConfig;
+import io.vidocq.runtime.spi.ExtensionContext;
 import io.vidocq.runtime.spi.VidocqConfiguration;
 import io.vidocq.runtime.spi.VidocqExtension;
+import io.vidocq.runtime.spi.report.StartupReportContext;
+import io.vidocq.runtime.spi.report.StartupReportContributor;
+import io.vidocq.runtime.spi.report.StartupReportSection;
 import io.vidocq.vauban.core.container.VaubanContainerBuilder;
 
 import java.util.Set;
@@ -30,23 +35,30 @@ import java.util.Set;
  * Hosts a langchain4j-cdi MCP server on Vidocq.
  *
  * <ul>
- *   <li>Its {@code META-INF/vauban-beans.list}, generated from the langchain4j-cdi jar when this module is built,
- *       names the server's beans: the application needs no {@code scanDependencies}.</li>
+ *   <li>Its {@code META-INF/vauban-beans.list}, generated from the langchain4j-cdi jar at build time, names the
+ *       server's beans: the application needs no {@code scanDependencies}.</li>
  *   <li>{@link #configure} maps the {@code vidocq.mcp.*} keys; {@link #beforeStart} publishes the result as the
  *       {@code @Named("mcp-server")} bean langchain4j-cdi reads, only when a key is set.</li>
+ *   <li>{@link #contribute} writes the {@code mcp} section of the startup report and raises
+ *       {@code VIDOCQ-MCP-001} to {@code 005}.</li>
  * </ul>
  *
- * <p>Priority {@code 600}: after Cassini ({@code 500}).
+ * <p>Priority {@code 600}: after Cassini ({@code 500}), whose section, when it declares routes, comes first, so
+ * that the {@code mcp} section can print the absolute URL of {@code /mcp}.
  */
-public final class McpExtension implements VidocqExtension {
+public final class McpExtension implements VidocqExtension, StartupReportContributor {
 
     static final String NAME = "langchain4j-cdi-mcp";
     static final int PRIORITY = 600;
+    static final String SECTION_ID = "mcp";
+    static final String SECTION_TITLE = "MCP server (langchain4j-cdi)";
 
     private static final System.Logger LOG = System.getLogger(McpExtension.class.getName());
 
     /** What the {@code vidocq.mcp.*} keys describe; {@code null} when none is set. */
     private volatile McpServerConfig mapped;
+    /** What {@link #onStart} read from the container; {@link McpInspection#NOTHING} before and after. */
+    private volatile McpInspection inspection = McpInspection.NOTHING;
 
     /** Created by the {@link java.util.ServiceLoader}. */
     public McpExtension() {}
@@ -84,7 +96,28 @@ public final class McpExtension implements VidocqExtension {
     }
 
     @Override
+    public void onStart(ExtensionContext context) {
+        inspection = McpInspection.of(context.beanManager());
+    }
+
+    @Override
     public void onStop() {
+        inspection = McpInspection.NOTHING;
         McpServerConfigProducer.config = null;
+    }
+
+    @Override
+    public String id() {
+        return SECTION_ID;
+    }
+
+    @Override
+    public String title() {
+        return SECTION_TITLE;
+    }
+
+    @Override
+    public void contribute(StartupReportContext context, StartupReportSection section) {
+        McpStartupSection.write(inspection, mapped != null, McpEndpoint.class.getModule(), context, section);
     }
 }
