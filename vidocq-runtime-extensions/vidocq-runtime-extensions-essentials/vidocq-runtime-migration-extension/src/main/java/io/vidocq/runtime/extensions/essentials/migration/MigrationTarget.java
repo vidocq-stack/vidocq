@@ -24,7 +24,16 @@ import java.util.List;
 /**
  * One datasource to migrate. {@code locations} are Flyway locations or, for Liquibase, the changelog
  * path in element 0; an empty list means "use the backend default".
+ *
+ * @param failOnMissingLocations {@code vidocq.migration.failOnMissingLocations}: fail the boot when a
+ *                               location holds nothing, instead of migrating nothing
  */
 public record MigrationTarget(String dataSourceName, String jdbcUrl, String username, String password,
-                              List<String> locations) {
+                              List<String> locations, boolean failOnMissingLocations) {
+
+    /** A target that migrates nothing, rather than failing, when a location holds nothing. */
+    public MigrationTarget(String dataSourceName, String jdbcUrl, String username, String password,
+                           List<String> locations) {
+        this(dataSourceName, jdbcUrl, username, password, locations, false);
+    }
 }

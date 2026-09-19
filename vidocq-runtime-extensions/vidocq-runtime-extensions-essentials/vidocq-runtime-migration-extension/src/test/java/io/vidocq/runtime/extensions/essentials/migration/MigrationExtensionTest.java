@@ -19,12 +19,14 @@
  */
 package io.vidocq.runtime.extensions.essentials.migration;
 
+import io.vidocq.runtime.core.config.ConfigKeyAudit;
 import io.vidocq.runtime.spi.VidocqConfiguration;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -135,6 +137,35 @@ class MigrationExtensionTest {
         assertEquals(List.of("default", "audit"), targets.stream().map(MigrationTarget::dataSourceName).toList());
         assertEquals(List.of("classpath:db/main"), targets.get(0).locations());
         assertEquals(List.of("classpath:db/audit"), targets.get(1).locations());
+    }
+
+    @Test
+    void strictModeIsOptInAndReachesEveryTarget() {
+        Map<String, String> pools = Map.of(
+                "vidocq.pool.url", "jdbc:h2:mem:def",
+                "vidocq.pool.audit.url", "jdbc:h2:mem:audit",
+                "vidocq.migration.audit.locations", "classpath:db/audit");
+        assertTrue(MigrationExtension.buildTargets(MapConfig.of(pools)).stream()
+                .noneMatch(MigrationTarget::failOnMissingLocations), "off by default");
+        var strict = new java.util.HashMap<>(pools);
+        strict.put("vidocq.migration.failOnMissingLocations", "true");
+        assertTrue(MigrationExtension.buildTargets(MapConfig.of(strict)).stream()
+                .allMatch(MigrationTarget::failOnMissingLocations));
+    }
+
+    @Test
+    void theDeclaredKeysAreExactSoATypoIsReadByNothing() {
+        MigrationExtension ext = new MigrationExtension(() -> List.of(new FakeMigrator("flyway")));
+        ext.configure(MapConfig.of(Map.of(
+                "vidocq.pool.url", "jdbc:h2:mem:def",
+                "vidocq.pool.audit.url", "jdbc:h2:mem:audit",
+                "vidocq.migration.audit.locations", "classpath:db/audit",
+                "vidocq.migration.location", "classpath:db/typo")));
+        assertEquals(Set.of("vidocq.migration.enabled", "vidocq.migration.engine", "vidocq.migration.locations",
+                "vidocq.migration.failOnMissingLocations", "vidocq.migration.audit.locations"), ext.configKeys());
+        assertEquals(List.of("vidocq.migration.location"), ConfigKeyAudit.unconsumedKeys(List.of(
+                "vidocq.pool.url", "vidocq.migration.audit.locations", "vidocq.migration.location"),
+                ext.configKeys()), "a prefix vidocq.migration.* would consume the typo too, and hide it");
     }
 
     // ── test doubles ─────────────────────────────────────────────────────────

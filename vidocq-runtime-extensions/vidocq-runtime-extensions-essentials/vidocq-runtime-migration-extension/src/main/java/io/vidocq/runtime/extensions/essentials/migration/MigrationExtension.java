@@ -27,7 +27,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.ServiceLoader;
+import java.util.Set;
 import java.util.TreeSet;
+import java.util.function.Supplier;
 
 /**
  * Applies schema migrations at boot. Priority 150 — after the Chappe transport (100), before the
@@ -44,15 +46,47 @@ public final class MigrationExtension implements VidocqExtension {
     private static final String PREFIX = "vidocq.migration.";
     private static final String POOL_PREFIX = "vidocq.pool.";
     private static final String LOCATIONS_SUFFIX = ".locations";
+    private static final String DEFAULT_LOCATIONS_KEY = PREFIX + "locations";
+    private static final String STRICT_KEY = PREFIX + "failOnMissingLocations";
+    /** The keys read whatever the datasources; each named datasource adds its {@code <name>.locations}. */
+    private static final Set<String> FIXED_KEYS = Set.of(
+            PREFIX + "enabled", PREFIX + "engine", DEFAULT_LOCATIONS_KEY, STRICT_KEY);
 
+    private final Supplier<List<SchemaMigrator>> backends;
     private SchemaMigrator migrator;
     private List<MigrationTarget> targets = List.of();
+    private Set<String> configKeys = FIXED_KEYS;
+
+    /** Called by {@link ServiceLoader}: the backends are the {@link SchemaMigrator}s on the path. */
+    public MigrationExtension() {
+        this(() -> {
+            List<SchemaMigrator> found = new ArrayList<>();
+            ServiceLoader.load(SchemaMigrator.class, MigrationExtension.class.getClassLoader()).forEach(found::add);
+            return found;
+        });
+    }
+
+    /** With the backends given, for the tests. */
+    MigrationExtension(Supplier<List<SchemaMigrator>> backends) {
+        this.backends = backends;
+    }
 
     @Override public String name() { return "migration"; }
     @Override public int priority() { return 150; }
 
+    /**
+     * {@code vidocq.migration.enabled}, {@code .engine}, {@code .locations}, {@code .failOnMissingLocations}
+     * and the {@code vidocq.migration.<name>.locations} of each named datasource: exact keys, not a prefix,
+     * so that a typo such as {@code vidocq.migration.location} is reported as read by nothing.
+     */
+    @Override
+    public Set<String> configKeys() {
+        return configKeys;
+    }
+
     @Override
     public void configure(VidocqConfiguration cfg) {
+        this.configKeys = declaredKeys(cfg);
         if (!cfg.property(PREFIX + "enabled").map(Boolean::parseBoolean).orElse(true)) {
             LOG.log(System.Logger.Level.DEBUG, "Migration disabled (vidocq.migration.enabled=false)");
             return;
@@ -61,10 +95,7 @@ public final class MigrationExtension implements VidocqExtension {
         if (targets.isEmpty()) {
             return;
         }
-        List<SchemaMigrator> found = new ArrayList<>();
-        ServiceLoader.load(SchemaMigrator.class, MigrationExtension.class.getClassLoader())
-                .forEach(found::add);
-        this.migrator = select(found, cfg.property(PREFIX + "engine"));
+        this.migrator = select(backends.get(), cfg.property(PREFIX + "engine"));
         LOG.log(System.Logger.Level.INFO,
                 "Migration configured: engine=" + migrator.engine()
                         + " datasources=" + targets.stream().map(MigrationTarget::dataSourceName).toList());
@@ -88,25 +119,36 @@ public final class MigrationExtension implements VidocqExtension {
 
     static List<MigrationTarget> buildTargets(VidocqConfiguration cfg) {
         List<MigrationTarget> result = new ArrayList<>();
+        boolean strict = cfg.property(STRICT_KEY).map(Boolean::parseBoolean).orElse(false);
         if (cfg.property(POOL_PREFIX + "url").isPresent()) {
-            result.add(target(cfg, "default", POOL_PREFIX, PREFIX + "locations"));
+            result.add(target(cfg, "default", POOL_PREFIX, DEFAULT_LOCATIONS_KEY, strict));
         }
         for (String name : namedWithLocations(cfg)) {
             String poolPrefix = POOL_PREFIX + name + ".";
             if (cfg.property(poolPrefix + "url").isPresent()) {
-                result.add(target(cfg, name, poolPrefix, PREFIX + name + LOCATIONS_SUFFIX));
+                result.add(target(cfg, name, poolPrefix, PREFIX + name + LOCATIONS_SUFFIX, strict));
             }
         }
         return result;
     }
 
+    /** {@link #FIXED_KEYS} and the {@code vidocq.migration.<name>.locations} of every named datasource. */
+    static Set<String> declaredKeys(VidocqConfiguration cfg) {
+        Set<String> keys = new TreeSet<>(FIXED_KEYS);
+        for (String name : namedWithLocations(cfg)) {
+            keys.add(PREFIX + name + LOCATIONS_SUFFIX);
+        }
+        return Set.copyOf(keys);
+    }
+
     private static MigrationTarget target(VidocqConfiguration cfg, String name,
-                                          String poolPrefix, String locKey) {
+                                          String poolPrefix, String locKey, boolean strict) {
         return new MigrationTarget(name,
                 cfg.property(poolPrefix + "url").orElseThrow(),
                 cfg.property(poolPrefix + "username").orElse(null),
                 cfg.property(poolPrefix + "password").orElse(null),
-                cfg.property(locKey).map(s -> List.of(s.split("\\s*,\\s*"))).orElse(List.of()));
+                cfg.property(locKey).map(s -> List.of(s.split("\\s*,\\s*"))).orElse(List.of()),
+                strict);
     }
 
     private static TreeSet<String> namedWithLocations(VidocqConfiguration cfg) {

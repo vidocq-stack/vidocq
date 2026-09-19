@@ -47,10 +47,29 @@
             <artifactId>vauban-classloader-spi</artifactId>
             <scope>runtime</scope>
         </dependency>
+        <!-- For the tests only: the key audit the configKeys() are declared for (VIDOCQ-CFG-003). -->
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-core</artifactId>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!-- The module does not require the core: its tests read it for the key audit only.
+                         Replaces any inherited argLine (none today). -->
+                    <argLine>--add-reads io.vidocq.runtime.extensions.essentials.migration=io.vidocq.runtime.core</argLine>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>
