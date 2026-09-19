@@ -81,7 +81,7 @@ class McpLaunchShapesTest {
 
             String log = server.log();
             assertTrue(log.contains("[VIDOCQ-MCP-003]"), log);
-            assertTrue(log.contains("loaded twice"), log);
+            assertTrue(log.lines().anyMatch(line -> line.strip().equals("loaded twice")), log);
         }
     }
 }

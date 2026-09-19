@@ -99,7 +99,7 @@ class VidocqAppLayerSelectionTest {
     @Test
     @DisplayName("the langchain4j-cdi MCP extension keeps the MCP server and its invoker in the boot layer: only the application moves")
     void theMcpExtensionKeepsTheMcpServerInTheBootLayer(@TempDir Path dir) throws Exception {
-        var app = explodedModule(dir, "acme.mcp.app", List.of(MCP_SERVER), "acme.mcp.app.Main");
+        var app = explodedModule(dir, "acme.mcp.app", List.of(MCP_SERVER, MCP_INVOKER), "acme.mcp.app.Main");
         var server = explodedModule(dir, MCP_SERVER, List.of(), "dev.langchain4j.cdi.mcp.server.transport.Endpoint");
         var invoker = explodedModule(dir, MCP_INVOKER, List.of(MCP_SERVER),
                 "dev.langchain4j.cdi.mcp.invoker.cdi41.Provider");

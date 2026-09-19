@@ -422,7 +422,7 @@ mcp           MCP server (langchain4j-cdi) | 3 ms
   cache hints         ttl PT0S, public
 ----
 
-`server` says where the configuration comes from: `vidocq.mcp.*`, `application bean` or `defaults`. The request-state secret is only ever printed as `configured` or `not configured`; session ids, tool descriptions, schemas and headers are never printed. The section reads what the server holds in memory and creates none of its session or transport beans.
+`server` says where the configuration comes from: `vidocq.mcp.*`, `application bean` or `defaults`. The request-state secret is only ever printed as `configured` or `not configured`; session ids, tool descriptions, schemas and headers are never printed. The section reads what the server holds in memory and creates none of its session beans; at the detailed level it also reads the configuration resolver.
 
 The anomalies below are each one WARNING record on `io.vidocq.startup.anomaly`, logged at every level of the report (xref:modules/vidocq-runtime-core.adoc#startup-anomalies[Anomalies]). They cover what the extension makes possible or alone can see; langchain4j-cdi's own failures stay in its logs.
 
