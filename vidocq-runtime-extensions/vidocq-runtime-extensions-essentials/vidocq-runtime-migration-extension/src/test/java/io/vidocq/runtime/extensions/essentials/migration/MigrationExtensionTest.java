@@ -112,6 +112,31 @@ class MigrationExtensionTest {
         assertDoesNotThrow(() -> ext.beforeStart(null));
     }
 
+    // ── vidocq#96 ─────────────────────────────────────────────────────────────
+
+    @Test
+    void theDefaultLocationsKeyOverridesTheDefaultDatasourceAlone() {
+        // vidocq.migration.locations starts with "vidocq.migration." and ends with ".locations", which share
+        // its dot: the named-datasource scan used to call substring(17, 16) on it and fail the boot.
+        var targets = MigrationExtension.buildTargets(MapConfig.of(Map.of(
+                "vidocq.pool.url", "jdbc:h2:mem:x",
+                "vidocq.migration.locations", "filesystem:src/main/resources/db/migration")));
+        assertEquals(List.of("default"), targets.stream().map(MigrationTarget::dataSourceName).toList());
+        assertEquals(List.of("filesystem:src/main/resources/db/migration"), targets.get(0).locations());
+    }
+
+    @Test
+    void theDefaultLocationsKeyNextToANamedOne() {
+        var targets = MigrationExtension.buildTargets(MapConfig.of(Map.of(
+                "vidocq.pool.url", "jdbc:h2:mem:def",
+                "vidocq.pool.audit.url", "jdbc:h2:mem:audit",
+                "vidocq.migration.locations", "classpath:db/main",
+                "vidocq.migration.audit.locations", "classpath:db/audit")));
+        assertEquals(List.of("default", "audit"), targets.stream().map(MigrationTarget::dataSourceName).toList());
+        assertEquals(List.of("classpath:db/main"), targets.get(0).locations());
+        assertEquals(List.of("classpath:db/audit"), targets.get(1).locations());
+    }
+
     // ── test doubles ─────────────────────────────────────────────────────────
 
     private record MapConfig(Map<String, String> data) implements VidocqConfiguration {

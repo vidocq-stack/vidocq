@@ -112,7 +112,10 @@ public final class MigrationExtension implements VidocqExtension {
     private static TreeSet<String> namedWithLocations(VidocqConfiguration cfg) {
         TreeSet<String> names = new TreeSet<>();
         for (String key : cfg.propertyNames()) {
-            if (key.startsWith(PREFIX) && key.endsWith(LOCATIONS_SUFFIX)) {
+            // vidocq.migration.locations belongs to the @Default datasource: it matches both ends, but has
+            // no <name> between them (PREFIX and LOCATIONS_SUFFIX share its dot), and substring would throw.
+            if (key.length() > PREFIX.length() + LOCATIONS_SUFFIX.length()
+                    && key.startsWith(PREFIX) && key.endsWith(LOCATIONS_SUFFIX)) {
                 String name = key.substring(PREFIX.length(), key.length() - LOCATIONS_SUFFIX.length());
                 if (!name.isEmpty() && name.indexOf('.') < 0) {
                     names.add(name);
