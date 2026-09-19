@@ -245,7 +245,7 @@ first; the boot spinner then runs until the runtime has started. A reload prints
 
 | `--port, -p <n>` | HTTP listening port (default `8080`).
 | `--profile, -P <name>` | Config profile to layer over `vidocq.properties` (default `dev`); merges `vidocq-<profile>.properties` on top.
-| `--debug` | Print a JDWP connection hint (`address=*:5005`, `suspend=n`) so a debugger can attach.
+| `--debug` | Print a JDWP connection hint (`address=127.0.0.1:5005`, `suspend=n`) so a debugger can attach. [.tag-new]#NEW# The printed agent listens on this machine only: whoever reaches a JDWP agent can run any code in the JVM. Edit the host (`*` for every interface) only on a network you trust.
 |===
 
 [NOTE]

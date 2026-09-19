@@ -21,6 +21,7 @@ package io.vidocq.runtime.maven.dev;
 
 import io.vidocq.runtime.maven.ApplicationLaunch;
 import io.vidocq.runtime.maven.ConsoleColors;
+import io.vidocq.runtime.maven.JdwpAgent;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
@@ -124,8 +125,8 @@ public class VidocqDevMojo extends AbstractMojo {
 
     /**
      * Open a JDWP debug agent on the child JVM. On by default in dev mode — attach a remote
-     * debugger (e.g. IntelliJ "Remote JVM Debug") to {@link #debugPort}. Disable with
-     * {@code -Dvidocq.dev.debug=false}.
+     * debugger (e.g. IntelliJ "Remote JVM Debug") to {@link #debugHost}:{@link #debugPort}. Disable
+     * with {@code -Dvidocq.dev.debug=false}.
      */
     @Parameter(property = "vidocq.dev.debug", defaultValue = "true")
     private boolean debug;
@@ -133,6 +134,14 @@ public class VidocqDevMojo extends AbstractMojo {
     /** JDWP listen port for the debug agent. */
     @Parameter(property = "vidocq.dev.debugPort", defaultValue = "5005")
     private int debugPort;
+
+    /**
+     * The interface the debug agent listens on. The loopback interface by default: whoever reaches the agent
+     * can run any code in the child JVM. {@code *} or {@code 0.0.0.0} opens it on every interface, an address
+     * or a host name on that one — with a warning, since the debugger is then reachable from the network.
+     */
+    @Parameter(property = "vidocq.dev.debugHost", defaultValue = JdwpAgent.DEFAULT_HOST)
+    private String debugHost;
 
     /**
      * Suspend the child JVM until a debugger attaches ({@code suspend=y}) — useful to debug boot
@@ -222,10 +231,7 @@ public class VidocqDevMojo extends AbstractMojo {
         }
         getLog().info("Watching: " + watch);
         getLog().info("Module path entries: " + modulePath.size());
-        if (debug) {
-            getLog().info("Debug agent (JDWP) on port " + debugPort
-                    + (debugSuspend ? " — child suspends until a debugger attaches" : " — attach any time"));
-        }
+        logDebugAgent();
 
         // Provision dev-mode services (Postgres, Keycloak, …) ONCE, before the first fork. Their
         // connection coordinates are folded into the child's system properties; an explicit -D or a
@@ -401,15 +407,34 @@ public class VidocqDevMojo extends AbstractMojo {
 
     /**
      * JVM args for the child: the verbatim {@code extraJvmArgs} plus, when {@link #debug} is on, a
-     * JDWP agent ({@code server=y}, suspend per {@link #debugSuspend}, listening on {@link #debugPort}).
+     * JDWP agent ({@code server=y}, suspend per {@link #debugSuspend}, listening on
+     * {@link #debugHost}:{@link #debugPort}).
      */
     private List<String> buildJvmArgs() {
         List<String> args = splitArgs(extraJvmArgs);
         if (debug) {
-            args.add("-agentlib:jdwp=transport=dt_socket,server=y,suspend="
-                    + (debugSuspend ? "y" : "n") + ",address=*:" + debugPort);
+            args.add(debugAgent().argument());
         }
         return args;
+    }
+
+    private JdwpAgent debugAgent() {
+        return new JdwpAgent(debugHost, debugPort, debugSuspend);
+    }
+
+    /**
+     * Announces the debug agent, when {@link #debug} is on, and warns when its host lets other machines reach
+     * it.
+     */
+    // package-private for the tests of the warning.
+    void logDebugAgent() {
+        if (!debug) {
+            return;
+        }
+        JdwpAgent agent = debugAgent();
+        getLog().info("Debug agent (JDWP) on " + agent.where()
+                + (debugSuspend ? " — child suspends until a debugger attaches" : " — attach any time"));
+        agent.exposure("vidocq.dev.debugHost").ifPresent(getLog()::warn);
     }
 
     private static List<String> splitArgs(String raw) {
@@ -460,5 +485,6 @@ public class VidocqDevMojo extends AbstractMojo {
         this.debugPort = port;
         this.debugSuspend = suspend;
     }
+    void setDebugHost(String debugHost) { this.debugHost = debugHost; }
     List<String> debugJvmArgs() { return buildJvmArgs(); }
 }

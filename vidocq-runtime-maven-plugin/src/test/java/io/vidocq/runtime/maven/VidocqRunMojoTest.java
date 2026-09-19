@@ -23,12 +23,14 @@ import io.vidocq.runtime.maven.dev.ChildJvm;
 import org.apache.maven.model.Build;
 import org.apache.maven.model.Model;
 import org.apache.maven.plugin.MojoExecutionException;
+import org.apache.maven.plugin.logging.SystemStreamLog;
 import org.apache.maven.project.MavenProject;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -57,13 +59,14 @@ class VidocqRunMojoTest {
         assertEquals(List.of("-Xmx512m"), mojo.debugJvmArgs());
     }
 
+    /** Whoever reaches a JDWP agent can run any code in the child: by default only this machine can. */
     @Test
-    void addsJdwpAgentWhenDebugEnabled() {
+    void addsJdwpAgentOnTheLoopbackInterfaceWhenDebugEnabled() {
         VidocqRunMojo mojo = new VidocqRunMojo();
         mojo.setExtraJvmArgs("");
         mojo.setDebugOptions(true, 5005, false);
 
-        assertEquals(List.of("-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005"),
+        assertEquals(List.of("-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=127.0.0.1:5005"),
                 mojo.debugJvmArgs());
     }
 
@@ -74,8 +77,72 @@ class VidocqRunMojoTest {
         mojo.setDebugOptions(true, 18099, true);
 
         assertEquals(List.of("-Xmx256m", "-XX:+UseZGC",
-                        "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=*:18099"),
+                        "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=127.0.0.1:18099"),
                 mojo.debugJvmArgs());
+    }
+
+    /** {@code vidocq.run.debug.host} is the explicit opt-in to open the agent beyond this machine. */
+    @Test
+    void anExplicitHostIsPassedToTheAgentAsWritten() {
+        VidocqRunMojo mojo = new VidocqRunMojo();
+        mojo.setExtraJvmArgs("");
+        mojo.setDebugOptions(true, 5005, false);
+
+        mojo.setDebugHost("*");
+        assertEquals(List.of("-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005"),
+                mojo.debugJvmArgs());
+        mojo.setDebugHost("192.168.1.20");
+        assertEquals(List.of("-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=192.168.1.20:5005"),
+                mojo.debugJvmArgs());
+    }
+
+    @Test
+    void theAgentIsAnnouncedWithItsHostAndNoWarningOnLoopback() {
+        VidocqRunMojo mojo = new VidocqRunMojo();
+        CapturingLog log = new CapturingLog();
+        mojo.setLog(log);
+        mojo.setDebugOptions(true, 5005, false);
+
+        mojo.logDebugAgent();
+
+        assertEquals(List.of("INFO Vidocq run: debug agent (JDWP) on port 5005, host 127.0.0.1 — attach any time"),
+                log.lines);
+    }
+
+    @Test
+    void aHostOpenToTheNetworkIsAWarning() {
+        VidocqRunMojo mojo = new VidocqRunMojo();
+        CapturingLog log = new CapturingLog();
+        mojo.setLog(log);
+        mojo.setDebugOptions(true, 5005, false);
+        mojo.setDebugHost("0.0.0.0");
+
+        mojo.logDebugAgent();
+
+        assertEquals(2, log.lines.size(), log.lines.toString());
+        assertEquals("INFO Vidocq run: debug agent (JDWP) on port 5005, host 0.0.0.0 (every interface)"
+                + " — attach any time", log.lines.get(0));
+        String warning = log.lines.get(1);
+        assertTrue(warning.startsWith(
+                "WARN Vidocq run: vidocq.run.debug.host=0.0.0.0 makes the debugger reachable from the network"),
+                warning);
+        assertTrue(warning.contains("whoever connects to it can run any code in the application JVM"), warning);
+    }
+
+    /** Keeps the INFO and WARN lines, as {@code "LEVEL message"}. */
+    private static final class CapturingLog extends SystemStreamLog {
+
+        final List<String> lines = new ArrayList<>();
+
+        @Override
+        public void info(CharSequence content) {
+            lines.add("INFO " + content);
+        }
+
+        @Override
+        public void warn(CharSequence content) {
+            lines.add("WARN " + content);
+        }
     }
 
     @Test

@@ -28,6 +28,10 @@ package io.vidocq.runtime.cli.dev;
  * relaunch with {@link #agentArgument()} (or rely on {@code vidocq start --debug} from a
  * launcher that forwards it).
  *
+ * <p>The agent listens on the loopback interface, {@link #HOST}: whoever reaches a JDWP agent can
+ * run any code in the JVM, so the printed argument never opens it to the network. A developer who
+ * needs a remote debugger edits the host of that argument ({@code *} for every interface).
+ *
  * @param port    JDWP listening port
  * @param suspend whether the JVM should wait for a debugger before running ({@code suspend=y})
  */
@@ -35,6 +39,9 @@ public record DebugOptions(int port, boolean suspend) {
 
     /** Default Vidocq debug port, matching the message shown by {@code start --debug}. */
     public static final int DEFAULT_PORT = 5005;
+
+    /** The interface the agent listens on: this machine only. */
+    public static final String HOST = "127.0.0.1";
 
     public static DebugOptions defaults() {
         return new DebugOptions(DEFAULT_PORT, false);
@@ -50,12 +57,12 @@ public record DebugOptions(int port, boolean suspend) {
     public String agentArgument() {
         return "-agentlib:jdwp=transport=dt_socket,server=y,suspend="
                 + (suspend ? "y" : "n")
-                + ",address=*:" + port;
+                + ",address=" + HOST + ":" + port;
     }
 
     /** Human-readable hint describing how to connect a debugger. */
     public String hint() {
-        String base = "Debug mode active — connect your debugger to port " + port + ".";
+        String base = "Debug mode active — connect your debugger to " + HOST + ":" + port + ".";
         return suspend
                 ? base + " The JVM will wait for the debugger before starting (suspend=y)."
                 : base;

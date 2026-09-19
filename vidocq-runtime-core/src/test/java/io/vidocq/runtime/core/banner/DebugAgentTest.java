@@ -43,6 +43,18 @@ class DebugAgentTest {
         assertEquals("debug *:5005", agent.get().segment());
     }
 
+    /** The agent {@code vidocq:dev} and {@code vidocq:run} add by default: the loopback interface only. */
+    @Test
+    void theLoopbackAgentOfTheMavenGoalsIsReadAsItWasGiven() {
+        DebugAgent agent = DebugAgent.detect(List.of("-Dvidocq.profile=dev",
+                "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=127.0.0.1:5005")).orElseThrow();
+
+        assertEquals("127.0.0.1:5005", agent.address());
+        assertFalse(agent.suspend());
+        assertEquals("debug 127.0.0.1:5005", agent.segment());
+        assertEquals("attach to 127.0.0.1:5005", agent.attachment());
+    }
+
     @Test
     void aSuspendedJvmSaysSo() {
         DebugAgent agent = DebugAgent.detect(List.of(

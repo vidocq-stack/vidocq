@@ -47,8 +47,8 @@ Zero external dependencies — hand-rolled arg parser, pure Java 25, JPMS-native
   Layers `vidocq-<profile>.properties` on top of `vidocq.properties` and publishes the
   merged values as system properties (highest config ordinal), so explicit `-D…`
   overrides still win. Reports how many config files were layered.
-- **`--debug`** — prints a JDWP connection hint (`address=*:5005`, `suspend=n`) so a
-  debugger can attach to the dev JVM.
+- **`--debug`** — prints a JDWP connection hint (`address=127.0.0.1:5005`, `suspend=n`) so a
+  debugger on the same machine can attach to the dev JVM.
 - ANSI progress **spinner** during boot (virtual-thread driven; auto-disabled when there
   is no console or `NO_COLOR` is set).
 

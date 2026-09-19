@@ -251,7 +251,8 @@ here):
   (publishes `mp.jwt.verify.*`, with an optional `issuer-keys` fan-out and `public-url-key` for app-specific
   keys, optionally importing a realm). Properties are injected into the forked child as `-D` values, and the
   containers survive reloads (started once before the first fork, stopped at Ctrl+C). The dev Mojo also gained
-  a default-on JDWP debug agent (`vidocq.dev.debug`, port `vidocq.dev.debugPort`=5005, `vidocq.dev.debugSuspend`).
+  a default-on JDWP debug agent (`vidocq.dev.debug`, port `vidocq.dev.debugPort`=5005, `vidocq.dev.debugSuspend`),
+  bound to the loopback interface (`vidocq.dev.debugHost`=127.0.0.1; `*` opens it on every interface, with a warning).
 - **M5 — (conditional on M2) Approach B PoC.** In-VM child `ModuleLayer` behind a `--in-vm` flag.
 - **M6 — CLI + continuous testing.** Standalone `vidocq dev` (modeled on `chappe-cli`); rerun impacted
   tests.

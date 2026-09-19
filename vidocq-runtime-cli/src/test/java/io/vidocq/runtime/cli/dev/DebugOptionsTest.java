@@ -44,12 +44,19 @@ class DebugOptionsTest {
     @Test
     void agentArgumentIsAWellFormedJdwpString() {
         String arg = new DebugOptions(6006, false).agentArgument();
-        assertEquals("-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:6006", arg);
+        assertEquals("-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=127.0.0.1:6006", arg);
+    }
+
+    /** Whoever reaches a JDWP agent can run any code in the JVM: the hint never opens it to the network. */
+    @Test
+    void theAgentListensOnTheLoopbackInterfaceOnly() {
+        assertTrue(DebugOptions.defaults().agentArgument().endsWith(",address=127.0.0.1:5005"));
+        assertFalse(DebugOptions.defaults().agentArgument().contains("*"));
     }
 
     @Test
-    void hintMentionsPort() {
-        assertTrue(new DebugOptions(5005, false).hint().contains("5005"));
+    void hintMentionsTheAddress() {
+        assertTrue(new DebugOptions(5005, false).hint().contains("127.0.0.1:5005"));
     }
 
     @Test

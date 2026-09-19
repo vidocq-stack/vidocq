@@ -93,7 +93,7 @@ class PluginDescriptorRunTest {
         Map<String, String> parameters = parameters();
 
         assertEquals(List.of("project", "session", "mainModule", "mainClass", "extraJvmArgs", "appArgs",
-                        "extraSystemProperties", "debug", "debugPort", "debugSuspend", "gracePeriodMillis", "skip",
+                        "extraSystemProperties", "debug", "debugPort", "debugHost", "debugSuspend", "gracePeriodMillis", "skip",
                         "classesDir", "baseDir", "buildDir"),
                 new ArrayList<>(parameters.keySet()));
         for (Map.Entry<String, String> parameter : parameters.entrySet()) {
@@ -133,6 +133,7 @@ class PluginDescriptorRunTest {
         assertProperty(entries.get("extraSystemProperties"), "${vidocq.run.systemProperties}", "");
         assertProperty(entries.get("debug"), "${vidocq.run.debug}", "false");
         assertProperty(entries.get("debugPort"), "${vidocq.run.debug.port}", "5005");
+        assertProperty(entries.get("debugHost"), "${vidocq.run.debug.host}", "127.0.0.1");
         assertProperty(entries.get("debugSuspend"), "${vidocq.run.debug.suspend}", "false");
         assertProperty(entries.get("gracePeriodMillis"), "${vidocq.run.gracePeriodMillis}", "5000");
         assertProperty(entries.get("skip"), "${vidocq.run.skip}", "false");

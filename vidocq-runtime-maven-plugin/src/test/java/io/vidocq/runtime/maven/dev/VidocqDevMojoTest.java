@@ -20,11 +20,13 @@
 package io.vidocq.runtime.maven.dev;
 
 import io.vidocq.runtime.maven.ConsoleColors;
+import org.apache.maven.plugin.logging.SystemStreamLog;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -50,15 +52,16 @@ class VidocqDevMojoTest {
         assertTrue(Files.readString(report).contains("datasource.default.url="));
     }
 
+    /** Whoever reaches a JDWP agent can run any code in the child: by default only this machine can. */
     @Test
-    void addsJdwpAgentWhenDebugEnabled() {
+    void addsJdwpAgentOnTheLoopbackInterfaceWhenDebugEnabled() {
         VidocqDevMojo mojo = new VidocqDevMojo();
         mojo.setExtraJvmArgs("");
         mojo.setDebugOptions(true, 5005, false);
 
         List<String> args = mojo.debugJvmArgs();
 
-        assertEquals(List.of("-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005"), args);
+        assertEquals(List.of("-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=127.0.0.1:5005"), args);
     }
 
     @Test
@@ -67,8 +70,70 @@ class VidocqDevMojoTest {
         mojo.setExtraJvmArgs("");
         mojo.setDebugOptions(true, 6789, true);
 
-        assertEquals(List.of("-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=*:6789"),
+        assertEquals(List.of("-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=127.0.0.1:6789"),
                 mojo.debugJvmArgs());
+    }
+
+    /** {@code vidocq.dev.debugHost} is the explicit opt-in to open the agent beyond this machine. */
+    @Test
+    void anExplicitHostIsPassedToTheAgentAsWritten() {
+        VidocqDevMojo mojo = new VidocqDevMojo();
+        mojo.setExtraJvmArgs("");
+        mojo.setDebugOptions(true, 5005, false);
+
+        mojo.setDebugHost("*");
+        assertEquals(List.of("-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005"),
+                mojo.debugJvmArgs());
+        mojo.setDebugHost("0.0.0.0");
+        assertEquals(List.of("-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=0.0.0.0:5005"),
+                mojo.debugJvmArgs());
+        mojo.setDebugHost(" ");
+        assertEquals(List.of("-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=127.0.0.1:5005"),
+                mojo.debugJvmArgs(), "a blank host is the default one, never every interface");
+    }
+
+    @Test
+    void theAgentIsAnnouncedWithItsHostAndNoWarningOnLoopback() {
+        VidocqDevMojo mojo = new VidocqDevMojo();
+        CapturingLog log = new CapturingLog();
+        mojo.setLog(log);
+        mojo.setDebugOptions(true, 5005, false);
+
+        mojo.logDebugAgent();
+
+        assertEquals(List.of("INFO Debug agent (JDWP) on port 5005, host 127.0.0.1 — attach any time"), log.lines);
+    }
+
+    @Test
+    void aHostOpenToTheNetworkIsAWarning() {
+        VidocqDevMojo mojo = new VidocqDevMojo();
+        CapturingLog log = new CapturingLog();
+        mojo.setLog(log);
+        mojo.setDebugOptions(true, 18095, true);
+        mojo.setDebugHost("*");
+
+        mojo.logDebugAgent();
+
+        assertEquals("INFO Debug agent (JDWP) on port 18095, host * (every interface)"
+                + " — child suspends until a debugger attaches", log.lines.get(0));
+        assertEquals(2, log.lines.size(), log.lines.toString());
+        String warning = log.lines.get(1);
+        assertTrue(warning.startsWith("WARN vidocq.dev.debugHost=* makes the debugger reachable from the network"),
+                warning);
+        assertTrue(warning.contains("whoever connects to it can run any code in the application JVM"), warning);
+    }
+
+    @Test
+    void noAnnouncementWithoutAnAgent() {
+        VidocqDevMojo mojo = new VidocqDevMojo();
+        CapturingLog log = new CapturingLog();
+        mojo.setLog(log);
+        mojo.setDebugOptions(false, 5005, false);
+        mojo.setDebugHost("*");
+
+        mojo.logDebugAgent();
+
+        assertEquals(List.of(), log.lines);
     }
 
     @Test
@@ -137,6 +202,22 @@ class VidocqDevMojoTest {
 
             assertEquals("always", mojo.debugSystemProperties().get(ConsoleColors.COLOR_KEY));
         });
+    }
+
+    /** Keeps the INFO and WARN lines, as {@code "LEVEL message"}. */
+    private static final class CapturingLog extends SystemStreamLog {
+
+        final List<String> lines = new ArrayList<>();
+
+        @Override
+        public void info(CharSequence content) {
+            lines.add("INFO " + content);
+        }
+
+        @Override
+        public void warn(CharSequence content) {
+            lines.add("WARN " + content);
+        }
     }
 
     /** Runs {@code body} with {@code vidocq.console.color} and {@code jansi.mode} set, then restores them. */

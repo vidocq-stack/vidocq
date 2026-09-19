@@ -25,7 +25,7 @@
 | Standalone distribution: `bin/run.sh` + `bin/run.cmd` launchers and `lib/*.jar` (application + module-path closure), attached as a `-dist.zip` artifact.
 
 | `vidocq:dev`
-| Dev/watch mode — forks a child JVM with `-Dvidocq.profile=dev`, recompiles and hot-reloads on change.
+| Dev/watch mode — forks a child JVM with `-Dvidocq.profile=dev`, recompiles and hot-reloads on change. The child runs a JDWP agent on `127.0.0.1:5005`, see <<debugger,the debug agent>>.
 
 | `vidocq:run` [.tag-new]#NEW#
 | Runs the application once in a forked JVM, after compiling and indexing it: the goal forks the lifecycle up to `process-classes`, so `mvn vidocq:run` alone is a complete run. See <<run,the `vidocq:run` goal>>.
@@ -185,7 +185,7 @@ with `vidocq:generate` and starts the application:
 [source,bash]
 ----
 mvn vidocq:run                                          # compile, index, run
-mvn vidocq:run -Dvidocq.run.debug=true                  # … with a JDWP agent on port 5005
+mvn vidocq:run -Dvidocq.run.debug=true                  # … with a JDWP agent on 127.0.0.1:5005
 mvn vidocq:run -Dvidocq.run.args="--seed data.json"     # … with application arguments
 mvn vidocq:run -Dvidocq.chappe.listener.default.port=8081
 ----
@@ -242,12 +242,17 @@ run always uses.
 
 | `vidocq.run.debug`
 | `false`
-| Add a JDWP agent (`server=y`, `address=*:<port>`) and print its address. Off by default: `vidocq:run` is also
-  how the application runs in CI and in scripts.
+| Add a JDWP agent (`server=y`, `address=<host>:<port>`) and print its address. Off by default: `vidocq:run` is also
+  how the application runs in CI and in scripts. See <<debugger,the debug agent>>.
 
 | `vidocq.run.debug.port`
 | `5005`
 | The port the debug agent listens on.
+
+| `vidocq.run.debug.host` [.tag-new]#NEW#
+| `127.0.0.1`
+| The interface the debug agent listens on: this machine only by default. `*` or `0.0.0.0` opens it on every
+  interface, with a warning — see <<debugger,the debug agent>>.
 
 | `vidocq.run.debug.suspend`
 | `false`
@@ -299,6 +304,64 @@ the goal passes that very value on to the forked JVM, since the property you set
 the application runs in another one. And a non-empty `NO_COLOR` in the environment stops the decision — nothing
 is passed, because the runtime honours `NO_COLOR` on its own, over any mode. The goal says what it decided, and
 why, on one `-X` debug line.
+
+[#debugger]
+== The debug agent of `vidocq:dev` and `vidocq:run` [.tag-new]#NEW#
+
+`vidocq:dev` starts its child JVM with a JDWP agent, and `vidocq:run` does when `-Dvidocq.run.debug=true` asks
+for one. A JDWP agent executes what the debugger connected to it asks, so whoever can reach its port can run any
+code in the application JVM. The agent therefore listens on the loopback interface, `127.0.0.1`: a debugger on
+the same machine attaches to `localhost:5005` as before, and no other machine can connect.
+
+[cols="2,2,1,3"]
+|===
+| `vidocq:dev` | `vidocq:run` | Default | Meaning
+
+| `vidocq.dev.debug`
+| `vidocq.run.debug`
+| `true` / `false`
+| Add the agent (`-agentlib:jdwp=transport=dt_socket,server=y,…`).
+
+| `vidocq.dev.debugPort`
+| `vidocq.run.debug.port`
+| `5005`
+| The port the agent listens on.
+
+| `vidocq.dev.debugHost` [.tag-new]#NEW#
+| `vidocq.run.debug.host` [.tag-new]#NEW#
+| `127.0.0.1`
+| The interface the agent listens on.
+
+| `vidocq.dev.debugSuspend`
+| `vidocq.run.debug.suspend`
+| `false`
+| `true` suspends the JVM until a debugger attaches, to debug the boot itself.
+|===
+
+The host is handed to the agent as it is written, so every spelling the JVM understands works:
+
+* `127.0.0.1` (the default), `localhost`, any `127.x.y.z` address or `::1` keep the agent on this machine;
+* `*`, `0.0.0.0` or `::` open it on every interface;
+* any other address or host name opens it on that interface only.
+
+The goal says where the agent listens, and warns as soon as other machines can reach it:
+
+[source]
+----
+[INFO] Debug agent (JDWP) on port 5005, host 127.0.0.1 — attach any time
+----
+
+[source]
+----
+[INFO] Debug agent (JDWP) on port 5005, host * (every interface) — attach any time
+[WARNING] vidocq.dev.debugHost=* makes the debugger reachable from the network: the JDWP agent listens on every
+interface, port 5005, and whoever connects to it can run any code in the application JVM. Leave
+vidocq.dev.debugHost at its default, 127.0.0.1, unless every machine that can reach this port is trusted.
+----
+
+Open it only when the debugger really runs elsewhere — a container, a VM, another machine — and only on a network
+you trust: `mvn vidocq:dev -Dvidocq.dev.debugHost='*'` (quote the `*` for the shell). An empty host is the default
+one, never every interface.
 
 [#idea]
 == `vidocq:idea` goal [.tag-new]#NEW#

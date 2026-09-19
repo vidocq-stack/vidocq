@@ -36,6 +36,7 @@
                 <parameter><name>profile</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>Profile string injected as -Dvidocq.profile in the child JVM.</description></parameter>
                 <parameter><name>debug</name><type>boolean</type><required>false</required><editable>true</editable><description>Open a JDWP debug agent on the child JVM (default true in dev).</description></parameter>
                 <parameter><name>debugPort</name><type>int</type><required>false</required><editable>true</editable><description>JDWP listen port for the debug agent (default 5005).</description></parameter>
+                <parameter><name>debugHost</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>Interface the debug agent listens on (default 127.0.0.1, this machine only). * or 0.0.0.0 opens it on every interface, an address or a host name on that one; a non-loopback host logs a warning, since whoever connects can run any code in the child JVM.</description></parameter>
                 <parameter><name>debugSuspend</name><type>boolean</type><required>false</required><editable>true</editable><description>Suspend the child JVM until a debugger attaches (jdwp suspend=y).</description></parameter>
                 <parameter><name>devServices</name><type>boolean</type><required>false</required><editable>true</editable><description>Provision dev-mode services (Postgres, Keycloak, …) discovered via the DevService SPI.</description></parameter>
                 <parameter><name>layerMode</name><type>boolean</type><required>false</required><editable>true</editable><description>Universal-loader mode (default): app classes boot in a Vauban-defined module layer via -Dvidocq.app.path; false restores the legacy module-path launch.</description></parameter>
@@ -56,6 +57,7 @@
                 <profile implementation="java.lang.String" default-value="dev">${vidocq.profile}</profile>
                 <debug implementation="boolean" default-value="true">${vidocq.dev.debug}</debug>
                 <debugPort implementation="int" default-value="5005">${vidocq.dev.debugPort}</debugPort>
+                <debugHost implementation="java.lang.String" default-value="127.0.0.1">${vidocq.dev.debugHost}</debugHost>
                 <debugSuspend implementation="boolean" default-value="false">${vidocq.dev.debugSuspend}</debugSuspend>
                 <devServices implementation="boolean" default-value="true">${vidocq.dev.devServices}</devServices>
                 <layerMode implementation="boolean" default-value="true">${vidocq.dev.layer}</layerMode>
@@ -93,6 +95,7 @@
                 <parameter><name>extraSystemProperties</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>Comma-separated key=value system properties forwarded to the forked JVM as -Dkey=value.</description></parameter>
                 <parameter><name>debug</name><type>boolean</type><required>false</required><editable>true</editable><description>Open a JDWP debug agent on the forked JVM and print its address (default false).</description></parameter>
                 <parameter><name>debugPort</name><type>int</type><required>false</required><editable>true</editable><description>JDWP listen port for the debug agent (default 5005).</description></parameter>
+                <parameter><name>debugHost</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>Interface the debug agent listens on (default 127.0.0.1, this machine only). * or 0.0.0.0 opens it on every interface, an address or a host name on that one; a non-loopback host logs a warning, since whoever connects can run any code in the forked JVM.</description></parameter>
                 <parameter><name>debugSuspend</name><type>boolean</type><required>false</required><editable>true</editable><description>Suspend the forked JVM until a debugger attaches (jdwp suspend=y).</description></parameter>
                 <parameter><name>gracePeriodMillis</name><type>long</type><required>false</required><editable>true</editable><description>Grace period given to the application after SIGTERM (Ctrl+C) before it is force-killed.</description></parameter>
                 <parameter><name>skip</name><type>boolean</type><required>false</required><editable>true</editable><description>Skip the goal entirely.</description></parameter>
@@ -110,6 +113,7 @@
                 <extraSystemProperties implementation="java.lang.String" default-value="">${vidocq.run.systemProperties}</extraSystemProperties>
                 <debug implementation="boolean" default-value="false">${vidocq.run.debug}</debug>
                 <debugPort implementation="int" default-value="5005">${vidocq.run.debug.port}</debugPort>
+                <debugHost implementation="java.lang.String" default-value="127.0.0.1">${vidocq.run.debug.host}</debugHost>
                 <debugSuspend implementation="boolean" default-value="false">${vidocq.run.debug.suspend}</debugSuspend>
                 <gracePeriodMillis implementation="long" default-value="5000">${vidocq.run.gracePeriodMillis}</gracePeriodMillis>
                 <skip implementation="boolean" default-value="false">${vidocq.run.skip}</skip>

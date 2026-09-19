@@ -127,6 +127,14 @@ public class VidocqRunMojo extends AbstractMojo {
     @Parameter(property = "vidocq.run.debug.port", defaultValue = "5005")
     private int debugPort;
 
+    /**
+     * The interface the debug agent listens on. The loopback interface by default: whoever reaches the agent
+     * can run any code in the child JVM. {@code *} or {@code 0.0.0.0} opens it on every interface, an address
+     * or a host name on that one — with a warning, since the debugger is then reachable from the network.
+     */
+    @Parameter(property = "vidocq.run.debug.host", defaultValue = JdwpAgent.DEFAULT_HOST)
+    private String debugHost;
+
     /** Suspend the child JVM until a debugger attaches ({@code suspend=y}), to debug boot itself. */
     @Parameter(property = "vidocq.run.debug.suspend", defaultValue = "false")
     private boolean debugSuspend;
@@ -182,10 +190,7 @@ public class VidocqRunMojo extends AbstractMojo {
         getLog().info(PREFIX + "main module : " + mainModule
                 + (mainClass != null && !mainClass.isBlank() ? ("/" + mainClass) : ""));
         getLog().info(PREFIX + "module path entries: " + modulePath.size());
-        if (debug) {
-            getLog().info(PREFIX + "debug agent (JDWP) on port " + debugPort
-                    + (debugSuspend ? " — the JVM suspends until a debugger attaches" : " — attach any time"));
-        }
+        logDebugAgent();
 
         await(ChildJvm.of(modulePath, appPath, mainModule, mainClass, jvmArgs, systemProperties,
                 projectDir, splitArgs(appArgs)));
@@ -297,10 +302,28 @@ public class VidocqRunMojo extends AbstractMojo {
     private List<String> buildJvmArgs() {
         List<String> args = splitArgs(extraJvmArgs);
         if (debug) {
-            args.add("-agentlib:jdwp=transport=dt_socket,server=y,suspend="
-                    + (debugSuspend ? "y" : "n") + ",address=*:" + debugPort);
+            args.add(debugAgent().argument());
         }
         return args;
+    }
+
+    private JdwpAgent debugAgent() {
+        return new JdwpAgent(debugHost, debugPort, debugSuspend);
+    }
+
+    /**
+     * Announces the debug agent, when {@link #debug} is on, and warns when its host lets other machines reach
+     * it.
+     */
+    // package-private for the tests of the warning.
+    void logDebugAgent() {
+        if (!debug) {
+            return;
+        }
+        JdwpAgent agent = debugAgent();
+        getLog().info(PREFIX + "debug agent (JDWP) on " + agent.where()
+                + (debugSuspend ? " — the JVM suspends until a debugger attaches" : " — attach any time"));
+        agent.exposure("vidocq.run.debug.host").ifPresent(warning -> getLog().warn(PREFIX + warning));
     }
 
     private static List<String> splitArgs(String raw) {
@@ -329,6 +352,7 @@ public class VidocqRunMojo extends AbstractMojo {
         this.debugPort = port;
         this.debugSuspend = suspend;
     }
+    void setDebugHost(String debugHost) { this.debugHost = debugHost; }
     List<String> debugJvmArgs() { return buildJvmArgs(); }
     Map<String, String> debugSystemProperties() { return buildSystemProperties(); }
     List<String> debugAppArgs() { return splitArgs(appArgs); }
