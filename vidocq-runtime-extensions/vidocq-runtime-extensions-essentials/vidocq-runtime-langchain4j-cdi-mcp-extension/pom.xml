@@ -1,0 +1,184 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+  ~
+  ~ This program and the accompanying materials are made available under the
+  ~ terms of the Eclipse Public License 2.0 which is available at
+  ~ https://www.eclipse.org/legal/epl-2.0/
+  ~
+  ~ This Source Code may also be made available under the following Secondary
+  ~ Licenses when the conditions for such availability set forth in the Eclipse
+  ~ Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+  ~ or any later version, which is available at
+  ~ https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+  ~
+  ~ It is also made available under the European Union Public Licence v. 1.2,
+  ~ which is available at
+  ~ https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+  ~
+  ~ SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+  -->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.runtime.extensions.essentials</groupId>
+        <artifactId>vidocq-runtime-extensions-essentials</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vidocq-runtime-langchain4j-cdi-mcp-extension</artifactId>
+    <name>Vidocq :: Extensions :: Essentials :: langchain4j-cdi MCP server</name>
+    <description>Hosts a langchain4j-cdi MCP server on Vidocq: one dependency brings the server, its CDI 4.1 invoker,
+        the Jakarta REST runtime and the server's bean list; vidocq.mcp.* keys configure it, and the startup report
+        gets an mcp section.</description>
+
+    <properties>
+        <!--
+            Not released while langchain4j-cdi is a SNAPSHOT (Vidocq/vidocq#94, decision 4): built in the reactor,
+            left out of the release. maven.deploy.skip in this module's own <properties> is what Vidocq/ci's
+            bootstrap-workflows.sh reads to list the module in release.yml's excluded-modules (the deploy step's
+            -pl !:<artifactId>); central-publishing ignores maven.deploy.skip, hence skipPublishing below. Remove all
+            five once langchain4j-cdi publishes a release carrying the MCP 2026-07-28 work.
+        -->
+        <maven.deploy.skip>true</maven.deploy.skip>
+        <maven.javadoc.skip>true</maven.javadoc.skip>
+        <maven.source.skip>true</maven.source.skip>
+        <gpg.skip>true</gpg.skip>
+        <!--
+            checkpom asks for the companion codegen bundle of every vidocq-runtime-*-extension this pom declares.
+            The Cassini extension is aggregated here for the applications' run time only, and this module runs no
+            annotation processor (-proc:none): there is nothing for its codegen to generate.
+        -->
+        <vidocq.checkpom.skip>true</vidocq.checkpom.skip>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-spi</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.annotation</groupId>
+            <artifactId>jakarta.annotation-api</artifactId>
+        </dependency>
+        <!-- vauban-core requires classloader-spi in its module-info: mandatory on the module path. -->
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-classloader-spi</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- langchain4j-cdi's MCP server and its CDI 4.1 invoker: what the application gets from this one dependency. -->
+        <dependency>
+            <groupId>dev.langchain4j.cdi.mcp</groupId>
+            <artifactId>langchain4j-cdi-mcp-server</artifactId>
+            <version>${langchain4j-cdi.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>dev.langchain4j.cdi.mcp</groupId>
+            <artifactId>langchain4j-cdi-mcp-invoker-cdi41</artifactId>
+            <version>${langchain4j-cdi.version}</version>
+        </dependency>
+
+        <!--
+            The Jakarta APIs module dev.langchain4j.cdi.mcp.server requires, which langchain4j-cdi declares
+            'provided'. Compile scope, at the versions Cassini brings: the application compiles against the server's
+            types without pinning them, and vidocq:generate can load the server's classes to index them.
+        -->
+        <dependency>
+            <groupId>jakarta.ws.rs</groupId>
+            <artifactId>jakarta.ws.rs-api</artifactId>
+            <version>4.0.0</version>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.json</groupId>
+            <artifactId>jakarta.json-api</artifactId>
+            <version>2.1.3</version>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.json.bind</groupId>
+            <artifactId>jakarta.json.bind-api</artifactId>
+            <version>3.0.1</version>
+        </dependency>
+
+        <!-- /mcp is a Jakarta REST resource: Cassini, with Chappe and the Champollion JSON-P and JSON-B providers.
+             Run time only, and no JPMS requires (decision 3). -->
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
+            <artifactId>vidocq-runtime-cassini-rest-extension</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <!--
+            For vidocq:generate only, which resolves the compile class path: Cassini's build compatible extension
+            gives the server's three @Provider classes their @Dependent scope, so the generated bean list names them.
+        -->
+        <dependency>
+            <groupId>io.vidocq.cassini</groupId>
+            <artifactId>cassini-cdi-vauban</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!--
+                No annotation processor: this module declares no bean. McpServerConfigProducer carries no
+                bean-defining annotation and is added by McpExtension.beforeStart only when a vidocq.mcp.* key is set.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <proc>none</proc>
+                </configuration>
+            </plugin>
+            <!--
+                Writes META-INF/vauban-beans.list from the langchain4j-cdi jar: the applications need no
+                scanDependencies. The generated client proxies are parked in target/vidocq-patches and never enter
+                the jar; the server's proxies are generated at run time. At plugin level, so a bare
+                `mvn vidocq:generate` uses it too.
+            -->
+            <plugin>
+                <groupId>io.vidocq.runtime</groupId>
+                <artifactId>vidocq-runtime-maven-plugin</artifactId>
+                <configuration>
+                    <scanDependencies>
+                        <scanDependency>dev.langchain4j.cdi.mcp:langchain4j-cdi-mcp-server</scanDependency>
+                    </scanDependencies>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>generate</id>
+                        <goals>
+                            <goal>generate</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.sonatype.central</groupId>
+                <artifactId>central-publishing-maven-plugin</artifactId>
+                <configuration>
+                    <skipPublishing>true</skipPublishing>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

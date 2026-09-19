@@ -103,6 +103,10 @@
         <humboldt.version>0.4.0-SNAPSHOT</humboldt.version>
         <champollion.version>0.4.0-SNAPSHOT</champollion.version>
         <grimm.version>0.4.0-SNAPSHOT</grimm.version>
+        <!-- langchain4j-cdi's MCP server, hosted by vidocq-runtime-langchain4j-cdi-mcp-extension (Vidocq/vidocq#94).
+             A SNAPSHOT until langchain4j-cdi releases the MCP 2026-07-28 work: that extension stays out of the
+             release meanwhile (maven.deploy.skip in its pom, excluded-modules in release.yml). -->
+        <langchain4j-cdi.version>1.4.0-SNAPSHOT</langchain4j-cdi.version>
         <microprofile.config.version>3.1.1</microprofile.config.version>
         <jakarta.cdi.version>4.1.0</jakarta.cdi.version>
         <jakarta.annotation.version>3.0.0</jakarta.annotation.version>
