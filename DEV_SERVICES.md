@@ -317,8 +317,18 @@ module com.example.app {
 }
 ```
 
-Without this directive Flyway/Liquibase cannot discover the scripts and the migration
-appears to apply zero changes, silently leaving your schema empty.
+Without this directive, in a launch that leaves the application module in the JVM's boot layer
+(`-Dvidocq.dev.layer=false` or `vidocq.package.layer=false` for an application without a `@VidocqMain`
+trampoline; a trampoline re-layers the application in `Vidocq.run()`), Flyway/Liquibase cannot discover
+the scripts and the migration appears to apply zero changes, silently leaving your schema empty. Flyway
+also needs it to instantiate Java migrations, in every launch.
+
+A second cause, fixed by Vidocq/vidocq#96 (0.4.0): `vidocq:dev`, `vidocq:run` and the launcher
+`vidocq:package` writes by default boot the application in a module layer of its own, whose class loader
+lists no directory. Before the fix the backends found no script there **even with** `opens db.migration`;
+they now list `classpath:` locations from the application's modules. Either way, a datasource that ends its
+migration with no migration found and none in its schema history is reported at boot as the warning
+`VIDOCQ-MIG-001` (see `docs/en/modules/ROOT/pages/modules/vidocq-runtime-extensions.adoc`, "Schema migration").
 
 ### Configuration keys
 
@@ -329,7 +339,8 @@ the matching `vidocq.pool[.<name>].*` keys — you do not repeat them.
 |-----|---------|-------------|
 | `vidocq.migration.enabled` | `true` | Set to `false` to skip all migrations at boot |
 | `vidocq.migration.engine` | _(auto)_ | `flyway` or `liquibase` — required only when both backends are on the classpath |
-| `vidocq.migration.locations` | engine default | Override the `@Default` datasource script location(s), comma-separated |
+| `vidocq.migration.locations` | engine default | Override the `@Default` datasource script location(s), comma-separated. Read from every source (`vidocq.properties`, `-D`, `VIDOCQ_MIGRATION_LOCATIONS`); before Vidocq/vidocq#96 only the environment variable worked, the other two stopped the boot with a `StringIndexOutOfBoundsException` |
+| `vidocq.migration.failOnMissingLocations` | `false` | `true`: a Flyway location that holds no script stops the boot (`Unable to resolve location …`) instead of migrating nothing. Liquibase always stops on a missing changelog |
 | `vidocq.migration.<name>.locations` | — | Opt-in migration of a **named** datasource; the named datasource is **not** migrated unless this key is set |
 
 ### Default vs named datasources

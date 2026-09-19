@@ -28,7 +28,7 @@
 
 | `vidocq-runtime-migration-extension`
 | `essentials`
-| Schema-migration facade — runs the configured migration engine before the datasource opens.
+| Schema-migration facade — runs the configured migration engine before the datasource opens, and says what it did in the startup report [.tag-new]#NEW# (<<schema-migration>>).
 
 | `vidocq-runtime-flyway-migration-extension`
 | `essentials`
@@ -479,6 +479,84 @@ A tool, prompt or resource template argument has no explicit name and its class 
 ----
 [VIDOCQ-MCP-005] 2 MCP method(s) have parameters without a name (TimeTools#convertTime, TimeTools#currentTime): clients see them as arg0, arg1, ... and their values are never bound. Compile the application with -parameters, or name each argument with @ToolArg(name = ...), @PromptArg(name = ...) or @ResourceTemplateArg(name = ...).
 ----
+
+[#schema-migration]
+== Schema migration [.tag-new]#NEW#
+
+`vidocq-runtime-migration-extension` migrates each datasource at boot, in `beforeStart`, before the pools open, with the one backend on the path: `vidocq-runtime-flyway-migration-extension` or `vidocq-runtime-liquibase-migration-extension`. It migrates the `@Default` datasource whenever `vidocq.pool.url` is set, and a named datasource only when `vidocq.migration.<name>.locations` is set. A migration that fails stops the boot.
+
+[#schema-migration-keys]
+=== Configuration [.tag-new]#NEW#
+
+[cols="2,1,3"]
+|===
+| Key | Default | Description
+
+| `vidocq.migration.enabled`
+| `true`
+| `false` skips every migration.
+
+| `vidocq.migration.engine`
+| the one backend
+| `flyway` or `liquibase`, required only when both backends are on the path.
+
+| `vidocq.migration.locations` [.tag-new]#NEW#
+| the backend's
+| The locations of the `@Default` datasource, comma-separated: Flyway locations, `classpath:db/migration` by default, or the Liquibase changelog, `db/changelog/db.changelog-master.xml` by default. Read from every configuration source: set in `vidocq.properties` or as a `-D`, it used to stop the boot with a `StringIndexOutOfBoundsException`, and only the environment variable `VIDOCQ_MIGRATION_LOCATIONS` worked.
+
+| `vidocq.migration.<name>.locations`
+| —
+| Enrols the named datasource of `vidocq.pool.<name>.url`, with its locations.
+
+| `vidocq.migration.failOnMissingLocations` [.tag-new]#NEW#
+| `false`
+| `true` stops the boot when a Flyway location holds no script (`Unable to resolve location classpath:db/migration.`), instead of migrating nothing. Off by default, so that an application can add the extension before its first script. Liquibase always stops on a missing changelog.
+|===
+
+The extension declares these keys, so a mistyped one, such as `vidocq.migration.location`, is reported as read by nothing [.tag-new]#NEW# (xref:modules/vidocq-runtime-core.adoc#vidocq-cfg-003[`VIDOCQ-CFG-003`]).
+
+[#schema-migration-layer]
+=== Scripts in the application layer [.tag-new]#NEW#
+
+`vidocq:dev`, `vidocq:run` and the launcher `vidocq:package` writes by default boot the application in a module layer of its own. Its class loader serves a script by name, but lists no directory. The backends used to scan `classpath:db/migration` with a loader, and found nothing there: Flyway logged `No migrations found. Are your locations set up correctly?`, the boot went on with an empty schema, and the first query failed with `Table "…" not found`. Liquibase stopped the boot, the changelog not found.
+
+The backends now list `classpath:` locations from the application's own modules, through `ApplicationLayer` (xref:modules/vidocq-runtime-spi.adoc#application-layer[Listing the application's files]), and read each file by name:
+
+* Flyway: SQL scripts, SQL callbacks and Java migrations such as `V3__Backfill.class`, from a directory (`vidocq:dev`) or a jar (the `app/` of a distribution). A script keeps the name Flyway's own scanner gives it, so a schema history written by a flat launch, or through `filesystem:`, stays valid. Flyway instantiates a Java migration itself, so its package must stay open to it, as the `opens db.migration;` that `vidocq:check-module-info` requires.
+* Liquibase: the changelog, every file it includes, and the directories of `includeAll`.
+
+A `@VidocqMain` trampoline re-layers the application in `Vidocq.run()`, so its IDE and flat launches take this path too. A launch that leaves the application module in the JVM's boot layer keeps the backend's own scanning: `-Dvidocq.dev.layer=false` or `vidocq.package.layer=false` for an application without a trampoline, a class-path launch, and the tests. Flyway locations that mix `classpath:` with `filesystem:` are left to Flyway's scanner, which cannot list the `classpath:` ones in the application layer. The migration logs a warning saying so: keep the locations all `classpath:` or all `filesystem:`.
+
+[#schema-migration-report]
+=== In the startup report [.tag-new]#NEW#
+
+The section `migration`, *Schema migration*, says what each datasource's migration did:
+
+[cols="1,3"]
+|===
+| Line | Value
+
+| summary
+| The engine, then each datasource: `flyway: default 2 applied, version 2`, or `default not migrated` when nothing was found. With no datasource, `idle: no vidocq.pool[.<name>].url`; turned off, `disabled: vidocq.migration.enabled=false`.
+
+| `<datasource>`
+| In the detailed report: `0 applied, version 2`. The version is the one the schema is at. On a restart with nothing left to run it is the current one [.tag-new]#NEW#, and the log line says `Migration done: datasource=default applied=0 version=2` where it used to say `version=(none)`.
+
+| `<datasource> locations`
+| In the detailed report: where the datasource was migrated from, the backend's default when no location is configured.
+|===
+
+[#vidocq-mig-001]
+=== VIDOCQ-MIG-001 — no migration found [.tag-new]#NEW#
+
+A datasource's migration found no migration at its locations, and its schema history records none: the schema was not migrated at all, and the first query on it will fail. It is a warning in every launch mode:
+
+[source,text]
+----
+[VIDOCQ-MIG-001] datasource default: no migration found in [classpath:db/migration] and none in its schema history; the schema was not migrated Check vidocq.migration.locations and that the scripts are in the application
+----
+
+Check the key the hint names, and that the scripts are packaged with the application under that path. In a launch that leaves the application module in the boot layer (<<schema-migration-layer>>), also check that `module-info.java` opens their package (`opens db.migration;`). A schema whose history holds a migration, a repeatable one included, is never flagged, so an up-to-date restart is not an anomaly. `vidocq.migration.failOnMissingLocations=true` turns an empty Flyway location into a boot failure instead.
 
 == Activation by dependency
 

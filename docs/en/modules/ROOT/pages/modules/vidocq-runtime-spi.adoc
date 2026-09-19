@@ -42,6 +42,9 @@ List indexed from the existing sources:
 | `VidocqApp` / `@VidocqMain`
 | Application-side entry points — the class run inside the Vauban application layer by `Vidocq.run(Class, args)`, and the zero-config IDE trampoline annotation.
 
+| `ApplicationLayer` [.tag-new]#NEW#
+| The application's module layer, when Vidocq boots it in one of its own — `current()` — and the files of a directory of its modules — `list(layer, directory)` (<<application-layer>>).
+
 | `report.StartupReportContributor` [.tag-new]#NEW#
 | Adds a section to the startup report — `id()`, `title()`, `order()`, `contribute(context, section)`. Implemented by an extension, or declared as a service (<<startup-report-contributors>>).
 
@@ -126,6 +129,29 @@ Priorities express real ordering constraints between extensions. The built-in HT
 == Configuration keys audit
 
 Declaring your keys in `configKeys()` is optional but recommended: the runtime's `ConfigKeyAudit` compares every configured `vidocq.*` key against the union of declared keys and warns at startup about keys nobody consumes — the typical typo that otherwise silently keeps the default. The warning carries the code xref:modules/vidocq-runtime-core.adoc#vidocq-cfg-003[`VIDOCQ-CFG-003`] [.tag-new]#NEW#. Entries ending in `*` declare a prefix (`"vidocq.greeting.*"`).
+
+[#application-layer]
+== Listing the application's files [.tag-new]#NEW#
+
+Under `vidocq:dev`, `vidocq:run`, the launcher `vidocq:package` writes by default, and after `Vidocq.run` re-layers a trampoline's application, Vidocq boots the application in a module layer of its own. Its archives are then off the JVM's class and module paths: the thread context class loader serves each of their files by name, but no class loader lists a directory of them, and `getResources("db/migration")` finds nothing. An extension that scans a directory of the application lists it from the layer, then reads each file by name:
+
+[source,java]
+----
+Optional<ModuleLayer> layer = ApplicationLayer.current();
+if (layer.isPresent()) {
+    ClassLoader loader = Thread.currentThread().getContextClassLoader();
+    for (String name : ApplicationLayer.list(layer.get(), "db/migration")) {
+        try (InputStream in = loader.getResourceAsStream(name)) {
+            // name is a resource name, such as db/migration/V1__init.sql
+        }
+    }
+} else {
+    // no layer of its own (the application module in the boot layer, a class-path launch, a unit test):
+    // the class loader lists the directory itself
+}
+----
+
+`current()` reads the layer at each call, so a dev reload's new layer is the one it returns. It is empty when the application has no layer of its own, and when no Vidocq runtime is on the path, as in an extension's unit tests. `list` walks the modules of that layer only, directories and jars alike, and returns the files under the directory, at any depth, sorted. The Flyway and Liquibase backends list their `classpath:` locations this way (xref:modules/vidocq-runtime-extensions.adoc#schema-migration-layer[Scripts in the application layer]).
 
 [#launch-mode-api]
 == Reading the launch mode [.tag-new]#NEW#

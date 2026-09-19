@@ -93,6 +93,21 @@ The `io.vidocq.runtime.extensions.*` modules each correspond to a built-in exten
 | `20`
 | Mansart pool maximum size. See the Mansart pool extension for `minIdle`, `acquireTimeout`, `validation`, `xa`, …
 
+| `vidocq.migration.enabled` +
+`vidocq.migration.engine`
+| `true` +
+the one backend
+| Schema migration at boot, and the backend when both Flyway and Liquibase are present. See xref:modules/vidocq-runtime-extensions.adoc#schema-migration-keys[Schema migration].
+
+| `vidocq.migration.locations` [.tag-new]#NEW# +
+`vidocq.migration.<name>.locations`
+| the backend's
+| Script locations of the `@Default` datasource, and of a named one, which this key enrols. Read from every configuration source.
+
+| `vidocq.migration.failOnMissingLocations` [.tag-new]#NEW#
+| `false`
+| `true`: a Flyway location with no script stops the boot instead of migrating nothing.
+
 | `vidocq.rest.context-path`
 | `/`
 | Prefix under which Cassini mounts the JAX-RS application.
@@ -290,6 +305,9 @@ Source: `vidocq-runtime-spi/src/main/java/io/vidocq/runtime/spi/`.
 | `@VidocqMain`
 | Annotation for the zero-config IDE trampoline `main` — boots the runtime in the Vauban layer.
 
+| `ApplicationLayer` [.tag-new]#NEW#
+| The module layer Vidocq boots the application in, when it has one of its own — `current()` — and the files of a directory of its modules — `list(layer, directory)`: what a library that scans the application reads, since the layer's class loader lists no directory. See xref:modules/vidocq-runtime-spi.adoc#application-layer[Listing the application's files].
+
 | `report.StartupReportContributor` [.tag-new]#NEW#
 | Adds a section to the startup report. Implemented by an extension, or declared as a service with `provides … with …` in `module-info.java` and `META-INF/services`. See xref:modules/vidocq-runtime-spi.adoc#startup-report-contributors[Contributing to the startup report].
 
@@ -369,6 +387,9 @@ Each is one WARNING record on `io.vidocq.startup.anomaly`, its code first, logge
 
 | xref:dev-console.adoc#vidocq-devc-005[`VIDOCQ-DEVC-005`] [.tag-new]#NEW#
 | A dev console panel failed to sample; that poll misses its live values.
+
+| xref:modules/vidocq-runtime-extensions.adoc#vidocq-mig-001[`VIDOCQ-MIG-001`] [.tag-new]#NEW#
+| A datasource's migration found no migration, and its schema history records none: the schema was not migrated.
 
 | xref:modules/vidocq-runtime-extensions.adoc#mansart-pool-001[`MANSART-POOL-001`] [.tag-new]#NEW#
 | A Mansart pool opened none of the connections its `minIdle` asks for at boot.
