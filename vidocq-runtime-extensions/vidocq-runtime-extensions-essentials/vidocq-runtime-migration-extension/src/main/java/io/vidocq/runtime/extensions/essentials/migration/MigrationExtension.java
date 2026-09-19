@@ -21,6 +21,10 @@ package io.vidocq.runtime.extensions.essentials.migration;
 
 import io.vidocq.runtime.spi.VidocqConfiguration;
 import io.vidocq.runtime.spi.VidocqExtension;
+import io.vidocq.runtime.spi.report.StartupReportContext;
+import io.vidocq.runtime.spi.report.StartupReportContributor;
+import io.vidocq.runtime.spi.report.StartupReportSection;
+import io.vidocq.runtime.spi.report.Verbosity;
 import io.vidocq.vauban.core.container.VaubanContainerBuilder;
 
 import java.util.ArrayList;
@@ -30,6 +34,7 @@ import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 /**
  * Applies schema migrations at boot. Priority 150 — after the Chappe transport (100), before the
@@ -38,10 +43,16 @@ import java.util.function.Supplier;
  * their own connection), so it needs no runtime {@link javax.sql.DataSource} and is decoupled from
  * mansart-pool. The {@code @Default} datasource is migrated whenever {@code vidocq.pool.url} is set;
  * a named datasource is migrated only when it sets {@code vidocq.migration.<name>.locations}.
+ *
+ * <p>Its section of the startup report, {@code migration}, says what each datasource's migration did, and
+ * raises {@value #NOTHING_FOUND} for one that found no migration and has none in its schema history.
  */
-public final class MigrationExtension implements VidocqExtension {
+public final class MigrationExtension implements VidocqExtension, StartupReportContributor {
 
     private static final System.Logger LOG = System.getLogger(MigrationExtension.class.getName());
+
+    /** A datasource whose migration found no migration, on a schema history that records none. */
+    static final String NOTHING_FOUND = "VIDOCQ-MIG-001";
 
     private static final String PREFIX = "vidocq.migration.";
     private static final String POOL_PREFIX = "vidocq.pool.";
@@ -52,10 +63,16 @@ public final class MigrationExtension implements VidocqExtension {
     private static final Set<String> FIXED_KEYS = Set.of(
             PREFIX + "enabled", PREFIX + "engine", DEFAULT_LOCATIONS_KEY, STRICT_KEY);
 
+    /** What one datasource's migration did: where it looked, and what the backend answered. */
+    record Outcome(String dataSourceName, String locationsKey, List<String> locations, MigrationResult result) {}
+
     private final Supplier<List<SchemaMigrator>> backends;
     private SchemaMigrator migrator;
     private List<MigrationTarget> targets = List.of();
+    private boolean disabled;
     private Set<String> configKeys = FIXED_KEYS;
+    /** Written by {@link #beforeStart}, read by {@link #contribute}. */
+    private volatile List<Outcome> outcomes = List.of();
 
     /** Called by {@link ServiceLoader}: the backends are the {@link SchemaMigrator}s on the path. */
     public MigrationExtension() {
@@ -73,6 +90,8 @@ public final class MigrationExtension implements VidocqExtension {
 
     @Override public String name() { return "migration"; }
     @Override public int priority() { return 150; }
+    @Override public String id() { return "migration"; }
+    @Override public String title() { return "Schema migration"; }
 
     /**
      * {@code vidocq.migration.enabled}, {@code .engine}, {@code .locations}, {@code .failOnMissingLocations}
@@ -88,6 +107,7 @@ public final class MigrationExtension implements VidocqExtension {
     public void configure(VidocqConfiguration cfg) {
         this.configKeys = declaredKeys(cfg);
         if (!cfg.property(PREFIX + "enabled").map(Boolean::parseBoolean).orElse(true)) {
+            this.disabled = true;
             LOG.log(System.Logger.Level.DEBUG, "Migration disabled (vidocq.migration.enabled=false)");
             return;
         }
@@ -106,12 +126,52 @@ public final class MigrationExtension implements VidocqExtension {
         if (migrator == null || targets.isEmpty()) {
             return;
         }
+        List<Outcome> done = new ArrayList<>();
         for (MigrationTarget t : targets) {
             MigrationResult r = migrator.migrate(t); // throws on failure → boot aborts (fail fast)
+            done.add(new Outcome(t.dataSourceName(), locationsKey(t), locations(t), r));
             LOG.log(System.Logger.Level.INFO,
                     "Migration done: datasource=" + t.dataSourceName()
                             + " applied=" + r.applied()
                             + " version=" + r.version());
+        }
+        this.outcomes = List.copyOf(done);
+    }
+
+    /**
+     * The engine and each datasource's outcome, the locations at {@link Verbosity#DETAILED}, and a
+     * {@value #NOTHING_FOUND} anomaly, at every level, for each datasource that was not migrated at all.
+     * Reads what {@link #beforeStart} kept, nothing else.
+     */
+    @Override
+    public void contribute(StartupReportContext context, StartupReportSection section) {
+        if (disabled) {
+            section.summary("disabled: vidocq.migration.enabled=false");
+            return;
+        }
+        List<Outcome> done = outcomes;
+        if (migrator == null || done.isEmpty()) {
+            section.summary("idle: no vidocq.pool[.<name>].url");
+            return;
+        }
+        section.summary(migrator.engine() + ": " + done.stream()
+                .map(o -> o.result().nothingFound()
+                        ? o.dataSourceName() + " not migrated"
+                        : o.dataSourceName() + " " + o.result().applied() + " applied, version " + o.result().version())
+                .collect(Collectors.joining("; ")));
+        if (context.verbosity() == Verbosity.DETAILED) {
+            for (Outcome o : done) {
+                section.row(o.dataSourceName(), o.result().applied() + " applied, version " + o.result().version());
+                section.list(o.dataSourceName() + " locations", o.locations());
+            }
+        }
+        for (Outcome o : done) {
+            if (o.result().nothingFound()) {
+                section.anomaly(NOTHING_FOUND,
+                        "datasource " + o.dataSourceName() + ": no migration found in " + o.locations()
+                                + " and none in its schema history; the schema was not migrated",
+                        "Check " + o.locationsKey() + " and that the scripts are in the application");
+            }
         }
     }
 
@@ -165,6 +225,17 @@ public final class MigrationExtension implements VidocqExtension {
             }
         }
         return names;
+    }
+
+    /** The key that sets the locations of {@code t}, as the hint of {@value #NOTHING_FOUND} names it. */
+    private static String locationsKey(MigrationTarget t) {
+        return "default".equals(t.dataSourceName()) ? DEFAULT_LOCATIONS_KEY
+                : PREFIX + t.dataSourceName() + LOCATIONS_SUFFIX;
+    }
+
+    /** The locations {@code t} was migrated from: its own, or the backend's default. */
+    private List<String> locations(MigrationTarget t) {
+        return t.locations().isEmpty() ? migrator.defaultLocations() : t.locations();
     }
 
     static SchemaMigrator select(List<SchemaMigrator> found, Optional<String> engine) {

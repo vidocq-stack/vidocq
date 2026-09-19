@@ -19,6 +19,23 @@
  */
 package io.vidocq.runtime.extensions.essentials.migration;
 
-/** Outcome summary for logging. {@code applied} = number of migrations/changesets run. */
-public record MigrationResult(int applied, String version) {
+/**
+ * What one datasource's migration did, for the log line and the startup report.
+ *
+ * @param applied      the migrations or changesets run
+ * @param version      the schema version the datasource is at afterwards: the new one, the current one when
+ *                     nothing was left to run, {@code (none)} when it has none
+ * @param nothingFound the backend found no migration at its locations and the schema history records none
+ *                     either, so the schema was not migrated at all: reported as {@code VIDOCQ-MIG-001}.
+ *                     {@code false} when the backend cannot tell
+ */
+public record MigrationResult(int applied, String version, boolean nothingFound) {
+
+    /**
+     * A result that does not say whether nothing was found, as a backend written before
+     * {@link #nothingFound()} returns it: never reported as {@code VIDOCQ-MIG-001}.
+     */
+    public MigrationResult(int applied, String version) {
+        this(applied, version, false);
+    }
 }

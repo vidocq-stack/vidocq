@@ -21,8 +21,14 @@ package io.vidocq.runtime.extensions.essentials.migration;
 
 import io.vidocq.runtime.core.config.ConfigKeyAudit;
 import io.vidocq.runtime.spi.VidocqConfiguration;
+import io.vidocq.runtime.spi.report.LaunchMode;
+import io.vidocq.runtime.spi.report.StartupReportContext;
+import io.vidocq.runtime.spi.report.StartupReportSection;
+import io.vidocq.runtime.spi.report.Verbosity;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -30,6 +36,7 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -168,6 +175,80 @@ class MigrationExtensionTest {
                 ext.configKeys()), "a prefix vidocq.migration.* would consume the typo too, and hide it");
     }
 
+    // ── vidocq#96 task 4: startup report ────────────────────────────────────────
+
+    @Test
+    void aDatasourceThatFoundNothingIsReportedAtEveryLevel() {
+        MigrationExtension ext = new MigrationExtension(() -> List.of(
+                new FakeMigrator("flyway", new MigrationResult(0, "(none)", true), List.of("classpath:db/migration"))));
+        ext.configure(MapConfig.of(Map.of("vidocq.pool.url", "jdbc:h2:mem:x")));
+        ext.beforeStart(null);
+        RecordedSection section = new RecordedSection();
+
+        ext.contribute(new ReportContext(Verbosity.OFF), section);
+
+        assertEquals("flyway: default not migrated", section.summary);
+        assertEquals(List.of(new RecordedSection.Anomaly("VIDOCQ-MIG-001",
+                "datasource default: no migration found in [classpath:db/migration] and none in its schema history;"
+                        + " the schema was not migrated",
+                "Check vidocq.migration.locations and that the scripts are in the application")), section.anomalies);
+    }
+
+    @Test
+    void aNamedDatasourceThatFoundNothingNamesItsOwnKey() {
+        MigrationExtension ext = new MigrationExtension(() -> List.of(
+                new FakeMigrator("flyway", new MigrationResult(0, "(none)", true), List.of("classpath:db/migration"))));
+        ext.configure(MapConfig.of(Map.of(
+                "vidocq.pool.audit.url", "jdbc:h2:mem:audit",
+                "vidocq.migration.audit.locations", "classpath:db/audit")));
+        ext.beforeStart(null);
+        RecordedSection section = new RecordedSection();
+
+        ext.contribute(new ReportContext(Verbosity.SUMMARY), section);
+
+        assertEquals(1, section.anomalies.size());
+        assertEquals("datasource audit: no migration found in [classpath:db/audit] and none in its schema history;"
+                + " the schema was not migrated", section.anomalies.get(0).message());
+        assertEquals("Check vidocq.migration.audit.locations and that the scripts are in the application",
+                section.anomalies.get(0).hint());
+    }
+
+    @Test
+    void aMigratedDatasourceIsSummarisedThenDetailed() {
+        MigrationExtension ext = new MigrationExtension(() -> List.of(
+                new FakeMigrator("flyway", new MigrationResult(2, "2", false), List.of("classpath:db/migration"))));
+        ext.configure(MapConfig.of(Map.of("vidocq.pool.url", "jdbc:h2:mem:x")));
+        ext.beforeStart(null);
+        RecordedSection section = new RecordedSection();
+
+        ext.contribute(new ReportContext(Verbosity.DETAILED), section);
+
+        assertEquals("flyway: default 2 applied, version 2", section.summary);
+        assertEquals(List.of("default=[2 applied, version 2]", "default locations=[classpath:db/migration]"),
+                section.rows);
+        assertTrue(section.anomalies.isEmpty());
+    }
+
+    @Test
+    void anIdleOrDisabledMigrationSaysSo() {
+        MigrationExtension idle = new MigrationExtension(List::of);
+        idle.configure(MapConfig.of(Map.of()));
+        RecordedSection idleSection = new RecordedSection();
+        idle.contribute(new ReportContext(Verbosity.DETAILED), idleSection);
+        assertEquals("idle: no vidocq.pool[.<name>].url", idleSection.summary);
+
+        MigrationExtension disabled = new MigrationExtension(List::of);
+        disabled.configure(MapConfig.of(Map.of("vidocq.migration.enabled", "false", "vidocq.pool.url", "jdbc:h2:mem:x")));
+        RecordedSection disabledSection = new RecordedSection();
+        disabled.contribute(new ReportContext(Verbosity.DETAILED), disabledSection);
+        assertEquals("disabled: vidocq.migration.enabled=false", disabledSection.summary);
+    }
+
+    @Test
+    void aTwoValueResultNeverSaysNothingWasFound() {
+        assertFalse(new MigrationResult(0, "(none)").nothingFound());
+    }
+
     // ── test doubles ─────────────────────────────────────────────────────────
 
     private record MapConfig(Map<String, String> data) implements VidocqConfiguration {
@@ -180,9 +261,53 @@ class MigrationExtensionTest {
         }
     }
 
-    private record FakeMigrator(String engine) implements SchemaMigrator {
-        @Override public MigrationResult migrate(MigrationTarget target) {
-            return new MigrationResult(0, "fake");
+    private record FakeMigrator(String engine, MigrationResult result, List<String> defaultLocations)
+            implements SchemaMigrator {
+        FakeMigrator(String engine) {
+            this(engine, new MigrationResult(0, "fake"), List.of());
         }
+
+        @Override public MigrationResult migrate(MigrationTarget target) {
+            return result;
+        }
+    }
+
+    /** What a contributor writes: its summary, its rows and lists as {@code key=[values]}, its anomalies. */
+    private static final class RecordedSection implements StartupReportSection {
+        record Anomaly(String code, String message, String hint) {}
+
+        String summary;
+        final List<String> rows = new ArrayList<>();
+        final List<Anomaly> anomalies = new ArrayList<>();
+
+        @Override public StartupReportSection summary(String text) { summary = text; return this; }
+        @Override public StartupReportSection row(String key, Object value) {
+            rows.add(key + "=[" + value + "]");
+            return this;
+        }
+        @Override public StartupReportSection list(String key, Collection<String> items) {
+            rows.add(key + "=" + items);
+            return this;
+        }
+        @Override public StartupReportSection secret(String key, boolean configured) {
+            throw new UnsupportedOperationException();
+        }
+        @Override public StartupReportSection listener(String name, String boundBaseUri) {
+            throw new UnsupportedOperationException();
+        }
+        @Override public StartupReportSection route(String listener, String method, String path, String handler) {
+            throw new UnsupportedOperationException();
+        }
+        @Override public StartupReportSection anomaly(String code, String message, String hint) {
+            anomalies.add(new Anomaly(code, message, hint));
+            return this;
+        }
+    }
+
+    private record ReportContext(Verbosity verbosity) implements StartupReportContext {
+        @Override public LaunchMode launchMode() { return LaunchMode.DEV; }
+        @Override public boolean hasBeanOfType(String typeName) { return false; }
+        @Override public <T> Optional<T> lookup(Class<T> type) { return Optional.empty(); }
+        @Override public List<String> routeUrls(String handlerClassName) { return List.of(); }
     }
 }

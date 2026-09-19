@@ -19,6 +19,8 @@
  */
 package io.vidocq.runtime.extensions.essentials.migration;
 
+import java.util.List;
+
 /**
  * A schema-migration backend. Discovered via {@link java.util.ServiceLoader}; an application puts
  * exactly one provider (the Flyway or the Liquibase extension) on its path.
@@ -29,4 +31,14 @@ public interface SchemaMigrator {
 
     /** Runs the migration against {@code target}; throws to abort the boot on failure. */
     MigrationResult migrate(MigrationTarget target);
+
+    /**
+     * Where the backend looks when a target names no location, as the startup report prints it, such as
+     * {@code classpath:db/migration}.
+     *
+     * @return the locations; empty by default, for a backend that does not say
+     */
+    default List<String> defaultLocations() {
+        return List.of();
+    }
 }
