@@ -26,6 +26,8 @@ module io.vidocq.runtime.extensions.essentials.langchain4jcdi.mcp {
     requires io.vidocq.vauban.core;
     requires jakarta.cdi;
     requires jakarta.inject;
+    // @Priority enables McpServerConfigProducer's alternative.
+    requires jakarta.annotation;
     // Typed on purpose: a module kept in the boot layer keeps what it reads, so the MCP server stays in the boot
     // layer in every launch shape (Vidocq/vidocq#94, option A).
     requires dev.langchain4j.cdi.mcp.server;
