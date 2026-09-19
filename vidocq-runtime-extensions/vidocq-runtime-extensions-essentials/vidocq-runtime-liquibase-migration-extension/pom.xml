@@ -47,6 +47,13 @@
             <artifactId>commons-lang3</artifactId>
             <version>3.17.0</version>
         </dependency>
+        <!-- For the tests only: the child JVM of LayeredLiquibaseProcessTest installs the application
+             layer and publishes it as Vidocq does (VidocqAppLayer, InstalledApplicationLayer). -->
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-core</artifactId>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
