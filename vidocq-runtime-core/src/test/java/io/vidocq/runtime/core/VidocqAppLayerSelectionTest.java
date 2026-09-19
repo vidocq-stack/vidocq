@@ -96,7 +96,45 @@ class VidocqAppLayerSelectionTest {
                 "the caller is the application: a runtime prefix must not keep it, nor, through it, what it reads");
     }
 
+    @Test
+    @DisplayName("the langchain4j-cdi MCP extension keeps the MCP server and its invoker in the boot layer: only the application moves")
+    void theMcpExtensionKeepsTheMcpServerInTheBootLayer(@TempDir Path dir) throws Exception {
+        var app = explodedModule(dir, "acme.mcp.app", List.of(MCP_SERVER), "acme.mcp.app.Main");
+        var server = explodedModule(dir, MCP_SERVER, List.of(), "dev.langchain4j.cdi.mcp.server.transport.Endpoint");
+        var invoker = explodedModule(dir, MCP_INVOKER, List.of(MCP_SERVER),
+                "dev.langchain4j.cdi.mcp.invoker.cdi41.Provider");
+        var extension = explodedModule(dir, MCP_EXTENSION, List.of(MCP_SERVER, MCP_INVOKER),
+                "io.vidocq.runtime.extensions.essentials.langchain4jcdi.mcp.McpExtension");
+
+        var config = ModuleLayer.boot().configuration().resolve(ModuleFinder.of(app, server, invoker, extension),
+                ModuleFinder.of(), Set.of("acme.mcp.app", MCP_EXTENSION));
+
+        assertEquals(Set.of(real(app)), relayered(VidocqAppLayer.applicationPaths(config, "acme.mcp.app")),
+                "the extension is kept by the io.vidocq.runtime.extensions prefix, and a kept module keeps what it "
+                        + "reads: the MCP server and the invoker stay in the boot layer (Vidocq/vidocq#94, option A)");
+    }
+
+    @Test
+    @DisplayName("without the extension, the MCP server and its invoker move with the application")
+    void withoutTheExtensionTheMcpServerMovesWithTheApplication(@TempDir Path dir) throws Exception {
+        var app = explodedModule(dir, "acme.mcp.app", List.of(MCP_SERVER, MCP_INVOKER), "acme.mcp.app.Main");
+        var server = explodedModule(dir, MCP_SERVER, List.of(), "dev.langchain4j.cdi.mcp.server.transport.Endpoint");
+        var invoker = explodedModule(dir, MCP_INVOKER, List.of(MCP_SERVER),
+                "dev.langchain4j.cdi.mcp.invoker.cdi41.Provider");
+
+        var config = ModuleLayer.boot().configuration().resolve(
+                ModuleFinder.of(app, server, invoker), ModuleFinder.of(), Set.of("acme.mcp.app"));
+
+        assertEquals(Set.of(real(app), real(server), real(invoker)),
+                relayered(VidocqAppLayer.applicationPaths(config, "acme.mcp.app")),
+                "nothing kept reads them: the trampoline re-layers the MCP server, the case the extension changes");
+    }
+
     // ---------------------------------------------------------------- fixtures
+
+    private static final String MCP_SERVER = "dev.langchain4j.cdi.mcp.server";
+    private static final String MCP_INVOKER = "dev.langchain4j.cdi.mcp.invoker.cdi41";
+    private static final String MCP_EXTENSION = "io.vidocq.runtime.extensions.essentials.langchain4jcdi.mcp";
 
     private static Set<Path> relayered(List<Path> paths) {
         return paths.stream().map(VidocqAppLayerSelectionTest::real).collect(Collectors.toSet());
