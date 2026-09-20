@@ -118,7 +118,8 @@ public class PetService {
      * as an endpoint. Lives in main sources, not {@code src/test/java}, because this repository's
      * Vauban-generated bean registry is produced separately per Maven compilation round (main vs.
      * test), so a CDI bean declared only in the test round is never merged into the main round's
-     * registry and would not be discoverable at runtime.
+     * registry and would not be discoverable at runtime. That is Vidocq/vauban#101; once it is
+     * fixed, this method moves back to a test-scope bean.
      */
     @Transactional
     void createThenFailForTests() {

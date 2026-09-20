@@ -99,6 +99,10 @@ public class ProductResource {
      * product and then always fails, so an in-process test can prove the write does not survive
      * the transaction rollback. Not a JAX-RS resource method (no {@code @GET}/{@code @POST}), so
      * Cassini never exposes it as an endpoint.
+     *
+     * <p>It lives here, and not in {@code src/test/java}, only because a bean declared in the test
+     * compilation round is not merged into the main round's generated Vauban registry: see
+     * Vidocq/vauban#101. Once that is fixed, this method moves back to a test-scope bean.
      */
     @Transactional
     void saveThenFailForTests() {
