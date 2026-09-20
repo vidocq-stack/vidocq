@@ -18,11 +18,15 @@
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
 /**
- * Hosts a langchain4j-cdi MCP server on Vidocq: the server's bean list, the {@code vidocq.mcp.*} keys and the
- * {@code mcp} section of the startup report.
+ * Hosts a langchain4j-cdi MCP server on Vidocq: the server's bean list, the {@code vidocq.mcp.*} keys, the
+ * {@code mcp} section of the startup report, and that section shown live as the dev console's {@code mcp} panel.
  */
 module io.vidocq.runtime.extensions.essentials.langchain4jcdi.mcp {
     requires transitive io.vidocq.runtime.spi;
+    // McpExtension is its own dev console panel: its report section, shown live. Hard, not static: a class does
+    // not load without the interfaces it implements. Transitive, as io.vidocq.runtime.spi above, so that a module
+    // reading this one sees the SPI McpExtension is typed with; the module is small and brings only that SPI.
+    requires transitive io.vidocq.runtime.spi.devconsole;
     requires io.vidocq.vauban.core;
     requires jakarta.cdi;
     requires jakarta.inject;
