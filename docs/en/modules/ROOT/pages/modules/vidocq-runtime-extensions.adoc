@@ -54,9 +54,9 @@
 | `jakartaee-web`
 | Jakarta Data 1.0 via Mansart — scans `@Repository`, implementations generated via APT (companion `-codegen` artefact).
 
-| `vidocq-runtime-mansart-transactions-extension`
+| `vidocq-runtime-mansart-transactions-extension` [.tag-new]#NEW#
 | `jakartaee-web`
-| Handles `@Transactional` via `mansart-transactions` (companion `-codegen` artefact).
+| Handles `@Transactional` via `mansart-transactions` (companion `-codegen` artefact). One dependency is enough: it also brings the JDBC-to-JTA bridge, so Mansart Data writes actually join the transaction (<<mansart-transactions-jdbc-bridge>>).
 
 | `vidocq-runtime-ravel-config-extension`
 | `microprofile`
@@ -293,6 +293,22 @@ A named pool is open, but no `@Named("<name>") DataSource` bean serves it: the b
 ----
 
 When the container cannot say which beans it has, no pool is flagged: the report never guesses.
+
+[#mansart-transactions-jdbc-bridge]
+== Mansart Data writes join the transaction [.tag-new]#NEW#
+
+`vidocq-runtime-mansart-transactions-extension` now brings `mansart-transactions-jdbc` itself, as a compile dependency and a `requires` of its module descriptor, alongside `mansart-transactions-cdi`. Adding the extension is enough for `@Transactional` to cover Mansart Data writes — no second dependency to remember.
+
+Mansart Data's JDBC-to-JTA bridge (`io.vidocq.mansart.transactions.jdbc.ConnectionXAResource`) only enlists a repository's JDBC connection in the active JTA transaction when that class can be loaded; `mansart-data-cdi` declares it an optional dependency. Before this fix, an application that depended on this extension alone did not have it on the module path: every repository call still took its own autocommit connection, so a `@Transactional` method began and rolled back a real JTA transaction, but no connection was ever enlisted in it — a write made before a thrown exception stayed committed, silently, with no anomaly in the startup report (Vidocq/vidocq#97).
+
+[source,xml,subs=attributes+]
+----
+<dependency>
+    <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+    <artifactId>vidocq-runtime-mansart-transactions-extension</artifactId>
+    <version>{project-version}</version>
+</dependency>
+----
 
 [#langchain4j-cdi-mcp]
 == langchain4j-cdi MCP server [.tag-new]#NEW#
