@@ -40,7 +40,7 @@
 
 | `vidocq-runtime-langchain4j-cdi-mcp-extension` [.tag-new]#NEW#
 | `essentials`
-| Hosts a langchain4j-cdi MCP server: one dependency brings the server, its CDI 4.1 invoker, Jakarta REST and the server's bean list; `vidocq.mcp.*` keys configure it. Not on Maven Central yet. See <<langchain4j-cdi-mcp>>.
+| Hosts a langchain4j-cdi MCP server: one dependency brings the server, its CDI 4.1 invoker, Jakarta REST and the server's bean list; `vidocq.mcp.*` keys configure it. Its section of the startup report is a live dev console panel [.tag-new]#NEW# (<<langchain4j-cdi-mcp-live>>). Not on Maven Central yet. See <<langchain4j-cdi-mcp>>.
 
 | `vidocq-runtime-cassini-rest-extension`
 | `jakartaee-core`
@@ -439,6 +439,96 @@ mcp           MCP server (langchain4j-cdi) | 3 ms
 ----
 
 `server` says where the configuration comes from: `vidocq.mcp.*`, `application bean` or `defaults`. The request-state secret is only ever printed as `configured` or `not configured`; session ids, tool descriptions, schemas and headers are never printed. The section reads what the server holds in memory and creates none of its session beans; at the detailed level it also reads the configuration resolver.
+
+[#langchain4j-cdi-mcp-live]
+=== The `mcp` panel in the dev console [.tag-new]#NEW#
+
+The `mcp` section is also a panel of the xref:dev-console.adoc[dev console]: its boot facts stay, and seven values are read again on every poll, about once a second, from the counters the MCP server already keeps in memory — no lock, no I/O, nothing logged, and no bean created.
+
+[cols="1,1,3"]
+|===
+| Key | Kind | Value, and what its absence says
+
+| `sessions`
+| gauge, count
+| The MCP sessions the server holds, from `McpSessionManager`. Absent `no request served yet` while that bean has no instance: the server creates it when it first answers.
+
+| `streams`
+| gauge, count
+| The SSE streams connected to the notification broadcaster. Absent `not created yet` before the server needs it.
+
+| `listens`
+| gauge, count
+| The open `subscriptions/listen` streams of `2026-07-28` clients. Absent `not created yet` before the server needs it.
+
+| `pending`
+| gauge, count
+| The requests the server has made of a client — an elicitation, a sampling, a `roots/list` — and is still waiting the answer of. Absent `not created yet` while a tool has asked the client for nothing, which is the usual reading of this panel.
+
+| `invoker.methods`
+| gauge, count
+| The MCP methods the CDI 4.1 invoker provider has an entry for.
+
+| `invoker.matches`
+| counter, count
+| The MCP methods that resolved to a container invoker.
+
+| `invoker.misses`
+| counter, count
+| The MCP methods that did not, and that the server invokes with `Method.invoke`.
+|===
+
+The three `invoker.*` values come from one bean, so they are absent together, with the same reason: `reflection` when no invoker provider bean exists at all — the optional CDI 4.1 invoker module registered none, and the whole server invokes by reflection — and `built at the first call` when the bean exists but the container has not built it yet. When the MCP server is not in this container, every value is absent with `no MCP server in this container`, as the summary reads `not deployed` (<<vidocq-mcp-002>>). A twin server (<<vidocq-mcp-003>>) leaves the panel inert: it samples nothing at all, as its section shows nothing.
+
+Two charts: *Connections* — `sessions` as an area, `streams` and `listens` as lines — and *Server-to-client requests* — `pending` as a line. The three invoker values get no chart on purpose: they grow once per method and then stop, so a curve of them would read as traffic.
+
+[IMPORTANT]
+====
+`invoker.matches` and `invoker.misses` count **distinct methods, not calls**. The provider counts one match the first time a given MCP method resolves to an invoker, so both totals stop growing once every method has been called once: a server whose four methods have each been called reads `4` after four calls and still `4` after four hundred. They answer "does this server invoke without reflection?", never "how busy is it?".
+====
+
+Here is a real server read through `api/snapshot`, once before it had served anything and once after six calls over four MCP methods:
+
+[cols="2,3,3"]
+|===
+| Key | Before the first request | After six calls
+
+| `sessions`
+| absent, `no request served yet`
+| gauge `1`
+
+| `streams`
+| gauge `0`
+| gauge `0`
+
+| `listens`
+| gauge `0`
+| gauge `0`
+
+| `pending`
+| absent, `not created yet`
+| absent, `not created yet`
+
+| `invoker.methods`
+| absent, `built at the first call`
+| gauge `4`
+
+| `invoker.matches`
+| absent, `built at the first call`
+| counter `4`
+
+| `invoker.misses`
+| absent, `built at the first call`
+| counter `0`
+|===
+
+Two traits of this panel are worth knowing, because both read as bugs until they are explained.
+
+**It never creates a bean.** `sample()` holds the `Bean` metadata resolved once at `onStart`, and asks the bean's `Context` for the instance it already has, with the single-argument `Context.get`, which returns `null` rather than creating one. Holding a client proxy obtained at boot and calling it on every poll would create the bean on the first poll of the page: for `McpSessionManager` that means starting its `mcp-session-cleanup` thread, once a second, on an application that has served no request and asked for nothing. A panel measures; it does not change what it measures.
+
+**A missing instance is `absent` with a reason, never a zero.** A bean with no instance has no number to give, and a zero would claim a measure the panel does not have — "no session open" and "nobody has ever asked" are not the same fact. The reasons above are what the page shows in place of the number, greyed.
+
+What reaches the page is a key, a kind, a number and a unit: no session id, no tool name, no header, and never the request-state secret, which stays what the report writes as `configured` or `not configured`.
 
 The anomalies below are each one WARNING record on `io.vidocq.startup.anomaly`, logged at every level of the report (xref:modules/vidocq-runtime-core.adoc#startup-anomalies[Anomalies]). They cover what the extension makes possible or alone can see; langchain4j-cdi's own failures stay in its logs.
 
