@@ -36,14 +36,15 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * Docker-gated integration test for {@link FlywaySchemaMigrator} against a real PostgreSQL instance.
- * Skips automatically when Docker is not available.
+ * Skips automatically when Docker is not usable.
  */
 class FlywaySchemaMigratorPostgresIT {
 
     @Test
     @Timeout(240)
     void migratesPostgres() throws Exception {
-        assumeTrue(DockerClientFactory.instance().isDockerAvailable(), "Docker not available — skipping");
+        String unusable = dockerProblem();
+        assumeTrue(unusable == null, () -> "Docker is not usable here, skipping: " + unusable);
         try (PostgreSQLContainer<?> pg = new PostgreSQLContainer<>("postgres:16-alpine")) {
             pg.start();
             MigrationResult r = new FlywaySchemaMigrator().migrate(new MigrationTarget(
@@ -55,6 +56,23 @@ class FlywaySchemaMigratorPostgresIT {
                  var rs = s.executeQuery("SELECT COUNT(*) FROM widget")) {
                 assertTrue(rs.next());
             }
+        }
+    }
+
+    /**
+     * Why Docker cannot be used here, or {@code null} when it can.
+     *
+     * <p>{@code isDockerAvailable()} reads as a boolean probe, but it starts Testcontainers' resource reaper on
+     * the way. A daemon that answers while the reaper cannot run makes it throw instead of returning
+     * {@code false}, and this test then fails the build rather than skipping — which is how a CI runner whose
+     * Docker endpoint had just started working turned a gated test red. Whatever it throws means one thing for
+     * this test: no usable Docker. The reason travels into the skip message, so a run that skips says why.
+     */
+    private static String dockerProblem() {
+        try {
+            return DockerClientFactory.instance().isDockerAvailable() ? null : "no Docker daemon answered";
+        } catch (RuntimeException | LinkageError unusable) {
+            return unusable.getClass().getSimpleName() + ": " + unusable.getMessage();
         }
     }
 }
