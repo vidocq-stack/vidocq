@@ -37,6 +37,18 @@
             <version>${mansart.version}</version>
         </dependency>
 
+        <!-- #97: mansart-data-cdi's JDBC-to-JTA bridge (ConnectionXAResource) only turns on when
+             this jar can be loaded, and mansart-data-cdi declares it optional. Without it, every
+             repository call takes its own autocommit connection: @Transactional still begins and
+             rolls back a JTA transaction, but no connection was ever enlisted in it, so a write
+             made before a thrown exception stays committed. Brought here, transitively, so that
+             an application using @Transactional gets the bridge without knowing this jar exists. -->
+        <dependency>
+            <groupId>io.vidocq.mansart</groupId>
+            <artifactId>mansart-transactions-jdbc</artifactId>
+            <version>${mansart.version}</version>
+        </dependency>
+
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>

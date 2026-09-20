@@ -30,6 +30,10 @@ module io.vidocq.runtime.extensions.jakartaee.web.mansart.transactions {
     requires transitive io.vidocq.runtime.spi;
     requires io.vidocq.vauban.core;
     requires transitive io.vidocq.mansart.transactions.cdi;
+    // #97: mansart-data-cdi's JDBC-to-JTA bridge only activates when this module is present.
+    // Brought here so an application that only requires this extension still gets a real
+    // enlistment of its JDBC connections in the JTA transaction @Transactional demarcates.
+    requires io.vidocq.mansart.transactions.jdbc;
     requires jakarta.cdi;
     // MANSART-007 phase 2 — boot-time recovery scan: XA-capable DataSource beans contribute
     // their driver XAResource to MansartTransactionManager.recover().

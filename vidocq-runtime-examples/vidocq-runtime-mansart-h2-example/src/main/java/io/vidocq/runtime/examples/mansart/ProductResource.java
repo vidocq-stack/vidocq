@@ -93,4 +93,16 @@ public class ProductResource {
     public long count() {
         return products.count();
     }
+
+    /**
+     * Test-only unit of work for {@code TransactionalRollbackTest} (Vidocq/vidocq#97): writes a
+     * product and then always fails, so an in-process test can prove the write does not survive
+     * the transaction rollback. Not a JAX-RS resource method (no {@code @GET}/{@code @POST}), so
+     * Cassini never exposes it as an endpoint.
+     */
+    @Transactional
+    void saveThenFailForTests() {
+        products.save(new Product("Rollback probe", 1.0));
+        throw new IllegalStateException("simulated failure after a write, for TransactionalRollbackTest (Vidocq/vidocq#97)");
+    }
 }
