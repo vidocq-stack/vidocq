@@ -111,6 +111,22 @@ public class PetService {
         return true;
     }
 
+    /**
+     * Test-only unit of work for {@code TransactionalRollbackTest} (Vidocq/vidocq#97): saves a pet
+     * and then always fails, so an in-process test can prove the write does not survive the
+     * transaction rollback. Package-private with no JAX-RS annotation, so Cassini never exposes it
+     * as an endpoint. Lives in main sources, not {@code src/test/java}, because this repository's
+     * Vauban-generated bean registry is produced separately per Maven compilation round (main vs.
+     * test), so a CDI bean declared only in the test round is never merged into the main round's
+     * registry and would not be discoverable at runtime.
+     */
+    @Transactional
+    void createThenFailForTests() {
+        pets.save(new Pet("Rollback probe", null, DEFAULT_STATUS, 1.0));
+        throw new IllegalStateException(
+                "simulated failure after a write, for TransactionalRollbackTest (Vidocq/vidocq#97)");
+    }
+
     // ---- relation plumbing ---------------------------------------------------------------------
 
     private PetView toView(Pet pet) {
