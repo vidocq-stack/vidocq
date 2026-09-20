@@ -32,8 +32,9 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
- * The MCP application of this module in a JVM of its own, in one launch shape, bound to a free loopback port of
- * 18090-18099. Its output goes to a log file under {@code target/it-logs}.
+ * The MCP application of this module in a JVM of its own, in one launch shape, bound to two free loopback ports of
+ * 18090-18099: one for the MCP endpoint, one for the dev console, which is forced on so that a test can read its
+ * {@code /api/snapshot}. Its output goes to a log file under {@code target/it-logs}.
  */
 final class LaunchedServer implements AutoCloseable {
 
@@ -56,11 +57,13 @@ final class LaunchedServer implements AutoCloseable {
     private final Process process;
     private final Path log;
     private final int port;
+    private final int consolePort;
 
-    private LaunchedServer(Process process, Path log, int port) {
+    private LaunchedServer(Process process, Path log, int port, int consolePort) {
         this.process = process;
         this.log = log;
         this.port = port;
+        this.consolePort = consolePort;
     }
 
     /**
@@ -71,7 +74,9 @@ final class LaunchedServer implements AutoCloseable {
      * @param properties extra {@code -D} options, such as {@code -Dvidocq.mcp.serverName=it-server}
      */
     static LaunchedServer start(Shape shape, String name, String... properties) throws Exception {
-        int port = freePort();
+        int[] ports = freePorts(2);
+        int port = ports[0];
+        int consolePort = ports[1];
         String lib = System.getProperty("it.lib");
         String app = System.getProperty("it.app");
         Path logs = Path.of(System.getProperty("it.logs"));
@@ -90,6 +95,10 @@ final class LaunchedServer implements AutoCloseable {
         command.add("-Dvidocq.chappe.listener.default.host=127.0.0.1");
         command.add("-Dvidocq.chappe.listener.default.port=" + port);
         command.add("-Dvidocq.startup.report=detailed");
+        // The dev console, on its own loopback port: an IT reads its /api/snapshot. Never 8888, its default.
+        command.add("-Dvidocq.devconsole.enabled=true");
+        command.add("-Dvidocq.devconsole.host=127.0.0.1");
+        command.add("-Dvidocq.devconsole.port=" + consolePort);
         command.addAll(List.of(properties));
         if (shape == Shape.APP_PATH) {
             command.addAll(List.of("-m", "io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq"));
@@ -101,7 +110,7 @@ final class LaunchedServer implements AutoCloseable {
                 .redirectErrorStream(true)
                 .redirectOutput(log.toFile())
                 .start();
-        LaunchedServer server = new LaunchedServer(process, log, port);
+        LaunchedServer server = new LaunchedServer(process, log, port, consolePort);
         server.awaitStarted();
         return server;
     }
@@ -109,6 +118,11 @@ final class LaunchedServer implements AutoCloseable {
     /** The base URL of the MCP endpoint. */
     String mcpUrl() {
         return "http://127.0.0.1:" + port + "/mcp";
+    }
+
+    /** The URL of the dev console's snapshot, the JSON its page polls. */
+    String snapshotUrl() {
+        return "http://127.0.0.1:" + consolePort + "/api/snapshot";
     }
 
     /** Everything the JVM printed so far. */
@@ -140,17 +154,35 @@ final class LaunchedServer implements AutoCloseable {
         throw new AssertionError("The server did not start within " + BOOT_TIMEOUT_MS + " ms:\n" + log());
     }
 
-    /** The first port of 18090-18099 nothing listens on; never another one. */
-    private static int freePort() throws IOException {
-        for (int port = FIRST_PORT; port <= LAST_PORT; port++) {
-            try (ServerSocket probe = new ServerSocket()) {
-                probe.setReuseAddress(false);
-                probe.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), port));
-                return port;
-            } catch (IOException taken) {
-                // next one
+    /**
+     * The first {@code count} ports of 18090-18099 nothing listens on; never another one. Every probe is held open
+     * until they are all found, so that two calls of one launch never get the same port.
+     *
+     * @param count how many distinct ports are needed
+     */
+    private static int[] freePorts(int count) throws IOException {
+        int[] found = new int[count];
+        List<ServerSocket> probes = new ArrayList<>();
+        try {
+            for (int port = FIRST_PORT; port <= LAST_PORT && probes.size() < count; port++) {
+                ServerSocket probe = new ServerSocket();
+                try {
+                    probe.setReuseAddress(false);
+                    probe.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), port));
+                    found[probes.size()] = port;
+                    probes.add(probe);
+                } catch (IOException taken) {
+                    probe.close();
+                }
+            }
+            if (probes.size() < count) {
+                throw new IOException("Fewer than " + count + " free ports in " + FIRST_PORT + "-" + LAST_PORT);
+            }
+        } finally {
+            for (ServerSocket probe : probes) {
+                probe.close();
             }
         }
-        throw new IOException("No free port in " + FIRST_PORT + "-" + LAST_PORT);
+        return found;
     }
 }

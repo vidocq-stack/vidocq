@@ -29,6 +29,16 @@
             <artifactId>vidocq-runtime-langchain4j-cdi-mcp-extension</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!--
+            I4 reads the mcp panel from the console's /api/snapshot. Run time only: the application compiles
+            against no console type, it just has to be on the module path of the launched JVM, which is what the
+            it-lib directory below is.
+        -->
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.essentials</groupId>
+            <artifactId>vidocq-runtime-devconsole-extension</artifactId>
+            <scope>runtime</scope>
+        </dependency>
 
         <dependency>
             <groupId>org.junit.jupiter</groupId>
