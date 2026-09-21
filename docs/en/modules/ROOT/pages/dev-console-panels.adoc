@@ -290,7 +290,7 @@ new Chart("connections", "Connections", List.of(
 * **Checked where it is written.** The constructors throw `IllegalArgumentException` for an id or a key that breaks the key rule, a blank title, no series, the same key twice in the same style, or a `STACKED` series with no `AREA` or `STACKED` series before it. Build the charts in a `static final` field: a mistake then fails the extension's tests, not the page.
 * **Repeated per group.** A chart plots the values of the panel's own scope, and is repeated for every group that holds at least one of its keys: the Mansart pool panel declares `connections` once, and the page draws it for each pool.
 * **A key the sample does not write, or writes as another kind, draws nothing.** `AREA`, `STACKED`, `LINE` and `CEILING` need a gauge, `CEILING` a gauge with a max, and `RATE` a counter.
-* **The page keeps the history,** five minutes of it, in the browser; a panel never keeps one.
+* **The console keeps the history,** five minutes of it, on the server; a panel never keeps one. It is filled by a thread of the console's own, once a second, whether or not a page is open — see xref:dev-console.adoc#history[Where the history lives].
 
 A *lifetime mean* — a mean over the whole boot, such as Mansart's mean borrow time — is sampled as a `duration` and shown as a number, never plotted. After an hour, one more minute of slow borrows barely moves a mean of the whole hour: its curve would stay flat while the last minutes get worse, and a flat line reads as "nothing happens". Plot what changes between two polls, a level or the rate of a counter. A mean over the last minutes would need the component to keep a total of the time spent, and a series style that divides its growth by the count's: neither exists yet.
 
@@ -338,7 +338,7 @@ No `static` field holds a `Class`, a bean, a proxy or any object of the applicat
 
 `id()` is the name of the section and of the panel, such as `mansart-pool`: lowercase, stable across boots and releases, and unique. `startup`, `jvm` and `devconsole` are the console's. Chart ids and value keys follow the key rule, and stay the same from one boot to the next.
 
-*Why:* the id is how a reader finds the section in a log, and how the report keeps a section from appearing twice: a second contributor with the same id is skipped as xref:modules/vidocq-runtime-core.adoc#vidocq-rpt-002[`VIDOCQ-RPT-002`], and so is one that takes `startup` or `jvm`. The page keys its history by panel, group and value key: a key that changes between two polls starts a new curve.
+*Why:* the id is how a reader finds the section in a log, and how the report keeps a section from appearing twice: a second contributor with the same id is skipped as xref:modules/vidocq-runtime-core.adoc#vidocq-rpt-002[`VIDOCQ-RPT-002`], and so is one that takes `startup` or `jvm`. The history is keyed by panel, group and value key: a key that changes between two ticks starts a new curve.
 
 [#rule-failure]
 === A failure costs one sample [.tag-new]#NEW#

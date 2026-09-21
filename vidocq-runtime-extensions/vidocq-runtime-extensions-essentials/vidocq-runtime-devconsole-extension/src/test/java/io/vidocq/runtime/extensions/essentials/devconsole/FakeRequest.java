@@ -33,9 +33,14 @@ import java.util.Map;
  *
  * @param method the method
  * @param path   the path, such as {@code /api/snapshot}
- * @param host   the {@code Host} header, or {@code null} for none
+ * @param host        the {@code Host} header, or {@code null} for none
+ * @param queryParams the query parameters, such as {@code since}
  */
-record FakeRequest(HttpMethod method, String path, String host) implements Request {
+record FakeRequest(HttpMethod method, String path, String host, Map<String, String> queryParams) implements Request {
+
+    FakeRequest(HttpMethod method, String path, String host) {
+        this(method, path, host, Map.of());
+    }
 
     static FakeRequest get(String path, String host) {
         return new FakeRequest(HttpMethod.GET, path, host);
@@ -68,11 +73,6 @@ record FakeRequest(HttpMethod method, String path, String host) implements Reque
 
     @Override
     public Map<String, String> pathParams() {
-        return Map.of();
-    }
-
-    @Override
-    public Map<String, String> queryParams() {
         return Map.of();
     }
 }

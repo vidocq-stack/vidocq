@@ -144,6 +144,20 @@ final class RecordingSample implements PanelSample {
             byKey.forEach((key, value) -> write(out, key, value));
             out.endArray();
         }
+
+        /** Reports the gauges, the counters and the absences of this scope, in the order their keys were written. */
+        void forEachMeasure(String group, PanelHistory.MeasureSink sink) {
+            byKey.forEach((key, value) -> {
+                switch (value) {
+                    case Gauge gauge ->
+                            sink.measure(group, key, "gauge", unit(gauge.unit()), gauge.value(), gauge.max());
+                    case Counter counter ->
+                            sink.measure(group, key, "counter", unit(counter.unit()), counter.total(), Double.NaN);
+                    case Absent ignored -> sink.measure(group, key, null, null, Double.NaN, Double.NaN);
+                    default -> { }      // a duration, a text or a table: nothing a chart draws
+                }
+            });
+        }
     }
 
     /** The scope of one group: the same values, and no group of its own. */
@@ -264,6 +278,20 @@ final class RecordingSample implements PanelSample {
         group = new Group(name, true);
         groups.put(name, group);
         return group;
+    }
+
+    /**
+     * Reports every measure of this sample to {@code sink}: the gauges and the counters, which a chart draws, and
+     * the absences, which break its curve. Durations, texts and tables have no curve and are not reported.
+     *
+     * <p>An absence is reported with a {@code null} kind and a {@code NaN} value: the history writes it as a hole,
+     * and refuses to open a series on one, having no kind to give it.
+     */
+    void forEachMeasure(PanelHistory.MeasureSink sink) {
+        values.forEachMeasure("", sink);
+        for (Group group : groups.values()) {
+            group.values.forEachMeasure(Texts.clean(group.name), sink);
+        }
     }
 
     /**

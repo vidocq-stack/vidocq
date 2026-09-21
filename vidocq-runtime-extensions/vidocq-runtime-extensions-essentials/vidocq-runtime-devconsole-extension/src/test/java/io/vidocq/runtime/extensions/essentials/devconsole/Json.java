@@ -56,6 +56,12 @@ final class Json {
         return (Map<String, Object>) parse(text);
     }
 
+    /** The array of objects {@code text} holds. */
+    @SuppressWarnings("unchecked")
+    static List<Map<String, Object>> array(String text) {
+        return (List<Map<String, Object>>) parse(text);
+    }
+
     private Object value() {
         blanks();
         if (at >= text.length()) {

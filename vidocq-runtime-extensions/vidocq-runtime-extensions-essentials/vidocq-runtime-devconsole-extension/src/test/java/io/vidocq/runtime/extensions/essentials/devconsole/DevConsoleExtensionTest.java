@@ -133,6 +133,62 @@ class DevConsoleExtensionTest {
                 .toList();
     }
 
+    /** The live threads named {@value DevConsoleExtension#TICKER}, whatever group they run in. */
+    private static List<Thread> tickers() {
+        return Thread.getAllStackTraces().keySet().stream()
+                .filter(thread -> DevConsoleExtension.TICKER.equals(thread.getName()) && thread.isAlive())
+                .toList();
+    }
+
+    @Test
+    void theHistoryTicksWhileTheConsoleRunsAndStopsWithIt() throws Exception {
+        assertEquals(List.of(), tickers(), "nothing ticks before a console starts");
+
+        Boot boot = boot(context(LaunchMode.DEV));
+
+        assertEquals(1, tickers().size(), "one thread, named so that a thread dump says whose it is");
+        assertTrue(tickers().get(0).isDaemon(), "a daemon: the history must never hold a JVM open");
+
+        // It fills on its own, with no page asking for anything: that is the whole point of moving it here.
+        Map<String, Object> filled = Json.object(get(url(boot.console().boundPort()) + "api/snapshot").body());
+        List<?> panels = (List<?>) filled.get("panels");
+        boolean ticked = false;
+        for (int attempt = 0; attempt < 40 && !ticked; attempt++) {
+            filled = Json.object(get(url(boot.console().boundPort()) + "api/snapshot").body());
+            panels = (List<?>) filled.get("panels");
+            ticked = panels.stream().anyMatch(panel -> !((List<?>) ((Map<?, ?>) panel).get("history")).isEmpty());
+            if (!ticked) {
+                Thread.sleep(100);
+            }
+        }
+        assertTrue(ticked, "the jvm panel has points, and nobody asked for them");
+
+        boot.stop();
+        boots.remove(boot);
+
+        assertEquals(List.of(), tickers(), "and onStop joins it: a dev reload must not leave one ticking per boot");
+    }
+
+    @Test
+    void aDevReloadLeavesExactlyOneTicker() throws Exception {
+        Boot first = boot(context(LaunchMode.DEV));
+        assertEquals(1, tickers().size());
+
+        Boot second = reload(first, context(LaunchMode.DEV));
+
+        assertEquals(1, tickers().size(), "the previous boot's thread was joined before this one started");
+        second.stop();
+        boots.remove(second);
+        assertEquals(List.of(), tickers());
+    }
+
+    @Test
+    void aConsoleThatIsOffTicksNothing() {
+        boot(context(LaunchMode.PROD));
+
+        assertEquals(List.of(), tickers(), "no console, no thread and no history to keep");
+    }
+
     @Test
     void aDevBootListensOnLoopbackAndPrintsItsUrl() throws Exception {
         FakeExtensionContext context = context(LaunchMode.DEV, DevConsoleSettings.PORT_KEY, "0");

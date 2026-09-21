@@ -26,10 +26,14 @@ import io.vidocq.runtime.spi.report.LaunchMode;
 import io.vidocq.runtime.spi.report.StartupReportContext;
 import io.vidocq.runtime.spi.report.StartupReportSection;
 import io.vidocq.runtime.spi.report.StartupReportView;
+import io.vidocq.chappe.api.HttpMethod;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -109,6 +113,93 @@ class SnapshotTest {
         return items.stream().map(item -> item.get("id")).toList();
     }
 
+    /** The history of the panel {@code id} carries, as the page reads it. */
+    private static List<Map<String, Object>> historyOf(Map<String, Object> document, String id) {
+        List<Map<String, Object>> panels = at(document, "panels");
+        return panels.stream().filter(panel -> id.equals(panel.get("id")))
+                .findFirst().map(panel -> (List<Map<String, Object>>) panel.get("history")).orElseThrow();
+    }
+
+    @Test
+    void theHistoryFillsOnItsOwnTicksAndNotOnThePolls() {
+        Snapshot snapshot = snapshot(new ClockPanel());
+
+        assertEquals(List.of(), historyOf(Json.object(snapshot.document()), "clock"),
+                "a poll draws the history, it does not write it: nothing has ticked yet");
+
+        snapshot.tick();
+        snapshot.tick();
+
+        List<Map<String, Object>> ticks = historyOf(Json.object(snapshot.document()), "clock");
+        assertEquals(1, ticks.size());
+        assertEquals("ticks", ticks.get(0).get("key"));
+        assertEquals("counter", ticks.get(0).get("kind"));
+        assertEquals(List.of(42L, 42L), ticks.get(0).get("v"), "two ticks, two points, however many polls there were");
+
+        Json.object(snapshot.document());
+        Json.object(snapshot.document());
+
+        assertEquals(List.of(42L, 42L), historyOf(Json.object(snapshot.document()), "clock").get(0).get("v"),
+                "three more polls and still two points: a poll reads the history, it never writes one");
+    }
+
+    @Test
+    void aPollAsksForThePointsItIsMissingWithSince() {
+        Snapshot snapshot = snapshot(new ClockPanel());
+        snapshot.tick();
+        snapshot.tick();
+
+        assertEquals(List.of(NOW, NOW), historyOf(Json.object(snapshot.document(-1)), "clock").get(0).get("t"),
+                "no since: every point kept, which is what a tab that has been away asks for");
+        assertEquals(List.of(), historyOf(Json.object(snapshot.document(NOW)), "clock").get(0).get("t"),
+                "a page already holding the newest point is sent none");
+    }
+
+    /** The document a request gets, the query parameters it carries applied. */
+    private static Map<String, Object> answered(Snapshot snapshot, Map<String, String> query) throws IOException {
+        io.vidocq.chappe.api.Response response = snapshot.handle(
+                new FakeRequest(HttpMethod.GET, "/api/snapshot", "127.0.0.1:8888", query));
+        try (InputStream in = response.body().asInputStream()) {
+            return Json.object(new String(in.readAllBytes(), StandardCharsets.UTF_8));
+        }
+    }
+
+    @Test
+    void aSinceThatIsNoNumberIsReadAsNoSinceAtAll() throws IOException {
+        Snapshot snapshot = snapshot(new ClockPanel());
+        snapshot.tick();
+
+        Map<String, Object> document = answered(snapshot, Map.of("since", "yesterday"));
+
+        assertEquals(1, ((List<?>) historyOf(document, "clock").get(0).get("t")).size(),
+                "a page that cannot say what it holds is given all of it, never nothing");
+    }
+
+    @Test
+    void theSinceOfARequestIsTheOneTheHistoryIsCutAt() throws IOException {
+        Snapshot snapshot = snapshot(new ClockPanel());
+        snapshot.tick();
+
+        assertEquals(List.of(), historyOf(answered(snapshot, Map.of("since", String.valueOf(NOW))), "clock")
+                .get(0).get("t"));
+        assertEquals(List.of(NOW), historyOf(answered(snapshot, Map.of()), "clock").get(0).get("t"),
+                "and no since at all is every point");
+    }
+
+    @Test
+    void aPanelThatThrowsCostsItsOwnTickAndNoOther() {
+        report.set(FakeReportView.of(new TestPanels.BrokenPanel(), new TestPanels.PoolPanel()));
+        Snapshot snapshot = snapshot(new ClockPanel());
+
+        snapshot.tick();
+
+        Map<String, Object> document = Json.object(snapshot.document());
+        assertEquals(List.of(), historyOf(document, "broken"),
+                "a sample that threw is not half-recorded: the tick drops it whole");
+        assertEquals(1, historyOf(document, "acme-pool").size(), "and the panels beside it keep ticking");
+        assertEquals(1, historyOf(document, "clock").size());
+    }
+
     @Test
     void theSnapshotIsBootingUntilTheReportIsWrittenThenReady() {
         TestPanels.PoolPanel pool = new TestPanels.PoolPanel();
@@ -121,7 +212,7 @@ class SnapshotTest {
         assertTrue(booting.containsKey("startup"));
         assertNull(booting.get("startup"));
         assertEquals(Map.of("vidocq", "0.4.0-TEST", "url", "http://127.0.0.1:8888/", "boot", BOOT, "time", NOW,
-                "pollMillis", 1000L), withoutPortTaken(at(booting, "console")));
+                "pollMillis", 1000L, "historyTruncated", false), withoutPortTaken(at(booting, "console")));
         assertEquals(List.of("clock"), ids(booting, "panels"), "only the console's own panels");
         assertEquals(0, pool.samples.get(), "no contributed panel is sampled before the report is written");
 

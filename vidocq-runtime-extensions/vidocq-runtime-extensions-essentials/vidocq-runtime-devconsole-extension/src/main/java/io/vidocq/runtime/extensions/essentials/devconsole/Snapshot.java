@@ -47,21 +47,29 @@ import java.util.function.Supplier;
  *
  * <pre>
  * { "console": {"vidocq": "0.4.0-SNAPSHOT", "url": "http://127.0.0.1:8888/", "boot": "7f3a91c04be2d810",
- *               "time": 1789740602114, "pollMillis": 1000, "portTaken": null},
+ *               "time": 1789740602114, "pollMillis": 1000, "portTaken": null, "historyTruncated": false},
  *   "state": "ready",
  *   "startup": {"launchMode": "dev", "launchReason": "...", "anomalies": [{"code", "message", "hint", "source"}],
  *               "sections": [{"id": "layer", "headline": "...", "summary": "...", "lines": [["weaving", "none"]]}],
  *               "text": "Vidocq startup report\n..."},
  *   "panels": [{"id": "mansart-pool", "title": "Mansart pools", "live": true, "summary": "...",
  *               "lines": [["@Default", "jdbc:h2:mem:demo"]], "charts": [{"id", "title", "series": [{"key", "style"}]}],
- *               "sample": {"nanos": 38000, "slow": false, "truncated": false, "values": [...], "groups": [...]}}] }
+ *               "sample": {"nanos": 38000, "slow": false, "truncated": false, "values": [...], "groups": [...]},
+ *               "history": [{"group": "main", "key": "active", "kind": "gauge", "unit": "count",
+ *                            "t": [1789740601114, 1789740602114], "v": [3, null], "max": [8, 8]}]}] }
  * </pre>
  *
  * <ul>
  *   <li>{@code console.time} is the server's clock at the poll: the page never uses its own. {@code console.boot}
- *       changes with every boot, a dev reload included: the page then forgets the history it drew.
- *       {@code console.portTaken} is {@code {"configured": 8888, "bound": 54213}} when the configured port was taken
- *       and the console listens on another one, {@code null} otherwise.</li>
+ *       changes with every boot, a dev reload included: the page then forgets the history it drew and asks for the
+ *       whole ring again. {@code console.portTaken} is {@code {"configured": 8888, "bound": 54213}} when the
+ *       configured port was taken and the console listens on another one, {@code null} otherwise.
+ *       {@code console.historyTruncated} is {@code true} once a series was refused for want of a slot.</li>
+ *   <li>{@code panels[].history} is the {@link PanelHistory} of that panel: one entry per measured key, its points
+ *       oldest first, in three arrays of the same length — {@code t} the server's clock, {@code v} the value,
+ *       {@code null} for an absence, and {@code max} the ceiling of a gauge, present only when the series ever had
+ *       one. {@code GET /api/snapshot?since=<t>} carries the points after {@code t} only; without {@code since},
+ *       every point kept. That is what lets a tab that was hidden for three minutes redraw a complete curve.</li>
  *   <li>Until the boot has written its report, {@code state} is {@code booting}, {@code startup} is {@code null}
  *       and {@code panels} has only the console's own panels. Then {@code state} is {@code ready}.</li>
  *   <li>{@code startup.sections} has the sections of the report that are no panel: the header's and the core's,
@@ -102,6 +110,8 @@ final class Snapshot implements Handler {
     private final LongSupplier clock;
     /** The panels whose failure was logged this boot. */
     private final Set<String> failed = ConcurrentHashMap.newKeySet();
+    /** Five minutes of every measure, filled by {@link #tick()} whether or not a page is watching. */
+    private final PanelHistory history = new PanelHistory();
     private volatile Bound bound;
     private volatile Contributed contributed;
 
@@ -162,12 +172,72 @@ final class Snapshot implements Handler {
                 .status(StatusCode.OK)
                 .header("Content-Type", "application/json; charset=utf-8")
                 .header("Cache-Control", "no-store")
-                .body(document())
+                .body(document(since(request)))
                 .build();
     }
 
-    /** The snapshot document of this poll. */
+    /**
+     * The point the page says it already holds, {@code -1} for "send everything": a {@code since} that is not a
+     * number is one, since a page that cannot say what it has must be given all of it rather than nothing.
+     */
+    private static long since(Request request) {
+        try {
+            String asked = request.queryParams().get("since");
+            return asked == null ? -1 : Long.parseLong(asked.trim());
+        } catch (RuntimeException unusable) {
+            return -1;
+        }
+    }
+
+    /**
+     * Samples every panel into the history. Called by the console's own thread, once a {@value #POLL_MILLIS}
+     * milliseconds, whether or not a page is watching: that is the whole point of keeping the history here.
+     *
+     * <p>A panel that throws costs its own series this tick and nothing else, and is not logged — {@code sample()}
+     * is called again by the next poll, and {@link #writeSample} reports the failure to whoever is looking.
+     */
+    void tick() {
+        long time = clock.getAsLong();
+        Contributed panels = view().map(this::contributed).orElse(null);
+        if (panels != null) {
+            for (PanelEntry panel : panels.panels()) {
+                record(time, panel);
+            }
+        }
+        for (PanelEntry panel : builtIns) {
+            record(time, panel);
+        }
+    }
+
+    private void record(long time, PanelEntry panel) {
+        if (panel.panel() == null) {
+            return;
+        }
+        RecordingSample sample = new RecordingSample();
+        try {
+            panel.panel().sample(sample);
+        } catch (RuntimeException | LinkageError failure) {
+            return;
+        }
+        history.record(time, panel.id(), sample);
+    }
+
+    /** The history this snapshot keeps, for the tests and for the extension that stops it. */
+    PanelHistory history() {
+        return history;
+    }
+
+    /** The snapshot document of this poll, with every point of the history. */
     String document() {
+        return document(-1);
+    }
+
+    /**
+     * The snapshot document of this poll.
+     *
+     * @param since the newest point the page already holds, negative for every point kept
+     */
+    String document(long since) {
         long time = clock.getAsLong();
         Optional<StartupReportView> view = view();
         JsonWriter out = new JsonWriter().beginObject();
@@ -183,11 +253,11 @@ final class Snapshot implements Handler {
         out.name("panels").beginArray();
         if (panels != null) {
             for (PanelEntry panel : panels.panels()) {
-                writePanel(out, panel);
+                writePanel(out, panel, since);
             }
         }
         for (PanelEntry panel : builtIns) {
-            writePanel(out, panel);
+            writePanel(out, panel, since);
         }
         return out.endArray().endObject().toString();
     }
@@ -216,6 +286,7 @@ final class Snapshot implements Handler {
         } else {
             out.nullValue();
         }
+        out.name("historyTruncated").value(history.truncated());
         out.endObject();
     }
 
@@ -324,7 +395,7 @@ final class Snapshot implements Handler {
         }
     }
 
-    private void writePanel(JsonWriter out, PanelEntry panel) {
+    private void writePanel(JsonWriter out, PanelEntry panel, long since) {
         ReportSection section = panel.section();
         out.beginObject()
                 .name("id").value(Texts.clean(panel.id()))
@@ -349,6 +420,8 @@ final class Snapshot implements Handler {
         } else {
             writeSample(out, panel);
         }
+        out.name("history");
+        history.writeTo(out, panel.id(), since);
         out.endObject();
     }
 

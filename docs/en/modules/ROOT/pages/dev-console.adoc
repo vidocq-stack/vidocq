@@ -193,7 +193,7 @@ Every section that a library adds to the startup report is a panel, with the boo
 * a *duration*, formatted;
 * an *absent* value, greyed with its reason, such as `leak detection off`: never a zero that would read as a measure;
 * *tables*;
-* *charts* of the values that change, drawn from the page's own history: a level, or the growth per second of a counter;
+* *charts* of the values that change, drawn from <<history,the history the console keeps>>: a level, or the growth per second of a counter;
 * one card per *group*, such as one per pool, with its values, its charts, and the boot facts that belong to it.
 
 When a panel's sampling fails, its tab shows the class of the exception, never its message, and keeps its boot facts; the console logs <<vidocq-devc-005>> once and tries again on the next poll. A sample that took more than 5 ms is flagged `slow`, and one that went past the console's limits is flagged as such.
@@ -225,6 +225,19 @@ The console's own panel, always last, read from the JVM's management beans — t
 * **Live values:** the heap in use (out of its maximum, or of what is committed when the JVM has no maximum), the heap committed, the non-heap in use, the threads (with daemon threads and the peak), the classes loaded, the uptime, the CPU load of the process and of the system as percentages, and the load average. A figure the JVM does not publish is `not available`, never a zero.
 * **One group per garbage collector:** its collections, and its time as the JVM counts it: pause time for G1, Parallel and Serial; ZGC and Shenandoah publish their pauses as collectors of their own, which get their own card.
 * **Charts:** memory (heap in use, committed, and the maximum as a ceiling), non-heap, threads, CPU, and per collector the share of time it took and its collections per second.
+
+[#history]
+=== Where the history lives [.tag-new]#NEW#
+
+The console keeps five minutes of every gauge and counter — 300 points, one a second — and it keeps them *on the server*, in a ring filled by a thread of its own named `vidocq-devconsole-history`. That thread runs for the life of the boot, whether or not a page is open.
+
+It used to be the page that kept them, one point per poll. A browser stops the timers of a hidden tab, so the history stopped the moment the tab stopped being the visible one — and on macOS, Chrome counts a window that another application covers as hidden. The result was a hole in every curve covering exactly the minutes you had left the console to go and cause something, which is the interval you came back to look at.
+
+* **A poll asks for what it is missing.** `GET /api/snapshot?since=<the newest point the page holds>` carries the points after that one only; with no `since` — a first load, or a new `boot` — it carries the whole ring. A tab that comes back after three minutes away sends its stale `since` and gets the three minutes it missed, in one document.
+* **An absent value is a hole, not a zero.** A tick where a panel wrote `absent` keeps its place on the axis with a null value, and the curve breaks there. Bridging it would draw a straight line asserting a measure nobody took.
+* **A tick the server missed is still a hole.** A long pause, a suspended process, a laptop that slept: those points are simply not there, the gap between neighbours is too wide, and the curve breaks. Moving the history to the server removes one cause of holes; it does not hide the ones that remain true.
+* **It is bounded, and the bound is a number.** 256 series of 300 points, measured full at 1,966,960 bytes — 1.88 MB — and it does not grow with the length of a run. Series are kept first seen, first served; one that arrives past the cap keeps its live value on its tile and gets no curve, and the snapshot says `historyTruncated`.
+* **It is forgotten with its boot.** A new `boot` id — a dev reload included — starts every curve again, and `onStop` stops the thread before the panels go.
 
 [#security]
 == Security [.tag-new]#NEW#

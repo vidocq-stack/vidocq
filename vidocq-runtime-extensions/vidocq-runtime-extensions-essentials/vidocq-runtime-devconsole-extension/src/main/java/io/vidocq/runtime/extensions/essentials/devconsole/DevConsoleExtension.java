@@ -79,7 +79,14 @@ import java.util.regex.Pattern;
  * resources under {@value #PAGE_RESOURCES}; nothing else, and only to a request that names the console's own
  * address. The page, {@code index.html}, {@code console.css} and the ES module {@code console.js}, loads nothing
  * from another site: it polls the snapshot and draws the report first, then one tab per panel, the console's own
- * {@linkplain JvmPanel JVM panel} last, keeping five minutes of history in the browser.
+ * {@linkplain JvmPanel JVM panel} last.
+ *
+ * <h2>The history of its curves</h2>
+ * <p>Five minutes of every measure is kept by the console, in a {@link PanelHistory} filled by a thread of its own,
+ * {@value #TICKER}, once a {@value Snapshot#POLL_MILLIS} milliseconds for the life of the boot. It used to be kept
+ * by the page, which lost it whenever the browser stopped the timers of a hidden tab — so the curve had a hole
+ * exactly over the minutes someone had left the console to go and cause something. The page now asks for the points
+ * it does not have, {@code ?since=}, and draws a complete curve when it comes back.
  */
 public final class DevConsoleExtension implements VidocqExtension, StartupReportContributor {
 
@@ -105,6 +112,10 @@ public final class DevConsoleExtension implements VidocqExtension, StartupReport
 
     /** How long stopping the console's server waits for a request in flight: never Chappe's 30 seconds. */
     private static final Duration GRACE_PERIOD = Duration.ofSeconds(1);
+    /** The thread that fills the history, one tick a second, for the life of a boot. */
+    static final String TICKER = "vidocq-devconsole-history";
+    /** How long {@link #onStop} waits for that thread: a tick is microseconds, this is only for a pathological one. */
+    private static final Duration TICKER_STOP = Duration.ofSeconds(2);
     /** The build identity file of this module, for its version on the class path. */
     private static final String BUILD_INFO =
             "/META-INF/vidocq/build-info/vidocq-runtime-devconsole-extension.properties";
@@ -122,6 +133,7 @@ public final class DevConsoleExtension implements VidocqExtension, StartupReport
     private volatile InetSocketAddress boundAddress;
     private volatile String url;
     private volatile String notStarted;
+    private volatile Thread ticker;
 
     /** The console Vidocq loads as a service, remembering what it printed across the dev reloads of this JVM. */
     public DevConsoleExtension() {
@@ -189,11 +201,42 @@ public final class DevConsoleExtension implements VidocqExtension, StartupReport
                     new ListenerOptions(true, true, GRACE_PERIOD, this::bound));
             mountPoint.mount(LISTENER, "", new ConsoleHandler(new HostGuard(resolved.host()), this::boundPort, boot,
                     page));
+            ticker = startTicking(boot);
         } catch (RuntimeException failed) {
             snapshot = null;
             notStarted = String.valueOf(failed.getMessage());
             LOG.log(System.Logger.Level.WARNING, "Vidocq dev console not started: " + notStarted);
         }
+    }
+
+    /**
+     * Starts the thread that fills the history: one {@link Snapshot#tick()} every {@value Snapshot#POLL_MILLIS}
+     * milliseconds, for the life of this boot.
+     *
+     * <p>It runs whether or not a page is open, and that is the point. The only signal the server has for "nobody is
+     * watching" is that no snapshot was asked for — which is exactly what a hidden tab causes, so stopping on it
+     * would empty the history during the absence the history exists to cover.
+     *
+     * <p>A daemon thread: it must never hold a JVM open. A tick that throws costs itself and the loop goes on, since
+     * the next one may well succeed — a panel reading a bean that was not there yet, for instance.
+     */
+    private static Thread startTicking(Snapshot boot) {
+        Thread thread = Thread.ofPlatform().name(TICKER).daemon(true).unstarted(() -> {
+            while (!Thread.currentThread().isInterrupted()) {
+                try {
+                    boot.tick();
+                } catch (RuntimeException | LinkageError costsThisTick) {
+                    LOG.log(System.Logger.Level.DEBUG, "Dev console history tick failed", costsThisTick);
+                }
+                try {
+                    Thread.sleep(Snapshot.POLL_MILLIS);
+                } catch (InterruptedException stopping) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+        });
+        thread.start();
+        return thread;
     }
 
     /**
@@ -286,9 +329,28 @@ public final class DevConsoleExtension implements VidocqExtension, StartupReport
         }
     }
 
-    /** Forgets this boot: the server is already down, {@code chappe-bootstrap} stops before the console. */
+    /**
+     * Forgets this boot: the server is already down, {@code chappe-bootstrap} stops before the console.
+     *
+     * <p>The ticker is stopped first, and waited for. A dev reload builds a new console on the same JVM, and a tick
+     * still running would sample panels whose beans the previous boot has already dropped.
+     */
     @Override
     public void onStop() {
+        Thread ticking = ticker;
+        ticker = null;
+        if (ticking != null) {
+            ticking.interrupt();
+            try {
+                ticking.join(TICKER_STOP.toMillis());
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        }
+        Snapshot boot = snapshot;
+        if (boot != null) {
+            boot.history().clear();
+        }
         snapshot = null;
         boundAddress = null;
         url = null;

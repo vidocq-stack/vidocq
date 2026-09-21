@@ -25,8 +25,10 @@
 //   textContent, a text node or an attribute value, never as markup. Charts are SVG elements built one by one.
 // - One request in flight at most, every console.pollMillis; none while the tab is hidden or the page is paused. A
 //   poll that fails greys the last data under "reloading…" and retries every second for a minute, then every five.
-// - The history of each value, 300 points, lives in this page only and is forgotten when console.boot changes: a new
-//   boot, a dev reload included. Time is the server's, console.time, never this browser's clock.
+// - The history of each value, 300 points, is the SERVER's: it keeps ticking while this tab is hidden, and a poll
+//   asks for what this page is missing with ?since=<its newest point>. That is why a tab that comes back after three
+//   minutes away draws a complete curve instead of a hole. The page forgets it all when console.boot changes — a new
+//   boot, a dev reload included — and then asks for the whole ring again. Time is the server's, never this browser's.
 // - localStorage keeps the selected panel and the pause, nothing else, and may refuse both.
 
 const HISTORY_POINTS = 300;          // five minutes at one poll per second
@@ -61,13 +63,17 @@ const page = {
   failingSince: 0,                    // when the polls started failing, by this page's clock; 0 while they succeed
   inFlight: false,
   timer: 0,
+  since: -1,                          // the newest history point this page holds, by the server's clock; -1 for none
   view: null,                         // what the panel area shows: { key, update(snapshot) }
   tabsKey: "",
   openGroups: new Set(),              // the groups whose boot facts are unfolded, by panel and group
   closedGroups: new Set(),
 };
 
-/** The history of every gauge and counter, by panel, group and key -> { kind, unit, points: [{ t, v, max }] }. */
+/**
+ * The history the server sends, by panel, group and key -> { kind, unit, points: [{ t, v, max }] }.
+ * The page appends to it what each poll brings and never invents a point of its own.
+ */
 const history = new Map();
 
 const $ = (id) => document.getElementById(id);
@@ -155,44 +161,45 @@ const rateUnit = (unit) => unit === "nanos" ? "share" : unit + "/s";
 
 const historyKey = (panel, group, key) => panel + "\u0000" + group + "\u0000" + key;
 
+/**
+ * Takes in what this poll brought: the points the server had after page.since, appended to what is already drawn,
+ * and the new watermark to ask from next time. A panel with no history member leaves its series alone.
+ */
 function record(snapshot) {
-  const t = snapshot.console.time;
-  if (typeof t !== "number") return;
+  let newest = page.since;
   for (const panel of snapshot.panels || []) {
-    const sample = panel.sample;
-    if (!sample || sample.error) continue;
-    recordScope(panel.id, "", sample.values, t);
-    for (const group of sample.groups || []) recordScope(panel.id, group.name, group.values, t);
+    if (!Array.isArray(panel.history)) continue;
+    for (const sent of panel.history) {
+      const times = sent.t;
+      if (!Array.isArray(times) || !Array.isArray(sent.v)) continue;
+      const k = historyKey(panel.id, sent.group || "", sent.key);
+      let series = history.get(k);
+      if (!series) {
+        series = { kind: sent.kind, unit: sent.unit, points: [] };
+        history.set(k, series);
+      }
+      series.kind = sent.kind;
+      series.unit = sent.unit;
+      const ceilings = Array.isArray(sent.max) ? sent.max : null;
+      for (let i = 0; i < times.length; i++) {
+        const t = times[i];
+        if (typeof t !== "number" || t <= page.since) continue;     // never the same point twice
+        const v = sent.v[i];
+        const max = ceilings && typeof ceilings[i] === "number" ? ceilings[i] : null;
+        series.points.push({ t, v: typeof v === "number" ? v : null, max });   // null: a gap, never a zero
+        if (t > newest) newest = t;
+      }
+      if (series.points.length > HISTORY_POINTS) series.points.splice(0, series.points.length - HISTORY_POINTS);
+    }
   }
+  page.since = newest;
 }
 
-function recordScope(panel, group, values, t) {
-  for (const value of values || []) {
-    const plotted = value.kind === "gauge" || value.kind === "counter";
-    if (!plotted && value.kind !== "absent") continue;
-    const k = historyKey(panel, group, value.key);
-    let series = history.get(k);
-    if (!series) {
-      if (!plotted) continue;
-      series = { kind: value.kind, unit: value.unit, points: [] };
-      history.set(k, series);
-    }
-    if (plotted) {
-      series.kind = value.kind;
-      series.unit = value.unit;
-      series.points.push({ t, v: value.value, max: typeof value.max === "number" ? value.max : null });
-    } else {
-      series.points.push({ t, v: null, max: null });    // absent: a gap, never a zero
-    }
-    if (series.points.length > HISTORY_POINTS) series.points.splice(0, series.points.length - HISTORY_POINTS);
-  }
-}
-
-/** The value of {@code key} before the last poll, for "+N since last poll", or null. */
+/** The value of {@code key} at the tick before this poll, for "+N since last poll", or null. */
 function previous(panel, group, key) {
   const series = history.get(historyKey(panel, group, key));
-  if (!series || series.points.length < 2) return null;
-  return series.points[series.points.length - 2].v;
+  if (!series || series.points.length < 1) return null;
+  return series.points[series.points.length - 1].v;
 }
 
 /**
@@ -895,12 +902,16 @@ function showState() {
 }
 
 function received(snapshot) {
-  if (snapshot.console.boot !== page.boot) {
+  const known = snapshot.console.boot === page.boot;
+  if (!known) {
     history.clear();                       // a new boot: its history starts again, its boot facts are drawn again
+    page.since = -1;
     page.boot = snapshot.console.boot;
     page.view = null;
   }
-  record(snapshot);
+  // This document answered a ?since= from the previous boot, so it carries an arbitrary tail of the new one's ring.
+  // Dropping it costs one poll and buys the whole ring on the next, asked for with no since at all.
+  if (known) record(snapshot);
   page.snapshot = snapshot;
   render();
 }
@@ -918,7 +929,9 @@ async function poll() {
   page.inFlight = true;
   let snapshot = null;
   try {
-    const response = await fetch("api/snapshot", {
+    // Ask only for the points this page does not have. After a spell hidden, that is every point it missed.
+    const url = page.since > 0 ? "api/snapshot?since=" + page.since : "api/snapshot";
+    const response = await fetch(url, {
       cache: "no-store",
       headers: { Accept: "application/json" },
       signal: AbortSignal.timeout ? AbortSignal.timeout(REQUEST_TIMEOUT_MILLIS) : undefined,
