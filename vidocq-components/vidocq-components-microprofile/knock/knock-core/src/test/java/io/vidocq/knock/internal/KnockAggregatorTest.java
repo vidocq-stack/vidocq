@@ -19,12 +19,20 @@
  */
 package io.vidocq.knock.internal;
 
+import io.vidocq.knock.spi.CheckResult;
 import io.vidocq.knock.spi.HealthCheckRegistry;
 import io.vidocq.knock.spi.ProbeType;
 import org.eclipse.microprofile.health.HealthCheck;
 import org.eclipse.microprofile.health.HealthCheckResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -163,5 +171,81 @@ class KnockAggregatorTest {
 
         assertEquals(HealthCheckResponse.Status.UP, snapshot.status());
         assertTrue(snapshot.checks().isEmpty());
+    }
+
+    // -----------------------------------------------------------------------
+    // Last results — remembered as the probe answered, without an extra call
+    // -----------------------------------------------------------------------
+
+    private static final Instant NOW = Instant.parse("2026-09-23T10:15:30Z");
+
+    private static CheckResult only(HealthCheckRegistry registry, ProbeType probe, String name) {
+        return registry.getLastResults().stream()
+                .filter(r -> r.probe() == probe && r.name().equals(name))
+                .findFirst()
+                .orElseThrow();
+    }
+
+    @Test
+    void aggregate_records_the_last_result_of_each_check_with_its_time_and_data() {
+        AtomicInteger calls = new AtomicInteger();
+        registry.register(ProbeType.READINESS, "com.acme.DbCheck", () -> {
+            calls.incrementAndGet();
+            return HealthCheckResponse.named("db").up().withData("pool", 8).withData("ok", true).build();
+        });
+        KnockAggregator clocked = new KnockAggregator(Clock.fixed(NOW, ZoneOffset.UTC));
+
+        clocked.aggregate(registry, ProbeType.READINESS);
+
+        assertEquals(1, calls.get(), "exactly one call per check per probe request");
+        CheckResult result = only(registry, ProbeType.READINESS, "com.acme.DbCheck");
+        assertEquals("db", result.responseName());
+        assertEquals(HealthCheckResponse.Status.UP, result.status());
+        assertEquals(NOW, result.observedAt());
+        assertEquals(Map.of("pool", "8", "ok", "true"), result.data());
+        assertEquals(1, calls.get(), "reading the results never calls a check");
+    }
+
+    @Test
+    void aggregate_all_records_each_check_under_its_own_probe() {
+        registry.register(ProbeType.LIVENESS, "live", () -> HealthCheckResponse.up("live"));
+        registry.register(ProbeType.STARTUP, "started", () -> HealthCheckResponse.down("started"));
+
+        aggregator.aggregate(registry, ProbeType.ALL);
+
+        assertEquals(HealthCheckResponse.Status.UP, only(registry, ProbeType.LIVENESS, "live").status());
+        assertEquals(HealthCheckResponse.Status.DOWN, only(registry, ProbeType.STARTUP, "started").status());
+        assertEquals(2, registry.getLastResults().size());
+    }
+
+    @Test
+    void a_check_that_turns_down_shows_down_at_the_next_probe_request() {
+        AtomicBoolean healthy = new AtomicBoolean(true);
+        registry.register(ProbeType.LIVENESS, "flaky",
+                () -> HealthCheckResponse.named("flaky").status(healthy.get()).build());
+
+        aggregator.aggregate(registry, ProbeType.LIVENESS);
+        assertEquals(HealthCheckResponse.Status.UP, only(registry, ProbeType.LIVENESS, "flaky").status());
+
+        healthy.set(false);
+        assertEquals(HealthCheckResponse.Status.UP, only(registry, ProbeType.LIVENESS, "flaky").status(),
+                "nothing changes until a probe runs");
+        aggregator.aggregate(registry, ProbeType.ALL);
+
+        assertEquals(HealthCheckResponse.Status.DOWN, only(registry, ProbeType.LIVENESS, "flaky").status());
+        assertEquals(1, registry.getLastResults().size());
+    }
+
+    @Test
+    void an_exception_is_recorded_as_down_under_the_check_name() {
+        registry.register(ProbeType.LIVENESS, "explosive", () -> {
+            throw new IllegalStateException("boom");
+        });
+
+        aggregator.aggregate(registry, ProbeType.LIVENESS);
+
+        CheckResult result = only(registry, ProbeType.LIVENESS, "explosive");
+        assertEquals(HealthCheckResponse.Status.DOWN, result.status());
+        assertEquals("IllegalStateException", result.responseName());
     }
 }

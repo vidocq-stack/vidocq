@@ -21,7 +21,11 @@ package io.vidocq.knock.spi;
 
 import org.eclipse.microprofile.health.HealthCheck;
 
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * Registry of Knock {@link HealthCheck}s.
@@ -32,6 +36,10 @@ import java.util.List;
  * <p>Implementations must be thread-safe — the registry is accessed concurrently by the CDI
  * integration (registration) and the JAX-RS endpoints (reads). No {@code synchronized} or
  * {@code ThreadLocal} should be used — virtual-thread-friendly.</p>
+ *
+ * <p>The registry also remembers the last {@link CheckResult} of each check, one entry per
+ * check per probe, as the probe requests recorded them. Reading the names or the results never
+ * calls a check and never creates one: it is a read of what is already in memory.</p>
  */
 public interface HealthCheckRegistry {
 
@@ -65,4 +73,76 @@ public interface HealthCheckRegistry {
      * @return immutable list of checks registered for this type
      */
     List<HealthCheck> getChecks(ProbeType type);
+
+    /**
+     * Returns the checks registered for a concrete probe type, keyed by their registration name.
+     *
+     * <p>The default implementation derives the name from {@code check.getClass().getName()},
+     * the naming used by the CDI integration.</p>
+     *
+     * @param type the probe type ({@link ProbeType#LIVENESS}, {@link ProbeType#READINESS} or
+     *             {@link ProbeType#STARTUP})
+     * @return immutable map of registration name to check
+     * @throws IllegalArgumentException if {@code type} is {@link ProbeType#ALL}
+     * @since 0.4.0
+     */
+    default Map<String, HealthCheck> getNamedChecks(ProbeType type) {
+        if (type == ProbeType.ALL) {
+            throw new IllegalArgumentException("ProbeType.ALL has no checks of its own — ask each probe type");
+        }
+        Map<String, HealthCheck> named = new LinkedHashMap<>();
+        for (HealthCheck check : getChecks(type)) {
+            named.putIfAbsent(check.getClass().getName(), check);
+        }
+        return Map.copyOf(named);
+    }
+
+    /**
+     * Returns the names of the checks registered for the given probe type, without calling them.
+     *
+     * <p>For {@link ProbeType#ALL}, returns the union of LIVENESS, READINESS and STARTUP names.</p>
+     *
+     * @param type the probe type
+     * @return immutable set of registration names
+     * @since 0.4.0
+     */
+    default Set<String> getCheckNames(ProbeType type) {
+        if (type != ProbeType.ALL) {
+            return Set.copyOf(getNamedChecks(type).keySet());
+        }
+        Set<String> names = new LinkedHashSet<>();
+        names.addAll(getNamedChecks(ProbeType.LIVENESS).keySet());
+        names.addAll(getNamedChecks(ProbeType.READINESS).keySet());
+        names.addAll(getNamedChecks(ProbeType.STARTUP).keySet());
+        return Set.copyOf(names);
+    }
+
+    /**
+     * Records the answer a check gave to a probe request, replacing the previous answer of the
+     * same check for the same probe.
+     *
+     * <p>Called by the aggregation after it ran the check — never a reason to run it. A result
+     * for a check that is not (or no longer) registered under {@code result.probe()} is ignored,
+     * which bounds the memory to one entry per registered check per probe. The default
+     * implementation keeps nothing.</p>
+     *
+     * @param result the observed result
+     * @since 0.4.0
+     */
+    default void recordResult(CheckResult result) {
+        // a registry that does not remember results
+    }
+
+    /**
+     * Returns the last recorded result of each check, one per check per probe.
+     *
+     * <p>A check that no probe request has run yet has no entry. Reading never calls a check.
+     * The default implementation remembers nothing and returns an empty list.</p>
+     *
+     * @return immutable list of the last results
+     * @since 0.4.0
+     */
+    default List<CheckResult> getLastResults() {
+        return List.of();
+    }
 }

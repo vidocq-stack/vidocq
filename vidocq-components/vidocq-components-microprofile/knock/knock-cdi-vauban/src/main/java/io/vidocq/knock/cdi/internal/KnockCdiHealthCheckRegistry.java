@@ -20,12 +20,15 @@
 package io.vidocq.knock.cdi.internal;
 
 import io.vidocq.knock.runtime.HealthCheckRegistries;
+import io.vidocq.knock.spi.CheckResult;
 import io.vidocq.knock.spi.HealthCheckRegistry;
 import io.vidocq.knock.spi.ProbeType;
 import jakarta.enterprise.context.ApplicationScoped;
 import org.eclipse.microprofile.health.HealthCheck;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * CDI {@link HealthCheckRegistry} bean — application singleton injectable via
@@ -56,5 +59,25 @@ class KnockCdiHealthCheckRegistry implements HealthCheckRegistry {
     @Override
     public List<HealthCheck> getChecks(ProbeType type) {
         return delegate.getChecks(type);
+    }
+
+    @Override
+    public Map<String, HealthCheck> getNamedChecks(ProbeType type) {
+        return delegate.getNamedChecks(type);
+    }
+
+    @Override
+    public Set<String> getCheckNames(ProbeType type) {
+        return delegate.getCheckNames(type);
+    }
+
+    @Override
+    public void recordResult(CheckResult result) {
+        delegate.recordResult(result);
+    }
+
+    @Override
+    public List<CheckResult> getLastResults() {
+        return delegate.getLastResults();
     }
 }

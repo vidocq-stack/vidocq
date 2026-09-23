@@ -19,12 +19,14 @@
  */
 package io.vidocq.knock.internal;
 
+import io.vidocq.knock.spi.CheckResult;
 import io.vidocq.knock.spi.HealthCheckRegistry;
 import io.vidocq.knock.spi.ProbeType;
 import org.eclipse.microprofile.health.HealthCheck;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -35,6 +37,10 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * <p>For {@link ProbeType#ALL}, {@link #getChecks(ProbeType)} returns the union of
  * LIVENESS, READINESS, and STARTUP.</p>
+ *
+ * <p>Keeps the last {@link CheckResult} of each check per probe in a second
+ * {@link ConcurrentHashMap}, keyed like the checks: at most one entry per registered check per
+ * probe, dropped when the check is unregistered.</p>
  */
 public final class KnockHealthCheckRegistry implements HealthCheckRegistry {
 
@@ -42,11 +48,18 @@ public final class KnockHealthCheckRegistry implements HealthCheckRegistry {
     private final ConcurrentHashMap<ProbeType, ConcurrentHashMap<String, HealthCheck>> checks =
             new ConcurrentHashMap<>();
 
+    /** Map<ProbeType, Map<name, CheckResult>> — the last answer of each registered check. */
+    private final ConcurrentHashMap<ProbeType, ConcurrentHashMap<String, CheckResult>> lastResults =
+            new ConcurrentHashMap<>();
+
     public KnockHealthCheckRegistry() {
         // Pre-initialize the three concrete types
         checks.put(ProbeType.LIVENESS, new ConcurrentHashMap<>());
         checks.put(ProbeType.READINESS, new ConcurrentHashMap<>());
         checks.put(ProbeType.STARTUP, new ConcurrentHashMap<>());
+        lastResults.put(ProbeType.LIVENESS, new ConcurrentHashMap<>());
+        lastResults.put(ProbeType.READINESS, new ConcurrentHashMap<>());
+        lastResults.put(ProbeType.STARTUP, new ConcurrentHashMap<>());
     }
 
     @Override
@@ -62,6 +75,7 @@ public final class KnockHealthCheckRegistry implements HealthCheckRegistry {
     public void unregister(String name) {
         // Iterate over LIVENESS, READINESS, STARTUP — remove the check if present
         checks.values().forEach(map -> map.remove(name));
+        lastResults.values().forEach(map -> map.remove(name));
     }
 
     @Override
@@ -74,5 +88,30 @@ public final class KnockHealthCheckRegistry implements HealthCheckRegistry {
             return List.copyOf(all);
         }
         return List.copyOf(checks.get(type).values());
+    }
+
+    @Override
+    public Map<String, HealthCheck> getNamedChecks(ProbeType type) {
+        if (type == ProbeType.ALL) {
+            throw new IllegalArgumentException("ProbeType.ALL has no checks of its own — ask each probe type");
+        }
+        return Map.copyOf(checks.get(type));
+    }
+
+    @Override
+    public void recordResult(CheckResult result) {
+        ConcurrentHashMap<String, HealthCheck> registered = checks.get(result.probe());
+        if (registered.containsKey(result.name())) {
+            lastResults.get(result.probe()).put(result.name(), result);
+        }
+    }
+
+    @Override
+    public List<CheckResult> getLastResults() {
+        List<CheckResult> all = new ArrayList<>();
+        all.addAll(lastResults.get(ProbeType.LIVENESS).values());
+        all.addAll(lastResults.get(ProbeType.READINESS).values());
+        all.addAll(lastResults.get(ProbeType.STARTUP).values());
+        return List.copyOf(all);
     }
 }
