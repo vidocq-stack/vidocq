@@ -253,6 +253,7 @@ The console shows what the application is made of, so it is built to be seen by 
 * **No reading from another site.** No CORS header, so another site's page can send a request but never read the answer. Every answer carries `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer` and `Content-Security-Policy: default-src 'self'; frame-ancestors 'none'`.
 * **No secret.** A section reports a secret only as `configured` or `not configured`: the API has no way to pass its value. A configuration value that may carry one, such as a JDBC URL, is shown in a dev launch only, without its credentials; outside it, the panel says what it is, such as the database kind. The console never shows JVM arguments or system properties, nor the message of an exception thrown by a panel.
 * **Text stays text.** Everything a panel writes reaches the page as text, never as markup, with control characters replaced and cut at 200 characters.
+* **Links are built, never written** [.tag-new]#NEW#. A panel's button or a route's URL becomes a link only when Vidocq built it from a listener the report declared and a path: an absolute `http` or `https` URL, opened in a new tab with `rel="noopener noreferrer"`. A panel has no way to pass a URL of its own. See xref:dev-console-panels.adoc#links[Links].
 * **A warning outside development.** Forced on in a `test` or `prod` launch, the console raises <<vidocq-devc-001>>, naming where it listens.
 
 [#anomalies]

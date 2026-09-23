@@ -203,6 +203,17 @@ A wrapper that only has boot facts to show implements `StartupReportContributor`
 
 The boot facts are drawn from what `contribute` writes: the summary is the headline of the panel, the anomalies come first, and the rows follow as a table. When the sample has groups, a row whose key is a group's name is shown in that group's header, and a row whose key starts with the name and a space goes to that group's card, without the name: the Mansart pool panel writes `@Default` and `@Default size`, and the card of the pool `@Default` shows its URL in its header and `size` in its boot facts. The other rows stay in the panel's own table.
 
+[#links]
+=== Links [.tag-new]#NEW#
+
+A section can offer to open something the application serves, such as a user interface or a document: `section.link("Swagger UI", "default", "/openapi/ui/")`. The log prints a row, the label then the absolute URL; the console shows a button under the panel's title that opens it in a new tab.
+
+A panel never writes a URL. It names a listener and a path, and Vidocq joins them with the address that listener really bound, as it does for `route()`: the `http` section declares the application's listeners. A link whose listener no section declared is printed as its path and gets no button. The page only makes a link of an absolute `http` or `https` URL, opened with `rel="noopener noreferrer"`.
+
+A `GET` route with no template variable, such as `GET /openapi`, is a URL a browser can open as it is: its URL in the route table is a link too.
+
+An extension that serves a page on a listener it does not describe itself advertises it instead, with `ChappeMountPoint.instance().advertise(listener, label, path)` from its `onStart`. The sections that describe that listener offer to open it without knowing the extension: the Swagger UI extension advertises `/openapi/ui/`, and the `rest` panel shows the button.
+
 [#values]
 == Values [.tag-new]#NEW#
 

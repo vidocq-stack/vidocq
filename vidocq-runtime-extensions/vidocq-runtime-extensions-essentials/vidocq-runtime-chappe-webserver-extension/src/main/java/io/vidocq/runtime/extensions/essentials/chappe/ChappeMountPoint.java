@@ -65,6 +65,8 @@ public final class ChappeMountPoint {
     private volatile boolean frozen;
     /** The URL each started listener really listens on, by name: read by report sections and the dev console. */
     private final Map<String, String> boundUrls = new ConcurrentHashMap<>();
+    /** The pages extensions advertised, by listener, in the order they were advertised. */
+    private final Map<String, List<Page>> pages = new LinkedHashMap<>();
 
     ChappeMountPoint() {}
 
@@ -154,6 +156,47 @@ public final class ChappeMountPoint {
                             + "' is already declared by an extension (" + existing.owner() + ")");
         }
         declare(new Declaration(listener, options, owner));
+    }
+
+    /**
+     * A page a person can open in a browser, on a listener: a user interface or a document an extension serves.
+     * @param label what it is, such as {@code Swagger UI}
+     * @param path  its path on the listener, starting with {@code /}
+     */
+    public record Page(String label, String path) {
+
+        public Page {
+            Objects.requireNonNull(label, "label");
+            Objects.requireNonNull(path, "path");
+            if (!path.startsWith("/")) {
+                throw new IllegalArgumentException("a page path starts with '/': " + path);
+            }
+        }
+    }
+
+    /**
+     * Advertises a page an extension serves on a listener, such as the Swagger UI at {@code /openapi/ui}, so that
+     * the sections of the startup report and the panels of the dev console that describe that listener can offer
+     * to open it, without knowing the extension. Callable until the mount point is frozen, like a mount.
+     * @param listenerName the listener it is served on, such as {@value ChappeListener#DEFAULT}
+     * @param label        what it is, such as {@code Swagger UI}
+     * @param path         its path on that listener, starting with {@code /}
+     */
+    public void advertise(String listenerName, String label, String path) {
+        Objects.requireNonNull(listenerName, "listenerName");
+        Page page = new Page(label, path);
+        ensureOpen();
+        pages.computeIfAbsent(listenerName, n -> new ArrayList<>()).add(page);
+    }
+
+    /**
+     * The pages advertised on a listener, in the order they were advertised.
+     * @param listenerName the listener name
+     * @return the pages, an immutable list, empty when none was advertised
+     */
+    public List<Page> pages(String listenerName) {
+        List<Page> advertised = pages.get(listenerName);
+        return advertised == null ? List.of() : List.copyOf(advertised);
     }
 
     /** Records where a listener really listens, once its server is started. */

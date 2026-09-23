@@ -21,6 +21,7 @@ package io.vidocq.runtime.extensions.microprofile.grimm.openapi.ui;
 
 import io.vidocq.chappe.api.Handler;
 import io.vidocq.chappe.api.StaticFileHandler;
+import io.vidocq.runtime.extensions.essentials.chappe.ChappeListener;
 import io.vidocq.runtime.extensions.essentials.chappe.ChappeMountPoint;
 import io.vidocq.runtime.spi.ExtensionContext;
 import io.vidocq.runtime.spi.VidocqExtension;
@@ -79,6 +80,8 @@ public final class GrimmOpenApiUiExtension implements VidocqExtension {
                 .cacheControl("public, max-age=86400")
                 .build();
         ChappeMountPoint.instance().mount(MOUNT_PREFIX, ui);
+        // The sections that describe the default listener, such as rest, offer to open it (Vidocq/vidocq#113).
+        ChappeMountPoint.instance().advertise(ChappeListener.DEFAULT, "Swagger UI", MOUNT_PREFIX + "/");
         LOG.log(System.Logger.Level.INFO,
                 "Swagger UI mounted at {0}/ (spec: /openapi?format=json)", MOUNT_PREFIX);
     }

@@ -86,4 +86,15 @@ class ReportViewRecordsTest {
         assertThrows(UnsupportedOperationException.class, () -> line.values().add("postgresql"));
         assertEquals(List.of(), new ReportLine("databases", null).values());
     }
+
+    @Test
+    void aLinePointsOnlyToAnAbsoluteWebUrl() {
+        assertEquals("http://localhost:8081/openapi/ui",
+                new ReportLine("Swagger UI", List.of("x"), "http://localhost:8081/openapi/ui").href());
+        assertEquals("https://example.org/", new ReportLine("k", List.of("x"), "https://example.org/").href());
+        assertNull(new ReportLine("k", List.of("x"), "/openapi/ui").href(), "a path is not a link");
+        assertNull(new ReportLine("k", List.of("x"), "javascript:alert(1)").href());
+        assertNull(new ReportLine("k", List.of("x"), "http://a/\"><script>").href());
+        assertNull(new ReportLine("k", List.of("x")).href());
+    }
 }

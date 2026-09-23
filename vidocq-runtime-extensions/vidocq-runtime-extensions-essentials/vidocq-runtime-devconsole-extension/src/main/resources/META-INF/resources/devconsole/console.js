@@ -506,12 +506,55 @@ function sampleTable(value) {
   return scroll;
 }
 
-/** A value of the report: a secret reads as whether it is configured, never more. */
-function factCell(values) {
+/**
+ * A link the server vouched for: an absolute http or https URL, opened in a new tab that cannot reach this page.
+ * Anything else stays text: the page never builds a link from a string a panel wrote.
+ */
+function linkTo(href, text) {
+  if (typeof href !== "string" || !/^https?:\/\//.test(href)) return document.createTextNode(text);
+  const a = el("a", "link", text);
+  a.href = href;
+  a.target = "_blank";
+  a.rel = "noopener noreferrer";
+  return a;
+}
+
+/**
+ * The links a panel declared, such as the Swagger UI, as buttons under its title: a named line with an href. A route
+ * that can be opened stays in its table, where its method and handler say what it is.
+ */
+function openButtons(lines) {
+  const links = (lines || []).map(splitLine).filter((line) => line.href && typeof line.key === "string");
+  if (!links.length) return null;
+  const bar = el("div", "opens");
+  for (const link of links) {
+    const button = linkTo(link.href, link.key);
+    if (button.nodeType === Node.ELEMENT_NODE) {
+      button.className = "open";
+      button.title = link.href;
+    }
+    bar.append(button);
+  }
+  return bar;
+}
+
+/** The key, values and href of a line of the report: a line that points somewhere ends with {href}. */
+function splitLine(line) {
+  const last = line[line.length - 1];
+  if (last !== null && typeof last === "object") {
+    return {key: line[0], values: line.slice(1, -1), href: last.href};
+  }
+  return {key: line[0], values: line.slice(1), href: null};
+}
+
+/** A value of the report: a secret reads as whether it is configured, never more; a link opens a new tab. */
+function factCell(values, href) {
   const td = el("td");
   const text = values.join(", ");
   if (values.length === 1 && (text === "configured" || text === "not configured")) {
     td.append(el("span", text === "configured" ? "secret" : "secret no", text));
+  } else if (href) {
+    td.append(linkTo(href, text));
   } else {
     td.textContent = text;
   }
@@ -526,12 +569,12 @@ function linesBlock(lines, heads) {
   const out = [];
   let kv = null, ext = null;
   for (const line of lines || []) {
-    const [key, ...values] = line;
+    const {key, values, href} = splitLine(line);
     if (key !== null && key !== undefined) {
       ext = null;
       if (!kv) { kv = el("table", "kv"); out.push(kv); }
       const tr = el("tr");
-      tr.append(el("td", null, key), factCell(values));
+      tr.append(el("td", null, key), factCell(values, href));
       kv.append(tr);
     } else {
       kv = null;
@@ -547,7 +590,16 @@ function linesBlock(lines, heads) {
         out.push(scroll);
       }
       const tr = el("tr");
-      for (const cell of values) tr.append(el("td", /^\d+$/.test(cell) ? "n" : null, cell));
+      for (const cell of values) {
+        // A route that can be opened as it is: its URL cell is the link.
+        if (href && cell === href) {
+          const td = el("td");
+          td.append(linkTo(href, cell));
+          tr.append(td);
+        } else {
+          tr.append(el("td", /^\d+$/.test(cell) ? "n" : null, cell));
+        }
+      }
       ext.append(tr);
     }
   }
@@ -693,6 +745,8 @@ function scopeView(container, panel, group, values, charts) {
 function panelView(panel, snapshot) {
   panelArea.append(panelHead(panel.title || panel.id, panel.id + (panel.live ? " · live" : " · boot facts only")));
   if (panel.summary) panelArea.append(el("p", "summary", panel.summary));
+  const opens = openButtons(panel.lines);
+  if (opens) panelArea.append(opens);
   const anomalies = anomaliesOf(panel.id, snapshot);
   if (anomalies.length) {
     const list = el("div", "anoms");
@@ -720,7 +774,7 @@ function panelView(panel, snapshot) {
     if (typeof key !== "string") return;
     for (const g of byLength) {
       if (key === g.name && line.length > 1) {
-        factsOf.get(g.name).kind = line.slice(1).join(", ");
+        factsOf.get(g.name).kind = splitLine(line).values.join(", ");
         claimed.add(i);
         return;
       }

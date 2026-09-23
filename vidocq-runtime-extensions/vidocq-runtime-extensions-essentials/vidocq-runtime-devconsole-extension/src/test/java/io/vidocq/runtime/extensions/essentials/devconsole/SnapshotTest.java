@@ -358,4 +358,23 @@ class SnapshotTest {
         rest.remove("portTaken");
         return rest;
     }
+
+    @Test
+    void aLineThatPointsSomewhereEndsWithItsHref() {
+        Snapshot snapshot = snapshot(new ClockPanel());
+        FakeReportView base = FakeReportView.of();
+        java.util.List<io.vidocq.runtime.spi.report.ReportSection> sections = new java.util.ArrayList<>(base.sections());
+        sections.add(new io.vidocq.runtime.spi.report.ReportSection("openapi", "OpenAPI (Grimm)", "3 operations",
+                List.of(new io.vidocq.runtime.spi.report.ReportLine("Swagger UI",
+                                List.of("http://127.0.0.1:18090/openapi/ui/"), "http://127.0.0.1:18090/openapi/ui/"),
+                        new io.vidocq.runtime.spi.report.ReportLine("document", List.of("/openapi")))));
+        report.set(new FakeReportView(base.launchMode(), base.launchReason(), base.anomalies(), sections,
+                base.detailedText(), base.contributors()));
+
+        List<?> lines = (List<?>) at(Json.object(snapshot.document()), "startup", "sections", 2, "lines");
+
+        assertEquals(List.of("Swagger UI", "http://127.0.0.1:18090/openapi/ui/",
+                Map.of("href", "http://127.0.0.1:18090/openapi/ui/")), lines.get(0));
+        assertEquals(List.of("document", "/openapi"), lines.get(1), "a line that points nowhere has no object");
+    }
 }

@@ -33,6 +33,9 @@ final class RecordingSection implements StartupReportSection {
     /** One anomaly as the section received it. */
     record Anomaly(String code, String message, String hint) {}
 
+    /** One link as the section received it. */
+    record Link(String label, String listener, String path) {}
+
     /** One route as the section received it. */
     record Route(String listener, String method, String path, String handler) {}
 
@@ -42,6 +45,7 @@ final class RecordingSection implements StartupReportSection {
     final Map<String, Boolean> secrets = new LinkedHashMap<>();
     final List<Anomaly> anomalies = new ArrayList<>();
     final List<Route> routes = new ArrayList<>();
+    final List<Link> links = new ArrayList<>();
 
     @Override
     public StartupReportSection summary(String text) {
@@ -75,6 +79,12 @@ final class RecordingSection implements StartupReportSection {
     @Override
     public StartupReportSection route(String listener, String method, String path, String handler) {
         routes.add(new Route(listener, method, path, handler));
+        return this;
+    }
+
+    @Override
+    public StartupReportSection link(String label, String listener, String path) {
+        links.add(new Link(label, listener, path));
         return this;
     }
 

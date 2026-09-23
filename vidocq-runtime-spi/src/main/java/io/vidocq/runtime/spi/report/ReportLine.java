@@ -32,13 +32,34 @@ import java.util.List;
  *   <li>a line of text: no key, and the text alone.</li>
  * </ul>
  *
+ * <p>A line may also point somewhere a reader can open: a {@link StartupReportSection#link link}, or a
+ * {@link StartupReportSection#route route} a browser can request as it is. Its {@link #href()} is then that absolute
+ * {@code http} or {@code https} URL, which the dev console shows as a link; the log prints the values alone.
  * @param key    the name of the row or the list, or {@code null} for a row of a table and a line of text
  * @param values the values, in order, a {@code null} one read as {@code "null"}, as the report prints it;
  *               never {@code null}, an immutable copy
+ * @param href   where the line points: an absolute {@code http} or {@code https} URL, or {@code null}; any other
+ *               value, a relative path or another scheme, is read as {@code null}
  */
-public record ReportLine(String key, List<String> values) {
+public record ReportLine(String key, List<String> values, String href) {
 
     public ReportLine {
         values = values == null ? List.of() : values.stream().map(String::valueOf).toList();
+        href = isWebUrl(href) ? href : null;
+    }
+
+    /**
+     * A line that points nowhere.
+     * @param key    the name of the row or the list, or {@code null}
+     * @param values the values, in order
+     */
+    public ReportLine(String key, List<String> values) {
+        this(key, values, null);
+    }
+
+    /** Whether {@code url} is an absolute {@code http} or {@code https} URL: nothing else may become a link. */
+    private static boolean isWebUrl(String url) {
+        return url != null && (url.startsWith("http://") || url.startsWith("https://"))
+                && url.chars().noneMatch(c -> c <= ' ' || c == '"' || c == '<' || c == '>' || c == '\\');
     }
 }

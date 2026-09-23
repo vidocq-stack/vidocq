@@ -126,4 +126,38 @@ class ContributedSectionTest {
         return new StartupReport(LaunchMode.DEV, "vidocq.launch.mode", verbosity, List.of(), sections,
                 List.of(ANOMALY), null, null);
     }
+
+    @Test
+    void aLinkIsARowJoinedWithItsListenerAndPointsThere() {
+        ContributedSection section = new ContributedSection("openapi", new StartupRecorder());
+        section.link("Swagger UI", "default", "/openapi/ui");
+
+        List<Section.Line> lines = section.toSection(null, -1, Map.of("default", "http://localhost:8081/")).lines();
+
+        assertEquals(List.of(new Section.Row("Swagger UI", "http://localhost:8081/openapi/ui",
+                "http://localhost:8081/openapi/ui")), lines);
+    }
+
+    @Test
+    void aLinkOnAnUnknownListenerIsItsPathAndPointsNowhere() {
+        ContributedSection section = new ContributedSection("openapi", new StartupRecorder());
+        section.link("Swagger UI", "admin", "/openapi/ui");
+
+        assertEquals(List.of(new Section.Row("Swagger UI", "/openapi/ui", null)),
+                section.toSection(null, -1, Map.of("default", "http://localhost:8081/")).lines());
+    }
+
+    @Test
+    void onlyAGetRouteWithNoTemplateVariablePointsToItsUrl() {
+        ContributedSection section = new ContributedSection("rest", new StartupRecorder());
+        section.route("default", "GET", "/tasks", "com.acme.Tasks#list")
+                .route("default", "GET", "/tasks/{id}", "com.acme.Tasks#one")
+                .route("default", "POST", "/tasks", "com.acme.Tasks#create")
+                .route("admin", "GET", "/stats", "com.acme.Stats#all");
+
+        List<String> hrefs = section.toSection(null, -1, Map.of("default", "http://localhost:8081/")).lines()
+                .stream().map(line -> ((Section.Cells) line).href()).toList();
+
+        assertEquals(java.util.Arrays.asList("http://localhost:8081/tasks", null, null, null), hrefs);
+    }
 }

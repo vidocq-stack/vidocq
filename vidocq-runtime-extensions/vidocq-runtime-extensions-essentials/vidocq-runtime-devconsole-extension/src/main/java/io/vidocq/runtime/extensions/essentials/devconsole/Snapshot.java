@@ -376,7 +376,11 @@ final class Snapshot implements Handler {
         }
     }
 
-    /** The members {@code lines} and, when some were dropped, {@code truncated}. */
+    /**
+     * The members {@code lines} and, when some were dropped, {@code truncated}. A line is an array, its key then its
+     * values; a line that points somewhere ends with an object, {@code {"href": url}}, where {@code url} is the
+     * absolute {@code http} or {@code https} URL {@link ReportLine#href()} guarantees.
+     */
     private static void writeLines(JsonWriter out, List<ReportLine> lines) {
         boolean truncated = lines.size() > MAX_LINES;
         out.name("lines").beginArray();
@@ -386,6 +390,9 @@ final class Snapshot implements Handler {
             truncated |= values.size() > MAX_LINE_VALUES;
             for (String value : values.subList(0, Math.min(MAX_LINE_VALUES, values.size()))) {
                 out.value(Texts.clean(value));
+            }
+            if (line.href() != null) {
+                out.beginObject().name("href").value(line.href()).endObject();
             }
             out.endArray();
         }

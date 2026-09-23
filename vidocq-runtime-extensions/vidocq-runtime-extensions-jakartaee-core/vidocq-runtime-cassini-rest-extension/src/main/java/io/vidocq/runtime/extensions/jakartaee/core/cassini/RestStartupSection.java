@@ -20,12 +20,16 @@
 package io.vidocq.runtime.extensions.jakartaee.core.cassini;
 
 import io.vidocq.cassini.spi.http.RouteDescription;
+import io.vidocq.runtime.extensions.essentials.chappe.ChappeMountPoint;
 import io.vidocq.runtime.spi.report.StartupReportContext;
 import io.vidocq.runtime.spi.report.StartupReportSection;
 import io.vidocq.runtime.spi.report.Verbosity;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.function.Function;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
@@ -45,7 +49,17 @@ final class RestStartupSection {
 
     private RestStartupSection() {}
 
-    static void write(List<RestMount> mounts, StartupReportContext context, StartupReportSection section) {
+    /**
+     * Writes the section.
+     *
+     * @param mounts  the mounts of this boot
+     * @param pages   the pages other extensions advertised on a listener, such as the Swagger UI: written as links,
+     *                for every listener a mount is on, so that the {@code rest} panel offers to open them
+     * @param context what the report lets a contributor read
+     * @param section where the section is written
+     */
+    static void write(List<RestMount> mounts, Function<String, List<ChappeMountPoint.Page>> pages,
+                      StartupReportContext context, StartupReportSection section) {
         if (mounts.isEmpty()) {
             section.summary("no resource class");
             return;
@@ -68,6 +82,15 @@ final class RestStartupSection {
             for (RouteDescription route : mount.routes()) {
                 section.route(mount.listener(), route.isLocator() ? ANY_METHOD : route.httpMethod(),
                         mount.pathOnListener(route), route.resourceClass() + "#" + route.methodName());
+            }
+        }
+
+        // Links before the level check: the dev console shows them whatever the log's level.
+        Set<String> listeners = new LinkedHashSet<>();
+        mounts.forEach(mount -> listeners.add(mount.listener()));
+        for (String listener : listeners) {
+            for (ChappeMountPoint.Page page : pages.apply(listener)) {
+                section.link(page.label(), listener, page.path());
             }
         }
 

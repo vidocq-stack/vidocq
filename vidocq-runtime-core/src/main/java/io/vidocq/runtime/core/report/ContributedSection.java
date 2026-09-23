@@ -59,7 +59,7 @@ final class ContributedSection implements StartupReportSection {
     }
 
     /** What a section keeps in order: a line as it is written, or a route that is joined later. */
-    private sealed interface Entry permits Written, Route {}
+    private sealed interface Entry permits Written, Route, Link {}
 
     private record Written(Line line) implements Entry {}
 
@@ -93,6 +93,20 @@ final class ContributedSection implements StartupReportSection {
             String base = listeners.get(listener);
             return base == null ? path : join(base, path);
         }
+    }
+
+    /**
+     * A link: joined with the base URI of its listener when the section is printed, like a route.
+     *
+     * @param label    what it is
+     * @param listener the name of the listener it is on
+     * @param path     the path on that listener
+     */
+    private record Link(String label, String listener, String path) implements Entry {}
+
+    /** Whether {@code url} is absolute, joined with a listener, rather than a path alone. */
+    private static boolean absolute(String url) {
+        return url.startsWith("http://") || url.startsWith("https://");
     }
 
     @Override
@@ -136,6 +150,12 @@ final class ContributedSection implements StartupReportSection {
     }
 
     @Override
+    public StartupReportSection link(String label, String listener, String path) {
+        entries.add(new Link(String.valueOf(label), String.valueOf(listener), String.valueOf(path)));
+        return this;
+    }
+
+    @Override
     public StartupReportSection anomaly(String code, String message, String hint) {
         recorder.anomaly(String.valueOf(code), String.valueOf(message), hint, id);
         return this;
@@ -168,8 +188,17 @@ final class ContributedSection implements StartupReportSection {
         for (Entry entry : entries) {
             switch (entry) {
                 case Written written -> lines.add(written.line());
-                case Route route -> lines.add(new Cells(List.of(route.method(), route.url(listeners),
-                        route.shortHandler())));
+                case Route route -> {
+                    String url = route.url(listeners);
+                    // A GET with no template variable is a URL a browser can open as it is.
+                    boolean openable = "GET".equals(route.method()) && absolute(url) && url.indexOf('{') < 0;
+                    lines.add(new Cells(List.of(route.method(), url, route.shortHandler()), openable ? url : null));
+                }
+                case Link link -> {
+                    String base = listeners.get(link.listener());
+                    String url = base == null ? link.path() : join(base, link.path());
+                    lines.add(new Row(link.label(), url, absolute(url) ? url : null));
+                }
             }
         }
         String headline = title == null || title.isBlank() || title.equals(id) ? null : title;

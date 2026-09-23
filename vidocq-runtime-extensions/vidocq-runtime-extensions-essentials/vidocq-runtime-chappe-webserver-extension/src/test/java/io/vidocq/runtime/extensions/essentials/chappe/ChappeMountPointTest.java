@@ -214,4 +214,24 @@ class ChappeMountPointTest {
         assertThrows(NullPointerException.class,
                 () -> mp.declareListener(ChappeListener.http("dev", "127.0.0.1", 0), null));
     }
+
+    @Test
+    void advertisedPagesAreKeptPerListenerInOrder() {
+        ChappeMountPoint mp = new ChappeMountPoint();
+        mp.advertise(ChappeListener.DEFAULT, "Swagger UI", "/openapi/ui/");
+        mp.advertise(ChappeListener.DEFAULT, "OpenAPI document", "/openapi");
+
+        assertEquals(List.of(new ChappeMountPoint.Page("Swagger UI", "/openapi/ui/"),
+                new ChappeMountPoint.Page("OpenAPI document", "/openapi")), mp.pages(ChappeListener.DEFAULT));
+        assertEquals(List.of(), mp.pages("admin"));
+    }
+
+    @Test
+    void anAdvertisedPageIsAPathAndComesBeforeTheStart() {
+        ChappeMountPoint mp = new ChappeMountPoint();
+
+        assertThrows(IllegalArgumentException.class, () -> mp.advertise("default", "Evil", "javascript:alert(1)"));
+        mp.freeze();
+        assertThrows(IllegalStateException.class, () -> mp.advertise("default", "Late", "/late"));
+    }
 }

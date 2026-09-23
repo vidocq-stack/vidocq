@@ -25,9 +25,15 @@ import io.vidocq.chappe.api.Response;
 import io.vidocq.chappe.api.StatusCode;
 import io.vidocq.grimm.cdi.GrimmModelCache;
 import io.vidocq.grimm.cdi.OpenApiResource;
+import io.vidocq.runtime.extensions.essentials.chappe.ChappeListener;
 import io.vidocq.runtime.extensions.essentials.chappe.ChappeMountPoint;
 import io.vidocq.runtime.spi.ExtensionContext;
 import io.vidocq.runtime.spi.VidocqExtension;
+import io.vidocq.runtime.spi.report.StartupReportContext;
+import io.vidocq.runtime.spi.report.StartupReportContributor;
+import io.vidocq.runtime.spi.report.StartupReportSection;
+import org.eclipse.microprofile.openapi.models.OpenAPI;
+import org.eclipse.microprofile.openapi.models.PathItem;
 import io.vidocq.vauban.core.container.VaubanContainer;
 
 /**
@@ -61,7 +67,10 @@ import io.vidocq.vauban.core.container.VaubanContainer;
  * ({@code ""}, priority 500). {@code ChappeEngineExtension} (100) has installed the
  * {@link ChappeMountPoint} in its {@code configure} phase.</p>
  */
-public final class GrimmOpenApiExtension implements VidocqExtension {
+public final class GrimmOpenApiExtension implements VidocqExtension, StartupReportContributor {
+
+    /** The model this boot serves, kept for the {@code openapi} section; {@code null} before and after. */
+    private volatile GrimmModelCache served;
 
     private static final System.Logger LOG = System.getLogger(GrimmOpenApiExtension.class.getName());
 
@@ -97,7 +106,56 @@ public final class GrimmOpenApiExtension implements VidocqExtension {
         }
         OpenApiResource resource = new OpenApiResource(cache);
         ChappeMountPoint.instance().mount(MOUNT_PREFIX, request -> render(resource, request));
+        ChappeMountPoint.instance().advertise(ChappeListener.DEFAULT, "OpenAPI document", MOUNT_PREFIX);
+        served = cache;
         LOG.log(System.Logger.Level.INFO, "OpenAPI document served at {0}", MOUNT_PREFIX);
+    }
+
+    @Override
+    public void onStop() {
+        served = null;
+    }
+
+    @Override
+    public String id() {
+        return "openapi";
+    }
+
+    @Override
+    public String title() {
+        return "OpenAPI (Grimm)";
+    }
+
+    /**
+     * The {@code openapi} section: how many operations the document describes, on how many paths, and links to the
+     * document and to every page advertised under {@value #MOUNT_PREFIX}, the Swagger UI among them. Reads the model
+     * Grimm already assembled: nothing is scanned again.
+     */
+    @Override
+    public void contribute(StartupReportContext context, StartupReportSection section) {
+        GrimmModelCache cache = served;
+        if (cache == null) {
+            section.summary("not served");
+            return;
+        }
+        OpenAPI document = cache.getDocument();
+        int paths = 0;
+        int operations = 0;
+        if (document != null && document.getPaths() != null && document.getPaths().getPathItems() != null) {
+            for (PathItem item : document.getPaths().getPathItems().values()) {
+                paths++;
+                if (item != null && item.getOperations() != null) {
+                    operations += item.getOperations().size();
+                }
+            }
+        }
+        section.summary(operations + " operation" + (operations == 1 ? "" : "s") + " on " + paths + " path"
+                + (paths == 1 ? "" : "s"));
+        for (ChappeMountPoint.Page page : ChappeMountPoint.instance().pages(ChappeListener.DEFAULT)) {
+            if (page.path().startsWith(MOUNT_PREFIX)) {
+                section.link(page.label(), ChappeListener.DEFAULT, page.path());
+            }
+        }
     }
 
     private static GrimmModelCache tryResolve(VaubanContainer container) {

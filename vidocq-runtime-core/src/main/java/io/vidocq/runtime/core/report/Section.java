@@ -58,12 +58,18 @@ public record Section(String id, String headline, String summary, List<Line> lin
      *
      * @param key   the name of the row
      * @param value the value
+     * @param href  the absolute URL the row points to, a link's, or {@code null}; the log ignores it
      */
-    public record Row(String key, String value) implements Line {
+    public record Row(String key, String value, String href) implements Line {
 
         public Row {
             key = String.valueOf(key);
             value = String.valueOf(value);
+        }
+
+        /** A row that points nowhere. */
+        public Row(String key, String value) {
+            this(key, value, null);
         }
     }
 
@@ -88,11 +94,18 @@ public record Section(String id, String headline, String summary, List<Line> lin
      * wider than the widest cell of each column.
      *
      * @param cells the cells, left to right
+     * @param href  the absolute URL the row points to, a route a browser can request as it is, or {@code null}; the
+     *              log ignores it
      */
-    public record Cells(List<String> cells) implements Line {
+    public record Cells(List<String> cells, String href) implements Line {
 
         public Cells {
             cells = cells == null ? List.of() : cells.stream().map(String::valueOf).toList();
+        }
+
+        /** A table row that points nowhere. */
+        public Cells(List<String> cells) {
+            this(cells, null);
         }
     }
 

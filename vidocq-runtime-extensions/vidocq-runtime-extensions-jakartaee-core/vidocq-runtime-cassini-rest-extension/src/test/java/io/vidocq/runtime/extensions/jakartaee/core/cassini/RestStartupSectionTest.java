@@ -68,7 +68,7 @@ class RestStartupSectionTest {
 
     private static RecordingSection write(Verbosity verbosity, List<RestMount> mounts) {
         RecordingSection section = new RecordingSection();
-        RestStartupSection.write(mounts, new FakeReportContext(verbosity), section);
+        RestStartupSection.write(mounts, listener -> List.of(), new FakeReportContext(verbosity), section);
         return section;
     }
 
@@ -116,5 +116,19 @@ class RestStartupSectionTest {
         assertEquals("listener default, prefix /health (not stripped), 1 route", section.rows.get("mount health"));
         assertEquals(List.of(HealthResource.class.getName(), TASKS), section.lists.get("resources"));
         assertEquals(List.of(AuditFilter.class.getName()), section.lists.get("request filters"));
+    }
+
+    @Test
+    void offersToOpenThePagesAdvertisedOnItsListenersAtEveryLevel() {
+        RecordingSection section = new RecordingSection();
+        RestStartupSection.write(List.of(api(), health()),
+                listener -> "default".equals(listener)
+                        ? List.of(new io.vidocq.runtime.extensions.essentials.chappe.ChappeMountPoint.Page(
+                                "Swagger UI", "/openapi/ui/"))
+                        : List.of(),
+                new FakeReportContext(Verbosity.SUMMARY), section);
+
+        assertEquals(List.of(new RecordingSection.Link("Swagger UI", "default", "/openapi/ui/")), section.links,
+                "once per listener, though two mounts are on it");
     }
 }

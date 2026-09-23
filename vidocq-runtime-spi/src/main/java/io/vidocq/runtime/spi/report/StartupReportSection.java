@@ -99,6 +99,22 @@ public interface StartupReportSection {
     StartupReportSection route(String listener, String method, String path, String handler);
 
     /**
+     * Something a reader can open, on a listener: a user interface, a document, such as the Swagger UI at
+     * {@code /openapi/ui}. Printed at {@link Verbosity#DETAILED} as a row, {@code label} then the absolute URL, the
+     * path joined with the base URI of the {@linkplain #listener listener} of that name, as a {@link #route route} is;
+     * the dev console shows it as a link that opens in a new tab. When no section declared that listener, the row
+     * shows the path alone and the console no link: a contributor never writes a URL itself.
+     *
+     * @param label    what it is, such as {@code Swagger UI}
+     * @param listener the listener name, such as {@code default}
+     * @param path     the path on that listener, starting with {@code /}, such as {@code /openapi/ui}
+     * @return this section
+     */
+    default StartupReportSection link(String label, String listener, String path) {
+        return row(label, path);
+    }
+
+    /**
      * Something wrong that does not stop the boot. Logged at once as its own WARNING record,
      * {@code [CODE] message hint}, at every {@link Verbosity}, {@link Verbosity#OFF} included, and
      * recalled in the report's {@code anomalies} section. Its code, message and hint have their control

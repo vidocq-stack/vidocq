@@ -201,7 +201,16 @@ public final class CassiniExtension implements VidocqExtension, DevConsolePanel 
 
     @Override
     public void contribute(StartupReportContext context, StartupReportSection section) {
-        RestStartupSection.write(RestMounts.all(), context, section);
+        RestStartupSection.write(RestMounts.all(), CassiniExtension::advertisedPages, context, section);
+    }
+
+    /** The pages other extensions advertised on a listener; none when the Chappe engine is not installed. */
+    private static List<ChappeMountPoint.Page> advertisedPages(String listener) {
+        try {
+            return ChappeMountPoint.instance().pages(listener);
+        } catch (IllegalStateException notInstalled) {
+            return List.of();
+        }
     }
 
     @Override

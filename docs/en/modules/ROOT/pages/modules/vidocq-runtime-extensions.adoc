@@ -72,7 +72,7 @@
 
 | `vidocq-runtime-grimm-openapi-extension`
 | `microprofile`
-| {spec-mp-openapi} via Grimm — document generated at compile time (`-ui` companion serves the viewer).
+| {spec-mp-openapi} via Grimm — document generated at compile time (`-ui` companion serves the viewer). Its `openapi` section counts the operations and offers to open the document and the Swagger UI [.tag-new]#NEW#; the `rest` panel of the dev console shows the same buttons.
 
 | `vidocq-runtime-cervantes-jwt-extension`
 | `microprofile`
