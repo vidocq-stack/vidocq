@@ -38,7 +38,8 @@ class McpDevConsolePanelTest {
     @Test
     void theSessionGaugeIsAbsentBeforeTheFirstRequestAndCountsAfterIt() throws Exception {
         try (LaunchedServer server = LaunchedServer.start(LaunchedServer.Shape.FLAT, "i4-devconsole")) {
-            DevConsoleSnapshot before = DevConsoleSnapshot.read(server.snapshotUrl());
+            // Warm: a snapshot creates nothing, so a first poll changes none of the values checked below.
+            DevConsoleSnapshot before = DevConsoleSnapshot.readWarm(server.snapshotUrl());
             before.assertSampled();
             double restBefore = before.restRequests();
 

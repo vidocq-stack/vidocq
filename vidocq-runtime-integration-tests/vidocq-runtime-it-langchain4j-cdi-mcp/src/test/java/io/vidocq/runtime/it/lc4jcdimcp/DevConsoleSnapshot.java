@@ -41,6 +41,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 record DevConsoleSnapshot(String json) {
 
+    /**
+     * Polls the console twice and keeps the second answer. The first sample of a panel runs on a cold JVM, its classes
+     * loaded and its code interpreted, and can pass the 5 ms mark on a busy build machine; the second is what the
+     * page sees once a second, and the one whose time says something about the panel.
+     */
+    static DevConsoleSnapshot readWarm(String url) throws IOException {
+        read(url);
+        return read(url);
+    }
+
     /** Polls the console once. */
     static DevConsoleSnapshot read(String url) throws IOException {
         HttpURLConnection connection = (HttpURLConnection) URI.create(url).toURL().openConnection();
