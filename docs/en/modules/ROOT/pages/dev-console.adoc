@@ -213,6 +213,9 @@ The panels shipped today:
 | *Metrics (Dirac)* [.tag-new]#NEW#
 | The MicroProfile Metrics registries of `vidocq-runtime-dirac-metrics-extension`, one card per registry, application first: how many counters, timers, histograms and gauges each holds, then live every counter's count and every timer's count and mean, under a key derived from the metric's name and tags that the boot facts map back to it. Gauges are counted and named, never called. See xref:modules/vidocq-runtime-extensions.adoc#dirac-metrics-panel[the `metrics` panel].
 
+| *Health (Knock)* [.tag-new]#NEW#
+| The health checks of `vidocq-runtime-knock-health-extension`, one card per probe: each check's last answer to a probe request, UP or DOWN and when, `never called` before the first, the checks UP and DOWN over time, and a button to `GET /health`. The console never calls a check. See xref:modules/vidocq-runtime-extensions.adoc#knock-health-live[the `health` panel].
+
 | *MCP server* [.tag-new]#NEW#
 | The langchain4j-cdi MCP server of `vidocq-runtime-langchain4j-cdi-mcp-extension`: what it serves and how it is configured, then live — the sessions it holds, the SSE streams and the `subscriptions/listen` streams open, the requests it is waiting an answer of from a client, and whether its methods are invoked through the CDI 4.1 invoker or by reflection. See xref:modules/vidocq-runtime-extensions.adoc#langchain4j-cdi-mcp-live[the `mcp` panel].
 

@@ -12,17 +12,18 @@
 
     <artifactId>vidocq-runtime-knock-health-extension</artifactId>
     <name>Vidocq :: Core Extensions :: Health (Knock)</name>
-    <description>Wrapper Maven/Java Modules qui active Knock (MicroProfile Health 4.0) dans un déploiement vidocq.
-        Aucune classe Java propre — l'intégration repose sur la BCE de knock-cdi-vauban (découverte
-        @Liveness/@Readiness/@Startup) et le scanning JAX-RS de CassiniExtension qui mount
-        automatiquement KnockHealthResource (@Path("/health")). Voir docs/adr/ADR-002 dans le repo knock.</description>
+    <description>Maven/Java Modules wrapper activating Knock (MicroProfile Health 4.0) in a vidocq deployment.
+        The integration relies on knock-cdi-vauban's CDI integration (discovery of
+        @Liveness/@Readiness/@Startup) and the JAX-RS @Path scanning of CassiniExtension, which auto-mounts
+        KnockHealthResource (@Path("/health")). Its one Java class, KnockHealthExtension, only reads the
+        registry for the startup report and the health panel of the dev console. See docs/adr/ADR-002 in the
+        knock repo.</description>
 
     <!--
-        ADR-002 (repo knock) : ce module est volontairement un *wrapper*, pas une
-        VidocqExtension. Knock est zero-config et son intégration passe à 100 % par
-        des SPI standards (CDI 4.1 BCE + JAX-RS @Path scanning). Toute logique
-        spécifique vidocq doit aller dans un module séparé pour préserver la
-        portabilité de Knock hors écosystème vidocq.
+        ADR-002 (knock repo): the integration itself needs no Vidocq code. Knock is zero-config and integrates
+        100% via standard SPIs (CDI 4.1 BCE + JAX-RS @Path scanning). The one VidocqExtension of this module,
+        KnockHealthExtension (Vidocq/vidocq#114), only reads what Knock keeps in memory, for the startup report
+        and the dev console: Vidocq-specific code lives here, so that Knock stays portable.
     -->
 
     <dependencies>
@@ -63,6 +64,19 @@
             <artifactId>vidocq-runtime-cassini-rest-extension</artifactId>
         </dependency>
 
+        <!--
+            The health panel of the dev console (KnockHealthExtension, Vidocq/vidocq#114): the extension SPI
+            and the dev console SPI it implements.
+        -->
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-spi</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-devconsole-spi</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>jakarta.enterprise</groupId>
             <artifactId>jakarta.enterprise.cdi-api</artifactId>
@@ -75,44 +89,6 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
-
-    <profiles>
-        <!--
-            Both release and snapshot profiles (declared in vidocq-parent) call
-            maven-javadoc-plugin:jar. This module has no src/main/java — only
-            src/main/module-info/module-info.java. Override the sourcepath in both
-            profiles so javadoc processes the module declaration and produces a
-            non-empty javadoc jar (required by Maven Central validation).
-        -->
-        <profile>
-            <id>release</id>
-            <build>
-                <plugins>
-                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-javadoc-plugin</artifactId>
-                        <configuration>
-                            <sourcepath>${project.basedir}/src/main/module-info</sourcepath>
-                        </configuration>
-                    </plugin>
-                </plugins>
-            </build>
-        </profile>
-        <profile>
-            <id>snapshot</id>
-            <build>
-                <plugins>
-                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-javadoc-plugin</artifactId>
-                        <configuration>
-                            <sourcepath>${project.basedir}/src/main/module-info</sourcepath>
-                        </configuration>
-                    </plugin>
-                </plugins>
-            </build>
-        </profile>
-    </profiles>
 
     <build>
         <plugins>
@@ -129,6 +105,18 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-dependency-plugin</artifactId>
+                <executions>
+                    <!-- copy-compile-deps-to-module-path: managed by vidocq-parent. -->
+                    <execution>
+                        <id>copy-test-deps-to-module-path</id>
+                        <phase>generate-test-sources</phase>
+                        <goals><goal>copy-dependencies</goal></goals>
+                        <configuration>
+                            <outputDirectory>${project.build.directory}/javamodules</outputDirectory>
+                            <includeScope>test</includeScope>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -163,6 +151,34 @@
                         </configuration>
                     </execution>
                 </executions>
+            </plugin>
+            <!--
+                Same pattern as cervantes-jwt-extension: the module-info lives in src/main/module-info and is
+                compiled at prepare-package, so target/classes holds no module-info.class during test-compile
+                and the tests run on the class path. Remove a stale one before test-compile.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-antrun-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>remove-stale-module-info-before-test-compile</id>
+                        <phase>process-test-resources</phase>
+                        <goals><goal>run</goal></goals>
+                        <configuration>
+                            <target>
+                                <delete file="${project.build.outputDirectory}/module-info.class" quiet="true"/>
+                            </target>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <useModulePath>false</useModulePath>
+                </configuration>
             </plugin>
         </plugins>
     </build>

@@ -21,9 +21,11 @@
  * <h2>Vidocq Runtime :: Knock health extension</h2>
  *
  * <p><em>wrapper</em> module that activates Knock (MicroProfile Health 4.0) in a
- * vidocq deployment. No own Java class — see
+ * vidocq deployment — see
  * {@code docs/adr/ADR-002-vidocq-runtime-integration-strategy.md} in the repo
- * {@code knock}.</p>
+ * {@code knock}. Its one class, {@code KnockHealthExtension}, reads the registry
+ * for the {@code health} section of the startup report and panel of the dev
+ * console; it takes no part in the integration itself, and never calls a check.</p>
  *
  * <p>The integration is 100% based on standard SPIs:</p>
  * <ul>
@@ -52,5 +54,12 @@ module io.vidocq.runtime.extensions.microprofile.knock {
 
     requires jakarta.cdi;
     requires jakarta.ws.rs;
+
+    // KnockHealthExtension: the health section of the startup report, shown live as a panel of the
+    // dev console (Vidocq/vidocq#114). The dev console SPI brings io.vidocq.runtime.spi with it.
+    requires transitive io.vidocq.runtime.spi.devconsole;
+
+    provides io.vidocq.runtime.spi.VidocqExtension
+            with io.vidocq.runtime.extensions.microprofile.knock.KnockHealthExtension;
 }
 
