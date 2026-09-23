@@ -111,11 +111,20 @@ final class LogRing extends Handler {
                 thread = "#" + Thread.currentThread().threadId();
             }
             long sequence = next.getAndIncrement();
-            slots.set((int) (sequence % CAPACITY),
-                    new Line(sequence, time, record.getLevel().getName(), logger, thread, message(record)));
+            store(new Line(sequence, time, record.getLevel().getName(), logger, thread, message(record)));
         } catch (RuntimeException | LinkageError unreadable) {
             // a record the ring cannot read is left out: logging never fails because of the console
         }
+    }
+
+    /**
+     * Puts a line in its slot, unless the slot already holds a newer one. Two publishers {@value #CAPACITY} records
+     * apart share a slot and may store in either order: the newer line must win, or the older one would overwrite it
+     * and the reader, finding a stale sequence, would drop both.
+     */
+    void store(Line line) {
+        slots.accumulateAndGet((int) (line.sequence() % CAPACITY), line,
+                (stored, offered) -> stored == null || stored.sequence() < offered.sequence() ? offered : stored);
     }
 
     /**

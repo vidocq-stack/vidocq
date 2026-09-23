@@ -66,7 +66,8 @@ class McpDevConsolePanelTest {
             calls.initialize();
             calls.runAll();
 
-            DevConsoleSnapshot after = DevConsoleSnapshot.read(server.snapshotUrl());
+            // Warm again: the first poll after the calls samples beans that did not exist before, on cold code.
+            DevConsoleSnapshot after = DevConsoleSnapshot.readWarm(server.snapshotUrl());
             after.assertSampled();
             // The six MCP calls and the initialize went through Cassini: the rest panel counted them.
             assertTrue(after.restRequests() >= restBefore + 7, "the rest panel did not count the MCP calls");

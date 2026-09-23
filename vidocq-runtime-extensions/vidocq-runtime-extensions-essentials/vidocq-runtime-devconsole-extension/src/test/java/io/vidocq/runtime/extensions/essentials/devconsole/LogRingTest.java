@@ -49,6 +49,24 @@ class LogRingTest {
         return record;
     }
 
+    /**
+     * The race a build machine hit once: two publishers {@value LogRing#CAPACITY} records apart share a slot, and the
+     * older one stores last. The slot must keep the newer line, or the reader skips it as stale and a line is lost.
+     */
+    @Test
+    void anOlderLineStoredLastNeverReplacesTheNewerOneOfItsSlot() {
+        LogRing ring = new LogRing();
+        for (int i = 0; i <= LogRing.CAPACITY; i++) {
+            ring.publish(record(Level.INFO, "io.vidocq.test", "record " + i));
+        }
+        // record 0 and record CAPACITY share slot 0; replay the older one arriving late.
+        ring.store(new LogRing.Line(0, "00:00:00.000", "INFO", "io.vidocq.test", "late", "record 0"));
+
+        List<LogRing.Line> all = ring.latest(Integer.MAX_VALUE);
+        assertEquals(LogRing.CAPACITY, all.size(), "no line lost to the late store");
+        assertEquals("record " + LogRing.CAPACITY, all.getFirst().message());
+    }
+
     @Test
     void itKeepsTheLastRecordsNewestFirst() {
         LogRing ring = new LogRing();
