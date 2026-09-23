@@ -111,4 +111,6 @@ its origin).
 * **A separate admin listener with its own credentials.** Heavier to set up, for no gain on the loopback of a
   developer machine; it adds a secret to manage.
 * **Only a `SameSite` cookie as CSRF token.** Works in current browsers, but a header token read from the snapshot
-  also covers clients that are not browsers (the Dev MCP of #121) with the same rule.
+  is one rule for every client of the page, and needs no cookie handling in the console. The Dev MCP of #121 runs
+  no action, so it needs no token: its read-only tools keep the checks of a read (`Host`, `Origin` when present,
+  `application/json`), and an action through MCP would first need this ADR amended.
