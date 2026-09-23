@@ -79,7 +79,7 @@ import java.util.regex.Pattern;
  * resources under {@value #PAGE_RESOURCES}; nothing else, and only to a request that names the console's own
  * address. The page, {@code index.html}, {@code console.css} and the ES module {@code console.js}, loads nothing
  * from another site: it polls the snapshot and draws the report first, then one tab per panel, the console's own
- * {@linkplain JvmPanel JVM panel} last.
+ * {@linkplain CdiPanel CDI panel} and {@linkplain JvmPanel JVM panel} last.
  *
  * <h2>The history of its curves</h2>
  * <p>Five minutes of every measure is kept by the console, in a {@link PanelHistory} filled by a thread of its own,
@@ -188,7 +188,7 @@ public final class DevConsoleExtension implements VidocqExtension, StartupReport
         }
         int port = resolved.port() == 0 ? memory.portForAnyPort() : resolved.port();
         Snapshot boot = new Snapshot(HexFormat.of().toHexDigits(RandomGenerator.getDefault().nextLong()),
-                VIDOCQ_VERSION, context.startupReport(), ownPanels(resolved.launchMode()), clock);
+                VIDOCQ_VERSION, context.startupReport(), ownPanels(context, resolved.launchMode()), clock);
         Handler page = StaticFileHandler.builder()
                 .addClasspath(DevConsoleExtension.class.getClassLoader(), PAGE_RESOURCES)
                 .indexFile("index.html")
@@ -241,11 +241,21 @@ public final class DevConsoleExtension implements VidocqExtension, StartupReport
 
     /**
      * The console's own panels, shown after the contributed ones from the first poll, the boot facts of each written
-     * once per boot: the {@linkplain JvmPanel JVM}. The report's own panel, {@code startup}, is the snapshot's
-     * {@code startup} member, which the page shows first.
+     * once per boot: the {@linkplain CdiPanel CDI container}, then the {@linkplain JvmPanel JVM}, last. The report's
+     * own panel, {@code startup}, is the snapshot's {@code startup} member, which the page shows first.
      */
-    private static List<PanelEntry> ownPanels(LaunchMode mode) {
-        return List.of(PanelEntry.builtIn(new JvmPanel(), mode));
+    private static List<PanelEntry> ownPanels(ExtensionContext context, LaunchMode mode) {
+        return List.of(PanelEntry.builtIn(cdiPanel(context), mode), PanelEntry.builtIn(new JvmPanel(), mode));
+    }
+
+    /** The {@code cdi} panel, its metadata read now; one that says it has none when reading it fails. */
+    private static CdiPanel cdiPanel(ExtensionContext context) {
+        try {
+            return CdiPanel.of(context.container());
+        } catch (RuntimeException | LinkageError failed) {
+            LOG.log(System.Logger.Level.DEBUG, "Dev console panel 'cdi' could not read the container", failed);
+            return new CdiPanel(null);
+        }
     }
 
     /**

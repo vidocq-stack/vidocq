@@ -202,8 +202,11 @@ class DevConsoleExtensionTest {
         assertEquals(200, booting.statusCode());
         Map<String, Object> first = Json.object(booting.body());
         assertEquals("booting", first.get("state"));
-        assertEquals(List.of("jvm"), panelIds(first), "the console's own panel, from the first poll");
-        Map<?, ?> jvm = (Map<?, ?>) ((List<?>) first.get("panels")).get(0);
+        assertEquals(List.of("cdi", "jvm"), panelIds(first), "the console's own panels, from the first poll");
+        Map<?, ?> cdi = (Map<?, ?>) ((List<?>) first.get("panels")).get(0);
+        assertEquals("CDI (Vauban)", cdi.get("title"));
+        assertEquals("not available: no container", cdi.get("summary"), "the test's context has no container");
+        Map<?, ?> jvm = (Map<?, ?>) ((List<?>) first.get("panels")).get(1);
         assertEquals("JVM", jvm.get("title"));
         assertEquals(true, jvm.get("live"));
         assertTrue(((List<?>) ((Map<?, ?>) jvm.get("sample")).get("values")).stream()
@@ -213,7 +216,8 @@ class DevConsoleExtensionTest {
         Map<String, Object> ready = Json.object(get(url(port) + "api/snapshot").body());
         assertEquals("ready", ready.get("state"));
         assertEquals(url(port), ((Map<?, ?>) ready.get("console")).get("url"));
-        assertEquals(List.of("acme-pool", "jvm"), panelIds(ready), "the contributed panels, then the JVM last");
+        assertEquals(List.of("acme-pool", "cdi", "jvm"), panelIds(ready),
+                "the contributed panels, then the CDI container, then the JVM last");
 
         ReportSection section = boot.section().toSection();
         assertEquals(url(port), section.summary());

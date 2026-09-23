@@ -89,6 +89,18 @@ record DevConsoleSnapshot(String json) {
         return Double.parseDouble(requests.group(1));
     }
 
+    /**
+     * The console's own {@code cdi} panel (Vidocq/vidocq#117), as the JSON it was written in: from its id to the
+     * {@code jvm} panel, which the console shows after it.
+     */
+    String cdiPanel() {
+        int panel = json.indexOf("{\"id\":\"cdi\",\"title\":\"CDI (Vauban)\"");
+        assertTrue(panel >= 0, "the snapshot holds no cdi panel: " + json);
+        int jvm = json.indexOf("{\"id\":\"jvm\"", panel);
+        assertTrue(jvm > panel, "the jvm panel does not follow the cdi panel: " + json);
+        return json.substring(panel, jvm);
+    }
+
     /** Asserts that the {@code mcp} panel is there and shown live, and returns where it starts. */
     private int mcpPanel() {
         int panel = json.indexOf("{\"id\":\"mcp\",\"title\":\"MCP server (langchain4j-cdi)\"");

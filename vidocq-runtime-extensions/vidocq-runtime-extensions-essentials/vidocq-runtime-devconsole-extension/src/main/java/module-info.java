@@ -32,6 +32,8 @@ module io.vidocq.runtime.extensions.essentials.devconsole {
     requires io.vidocq.runtime.spi.devconsole;
     // ChappeMountPoint and ListenerOptions; brings io.vidocq.chappe.api (Handler, Response) transitively
     requires io.vidocq.runtime.extensions.essentials.chappe;
+    // DotName and TypeInfo: the descriptors the console's own cdi panel reads name their classes with them
+    requires io.vidocq.vauban.indexer;
     // the platform MXBeans the console's own jvm panel reads
     requires java.management;
     // for the tests only, which read the log records and call the console over HTTP

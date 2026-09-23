@@ -24,7 +24,7 @@
 
 | `vidocq-runtime-devconsole-extension` [.tag-new]#NEW#
 | `essentials`
-| The xref:dev-console.adoc[dev console]: a read-only page, on a loopback listener of its own, with the startup report of the running boot and the live values of the extensions. On in a dev launch only.
+| The xref:dev-console.adoc[dev console]: a read-only page, on a loopback listener of its own, with the startup report of the running boot and the live values of the extensions. On in a dev launch only. Its own panels show the beans of the Vauban container [.tag-new]#NEW# (xref:dev-console.adoc#cdi-panel[the `cdi` panel]) and the JVM.
 
 | `vidocq-runtime-migration-extension`
 | `essentials`

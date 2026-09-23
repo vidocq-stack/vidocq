@@ -204,12 +204,13 @@ class StartupContributorsTest {
     @Test
     void theDevConsolePanelsOfTheCoreAreReservedToo() {
         Contributing startup = new Contributing("startup");
+        Contributing cdi = new Contributing("cdi") {};
         Contributing jvm = new Contributing("jvm") {};
 
-        List<Contributor> found = StartupContributors.discover(List.of(startup, jvm), loader(), recorder);
+        List<Contributor> found = StartupContributors.discover(List.of(startup, cdi, jvm), loader(), recorder);
 
-        assertEquals(List.of(), ids(found), "the dev console shows its own 'startup' and 'jvm' panels");
-        assertEquals(List.of(RPT_002, RPT_002), codes());
+        assertEquals(List.of(), ids(found), "the dev console shows its own 'startup', 'cdi' and 'jvm' panels");
+        assertEquals(List.of(RPT_002, RPT_002, RPT_002), codes());
         assertEquals("[VIDOCQ-RPT-002] Contributor " + Contributing.class.getName() + " uses id 'startup', which"
                 + " names a section of the core; it is skipped", messages().getFirst());
     }

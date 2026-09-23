@@ -56,9 +56,9 @@ import java.util.List;
  * </ul>
  *
  * <p><b>Identity and order.</b> The panel's id is {@link #id()}, stable and lowercase, such as {@code mansart-pool},
- * and unique through the report's own rules; {@code startup}, {@code jvm} and {@code devconsole} are the console's.
- * Its title is {@link #title()}. The console shows its own {@code startup} panel first, then the contributed ones in
- * the order of the report, then its {@code jvm} panel.
+ * and unique through the report's own rules; {@code startup}, {@code cdi}, {@code jvm} and {@code devconsole} are the
+ * console's. Its title is {@link #title()}. The console shows its own {@code startup} panel first, then the
+ * contributed ones in the order of the report, then its {@code cdi} and {@code jvm} panels.
  *
  * <p><b>State.</b> {@link #sample sample} runs on the console's request threads, virtual threads, while the extension
  * may be stopping for a dev reload. What it reads is therefore published in a {@code volatile} field that holds an

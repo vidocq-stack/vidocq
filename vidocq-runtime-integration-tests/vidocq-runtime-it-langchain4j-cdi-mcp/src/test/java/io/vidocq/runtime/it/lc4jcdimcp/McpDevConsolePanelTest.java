@@ -50,6 +50,18 @@ class McpDevConsolePanelTest {
             assertEquals(0.0, before.number("streams"));
             assertEquals(0.0, before.number("listens"));
 
+            // Vidocq/vidocq#117: the console's own cdi panel lists the MCP endpoint and the application's tools
+            // among the beans, read from Vauban's metadata, the application's rows first.
+            String cdi = before.cdiPanel();
+            assertTrue(cdi.matches("(?s).*\"summary\":\"[0-9]+ beans \\(.*, [0-9]+ interceptors?, 0 decorators, "
+                    + "[0-9]+ observers?\".*"), cdi);
+            assertTrue(cdi.contains("\"dev.langchain4j.cdi.mcp.server.transport.McpEndpoint\""),
+                    "no McpEndpoint bean: " + cdi);
+            assertTrue(cdi.contains("[\"io.vidocq.runtime.it.lc4jcdimcp.TimeTools\","), "no TimeTools bean: " + cdi);
+            int runtime = cdi.indexOf("\"runtime\"]");
+            assertTrue(runtime < 0 || cdi.indexOf("\"application\"]") < runtime,
+                    "the application's beans come first: " + cdi);
+
             McpCalls calls = new McpCalls(server.mcpUrl());
             calls.initialize();
             calls.runAll();

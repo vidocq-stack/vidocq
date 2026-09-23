@@ -2,7 +2,7 @@
 :description: A read-only page, on a loopback listener of its own, that shows the startup report of the running boot and the live values of the extensions while you develop.
 
 [.lead]
-The dev console is a page that the application serves to your browser while you develop: the startup report of the boot that is running, with its anomalies first, then one tab per extension that has something to show — its boot facts and, for the extensions that give them, live values and charts, such as the connections of each Mansart pool — and the JVM last. It listens on a port of its own, on the loopback address, it only reads, and it is on in a `dev` launch only.
+The dev console is a page that the application serves to your browser while you develop: the startup report of the boot that is running, with its anomalies first, then one tab per extension that has something to show — its boot facts and, for the extensions that give them, live values and charts, such as the connections of each Mansart pool — then the beans of the CDI container and the JVM last. It listens on a port of its own, on the loopback address, it only reads, and it is on in a `dev` launch only.
 
 [#getting-it]
 == Getting it [.tag-new]#NEW#
@@ -170,7 +170,7 @@ Falling back costs about one second of boot: before the console takes a free por
 
 The page is plain HTML, one stylesheet and one JavaScript module, all served by the console: no build step, and nothing loaded from another site, not even a font. It reads one document, `GET /api/snapshot`, about once a second.
 
-* **Tabs.** *Startup* first, then one tab per section of the startup report, in the order of the report, and the console's own *JVM* last. The page keeps the selected tab and the pause in the browser's `localStorage`, and nothing else.
+* **Tabs.** *Startup* first, then one tab per section of the startup report, in the order of the report, and the console's own *CDI (Vauban)* and *JVM* last. The page keeps the selected tab and the pause in the browser's `localStorage`, and nothing else.
 * **Polling.** One request at a time. None while the tab is hidden, or while *Pause* is pressed.
 * **A reload.** When the application stops answering, during a dev reload, the page greys the last data under `reloading…` and retries every second; after a minute it says `unreachable` and retries every five seconds. A new boot is recognised by its id: the page draws its boot facts again and starts its charts over.
 * **Charts.** The page keeps five minutes of history, 300 points per value, in the browser only: nothing is stored on the server. Time is the server's clock, so a missed poll or a debugger paused on a breakpoint leaves a gap, never a lie.
@@ -216,11 +216,33 @@ The panels shipped today:
 | *MCP server* [.tag-new]#NEW#
 | The langchain4j-cdi MCP server of `vidocq-runtime-langchain4j-cdi-mcp-extension`: what it serves and how it is configured, then live — the sessions it holds, the SSE streams and the `subscriptions/listen` streams open, the requests it is waiting an answer of from a client, and whether its methods are invoked through the CDI 4.1 invoker or by reflection. See xref:modules/vidocq-runtime-extensions.adoc#langchain4j-cdi-mcp-live[the `mcp` panel].
 
+| *CDI (Vauban)* [.tag-new]#NEW#
+| The console's own: the beans, interceptors and observers of the Vauban container, the application's first. See <<cdi-panel>>.
+
 | *JVM*
 | The console's own, below.
 |===
 
 An extension adds its panel with the xref:dev-console-panels.adoc[panel SPI].
+
+[#cdi-panel]
+=== CDI (Vauban) [.tag-new]#NEW#
+
+The console's own panel, `cdi`, just before the JVM: what Vauban, the runtime's CDI container, holds for this boot, as Quarkus's ArC card shows it. Everything is read once, when the console starts, from the container's metadata: the beans its bean manager lists for `Object` and `@Any`, its interceptors and its observer methods. No bean is created and no context is read, so a lazy bean stays lazy.
+
+* **Boot facts:** a summary such as `33 beans (29 application-scoped, 4 dependent), 0 interceptors, 0 decorators, 1 observer`, then:
+** `beans`, `interceptors` and `observers`: how many, and how many of them are the application's and the runtime's;
+** `scopes`: the beans by scope, most first;
+** `decorators`: always none — Vauban implements CDI Lite, which has no decorators;
+** `application`: how the application's classes were told apart. When Vidocq booted the application in a module layer of its own, as `vidocq:dev`, `vidocq:run`, the packaged launcher and a `@VidocqMain` trampoline do, they are the classes of that layer, and an extension's beans, such as the MCP server's, are the runtime's. Otherwise they are the classes outside the `io.vidocq`, `jakarta` and `java` packages, plus those of the main module;
+** `beans left out`, `interceptors left out`, `observers left out`: how many rows a table could not show, only when it could not;
+** `source`: Vauban's metadata, read once at boot.
+* **Tables**, the application's rows first, then by class name, 100 rows each at most:
+** `beans`: the class, the kind (`managed`, `producer method`, `producer field`, `synthetic`, `built-in`), the scope, the qualifiers without `@Any`, which every bean has, whether it is an alternative, and where it comes from. A disabled alternative is not listed: the container does not resolve it;
+** `interceptors`: the class, its interceptor bindings, its priority or `disabled: no @Priority`, and where it comes from;
+** `observers`: the event type, its qualifiers, the declaring class and method, `sync` or `async`, and where it comes from.
+
+A table with no row reads `none`. The tables are written as the panel's values rather than its boot facts because a value table has column heads; they are computed once, and every poll hands the page the same rows. The panel keeps class names as strings only, never a class or a bean of the application.
 
 [#jvm-panel]
 === JVM [.tag-new]#NEW#

@@ -27,6 +27,12 @@
             <groupId>io.vidocq.runtime.extensions.essentials</groupId>
             <artifactId>vidocq-runtime-chappe-webserver-extension</artifactId>
         </dependency>
+        <!-- The cdi panel reads Vauban's metadata: its bean, interceptor and observer descriptors name their
+             classes and types with the index's DotName and TypeInfo. -->
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-indexer</artifactId>
+        </dependency>
         <!-- Handler, Response, StaticFileHandler. -->
         <dependency>
             <groupId>io.vidocq.chappe</groupId>
