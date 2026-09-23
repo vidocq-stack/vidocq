@@ -49,6 +49,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -129,6 +130,11 @@ class DevConsoleExtensionTest {
 
     private static String url(int port) {
         return "http://127.0.0.1:" + port + "/";
+    }
+
+    /** The INFO records of a dev boot that binds {@code url}: the console's URL, then its dev MCP's. */
+    private static List<String> printed(String url) {
+        return List.of("Vidocq dev console: " + url, "Vidocq dev MCP: " + url + "mcp");
     }
 
     private static List<Object> panelIds(Map<String, Object> snapshot) {
@@ -231,7 +237,7 @@ class DevConsoleExtensionTest {
 
         int port = boot.console().boundPort();
         assertNotEquals(0, port);
-        assertEquals(List.of("Vidocq dev console: " + url(port)), log.messages(Level.INFO));
+        assertEquals(printed(url(port)), log.messages(Level.INFO), "the console, then its dev MCP");
 
         HttpResponse<String> booting = get(url(port) + "api/snapshot");
         assertEquals(200, booting.statusCode());
@@ -263,7 +269,43 @@ class DevConsoleExtensionTest {
 
         ReportSection section = boot.section().toSection();
         assertEquals(url(port), section.summary());
+        assertTrue(section.lines().stream().anyMatch(line -> "mcp".equals(line.key())
+                && line.values().equals(List.of(url(port) + "mcp"))), "the section shows the dev MCP's URL");
         assertEquals(List.of(), boot.section().anomalies());
+    }
+
+    @Test
+    void aDevBootServesItsDevMcpOnTheWire() throws Exception {
+        Boot boot = boot(context(LaunchMode.DEV, DevConsoleSettings.PORT_KEY, "0"));
+        HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build();
+
+        HttpResponse<String> list = client.send(HttpRequest.newBuilder(URI.create(url(boot.console().boundPort())
+                        + "mcp")).timeout(Duration.ofSeconds(3))
+                .header("Content-Type", "application/json")
+                .header("Accept", "application/json, text/event-stream")
+                .POST(HttpRequest.BodyPublishers.ofString("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}"))
+                .build(), HttpResponse.BodyHandlers.ofString());
+
+        assertEquals(200, list.statusCode(), list.body());
+        assertEquals(5, ((List<?>) ((Map<?, ?>) Json.object(list.body()).get("result")).get("tools")).size());
+    }
+
+    @Test
+    void aProdBootHasNoDevMcp() throws Exception {
+        Boot boot = boot(context(LaunchMode.PROD, DevConsoleSettings.ENABLED_KEY, "true",
+                DevConsoleSettings.PORT_KEY, "0"));
+        HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build();
+
+        HttpResponse<String> list = client.send(HttpRequest.newBuilder(URI.create(url(boot.console().boundPort())
+                        + "mcp")).timeout(Duration.ofSeconds(3))
+                .header("Content-Type", "application/json")
+                .header("Accept", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}"))
+                .build(), HttpResponse.BodyHandlers.ofString());
+
+        assertEquals(405, list.statusCode(), "read-only outside a dev launch");
+        assertTrue(boot.section().toSection().lines().stream().noneMatch(line -> "mcp".equals(line.key())));
+        assertEquals(List.of("Vidocq dev console: " + url(boot.console().boundPort())), log.messages(Level.INFO));
     }
 
     @Test
@@ -339,7 +381,7 @@ class DevConsoleExtensionTest {
         Boot second = reload(first, context);
 
         assertEquals(port, second.console().boundPort(), "port 0 asks for the port the previous boot bound");
-        assertEquals(List.of("Vidocq dev console: " + url(port)), log.messages(Level.INFO),
+        assertEquals(printed(url(port)), log.messages(Level.INFO),
                 "the same URL is not printed again");
         second.stop();
         boots.remove(second);
@@ -349,7 +391,7 @@ class DevConsoleExtensionTest {
 
             int moved = third.console().boundPort();
             assertNotEquals(port, moved);
-            assertEquals(List.of("Vidocq dev console: " + url(port), "Vidocq dev console: " + url(moved)),
+            assertEquals(Stream.concat(printed(url(port)).stream(), printed(url(moved)).stream()).toList(),
                     log.messages(Level.INFO), "a new URL is printed");
             assertEquals(List.of(), log.messages(Level.WARNING), "port 0 asked for any port: nothing was taken");
             assertEquals(List.of(), third.section().anomalies());
@@ -366,7 +408,7 @@ class DevConsoleExtensionTest {
 
             int bound = boot.console().boundPort();
             assertNotEquals(configured, bound);
-            assertEquals(List.of("Vidocq dev console: " + url(bound)), log.messages(Level.INFO));
+            assertEquals(printed(url(bound)), log.messages(Level.INFO));
 
             List<String> warnings = log.messages(Level.WARNING);
             assertEquals(1, warnings.size(), warnings.toString());
@@ -431,7 +473,7 @@ class DevConsoleExtensionTest {
             RecordingSection section = new RecordingSection(console.id(), console.title());
             console.contribute(new ConsoleReportContext(LaunchMode.DEV), section);
 
-            assertEquals(List.of("Vidocq dev console: http://localhost:8888/"), log.messages(Level.INFO));
+            assertEquals(printed("http://localhost:8888/"), log.messages(Level.INFO));
             assertEquals(List.of("VIDOCQ-DEVC-002"),
                     section.anomalies().stream().map(ReportAnomaly::code).toList());
             assertEquals("The dev console listens on 0.0.0.0:8888, which is not a loopback address: whoever reaches "
@@ -457,7 +499,7 @@ class DevConsoleExtensionTest {
                 anomalies.get(0).message());
         assertEquals("Invalid value 'a host' for vidocq.devconsole.host (a host name or an IP address): using "
                 + "127.0.0.1", anomalies.get(1).message());
-        assertEquals(List.of("Vidocq dev console: " + url(boot.console().boundPort())), log.messages(Level.INFO),
+        assertEquals(printed(url(boot.console().boundPort())), log.messages(Level.INFO),
                 "on, as auto in a dev launch, on the loopback address");
     }
 

@@ -331,6 +331,7 @@ The console shows what the application is made of, so it is built to be seen by 
 * **Its own address only.** A request is answered only when its `Host` header names the console: `localhost`, `127.0.0.1`, `[::1]` or the host it listens on, optionally with the port it bound; when that host is not a loopback one, any IP address too. The host it listens on is the configured one only when the console accepted it: a value refused by the ASCII-only rule of <<configuration>> is reported as <<vidocq-devc-003>> and replaced by `127.0.0.1`, for the bind, the banner and this check alike. Anything else gets `403`. This stops DNS rebinding, where a page of another site has its name resolved to `127.0.0.1` to reach local ports: the browser still sends that site's name.
 * **Read-only outside development** [.tag-new]#NEW#. In a `test` or `prod` launch the console answers `GET` and `HEAD` only, anything else gets `405`, `POST /api/action/…` included: no panel's `actions()` is called, and the snapshot carries neither a token nor an action.
 * **Actions in a `dev` launch, for the console's own page only** [.tag-new]#NEW#. A panel may offer actions, such as setting a log level; the console runs one only for a request its own page sent, behind the checks of <<actions>>.
+* **A read-only dev MCP in a `dev` launch** [.tag-new]#NEW#. `POST /mcp` serves the page's facts to a coding agent as MCP tools that change nothing, behind the checks of <<dev-mcp>>: no token, since nothing it answers is not already on the page, but an `Origin`, when there is one, that is the console's own.
 * **No reading from another site.** No CORS header, so another site's page can send a request but never read the answer. Every answer carries `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer` and `Content-Security-Policy: default-src 'self'; frame-ancestors 'none'`.
 * **No secret.** A section reports a secret only as `configured` or `not configured`: the API has no way to pass its value. A configuration value that may carry one, such as a JDBC URL, is shown in a dev launch only, without its credentials; outside it, the panel says what it is, such as the database kind. The console never shows JVM arguments or system properties, nor the message of an exception thrown by a panel.
 * **Text stays text.** Everything a panel writes reaches the page as text, never as markup, with control characters replaced and cut at 200 characters.
@@ -349,6 +350,53 @@ In a `dev` launch, a panel may offer actions, such as setting a log level (xref:
 . the panel and the action exist (`404`), the body is at most 4 KiB (`413`), and it is one JSON object of strings whose keys are exactly the arguments the action declared, each value accepted by its check (`400`).
 
 A refusal at step 3 or 4 is logged as <<vidocq-devc-006>>. An action runs on a virtual thread, one at a time per panel (`409` while another runs), and the request waits for it up to 60 seconds: `200 {"result": "..."}`, `500 {"error": "<exception class>"}`, or `202 {"state": "running"}` past the limit, the action going on. The snapshot lists each action with its last outcome of the boot, so the page shows it after a reload too. Every run is logged at INFO, `Vidocq dev console: action <panel>/<action> by <address>: <result>`; a failure at WARNING with the class of the exception, which is all the page shows of it, never its message. The decision and the options set aside are in ADR 0001, `docs/adr/0001-dev-console-actions.md` in the repository.
+
+[#dev-mcp]
+== Dev MCP [.tag-new]#NEW#
+
+In a `dev` launch, the console is also an MCP server, as Quarkus's Dev MCP is: a coding agent, such as Claude Code, asks the running application what it serves instead of guessing it from the sources. It is served by the console itself, on the console's own listener, never the application's, so it works whether or not the application uses MCP or langchain4j-cdi, and adds no dependency. The console prints its URL after its own:
+
+[source,text]
+----
+Vidocq dev console: http://127.0.0.1:8888/
+Vidocq dev MCP: http://127.0.0.1:8888/mcp
+----
+
+and the `devconsole` section of the report shows it on its `mcp` row. To point Claude Code at it:
+
+[source,shell]
+----
+claude mcp add --transport http vidocq-dev http://127.0.0.1:8888/mcp
+----
+
+Any MCP client that speaks the Streamable HTTP transport does the same; the MCP Inspector lists the tools with `npx @modelcontextprotocol/inspector --cli --transport http --server-url http://127.0.0.1:8888/mcp --method tools/list`.
+
+[cols="1,3"]
+|===
+| Tool | What it answers
+
+| `vidocq_report`
+| The startup report as the page shows it: the console (version, URL, boot id), the launch mode and why, the anomalies, every section that is not a panel with its lines, and the whole report as text. `state` is `booting` until the report is written.
+
+| `vidocq_panels`
+| The panels of the page, the extensions' and the console's own: `id`, `title`, whether it is `live`, and its summary.
+
+| `vidocq_panel`
+| One panel, by `id` (its input schema lists the ids of the panels shown now): its boot facts, its charts and a fresh sample of its live values, as a poll of the page would get them, without the history of its curves. An unknown id is a tool error that names the panels.
+
+| `vidocq_anomalies`
+| The anomalies of the startup report, each with its code, message, hint and source.
+
+| `vidocq_routes`
+| The routes of the `rest` section: the HTTP method, the absolute URL (xref:modules/vidocq-runtime-extensions.adoc#chappe-http-section[the `http` section] declares the listeners) and the method that handles it, such as `POST http://127.0.0.1:8080/mcp McpEndpoint#handlePost`.
+|===
+
+Each tool answers one JSON object, as `structuredContent` and, for a client that reads text only, indented in one `text` content. They are built from the very document the page polls, `/api/snapshot`, minus what only the page needs to act — the token of the boot and the actions — so an agent sees nothing the page does not: secrets read `configured`, values are masked as on the page (<<security>>).
+
+* **Read-only.** No tool runs an action; every tool says so in its description and carries `readOnlyHint`. The actions stay the page's (<<actions>>), until an ADR decides otherwise.
+* **The protocol, the part it needs.** One JSON-RPC 2.0 request per `POST`, answered `application/json`, never an event stream, and no session: no `Mcp-Session-Id` is given or needed. It answers `initialize` (the protocol version asked for when it is `2025-03-26`, `2025-06-18` or `2025-11-25`, the newest of them otherwise; `serverInfo.name` is `vidocq-dev-console`), `ping`, `tools/list` and `tools/call`; a notification, such as `notifications/initialized`, gets `202`. An unknown method is the JSON-RPC error `-32601`, parameters it cannot use `-32602`, a body that is not JSON `-32700` and anything but one request object, a batch included, `-32600`, these two with `400`. `GET /mcp` gets `405`: the server never starts a stream.
+* **The checks, in this order.** The `Host`, as for every request (`403`); the method is `POST` (`405`); the body is `application/json` (`415`), which a cross-site form cannot send; the `Origin`, when there is one, is the console's own, as for an action (`403`, logged as <<vidocq-devc-006>>) — an MCP client that is no browser sends none, and a browser always sends one on a cross-site `POST`; the `Accept` header takes `application/json` (`406`); the body is at most 64 KiB (`413`) and nests at most 32 levels. No token: the tools answer what the page shows, which the `Host` check already keeps to the console's own address.
+* **Outside `dev`, absent.** In a `test` or `prod` launch, `POST /mcp` gets `405` like any other `POST`, and the URL is neither printed nor in the report.
 
 [#anomalies]
 == Anomaly codes [.tag-new]#NEW#
@@ -418,13 +466,14 @@ It is a bug of the panel: see xref:dev-console-panels.adoc[Writing a dev console
 [#vidocq-devc-006]
 === VIDOCQ-DEVC-006 — an action request from elsewhere [.tag-new]#NEW#
 
-In a `dev` launch, an action request was refused for its `Origin` or its `X-Vidocq-Console-Token` (<<security>>): it did not come from the console's own page. Most likely a page of another site tried to make the console do something, or a stale tab of a previous boot sent its old token. Nothing ran. The WARNING is logged on `io.vidocq.devconsole` with the origin the request named, once per origin, reason and boot, 64 at most:
+In a `dev` launch, an action request was refused for its `Origin` or its `X-Vidocq-Console-Token` (<<security>>), or a <<dev-mcp,dev MCP>> request [.tag-new]#NEW# for its `Origin`: it did not come from the console's own page. Most likely a page of another site tried to make the console do something, or a stale tab of a previous boot sent its old token. Nothing ran. The WARNING is logged on `io.vidocq.devconsole` with the origin the request named, once per origin, reason and boot, 64 at most:
 
 [source,text]
 ----
 [VIDOCQ-DEVC-006] Dev console action refused, origin 'https://evil.example.com': not the console's own origin
 [VIDOCQ-DEVC-006] Dev console action refused, origin (none): not the console's own origin
 [VIDOCQ-DEVC-006] Dev console action refused, origin 'http://127.0.0.1:8888': no valid X-Vidocq-Console-Token
+[VIDOCQ-DEVC-006] Dev console MCP request refused, origin 'https://evil.example.com': not the console's own origin
 ----
 
 The last one, from the console's own origin, is a tab that outlived its boot: reload it.
@@ -437,7 +486,7 @@ The last one, from the console's own origin, is a tab that outlived its boot: re
 | Logger | Records
 
 | `io.vidocq.devconsole`
-| The URL record (INFO), the boxed WARNING of a taken port, a console that could not start (WARNING), <<vidocq-devc-005>>, and the stack trace of a failed sample (DEBUG). In a `dev` launch [.tag-new]#NEW#: every action run (INFO), a failed one (WARNING, its stack trace at DEBUG), and <<vidocq-devc-006>>. The <<logs-panel,logs panel>> [.tag-new]#NEW# logs nothing: its handler only reads what reaches the root logger.
+| The URL record (INFO), the boxed WARNING of a taken port, a console that could not start (WARNING), <<vidocq-devc-005>>, and the stack trace of a failed sample (DEBUG). In a `dev` launch [.tag-new]#NEW#: the URL of the <<dev-mcp,dev MCP>> (INFO), every action run (INFO), a failed one (WARNING, its stack trace at DEBUG), and <<vidocq-devc-006>>. The <<logs-panel,logs panel>> [.tag-new]#NEW# logs nothing: its handler only reads what reaches the root logger.
 
 | `io.vidocq.startup.anomaly`
 | <<vidocq-devc-001>> to <<vidocq-devc-004>>, as every startup anomaly.

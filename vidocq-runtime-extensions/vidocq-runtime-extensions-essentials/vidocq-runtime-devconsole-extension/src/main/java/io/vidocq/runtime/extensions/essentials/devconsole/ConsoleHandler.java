@@ -26,6 +26,7 @@ import io.vidocq.chappe.api.Request;
 import io.vidocq.chappe.api.Response;
 import io.vidocq.chappe.api.StatusCode;
 
+import java.util.List;
 import java.util.Objects;
 import java.util.function.IntSupplier;
 
@@ -38,6 +39,10 @@ import java.util.function.IntSupplier;
  *       below; outside it, that path is nothing special;</li>
  *   <li>any other method but {@code GET} and {@code HEAD} gets {@code 405}: outside a dev launch, the console is
  *       read-only, and a {@code POST} anywhere gets {@code 405} as well;</li>
+ *   <li>in a {@code dev} launch, {@code /mcp} is the {@linkplain DevMcp dev MCP}: {@code POST} only
+ *       ({@code 405}), {@code application/json} ({@code 415}), no {@code Origin} or the console's own
+ *       ({@code 403}), an {@code Accept} that takes JSON ({@code 406}), and no token, since its tools only read;
+ *       outside it, that path is nothing special;</li>
  *   <li>{@code /api/snapshot} is the {@link Snapshot}; every other path is the page, its static files.</li>
  * </ul>
  *
@@ -65,6 +70,7 @@ final class ConsoleHandler implements Handler {
     private final IntSupplier boundPort;
     private final Snapshot snapshot;
     private final Handler page;
+    private final DevMcp mcp;
 
     /**
      * @param guard     who may be answered
@@ -73,10 +79,22 @@ final class ConsoleHandler implements Handler {
      * @param page      what serves every other path: the page's static files
      */
     ConsoleHandler(HostGuard guard, IntSupplier boundPort, Snapshot snapshot, Handler page) {
+        this(guard, boundPort, snapshot, page, null);
+    }
+
+    /**
+     * @param guard     who may be answered
+     * @param boundPort the port the console listens on, {@code 0} until it is bound
+     * @param snapshot  what answers {@value #SNAPSHOT_PATH}, and holds the panels and the actions of the boot
+     * @param page      what serves every other path: the page's static files
+     * @param mcp       what answers {@value DevMcp#PATH} in a dev launch, {@code null} in any other
+     */
+    ConsoleHandler(HostGuard guard, IntSupplier boundPort, Snapshot snapshot, Handler page, DevMcp mcp) {
         this.guard = Objects.requireNonNull(guard, "guard");
         this.boundPort = Objects.requireNonNull(boundPort, "boundPort");
         this.snapshot = Objects.requireNonNull(snapshot, "snapshot");
         this.page = Objects.requireNonNull(page, "page");
+        this.mcp = mcp;
     }
 
     @Override
@@ -93,6 +111,8 @@ final class ConsoleHandler implements Handler {
         } else if (actions != null && request.pathInfo() != null
                 && request.pathInfo().startsWith(ConsoleActions.PATH_PREFIX)) {
             response = action(request, host, actions);
+        } else if (mcp != null && DevMcp.PATH.equals(request.pathInfo())) {
+            response = mcp(request, host, actions);
         } else if (request.method() != HttpMethod.GET && request.method() != HttpMethod.HEAD) {
             response = Response.builder().status(StatusCode.METHOD_NOT_ALLOWED).header("Allow", "GET, HEAD").build();
         } else if (SNAPSHOT_PATH.equals(request.pathInfo())) {
@@ -127,6 +147,47 @@ final class ConsoleHandler implements Handler {
             return ConsoleActions.text(StatusCode.NOT_FOUND, "No such action.");
         }
         return actions.run(request, snapshot.panel(rest.substring(0, slash)), rest.substring(slash + 1));
+    }
+
+    /**
+     * A request to the dev MCP of a dev boot, its {@code Host} already let in: the method, {@code POST}
+     * ({@code 405}); the content type, {@code application/json} ({@code 415}); the {@code Origin}, which an MCP
+     * client that is no browser does not send, and which must otherwise be the console's own ({@code 403}); the
+     * {@code Accept} header, which must take {@code application/json} ({@code 406}). No token: the tools only read.
+     */
+    private Response mcp(Request request, String host, ConsoleActions actions) {
+        if (request.method() != HttpMethod.POST) {
+            return Response.builder().status(StatusCode.METHOD_NOT_ALLOWED).header("Allow", "POST").build();
+        }
+        if (!json(request.header("Content-Type").orElse(null))) {
+            return ConsoleActions.text(StatusCode.UNSUPPORTED_MEDIA_TYPE, "An MCP request is application/json.");
+        }
+        String origin = request.header("Origin").orElse(null);
+        if (origin != null && !sameOrigin(origin, host)) {
+            if (actions != null) {
+                actions.refused("MCP request", "not the console's own origin", origin);
+            }
+            return ConsoleActions.text(StatusCode.FORBIDDEN, "This origin is not the dev console's.");
+        }
+        if (!acceptsJson(request.headers().all("Accept"))) {
+            return ConsoleActions.text(StatusCode.NOT_ACCEPTABLE, "The dev MCP answers application/json only.");
+        }
+        return mcp.handle(request);
+    }
+
+    /** Whether an {@code Accept} header takes {@code application/json}: itself, {@code application/*}, or all. */
+    private static boolean acceptsJson(List<String> accepts) {
+        for (String accept : accepts) {
+            for (String range : accept.split(",")) {
+                int semicolon = range.indexOf(';');
+                String type = (semicolon < 0 ? range : range.substring(0, semicolon)).strip();
+                if (type.equalsIgnoreCase("application/json") || type.equalsIgnoreCase("application/*")
+                        || type.equals("*/*")) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /** Whether {@code contentType} is {@code application/json}, with parameters or not. */

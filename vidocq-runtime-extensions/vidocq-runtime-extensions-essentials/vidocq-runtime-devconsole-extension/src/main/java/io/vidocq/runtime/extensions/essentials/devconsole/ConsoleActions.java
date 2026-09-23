@@ -148,11 +148,24 @@ final class ConsoleActions {
      * @param origin the {@code Origin} header, or {@code null}
      */
     void refused(String reason, String origin) {
+        refused("action", reason, origin);
+    }
+
+    /**
+     * Logs {@value #CROSS_SITE} for a request of {@code kind} refused for its origin, the first time this origin is
+     * refused for this reason this boot: the {@linkplain DevMcp dev MCP} shares the rule, and the budget.
+     *
+     * @param kind   what was asked, {@code action} or {@code MCP request}
+     * @param reason what failed, such as {@code not the console's own origin}
+     * @param origin the {@code Origin} header, or {@code null}
+     */
+    void refused(String kind, String reason, String origin) {
         String shown = origin == null ? "(none)" : "'" + Texts.clean(origin) + "'";
-        if (refusalsLogged.size() >= MAX_REFUSALS_LOGGED || !refusalsLogged.add(reason + "\u0000" + shown)) {
+        if (refusalsLogged.size() >= MAX_REFUSALS_LOGGED
+                || !refusalsLogged.add(kind + "\u0000" + reason + "\u0000" + shown)) {
             return;
         }
-        LOG.log(System.Logger.Level.WARNING, "[" + CROSS_SITE + "] Dev console action refused, origin " + shown
+        LOG.log(System.Logger.Level.WARNING, "[" + CROSS_SITE + "] Dev console " + kind + " refused, origin " + shown
                 + ": " + reason);
     }
 
@@ -181,7 +194,7 @@ final class ConsoleActions {
         }
         String body;
         try {
-            body = body(request);
+            body = body(request, MAX_BODY);
         } catch (TooLarge tooLarge) {
             return text(StatusCode.PAYLOAD_TOO_LARGE, "The body is larger than " + MAX_BODY + " bytes.");
         } catch (IOException | RuntimeException unreadable) {
@@ -274,17 +287,23 @@ final class ConsoleActions {
         return Map.copyOf(checked);
     }
 
-    /** The body as UTF-8 text, {@value #MAX_BODY} bytes at most. */
-    private static String body(Request request) throws IOException {
+    /**
+     * The body of {@code request} as UTF-8 text.
+     *
+     * @param max the most bytes it may hold
+     * @throws TooLarge when it holds more
+     * @throws IllegalArgumentException when it is not UTF-8
+     */
+    static String body(Request request, int max) throws IOException {
         long declared = request.body().contentLength();
-        if (declared > MAX_BODY) {
+        if (declared > max) {
             throw new TooLarge();
         }
         byte[] bytes;
         try (InputStream in = request.body().asInputStream()) {
-            bytes = in.readNBytes(MAX_BODY + 1);
+            bytes = in.readNBytes(max + 1);
         }
-        if (bytes.length > MAX_BODY) {
+        if (bytes.length > max) {
             throw new TooLarge();
         }
         try {
@@ -297,8 +316,8 @@ final class ConsoleActions {
         }
     }
 
-    /** A body past {@value #MAX_BODY} bytes. */
-    private static final class TooLarge extends RuntimeException {
+    /** A body past its limit. */
+    static final class TooLarge extends RuntimeException {
 
         private static final long serialVersionUID = 1L;
 

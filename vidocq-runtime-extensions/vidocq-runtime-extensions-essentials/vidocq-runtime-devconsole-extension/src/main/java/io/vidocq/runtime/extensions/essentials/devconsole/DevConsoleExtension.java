@@ -79,8 +79,10 @@ import java.util.regex.Pattern;
  * <p>See {@link ConsoleHandler}: {@code GET /api/snapshot}, the {@link Snapshot} of the boot, and the page, from the
  * resources under {@value #PAGE_RESOURCES}; nothing else, and only to a request that names the console's own
  * address. In a dev launch, {@code POST /api/action/<panel>/<action>} too, behind an origin check and a per-boot
- * token ({@link ConsoleActions}, ADR 0001). The page, {@code index.html}, {@code console.css} and the ES module
- * {@code console.js}, loads nothing from another site: it polls the snapshot and draws the report first, then one tab per panel, the console's own
+ * token ({@link ConsoleActions}, ADR 0001), and {@code POST /mcp}, the {@linkplain DevMcp dev MCP}: the same facts
+ * as read-only tools for a coding agent, whose URL is printed after the console's, {@code Vidocq dev MCP: ...}.
+ * The page, {@code index.html}, {@code console.css} and the ES module {@code console.js}, loads nothing from another
+ * site: it polls the snapshot and draws the report first, then one tab per panel, the console's own
  * {@linkplain ConfigPanel configuration}, {@linkplain CdiPanel CDI}, {@linkplain LogsPanel logs} (in a dev launch)
  * and {@linkplain JvmPanel JVM} panels last.
  *
@@ -211,8 +213,10 @@ public final class DevConsoleExtension implements VidocqExtension, StartupReport
             ChappeMountPoint mountPoint = ChappeMountPoint.instance();
             mountPoint.declareListener(ChappeListener.http(LISTENER, resolved.host(), port),
                     new ListenerOptions(true, true, GRACE_PERIOD, this::bound));
+            // The dev MCP, like the actions, exists in a dev launch only.
+            DevMcp mcp = resolved.launchMode() == LaunchMode.DEV ? new DevMcp(boot, VIDOCQ_VERSION) : null;
             mountPoint.mount(LISTENER, "", new ConsoleHandler(new HostGuard(resolved.host()), this::boundPort, boot,
-                    page));
+                    page, mcp));
             ticker = startTicking(boot);
         } catch (RuntimeException failed) {
             snapshot = null;
@@ -310,6 +314,9 @@ public final class DevConsoleExtension implements VidocqExtension, StartupReport
         }
         if (memory.toPrint(bound)) {
             LOG.log(System.Logger.Level.INFO, "Vidocq dev console: " + bound);
+            if (resolved.launchMode() == LaunchMode.DEV) {
+                LOG.log(System.Logger.Level.INFO, "Vidocq dev MCP: " + mcpUrl(bound));
+            }
         }
         if (portTaken(resolved, address)) {
             LOG.log(System.Logger.Level.WARNING, portTakenWarning(resolved.port(), address.getPort(), bound));
@@ -352,6 +359,9 @@ public final class DevConsoleExtension implements VidocqExtension, StartupReport
         }
         String bound = url;
         section.summary(bound).listener(LISTENER, bound);
+        if (resolved.launchMode() == LaunchMode.DEV) {
+            section.row("mcp", mcpUrl(bound));
+        }
         if (resolved.launchMode() != LaunchMode.DEV) {
             section.anomaly(ON_OUTSIDE_DEV, "The dev console is on in a " + resolved.launchMode().label()
                     + " launch: it shows the startup report and the live values of this application on "
@@ -436,6 +446,12 @@ public final class DevConsoleExtension implements VidocqExtension, StartupReport
             warning.append('\n').append("|   ").append(line).append(" ".repeat(width - 5 - line.length())).append('|');
         }
         return warning.append('\n').append(rule).toString();
+    }
+
+    /** The URL of the dev MCP: {@value DevMcp#PATH} on the console's own URL. */
+    private static String mcpUrl(String consoleUrl) {
+        return (consoleUrl.endsWith("/") ? consoleUrl.substring(0, consoleUrl.length() - 1) : consoleUrl)
+                + DevMcp.PATH;
     }
 
     /** {@code host:port}, an IPv6 literal bracketed. */

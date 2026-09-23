@@ -289,10 +289,28 @@ final class Snapshot implements Handler {
      * @param since the newest point the page already holds, negative for every point kept
      */
     String document(long since) {
+        return document(since, true);
+    }
+
+    /**
+     * The snapshot document the {@linkplain DevMcp dev MCP} reads: what the page is sent, without what only the page
+     * needs to act, the token of the boot and the actions of each panel, and without the history of the curves.
+     * Built by the same code as the page's, so that a tool can show nothing the page does not.
+     */
+    String toolDocument() {
+        return document(-1, false);
+    }
+
+    /**
+     * @param since the newest point the page already holds, negative for every point kept
+     * @param page  {@code true} for the page, with the token, the actions and the history; {@code false} for the
+     *              dev MCP, without them
+     */
+    private String document(long since, boolean page) {
         long time = clock.getAsLong();
         Optional<StartupReportView> view = view();
         JsonWriter out = new JsonWriter().beginObject();
-        writeConsole(out, time);
+        writeConsole(out, time, page);
         out.name("state").value(view.isPresent() ? "ready" : "booting");
         out.name("startup");
         Contributed panels = view.map(this::contributed).orElse(null);
@@ -304,11 +322,11 @@ final class Snapshot implements Handler {
         out.name("panels").beginArray();
         if (panels != null) {
             for (PanelEntry panel : panels.panels()) {
-                writePanel(out, panel, since);
+                writePanel(out, panel, since, page);
             }
         }
         for (PanelEntry panel : builtIns) {
-            writePanel(out, panel, since);
+            writePanel(out, panel, since, page);
         }
         return out.endArray().endObject().toString();
     }
@@ -322,7 +340,7 @@ final class Snapshot implements Handler {
         }
     }
 
-    private void writeConsole(JsonWriter out, long time) {
+    private void writeConsole(JsonWriter out, long time, boolean page) {
         Bound where = bound;
         out.name("console").beginObject()
                 .name("vidocq").value(vidocq)
@@ -338,7 +356,7 @@ final class Snapshot implements Handler {
             out.nullValue();
         }
         out.name("historyTruncated").value(history.truncated());
-        if (actions != null) {
+        if (page && actions != null) {
             out.name("actionToken").value(actions.token());
         }
         out.endObject();
@@ -456,7 +474,7 @@ final class Snapshot implements Handler {
         }
     }
 
-    private void writePanel(JsonWriter out, PanelEntry panel, long since) {
+    private void writePanel(JsonWriter out, PanelEntry panel, long since, boolean page) {
         ReportSection section = panel.section();
         out.beginObject()
                 .name("id").value(Texts.clean(panel.id()))
@@ -481,10 +499,12 @@ final class Snapshot implements Handler {
         } else {
             writeSample(out, panel);
         }
-        out.name("history");
-        history.writeTo(out, panel.id(), since);
-        if (actions != null) {
-            writeActions(out, panel);
+        if (page) {
+            out.name("history");
+            history.writeTo(out, panel.id(), since);
+            if (actions != null) {
+                writeActions(out, panel);
+            }
         }
         out.endObject();
     }

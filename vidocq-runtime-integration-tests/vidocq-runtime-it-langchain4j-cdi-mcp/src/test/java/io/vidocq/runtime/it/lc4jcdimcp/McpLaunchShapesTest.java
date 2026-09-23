@@ -119,6 +119,44 @@ class McpLaunchShapesTest {
             String levels = DevConsoleSnapshot.read(server.snapshotUrl()).logsPanel();
             assertTrue(levels.contains("[\"io.vidocq.cassini\",\"FINE\",\"until the next reload\"]"),
                     "the levels table does not show the level set: " + levels);
+
+            // Vidocq/vidocq#121: the dev MCP of a dev launch, on the console's listener, as an MCP client calls it:
+            // initialize, the five read-only tools, and the absolute URL of the application's /mcp route; never the
+            // token of the boot.
+            HttpResponse<String> mcpInitialize = DevConsoleSnapshot.postMcp(server.snapshotUrl(), "{\"jsonrpc\":\"2.0\","
+                    + "\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-06-18\","
+                    + "\"capabilities\":{},\"clientInfo\":{\"name\":\"it\",\"version\":\"1\"}}}");
+            assertEquals(200, mcpInitialize.statusCode(), mcpInitialize.body());
+            assertTrue(mcpInitialize.body().contains("\"protocolVersion\":\"2025-06-18\""), mcpInitialize.body());
+            assertTrue(mcpInitialize.body().contains("\"name\":\"vidocq-dev-console\""), mcpInitialize.body());
+            HttpResponse<String> initialized = DevConsoleSnapshot.postMcp(server.snapshotUrl(),
+                    "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}");
+            assertEquals(202, initialized.statusCode());
+            HttpResponse<String> tools = DevConsoleSnapshot.postMcp(server.snapshotUrl(),
+                    "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\"}");
+            assertEquals(200, tools.statusCode(), tools.body());
+            for (String tool : new String[] {"vidocq_report", "vidocq_panels", "vidocq_panel", "vidocq_anomalies",
+                    "vidocq_routes"}) {
+                assertTrue(tools.body().contains("\"name\":\"" + tool + "\""), tool + ": " + tools.body());
+            }
+            assertEquals(5, tools.body().split("\"inputSchema\"", -1).length - 1, tools.body());
+            HttpResponse<String> routes = DevConsoleSnapshot.postMcp(server.snapshotUrl(), "{\"jsonrpc\":\"2.0\","
+                    + "\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"vidocq_routes\"}}");
+            assertEquals(200, routes.statusCode(), routes.body());
+            assertTrue(routes.body().contains("{\"method\":\"POST\",\"url\":\"" + server.mcpUrl()
+                    + "\",\"handler\":\"McpEndpoint#handlePost\"}"), routes.body());
+            StringBuilder answers = new StringBuilder(mcpInitialize.body()).append(tools.body()).append(routes.body());
+            for (String tool : new String[] {"vidocq_report", "vidocq_panels", "vidocq_anomalies"}) {
+                answers.append(DevConsoleSnapshot.postMcp(server.snapshotUrl(), "{\"jsonrpc\":\"2.0\",\"id\":4,"
+                        + "\"method\":\"tools/call\",\"params\":{\"name\":\"" + tool + "\"}}").body());
+            }
+            answers.append(DevConsoleSnapshot.postMcp(server.snapshotUrl(), "{\"jsonrpc\":\"2.0\",\"id\":5,"
+                    + "\"method\":\"tools/call\",\"params\":{\"name\":\"vidocq_panel\","
+                    + "\"arguments\":{\"id\":\"logs\"}}}").body());
+            assertTrue(answers.toString().contains("\"isError\":false"), answers.toString());
+            assertFalse(answers.toString().contains(token), "a dev MCP answer holds the token of the boot");
+            assertFalse(answers.toString().contains(SECRET), "a dev MCP answer holds the request-state secret");
+            assertTrue(server.log().contains("Vidocq dev MCP: " + own + "/mcp"), "the dev MCP's URL is printed");
         }
     }
 

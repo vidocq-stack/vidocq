@@ -235,4 +235,23 @@ record DevConsoleSnapshot(String json) {
             return client.send(request, HttpResponse.BodyHandlers.ofString());
         }
     }
+
+    /**
+     * Sends the console's dev MCP (Vidocq/vidocq#121) one JSON-RPC request, as an MCP client that is no browser does:
+     * no {@code Origin}, no token, and returns its answer.
+     *
+     * @param snapshotUrl the URL of the console's snapshot, whose origin the request is sent to
+     * @param body        the JSON-RPC request
+     */
+    static HttpResponse<String> postMcp(String snapshotUrl, String body) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(URI.create(snapshotUrl).resolve("/mcp"))
+                .timeout(Duration.ofSeconds(10))
+                .header("Content-Type", "application/json")
+                .header("Accept", "application/json, text/event-stream")
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build();
+        try (HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build()) {
+            return client.send(request, HttpResponse.BodyHandlers.ofString());
+        }
+    }
 }
