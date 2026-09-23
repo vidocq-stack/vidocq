@@ -225,6 +225,9 @@ The panels shipped today:
 | *CDI (Vauban)* [.tag-new]#NEW#
 | The console's own: the beans, interceptors and observers of the Vauban container, the application's first. See <<cdi-panel>>.
 
+| *Logs* [.tag-new]#NEW#
+| The console's own, in a `dev` launch only: the last records the application logged, newest first, the warnings and errors per second, the loggers whose level is set, and a button that sets one until the next reload. See <<logs-panel>>.
+
 | *JVM*
 | The console's own, below.
 |===
@@ -260,7 +263,7 @@ The values are made safe in the application's JVM, before the snapshot is writte
 [#cdi-panel]
 === CDI (Vauban) [.tag-new]#NEW#
 
-The console's own panel, `cdi`, just before the JVM: what Vauban, the runtime's CDI container, holds for this boot, as Quarkus's ArC card shows it. Everything is read once, when the console starts, from the container's metadata: the beans its bean manager lists for `Object` and `@Any`, its interceptors and its observer methods. No bean is created and no context is read, so a lazy bean stays lazy.
+The console's own panel, `cdi`, just before the logs of a `dev` launch and the JVM: what Vauban, the runtime's CDI container, holds for this boot, as Quarkus's ArC card shows it. Everything is read once, when the console starts, from the container's metadata: the beans its bean manager lists for `Object` and `@Any`, its interceptors and its observer methods. No bean is created and no context is read, so a lazy bean stays lazy.
 
 * **Boot facts:** a summary such as `33 beans (29 application-scoped, 4 dependent), 0 interceptors, 0 decorators, 1 observer`, then:
 ** `beans`, `interceptors` and `observers`: how many, and how many of them are the application's and the runtime's;
@@ -275,6 +278,23 @@ The console's own panel, `cdi`, just before the JVM: what Vauban, the runtime's 
 ** `observers`: the event type, its qualifiers, the declaring class and method, `sync` or `async`, and where it comes from.
 
 A table with no row reads `none`. The tables are written as the panel's values rather than its boot facts because a value table has column heads; they are computed once, and every poll hands the page the same rows. The panel keeps class names as strings only, never a class or a bean of the application.
+
+[#logs-panel]
+=== Logs [.tag-new]#NEW#
+
+The console's own panel, `logs`, between the CDI container and the JVM, in a `dev` launch only: what the application logged in this boot, and a level changed without a restart. When the console starts, it adds a handler of its own to the root logger of `java.util.logging`, and removes it when the boot stops, so that a dev reload never stacks two. The handler keeps the last 500 records in memory, in a bounded ring written without a lock: logging never waits for the console.
+
+* **Boot facts:** a summary such as `the last 500 records, root logger at INFO`, then `backend`, where the logs go (`java.util.logging`, or the class of the `System.LoggerFinder` that took them), `kept`, and `root level`.
+* **Counters** `warnings` and `errors`: the WARNING and the SEVERE records seen since the boot, not only those still kept, drawn per second in the chart *Warnings and errors*.
+* **Table** `records`, newest first, 100 rows at most: the time (`HH:mm:ss.SSS`), the level, the logger with its packages cut to their initials (`i.v.c.CassiniExtension`), the thread, and the message, formatted with its parameters as `java.util.logging` formats it. A record logged with an exception adds the exception's class and the first line of its message, never the stack trace.
+* **Table** `levels`: the root logger, then every logger whose level is set, by name, and `until the next reload` next to those the button set.
+* **Button** *Set level*: a logger name, empty for the root logger, and a level of `java.util.logging`, from `SEVERE` to `FINEST`, `ALL` or `OFF`. It answers, for example, `io.vidocq.cassini at FINE until the next reload`. The level lasts until the next dev reload, which puts every level the button set back as it was: a reload starts from the configured levels. The console holds the loggers it changed, since `java.util.logging` holds its loggers weakly and would otherwise forget the level. No confirmation is asked: it is harmless, and undone on the next reload.
+
+What is never shown or kept:
+
+* **The record itself.** Each record is written once into strings when it is logged; the ring never keeps the record, its parameters or its exception, which may be objects of the application and would keep it in memory past a reload.
+* **The credentials of a URL** in a message, removed as <<config-panel,the configuration panel>> removes them: `jdbc:postgresql://admin:s3cr3t@db/orders` reads `jdbc:postgresql://***@db/orders`. A message is cut at 500 characters, and the page cuts what it shows at 200. A log message can still carry anything the application wrote into it, which is why the panel exists in a `dev` launch only.
+* **Records that go elsewhere.** When an SLF4J or Log4j bridge replaces the JDK's `System.LoggerFinder`, what Vidocq and the libraries log never reaches `java.util.logging`: `records`, `warnings` and `errors` are absent with the reason, such as `logs go to Log4jSystemLoggerFinder, not java.util.logging`, rather than an empty table that would read as a quiet application. The `levels` table and the button still act on `java.util.logging`.
 
 [#jvm-panel]
 === JVM [.tag-new]#NEW#
@@ -414,7 +434,7 @@ The last one, from the console's own origin, is a tab that outlived its boot: re
 | Logger | Records
 
 | `io.vidocq.devconsole`
-| The URL record (INFO), the boxed WARNING of a taken port, a console that could not start (WARNING), <<vidocq-devc-005>>, and the stack trace of a failed sample (DEBUG). In a `dev` launch [.tag-new]#NEW#: every action run (INFO), a failed one (WARNING, its stack trace at DEBUG), and <<vidocq-devc-006>>.
+| The URL record (INFO), the boxed WARNING of a taken port, a console that could not start (WARNING), <<vidocq-devc-005>>, and the stack trace of a failed sample (DEBUG). In a `dev` launch [.tag-new]#NEW#: every action run (INFO), a failed one (WARNING, its stack trace at DEBUG), and <<vidocq-devc-006>>. The <<logs-panel,logs panel>> [.tag-new]#NEW# logs nothing: its handler only reads what reaches the root logger.
 
 | `io.vidocq.startup.anomaly`
 | <<vidocq-devc-001>> to <<vidocq-devc-004>>, as every startup anomaly.

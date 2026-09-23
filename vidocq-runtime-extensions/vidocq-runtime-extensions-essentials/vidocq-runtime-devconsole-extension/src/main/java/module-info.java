@@ -36,8 +36,9 @@ module io.vidocq.runtime.extensions.essentials.devconsole {
     requires io.vidocq.vauban.indexer;
     // the platform MXBeans the console's own jvm panel reads
     requires java.management;
-    // for the tests only, which read the log records and call the console over HTTP
-    requires static java.logging;
+    // the logs panel: its ring on the root logger, and the levels its action sets
+    requires java.logging;
+    // for the tests only, which call the console over HTTP
     requires static java.net.http;
 
     provides io.vidocq.runtime.spi.VidocqExtension

@@ -206,14 +206,15 @@ class StartupContributorsTest {
         Contributing startup = new Contributing("startup");
         Contributing config = new Contributing("config") {};
         Contributing cdi = new Contributing("cdi") {};
+        Contributing logs = new Contributing("logs") {};
         Contributing jvm = new Contributing("jvm") {};
 
-        List<Contributor> found = StartupContributors.discover(List.of(startup, config, cdi, jvm), loader(),
+        List<Contributor> found = StartupContributors.discover(List.of(startup, config, cdi, logs, jvm), loader(),
                 recorder);
 
         assertEquals(List.of(), ids(found),
-                "the dev console shows its own 'startup', 'config', 'cdi' and 'jvm' panels");
-        assertEquals(List.of(RPT_002, RPT_002, RPT_002, RPT_002), codes());
+                "the dev console shows its own 'startup', 'config', 'cdi', 'logs' and 'jvm' panels");
+        assertEquals(List.of(RPT_002, RPT_002, RPT_002, RPT_002, RPT_002), codes());
         assertEquals("[VIDOCQ-RPT-002] Contributor " + Contributing.class.getName() + " uses id 'startup', which"
                 + " names a section of the core; it is skipped", messages().getFirst());
     }

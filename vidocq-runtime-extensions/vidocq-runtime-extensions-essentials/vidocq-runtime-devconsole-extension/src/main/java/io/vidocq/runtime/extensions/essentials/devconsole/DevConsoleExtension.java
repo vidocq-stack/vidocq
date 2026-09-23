@@ -81,7 +81,8 @@ import java.util.regex.Pattern;
  * address. In a dev launch, {@code POST /api/action/<panel>/<action>} too, behind an origin check and a per-boot
  * token ({@link ConsoleActions}, ADR 0001). The page, {@code index.html}, {@code console.css} and the ES module
  * {@code console.js}, loads nothing from another site: it polls the snapshot and draws the report first, then one tab per panel, the console's own
- * {@linkplain ConfigPanel configuration}, {@linkplain CdiPanel CDI} and {@linkplain JvmPanel JVM} panels last.
+ * {@linkplain ConfigPanel configuration}, {@linkplain CdiPanel CDI}, {@linkplain LogsPanel logs} (in a dev launch)
+ * and {@linkplain JvmPanel JVM} panels last.
  *
  * <h2>The history of its curves</h2>
  * <p>Five minutes of every measure is kept by the console, in a {@link PanelHistory} filled by a thread of its own,
@@ -136,6 +137,7 @@ public final class DevConsoleExtension implements VidocqExtension, StartupReport
     private volatile String url;
     private volatile String notStarted;
     private volatile Thread ticker;
+    private volatile LogsPanel logs;
 
     /** The console Vidocq loads as a service, remembering what it printed across the dev reloads of this JVM. */
     public DevConsoleExtension() {
@@ -193,8 +195,12 @@ public final class DevConsoleExtension implements VidocqExtension, StartupReport
         ConsoleActions actions = resolved.launchMode() == LaunchMode.DEV
                 ? new ConsoleActions(ConsoleActions.newToken(), clock, ConsoleActions.TIME_LIMIT)
                 : null;
+        // The logs panel shows what the application logs: in a dev launch only, its ring removed in onStop.
+        LogsPanel logged = resolved.launchMode() == LaunchMode.DEV ? LogsPanel.start() : null;
+        logs = logged;
         Snapshot boot = new Snapshot(HexFormat.of().toHexDigits(RandomGenerator.getDefault().nextLong()),
-                VIDOCQ_VERSION, context.startupReport(), ownPanels(context, resolved.launchMode()), clock, actions);
+                VIDOCQ_VERSION, context.startupReport(), ownPanels(context, resolved.launchMode(), logged), clock,
+                actions);
         Handler page = StaticFileHandler.builder()
                 .addClasspath(DevConsoleExtension.class.getClassLoader(), PAGE_RESOURCES)
                 .indexFile("index.html")
@@ -247,13 +253,21 @@ public final class DevConsoleExtension implements VidocqExtension, StartupReport
 
     /**
      * The console's own panels, shown after the contributed ones from the first poll, the boot facts of each written
-     * once per boot: the {@linkplain ConfigPanel configuration}, the {@linkplain CdiPanel CDI container}, then the
-     * {@linkplain JvmPanel JVM}, last. The report's own panel, {@code startup}, is the snapshot's {@code startup}
-     * member, which the page shows first.
+     * once per boot: the {@linkplain ConfigPanel configuration}, the {@linkplain CdiPanel CDI container}, in a dev
+     * launch the {@linkplain LogsPanel logs}, then the {@linkplain JvmPanel JVM}, last. The report's own panel,
+     * {@code startup}, is the snapshot's {@code startup} member, which the page shows first.
+     *
+     * @param logs the logs panel of a dev launch, or {@code null}
      */
-    private static List<PanelEntry> ownPanels(ExtensionContext context, LaunchMode mode) {
-        return List.of(PanelEntry.builtIn(configPanel(context, mode), mode),
-                PanelEntry.builtIn(cdiPanel(context), mode), PanelEntry.builtIn(new JvmPanel(), mode));
+    private static List<PanelEntry> ownPanels(ExtensionContext context, LaunchMode mode, LogsPanel logs) {
+        List<PanelEntry> panels = new ArrayList<>();
+        panels.add(PanelEntry.builtIn(configPanel(context, mode), mode));
+        panels.add(PanelEntry.builtIn(cdiPanel(context), mode));
+        if (logs != null) {
+            panels.add(PanelEntry.builtIn(logs, mode));
+        }
+        panels.add(PanelEntry.builtIn(new JvmPanel(), mode));
+        return List.copyOf(panels);
     }
 
     /** The {@code config} panel, the configuration read now; one that says it has none when reading it fails. */
@@ -363,7 +377,8 @@ public final class DevConsoleExtension implements VidocqExtension, StartupReport
      * Forgets this boot: the server is already down, {@code chappe-bootstrap} stops before the console.
      *
      * <p>The ticker is stopped first, and waited for. A dev reload builds a new console on the same JVM, and a tick
-     * still running would sample panels whose beans the previous boot has already dropped.
+     * still running would sample panels whose beans the previous boot has already dropped. Then the logs panel's ring
+     * leaves the root logger and the levels its action set are put back, so that the next boot starts clean.
      */
     @Override
     public void onStop() {
@@ -376,6 +391,11 @@ public final class DevConsoleExtension implements VidocqExtension, StartupReport
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
             }
+        }
+        LogsPanel logged = logs;
+        logs = null;
+        if (logged != null) {
+            logged.stop();
         }
         Snapshot boot = snapshot;
         if (boot != null) {

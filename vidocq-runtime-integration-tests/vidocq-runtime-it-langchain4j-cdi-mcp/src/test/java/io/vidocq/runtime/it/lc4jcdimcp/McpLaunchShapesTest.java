@@ -24,6 +24,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
 import java.net.URI;
+import java.net.http.HttpResponse;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -106,6 +107,18 @@ class McpLaunchShapesTest {
             assertEquals(404, DevConsoleSnapshot.postAction(server.snapshotUrl(), "/api/action/mcp/nothing", own,
                     token));
             assertTrue(server.log().contains("[VIDOCQ-DEVC-006]"), "the refusal is logged");
+
+            // Vidocq/vidocq#119: the logs panel of a dev launch shows the records of this boot, its last line among
+            // them, and its set-level action changes a level the levels table then lists, until the next reload.
+            String logs = DevConsoleSnapshot.read(server.snapshotUrl()).logsPanel();
+            assertTrue(logs.contains("Vidocq - Started in "), "the logs panel shows no record of the boot: " + logs);
+            HttpResponse<String> set = DevConsoleSnapshot.postAction(server.snapshotUrl(),
+                    "/api/action/logs/set-level", own, token, "{\"logger\":\"io.vidocq.cassini\",\"level\":\"FINE\"}");
+            assertEquals(200, set.statusCode(), set.body());
+            assertTrue(set.body().contains("io.vidocq.cassini at FINE until the next reload"), set.body());
+            String levels = DevConsoleSnapshot.read(server.snapshotUrl()).logsPanel();
+            assertTrue(levels.contains("[\"io.vidocq.cassini\",\"FINE\",\"until the next reload\"]"),
+                    "the levels table does not show the level set: " + levels);
         }
     }
 

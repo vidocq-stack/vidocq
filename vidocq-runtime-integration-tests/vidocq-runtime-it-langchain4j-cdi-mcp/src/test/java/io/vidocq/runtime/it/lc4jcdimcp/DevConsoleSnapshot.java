@@ -109,13 +109,26 @@ record DevConsoleSnapshot(String json) {
 
     /**
      * The console's own {@code cdi} panel (Vidocq/vidocq#117), as the JSON it was written in: from its id to the
-     * {@code jvm} panel, which the console shows after it.
+     * next of the console's panels, {@code logs} in a dev launch (Vidocq/vidocq#119), {@code jvm} otherwise.
      */
     String cdiPanel() {
         int panel = json.indexOf("{\"id\":\"cdi\",\"title\":\"CDI (Vauban)\"");
         assertTrue(panel >= 0, "the snapshot holds no cdi panel: " + json);
+        int logs = json.indexOf("{\"id\":\"logs\"", panel);
+        int next = logs > panel ? logs : json.indexOf("{\"id\":\"jvm\"", panel);
+        assertTrue(next > panel, "no console panel follows the cdi panel: " + json);
+        return json.substring(panel, next);
+    }
+
+    /**
+     * The console's own {@code logs} panel of a dev launch (Vidocq/vidocq#119), as the JSON it was written in: from
+     * its id to the {@code jvm} panel, which the console shows after it.
+     */
+    String logsPanel() {
+        int panel = json.indexOf("{\"id\":\"logs\",\"title\":\"Logs\"");
+        assertTrue(panel >= 0, "the snapshot holds no logs panel: " + json);
         int jvm = json.indexOf("{\"id\":\"jvm\"", panel);
-        assertTrue(jvm > panel, "the jvm panel does not follow the cdi panel: " + json);
+        assertTrue(jvm > panel, "the jvm panel does not follow the logs panel: " + json);
         return json.substring(panel, jvm);
     }
 
@@ -199,16 +212,27 @@ record DevConsoleSnapshot(String json) {
      * @param token       the {@code X-Vidocq-Console-Token} header
      */
     static int postAction(String snapshotUrl, String path, String origin, String token) throws Exception {
+        return postAction(snapshotUrl, path, origin, token, "{}").statusCode();
+    }
+
+    /**
+     * Sends the console an action request with {@code body}, as {@link #postAction(String, String, String, String)}
+     * does, and returns its answer.
+     *
+     * @param body the JSON object of the action's arguments
+     */
+    static HttpResponse<String> postAction(String snapshotUrl, String path, String origin, String token, String body)
+            throws Exception {
         URI target = URI.create(snapshotUrl).resolve(path);
         HttpRequest request = HttpRequest.newBuilder(target)
                 .timeout(Duration.ofSeconds(10))
                 .header("Content-Type", "application/json")
                 .header("Origin", origin)
                 .header("X-Vidocq-Console-Token", token)
-                .POST(HttpRequest.BodyPublishers.ofString("{}"))
+                .POST(HttpRequest.BodyPublishers.ofString(body))
                 .build();
         try (HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build()) {
-            return client.send(request, HttpResponse.BodyHandlers.discarding()).statusCode();
+            return client.send(request, HttpResponse.BodyHandlers.ofString());
         }
     }
 }

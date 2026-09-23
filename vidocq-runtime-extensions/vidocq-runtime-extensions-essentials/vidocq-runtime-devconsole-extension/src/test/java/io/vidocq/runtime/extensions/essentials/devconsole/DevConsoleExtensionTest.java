@@ -43,10 +43,12 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -183,6 +185,38 @@ class DevConsoleExtensionTest {
         assertEquals(List.of(), tickers());
     }
 
+    /** The rings of the logs panel on the JVM's root logger. */
+    private static long rings() {
+        return Arrays.stream(Logger.getLogger("").getHandlers()).filter(handler -> handler instanceof LogRing)
+                .count();
+    }
+
+    @Test
+    void aDevReloadLeavesExactlyOneRingOnTheRootLogger() throws Exception {
+        long before = rings();
+        Boot first = boot(context(LaunchMode.DEV));
+        assertEquals(before + 1, rings());
+
+        Boot second = reload(first, context(LaunchMode.DEV));
+
+        assertEquals(before + 1, rings(), "the previous boot's ring was removed: a reload never stacks them");
+        second.stop();
+        boots.remove(second);
+        assertEquals(before, rings());
+    }
+
+    @Test
+    void aProdBootHasNoLogsPanelAndNoRing() throws Exception {
+        long before = rings();
+        FakeExtensionContext context = context(LaunchMode.PROD, DevConsoleSettings.ENABLED_KEY, "true",
+                DevConsoleSettings.PORT_KEY, "0");
+        Boot boot = boot(context);
+
+        assertEquals(before, rings(), "the records of an application are shown in a dev launch only");
+        assertEquals(List.of("config", "cdi", "jvm"),
+                panelIds(Json.object(get(url(boot.console().boundPort()) + "api/snapshot").body())));
+    }
+
     @Test
     void aConsoleThatIsOffTicksNothing() {
         boot(context(LaunchMode.PROD));
@@ -203,8 +237,8 @@ class DevConsoleExtensionTest {
         assertEquals(200, booting.statusCode());
         Map<String, Object> first = Json.object(booting.body());
         assertEquals("booting", first.get("state"));
-        assertEquals(List.of("config", "cdi", "jvm"), panelIds(first),
-                "the console's own panels, from the first poll");
+        assertEquals(List.of("config", "cdi", "logs", "jvm"), panelIds(first),
+                "the console's own panels, from the first poll, the logs in a dev launch");
         Map<?, ?> config = (Map<?, ?>) ((List<?>) first.get("panels")).get(0);
         assertEquals("Configuration", config.get("title"));
         assertEquals("0 keys: 0 of the application, 0 vidocq.*, 0 mp.*; 0 sources", config.get("summary"),
@@ -212,7 +246,9 @@ class DevConsoleExtensionTest {
         Map<?, ?> cdi = (Map<?, ?>) ((List<?>) first.get("panels")).get(1);
         assertEquals("CDI (Vauban)", cdi.get("title"));
         assertEquals("not available: no container", cdi.get("summary"), "the test's context has no container");
-        Map<?, ?> jvm = (Map<?, ?>) ((List<?>) first.get("panels")).get(2);
+        Map<?, ?> logs = (Map<?, ?>) ((List<?>) first.get("panels")).get(2);
+        assertEquals("Logs", logs.get("title"));
+        Map<?, ?> jvm = (Map<?, ?>) ((List<?>) first.get("panels")).get(3);
         assertEquals("JVM", jvm.get("title"));
         assertEquals(true, jvm.get("live"));
         assertTrue(((List<?>) ((Map<?, ?>) jvm.get("sample")).get("values")).stream()
@@ -222,8 +258,8 @@ class DevConsoleExtensionTest {
         Map<String, Object> ready = Json.object(get(url(port) + "api/snapshot").body());
         assertEquals("ready", ready.get("state"));
         assertEquals(url(port), ((Map<?, ?>) ready.get("console")).get("url"));
-        assertEquals(List.of("acme-pool", "config", "cdi", "jvm"), panelIds(ready),
-                "the contributed panels, then the configuration, the CDI container, and the JVM last");
+        assertEquals(List.of("acme-pool", "config", "cdi", "logs", "jvm"), panelIds(ready),
+                "the contributed panels, then the configuration, the CDI container, the logs, and the JVM last");
 
         ReportSection section = boot.section().toSection();
         assertEquals(url(port), section.summary());
