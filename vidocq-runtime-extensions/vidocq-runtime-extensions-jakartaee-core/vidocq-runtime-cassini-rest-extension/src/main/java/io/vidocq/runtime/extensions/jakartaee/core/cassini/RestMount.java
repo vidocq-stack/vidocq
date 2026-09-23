@@ -19,6 +19,7 @@
  */
 package io.vidocq.runtime.extensions.jakartaee.core.cassini;
 
+import io.vidocq.cassini.spi.http.CassiniStatistics;
 import io.vidocq.cassini.spi.http.RouteDescription;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.container.ContainerRequestFilter;
@@ -39,8 +40,9 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * One Cassini stack mounted on Chappe, as the startup report describes it. Every component is a value: the record
- * holds no {@link Class}, so keeping it across a dev reload keeps no class of the previous application alive.
+ * One Cassini stack mounted on Chappe, as the startup report and the dev console describe it. The record holds no
+ * {@link Class} and no object of the application — names, and the stack's own counters — so keeping it across a dev
+ * reload keeps no class of the previous application alive.
  *
  * @param name           {@code vidocq.rest} for the automatic mount, else the name of the declarative mount
  * @param listener       the Chappe listener it is mounted on
@@ -49,9 +51,10 @@ import java.util.Set;
  * @param resources      the binary names of its {@code @Path} classes, sorted
  * @param routes         its routes, in match order
  * @param providerGroups its {@code @Provider} classes by the JAX-RS contracts they implement
+ * @param statistics     the counters the stack keeps, {@code null} when it was built without them
  */
 record RestMount(String name, String listener, String prefix, boolean stripPrefix, List<String> resources,
-                 List<RouteDescription> routes, List<ProviderGroup> providerGroups) {
+                 List<RouteDescription> routes, List<ProviderGroup> providerGroups, CassiniStatistics statistics) {
 
     /**
      * The {@code @Provider} classes that implement one JAX-RS contract, sorted by binary name. A class that implements
@@ -93,10 +96,11 @@ record RestMount(String name, String listener, String prefix, boolean stripPrefi
      * Describes a mounted stack. Reads the classes' annotations and interfaces only: it creates no instance.
      *
      * @param classes what the {@code BeanProvider} handed Cassini, {@code @Path} and {@code @Provider} classes
-     * @param routes  what the stack resolved, {@code CassiniStack.routes()}
+     * @param routes     what the stack resolved, {@code CassiniStack.routes()}
+     * @param statistics what it counts, {@code CassiniStack.statistics()}, or {@code null}
      */
     static RestMount of(String name, String listener, String prefix, boolean stripPrefix, Set<Class<?>> classes,
-                        List<RouteDescription> routes) {
+                        List<RouteDescription> routes, CassiniStatistics statistics) {
         List<String> resources = new ArrayList<>();
         List<Class<?>> providers = new ArrayList<>();
         for (Class<?> c : classes) {
@@ -119,7 +123,7 @@ record RestMount(String name, String listener, String prefix, boolean stripPrefi
             }
         }
         return new RestMount(name, listener, prefix, stripPrefix, resources.stream().sorted().toList(), routes,
-                groups);
+                groups, statistics);
     }
 
     /** The binary names of the {@code @Provider} classes, each once, sorted. */

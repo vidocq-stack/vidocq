@@ -28,12 +28,15 @@ import io.vidocq.runtime.extensions.essentials.chappe.ChappeMountPoint;
 import io.vidocq.runtime.spi.ExtensionContext;
 import io.vidocq.runtime.spi.VidocqConfiguration;
 import io.vidocq.runtime.spi.VidocqExtension;
+import io.vidocq.runtime.spi.devconsole.Chart;
+import io.vidocq.runtime.spi.devconsole.DevConsolePanel;
+import io.vidocq.runtime.spi.devconsole.PanelSample;
 import io.vidocq.runtime.spi.report.StartupReportContext;
-import io.vidocq.runtime.spi.report.StartupReportContributor;
 import io.vidocq.runtime.spi.report.StartupReportSection;
 import io.vidocq.vauban.core.container.VaubanContainerBuilder;
 import io.vidocq.vauban.core.context.RequestContext;
 
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -62,9 +65,10 @@ import java.util.Set;
  *
  * <p><b>Startup report:</b> writes the {@code rest} section — the routes of every Cassini stack mounted
  * during the boot, this extension's and the declarative {@code type=restful} mounts', in match order, with
- * the resource and provider classes. The dev console shows it as the {@code rest} panel.</p>
+ * the resource and provider classes. The dev console shows it as the {@code rest} panel, live: each mount's
+ * requests, status classes, requests in flight and time in handlers, from {@code CassiniStack.statistics()}.</p>
  */
-public final class CassiniExtension implements VidocqExtension, StartupReportContributor {
+public final class CassiniExtension implements VidocqExtension, DevConsolePanel {
 
     static final String SECTION_ID = "rest";
     static final String SECTION_TITLE = "REST (Cassini)";
@@ -167,7 +171,8 @@ public final class CassiniExtension implements VidocqExtension, StartupReportCon
         }
         String mountPrefix = "/".equals(effectiveContextPath) ? "" : effectiveContextPath;
         ChappeMountPoint.instance().mount(listener, mountPrefix, bridge);
-        RestMounts.record(RestMount.of(AUTO_MOUNT, listener, mountPrefix, true, resourceClasses, stack.routes()));
+        RestMounts.record(RestMount.of(AUTO_MOUNT, listener, mountPrefix, true, resourceClasses, stack.routes(),
+                stack.statistics().orElse(null)));
 
         LOG.log(System.Logger.Level.INFO,
                 "Cassini REST extension mounted on listener={0} prefix={1} ({2} resource class(es))",
@@ -197,6 +202,20 @@ public final class CassiniExtension implements VidocqExtension, StartupReportCon
     @Override
     public void contribute(StartupReportContext context, StartupReportSection section) {
         RestStartupSection.write(RestMounts.all(), context, section);
+    }
+
+    @Override
+    public List<Chart> charts() {
+        return RestPanel.CHARTS;
+    }
+
+    /**
+     * The live figures of every mount, from the counters each stack keeps: read from memory, without a lock, and
+     * nothing after {@code onStop}, which clears the mounts first.
+     */
+    @Override
+    public void sample(PanelSample sample) {
+        RestPanel.sample(RestMounts.all(), sample);
     }
 
     private static boolean hasDeclarativeCassiniMount(ExtensionContext context) {

@@ -22,6 +22,9 @@ import io.vidocq.runtime.extensions.jakartaee.core.cassini.CassiniMountHandlerPr
 
 module io.vidocq.runtime.extensions.jakartaee.core.cassini {
     requires transitive io.vidocq.runtime.spi;
+    // CassiniExtension is its own dev console panel: its report section, shown live. Transitive, since the exported
+    // CassiniExtension is a DevConsolePanel.
+    requires transitive io.vidocq.runtime.spi.devconsole;
     requires io.vidocq.runtime.extensions.essentials.chappe;
     requires io.vidocq.vauban.core;
 

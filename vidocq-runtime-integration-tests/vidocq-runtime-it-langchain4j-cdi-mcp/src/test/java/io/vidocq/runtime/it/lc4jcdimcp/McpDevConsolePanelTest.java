@@ -40,7 +40,7 @@ class McpDevConsolePanelTest {
         try (LaunchedServer server = LaunchedServer.start(LaunchedServer.Shape.FLAT, "i4-devconsole")) {
             DevConsoleSnapshot before = DevConsoleSnapshot.read(server.snapshotUrl());
             before.assertSampled();
-            before.assertRestPanelShowsBootFactsOnly();
+            double restBefore = before.restRequests();
 
             assertEquals("no request served yet", before.absent("sessions"),
                     "before any request the panel must say why it has no number, never write a zero");
@@ -55,6 +55,8 @@ class McpDevConsolePanelTest {
 
             DevConsoleSnapshot after = DevConsoleSnapshot.read(server.snapshotUrl());
             after.assertSampled();
+            // The six MCP calls and the initialize went through Cassini: the rest panel counted them.
+            assertTrue(after.restRequests() >= restBefore + 7, "the rest panel did not count the MCP calls");
 
             assertEquals(1.0, after.number("sessions"), "the session the client opened is not counted");
             assertEquals(0.0, after.number("streams"));

@@ -78,7 +78,7 @@ public final class CassiniMountHandlerProvider implements MountHandlerProvider {
         // Chappe strips the prefix unless strip-prefix=false (ChappeMountConfigExtension reads the same key).
         boolean stripPrefix = cfg.property("strip-prefix", Boolean.class, true);
         RestMounts.record(RestMount.of(cfg.name(), cfg.listener(), cfg.prefix(), stripPrefix,
-                beanProvider.getResourceClasses(), stack.routes()));
+                beanProvider.getResourceClasses(), stack.routes(), stack.statistics().orElse(null)));
         RequestContext requestContext = new RequestContext();
         return new ChappeHttpAdapter(stack.adapter(), requestContext::runInScope);
     }

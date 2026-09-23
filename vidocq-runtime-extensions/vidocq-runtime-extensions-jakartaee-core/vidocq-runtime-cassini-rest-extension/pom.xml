@@ -44,6 +44,10 @@
             <artifactId>vidocq-runtime-spi</artifactId>
         </dependency>
         <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-devconsole-spi</artifactId>
+        </dependency>
+        <dependency>
             <groupId>io.vidocq.runtime.extensions.essentials</groupId>
             <artifactId>vidocq-runtime-chappe-webserver-extension</artifactId>
         </dependency>

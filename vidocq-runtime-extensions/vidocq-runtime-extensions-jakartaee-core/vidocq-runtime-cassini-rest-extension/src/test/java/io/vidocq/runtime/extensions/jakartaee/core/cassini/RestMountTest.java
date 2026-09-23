@@ -74,7 +74,7 @@ class RestMountTest {
     void keeps_resource_and_provider_classes_by_name_and_kind() {
         RestMount mount = RestMount.of("vidocq.rest", "default", "/api", true,
                 classes(UserResource.class, NotFoundMapper.class, TaskResource.class, AuditFilter.class),
-                List.of(LIST));
+                List.of(LIST), null);
 
         assertEquals(List.of(TaskResource.class.getName(), UserResource.class.getName()), mount.resources());
         assertEquals(List.of(AuditFilter.class.getName(), NotFoundMapper.class.getName()), mount.providers());
@@ -87,14 +87,14 @@ class RestMountTest {
 
     @Test
     void a_route_is_on_the_listener_under_the_mount_prefix() {
-        RestMount mount = RestMount.of("vidocq.rest", "default", "/api", true, classes(), List.of(LIST));
+        RestMount mount = RestMount.of("vidocq.rest", "default", "/api", true, classes(), List.of(LIST), null);
 
         assertEquals("/api/tasks", mount.pathOnListener(LIST));
     }
 
     @Test
     void a_root_mount_adds_no_prefix() {
-        RestMount mount = RestMount.of("vidocq.rest", "default", "", true, classes(), List.of(LIST));
+        RestMount mount = RestMount.of("vidocq.rest", "default", "", true, classes(), List.of(LIST), null);
 
         assertEquals("/tasks", mount.pathOnListener(LIST));
         assertEquals("/", mount.displayPrefix());
@@ -103,7 +103,7 @@ class RestMountTest {
     @Test
     void a_mount_that_keeps_the_prefix_hands_the_full_path_to_cassini() {
         RouteDescription health = new RouteDescription("GET", "/health", "com.acme.Health", "check", Set.of(), Set.of());
-        RestMount mount = RestMount.of("health", "default", "/health", false, classes(), List.of(health));
+        RestMount mount = RestMount.of("health", "default", "/health", false, classes(), List.of(health), null);
 
         assertEquals("/health", mount.pathOnListener(health));
     }
@@ -111,7 +111,7 @@ class RestMountTest {
     @Test
     void holds_no_class_and_cannot_be_changed() {
         RestMount mount = RestMount.of("vidocq.rest", "default", "/api", true,
-                classes(TaskResource.class, AuditFilter.class), List.of(LIST));
+                classes(TaskResource.class, AuditFilter.class), List.of(LIST), null);
 
         assertThrows(UnsupportedOperationException.class, () -> mount.routes().clear());
         assertThrows(UnsupportedOperationException.class, () -> mount.resources().clear());

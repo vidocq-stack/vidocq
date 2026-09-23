@@ -57,13 +57,13 @@ class RestStartupSectionTest {
 
     private static RestMount api() {
         return RestMount.of("vidocq.rest", "default", "/api", true,
-                new LinkedHashSet<>(List.of(TaskResource.class, AuditFilter.class)), TASK_ROUTES);
+                new LinkedHashSet<>(List.of(TaskResource.class, AuditFilter.class)), TASK_ROUTES, null);
     }
 
     private static RestMount health() {
         return RestMount.of("health", "default", "/health", false, Set.of(HealthResource.class),
                 List.of(new RouteDescription("GET", "/health", HealthResource.class.getName(), "check",
-                        Set.of(), Set.of())));
+                        Set.of(), Set.of())), null);
     }
 
     private static RecordingSection write(Verbosity verbosity, List<RestMount> mounts) {

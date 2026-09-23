@@ -60,16 +60,23 @@ record DevConsoleSnapshot(String json) {
     }
 
     /**
-     * Asserts that the {@code rest} panel is there with its boot facts, and not live: Cassini measures no request yet
-     * (Vidocq/cassini#42), so the panel has no value to sample.
+     * Asserts that the {@code rest} panel is there, lists the {@code /mcp} route among its boot facts and is live, and
+     * returns the {@code requests} counter of its {@code vidocq.rest} mount (Vidocq/vidocq#103).
      */
-    void assertRestPanelShowsBootFactsOnly() {
+    double restRequests() {
         int panel = json.indexOf("{\"id\":\"rest\",\"title\":\"REST (Cassini)\"");
         assertTrue(panel >= 0, "the snapshot holds no rest panel: " + json);
-        String excerpt = json.substring(panel, Math.min(json.length(), panel + 2_000));
+        // A panel ends where the next one's "live" flag starts: charts carry ids and titles too.
+        int live = json.indexOf("\"live\":", panel);
+        int nextLive = json.indexOf("\"live\":", live + 1);
+        String excerpt = json.substring(panel, nextLive < 0 ? json.length() : nextLive);
         assertTrue(excerpt.contains("McpEndpoint#handlePost"), "the rest panel lists no /mcp route: " + excerpt);
-        assertTrue(json.startsWith("\"live\":false", json.indexOf("\"live\":", panel)),
-                "the rest panel claims live values: " + excerpt);
+        assertTrue(json.startsWith("\"live\":true", live), "the rest panel is not live: " + excerpt);
+        java.util.regex.Matcher requests = java.util.regex.Pattern
+                .compile("\\{\"key\":\"requests\",\"kind\":\"counter\",\"value\":([0-9.]+)")
+                .matcher(excerpt);
+        assertTrue(requests.find(), "the rest panel wrote no requests counter: " + excerpt);
+        return Double.parseDouble(requests.group(1));
     }
 
     /** Asserts that the {@code mcp} panel is there and shown live, and returns where it starts. */

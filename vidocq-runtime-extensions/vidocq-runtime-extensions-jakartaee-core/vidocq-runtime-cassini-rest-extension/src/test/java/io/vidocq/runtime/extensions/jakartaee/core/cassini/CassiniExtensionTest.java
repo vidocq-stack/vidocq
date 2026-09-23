@@ -46,8 +46,8 @@ class CassiniExtensionTest {
 
     @Test
     void writes_what_the_mounts_of_this_boot_recorded() {
-        RestMounts.record(RestMount.of("vidocq.rest", "default", "", true, Set.of(), List.of()));
-        RestMounts.record(RestMount.of("health", "default", "/health", false, Set.of(), List.of()));
+        RestMounts.record(RestMount.of("vidocq.rest", "default", "", true, Set.of(), List.of(), null));
+        RestMounts.record(RestMount.of("health", "default", "/health", false, Set.of(), List.of(), null));
         RecordingSection section = new RecordingSection();
 
         new CassiniExtension().contribute(new FakeReportContext(Verbosity.SUMMARY), section);
@@ -57,7 +57,7 @@ class CassiniExtensionTest {
 
     @Test
     void forgets_the_mounts_when_it_stops() {
-        RestMounts.record(RestMount.of("vidocq.rest", "default", "", true, Set.of(), List.of()));
+        RestMounts.record(RestMount.of("vidocq.rest", "default", "", true, Set.of(), List.of(), null));
 
         new CassiniExtension().onStop();
 
