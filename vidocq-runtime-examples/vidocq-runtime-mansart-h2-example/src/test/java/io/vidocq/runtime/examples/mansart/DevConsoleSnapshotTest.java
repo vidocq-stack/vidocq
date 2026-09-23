@@ -28,6 +28,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
@@ -191,6 +192,64 @@ class DevConsoleSnapshotTest {
         }
     }
 
+    @Test
+    void migratesFromTheConsoleAndRefusesToCleanByDefault() throws Exception {
+        List<?> actions = (List<?>) panel("migration").get("actions");
+        assertEquals(List.of("migrate", "clean-and-migrate"),
+                actions.stream().map(a -> ((Map<?, ?>) a).get("id")).toList());
+        String token = (String) ((Map<?, ?>) snapshot.get("console")).get("actionToken");
+
+        String migrated = postAction("migration/migrate", token, "{\"datasource\":\"default\"}");
+        String refused = postAction("migration/clean-and-migrate", token, "{\"datasource\":\"default\"}");
+
+        assertTrue(migrated.contains("default: 0 migrations applied, schema at version 1"), migrated);
+        assertTrue(refused.contains("default: clean refused, nothing dropped; set vidocq.migration.cleanDisabled=false"
+                + " to allow it"), refused);
+        String after = get(consoleUrl() + "api/snapshot", "application/json");
+        Map<?, ?> panel;
+        try (Jsonb jsonb = JsonbBuilder.create()) {
+            panel = panelOf((Map<?, ?>) jsonb.fromJson(after, Object.class), "migration");
+        }
+        Map<?, ?> group = (Map<?, ?>) ((List<?>) ((Map<?, ?>) panel.get("sample")).get("groups")).getFirst();
+        assertEquals("default", group.get("name"));
+        assertEquals("migrate: 0 applied", value(group, "last-run").get("value"));
+        assertEquals("table", value(group, "applied").get("kind"), "listed after the action: " + group);
+        for (String password : PASSWORD_KEYS.stream().map(DevConsoleSnapshotTest::password).toList()) {
+            assertFalse(after.contains(password), "the snapshot after an action holds a pool password");
+            assertFalse(migrated.contains(password) || refused.contains(password), "an action's answer does");
+        }
+    }
+
+    /**
+     * Sends the console an action request as its own page does: JSON, its own {@code Origin}, the token of the boot.
+     * {@code Origin} is a restricted header of {@link HttpURLConnection}: the surefire configuration lets it through.
+     *
+     * @return the body of the answer, which must be 200
+     */
+    private static String postAction(String action, String token, String body) throws IOException {
+        String console = consoleUrl();
+        HttpURLConnection connection = (HttpURLConnection) URI.create(console + "api/action/" + action).toURL()
+                .openConnection();
+        connection.setConnectTimeout(2_000);
+        connection.setReadTimeout(30_000);
+        connection.setRequestMethod("POST");
+        connection.setDoOutput(true);
+        connection.setRequestProperty("Content-Type", "application/json");
+        connection.setRequestProperty("Origin", console.substring(0, console.length() - 1));
+        connection.setRequestProperty("X-Vidocq-Console-Token", token);
+        try {
+            try (OutputStream out = connection.getOutputStream()) {
+                out.write(body.getBytes(StandardCharsets.UTF_8));
+            }
+            assertEquals(200, connection.getResponseCode(), action);
+            try (InputStream in = connection.getInputStream()) {
+                return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+            }
+        } finally {
+            connection.disconnect();
+        }
+    }
+
     /** The URL the console logged. */
     private static String consoleUrl() {
         for (String message : consoleMessages()) {
@@ -218,6 +277,10 @@ class DevConsoleSnapshotTest {
     }
 
     private static Map<?, ?> panel(String id) {
+        return panelOf(snapshot, id);
+    }
+
+    private static Map<?, ?> panelOf(Map<?, ?> snapshot, String id) {
         for (Object panel : (List<?>) snapshot.get("panels")) {
             if (id.equals(((Map<?, ?>) panel).get("id"))) {
                 return (Map<?, ?>) panel;

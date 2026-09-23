@@ -19,6 +19,7 @@
  */
 package io.vidocq.runtime.extensions.essentials.migration.liquibase;
 
+import io.vidocq.runtime.extensions.essentials.migration.MigrationInfo;
 import io.vidocq.runtime.extensions.essentials.migration.MigrationResult;
 import io.vidocq.runtime.extensions.essentials.migration.MigrationTarget;
 import liquibase.resource.ClassLoaderResourceAccessor;
@@ -26,6 +27,7 @@ import org.junit.jupiter.api.Test;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -96,6 +98,60 @@ class LiquibaseSchemaMigratorTest {
 
         assertEquals(0, restart.applied());
         assertFalse(restart.nothingFound());
+    }
+
+    // ── vidocq#120: info and clean ─────────────────────────────────────────────
+
+    @Test
+    void infoListsThePendingThenTheAppliedChangesets() {
+        MigrationTarget target = target(url(), "db/testchangelog/db.changelog-master.xml");
+        LiquibaseSchemaMigrator migrator = new LiquibaseSchemaMigrator();
+
+        MigrationInfo before = migrator.info(target);
+        migrator.migrate(target);
+        MigrationInfo after = migrator.info(target);
+
+        assertTrue(before.applied().isEmpty());
+        assertEquals(1, before.pending().size());
+        MigrationInfo.Migration pending = before.pending().get(0);
+        assertEquals("1", pending.version(), "a changeset's id stands for its version");
+        assertTrue(pending.description().contains("by vidocq"), pending.description());
+        assertEquals("changeset", pending.type());
+        assertEquals("", pending.installedOn());
+        assertEquals("PENDING", pending.state());
+
+        assertTrue(after.pending().isEmpty());
+        assertEquals(1, after.applied().size());
+        assertEquals("1", after.applied().get(0).version());
+        assertEquals("EXECUTED", after.applied().get(0).state());
+        assertFalse(after.applied().get(0).installedOn().isEmpty());
+    }
+
+    @Test
+    void cleanIsRefusedWhileCleanIsDisabledAndDropsNothing() throws Exception {
+        String url = url();
+        MigrationTarget target = target(url, "db/testchangelog/db.changelog-master.xml");
+        new LiquibaseSchemaMigrator().migrate(target);
+
+        assertThrows(IllegalStateException.class, () -> new LiquibaseSchemaMigrator().clean(target));
+
+        assertEquals(0, count(url, "widget"), "the table is still there");
+    }
+
+    @Test
+    void cleanDropsTheSchemaWhenCleanIsNotDisabled() throws Exception {
+        String url = url();
+        MigrationTarget target = new MigrationTarget("default", url, "sa", "",
+                List.of("db/testchangelog/db.changelog-master.xml"), false, false);
+        LiquibaseSchemaMigrator migrator = new LiquibaseSchemaMigrator();
+        migrator.migrate(target);
+
+        migrator.clean(target);
+
+        assertThrows(SQLException.class, () -> count(url, "widget"));
+        assertEquals(1, migrator.info(target).pending().size(), "the changelog table is gone too");
+        assertEquals(1, migrator.migrate(target).applied());
+        assertEquals(0, count(url, "widget"));
     }
 
     // ── fixtures ─────────────────────────────────────────────────────────────

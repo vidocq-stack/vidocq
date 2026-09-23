@@ -19,20 +19,26 @@
  */
 package io.vidocq.runtime.extensions.essentials.migration;
 
+import io.vidocq.runtime.spi.ExtensionContext;
 import io.vidocq.runtime.spi.VidocqConfiguration;
 import io.vidocq.runtime.spi.VidocqExtension;
+import io.vidocq.runtime.spi.devconsole.DevConsolePanel;
+import io.vidocq.runtime.spi.devconsole.PanelAction;
+import io.vidocq.runtime.spi.devconsole.PanelSample;
+import io.vidocq.runtime.spi.report.LaunchMode;
 import io.vidocq.runtime.spi.report.StartupReportContext;
-import io.vidocq.runtime.spi.report.StartupReportContributor;
 import io.vidocq.runtime.spi.report.StartupReportSection;
 import io.vidocq.runtime.spi.report.Verbosity;
 import io.vidocq.vauban.core.container.VaubanContainerBuilder;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -46,8 +52,16 @@ import java.util.stream.Collectors;
  *
  * <p>Its section of the startup report, {@code migration}, says what each datasource's migration did, and
  * raises {@value #NOTHING_FOUND} for one that found no migration and has none in its schema history.
+ *
+ * <p>The dev console shows that section live, as the {@code migration} panel: per datasource, its version, what
+ * the last run did, and, in a dev launch, the migrations applied and pending, listed once after the boot's
+ * migration and again after each action, never while the page polls. In a dev launch it offers two actions:
+ * {@code migrate}, which applies the pending migrations of a datasource without a restart, and
+ * {@code clean-and-migrate}, which drops every object of its schema and migrates it again, refused, with nothing
+ * dropped, unless {@code vidocq.migration[.<name>].cleanDisabled} is {@code false}. The password of a datasource
+ * reaches neither the page nor the log.
  */
-public final class MigrationExtension implements VidocqExtension, StartupReportContributor {
+public final class MigrationExtension implements VidocqExtension, DevConsolePanel {
 
     private static final System.Logger LOG = System.getLogger(MigrationExtension.class.getName());
 
@@ -59,20 +73,50 @@ public final class MigrationExtension implements VidocqExtension, StartupReportC
     private static final String LOCATIONS_SUFFIX = ".locations";
     private static final String DEFAULT_LOCATIONS_KEY = PREFIX + "locations";
     private static final String STRICT_KEY = PREFIX + "failOnMissingLocations";
-    /** The keys read whatever the datasources; each named datasource adds its {@code <name>.locations}. */
+    private static final String CLEAN_DISABLED_SUFFIX = "cleanDisabled";
+    private static final String DEFAULT_CLEAN_DISABLED_KEY = PREFIX + CLEAN_DISABLED_SUFFIX;
+    /**
+     * The keys read whatever the datasources; each named datasource adds its {@code <name>.locations} and
+     * {@code <name>.cleanDisabled}.
+     */
     private static final Set<String> FIXED_KEYS = Set.of(
-            PREFIX + "enabled", PREFIX + "engine", DEFAULT_LOCATIONS_KEY, STRICT_KEY);
+            PREFIX + "enabled", PREFIX + "engine", DEFAULT_LOCATIONS_KEY, STRICT_KEY, DEFAULT_CLEAN_DISABLED_KEY);
 
-    /** What one datasource's migration did: where it looked, and what the backend answered. */
-    record Outcome(String dataSourceName, String locationsKey, List<String> locations, MigrationResult result) {}
+    /** The argument both actions take: the name of a datasource that is migrated. */
+    private static final String DATASOURCE = "datasource";
+    static final String CLEAN_CONFIRMATION = "Drop every object in the schema of the chosen datasource, then migrate"
+            + " it again? This cannot be undone.";
+    /** The columns of the {@code applied} and {@code pending} tables of the panel. */
+    static final List<String> COLUMNS = List.of("Version", "Description", "Type", "Installed on", "State");
+    /** The rows a table of the console keeps: the most recent applied migrations, the first pending ones. */
+    private static final int MAX_ROWS = 100;
+
+    /**
+     * What one datasource's migration did: where it looked, what the backend answered, and what ran it.
+     *
+     * @param lastRun     what the panel says of the last run, such as {@code boot: 2 applied}
+     * @param info        the migrations applied and pending, or {@code null} when they are not listed
+     * @param infoAbsent  why they are not listed, when {@code info} is {@code null}
+     */
+    record Outcome(String dataSourceName, String locationsKey, List<String> locations, MigrationResult result,
+                   boolean cleanDisabled, String lastRun, MigrationInfo info, String infoAbsent) {}
 
     private final Supplier<List<SchemaMigrator>> backends;
     private SchemaMigrator migrator;
     private List<MigrationTarget> targets = List.of();
     private boolean disabled;
     private Set<String> configKeys = FIXED_KEYS;
-    /** Written by {@link #beforeStart}, read by {@link #contribute}. */
+    /**
+     * Written by {@link #beforeStart} and replaced by each action, read by {@link #contribute} and {@link #sample}:
+     * an immutable list of immutable outcomes, cleared first in {@link #onStop}.
+     */
     private volatile List<Outcome> outcomes = List.of();
+    /** Set first in {@link #onStop}: an action that starts afterwards runs nothing. */
+    private volatile boolean stopped;
+    /** One monitor per datasource: two actions on one datasource run one after the other. */
+    private final Map<String, Object> locks = new ConcurrentHashMap<>();
+    /** Guards the replacement of one outcome in {@link #outcomes}. */
+    private final Object outcomesLock = new Object();
 
     /** Called by {@link ServiceLoader}: the backends are the {@link SchemaMigrator}s on the path. */
     public MigrationExtension() {
@@ -129,13 +173,40 @@ public final class MigrationExtension implements VidocqExtension, StartupReportC
         List<Outcome> done = new ArrayList<>();
         for (MigrationTarget t : targets) {
             MigrationResult r = migrator.migrate(t); // throws on failure → boot aborts (fail fast)
-            done.add(new Outcome(t.dataSourceName(), locationsKey(t), locations(t), r));
+            done.add(new Outcome(t.dataSourceName(), locationsKey(t), locations(t), r, t.cleanDisabled(),
+                    "boot: " + r.applied() + " applied", null, "listed in a dev launch only"));
             LOG.log(System.Logger.Level.INFO,
                     "Migration done: datasource=" + t.dataSourceName()
                             + " applied=" + r.applied()
                             + " version=" + r.version());
         }
         this.outcomes = List.copyOf(done);
+    }
+
+    /**
+     * In a dev launch, lists the migrations of each datasource once, for the panel: it opens a connection per
+     * datasource, which {@link #sample} never does.
+     */
+    @Override
+    public void onStart(ExtensionContext context) {
+        if (migrator == null || context.launchMode() != LaunchMode.DEV) {
+            return;
+        }
+        for (MigrationTarget t : targets) {
+            synchronized (lock(t)) {
+                Outcome o = outcome(t.dataSourceName());
+                if (o != null) {
+                    replace(withInfo(o, t));
+                }
+            }
+        }
+    }
+
+    /** Clears the outcomes first, so that the panel shows nothing of a stopping boot, and refuses any new action. */
+    @Override
+    public void onStop() {
+        stopped = true;
+        outcomes = List.of();
     }
 
     /**
@@ -175,6 +246,182 @@ public final class MigrationExtension implements VidocqExtension, StartupReportC
         }
     }
 
+    // ── dev console ─────────────────────────────────────────────────────────
+
+    /**
+     * Per datasource, a group: its version, what the last run did, whether its schema may be cleaned, and the
+     * {@code applied} and {@code pending} tables when they were listed. Reads the outcomes kept in memory, nothing
+     * else: the migrations were listed by {@link #onStart} or by the last action.
+     */
+    @Override
+    public void sample(PanelSample sample) {
+        for (Outcome o : outcomes) {
+            PanelSample group = sample.group(o.dataSourceName())
+                    .text("version", o.result().version())
+                    .text("last-run", o.lastRun())
+                    .text("clean", o.cleanDisabled()
+                            ? "disabled: " + cleanDisabledKey(o.dataSourceName()) + "=false allows it"
+                            : "allowed");
+            MigrationInfo info = o.info();
+            if (info == null) {
+                group.absent("applied", o.infoAbsent()).absent("pending", o.infoAbsent());
+            } else {
+                List<MigrationInfo.Migration> applied = info.applied();
+                group.table("applied", COLUMNS,
+                                rows(applied.subList(Math.max(0, applied.size() - MAX_ROWS), applied.size())))
+                        .table("pending", COLUMNS, rows(info.pending().subList(0,
+                                Math.min(MAX_ROWS, info.pending().size()))));
+            }
+        }
+    }
+
+    /**
+     * {@code migrate} and {@code clean-and-migrate}, each taking one of the migrated datasources by name; none when
+     * nothing is migrated. The console calls it in a dev launch only.
+     */
+    @Override
+    public List<PanelAction> actions() {
+        if (migrator == null || targets.isEmpty()) {
+            return List.of();
+        }
+        String[] names = targets.stream().map(MigrationTarget::dataSourceName).toArray(String[]::new);
+        return List.of(
+                new PanelAction("migrate", "Migrate now", null,
+                        List.of(PanelAction.Argument.oneOf(DATASOURCE, "Datasource", names)),
+                        arguments -> migrateNow(arguments.get(DATASOURCE))),
+                new PanelAction("clean-and-migrate", "Clean and migrate", CLEAN_CONFIRMATION,
+                        List.of(PanelAction.Argument.oneOf(DATASOURCE, "Datasource", names)),
+                        arguments -> cleanAndMigrate(arguments.get(DATASOURCE))));
+    }
+
+    /**
+     * Applies the pending migrations of a datasource, as the boot did, and replaces its outcome.
+     *
+     * @param name the datasource
+     * @return what was done, such as {@code default: 2 migrations applied, schema at version 3}
+     */
+    String migrateNow(String name) {
+        MigrationTarget t = target(name);
+        synchronized (lock(t)) {
+            requireRunning();
+            MigrationResult r = run(t, "migrate", () -> migrator.migrate(t));
+            return name + ": " + applied(r) + ", schema at version " + r.version();
+        }
+    }
+
+    /**
+     * Drops every object in the schema of a datasource, then migrates it again, and replaces its outcome. Refused,
+     * with nothing dropped, while its {@code cleanDisabled} key is not {@code false}, and when the backend cannot
+     * clean.
+     *
+     * @param name the datasource
+     * @return what was done, or why nothing was, naming the key to set
+     */
+    String cleanAndMigrate(String name) {
+        MigrationTarget t = target(name);
+        if (t.cleanDisabled()) {
+            return name + ": clean refused, nothing dropped; set " + cleanDisabledKey(name) + "=false to allow it";
+        }
+        synchronized (lock(t)) {
+            requireRunning();
+            try {
+                migrator.clean(t);
+            } catch (UnsupportedOperationException unsupported) {
+                return name + ": " + migrator.engine() + " cannot clean a schema, nothing dropped";
+            }
+            MigrationResult r = run(t, "clean-and-migrate", () -> migrator.migrate(t));
+            return name + ": schema cleaned, " + applied(r) + ", schema at version " + r.version();
+        }
+    }
+
+    /**
+     * Migrates {@code t} and records the outcome with its migrations listed again. On a failure, the previous result
+     * stays, the last run says it failed, by the exception's class only, and the exception goes on to the console.
+     */
+    private MigrationResult run(MigrationTarget t, String action, Supplier<MigrationResult> migration) {
+        Outcome previous = outcome(t.dataSourceName());
+        MigrationResult r;
+        try {
+            r = migration.get();
+        } catch (RuntimeException failed) {
+            if (previous != null) {
+                replace(withInfo(new Outcome(previous.dataSourceName(), previous.locationsKey(),
+                        previous.locations(), previous.result(), previous.cleanDisabled(),
+                        action + ": failed (" + failed.getClass().getSimpleName() + ")", null, null), t));
+            }
+            throw failed;
+        }
+        LOG.log(System.Logger.Level.INFO, "Migration done by the dev console (" + action + "): datasource="
+                + t.dataSourceName() + " applied=" + r.applied() + " version=" + r.version());
+        replace(withInfo(new Outcome(t.dataSourceName(), locationsKey(t), locations(t), r, t.cleanDisabled(),
+                action + ": " + r.applied() + " applied", null, null), t));
+        return r;
+    }
+
+    /** {@code o} with the migrations of {@code t} listed now, or the reason they are not. */
+    private Outcome withInfo(Outcome o, MigrationTarget t) {
+        MigrationInfo info = null;
+        String absent = null;
+        try {
+            info = migrator.info(t);
+        } catch (UnsupportedOperationException unsupported) {
+            absent = migrator.engine() + " cannot list the migrations";
+        } catch (RuntimeException failed) {
+            // the class only: the message of a JDBC failure may carry the URL, or worse
+            absent = "not listed: " + failed.getClass().getSimpleName();
+            LOG.log(System.Logger.Level.WARNING, "Migration: the migrations of datasource " + t.dataSourceName()
+                    + " could not be listed: " + failed.getClass().getName());
+        }
+        return new Outcome(o.dataSourceName(), o.locationsKey(), o.locations(), o.result(), o.cleanDisabled(),
+                o.lastRun(), info, absent);
+    }
+
+    /** Replaces the outcome of the same datasource in {@link #outcomes}, a new immutable list. */
+    private void replace(Outcome o) {
+        synchronized (outcomesLock) {
+            if (stopped) {
+                return;
+            }
+            List<Outcome> next = new ArrayList<>(outcomes);
+            next.replaceAll(current -> current.dataSourceName().equals(o.dataSourceName()) ? o : current);
+            outcomes = List.copyOf(next);
+        }
+    }
+
+    /** The outcomes the report and the panel read now, for the tests. */
+    List<Outcome> outcomes() {
+        return outcomes;
+    }
+
+    private Outcome outcome(String name) {
+        return outcomes.stream().filter(o -> o.dataSourceName().equals(name)).findFirst().orElse(null);
+    }
+
+    private MigrationTarget target(String name) {
+        return targets.stream().filter(t -> t.dataSourceName().equals(name)).findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("no migrated datasource of that name"));
+    }
+
+    private Object lock(MigrationTarget t) {
+        return locks.computeIfAbsent(t.dataSourceName(), n -> new Object());
+    }
+
+    private void requireRunning() {
+        if (stopped) {
+            throw new IllegalStateException("the migration extension is stopped");
+        }
+    }
+
+    private static String applied(MigrationResult r) {
+        return r.applied() + (r.applied() == 1 ? " migration applied" : " migrations applied");
+    }
+
+    private static List<List<String>> rows(List<MigrationInfo.Migration> migrations) {
+        return migrations.stream()
+                .map(m -> List.of(m.version(), m.description(), m.type(), m.installedOn(), m.state()))
+                .toList();
+    }
+
     // ── package-private helpers (unit-tested) ─────────────────────────────────
 
     static List<MigrationTarget> buildTargets(VidocqConfiguration cfg) {
@@ -192,11 +439,15 @@ public final class MigrationExtension implements VidocqExtension, StartupReportC
         return result;
     }
 
-    /** {@link #FIXED_KEYS} and the {@code vidocq.migration.<name>.locations} of every named datasource. */
+    /**
+     * {@link #FIXED_KEYS}, and the {@code vidocq.migration.<name>.locations} and {@code .cleanDisabled} of every named
+     * datasource.
+     */
     static Set<String> declaredKeys(VidocqConfiguration cfg) {
         Set<String> keys = new TreeSet<>(FIXED_KEYS);
         for (String name : namedWithLocations(cfg)) {
             keys.add(PREFIX + name + LOCATIONS_SUFFIX);
+            keys.add(cleanDisabledKey(name));
         }
         return Set.copyOf(keys);
     }
@@ -208,7 +459,14 @@ public final class MigrationExtension implements VidocqExtension, StartupReportC
                 cfg.property(poolPrefix + "username").orElse(null),
                 cfg.property(poolPrefix + "password").orElse(null),
                 cfg.property(locKey).map(s -> List.of(s.split("\\s*,\\s*"))).orElse(List.of()),
-                strict);
+                strict,
+                // anything but false keeps the schema safe from clean
+                cfg.property(cleanDisabledKey(name)).map(v -> !"false".equalsIgnoreCase(v.strip())).orElse(true));
+    }
+
+    /** The key that lets the schema of a datasource be cleaned: {@code vidocq.migration[.<name>].cleanDisabled}. */
+    static String cleanDisabledKey(String name) {
+        return "default".equals(name) ? DEFAULT_CLEAN_DISABLED_KEY : PREFIX + name + "." + CLEAN_DISABLED_SUFFIX;
     }
 
     private static TreeSet<String> namedWithLocations(VidocqConfiguration cfg) {

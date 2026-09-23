@@ -19,6 +19,7 @@
  */
 package io.vidocq.runtime.extensions.essentials.migration.flyway;
 
+import io.vidocq.runtime.extensions.essentials.migration.MigrationInfo;
 import io.vidocq.runtime.extensions.essentials.migration.MigrationResult;
 import io.vidocq.runtime.extensions.essentials.migration.MigrationTarget;
 import org.flywaydb.core.api.FlywayException;
@@ -29,6 +30,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -142,6 +144,58 @@ class FlywaySchemaMigratorTest {
                 lister(Map.of()), FlywaySchemaMigratorTest.class.getClassLoader());
         assertEquals(2, r.applied(), "the scanner lists both kinds; the layer's lister is not used");
         assertEquals(0, count(url, "gizmo"));
+    }
+
+    // ── vidocq#120: info and clean ─────────────────────────────────────────────
+
+    @Test
+    void infoListsTheAppliedAndThePendingMigrations() throws Exception {
+        Path scripts = Files.createDirectories(dir.resolve("info"));
+        Files.writeString(scripts.resolve("V1__create_widget.sql"), "CREATE TABLE widget (id INT PRIMARY KEY);");
+        MigrationTarget target = new MigrationTarget("default", url(), "sa", "", List.of("filesystem:" + scripts));
+        FlywaySchemaMigrator migrator = new FlywaySchemaMigrator();
+        migrator.migrate(target);
+        Files.writeString(scripts.resolve("V2__create_gizmo.sql"), "CREATE TABLE gizmo (id INT PRIMARY KEY);");
+
+        MigrationInfo info = migrator.info(target);
+
+        assertEquals(1, info.applied().size());
+        MigrationInfo.Migration applied = info.applied().get(0);
+        assertEquals("1", applied.version());
+        assertEquals("create widget", applied.description());
+        assertEquals("SQL", applied.type());
+        assertEquals("Success", applied.state());
+        assertFalse(applied.installedOn().isEmpty(), "an ISO-8601 instant");
+        assertEquals(List.of(new MigrationInfo.Migration("2", "create gizmo", "SQL", "", "Pending")),
+                info.pending());
+    }
+
+    @Test
+    void cleanIsRefusedWhileCleanIsDisabledAndDropsNothing() throws Exception {
+        String url = url();
+        MigrationTarget target = target(url, "classpath:db/testmigration");
+        new FlywaySchemaMigrator().migrate(target);
+        assertTrue(target.cleanDisabled(), "the default, as Flyway's own");
+
+        assertThrows(IllegalStateException.class, () -> new FlywaySchemaMigrator().clean(target));
+
+        assertEquals(0, count(url, "widget"), "the table is still there");
+    }
+
+    @Test
+    void cleanDropsTheSchemaWhenCleanIsNotDisabled() throws Exception {
+        String url = url();
+        MigrationTarget target = new MigrationTarget("default", url, "sa", "", List.of("classpath:db/testmigration"),
+                false, false);
+        FlywaySchemaMigrator migrator = new FlywaySchemaMigrator();
+        migrator.migrate(target);
+
+        migrator.clean(target);
+
+        assertThrows(SQLException.class, () -> count(url, "widget"));
+        MigrationInfo info = migrator.info(target);
+        assertTrue(info.applied().isEmpty(), "the schema history is gone too");
+        assertEquals(1, info.pending().size());
     }
 
     // ── fixtures ─────────────────────────────────────────────────────────────

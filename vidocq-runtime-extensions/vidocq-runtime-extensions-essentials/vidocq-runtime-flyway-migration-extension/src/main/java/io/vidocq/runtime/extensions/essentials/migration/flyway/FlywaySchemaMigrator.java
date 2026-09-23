@@ -19,6 +19,7 @@
  */
 package io.vidocq.runtime.extensions.essentials.migration.flyway;
 
+import io.vidocq.runtime.extensions.essentials.migration.MigrationInfo;
 import io.vidocq.runtime.extensions.essentials.migration.MigrationResult;
 import io.vidocq.runtime.extensions.essentials.migration.MigrationTarget;
 import io.vidocq.runtime.extensions.essentials.migration.SchemaMigrator;
@@ -29,6 +30,7 @@ import org.flywaydb.core.api.configuration.FluentConfiguration;
 import org.flywaydb.core.api.output.MigrateResult;
 
 import java.util.Arrays;
+import java.util.Date;
 import java.util.List;
 import java.util.function.Function;
 
@@ -57,10 +59,7 @@ public final class FlywaySchemaMigrator implements SchemaMigrator {
 
     @Override
     public MigrationResult migrate(MigrationTarget t) {
-        Function<String, List<String>> lister = ApplicationLayer.current()
-                .<Function<String, List<String>>>map(layer -> directory -> ApplicationLayer.list(layer, directory))
-                .orElse(null);
-        return migrate(t, lister, applicationLoader());
+        return migrate(t, currentLister(), applicationLoader());
     }
 
     /**
@@ -71,23 +70,83 @@ public final class FlywaySchemaMigrator implements SchemaMigrator {
      * @param loader the loader Flyway reads scripts and loads classes with
      */
     MigrationResult migrate(MigrationTarget t, Function<String, List<String>> lister, ClassLoader loader) {
-        String[] locations = t.locations().isEmpty()
-                ? new String[]{DEFAULT_LOCATION}
-                : t.locations().toArray(String[]::new);
-        FluentConfiguration configuration = Flyway.configure(loader)
-                .dataSource(t.jdbcUrl(), t.username(), t.password())
-                .locations(locations)
-                .failOnMissingLocations(t.failOnMissingLocations());
-        if (lister != null) {
-            listFromTheApplicationLayer(configuration, lister, t);
-        }
-        Flyway flyway = configuration.load();
+        Flyway flyway = load(t, lister, loader);
         MigrateResult r = flyway.migrate();
         // Nothing ran and there was no version before: either nothing was found, or the history holds
         // repeatable migrations only, which have no version. Only the second look tells them apart.
         boolean nothingFound = r.migrationsExecuted == 0 && r.initialSchemaVersion == null
                 && flyway.info().all().length == 0;
         return new MigrationResult(r.migrationsExecuted, version(r), nothingFound);
+    }
+
+    /** Flyway's {@code info}: the migrations its schema history records, and those still to run. */
+    @Override
+    public MigrationInfo info(MigrationTarget t) {
+        return info(t, currentLister(), applicationLoader());
+    }
+
+    /** {@link #info(MigrationTarget)} with the application's files and loader given, for the tests. */
+    MigrationInfo info(MigrationTarget t, Function<String, List<String>> lister, ClassLoader loader) {
+        org.flywaydb.core.api.MigrationInfoService info = load(t, lister, loader).info();
+        return new MigrationInfo(migrations(info.applied()), migrations(info.pending()));
+    }
+
+    /**
+     * Flyway's {@code clean}, which drops every object of the schemas it manages. Flyway refuses it unless its
+     * {@code cleanDisabled} is {@code false}, which it is here only when the target's is: refused otherwise, with
+     * nothing dropped.
+     *
+     * @throws IllegalStateException when the target's {@code cleanDisabled} is {@code true}
+     */
+    @Override
+    public void clean(MigrationTarget t) {
+        clean(t, currentLister(), applicationLoader());
+    }
+
+    /** {@link #clean(MigrationTarget)} with the application's files and loader given, for the tests. */
+    void clean(MigrationTarget t, Function<String, List<String>> lister, ClassLoader loader) {
+        if (t.cleanDisabled()) {
+            throw new IllegalStateException("clean is disabled for datasource " + t.dataSourceName());
+        }
+        load(t, lister, loader).clean();
+    }
+
+    /** A Flyway for {@code t}, its {@code cleanDisabled} that of the target. */
+    private static Flyway load(MigrationTarget t, Function<String, List<String>> lister, ClassLoader loader) {
+        String[] locations = t.locations().isEmpty()
+                ? new String[]{DEFAULT_LOCATION}
+                : t.locations().toArray(String[]::new);
+        FluentConfiguration configuration = Flyway.configure(loader)
+                .dataSource(t.jdbcUrl(), t.username(), t.password())
+                .locations(locations)
+                .failOnMissingLocations(t.failOnMissingLocations())
+                .cleanDisabled(t.cleanDisabled());
+        if (lister != null) {
+            listFromTheApplicationLayer(configuration, lister, t);
+        }
+        return configuration.load();
+    }
+
+    /** What lists the application layer's files, or {@code null} without a layer. */
+    private static Function<String, List<String>> currentLister() {
+        return ApplicationLayer.current()
+                .<Function<String, List<String>>>map(layer -> directory -> ApplicationLayer.list(layer, directory))
+                .orElse(null);
+    }
+
+    private static List<MigrationInfo.Migration> migrations(org.flywaydb.core.api.MigrationInfo[] infos) {
+        return Arrays.stream(infos)
+                .map(i -> new MigrationInfo.Migration(
+                        i.getVersion() == null ? "" : i.getVersion().getVersion(),
+                        i.getDescription(),
+                        i.getType() == null ? "" : String.valueOf(i.getType()),
+                        instant(i.getInstalledOn()),
+                        i.getState() == null ? "" : i.getState().getDisplayName()))
+                .toList();
+    }
+
+    private static String instant(Date installedOn) {
+        return installedOn == null ? "" : installedOn.toInstant().toString();
     }
 
     /** The version after the migration: the new one, else the one the schema was already at. */

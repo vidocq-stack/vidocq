@@ -811,6 +811,14 @@ A tool, prompt or resource template argument has no explicit name and its class 
 | `vidocq.migration.failOnMissingLocations` [.tag-new]#NEW#
 | `false`
 | `true` stops the boot when a Flyway location holds no script (`Unable to resolve location classpath:db/migration.`), instead of migrating nothing. Off by default, so that an application can add the extension before its first script. Liquibase always stops on a missing changelog.
+
+| `vidocq.migration.cleanDisabled` [.tag-new]#NEW#
+| `true`
+| `false` lets the dev console's `clean-and-migrate` action drop every object in the schema of the `@Default` datasource (<<schema-migration-actions>>). Any other value keeps it refused. It is Flyway's own `cleanDisabled`, passed on, and the switch Liquibase's `dropAll` lacks. Nothing but that action ever cleans a schema.
+
+| `vidocq.migration.<name>.cleanDisabled` [.tag-new]#NEW#
+| `true`
+| The same for the named datasource `<name>`.
 |===
 
 The extension declares these keys, so a mistyped one, such as `vidocq.migration.location`, is reported as read by nothing [.tag-new]#NEW# (xref:modules/vidocq-runtime-core.adoc#vidocq-cfg-003[`VIDOCQ-CFG-003`]).
@@ -857,6 +865,41 @@ A datasource's migration found no migration at its locations, and its schema his
 ----
 
 Check the key the hint names, and that the scripts are packaged with the application under that path. In a launch that leaves the application module in the boot layer (<<schema-migration-layer>>), also check that `module-info.java` opens their package (`opens db.migration;`). A schema whose history holds a migration, a repeatable one included, is never flagged, so an up-to-date restart is not an anomaly. `vidocq.migration.failOnMissingLocations=true` turns an empty Flyway location into a boot failure instead.
+
+[#schema-migration-actions]
+=== The `migration` panel and its actions [.tag-new]#NEW#
+
+The dev console shows the section as the `migration` panel, with the boot facts above and one card per migrated datasource below:
+
+[cols="1,1,3"]
+|===
+| Key | Kind | What it is
+
+| `version`
+| text
+| The version the schema is at after the last run: `2`, `(none)`, or `(liquibase)`, which numbers no version.
+
+| `last-run`
+| text
+| What ran last and how many migrations it applied: `boot: 2 applied`, `migrate: 1 applied`, `clean-and-migrate: 3 applied`, or `migrate: failed (FlywayValidateException)`, by the exception's class only, when an action failed.
+
+| `clean`
+| text
+| `allowed`, or `disabled: vidocq.migration.cleanDisabled=false allows it`, naming the key of that datasource.
+
+| `applied`, `pending`
+| table
+| The migrations the schema history records, the latest 100, and those still to run, the first 100: version, description, type, installed on and state, as Flyway's `info` gives them. Liquibase numbers no version: a changeset's id stands in the version column, its author in the description. Absent, `listed in a dev launch only`, outside a `dev` launch.
+|===
+
+The migrations are listed once after the boot's migration, in a `dev` launch only, and again after each action: listing opens a connection, and the page's polls never do.
+
+In a `dev` launch the panel offers two actions (xref:dev-console.adoc#security[the console runs them for its own page only]), each on one migrated datasource, picked from a list:
+
+* *Migrate now*, `migrate`, applies the migrations added since the boot, as the boot does, without a restart: `default: 1 migration applied, schema at version 3`. Its outcome replaces the one the panel shows.
+* *Clean and migrate*, `clean-and-migrate`, asks first: _Drop every object in the schema of the chosen datasource, then migrate it again? This cannot be undone._ It then drops every table, view and sequence of the schema, its history included, with Flyway's `clean` or Liquibase's `dropAll`, and migrates it from scratch: `default: schema cleaned, 3 migrations applied, schema at version 3`. It is refused unless the datasource's `cleanDisabled` key is `false`, and then drops nothing: `default: clean refused, nothing dropped; set vidocq.migration.cleanDisabled=false to allow it`. Flyway itself refuses too, since the extension passes it that same setting.
+
+Actions on one datasource run one after the other. An action runs while the application runs: a query on the datasource at the same time may fail, which the developer who clicked accepts. The answer and the log line name the datasource and counts, never its URL or password. A backend written for an older SPI, without `info` or `clean`, shows its tables absent, `flyway cannot list the migrations` for instance, and answers `clean-and-migrate` with `default: flyway cannot clean a schema, nothing dropped`.
 
 == Activation by dependency
 

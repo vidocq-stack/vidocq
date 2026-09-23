@@ -41,4 +41,30 @@ public interface SchemaMigrator {
     default List<String> defaultLocations() {
         return List.of();
     }
+
+    /**
+     * The migrations of {@code target}: applied and pending. Opens a connection of its own, as
+     * {@link #migrate} does, so it is never called while the dev console samples: the extension lists them once
+     * after the boot's migration, in a dev launch, and again after each action of the console.
+     *
+     * @param target the datasource
+     * @return what its schema history records and what its locations still hold
+     * @throws UnsupportedOperationException by default, for a backend that cannot list them
+     */
+    default MigrationInfo info(MigrationTarget target) {
+        throw new UnsupportedOperationException(engine() + " cannot list the migrations");
+    }
+
+    /**
+     * Drops every object in the schema of {@code target}: its tables, its views, its schema history. Called by
+     * the dev console's {@code clean-and-migrate} action only, in a dev launch, and only for a target whose
+     * {@link MigrationTarget#cleanDisabled() cleanDisabled()} is {@code false}; an implementation refuses, throwing
+     * {@link IllegalStateException}, when it is {@code true}.
+     *
+     * @param target the datasource
+     * @throws UnsupportedOperationException by default, for a backend that cannot clean a schema
+     */
+    default void clean(MigrationTarget target) {
+        throw new UnsupportedOperationException(engine() + " cannot clean a schema");
+    }
 }

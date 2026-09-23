@@ -19,6 +19,8 @@
  */
 module io.vidocq.runtime.extensions.essentials.migration {
     requires transitive io.vidocq.runtime.spi;
+    // MigrationExtension is a DevConsolePanel: its report section is shown live, with its actions, in the console.
+    requires transitive io.vidocq.runtime.spi.devconsole;
     requires io.vidocq.vauban.core;
     exports io.vidocq.runtime.extensions.essentials.migration;
     uses io.vidocq.runtime.extensions.essentials.migration.SchemaMigrator;
