@@ -132,6 +132,19 @@ Chappe listener 'default' started on http://localhost:43127/
 
 A wildcard host reads `localhost` and an IPv6 address is bracketed, `http://[::1]:8080/`.
 
+[#chappe-http-section]
+The startup report gets the same addresses in its `http` section [.tag-new]#NEW#, one per listener of the configuration. The sections that declare routes, such as `rest`, then print them as absolute URLs, and the `mcp` section finds the URL of `/mcp` there:
+
+----
+http          HTTP (Chappe) | 0 ms
+  default http://127.0.0.1:18090/
+rest          REST (Cassini) | 1 ms
+  1 resource class, 4 routes, 4 providers at /
+  POST    http://127.0.0.1:18090/mcp          McpEndpoint#handlePost
+----
+
+A listener an extension declares for itself is left to that extension's section: the dev console's is in the `devconsole` section. An extension reads the URL a listener really listens on with `ChappeMountPoint.instance().boundUrl(name)`, from its `contribute` onwards.
+
 [#extension-listeners]
 === A listener of an extension's own [.tag-new]#NEW#
 
@@ -195,7 +208,7 @@ rest          REST (Cassini) | 0 ms
 
 A route's path is the one a client requests on the listener: the mount prefix, then the path Cassini matches. A mount declared with `strip-prefix=false` hands Cassini the full path, so its routes are printed as Cassini matches them, and its row says `(not stripped)`. A sub-resource locator whose target class is only known when a request reaches it is printed with `*` as its method and names the locator itself.
 
-The route table names handler classes, as every routing section of the report does; it is printed in the detailed report only, the summary keeps its one line. Every route is declared to the report at every level, so a later section finds the URL of its own resource: the `mcp` section's `endpoint` row reads its URL there. The paths are relative for now, since no section declares the `default` listener.
+The route table names handler classes, as every routing section of the report does; it is printed in the detailed report only, the summary keeps its one line. Every route is declared to the report at every level, so a later section finds the URL of its own resource: the `mcp` section's `endpoint` row reads its URL there. The routes are printed as absolute URLs, joined with the listener the <<chappe-http-section,`http` section>> declares.
 
 The section reads what Cassini computed when each stack was built, through `CassiniStack.routes()` (xref:cassini::usage.adoc#route-table[Reading the route table]): it creates no resource or provider instance, and it keeps names only, never a class of the application, so a dev reload releases the previous application.
 
@@ -488,8 +501,8 @@ The summary line counts what the server serves, and the detailed report describe
 [source,text]
 ----
 mcp           MCP server (langchain4j-cdi) | 3 ms
-  2 tools, 1 prompt, 0 resources, 1 resource template
-  endpoint            /mcp (Jakarta REST path; absolute URL once a section declares its listener)
+  2 tools, 1 prompt, 0 resources, 1 resource template at http://localhost:8081/mcp
+  endpoint            http://localhost:8081/mcp
   protocols           2026-07-28 (modern), 2025-03-26 (legacy)
   server              time-server 1.2.3 (vidocq.mcp.*)
   tools               convert_time, current_time

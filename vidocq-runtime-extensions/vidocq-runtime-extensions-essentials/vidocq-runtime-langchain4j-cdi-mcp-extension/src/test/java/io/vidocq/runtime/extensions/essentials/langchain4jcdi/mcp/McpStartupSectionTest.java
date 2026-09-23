@@ -51,6 +51,14 @@ class McpStartupSectionTest {
     private static final Module OPEN_PROVIDING_SERVER = McpEndpoint.class.getModule();
 
     @Test
+    void endpointUrlsKeepEachPathOnceAndDropTheInternalListenRoute() {
+        List<String> urls = List.of("http://127.0.0.1:18090/mcp/_listen", "http://127.0.0.1:18090/mcp",
+                "http://127.0.0.1:18090/mcp", "http://127.0.0.1:18090/mcp");
+
+        assertEquals(List.of("http://127.0.0.1:18090/mcp"), McpStartupSection.endpointUrls(urls));
+    }
+
+    @Test
     void summaryCountsEveryKindWithSingularsAndPlurals() throws Exception {
         RecordingSection section = write(fullContext(Verbosity.SUMMARY, new McpServerConfig()),
                 McpInspection.NOTHING, false);

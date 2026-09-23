@@ -138,6 +138,7 @@ public final class ChappeServerBootstrap implements VidocqExtension {
         servers.add(server);
         InetSocketAddress bound = server.localAddress();
         boundAddresses.put(l.name(), bound);
+        mountPoint.recordBound(l.name(), bound);
 
         if (fellBack) {
             LOG.log(System.Logger.Level.WARNING, "Chappe listener '" + l.name() + "': port " + l.port()
@@ -192,6 +193,9 @@ public final class ChappeServerBootstrap implements VidocqExtension {
         }
         servers.clear();
         boundAddresses.clear();
+        if (mountPoint != null) {
+            mountPoint.clearBound();
+        }
 
         if (mountPoint != null) {
             for (Runnable h : mountPoint.afterStopHooks()) {

@@ -23,12 +23,15 @@ import io.vidocq.chappe.api.Handler;
 import io.vidocq.chappe.api.Router;
 import io.vidocq.chappe.api.WebSocketHandler;
 
+import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Single attachment point shared between extensions to contribute handlers to the Chappe engine.
@@ -60,6 +63,8 @@ public final class ChappeMountPoint {
     private final List<Runnable> beforeStartHooks = new ArrayList<>();
     private final List<Runnable> afterStopHooks = new ArrayList<>();
     private volatile boolean frozen;
+    /** The URL each started listener really listens on, by name: read by report sections and the dev console. */
+    private final Map<String, String> boundUrls = new ConcurrentHashMap<>();
 
     ChappeMountPoint() {}
 
@@ -149,6 +154,27 @@ public final class ChappeMountPoint {
                             + "' is already declared by an extension (" + existing.owner() + ")");
         }
         declare(new Declaration(listener, options, owner));
+    }
+
+    /** Records where a listener really listens, once its server is started. */
+    void recordBound(String listenerName, InetSocketAddress bound) {
+        boundUrls.put(listenerName, ChappeListener.httpUrl(bound));
+    }
+
+    /** Forgets every address, once the servers are stopped. */
+    void clearBound() {
+        boundUrls.clear();
+    }
+
+    /**
+     * The URL a listener really listens on, as its start line logs it: {@code http://localhost:43127/}, with the port
+     * it bound when the configured one was {@code 0} or taken. Known once {@link ChappeServerBootstrap} has started
+     * the servers, so from any {@code contribute} of the startup report and afterwards; forgotten when they stop.
+     * @param listenerName the listener name, such as {@value ChappeListener#DEFAULT}
+     * @return the URL, ending with {@code /}; empty when no server of that name is listening
+     */
+    public Optional<String> boundUrl(String listenerName) {
+        return Optional.ofNullable(boundUrls.get(listenerName));
     }
 
     private void declare(Declaration declaration) {

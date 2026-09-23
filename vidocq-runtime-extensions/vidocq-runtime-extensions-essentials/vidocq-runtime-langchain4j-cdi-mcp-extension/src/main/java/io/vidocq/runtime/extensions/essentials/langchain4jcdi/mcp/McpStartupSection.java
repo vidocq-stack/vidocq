@@ -109,7 +109,7 @@ final class McpStartupSection {
         McpToolRegistry toolRegistry = tools.get();
         McpPromptRegistry prompts = context.lookup(McpPromptRegistry.class).orElseGet(McpPromptRegistry::new);
         McpResourceRegistry resources = context.lookup(McpResourceRegistry.class).orElseGet(McpResourceRegistry::new);
-        List<String> urls = context.routeUrls(ENDPOINT);
+        List<String> urls = endpointUrls(context.routeUrls(ENDPOINT));
 
         section.summary(count(toolRegistry.size(), "tool") + ", " + count(prompts.size(), "prompt") + ", "
                 + count(resources.size(), "resource") + ", " + count(resources.templateSize(), "resource template")
@@ -165,6 +165,15 @@ final class McpStartupSection {
         }
         section.row("allowed origins", origins(config.getAllowedOrigins()));
         section.row("cache hints", "ttl " + config.getCacheTtl() + ", " + config.getCacheScope());
+    }
+
+    /**
+     * The URLs a client calls, from those the {@code rest} section declared for {@link McpEndpoint}: each once, since
+     * the endpoint serves one path with several methods, and without {@link McpEndpoint#LISTEN_PATH}, where the
+     * server routes {@code subscriptions/listen} internally and which no client calls.
+     */
+    static List<String> endpointUrls(List<String> routeUrls) {
+        return routeUrls.stream().filter(url -> !url.endsWith("/" + McpEndpoint.LISTEN_PATH)).distinct().toList();
     }
 
     /** {@code 1 tool}, {@code 0 tools}, {@code 2 resource templates}. */

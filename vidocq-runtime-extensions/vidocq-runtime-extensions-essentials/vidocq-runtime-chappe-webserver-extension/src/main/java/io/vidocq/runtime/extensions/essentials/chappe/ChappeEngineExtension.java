@@ -22,6 +22,13 @@ package io.vidocq.runtime.extensions.essentials.chappe;
 import io.vidocq.vauban.core.container.VaubanContainerBuilder;
 import io.vidocq.runtime.spi.VidocqConfiguration;
 import io.vidocq.runtime.spi.VidocqExtension;
+import io.vidocq.runtime.spi.report.StartupReportContext;
+import io.vidocq.runtime.spi.report.StartupReportContributor;
+import io.vidocq.runtime.spi.report.StartupReportSection;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
 
 /**
  * Vidocq extension which installs the shared {@link ChappeMountPoint}.
@@ -32,8 +39,13 @@ import io.vidocq.runtime.spi.VidocqExtension;
  * </p>
  * <p>The effective startup of the Chappe servers is ensured by
  * {@link ChappeServerBootstrap} at the end of the chain (priority 10,000).</p>
+ * <p><b>Startup report:</b> writes the {@code http} section, which declares every listener of the configuration
+ * with the URL it really listens on. Its priority puts it before the sections that declare routes, so that they
+ * print absolute URLs and read them through {@code routeUrls}: every {@code contribute} runs after every
+ * {@code onStart}, when the servers are already listening. A listener an extension declared for itself, such as
+ * the dev console's, is left to that extension's section.</p>
  */
-public final class ChappeEngineExtension implements VidocqExtension {
+public final class ChappeEngineExtension implements VidocqExtension, StartupReportContributor {
 
     private static final System.Logger LOG = System.getLogger(ChappeEngineExtension.class.getName());
 
@@ -52,6 +64,40 @@ public final class ChappeEngineExtension implements VidocqExtension {
         ChappeMountPoint mp = new ChappeMountPoint();
         ChappeMountPoint.install(mp);
         LOG.log(System.Logger.Level.INFO, "Chappe engine: mount point ready");
+    }
+
+    @Override
+    public String id() {
+        return "http";
+    }
+
+    @Override
+    public String title() {
+        return "HTTP (Chappe)";
+    }
+
+    @Override
+    public void contribute(StartupReportContext context, StartupReportSection section) {
+        ChappeMountPoint mp;
+        try {
+            mp = ChappeMountPoint.instance();
+        } catch (IllegalStateException notInstalled) {
+            section.summary("no listener started");
+            return;
+        }
+        List<String> started = new ArrayList<>();
+        for (ChappeMountPoint.Declaration d : mp.declarations()) {
+            if (d.owner() != null) {
+                continue;
+            }
+            String name = d.listener().name();
+            Optional<String> url = mp.boundUrl(name);
+            if (url.isPresent()) {
+                section.listener(name, url.get());
+                started.add(name + " " + url.get());
+            }
+        }
+        section.summary(started.isEmpty() ? "no listener started" : String.join(", ", started));
     }
 
     @Override
