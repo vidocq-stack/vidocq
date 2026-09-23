@@ -67,6 +67,9 @@ class McpLaunchShapesTest {
             assertTrue(log.contains("it-server 9.9.9 (vidocq.mcp.*)"), log);
             assertTrue(log.lines().anyMatch(line -> line.strip().matches("requestStateSecret\\s+configured")), log);
             assertFalse(log.contains(SECRET), "the rendered startup report printed the request-state secret");
+            // vidocq#103: the rest section lists the routes Cassini resolved, /mcp among them.
+            assertTrue(log.lines().anyMatch(line -> line.strip().matches("POST\\s+/mcp\\s+McpEndpoint#handlePost")),
+                    log);
         }
     }
 

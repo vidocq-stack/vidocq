@@ -59,8 +59,11 @@ final class McpStartupSection {
     static final String ENDPOINT = McpEndpoint.class.getName();
     /** The synthetic bean langchain4j-cdi's CDI 4.1 invoker registers; it is created at the first call only. */
     static final String INVOKER_PROVIDER = "dev.langchain4j.cdi.mcp.invoker.cdi41.McpCdi41InvokerProvider";
-    /** What the endpoint row says until a section declares the route of {@link McpEndpoint}. */
-    static final String ENDPOINT_PATH = "/mcp (Jakarta REST path; absolute URL once the rest section declares routes)";
+    /**
+     * What the endpoint row says while the route of {@link McpEndpoint} has no absolute URL: the {@code rest} section
+     * declares the route, but no section declared the listener it is on.
+     */
+    static final String ENDPOINT_PATH = "/mcp (Jakarta REST path; absolute URL once a section declares its listener)";
 
     private McpStartupSection() {}
 

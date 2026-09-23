@@ -207,6 +207,9 @@ The panels shipped today:
 | *Mansart pools*
 | One card per pool of `vidocq-runtime-mansart-pool-extension`: its size, timeouts and checks, its URL without credentials in a dev launch, the active and idle connections out of its maximum, the borrowers waiting, borrows, timeouts and leaks, and the mean borrow time. See xref:modules/vidocq-runtime-extensions.adoc#mansart-pool-panel[the Mansart pool section].
 
+| *REST (Cassini)* [.tag-new]#NEW#
+| The routes of `vidocq-runtime-cassini-rest-extension`, in match order, each mount, the resource classes and the providers by contract. Boot facts only: Cassini does not measure requests yet. See xref:modules/vidocq-runtime-extensions.adoc#cassini-rest-report[the `rest` section].
+
 | *MCP server* [.tag-new]#NEW#
 | The langchain4j-cdi MCP server of `vidocq-runtime-langchain4j-cdi-mcp-extension`: what it serves and how it is configured, then live — the sessions it holds, the SSE streams and the `subscriptions/listen` streams open, the requests it is waiting an answer of from a client, and whether its methods are invoked through the CDI 4.1 invoker or by reflection. See xref:modules/vidocq-runtime-extensions.adoc#langchain4j-cdi-mcp-live[the `mcp` panel].
 

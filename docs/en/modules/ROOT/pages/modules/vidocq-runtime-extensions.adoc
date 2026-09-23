@@ -44,7 +44,7 @@
 
 | `vidocq-runtime-cassini-rest-extension`
 | `jakartaee-core`
-| Wires xref:cassini::index.adoc[Cassini] for Jakarta REST 4.0. Static routing generated at build (companion `-codegen` artefact), CDI bridged via Vauban.
+| Wires xref:cassini::index.adoc[Cassini] for Jakarta REST 4.0. Static routing generated at build (companion `-codegen` artefact), CDI bridged via Vauban. Its `rest` section of the startup report lists every route [.tag-new]#NEW# (<<cassini-rest-report>>).
 
 | `vidocq-runtime-mansart-pool-extension`
 | `jakartaee-web`
@@ -167,6 +167,37 @@ mp.router("dev").get("/api/snapshot", snapshot);
 A listener name has one owner. The extensions' listeners start first, then those of `vidocq.chappe.listeners`, which must not list a name an extension declared: the boot fails with `listener 'dev' is declared by an extension (DevConsoleExtension); remove it from vidocq.chappe.listeners`. The listener named `default` is always the application's.
 
 Other extensions follow comparable scheduling logic with their own priorities.
+
+[#cassini-rest-report]
+== The `rest` section of the startup report [.tag-new]#NEW#
+
+`vidocq-runtime-cassini-rest-extension` writes the `rest` section: what the Jakarta REST application exposes, as Cassini resolved it. It covers every Cassini stack mounted during the boot — the automatic mount configured by `vidocq.rest.*`, reported as `vidocq.rest`, and each declarative `vidocq.http.mount.<name>.type=restful` mount, reported by its name.
+
+The summary line counts the resource classes, the routes and the providers, and says where they are mounted. The detailed report then lists the routes **in match order** — when two routes match a request, the one listed first wins — each with the resource class and method that handles it; then each mount, the resource classes, and the `@Provider` classes grouped by the contract they implement. A provider that is both a filter and an exception mapper is listed under both.
+
+.The MCP server of `vidocq-runtime-it-langchain4j-cdi-mcp`, `-Dvidocq.startup.report=detailed`
+[source,text]
+----
+rest          REST (Cassini) | 0 ms
+  1 resource class, 4 routes, 4 providers at /
+  POST    /mcp/_listen  McpEndpoint#handleListen
+  POST    /mcp          McpEndpoint#handlePost
+  GET     /mcp          McpEndpoint#handleGet
+  DELETE  /mcp          McpEndpoint#handleDelete
+  mount vidocq.rest  listener default, prefix /, 4 routes
+  resources          dev.langchain4j.cdi.mcp.server.transport.McpEndpoint
+  request filters    dev.langchain4j.cdi.mcp.server.transport.McpListenRoutingFilter,
+                     io.vidocq.cassini.cdi.vauban.VaubanRequestScopeFilter
+  response filters   dev.langchain4j.cdi.mcp.server.transport.McpSseStreamHeadersFilter,
+                     io.vidocq.cassini.cdi.vauban.VaubanRequestScopeFilter
+  exception mappers  dev.langchain4j.cdi.mcp.server.transport.McpExceptionMapper
+----
+
+A route's path is the one a client requests on the listener: the mount prefix, then the path Cassini matches. A mount declared with `strip-prefix=false` hands Cassini the full path, so its routes are printed as Cassini matches them, and its row says `(not stripped)`. A sub-resource locator whose target class is only known when a request reaches it is printed with `*` as its method and names the locator itself.
+
+The route table names handler classes, as every routing section of the report does; it is printed in the detailed report only, the summary keeps its one line. Every route is declared to the report at every level, so a later section finds the URL of its own resource: the `mcp` section's `endpoint` row reads its URL there. The paths are relative for now, since no section declares the `default` listener.
+
+The section reads what Cassini computed when each stack was built, through `CassiniStack.routes()` (xref:cassini::usage.adoc#route-table[Reading the route table]): it creates no resource or provider instance, and it keeps names only, never a class of the application, so a dev reload releases the previous application. The dev console shows it as the `rest` panel, boot facts only: Cassini does not measure requests yet, so the panel has no live value.
 
 [#mansart-pool-panel]
 == Mansart pools in the startup report and the dev console [.tag-new]#NEW#
@@ -424,7 +455,7 @@ The summary line counts what the server serves, and the detailed report describe
 ----
 mcp           MCP server (langchain4j-cdi) | 3 ms
   2 tools, 1 prompt, 0 resources, 1 resource template
-  endpoint            /mcp (Jakarta REST path; absolute URL once the rest section declares routes)
+  endpoint            /mcp (Jakarta REST path; absolute URL once a section declares its listener)
   protocols           2026-07-28 (modern), 2025-03-26 (legacy)
   server              time-server 1.2.3 (vidocq.mcp.*)
   tools               convert_time, current_time

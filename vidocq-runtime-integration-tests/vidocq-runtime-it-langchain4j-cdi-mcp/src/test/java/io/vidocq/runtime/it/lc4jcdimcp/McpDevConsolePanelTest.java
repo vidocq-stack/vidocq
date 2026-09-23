@@ -40,6 +40,7 @@ class McpDevConsolePanelTest {
         try (LaunchedServer server = LaunchedServer.start(LaunchedServer.Shape.FLAT, "i4-devconsole")) {
             DevConsoleSnapshot before = DevConsoleSnapshot.read(server.snapshotUrl());
             before.assertSampled();
+            before.assertRestPanelShowsBootFactsOnly();
 
             assertEquals("no request served yet", before.absent("sessions"),
                     "before any request the panel must say why it has no number, never write a zero");

@@ -28,6 +28,9 @@ import io.vidocq.runtime.extensions.essentials.chappe.ChappeMountPoint;
 import io.vidocq.runtime.spi.ExtensionContext;
 import io.vidocq.runtime.spi.VidocqConfiguration;
 import io.vidocq.runtime.spi.VidocqExtension;
+import io.vidocq.runtime.spi.report.StartupReportContext;
+import io.vidocq.runtime.spi.report.StartupReportContributor;
+import io.vidocq.runtime.spi.report.StartupReportSection;
 import io.vidocq.vauban.core.container.VaubanContainerBuilder;
 import io.vidocq.vauban.core.context.RequestContext;
 
@@ -56,10 +59,20 @@ import java.util.Set;
  * <p><b>Deactivation:</b> as soon as a declarative mount {@code vidocq.http.mount.<n>.type=restful}
  * is present in the config, this extension gives way to
  * {@code ChappeMountConfigExtension} to avoid a double mount.</p>
+ *
+ * <p><b>Startup report:</b> writes the {@code rest} section — the routes of every Cassini stack mounted
+ * during the boot, this extension's and the declarative {@code type=restful} mounts', in match order, with
+ * the resource and provider classes. The dev console shows it as the {@code rest} panel.</p>
  */
-public final class CassiniExtension implements VidocqExtension {
+public final class CassiniExtension implements VidocqExtension, StartupReportContributor {
+
+    static final String SECTION_ID = "rest";
+    static final String SECTION_TITLE = "REST (Cassini)";
 
     private static final System.Logger LOG = System.getLogger(CassiniExtension.class.getName());
+
+    /** The name the report gives the automatic mount, after the keys that configure it. */
+    static final String AUTO_MOUNT = "vidocq.rest";
 
     private String contextPath = "/";
     private String listener = ChappeListener.DEFAULT;
@@ -154,6 +167,7 @@ public final class CassiniExtension implements VidocqExtension {
         }
         String mountPrefix = "/".equals(effectiveContextPath) ? "" : effectiveContextPath;
         ChappeMountPoint.instance().mount(listener, mountPrefix, bridge);
+        RestMounts.record(RestMount.of(AUTO_MOUNT, listener, mountPrefix, true, resourceClasses, stack.routes()));
 
         LOG.log(System.Logger.Level.INFO,
                 "Cassini REST extension mounted on listener={0} prefix={1} ({2} resource class(es))",
@@ -162,11 +176,27 @@ public final class CassiniExtension implements VidocqExtension {
 
     @Override
     public void onStop() {
+        RestMounts.clear();
         // Cassini's route/adapter discovery caches are static and keyed by application
         // Class objects. On an in-JVM hot reload (dev mode, layer re-creation) the next
         // deployment carries NEW classes from a fresh loader — stale keys would miss and
         // dispatch would fall back to reflection against encapsulated packages.
         io.vidocq.cassini.runtime.CassiniMaintenance.resetDiscoveryCaches();
+    }
+
+    @Override
+    public String id() {
+        return SECTION_ID;
+    }
+
+    @Override
+    public String title() {
+        return SECTION_TITLE;
+    }
+
+    @Override
+    public void contribute(StartupReportContext context, StartupReportSection section) {
+        RestStartupSection.write(RestMounts.all(), context, section);
     }
 
     private static boolean hasDeclarativeCassiniMount(ExtensionContext context) {
