@@ -79,7 +79,7 @@ import java.util.regex.Pattern;
  * resources under {@value #PAGE_RESOURCES}; nothing else, and only to a request that names the console's own
  * address. The page, {@code index.html}, {@code console.css} and the ES module {@code console.js}, loads nothing
  * from another site: it polls the snapshot and draws the report first, then one tab per panel, the console's own
- * {@linkplain CdiPanel CDI panel} and {@linkplain JvmPanel JVM panel} last.
+ * {@linkplain ConfigPanel configuration}, {@linkplain CdiPanel CDI} and {@linkplain JvmPanel JVM} panels last.
  *
  * <h2>The history of its curves</h2>
  * <p>Five minutes of every measure is kept by the console, in a {@link PanelHistory} filled by a thread of its own,
@@ -241,11 +241,25 @@ public final class DevConsoleExtension implements VidocqExtension, StartupReport
 
     /**
      * The console's own panels, shown after the contributed ones from the first poll, the boot facts of each written
-     * once per boot: the {@linkplain CdiPanel CDI container}, then the {@linkplain JvmPanel JVM}, last. The report's
-     * own panel, {@code startup}, is the snapshot's {@code startup} member, which the page shows first.
+     * once per boot: the {@linkplain ConfigPanel configuration}, the {@linkplain CdiPanel CDI container}, then the
+     * {@linkplain JvmPanel JVM}, last. The report's own panel, {@code startup}, is the snapshot's {@code startup}
+     * member, which the page shows first.
      */
     private static List<PanelEntry> ownPanels(ExtensionContext context, LaunchMode mode) {
-        return List.of(PanelEntry.builtIn(cdiPanel(context), mode), PanelEntry.builtIn(new JvmPanel(), mode));
+        return List.of(PanelEntry.builtIn(configPanel(context, mode), mode),
+                PanelEntry.builtIn(cdiPanel(context), mode), PanelEntry.builtIn(new JvmPanel(), mode));
+    }
+
+    /** The {@code config} panel, the configuration read now; one that says it has none when reading it fails. */
+    private static ConfigPanel configPanel(ExtensionContext context, LaunchMode mode) {
+        try {
+            return ConfigPanel.of(context.config(), mode, context.startupReport());
+        } catch (RuntimeException | LinkageError failed) {
+            // the failure's class only: its message may quote a configured value
+            LOG.log(System.Logger.Level.DEBUG, "Dev console panel 'config' could not read the configuration: "
+                    + failed.getClass().getName());
+            return new ConfigPanel(null, context.startupReport());
+        }
     }
 
     /** The {@code cdi} panel, its metadata read now; one that says it has none when reading it fails. */

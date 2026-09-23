@@ -202,11 +202,16 @@ class DevConsoleExtensionTest {
         assertEquals(200, booting.statusCode());
         Map<String, Object> first = Json.object(booting.body());
         assertEquals("booting", first.get("state"));
-        assertEquals(List.of("cdi", "jvm"), panelIds(first), "the console's own panels, from the first poll");
-        Map<?, ?> cdi = (Map<?, ?>) ((List<?>) first.get("panels")).get(0);
+        assertEquals(List.of("config", "cdi", "jvm"), panelIds(first),
+                "the console's own panels, from the first poll");
+        Map<?, ?> config = (Map<?, ?>) ((List<?>) first.get("panels")).get(0);
+        assertEquals("Configuration", config.get("title"));
+        assertEquals("0 keys: 0 of the application, 0 vidocq.*, 0 mp.*; 0 sources", config.get("summary"),
+                "the test's configuration has no source");
+        Map<?, ?> cdi = (Map<?, ?>) ((List<?>) first.get("panels")).get(1);
         assertEquals("CDI (Vauban)", cdi.get("title"));
         assertEquals("not available: no container", cdi.get("summary"), "the test's context has no container");
-        Map<?, ?> jvm = (Map<?, ?>) ((List<?>) first.get("panels")).get(1);
+        Map<?, ?> jvm = (Map<?, ?>) ((List<?>) first.get("panels")).get(2);
         assertEquals("JVM", jvm.get("title"));
         assertEquals(true, jvm.get("live"));
         assertTrue(((List<?>) ((Map<?, ?>) jvm.get("sample")).get("values")).stream()
@@ -216,8 +221,8 @@ class DevConsoleExtensionTest {
         Map<String, Object> ready = Json.object(get(url(port) + "api/snapshot").body());
         assertEquals("ready", ready.get("state"));
         assertEquals(url(port), ((Map<?, ?>) ready.get("console")).get("url"));
-        assertEquals(List.of("acme-pool", "cdi", "jvm"), panelIds(ready),
-                "the contributed panels, then the CDI container, then the JVM last");
+        assertEquals(List.of("acme-pool", "config", "cdi", "jvm"), panelIds(ready),
+                "the contributed panels, then the configuration, the CDI container, and the JVM last");
 
         ReportSection section = boot.section().toSection();
         assertEquals(url(port), section.summary());

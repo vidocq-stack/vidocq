@@ -2,7 +2,7 @@
 :description: A read-only page, on a loopback listener of its own, that shows the startup report of the running boot and the live values of the extensions while you develop.
 
 [.lead]
-The dev console is a page that the application serves to your browser while you develop: the startup report of the boot that is running, with its anomalies first, then one tab per extension that has something to show — its boot facts and, for the extensions that give them, live values and charts, such as the connections of each Mansart pool — then the beans of the CDI container and the JVM last. It listens on a port of its own, on the loopback address, it only reads, and it is on in a `dev` launch only.
+The dev console is a page that the application serves to your browser while you develop: the startup report of the boot that is running, with its anomalies first, then one tab per extension that has something to show — its boot facts and, for the extensions that give them, live values and charts, such as the connections of each Mansart pool — then the configuration, the beans of the CDI container and the JVM last. It listens on a port of its own, on the loopback address, it only reads, and it is on in a `dev` launch only.
 
 [#getting-it]
 == Getting it [.tag-new]#NEW#
@@ -170,7 +170,7 @@ Falling back costs about one second of boot: before the console takes a free por
 
 The page is plain HTML, one stylesheet and one JavaScript module, all served by the console: no build step, and nothing loaded from another site, not even a font. It reads one document, `GET /api/snapshot`, about once a second.
 
-* **Tabs.** *Startup* first, then one tab per section of the startup report, in the order of the report, and the console's own *CDI (Vauban)* and *JVM* last. The page keeps the selected tab and the pause in the browser's `localStorage`, and nothing else.
+* **Tabs.** *Startup* first, then one tab per section of the startup report, in the order of the report, and the console's own *Configuration*, *CDI (Vauban)* and *JVM* last. The page keeps the selected tab and the pause in the browser's `localStorage`, and nothing else.
 * **Polling.** One request at a time. None while the tab is hidden, or while *Pause* is pressed.
 * **A reload.** When the application stops answering, during a dev reload, the page greys the last data under `reloading…` and retries every second; after a minute it says `unreachable` and retries every five seconds. A new boot is recognised by its id: the page draws its boot facts again and starts its charts over.
 * **Charts.** The page keeps five minutes of history, 300 points per value, in the browser only: nothing is stored on the server. Time is the server's clock, so a missed poll or a debugger paused on a breakpoint leaves a gap, never a lie.
@@ -216,6 +216,9 @@ The panels shipped today:
 | *MCP server* [.tag-new]#NEW#
 | The langchain4j-cdi MCP server of `vidocq-runtime-langchain4j-cdi-mcp-extension`: what it serves and how it is configured, then live — the sessions it holds, the SSE streams and the `subscriptions/listen` streams open, the requests it is waiting an answer of from a client, and whether its methods are invoked through the CDI 4.1 invoker or by reflection. See xref:modules/vidocq-runtime-extensions.adoc#langchain4j-cdi-mcp-live[the `mcp` panel].
 
+| *Configuration* [.tag-new]#NEW#
+| The console's own: the keys the application sets, the source each value comes from, the value in a dev launch only and never a secret, and the keys nothing reads. See <<config-panel>>.
+
 | *CDI (Vauban)* [.tag-new]#NEW#
 | The console's own: the beans, interceptors and observers of the Vauban container, the application's first. See <<cdi-panel>>.
 
@@ -224,6 +227,32 @@ The panels shipped today:
 |===
 
 An extension adds its panel with the xref:dev-console-panels.adoc[panel SPI].
+
+[#config-panel]
+=== Configuration [.tag-new]#NEW#
+
+The console's own panel, `config`, just before the CDI container: which keys the application sets, which source each value comes from, and which keys nothing reads. Everything is read once, when the console starts, from the configuration sources of the boot: the configuration does not change during a boot, and a dev reload boots again.
+
+* **Which keys:** those of the `vidocq.*` and `mp.*` namespaces, whatever source sets them, and those the application's own sources define: its `vidocq.properties` or `application.properties`, an external `vidocq.properties`, a `microprofile-config.properties` under Ravel, or a source of its own. The system properties and the environment are not listed key by key — the hundreds of `java.*` properties and variables such as `PATH` would drown the rest — but a `-D` property or an environment variable that overrides a key of the application's file is listed, with the source that wins.
+* **Boot facts:** a summary such as `12 keys: 5 of the application, 6 vidocq.*, 1 mp.*; 4 sources`, then:
+** `sources`: every source with its ordinal, in lookup order, the one that wins first;
+** `values`: what the table shows of the values, below;
+** `status`: what the last column means, below;
+** `keys left out`: how many keys the table could not show, only when it could not;
+** `source`: the configuration sources, read once at boot.
+* **Table** `keys`, the application's keys first, then `vidocq.*`, then `mp.*`, each by name, 100 rows at most:
+** `key`;
+** `source` and `ordinal`: the source that wins, the first in lookup order that has a value for the key — the very value `VidocqConfig.getValue` returns. An environment variable `DB_USER` wins for `db.user` when it is set;
+** `value`: in a `dev` launch only, the raw value of that source. Under Ravel it is read before profiles and `${...}` expressions, so an expression is shown as written, never expanded;
+** `status`: `unused` when a xref:modules/vidocq-runtime-core.adoc#vidocq-cfg-003[`VIDOCQ-CFG-003`] anomaly of this boot names the key — a key nothing reads, a typo most of the time; `claimed` when the key falls under a namespace the core or a loaded extension reads, such as `vidocq.mcp.*`; `not audited` for any other key, the application's own among them. The status is read from the startup report, which is written after the console starts: until then it reads `report not written yet`.
+
+What is never shown:
+
+* **A secret.** A key whose last segment names one — `password`, `passwd`, `pwd`, `secret`, `token`, `key`, `credentials`, `apikey`, `api-key` or `private-key`, in any case, alone or as the end of the segment, so `db.adminPassword`, `DB_PASSWORD` and `vidocq.mcp.requestStateSecret` too — reads `configured`. The rule is on the key: a value that merely contains the word `password` is shown when its key names no secret.
+* **The credentials of a URL.** `jdbc:postgresql://admin:s3cr3t@db/orders` reads `jdbc:postgresql://***@db/orders`, and a query parameter that names a secret by the same rule, `password=` or `pwd=` among them, reads `password=***`.
+* **Any value outside a `dev` launch.** A console forced on in a `test` or `prod` launch shows the keys and their sources, and `not shown outside dev` for every value.
+
+The values are made safe in the application's JVM, before the snapshot is written: a secret never reaches the page, and the panel logs nothing.
 
 [#cdi-panel]
 === CDI (Vauban) [.tag-new]#NEW#

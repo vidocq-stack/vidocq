@@ -90,6 +90,18 @@ record DevConsoleSnapshot(String json) {
     }
 
     /**
+     * The console's own {@code config} panel (Vidocq/vidocq#116), as the JSON it was written in: from its id to the
+     * {@code cdi} panel, which the console shows after it.
+     */
+    String configPanel() {
+        int panel = json.indexOf("{\"id\":\"config\",\"title\":\"Configuration\"");
+        assertTrue(panel >= 0, "the snapshot holds no config panel: " + json);
+        int cdi = json.indexOf("{\"id\":\"cdi\"", panel);
+        assertTrue(cdi > panel, "the cdi panel does not follow the config panel: " + json);
+        return json.substring(panel, cdi);
+    }
+
+    /**
      * The console's own {@code cdi} panel (Vidocq/vidocq#117), as the JSON it was written in: from its id to the
      * {@code jvm} panel, which the console shows after it.
      */

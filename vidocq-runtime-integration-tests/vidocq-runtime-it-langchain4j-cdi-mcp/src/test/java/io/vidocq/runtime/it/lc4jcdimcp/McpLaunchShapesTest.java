@@ -58,7 +58,9 @@ class McpLaunchShapesTest {
     void theServerKeysReachTheInitializeResponseAndTheSecretIsNeverPrinted() throws Exception {
         try (LaunchedServer server = LaunchedServer.start(LaunchedServer.Shape.FLAT, "i2-keys",
                 "-Dvidocq.mcp.serverName=it-server", "-Dvidocq.mcp.serverVersion=9.9.9",
-                "-Dvidocq.mcp.requestStateSecret=" + SECRET)) {
+                "-Dvidocq.mcp.requestStateSecret=" + SECRET,
+                // Vidocq/vidocq#116: a dev launch, so that the config panel shows values, and a mistyped key
+                "-Dvidocq.launch.mode=dev", "-Dvidocq.mcp.serverNam=typo")) {
             String initialize = new McpCalls(server.mcpUrl()).initialize();
             String log = server.log();
 
@@ -74,6 +76,19 @@ class McpLaunchShapesTest {
                     log);
             assertTrue(log.lines().anyMatch(line -> line.strip()
                     .equals("endpoint            " + server.mcpUrl())), log);
+
+            // Vidocq/vidocq#116: the dev console's config panel lists the secret key, from the system properties,
+            // as configured; the other keys with their value; the mistyped key as unused. The secret itself
+            // appears nowhere in the snapshot.
+            DevConsoleSnapshot snapshot = DevConsoleSnapshot.read(server.snapshotUrl());
+            String config = snapshot.configPanel();
+            assertTrue(config.contains("[\"vidocq.mcp.requestStateSecret\",\"SystemProperties\",\"400\","
+                    + "\"configured\",\"claimed\"]"), config);
+            assertTrue(config.contains("[\"vidocq.mcp.serverName\",\"SystemProperties\",\"400\",\"it-server\","
+                    + "\"claimed\"]"), config);
+            assertTrue(config.contains("[\"vidocq.mcp.serverNam\",\"SystemProperties\",\"400\",\"typo\","
+                    + "\"unused\"]"), config);
+            assertFalse(snapshot.json().contains(SECRET), "the dev console's snapshot holds the request-state secret");
         }
     }
 

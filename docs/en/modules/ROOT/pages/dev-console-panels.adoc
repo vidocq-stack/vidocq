@@ -347,9 +347,9 @@ No `static` field holds a `Class`, a bean, a proxy or any object of the applicat
 [#rule-ids]
 === Ids are stable and lowercase [.tag-new]#NEW#
 
-`id()` is the name of the section and of the panel, such as `mansart-pool`: lowercase, stable across boots and releases, and unique. `startup`, `cdi`, `jvm` and `devconsole` are the console's. Chart ids and value keys follow the key rule, and stay the same from one boot to the next.
+`id()` is the name of the section and of the panel, such as `mansart-pool`: lowercase, stable across boots and releases, and unique. `startup`, `config`, `cdi`, `jvm` and `devconsole` are the console's. Chart ids and value keys follow the key rule, and stay the same from one boot to the next.
 
-*Why:* the id is how a reader finds the section in a log, and how the report keeps a section from appearing twice: a second contributor with the same id is skipped as xref:modules/vidocq-runtime-core.adoc#vidocq-rpt-002[`VIDOCQ-RPT-002`], and so is one that takes `startup`, `cdi` or `jvm`. The history is keyed by panel, group and value key: a key that changes between two ticks starts a new curve.
+*Why:* the id is how a reader finds the section in a log, and how the report keeps a section from appearing twice: a second contributor with the same id is skipped as xref:modules/vidocq-runtime-core.adoc#vidocq-rpt-002[`VIDOCQ-RPT-002`], and so is one that takes `startup`, `config`, `cdi` or `jvm`. The history is keyed by panel, group and value key: a key that changes between two ticks starts a new curve.
 
 [#rule-failure]
 === A failure costs one sample [.tag-new]#NEW#
@@ -683,7 +683,7 @@ Before shipping a panel, check that:
 
 . **It lives in the brick's existing runtime extension**, a class-less wrapper included, never in the component and never in a new artifact beside it; the module requires `io.vidocq.runtime.spi.devconsole` (transitively when the panel class is exported) and the pom depends on `vidocq-runtime-devconsole-spi`.
 . **It is found**: the extension class implements `DevConsolePanel`, or the wrapper's one class, never a `VidocqExtension`, is declared with `provides io.vidocq.runtime.spi.report.StartupReportContributor` in its `module-info` *and* in `META-INF/services`; the wrapper keeps its Java modules workaround, its `pom.xml` and `module-info` no longer say it has no class, and Knock's ADR-002 has a note recording the departure from option B. Its section is in the detailed report.
-. **Its `id()` is stable, lowercase and unique**, not `startup`, `cdi`, `jvm` or `devconsole`, and `title()` names it for a person.
+. **Its `id()` is stable, lowercase and unique**, not `startup`, `config`, `cdi`, `jvm` or `devconsole`, and `title()` names it for a person.
 . **`contribute` reads memory only**, writes a short summary with no configured value, its rows for `DETAILED`, and its anomalies under a code of its own.
 . **`sample` reads memory only**: no I/O, network, blocking call, application lock, bean creation or logging, and it is never flagged `slow`.
 . **Its state is one `volatile` immutable snapshot**, assigned once complete, cleared first thing in `onStop`, read once per call.
