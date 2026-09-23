@@ -1,6 +1,6 @@
 # ADR 0001 — Actions in the dev console
 
-* Status: Proposed
+* Status: Accepted
 * Date: 2026-09-23
 * Deciders: Yann Blazart
 * Issue: Vidocq/vidocq#118
