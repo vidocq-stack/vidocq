@@ -13,15 +13,17 @@
     <artifactId>vidocq-runtime-dirac-metrics-extension</artifactId>
     <name>Vidocq :: Core Extensions :: Metrics (Dirac)</name>
     <description>Maven/Java Modules wrapper activating Dirac (MicroProfile Metrics 5.1) in a vidocq deployment.
-        No own Java class — the integration relies on dirac-cdi-vauban's BuildCompatibleExtension
-        (discovery of @Counted/@Timed/@Gauge + @ApplicationScoped MetricRegistry producers) and the
-        JAX-RS @Path scanning of CassiniExtension, which auto-mounts MetricsResource (@Path("/metrics")).
-        Mirrors vidocq-runtime-knock-health-extension (ADR-002 in the knock repo).</description>
+        The integration relies on dirac-cdi-vauban's BuildCompatibleExtension (discovery of
+        @Counted/@Timed/@Gauge + @ApplicationScoped MetricRegistry producers) and the JAX-RS @Path
+        scanning of CassiniExtension, which auto-mounts MetricsResource (@Path("/metrics")). Its one
+        Java class, DiracMetricsExtension, only reads the registries for the startup report and the
+        metrics panel of the dev console.</description>
 
     <!--
-        Like knock-extension, this is intentionally a *wrapper*, not a VidocqExtension. Dirac is
-        zero-config and integrates 100% via standard SPIs (CDI 4.1 BCE + JAX-RS @Path scanning).
-        Any vidocq-specific logic must live in a separate module to keep Dirac portable.
+        Like knock-extension, the integration itself needs no Vidocq code: Dirac is zero-config and
+        integrates 100% via standard SPIs (CDI 4.1 BCE + JAX-RS @Path scanning). The one VidocqExtension
+        of this module, DiracMetricsExtension (Vidocq/vidocq#115), only reads what Dirac publishes, for the
+        startup report and the dev console: Vidocq-specific code lives here, so that Dirac stays portable.
     -->
 
     <dependencies>
@@ -62,6 +64,19 @@
             <artifactId>vidocq-runtime-cassini-rest-extension</artifactId>
         </dependency>
 
+        <!--
+            The metrics panel of the dev console (DiracMetricsExtension, Vidocq/vidocq#115): the extension SPI
+            and the dev console SPI it implements.
+        -->
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-spi</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-devconsole-spi</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>jakarta.enterprise</groupId>
             <artifactId>jakarta.enterprise.cdi-api</artifactId>
@@ -75,44 +90,6 @@
         </dependency>
     </dependencies>
 
-    <profiles>
-        <!--
-            Both release and snapshot profiles (declared in vidocq-parent) call
-            maven-javadoc-plugin:jar. This module has no src/main/java — only
-            src/main/module-info/module-info.java. Override the sourcepath in both
-            profiles so javadoc processes the module declaration and produces a
-            non-empty javadoc jar (required by Maven Central validation).
-        -->
-        <profile>
-            <id>release</id>
-            <build>
-                <plugins>
-                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-javadoc-plugin</artifactId>
-                        <configuration>
-                            <sourcepath>${project.basedir}/src/main/module-info</sourcepath>
-                        </configuration>
-                    </plugin>
-                </plugins>
-            </build>
-        </profile>
-        <profile>
-            <id>snapshot</id>
-            <build>
-                <plugins>
-                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-javadoc-plugin</artifactId>
-                        <configuration>
-                            <sourcepath>${project.basedir}/src/main/module-info</sourcepath>
-                        </configuration>
-                    </plugin>
-                </plugins>
-            </build>
-        </profile>
-    </profiles>
-
     <build>
         <plugins>
             <!--
@@ -124,6 +101,18 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-dependency-plugin</artifactId>
+                <executions>
+                    <!-- copy-compile-deps-to-module-path: managed by vidocq-parent. -->
+                    <execution>
+                        <id>copy-test-deps-to-module-path</id>
+                        <phase>generate-test-sources</phase>
+                        <goals><goal>copy-dependencies</goal></goals>
+                        <configuration>
+                            <outputDirectory>${project.build.directory}/javamodules</outputDirectory>
+                            <includeScope>test</includeScope>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -158,6 +147,34 @@
                         </configuration>
                     </execution>
                 </executions>
+            </plugin>
+            <!--
+                Same pattern as cervantes-jwt-extension: the module-info lives in src/main/module-info and is
+                compiled at prepare-package, so target/classes holds no module-info.class during test-compile
+                and the tests run on the class path. Remove a stale one before test-compile.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-antrun-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>remove-stale-module-info-before-test-compile</id>
+                        <phase>process-test-resources</phase>
+                        <goals><goal>run</goal></goals>
+                        <configuration>
+                            <target>
+                                <delete file="${project.build.outputDirectory}/module-info.class" quiet="true"/>
+                            </target>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <useModulePath>false</useModulePath>
+                </configuration>
             </plugin>
         </plugins>
     </build>

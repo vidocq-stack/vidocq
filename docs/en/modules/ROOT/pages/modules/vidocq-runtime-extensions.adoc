@@ -68,7 +68,7 @@
 
 | `vidocq-runtime-dirac-metrics-extension`
 | `microprofile`
-| {spec-mp-metrics} via xref:dirac::index.adoc[Dirac] — Prometheus endpoint.
+| {spec-mp-metrics} via xref:dirac::index.adoc[Dirac] — Prometheus endpoint. Its `metrics` section of the startup report, what the registries hold, is a live dev console panel [.tag-new]#NEW# (<<dirac-metrics-panel>>).
 
 | `vidocq-runtime-grimm-openapi-extension`
 | `microprofile`
@@ -245,6 +245,64 @@ The dev console shows the section as the `rest` panel, with the boot facts above
 A request is timed from the moment Chappe hands it to Cassini to the moment Cassini has written its response: filters, the resource method, exception mappers and serialisation, not the network. A request no resource matches counts as the `404` it gets. The figures are totals for the whole mount: there is no breakdown per route.
 
 Sampling sums a few counters and creates nothing. The counters are on in every stack Vidocq builds; they cost about 25 ns per request and allocate nothing, as Cassini's `BENCH.md` measures. A stack built without them shows `requests` absent, `counters off`, never a zero.
+
+[#dirac-metrics-panel]
+== Dirac metrics in the startup report and the dev console [.tag-new]#NEW#
+
+`vidocq-runtime-dirac-metrics-extension` writes the `metrics` section, titled *Metrics (Dirac)*: what the three MicroProfile Metrics registries of xref:dirac::index.adoc[Dirac] hold. The dev console shows it as the `metrics` panel. Dirac itself needs no Vidocq code; the extension's one class, `DiracMetricsExtension`, only reads what Dirac publishes.
+
+[#dirac-metrics-report]
+=== Boot facts [.tag-new]#NEW#
+
+The summary line counts the metrics of each registry, gauges included: `3 application metrics, 13 base, 0 vendor`. The base registry holds the gauges Dirac reads from the JVM. The detailed report then writes:
+
+* one row per registry, `application`, `base` and `vendor`: its counters, timers, histograms and gauges, such as `1 counter, 1 timer, 0 histograms, 1 gauge`;
+* a list `<registry> metrics` for each registry that holds a counter, a timer or a histogram: the key each one has in the panel, its kind, then its name and tags, such as `checkout.shop-eu, checkout.shop-eu.mean = timer checkout{shop=eu}`. This is where a key the panel shortened or numbered reads back as the metric it stands for;
+* a list `<registry> gauges`: each gauge by its name and tags.
+
+A metric name is not a valid key of the console, so the panel derives one, always the same for the same registry: the name, then each tag in the order of the tag names as `.name-value`; lowercased, every character other than a letter, a digit, a dot or a hyphen replaced with a hyphen, and `m-` in front when it does not start with a letter; cut to 40 characters, less 5 for a timer, whose mean needs `.mean`; and when two metrics end up with the same key, the second gets `-2`, the third `-3`. `com.acme.Shop.placeOrder` with the tag `shop=EU` is `com.acme.shop.placeorder.shop-eu`.
+
+[#dirac-metrics-live]
+=== The `metrics` panel in the dev console [.tag-new]#NEW#
+
+One card per registry, `application` first, then `base` and `vendor`, sampled about once a second:
+
+[cols="1,1,3"]
+|===
+| Key | Kind | What it is
+
+| `counters`, `timers`, `histograms`, `gauges`
+| gauge
+| How many metrics of that kind the registry holds.
+
+| `<key>` of a counter
+| counter
+| Its count. The page shows how much it grew since the previous poll.
+
+| `<key>` of a timer
+| counter
+| How many times it was timed.
+
+| `<key>.mean` of a timer
+| duration
+| Its mean: the time it recorded, added up, divided by its count; absent, `no call yet`, before the first.
+
+| `<key>` of a histogram
+| counter
+| How many values it recorded.
+
+| `omitted`
+| text
+| How many metrics of the card did not fit, such as `11 metrics left out: the console shows 64 values per group`. Written only when some did not.
+|===
+
+What is never shown:
+
+* **A gauge's value.** A gauge's `getValue()` runs application code, which may do I/O or wait on a lock. A gauge is counted and named in the boot facts, and never called, by the report or by the panel.
+* **A timer's longest time, or any percentile.** Dirac's `Timer.getSnapshot()` copies and sorts every value its reservoir holds, too much for a poll that should take well under a millisecond. The panel reads `getCount()` and `getElapsedTime()` only. A histogram shows its count for the same reason.
+* **More than 64 values per card.** The four counts and `omitted` leave 59 values for the metrics: counters first, then timers, two values each, then histograms, each kind in the order of its name and tags. Past them, the rest of the card is left out — a timer whole or not at all — and `omitted` says how many metrics were. The application's metrics have a card of their own, so the JVM gauges of the base registry never push them out.
+
+The section and the panel read the registries of the `MetricRegistryProducerBean` instance the application already has: the bean is resolved once when the extension starts, and each sample asks its context for the existing instance, which never creates one. Before anything asked Dirac for a registry or a metric, the section's summary is `registries not created yet` and the panel shows a single `registries` value, absent, `not created yet`. A container with no Dirac producer, or with a second copy of Dirac loaded by the application layer, which the extension cannot read, shows `no Dirac registry in this container`.
 
 [#mansart-pool-panel]
 == Mansart pools in the startup report and the dev console [.tag-new]#NEW#
