@@ -49,6 +49,7 @@ import java.util.Set;
 import java.util.logging.Level;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -450,5 +451,71 @@ class DevConsoleExtensionTest {
         assertEquals("[VIDOCQ-CFG-003] Configuration key 'vidocq.devconsole.prot' is read by nothing and has no "
                 + "effect. Known keys in this namespace: vidocq.devconsole.enabled, vidocq.devconsole.host, "
                 + "vidocq.devconsole.port", ConfigKeyAudit.warningFor("vidocq.devconsole.prot", declared));
+    }
+
+    /** A {@code POST} of an action, as a client that is no browser may send it, {@code Origin} included. */
+    private static HttpResponse<String> postAction(int port, String path, String origin, String token)
+            throws Exception {
+        HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build();
+        HttpRequest.Builder request = HttpRequest.newBuilder(URI.create(url(port) + path.substring(1)))
+                .timeout(Duration.ofSeconds(3))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString("{}"));
+        if (origin != null) {
+            request.header("Origin", origin);
+        }
+        if (token != null) {
+            request.header(ConsoleActions.TOKEN_HEADER, token);
+        }
+        return client.send(request.build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void aDevBootRunsAnActionForItsOwnPageOnlyOnTheWire() throws Exception {
+        FakeExtensionContext context = context(LaunchMode.DEV, DevConsoleSettings.PORT_KEY, "0");
+        TestPanels.ActionPanel panel = new TestPanels.ActionPanel();
+        Boot boot = boot(context);
+        context.writeReport(FakeReportView.of(panel));
+        int port = boot.console().boundPort();
+
+        Map<String, Object> console = (Map<String, Object>) Json.object(get(url(port) + "api/snapshot").body())
+                .get("console");
+        String token = (String) console.get("actionToken");
+        assertTrue(token != null && token.matches("[0-9a-f]{64}"), String.valueOf(token));
+
+        String own = "http://127.0.0.1:" + port;
+        assertEquals(403, postAction(port, "/api/action/acme-actions/clear", "https://evil.example.com", token)
+                .statusCode());
+        assertEquals(403, postAction(port, "/api/action/acme-actions/clear", null, token).statusCode());
+        assertEquals(403, postAction(port, "/api/action/acme-actions/clear", own, "0".repeat(64)).statusCode());
+        assertEquals(List.of(), panel.runs);
+
+        HttpResponse<String> ran = postAction(port, "/api/action/acme-actions/clear", own, token);
+        assertEquals(200, ran.statusCode(), ran.body());
+        assertEquals("{\"result\":\"0 entries\"}", ran.body());
+        assertTrue(log.messages(Level.INFO).stream().anyMatch(m -> m.startsWith(
+                "Vidocq dev console: action acme-actions/clear by ") && m.endsWith(": 0 entries")),
+                log.messages().toString());
+    }
+
+    @Test
+    void aConsoleForcedOnOutsideDevHasNoTokenAndRunsNothing() throws Exception {
+        FakeExtensionContext context = context(LaunchMode.PROD, DevConsoleSettings.ENABLED_KEY, "true",
+                DevConsoleSettings.PORT_KEY, "0");
+        TestPanels.ActionPanel panel = new TestPanels.ActionPanel();
+        Boot boot = boot(context);
+        context.writeReport(FakeReportView.of(panel));
+        int port = boot.console().boundPort();
+
+        String snapshot = get(url(port) + "api/snapshot").body();
+        HttpResponse<String> refused = postAction(port, "/api/action/acme-actions/clear", "http://127.0.0.1:" + port,
+                "0".repeat(64));
+
+        assertFalse(snapshot.contains("actionToken"), snapshot);
+        assertFalse(snapshot.contains("\"actions\""), snapshot);
+        assertEquals(405, refused.statusCode());
+        assertEquals(0, panel.actionsCalls.get(), "actions() is never called outside a dev launch");
+        assertEquals(List.of(), panel.runs);
     }
 }

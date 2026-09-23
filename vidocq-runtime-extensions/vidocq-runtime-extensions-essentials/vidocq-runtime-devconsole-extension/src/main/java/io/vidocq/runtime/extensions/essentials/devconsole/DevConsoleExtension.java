@@ -46,8 +46,9 @@ import java.util.random.RandomGenerator;
 import java.util.regex.Pattern;
 
 /**
- * The dev console: a read-only page, on a listener of its own, that shows the startup report of the running boot and
- * the live values of the {@linkplain io.vidocq.runtime.spi.devconsole.DevConsolePanel dev console panels}.
+ * The dev console: a page, on a listener of its own, that shows the startup report of the running boot and the live
+ * values of the {@linkplain io.vidocq.runtime.spi.devconsole.DevConsolePanel dev console panels}, and, in a dev
+ * launch only, runs the actions they offer.
  *
  * <h2>When it is on</h2>
  * <p>{@value DevConsoleSettings#ENABLED_KEY} is {@code auto} by default: on in a dev launch, off otherwise;
@@ -77,8 +78,9 @@ import java.util.regex.Pattern;
  * <h2>What it serves</h2>
  * <p>See {@link ConsoleHandler}: {@code GET /api/snapshot}, the {@link Snapshot} of the boot, and the page, from the
  * resources under {@value #PAGE_RESOURCES}; nothing else, and only to a request that names the console's own
- * address. The page, {@code index.html}, {@code console.css} and the ES module {@code console.js}, loads nothing
- * from another site: it polls the snapshot and draws the report first, then one tab per panel, the console's own
+ * address. In a dev launch, {@code POST /api/action/<panel>/<action>} too, behind an origin check and a per-boot
+ * token ({@link ConsoleActions}, ADR 0001). The page, {@code index.html}, {@code console.css} and the ES module
+ * {@code console.js}, loads nothing from another site: it polls the snapshot and draws the report first, then one tab per panel, the console's own
  * {@linkplain ConfigPanel configuration}, {@linkplain CdiPanel CDI} and {@linkplain JvmPanel JVM} panels last.
  *
  * <h2>The history of its curves</h2>
@@ -187,8 +189,12 @@ public final class DevConsoleExtension implements VidocqExtension, StartupReport
             return;
         }
         int port = resolved.port() == 0 ? memory.portForAnyPort() : resolved.port();
+        // Actions exist in a dev launch only (ADR 0001): anywhere else, no token, and no panel's actions() called.
+        ConsoleActions actions = resolved.launchMode() == LaunchMode.DEV
+                ? new ConsoleActions(ConsoleActions.newToken(), clock, ConsoleActions.TIME_LIMIT)
+                : null;
         Snapshot boot = new Snapshot(HexFormat.of().toHexDigits(RandomGenerator.getDefault().nextLong()),
-                VIDOCQ_VERSION, context.startupReport(), ownPanels(context, resolved.launchMode()), clock);
+                VIDOCQ_VERSION, context.startupReport(), ownPanels(context, resolved.launchMode()), clock, actions);
         Handler page = StaticFileHandler.builder()
                 .addClasspath(DevConsoleExtension.class.getClassLoader(), PAGE_RESOURCES)
                 .indexFile("index.html")

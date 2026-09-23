@@ -25,7 +25,9 @@ import io.vidocq.chappe.api.HttpMethod;
 import io.vidocq.chappe.api.HttpVersion;
 import io.vidocq.chappe.api.Request;
 
+import java.net.InetSocketAddress;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 /**
@@ -35,11 +37,36 @@ import java.util.Map;
  * @param path   the path, such as {@code /api/snapshot}
  * @param host        the {@code Host} header, or {@code null} for none
  * @param queryParams the query parameters, such as {@code since}
+ * @param others      the headers besides {@code Host}, by name
+ * @param content     the body
  */
-record FakeRequest(HttpMethod method, String path, String host, Map<String, String> queryParams) implements Request {
+record FakeRequest(HttpMethod method, String path, String host, Map<String, String> queryParams,
+                   Map<String, String> others, byte[] content) implements Request {
+
+    FakeRequest(HttpMethod method, String path, String host, Map<String, String> queryParams) {
+        this(method, path, host, queryParams, Map.of(), new byte[0]);
+    }
 
     FakeRequest(HttpMethod method, String path, String host) {
         this(method, path, host, Map.of());
+    }
+
+    /**
+     * A {@code POST} with headers besides {@code Host} and a body.
+     *
+     * @param path    the path
+     * @param host    the {@code Host} header, or {@code null}
+     * @param headers the other headers, by name; a {@code null} value leaves the header out
+     * @param body    the body, UTF-8
+     */
+    static FakeRequest post(String path, String host, Map<String, String> headers, String body) {
+        return new FakeRequest(HttpMethod.POST, path, host, Map.of(), headers,
+                body.getBytes(StandardCharsets.UTF_8));
+    }
+
+    @Override
+    public InetSocketAddress remoteAddress() {
+        return new InetSocketAddress(java.net.InetAddress.getLoopbackAddress(), 52814);
     }
 
     static FakeRequest get(String path, String host) {
@@ -63,12 +90,21 @@ record FakeRequest(HttpMethod method, String path, String host, Map<String, Stri
 
     @Override
     public Headers headers() {
-        return host == null ? Headers.empty() : Headers.of("Host", host);
+        Headers.Builder headers = Headers.builder();
+        if (host != null) {
+            headers.add("Host", host);
+        }
+        others.forEach((name, value) -> {
+            if (value != null) {
+                headers.add(name, value);
+            }
+        });
+        return headers.build();
     }
 
     @Override
     public Body body() {
-        return Body.empty();
+        return Body.of(content);
     }
 
     @Override

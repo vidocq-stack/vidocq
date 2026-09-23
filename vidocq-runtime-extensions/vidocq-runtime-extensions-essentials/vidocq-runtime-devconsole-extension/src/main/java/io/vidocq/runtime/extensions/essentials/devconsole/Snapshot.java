@@ -24,6 +24,7 @@ import io.vidocq.chappe.api.Request;
 import io.vidocq.chappe.api.Response;
 import io.vidocq.chappe.api.StatusCode;
 import io.vidocq.runtime.spi.devconsole.Chart;
+import io.vidocq.runtime.spi.devconsole.PanelAction;
 import io.vidocq.runtime.spi.devconsole.Series;
 import io.vidocq.runtime.spi.report.ReportAnomaly;
 import io.vidocq.runtime.spi.report.ReportLine;
@@ -82,6 +83,11 @@ import java.util.function.Supplier;
  *       exception's class, never its message, which may carry a secret. The console logs
  *       {@code [VIDOCQ-DEVC-005]} once per panel and boot, with the stack trace at DEBUG, and calls the panel
  *       again on the next poll. A sample that took more than 5 ms is {@code slow}.</li>
+ *   <li>In a {@code dev} launch only, {@code console.actionToken} is the token of this boot, which the page sends
+ *       back with every action request, and each panel has {@code actions}: {@code [{"id", "label",
+ *       "confirmation", "arguments": [{"name", "label", "allowed"}], "running", "last": {"text", "time", "ok"}}]},
+ *       {@code allowed} {@code null} for an argument checked by a pattern, {@code last} {@code null} before the
+ *       first run of the boot (see {@link ConsoleActions}). In any other launch, neither member is written.</li>
  *   <li>Every string of the report and of the samples is {@linkplain Texts#clean cleaned and cut}; a section keeps
  *       {@value #MAX_LINES} lines of {@value #MAX_LINE_VALUES} values, flagged {@code "truncated": true} beyond.</li>
  * </ul>
@@ -108,6 +114,8 @@ final class Snapshot implements Handler {
     private final Supplier<Optional<StartupReportView>> report;
     private final List<PanelEntry> builtIns;
     private final LongSupplier clock;
+    /** The actions of this boot, {@code null} outside a dev launch. */
+    private final ConsoleActions actions;
     /** The panels whose failure was logged this boot. */
     private final Set<String> failed = ConcurrentHashMap.newKeySet();
     /** Five minutes of every measure, filled by {@link #tick()} whether or not a page is watching. */
@@ -147,11 +155,54 @@ final class Snapshot implements Handler {
      */
     Snapshot(String bootId, String vidocq, Supplier<Optional<StartupReportView>> report, List<PanelEntry> builtIns,
              LongSupplier clock) {
+        this(bootId, vidocq, report, builtIns, clock, null);
+    }
+
+    /**
+     * @param bootId   the id of this boot, 64 random bits in hex
+     * @param vidocq   the Vidocq version, or {@code null}
+     * @param report   the startup report of this boot, empty until it is written
+     * @param builtIns the console's own panels, shown last, from the first poll
+     * @param clock    the server's clock, in epoch milliseconds
+     * @param actions  the actions of a dev boot, {@code null} in any other: then no panel's {@code actions()} is
+     *                 called, and the snapshot carries neither the token nor an action
+     */
+    Snapshot(String bootId, String vidocq, Supplier<Optional<StartupReportView>> report, List<PanelEntry> builtIns,
+             LongSupplier clock, ConsoleActions actions) {
         this.bootId = Objects.requireNonNull(bootId, "bootId");
         this.vidocq = vidocq;
         this.report = Objects.requireNonNull(report, "report");
         this.builtIns = List.copyOf(builtIns);
         this.clock = Objects.requireNonNull(clock, "clock");
+        this.actions = actions;
+    }
+
+    /** The actions of this boot, {@code null} outside a dev launch. */
+    ConsoleActions actions() {
+        return actions;
+    }
+
+    /**
+     * The panel {@code id}, among the contributed ones once the report is written and the console's own.
+     *
+     * @param id the id of the panel
+     * @return the panel, or {@code null} when there is none of that id
+     */
+    PanelEntry panel(String id) {
+        Contributed panels = view().map(this::contributed).orElse(null);
+        if (panels != null) {
+            for (PanelEntry panel : panels.panels()) {
+                if (panel.id().equals(id)) {
+                    return panel;
+                }
+            }
+        }
+        for (PanelEntry panel : builtIns) {
+            if (panel.id().equals(id)) {
+                return panel;
+            }
+        }
+        return null;
     }
 
     /**
@@ -287,6 +338,9 @@ final class Snapshot implements Handler {
             out.nullValue();
         }
         out.name("historyTruncated").value(history.truncated());
+        if (actions != null) {
+            out.name("actionToken").value(actions.token());
+        }
         out.endObject();
     }
 
@@ -299,14 +353,14 @@ final class Snapshot implements Handler {
         synchronized (this) {
             current = contributed;
             if (current == null || current.view() != view) {
-                current = read(view);
+                current = read(view, actions != null);
                 contributed = current;
             }
             return current;
         }
     }
 
-    private static Contributed read(StartupReportView view) {
+    private static Contributed read(StartupReportView view, boolean dev) {
         List<ReportSection> sections = view.sections();
         List<PanelEntry> panels = new ArrayList<>();
         Set<String> panelIds = new HashSet<>();
@@ -317,7 +371,7 @@ final class Snapshot implements Handler {
             }
             for (ReportSection section : sections) {
                 if (section.id().equals(id)) {
-                    panels.add(PanelEntry.contributed(contributor, section));
+                    panels.add(PanelEntry.contributed(contributor, section, dev));
                     panelIds.add(id);
                     break;
                 }
@@ -429,7 +483,52 @@ final class Snapshot implements Handler {
         }
         out.name("history");
         history.writeTo(out, panel.id(), since);
+        if (actions != null) {
+            writeActions(out, panel);
+        }
         out.endObject();
+    }
+
+    /**
+     * The member {@code actions} of a panel of a dev boot: what each action is, whether it is running, and how it
+     * last ended this boot, {@code null} before its first run.
+     */
+    private void writeActions(JsonWriter out, PanelEntry panel) {
+        out.name("actions").beginArray();
+        for (PanelAction action : panel.actions()) {
+            out.beginObject()
+                    .name("id").value(action.id())
+                    .name("label").value(Texts.clean(action.label()))
+                    .name("confirmation").value(Texts.clean(action.confirmation()))
+                    .name("arguments").beginArray();
+            for (PanelAction.Argument argument : action.arguments()) {
+                out.beginObject().name("name").value(argument.name())
+                        .name("label").value(Texts.clean(argument.label()))
+                        .name("allowed");
+                if (argument.allowedValues() == null) {
+                    out.nullValue();
+                } else {
+                    out.beginArray();
+                    for (String value : argument.allowedValues()) {
+                        out.value(Texts.clean(value));
+                    }
+                    out.endArray();
+                }
+                out.endObject();
+            }
+            out.endArray();
+            out.name("running").value(actions.running(panel.id(), action.id()));
+            out.name("last");
+            ConsoleActions.Outcome last = actions.outcome(panel.id(), action.id());
+            if (last == null) {
+                out.nullValue();
+            } else {
+                out.beginObject().name("text").value(last.text()).name("time").value(last.time())
+                        .name("ok").value(last.ok()).endObject();
+            }
+            out.endObject();
+        }
+        out.endArray();
     }
 
     /** The lines of {@code section} but the first, when it is the summary, as the report prints it first. */
@@ -475,7 +574,7 @@ final class Snapshot implements Handler {
     }
 
     /** The simple name of the class of {@code failure}, which says what failed and carries nothing of the data. */
-    private static String className(Throwable failure) {
+    static String className(Throwable failure) {
         Class<?> type = failure.getClass();
         String simple = type.getSimpleName();
         if (!simple.isEmpty()) {

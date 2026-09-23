@@ -305,6 +305,38 @@ new Chart("connections", "Connections", List.of(
 
 A *lifetime mean* — a mean over the whole boot, such as Mansart's mean borrow time — is sampled as a `duration` and shown as a number, never plotted. After an hour, one more minute of slow borrows barely moves a mean of the whole hour: its curve would stay flat while the last minutes get worse, and a flat line reads as "nothing happens". Plot what changes between two polls, a level or the rate of a counter. A mean over the last minutes would need the component to keep a total of the time spent, and a series style that divides its growth by the count's: neither exists yet.
 
+[#actions]
+== Actions [.tag-new]#NEW#
+
+In a `dev` launch, a panel may offer to *do* something, such as setting a log level or migrating a database again. It lists what with `actions()`, one `PanelAction` each, and the page shows a button per action next to the panel's links, with a field per argument:
+
+[source,java]
+----
+@Override
+public List<PanelAction> actions() {
+    return List.of(
+            new PanelAction("clear", "Clear the cache", "Drop every entry of the cache?", arguments -> {
+                AcmeCache c = cache;
+                if (c == null) return "not started";
+                return c.clear() + " entries dropped";
+            }),
+            new PanelAction("set-level", "Set level", null, List.of(
+                    PanelAction.Argument.matching("logger", "Logger", "[A-Za-z0-9_.$]{1,120}"),
+                    PanelAction.Argument.oneOf("level", "Level", "ERROR", "WARNING", "INFO", "DEBUG")),
+                    arguments -> levels.set(arguments.get("logger"), arguments.get("level"))));
+}
+----
+
+* **`dev` only.** The console calls `actions()` in a `dev` launch only, once per boot, after the report is written. In a `test` or `prod` launch it never calls it, the page shows no button, and a request to run one gets `405`. A `RuntimeException` or a `LinkageError` thrown by `actions()` leaves the panel without actions.
+* **Checked where it is written.** The id follows the key rule, the label is not blank, a confirmation is `null` or a question, and each argument is named once. Build them in a method that reads the panel's `volatile` state when it runs, as `sample()` does.
+* **Arguments are strings the console checks first.** An argument is either `Argument.oneOf(name, label, values…)`, which the page offers as a list, or `Argument.matching(name, label, regex)`, a text field whose value must match the regular expression as a whole; 200 characters at most either way. A request whose keys are not exactly the declared names, or whose value is not accepted, is refused with `400` before the action is called: `run` receives the declared names only, each with an accepted value.
+* **Never a path, a class or a URL.** An action acts on what its panel already holds; an argument picks among those things, a pool by name, a level. It never takes a file path, a class name or a URL to act on, and keep its pattern as narrow as the value it takes.
+* **One short line back.** `run` returns what the page shows and the console logs at INFO, `Vidocq dev console: action acme-cache/clear by 127.0.0.1: 12 entries dropped`; `null` reads as `done`. It is cleaned and cut at 200 characters, like every text a panel writes, and must never carry a secret.
+* **A failure shows its class only.** An exception thrown by `run` is logged at WARNING with its class, its stack trace at DEBUG, and the page shows `failed: IllegalStateException`, never the message, which may carry a secret.
+* **It runs on its own thread.** A virtual thread of the console, one action at a time per panel: a second request while one runs gets `409`. Past 60 seconds the page stops waiting and says so; the action goes on, and its outcome shows when it ends. Unlike `sample()`, an action may do I/O and block: that is what it is for.
+* **A confirmation for what cannot be undone.** When `confirmation` is set, the page asks it inline, next to the button, and sends only on a second click.
+* **The console guards the request, the panel never parses one.** Who may run an action — the console's own page only, behind an origin check and the token of the boot — is decided in one place: see xref:dev-console.adoc#actions[the checks of an action request].
+
 [#rules]
 == The rules [.tag-new]#NEW#
 
@@ -690,6 +722,7 @@ Before shipping a panel, check that:
 . **No `static` field holds a `Class`, a bean or any object of the application.**
 . **No secret is ever written**: secrets through `secret(key, configured)` only, no `toString()` of a configuration object, URLs without their credentials, configuration values in `dev` only, property keys without their values.
 . **Every key follows `[a-z][a-z0-9.-]{0,39}`, every series names a value the sample writes with the right kind**, a `CEILING` a gauge with a max, a `RATE` a counter, and no lifetime mean is plotted; the rows of a group start with its name.
+. **Its actions, if any, are harmless on a developer's machine** [.tag-new]#NEW#: each takes only declared arguments, a list of values or a narrow pattern, never a path, a class or a URL, returns one short line with no secret, and is tested with the arguments it refuses.
 . **It is tested** against a recording section and a recording sample — in `dev` and outside, the secrets searched for, the charts against the sample, empty after `onStop` — and seen once in a real `mvn vidocq:dev` page.
 
 == Next steps [.tag-new]#NEW#

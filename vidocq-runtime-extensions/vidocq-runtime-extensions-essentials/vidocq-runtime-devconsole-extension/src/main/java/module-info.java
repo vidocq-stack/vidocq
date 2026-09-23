@@ -18,8 +18,8 @@
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
 /**
- * The dev console: a read-only page, on a listener of its own, that shows the startup report of the running boot
- * and the live values of the dev console panels.
+ * The dev console: a page, on a listener of its own, that shows the startup report of the running boot
+ * and the live values of the dev console panels, and runs their actions in a dev launch only.
  *
  * <p>The module exports nothing: Vidocq finds the extension as a service, and the core looks for its class by name,
  * without loading it, to promise its address on the banner. The name falls under the

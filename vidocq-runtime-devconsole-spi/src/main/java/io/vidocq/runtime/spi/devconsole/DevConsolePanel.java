@@ -30,7 +30,8 @@ import java.util.List;
  * <p><b>One contract, two renderings.</b> A panel is a {@link StartupReportContributor}. What its
  * {@link #contribute contribute} writes, once per boot, is both its section of the report logged at the end of the
  * boot and the boot facts of its panel in the console. On top of that, {@link #sample sample} writes the values that
- * change while the application runs, and {@link #charts charts} says which of them the page plots. Every section of
+ * change while the application runs, {@link #charts charts} says which of them the page plots, and, in a dev launch
+ * only, {@link #actions actions} says what the page may ask it to do. Every section of
  * the report is shown by the console, as boot facts; a contributor that implements this interface adds the live
  * part.
  *
@@ -131,6 +132,23 @@ public interface DevConsolePanel extends StartupReportContributor {
      * @return the charts, in the order the page shows them, each with its own id; none by default
      */
     default List<Chart> charts() {
+        return List.of();
+    }
+
+    /**
+     * What this panel offers to do from the page, such as setting a log level: one button each, next to the
+     * panel's links. Read once per boot, after the report is written, and only in a
+     * {@link io.vidocq.runtime.spi.report.LaunchMode#DEV dev} launch: in any other mode the console never calls
+     * it, shows no action and runs none. A {@link RuntimeException} or a {@link LinkageError} thrown here leaves
+     * the panel without actions.
+     *
+     * <p>An action is development only and receives only the string arguments it declares, each checked by the
+     * console first: it never takes a path, a class name or a URL, and returns one short line of text. See
+     * {@link PanelAction}.
+     *
+     * @return the actions, in the order the page shows them, each with its own id; none by default
+     */
+    default List<PanelAction> actions() {
         return List.of();
     }
 

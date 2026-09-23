@@ -110,6 +110,19 @@ class PageTest {
     }
 
     @Test
+    void anActionIsASameOriginJsonPostWithTheTokenConfirmedInline() {
+        String script = file("console.js");
+
+        assertTrue(script.contains("method: \"POST\""), "an action is a POST");
+        assertTrue(script.contains("\"Content-Type\": \"application/json\""), "a body a cross-site form cannot send");
+        assertTrue(script.contains("\"X-Vidocq-Console-Token\": token"), "the token of the boot");
+        assertTrue(script.contains("console.actionToken"), "read from the snapshot");
+        assertTrue(script.contains("fetch(\"api/action/"), "to the console itself, never another origin");
+        assertFalse(Pattern.compile("(?<![\\w.])(confirm|alert|prompt)\\(|window\\.(confirm|alert|prompt)")
+                .matcher(script).find(), "a blocking dialog: the confirmation is asked inline");
+    }
+
+    @Test
     void theScriptTouchesLocalStorageInsideATryOnly() {
         List<String> uses = file("console.js").lines()
                 .filter(line -> !line.strip().startsWith("//") && !line.strip().startsWith("*"))

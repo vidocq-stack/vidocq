@@ -25,6 +25,8 @@ open module io.vidocq.runtime.it.lc4jcdimcp {
     requires io.vidocq.runtime.core;
     // The application compiles against the MCP server's annotations and types; mcp.server.api comes with it.
     requires dev.langchain4j.cdi.mcp.server;
+    // for the tests only, which send the dev console an action request with an Origin of their choice
+    requires static java.net.http;
 
     exports io.vidocq.runtime.it.lc4jcdimcp;
 }

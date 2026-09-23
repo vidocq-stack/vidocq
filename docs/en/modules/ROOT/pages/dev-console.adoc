@@ -306,17 +306,31 @@ The console shows what the application is made of, so it is built to be seen by 
 
 * **Loopback by default.** It listens on `127.0.0.1`. Another address raises <<vidocq-devc-002>>, in every mode.
 * **Its own address only.** A request is answered only when its `Host` header names the console: `localhost`, `127.0.0.1`, `[::1]` or the host it listens on, optionally with the port it bound; when that host is not a loopback one, any IP address too. The host it listens on is the configured one only when the console accepted it: a value refused by the ASCII-only rule of <<configuration>> is reported as <<vidocq-devc-003>> and replaced by `127.0.0.1`, for the bind, the banner and this check alike. Anything else gets `403`. This stops DNS rebinding, where a page of another site has its name resolved to `127.0.0.1` to reach local ports: the browser still sends that site's name.
-* **Read-only.** `GET` and `HEAD` only, anything else gets `405`; there is no endpoint that changes anything.
+* **Read-only outside development** [.tag-new]#NEW#. In a `test` or `prod` launch the console answers `GET` and `HEAD` only, anything else gets `405`, `POST /api/action/…` included: no panel's `actions()` is called, and the snapshot carries neither a token nor an action.
+* **Actions in a `dev` launch, for the console's own page only** [.tag-new]#NEW#. A panel may offer actions, such as setting a log level; the console runs one only for a request its own page sent, behind the checks of <<actions>>.
 * **No reading from another site.** No CORS header, so another site's page can send a request but never read the answer. Every answer carries `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer` and `Content-Security-Policy: default-src 'self'; frame-ancestors 'none'`.
 * **No secret.** A section reports a secret only as `configured` or `not configured`: the API has no way to pass its value. A configuration value that may carry one, such as a JDBC URL, is shown in a dev launch only, without its credentials; outside it, the panel says what it is, such as the database kind. The console never shows JVM arguments or system properties, nor the message of an exception thrown by a panel.
 * **Text stays text.** Everything a panel writes reaches the page as text, never as markup, with control characters replaced and cut at 200 characters.
 * **Links are built, never written** [.tag-new]#NEW#. A panel's button or a route's URL becomes a link only when Vidocq built it from a listener the report declared and a path: an absolute `http` or `https` URL, opened in a new tab with `rel="noopener noreferrer"`. A panel has no way to pass a URL of its own. See xref:dev-console-panels.adoc#links[Links].
 * **A warning outside development.** Forced on in a `test` or `prod` launch, the console raises <<vidocq-devc-001>>, naming where it listens.
 
+[#actions]
+=== Actions [.tag-new]#NEW#
+
+In a `dev` launch, a panel may offer actions, such as setting a log level (xref:dev-console-panels.adoc#actions[Actions]): buttons next to its links, with a field per argument and, when the panel asks for one, an inline confirmation. That makes the console no longer read-only, and a write is a different threat from a read: a page of any site you visit can send a `POST` to `http://127.0.0.1:8888/`. It cannot read the answer, but it does not need to. So `POST /api/action/<panel>/<action>` runs only when every check passes, in this order, each failure answering without running anything:
+
+. the `Host`, as for every request (`403`);
+. the method is `POST` (`405`), and the body is `application/json`, a charset allowed (`415`): a cross-site form cannot send it without a CORS preflight, which the console never answers;
+. `Origin` is present and is `http://` followed by the very `Host` the request was let in with: the origin of the page the console served there (`403`). A missing origin, `null`, `https`, another name for the same address or another port are refused;
+. the header `X-Vidocq-Console-Token` equals the token of the boot, 32 random bytes in hex drawn from `SecureRandom` when the console starts, compared in constant time; the page reads it from `/api/snapshot` (`console.actionToken`), which another site cannot read (`403`);
+. the panel and the action exist (`404`), the body is at most 4 KiB (`413`), and it is one JSON object of strings whose keys are exactly the arguments the action declared, each value accepted by its check (`400`).
+
+A refusal at step 3 or 4 is logged as <<vidocq-devc-006>>. An action runs on a virtual thread, one at a time per panel (`409` while another runs), and the request waits for it up to 60 seconds: `200 {"result": "..."}`, `500 {"error": "<exception class>"}`, or `202 {"state": "running"}` past the limit, the action going on. The snapshot lists each action with its last outcome of the boot, so the page shows it after a reload too. Every run is logged at INFO, `Vidocq dev console: action <panel>/<action> by <address>: <result>`; a failure at WARNING with the class of the exception, which is all the page shows of it, never its message. The decision and the options set aside are in ADR 0001, `docs/adr/0001-dev-console-actions.md` in the repository.
+
 [#anomalies]
 == Anomaly codes [.tag-new]#NEW#
 
-The first four are anomalies of the console's section of the startup report: each is one WARNING record on `io.vidocq.startup.anomaly`, logged the moment it is found and recalled by the report (xref:modules/vidocq-runtime-core.adoc#startup-anomalies[Anomalies]). The fifth comes later, from a poll, on the console's own logger.
+The first four are anomalies of the console's section of the startup report: each is one WARNING record on `io.vidocq.startup.anomaly`, logged the moment it is found and recalled by the report (xref:modules/vidocq-runtime-core.adoc#startup-anomalies[Anomalies]). The fifth comes later, from a poll, and the sixth from a refused action request, both on the console's own logger.
 
 [#vidocq-devc-001]
 === VIDOCQ-DEVC-001 — on outside development [.tag-new]#NEW#
@@ -378,6 +392,20 @@ A panel's `sample()` threw a `RuntimeException` or a `LinkageError`, an invalid 
 
 It is a bug of the panel: see xref:dev-console-panels.adoc[Writing a dev console panel].
 
+[#vidocq-devc-006]
+=== VIDOCQ-DEVC-006 — an action request from elsewhere [.tag-new]#NEW#
+
+In a `dev` launch, an action request was refused for its `Origin` or its `X-Vidocq-Console-Token` (<<security>>): it did not come from the console's own page. Most likely a page of another site tried to make the console do something, or a stale tab of a previous boot sent its old token. Nothing ran. The WARNING is logged on `io.vidocq.devconsole` with the origin the request named, once per origin, reason and boot, 64 at most:
+
+[source,text]
+----
+[VIDOCQ-DEVC-006] Dev console action refused, origin 'https://evil.example.com': not the console's own origin
+[VIDOCQ-DEVC-006] Dev console action refused, origin (none): not the console's own origin
+[VIDOCQ-DEVC-006] Dev console action refused, origin 'http://127.0.0.1:8888': no valid X-Vidocq-Console-Token
+----
+
+The last one, from the console's own origin, is a tab that outlived its boot: reload it.
+
 [#loggers]
 == Loggers [.tag-new]#NEW#
 
@@ -386,7 +414,7 @@ It is a bug of the panel: see xref:dev-console-panels.adoc[Writing a dev console
 | Logger | Records
 
 | `io.vidocq.devconsole`
-| The URL record (INFO), the boxed WARNING of a taken port, a console that could not start (WARNING), <<vidocq-devc-005>>, and the stack trace of a failed sample (DEBUG).
+| The URL record (INFO), the boxed WARNING of a taken port, a console that could not start (WARNING), <<vidocq-devc-005>>, and the stack trace of a failed sample (DEBUG). In a `dev` launch [.tag-new]#NEW#: every action run (INFO), a failed one (WARNING, its stack trace at DEBUG), and <<vidocq-devc-006>>.
 
 | `io.vidocq.startup.anomaly`
 | <<vidocq-devc-001>> to <<vidocq-devc-004>>, as every startup anomaly.

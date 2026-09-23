@@ -30,6 +30,9 @@
 //   minutes away draws a complete curve instead of a hole. The page forgets it all when console.boot changes — a new
 //   boot, a dev reload included — and then asks for the whole ring again. Time is the server's, never this browser's.
 // - localStorage keeps the selected panel and the pause, nothing else, and may refuse both.
+// - In a dev launch, a panel's actions are buttons. Each sends one same-origin POST, application/json, with the
+//   token of the boot the snapshot carries (console.actionToken); a confirmation is asked inline, never with a
+//   blocking dialog. The page shows the line the action returned, or the class of what it threw.
 
 const HISTORY_POINTS = 300;          // five minutes at one poll per second
 const WINDOW_MILLIS = 300_000;       // what a chart shows: the last five minutes
@@ -538,6 +541,133 @@ function openButtons(lines) {
   return bar;
 }
 
+// ------------------------------------------------------------------------------------------------ actions
+
+/** The time of an outcome, by the server's clock, as the reader's local time of day. */
+const clockTime = (t) => typeof t === "number" ? new Date(t).toLocaleTimeString() : "";
+
+/**
+ * The actions a panel offers, in a dev launch only (the snapshot then carries console.actionToken): one button each,
+ * with a field per argument, a list when the server named the values it accepts. A confirmation is asked inline,
+ * never with the browser's blocking dialog, which stops the page and any automation. The request is a same-origin
+ * fetch with the token of the boot; the page shows the result line, or the class of what the action threw, never
+ * more.
+ */
+function actionsBar(panel) {
+  const actions = Array.isArray(panel.actions) ? panel.actions : [];
+  if (!actions.length) return null;
+  const bar = el("div", "actions");
+  const rows = actions.map((action) => actionRow(panel.id, action));
+  bar.append(...rows.map((row) => row.root));
+  return {
+    root: bar,
+    update(current) {
+      const now = (current.actions || []);
+      for (const row of rows) row.update(now.find((a) => a.id === row.id));
+    },
+  };
+}
+
+function actionRow(panelId, action) {
+  const root = el("form", "action");
+  root.noValidate = true;
+  const fields = [];
+  for (const argument of action.arguments || []) {
+    const wrap = el("label", "arg");
+    wrap.append(el("span", null, argument.label || argument.name));
+    let input;
+    if (Array.isArray(argument.allowed)) {
+      input = el("select");
+      for (const value of argument.allowed) {
+        const option = el("option", null, value);
+        option.value = value;
+        input.append(option);
+      }
+    } else {
+      input = el("input");
+      input.type = "text";
+      input.maxLength = 200;
+      input.autocomplete = "off";
+      input.spellcheck = false;
+    }
+    input.name = argument.name;
+    wrap.append(input);
+    fields.push(input);
+    root.append(wrap);
+  }
+  const go = el("button", "act", action.label || action.id);
+  go.type = "submit";
+  const ask = el("span", "ask");
+  ask.hidden = true;
+  const yes = el("button", "act confirm", "Confirm");
+  yes.type = "button";
+  const no = el("button", null, "Cancel");
+  no.type = "button";
+  ask.append(el("span", "question", action.confirmation || ""), yes, no);
+  const message = el("span", "msg");
+  root.append(go, ask, message);
+
+  let sending = false;
+  let shown = null;            // the time of the outcome of the snapshot last shown; a newer one replaces the message
+  const busy = (on) => { for (const c of [go, yes, no, ...fields]) c.disabled = on; };
+  const say = (text, cls) => { message.textContent = text; message.className = "msg" + (cls ? " " + cls : ""); };
+  const closeAsk = () => { ask.hidden = true; go.hidden = false; };
+
+  async function send() {
+    const token = page.snapshot && page.snapshot.console && page.snapshot.console.actionToken;
+    if (typeof token !== "string") { say("No token: reload the page.", "failed"); return; }
+    const body = {};
+    for (const input of fields) body[input.name] = input.value;
+    sending = true;
+    busy(true);
+    say("running…", "running");
+    try {
+      const response = await fetch("api/action/" + encodeURIComponent(panelId) + "/" + encodeURIComponent(action.id), {
+        method: "POST",
+        cache: "no-store",
+        headers: { "Content-Type": "application/json", "X-Vidocq-Console-Token": token },
+        body: JSON.stringify(body),
+      });
+      const type = response.headers.get("Content-Type") || "";
+      const answer = type.startsWith("application/json") ? await response.json() : { text: await response.text() };
+      if (response.status === 200 && typeof answer.result === "string") say(answer.result, "ok");
+      else if (response.status === 500 && typeof answer.error === "string") say("failed: " + answer.error, "failed");
+      else if (response.status === 202) say("still running after 60 s: the outcome will show here", "running");
+      else if (response.status === 409) say("another action of this panel is running", "failed");
+      else say("refused (" + response.status + ")" + (answer.text ? ": " + answer.text : ""), "failed");
+    } catch (unreachable) {
+      say("the console did not answer", "failed");
+    } finally {
+      sending = false;
+      busy(false);
+    }
+  }
+
+  root.addEventListener("submit", (event) => {
+    event.preventDefault();
+    if (sending) return;
+    if (action.confirmation) { go.hidden = true; ask.hidden = false; yes.focus(); return; }
+    send();
+  });
+  yes.addEventListener("click", () => { closeAsk(); send(); });
+  no.addEventListener("click", closeAsk);
+
+  return {
+    id: action.id,
+    root,
+    update(now) {
+      if (!now || sending) return;
+      busy(!!now.running);
+      if (now.running) { say("running…", "running"); shown = null; return; }
+      const last = now.last;
+      if (last && typeof last.text === "string" && last.time !== shown) {
+        shown = last.time;
+        say((last.ok ? "" : "failed: ") + last.text + " · " + clockTime(last.time), last.ok ? "ok" : "failed");
+      }
+    },
+  };
+}
+
 /** The key, values and href of a line of the report: a line that points somewhere ends with {href}. */
 function splitLine(line) {
   const last = line[line.length - 1];
@@ -698,10 +828,13 @@ function startupView(snapshot) {
 /** What decides the layout of a panel: its values and groups. A change draws the panel again. */
 function structure(panel) {
   const sample = panel.sample;
-  if (!sample) return "facts";
-  if (sample.error) return "error";
+  // the actions a panel offers draw their buttons once: a change of them draws the panel again
+  const acts = Array.isArray(panel.actions) ? "#" + panel.actions.map((a) => a.id).join(",") : "";
+  if (!sample) return "facts" + acts;
+  if (sample.error) return "error" + acts;
   const keys = (values) => (values || []).map((v) => v.key + (v.kind === "table" ? "#" : "")).join(",");
-  return keys(sample.values) + "|" + (sample.groups || []).map((g) => g.name + ":" + keys(g.values)).join("|");
+  return keys(sample.values) + "|" + (sample.groups || []).map((g) => g.name + ":" + keys(g.values)).join("|")
+    + acts;
 }
 
 /** A scope of a sample, the panel's own or a group's: its tiles, its tables and the charts that apply to it. */
@@ -747,6 +880,8 @@ function panelView(panel, snapshot) {
   if (panel.summary) panelArea.append(el("p", "summary", panel.summary));
   const opens = openButtons(panel.lines);
   if (opens) panelArea.append(opens);
+  const actions = actionsBar(panel);
+  if (actions) panelArea.append(actions.root);
   const anomalies = anomaliesOf(panel.id, snapshot);
   if (anomalies.length) {
     const list = el("div", "anoms");
@@ -820,6 +955,7 @@ function panelView(panel, snapshot) {
     update(current) {
       const now = current.panels.find((p) => p.id === panel.id);
       if (!now) return;
+      if (actions) actions.update(now);
       const s = now.sample;
       failure.hidden = !(s && s.error);
       if (s && s.error) {

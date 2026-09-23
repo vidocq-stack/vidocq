@@ -21,11 +21,15 @@ package io.vidocq.runtime.extensions.essentials.devconsole;
 
 import io.vidocq.runtime.spi.devconsole.Chart;
 import io.vidocq.runtime.spi.devconsole.DevConsolePanel;
+import io.vidocq.runtime.spi.devconsole.PanelAction;
 import io.vidocq.runtime.spi.report.LaunchMode;
 import io.vidocq.runtime.spi.report.ReportSection;
 import io.vidocq.runtime.spi.report.StartupReportContributor;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 
 /**
  * One panel of the console for one boot, as it is read once and shown on every poll: the boot facts of a section of
@@ -36,13 +40,35 @@ import java.util.List;
  * @param section its boot facts
  * @param panel   what writes its live values, or {@code null} for a contributor that is no panel
  * @param charts  what the page plots of them; empty when there is no panel or its {@code charts()} failed
+ * @param actions what the page may ask it to do: read in a dev launch only, empty in any other, when there is no
+ *                panel or its {@code actions()} failed; each id once, {@value #MAX_ACTIONS} at most
  */
-record PanelEntry(String id, String title, ReportSection section, DevConsolePanel panel, List<Chart> charts) {
+record PanelEntry(String id, String title, ReportSection section, DevConsolePanel panel, List<Chart> charts,
+                  List<PanelAction> actions) {
+
+    /** The most actions of one panel the console shows. */
+    static final int MAX_ACTIONS = 16;
 
     private static final System.Logger LOG = System.getLogger(DevConsoleExtension.LOGGER_NAME);
 
     PanelEntry {
         charts = List.copyOf(charts);
+        actions = List.copyOf(actions);
+    }
+
+    /**
+     * The action {@code id} of this panel.
+     *
+     * @param id the id of the action, as the request names it
+     * @return the action, or {@code null} when the panel offers none of that id
+     */
+    PanelAction action(String id) {
+        for (PanelAction action : actions) {
+            if (action.id().equals(id)) {
+                return action;
+            }
+        }
+        return null;
     }
 
     /**
@@ -51,11 +77,12 @@ record PanelEntry(String id, String title, ReportSection section, DevConsolePane
      *
      * @param contributor the contributor, as the report called it
      * @param section     the section it wrote
+     * @param dev         whether the boot is a dev launch, the only one whose panels offer actions
      */
-    static PanelEntry contributed(StartupReportContributor contributor, ReportSection section) {
+    static PanelEntry contributed(StartupReportContributor contributor, ReportSection section, boolean dev) {
         DevConsolePanel panel = contributor instanceof DevConsolePanel live ? live : null;
         return new PanelEntry(section.id(), title(contributor, section.id()), section, panel,
-                charts(panel, section.id()));
+                charts(panel, section.id()), dev ? actions(panel, section.id()) : List.of());
     }
 
     /**
@@ -75,7 +102,8 @@ record PanelEntry(String id, String title, ReportSection section, DevConsolePane
             LOG.log(System.Logger.Level.DEBUG, "Dev console panel '" + id + "' failed to write its boot facts",
                     failed);
         }
-        return new PanelEntry(id, title, section.toSection(), panel, charts(panel, id));
+        return new PanelEntry(id, title, section.toSection(), panel, charts(panel, id),
+                mode == LaunchMode.DEV ? actions(panel, id) : List.of());
     }
 
     private static String title(StartupReportContributor contributor, String id) {
@@ -97,6 +125,34 @@ record PanelEntry(String id, String title, ReportSection section, DevConsolePane
             return charts == null ? List.of() : charts.stream().filter(chart -> chart != null).toList();
         } catch (RuntimeException | LinkageError failed) {
             LOG.log(System.Logger.Level.DEBUG, "Dev console panel '" + id + "' has no charts: its charts() failed",
+                    failed);
+            return List.of();
+        }
+    }
+
+    /**
+     * The actions of {@code panel}, read once per boot and in a dev launch only: none when it has none or they
+     * fail; an action whose id was already seen, and those past {@value #MAX_ACTIONS}, dropped.
+     */
+    private static List<PanelAction> actions(DevConsolePanel panel, String id) {
+        if (panel == null) {
+            return List.of();
+        }
+        try {
+            List<PanelAction> declared = panel.actions();
+            if (declared == null) {
+                return List.of();
+            }
+            Set<String> ids = new HashSet<>();
+            List<PanelAction> kept = declared.stream().filter(Objects::nonNull).filter(a -> ids.add(a.id()))
+                    .limit(MAX_ACTIONS).toList();
+            if (kept.size() < declared.size()) {
+                LOG.log(System.Logger.Level.DEBUG, "Dev console panel '" + id + "' offers " + declared.size()
+                        + " actions, the console keeps " + kept.size());
+            }
+            return kept;
+        } catch (RuntimeException | LinkageError failed) {
+            LOG.log(System.Logger.Level.DEBUG, "Dev console panel '" + id + "' has no actions: its actions() failed",
                     failed);
             return List.of();
         }

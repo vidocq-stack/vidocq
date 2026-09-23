@@ -402,7 +402,7 @@ The module name falls under the `io.vidocq.runtime.spi` prefix, which keeps a mo
 | Type | Role
 
 | `DevConsolePanel` [.tag-new]#NEW#
-| Extends `StartupReportContributor`. `contribute` writes the boot facts once per boot, for the report and the console alike; `sample(PanelSample)` writes the live values on every poll, from memory only; `charts()` names the values the page plots, none by default. Found as any contributor is: nothing new to declare.
+| Extends `StartupReportContributor`. `contribute` writes the boot facts once per boot, for the report and the console alike; `sample(PanelSample)` writes the live values on every poll, from memory only; `charts()` names the values the page plots, none by default; `actions()` [.tag-new]#NEW#, what the page may ask it to do, called in a `dev` launch only, none by default. Found as any contributor is: nothing new to declare.
 
 | `PanelSample` [.tag-new]#NEW#
 | Where `sample` writes, every method returning a scope so that calls chain: `gauge(key, value, unit)`, `gauge(key, value, max, unit)`, `counter(key, total, unit)`, `duration(key, value)`, `text(key, value)`, `absent(key, reason)`, `table(key, columns, rows)`, and `group(name)`, one level deep. `requireKey(key)` checks the rule of every key, `[a-z][a-z0-9.-]{0,39}`.
@@ -415,6 +415,9 @@ The module name falls under the `io.vidocq.runtime.spi` prefix, which keeps a mo
 
 | `Series`, `Series.Style` [.tag-new]#NEW#
 | A value a chart plots and how: `AREA`, `STACKED`, `LINE` and `CEILING` for a gauge, `RATE` for a counter. `Series.area(key)`, `stacked`, `line`, `rate`, `ceiling`.
+
+| `PanelAction`, `PanelAction.Argument` [.tag-new]#NEW#
+| Something a panel offers to do from the page, in a `dev` launch only: an id, a label, an optional confirmation, its string arguments, each checked by a list of values (`Argument.oneOf`) or a regular expression (`Argument.matching`), and a `Function<Map<String, String>, String>` that does the work and returns one short line. See xref:dev-console-panels.adoc#actions[Actions].
 |===
 
 Where a panel lives, how to write one, its rules, a worked example and how to test it: xref:dev-console-panels.adoc[Writing a dev console panel].

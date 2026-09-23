@@ -23,6 +23,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.nio.charset.StandardCharsets;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -171,5 +177,38 @@ record DevConsoleSnapshot(String json) {
         assertTrue(json.startsWith("\"slow\":false", slow),
                 "the mcp panel's sample was flagged slow: " + json.substring(sample,
                         Math.min(json.length(), sample + 200)));
+    }
+
+    /**
+     * The token of the boot the snapshot carries in a dev launch, {@code console.actionToken}, or {@code null} when
+     * it carries none (Vidocq/vidocq#118).
+     */
+    String actionToken() {
+        Matcher token = Pattern.compile("\"actionToken\":\"([0-9a-f]*)\"").matcher(json);
+        return token.find() ? token.group(1) : null;
+    }
+
+    /**
+     * Sends the console an action request as a page of {@code origin} would, with {@code token}, and returns the
+     * status it answers. With {@code java.net.http}, since {@code HttpURLConnection} refuses to set an
+     * {@code Origin}.
+     *
+     * @param snapshotUrl the URL of the console's snapshot, whose origin the request is sent to
+     * @param path        the path of the action, such as {@code /api/action/mcp/nothing}
+     * @param origin      the {@code Origin} header
+     * @param token       the {@code X-Vidocq-Console-Token} header
+     */
+    static int postAction(String snapshotUrl, String path, String origin, String token) throws Exception {
+        URI target = URI.create(snapshotUrl).resolve(path);
+        HttpRequest request = HttpRequest.newBuilder(target)
+                .timeout(Duration.ofSeconds(10))
+                .header("Content-Type", "application/json")
+                .header("Origin", origin)
+                .header("X-Vidocq-Console-Token", token)
+                .POST(HttpRequest.BodyPublishers.ofString("{}"))
+                .build();
+        try (HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build()) {
+            return client.send(request, HttpResponse.BodyHandlers.discarding()).statusCode();
+        }
     }
 }

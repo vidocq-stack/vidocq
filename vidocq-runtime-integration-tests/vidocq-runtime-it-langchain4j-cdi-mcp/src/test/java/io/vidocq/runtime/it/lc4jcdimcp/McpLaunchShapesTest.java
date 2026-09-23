@@ -23,6 +23,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
+import java.net.URI;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -89,6 +92,20 @@ class McpLaunchShapesTest {
             assertTrue(config.contains("[\"vidocq.mcp.serverNam\",\"SystemProperties\",\"400\",\"typo\","
                     + "\"unused\"]"), config);
             assertFalse(snapshot.json().contains(SECRET), "the dev console's snapshot holds the request-state secret");
+
+            // Vidocq/vidocq#118: a dev launch publishes the token of its boot for the console's own page, and an
+            // action request from another site is refused before anything is looked up, even with that token.
+            String token = snapshot.actionToken();
+            assertTrue(token != null && token.matches("[0-9a-f]{64}"), "no action token in a dev launch: " + token);
+            String own = URI.create(server.snapshotUrl()).resolve("/").toString().replaceAll("/$", "");
+            assertEquals(403, DevConsoleSnapshot.postAction(server.snapshotUrl(), "/api/action/mcp/nothing",
+                    "https://evil.example.com", token));
+            assertEquals(403, DevConsoleSnapshot.postAction(server.snapshotUrl(), "/api/action/mcp/nothing", own,
+                    "0".repeat(64)));
+            // its own origin and the token get past both checks, to an action the mcp panel does not offer
+            assertEquals(404, DevConsoleSnapshot.postAction(server.snapshotUrl(), "/api/action/mcp/nothing", own,
+                    token));
+            assertTrue(server.log().contains("[VIDOCQ-DEVC-006]"), "the refusal is logged");
         }
     }
 
