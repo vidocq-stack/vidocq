@@ -21,9 +21,14 @@ package io.vidocq.runtime.maven.dev;
 
 import io.vidocq.runtime.devservices.host.DefaultDevServiceContext;
 import io.vidocq.runtime.devservices.host.DevServiceManager;
+import io.vidocq.runtime.devservices.host.DevServicesSession;
+import io.vidocq.runtime.devservices.spi.DevService;
+import io.vidocq.runtime.devservices.spi.DevServiceContext;
 import io.vidocq.runtime.maven.ConsoleColors;
 import org.apache.maven.plugin.logging.SystemStreamLog;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -31,6 +36,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -98,6 +107,72 @@ class VidocqDevMojoTest {
         assertFalse(sysProps.containsKey("vidocq.dev.provided.vidocq.pool.audit.username"),
                 "the child sees the explicit value, not the dev service's");
         assertEquals(6, sysProps.size(), sysProps.toString());
+    }
+
+    /**
+     * {@code vidocq:dev}'s shutdown hook and {@code execute()}'s own {@code finally} block both call {@link
+     * VidocqDevMojo#closeDevServices(io.vidocq.runtime.devservices.host.DevServicesSession)} on Ctrl+C.
+     * Not just "at most once": the loser of that race must not return before the winner's {@code close()}
+     * — including the provider's (possibly slow) {@code stop()} — has actually finished. {@code
+     * closeDevServices} is {@code synchronized} for exactly this.
+     */
+    @Test
+    @Timeout(value = 10, unit = TimeUnit.SECONDS)
+    void devServicesStopFullyCompletesBeforeEitherCallerReturns(@TempDir Path tmp) throws Exception {
+        AtomicInteger stopCalls = new AtomicInteger();
+        CountDownLatch stopStarted = new CountDownLatch(1);
+        AtomicBoolean stopCompleted = new AtomicBoolean(false);
+        DevService slow = new DevService() {
+            @Override
+            public String id() {
+                return "slow";
+            }
+
+            @Override
+            public boolean appliesWhen(DevServiceContext ctx) {
+                return true;
+            }
+
+            @Override
+            public Map<String, String> start(DevServiceContext ctx) {
+                return Map.of();
+            }
+
+            @Override
+            public void stop() {
+                stopCalls.incrementAndGet();
+                stopStarted.countDown();
+                try {
+                    Thread.sleep(300); // simulates a slow container stop (Testcontainers/Ryuk)
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                stopCompleted.set(true);
+            }
+        };
+        DevServicesSession session = DevServicesSession.forTesting("vidocq:dev", tmp, List.of(slow),
+                System.getLogger("test"));
+        VidocqDevMojo mojo = new VidocqDevMojo();
+
+        AtomicBoolean secondCallerReturnedTooEarly = new AtomicBoolean(false);
+        Thread first = new Thread(() -> mojo.closeDevServices(session), "first-closer");
+        first.start();
+        assertTrue(stopStarted.await(5, TimeUnit.SECONDS), "stop() never started");
+
+        Thread second = new Thread(() -> {
+            mojo.closeDevServices(session); // must block until the first call's stop() has fully returned
+            if (!stopCompleted.get()) {
+                secondCallerReturnedTooEarly.set(true);
+            }
+        }, "second-closer");
+        second.start();
+        second.join(TimeUnit.SECONDS.toMillis(5));
+        first.join(TimeUnit.SECONDS.toMillis(5));
+
+        assertFalse(secondCallerReturnedTooEarly.get(),
+                "the second caller returned before the provider's stop() had actually finished");
+        assertTrue(stopCompleted.get());
+        assertEquals(1, stopCalls.get(), "stop() must run exactly once");
     }
 
     /** Whoever reaches a JDWP agent can run any code in the child: by default only this machine can. */

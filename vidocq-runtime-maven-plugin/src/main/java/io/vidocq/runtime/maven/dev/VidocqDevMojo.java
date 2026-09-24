@@ -263,6 +263,9 @@ public class VidocqDevMojo extends AbstractMojo {
         // source reloads respawn the child but never touch them.
         DevServicesSession devs = null;
         if (devServices) {
+            // Resolved before open(): a missing extension/devconsole-spi jar must abort before any
+            // container is started, never leave a running session with nothing left to close it.
+            List<Path> extensionJars = DevServicesExtensionJar.resolve(pluginArtifactMap, project.getArtifacts());
             try {
                 devs = DevServicesSession.open("vidocq:dev", projectDir, sysProps,
                         ApplicationFiles.of(classesDir.toPath()), System.getLogger("vidocq.dev.devservices"));
@@ -271,7 +274,7 @@ public class VidocqDevMojo extends AbstractMojo {
             }
             foldDevServiceProperties(sysProps, devs.injected(), devs.providers());
             sysProps.putIfAbsent(StateFile.PROPERTY, devs.stateFile().toAbsolutePath().toString());
-            modulePath.add(DevServicesExtensionJar.find(pluginArtifactMap));
+            modulePath.addAll(extensionJars);
         }
         final DevServicesSession devServicesRef = devs;
 
@@ -291,9 +294,7 @@ public class VidocqDevMojo extends AbstractMojo {
                     Thread.currentThread().interrupt();
                 }
             }
-            if (devServicesRef != null) {
-                devServicesRef.close();
-            }
+            closeDevServices(devServicesRef);
         }, "vidocq-dev-shutdown");
         Runtime.getRuntime().addShutdownHook(hook);
 
@@ -362,9 +363,7 @@ public class VidocqDevMojo extends AbstractMojo {
                 }
             }
             // Stop the dev-mode containers (idempotent — the hook may already have run on Ctrl+C).
-            if (devServicesRef != null) {
-                devServicesRef.close();
-            }
+            closeDevServices(devServicesRef);
             // Avoid IllegalStateException if the JVM is mid-shutdown.
             try {
                 Runtime.getRuntime().removeShutdownHook(hook);
@@ -503,6 +502,22 @@ public class VidocqDevMojo extends AbstractMojo {
                 sysProps.putIfAbsent(DEV_PROVIDED_PREFIX + key, providers.get(key));
             }
         });
+    }
+
+    /**
+     * Closes {@code session} (if not {@code null}), {@code synchronized} on this mojo instance: the shutdown
+     * hook and {@code execute()}'s own {@code finally} block both call this, and {@link
+     * DevServicesSession#close()} only guards itself against running twice — its second caller returns
+     * immediately, without waiting for the first call to actually finish stopping the containers. The lock
+     * here forces the second caller to wait until the first one's {@code close()} has fully returned, so
+     * neither the hook nor {@code finally} can move on (and let the JVM believe shutdown is complete) while a
+     * container is still being torn down.
+     */
+    // package-private for the unit test of the close-exactly-once wiring.
+    synchronized void closeDevServices(DevServicesSession session) {
+        if (session != null) {
+            session.close();
+        }
     }
 
     // Package-private accessors used in unit tests — keep at the bottom so the

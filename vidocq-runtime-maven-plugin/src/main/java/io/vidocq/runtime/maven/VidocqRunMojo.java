@@ -224,6 +224,9 @@ public class VidocqRunMojo extends AbstractMojo {
 
         DevServicesSession devs = null;
         if (devServicesEnabled(systemProperties, ApplicationFiles.of(classes))) {
+            // Resolved before open(): a missing extension/devconsole-spi jar must abort before any
+            // container is started, never leave a running session with nothing left to close it.
+            List<Path> extensionJars = DevServicesExtensionJar.resolve(pluginArtifactMap, project.getArtifacts());
             try {
                 devs = DevServicesSession.open("vidocq:run", projectDir, systemProperties, ApplicationFiles.of(classes),
                         System.getLogger("vidocq.run.devservices"));
@@ -233,7 +236,7 @@ public class VidocqRunMojo extends AbstractMojo {
             devs.injected().forEach(systemProperties::putIfAbsent);
             devs.providers().forEach((k, id) -> systemProperties.putIfAbsent("vidocq.dev.provided." + k, id));
             systemProperties.putIfAbsent(StateFile.PROPERTY, devs.stateFile().toAbsolutePath().toString());
-            modulePath.add(DevServicesExtensionJar.find(pluginArtifactMap));
+            modulePath.addAll(extensionJars);
         }
         devServicesSession.set(devs);
 
@@ -259,13 +262,17 @@ public class VidocqRunMojo extends AbstractMojo {
     }
 
     /**
-     * Closes the dev services session exactly once: whichever of the shutdown hook (Ctrl+C) or this
-     * {@code finally} block runs first clears {@link #devServicesSession}, so the other sees {@code null}
-     * and does nothing. {@link DevServicesSession#close()} is itself idempotent, so calling it twice would
-     * be harmless too — this just avoids the redundant call.
+     * Closes the dev services session exactly once, and only returns to <em>either</em> caller after the
+     * close has actually finished. The shutdown hook (Ctrl+C) and this {@code finally} block both call this
+     * — {@code synchronized} so that whichever runs first performs the close while holding the lock, and the
+     * other blocks on the same lock until it is released, instead of racing {@link
+     * #devServicesSession}'s {@code getAndSet(null)} and returning immediately with the containers still
+     * being torn down. A racing loser that merely saw {@code null} would let the JVM believe shutdown is
+     * complete — and halt — while {@link DevServicesSession#close()} is still stopping containers on the
+     * other thread (Testcontainers/Ryuk left to clean up, and the state file stuck at {@code "running"}).
      */
     // package-private for the unit test of the close-exactly-once wiring.
-    void closeDevServices() {
+    synchronized void closeDevServices() {
         DevServicesSession session = devServicesSession.getAndSet(null);
         if (session != null) {
             session.close();
@@ -284,9 +291,10 @@ public class VidocqRunMojo extends AbstractMojo {
         Thread hook = new Thread(() -> {
             stopped.set(true);
             stop(running.getAndSet(null));
-            // Covers a JVM that exits (Ctrl+C) before execute()'s finally runs; closeDevServices() is
-            // itself safe to call twice, since the AtomicReference exchange means only one of the two
-            // callers ever sees a non-null session.
+            // Covers a JVM that exits (Ctrl+C) before execute()'s finally runs. closeDevServices() is
+            // synchronized: if execute()'s finally is already closing the session on the main thread, this
+            // call blocks until that close has fully finished before the hook (and the shutdown sequence)
+            // can proceed.
             closeDevServices();
         }, "vidocq-run-shutdown");
         Runtime.getRuntime().addShutdownHook(hook);

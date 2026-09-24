@@ -20,6 +20,8 @@
 package io.vidocq.runtime.maven;
 
 import io.vidocq.runtime.devservices.host.DevServicesSession;
+import io.vidocq.runtime.devservices.spi.DevService;
+import io.vidocq.runtime.devservices.spi.DevServiceContext;
 import io.vidocq.runtime.maven.dev.ChildJvm;
 import org.apache.maven.model.Build;
 import org.apache.maven.model.Model;
@@ -36,7 +38,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -301,6 +306,75 @@ class VidocqRunMojoTest {
 
         assertDoesNotThrow(mojo::closeDevServices,
                 "the shutdown hook and the execute() finally block may both try to close the session");
+    }
+
+    /**
+     * Stronger than {@link #devServicesCloseExactlyOnce}: not just "at most once" but "stopped once" — the
+     * second caller (whichever of the shutdown hook or {@code execute()}'s {@code finally} loses the race)
+     * must not return until the winner's {@code close()} has actually finished stopping the provider,
+     * never merely see the {@code AtomicReference} already cleared and return early while a container is
+     * still being torn down. {@link VidocqRunMojo#closeDevServices()} is {@code synchronized} for exactly
+     * this: the loser blocks on the same lock until the winner's call — including the provider's slow
+     * {@code stop()} — fully returns.
+     */
+    @Test
+    @Timeout(value = 10, unit = TimeUnit.SECONDS)
+    void devServicesStopFullyCompletesBeforeEitherCallerReturns(@TempDir Path tmp) throws Exception {
+        AtomicInteger stopCalls = new AtomicInteger();
+        CountDownLatch stopStarted = new CountDownLatch(1);
+        AtomicBoolean stopCompleted = new AtomicBoolean(false);
+        DevService slow = new DevService() {
+            @Override
+            public String id() {
+                return "slow";
+            }
+
+            @Override
+            public boolean appliesWhen(DevServiceContext ctx) {
+                return true;
+            }
+
+            @Override
+            public Map<String, String> start(DevServiceContext ctx) {
+                return Map.of();
+            }
+
+            @Override
+            public void stop() {
+                stopCalls.incrementAndGet();
+                stopStarted.countDown();
+                try {
+                    Thread.sleep(300); // simulates a slow container stop (Testcontainers/Ryuk)
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                stopCompleted.set(true);
+            }
+        };
+        DevServicesSession session = DevServicesSession.forTesting("vidocq:run", tmp, List.of(slow),
+                System.getLogger("test"));
+        VidocqRunMojo mojo = new VidocqRunMojo();
+        mojo.setDevServicesSession(session);
+
+        AtomicBoolean secondCallerReturnedTooEarly = new AtomicBoolean(false);
+        Thread first = new Thread(mojo::closeDevServices, "first-closer");
+        first.start();
+        assertTrue(stopStarted.await(5, TimeUnit.SECONDS), "stop() never started");
+
+        Thread second = new Thread(() -> {
+            mojo.closeDevServices(); // must block until the first call's stop() has fully returned
+            if (!stopCompleted.get()) {
+                secondCallerReturnedTooEarly.set(true);
+            }
+        }, "second-closer");
+        second.start();
+        second.join(TimeUnit.SECONDS.toMillis(5));
+        first.join(TimeUnit.SECONDS.toMillis(5));
+
+        assertFalse(secondCallerReturnedTooEarly.get(),
+                "the second caller returned before the provider's stop() had actually finished");
+        assertTrue(stopCompleted.get());
+        assertEquals(1, stopCalls.get(), "stop() must run exactly once");
     }
 
     private static VidocqRunMojo newMojo() {
