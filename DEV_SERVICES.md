@@ -37,7 +37,8 @@ Providers start **once**, before the first child fork, and survive source reload
 recompile/restart respawns the child but never touches the running containers. They stop once,
 when the session ends (Ctrl+C).
 
-Disable all of it with `-Dvidocq.dev.devServices=false`.
+Disable all of it with `-Dvidocq.dev.devServices=false`, or with `vidocq.dev.devServices=false`
+in `vidocq.properties` (see [Switching dev services on and off](#switching-dev-services-on-and-off)).
 
 ## Bundled providers
 
@@ -269,15 +270,28 @@ first thing to check.
 
 | What | How |
 |------|-----|
-| All dev services under `vidocq:dev` | `-Dvidocq.dev.devServices=false` |
+| All dev services under `vidocq:dev` | `-Dvidocq.dev.devServices=false`, or `vidocq.dev.devServices=false` in `vidocq.properties` |
 | One datasource (use your own DB) | set its `vidocq.pool[.<name>].url` explicitly (`-D` / env) |
 | Container reuse | `vidocq.dev.reuse=false` (default) |
 
-Under `vidocq:run`, dev services are off by default in the first place — see below. One
-asymmetry to know about: since `vidocq.dev.devServices` is a tuning key,
-`vidocq.properties` **can** turn it on, but a `-Dvidocq.dev.devServices=false` on the command
-line **cannot** turn it back off once `vidocq.properties` says `true` — see
-[vidocq:run](#vidocqrun).
+Under `vidocq:run`, dev services are off by default in the first place — see below.
+
+### Switching dev services on and off
+
+Every host — `vidocq:dev`, `vidocq:run` and the JUnit listener — reads `vidocq.dev.devServices`
+the same way, first match wins:
+
+1. **the explicit value**: a `-Dvidocq.dev.devServices=…`, the goal's `<devServices>`
+   configuration, or (under the JUnit host) the system property;
+2. **then the application's files**: `vidocq.dev.devServices` in `vidocq.properties` or
+   `application.properties` (it is a tuning key, see
+   [Where configuration comes from](#where-configuration-comes-from));
+3. **then the host's default**: on for `vidocq:dev` and tests, off for `vidocq:run`.
+
+The value is `true` or `false`, trimmed, in any case; anything else fails the goal (or the test
+run) with a message naming the key and the value. So a `vidocq.properties` that says `true`
+opts every `vidocq:run` into dev services, and `-Dvidocq.dev.devServices=false` still turns them
+off for one invocation — and the other way round.
 
 ## vidocq:run
 
@@ -303,13 +317,9 @@ for the application to read (see [The state file](#the-state-file)), and the sam
 exiting on its own — stops the containers exactly once, whichever of the shutdown hook or the
 goal's own cleanup gets there first.
 
-**Turning it back off.** `devServicesEnabled` is computed as `-D value OR the file says "true"` —
-there is no way to tell "not set" apart from "explicitly set to false" once it has collapsed into
-a Maven `boolean` parameter, so a `-Dvidocq.dev.devServices=false` can never win over a
-`vidocq.properties` that already says `true`: the `OR` always keeps the `true`. If a
-`vidocq.properties` on a branch, a profile or a downstream fork opts every `vidocq:run` into dev
-services and you need it off for one invocation, remove or comment out that line — there is
-currently no override that reaches lower than the file.
+**Turning it back off.** A `vidocq.properties` that says `vidocq.dev.devServices=true` is
+overridden for one invocation by `mvn vidocq:run -Dvidocq.dev.devServices=false`: the explicit
+value comes first (see [Switching dev services on and off](#switching-dev-services-on-and-off)).
 
 ## In tests
 
@@ -340,8 +350,8 @@ containers for the whole suite. It injects each provider's coordinates as system
 needs the database can query it with plain `java.sql`, without booting Vidocq at all.
 
 Opt out with the same key as everywhere else, `vidocq.dev.devServices=false` — a `-D` on the
-Surefire command line, or (unlike the goals above, this direction only) in your project's own
-files, since it is a tuning key.
+Surefire command line, or in your project's own files, since it is a tuning key; the explicit
+value wins over the files, as for the goals above.
 
 **A hard requirement, not a suggestion.** The listener, and any `LauncherSessionListener` your own
 project adds the same way, must ship as its **own separate jar** — a `test`-scope dependency your
@@ -377,6 +387,14 @@ shows as `configured` instead. A JDBC URL's `user:password@` and any secret quer
 stripped the same way. Without the file (or without the `vidocq.devservices.state` system property
 that points to it), the section simply reads "no dev service" — the extension never scans for a
 stray file on its own.
+
+**One project, one state file.** The path is fixed by the project, not by the host, so every host
+of the same project shares it — and `target/vidocq-dev-services.properties` too. Running `mvn test`
+while `vidocq:dev` runs in another terminal starts the test run's own containers and overwrites
+both files with the test host's; when the test run ends, it marks the state file `stopped` with
+host `test`, although `vidocq:dev`'s containers still run. The running `vidocq:dev` application
+keeps what it read at boot, but a reload reads the file again and then shows the test run's. Restart `vidocq:dev`, or
+avoid running both at once, when the files must describe it.
 
 **`target/vidocq-dev-services.properties` is a different file, on purpose.** It is the one
 described in [Connection information](#connection-information) above: local to the machine,

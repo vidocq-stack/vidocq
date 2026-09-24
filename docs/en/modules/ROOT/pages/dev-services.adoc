@@ -76,10 +76,21 @@ Once on, `vidocq:run` and `vidocq:dev` share every other piece: the providers, t
 and the extension added to the child's module path. Ctrl+C, or the process exiting on its own,
 stops the containers exactly once.
 
-CAUTION: A `-Dvidocq.dev.devServices=false` on the command line cannot turn dev services back off
-once `vidocq.properties` already says `true` — the two sources are combined with an `OR`, and a
-Maven `boolean` parameter cannot tell "not set" apart from "explicitly false". Remove the line
-from `vidocq.properties` to switch it off for good.
+[#switching-on-and-off]
+=== Switching dev services on and off [.tag-new]#NEW#
+
+Every host — `vidocq:dev`, `vidocq:run` and the JUnit listener — reads `vidocq.dev.devServices`
+the same way, first match wins:
+
+. the explicit value: a `-Dvidocq.dev.devServices=…`, the goal's `<devServices>` configuration, or
+  (under the JUnit host) the system property;
+. then the application's files, `vidocq.properties` or `application.properties`;
+. then the host's default: on for `vidocq:dev` and tests, off for `vidocq:run`.
+
+The value is `true` or `false`, trimmed, in any case; anything else fails the goal, or the test
+run, with a message naming the key and the value. A `vidocq.properties` that says `true` opts
+every `vidocq:run` into dev services, and `mvn vidocq:run -Dvidocq.dev.devServices=false` still
+turns them off for that one run.
 
 [#in-tests]
 == In tests [.tag-new]#NEW#
@@ -160,8 +171,18 @@ when a later host overwrites `vidocq.devservices.state`, never merely because th
 
 Raised when the state file exists but could not be read — a corrupt or half-written file, most
 often from a very old, incompatible Vidocq version. The boot goes on; the section reads
-`state file unreadable`. Rerun the goal that starts dev services: the Maven plugin, or the JUnit
+`state file unreadable`, and the anomaly's message names the file's path. Rerun the goal that starts dev services: the Maven plugin, or the JUnit
 listener, rewrites the file cleanly.
+
+[#one-state-file-per-project]
+=== One state file per project [.tag-new]#NEW#
+
+The state file's path is the project's, not the host's: every host of the same project shares
+it, and `target/vidocq-dev-services.properties` too. Running `mvn test` while `vidocq:dev` runs in
+another terminal starts the test run's own containers and overwrites both files; when the test run
+ends, it marks the state file `stopped`, host `test`, although `vidocq:dev`'s containers still run.
+The running application keeps what it read at boot, but a reload reads the file again. Restart
+`vidocq:dev`, or avoid running both at once, when the files must describe it.
 
 The dev console panel of the same name shows the same boot facts, live: which service, its image
 and endpoints, and the keys it injected, a secret always as `configured`. The application cannot
