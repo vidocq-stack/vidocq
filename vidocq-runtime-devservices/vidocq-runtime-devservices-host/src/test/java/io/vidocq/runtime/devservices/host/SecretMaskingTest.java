@@ -81,4 +81,29 @@ class SecretMaskingTest {
                 + "&sslmode=require;private-key=***";
         assertEquals(expected, SecretMasking.withoutCredentials(url));
     }
+
+    /**
+     * {@code Matcher.replaceAll(Function)} feeds the function's returned string straight into
+     * {@code appendReplacement}, which treats an un-quoted {@code $} or {@code \} as a group reference or an
+     * escape. A non-secret parameter's value is echoed verbatim on the pass-through branch and must never be
+     * read that way — it is data, not a replacement template. Each input here must come back unchanged but for
+     * {@code password=z} becoming {@code password=***}, and must never throw.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "user=abc$def&password=z",
+            "user=abc\\&password=z",
+            "user=$0xyz&password=z",
+            "user=a\\1b&password=z"})
+    void aNonSecretValueWithRegexMetacharactersIsNeverInterpretedAsAReplacementTemplate(String query) {
+        String url = "jdbc:postgresql://h/db?" + query;
+        String expected = url.replace("password=z", "password=***");
+        assertEquals(expected, SecretMasking.withoutCredentials(url), url);
+    }
+
+    @Test
+    void aSecretParameterNameContainingADollarStaysMaskedWithoutThrowing() {
+        assertEquals("jdbc:postgresql://h/db?to$password=***",
+                SecretMasking.withoutCredentials("jdbc:postgresql://h/db?to$password=z"));
+    }
 }
