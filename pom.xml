@@ -289,6 +289,11 @@
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
+                <artifactId>vidocq-runtime-devservices-host</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-devservice-postgres</artifactId>
                 <version>${project.version}</version>
             </dependency>

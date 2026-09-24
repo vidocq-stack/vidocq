@@ -17,13 +17,10 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
-package io.vidocq.runtime.maven.dev;
+package io.vidocq.runtime.devservices.host;
 
 import io.vidocq.runtime.devservices.spi.DevService;
 import io.vidocq.runtime.devservices.spi.DevServiceContext;
-import org.apache.maven.plugin.MojoExecutionException;
-import org.apache.maven.plugin.logging.Log;
-import org.apache.maven.plugin.logging.SystemStreamLog;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
@@ -38,7 +35,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class DevServiceManagerTest {
 
-    private static final Log LOG = new SystemStreamLog();
+    private static final System.Logger LOG = System.getLogger("DevServiceManagerTest");
 
     private static DefaultDevServiceContext ctx() {
         return new DefaultDevServiceContext(Path.of("."), Map.of());
@@ -109,7 +106,7 @@ class DevServiceManagerTest {
         FakeDevService a = new FakeDevService("a", 100, true, Map.of("a.key", "1"), false, null, events);
         FakeDevService b = new FakeDevService("b", 200, true, Map.of(), true, null, events);
 
-        MojoExecutionException ex = assertThrows(MojoExecutionException.class,
+        DevServicesException ex = assertThrows(DevServicesException.class,
                 () -> DevServiceManager.start(List.of(a, b), ctx(), LOG));
 
         assertTrue(ex.getMessage().contains("'b'"));

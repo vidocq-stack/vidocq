@@ -17,11 +17,10 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
-package io.vidocq.runtime.maven.dev;
+package io.vidocq.runtime.devservices.host;
 
 import io.vidocq.runtime.devservices.spi.DevService;
-import org.apache.maven.plugin.MojoExecutionException;
-import org.apache.maven.plugin.logging.Log;
+import io.vidocq.runtime.devservices.spi.DevServiceState;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -44,11 +43,14 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * started provider in reverse order and is idempotent (shutdown hook + {@code finally}).</p>
  *
  * <p>The manager also keeps which provider supplied each key ({@link #providers()}): the application cannot
- * tell a dev-service value from a hand-set {@code -D}, so the goal marks the ones it passes on.</p>
+ * tell a dev-service value from a hand-set {@code -D}, so the goal marks the ones it passes on. {@link #states()}
+ * exposes what each started provider reported about itself, for the application's startup report and dev
+ * console.</p>
  */
-final class DevServiceManager implements AutoCloseable {
+public final class DevServiceManager implements AutoCloseable {
 
     private final List<DevService> started = new ArrayList<>();
+    private final List<Map<String, String>> outputs = new ArrayList<>();
     private final Map<String, String> collected = new LinkedHashMap<>();
     private final Map<String, String> providers = new LinkedHashMap<>();
     private final AtomicBoolean closed = new AtomicBoolean(false);
@@ -56,7 +58,7 @@ final class DevServiceManager implements AutoCloseable {
     private DevServiceManager() {}
 
     /** Production entry point: discover providers via ServiceLoader on the plugin realm. */
-    static DevServiceManager start(DefaultDevServiceContext ctx, Log log) throws MojoExecutionException {
+    public static DevServiceManager start(DefaultDevServiceContext ctx, System.Logger log) throws DevServicesException {
         List<DevService> providers = new ArrayList<>();
         ServiceLoader.load(DevService.class, DevServiceManager.class.getClassLoader())
                 .forEach(providers::add);
@@ -64,29 +66,30 @@ final class DevServiceManager implements AutoCloseable {
     }
 
     /** Core loop, exposed package-private so tests can inject providers without a {@code META-INF/services}. */
-    static DevServiceManager start(List<DevService> providers, DefaultDevServiceContext ctx, Log log)
-            throws MojoExecutionException {
+    static DevServiceManager start(List<DevService> providers, DefaultDevServiceContext ctx, System.Logger log)
+            throws DevServicesException {
         DevServiceManager mgr = new DevServiceManager();
         List<DevService> ordered = new ArrayList<>(providers);
         ordered.sort(Comparator.comparingInt(DevService::order));
         for (DevService p : ordered) {
             try {
                 if (!p.appliesWhen(ctx)) {
-                    log.info("DevService '" + p.id() + "' skipped (already configured)");
+                    log.log(System.Logger.Level.INFO, "DevService '" + p.id() + "' skipped (already configured)");
                     continue;
                 }
-                log.info("DevService '" + p.id() + "' starting…");
+                log.log(System.Logger.Level.INFO, "DevService '" + p.id() + "' starting…");
                 Map<String, String> props = p.start(ctx);
                 mgr.started.add(p);
+                mgr.outputs.add(props != null ? props : Map.of());
                 if (props != null && !props.isEmpty()) {
                     mgr.collected.putAll(props);
                     props.keySet().forEach(key -> mgr.providers.put(key, p.id()));
                     ctx.merge(props);
                 }
-                log.info("DevService '" + p.id() + "' started");
+                log.log(System.Logger.Level.INFO, "DevService '" + p.id() + "' started");
             } catch (Exception e) {
                 mgr.close(); // roll back the providers already started, in reverse order
-                throw new MojoExecutionException("DevService '" + p.id() + "' failed to start: "
+                throw new DevServicesException("DevService '" + p.id() + "' failed to start: "
                         + e.getMessage() + " — set -Dvidocq.dev.devServices=false to skip", e);
             }
         }
@@ -94,7 +97,7 @@ final class DevServiceManager implements AutoCloseable {
     }
 
     /** The {@code key=value} pairs to expose to the child JVM (provider outputs only). */
-    Map<String, String> collectedProperties() {
+    public Map<String, String> collectedProperties() {
         return Collections.unmodifiableMap(collected);
     }
 
@@ -102,8 +105,29 @@ final class DevServiceManager implements AutoCloseable {
      * The {@linkplain DevService#id() id} of the provider that supplied each key of {@link #collectedProperties()},
      * such as {@code vidocq.pool.url -> postgres}. A key two providers supplied is the later one's, as its value is.
      */
-    Map<String, String> providers() {
+    public Map<String, String> providers() {
         return Collections.unmodifiableMap(providers);
+    }
+
+    /**
+     * What each started provider reported about itself, in start order, from
+     * {@link DevService#describe(Map)} called with what {@link DevService#start} returned. A provider whose
+     * {@code describe} throws falls back to {@link DevServiceState#minimal}.
+     */
+    public List<DevServiceState> states() {
+        List<DevServiceState> out = new ArrayList<>(started.size());
+        for (int i = 0; i < started.size(); i++) {
+            DevService p = started.get(i);
+            Map<String, String> injected = outputs.get(i);
+            DevServiceState state;
+            try {
+                state = p.describe(injected);
+            } catch (RuntimeException e) {
+                state = DevServiceState.minimal(p.id(), injected.keySet());
+            }
+            out.add(state);
+        }
+        return Collections.unmodifiableList(out);
     }
 
     @Override

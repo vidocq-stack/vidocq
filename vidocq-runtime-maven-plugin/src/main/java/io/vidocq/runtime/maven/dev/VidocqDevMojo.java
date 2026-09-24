@@ -19,6 +19,11 @@
  */
 package io.vidocq.runtime.maven.dev;
 
+import io.vidocq.runtime.devservices.host.ApplicationFiles;
+import io.vidocq.runtime.devservices.host.DefaultDevServiceContext;
+import io.vidocq.runtime.devservices.host.DevServiceManager;
+import io.vidocq.runtime.devservices.host.DevServicesException;
+import io.vidocq.runtime.devservices.host.DevServicesReport;
 import io.vidocq.runtime.maven.ApplicationLaunch;
 import io.vidocq.runtime.maven.ConsoleColors;
 import io.vidocq.runtime.maven.JdwpAgent;
@@ -253,8 +258,13 @@ public class VidocqDevMojo extends AbstractMojo {
         // source reloads respawn the child but never touch them.
         DevServiceManager devs = null;
         if (devServices) {
-            DefaultDevServiceContext devCtx = new DefaultDevServiceContext(projectDir, sysProps);
-            devs = DevServiceManager.start(devCtx, getLog());
+            DefaultDevServiceContext devCtx = new DefaultDevServiceContext(
+                    projectDir, sysProps, ApplicationFiles.of(classesDir.toPath()));
+            try {
+                devs = DevServiceManager.start(devCtx, System.getLogger("vidocq.dev.devservices"));
+            } catch (DevServicesException e) {
+                throw new MojoExecutionException(e.getMessage(), e);
+            }
             foldDevServiceProperties(sysProps, devs);
             reportConnectionInformation(devs.collectedProperties());
         }

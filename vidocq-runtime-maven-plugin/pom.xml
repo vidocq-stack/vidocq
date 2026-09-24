@@ -32,6 +32,12 @@
             <groupId>io.vidocq.runtime</groupId>
             <artifactId>vidocq-runtime-devservices-spi</artifactId>
         </dependency>
+        <!-- Discovers, starts and stops the DevService providers and resolves their vidocq.dev.* tuning
+             keys from the application's own files. Shared with every other host (DEBUGMODE.md §10). -->
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-devservices-host</artifactId>
+        </dependency>
         <dependency>
             <groupId>io.vidocq.vauban</groupId>
             <artifactId>vauban-core</artifactId>

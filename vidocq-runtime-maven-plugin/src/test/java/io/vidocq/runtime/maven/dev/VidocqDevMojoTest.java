@@ -19,8 +19,8 @@
  */
 package io.vidocq.runtime.maven.dev;
 
-import io.vidocq.runtime.devservices.spi.DevService;
-import io.vidocq.runtime.devservices.spi.DevServiceContext;
+import io.vidocq.runtime.devservices.host.DefaultDevServiceContext;
+import io.vidocq.runtime.devservices.host.DevServiceManager;
 import io.vidocq.runtime.maven.ConsoleColors;
 import org.apache.maven.plugin.logging.SystemStreamLog;
 import org.junit.jupiter.api.Test;
@@ -97,12 +97,11 @@ class VidocqDevMojoTest {
      */
     @Test
     void marksEveryKeyWhoseValueADevServiceProvided() throws Exception {
-        Map<String, String> provided = new LinkedHashMap<>();
-        provided.put("vidocq.pool.audit.url", "jdbc:postgresql://localhost:54219/audit");
-        provided.put("vidocq.pool.audit.username", "vidocq");
-        provided.put("vidocq.pool.audit.password", "vidocq");
-        DevServiceManager devs = DevServiceManager.start(List.of(providing("postgres", provided)),
-                new DefaultDevServiceContext(Path.of("."), Map.of()), new SystemStreamLog());
+        // FixtureAuditDevService (META-INF/services) is discovered by the real ServiceLoader path
+        // VidocqDevMojo#execute() uses: DevServiceManager#start(List, ...) is package-private in
+        // vidocq-runtime-devservices-host and not reachable from this package.
+        DevServiceManager devs = DevServiceManager.start(
+                new DefaultDevServiceContext(Path.of("."), Map.of()), System.getLogger("VidocqDevMojoTest"));
         Map<String, String> sysProps = new LinkedHashMap<>();
         sysProps.put("vidocq.profile", "dev");
         sysProps.put("vidocq.pool.audit.username", "app"); // from vidocq.dev.systemProperties: it wins
@@ -284,16 +283,6 @@ class VidocqDevMojoTest {
         public void warn(CharSequence content) {
             lines.add("WARN " + content);
         }
-    }
-
-    /** A dev service that always applies and provides {@code props}. */
-    private static DevService providing(String id, Map<String, String> props) {
-        return new DevService() {
-            @Override public String id() { return id; }
-            @Override public boolean appliesWhen(DevServiceContext ctx) { return true; }
-            @Override public Map<String, String> start(DevServiceContext ctx) { return props; }
-            @Override public void stop() { }
-        };
     }
 
     /** Runs {@code body} with {@code vidocq.console.color} and {@code jansi.mode} set, then restores them. */

@@ -20,6 +20,7 @@
 
     <modules>
         <module>vidocq-runtime-devservices-spi</module>
+        <module>vidocq-runtime-devservices-host</module>
         <module>vidocq-runtime-devservice-postgres</module>
         <module>vidocq-runtime-devservice-keycloak</module>
     </modules>

@@ -17,7 +17,7 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
-package io.vidocq.runtime.maven.dev;
+package io.vidocq.runtime.devservices.host;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -33,20 +33,20 @@ import java.util.TreeMap;
  *
  * <p>Provider-agnostic: it groups the collected {@code vidocq.pool[.<name>].url|username|password} keys
  * by datasource ({@code default} for the {@code @Default} pool, then each named one) and derives host and
- * port from the JDBC URL. Pure functions — the mojo owns the logging and the file IO.</p>
+ * port from the JDBC URL. Pure functions — the host owns the logging and the file IO.</p>
  */
-final class DevServicesReport {
+public final class DevServicesReport {
 
     private static final String POOL_PREFIX = "vidocq.pool.";
 
     /** First line of the console block — deliberately tool-neutral (not "DataGrip", not "psql"). */
-    static final String CONSOLE_HEADER = "Connection information:";
+    public static final String CONSOLE_HEADER = "Connection information:";
 
     private DevServicesReport() {
     }
 
     /** A single datasource's reachable coordinates; {@code host}/{@code port} are {@code null} when not parseable. */
-    record Coordinates(String name, String url, String host, String port, String username, String password) {
+    public record Coordinates(String name, String url, String host, String port, String username, String password) {
     }
 
     /**
@@ -54,7 +54,7 @@ final class DevServicesReport {
      * comes first, then named datasources ({@code vidocq.pool.<name>.…}) in alphabetical order. A datasource
      * with no {@code url} is dropped — there is nothing to connect to.
      */
-    static List<Coordinates> datasources(Map<String, String> collected) {
+    public static List<Coordinates> datasources(Map<String, String> collected) {
         Map<String, String> dflt = new LinkedHashMap<>();
         TreeMap<String, Map<String, String>> named = new TreeMap<>();
         for (Map.Entry<String, String> e : collected.entrySet()) {
@@ -89,8 +89,8 @@ final class DevServicesReport {
         return out;
     }
 
-    /** The console block lines (empty when no datasource was provisioned). The mojo logs each one. */
-    static List<String> consoleLines(Map<String, String> collected) {
+    /** The console block lines (empty when no datasource was provisioned). The host logs each one. */
+    public static List<String> consoleLines(Map<String, String> collected) {
         List<Coordinates> ds = datasources(collected);
         if (ds.isEmpty()) {
             return List.of();
@@ -117,7 +117,7 @@ final class DevServicesReport {
     }
 
     /** The {@code vidocq-dev-services.properties} body: {@code datasource.<name>.{url,host,port,username,password}}. */
-    static String fileContent(Map<String, String> collected) {
+    public static String fileContent(Map<String, String> collected) {
         StringBuilder sb = new StringBuilder();
         sb.append("# Vidocq dev services — connection information (generated; do not edit).\n");
         sb.append("# Rewritten on each `vidocq:dev` start.\n");
