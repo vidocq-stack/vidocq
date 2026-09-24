@@ -45,6 +45,7 @@
                 <parameter><name>classesDir</name><type>java.io.File</type><required>false</required><editable>false</editable><description>Compiled classes directory of the project.</description></parameter>
                 <parameter><name>baseDir</name><type>java.io.File</type><required>false</required><editable>false</editable><description>Project base directory.</description></parameter>
                 <parameter><name>buildDir</name><type>java.io.File</type><required>false</required><editable>false</editable><description>Build directory (hosts vidocq-patches/ for cross-module generated classes).</description></parameter>
+                <parameter><name>pluginArtifactMap</name><type>java.util.Map</type><required>false</required><editable>false</editable><description>This plugin's own resolved dependencies, keyed groupId:artifactId — used to locate the dev services extension jar added to the child's module path.</description></parameter>
             </parameters>
             <configuration>
                 <project implementation="org.apache.maven.project.MavenProject" default-value="${project}"/>
@@ -67,6 +68,7 @@
                 <classesDir implementation="java.io.File" default-value="${project.build.outputDirectory}"/>
                 <baseDir implementation="java.io.File" default-value="${project.basedir}"/>
                 <buildDir implementation="java.io.File" default-value="${project.build.directory}"/>
+                <pluginArtifactMap implementation="java.util.Map" default-value="${plugin.artifactMap}"/>
             </configuration>
         </mojo>
 
@@ -101,9 +103,11 @@
                 <parameter><name>debugSuspend</name><type>boolean</type><required>false</required><editable>true</editable><description>Suspend the forked JVM until a debugger attaches (jdwp suspend=y).</description></parameter>
                 <parameter><name>gracePeriodMillis</name><type>long</type><required>false</required><editable>true</editable><description>Grace period given to the application after SIGTERM (Ctrl+C) before it is force-killed.</description></parameter>
                 <parameter><name>skip</name><type>boolean</type><required>false</required><editable>true</editable><description>Skip the goal entirely.</description></parameter>
+                <parameter><name>devServices</name><type>boolean</type><required>false</required><editable>true</editable><description>Provision dev-mode services (Postgres, Keycloak, …), the way vidocq:dev does. Off by default: vidocq:run is also how the application runs in CI and in scripts.</description></parameter>
                 <parameter><name>classesDir</name><type>java.io.File</type><required>false</required><editable>false</editable><description>Compiled classes directory of the project.</description></parameter>
                 <parameter><name>baseDir</name><type>java.io.File</type><required>false</required><editable>false</editable><description>Project base directory, the working directory of the forked JVM.</description></parameter>
                 <parameter><name>buildDir</name><type>java.io.File</type><required>false</required><editable>false</editable><description>Build directory (hosts vidocq-patches/ for cross-module generated classes).</description></parameter>
+                <parameter><name>pluginArtifactMap</name><type>java.util.Map</type><required>false</required><editable>false</editable><description>This plugin's own resolved dependencies, keyed groupId:artifactId — used to locate the dev services extension jar added to the child's module path.</description></parameter>
             </parameters>
             <configuration>
                 <project implementation="org.apache.maven.project.MavenProject" default-value="${project}"/>
@@ -119,9 +123,11 @@
                 <debugSuspend implementation="boolean" default-value="false">${vidocq.run.debug.suspend}</debugSuspend>
                 <gracePeriodMillis implementation="long" default-value="5000">${vidocq.run.gracePeriodMillis}</gracePeriodMillis>
                 <skip implementation="boolean" default-value="false">${vidocq.run.skip}</skip>
+                <devServices implementation="boolean" default-value="false">${vidocq.dev.devServices}</devServices>
                 <classesDir implementation="java.io.File" default-value="${project.build.outputDirectory}"/>
                 <baseDir implementation="java.io.File" default-value="${project.basedir}"/>
                 <buildDir implementation="java.io.File" default-value="${project.build.directory}"/>
+                <pluginArtifactMap implementation="java.util.Map" default-value="${plugin.artifactMap}"/>
             </configuration>
         </mojo>
 

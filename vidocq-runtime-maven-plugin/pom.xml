@@ -38,6 +38,14 @@
             <groupId>io.vidocq.runtime</groupId>
             <artifactId>vidocq-runtime-devservices-host</artifactId>
         </dependency>
+        <!-- Runtime-only: DevServicesExtensionJar resolves its jar from ${plugin.artifactMap} and adds it
+             to the child's module path (vidocq:dev, vidocq:run) when dev services are enabled. The plugin
+             itself never calls into it — it runs on the application's own module path/class path. -->
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-devservices-extension</artifactId>
+            <scope>runtime</scope>
+        </dependency>
         <dependency>
             <groupId>io.vidocq.vauban</groupId>
             <artifactId>vauban-core</artifactId>

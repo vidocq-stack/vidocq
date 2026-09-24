@@ -94,7 +94,7 @@ class PluginDescriptorRunTest {
 
         assertEquals(List.of("project", "session", "mainModule", "mainClass", "extraJvmArgs", "appArgs",
                         "extraSystemProperties", "debug", "debugPort", "debugHost", "debugSuspend", "gracePeriodMillis", "skip",
-                        "classesDir", "baseDir", "buildDir"),
+                        "devServices", "classesDir", "baseDir", "buildDir", "pluginArtifactMap"),
                 new ArrayList<>(parameters.keySet()));
         for (Map.Entry<String, String> parameter : parameters.entrySet()) {
             Field field = VidocqRunMojo.class.getDeclaredField(parameter.getKey());
@@ -137,9 +137,14 @@ class PluginDescriptorRunTest {
         assertProperty(entries.get("debugSuspend"), "${vidocq.run.debug.suspend}", "false");
         assertProperty(entries.get("gracePeriodMillis"), "${vidocq.run.gracePeriodMillis}", "5000");
         assertProperty(entries.get("skip"), "${vidocq.run.skip}", "false");
+        // Same property as vidocq:dev's own devServices, but off by default: vidocq:run is also how the
+        // application runs in CI and in scripts.
+        assertProperty(entries.get("devServices"), "${vidocq.dev.devServices}", "false");
         assertEquals("${project.build.outputDirectory}", entries.get("classesDir").getAttribute("default-value"));
         assertEquals("${project.basedir}", entries.get("baseDir").getAttribute("default-value"));
         assertEquals("${project.build.directory}", entries.get("buildDir").getAttribute("default-value"));
+        assertEquals("${plugin.artifactMap}", entries.get("pluginArtifactMap").getAttribute("default-value"),
+                "resolves this plugin's own dependencies, so DevServicesExtensionJar can find its jar");
     }
 
     @Test

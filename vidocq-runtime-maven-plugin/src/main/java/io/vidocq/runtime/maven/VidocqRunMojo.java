@@ -19,7 +19,13 @@
  */
 package io.vidocq.runtime.maven;
 
+import io.vidocq.runtime.devservices.host.ApplicationFiles;
+import io.vidocq.runtime.devservices.host.DevServicesException;
+import io.vidocq.runtime.devservices.host.DevServicesSession;
+import io.vidocq.runtime.devservices.host.StateFile;
 import io.vidocq.runtime.maven.dev.ChildJvm;
+import io.vidocq.runtime.maven.dev.DevServicesExtensionJar;
+import org.apache.maven.artifact.Artifact;
 import org.apache.maven.execution.MavenSession;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
@@ -39,9 +45,11 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
 
 /**
  * Runs the application once, in a forked JVM, the way the production launcher does — and the way an
@@ -150,6 +158,16 @@ public class VidocqRunMojo extends AbstractMojo {
     @Parameter(property = "vidocq.run.skip", defaultValue = "false")
     private boolean skip;
 
+    /**
+     * Provision dev-mode services (Postgres, Keycloak, …), the way {@code vidocq:dev} does — off by
+     * default, since {@code vidocq:run} is also how the application runs in CI and in scripts, where
+     * nothing should reach out for a container. A {@code vidocq.dev.devServices=true} entry in the
+     * application's own files (spec §6) turns it on the same way the field does; see {@link
+     * #devServicesEnabled}.
+     */
+    @Parameter(property = "vidocq.dev.devServices", defaultValue = "false")
+    private boolean devServices;
+
     @Parameter(defaultValue = "${project.build.outputDirectory}", readonly = true)
     private File classesDir;
 
@@ -158,6 +176,20 @@ public class VidocqRunMojo extends AbstractMojo {
 
     @Parameter(defaultValue = "${project.build.directory}", readonly = true)
     private File buildDir;
+
+    /** This plugin's own resolved dependencies, keyed {@code groupId:artifactId} — {@link
+     *  DevServicesExtensionJar} looks the dev services extension jar up here to add it to the child's
+     *  module path. */
+    @Parameter(defaultValue = "${plugin.artifactMap}", readonly = true)
+    private Map<String, Artifact> pluginArtifactMap;
+
+    /**
+     * The dev services session started by this run, if any — set in {@link #execute()}, closed exactly
+     * once whether the application exits normally ({@code execute()}'s {@code finally}) or is stopped by
+     * Ctrl+C (the shutdown hook inside {@link #await}): whichever runs first clears the reference, so the
+     * other finds it already {@code null}.
+     */
+    private final AtomicReference<DevServicesSession> devServicesSession = new AtomicReference<>();
 
     @Override
     public void execute() throws MojoExecutionException {
@@ -189,11 +221,55 @@ public class VidocqRunMojo extends AbstractMojo {
 
         getLog().info(PREFIX + "main module : " + mainModule
                 + (mainClass != null && !mainClass.isBlank() ? ("/" + mainClass) : ""));
+
+        DevServicesSession devs = null;
+        if (devServicesEnabled(systemProperties, ApplicationFiles.of(classes))) {
+            try {
+                devs = DevServicesSession.open("vidocq:run", projectDir, systemProperties, ApplicationFiles.of(classes),
+                        System.getLogger("vidocq.run.devservices"));
+            } catch (DevServicesException e) {
+                throw new MojoExecutionException(e.getMessage(), e);
+            }
+            devs.injected().forEach(systemProperties::putIfAbsent);
+            devs.providers().forEach((k, id) -> systemProperties.putIfAbsent("vidocq.dev.provided." + k, id));
+            systemProperties.putIfAbsent(StateFile.PROPERTY, devs.stateFile().toAbsolutePath().toString());
+            modulePath.add(DevServicesExtensionJar.find(pluginArtifactMap));
+        }
+        devServicesSession.set(devs);
+
         getLog().info(PREFIX + "module path entries: " + modulePath.size());
         logDebugAgent();
 
-        await(ChildJvm.of(modulePath, appPath, mainModule, mainClass, jvmArgs, systemProperties,
-                projectDir, splitArgs(appArgs)));
+        try {
+            await(ChildJvm.of(modulePath, appPath, mainModule, mainClass, jvmArgs, systemProperties,
+                    projectDir, splitArgs(appArgs)));
+        } finally {
+            closeDevServices();
+        }
+    }
+
+    /**
+     * {@code vidocq.dev.devServices} (the field) or a {@code vidocq.dev.devServices=true} entry in the
+     * application's own files (spec §6) — either one is enough, since a project may prefer to always run
+     * with dev services rather than pass the flag on every {@code vidocq:run} invocation.
+     */
+    // package-private for the unit test.
+    boolean devServicesEnabled(Map<String, String> sysProps, Function<String, Optional<String>> files) {
+        return devServices || "true".equals(files.apply("vidocq.dev.devServices").orElse(null));
+    }
+
+    /**
+     * Closes the dev services session exactly once: whichever of the shutdown hook (Ctrl+C) or this
+     * {@code finally} block runs first clears {@link #devServicesSession}, so the other sees {@code null}
+     * and does nothing. {@link DevServicesSession#close()} is itself idempotent, so calling it twice would
+     * be harmless too — this just avoids the redundant call.
+     */
+    // package-private for the unit test of the close-exactly-once wiring.
+    void closeDevServices() {
+        DevServicesSession session = devServicesSession.getAndSet(null);
+        if (session != null) {
+            session.close();
+        }
     }
 
     /**
@@ -208,6 +284,10 @@ public class VidocqRunMojo extends AbstractMojo {
         Thread hook = new Thread(() -> {
             stopped.set(true);
             stop(running.getAndSet(null));
+            // Covers a JVM that exits (Ctrl+C) before execute()'s finally runs; closeDevServices() is
+            // itself safe to call twice, since the AtomicReference exchange means only one of the two
+            // callers ever sees a non-null session.
+            closeDevServices();
         }, "vidocq-run-shutdown");
         Runtime.getRuntime().addShutdownHook(hook);
 
@@ -343,6 +423,9 @@ public class VidocqRunMojo extends AbstractMojo {
     void setBaseDir(File baseDir) { this.baseDir = baseDir; }
     void setBuildDir(File buildDir) { this.buildDir = buildDir; }
     void setClassesDir(File classesDir) { this.classesDir = classesDir; }
+    void setDevServices(boolean devServices) { this.devServices = devServices; }
+    void setPluginArtifactMap(Map<String, Artifact> pluginArtifactMap) { this.pluginArtifactMap = pluginArtifactMap; }
+    void setDevServicesSession(DevServicesSession session) { this.devServicesSession.set(session); }
     void setExtraJvmArgs(String extraJvmArgs) { this.extraJvmArgs = extraJvmArgs; }
     void setAppArgs(String appArgs) { this.appArgs = appArgs; }
     void setExtraSystemProperties(String extraSystemProperties) { this.extraSystemProperties = extraSystemProperties; }

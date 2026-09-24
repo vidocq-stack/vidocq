@@ -20,14 +20,14 @@
 package io.vidocq.runtime.maven.dev;
 
 import io.vidocq.runtime.devservices.host.ApplicationFiles;
-import io.vidocq.runtime.devservices.host.DefaultDevServiceContext;
-import io.vidocq.runtime.devservices.host.DevServiceManager;
 import io.vidocq.runtime.devservices.host.DevServicesException;
-import io.vidocq.runtime.devservices.host.DevServicesReport;
+import io.vidocq.runtime.devservices.host.DevServicesSession;
+import io.vidocq.runtime.devservices.host.StateFile;
 import io.vidocq.runtime.maven.ApplicationLaunch;
 import io.vidocq.runtime.maven.ConsoleColors;
 import io.vidocq.runtime.maven.JdwpAgent;
 import io.vidocq.runtime.maven.VidocqRunMojo;
+import org.apache.maven.artifact.Artifact;
 import org.apache.maven.execution.MavenSession;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
@@ -202,6 +202,11 @@ public class VidocqDevMojo extends AbstractMojo {
     @Parameter(defaultValue = "${project.build.directory}", readonly = true)
     private File buildDir;
 
+    /** This plugin's own resolved dependencies, keyed {@code groupId:artifactId} — {@link DevServicesExtensionJar}
+     *  looks the dev services extension jar up here to add it to the child's module path. */
+    @Parameter(defaultValue = "${plugin.artifactMap}", readonly = true)
+    private Map<String, Artifact> pluginArtifactMap;
+
     @Override
     public void execute() throws MojoExecutionException {
         Path projectDir = baseDir.toPath();
@@ -256,19 +261,19 @@ public class VidocqDevMojo extends AbstractMojo {
         // vidocq.dev.systemProperties entry always wins (putIfAbsent), and each key the child does get from
         // a provider is marked vidocq.dev.provided.<key>=<id>. The containers live for the whole session —
         // source reloads respawn the child but never touch them.
-        DevServiceManager devs = null;
+        DevServicesSession devs = null;
         if (devServices) {
-            DefaultDevServiceContext devCtx = new DefaultDevServiceContext(
-                    projectDir, sysProps, ApplicationFiles.of(classesDir.toPath()));
             try {
-                devs = DevServiceManager.start(devCtx, System.getLogger("vidocq.dev.devservices"));
+                devs = DevServicesSession.open("vidocq:dev", projectDir, sysProps,
+                        ApplicationFiles.of(classesDir.toPath()), System.getLogger("vidocq.dev.devservices"));
             } catch (DevServicesException e) {
                 throw new MojoExecutionException(e.getMessage(), e);
             }
-            foldDevServiceProperties(sysProps, devs);
-            reportConnectionInformation(devs.collectedProperties());
+            foldDevServiceProperties(sysProps, devs.injected(), devs.providers());
+            sysProps.putIfAbsent(StateFile.PROPERTY, devs.stateFile().toAbsolutePath().toString());
+            modulePath.add(DevServicesExtensionJar.find(pluginArtifactMap));
         }
-        final DevServiceManager devServicesRef = devs;
+        final DevServicesSession devServicesRef = devs;
 
         // The atomic reference lets the shutdown hook (running on a separate
         // thread) see the latest spawned child, no matter how many reload
@@ -491,37 +496,13 @@ public class VidocqDevMojo extends AbstractMojo {
      * it is read like any other configuration, and {@code vidocq.dev.*} is exempt from the configuration key audit.</p>
      */
     // package-private for the unit test.
-    static void foldDevServiceProperties(Map<String, String> sysProps, DevServiceManager devs) {
-        Map<String, String> providers = devs.providers();
-        devs.collectedProperties().forEach((key, value) -> {
+    static void foldDevServiceProperties(Map<String, String> sysProps, Map<String, String> injected,
+            Map<String, String> providers) {
+        injected.forEach((key, value) -> {
             if (sysProps.putIfAbsent(key, value) == null && value != null) {
                 sysProps.putIfAbsent(DEV_PROVIDED_PREFIX + key, providers.get(key));
             }
         });
-    }
-
-    /**
-     * Logs the {@code Connection information} block for every dev-provisioned datasource and writes the
-     * coordinates to {@code target/vidocq-dev-services.properties}, so an external SQL client can reach
-     * the dev databases. No-op when no datasource was provisioned (e.g. only Keycloak ran).
-     */
-    // package-private for the regression test on the buildDir fallback.
-    void reportConnectionInformation(Map<String, String> collected) {
-        List<String> lines = DevServicesReport.consoleLines(collected);
-        if (lines.isEmpty()) {
-            return;
-        }
-        lines.forEach(getLog()::info);
-        // buildDirPath() falls back to the parent of the (always-injected) classes dir
-        // (target/classes → target) when Maven did not inject it, so the report never NPEs.
-        Path file = buildDirPath().resolve("vidocq-dev-services.properties");
-        try {
-            Files.createDirectories(file.getParent());
-            Files.writeString(file, DevServicesReport.fileContent(collected));
-            getLog().info("Connection information written to " + file);
-        } catch (IOException e) {
-            getLog().warn("Could not write " + file + ": " + e.getMessage());
-        }
     }
 
     // Package-private accessors used in unit tests — keep at the bottom so the

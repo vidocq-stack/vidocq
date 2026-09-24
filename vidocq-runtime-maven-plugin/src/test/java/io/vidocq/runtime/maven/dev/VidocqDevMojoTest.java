@@ -24,9 +24,7 @@ import io.vidocq.runtime.devservices.host.DevServiceManager;
 import io.vidocq.runtime.maven.ConsoleColors;
 import org.apache.maven.plugin.logging.SystemStreamLog;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -75,21 +73,6 @@ class VidocqDevMojoTest {
                 "as in vidocq:run, a property the child already gets is not replaced by the command line");
     }
 
-    @Test
-    void connectionReportFallsBackToClassesDirParentWhenBuildDirIsNull(@TempDir Path tmp) throws Exception {
-        VidocqDevMojo mojo = new VidocqDevMojo();
-        Path classes = Files.createDirectories(tmp.resolve("target/classes"));
-        mojo.setClassesDir(classes.toFile());
-        // buildDir deliberately left null (the bug Arago's vidocq:dev hit): must not NPE — the report
-        // falls back to the parent of the classes dir (target/classes → target).
-        mojo.reportConnectionInformation(Map.of(
-                "vidocq.pool.url", "jdbc:postgresql://localhost:5432/app",
-                "vidocq.pool.username", "app"));
-        Path report = tmp.resolve("target/vidocq-dev-services.properties");
-        assertTrue(Files.exists(report), "report written under the classes-dir parent (target)");
-        assertTrue(Files.readString(report).contains("datasource.default.url="));
-    }
-
     /**
      * The application cannot tell a dev-service datasource from a hand-set {@code -D}: each key the child gets from a
      * dev service is marked {@code vidocq.dev.provided.<key>=<provider id>}, and a key an explicit value kept is not,
@@ -106,7 +89,7 @@ class VidocqDevMojoTest {
         sysProps.put("vidocq.profile", "dev");
         sysProps.put("vidocq.pool.audit.username", "app"); // from vidocq.dev.systemProperties: it wins
 
-        VidocqDevMojo.foldDevServiceProperties(sysProps, devs);
+        VidocqDevMojo.foldDevServiceProperties(sysProps, devs.collectedProperties(), devs.providers());
 
         assertEquals("jdbc:postgresql://localhost:54219/audit", sysProps.get("vidocq.pool.audit.url"));
         assertEquals("postgres", sysProps.get("vidocq.dev.provided.vidocq.pool.audit.url"));

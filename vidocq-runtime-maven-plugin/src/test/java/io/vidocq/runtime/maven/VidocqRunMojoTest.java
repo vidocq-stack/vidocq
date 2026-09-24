@@ -19,6 +19,7 @@
  */
 package io.vidocq.runtime.maven;
 
+import io.vidocq.runtime.devservices.host.DevServicesSession;
 import io.vidocq.runtime.maven.dev.ChildJvm;
 import org.apache.maven.model.Build;
 import org.apache.maven.model.Model;
@@ -33,9 +34,11 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -251,6 +254,53 @@ class VidocqRunMojoTest {
         assertEquals(List.of(classes), ApplicationLaunch.appPath(classes, true));
         assertEquals(List.of(classes), ApplicationLaunch.modulePath(project, tmp, classes, false, jar -> { }));
         assertEquals(List.of(), ApplicationLaunch.appPath(classes, false));
+    }
+
+    /** {@code vidocq:run} starts nothing by default: CI and scripts must never reach out for a container. */
+    @Test
+    void devServicesOffByDefault() {
+        VidocqRunMojo mojo = new VidocqRunMojo();
+
+        assertFalse(mojo.devServicesEnabled(Map.of(), key -> Optional.empty()));
+    }
+
+    @Test
+    void devServicesOnWithTheField() {
+        VidocqRunMojo mojo = new VidocqRunMojo();
+        mojo.setDevServices(true);
+
+        assertTrue(mojo.devServicesEnabled(Map.of(), key -> Optional.empty()));
+    }
+
+    /** A {@code vidocq.dev.devServices=true} entry in the application's own files (spec §6) is equivalent. */
+    @Test
+    void devServicesOnWithTheApplicationFileKey() {
+        VidocqRunMojo mojo = new VidocqRunMojo();
+
+        assertTrue(mojo.devServicesEnabled(Map.of(),
+                key -> "vidocq.dev.devServices".equals(key) ? Optional.of("true") : Optional.empty()));
+        assertFalse(mojo.devServicesEnabled(Map.of(),
+                key -> "vidocq.dev.devServices".equals(key) ? Optional.of("false") : Optional.empty()),
+                "any value other than the literal \"true\" leaves dev services off");
+    }
+
+    /**
+     * Review Focus 4: dev services under {@code vidocq:run} with Ctrl+C must stop the containers exactly
+     * once, with no exception from a second {@code close()}. The shutdown hook inside {@link
+     * VidocqRunMojo#await} and {@code execute()}'s own {@code finally} block both call {@link
+     * VidocqRunMojo#closeDevServices()} — whichever runs first must leave nothing for the other to close.
+     */
+    @Test
+    void devServicesCloseExactlyOnce(@TempDir Path tmp) {
+        VidocqRunMojo mojo = new VidocqRunMojo();
+        DevServicesSession session = assertDoesNotThrow(
+                () -> DevServicesSession.forTesting("vidocq:run", tmp, List.of(), System.getLogger("test")));
+        mojo.setDevServicesSession(session);
+
+        mojo.closeDevServices();
+
+        assertDoesNotThrow(mojo::closeDevServices,
+                "the shutdown hook and the execute() finally block may both try to close the session");
     }
 
     private static VidocqRunMojo newMojo() {
