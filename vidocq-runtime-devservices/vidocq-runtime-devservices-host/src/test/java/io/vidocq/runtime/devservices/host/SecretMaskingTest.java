@@ -54,4 +54,31 @@ class SecretMaskingTest {
         assertEquals("plain value", SecretMasking.withoutCredentials("plain value"));
         assertNull(SecretMasking.withoutCredentials(null));
     }
+
+    /**
+     * Query-parameter masking must use the very same rule as {@link SecretMasking#isSecret(String)} — any
+     * parameter name that rule flags is masked, not only the fixed handful the old pattern hard-coded.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"sslpassword", "client_secret", "access_token", "private-key", "sslkey", "PASSWORD"})
+    void everySecretQueryParameterNameIsMaskedByTheKeyRule(String name) {
+        String masked = SecretMasking.withoutCredentials("jdbc:postgresql://h/db?" + name + "=x");
+        assertEquals("jdbc:postgresql://h/db?" + name + "=***", masked, masked);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"user", "ssl", "sslmode"})
+    void aNonSecretQueryParameterIsLeftUntouched(String name) {
+        String value = "jdbc:postgresql://h/db?" + name + "=kept";
+        assertEquals(value, SecretMasking.withoutCredentials(value));
+    }
+
+    @Test
+    void aUrlMixingSecretAndNonSecretParamsInSeveralPositionsMasksOnlyTheSecretOnes() {
+        String url = "jdbc:postgresql://h/db?sslpassword=x&user=u&client_secret=y&ssl=true&access_token=z"
+                + "&sslmode=require;private-key=w";
+        String expected = "jdbc:postgresql://h/db?sslpassword=***&user=u&client_secret=***&ssl=true&access_token=***"
+                + "&sslmode=require;private-key=***";
+        assertEquals(expected, SecretMasking.withoutCredentials(url));
+    }
 }

@@ -33,8 +33,9 @@ public final class SecretMasking {
             "password", "passwd", "pwd", "secret", "token", "key",
             "credential", "credentials", "apikey", "api-key", "private-key");
     private static final Pattern USER_INFO = Pattern.compile("(//)[^/@\\s]+@");
-    private static final Pattern SECRET_PARAM = Pattern.compile(
-            "([?&;](?:password|passwd|pwd|secret|token|apikey|api-key)=)[^&;]*", Pattern.CASE_INSENSITIVE);
+
+    /** {@code [?&;]name=value} — group 1 the delimiter, group 2 the parameter name, group 3 its value. */
+    private static final Pattern QUERY_PARAM = Pattern.compile("([?&;])([^=&;?#\\s]+)=([^&;#]*)");
 
     private SecretMasking() {}
 
@@ -45,14 +46,18 @@ public final class SecretMasking {
     }
 
     /**
-     * {@code value} without the {@code user:password@} part of a URL and with secret query parameters replaced
-     * by {@code ***}. Returns {@code null} for a {@code null} value, and any other value unchanged.
+     * {@code value} without the {@code user:password@} part of a URL and with every secret query parameter's
+     * value replaced by {@code ***}. A parameter is secret under the very same rule as a configuration key
+     * ({@link #isSecret(String)} on its name), so the two can never drift apart; a non-secret parameter (e.g.
+     * {@code user}, {@code ssl}, {@code sslmode}) is left untouched. Returns {@code null} for a {@code null}
+     * value, and any other value unchanged but for those two substitutions.
      */
     public static String withoutCredentials(String value) {
         if (value == null) {
             return null;
         }
         String out = USER_INFO.matcher(value).replaceAll("$1***@");
-        return SECRET_PARAM.matcher(out).replaceAll("$1***");
+        return QUERY_PARAM.matcher(out).replaceAll(m ->
+                m.group(1) + m.group(2) + "=" + (isSecret(m.group(2)) ? "***" : m.group(3)));
     }
 }
