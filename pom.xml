@@ -308,6 +308,11 @@
                 <artifactId>vidocq-runtime-devservices-extension</artifactId>
                 <version>${project.version}</version>
             </dependency>
+            <dependency>
+                <groupId>io.vidocq.runtime</groupId>
+                <artifactId>vidocq-runtime-devservices-junit</artifactId>
+                <version>${project.version}</version>
+            </dependency>
 
             <!-- Jakarta CDI API -->
             <dependency>
