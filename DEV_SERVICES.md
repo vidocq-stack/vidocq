@@ -71,6 +71,31 @@ environment variable, or in the dev-goal configuration** — a baked-in default 
 container. Point dev mode at your own database by passing `-Dvidocq.pool.url=…` (the container
 is then not started, and your URL is used as-is).
 
+## Where configuration comes from
+
+A provider's keys fall into two kinds, and only the second one is read from your project's own files:
+
+| Kind | Examples | Sources |
+|------|----------|---------|
+| **Opt-out keys** — decide whether a service starts at all | `vidocq.pool[.<name>].url`, `mp.jwt.verify.issuer` | An explicit `-D`, an environment variable, or the dev-goal configuration. **Never** `vidocq.properties` or `application.properties`. |
+| **Tuning keys** — say how to start it, once a service is already going to start | everything under `vidocq.dev.` — `vidocq.dev.postgres.port`, `vidocq.dev.postgres.datasources`, `vidocq.dev.keycloak.realm`, `vidocq.dev.reuse`, `vidocq.dev.devServices` | A `-D`, an environment variable, the dev-goal configuration, **and now also `vidocq.properties`/`application.properties`** (read from `target/classes`, i.e. after resource filtering, the same way the runtime itself reads them) |
+
+This split exists so that a baked-in default never silently switches a dev container off: a
+`vidocq.pool.url=jdbc:postgresql://prod-host/app` your production `vidocq.properties` already
+carries must never suppress the Postgres dev service just because the file happens to be on the
+build's classpath. `vidocq.pool.url` (and any other opt-out key) is therefore read from nowhere
+but an explicit `-D`, an environment variable or the dev-goal configuration, exactly as before —
+**this did not change**. Only the `vidocq.dev.*` tuning keys gained `vidocq.properties` as a
+source, which is what makes the stable-port example below, and the file-based `vidocq:run`
+opt-in further down, work.
+
+Resolution order for a `vidocq.dev.*` key, first match wins: the goal's own `-D`/configuration,
+then `vidocq.dev.systemProperties`, then an earlier provider's own output, then the host JVM's
+system properties, then its environment variables, then `vidocq.properties`/`application.properties`.
+A value that is a `${…}` expression (Ravel/MicroProfile Config is not emulated here) is passed to
+the provider exactly as written; a provider that cannot parse it — a non-numeric port, say — names
+the offending key and its literal value in the error, instead of a bare `NumberFormatException`.
+
 ## Multi-datasource
 
 An application can use several datasources — a `@Default` plus any number of named ones:
@@ -206,9 +231,12 @@ the URL is left out of the host).
 
 By default each container gets a **random** host port, so the coordinates change on every
 restart. To keep a tool connected across restarts, pin a **fixed port** and enable container
-**reuse**:
+**reuse** — these are tuning keys (see [Where configuration comes from](#where-configuration-comes-from)
+above), so this now works written straight into `src/main/resources/vidocq.properties`, no `-D`
+needed on every `vidocq:dev`/`vidocq:run` invocation:
 
 ```properties
+# src/main/resources/vidocq.properties
 vidocq.dev.postgres.port=55432                 # @Default on a fixed port
 vidocq.dev.postgres.analytics.port=55433       # named datasource on its own fixed port
 vidocq.dev.reuse=true                          # keep the container between sessions
@@ -241,9 +269,121 @@ first thing to check.
 
 | What | How |
 |------|-----|
-| All dev services | `-Dvidocq.dev.devServices=false` |
+| All dev services under `vidocq:dev` | `-Dvidocq.dev.devServices=false` |
 | One datasource (use your own DB) | set its `vidocq.pool[.<name>].url` explicitly (`-D` / env) |
 | Container reuse | `vidocq.dev.reuse=false` (default) |
+
+Under `vidocq:run`, dev services are off by default in the first place — see below. One
+asymmetry to know about: since `vidocq.dev.devServices` is a tuning key,
+`vidocq.properties` **can** turn it on, but a `-Dvidocq.dev.devServices=false` on the command
+line **cannot** turn it back off once `vidocq.properties` says `true` — see
+[vidocq:run](#vidocqrun).
+
+## vidocq:run
+
+`vidocq:run` launches the application the way the production launcher does — starting a
+container unasked would break that promise — so, unlike `vidocq:dev`, it starts **no** dev
+service by default. Opt in with the same key dev services already use, either as a `-D` or,
+since it is a tuning key (see [Where configuration comes from](#where-configuration-comes-from)),
+written into `vidocq.properties`:
+
+```bash
+mvn vidocq:run -Dvidocq.dev.devServices=true
+```
+
+```properties
+# src/main/resources/vidocq.properties
+vidocq.dev.devServices=true
+```
+
+Both goals share the same machinery from here on: the same providers, the same "Connection
+information" console block and `target/vidocq-dev-services.properties` file, the same state file
+for the application to read (see [The state file](#the-state-file)), and the same
+`vidocq-runtime-devservices-extension` added to the child's module path. Ctrl+C — or the process
+exiting on its own — stops the containers exactly once, whichever of the shutdown hook or the
+goal's own cleanup gets there first.
+
+**Turning it back off.** `devServicesEnabled` is computed as `-D value OR the file says "true"` —
+there is no way to tell "not set" apart from "explicitly set to false" once it has collapsed into
+a Maven `boolean` parameter, so a `-Dvidocq.dev.devServices=false` can never win over a
+`vidocq.properties` that already says `true`: the `OR` always keeps the `true`. If a
+`vidocq.properties` on a branch, a profile or a downstream fork opts every `vidocq:run` into dev
+services and you need it off for one invocation, remove or comment out that line — there is
+currently no override that reaches lower than the file.
+
+## In tests
+
+A test that only wants a database uses the JUnit host: add the listener and the provider it
+needs, both `test` scope:
+
+```xml
+<dependency>
+  <groupId>io.vidocq.runtime</groupId>
+  <artifactId>vidocq-runtime-devservices-junit</artifactId>
+  <version>${vidocq.version}</version>
+  <scope>test</scope>
+</dependency>
+<dependency>
+  <groupId>io.vidocq.runtime</groupId>
+  <artifactId>vidocq-runtime-devservice-postgres</artifactId>
+  <version>${vidocq.version}</version>
+  <scope>test</scope>
+</dependency>
+```
+
+`vidocq-runtime-devservices-junit` registers a JUnit Platform `LauncherSessionListener` (no
+annotation needed in your tests) that starts the providers found on the test class path **once**,
+before any test class runs, and stops them once the whole test run is over — one set of
+containers for the whole suite. It injects each provider's coordinates as system properties
+(`vidocq.pool.url`, `.username`, `.password`, …) before the first test runs, so any
+`VidocqBootstrap.create().configure().start()` in any test sees them, and any test that only
+needs the database can query it with plain `java.sql`, without booting Vidocq at all.
+
+Opt out with the same key as everywhere else, `vidocq.dev.devServices=false` — a `-D` on the
+Surefire command line, or (unlike the goals above, this direction only) in your project's own
+files, since it is a tuning key.
+
+**A hard requirement, not a suggestion.** The listener, and any `LauncherSessionListener` your own
+project adds the same way, must ship as its **own separate jar** — a `test`-scope dependency your
+`module-info.java` does not `requires` — and never be compiled straight into your module's own
+`src/test/java`. Surefire's default module-path `--patch-module` folds your project's *entire*
+`target/test-classes` tree into your named module, `module-info` or not; a listener that landed
+there would be invisible to `ServiceLoader`, which only honours an explicit `provides … with …` in
+a named module, never a `META-INF/services` file. Kept as a separate jar, `vidocq-runtime-devservices-junit`
+lands on the class path instead, in the unnamed module, exactly where `ServiceLoader` finds its
+`META-INF/services` entry — proven with a throwaway spike, both ways, before this was shipped.
+This is also why no `<useModulePath>false</useModulePath>` is needed in your `pom.xml`: the
+default module-path Surefire configuration already does the right thing.
+
+If Docker (or Podman) is not reachable, the listener fails the whole test run fast, naming the
+container runtime it looked for and the key that switches dev services off — a test that needed
+the database would have failed anyway, so failing at the very start says why immediately instead
+of timing out on the first query.
+
+## The state file
+
+Whichever host started them — `vidocq:dev`, `vidocq:run`, or the JUnit listener above — writes
+`<basedir>/target/vidocq-dev-services.json` once the providers are up, and rewrites it with
+`"state": "stopped"` once they stop. **A custom `<project.build.directory>` does not move it**:
+the path is always `<basedir>/target/vidocq-dev-services.json`, `<basedir>` meaning the project's
+own `pom.xml` directory, never `${project.build.directory}`.
+
+This file is how `vidocq-runtime-devservices-extension` (on the child's module path under the
+Maven-plugin hosts, on the class path under the JUnit host — an application declares nothing)
+shows the `devservices` section of the startup report and, in a `dev` launch, the dev console
+panel of the same name: what started, its image and endpoints, and which keys it injected. A
+password, or any key whose last segment names a secret, is **never** written to this file — it
+shows as `configured` instead. A JDBC URL's `user:password@` and any secret query parameter are
+stripped the same way. Without the file (or without the `vidocq.devservices.state` system property
+that points to it), the section simply reads "no dev service" — the extension never scans for a
+stray file on its own.
+
+**`target/vidocq-dev-services.properties` is a different file, on purpose.** It is the one
+described in [Connection information](#connection-information) above: local to the machine,
+never sent anywhere, and it **does** keep every password in clear text — that is what lets an
+external tool (`psql`, DataGrip, a migration runner) connect to the dev database without you
+copying a JDBC URL by hand. Only the JSON state file, the one the application itself reads, masks
+secrets.
 
 ## Schema migrations
 

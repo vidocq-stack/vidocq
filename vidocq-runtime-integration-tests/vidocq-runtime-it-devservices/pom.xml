@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Vidocq/vidocq#123: proves dev services end-to-end, with real Docker. A modular application with one
+    PostgreSQL datasource, reached through java.sql directly (no Mansart pool), under two hosts:
+      - the JUnit launcher (DevServicesTestHostIT): vidocq-runtime-devservices-junit and the postgres
+        provider, both test scope, start one container for this module's whole test run and inject its
+        coordinates as system properties (spec §7);
+      - the Maven plugin's `vidocq:run` goal (DevServicesRunGoalIT), opted in with
+        -Dvidocq.dev.devServices=true (spec §6), which needs the postgres provider on the PLUGIN's own
+        classpath instead — declared under <plugin><dependencies>, DEV_SERVICES.md's existing pattern,
+        never the project's own dependencies.
+    This module needs Docker and only joins the reactor under the `docker` profile of
+    vidocq-runtime-integration-tests/pom.xml, so a plain build never needs it.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.runtime</groupId>
+        <artifactId>vidocq-runtime-integration-tests</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vidocq-runtime-it-devservices</artifactId>
+    <name>Vidocq Runtime :: IT :: Dev services end-to-end (needs Docker)</name>
+
+    <properties>
+        <!-- vidocq:run / vidocq:dev need these to know which module and class to launch. -->
+        <vidocq.mainModule>io.vidocq.runtime.it.devservices</vidocq.mainModule>
+        <vidocq.mainClass>io.vidocq.runtime.it.devservices.DevServicesItApp</vidocq.mainClass>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-core</artifactId>
+        </dependency>
+        <!-- DevServicesTestHostIT reads the devservices section through the dev console snapshot, the
+             way vidocq-runtime-mansart-h2-example's DevConsoleSnapshotTest does. -->
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.essentials</groupId>
+            <artifactId>vidocq-runtime-devconsole-extension</artifactId>
+        </dependency>
+
+        <!-- The JUnit host (spec §7): a test dependency that brings vidocq-runtime-devservices-extension
+             transitively. Not required by module-info.java on purpose (spec §7.1): Surefire's default
+             module-path patch-module then leaves it on the class path, in the unnamed module, where
+             ServiceLoader finds its META-INF/services entry. -->
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-devservices-junit</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- The provider the JUnit host discovers on that same class path (spec §7.1: its own jar, never
+             compiled into this module's own test sources). -->
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-devservice-postgres</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- DevServicesTestHostIT queries the injected datasource with java.sql directly. -->
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <version>42.7.10</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- Parses the dev console's /api/snapshot JSON, as DevConsoleSnapshotTest does. -->
+        <dependency>
+            <groupId>jakarta.json.bind</groupId>
+            <artifactId>jakarta.json.bind-api</artifactId>
+            <version>3.0.1</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.eclipse</groupId>
+            <artifactId>yasson</artifactId>
+            <version>3.0.4</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.eclipse.parsson</groupId>
+            <artifactId>parsson</artifactId>
+            <version>1.1.7</version>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!-- Also pick up *IT.java: this module only joins the reactor under -Pdocker anyway
+                         (vidocq-runtime-integration-tests/pom.xml), so there is no separate Failsafe
+                         gate to bind — the test phase itself is the Docker-gated one here. -->
+                    <includes>
+                        <include>**/*Test.java</include>
+                        <include>**/*IT.java</include>
+                    </includes>
+                    <!-- No useModulePath=false: spec §7.1's spike (redone to match this design, not the
+                         misleading first pass) proved that Surefire's DEFAULT module-path patch-module is
+                         enough. vidocq-runtime-devservices-junit and vidocq-runtime-devservice-postgres
+                         are test-scope dependencies this module's module-info.java does not `requires`,
+                         so they land on the class path (the unnamed module) where ServiceLoader finds the
+                         listener's META-INF/services entry, exactly as the design requires. Contrast
+                         vidocq-runtime-flyway-migration-extension, whose own useModulePath=false is for an
+                         unrelated reason. -->
+                    <systemPropertyVariables>
+                        <!-- DevServicesTestHostIT boots in a dev launch, dev console on a free port of its
+                             own — never 8888, its default. -->
+                        <vidocq.launch.mode>dev</vidocq.launch.mode>
+                        <vidocq.devconsole.port>0</vidocq.devconsole.port>
+                    </systemPropertyVariables>
+                </configuration>
+            </plugin>
+            <!-- The postgres provider on the Maven PLUGIN's own classpath (its JVM), for vidocq:run and
+                 vidocq:dev — DEV_SERVICES.md's existing pattern. Separate from the test-scope dependency
+                 above, which is for the JUnit host instead. -->
+            <plugin>
+                <groupId>io.vidocq.runtime</groupId>
+                <artifactId>vidocq-runtime-maven-plugin</artifactId>
+                <version>${project.version}</version>
+                <dependencies>
+                    <dependency>
+                        <groupId>io.vidocq.runtime</groupId>
+                        <artifactId>vidocq-runtime-devservice-postgres</artifactId>
+                        <version>${project.version}</version>
+                    </dependency>
+                </dependencies>
+            </plugin>
+        </plugins>
+    </build>
+</project>

@@ -219,6 +219,9 @@ The panels shipped today:
 | *Schema migration* [.tag-new]#NEW#
 | The datasources `vidocq-runtime-migration-extension` migrates, one card each: the version the schema is at, what the last run applied, and in a `dev` launch the migrations applied and pending; with two buttons, *Migrate now*, which applies the migrations added since the boot, and *Clean and migrate*, which drops the schema and migrates it again, refused unless `vidocq.migration[.<name>].cleanDisabled=false`. See xref:modules/vidocq-runtime-extensions.adoc#schema-migration-actions[the `migration` panel].
 
+| *Dev services* [.tag-new]#NEW#
+| What `vidocq:dev`, `vidocq:run` or the test launcher started: image and addresses of each service, the keys it injected, secrets as `configured`. Boot facts only. See xref:dev-services.adoc[Dev services].
+
 | *MCP server* [.tag-new]#NEW#
 | The langchain4j-cdi MCP server of `vidocq-runtime-langchain4j-cdi-mcp-extension`: what it serves and how it is configured, then live — the sessions it holds, the SSE streams and the `subscriptions/listen` streams open, the requests it is waiting an answer of from a client, and whether its methods are invoked through the CDI 4.1 invoker or by reflection. See xref:modules/vidocq-runtime-extensions.adoc#langchain4j-cdi-mcp-live[the `mcp` panel].
 

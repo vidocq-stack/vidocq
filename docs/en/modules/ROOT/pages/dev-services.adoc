@@ -1,0 +1,182 @@
+= Dev services [.tag-new]#NEW#
+:description: Zero-config external dependencies — a PostgreSQL database, a Keycloak identity provider — for `vidocq:dev`, `vidocq:run` and your tests, visible in the startup report and the dev console.
+
+[.lead]
+A **dev service** provisions a Testcontainers container — PostgreSQL, Keycloak — and wires its coordinates into your application as plain configuration, with no `docker run` and no hand-copied JDBC URL. Providers run outside the application, in the host that starts them: `vidocq:dev`, `vidocq:run` (opt-in), or a JUnit test run. Whichever host it is, the application sees the same thing — a `devservices` section of the startup report, and, in a `dev` launch, a dev console panel of the same name — without depending on Testcontainers or Docker itself.
+
+TIP: This page covers where dev services run, how the application sees them, and how a test gets one. `DEV_SERVICES.md` at the repository root covers the providers themselves — PostgreSQL, Keycloak, multi-datasource, stable ports — in full.
+
+[#where-they-run]
+== Where they run [.tag-new]#NEW#
+
+Three hosts can start dev services, all through the same `vidocq-runtime-devservices-host` machinery:
+
+[cols="1,2,1"]
+|===
+| Host | Starts | Default
+
+| `vidocq:dev`
+| Every provider whose `appliesWhen` matches, once, before the first child JVM; survives hot reloads.
+| On
+
+| `vidocq:run`
+| The same providers, in the same forked-JVM launch the production launcher uses.
+| **Off** — opt in with `-Dvidocq.dev.devServices=true`
+
+| A JUnit test run
+| The same providers, for the whole test run, before any test class.
+| Off — opt in by adding the dependencies (see <<in-tests>>)
+|===
+
+Testcontainers and the Docker client never reach the application's own module path: they live in
+`vidocq-runtime-devservices-host` and the providers, consumed only by the host. The application
+depends on nothing but `vidocq-runtime-devservices-extension`, which reads a small state file and
+has no Testcontainers, no Maven API and no JSON library of its own.
+
+[#configuration-sources]
+== Configuration sources [.tag-new]#NEW#
+
+A provider's keys are one of two kinds:
+
+* **Opt-out keys** decide whether a service starts at all — `vidocq.pool[.<name>].url`,
+  `mp.jwt.verify.issuer`. They are read from an explicit `-D`, an environment variable, or the
+  dev-goal configuration, and **never** from `vidocq.properties`/`application.properties`: a
+  production default baked into the application's own file must never silently switch a dev
+  container off.
+* **Tuning keys**, everything under `vidocq.dev.` — `vidocq.dev.postgres.port`,
+  `vidocq.dev.postgres.datasources`, `vidocq.dev.reuse`, `vidocq.dev.devServices` — say how to
+  start a service that is already going to start. These are read from the application's own files
+  too, in the runtime's own order (`target/classes`, after resource filtering), so a stable port
+  pinned once in `vidocq.properties` now works without repeating a `-D` on every invocation:
+
+[source,properties]
+----
+# src/main/resources/vidocq.properties
+vidocq.dev.postgres.port=55432
+vidocq.dev.reuse=true
+----
+
+`vidocq.pool.url` in that same file still never disables the PostgreSQL dev service — it is an
+opt-out key, not a tuning key.
+
+[#vidocq-run]
+== vidocq:run (opt-in) [.tag-new]#NEW#
+
+`vidocq:run` starts the application the way the production launcher does, so it starts no
+container unless asked — the same `vidocq.dev.devServices` tuning key turns it on, as a `-D` or in
+`vidocq.properties`:
+
+[source,bash]
+----
+mvn vidocq:run -Dvidocq.dev.devServices=true
+----
+
+Once on, `vidocq:run` and `vidocq:dev` share every other piece: the providers, the
+"Connection information" console block, `target/vidocq-dev-services.properties`, the state file,
+and the extension added to the child's module path. Ctrl+C, or the process exiting on its own,
+stops the containers exactly once.
+
+CAUTION: A `-Dvidocq.dev.devServices=false` on the command line cannot turn dev services back off
+once `vidocq.properties` already says `true` — the two sources are combined with an `OR`, and a
+Maven `boolean` parameter cannot tell "not set" apart from "explicitly false". Remove the line
+from `vidocq.properties` to switch it off for good.
+
+[#in-tests]
+== In tests [.tag-new]#NEW#
+
+A test that only needs a database adds the JUnit host's listener and the provider it wants, both
+`test` scope:
+
+[source,xml,subs=attributes+]
+----
+<dependency>
+    <groupId>io.vidocq.runtime</groupId>
+    <artifactId>vidocq-runtime-devservices-junit</artifactId>
+    <version>{project-version}</version>
+    <scope>test</scope>
+</dependency>
+<dependency>
+    <groupId>io.vidocq.runtime</groupId>
+    <artifactId>vidocq-runtime-devservice-postgres</artifactId>
+    <version>{project-version}</version>
+    <scope>test</scope>
+</dependency>
+----
+
+No annotation is needed in the tests themselves: `vidocq-runtime-devservices-junit` registers a
+JUnit Platform `LauncherSessionListener`, discovered through `META-INF/services`, that starts the
+providers found on the test class path once, before any test class, injects their coordinates as
+system properties (`vidocq.pool.url`, `.username`, `.password`, …), and stops them once the whole
+test run ends — one set of containers for the whole suite. `-Dvidocq.dev.devServices=false`, or
+that same key in the application's own files, skips it entirely; without Docker or Podman, the
+listener fails the run fast, naming the runtime it looked for and the key that switches it off, so
+a test that needed the database does not time out silently.
+
+IMPORTANT: The listener — and any `LauncherSessionListener` a project adds the same way — must
+ship as its own jar, a `test`-scope dependency the consuming module's `module-info.java` does not
+`requires`, never compiled straight into that module's own `src/test/java`. Surefire's default
+module-path `--patch-module` folds a module's entire `target/test-classes` tree into its own named
+module; a listener class that landed there would be invisible to `ServiceLoader`, which only
+honours an explicit `provides … with …` in a named module, never a `META-INF/services` file. Kept
+as a separate jar, it lands on the class path instead, in the unnamed module, where
+`ServiceLoader` finds it — which is also why no `<useModulePath>false</useModulePath>` is needed
+in a consuming project's `pom.xml`.
+
+[#the-report-section]
+== The startup report section and dev console panel [.tag-new]#NEW#
+
+Whichever host started them, the application reads one state file,
+`<basedir>/target/vidocq-dev-services.json` — `<basedir>` is always the project's own `pom.xml`
+directory, unaffected by a custom `project.build.directory` — through
+`vidocq-runtime-devservices-extension`, which the host adds to the child's module path (the
+Maven-plugin hosts) or which arrives on the class path (the JUnit host, transitively with
+`vidocq-runtime-devservices-junit`). An application declares nothing itself.
+
+A real run of this repository's own end-to-end integration test
+(`vidocq-runtime-it-devservices`, `-Pdocker`) shows what the detailed report prints:
+
+[source,text]
+----
+devservices   Dev services | 0 ms
+  1 service: postgres (postgres:16-alpine at localhost:32851) — vidocq:run
+  started                        2026-09-24T20:11:15.781794Z by vidocq:run
+  postgres                       postgres:16-alpine, default localhost:32851
+  postgres vidocq.pool.password  configured
+  postgres vidocq.pool.url       jdbc:postgresql://localhost:32851/vidocq?loggerLevel=OFF
+  postgres vidocq.pool.username  vidocq
+----
+
+The summary names every service, its image and its first endpoint, and the host that started it;
+the detailed report adds a row per service and, in a `dev` launch, every key it injected — a
+secret (`vidocq.pool.password` above) always as `configured`, never its value, whatever the launch
+mode. Without a state file or the `vidocq.devservices.state` system property, the summary reads
+`no dev service: not started by vidocq:dev, vidocq:run or the test launcher` — not an anomaly, the
+ordinary state of an application nobody has started with a dev service yet. The extension never
+scans `target/` for a stray file on its own: a killed session's leftover file is read again only
+when a later host overwrites `vidocq.devservices.state`, never merely because the file exists.
+
+[#vidocq-devs-001]
+=== VIDOCQ-DEVS-001 [.tag-new]#NEW#
+
+Raised when the state file exists but could not be read — a corrupt or half-written file, most
+often from a very old, incompatible Vidocq version. The boot goes on; the section reads
+`state file unreadable`. Rerun the goal that starts dev services: the Maven plugin, or the JUnit
+listener, rewrites the file cleanly.
+
+The dev console panel of the same name shows the same boot facts, live: which service, its image
+and endpoints, and the keys it injected, a secret always as `configured`. The application cannot
+reach Docker itself, so the panel has no live samples of its own — boot facts only, no chart.
+
+xref:dev-console.adoc#panels[The dev console's panels].
+
+[#no-secrets]
+== No secret leaves the application [.tag-new]#NEW#
+
+A key whose last dot-separated segment names a secret — `password`, `passwd`, `pwd`, `secret`,
+`token`, `key`, `credential(s)`, `apikey`, `api-key`, `private-key`, in any case — is written to
+the state file as `"configured": true`, never with its value; a URL loses its `user:password@`
+part and any secret query parameter is masked as `***` before anything is written. Only
+`target/vidocq-dev-services.properties`, documented in `DEV_SERVICES.md`'s "Connection
+information", keeps a password in clear text, on purpose: it is the local, machine-only file an
+external tool — `psql`, DataGrip, a migration runner — reads to connect to the dev database
+without a JDBC URL copied by hand.

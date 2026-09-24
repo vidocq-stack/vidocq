@@ -39,6 +39,18 @@
 
     <profiles>
         <!--
+            Vidocq/vidocq#123: the dev services end-to-end IT needs a real Docker daemon (Testcontainers).
+            Kept out of the default reactor so a plain `mvn install`/`verify` never needs Docker. Activate
+            with `-Pdocker`.
+        -->
+        <profile>
+            <id>docker</id>
+            <modules>
+                <module>vidocq-runtime-it-devservices</module>
+            </modules>
+        </profile>
+
+        <!--
             Official MicroProfile TCK runners. Kept out of the default reactor so a
             normal `mvn install` does not download the TCK jars (TestNG, httpclient,
             json-schema-validator, ...) nor run the long TCK suites. Activate with
