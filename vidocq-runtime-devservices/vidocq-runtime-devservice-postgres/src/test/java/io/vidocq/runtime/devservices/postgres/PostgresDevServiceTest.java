@@ -20,6 +20,7 @@
 package io.vidocq.runtime.devservices.postgres;
 
 import io.vidocq.runtime.devservices.spi.DevServiceContext;
+import io.vidocq.runtime.devservices.spi.DevServiceState;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.testcontainers.DockerClientFactory;
@@ -28,6 +29,7 @@ import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.URI;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -36,6 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
@@ -127,6 +130,35 @@ class PostgresDevServiceTest {
     private static PostgresDevService.DatasourcePlan named(
             List<PostgresDevService.DatasourcePlan> plan, String name) {
         return plan.stream().filter(p -> p.name().equals(name)).findFirst().orElseThrow();
+    }
+
+    @Test
+    void aPortThatIsNotANumberNamesItsKey() {
+        DevServiceContext ctx = ctx(Map.of("vidocq.dev.postgres.port", "${db.port}"));
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> PostgresDevService.plan(ctx));
+        assertTrue(e.getMessage().contains("vidocq.dev.postgres.port"), e.getMessage());
+        assertTrue(e.getMessage().contains("${db.port}"), e.getMessage());
+    }
+
+    // ---- describe (pure, no Docker) ----
+
+    @Test
+    void describeGivesTheImageAndOneEndpointPerDatasource() {
+        Map<String, String> injected = new LinkedHashMap<>();
+        injected.put("vidocq.pool.url", "jdbc:postgresql://localhost:54321/vidocq");
+        injected.put("vidocq.pool.username", "vidocq");
+        injected.put("vidocq.pool.password", "vidocq");
+        injected.put("vidocq.pool.audit.url", "jdbc:postgresql://localhost:54322/vidocq");
+        injected.put("vidocq.pool.audit.username", "vidocq");
+        injected.put("vidocq.pool.audit.password", "vidocq");
+
+        DevServiceState s = PostgresDevService.describe(injected, "postgres:16-alpine");
+
+        assertEquals("postgres", s.id());
+        assertEquals("postgres:16-alpine", s.image());
+        assertEquals(Map.of("default", "localhost:54321", "audit", "localhost:54322"), s.endpoints());
+        assertEquals(6, s.injectedKeys().size());
     }
 
     // ---- provisioning (Docker-gated) ----

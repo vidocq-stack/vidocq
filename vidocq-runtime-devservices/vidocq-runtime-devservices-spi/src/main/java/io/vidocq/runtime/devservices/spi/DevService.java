@@ -82,4 +82,16 @@ public interface DevService {
      * and again from the goal's {@code finally} block.
      */
     void stop();
+
+    /**
+     * What this provider started, for the application's startup report and dev console. Called once, after
+     * {@link #start}, with what {@code start} returned. The default names the provider and its keys; a provider
+     * that runs a container should say which image and where it listens.
+     *
+     * @param injected what {@link #start} returned
+     * @return the state, never {@code null}
+     */
+    default DevServiceState describe(Map<String, String> injected) {
+        return DevServiceState.minimal(id(), injected.keySet());
+    }
 }

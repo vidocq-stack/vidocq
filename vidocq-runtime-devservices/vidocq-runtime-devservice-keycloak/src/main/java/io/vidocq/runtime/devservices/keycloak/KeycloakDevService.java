@@ -21,6 +21,7 @@ package io.vidocq.runtime.devservices.keycloak;
 
 import io.vidocq.runtime.devservices.spi.DevService;
 import io.vidocq.runtime.devservices.spi.DevServiceContext;
+import io.vidocq.runtime.devservices.spi.DevServiceState;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.utility.DockerImageName;
@@ -29,6 +30,7 @@ import org.testcontainers.utility.MountableFile;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -56,6 +58,8 @@ public final class KeycloakDevService implements DevService {
     private static final int KC_PORT = 8080;
 
     private GenericContainer<?> container;
+    private String image;
+    private String issuer;
 
     @Override
     public String id() {
@@ -74,7 +78,7 @@ public final class KeycloakDevService implements DevService {
 
     @Override
     public Map<String, String> start(DevServiceContext ctx) {
-        String image = ctx.property("vidocq.dev.keycloak.image").orElse(DEFAULT_IMAGE);
+        image = ctx.property("vidocq.dev.keycloak.image").orElse(DEFAULT_IMAGE);
         Optional<String> realmImport = ctx.property("vidocq.dev.keycloak.realm-import");
         // With a realm import, the issuer realm is the imported one; without, only the built-in
         // 'master' realm exists, so we wait on (and issue against) that.
@@ -102,7 +106,7 @@ public final class KeycloakDevService implements DevService {
         }
         container.start();
 
-        String issuer = "http://" + container.getHost() + ":" + container.getMappedPort(KC_PORT)
+        issuer = "http://" + container.getHost() + ":" + container.getMappedPort(KC_PORT)
                 + "/realms/" + realm;
         ctx.log().log(System.Logger.Level.INFO, "Keycloak dev service ready, issuer " + issuer);
 
@@ -132,6 +136,17 @@ public final class KeycloakDevService implements DevService {
             container.stop();
             container = null;
         }
+    }
+
+    @Override
+    public DevServiceState describe(Map<String, String> injected) {
+        Map<String, String> endpoints = new LinkedHashMap<>();
+        if (container != null) {
+            String base = "http://" + container.getHost() + ":" + container.getMappedPort(KC_PORT);
+            endpoints.put("issuer", issuer);
+            endpoints.put("admin", base + "/admin");
+        }
+        return new DevServiceState(id(), image, endpoints, List.copyOf(injected.keySet()));
     }
 
     private static boolean reuse(DevServiceContext ctx) {

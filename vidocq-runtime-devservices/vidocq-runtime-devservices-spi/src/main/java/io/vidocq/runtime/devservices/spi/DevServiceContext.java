@@ -29,9 +29,11 @@ import java.util.Optional;
  * read its tuning keys), the project base directory (to resolve files such as a Keycloak realm
  * import) and a logger.
  *
- * <p>Configuration is resolved from, in decreasing precedence: properties already collected from
- * earlier providers and the goal's explicit {@code -D} / {@code vidocq.dev.systemProperties}, then
- * the JVM system properties, then the project's {@code vidocq.properties}.</p>
+ * <p>Configuration is resolved from, in decreasing precedence: properties already collected from earlier providers
+ * and the goal's explicit {@code -D} / {@code vidocq.dev.systemProperties}, then the host JVM's system properties,
+ * then environment variables. Keys starting with {@code vidocq.dev.} are also read from the application's
+ * {@code vidocq.properties} and {@code application.properties}, after those; every other key never is, so that a
+ * baked-in default such as {@code vidocq.pool.url} does not switch a dev service off.</p>
  */
 public interface DevServiceContext {
 

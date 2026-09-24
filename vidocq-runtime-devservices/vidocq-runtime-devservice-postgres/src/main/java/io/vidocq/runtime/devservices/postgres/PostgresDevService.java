@@ -21,9 +21,11 @@ package io.vidocq.runtime.devservices.postgres;
 
 import io.vidocq.runtime.devservices.spi.DevService;
 import io.vidocq.runtime.devservices.spi.DevServiceContext;
+import io.vidocq.runtime.devservices.spi.DevServiceState;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -57,6 +59,7 @@ public final class PostgresDevService implements DevService {
     private static final String DEFAULT_NAME     = "default";
 
     private final List<PostgreSQLContainer<?>> containers = new ArrayList<>();
+    private final List<String> images = new ArrayList<>();
 
     @Override
     public String id() {
@@ -93,6 +96,7 @@ public final class PostgresDevService implements DevService {
             }
             c.start();
             containers.add(c);
+            images.add(ds.image());
             props.put(ds.poolPrefix() + "url", c.getJdbcUrl());
             props.put(ds.poolPrefix() + "username", c.getUsername());
             props.put(ds.poolPrefix() + "password", c.getPassword());
@@ -112,6 +116,28 @@ public final class PostgresDevService implements DevService {
             }
         }
         containers.clear();
+    }
+
+    @Override
+    public DevServiceState describe(Map<String, String> injected) {
+        return describe(injected, images.isEmpty() ? DEFAULT_IMAGE : images.getFirst());
+    }
+
+    /** The state for what {@link #start} returned: one endpoint per datasource, from its JDBC URL's host and port. */
+    static DevServiceState describe(Map<String, String> injected, String image) {
+        Map<String, String> endpoints = new LinkedHashMap<>();
+        for (Map.Entry<String, String> e : injected.entrySet()) {
+            String key = e.getKey();
+            if (!key.startsWith("vidocq.pool.") || !key.endsWith(".url")) {
+                continue;
+            }
+            String name = key.equals("vidocq.pool.url")
+                    ? DEFAULT_NAME
+                    : key.substring("vidocq.pool.".length(), key.length() - ".url".length());
+            URI uri = URI.create(e.getValue().substring("jdbc:".length()));
+            endpoints.put(name, uri.getHost() + ":" + uri.getPort());
+        }
+        return new DevServiceState("postgres", image, endpoints, List.copyOf(injected.keySet()));
     }
 
     // ---- planning (pure; unit-testable without Docker) ----
@@ -149,8 +175,25 @@ public final class PostgresDevService implements DevService {
                 .orElse(DEFAULT_NAME.equals(name) ? DEFAULT_DB : name);
         String username = ctx.property(devPrefix + "username").orElse(DEFAULT_USERNAME);
         String password = ctx.property(devPrefix + "password").orElse(DEFAULT_PASSWORD);
-        Integer fixedPort = ctx.property(devPrefix + "port").map(Integer::parseInt).orElse(null);
+        Integer fixedPort = parsePort(ctx, devPrefix + "port");
         return new DatasourcePlan(name, poolPrefix, image, db, username, password, fixedPort);
+    }
+
+    /**
+     * Parses a fixed-port property, naming the offending key and value instead of a bare
+     * {@code NumberFormatException}.
+     */
+    private static Integer parsePort(DevServiceContext ctx, String key) {
+        return ctx.property(key)
+                .map(text -> {
+                    try {
+                        return Integer.valueOf(text.trim());
+                    } catch (NumberFormatException notANumber) {
+                        throw new IllegalArgumentException(
+                                key + " is not a number: '" + text + "'", notANumber);
+                    }
+                })
+                .orElse(null);
     }
 
     private static List<String> parseNames(String csv) {
