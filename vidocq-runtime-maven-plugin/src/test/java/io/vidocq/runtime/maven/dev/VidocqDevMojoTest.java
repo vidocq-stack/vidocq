@@ -35,11 +35,13 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -80,6 +82,32 @@ class VidocqDevMojoTest {
         assertEquals("dev", child.get("vidocq.profile"));
         assertEquals("9000", child.get("vidocq.devconsole.port"),
                 "as in vidocq:run, a property the child already gets is not replaced by the command line");
+    }
+
+    /** {@code vidocq:dev} starts its dev services unless something says otherwise. */
+    @Test
+    void devServicesOnByDefault() throws Exception {
+        assertTrue(new VidocqDevMojo().devServicesEnabled(key -> Optional.empty()));
+    }
+
+    /** Spec §5: {@code vidocq.dev.devServices=false} in {@code vidocq.properties} switches them off. */
+    @Test
+    void aFalseInTheApplicationsFilesTurnsThemOff() throws Exception {
+        assertFalse(new VidocqDevMojo().devServicesEnabled(devServicesInFiles(" False ")));
+    }
+
+    /** First match wins: an explicit {@code -D} or goal configuration comes before the files, both ways. */
+    @Test
+    void anExplicitValueBeatsTheApplicationsFiles() throws Exception {
+        VidocqDevMojo mojo = new VidocqDevMojo();
+        mojo.setDevServices(true);
+        assertTrue(mojo.devServicesEnabled(devServicesInFiles("false")));
+        mojo.setDevServices(false);
+        assertFalse(mojo.devServicesEnabled(devServicesInFiles("true")));
+    }
+
+    private static Function<String, Optional<String>> devServicesInFiles(String value) {
+        return key -> "vidocq.dev.devServices".equals(key) ? Optional.of(value) : Optional.empty();
     }
 
     /**

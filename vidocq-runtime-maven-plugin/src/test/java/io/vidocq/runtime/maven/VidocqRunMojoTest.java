@@ -34,6 +34,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -42,6 +43,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -263,30 +265,49 @@ class VidocqRunMojoTest {
 
     /** {@code vidocq:run} starts nothing by default: CI and scripts must never reach out for a container. */
     @Test
-    void devServicesOffByDefault() {
+    void devServicesOffByDefault() throws Exception {
         VidocqRunMojo mojo = new VidocqRunMojo();
 
-        assertFalse(mojo.devServicesEnabled(Map.of(), key -> Optional.empty()));
+        assertFalse(mojo.devServicesEnabled(key -> Optional.empty()));
     }
 
     @Test
-    void devServicesOnWithTheField() {
+    void devServicesOnWithTheField() throws Exception {
         VidocqRunMojo mojo = new VidocqRunMojo();
         mojo.setDevServices(true);
 
-        assertTrue(mojo.devServicesEnabled(Map.of(), key -> Optional.empty()));
+        assertTrue(mojo.devServicesEnabled(key -> Optional.empty()));
     }
 
-    /** A {@code vidocq.dev.devServices=true} entry in the application's own files (spec §6) is equivalent. */
+    /** A {@code vidocq.dev.devServices} entry in the application's files (spec §5) decides when nothing else does. */
     @Test
-    void devServicesOnWithTheApplicationFileKey() {
+    void devServicesFollowTheApplicationFileKeyInAnyCase() throws Exception {
         VidocqRunMojo mojo = new VidocqRunMojo();
 
-        assertTrue(mojo.devServicesEnabled(Map.of(),
-                key -> "vidocq.dev.devServices".equals(key) ? Optional.of("true") : Optional.empty()));
-        assertFalse(mojo.devServicesEnabled(Map.of(),
-                key -> "vidocq.dev.devServices".equals(key) ? Optional.of("false") : Optional.empty()),
-                "any value other than the literal \"true\" leaves dev services off");
+        assertTrue(mojo.devServicesEnabled(devServicesInFiles("TRUE")));
+        assertFalse(mojo.devServicesEnabled(devServicesInFiles("false")));
+    }
+
+    /** Spec §5, first match wins: {@code -Dvidocq.dev.devServices=false} turns off what the files turn on. */
+    @Test
+    void anExplicitFalseBeatsATrueInTheApplicationsFiles() throws Exception {
+        VidocqRunMojo mojo = new VidocqRunMojo();
+        mojo.setDevServices(false);
+
+        assertFalse(mojo.devServicesEnabled(devServicesInFiles("true")));
+    }
+
+    @Test
+    void aValueThatIsNotABooleanFailsTheGoal() {
+        VidocqRunMojo mojo = new VidocqRunMojo();
+
+        MojoExecutionException e = assertThrows(MojoExecutionException.class,
+                () -> mojo.devServicesEnabled(devServicesInFiles("${DEV}")));
+        assertTrue(e.getMessage().contains("vidocq.dev.devServices"), e.getMessage());
+    }
+
+    static Function<String, Optional<String>> devServicesInFiles(String value) {
+        return key -> "vidocq.dev.devServices".equals(key) ? Optional.of(value) : Optional.empty();
     }
 
     /**
@@ -375,6 +396,47 @@ class VidocqRunMojoTest {
                 "the second caller returned before the provider's stop() had actually finished");
         assertTrue(stopCompleted.get());
         assertEquals(1, stopCalls.get(), "stop() must run exactly once");
+    }
+
+    /**
+     * A key the child already gets (a {@code -D}, a {@code vidocq.run.systemProperties} entry) keeps its value and
+     * gets no {@code vidocq.dev.provided.*} marker: the child would otherwise present a hand-set password as the dev
+     * service's. A key taken from the provider is marked.
+     */
+    @Test
+    void theChildKeepsItsExplicitValuesAndOnlyTakenKeysAreMarked(@TempDir Path tmp) throws Exception {
+        DevService pg = new DevService() {
+            @Override
+            public String id() {
+                return "postgres";
+            }
+
+            @Override
+            public boolean appliesWhen(DevServiceContext ctx) {
+                return true;
+            }
+
+            @Override
+            public Map<String, String> start(DevServiceContext ctx) {
+                return Map.of("vidocq.pool.url", "jdbc:postgresql://localhost:5/x", "vidocq.pool.password", "pw");
+            }
+
+            @Override
+            public void stop() {
+            }
+        };
+        Map<String, String> systemProperties = new LinkedHashMap<>();
+        systemProperties.put("vidocq.pool.password", "hand-set");
+        try (DevServicesSession session = DevServicesSession.forTesting("vidocq:run", tmp, List.of(pg),
+                System.getLogger("test"))) {
+            VidocqRunMojo.handTo(systemProperties, session);
+        }
+
+        assertEquals("hand-set", systemProperties.get("vidocq.pool.password"));
+        assertFalse(systemProperties.containsKey("vidocq.dev.provided.vidocq.pool.password"));
+        assertEquals("jdbc:postgresql://localhost:5/x", systemProperties.get("vidocq.pool.url"));
+        assertEquals("postgres", systemProperties.get("vidocq.dev.provided.vidocq.pool.url"));
+        assertTrue(systemProperties.containsKey("vidocq.devservices.state"));
     }
 
     private static VidocqRunMojo newMojo() {

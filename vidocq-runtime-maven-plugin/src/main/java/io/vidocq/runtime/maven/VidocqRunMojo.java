@@ -21,6 +21,7 @@ package io.vidocq.runtime.maven;
 
 import io.vidocq.runtime.devservices.host.ApplicationFiles;
 import io.vidocq.runtime.devservices.host.DevServicesException;
+import io.vidocq.runtime.devservices.host.DevServicesFlag;
 import io.vidocq.runtime.devservices.host.DevServicesSession;
 import io.vidocq.runtime.devservices.host.StateFile;
 import io.vidocq.runtime.maven.dev.ChildJvm;
@@ -161,12 +162,12 @@ public class VidocqRunMojo extends AbstractMojo {
     /**
      * Provision dev-mode services (Postgres, Keycloak, …), the way {@code vidocq:dev} does — off by
      * default, since {@code vidocq:run} is also how the application runs in CI and in scripts, where
-     * nothing should reach out for a container. A {@code vidocq.dev.devServices=true} entry in the
-     * application's own files (spec §6) turns it on the same way the field does; see {@link
-     * #devServicesEnabled}.
+     * nothing should reach out for a container. Unset by default, so that a {@code vidocq.dev.devServices} entry
+     * in the application's own files (spec §5) is read when neither {@code -D} nor the goal's configuration gives
+     * one; see {@link #devServicesEnabled}.
      */
-    @Parameter(property = "vidocq.dev.devServices", defaultValue = "false")
-    private boolean devServices;
+    @Parameter(property = "vidocq.dev.devServices")
+    private Boolean devServices;
 
     @Parameter(defaultValue = "${project.build.outputDirectory}", readonly = true)
     private File classesDir;
@@ -223,19 +224,18 @@ public class VidocqRunMojo extends AbstractMojo {
                 + (mainClass != null && !mainClass.isBlank() ? ("/" + mainClass) : ""));
 
         DevServicesSession devs = null;
-        if (devServicesEnabled(systemProperties, ApplicationFiles.of(classes))) {
+        Function<String, Optional<String>> applicationFiles = ApplicationFiles.of(classes);
+        if (devServicesEnabled(applicationFiles)) {
             // Resolved before open(): a missing extension/devconsole-spi jar must abort before any
             // container is started, never leave a running session with nothing left to close it.
             List<Path> extensionJars = DevServicesExtensionJar.resolve(pluginArtifactMap, project.getArtifacts());
             try {
-                devs = DevServicesSession.open("vidocq:run", projectDir, systemProperties, ApplicationFiles.of(classes),
+                devs = DevServicesSession.open("vidocq:run", projectDir, systemProperties, applicationFiles,
                         System.getLogger("vidocq.run.devservices"));
             } catch (DevServicesException e) {
                 throw new MojoExecutionException(e.getMessage(), e);
             }
-            devs.injected().forEach(systemProperties::putIfAbsent);
-            devs.providers().forEach((k, id) -> systemProperties.putIfAbsent("vidocq.dev.provided." + k, id));
-            systemProperties.putIfAbsent(StateFile.PROPERTY, devs.stateFile().toAbsolutePath().toString());
+            handTo(systemProperties, devs);
             modulePath.addAll(extensionJars);
         }
         devServicesSession.set(devs);
@@ -252,13 +252,28 @@ public class VidocqRunMojo extends AbstractMojo {
     }
 
     /**
-     * {@code vidocq.dev.devServices} (the field) or a {@code vidocq.dev.devServices=true} entry in the
-     * application's own files (spec §6) — either one is enough, since a project may prefer to always run
-     * with dev services rather than pass the flag on every {@code vidocq:run} invocation.
+     * Hands the session to the child: its injected keys where an explicit value does not already stand (each key so
+     * taken marked {@code vidocq.dev.provided.<key>}, see {@link DevServicesSession#foldInto}), and the state file.
      */
     // package-private for the unit test.
-    boolean devServicesEnabled(Map<String, String> sysProps, Function<String, Optional<String>> files) {
-        return devServices || "true".equals(files.apply("vidocq.dev.devServices").orElse(null));
+    static void handTo(Map<String, String> systemProperties, DevServicesSession devs) {
+        devs.foldInto(systemProperties);
+        systemProperties.putIfAbsent(StateFile.PROPERTY, devs.stateFile().toAbsolutePath().toString());
+    }
+
+    /**
+     * {@code vidocq.dev.devServices}, first match wins (spec §5, {@link DevServicesFlag}): the explicit value — a
+     * {@code -D} or the goal's configuration — then the application's own files, then off. A project may so keep
+     * {@code vidocq.dev.devServices=true} in {@code vidocq.properties} rather than pass the flag on every
+     * {@code vidocq:run}, and still turn it off for one run with {@code -Dvidocq.dev.devServices=false}.
+     */
+    // package-private for the unit test.
+    boolean devServicesEnabled(Function<String, Optional<String>> files) throws MojoExecutionException {
+        try {
+            return DevServicesFlag.enabled(Optional.ofNullable(devServices).map(String::valueOf), files, false);
+        } catch (IllegalArgumentException e) {
+            throw new MojoExecutionException(e.getMessage(), e);
+        }
     }
 
     /**
@@ -431,7 +446,7 @@ public class VidocqRunMojo extends AbstractMojo {
     void setBaseDir(File baseDir) { this.baseDir = baseDir; }
     void setBuildDir(File buildDir) { this.buildDir = buildDir; }
     void setClassesDir(File classesDir) { this.classesDir = classesDir; }
-    void setDevServices(boolean devServices) { this.devServices = devServices; }
+    void setDevServices(Boolean devServices) { this.devServices = devServices; }
     void setPluginArtifactMap(Map<String, Artifact> pluginArtifactMap) { this.pluginArtifactMap = pluginArtifactMap; }
     void setDevServicesSession(DevServicesSession session) { this.devServicesSession.set(session); }
     void setExtraJvmArgs(String extraJvmArgs) { this.extraJvmArgs = extraJvmArgs; }

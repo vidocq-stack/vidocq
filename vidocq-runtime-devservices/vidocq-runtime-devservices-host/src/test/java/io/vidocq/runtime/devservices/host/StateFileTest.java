@@ -74,6 +74,21 @@ class StateFileTest {
     }
 
     @Test
+    void endpointsLoseTheirUserInfoAndSecretQueryParameters() {
+        Map<String, String> endpoints = new LinkedHashMap<>();
+        endpoints.put("admin", "http://admin:hunter2@localhost:8180/admin");
+        endpoints.put("token", "http://localhost:8180/realms/vidocq?client_id=app&access_token=abc123&x=1");
+        DevServiceState kc = new DevServiceState("keycloak", "quay.io/keycloak/keycloak:26", endpoints, List.of());
+
+        String json = StateFile.json("vidocq:dev", "running", Instant.EPOCH, List.of(kc), Map.of());
+
+        assertFalse(json.contains("hunter2"), json);
+        assertFalse(json.contains("abc123"), json);
+        assertTrue(json.contains("\"admin\":\"http://***@localhost:8180/admin\""), json);
+        assertTrue(json.contains("?client_id=app&access_token=***&x=1"), json);
+    }
+
+    @Test
     void writeIsAtomic(@TempDir Path dir) throws Exception {
         Path file = dir.resolve("target").resolve(StateFile.FILE_NAME);
         StateFile.write(file, "{\"a\":1}");

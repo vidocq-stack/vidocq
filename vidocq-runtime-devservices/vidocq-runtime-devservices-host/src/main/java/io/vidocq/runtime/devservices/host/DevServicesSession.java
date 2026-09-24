@@ -41,6 +41,12 @@ import java.util.function.Function;
  */
 public final class DevServicesSession implements AutoCloseable {
 
+    /**
+     * Prefix of the markers that say which dev service provided a key the application was given:
+     * {@code vidocq.dev.provided.<key>=<provider id>}.
+     */
+    public static final String PROVIDED_PREFIX = "vidocq.dev.provided.";
+
     private final DevServiceManager mgr;
     private final Path stateFile;
     private final String host;
@@ -89,18 +95,45 @@ public final class DevServicesSession implements AutoCloseable {
 
     private static DevServicesSession open(String host, Path basedir, DevServiceManager mgr, System.Logger log,
             Clock clock) throws DevServicesException {
-        List<DevServiceState> states = mgr.states();
-        Instant startedAt = clock.instant();
         Path stateFile = stateFileOf(basedir);
         try {
+            Instant startedAt = clock.instant();
+            List<DevServiceState> states = mgr.states();
             StateFile.write(stateFile, StateFile.json(host, "running", startedAt, states, mgr.collectedProperties()));
+            reportConnectionInformation(basedir, mgr.collectedProperties(), log);
+            return new DevServicesSession(mgr, stateFile, host, startedAt, log);
         } catch (IOException e) {
             mgr.close();
             throw new DevServicesException(
                     "Cannot write the dev services state file " + stateFile + ": " + e.getMessage(), e);
+        } catch (Throwable t) {
+            // Nothing holds the session yet, so nothing else could stop the containers: stop them, then go on.
+            mgr.close();
+            throw t;
         }
-        reportConnectionInformation(basedir, mgr.collectedProperties(), log);
-        return new DevServicesSession(mgr, stateFile, host, startedAt, log);
+    }
+
+    /**
+     * Folds {@link #injected()} into {@code target}, the properties the application will see: a key already there
+     * — an explicit {@code -D}, a {@code vidocq.dev.systemProperties} entry, a system property — keeps its value,
+     * and only a key actually taken from a provider gets its {@code vidocq.dev.provided.<key>=<provider id>}
+     * marker, so the application never presents a hand-set value as a dev service's.
+     */
+    public void foldInto(Map<? super String, ? super String> target) {
+        fold(injected(), providers(), target);
+    }
+
+    /** {@link #foldInto(Map)}'s rule, for {@code injected}/{@code providers} maps held without a session. */
+    public static void fold(Map<String, String> injected, Map<String, String> providers,
+            Map<? super String, ? super String> target) {
+        injected.forEach((key, value) -> {
+            if (value != null && target.putIfAbsent(key, value) == null) {
+                String provider = providers.get(key);
+                if (provider != null) {
+                    target.putIfAbsent(PROVIDED_PREFIX + key, provider);
+                }
+            }
+        });
     }
 
     /** The collected {@code key -> value} pairs injected by every started provider. */
@@ -120,7 +153,7 @@ public final class DevServicesSession implements AutoCloseable {
 
     /**
      * Stops the providers, then rewrites the state file with {@code "state":"stopped"}. Idempotent — a second or
-     * later call is a no-op. An {@code IOException} while rewriting the file is logged, not thrown: {@code close}
+     * later call is a no-op. A failure while stopping or rewriting the file is logged, never thrown: {@code close}
      * runs from a shutdown hook or a {@code finally} block, where nothing could act on a thrown exception anyway.
      */
     @Override
@@ -128,12 +161,19 @@ public final class DevServicesSession implements AutoCloseable {
         if (!closed.compareAndSet(false, true)) {
             return;
         }
-        mgr.close();
+        try {
+            mgr.close();
+        } catch (RuntimeException e) {
+            log.log(System.Logger.Level.WARNING, "Stopping the dev services threw " + e.getClass().getName());
+        }
         try {
             StateFile.write(stateFile,
                     StateFile.json(host, "stopped", startedAt, mgr.states(), mgr.collectedProperties()));
         } catch (IOException e) {
             log.log(System.Logger.Level.WARNING, "Could not rewrite " + stateFile + " as stopped: " + e.getMessage());
+        } catch (RuntimeException e) {
+            log.log(System.Logger.Level.WARNING, "Could not rewrite " + stateFile + " as stopped: "
+                    + e.getClass().getName());
         }
     }
 

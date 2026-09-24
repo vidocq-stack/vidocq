@@ -21,6 +21,7 @@ package io.vidocq.runtime.devservices.host;
 
 import io.vidocq.runtime.devservices.spi.DevService;
 import io.vidocq.runtime.devservices.spi.DevServiceContext;
+import io.vidocq.runtime.devservices.spi.DevServiceState;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -30,10 +31,15 @@ import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
+import java.util.function.IntFunction;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -74,11 +80,73 @@ class DevServicesSessionTest {
         assertEquals(1, a.stops);
     }
 
+    @Test
+    void foldKeepsAnExplicitValueUnmarkedAndMarksATakenOne() {
+        Map<String, String> target = new LinkedHashMap<>();
+        target.put("vidocq.pool.password", "hand-set");
+        DevServicesSession.fold(
+                Map.of("vidocq.pool.password", "pw", "vidocq.pool.url", "jdbc:x://h:1/a"),
+                Map.of("vidocq.pool.password", "postgres", "vidocq.pool.url", "postgres"),
+                target);
+        assertEquals("hand-set", target.get("vidocq.pool.password"));
+        assertNull(target.get("vidocq.dev.provided.vidocq.pool.password"), "a kept value is not marked");
+        assertEquals("jdbc:x://h:1/a", target.get("vidocq.pool.url"));
+        assertEquals("postgres", target.get("vidocq.dev.provided.vidocq.pool.url"), "a taken value is marked");
+    }
+
+    @Test
+    void foldIntoSystemPropertiesWorksOnAPropertiesTarget(@TempDir Path basedir) throws Exception {
+        Properties target = new Properties();
+        target.setProperty("a.password", "hand-set");
+        try (DevServicesSession s = DevServicesSession.open("test", basedir, List.of(new Fake("a", false)),
+                ctx(basedir), LOG, CLOCK)) {
+            s.foldInto(target);
+        }
+        assertEquals("hand-set", target.getProperty("a.password"));
+        assertNull(target.getProperty("vidocq.dev.provided.a.password"));
+        assertEquals("a", target.getProperty("vidocq.dev.provided.a.url"));
+    }
+
+    @Test
+    void anUnwritableStateFileStopsTheProvidersAndThrows(@TempDir Path basedir) throws Exception {
+        Files.writeString(basedir.resolve("target"), "a plain file where the target directory should be");
+        Fake a = new Fake("a", false);
+        DevServicesException e = assertThrows(DevServicesException.class,
+                () -> DevServicesSession.open("test", basedir, List.of(a), ctx(basedir), LOG, CLOCK));
+        assertTrue(e.getMessage().contains("state file"), e.getMessage());
+        assertEquals(1, a.stops, "stopped exactly once");
+    }
+
+    @Test
+    void anErrorWhileWritingTheStateStopsTheProvidersAndIsRethrown(@TempDir Path basedir) {
+        Fake a = new Fake("a", false);
+        a.describe = n -> {
+            throw new AssertionError("describe blew up");
+        };
+        AssertionError e = assertThrows(AssertionError.class,
+                () -> DevServicesSession.open("test", basedir, List.of(a), ctx(basedir), LOG, CLOCK));
+        assertEquals("describe blew up", e.getMessage());
+        assertEquals(1, a.stops, "stopped exactly once");
+    }
+
+    @Test
+    void closeNeverThrowsWhenTheStoppedStateCannotBeRendered(@TempDir Path basedir) throws Exception {
+        Fake a = new Fake("a", false);
+        // Fine at open, then a null state (a broken provider) when close re-describes it.
+        a.describe = n -> n == 1 ? DevServiceState.minimal("a", List.of("a.url")) : null;
+        DevServicesSession s = DevServicesSession.open("test", basedir, List.of(a), ctx(basedir), LOG, CLOCK);
+        assertDoesNotThrow(s::close);
+        assertEquals(1, a.stops);
+    }
+
     /** A minimal {@link DevService} scripted to succeed or fail, recording how many times it was stopped. */
     private static final class Fake implements DevService {
         final String id;
         final boolean fail;
         int stops;
+        /** {@link #describe}'s answer by call number (1 for the first call); the SPI default when unset. */
+        IntFunction<DevServiceState> describe;
+        private int describes;
 
         Fake(String id, boolean fail) {
             this.id = id;
@@ -101,6 +169,12 @@ class DevServicesSessionTest {
                 throw new IllegalStateException("no docker");
             }
             return Map.of(id + ".url", "jdbc:x://h:1/" + id, id + ".password", "pw");
+        }
+
+        @Override
+        public DevServiceState describe(Map<String, String> injected) {
+            describes++;
+            return describe == null ? DevService.super.describe(injected) : describe.apply(describes);
         }
 
         @Override

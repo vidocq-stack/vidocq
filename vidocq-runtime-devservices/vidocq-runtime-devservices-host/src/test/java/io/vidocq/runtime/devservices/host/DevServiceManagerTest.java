@@ -183,6 +183,60 @@ class DevServiceManagerTest {
                 "the exception's message may carry a secret and must never be logged: " + log.lines);
     }
 
+    @Test
+    void anErrorFromAProviderRollsBackTheStartedOnesAndIsRethrown() {
+        List<String> events = new ArrayList<>();
+        FakeDevService a = new FakeDevService("a", 100, true, Map.of("a.key", "1"), false, null, events);
+        DevService b = new Scripted("b") {
+            @Override
+            public Map<String, String> start(DevServiceContext ctx) {
+                throw new NoClassDefFoundError("org/testcontainers/Missing");
+            }
+        };
+
+        NoClassDefFoundError e = assertThrows(NoClassDefFoundError.class,
+                () -> DevServiceManager.start(List.of(a, b), ctx(), LOG));
+
+        assertEquals("org/testcontainers/Missing", e.getMessage());
+        assertEquals(1, a.stopCount, "the provider already started is stopped");
+    }
+
+    @Test
+    void aStopThatThrowsIsLoggedAndTheOthersAreStillStopped() throws Exception {
+        List<String> events = new ArrayList<>();
+        FakeDevService a = new FakeDevService("a", 100, true, Map.of(), false, null, events);
+        DevService b = new Scripted("b") {
+            @Override
+            public void stop() {
+                throw new IllegalStateException("boom-stop-secret");
+            }
+        };
+        CapturingLogger log = new CapturingLogger();
+
+        DevServiceManager mgr = DevServiceManager.start(List.of(a, b), ctx(), log);
+        mgr.close();
+
+        assertEquals(1, a.stopCount);
+        assertEquals(1, log.lines.stream().filter(line -> line.startsWith("WARNING") && line.contains("b stop()")
+                && line.contains("IllegalStateException")).count(), log.lines.toString());
+        assertFalse(log.lines.stream().anyMatch(line -> line.contains("boom-stop-secret")), log.lines.toString());
+    }
+
+    /** A provider that applies, starts with no output and stops quietly, for a test to override one step of. */
+    private static class Scripted implements DevService {
+        private final String id;
+
+        Scripted(String id) {
+            this.id = id;
+        }
+
+        @Override public String id() { return id; }
+        @Override public int order() { return 200; }
+        @Override public boolean appliesWhen(DevServiceContext ctx) { return true; }
+        @Override public Map<String, String> start(DevServiceContext ctx) { return Map.of(); }
+        @Override public void stop() {}
+    }
+
     /** Captures every line logged through it, as {@code "LEVEL message"}. */
     private static final class CapturingLogger implements System.Logger {
         final List<String> lines = new ArrayList<>();

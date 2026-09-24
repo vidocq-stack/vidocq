@@ -21,6 +21,7 @@ package io.vidocq.runtime.devservices.junit;
 
 import io.vidocq.runtime.devservices.host.ApplicationFiles;
 import io.vidocq.runtime.devservices.host.DevServicesException;
+import io.vidocq.runtime.devservices.host.DevServicesFlag;
 import io.vidocq.runtime.devservices.host.DevServicesSession;
 import io.vidocq.runtime.devservices.host.StateFile;
 
@@ -75,23 +76,11 @@ public final class DevServicesSessionListener implements LauncherSessionListener
     public void launcherSessionOpened(LauncherSession launcherSession) {
         Path basedir = Path.of(System.getProperty("basedir", System.getProperty("user.dir")));
         Function<String, Optional<String>> files = ApplicationFiles.of(basedir.resolve("target").resolve("classes"));
-        String flag = Optional.ofNullable(System.getProperty("vidocq.dev.devServices"))
-                .or(() -> files.apply("vidocq.dev.devServices"))
-                .orElse("true");
-        if ("false".equalsIgnoreCase(flag.trim())) {
+        if (!DevServicesFlag.enabled(Optional.ofNullable(System.getProperty(DevServicesFlag.KEY)), files, true)) {
             return;
         }
         session = opener.apply(basedir);
-        session.injected().forEach((k, v) -> {
-            if (System.getProperty(k) == null) {
-                System.setProperty(k, v);
-            }
-        });
-        session.providers().forEach((k, id) -> {
-            if (System.getProperty("vidocq.dev.provided." + k) == null) {
-                System.setProperty("vidocq.dev.provided." + k, id);
-            }
-        });
+        session.foldInto(System.getProperties());
         System.setProperty(StateFile.PROPERTY, session.stateFile().toAbsolutePath().toString());
     }
 

@@ -137,9 +137,10 @@ class PluginDescriptorRunTest {
         assertProperty(entries.get("debugSuspend"), "${vidocq.run.debug.suspend}", "false");
         assertProperty(entries.get("gracePeriodMillis"), "${vidocq.run.gracePeriodMillis}", "5000");
         assertProperty(entries.get("skip"), "${vidocq.run.skip}", "false");
-        // Same property as vidocq:dev's own devServices, but off by default: vidocq:run is also how the
-        // application runs in CI and in scripts.
-        assertProperty(entries.get("devServices"), "${vidocq.dev.devServices}", "false");
+        // Same property as vidocq:dev's own devServices, and no default: unset, the application's files decide,
+        // else off (VidocqRunMojo#devServicesEnabled), since vidocq:run is also how the application runs in CI.
+        assertProperty(entries.get("devServices"), "${vidocq.dev.devServices}", "");
+        assertEquals("java.lang.Boolean", entries.get("devServices").getAttribute("implementation"));
         assertEquals("${project.build.outputDirectory}", entries.get("classesDir").getAttribute("default-value"));
         assertEquals("${project.basedir}", entries.get("baseDir").getAttribute("default-value"));
         assertEquals("${project.build.directory}", entries.get("buildDir").getAttribute("default-value"));

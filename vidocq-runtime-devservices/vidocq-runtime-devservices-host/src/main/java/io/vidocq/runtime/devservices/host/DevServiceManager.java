@@ -93,6 +93,11 @@ public final class DevServiceManager implements AutoCloseable {
                 mgr.close(); // roll back the providers already started, in reverse order
                 throw new DevServicesException("DevService '" + p.id() + "' failed to start: "
                         + e.getMessage() + " — set -Dvidocq.dev.devServices=false to skip", e);
+            } catch (Throwable t) {
+                // An Error (e.g. a NoClassDefFoundError from a provider's dependencies) still rolls back the
+                // providers already started, then goes on as it is.
+                mgr.close();
+                throw t;
             }
         }
         return mgr;
@@ -141,10 +146,14 @@ public final class DevServiceManager implements AutoCloseable {
             return;
         }
         for (int i = started.size() - 1; i >= 0; i--) {
+            DevService p = started.get(i);
             try {
-                started.get(i).stop();
+                p.stop();
             } catch (RuntimeException e) {
-                // best-effort teardown — keep stopping the remaining providers
+                // Best-effort teardown: keep stopping the remaining providers. The class only, never the
+                // message, which may carry a secret.
+                log.log(System.Logger.Level.WARNING, "DevService '" + p.id() + "' stop() threw "
+                        + e.getClass().getName() + " — its container may still be running");
             }
         }
     }

@@ -35,6 +35,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -74,6 +75,7 @@ class DevServicesSessionListenerTest {
 
         assertEquals(1, calls.get());
         assertEquals("jdbc:x://h:1/a", System.getProperty("a.url"));
+        assertEquals("a", System.getProperty("vidocq.dev.provided.a.url"), "a taken value is marked");
         String stateFile = System.getProperty(StateFile.PROPERTY);
         assertTrue(stateFile != null && Files.exists(Path.of(stateFile)), "state file exists: " + stateFile);
 
@@ -93,6 +95,7 @@ class DevServicesSessionListenerTest {
         listener.launcherSessionOpened(null);
 
         assertEquals("already-set", System.getProperty("a.url"));
+        assertNull(System.getProperty("vidocq.dev.provided.a.url"), "a kept value is not marked");
 
         listener.launcherSessionClosed(null);
     }
@@ -114,6 +117,45 @@ class DevServicesSessionListenerTest {
 
         // No session was opened, so closing must be a harmless no-op.
         listener.launcherSessionClosed(null);
+    }
+
+    @Test
+    void aFalseInTheApplicationsFilesSkipsOpening(@TempDir Path basedir) throws Exception {
+        System.setProperty("basedir", basedir.toString());
+        writeVidocqProperties(basedir, "vidocq.dev.devServices = False\n");
+        AtomicInteger calls = new AtomicInteger();
+        DevServicesSessionListener listener = new DevServicesSessionListener(dir -> {
+            calls.incrementAndGet();
+            return forTesting(dir, new Fake("a", false));
+        });
+
+        listener.launcherSessionOpened(null);
+
+        assertEquals(0, calls.get(), "the file's false is read, whatever its case");
+        listener.launcherSessionClosed(null);
+    }
+
+    @Test
+    void anExplicitSystemPropertyBeatsTheApplicationsFiles(@TempDir Path basedir) throws Exception {
+        System.setProperty("basedir", basedir.toString());
+        writeVidocqProperties(basedir, "vidocq.dev.devServices=false\n");
+        System.setProperty("vidocq.dev.devServices", " TRUE ");
+        AtomicInteger calls = new AtomicInteger();
+        DevServicesSessionListener listener = new DevServicesSessionListener(dir -> {
+            calls.incrementAndGet();
+            return forTesting(dir, new Fake("a", false));
+        });
+
+        listener.launcherSessionOpened(null);
+
+        assertEquals(1, calls.get(), "the explicit true wins over the file's false");
+        listener.launcherSessionClosed(null);
+    }
+
+    private static void writeVidocqProperties(Path basedir, String content) throws Exception {
+        Path classes = basedir.resolve("target").resolve("classes");
+        Files.createDirectories(classes);
+        Files.writeString(classes.resolve("vidocq.properties"), content);
     }
 
     private static DevServicesSession forTesting(Path dir, Fake fake) {

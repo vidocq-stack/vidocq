@@ -82,6 +82,20 @@ class PluginDescriptorDevDebugTest {
         assertEquals("java.lang.String", entry.getAttribute("implementation"));
     }
 
+    /**
+     * {@code devServices} has no default, so that {@code vidocq.dev.devServices} in the application's files is read
+     * when neither {@code -D} nor the goal's configuration sets it ({@link VidocqDevMojo#devServicesEnabled}).
+     */
+    @Test
+    void devServicesIsAnUnsetBooleanReadingItsProperty() throws Exception {
+        assertEquals("java.lang.Boolean", text(parameter("devServices"), "type"));
+        assertEquals(Boolean.class, VidocqDevMojo.class.getDeclaredField("devServices").getType());
+        Element entry = child(child(dev, "configuration"), "devServices");
+        assertNotNull(entry, "<configuration> has no devServices entry");
+        assertEquals("${vidocq.dev.devServices}", entry.getTextContent().strip());
+        assertEquals("", entry.getAttribute("default-value"), "no default: the application's files must be read");
+    }
+
     private static Element parameter(String name) {
         for (Element element : children(child(dev, "parameters"))) {
             if (name.equals(text(element, "name"))) {

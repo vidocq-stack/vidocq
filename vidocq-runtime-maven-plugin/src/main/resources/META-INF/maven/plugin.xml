@@ -39,7 +39,7 @@
                 <parameter><name>debugPort</name><type>int</type><required>false</required><editable>true</editable><description>JDWP listen port for the debug agent (default 5005).</description></parameter>
                 <parameter><name>debugHost</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>Interface the debug agent listens on (default 127.0.0.1, this machine only). * or 0.0.0.0 opens it on every interface, an address or a host name on that one; a non-loopback host logs a warning, since whoever connects can run any code in the child JVM.</description></parameter>
                 <parameter><name>debugSuspend</name><type>boolean</type><required>false</required><editable>true</editable><description>Suspend the child JVM until a debugger attaches (jdwp suspend=y).</description></parameter>
-                <parameter><name>devServices</name><type>boolean</type><required>false</required><editable>true</editable><description>Provision dev-mode services (Postgres, Keycloak, …) discovered via the DevService SPI.</description></parameter>
+                <parameter><name>devServices</name><type>java.lang.Boolean</type><required>false</required><editable>true</editable><description>Provision dev-mode services (Postgres, Keycloak, …) discovered via the DevService SPI. Unset by default: then vidocq.dev.devServices in the application's files decides, else on.</description></parameter>
                 <parameter><name>layerMode</name><type>boolean</type><required>false</required><editable>true</editable><description>Universal-loader mode (default): app classes boot in a Vauban-defined module layer via -Dvidocq.app.path; false restores the legacy module-path launch.</description></parameter>
                 <parameter><name>hotReload</name><type>boolean</type><required>false</required><editable>true</editable><description>In-JVM hot reload (default, requires layerMode): the child re-creates its application layer on a reload signal instead of being respawned.</description></parameter>
                 <parameter><name>classesDir</name><type>java.io.File</type><required>false</required><editable>false</editable><description>Compiled classes directory of the project.</description></parameter>
@@ -62,7 +62,7 @@
                 <debugPort implementation="int" default-value="5005">${vidocq.dev.debugPort}</debugPort>
                 <debugHost implementation="java.lang.String" default-value="127.0.0.1">${vidocq.dev.debugHost}</debugHost>
                 <debugSuspend implementation="boolean" default-value="false">${vidocq.dev.debugSuspend}</debugSuspend>
-                <devServices implementation="boolean" default-value="true">${vidocq.dev.devServices}</devServices>
+                <devServices implementation="java.lang.Boolean">${vidocq.dev.devServices}</devServices>
                 <layerMode implementation="boolean" default-value="true">${vidocq.dev.layer}</layerMode>
                 <hotReload implementation="boolean" default-value="true">${vidocq.dev.hotReload}</hotReload>
                 <classesDir implementation="java.io.File" default-value="${project.build.outputDirectory}"/>
@@ -103,7 +103,7 @@
                 <parameter><name>debugSuspend</name><type>boolean</type><required>false</required><editable>true</editable><description>Suspend the forked JVM until a debugger attaches (jdwp suspend=y).</description></parameter>
                 <parameter><name>gracePeriodMillis</name><type>long</type><required>false</required><editable>true</editable><description>Grace period given to the application after SIGTERM (Ctrl+C) before it is force-killed.</description></parameter>
                 <parameter><name>skip</name><type>boolean</type><required>false</required><editable>true</editable><description>Skip the goal entirely.</description></parameter>
-                <parameter><name>devServices</name><type>boolean</type><required>false</required><editable>true</editable><description>Provision dev-mode services (Postgres, Keycloak, …), the way vidocq:dev does. Off by default: vidocq:run is also how the application runs in CI and in scripts.</description></parameter>
+                <parameter><name>devServices</name><type>java.lang.Boolean</type><required>false</required><editable>true</editable><description>Provision dev-mode services (Postgres, Keycloak, …), the way vidocq:dev does. Unset by default: then vidocq.dev.devServices in the application's files decides, else off, since vidocq:run is also how the application runs in CI and in scripts.</description></parameter>
                 <parameter><name>classesDir</name><type>java.io.File</type><required>false</required><editable>false</editable><description>Compiled classes directory of the project.</description></parameter>
                 <parameter><name>baseDir</name><type>java.io.File</type><required>false</required><editable>false</editable><description>Project base directory, the working directory of the forked JVM.</description></parameter>
                 <parameter><name>buildDir</name><type>java.io.File</type><required>false</required><editable>false</editable><description>Build directory (hosts vidocq-patches/ for cross-module generated classes).</description></parameter>
@@ -123,7 +123,7 @@
                 <debugSuspend implementation="boolean" default-value="false">${vidocq.run.debug.suspend}</debugSuspend>
                 <gracePeriodMillis implementation="long" default-value="5000">${vidocq.run.gracePeriodMillis}</gracePeriodMillis>
                 <skip implementation="boolean" default-value="false">${vidocq.run.skip}</skip>
-                <devServices implementation="boolean" default-value="false">${vidocq.dev.devServices}</devServices>
+                <devServices implementation="java.lang.Boolean">${vidocq.dev.devServices}</devServices>
                 <classesDir implementation="java.io.File" default-value="${project.build.outputDirectory}"/>
                 <baseDir implementation="java.io.File" default-value="${project.basedir}"/>
                 <buildDir implementation="java.io.File" default-value="${project.build.directory}"/>
