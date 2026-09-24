@@ -281,7 +281,8 @@
                 <version>${project.version}</version>
             </dependency>
 
-            <!-- DevServices (dev-mode container providers — plugin classpath only, never runtime) -->
+            <!-- DevServices (dev-mode container providers — plugin classpath only, never runtime, except
+                 vidocq-runtime-devservices-extension, which runs in the application) -->
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-devservices-spi</artifactId>
@@ -300,6 +301,11 @@
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-devservice-keycloak</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.runtime</groupId>
+                <artifactId>vidocq-runtime-devservices-extension</artifactId>
                 <version>${project.version}</version>
             </dependency>
 

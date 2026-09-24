@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.runtime</groupId>
+        <artifactId>vidocq-runtime-devservices</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vidocq-runtime-devservices-extension</artifactId>
+    <name>Vidocq :: DevServices :: Extension</name>
+    <description>Runtime extension and dev console panel that read the dev services state file (spec
+        2026-09-24-devservices-visibility-run-tests §4.4) and report it as the devservices section. On the
+        application's own module path or class path, unlike its sibling modules in this tree: it depends only
+        on vidocq-runtime-spi and vidocq-runtime-devconsole-spi, never on vidocq-runtime-devservices-host,
+        Testcontainers or the Maven plugin API.</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-spi</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-devconsole-spi</artifactId>
+        </dependency>
+
+        <!-- vauban-core, which vidocq-runtime-spi requires transitively, requires
+             io.vidocq.vauban.classloader.spi but declares it optional: the tests run on the module
+             path, where it must be present. -->
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-classloader-spi</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- Interfaces, records and a plain reader/section, no bean: turn off the inherited Vauban
+                 indexer APT (vidocq-runtime-core-codegen), there is nothing to index here. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <proc>none</proc>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
