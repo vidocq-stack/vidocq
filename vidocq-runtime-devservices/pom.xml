@@ -27,5 +27,6 @@
         <module>vidocq-runtime-devservice-postgres</module>
         <module>vidocq-runtime-devservice-keycloak</module>
         <module>vidocq-runtime-devservices-extension</module>
+        <module>vidocq-runtime-devservices-junit</module>
     </modules>
 </project>

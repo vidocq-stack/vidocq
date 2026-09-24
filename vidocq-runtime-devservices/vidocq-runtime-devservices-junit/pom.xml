@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.runtime</groupId>
+        <artifactId>vidocq-runtime-devservices</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vidocq-runtime-devservices-junit</artifactId>
+    <name>Vidocq :: DevServices :: JUnit</name>
+    <description>A JUnit Platform LauncherSessionListener that hosts dev services for a test run (spec
+        2026-09-24-devservices-visibility-run-tests §7). An application adds this module test-scoped, next to
+        the providers it wants; it brings vidocq-runtime-devservices-extension transitively. Must ship as its
+        own jar — spec §7.1's spike proved that a listener compiled into an application's own test sources is
+        folded by Surefire's module-path patching into the application's named module, where ServiceLoader can
+        no longer see its META-INF/services entry.</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-devservices-host</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-devservices-extension</artifactId>
+        </dependency>
+        <!-- Compile-only: Surefire's JUnit Platform provider (3.5.x) auto-resolves a matching
+             junit-platform-launcher onto its own provider classpath when running junit-jupiter tests, so it
+             is already there at test-run time. Declaring it provided avoids shipping a second copy of it,
+             possibly at a different version, transitively into every application that depends on this module. -->
+        <dependency>
+            <groupId>org.junit.platform</groupId>
+            <artifactId>junit-platform-launcher</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- No Vidocq beans here: turn off the inherited Vauban indexer APT. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <proc>none</proc>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
