@@ -154,29 +154,44 @@ plugin's version.
 
 ## 5. Configuration sources for the providers
 
-The plugin already depends on `vidocq-runtime-core`. `DefaultDevServiceContext.property(key)` resolves, first match
-wins:
+`DefaultDevServiceContext` deliberately does **not** read `vidocq.properties`, and its Javadoc says why: a baked-in
+default such as `vidocq.pool.url=jdbc:postgresql://localhost:5432/app` must not switch a dev service off. Only an
+explicit override may, whether a `-D`, an environment variable or the dev goal's configuration. That rule stays.
+
+The keys a provider reads fall into two kinds, and only the second gains a source:
+
+- **Opt-out keys** decide whether a service starts: `vidocq.pool[.<name>].url` for PostgreSQL,
+  `mp.jwt.verify.issuer` for Keycloak. They keep today's sources and still **ignore the application's files**.
+- **Tuning keys**, everything under `vidocq.dev.`, say how to start it: e.g. `vidocq.dev.postgres.image`,
+  `vidocq.dev.postgres.port`, `vidocq.dev.keycloak.realm`, `vidocq.dev.reuse`, `vidocq.dev.devServices`. They
+  are also read from the application's files.
+
+`DefaultDevServiceContext.property(key)` resolves, first match wins:
 
 1. **Dev seeds (unchanged):** `-D` values given to the goal, then `vidocq.dev.systemProperties`, then the outputs of
    the providers started before.
 2. The host JVM's system properties, then environment variables (unchanged).
-3. **New:** the application's files, read with the runtime's own sources, in the runtime's order:
+3. **New, for keys starting with `vidocq.dev.` only:** the application's files, read with the runtime's own sources
+   in the runtime's order:
    - `ExternalFileConfigSource`, when configured;
    - then `PropertiesFileConfigSource` over a class loader on `target/classes`, which reads `vidocq.properties` then
      `application.properties`.
 
    `target/classes` is read, not `src/main/resources`, because it is what the application sees after resource
-   filtering. Under the JUnit host it is `target/classes` of `basedir`, not `target/test-classes`: a test sees the
-   application's configuration.
+   filtering. Under the JUnit host it is `target/classes` of `basedir`, not `target/test-classes`.
 
 Effects:
 
-- `vidocq.pool.url` in `vidocq.properties` switches the PostgreSQL service off, as `DEV_SERVICES.md` already
-  promised. Its stable-port example becomes correct.
-- A service's own keys can be written there, e.g. `vidocq.dev.postgres.image`, `vidocq.dev.postgres.port`.
+- `vidocq.dev.postgres.port=55432` in `vidocq.properties` pins the port. The stable-port example of
+  `DEV_SERVICES.md` becomes true.
+- `vidocq.pool.url` in `vidocq.properties` still does **not** switch the PostgreSQL service off. `DEV_SERVICES.md`
+  says so explicitly, and states the two kinds of keys.
+- `vidocq.dev.devServices=true` in `vidocq.properties` is the file-based opt-in for `vidocq:run` (§6).
+- The Javadoc of `DevServiceContext` (SPI), which wrongly says `vidocq.properties` is read, is corrected to state
+  this rule.
 - **Limit (documented):** Ravel (MicroProfile Config) is not emulated. Its profiles and `${…}` expressions are not
-  evaluated, and a key whose value is an expression counts as set: it switches the service off. That is the cautious
-  side, since nothing starts when the user configured something.
+  evaluated. A `vidocq.dev.*` value that is an expression is passed as it is written, and the provider reports it
+  when it cannot parse it.
 
 ## 6. `vidocq:run`
 
