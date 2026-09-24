@@ -235,12 +235,22 @@ So the listener, Testcontainers and the providers should work from the unnamed m
 (`junit.platform.launcher`, which `uses LauncherSessionListener`) should find the listener's
 `META-INF/services` entry through its class loader.
 
-**This is not verified.** The plan's **first task is a spike**: a modular integration-test application whose test
-starts PostgreSQL through the listener and queries it. Two outcomes:
+**Verified on 2026-09-24**, with a throwaway spike (a modular `io.vidocq.spike.app` module, a
+`LauncherSessionListener` in an unmentioned-by-`module-info` `spike.listener` package, and a test reading the
+JDBC URL it publishes): **fails on the module path.** Under Surefire's default module-path run, `--patch-module`
+folds the *entire* `target/test-classes` tree — including packages the `module-info` never mentions — into the
+application's named module. The listener class lands inside that named module, not the unnamed one, so the JPMS
+rule for named modules applies: `ServiceLoader` only honors an explicit `provides … with …` module directive there,
+never the `META-INF/services` provider-configuration file (that convention is for automatic modules and the
+unnamed module only). The `META-INF/services` entry is silently ignored, `launcherSessionOpened` never runs, and
+the test fails immediately (`SQLException: The url cannot be null`) with no Testcontainers/Docker activity at all.
 
-- It works: the design stands.
-- It fails: the documented fallback is `<useModulePath>false</useModulePath>` for the tests that need dev services,
-  and the spike records why.
+Retrying the same module with `<useModulePath>false</useModulePath>` on `maven-surefire-plugin` passes: Surefire
+then runs everything from the classpath, the listener loads in the unnamed module as intended, `ServiceLoader`
+finds it via `META-INF/services`, and the test observes the PostgreSQL container's JDBC URL.
+
+**Applications that use dev services in tests must set `<useModulePath>false</useModulePath>`** on
+`maven-surefire-plugin` for the test execution that needs them. Task 7's docs step must say so.
 
 ## 8. Error handling
 
