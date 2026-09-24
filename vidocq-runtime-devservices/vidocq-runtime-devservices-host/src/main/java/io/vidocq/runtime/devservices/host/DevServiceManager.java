@@ -54,6 +54,7 @@ public final class DevServiceManager implements AutoCloseable {
     private final Map<String, String> collected = new LinkedHashMap<>();
     private final Map<String, String> providers = new LinkedHashMap<>();
     private final AtomicBoolean closed = new AtomicBoolean(false);
+    private System.Logger log;
 
     private DevServiceManager() {}
 
@@ -69,6 +70,7 @@ public final class DevServiceManager implements AutoCloseable {
     static DevServiceManager start(List<DevService> providers, DefaultDevServiceContext ctx, System.Logger log)
             throws DevServicesException {
         DevServiceManager mgr = new DevServiceManager();
+        mgr.log = log;
         List<DevService> ordered = new ArrayList<>(providers);
         ordered.sort(Comparator.comparingInt(DevService::order));
         for (DevService p : ordered) {
@@ -112,7 +114,8 @@ public final class DevServiceManager implements AutoCloseable {
     /**
      * What each started provider reported about itself, in start order, from
      * {@link DevService#describe(Map)} called with what {@link DevService#start} returned. A provider whose
-     * {@code describe} throws falls back to {@link DevServiceState#minimal}.
+     * {@code describe} throws falls back to {@link DevServiceState#minimal}, after a WARNING naming the
+     * provider's id and the exception's class (never its message, which may carry a secret).
      */
     public List<DevServiceState> states() {
         List<DevServiceState> out = new ArrayList<>(started.size());
@@ -123,6 +126,8 @@ public final class DevServiceManager implements AutoCloseable {
             try {
                 state = p.describe(injected);
             } catch (RuntimeException e) {
+                log.log(System.Logger.Level.WARNING, "DevService '" + p.id() + "' describe() threw "
+                        + e.getClass().getName() + " — falling back to a minimal state");
                 state = DevServiceState.minimal(p.id(), injected.keySet());
             }
             out.add(state);

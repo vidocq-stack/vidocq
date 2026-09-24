@@ -21,12 +21,14 @@ package io.vidocq.runtime.devservices.host;
 
 import io.vidocq.runtime.devservices.spi.DevService;
 import io.vidocq.runtime.devservices.spi.DevServiceContext;
+import io.vidocq.runtime.devservices.spi.DevServiceState;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.ResourceBundle;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -140,6 +142,65 @@ class DevServiceManagerTest {
         assertFalse(mgr.collectedProperties().containsKey("anything"));
     }
 
+    /**
+     * {@link DevServiceManager#states()} must report each provider's own output, in start order — not the
+     * aggregated {@link DevServiceManager#collectedProperties()}, where a later provider's value for a shared
+     * key would otherwise hide the earlier provider's key entirely.
+     */
+    @Test
+    void statesReflectExactlyWhatEachProviderReturnedInStartOrder() throws Exception {
+        List<String> events = new ArrayList<>();
+        FakeDevService a = new FakeDevService("a", 100, true,
+                Map.of("shared", "from-a", "a.only", "1"), false, null, events);
+        FakeDevService b = new FakeDevService("b", 200, true,
+                Map.of("shared", "from-b", "b.only", "2"), false, null, events);
+
+        DevServiceManager mgr = DevServiceManager.start(List.of(b, a), ctx(), LOG);
+
+        List<DevServiceState> states = mgr.states();
+        assertEquals(2, states.size());
+        assertEquals("a", states.get(0).id(), "states() is in start order, not registration order");
+        assertEquals(List.of("a.only", "shared"), states.get(0).injectedKeys());
+        assertEquals("b", states.get(1).id());
+        assertEquals(List.of("b.only", "shared"), states.get(1).injectedKeys(),
+                "b's own output, not a's — the shared key must not bleed across providers");
+    }
+
+    @Test
+    void describeThatThrowsFallsBackToAMinimalStateAndLogsAWarning() throws Exception {
+        List<String> events = new ArrayList<>();
+        FakeDevService broken = new FakeDevService("broken", 100, true,
+                Map.of("broken.key", "1"), false, null, events, true);
+        CapturingLogger log = new CapturingLogger();
+
+        DevServiceManager mgr = DevServiceManager.start(List.of(broken), ctx(), log);
+
+        assertEquals(List.of(DevServiceState.minimal("broken", List.of("broken.key"))), mgr.states());
+        assertTrue(log.lines.stream().anyMatch(
+                line -> line.contains("WARNING") && line.contains("broken") && line.contains("IllegalStateException")),
+                log.lines.toString());
+        assertFalse(log.lines.stream().anyMatch(line -> line.contains("boom-describe")),
+                "the exception's message may carry a secret and must never be logged: " + log.lines);
+    }
+
+    /** Captures every line logged through it, as {@code "LEVEL message"}. */
+    private static final class CapturingLogger implements System.Logger {
+        final List<String> lines = new ArrayList<>();
+
+        @Override public String getName() { return "CapturingLogger"; }
+        @Override public boolean isLoggable(Level level) { return true; }
+
+        @Override
+        public void log(Level level, ResourceBundle bundle, String msg, Throwable thrown) {
+            lines.add(level + " " + msg);
+        }
+
+        @Override
+        public void log(Level level, ResourceBundle bundle, String format, Object... params) {
+            lines.add(level + " " + java.text.MessageFormat.format(format, params));
+        }
+    }
+
     /** A scripted DevService that records its lifecycle into a shared event log. */
     private static final class FakeDevService implements DevService {
         private final String id;
@@ -149,11 +210,17 @@ class DevServiceManagerTest {
         private final boolean fail;
         private final String readKey;
         private final List<String> events;
+        private final boolean describeThrows;
         private String sawValue;
         private int stopCount;
 
         FakeDevService(String id, int order, boolean applies, Map<String, String> output,
                        boolean fail, String readKey, List<String> events) {
+            this(id, order, applies, output, fail, readKey, events, false);
+        }
+
+        FakeDevService(String id, int order, boolean applies, Map<String, String> output,
+                       boolean fail, String readKey, List<String> events, boolean describeThrows) {
             this.id = id;
             this.order = order;
             this.applies = applies;
@@ -161,6 +228,7 @@ class DevServiceManagerTest {
             this.fail = fail;
             this.readKey = readKey;
             this.events = events;
+            this.describeThrows = describeThrows;
         }
 
         @Override public String id() { return id; }
@@ -177,6 +245,15 @@ class DevServiceManagerTest {
                 throw new IllegalStateException("boom-" + id);
             }
             return output;
+        }
+
+        @Override
+        public DevServiceState describe(Map<String, String> injected) {
+            if (describeThrows) {
+                // The message deliberately looks like a secret, to prove the manager never logs it.
+                throw new IllegalStateException("boom-describe-" + id);
+            }
+            return DevService.super.describe(injected);
         }
 
         @Override
