@@ -50,14 +50,16 @@ public final class DevServicesSection {
      * @param snapshot    the parsed state file, or {@link DevServicesSnapshot#NONE} when there is none
      * @param readProblem the simple name of the exception the extension caught while reading the file, or
      *                    {@code null} when it read cleanly (or found none)
+     * @param stateFile   the path of the state file the extension read, named by the {@code VIDOCQ-DEVS-001}
+     *                    anomaly; may be {@code null} when {@code readProblem} is
      * @param context     what the report lets a contributor read
      * @param section     where the section is written
      */
-    public static void write(DevServicesSnapshot snapshot, String readProblem, StartupReportContext context,
-            StartupReportSection section) {
+    public static void write(DevServicesSnapshot snapshot, String readProblem, String stateFile,
+            StartupReportContext context, StartupReportSection section) {
         if (readProblem != null) {
             section.anomaly(UNREADABLE_STATE_FILE,
-                    "The dev services state file could not be read: " + readProblem + ".",
+                    "The dev services state file " + stateFile + " could not be read: " + readProblem + ".",
                     "Rerun the goal: the Vidocq Maven plugin writes it.");
             section.summary("state file unreadable");
             return;
@@ -77,7 +79,10 @@ public final class DevServicesSection {
         }
         boolean dev = context.launchMode() == LaunchMode.DEV;
         for (DevServicesSnapshot.Service service : services) {
-            section.row(service.id(), service.image() + ", " + joinEndpoints(service.endpoints()));
+            String details = details(service);
+            if (!details.isEmpty()) {
+                section.row(service.id(), details);
+            }
             if (dev) {
                 writeInjectedValues(service, section);
             } else {
@@ -95,8 +100,16 @@ public final class DevServicesSection {
                 summary.append(", ");
             }
             DevServicesSnapshot.Service service = services.get(i);
-            summary.append(service.id()).append(" (").append(service.image()).append(" at ")
-                    .append(firstEndpoint(service)).append(')');
+            summary.append(service.id());
+            String image = blankToNull(service.image());
+            String endpoint = blankToNull(firstEndpoint(service));
+            if (image != null && endpoint != null) {
+                summary.append(" (").append(image).append(" at ").append(endpoint).append(')');
+            } else if (image != null) {
+                summary.append(" (").append(image).append(')');
+            } else if (endpoint != null) {
+                summary.append(" (at ").append(endpoint).append(')');
+            }
         }
         summary.append(" — ").append(snapshot.host());
         if ("stopped".equals(snapshot.state())) {
@@ -123,9 +136,28 @@ public final class DevServicesSection {
         return keys;
     }
 
+    /**
+     * {@code image, endpoints} for the service's row, leaving out what the provider did not describe: a third-party
+     * provider keeping {@code DevService.describe}'s default has neither, and gets no row at all.
+     */
+    private static String details(DevServicesSnapshot.Service service) {
+        String image = blankToNull(service.image());
+        String endpoints = joinEndpoints(service.endpoints());
+        if (image == null) {
+            return endpoints;
+        }
+        return endpoints.isEmpty() ? image : image + ", " + endpoints;
+    }
+
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value;
+    }
+
     private static String firstEndpoint(DevServicesSnapshot.Service service) {
         for (String value : service.endpoints().values()) {
-            return value;
+            if (blankToNull(value) != null) {
+                return value;
+            }
         }
         return "";
     }
@@ -133,6 +165,9 @@ public final class DevServicesSection {
     private static String joinEndpoints(Map<String, String> endpoints) {
         StringBuilder joined = new StringBuilder();
         for (Map.Entry<String, String> entry : endpoints.entrySet()) {
+            if (blankToNull(entry.getValue()) == null) {
+                continue;
+            }
             if (!joined.isEmpty()) {
                 joined.append(", ");
             }

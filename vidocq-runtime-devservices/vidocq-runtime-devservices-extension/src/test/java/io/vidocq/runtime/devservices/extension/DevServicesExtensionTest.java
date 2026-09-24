@@ -27,6 +27,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -37,6 +38,31 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * property gives it — it never scans {@code target/} itself.
  */
 class DevServicesExtensionTest {
+
+    @Test
+    void anUnreadableStateFileIsReportedWithItsPath(@TempDir Path dir) throws IOException {
+        Path file = dir.resolve("vidocq-dev-services.json");
+        Files.writeString(file, "{\"host\":");
+
+        String previous = System.getProperty(DevServicesExtension.STATE_PROPERTY);
+        System.setProperty(DevServicesExtension.STATE_PROPERTY, file.toString());
+        try {
+            DevServicesExtension extension = new DevServicesExtension();
+            extension.onStart(null);
+
+            RecordingSection section = new RecordingSection();
+            extension.contribute(new FakeReportContext(Verbosity.DETAILED), section);
+            assertEquals(List.of("VIDOCQ-DEVS-001"), section.codes());
+            String message = section.anomalies.getFirst().message();
+            assertTrue(message.contains(file.toString()), message);
+        } finally {
+            if (previous == null) {
+                System.clearProperty(DevServicesExtension.STATE_PROPERTY);
+            } else {
+                System.setProperty(DevServicesExtension.STATE_PROPERTY, previous);
+            }
+        }
+    }
 
     @Test
     void aStaleFileWithNoStatePropertyIsNeverScannedFor(@TempDir Path dir) throws IOException {

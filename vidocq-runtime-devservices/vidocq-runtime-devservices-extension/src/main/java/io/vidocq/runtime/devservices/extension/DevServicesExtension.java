@@ -50,6 +50,7 @@ public final class DevServicesExtension implements VidocqExtension, DevConsolePa
 
     private volatile DevServicesSnapshot snapshot = DevServicesSnapshot.NONE;
     private volatile String readProblem;
+    private volatile String stateFile;
 
     @Override
     public String name() {
@@ -68,6 +69,7 @@ public final class DevServicesExtension implements VidocqExtension, DevConsolePa
             return;
         }
         Path file = Path.of(path);
+        stateFile = file.toString();
         if (!Files.exists(file)) {
             return;
         }
@@ -82,6 +84,7 @@ public final class DevServicesExtension implements VidocqExtension, DevConsolePa
     public void onStop() {
         snapshot = DevServicesSnapshot.NONE;
         readProblem = null;
+        stateFile = null;
     }
 
     @Override
@@ -96,7 +99,7 @@ public final class DevServicesExtension implements VidocqExtension, DevConsolePa
 
     @Override
     public void contribute(StartupReportContext context, StartupReportSection section) {
-        DevServicesSection.write(snapshot, readProblem, context, section);
+        DevServicesSection.write(snapshot, readProblem, stateFile, context, section);
     }
 
     /**
