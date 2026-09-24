@@ -235,22 +235,33 @@ So the listener, Testcontainers and the providers should work from the unnamed m
 (`junit.platform.launcher`, which `uses LauncherSessionListener`) should find the listener's
 `META-INF/services` entry through its class loader.
 
-**Verified on 2026-09-24**, with a throwaway spike (a modular `io.vidocq.spike.app` module, a
-`LauncherSessionListener` in an unmentioned-by-`module-info` `spike.listener` package, and a test reading the
-JDBC URL it publishes): **fails on the module path.** Under Surefire's default module-path run, `--patch-module`
-folds the *entire* `target/test-classes` tree — including packages the `module-info` never mentions — into the
-application's named module. The listener class lands inside that named module, not the unnamed one, so the JPMS
-rule for named modules applies: `ServiceLoader` only honors an explicit `provides … with …` module directive there,
-never the `META-INF/services` provider-configuration file (that convention is for automatic modules and the
-unnamed module only). The `META-INF/services` entry is silently ignored, `launcherSessionOpened` never runs, and
-the test fails immediately (`SQLException: The url cannot be null`) with no Testcontainers/Docker activity at all.
+**Verified on 2026-09-24**, with a throwaway spike, redone once to match the real design after a first pass gave
+a misleading result:
 
-Retrying the same module with `<useModulePath>false</useModulePath>` on `maven-surefire-plugin` passes: Surefire
-then runs everything from the classpath, the listener loads in the unnamed module as intended, `ServiceLoader`
-finds it via `META-INF/services`, and the test observes the PostgreSQL container's JDBC URL.
+- **Round 1 (listener in the app's own test sources — not representative):** a modular `io.vidocq.spike.app`
+  module with the `LauncherSessionListener` compiled alongside `SpikeTest` in its own `src/test/java`, in an
+  unmentioned-by-`module-info` `spike.listener` package. This **failed on the module path**: Surefire's default
+  `--patch-module` folds the *entire* `target/test-classes` tree — including packages `module-info` never
+  mentions — into the application's named module. The listener class landed inside that named module, not the
+  unnamed one, so the JPMS rule for named modules applied (`ServiceLoader` only honors an explicit
+  `provides … with …` module directive there, never a `META-INF/services` file), the entry was silently ignored,
+  `launcherSessionOpened` never ran, and the test failed immediately (`SQLException: The url cannot be null`)
+  with no Testcontainers/Docker activity at all. This setup doesn't match the design, though: the real
+  `vidocq-runtime-devservices-junit` listener never lives in the application's own test sources.
+- **Round 2 (listener in its own jar, added as a test dependency — matches the design):** the
+  `LauncherSessionListener` moved to a separate, plain (no `module-info`) throwaway jar
+  (`io.vidocq.spike:spike-listener`), `mvn install`ed locally and added to the modular app's `pom.xml` as a
+  `test`-scope dependency, exactly as an application adds `vidocq-runtime-devservices-junit`. The app's test
+  sources then contained only `SpikeTest`. Run unchanged (default Surefire, module path): **this passes.**
+  Because `module-info` doesn't require `spike-listener`, Surefire's `--patch-module` only folds the app's own
+  `target/test-classes` (just `SpikeTest.class`) into the named module; the listener jar lands on the classpath,
+  in the unnamed module, where `ServiceLoader` finds its `META-INF/services` entry as expected. No
+  `<useModulePath>false</useModulePath>` was needed.
 
-**Applications that use dev services in tests must set `<useModulePath>false</useModulePath>`** on
-`maven-surefire-plugin` for the test execution that needs them. Task 7's docs step must say so.
+**The design stands, with one constraint carried over from round 1's finding:** `vidocq-runtime-devservices-junit`
+(and any `LauncherSessionListener` an application wires this way) must be its own artifact/jar, never compiled
+into the application's own test sources — Surefire's module-path patching would fold it into the named module and
+silently break `ServiceLoader` discovery. Task 7's docs step must say so.
 
 ## 8. Error handling
 
