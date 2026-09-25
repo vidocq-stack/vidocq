@@ -4,8 +4,9 @@ name: CI
 # (which inherits from it) can resolve its <parent>. Common steps come from Vidocq/ci.
 #
 # Forgejo runner clones the Vidocq/ci action repo at every `uses:` step. Cloning
-# from codeberg.org under burst returns HTTP 504 (rate-limit on the same pack
-# server-side) and the anonymous clone from forgejo.sabot-durand.net is rejected
+# from the forge under burst returned HTTP 504 (rate-limit on the same pack
+# server-side, seen on codeberg.org before the Codefloe migration) and the
+# anonymous clone from forgejo.sabot-durand.net is rejected
 # (Unauthorized) even though ls-remote works anonymously. Workaround: one
 # explicit clone using basic-auth secrets (MIRROR_ASD_*), checked out into
 # .ci-action/, then 4 `uses:` against local paths — zero further network reads.
