@@ -31,7 +31,7 @@ refer to it).
   never `./mvnw`. Add `-o` unless a download is needed. A long Maven run may be blocked by the shell hook: run it
   through the context-mode execute tool or a wrapper script, as in #123.
 - Work on branch `feat/122-continuous-testing`, created from `docs/122-continuous-testing-design` (the spec and
-  this plan travel with it), in `~/projects/perso/vidocq/vidocq`. Never in a hidden worktree.
+  this plan travel with it), in the main checkout. Never in a hidden worktree.
 - File names and keys, verbatim (spec §2–§3):
   - results `target/vidocq-dev-tests.json`, log `target/vidocq-dev-tests.log`, request
     `target/vidocq-dev-tests.request` (a sibling of the results file);
