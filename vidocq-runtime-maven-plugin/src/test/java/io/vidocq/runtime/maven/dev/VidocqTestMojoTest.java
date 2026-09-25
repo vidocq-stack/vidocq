@@ -20,8 +20,16 @@
 package io.vidocq.runtime.maven.dev;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.nio.file.Path;
+import java.time.Clock;
+import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -47,5 +55,58 @@ class VidocqTestMojoTest {
     @Test
     void closingNoSessionIsHarmless() {
         assertDoesNotThrow(() -> new VidocqTestMojo().closeDevServices(null));
+    }
+
+    /**
+     * #138: Ctrl+C runs the shutdown hook while execute() reaches its finally. The second caller must not return, and
+     * go on to stop the dev services, while the first is still killing the test process.
+     */
+    @Test
+    @Timeout(20)
+    void aSecondShutdownWaitsForTheFirstToFinishKillingTheTests(@TempDir Path dir) throws Exception {
+        AtomicBoolean killed = new AtomicBoolean();
+        CountDownLatch running = new CountDownLatch(1);
+        CompletableFuture<Integer> exit = new CompletableFuture<>();
+        ContinuousTesting testing = new ContinuousTesting(tests -> {
+            running.countDown();
+            return new ContinuousTesting.Launched() {
+                @Override
+                public int waitFor() throws InterruptedException {
+                    try {
+                        return exit.get();
+                    } catch (java.util.concurrent.ExecutionException e) {
+                        throw new IllegalStateException(e);
+                    }
+                }
+
+                @Override
+                public void cancel() {
+                    try {
+                        Thread.sleep(500); // a slow kill
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                    killed.set(true);
+                    exit.complete(143);
+                }
+
+                @Override
+                public boolean cancelled() {
+                    return true;
+                }
+            };
+        }, since -> SurefireReports.Reports.NONE, () -> false, dir.resolve("r.json"), "log", result -> {},
+                warning -> {}, Clock.systemUTC());
+        testing.start();
+        testing.changed(TestResults.Trigger.RUN_ALL, TestControl.ReadyGate.NOW);
+        running.await();
+        VidocqTestMojo mojo = new VidocqTestMojo();
+
+        Thread hook = Thread.ofPlatform().start(() -> mojo.shutdown(testing, null));
+        Thread.sleep(100);
+        mojo.shutdown(testing, null);
+
+        assertTrue(killed.get(), "the finally returned before the hook finished killing the test process");
+        hook.join();
     }
 }

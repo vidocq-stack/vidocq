@@ -110,8 +110,7 @@ public class VidocqTestMojo extends AbstractMojo {
         Thread mainThread = Thread.currentThread();
         Thread hook = new Thread(() -> {
             mainThread.interrupt();
-            testing.close();
-            closeDevServices(session);
+            shutdown(testing, session);
         }, "vidocq-test-shutdown");
         Runtime.getRuntime().addShutdownHook(hook);
 
@@ -136,8 +135,7 @@ public class VidocqTestMojo extends AbstractMojo {
         } catch (IOException e) {
             throw new MojoExecutionException("Continuous testing initialisation failed", e);
         } finally {
-            testing.close();
-            closeDevServices(session);
+            shutdown(testing, session);
             try {
                 Runtime.getRuntime().removeShutdownHook(hook);
             } catch (IllegalStateException ignored) {
@@ -177,6 +175,16 @@ public class VidocqTestMojo extends AbstractMojo {
         } catch (IllegalArgumentException e) {
             throw new MojoExecutionException(e.getMessage(), e);
         }
+    }
+
+    /**
+     * Stops the tests, then the dev services, {@code synchronized} on this mojo: the shutdown hook and {@code
+     * finally} both call it, and {@link ContinuousTesting#close()} returns at once to its second caller. Without the
+     * lock, that caller would go on to stop the containers while the first one still kills the test process (#138).
+     */
+    synchronized void shutdown(ContinuousTesting testing, DevServicesSession session) {
+        testing.close();
+        closeDevServices(session);
     }
 
     /** Closes {@code session} once, the shutdown hook and {@code finally} waiting for each other (#123). */
