@@ -52,6 +52,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 /**
@@ -433,6 +435,36 @@ public class VidocqDevMojo extends AbstractMojo {
         Optional<TestControl.ReadyGate> run() throws IOException, InterruptedException;
     }
 
+    /** Reads the stamp of the reload signal just written; {@link ReloadAck#stamp} in production. */
+    @FunctionalInterface
+    interface StampReader {
+        long stamp(Path reloadFile) throws IOException;
+    }
+
+    /**
+     * Signals a hot reload: the gate the tests of this change wait for, or empty when the signal could not be written,
+     * in which case the caller respawns the child. Once written, the child reloads whatever happens next: a stamp
+     * that cannot be read then only costs the wait for the reload, the tests starting at once, never a second reload
+     * by a respawn (#138).
+     */
+    static Optional<TestControl.ReadyGate> signalHotReload(Path reloadFile, StampReader stamps,
+            BooleanSupplier childAlive, Consumer<String> warn) {
+        try {
+            Files.writeString(reloadFile, System.nanoTime() + "\n");
+        } catch (IOException e) {
+            warn.accept("Cannot signal hot reload (" + e.getMessage() + ") — falling back to a respawn.");
+            return Optional.empty();
+        }
+        try {
+            long stamp = stamps.stamp(reloadFile);
+            return Optional.of(ReloadAck.gate(reloadFile, stamp, RELOAD_ACK_TIMEOUT, childAlive, warn));
+        } catch (IOException e) {
+            warn.accept("Tests: cannot read the time of the reload signal (" + e.getMessage()
+                    + "); the tests start without waiting for the reload");
+            return Optional.of(TestControl.ReadyGate.NOW);
+        }
+    }
+
     /**
      * One change of the source loop (spec §2.2). A test-only change runs the tests, and nothing is reloaded. A main
      * change first stops the run in flight and holds the requests, so that no test Maven races the recompile. It then
@@ -482,16 +514,12 @@ public class VidocqDevMojo extends AbstractMojo {
         ChildJvm child = currentChild.get();
         if (inJvmReload && child.isAlive()) {
             // Signal the child: it re-creates its application layer in place.
-            try {
-                Files.writeString(reloadFile, System.nanoTime() + "\n");
-                long stamp = ReloadAck.stamp(reloadFile);
+            Optional<TestControl.ReadyGate> signalled =
+                    signalHotReload(reloadFile, ReloadAck::stamp, child::isAlive, getLog()::warn);
+            if (signalled.isPresent()) {
                 getLog().info("Hot reload signalled after " + (System.nanoTime() - t0) / 1_000_000
                         + " ms (in-JVM layer swap).");
-                return Optional.of(ReloadAck.gate(reloadFile, stamp, RELOAD_ACK_TIMEOUT, child::isAlive,
-                        getLog()::warn));
-            } catch (IOException e) {
-                getLog().warn("Cannot signal hot reload (" + e.getMessage()
-                        + ") — falling back to a respawn.");
+                return signalled;
             }
         }
         child.stop(Duration.ofMillis(gracePeriodMillis));

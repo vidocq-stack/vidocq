@@ -497,4 +497,31 @@ class VidocqDevMojoTest {
 
         assertEquals(List.of("reload"), calls);
     }
+
+    /** #138: once the signal is written the child reloads; a failure after it must not respawn the child as well. */
+    @Test
+    void aStampThatCannotBeReadAfterTheSignalDoesNotRespawn(@TempDir Path dir) throws Exception {
+        Path reloadFile = dir.resolve(".vidocq-dev-reload");
+        List<String> warnings = new ArrayList<>();
+
+        Optional<TestControl.ReadyGate> gate = VidocqDevMojo.signalHotReload(reloadFile, file -> {
+            throw new java.io.IOException("no mtime");
+        }, () -> true, warnings::add);
+
+        assertTrue(gate.isPresent(), "the child was signalled: no respawn");
+        assertTrue(gate.get().await(() -> false), "the tests run without waiting");
+        assertEquals(1, warnings.size(), warnings.toString());
+        assertTrue(Files.exists(reloadFile));
+    }
+
+    @Test
+    void aSignalThatCannotBeWrittenFallsBackToARespawn(@TempDir Path dir) {
+        List<String> warnings = new ArrayList<>();
+
+        Optional<TestControl.ReadyGate> gate = VidocqDevMojo.signalHotReload(dir.resolve("absent/.vidocq-dev-reload"),
+                ReloadAck::stamp, () -> true, warnings::add);
+
+        assertTrue(gate.isEmpty(), "respawn");
+        assertTrue(warnings.getFirst().contains("respawn"), warnings.toString());
+    }
 }
