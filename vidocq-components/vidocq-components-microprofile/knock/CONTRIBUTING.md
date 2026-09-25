@@ -1,6 +1,6 @@
 # Contributing to Knock
 
-Knock is a component of the [Vidocq project](https://codeberg.org/vidocq),
+Knock is a component of the [Vidocq project](https://codefloe.com/Vidocq),
 an open source Java implementation of Jakarta EE Core Profile 11 and MicroProfile 7.1.
 
 ## Contribution guide
@@ -8,7 +8,7 @@ an open source Java implementation of Jakarta EE Core Profile 11 and MicroProfil
 All contribution rules (CLA, GPG commit signing, Signed-off-by, code style,
 commit message format) are defined centrally:
 
-**[Vidocq Contribution Guide](https://codeberg.org/vidocq/governance/src/branch/main/CONTRIBUTING.md)**
+**[Vidocq Contribution Guide](https://codefloe.com/Vidocq/governance/src/branch/main/CONTRIBUTING.md)**
 
 Please read it carefully before opening your first pull request.
 
@@ -16,7 +16,7 @@ Please read it carefully before opening your first pull request.
 
 The Contributor License Agreement and the list of signatories are maintained at:
 
-**[vidocq/governance](https://codeberg.org/vidocq/governance)**
+**[Vidocq/governance](https://codefloe.com/Vidocq/governance)**
 
 Your CLA signature pull request must be opened against that repository,
 not this one.
