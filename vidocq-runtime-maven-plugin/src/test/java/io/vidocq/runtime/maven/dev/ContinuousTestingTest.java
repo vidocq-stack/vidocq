@@ -96,7 +96,7 @@ class ContinuousTestingTest {
             FakeRun run = new FakeRun(tests);
             launches.add(run);
             return run;
-        }, since -> reports.get(), resultsFile, "target/vidocq-dev-tests.log", results::add, warnings::add,
+        }, since -> reports.get(), () -> true, resultsFile, "target/vidocq-dev-tests.log", results::add, warnings::add,
                 Clock.systemUTC());
         testing.start();
     }
@@ -254,17 +254,17 @@ class ContinuousTestingTest {
     }
 
     @Test
-    void aLauncherThatCannotStartIsACompileErrorNotACrash(@TempDir Path dir) throws Exception {
+    void aLauncherThatCannotStartIsAnErrorNotACrash(@TempDir Path dir) throws Exception {
         testing.close();
         testing = new ContinuousTesting(tests -> {
             throw new java.io.IOException("mvn: not found");
-        }, since -> SurefireReports.Reports.NONE, dir.resolve("r.json"), "log", results::add, warnings::add,
+        }, since -> SurefireReports.Reports.NONE, () -> false, dir.resolve("r.json"), "log", results::add, warnings::add,
                 Clock.systemUTC());
         testing.start();
 
         testing.changed(Trigger.RUN_ALL, TestControl.ReadyGate.NOW);
 
-        assertEquals(State.COMPILE_ERROR, nextResult().state());
+        assertEquals(State.ERROR, nextResult().state(), "Maven never ran: nothing was compiled");
         assertTrue(warnings.stream().anyMatch(w -> w.contains("mvn: not found")), warnings.toString());
     }
 

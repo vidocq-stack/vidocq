@@ -44,6 +44,7 @@ final class TestSummaryPrinter {
                     r.counts().passed(), r.counts().failures() + r.counts().errors(), r.counts().skipped(),
                     r.durationMillis() / 1000.0, trigger);
             case COMPILE_ERROR -> "Tests: compilation failed (" + trigger + "), see " + r.log();
+            case ERROR -> "Tests: the run failed (" + trigger + "), see " + r.log();
             case NO_TESTS -> "Tests: no test to run (" + trigger + ")";
             case CANCELLED -> "Tests: cancelled (" + trigger + "), a newer change runs next";
             case RUNNING -> "Tests: running (" + trigger + ")";

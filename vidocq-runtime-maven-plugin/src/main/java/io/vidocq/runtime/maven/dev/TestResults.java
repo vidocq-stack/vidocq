@@ -43,7 +43,9 @@ record TestResults(State state, Trigger trigger, Instant startedAt, long duratio
         FAILED("failed"),
         COMPILE_ERROR("compile-error"),
         NO_TESTS("no-tests"),
-        CANCELLED("cancelled");
+        CANCELLED("cancelled"),
+        /** Maven failed before any test ran, and not in the compiler: see the log (#138). */
+        ERROR("error");
 
         private final String wire;
 
@@ -129,20 +131,20 @@ record TestResults(State state, Trigger trigger, Instant startedAt, long duratio
     }
 
     /**
-     * A run whose subprocess exited (spec §2.4, §6): no report at all is {@code compile-error} after a non-zero exit
-     * and {@code no-tests} after a zero one, unless reports were there but unreadable ({@code passed}, with a
+     * A run whose subprocess exited (spec §2.4, §6): no report at all is {@code no-tests} after a zero exit, and after
+     * a non-zero one {@code compile-error} when the log shows a compiler failure, else {@code error} (#138), unless reports were there but unreadable ({@code passed}, with a
      * warning); a failure or an error is {@code failed}; so is a non-zero exit without either, such as a forked JVM
      * that crashed, with a warning.
      */
     static TestResults completed(Trigger trigger, Instant startedAt, long durationMillis, int exitCode,
-            SurefireReports.Reports reports, String log, Consumer<String> warn) {
+            boolean compilerFailed, SurefireReports.Reports reports, String log, Consumer<String> warn) {
         if (reports.unreadable() > 0) {
             warn.accept("Tests: " + reports.unreadable() + " Surefire report(s) could not be read; see " + log);
         }
         Counts counts = reports.counts();
         State state;
         if (reports.readable() == 0 || counts.run() == 0) {
-            state = exitCode != 0 ? State.COMPILE_ERROR
+            state = exitCode != 0 ? (compilerFailed ? State.COMPILE_ERROR : State.ERROR)
                     : reports.unreadable() > 0 ? State.PASSED : State.NO_TESTS;
         } else if (counts.failures() + counts.errors() > 0) {
             state = State.FAILED;

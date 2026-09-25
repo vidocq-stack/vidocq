@@ -42,7 +42,7 @@ class TestResultsTest {
     private final List<String> warnings = new ArrayList<>();
 
     private TestResults completed(int exit, SurefireReports.Reports reports) {
-        return TestResults.completed(Trigger.CHANGE, AT, 3210, exit, reports, LOG, warnings::add);
+        return TestResults.completed(Trigger.CHANGE, AT, 3210, exit, true, reports, LOG, warnings::add);
     }
 
     private static SurefireReports.Reports reports(Counts counts, List<Failure> failures, int readable,
@@ -121,9 +121,19 @@ class TestResultsTest {
 
     @Test
     void theWireValuesAreTheSpecs() {
-        assertEquals(List.of("running", "passed", "failed", "compile-error", "no-tests", "cancelled"),
+        assertEquals(List.of("running", "passed", "failed", "compile-error", "no-tests", "cancelled", "error"),
                 List.of(State.values()).stream().map(State::wire).toList());
         assertEquals(List.of("change", "test-change", "run-all", "rerun-failed"),
                 List.of(Trigger.values()).stream().map(Trigger::wire).toList());
+    }
+
+    /** #138: Maven failed before any test, and not in the compiler: a missing Surefire provider offline, a crash. */
+    @Test
+    void noReportANonZeroExitAndNoCompilerErrorIsAnError() {
+        TestResults result = TestResults.completed(Trigger.CHANGE, AT, 3210, 1, false, SurefireReports.Reports.NONE,
+                LOG, warnings::add);
+
+        assertEquals(State.ERROR, result.state());
+        assertTrue(result.state().complete(), "a finished run");
     }
 }

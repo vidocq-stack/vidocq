@@ -144,7 +144,8 @@ Each run writes its output to `target/vidocq-dev-tests.log`, overwritten on the 
 | `running` | A run has started; the previous complete result is under `previous`.
 | `passed` | Every test passed, or was skipped.
 | `failed` | A test failed or ended in error — or Maven exited with an error although none did, such as a test JVM that crashed; the log says why.
-| `compile-error` | Maven failed before any test ran: the main or test sources do not compile. The application keeps running.
+| `compile-error` | The main or test sources do not compile: the log shows the compiler's errors. The application keeps running.
+| `error` [.tag-new]#NEW# | Maven failed before any test ran, but not in the compiler: for example Surefire's JUnit provider missing from the local repository of an offline run, or a test JVM that crashed before writing any report. The log says why.
 | `no-tests` | There was no test to run.
 | `cancelled` | A newer change stopped the run; the previous complete result is under `previous`.
 |===
@@ -170,8 +171,8 @@ Tests: 41 passed, 1 failed, 0 skipped in 3.2 s (change)
 Log: target/vidocq-dev-tests.log   [r] run all  [f] rerun failed  [q] quit
 ----
 
-A compilation failure, a run with no test and a cancelled run each print one line, such as
-`Tests: compilation failed (change), see target/vidocq-dev-tests.log`.
+A compilation failure, another failure before the tests, a run with no test and a cancelled run each print one line, such as
+`Tests: compilation failed (change), see target/vidocq-dev-tests.log` or `Tests: the run failed (change), see target/vidocq-dev-tests.log`.
 
 With a console attached, `vidocq:test` reads a key per line — type the key, then Enter:
 

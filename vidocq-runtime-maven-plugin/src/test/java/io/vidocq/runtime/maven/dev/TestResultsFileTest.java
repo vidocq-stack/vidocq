@@ -40,7 +40,7 @@ class TestResultsFileTest {
     private static final String LOG = "target/vidocq-dev-tests.log";
 
     private static TestResults failed() {
-        return TestResults.completed(Trigger.CHANGE, AT, 3210, 1, new SurefireReports.Reports(
+        return TestResults.completed(Trigger.CHANGE, AT, 3210, 1, true, new SurefireReports.Reports(
                 new Counts(42, 1, 0, 0), List.of(new Failure("com.acme.OrderServiceTest#rejectsEmptyCart",
                         "org.opentest4j.AssertionFailedError", "expected: <400> but was: <200>")), 1, 0),
                 LOG, warning -> {});
@@ -66,7 +66,7 @@ class TestResultsFileTest {
 
     @Test
     void stringsAreEscaped() {
-        TestResults odd = TestResults.completed(Trigger.CHANGE, AT, 1, 1, new SurefireReports.Reports(
+        TestResults odd = TestResults.completed(Trigger.CHANGE, AT, 1, 1, true, new SurefireReports.Reports(
                 new Counts(1, 1, 0, 0), List.of(new Failure("a.B#c", "T", "say \"hi\" \\ \t\u0001")), 1, 0),
                 LOG, warning -> {});
 

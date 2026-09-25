@@ -135,6 +135,11 @@ class TestRunnerTest {
         long millis = (System.nanoTime() - t0) / 1_000_000;
 
         assertTrue(millis < TestRunner.GRACE.toMillis() / 2, "the cancel took " + millis + " ms");
+        // SIGKILL is delivered asynchronously: give the kernel a moment, far below the grace period.
+        long deadline = System.currentTimeMillis() + 2_000;
+        while (!gone(child) && System.currentTimeMillis() < deadline) {
+            Thread.sleep(20);
+        }
         assertTrue(gone(child), "the descendant that ignored SIGTERM");
     }
 
@@ -154,5 +159,22 @@ class TestRunnerTest {
         }
         String line = Files.readString(stat);
         return line.substring(line.lastIndexOf(')') + 2).startsWith("Z");
+    }
+
+    /** #138: only a compiler failure in the log makes a run without report a compile error. */
+    @Test
+    void theLogTellsACompilerFailureFromAnyOtherFailure(@TempDir Path dir) throws Exception {
+        Path log = dir.resolve("vidocq-dev-tests.log");
+
+        assertFalse(TestRunner.compilationFailed(log), "no log at all");
+        Files.writeString(log, "[ERROR] COMPILATION ERROR : \n[ERROR] /a/B.java:[3,1] ';' expected\n");
+        assertTrue(TestRunner.compilationFailed(log));
+        Files.writeString(log, "[ERROR] Failed to execute goal org.apache.maven.plugins:maven-compiler-plugin:3.15.0:"
+                + "testCompile (default-testCompile) on project app: Compilation failure\n");
+        assertTrue(TestRunner.compilationFailed(log));
+        Files.writeString(log, "[ERROR] Failed to execute goal org.apache.maven.plugins:maven-surefire-plugin:3.5.5:test:"
+                + " Cannot access central in offline mode and the artifact surefire-junit-platform has not been"
+                + " downloaded from it before.\n");
+        assertFalse(TestRunner.compilationFailed(log));
     }
 }

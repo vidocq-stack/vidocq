@@ -28,6 +28,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -74,6 +75,7 @@ final class ContinuousTesting implements TestControl, AutoCloseable {
 
     private final Launcher launcher;
     private final Function<Instant, SurefireReports.Reports> reports;
+    private final BooleanSupplier compilerFailed;
     private final Path resultsFile;
     private final String log;
     private final Consumer<TestResults> onResult;
@@ -96,14 +98,17 @@ final class ContinuousTesting implements TestControl, AutoCloseable {
     private Thread worker;
 
     /**
-     * @param reports    the reports of the run that started at the given instant
+     * @param reports        the reports of the run that started at the given instant
+     * @param compilerFailed whether the log of the run that just ended shows a compiler failure (#138)
      * @param log        the log file as the results show it, such as {@code target/vidocq-dev-tests.log}
      * @param onResult   called on the worker with each run's outcome, never with {@code running}
      */
-    ContinuousTesting(Launcher launcher, Function<Instant, SurefireReports.Reports> reports, Path resultsFile,
-            String log, Consumer<TestResults> onResult, Consumer<String> warn, Clock clock) {
+    ContinuousTesting(Launcher launcher, Function<Instant, SurefireReports.Reports> reports,
+            BooleanSupplier compilerFailed, Path resultsFile, String log, Consumer<TestResults> onResult,
+            Consumer<String> warn, Clock clock) {
         this.launcher = launcher;
         this.reports = reports;
+        this.compilerFailed = compilerFailed;
         this.resultsFile = resultsFile;
         this.log = log;
         this.onResult = onResult;
@@ -125,7 +130,7 @@ final class ContinuousTesting implements TestControl, AutoCloseable {
         TestRunner runner = new TestRunner(projectDir, RecompileRunner.detectMavenExecutable(projectDir),
                 testProperties, logFile, reportsDir);
         return new ContinuousTesting(runner, since -> SurefireReports.read(reportsDir, since),
-                buildDir.resolve(TestResultsFile.FILE_NAME), shown(projectDir, logFile), onResult, warn,
+                () -> TestRunner.compilationFailed(logFile), buildDir.resolve(TestResultsFile.FILE_NAME), shown(projectDir, logFile), onResult, warn,
                 Clock.systemUTC());
     }
 
@@ -350,7 +355,8 @@ final class ContinuousTesting implements TestControl, AutoCloseable {
         long duration = Duration.ofNanos(System.nanoTime() - t0).toMillis();
         TestResults result = wasCancelled
                 ? TestResults.cancelled(trigger, startedAt, duration, log, previous)
-                : TestResults.completed(trigger, startedAt, duration, exit, reports.apply(startedAt), log, warn);
+                : TestResults.completed(trigger, startedAt, duration, exit, compilerFailed.getAsBoolean(),
+                        reports.apply(startedAt), log, warn);
         if (result.state().complete()) {
             synchronized (lock) {
                 lastComplete = result;

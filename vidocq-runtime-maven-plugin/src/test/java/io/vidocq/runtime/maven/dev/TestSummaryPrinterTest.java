@@ -38,7 +38,7 @@ class TestSummaryPrinterTest {
             "org.opentest4j.AssertionFailedError", "expected: <400> but was: <200>");
 
     private static TestResults completed(int exit, Counts counts, List<Failure> failures) {
-        return TestResults.completed(Trigger.CHANGE, AT, 3210, exit,
+        return TestResults.completed(Trigger.CHANGE, AT, 3210, exit, true,
                 new SurefireReports.Reports(counts, failures, 1, 0), LOG, warning -> {});
     }
 
@@ -95,5 +95,14 @@ class TestSummaryPrinterTest {
     void aFailureWithoutMessageShowsItsType() {
         assertEquals("  FAILED a.B#c — NullPointerException",
                 TestSummaryPrinter.failureLine(new Failure("a.B#c", "java.lang.NullPointerException", "")));
+    }
+
+    @Test
+    void aRunThatFailedOutsideTheCompilerSaysSo() {
+        TestResults error = TestResults.completed(Trigger.CHANGE, AT, 3210, 1, false,
+                SurefireReports.Reports.NONE, LOG, warning -> {});
+
+        assertEquals("Tests: the run failed (change), see target/vidocq-dev-tests.log",
+                TestSummaryPrinter.headline(error));
     }
 }

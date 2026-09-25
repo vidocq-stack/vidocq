@@ -22,6 +22,8 @@ package io.vidocq.runtime.maven.dev;
 import io.vidocq.runtime.devservices.host.DevServicesFlag;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -93,6 +95,20 @@ final class TestRunner implements ContinuousTesting.Launcher {
                 .redirectOutput(logFile.toFile())
                 .start();
         return new Running(process);
+    }
+
+    /**
+     * Whether the log of a run shows a compiler failure — Maven's {@code COMPILATION ERROR} block, or a
+     * {@code Compilation failure} of the compiler plugin — as opposed to any other failure before the tests, such as
+     * a Surefire provider missing offline (#138). {@code false} when the log cannot be read.
+     */
+    static boolean compilationFailed(Path logFile) {
+        try {
+            String log = Files.readString(logFile, StandardCharsets.UTF_8);
+            return log.contains("COMPILATION ERROR") || log.contains("Compilation failure");
+        } catch (IOException | UncheckedIOException unreadable) {
+            return false;
+        }
     }
 
     /** Deletes the {@code TEST-*.xml} of {@code dir}, and nothing else. */
