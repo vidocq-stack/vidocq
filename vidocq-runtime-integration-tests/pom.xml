@@ -38,6 +38,20 @@
     </modules>
 
     <profiles>
+        <!-- Continuous testing end to end (#122): real mvn subprocesses running vidocq:dev and vidocq:test on a
+             fixture project. On any CI runner (Forgejo sets CI=true) and with -Pit, like the plugin's invoker
+             tests: it stages the fresh plugin with maven-invoker-plugin, which a plain offline build may lack. -->
+        <profile>
+            <id>it</id>
+            <activation>
+                <property>
+                    <name>env.CI</name>
+                </property>
+            </activation>
+            <modules>
+                <module>vidocq-runtime-it-continuous-testing</module>
+            </modules>
+        </profile>
         <!--
             Vidocq/vidocq#123: the dev services end-to-end IT needs a real Docker daemon (Testcontainers).
             Kept out of the default reactor so a plain `mvn install`/`verify` never needs Docker. Activate
