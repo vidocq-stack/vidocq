@@ -583,15 +583,15 @@ Two hand-made layouts break this:
 
 | `vidocq.mcp.mrtrMode`
 | `REPLAY`
-| How a tool's client interactions (elicitation, sampling, roots) are served to `2026-07-28` clients: `REPLAY` re-executes the call with the answers carried in a signed request state, `CONTINUATION` parks it until they arrive and needs sticky routing.
+| How a tool's client interactions (elicitation, sampling, roots) are served to `2026-07-28` clients: `REPLAY` re-executes the call with the answers carried in an encrypted request state, `CONTINUATION` parks it until they arrive and needs sticky routing.
 
 | `vidocq.mcp.requestStateSecret`
 | (random per JVM)
-| The key that signs the `REPLAY` request state, at least 32 bytes in UTF-8. Set it when several instances serve the same clients. A secret: never printed.
+| The secret the `REPLAY` request state is encrypted and authenticated with (AES-256-GCM, key derived from it) [.tag-new]#NEW#, at least 32 bytes in UTF-8. A client, a proxy or an access log can neither read the answers the request state carries nor alter them; the tool name and arguments travel in clear beside it. Set the same value on every instance that serves the same clients, use a random one (`openssl rand -base64 32`), not a passphrase, and rotate it from time to time. A secret: never printed.
 
 | `vidocq.mcp.requestStateTtl`
 | `PT10M`
-| How long a signed request state stays valid, ISO-8601.
+| How long a request state stays valid, ISO-8601.
 
 | `vidocq.mcp.continuationTimeout`
 | `PT5M`
