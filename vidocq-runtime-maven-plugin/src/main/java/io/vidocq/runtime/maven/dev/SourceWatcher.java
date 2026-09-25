@@ -20,7 +20,9 @@
 package io.vidocq.runtime.maven.dev;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.ClosedWatchServiceException;
+import java.nio.file.FileSystems;
 import java.nio.file.FileVisitResult;
 import java.nio.file.FileVisitor;
 import java.nio.file.Files;
@@ -36,6 +38,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
 
 /**
  * Recursive {@link WatchService} wrapper used by {@code vidocq:dev} and {@code vidocq:test} to detect
@@ -67,6 +70,11 @@ final class SourceWatcher implements AutoCloseable {
     record Change(boolean main, boolean test) {}
 
     private final List<Path> testRoots;
+    /** The watched roots that did not exist yet: looked for every {@value #MISSING_ROOT_POLL_MILLIS} ms (#138). */
+    private final List<Path> missing = new ArrayList<>();
+
+    /** How often a watched root that does not exist yet is looked for. */
+    static final long MISSING_ROOT_POLL_MILLIS = 1_000;
 
     private SourceWatcher(WatchService service, long debounceMillis, List<Path> testRoots) {
         this.service = service;
@@ -85,12 +93,14 @@ final class SourceWatcher implements AutoCloseable {
     static SourceWatcher on(List<Path> mainDirs, List<Path> testDirs, Duration debounce) throws IOException {
         List<Path> all = new ArrayList<>(mainDirs);
         all.addAll(testDirs);
-        WatchService ws = all.get(0).getFileSystem().newWatchService();
+        WatchService ws = (all.isEmpty() ? FileSystems.getDefault() : all.get(0).getFileSystem()).newWatchService();
         SourceWatcher watcher = new SourceWatcher(ws, debounce.toMillis(),
                 testDirs.stream().map(dir -> dir.toAbsolutePath().normalize()).toList());
         for (Path dir : all) {
             if (Files.isDirectory(dir)) {
                 watcher.registerRecursive(dir);
+            } else {
+                watcher.missing.add(dir.toAbsolutePath().normalize());
             }
         }
         return watcher;
@@ -139,11 +149,19 @@ final class SourceWatcher implements AutoCloseable {
         while (true) {
             WatchKey key;
             try {
-                key = service.take();
+                key = missing.isEmpty() ? service.take()
+                        : service.poll(MISSING_ROOT_POLL_MILLIS, TimeUnit.MILLISECONDS);
             } catch (ClosedWatchServiceException e) {
                 return null;
             }
             Touched touched = new Touched();
+            if (key == null) {
+                registerAppearedRoots(touched);
+                if (touched.any()) {
+                    return touched.change();
+                }
+                continue;
+            }
             drainKey(key, touched);
             if (!key.reset()) {
                 registered.remove((Path) key.watchable());
@@ -221,6 +239,36 @@ final class SourceWatcher implements AutoCloseable {
                 } else {
                     touched.main = true;
                 }
+            }
+        }
+    }
+
+    /**
+     * Registers the watched roots that appeared since the last look. One that holds a watched file is a change of its
+     * kind: a first {@code src/test/java} created with a test in it runs the tests.
+     */
+    private void registerAppearedRoots(Touched touched) {
+        for (var it = missing.iterator(); it.hasNext(); ) {
+            Path root = it.next();
+            if (!Files.isDirectory(root)) {
+                continue;
+            }
+            it.remove();
+            try {
+                registerRecursive(root);
+                boolean sources;
+                try (Stream<Path> files = Files.walk(root)) {
+                    sources = files.anyMatch(file -> isWatchedExtension(file.getFileName().toString()));
+                }
+                if (sources) {
+                    if (under(root, testRoots)) {
+                        touched.test = true;
+                    } else {
+                        touched.main = true;
+                    }
+                }
+            } catch (IOException | UncheckedIOException ignored) {
+                // a root we cannot read yet is not fatal: its later events still count once registered
             }
         }
     }

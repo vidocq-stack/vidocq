@@ -147,4 +147,39 @@ class SourceWatcherTest {
             assertEquals(new SourceWatcher.Change(false, true), change.get());
         }
     }
+
+    /** #138: a test directory created after the start, such as a first src/test/java, is watched from then on. */
+    @Test
+    @Timeout(value = 30, unit = TimeUnit.SECONDS)
+    void a_test_directory_created_later_is_watched(@TempDir Path tmp) throws Exception {
+        Path main = Files.createDirectories(tmp.resolve("src/main/java"));
+        Files.writeString(main.resolve("Hello.java"), "class Hello {}");
+        Path test = tmp.resolve("src/test/java");
+
+        try (SourceWatcher watcher = SourceWatcher.on(List.of(main), List.of(test), Duration.ofMillis(50))) {
+            AtomicReference<SourceWatcher.Change> change = new AtomicReference<>();
+            Thread t = new Thread(() -> {
+                try {
+                    change.set(watcher.awaitChanges());
+                } catch (InterruptedException ignored) {
+                    Thread.currentThread().interrupt();
+                }
+            });
+            t.start();
+            Thread.sleep(500);
+            Files.createDirectories(test.resolve("a"));
+            Files.writeString(test.resolve("a/HelloTest.java"), "class HelloTest {}");
+
+            t.join(TimeUnit.SECONDS.toMillis(20));
+            assertFalse(t.isAlive(), "the new test directory was never seen");
+            assertEquals(new SourceWatcher.Change(false, true), change.get());
+        }
+    }
+
+    @Test
+    void noDirectoryAtAllIsNoError() throws Exception {
+        try (SourceWatcher ignored = SourceWatcher.on(List.of(), List.of(), Duration.ofMillis(50))) {
+            // nothing to watch, and no exception
+        }
+    }
 }
