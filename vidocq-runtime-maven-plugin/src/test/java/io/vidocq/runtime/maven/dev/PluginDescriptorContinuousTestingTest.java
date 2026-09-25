@@ -77,6 +77,26 @@ class PluginDescriptorContinuousTestingTest {
         assertParametersAreFields("dev", VidocqDevMojo.class);
     }
 
+    @Test
+    void theTestGoalIsDeclaredForItsMojo() throws Exception {
+        Element mojo = mojo("test");
+        assertNotNull(mojo, "no <mojo> with <goal>test</goal>");
+        assertEquals(VidocqTestMojo.class.getName(), text(mojo, "implementation"));
+        assertEquals("true", text(mojo, "requiresDirectInvocation"));
+        assertEquals("true", text(mojo, "requiresProject"));
+        assertParametersAreFields("test", VidocqTestMojo.class);
+    }
+
+    @Test
+    void theTestGoalReadsTheDevWatchProperties() {
+        assertConfigured("test", "watchDirs", "java.lang.String", "${vidocq.dev.watchDirs}",
+                "src/main/java,src/main/resources");
+        assertConfigured("test", "testWatchDirs", "java.lang.String", "${vidocq.dev.testWatchDirs}",
+                "src/test/java,src/test/resources");
+        assertConfigured("test", "debounceMillis", "long", "${vidocq.dev.debounceMillis}", "250");
+        assertConfigured("test", "devServices", "java.lang.Boolean", "${vidocq.dev.devServices}", "");
+    }
+
     static void assertConfigured(String goal, String name, String type, String expression, String defaultValue) {
         Element mojo = MOJOS.get(goal);
         assertNotNull(mojo, "no <mojo> with <goal>" + goal + "</goal>");
