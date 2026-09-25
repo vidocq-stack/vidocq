@@ -25,11 +25,13 @@ import io.vidocq.runtime.devservices.host.DevServicesSession;
 import io.vidocq.runtime.devservices.spi.DevService;
 import io.vidocq.runtime.devservices.spi.DevServiceContext;
 import io.vidocq.runtime.maven.ConsoleColors;
+import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.logging.SystemStreamLog;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -45,6 +47,7 @@ import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
@@ -391,5 +394,101 @@ class VidocqDevMojoTest {
         } else {
             System.setProperty(key, value);
         }
+    }
+
+    private static Function<String, Optional<String>> files(String key, String value) {
+        return k -> k.equals(key) ? Optional.of(value) : Optional.empty();
+    }
+
+    private static final Function<String, Optional<String>> NO_FILES = k -> Optional.empty();
+
+    @Test
+    void continuousTestingIsOnWhenTheProjectHasTestSources(@TempDir Path dir) throws Exception {
+        VidocqDevMojo mojo = new VidocqDevMojo();
+
+        assertFalse(mojo.continuousTestingEnabled(dir, NO_FILES), "no src/test/java");
+        Files.createDirectories(dir.resolve("src/test/java"));
+        assertTrue(mojo.continuousTestingEnabled(dir, NO_FILES));
+    }
+
+    @Test
+    void theFilesBeatTheDefaultAndAnExplicitValueBeatsTheFiles(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("src/test/java"));
+        VidocqDevMojo mojo = new VidocqDevMojo();
+
+        assertFalse(mojo.continuousTestingEnabled(dir,
+                files(VidocqDevMojo.CONTINUOUS_TESTING_KEY, "false")));
+        mojo.setContinuousTesting(true);
+        assertTrue(mojo.continuousTestingEnabled(dir, files(VidocqDevMojo.CONTINUOUS_TESTING_KEY, "false")));
+    }
+
+    @Test
+    void anInvalidSwitchFailsTheGoalNamingTheKey(@TempDir Path dir) {
+        MojoExecutionException e = assertThrows(MojoExecutionException.class, () -> new VidocqDevMojo()
+                .continuousTestingEnabled(dir, files(VidocqDevMojo.CONTINUOUS_TESTING_KEY, "sometimes")));
+        assertTrue(e.getMessage().contains(VidocqDevMojo.CONTINUOUS_TESTING_KEY), e.getMessage());
+    }
+
+    /** Records what the loop asks of the tests, and when the reload ran, in one list. */
+    private static final class Recording implements TestControl {
+        final List<String> calls = new ArrayList<>();
+
+        @Override
+        public void changed(TestResults.Trigger trigger, ReadyGate gate) {
+            calls.add("changed " + trigger.wire());
+        }
+
+        @Override
+        public void interrupt() {
+            calls.add("interrupt");
+        }
+    }
+
+    @Test
+    void aTestChangeRunsTheTestsWithoutAReload() throws Exception {
+        Recording tests = new Recording();
+
+        VidocqDevMojo.onChange(new SourceWatcher.Change(false, true), tests, () -> {
+            tests.calls.add("reload");
+            return Optional.of(TestControl.ReadyGate.NOW);
+        });
+
+        assertEquals(List.of("changed test-change"), tests.calls);
+    }
+
+    @Test
+    void aMainChangeStopsTheTestsReloadsThenRunsThem() throws Exception {
+        Recording tests = new Recording();
+
+        VidocqDevMojo.onChange(new SourceWatcher.Change(true, true), tests, () -> {
+            tests.calls.add("reload");
+            return Optional.of(TestControl.ReadyGate.NOW);
+        });
+
+        assertEquals(List.of("interrupt", "reload", "changed change"), tests.calls);
+    }
+
+    @Test
+    void aFailedRecompileRunsNoTest() throws Exception {
+        Recording tests = new Recording();
+
+        VidocqDevMojo.onChange(new SourceWatcher.Change(true, false), tests, () -> {
+            tests.calls.add("reload");
+            return Optional.empty();
+        });
+
+        assertEquals(List.of("interrupt", "reload"), tests.calls);
+    }
+
+    @Test
+    void withoutContinuousTestingAMainChangeOnlyReloads() throws Exception {
+        List<String> calls = new ArrayList<>();
+
+        VidocqDevMojo.onChange(new SourceWatcher.Change(true, false), null, () -> {
+            calls.add("reload");
+            return Optional.of(TestControl.ReadyGate.NOW);
+        });
+
+        assertEquals(List.of("reload"), calls);
     }
 }

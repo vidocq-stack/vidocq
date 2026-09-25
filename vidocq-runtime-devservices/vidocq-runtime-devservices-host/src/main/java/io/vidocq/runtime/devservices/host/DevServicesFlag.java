@@ -50,17 +50,30 @@ public final class DevServicesFlag {
      */
     public static boolean enabled(Optional<String> explicit, Function<String, Optional<String>> files,
             boolean defaultValue) {
-        Optional<String> value = explicit.filter(v -> !v.isBlank())
-                .or(() -> files.apply(KEY).filter(v -> !v.isBlank()));
-        return value.map(DevServicesFlag::parse).orElse(defaultValue);
+        return enabled(KEY, explicit, files, defaultValue);
     }
 
-    private static boolean parse(String value) {
+    /**
+     * The same rule for another switch of the {@code vidocq.dev.*} family, such as
+     * {@code vidocq.dev.continuousTesting} (#122): the explicit value, then {@code key} in the application's files,
+     * then {@code defaultValue}.
+     *
+     * @throws IllegalArgumentException when the value that wins is neither {@code true} nor {@code false}; the
+     *                                  message names {@code key} and the value
+     */
+    public static boolean enabled(String key, Optional<String> explicit, Function<String, Optional<String>> files,
+            boolean defaultValue) {
+        Optional<String> value = explicit.filter(v -> !v.isBlank())
+                .or(() -> files.apply(key).filter(v -> !v.isBlank()));
+        return value.map(v -> parse(key, v)).orElse(defaultValue);
+    }
+
+    private static boolean parse(String key, String value) {
         return switch (value.trim().toLowerCase(Locale.ROOT)) {
             case "true" -> true;
             case "false" -> false;
             default -> throw new IllegalArgumentException(
-                    KEY + " must be true or false, not '" + value + "'");
+                    key + " must be true or false, not '" + value + "'");
         };
     }
 }

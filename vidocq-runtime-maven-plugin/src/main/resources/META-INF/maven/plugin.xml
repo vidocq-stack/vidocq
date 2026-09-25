@@ -14,7 +14,7 @@
              Blocking goal: watches src/, recompiles, respawns the child JVM. -->
         <mojo>
             <goal>dev</goal>
-            <description>Vidocq dev mode: watch sources, recompile, restart child JVM (Approach A / M1)</description>
+            <description>Vidocq dev mode: watch sources, recompile, restart child JVM (Approach A / M1). Runs the tests after every reload (continuous testing).</description>
             <requiresDependencyResolution>runtime</requiresDependencyResolution>
             <requiresDirectInvocation>true</requiresDirectInvocation>
             <requiresProject>true</requiresProject>
@@ -30,6 +30,8 @@
                 <parameter><name>mainModule</name><type>java.lang.String</type><required>true</required><editable>true</editable><description>Java module containing the main class (required — Vidocq runs on the module path)</description></parameter>
                 <parameter><name>mainClass</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>Fully-qualified main class. Optional if the module declares ModuleMainClass.</description></parameter>
                 <parameter><name>watchDirs</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>Comma-separated directories to watch, relative to the project base dir.</description></parameter>
+                <parameter><name>testWatchDirs</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>Comma-separated test directories to watch with continuous testing, relative to the project base dir: a change there runs the tests again without an application reload.</description></parameter>
+                <parameter><name>continuousTesting</name><type>java.lang.Boolean</type><required>false</required><editable>true</editable><description>Run the application's tests after every reload (continuous testing). Unset by default: then vidocq.dev.continuousTesting in the application's files decides, else on when src/test/java exists.</description></parameter>
                 <parameter><name>debounceMillis</name><type>long</type><required>false</required><editable>true</editable><description>Debounce window in milliseconds; collapses bursts of editor saves into a single reload.</description></parameter>
                 <parameter><name>gracePeriodMillis</name><type>long</type><required>false</required><editable>true</editable><description>Grace period given to the child JVM after SIGTERM before forceful kill.</description></parameter>
                 <parameter><name>extraJvmArgs</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>Extra JVM args passed verbatim to the child, split on whitespace.</description></parameter>
@@ -53,6 +55,8 @@
                 <mainModule implementation="java.lang.String">${vidocq.mainModule}</mainModule>
                 <mainClass implementation="java.lang.String">${vidocq.mainClass}</mainClass>
                 <watchDirs implementation="java.lang.String" default-value="src/main/java,src/main/resources">${vidocq.dev.watchDirs}</watchDirs>
+                <testWatchDirs implementation="java.lang.String" default-value="src/test/java,src/test/resources">${vidocq.dev.testWatchDirs}</testWatchDirs>
+                <continuousTesting implementation="java.lang.Boolean">${vidocq.dev.continuousTesting}</continuousTesting>
                 <debounceMillis implementation="long" default-value="250">${vidocq.dev.debounceMillis}</debounceMillis>
                 <gracePeriodMillis implementation="long" default-value="5000">${vidocq.dev.gracePeriodMillis}</gracePeriodMillis>
                 <extraJvmArgs implementation="java.lang.String" default-value="">${vidocq.dev.jvmArgs}</extraJvmArgs>

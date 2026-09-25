@@ -28,6 +28,7 @@ import io.vidocq.runtime.maven.ApplicationLaunch;
 import io.vidocq.runtime.maven.ConsoleColors;
 import io.vidocq.runtime.maven.JdwpAgent;
 import io.vidocq.runtime.maven.VidocqRunMojo;
+import io.vidocq.runtime.maven.dev.TestResults.Trigger;
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.execution.MavenSession;
 import org.apache.maven.plugin.AbstractMojo;
@@ -63,6 +64,8 @@ import java.util.function.Function;
  *       (target/classes + every runtime/compile artifact).</li>
  *   <li>Fork a child JVM with {@code -Dvidocq.profile=dev} and inherited I/O.</li>
  *   <li>Watch {@code src/main/{java,resources}} for changes.</li>
+ *   <li>With continuous testing (#122), watch {@code src/test/{java,resources}} too and run the tests after every
+ *       reload, or alone after a test-only change; see {@link ContinuousTesting}.</li>
  *   <li>We have a relevant change (debounced 250 ms by default), shell out
  *       {@code mvn process-classes}; on success, gracefully stop the child JVM
  *       and respawn it.</li>
@@ -88,6 +91,12 @@ public class VidocqDevMojo extends AbstractMojo {
      * {@code vidocq.dev.provided.<key>=<provider id>}.
      */
     static final String DEV_PROVIDED_PREFIX = DevServicesSession.PROVIDED_PREFIX;
+
+    /** The continuous-testing switch, in every source. */
+    static final String CONTINUOUS_TESTING_KEY = "vidocq.dev.continuousTesting";
+
+    /** How long the tests of a main change wait for the hot reload to answer. */
+    static final Duration RELOAD_ACK_TIMEOUT = Duration.ofMinutes(2);
 
     @Parameter(defaultValue = "${project}", readonly = true, required = true)
     private MavenProject project;
@@ -115,6 +124,21 @@ public class VidocqDevMojo extends AbstractMojo {
     @Parameter(property = "vidocq.dev.watchDirs",
             defaultValue = "src/main/java,src/main/resources")
     private String watchDirs;
+
+    /**
+     * Test directories to watch, relative to the project base dir: a change there runs the tests again, without an
+     * application reload. Only with continuous testing.
+     */
+    @Parameter(property = "vidocq.dev.testWatchDirs", defaultValue = "src/test/java,src/test/resources")
+    private String testWatchDirs;
+
+    /**
+     * Continuous testing (#122): run the application's tests after every reload, results in the dev console's
+     * {@code tests} panel. Unset by default, so that {@code vidocq.dev.continuousTesting} in the application's files
+     * is read; then on when {@code src/test/java} exists. See {@link #continuousTestingEnabled}.
+     */
+    @Parameter(property = "vidocq.dev.continuousTesting")
+    private Boolean continuousTesting;
 
     /** Debounce window in milliseconds — collapses bursts of editor saves. */
     @Parameter(property = "vidocq.dev.debounceMillis", defaultValue = "250")
@@ -215,7 +239,7 @@ public class VidocqDevMojo extends AbstractMojo {
     @Override
     public void execute() throws MojoExecutionException {
         Path projectDir = baseDir.toPath();
-        List<Path> watch = parseWatchDirs(projectDir);
+        List<Path> watch = parseDirs(projectDir, watchDirs);
         List<Path> modulePath = buildModulePath();
         List<Path> appPath = buildAppPath();
         Map<String, String> sysProps = buildSystemProperties();
@@ -284,6 +308,39 @@ public class VidocqDevMojo extends AbstractMojo {
         }
         final DevServicesSession devServicesRef = devs;
 
+        // Continuous testing (#122): the test directories are watched too, the child's dev console learns where
+        // the results are, and every run gets the dev session's keys, so the tests use its containers.
+        boolean testsOn = continuousTestingEnabled(projectDir, applicationFiles);
+        List<Path> testWatch = testsOn ? parseDirs(projectDir, testWatchDirs) : List.of();
+        ContinuousTesting testing = null;
+        TestRequestFile requests = null;
+        if (testsOn) {
+            Path results = buildDirPath().resolve(TestResultsFile.FILE_NAME);
+            sysProps.put(TestResultsFile.PROPERTY, results.toAbsolutePath().toString());
+            Map<String, String> testProps = new LinkedHashMap<>();
+            if (devs != null) {
+                devs.foldInto(testProps);
+            }
+            ContinuousTesting started = ContinuousTesting.forProject(projectDir, buildDirPath(), testProps,
+                    result -> getLog().info(TestSummaryPrinter.headline(result)), getLog()::warn);
+            testing = started;
+            try {
+                requests = TestRequestFile.poll(results.resolveSibling(TestRequestFile.FILE_NAME), trigger -> {
+                    String outcome = started.request(trigger);
+                    if (!ContinuousTesting.QUEUED.equals(outcome)) {
+                        getLog().info("Tests: " + outcome);
+                    }
+                }, getLog()::warn);
+            } catch (IOException e) {
+                closeDevServices(devServicesRef);
+                throw new MojoExecutionException("Cannot watch the test request file", e);
+            }
+            getLog().info("Continuous testing: on, watching " + testWatch
+                    + " (-D" + CONTINUOUS_TESTING_KEY + "=false to turn it off)");
+        }
+        final ContinuousTesting testingRef = testing;
+        final TestRequestFile requestsRef = requests;
+
         // The atomic reference lets the shutdown hook (running on a separate
         // thread) see the latest spawned child, no matter how many reload
         // cycles we have been through.
@@ -292,6 +349,7 @@ public class VidocqDevMojo extends AbstractMojo {
 
         Thread hook = new Thread(() -> {
             mainThread.interrupt();
+            closeTesting(testingRef, requestsRef);
             ChildJvm c = currentChild.get();
             if (c != null) {
                 try {
@@ -305,51 +363,29 @@ public class VidocqDevMojo extends AbstractMojo {
         Runtime.getRuntime().addShutdownHook(hook);
 
         RecompileRunner recompile = new RecompileRunner(projectDir);
+        ChildLaunch launch = new ChildLaunch(modulePath, appPath, jvmArgs, sysProps, projectDir);
 
-        try (SourceWatcher watcher = SourceWatcher.on(watch, Duration.ofMillis(debounceMillis))) {
-            ChildJvm child = ChildJvm.of(modulePath, appPath, mainModule, mainClass,
-                    jvmArgs, sysProps, projectDir);
+        try (SourceWatcher watcher = SourceWatcher.on(watch, testWatch, Duration.ofMillis(debounceMillis))) {
+            ChildJvm child = newChild(launch);
             long pid = child.start();
             currentChild.set(child);
             getLog().info("Child JVM started, pid=" + pid + ". Listening for changes (Ctrl+C to stop).");
+            if (testingRef != null) {
+                // The first run, once the first boot completed (spec §7: the panel shows a result at once).
+                testingRef.start();
+                testingRef.changed(Trigger.RUN_ALL, inJvmReload
+                        ? ReloadAck.gate(reloadFile, ReloadAck.stamp(reloadFile), RELOAD_ACK_TIMEOUT,
+                                child::isAlive, getLog()::warn)
+                        : TestControl.ReadyGate.NOW);
+            }
 
             while (!Thread.currentThread().isInterrupted()) {
-                if (!watcher.awaitChange()) {
+                SourceWatcher.Change change = watcher.awaitChanges();
+                if (change == null) {
                     break; // watcher closed
                 }
-                long t0 = System.nanoTime();
-                getLog().info("Changes detected — recompiling...");
-                int rc;
-                try {
-                    rc = recompile.run();
-                } catch (IOException e) {
-                    getLog().warn("Recompile invocation failed: " + e.getMessage());
-                    continue;
-                }
-                if (rc != 0) {
-                    getLog().warn("Compile failed (exit " + rc + "); keeping previous JVM up.");
-                    continue;
-                }
-                if (inJvmReload && child.isAlive()) {
-                    // Signal the child: it re-creates its application layer in place.
-                    try {
-                        Files.writeString(reloadFile, System.nanoTime() + "\n");
-                        long elapsed = (System.nanoTime() - t0) / 1_000_000;
-                        getLog().info("Hot reload signalled after " + elapsed
-                                + " ms (in-JVM layer swap, pid=" + pid + ").");
-                        continue;
-                    } catch (IOException e) {
-                        getLog().warn("Cannot signal hot reload (" + e.getMessage()
-                                + ") — falling back to a respawn.");
-                    }
-                }
-                child.stop(Duration.ofMillis(gracePeriodMillis));
-                child = ChildJvm.of(modulePath, appPath, mainModule, mainClass,
-                        jvmArgs, sysProps, projectDir);
-                pid = child.start();
-                currentChild.set(child);
-                long elapsed = (System.nanoTime() - t0) / 1_000_000;
-                getLog().info("Reloaded in " + elapsed + " ms (pid=" + pid + ").");
+                onChange(change, testingRef,
+                        () -> recompileAndReload(recompile, launch, currentChild, reloadFile, inJvmReload));
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -357,6 +393,7 @@ public class VidocqDevMojo extends AbstractMojo {
         } catch (IOException e) {
             throw new MojoExecutionException("Dev mode initialisation failed", e);
         } finally {
+            closeTesting(testingRef, requestsRef);
             // The shutdown hook will have done it already on Ctrl+C, but if we
             // fell through because the watcher closed normally we still need to
             // tear the child down here.
@@ -379,9 +416,90 @@ public class VidocqDevMojo extends AbstractMojo {
         }
     }
 
-    private List<Path> parseWatchDirs(Path projectDir) {
+    /** What every child JVM of this session is started with. */
+    private record ChildLaunch(List<Path> modulePath, List<Path> appPath, List<String> jvmArgs,
+            Map<String, String> sysProps, Path projectDir) {}
+
+    private ChildJvm newChild(ChildLaunch launch) {
+        return ChildJvm.of(launch.modulePath(), launch.appPath(), mainModule, mainClass, launch.jvmArgs(),
+                launch.sysProps(), launch.projectDir());
+    }
+
+    /** Recompiles and reloads the application: what the tests of this change wait for. */
+    @FunctionalInterface
+    interface Reload {
+
+        /** @return the gate that opens once the application booted again, or empty when nothing was reloaded */
+        Optional<TestControl.ReadyGate> run() throws IOException, InterruptedException;
+    }
+
+    /**
+     * One change of the source loop (spec §2.2). A test-only change runs the tests, and nothing is reloaded. A main
+     * change first stops the run in flight, so that its Maven never races the recompile. It then recompiles and
+     * reloads, and runs the tests once the reload completed; a failed recompile runs none.
+     *
+     * @param tests {@code null} without continuous testing
+     */
+    static void onChange(SourceWatcher.Change change, TestControl tests, Reload reload)
+            throws IOException, InterruptedException {
+        if (!change.main()) {
+            if (tests != null && change.test()) {
+                tests.changed(Trigger.TEST_CHANGE, TestControl.ReadyGate.NOW);
+            }
+            return;
+        }
+        if (tests != null) {
+            tests.interrupt();
+        }
+        Optional<TestControl.ReadyGate> booted = reload.run();
+        if (tests != null && booted.isPresent()) {
+            tests.changed(Trigger.CHANGE, booted.get());
+        }
+    }
+
+    private Optional<TestControl.ReadyGate> recompileAndReload(RecompileRunner recompile, ChildLaunch launch,
+            AtomicReference<ChildJvm> currentChild, Path reloadFile, boolean inJvmReload)
+            throws IOException, InterruptedException {
+        long t0 = System.nanoTime();
+        getLog().info("Changes detected — recompiling...");
+        int rc;
+        try {
+            rc = recompile.run();
+        } catch (IOException e) {
+            getLog().warn("Recompile invocation failed: " + e.getMessage());
+            return Optional.empty();
+        }
+        if (rc != 0) {
+            getLog().warn("Compile failed (exit " + rc + "); keeping previous JVM up.");
+            return Optional.empty();
+        }
+        ChildJvm child = currentChild.get();
+        if (inJvmReload && child.isAlive()) {
+            // Signal the child: it re-creates its application layer in place.
+            try {
+                Files.writeString(reloadFile, System.nanoTime() + "\n");
+                long stamp = ReloadAck.stamp(reloadFile);
+                getLog().info("Hot reload signalled after " + (System.nanoTime() - t0) / 1_000_000
+                        + " ms (in-JVM layer swap).");
+                return Optional.of(ReloadAck.gate(reloadFile, stamp, RELOAD_ACK_TIMEOUT, child::isAlive,
+                        getLog()::warn));
+            } catch (IOException e) {
+                getLog().warn("Cannot signal hot reload (" + e.getMessage()
+                        + ") — falling back to a respawn.");
+            }
+        }
+        child.stop(Duration.ofMillis(gracePeriodMillis));
+        ChildJvm next = newChild(launch);
+        long pid = next.start();
+        currentChild.set(next);
+        getLog().info("Reloaded in " + (System.nanoTime() - t0) / 1_000_000 + " ms (pid=" + pid + ").");
+        return Optional.of(TestControl.ReadyGate.NOW);
+    }
+
+    /** Comma-separated directories, relative to {@code projectDir}; blanks skipped. Shared with {@code vidocq:test}. */
+    static List<Path> parseDirs(Path projectDir, String csv) {
         List<Path> result = new ArrayList<>();
-        for (String s : watchDirs.split(",")) {
+        for (String s : csv.split(",")) {
             String trimmed = s.trim();
             if (!trimmed.isEmpty()) {
                 result.add(projectDir.resolve(trimmed));
@@ -520,6 +638,35 @@ public class VidocqDevMojo extends AbstractMojo {
     }
 
     /**
+     * {@code vidocq.dev.continuousTesting}, first match wins (spec §2.1), as {@link #devServicesEnabled}: the explicit
+     * value, then the application's own files, then on when the project has {@code src/test/java}.
+     */
+    // package-private for the unit test.
+    boolean continuousTestingEnabled(Path projectDir, Function<String, Optional<String>> files)
+            throws MojoExecutionException {
+        try {
+            return DevServicesFlag.enabled(CONTINUOUS_TESTING_KEY,
+                    Optional.ofNullable(continuousTesting).map(String::valueOf), files,
+                    Files.isDirectory(projectDir.resolve("src/test/java")));
+        } catch (IllegalArgumentException e) {
+            throw new MojoExecutionException(e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Stops continuous testing: the request polling, then the run in flight, cancelled. Both are idempotent; the
+     * lock makes the shutdown hook and {@code finally} wait for each other, as {@link #closeDevServices} does.
+     */
+    synchronized void closeTesting(ContinuousTesting testing, TestRequestFile requests) {
+        if (requests != null) {
+            requests.close();
+        }
+        if (testing != null) {
+            testing.close();
+        }
+    }
+
+    /**
      * Closes {@code session} (if not {@code null}), {@code synchronized} on this mojo instance: the shutdown
      * hook and {@code execute()}'s own {@code finally} block both call this, and {@link
      * DevServicesSession#close()} only guards itself against running twice — its second caller returns
@@ -544,6 +691,7 @@ public class VidocqDevMojo extends AbstractMojo {
     void setBuildDir(File buildDir) { this.buildDir = buildDir; }
     void setClassesDir(File classesDir) { this.classesDir = classesDir; }
     void setDevServices(Boolean devServices) { this.devServices = devServices; }
+    void setContinuousTesting(Boolean continuousTesting) { this.continuousTesting = continuousTesting; }
     void setExtraSystemProperties(String s) { this.extraSystemProperties = s; }
     void setProfile(String profile) { this.profile = profile; }
     Map<String, String> debugSystemProperties() { return buildSystemProperties(); }

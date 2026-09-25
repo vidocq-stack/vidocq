@@ -74,4 +74,18 @@ class DevServicesFlagTest {
         assertTrue(e.getMessage().contains(DevServicesFlag.KEY), e.getMessage());
         assertTrue(e.getMessage().contains("${DEV}"), e.getMessage());
     }
+
+    @Test
+    void anotherSwitchReadsItsOwnKeyByTheSameRule() {
+        String key = "vidocq.dev.continuousTesting";
+        Map<String, String> map = Map.of(key, "false", DevServicesFlag.KEY, "true");
+        Function<String, Optional<String>> both = k -> Optional.ofNullable(map.get(k));
+
+        assertFalse(DevServicesFlag.enabled(key, Optional.empty(), both, true));
+        assertTrue(DevServicesFlag.enabled(key, Optional.of("TRUE"), both, false));
+        assertTrue(DevServicesFlag.enabled(key, Optional.empty(), NO_FILES, true));
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> DevServicesFlag.enabled(key, Optional.of("maybe"), NO_FILES, true));
+        assertTrue(e.getMessage().contains(key), e.getMessage());
+    }
 }
