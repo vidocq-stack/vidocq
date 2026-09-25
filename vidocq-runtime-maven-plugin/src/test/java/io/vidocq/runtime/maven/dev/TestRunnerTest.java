@@ -30,6 +30,7 @@ import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -105,7 +106,25 @@ class TestRunnerTest {
 
         launched.cancel();
 
-        assertFalse(ProcessHandle.of(child).map(ProcessHandle::isAlive).orElse(false), "the forked test JVM");
+        assertTrue(gone(child), "the forked test JVM");
         assertNotEquals(0, launched.waitFor());
+    }
+
+    /**
+     * Whether {@code pid} is dead. On Linux a killed process that nobody reaps stays a zombie, which {@link
+     * ProcessHandle#isAlive} still reports alive: in a container without an init process, the orphaned grandchild
+     * is re-parented to a PID 1 that never reaps it. A zombie runs nothing and holds nothing: it counts as gone.
+     */
+    private static boolean gone(long pid) throws Exception {
+        Optional<ProcessHandle> handle = ProcessHandle.of(pid);
+        if (handle.isEmpty() || !handle.get().isAlive()) {
+            return true;
+        }
+        Path stat = Path.of("/proc", Long.toString(pid), "stat");
+        if (!Files.isReadable(stat)) {
+            return false;
+        }
+        String line = Files.readString(stat);
+        return line.substring(line.lastIndexOf(')') + 2).startsWith("Z");
     }
 }
