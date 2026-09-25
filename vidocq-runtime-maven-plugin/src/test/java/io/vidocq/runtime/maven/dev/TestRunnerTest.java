@@ -111,6 +111,34 @@ class TestRunnerTest {
     }
 
     /**
+     * #138: a cancel waits for the root Maven process only. A descendant that outlives it, such as a JVM ignoring
+     * SIGTERM or a zombie that a container's PID 1 never reaps, is killed at once instead of costing the whole grace
+     * period, which blocked the reload loop of vidocq:dev.
+     */
+    @Test
+    @DisabledOnOs(OS.WINDOWS)
+    @Timeout(30)
+    void aDescendantThatIgnoresTheTermSignalDoesNotDelayTheCancel(@TempDir Path dir) throws Exception {
+        Path maven = script(dir, "sh -c 'trap \"\" TERM; while :; do sleep 0.1; done' &\necho $! > child.pid\nwait\n");
+        TestRunner runner = new TestRunner(dir, maven.toString(), Map.of(), dir.resolve("target/t.log"),
+                dir.resolve("target/surefire-reports"));
+        ContinuousTesting.Launched launched = runner.launch(List.of());
+        Path pidFile = dir.resolve("child.pid");
+        while (!Files.exists(pidFile) || Files.readString(pidFile).isBlank()) {
+            Thread.sleep(50);
+        }
+        long child = Long.parseLong(Files.readString(pidFile).strip());
+        Thread.sleep(200);
+
+        long t0 = System.nanoTime();
+        launched.cancel();
+        long millis = (System.nanoTime() - t0) / 1_000_000;
+
+        assertTrue(millis < TestRunner.GRACE.toMillis() / 2, "the cancel took " + millis + " ms");
+        assertTrue(gone(child), "the descendant that ignored SIGTERM");
+    }
+
+    /**
      * Whether {@code pid} is dead. On Linux a killed process that nobody reaps stays a zombie, which {@link
      * ProcessHandle#isAlive} still reports alive: in a container without an init process, the orphaned grandchild
      * is re-parented to a PID 1 that never reaps it. A zombie runs nothing and holds nothing: it counts as gone.

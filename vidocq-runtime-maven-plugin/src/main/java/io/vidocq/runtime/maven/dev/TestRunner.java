@@ -108,30 +108,27 @@ final class TestRunner implements ContinuousTesting.Launcher {
     }
 
     /**
-     * Destroys {@code root} and every process it started (spec §2.3): the descendants are listed first, while they
-     * are still attached to it, then each gets a {@code SIGTERM}, and whatever is alive after {@code grace} a
-     * {@code SIGKILL}.
+     * Destroys {@code root} and every process it started (spec §2.3). The descendants are listed first, while they
+     * are still attached to it, then each gets a {@code SIGTERM}. Only {@code root}, which this JVM started and
+     * reaps, is waited for, {@code grace} at most. Whatever is still alive afterwards gets a {@code SIGKILL} at once:
+     * a descendant that ignores {@code SIGTERM}, or a zombie that a container's PID 1 never reaps, must not hold up
+     * the reload loop for the whole grace period (#138).
      */
     static void destroyTree(ProcessHandle root, Duration grace) {
-        List<ProcessHandle> tree = new ArrayList<>(root.descendants().toList());
-        tree.add(root);
-        tree.forEach(ProcessHandle::destroy);
-        long deadline = System.nanoTime() + grace.toNanos();
-        for (ProcessHandle handle : tree) {
-            long left = deadline - System.nanoTime();
-            if (left <= 0) {
-                break;
-            }
-            try {
-                handle.onExit().get(left, TimeUnit.NANOSECONDS);
-            } catch (TimeoutException | ExecutionException stillThere) {
-                // killed below
-            } catch (InterruptedException interrupted) {
-                Thread.currentThread().interrupt();
-                break;
-            }
+        List<ProcessHandle> descendants = root.descendants().toList();
+        descendants.forEach(ProcessHandle::destroy);
+        root.destroy();
+        try {
+            root.onExit().get(grace.toNanos(), TimeUnit.NANOSECONDS);
+        } catch (TimeoutException | ExecutionException stillThere) {
+            // killed below
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
         }
-        tree.stream().filter(ProcessHandle::isAlive).forEach(ProcessHandle::destroyForcibly);
+        if (root.isAlive()) {
+            root.destroyForcibly();
+        }
+        descendants.stream().filter(ProcessHandle::isAlive).forEach(ProcessHandle::destroyForcibly);
     }
 
     private record Running(Process process) implements ContinuousTesting.Launched {
