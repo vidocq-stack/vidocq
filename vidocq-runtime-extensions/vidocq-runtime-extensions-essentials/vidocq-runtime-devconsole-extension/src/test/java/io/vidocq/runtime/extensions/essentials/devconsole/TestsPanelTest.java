@@ -226,4 +226,20 @@ class TestsPanelTest {
         assertFalse(reader.isAlive());
         assertNull(panel.reader());
     }
+
+    /** #138: running then its outcome written within one millisecond keep the same modification time. */
+    @Test
+    void aRewriteWithinTheSameMillisecondIsSeenByItsSize(@TempDir Path dir) throws Exception {
+        Path results = dir.resolve("vidocq-dev-tests.json");
+        write(results, RUNNING);
+        TestsPanel panel = panel(results);
+        panel.refresh();
+        FileTime same = Files.getLastModifiedTime(results);
+        Files.writeString(results, PASSED);
+        Files.setLastModifiedTime(results, same);
+
+        panel.refresh();
+
+        assertEquals("passed (test-change)", value(sampled(panel), "state").get("value"));
+    }
 }

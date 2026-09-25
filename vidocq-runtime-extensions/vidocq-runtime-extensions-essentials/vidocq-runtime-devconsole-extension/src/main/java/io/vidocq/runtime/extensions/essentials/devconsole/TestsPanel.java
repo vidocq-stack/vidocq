@@ -95,6 +95,8 @@ final class TestsPanel implements DevConsolePanel {
     private volatile Thread reader;
     /** Guarded by this: the modification time last read, or -1. */
     private long lastModified = -1;
+    /** Guarded by this: the size last read, or -1. */
+    private long lastSize = -1;
 
     TestsPanel(Path results) {
         this.results = Objects.requireNonNull(results, "results");
@@ -147,18 +149,24 @@ final class TestsPanel implements DevConsolePanel {
         return reader;
     }
 
-    /** Reads the file when its modification time changed; the reader thread calls it, and so do the tests. */
+    /**
+     * Reads the file when its modification time or its size changed: {@code running} and the outcome of a run that
+     * ended at once can be written within one millisecond (#138). The reader thread calls it, and so do the tests.
+     */
     synchronized void refresh() {
         long modified;
+        long size;
         try {
             modified = Files.getLastModifiedTime(results).toMillis();
+            size = Files.size(results);
         } catch (IOException noFileYet) {
             return;
         }
-        if (modified == lastModified) {
+        if (modified == lastModified && size == lastSize) {
             return;
         }
         lastModified = modified;
+        lastSize = size;
         try {
             view = parse(Files.readString(results, StandardCharsets.UTF_8));
             unreadable = false;
