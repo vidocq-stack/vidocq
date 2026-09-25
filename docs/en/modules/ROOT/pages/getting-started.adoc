@@ -33,6 +33,8 @@ $ vidocq version
 Vidocq CLI {cli-version}
 ----
 
+TIP: To try what is on `main` before it is released, install the latest SNAPSHOT CLI instead: `curl -fsSL https://vidocq.dev/install.sh | VIDOCQ_VERSION=snapshot sh` (PowerShell: `$env:VIDOCQ_VERSION='snapshot'; irm https://vidocq.dev/install.ps1 | iex`). The projects it scaffolds resolve Vidocq from the Central snapshot repository; see xref:modules/vidocq-runtime-cli.adoc#create-snapshot[Trying a SNAPSHOT].
+
 NOTE: No installer needed? Download `vidocq-runtime-cli-<version>-cli.zip` from https://repo1.maven.org/maven2/io/vidocq/runtime/vidocq-runtime-cli/[Maven Central], unzip it anywhere, and add its `bin/` directory to your `PATH`.
 
 == Step 2 — Scaffold a project

@@ -93,17 +93,60 @@ class ProjectScaffolderVersionTest {
     }
 
     @Test
-    void warnsWhenParentVersionIsSnapshot() {
-        String out = captureStdout(() -> ProjectScaffolder.buildPom(create(null), "0.3.0-SNAPSHOT"));
-        assertTrue(out.contains("--parent-version"),
-                "a SNAPSHOT parent must trigger a warning suggesting --parent-version, got: " + out);
+    void snapshotParentDeclaresTheCentralSnapshotRepository() {
+        String pom = ProjectScaffolder.buildPom(create("0.4.0-SNAPSHOT"), "0.3.0");
+
+        String repository = """
+                    <repositories>
+                        <repository>
+                            <id>central-snapshots</id>
+                            <url>https://central.sonatype.com/repository/maven-snapshots/</url>
+                            <releases><enabled>false</enabled></releases>
+                            <snapshots><enabled>true</enabled></snapshots>
+                        </repository>
+                    </repositories>
+                """;
+        assertTrue(pom.contains(repository),
+                "a SNAPSHOT parent must resolve its artifacts from Central snapshots, pom was:\n" + pom);
+        assertTrue(pom.contains("""
+                    <pluginRepositories>
+                        <pluginRepository>
+                            <id>central-snapshots</id>
+                """),
+                "the SNAPSHOT vidocq-runtime-maven-plugin needs a plugin repository, pom was:\n" + pom);
     }
 
     @Test
-    void doesNotWarnForReleaseParentVersion() {
+    void snapshotRuntimeOfTheCliDeclaresTheCentralSnapshotRepository() {
+        // A CLI installed from a SNAPSHOT scaffolds with its own SNAPSHOT runtime.
+        String pom = ProjectScaffolder.buildPom(create(null), "0.4.0-SNAPSHOT");
+
+        assertTrue(pom.contains("<id>central-snapshots</id>"),
+                "the CLI's SNAPSHOT runtime must resolve from Central snapshots, pom was:\n" + pom);
+    }
+
+    @Test
+    void releaseParentDeclaresNoRepository() {
+        String pom = ProjectScaffolder.buildPom(create(null), "0.3.0");
+
+        assertFalse(pom.contains("<repositories>"),
+                "a released parent resolves from Maven Central alone, pom was:\n" + pom);
+        assertFalse(pom.contains("<pluginRepositories>"),
+                "a released parent resolves from Maven Central alone, pom was:\n" + pom);
+    }
+
+    @Test
+    void tellsWhereSnapshotArtifactsComeFrom() {
+        String out = captureStdout(() -> ProjectScaffolder.buildPom(create("0.4.0-SNAPSHOT"), "0.3.0"));
+        assertTrue(out.contains("https://central.sonatype.com/repository/maven-snapshots/"),
+                "a SNAPSHOT parent must say where its artifacts come from, got: " + out);
+    }
+
+    @Test
+    void saysNothingForReleaseParentVersion() {
         String out = captureStdout(() -> ProjectScaffolder.buildPom(create(null), "0.2.0"));
-        assertFalse(out.contains("--parent-version"),
-                "a release parent must not trigger a warning, got: " + out);
+        assertFalse(out.contains("SNAPSHOT"),
+                "a release parent must not trigger a note, got: " + out);
     }
 
     private static String captureStdout(Runnable action) {

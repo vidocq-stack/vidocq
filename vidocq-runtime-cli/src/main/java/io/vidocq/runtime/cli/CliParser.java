@@ -308,6 +308,7 @@ public final class CliParser {
                 opt("--package <pkg>",            "Root Java package        (default: <groupId>.<name>)");
                 opt("--extension, -x <id>",       "Extension to enable, repeatable");
                 opt("--parent-version <version>", "Vidocq runtime parent version   (default: the CLI's runtime version)");
+                opt("",                           "a SNAPSHOT adds the Central snapshot repository to the pom");
                 CliOutput.println();
                 CliOutput.println("Example:");
                 CliOutput.println("  " + CliOutput.cyan(

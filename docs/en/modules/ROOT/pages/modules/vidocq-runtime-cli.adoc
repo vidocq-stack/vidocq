@@ -224,12 +224,25 @@ Scaffolds a minimal Maven project (`pom.xml`, `module-info.java`, an `…App` en
 | `--group-id, -g <groupId>` | Maven groupId (default `io.example`).
 | `--package <pkg>` | Root Java package (default `<groupId>.<name>`).
 | `--extension, -x <id>` | Extension to enable; repeatable.
+| `--parent-version <version>` | Version of `vidocq-runtime-parent` the project inherits, and of every Vidocq dependency it declares (default: the runtime version of the CLI).
 |===
 
 [source,bash]
 ----
 vidocq create --name my-api -g com.acme -x cassini-rest -x knock-health
 ----
+
+[#create-snapshot]
+==== Trying a SNAPSHOT [.tag-new]#NEW#
+
+Every build of `main` publishes the Vidocq SNAPSHOTs to the Central snapshot repository, `https://central.sonatype.com/repository/maven-snapshots/`. When the parent version is a SNAPSHOT, the generated `pom.xml` declares that repository, for dependencies and for plugins, with releases disabled: the SNAPSHOT artifacts come from there, everything else from Maven Central.
+
+[source,bash]
+----
+vidocq create --name my-api -x cassini-rest --parent-version 0.4.0-SNAPSHOT
+----
+
+A CLI installed from a SNAPSHOT (`VIDOCQ_VERSION=snapshot`, see xref:getting-started.adoc[Getting started]) scaffolds with its own SNAPSHOT runtime, so `--parent-version` is not needed there. A SNAPSHOT changes with every push to `main`: run `mvn -U package` to pick up the newest one.
 
 [#dev]
 === `vidocq dev`

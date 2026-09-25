@@ -45,6 +45,9 @@ import java.util.Set;
  */
 public final class ProjectScaffolder {
 
+    /** Where the Vidocq SNAPSHOTs are published, on every build of {@code main}. */
+    static final String SNAPSHOT_REPOSITORY_URL = "https://central.sonatype.com/repository/maven-snapshots/";
+
     private ProjectScaffolder() {}
 
     public static void scaffold(Command.Create create) throws IOException {
@@ -78,17 +81,18 @@ public final class ProjectScaffolder {
     }
 
     /**
-     * Builds the pom with an explicit runtime parent version — the released
+     * Builds the pom with an explicit runtime parent version — the
      * {@code vidocq-runtime-parent} the generated project inherits from. An explicit
-     * {@code --parent-version} always wins; a SNAPSHOT parent (dev build of the CLI)
-     * triggers a warning because it will not resolve from Maven Central.
+     * {@code --parent-version} always wins. A SNAPSHOT parent (explicit, or the
+     * runtime of a CLI installed from a SNAPSHOT) is not on Maven Central: the pom
+     * then declares the Central snapshot repository for dependencies and plugins.
      */
     static String buildPom(Command.Create c, String runtimeVersion) {
         String parentVersion = c.parentVersion() != null ? c.parentVersion() : runtimeVersion;
-        if (c.parentVersion() == null && parentVersion.endsWith("-SNAPSHOT")) {
-            CliOutput.warning("Scaffolded parent version " + parentVersion
-                    + " is a SNAPSHOT and will not resolve from Maven Central."
-                    + " Use --parent-version <released-version> to override.");
+        boolean snapshot = parentVersion.endsWith("-SNAPSHOT");
+        if (snapshot) {
+            CliOutput.info("Parent version " + parentVersion + " is a SNAPSHOT: the project resolves"
+                    + " Vidocq artifacts from " + SNAPSHOT_REPOSITORY_URL);
         }
         return """
                 <?xml version="1.0" encoding="UTF-8"?>
@@ -112,7 +116,7 @@ public final class ProjectScaffolder {
                         <vidocq.mainModule>%s</vidocq.mainModule>
                         <vidocq.mainClass>%s.%s</vidocq.mainClass>
                     </properties>
-
+                %s
                     <dependencies>
                         <dependency>
                             <groupId>io.vidocq.runtime</groupId>
@@ -148,9 +152,37 @@ public final class ProjectScaffolder {
                     </build>
                 </project>
                 """.formatted(parentVersion, c.groupId(), c.name(), c.name(),
-                moduleName(c), c.pkg(), appClassName(c.name()), parentVersion,
+                moduleName(c), c.pkg(), appClassName(c.name()),
+                snapshot ? snapshotRepositories() : "", parentVersion,
                 extensionDeps(c.extensions(), parentVersion),
                 aptCodegenPlugin(c.extensions(), parentVersion));
+    }
+
+    /**
+     * Central snapshot repository, for dependencies and for the SNAPSHOT
+     * {@code vidocq-runtime-maven-plugin}. Releases stay on Maven Central.
+     */
+    private static String snapshotRepositories() {
+        return """
+
+                    <repositories>
+                        <repository>
+                            <id>central-snapshots</id>
+                            <url>%1$s</url>
+                            <releases><enabled>false</enabled></releases>
+                            <snapshots><enabled>true</enabled></snapshots>
+                        </repository>
+                    </repositories>
+
+                    <pluginRepositories>
+                        <pluginRepository>
+                            <id>central-snapshots</id>
+                            <url>%1$s</url>
+                            <releases><enabled>false</enabled></releases>
+                            <snapshots><enabled>true</enabled></snapshots>
+                        </pluginRepository>
+                    </pluginRepositories>
+                """.formatted(SNAPSHOT_REPOSITORY_URL);
     }
 
     /**
