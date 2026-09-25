@@ -31,6 +31,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -107,6 +108,43 @@ class SourceWatcherTest {
             }
             t.interrupt();
             t.join(1000);
+        }
+    }
+
+    @Test
+    void aFileUnderATestRootIsATestChange(@TempDir Path tmp) {
+        Path testRoot = tmp.resolve("src/test/java").toAbsolutePath().normalize();
+
+        assertTrue(SourceWatcher.under(tmp.resolve("src/test/java/a/BTest.java"), List.of(testRoot)));
+        assertFalse(SourceWatcher.under(tmp.resolve("src/main/java/a/B.java"), List.of(testRoot)));
+        assertFalse(SourceWatcher.under(tmp.resolve("src/test/javax/C.java"), List.of(testRoot)));
+    }
+
+    @Test
+    @Timeout(value = 20, unit = TimeUnit.SECONDS)
+    void awaitChanges_tells_a_test_change_from_a_main_one(@TempDir Path tmp) throws Exception {
+        Path main = Files.createDirectories(tmp.resolve("src/main/java"));
+        Path test = Files.createDirectories(tmp.resolve("src/test/java"));
+        Path testFile = test.resolve("HelloTest.java");
+        Files.writeString(main.resolve("Hello.java"), "class Hello {}");
+        Files.writeString(testFile, "class HelloTest {}");
+
+        try (SourceWatcher watcher = SourceWatcher.on(List.of(main), List.of(test), Duration.ofMillis(50))) {
+            AtomicReference<SourceWatcher.Change> change = new AtomicReference<>();
+            Thread t = new Thread(() -> {
+                try {
+                    change.set(watcher.awaitChanges());
+                } catch (InterruptedException ignored) {
+                    Thread.currentThread().interrupt();
+                }
+            });
+            t.start();
+            Thread.sleep(500);
+            Files.writeString(testFile, "class HelloTest { /* edit */ }");
+
+            t.join(TimeUnit.SECONDS.toMillis(15));
+            assertFalse(t.isAlive(), "watcher should have returned by now");
+            assertEquals(new SourceWatcher.Change(false, true), change.get());
         }
     }
 }

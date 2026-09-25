@@ -31,14 +31,16 @@ import java.nio.file.WatchKey;
 import java.nio.file.WatchService;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Recursive {@link WatchService} wrapper used by {@code vidocq:dev} to detect
- * source modifications under {@code src/main/{java,resources}}.
+ * Recursive {@link WatchService} wrapper used by {@code vidocq:dev} and {@code vidocq:test} to detect
+ * source modifications under the main directories and, for continuous testing, the test directories;
+ * {@link #awaitChanges} says which of the two a burst touched.
  *
  * <p>Events are filtered on a fixed set of extensions ({@code .java},
  * {@code .properties}, {@code .xml}, {@code .yml}/{@code .yaml}) so that
@@ -61,19 +63,32 @@ final class SourceWatcher implements AutoCloseable {
     private final long debounceMillis;
     private final Set<Path> registered = new HashSet<>();
 
-    private SourceWatcher(WatchService service, long debounceMillis) {
+    /** A burst of events: whether it touched the main directories, the test directories, or both. */
+    record Change(boolean main, boolean test) {}
+
+    private final List<Path> testRoots;
+
+    private SourceWatcher(WatchService service, long debounceMillis, List<Path> testRoots) {
         this.service = service;
         this.debounceMillis = debounceMillis;
+        this.testRoots = testRoots;
+    }
+
+    /** A watcher of main directories only. */
+    static SourceWatcher on(List<Path> dirs, Duration debounce) throws IOException {
+        return on(dirs, List.of(), debounce);
     }
 
     /**
-     * Register the given directories (recursively) and return a ready-to-use
-     * watcher. Non-existent directories are silently skipped.
+     * Registers the main and test directories (recursively). A directory that does not exist is skipped.
      */
-    static SourceWatcher on(List<Path> dirs, Duration debounce) throws IOException {
-        WatchService ws = dirs.get(0).getFileSystem().newWatchService();
-        SourceWatcher watcher = new SourceWatcher(ws, debounce.toMillis());
-        for (Path dir : dirs) {
+    static SourceWatcher on(List<Path> mainDirs, List<Path> testDirs, Duration debounce) throws IOException {
+        List<Path> all = new ArrayList<>(mainDirs);
+        all.addAll(testDirs);
+        WatchService ws = all.get(0).getFileSystem().newWatchService();
+        SourceWatcher watcher = new SourceWatcher(ws, debounce.toMillis(),
+                testDirs.stream().map(dir -> dir.toAbsolutePath().normalize()).toList());
+        for (Path dir : all) {
             if (Files.isDirectory(dir)) {
                 watcher.registerRecursive(dir);
             }
@@ -111,24 +126,29 @@ final class SourceWatcher implements AutoCloseable {
         });
     }
 
-    /**
-     * Block until at least one event on a watched file extension arrives,
-     * then drain any further event within the debounce window. Returns
-     * {@code true} we have a real change, {@code false} if the watcher was closed.
-     */
+    /** {@link #awaitChanges}, as a yes/no: {@code false} once the watcher is closed. */
     boolean awaitChange() throws InterruptedException {
+        return awaitChanges() != null;
+    }
+
+    /**
+     * Blocks until at least one event on a watched file extension arrives, then drains any further event within
+     * the debounce window. Returns what the burst touched, or {@code null} once the watcher is closed.
+     */
+    Change awaitChanges() throws InterruptedException {
         while (true) {
             WatchKey key;
             try {
                 key = service.take();
             } catch (ClosedWatchServiceException e) {
-                return false;
+                return null;
             }
-            boolean relevant = drainKey(key);
+            Touched touched = new Touched();
+            drainKey(key, touched);
             if (!key.reset()) {
                 registered.remove((Path) key.watchable());
             }
-            if (!relevant) {
+            if (!touched.any()) {
                 continue;
             }
             // Debounce: keep draining events for `debounceMillis` so a burst
@@ -140,31 +160,45 @@ final class SourceWatcher implements AutoCloseable {
                 try {
                     more = service.poll(remaining, TimeUnit.NANOSECONDS);
                 } catch (ClosedWatchServiceException e) {
-                    return true;
+                    return touched.change();
                 }
                 if (more == null) {
                     break;
                 }
-                drainKey(more);
+                drainKey(more, touched);
                 if (!more.reset()) {
                     registered.remove((Path) more.watchable());
                 }
             }
-            return true;
+            return touched.change();
+        }
+    }
+
+    /** What the events drained so far touched. */
+    private static final class Touched {
+        boolean main;
+        boolean test;
+
+        boolean any() {
+            return main || test;
+        }
+
+        Change change() {
+            return new Change(main, test);
         }
     }
 
     /**
-     * Pull all events for {@code key} and return whether any of them concerns
-     * a file we actually care about. Also auto-registers any newly created
-     * sub-directory so the recursive watch stays in sync.
+     * Pull all events for {@code key} and note whether they concern a watched file of a main or a test directory;
+     * an overflow counts as both. Also auto-registers any newly created sub-directory so the recursive watch stays
+     * in sync.
      */
-    private boolean drainKey(WatchKey key) {
-        boolean relevant = false;
+    private void drainKey(WatchKey key, Touched touched) {
         Path parent = (Path) key.watchable();
         for (WatchEvent<?> event : key.pollEvents()) {
             if (event.kind() == StandardWatchEventKinds.OVERFLOW) {
-                relevant = true;
+                touched.main = true;
+                touched.test = !testRoots.isEmpty();
                 continue;
             }
             Object ctx = event.context();
@@ -182,10 +216,24 @@ final class SourceWatcher implements AutoCloseable {
                 }
             }
             if (isWatchedExtension(child.toString())) {
-                relevant = true;
+                if (under(resolved, testRoots)) {
+                    touched.test = true;
+                } else {
+                    touched.main = true;
+                }
             }
         }
-        return relevant;
+    }
+
+    /** Whether {@code file} lies under one of {@code roots} (absolute, normalized). */
+    static boolean under(Path file, List<Path> roots) {
+        Path normalized = file.toAbsolutePath().normalize();
+        for (Path root : roots) {
+            if (normalized.startsWith(root)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static boolean isWatchedExtension(String name) {

@@ -22,6 +22,7 @@ package io.vidocq.runtime.core;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 
 /**
  * Dev-mode hot reload by <b>application-layer re-creation</b>, in the same JVM: when the
@@ -48,6 +49,12 @@ final class VidocqDevReloadLoop {
     private static final System.Logger LOG = System.getLogger(VidocqDevReloadLoop.class.getName());
     private static final long POLL_MILLIS = 200;
 
+    /**
+     * Suffix of the file the loop writes once a boot completed, next to the reload file: it holds the stamp of the
+     * signal that boot answered, so that the host starts the tests of that change after it (#122).
+     */
+    static final String READY_SUFFIX = ".ready";
+
     private VidocqDevReloadLoop() {}
 
     static void run(Path reloadFile, String[] args) {
@@ -62,6 +69,8 @@ final class VidocqDevReloadLoop {
             VidocqBootstrap bootstrap = VidocqBootstrap.create()
                     .configure()
                     .start();
+
+            acknowledge(reloadFile, lastSignal);
 
             boolean reloadRequested = false;
             while (true) {
@@ -87,6 +96,31 @@ final class VidocqDevReloadLoop {
             long elapsed = (System.nanoTime() - t0) / 1_000_000;
             LOG.log(System.Logger.Level.INFO,
                     "Hot reload - previous deployment stopped in " + elapsed + " ms");
+        }
+    }
+
+    /** {@code <reload file>.ready}, next to it. */
+    static Path readyFile(Path reloadFile) {
+        return reloadFile.resolveSibling(reloadFile.getFileName() + READY_SUFFIX);
+    }
+
+    /**
+     * Tells the host that the boot answering the signal {@code stamp} completed: the stamp is written to
+     * {@link #readyFile}, atomically. Never fails the application: a failure is logged at DEBUG, and the host then
+     * runs the tests after its own timeout.
+     */
+    static void acknowledge(Path reloadFile, long stamp) {
+        Path ready = readyFile(reloadFile);
+        try {
+            Path tmp = Files.createTempFile(ready.toAbsolutePath().getParent(), ".vidocq-dev-reload", ".tmp");
+            try {
+                Files.writeString(tmp, stamp + "\n");
+                Files.move(tmp, ready, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } finally {
+                Files.deleteIfExists(tmp);
+            }
+        } catch (IOException | RuntimeException failed) {
+            LOG.log(System.Logger.Level.DEBUG, "Cannot write " + ready + ": " + failed.getMessage());
         }
     }
 
