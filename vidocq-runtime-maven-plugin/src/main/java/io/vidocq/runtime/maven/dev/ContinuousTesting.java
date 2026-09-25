@@ -19,11 +19,33 @@
  */
 package io.vidocq.runtime.maven.dev;
 
-import java.io.IOException;
-import java.util.List;
+import io.vidocq.runtime.maven.dev.TestResults.Trigger;
 
-/** Continuous testing (spec §2); completed in the next step of the plan. */
-final class ContinuousTesting {
+import java.io.IOException;
+import java.nio.file.Path;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Consumer;
+import java.util.function.Function;
+
+/**
+ * Continuous testing (spec §2), shared by {@code vidocq:dev} and {@code vidocq:test}: one worker thread,
+ * {@code vidocq-tests}, runs the tests one run at a time.
+ *
+ * <ul>
+ *   <li>A {@linkplain #changed change} cancels the run in flight and replaces the run waiting to start; that run
+ *       starts once its {@link ReadyGate} opens, after the application reloaded.</li>
+ *   <li>A {@linkplain #request request} ({@code run-all}, {@code rerun-failed}) never cancels: it waits for the run
+ *       in flight, the last one wins, and it never replaces a change waiting to start, whose run covers it.</li>
+ *   <li>{@code rerun-failed} runs the failures of the last complete result, which this class computes itself.</li>
+ * </ul>
+ * Each run writes {@code running}, then its outcome, to the results file, and hands the outcome to
+ * {@code onResult}. Nothing a run does escapes the worker as an exception: it becomes a warning.
+ */
+final class ContinuousTesting implements TestControl, AutoCloseable {
 
     /** Starts one run of the tests: all of them, or the listed {@code Class#method}s. */
     interface Launcher {
@@ -38,5 +60,285 @@ final class ContinuousTesting {
 
         /** Stops the run and every process it started; returns once they are gone. */
         void cancel();
+    }
+
+    /** What a request answers when it will run. */
+    static final String QUEUED = "queued";
+    /** What {@code rerun-failed} answers when the last result has no failure. */
+    static final String NOTHING_TO_RERUN = "no failed test to rerun";
+    /** How long {@link #close} waits for the worker. */
+    static final Duration CLOSE_WAIT = Duration.ofSeconds(15);
+
+    /** The run waiting to start. {@code change} is {@code false} for a request. */
+    private record Pending(Trigger trigger, ReadyGate gate, boolean change) {}
+
+    private final Launcher launcher;
+    private final Function<Instant, SurefireReports.Reports> reports;
+    private final Path resultsFile;
+    private final String log;
+    private final Consumer<TestResults> onResult;
+    private final Consumer<String> warn;
+    private final Clock clock;
+
+    private final Object lock = new Object();
+    // Guarded by lock.
+    private Pending pending;
+    private Launched current;
+    private boolean cancelled;
+    private boolean closed;
+    /** Bumped by every change, interrupt and close: a run taken under an older value is abandoned. */
+    private long generation;
+    private TestResults lastComplete;
+    private Thread worker;
+
+    /**
+     * @param reports    the reports of the run that started at the given instant
+     * @param log        the log file as the results show it, such as {@code target/vidocq-dev-tests.log}
+     * @param onResult   called on the worker with each run's outcome, never with {@code running}
+     */
+    ContinuousTesting(Launcher launcher, Function<Instant, SurefireReports.Reports> reports, Path resultsFile,
+            String log, Consumer<TestResults> onResult, Consumer<String> warn, Clock clock) {
+        this.launcher = launcher;
+        this.reports = reports;
+        this.resultsFile = resultsFile;
+        this.log = log;
+        this.onResult = onResult;
+        this.warn = warn;
+        this.clock = clock;
+    }
+
+    /**
+     * The continuous testing of a project: Surefire run by {@link TestRunner} with the Maven the recompile uses,
+     * its reports read from {@code <buildDir>/surefire-reports}, the results in {@code <buildDir>/}{@value
+     * TestResultsFile#FILE_NAME} and the log in {@code <buildDir>/}{@value TestResultsFile#LOG_NAME}.
+     *
+     * @param testProperties the dev session's keys, handed to every run as {@code -D}
+     */
+    static ContinuousTesting forProject(Path projectDir, Path buildDir, Map<String, String> testProperties,
+            Consumer<TestResults> onResult, Consumer<String> warn) {
+        Path logFile = buildDir.resolve(TestResultsFile.LOG_NAME);
+        Path reportsDir = buildDir.resolve("surefire-reports");
+        TestRunner runner = new TestRunner(projectDir, RecompileRunner.detectMavenExecutable(projectDir),
+                testProperties, logFile, reportsDir);
+        return new ContinuousTesting(runner, since -> SurefireReports.read(reportsDir, since),
+                buildDir.resolve(TestResultsFile.FILE_NAME), shown(projectDir, logFile), onResult, warn,
+                Clock.systemUTC());
+    }
+
+    /** {@code file} relative to the project, with forward slashes, when it is inside it. */
+    static String shown(Path projectDir, Path file) {
+        Path base = projectDir.toAbsolutePath().normalize();
+        Path absolute = file.toAbsolutePath().normalize();
+        return absolute.startsWith(base) ? base.relativize(absolute).toString().replace('\\', '/')
+                : absolute.toString();
+    }
+
+    /** Starts the worker thread; idempotent. */
+    void start() {
+        synchronized (lock) {
+            if (worker == null && !closed) {
+                worker = Thread.ofPlatform().name("vidocq-tests").daemon(true).start(this::work);
+            }
+        }
+    }
+
+    @Override
+    public void changed(Trigger trigger, ReadyGate gate) {
+        Launched running;
+        synchronized (lock) {
+            if (closed) {
+                return;
+            }
+            generation++;
+            pending = new Pending(trigger, gate, true);
+            running = markCancelled();
+            lock.notifyAll();
+        }
+        if (running != null) {
+            running.cancel();
+        }
+    }
+
+    @Override
+    public void interrupt() {
+        Launched running;
+        synchronized (lock) {
+            generation++;
+            pending = null;
+            running = markCancelled();
+            lock.notifyAll();
+        }
+        if (running != null) {
+            running.cancel();
+        }
+    }
+
+    /**
+     * A request from the dev console or the terminal (spec §3.2, §4.2).
+     *
+     * @return {@value #QUEUED}, or {@value #NOTHING_TO_RERUN} for {@code rerun-failed} after a result without
+     *         failure, in which case nothing runs
+     */
+    String request(Trigger trigger) {
+        synchronized (lock) {
+            if (closed) {
+                return "continuous testing is stopped";
+            }
+            if (trigger == Trigger.RERUN_FAILED && rerunTests().isEmpty()) {
+                return NOTHING_TO_RERUN;
+            }
+            if (pending == null || !pending.change()) {
+                pending = new Pending(trigger, ReadyGate.NOW, false);
+            }
+            lock.notifyAll();
+            return QUEUED;
+        }
+    }
+
+    /** The last result that is neither {@code running} nor {@code cancelled}, or {@code null}. */
+    TestResults lastComplete() {
+        synchronized (lock) {
+            return lastComplete;
+        }
+    }
+
+    /** Cancels the run in flight, which is written {@code cancelled}, and stops the worker; idempotent. */
+    @Override
+    public void close() {
+        Launched running;
+        Thread thread;
+        synchronized (lock) {
+            if (closed) {
+                return;
+            }
+            closed = true;
+            generation++;
+            pending = null;
+            running = markCancelled();
+            thread = worker;
+            lock.notifyAll();
+        }
+        if (running != null) {
+            running.cancel();
+        }
+        if (thread != null && thread != Thread.currentThread()) {
+            try {
+                thread.join(CLOSE_WAIT.toMillis());
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+
+    /** Guarded by lock: marks the run in flight cancelled and returns it, for the caller to cancel unlocked. */
+    private Launched markCancelled() {
+        if (current != null) {
+            cancelled = true;
+        }
+        return current;
+    }
+
+    /** Guarded by lock. */
+    private List<String> rerunTests() {
+        return lastComplete == null ? List.of() : lastComplete.rerunList();
+    }
+
+    private boolean abandoned(long taken) {
+        synchronized (lock) {
+            return closed || generation != taken;
+        }
+    }
+
+    private void work() {
+        while (true) {
+            Pending next;
+            long taken;
+            synchronized (lock) {
+                while (pending == null && !closed) {
+                    try {
+                        lock.wait();
+                    } catch (InterruptedException stopping) {
+                        return;
+                    }
+                }
+                if (closed) {
+                    return;
+                }
+                next = pending;
+                pending = null;
+                taken = generation;
+            }
+            try {
+                if (next.gate().await(() -> abandoned(taken))) {
+                    runOnce(next.trigger(), taken);
+                }
+            } catch (InterruptedException stopping) {
+                return;
+            } catch (RuntimeException failed) {
+                warn.accept("Tests: the run failed: " + failed.getClass().getName());
+            }
+        }
+    }
+
+    private void runOnce(Trigger trigger, long taken) throws InterruptedException {
+        List<String> tests;
+        TestResults previous;
+        synchronized (lock) {
+            if (closed || generation != taken) {
+                return;
+            }
+            tests = trigger == Trigger.RERUN_FAILED ? rerunTests() : List.of();
+            previous = lastComplete;
+        }
+        if (trigger == Trigger.RERUN_FAILED && tests.isEmpty()) {
+            return;
+        }
+        Instant startedAt = clock.instant();
+        long t0 = System.nanoTime();
+        write(TestResults.running(trigger, startedAt, log, previous));
+        Launched launched = null;
+        boolean abandonedBeforeLaunch;
+        synchronized (lock) {
+            abandonedBeforeLaunch = closed || generation != taken;
+            if (!abandonedBeforeLaunch) {
+                try {
+                    launched = launcher.launch(tests);
+                } catch (IOException cannotStart) {
+                    warn.accept("Tests: cannot start Maven: " + cannotStart.getMessage());
+                }
+                current = launched;
+                cancelled = false;
+            }
+        }
+        if (abandonedBeforeLaunch) {
+            write(TestResults.cancelled(trigger, startedAt, 0, log, previous));
+            return;
+        }
+        int exit = launched == null ? -1 : launched.waitFor();
+        boolean wasCancelled;
+        synchronized (lock) {
+            wasCancelled = cancelled;
+            current = null;
+            cancelled = false;
+        }
+        long duration = Duration.ofNanos(System.nanoTime() - t0).toMillis();
+        TestResults result = wasCancelled
+                ? TestResults.cancelled(trigger, startedAt, duration, log, previous)
+                : TestResults.completed(trigger, startedAt, duration, exit, reports.apply(startedAt), log, warn);
+        if (result.state().complete()) {
+            synchronized (lock) {
+                lastComplete = result;
+            }
+        }
+        write(result);
+        onResult.accept(result);
+    }
+
+    private void write(TestResults results) {
+        try {
+            TestResultsFile.write(resultsFile, results);
+        } catch (IOException | RuntimeException failed) {
+            warn.accept("Tests: cannot write " + resultsFile + ": " + failed.getMessage());
+        }
     }
 }
