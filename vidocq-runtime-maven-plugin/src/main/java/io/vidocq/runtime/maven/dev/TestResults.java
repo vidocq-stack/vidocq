@@ -160,14 +160,16 @@ record TestResults(State state, Trigger trigger, Instant startedAt, long duratio
     /**
      * The tests to run again, as Surefire's {@code -Dtest} takes them: {@code <class>#<method>}, each once, a
      * parameterised or repeated name such as {@code adds(int)[1]} cut to its method, which is what {@code -Dtest}
-     * matches.
+     * matches; a failure of the class itself, {@code <class>#}, reruns the whole class.
      */
     List<String> rerunList() {
         LinkedHashSet<String> tests = new LinkedHashSet<>();
         for (Failure failure : failures) {
             String test = failure.test();
             int cut = firstOf(test, '(', '[');
-            tests.add(cut < 0 ? test : test.substring(0, cut));
+            String name = cut < 0 ? test : test.substring(0, cut);
+            // a failure of the class itself (@BeforeAll) has no method: the whole class runs again (#138)
+            tests.add(name.endsWith("#") ? name.substring(0, name.length() - 1) : name);
         }
         return List.copyOf(tests);
     }

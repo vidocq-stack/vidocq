@@ -181,7 +181,7 @@ With a console attached, `vidocq:test` reads a key per line — type the key, th
 | Key | Effect
 
 | `r` | Run every test.
-| `f` | Run the tests that failed in the last result; `no failed test to rerun` when there is none.
+| `f` | Run the tests that failed in the last result; `no failed test to rerun` when there is none. A failure of the class itself (`@BeforeAll`) reruns the whole class, and a rerun that matches no test — a name `-Dtest` cannot express — runs every test instead [.tag-new]#NEW#.
 | `q` | Quit: the run in flight is cancelled and the dev services stop.
 | Enter | Run every test.
 |===

@@ -341,4 +341,25 @@ class ContinuousTestingTest {
         nextLaunch().finish(0);
         assertEquals(Trigger.TEST_CHANGE, nextResult().trigger());
     }
+
+    /** #138: a rerun whose names -Dtest matched to no test runs every test, rather than losing the failures. */
+    @Test
+    void aRerunThatMatchesNoTestRunsEveryTestInstead() throws Exception {
+        firstRun(failed("com.acme.ATest#x"));
+        testing.request(Trigger.RERUN_FAILED);
+        FakeRun rerun = nextLaunch();
+        reports.set(SurefireReports.Reports.NONE);
+        rerun.finish(0);
+        assertEquals(State.NO_TESTS, nextResult().state());
+
+        FakeRun all = nextLaunch();
+
+        assertEquals(List.of(), all.tests, "every test");
+        reports.set(failed("com.acme.ATest#x"));
+        all.finish(1);
+        TestResults again = nextResult();
+        assertEquals(Trigger.RUN_ALL, again.trigger());
+        assertEquals(List.of("com.acme.ATest#x"), again.rerunList());
+        assertTrue(warnings.stream().anyMatch(w -> w.contains("matched no test")), warnings.toString());
+    }
 }

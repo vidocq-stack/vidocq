@@ -356,13 +356,25 @@ final class ContinuousTesting implements TestControl, AutoCloseable {
                 ? TestResults.cancelled(trigger, startedAt, duration, log, previous)
                 : TestResults.completed(trigger, startedAt, duration, exit, compilerFailed.getAsBoolean(),
                         reports.apply(startedAt), log, warn);
-        if (result.state().complete()) {
+        boolean rerunMatchedNothing = trigger == Trigger.RERUN_FAILED && result.state() == TestResults.State.NO_TESTS;
+        if (result.state().complete() && !rerunMatchedNothing) {
             synchronized (lock) {
                 lastComplete = result;
             }
         }
         write(result);
         onResult.accept(result);
+        if (rerunMatchedNothing) {
+            // -Dtest matched none of the failed tests, whose names it cannot express (a @DisplayName, a phrased
+            // report): run them all rather than lose the failures (#138).
+            warn.accept("Tests: the rerun of " + tests.size() + " failed test(s) matched no test; running every test");
+            synchronized (lock) {
+                if (pending == null && !closed) {
+                    pending = new Pending(Trigger.RUN_ALL, ReadyGate.NOW, false);
+                    lock.notifyAll();
+                }
+            }
+        }
     }
 
     private void write(TestResults results) {

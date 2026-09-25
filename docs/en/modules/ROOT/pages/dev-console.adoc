@@ -317,7 +317,7 @@ xref:continuous-testing.adoc[continuous testing] only: the last test run. The Ma
 * **Text** `state`: the state and the trigger of the last run, such as `failed (change)` or `running (test-change)`; `results unreadable` when the file could not be read, the previous values staying.
 * **Gauges** `run`, `failures`, `errors` and `skipped`: those of the last complete run, the previous one while a run is in progress. The chart *Tests* plots the failures and the errors.
 * **Table** `failed-tests`, 100 rows at most: the test as `Class#method`, the exception's class, and the first line of its message.
-* **Buttons** *Run all tests* and *Rerun failed tests*: each answers `queued` and the run shows in the panel once it ends; *Rerun failed tests* answers `no failed test to rerun` when the last run had none. A button never cancels the run in flight: it waits for it.
+* **Buttons** *Run all tests* and *Rerun failed tests*: each answers `queued` and the run shows in the panel once it ends; *Rerun failed tests* answers `no failed test to rerun` when the last run had none. A rerun that matches no test runs every test instead [.tag-new]#NEW#. A button never cancels the run in flight: it waits for it.
 
 What is never shown: a stack trace — it is in the log — or the credentials of a URL in a message. The buttons
 never send a test name: they write the word `run-all` or `rerun-failed` to `target/vidocq-dev-tests.request`,

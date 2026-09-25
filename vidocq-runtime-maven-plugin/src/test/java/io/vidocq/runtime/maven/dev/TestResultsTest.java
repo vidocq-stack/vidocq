@@ -136,4 +136,14 @@ class TestResultsTest {
         assertEquals(State.ERROR, result.state());
         assertTrue(result.state().complete(), "a finished run");
     }
+
+    /** #138: a failure of the class itself (@BeforeAll) has no method: the whole class runs again. */
+    @Test
+    void aClassLevelFailureRerunsTheWholeClass() {
+        TestResults failed = completed(1, reports(new Counts(2, 0, 1, 0), List.of(
+                new Failure("com.acme.SetupTest#", "T", "m"),
+                new Failure("com.acme.OtherTest#x", "T", "m")), 1, 0));
+
+        assertEquals(List.of("com.acme.SetupTest", "com.acme.OtherTest#x"), failed.rerunList());
+    }
 }
