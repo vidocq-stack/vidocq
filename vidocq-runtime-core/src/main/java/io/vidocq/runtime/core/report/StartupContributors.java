@@ -60,12 +60,12 @@ public final class StartupContributors {
 
     /**
      * The ids no contributor may take: those of the sections the core writes itself, and those of the dev
-     * console's own panels, {@code startup}, {@code config}, {@code cdi}, {@code logs} and {@code jvm}, which it
+     * console's own panels, {@code startup}, {@code config}, {@code cdi}, {@code logs}, {@code tests} and {@code jvm}, which it
      * shows next to the contributed ones.
      */
     static final Set<String> CORE_IDS = Set.of("launch", "vidocq", "phases", CoreSections.LAYER,
             CoreSections.CONFIGURATION, CoreSections.EXTENSIONS, "anomalies", "startup", "config", "cdi", "logs",
-            "jvm");
+            "tests", "jvm");
     /**
      * How many providers the service loader may fail to load before discovery stops: a service file that cannot
      * be read fails again on every attempt.

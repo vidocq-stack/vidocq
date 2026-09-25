@@ -28,6 +28,7 @@ import io.vidocq.runtime.spi.report.ReportSection;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -41,6 +42,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -595,5 +597,19 @@ class DevConsoleExtensionTest {
         assertEquals(405, refused.statusCode());
         assertEquals(0, panel.actionsCalls.get(), "actions() is never called outside a dev launch");
         assertEquals(List.of(), panel.runs);
+    }
+
+    @Test
+    void aDevBootWithTestResultsShowsTheTestsPanelBeforeTheJvm(@TempDir Path dir) throws Exception {
+        System.setProperty(TestsPanel.PROPERTY, dir.resolve("vidocq-dev-tests.json").toString());
+        try {
+            Boot boot = boot(context(LaunchMode.DEV, DevConsoleSettings.PORT_KEY, "0"));
+
+            Map<String, Object> first = Json.object(get(url(boot.console().boundPort()) + "api/snapshot").body());
+
+            assertEquals(List.of("config", "cdi", "logs", "tests", "jvm"), panelIds(first));
+        } finally {
+            System.clearProperty(TestsPanel.PROPERTY);
+        }
     }
 }

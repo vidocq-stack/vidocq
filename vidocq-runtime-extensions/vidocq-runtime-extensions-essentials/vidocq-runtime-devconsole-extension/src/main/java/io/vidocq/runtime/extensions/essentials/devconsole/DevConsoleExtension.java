@@ -83,7 +83,8 @@ import java.util.regex.Pattern;
  * as read-only tools for a coding agent, whose URL is printed after the console's, {@code Vidocq dev MCP: ...}.
  * The page, {@code index.html}, {@code console.css} and the ES module {@code console.js}, loads nothing from another
  * site: it polls the snapshot and draws the report first, then one tab per panel, the console's own
- * {@linkplain ConfigPanel configuration}, {@linkplain CdiPanel CDI}, {@linkplain LogsPanel logs} (in a dev launch)
+ * {@linkplain ConfigPanel configuration}, {@linkplain CdiPanel CDI}, {@linkplain LogsPanel logs} (in a dev launch),
+ * {@linkplain TestsPanel tests} (in a dev launch run with continuous testing)
  * and {@linkplain JvmPanel JVM} panels last.
  *
  * <h2>The history of its curves</h2>
@@ -140,6 +141,7 @@ public final class DevConsoleExtension implements VidocqExtension, StartupReport
     private volatile String notStarted;
     private volatile Thread ticker;
     private volatile LogsPanel logs;
+    private volatile TestsPanel tests;
 
     /** The console Vidocq loads as a service, remembering what it printed across the dev reloads of this JVM. */
     public DevConsoleExtension() {
@@ -200,8 +202,14 @@ public final class DevConsoleExtension implements VidocqExtension, StartupReport
         // The logs panel shows what the application logs: in a dev launch only, its ring removed in onStop.
         LogsPanel logged = resolved.launchMode() == LaunchMode.DEV ? LogsPanel.start() : null;
         logs = logged;
+        // The tests panel shows vidocq:dev's continuous testing: in a dev launch only, when the plugin named the
+        // results file; its reader thread stops in onStop.
+        TestsPanel tested = resolved.launchMode() == LaunchMode.DEV
+                ? TestsPanel.start(System.getProperty(TestsPanel.PROPERTY)).orElse(null)
+                : null;
+        tests = tested;
         Snapshot boot = new Snapshot(HexFormat.of().toHexDigits(RandomGenerator.getDefault().nextLong()),
-                VIDOCQ_VERSION, context.startupReport(), ownPanels(context, resolved.launchMode(), logged), clock,
+                VIDOCQ_VERSION, context.startupReport(), ownPanels(context, resolved.launchMode(), logged, tested), clock,
                 actions);
         Handler page = StaticFileHandler.builder()
                 .addClasspath(DevConsoleExtension.class.getClassLoader(), PAGE_RESOURCES)
@@ -261,14 +269,19 @@ public final class DevConsoleExtension implements VidocqExtension, StartupReport
      * launch the {@linkplain LogsPanel logs}, then the {@linkplain JvmPanel JVM}, last. The report's own panel,
      * {@code startup}, is the snapshot's {@code startup} member, which the page shows first.
      *
-     * @param logs the logs panel of a dev launch, or {@code null}
+     * @param logs  the logs panel of a dev launch, or {@code null}
+     * @param tests the tests panel of a dev launch with continuous testing, or {@code null}
      */
-    private static List<PanelEntry> ownPanels(ExtensionContext context, LaunchMode mode, LogsPanel logs) {
+    private static List<PanelEntry> ownPanels(ExtensionContext context, LaunchMode mode, LogsPanel logs,
+            TestsPanel tests) {
         List<PanelEntry> panels = new ArrayList<>();
         panels.add(PanelEntry.builtIn(configPanel(context, mode), mode));
         panels.add(PanelEntry.builtIn(cdiPanel(context), mode));
         if (logs != null) {
             panels.add(PanelEntry.builtIn(logs, mode));
+        }
+        if (tests != null) {
+            panels.add(PanelEntry.builtIn(tests, mode));
         }
         panels.add(PanelEntry.builtIn(new JvmPanel(), mode));
         return List.copyOf(panels);
@@ -406,6 +419,11 @@ public final class DevConsoleExtension implements VidocqExtension, StartupReport
         logs = null;
         if (logged != null) {
             logged.stop();
+        }
+        TestsPanel tested = tests;
+        tests = null;
+        if (tested != null) {
+            tested.stop();
         }
         Snapshot boot = snapshot;
         if (boot != null) {
