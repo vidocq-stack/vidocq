@@ -27,32 +27,42 @@ user guide; jump straight to <<getting-started>> for a Hello-World walkthrough.
 
 == Installing the `vidocq` command
 
-The CLI ships as a JPMS module. The canonical invocation is:
+The installer downloads the CLI distribution into `~/.vidocq/cli/<version>` and puts a
+`vidocq` launcher on your `PATH`:
+
+[source,bash]
+----
+curl -fsSL https://vidocq.dev/install.sh | sh                            # latest release
+curl -fsSL https://vidocq.dev/install.sh | VIDOCQ_VERSION=0.3.0 sh       # a given release
+curl -fsSL https://vidocq.dev/install.sh | VIDOCQ_VERSION=snapshot sh    # latest build of main
+----
+
+On Windows (PowerShell), set the same variable before running the script:
+
+[source,powershell]
+----
+irm https://vidocq.dev/install.ps1 | iex
+$env:VIDOCQ_VERSION = 'snapshot'; irm https://vidocq.dev/install.ps1 | iex
+----
+
+`VIDOCQ_VERSION=snapshot` [.tag-new]#NEW# takes the newest `-SNAPSHOT` of the CLI from the
+Central snapshot repository, where every build of `main` is published. A SNAPSHOT is
+downloaded again on every run, since it changes with every build; a release already
+installed is kept. A CLI installed this way scaffolds projects against its own SNAPSHOT
+runtime (see <<create-snapshot>>). Run the installer again to go back to the latest release.
+
+Without the installer, download `vidocq-runtime-cli-<version>-cli.zip` from Maven Central,
+unzip it anywhere and add its `bin/` directory to your `PATH`. The launcher runs the CLI
+as a JPMS module:
 
 [source,bash]
 ----
 java -m io.vidocq.runtime.cli/io.vidocq.runtime.cli.VidocqCli <command> [options]
 ----
 
-For day-to-day use, define a `vidocq` shell function so the rest of this guide reads
-naturally. Add this to your `~/.bashrc` or `~/.zshrc`:
-
-[source,bash]
-----
-vidocq() {
-  java -p "$VIDOCQ_CLI_MODULE_PATH" \
-       -m io.vidocq.runtime.cli/io.vidocq.runtime.cli.VidocqCli "$@"
-}
-----
-
-where `$VIDOCQ_CLI_MODULE_PATH` points at the CLI module and `io.vidocq.runtime.core` (and
-any extensions you want discoverable). From here on, every example uses the short `vidocq`
-form.
-
 [TIP]
 ====
-Once the function is on your `PATH`, enable tab-completion with
-`source <(vidocq completion bash)` — see <<completion>>.
+Enable tab-completion with `source <(vidocq completion bash)` — see <<completion>>.
 ====
 
 [#getting-started]
