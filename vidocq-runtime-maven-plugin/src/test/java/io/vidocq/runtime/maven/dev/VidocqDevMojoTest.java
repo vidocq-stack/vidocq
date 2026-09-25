@@ -442,6 +442,11 @@ class VidocqDevMojoTest {
         public void interrupt() {
             calls.add("interrupt");
         }
+
+        @Override
+        public void release() {
+            calls.add("release");
+        }
     }
 
     @Test
@@ -477,7 +482,8 @@ class VidocqDevMojoTest {
             return Optional.empty();
         });
 
-        assertEquals(List.of("interrupt", "reload"), tests.calls);
+        assertEquals(List.of("interrupt", "reload", "release"), tests.calls,
+                "the requests held during the recompile run after it");
     }
 
     @Test

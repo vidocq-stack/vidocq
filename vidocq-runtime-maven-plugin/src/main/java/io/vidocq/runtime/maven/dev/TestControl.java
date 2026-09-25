@@ -33,8 +33,15 @@ interface TestControl {
      */
     void changed(TestResults.Trigger trigger, ReadyGate gate);
 
-    /** Cancels the run in flight and drops the run waiting to start; returns once its processes are gone. */
+    /**
+     * Cancels the run in flight and drops the run waiting to start; returns once its processes are gone. Until the
+     * next {@link #changed} or {@link #release}, a request is queued but not started: the application is being
+     * recompiled, and a test run's Maven must not compile into the same {@code target/classes} meanwhile.
+     */
     void interrupt();
+
+    /** Ends the hold of {@link #interrupt} without a new run, such as after a recompile that failed. */
+    void release();
 
     /** What a run waits for before starting, such as the end of an application reload. */
     @FunctionalInterface

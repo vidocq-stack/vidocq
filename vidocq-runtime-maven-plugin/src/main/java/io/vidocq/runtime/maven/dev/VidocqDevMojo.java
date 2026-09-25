@@ -435,8 +435,9 @@ public class VidocqDevMojo extends AbstractMojo {
 
     /**
      * One change of the source loop (spec §2.2). A test-only change runs the tests, and nothing is reloaded. A main
-     * change first stops the run in flight, so that its Maven never races the recompile. It then recompiles and
-     * reloads, and runs the tests once the reload completed; a failed recompile runs none.
+     * change first stops the run in flight and holds the requests, so that no test Maven races the recompile. It then
+     * recompiles and reloads, and runs the tests once the reload completed; a failed recompile runs none and lets the
+     * held requests run.
      *
      * @param tests {@code null} without continuous testing
      */
@@ -452,8 +453,13 @@ public class VidocqDevMojo extends AbstractMojo {
             tests.interrupt();
         }
         Optional<TestControl.ReadyGate> booted = reload.run();
-        if (tests != null && booted.isPresent()) {
+        if (tests == null) {
+            return;
+        }
+        if (booted.isPresent()) {
             tests.changed(Trigger.CHANGE, booted.get());
+        } else {
+            tests.release();
         }
     }
 

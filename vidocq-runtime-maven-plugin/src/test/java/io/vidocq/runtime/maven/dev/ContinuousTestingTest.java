@@ -267,4 +267,44 @@ class ContinuousTestingTest {
         assertEquals(State.COMPILE_ERROR, nextResult().state());
         assertTrue(warnings.stream().anyMatch(w -> w.contains("mvn: not found")), warnings.toString());
     }
+
+    /** Review finding: a request between interrupt() and the reload must not run test-compile beside the recompile. */
+    @Test
+    void aRequestDuringARecompileWaitsForItsEnd() throws Exception {
+        firstRun(passed(2));
+        testing.interrupt();
+
+        assertEquals(ContinuousTesting.QUEUED, testing.request(Trigger.RUN_ALL));
+
+        assertNull(launches.poll(300, TimeUnit.MILLISECONDS), "no run while the application recompiles");
+        testing.release();
+        FakeRun run = nextLaunch();
+        run.finish(0);
+        assertEquals(Trigger.RUN_ALL, nextResult().trigger());
+    }
+
+    /** Review finding: a test change during the reload keeps waiting for the reload. */
+    @Test
+    void aTestChangeDuringTheReloadWaitsForTheReloadToo() throws Exception {
+        CountDownLatch reloaded = new CountDownLatch(1);
+        testing.changed(Trigger.CHANGE, abandoned -> {
+            while (reloaded.getCount() > 0) {
+                if (abandoned.getAsBoolean()) {
+                    return false;
+                }
+                Thread.sleep(10);
+            }
+            return true;
+        });
+        Thread.sleep(100);
+
+        testing.changed(Trigger.TEST_CHANGE, TestControl.ReadyGate.NOW);
+
+        assertNull(launches.poll(300, TimeUnit.MILLISECONDS), "no run before the reload completed");
+        reloaded.countDown();
+        FakeRun run = nextLaunch();
+        run.finish(0);
+        assertEquals(Trigger.CHANGE, nextResult().trigger(), "the change's run covers the test change");
+        assertNull(launches.poll(300, TimeUnit.MILLISECONDS), "one run, not two");
+    }
 }

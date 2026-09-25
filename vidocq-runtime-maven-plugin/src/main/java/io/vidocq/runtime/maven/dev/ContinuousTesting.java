@@ -86,6 +86,10 @@ final class ContinuousTesting implements TestControl, AutoCloseable {
     private Launched current;
     private boolean cancelled;
     private boolean closed;
+    /** Set by {@link #interrupt} while the application recompiles: requests wait, changes clear it. */
+    private boolean held;
+    /** The change the worker took and whose gate it is waiting on, or {@code null}. */
+    private Pending waiting;
     /** Bumped by every change, interrupt and close: a run taken under an older value is abandoned. */
     private long generation;
     private TestResults lastComplete;
@@ -150,7 +154,13 @@ final class ContinuousTesting implements TestControl, AutoCloseable {
                 return;
             }
             generation++;
-            pending = new Pending(trigger, gate, true);
+            held = false;
+            // A test change while a change (or the first run) waits for its reload keeps waiting for it: that run
+            // covers every test, and a test run's Maven must not compile while the application boots (spec §2.2).
+            Pending reloading = pending != null && pending.change() ? pending : waiting;
+            pending = trigger == Trigger.TEST_CHANGE && reloading != null
+                    ? reloading
+                    : new Pending(trigger, gate, true);
             running = markCancelled();
             lock.notifyAll();
         }
@@ -165,11 +175,20 @@ final class ContinuousTesting implements TestControl, AutoCloseable {
         synchronized (lock) {
             generation++;
             pending = null;
+            held = true;
             running = markCancelled();
             lock.notifyAll();
         }
         if (running != null) {
             running.cancel();
+        }
+    }
+
+    @Override
+    public void release() {
+        synchronized (lock) {
+            held = false;
+            lock.notifyAll();
         }
     }
 
@@ -254,7 +273,7 @@ final class ContinuousTesting implements TestControl, AutoCloseable {
             Pending next;
             long taken;
             synchronized (lock) {
-                while (pending == null && !closed) {
+                while ((pending == null || held && !pending.change()) && !closed) {
                     try {
                         lock.wait();
                     } catch (InterruptedException stopping) {
@@ -267,9 +286,16 @@ final class ContinuousTesting implements TestControl, AutoCloseable {
                 next = pending;
                 pending = null;
                 taken = generation;
+                waiting = next.change() ? next : null;
             }
             try {
-                if (next.gate().await(() -> abandoned(taken))) {
+                boolean open = next.gate().await(() -> abandoned(taken));
+                synchronized (lock) {
+                    if (waiting == next) {
+                        waiting = null;
+                    }
+                }
+                if (open) {
                     runOnce(next.trigger(), taken);
                 }
             } catch (InterruptedException stopping) {
