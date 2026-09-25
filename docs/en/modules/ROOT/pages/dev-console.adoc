@@ -234,6 +234,9 @@ The panels shipped today:
 | *Logs* [.tag-new]#NEW#
 | The console's own, in a `dev` launch only: the last records the application logged, newest first, the warnings and errors per second, the loggers whose level is set, and a button that sets one until the next reload. See <<logs-panel>>.
 
+| *Tests* [.tag-new]#NEW#
+| The console's own panel under `vidocq:dev` with continuous testing: the last test run, its failures, and buttons to run every test or the failed ones. See <<tests-panel>>.
+
 | *JVM*
 | The console's own, below.
 |===
@@ -301,6 +304,24 @@ What is never shown or kept:
 * **The record itself.** Each record is written once into strings when it is logged; the ring never keeps the record, its parameters or its exception, which may be objects of the application and would keep it in memory past a reload.
 * **The credentials of a URL** in a message, removed as <<config-panel,the configuration panel>> removes them: `jdbc:postgresql://admin:s3cr3t@db/orders` reads `jdbc:postgresql://***@db/orders`. A message is cut at 500 characters, and the page cuts what it shows at 200. A log message can still carry anything the application wrote into it, which is why the panel exists in a `dev` launch only.
 * **Records that go elsewhere.** When an SLF4J or Log4j bridge replaces the JDK's `System.LoggerFinder`, what Vidocq and the libraries log never reaches `java.util.logging`: `records`, `warnings` and `errors` are absent with the reason, such as `logs go to Log4jSystemLoggerFinder, not java.util.logging`, rather than an empty table that would read as a quiet application. The `levels` table and the button still act on `java.util.logging`.
+
+[#tests-panel]
+=== Tests [.tag-new]#NEW#
+
+The console's own panel, `tests`, between the logs and the JVM, in a `dev` launch run by `vidocq:dev` with
+xref:continuous-testing.adoc[continuous testing] only: the last test run. The Maven plugin writes it to
+`target/vidocq-dev-tests.json` and names that file with `-Dvidocq.dev.tests.results`; a thread of the console,
+`vidocq-devconsole-tests`, reads it again whenever it changes, and a poll never touches the disk.
+
+* **Boot facts:** the last run when the console started, the results file and the log.
+* **Text** `state`: the state and the trigger of the last run, such as `failed (change)` or `running (test-change)`; `results unreadable` when the file could not be read, the previous values staying.
+* **Gauges** `run`, `failures`, `errors` and `skipped`: those of the last complete run, the previous one while a run is in progress. The chart *Tests* plots the failures and the errors.
+* **Table** `failed-tests`, 100 rows at most: the test as `Class#method`, the exception's class, and the first line of its message.
+* **Buttons** *Run all tests* and *Rerun failed tests*: each answers `queued` and the run shows in the panel once it ends; *Rerun failed tests* answers `no failed test to rerun` when the last run had none. A button never cancels the run in flight: it waits for it.
+
+What is never shown: a stack trace — it is in the log — or the credentials of a URL in a message. The buttons
+never send a test name: they write the word `run-all` or `rerun-failed` to `target/vidocq-dev-tests.request`,
+and the plugin works out which tests failed.
 
 [#jvm-panel]
 === JVM [.tag-new]#NEW#

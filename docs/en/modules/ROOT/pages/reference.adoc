@@ -371,7 +371,7 @@ Each is one WARNING record on `io.vidocq.startup.anomaly`, its code first, logge
 | A startup report contributor could not be loaded, created or identified, or failed; its section is skipped.
 
 | xref:modules/vidocq-runtime-core.adoc#vidocq-rpt-002[`VIDOCQ-RPT-002`]
-| Two contributors of different classes use the same id, or one uses the id of a section of the core, or `startup`, `config`, `cdi`, `logs` or `jvm` [.tag-new]#NEW#, the dev console's own panels; the second is skipped.
+| Two contributors of different classes use the same id, or one uses the id of a section of the core, or `startup`, `config`, `cdi`, `logs`, `tests` or `jvm` [.tag-new]#NEW#, the dev console's own panels; the second is skipped.
 
 | xref:dev-console.adoc#vidocq-devc-001[`VIDOCQ-DEVC-001`] [.tag-new]#NEW#
 | The dev console is on in a `test` or `prod` launch.

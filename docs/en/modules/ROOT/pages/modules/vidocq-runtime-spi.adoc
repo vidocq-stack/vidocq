@@ -193,7 +193,7 @@ A library that is not an extension declares its contributor as a service. Its se
 | Method | Contract
 
 | `StartupReportContributor.id()`
-| A stable lowercase id, such as `translate`: the name of the section, and what keeps it from appearing twice. `null` or blank skips the contributor (xref:modules/vidocq-runtime-core.adoc#vidocq-rpt-001[`VIDOCQ-RPT-001`]); an id already taken by another class, or by a section of the core, skips the second one (xref:modules/vidocq-runtime-core.adoc#vidocq-rpt-002[`VIDOCQ-RPT-002`]). `startup`, `config`, `cdi`, `logs` and `jvm` are taken too [.tag-new]#NEW#: they are the dev console's own panels.
+| A stable lowercase id, such as `translate`: the name of the section, and what keeps it from appearing twice. `null` or blank skips the contributor (xref:modules/vidocq-runtime-core.adoc#vidocq-rpt-001[`VIDOCQ-RPT-001`]); an id already taken by another class, or by a section of the core, skips the second one (xref:modules/vidocq-runtime-core.adoc#vidocq-rpt-002[`VIDOCQ-RPT-002`]). `startup`, `config`, `cdi`, `logs`, `tests` and `jvm` are taken too [.tag-new]#NEW#: they are the dev console's own panels.
 
 | `title()`, `order()`
 | The title printed after the id in the detailed report, the id by default; the position among the contributors declared as services.

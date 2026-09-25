@@ -190,6 +190,15 @@ reach Docker itself, so the panel has no live samples of its own — boot facts 
 
 xref:dev-console.adoc#panels[The dev console's panels].
 
+[#continuous-testing]
+== Continuous testing [.tag-new]#NEW#
+
+xref:continuous-testing.adoc[Continuous testing] reuses the dev containers: under `vidocq:dev` every test run
+gets the session's connection keys, and `vidocq:test` opens a session of its own, host `vidocq:test`. Each run
+gets `-Dvidocq.dev.devServices=false`, so the tests never start a second set of containers.
+
+WARNING: The tests then share the dev database: a test that deletes rows deletes your dev data.
+
 [#no-secrets]
 == No secret leaves the application [.tag-new]#NEW#
 

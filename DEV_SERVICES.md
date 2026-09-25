@@ -523,3 +523,11 @@ It declares `opens db.migration;` in its `module-info.java` and sets
 `vidocq.pool.url=jdbc:h2:mem:mansart` in its configuration. No further migration
 configuration is needed — the extension picks up the `@Default` pool coordinates and
 applies `V1__products.sql` before the Mansart pool opens.
+
+## Continuous testing (#122)
+
+`vidocq:dev` (with `vidocq.dev.continuousTesting`, on when `src/test/java` exists) and `vidocq:test` run the
+application's tests on every change. The tests reuse the dev containers: `vidocq:dev` hands every run its
+session's keys, `vidocq:test` opens its own session (host `vidocq:test`), and every run gets
+`-Dvidocq.dev.devServices=false`, so the JUnit host starts nothing. The tests share the dev database. See
+`docs/en/modules/ROOT/pages/continuous-testing.adoc`.

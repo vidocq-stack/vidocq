@@ -4,6 +4,7 @@
 ** xref:usage.adoc[Usage]
 *** xref:dev-console.adoc[Dev console]
 *** xref:dev-console-panels.adoc[Writing a dev console panel]
+*** xref:continuous-testing.adoc[Continuous testing]
 ** xref:dev-services.adoc[Dev services]
 ** xref:concepts.adoc[Concepts]
 ** xref:internals.adoc[Internals]

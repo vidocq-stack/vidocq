@@ -25,10 +25,13 @@
 | Standalone distribution: `bin/run.sh` + `bin/run.cmd` launchers and `lib/*.jar` (application + module-path closure), attached as a `-dist.zip` artifact.
 
 | `vidocq:dev`
-| Dev/watch mode — forks a child JVM with `-Dvidocq.profile=dev`, recompiles and hot-reloads on change. The child runs a JDWP agent on `127.0.0.1:5005`, see <<debugger,the debug agent>>.
+| Dev/watch mode — forks a child JVM with `-Dvidocq.profile=dev`, recompiles and hot-reloads on change. The child runs a JDWP agent on `127.0.0.1:5005`, see <<debugger,the debug agent>>. With continuous testing, it also runs the tests after every reload; see xref:continuous-testing.adoc[Continuous testing].
 
 | `vidocq:run` [.tag-new]#NEW#
 | Runs the application once in a forked JVM, after compiling and indexing it: the goal forks the lifecycle up to `process-classes`, so `mvn vidocq:run` alone is a complete run. See <<run,the `vidocq:run` goal>>.
+
+| `vidocq:test` [.tag-new]#NEW#
+| Continuous testing without the application: runs the tests, then again on every change of the main or test sources, with a summary and keys in the terminal. See <<test,the `vidocq:test` goal>>.
 
 | `vidocq:checkpom`
 | Verifies every `vidocq-runtime-<name>-extension` declared in the pom is correctly wired (annotation processor paths, codegen bundles). Bound to `validate` via `pluginManagement`.
@@ -309,6 +312,69 @@ the goal passes that very value on to the forked JVM, since the property you set
 the application runs in another one. And a non-empty `NO_COLOR` in the environment stops the decision — nothing
 is passed, because the runtime honours `NO_COLOR` on its own, over any mode. The goal says what it decided, and
 why, on one `-X` debug line.
+
+[#test]
+== `vidocq:test` goal [.tag-new]#NEW#
+
+`vidocq:test` runs the application's tests on every change, without starting the application: no child JVM,
+no dev console, no debug agent. It opens the dev services session, runs every test, then watches the main and
+test directories and runs them again on each change. A run is `mvn test-compile surefire:test`, so a main
+change is recompiled by the run itself. See xref:continuous-testing.adoc[Continuous testing] for the whole
+behaviour, the results file and the dev services it shares.
+
+[source,bash]
+----
+mvn vidocq:test
+----
+
+----
+[INFO] Vidocq test — watching [src/main/java, src/main/resources] and [src/test/java, src/test/resources]
+[INFO] Tests: 41 passed, 1 failed, 0 skipped in 3.2 s (run-all)
+[INFO]   FAILED com.acme.OrderServiceTest#rejectsEmptyCart — AssertionFailedError: expected: <400> but was: <200>
+[INFO] Log: target/vidocq-dev-tests.log   [r] run all  [f] rerun failed  [q] quit
+----
+
+With a console, `r` and Enter run every test, `f` the failed ones, `q` quits; Ctrl+C always stops the goal,
+its run and its dev services.
+
+[cols="2,1,3"]
+|===
+| Property | Default | Meaning
+
+| `vidocq.dev.watchDirs`
+| `src/main/java,src/main/resources`
+| The main directories to watch.
+
+| `vidocq.dev.testWatchDirs`
+| `src/test/java,src/test/resources`
+| The test directories to watch.
+
+| `vidocq.dev.debounceMillis`
+| `250`
+| How long a burst of saves is collected into one change.
+
+| `vidocq.dev.devServices`
+| _(unset)_
+| Whether the goal opens a dev services session for the tests: the explicit value, then the application's files, then on.
+|===
+
+[#dev-continuous-testing]
+=== Continuous testing in `vidocq:dev` [.tag-new]#NEW#
+
+`vidocq:dev` gains two parameters:
+
+[cols="2,1,3"]
+|===
+| Property | Default | Meaning
+
+| `vidocq.dev.continuousTesting`
+| _(unset)_
+| Run the tests after every reload: the explicit value, then the application's files, then on when `src/test/java` exists.
+
+| `vidocq.dev.testWatchDirs`
+| `src/test/java,src/test/resources`
+| The test directories to watch: a change there runs the tests without reloading the application.
+|===
 
 [#debugger]
 == The debug agent of `vidocq:dev` and `vidocq:run` [.tag-new]#NEW#

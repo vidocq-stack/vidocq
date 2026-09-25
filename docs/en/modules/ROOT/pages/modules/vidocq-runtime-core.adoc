@@ -561,7 +561,7 @@ A startup report contributor could not be loaded or created, has no id (`null` o
 [#vidocq-rpt-002]
 ==== VIDOCQ-RPT-002 — duplicate section id
 
-Two contributors of different classes use the same id: the second one is skipped. So is a contributor whose id names a section of the core (`launch`, `vidocq`, `phases`, `layer`, `configuration`, `extensions` or `anomalies`), or one of the xref:dev-console.adoc[dev console]'s own panels, `startup`, `config`, `cdi`, `logs` and `jvm` [.tag-new]#NEW#. The same class found twice is not an anomaly: see xref:modules/vidocq-runtime-spi.adoc#report-twins[Layer twins].
+Two contributors of different classes use the same id: the second one is skipped. So is a contributor whose id names a section of the core (`launch`, `vidocq`, `phases`, `layer`, `configuration`, `extensions` or `anomalies`), or one of the xref:dev-console.adoc[dev console]'s own panels, `startup`, `config`, `cdi`, `logs`, `tests` and `jvm` [.tag-new]#NEW#. The same class found twice is not an anomaly: see xref:modules/vidocq-runtime-spi.adoc#report-twins[Layer twins].
 
 [source,text]
 ----
