@@ -59,8 +59,11 @@ final class ContinuousTesting implements TestControl, AutoCloseable {
         /** Waits for the run to end and returns its exit code. */
         int waitFor() throws InterruptedException;
 
-        /** Stops the run and every process it started; returns once they are gone. */
+        /** Stops the run and every process it started, if it still runs; returns once they are gone. */
         void cancel();
+
+        /** Whether {@link #cancel} stopped the run while it ran, as opposed to a run that had already ended (#138). */
+        boolean cancelled();
     }
 
     /** What a request answers when it will run. */
@@ -86,7 +89,6 @@ final class ContinuousTesting implements TestControl, AutoCloseable {
     // Guarded by lock.
     private Pending pending;
     private Launched current;
-    private boolean cancelled;
     private boolean closed;
     /** Set by {@link #interrupt} while the application recompiles: requests wait, changes clear it. */
     private boolean held;
@@ -254,11 +256,11 @@ final class ContinuousTesting implements TestControl, AutoCloseable {
         }
     }
 
-    /** Guarded by lock: marks the run in flight cancelled and returns it, for the caller to cancel unlocked. */
+    /**
+     * Guarded by lock: the run in flight, for the caller to cancel unlocked. Whether the cancel stopped it is the
+     * run's own to say ({@link Launched#cancelled}): a run whose process had already ended is not cancelled (#138).
+     */
     private Launched markCancelled() {
-        if (current != null) {
-            cancelled = true;
-        }
         return current;
     }
 
@@ -338,7 +340,6 @@ final class ContinuousTesting implements TestControl, AutoCloseable {
                     warn.accept("Tests: cannot start Maven: " + cannotStart.getMessage());
                 }
                 current = launched;
-                cancelled = false;
             }
         }
         if (abandonedBeforeLaunch) {
@@ -346,12 +347,10 @@ final class ContinuousTesting implements TestControl, AutoCloseable {
             return;
         }
         int exit = launched == null ? -1 : launched.waitFor();
-        boolean wasCancelled;
         synchronized (lock) {
-            wasCancelled = cancelled;
             current = null;
-            cancelled = false;
         }
+        boolean wasCancelled = launched != null && launched.cancelled();
         long duration = Duration.ofNanos(System.nanoTime() - t0).toMillis();
         TestResults result = wasCancelled
                 ? TestResults.cancelled(trigger, startedAt, duration, log, previous)

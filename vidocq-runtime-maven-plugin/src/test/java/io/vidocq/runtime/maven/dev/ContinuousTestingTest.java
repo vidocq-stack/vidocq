@@ -57,6 +57,8 @@ class ContinuousTestingTest {
         final List<String> tests;
         final CompletableFuture<Integer> exit = new CompletableFuture<>();
         volatile boolean cancelled;
+        /** When set, waitFor() holds the exit code until it opens: the process ended, the worker has not yet read it. */
+        volatile CountDownLatch collected;
 
         FakeRun(List<String> tests) {
             this.tests = tests;
@@ -65,7 +67,12 @@ class ContinuousTestingTest {
         @Override
         public int waitFor() throws InterruptedException {
             try {
-                return exit.get();
+                int code = exit.get();
+                CountDownLatch hold = collected;
+                if (hold != null) {
+                    hold.await();
+                }
+                return code;
             } catch (ExecutionException e) {
                 throw new IllegalStateException(e);
             }
@@ -73,8 +80,15 @@ class ContinuousTestingTest {
 
         @Override
         public void cancel() {
-            cancelled = true;
-            exit.complete(143);
+            if (!exit.isDone()) {
+                cancelled = true;
+                exit.complete(143);
+            }
+        }
+
+        @Override
+        public boolean cancelled() {
+            return cancelled;
         }
 
         void finish(int code) {
@@ -306,5 +320,25 @@ class ContinuousTestingTest {
         run.finish(0);
         assertEquals(Trigger.CHANGE, nextResult().trigger(), "the change's run covers the test change");
         assertNull(launches.poll(300, TimeUnit.MILLISECONDS), "one run, not two");
+    }
+
+    /** #138: a change that arrives once the run's process ended, before the worker read its outcome. */
+    @Test
+    void aChangeAfterTheRunEndedDoesNotMarkItCancelled() throws Exception {
+        testing.changed(Trigger.CHANGE, TestControl.ReadyGate.NOW);
+        FakeRun run = nextLaunch();
+        CountDownLatch collected = new CountDownLatch(1);
+        run.collected = collected;
+        run.finish(0);
+        Thread.sleep(100);
+
+        testing.changed(Trigger.TEST_CHANGE, TestControl.ReadyGate.NOW);
+        collected.countDown();
+
+        TestResults finished = nextResult();
+        assertEquals(State.PASSED, finished.state(), "the run had finished before the change");
+        assertEquals(finished, testing.lastComplete());
+        nextLaunch().finish(0);
+        assertEquals(Trigger.TEST_CHANGE, nextResult().trigger());
     }
 }

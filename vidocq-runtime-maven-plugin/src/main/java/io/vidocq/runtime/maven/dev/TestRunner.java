@@ -147,7 +147,14 @@ final class TestRunner implements ContinuousTesting.Launcher {
         descendants.stream().filter(ProcessHandle::isAlive).forEach(ProcessHandle::destroyForcibly);
     }
 
-    private record Running(Process process) implements ContinuousTesting.Launched {
+    private static final class Running implements ContinuousTesting.Launched {
+
+        private final Process process;
+        private volatile boolean cancelled;
+
+        Running(Process process) {
+            this.process = process;
+        }
 
         @Override
         public int waitFor() throws InterruptedException {
@@ -156,7 +163,15 @@ final class TestRunner implements ContinuousTesting.Launcher {
 
         @Override
         public void cancel() {
-            destroyTree(process.toHandle(), GRACE);
+            if (process.isAlive()) {
+                cancelled = true;
+                destroyTree(process.toHandle(), GRACE);
+            }
+        }
+
+        @Override
+        public boolean cancelled() {
+            return cancelled;
         }
     }
 }
