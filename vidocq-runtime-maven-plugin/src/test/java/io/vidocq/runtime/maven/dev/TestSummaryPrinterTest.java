@@ -75,7 +75,7 @@ class TestSummaryPrinterTest {
                 TestSummaryPrinter.headline(completed(1, Counts.NONE, List.of())));
         assertEquals("Tests: no test to run (change)",
                 TestSummaryPrinter.headline(completed(0, Counts.NONE, List.of())));
-        assertEquals("Tests: cancelled (test-change), a newer change runs next", TestSummaryPrinter.headline(
+        assertEquals("Tests: cancelled (test-change)", TestSummaryPrinter.headline(
                 TestResults.cancelled(Trigger.TEST_CHANGE, AT, 10, LOG, null)));
     }
 
