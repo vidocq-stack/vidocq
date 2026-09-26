@@ -21,6 +21,7 @@ package io.vidocq.runtime.extensions.essentials.langchain4jcdi.mcp;
 
 import dev.langchain4j.cdi.mcp.server.transport.McpEndpoint;
 import dev.langchain4j.cdi.mcp.server.transport.McpServerConfig;
+import io.vidocq.runtime.extensions.essentials.langchain4jcdi.mcp.live.McpEndpointLive;
 import io.vidocq.runtime.extensions.essentials.langchain4jcdi.mcp.live.McpInspection;
 import io.vidocq.runtime.spi.ExtensionContext;
 import io.vidocq.runtime.spi.VidocqConfiguration;
@@ -42,6 +43,8 @@ import java.util.Set;
  *       {@code @Named("mcp-server")} bean langchain4j-cdi reads, only when a key is set.</li>
  *   <li>{@link #contribute} writes the {@code mcp} section of the startup report and raises
  *       {@code VIDOCQ-MCP-001} to {@code 005}.</li>
+ *   <li>{@link #contribute} also publishes the URLs of {@code /mcp} in {@link McpEndpointLive}, for the MCP
+ *       inspector of the {@code -dev} module.</li>
  *   <li>That section is also the {@code mcp} panel of the dev console, shown live: the companion module
  *       {@code vidocq-runtime-langchain4j-cdi-mcp-extension-dev} (Vidocq/vidocq#143), which only {@code vidocq:dev}
  *       adds, reads {@link McpInspection} to sample the values that change while the server runs, without creating a
@@ -114,6 +117,7 @@ public final class McpExtension implements VidocqExtension, StartupReportContrib
     /** Clears what {@link #contribute} last read, before anything it refers to may be closed. */
     @Override
     public void onStop() {
+        McpEndpointLive.clear();
         inspection = McpInspection.NOTHING;
         McpServerConfigProducer.config = null;
     }
@@ -131,5 +135,7 @@ public final class McpExtension implements VidocqExtension, StartupReportContrib
     @Override
     public void contribute(StartupReportContext context, StartupReportSection section) {
         McpStartupSection.write(inspection, mapped != null, McpEndpoint.class.getModule(), context, section);
+        // The MCP inspector of the -dev module calls the URL the report prints: it cannot resolve routes itself.
+        McpEndpointLive.publish(McpStartupSection.endpointUrls(context.routeUrls(McpStartupSection.ENDPOINT)));
     }
 }
