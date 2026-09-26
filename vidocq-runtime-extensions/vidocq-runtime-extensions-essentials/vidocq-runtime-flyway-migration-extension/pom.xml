@@ -36,6 +36,13 @@
             <groupId>io.vidocq.runtime.extensions.essentials</groupId>
             <artifactId>vidocq-runtime-migration-extension</artifactId>
         </dependency>
+        <!-- For the tests only: MigrationPanelH2Test drives the -dev module's live panel and actions, since
+             the runtime extension itself no longer implements them (Vidocq/vidocq#143). -->
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.essentials</groupId>
+            <artifactId>vidocq-runtime-migration-extension-dev</artifactId>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-core</artifactId>

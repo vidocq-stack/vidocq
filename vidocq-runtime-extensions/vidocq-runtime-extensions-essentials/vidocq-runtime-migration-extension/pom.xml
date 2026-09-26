@@ -36,13 +36,6 @@
             <groupId>io.vidocq.runtime</groupId>
             <artifactId>vidocq-runtime-spi</artifactId>
         </dependency>
-        <!-- DevConsolePanel: the migration section is shown live in the dev console, with its actions.
-             A hard dependency, since a class does not load without the interfaces it implements; the module
-             is small and brings only vidocq-runtime-spi. -->
-        <dependency>
-            <groupId>io.vidocq.runtime</groupId>
-            <artifactId>vidocq-runtime-devconsole-spi</artifactId>
-        </dependency>
         <dependency>
             <groupId>io.vidocq.vauban</groupId>
             <artifactId>vauban-core</artifactId>

@@ -17,14 +17,11 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
-module io.vidocq.runtime.extensions.essentials.migration {
-    requires transitive io.vidocq.runtime.spi;
-    requires io.vidocq.vauban.core;
-    exports io.vidocq.runtime.extensions.essentials.migration;
-    // What the migration panel of the -dev module reads (Vidocq/vidocq#143); no other module sees it.
-    exports io.vidocq.runtime.extensions.essentials.migration.live
-            to io.vidocq.runtime.extensions.essentials.migration.dev;
-    uses io.vidocq.runtime.extensions.essentials.migration.SchemaMigrator;
-    provides io.vidocq.runtime.spi.VidocqExtension
-            with io.vidocq.runtime.extensions.essentials.migration.MigrationExtension;
+/** The live migration panel of the dev console, which only vidocq:dev adds (Vidocq/vidocq#143). */
+module io.vidocq.runtime.extensions.essentials.migration.dev {
+    requires io.vidocq.runtime.extensions.essentials.migration;
+    requires io.vidocq.runtime.spi.devconsole;
+
+    provides io.vidocq.runtime.spi.devconsole.LivePanel
+            with io.vidocq.runtime.extensions.essentials.migration.dev.MigrationLivePanel;
 }

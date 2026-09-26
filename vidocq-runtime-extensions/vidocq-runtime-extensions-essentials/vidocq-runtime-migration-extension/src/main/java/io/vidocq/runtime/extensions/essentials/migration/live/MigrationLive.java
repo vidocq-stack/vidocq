@@ -17,14 +17,29 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
-module io.vidocq.runtime.extensions.essentials.migration {
-    requires transitive io.vidocq.runtime.spi;
-    requires io.vidocq.vauban.core;
-    exports io.vidocq.runtime.extensions.essentials.migration;
-    // What the migration panel of the -dev module reads (Vidocq/vidocq#143); no other module sees it.
-    exports io.vidocq.runtime.extensions.essentials.migration.live
-            to io.vidocq.runtime.extensions.essentials.migration.dev;
-    uses io.vidocq.runtime.extensions.essentials.migration.SchemaMigrator;
-    provides io.vidocq.runtime.spi.VidocqExtension
-            with io.vidocq.runtime.extensions.essentials.migration.MigrationExtension;
+package io.vidocq.runtime.extensions.essentials.migration.live;
+
+/**
+ * The migration control the runtime extension publishes, for its -dev panel only (Vidocq/vidocq#143): published
+ * once a migrator is selected, cleared first when the extension stops, so that a dev reload never shows the
+ * previous boot's control.
+ */
+public final class MigrationLive {
+
+    private static volatile MigrationControl control;
+
+    private MigrationLive() {}
+
+    /** The control the running boot published, or {@code null} when nothing is published. */
+    public static MigrationControl control() {
+        return control;
+    }
+
+    public static void publish(MigrationControl c) {
+        control = c;
+    }
+
+    public static void clear() {
+        control = null;
+    }
 }

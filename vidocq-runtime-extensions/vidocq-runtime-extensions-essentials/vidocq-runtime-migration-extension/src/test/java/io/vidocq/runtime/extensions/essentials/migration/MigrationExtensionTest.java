@@ -20,21 +20,25 @@
 package io.vidocq.runtime.extensions.essentials.migration;
 
 import io.vidocq.runtime.core.config.ConfigKeyAudit;
+import io.vidocq.runtime.extensions.essentials.migration.live.MigrationControl;
+import io.vidocq.runtime.extensions.essentials.migration.live.MigrationLive;
 import io.vidocq.runtime.spi.ExtensionContext;
 import io.vidocq.runtime.spi.VidocqConfiguration;
 import io.vidocq.runtime.spi.config.VidocqConfig;
-import io.vidocq.runtime.spi.devconsole.PanelAction;
 import io.vidocq.runtime.spi.report.LaunchMode;
 import io.vidocq.runtime.spi.report.StartupReportContext;
 import io.vidocq.runtime.spi.report.StartupReportSection;
 import io.vidocq.runtime.spi.report.Verbosity;
 import io.vidocq.vauban.core.container.VaubanContainer;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.RecordComponent;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -46,7 +50,18 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Vidocq/vidocq#143: the {@code migrate}/{@code clean-and-migrate} actions and the {@code migration} panel itself
+ * moved to the {@code -dev} companion module; what stays here is the configuration, the report, and the
+ * {@link MigrationControl} the extension publishes through {@link MigrationLive} for that panel to read.
+ */
 class MigrationExtensionTest {
+
+    /** {@link MigrationExtension#configure} publishes to the static holder: never leak one test into the next. */
+    @AfterEach
+    void clearTheLiveHolder() {
+        MigrationLive.clear();
+    }
 
     @Test
     void defaultTargetIsBuiltFromPoolUrl() {
@@ -255,7 +270,7 @@ class MigrationExtensionTest {
         assertFalse(new MigrationResult(0, "(none)").nothingFound());
     }
 
-    // ── vidocq#120: migrate and clean-and-migrate from the dev console ─────────
+    // ── vidocq#120: migrate and clean-and-migrate ───────────────────────────────
 
     @Test
     void cleanIsDisabledUnlessItsKeyIsFalse() {
@@ -272,179 +287,45 @@ class MigrationExtensionTest {
         assertFalse(targets.get(1).cleanDisabled());
     }
 
-    @Test
-    void theActionsTakeAMigratedDatasourceByName() {
-        MigrationExtension ext = booted(new SchemaFake(), Map.of(
-                "vidocq.pool.url", "jdbc:h2:mem:def",
-                "vidocq.pool.audit.url", "jdbc:h2:mem:audit",
-                "vidocq.migration.audit.locations", "classpath:db/audit"));
-
-        List<PanelAction> actions = ext.actions();
-
-        assertEquals(List.of("migrate", "clean-and-migrate"), actions.stream().map(PanelAction::id).toList());
-        assertEquals(List.of("Migrate now", "Clean and migrate"), actions.stream().map(PanelAction::label).toList());
-        assertEquals(null, actions.get(0).confirmation());
-        assertEquals("Drop every object in the schema of the chosen datasource, then migrate it again?"
-                + " This cannot be undone.", actions.get(1).confirmation());
-        for (PanelAction action : actions) {
-            assertEquals(1, action.arguments().size());
-            assertEquals("datasource", action.arguments().get(0).name());
-            assertEquals(List.of("default", "audit"), action.arguments().get(0).allowedValues());
-        }
-    }
+    // ── vidocq#143: the panel and its actions moved to -dev; the control and the report stay here ───────────────
 
     @Test
-    void nothingMigratedOffersNoAction() {
-        MigrationExtension idle = new MigrationExtension(List::of);
-        idle.configure(MapConfig.of(Map.of()));
-        assertTrue(idle.actions().isEmpty());
-        RecordingSample sample = new RecordingSample();
-        idle.sample(sample);
-        assertTrue(sample.isEmpty());
-    }
-
-    @Test
-    void migrateAppliesWhatWasAddedAfterTheBootAndReplacesTheOutcome() {
-        SchemaFake schema = new SchemaFake("1", "2");
-        MigrationExtension ext = booted(schema, Map.of("vidocq.pool.url", "jdbc:h2:mem:def"));
-        schema.available.add("3");
-
-        String result = run(ext, "migrate", "default");
-
-        assertEquals("default: 1 migration applied, schema at version 3", result);
-        RecordingSample group = sampled(ext).groups().get("default");
-        assertEquals("3", group.text("version"));
-        assertEquals("migrate: 1 applied", group.text("last-run"));
-        assertEquals("[[1, V1, SQL, 2026-09-23T10:00:00Z, Success], [2, V2, SQL, 2026-09-23T10:00:00Z, Success],"
-                + " [3, V3, SQL, 2026-09-23T10:00:00Z, Success]]", group.text("applied"));
-        assertEquals("[]", group.text("pending"));
-
-        MigrationResult kept = ext.outcomes().get(0).result();
-        assertEquals(new MigrationResult(1, "3", false), kept, "the outcome the report reads is replaced too");
-    }
-
-    @Test
-    void theBootListsTheMigrationsInADevLaunchOnly() {
-        SchemaFake schema = new SchemaFake("1");
-        MigrationExtension dev = booted(schema, Map.of("vidocq.pool.url", "jdbc:h2:mem:def"));
-        RecordingSample devGroup = sampled(dev).groups().get("default");
-        assertEquals("table", devGroup.kind("applied"));
-        assertEquals("boot: 1 applied", devGroup.text("last-run"));
-
-        MigrationExtension prod = new MigrationExtension(() -> List.of(new SchemaFake("1")));
-        prod.configure(MapConfig.of(Map.of("vidocq.pool.url", "jdbc:h2:mem:def")));
-        prod.beforeStart(null);
-        prod.onStart(new StartContext(LaunchMode.PROD));
-        RecordingSample prodGroup = sampled(prod).groups().get("default");
-        assertEquals("absent", prodGroup.kind("applied"));
-        assertEquals("listed in a dev launch only", prodGroup.text("applied"));
-        assertEquals("absent", prodGroup.kind("pending"));
-    }
-
-    @Test
-    void theMigrationsAreListedByAnActionNeverBySample() {
-        SchemaFake schema = new SchemaFake("1");
-        MigrationExtension ext = booted(schema, Map.of("vidocq.pool.url", "jdbc:h2:mem:def"));
-        schema.available.add("2");
-        assertEquals("[]", sampled(ext).groups().get("default").text("pending"), "sample reads no database");
-
-        schema.applyNothing = true;
-        assertEquals("default: 0 migrations applied, schema at version 1", run(ext, "migrate", "default"));
-
-        RecordingSample group = sampled(ext).groups().get("default");
-        assertEquals("[[2, V2, SQL, , Pending]]", group.text("pending"));
-        assertEquals("[[1, V1, SQL, 2026-09-23T10:00:00Z, Success]]", group.text("applied"));
-    }
-
-    @Test
-    void cleanAndMigrateIsRefusedByDefaultAndDropsNothing() {
-        SchemaFake schema = new SchemaFake("1", "2");
-        MigrationExtension ext = booted(schema, Map.of("vidocq.pool.url", "jdbc:h2:mem:def"));
-
-        String result = run(ext, "clean-and-migrate", "default");
-
-        assertEquals("default: clean refused, nothing dropped; set vidocq.migration.cleanDisabled=false to allow it",
-                result);
-        assertEquals(0, schema.cleans);
-        assertEquals(List.of("1", "2"), schema.applied);
-        assertEquals("disabled: vidocq.migration.cleanDisabled=false allows it",
-                sampled(ext).groups().get("default").text("clean"));
-    }
-
-    @Test
-    void aNamedDatasourceNamesItsOwnCleanKey() {
-        MigrationExtension ext = booted(new SchemaFake("1"), Map.of(
-                "vidocq.pool.audit.url", "jdbc:h2:mem:audit",
-                "vidocq.migration.audit.locations", "classpath:db/audit"));
-        assertEquals("audit: clean refused, nothing dropped; set vidocq.migration.audit.cleanDisabled=false to"
-                + " allow it", run(ext, "clean-and-migrate", "audit"));
-    }
-
-    @Test
-    void cleanAndMigrateWithTheKeyDropsTheSchemaAndMigratesItAgain() {
-        SchemaFake schema = new SchemaFake("1", "2");
-        MigrationExtension ext = booted(schema, Map.of(
-                "vidocq.pool.url", "jdbc:h2:mem:def", "vidocq.migration.cleanDisabled", "false"));
-
-        String result = run(ext, "clean-and-migrate", "default");
-
-        assertEquals("default: schema cleaned, 2 migrations applied, schema at version 2", result);
-        assertEquals(1, schema.cleans);
-        RecordingSample group = sampled(ext).groups().get("default");
-        assertEquals("clean-and-migrate: 2 applied", group.text("last-run"));
-        assertEquals("allowed", group.text("clean"));
-    }
-
-    @Test
-    void aBackendThatCannotCleanOrListSaysSo() {
-        MigrationExtension ext = booted(new FakeMigrator("flyway"), Map.of(
-                "vidocq.pool.url", "jdbc:h2:mem:def", "vidocq.migration.cleanDisabled", "false"));
-        RecordingSample group = sampled(ext).groups().get("default");
-        assertEquals("flyway cannot list the migrations", group.text("applied"));
-        assertEquals("default: flyway cannot clean a schema, nothing dropped", run(ext, "clean-and-migrate", "default"));
-    }
-
-    @Test
-    void aFailedMigrationIsShownByItsClassAndRethrown() {
-        SchemaFake schema = new SchemaFake("1");
-        MigrationExtension ext = booted(schema, Map.of("vidocq.pool.url", "jdbc:h2:mem:def"));
-        schema.failure = new IllegalStateException("jdbc:h2:mem:def password=s3cr3t");
-
-        assertThrows(IllegalStateException.class, () -> run(ext, "migrate", "default"));
-
-        RecordingSample group = sampled(ext).groups().get("default");
-        assertEquals("migrate: failed (IllegalStateException)", group.text("last-run"));
-        assertEquals("1", group.text("version"), "the previous result stays");
-        assertFalse(group.toString().contains("s3cr3t"));
-    }
-
-    @Test
-    void thePasswordNeverReachesThePanel() {
+    void thePasswordNeverReachesTheControlOrTheReport() {
         SchemaFake schema = new SchemaFake("1");
         MigrationExtension ext = booted(schema, Map.of(
                 "vidocq.pool.url", "jdbc:h2:mem:def", "vidocq.pool.username", "sa",
                 "vidocq.pool.password", "s3cr3t", "vidocq.migration.cleanDisabled", "false"));
         schema.available.add("2");
-        List<String> results = List.of(run(ext, "migrate", "default"), run(ext, "clean-and-migrate", "default"));
-        RecordingSample sample = sampled(ext);
+        List<String> results = List.of(ext.migrateNow("default"), ext.cleanAndMigrate("default"));
         RecordedSection section = new RecordedSection();
         ext.contribute(new ReportContext(Verbosity.DETAILED), section);
 
         assertEquals("s3cr3t", schema.lastPassword, "the backend gets it");
-        for (String text : List.of(results.toString(), sample.toString(), section.summary, section.rows.toString(),
-                ext.outcomes().toString(), schema.lastTarget.toString())) {
+        for (String text : List.of(results.toString(), ext.outcomes().toString(), section.summary,
+                section.rows.toString(), schema.lastTarget.toString())) {
             assertFalse(text.contains("s3cr3t"), text);
         }
     }
 
     @Test
-    void aStoppedExtensionShowsNothingAndRunsNothing() {
+    void neitherLiveOutcomeNorMigrationInfoDeclareACredentialField() {
+        Set<String> suspicious = Set.of("password", "credential", "secret", "token");
+        for (Class<?> type : List.of(MigrationControl.LiveOutcome.class, MigrationInfo.class)) {
+            for (RecordComponent component : type.getRecordComponents()) {
+                String name = component.getName().toLowerCase(Locale.ROOT);
+                assertFalse(suspicious.stream().anyMatch(name::contains),
+                        type.getSimpleName() + "." + component.getName());
+            }
+        }
+    }
+
+    @Test
+    void aStoppedExtensionRunsNothing() {
         SchemaFake schema = new SchemaFake("1");
         MigrationExtension ext = booted(schema, Map.of("vidocq.pool.url", "jdbc:h2:mem:def"));
         ext.onStop();
 
-        assertTrue(sampled(ext).isEmpty());
-        assertThrows(IllegalStateException.class, () -> run(ext, "migrate", "default"));
+        assertThrows(IllegalStateException.class, () -> ext.migrateNow("default"));
         assertEquals(1, schema.migrations, "the boot's only");
     }
 
@@ -454,23 +335,14 @@ class MigrationExtensionTest {
         assertThrows(IllegalArgumentException.class, () -> ext.migrateNow("audit"));
     }
 
+    /** The extension through a boot: configured (which publishes it, see {@link #clearTheLiveHolder}), migrated,
+     * started in a dev launch. */
     private static MigrationExtension booted(SchemaMigrator backend, Map<String, String> config) {
         MigrationExtension ext = new MigrationExtension(() -> List.of(backend));
         ext.configure(MapConfig.of(config));
         ext.beforeStart(null);
         ext.onStart(new StartContext(LaunchMode.DEV));
         return ext;
-    }
-
-    private static String run(MigrationExtension ext, String action, String datasource) {
-        return ext.actions().stream().filter(a -> a.id().equals(action)).findFirst().orElseThrow()
-                .run().apply(Map.of("datasource", datasource));
-    }
-
-    private static RecordingSample sampled(MigrationExtension ext) {
-        RecordingSample sample = new RecordingSample();
-        ext.sample(sample);
-        return sample;
     }
 
     // ── test doubles ─────────────────────────────────────────────────────────

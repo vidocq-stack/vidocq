@@ -23,9 +23,11 @@ import io.vidocq.runtime.extensions.essentials.migration.MigrationExtension;
 import io.vidocq.runtime.spi.ExtensionContext;
 import io.vidocq.runtime.spi.VidocqConfiguration;
 import io.vidocq.runtime.spi.config.VidocqConfig;
+import io.vidocq.runtime.spi.devconsole.LivePanel;
 import io.vidocq.runtime.spi.devconsole.PanelAction;
 import io.vidocq.runtime.spi.report.LaunchMode;
 import io.vidocq.vauban.core.container.VaubanContainer;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -36,6 +38,7 @@ import java.sql.DriverManager;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.ServiceLoader;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -43,8 +46,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * The {@code migration} panel of the dev console on Flyway and an in-memory H2 database, the extension found as
- * Vidocq finds it, through the {@link java.util.ServiceLoader} (vidocq#120).
+ * The {@code migration} panel of the dev console on Flyway and an in-memory H2 database: the extension and its
+ * {@code -dev} companion's live panel, each found as Vidocq finds them, through the {@link ServiceLoader}
+ * (vidocq#120, Vidocq/vidocq#143).
  */
 class MigrationPanelH2Test {
 
@@ -53,18 +57,33 @@ class MigrationPanelH2Test {
     @TempDir
     Path dir;
 
+    /** Found by id, exactly as the dev console finds it: no direct dependency on the -dev module's own package. */
+    private final LivePanel panel = ServiceLoader.load(LivePanel.class, MigrationPanelH2Test.class.getClassLoader())
+            .stream().map(ServiceLoader.Provider::get)
+            .filter(p -> "migration".equals(p.id())).findFirst().orElseThrow();
+
+    private MigrationExtension ext;
+
+    /** The panel reads the static holder the runtime extension publishes: never leak one test into the next. */
+    @AfterEach
+    void stop() {
+        if (ext != null) {
+            ext.onStop();
+        }
+    }
+
     @Test
     void migrateAppliesAMigrationAddedAfterTheBoot() throws Exception {
         Path scripts = scripts();
         String url = url();
-        MigrationExtension ext = booted(url, scripts, Map.of());
+        booted(url, scripts, Map.of());
         Files.writeString(scripts.resolve("V2__create_gizmo.sql"), "CREATE TABLE gizmo (id INT PRIMARY KEY);");
 
-        String result = run(ext, "migrate");
+        String result = run("migrate");
 
         assertEquals("default: 1 migration applied, schema at version 2", result);
         assertEquals(0, count(url, "gizmo"));
-        RecordingSample group = sampled(ext).groups().get("default");
+        RecordingSample group = sampled().groups().get("default");
         assertEquals("2", group.text("version"));
         assertEquals("migrate: 1 applied", group.text("last-run"));
         assertTrue(group.text("applied").contains("create gizmo"), group.text("applied"));
@@ -74,10 +93,10 @@ class MigrationPanelH2Test {
     @Test
     void cleanAndMigrateIsRefusedByDefaultAndDropsNothing() throws Exception {
         String url = url();
-        MigrationExtension ext = booted(url, scripts(), Map.of());
+        booted(url, scripts(), Map.of());
         execute(url, "INSERT INTO widget VALUES (1)");
 
-        String result = run(ext, "clean-and-migrate");
+        String result = run("clean-and-migrate");
 
         assertEquals("default: clean refused, nothing dropped; set vidocq.migration.cleanDisabled=false to allow it",
                 result);
@@ -87,23 +106,23 @@ class MigrationPanelH2Test {
     @Test
     void cleanAndMigrateWithTheKeyRecreatesTheSchema() throws Exception {
         String url = url();
-        MigrationExtension ext = booted(url, scripts(), Map.of("vidocq.migration.cleanDisabled", "false"));
+        booted(url, scripts(), Map.of("vidocq.migration.cleanDisabled", "false"));
         execute(url, "INSERT INTO widget VALUES (1)");
 
-        String result = run(ext, "clean-and-migrate");
+        String result = run("clean-and-migrate");
 
         assertEquals("default: schema cleaned, 1 migration applied, schema at version 1", result);
         assertEquals(0, count(url, "widget"), "dropped, then created again");
-        assertEquals("clean-and-migrate: 1 applied", sampled(ext).groups().get("default").text("last-run"));
+        assertEquals("clean-and-migrate: 1 applied", sampled().groups().get("default").text("last-run"));
     }
 
     @Test
     void thePasswordReachesNeitherThePageNorTheResults() throws Exception {
         String url = url();
-        MigrationExtension ext = booted(url, scripts(), Map.of("vidocq.migration.cleanDisabled", "false"));
+        booted(url, scripts(), Map.of("vidocq.migration.cleanDisabled", "false"));
 
-        String results = run(ext, "migrate") + run(ext, "clean-and-migrate");
-        String sample = sampled(ext).toString();
+        String results = run("migrate") + run("clean-and-migrate");
+        String sample = sampled().toString();
 
         assertTrue(sample.contains("create widget"), sample);
         assertFalse(sample.contains(PASSWORD), sample);
@@ -118,29 +137,28 @@ class MigrationPanelH2Test {
         return scripts;
     }
 
-    /** The extension through a boot: configured, migrated, started in a dev launch. */
-    private static MigrationExtension booted(String url, Path scripts, Map<String, String> more) {
+    /** The extension through a boot: configured, migrated, started in a dev launch — publishes the panel's control. */
+    private void booted(String url, Path scripts, Map<String, String> more) {
         Map<String, String> config = new HashMap<>(Map.of(
                 "vidocq.pool.url", url,
                 "vidocq.pool.username", "sa",
                 "vidocq.pool.password", PASSWORD,
                 "vidocq.migration.locations", "filesystem:" + scripts));
         config.putAll(more);
-        MigrationExtension ext = new MigrationExtension();
+        ext = new MigrationExtension();
         ext.configure(new MapConfig(config));
         ext.beforeStart(null);
         ext.onStart(new DevContext());
-        return ext;
     }
 
-    private static String run(MigrationExtension ext, String action) {
-        PanelAction found = ext.actions().stream().filter(a -> a.id().equals(action)).findFirst().orElseThrow();
+    private String run(String action) {
+        PanelAction found = panel.actions().stream().filter(a -> a.id().equals(action)).findFirst().orElseThrow();
         return found.run().apply(Map.of("datasource", "default"));
     }
 
-    private static RecordingSample sampled(MigrationExtension ext) {
+    private RecordingSample sampled() {
         RecordingSample sample = new RecordingSample();
-        ext.sample(sample);
+        panel.sample(sample);
         return sample;
     }
 

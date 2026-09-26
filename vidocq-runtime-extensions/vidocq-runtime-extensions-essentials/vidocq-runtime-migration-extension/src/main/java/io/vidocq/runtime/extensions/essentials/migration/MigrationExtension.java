@@ -19,14 +19,15 @@
  */
 package io.vidocq.runtime.extensions.essentials.migration;
 
+import io.vidocq.runtime.extensions.essentials.migration.live.MigrationControl;
+import io.vidocq.runtime.extensions.essentials.migration.live.MigrationControl.LiveOutcome;
+import io.vidocq.runtime.extensions.essentials.migration.live.MigrationLive;
 import io.vidocq.runtime.spi.ExtensionContext;
 import io.vidocq.runtime.spi.VidocqConfiguration;
 import io.vidocq.runtime.spi.VidocqExtension;
-import io.vidocq.runtime.spi.devconsole.DevConsolePanel;
-import io.vidocq.runtime.spi.devconsole.PanelAction;
-import io.vidocq.runtime.spi.devconsole.PanelSample;
 import io.vidocq.runtime.spi.report.LaunchMode;
 import io.vidocq.runtime.spi.report.StartupReportContext;
+import io.vidocq.runtime.spi.report.StartupReportContributor;
 import io.vidocq.runtime.spi.report.StartupReportSection;
 import io.vidocq.runtime.spi.report.Verbosity;
 import io.vidocq.vauban.core.container.VaubanContainerBuilder;
@@ -53,15 +54,16 @@ import java.util.stream.Collectors;
  * <p>Its section of the startup report, {@code migration}, says what each datasource's migration did, and
  * raises {@value #NOTHING_FOUND} for one that found no migration and has none in its schema history.
  *
- * <p>The dev console shows that section live, as the {@code migration} panel: per datasource, its version, what
- * the last run did, and, in a dev launch, the migrations applied and pending, listed once after the boot's
- * migration and again after each action, never while the page polls. In a dev launch it offers two actions:
- * {@code migrate}, which applies the pending migrations of a datasource without a restart, and
- * {@code clean-and-migrate}, which drops every object of its schema and migrates it again, refused, with nothing
- * dropped, unless {@code vidocq.migration[.<name>].cleanDisabled} is {@code false}. The password of a datasource
- * reaches neither the page nor the log.
+ * <p>Implements {@link MigrationControl} and publishes itself through {@link MigrationLive} once a migrator is
+ * selected, cleared first in {@link #onStop}: the {@code migration} panel of the {@code -dev} companion module
+ * reads it live, per datasource, its version, what the last run did, and, in a dev launch, the migrations applied
+ * and pending, listed once after the boot's migration and again after each action, never while the page polls. In
+ * a dev launch it offers two actions through that control: {@code migrate}, which applies the pending migrations
+ * of a datasource without a restart, and {@code clean-and-migrate}, which drops every object of its schema and
+ * migrates it again, refused, with nothing dropped, unless {@code vidocq.migration[.<name>].cleanDisabled} is
+ * {@code false}. The password of a datasource reaches neither the page nor the log.
  */
-public final class MigrationExtension implements VidocqExtension, DevConsolePanel {
+public final class MigrationExtension implements VidocqExtension, StartupReportContributor, MigrationControl {
 
     private static final System.Logger LOG = System.getLogger(MigrationExtension.class.getName());
 
@@ -82,15 +84,6 @@ public final class MigrationExtension implements VidocqExtension, DevConsolePane
     private static final Set<String> FIXED_KEYS = Set.of(
             PREFIX + "enabled", PREFIX + "engine", DEFAULT_LOCATIONS_KEY, STRICT_KEY, DEFAULT_CLEAN_DISABLED_KEY);
 
-    /** The argument both actions take: the name of a datasource that is migrated. */
-    private static final String DATASOURCE = "datasource";
-    static final String CLEAN_CONFIRMATION = "Drop every object in the schema of the chosen datasource, then migrate"
-            + " it again? This cannot be undone.";
-    /** The columns of the {@code applied} and {@code pending} tables of the panel. */
-    static final List<String> COLUMNS = List.of("Version", "Description", "Type", "Installed on", "State");
-    /** The rows a table of the console keeps: the most recent applied migrations, the first pending ones. */
-    private static final int MAX_ROWS = 100;
-
     /**
      * What one datasource's migration did: where it looked, what the backend answered, and what ran it.
      *
@@ -107,8 +100,8 @@ public final class MigrationExtension implements VidocqExtension, DevConsolePane
     private boolean disabled;
     private Set<String> configKeys = FIXED_KEYS;
     /**
-     * Written by {@link #beforeStart} and replaced by each action, read by {@link #contribute} and {@link #sample}:
-     * an immutable list of immutable outcomes, cleared first in {@link #onStop}.
+     * Written by {@link #beforeStart} and replaced by each action, read by {@link #contribute} and by
+     * {@link #outcomes()}: an immutable list of immutable outcomes, cleared first in {@link #onStop}.
      */
     private volatile List<Outcome> outcomes = List.of();
     /** Set first in {@link #onStop}: an action that starts afterwards runs nothing. */
@@ -127,8 +120,11 @@ public final class MigrationExtension implements VidocqExtension, DevConsolePane
         });
     }
 
-    /** With the backends given, for the tests. */
-    MigrationExtension(Supplier<List<SchemaMigrator>> backends) {
+    /**
+     * With the backends given, for the tests — including those of the {@code -dev} companion module, which drives
+     * this extension with a fake {@link SchemaMigrator} to test {@link MigrationControl} without a real backend.
+     */
+    public MigrationExtension(Supplier<List<SchemaMigrator>> backends) {
         this.backends = backends;
     }
 
@@ -163,6 +159,7 @@ public final class MigrationExtension implements VidocqExtension, DevConsolePane
         LOG.log(System.Logger.Level.INFO,
                 "Migration configured: engine=" + migrator.engine()
                         + " datasources=" + targets.stream().map(MigrationTarget::dataSourceName).toList());
+        MigrationLive.publish(this);
     }
 
     @Override
@@ -185,7 +182,7 @@ public final class MigrationExtension implements VidocqExtension, DevConsolePane
 
     /**
      * In a dev launch, lists the migrations of each datasource once, for the panel: it opens a connection per
-     * datasource, which {@link #sample} never does.
+     * datasource, which the panel's own poll never does.
      */
     @Override
     public void onStart(ExtensionContext context) {
@@ -202,9 +199,13 @@ public final class MigrationExtension implements VidocqExtension, DevConsolePane
         }
     }
 
-    /** Clears the outcomes first, so that the panel shows nothing of a stopping boot, and refuses any new action. */
+    /**
+     * Clears {@link MigrationLive} first, so that a dev reload never shows the previous boot's control, then the
+     * outcomes, so that the panel shows nothing of a stopping boot, and refuses any new action.
+     */
     @Override
     public void onStop() {
+        MigrationLive.clear();
         stopped = true;
         outcomes = List.of();
     }
@@ -246,52 +247,25 @@ public final class MigrationExtension implements VidocqExtension, DevConsolePane
         }
     }
 
-    // ── dev console ─────────────────────────────────────────────────────────
+    // ── MigrationControl (read by the -dev panel through MigrationLive) ──────
 
     /**
-     * Per datasource, a group: its version, what the last run did, whether its schema may be cleaned, and the
-     * {@code applied} and {@code pending} tables when they were listed. Reads the outcomes kept in memory, nothing
-     * else: the migrations were listed by {@link #onStart} or by the last action.
+     * Per datasource, its version, what the last run did, whether its schema may be cleaned, and the migrations
+     * applied and pending when they were listed. Reads the outcomes kept in memory, nothing else: they were listed
+     * by {@link #onStart} or by the last action.
      */
     @Override
-    public void sample(PanelSample sample) {
-        for (Outcome o : outcomes) {
-            PanelSample group = sample.group(o.dataSourceName())
-                    .text("version", o.result().version())
-                    .text("last-run", o.lastRun())
-                    .text("clean", o.cleanDisabled()
-                            ? "disabled: " + cleanDisabledKey(o.dataSourceName()) + "=false allows it"
-                            : "allowed");
-            MigrationInfo info = o.info();
-            if (info == null) {
-                group.absent("applied", o.infoAbsent()).absent("pending", o.infoAbsent());
-            } else {
-                List<MigrationInfo.Migration> applied = info.applied();
-                group.table("applied", COLUMNS,
-                                rows(applied.subList(Math.max(0, applied.size() - MAX_ROWS), applied.size())))
-                        .table("pending", COLUMNS, rows(info.pending().subList(0,
-                                Math.min(MAX_ROWS, info.pending().size()))));
-            }
-        }
+    public List<LiveOutcome> outcomes() {
+        return outcomes.stream()
+                .map(o -> new LiveOutcome(o.dataSourceName(), o.result().version(), o.lastRun(), o.cleanDisabled(),
+                        cleanDisabledKey(o.dataSourceName()), o.info(), o.infoAbsent()))
+                .toList();
     }
 
-    /**
-     * {@code migrate} and {@code clean-and-migrate}, each taking one of the migrated datasources by name; none when
-     * nothing is migrated. The console calls it in a dev launch only.
-     */
+    /** The datasources migrated, in configuration order; empty when there is no migrator. */
     @Override
-    public List<PanelAction> actions() {
-        if (migrator == null || targets.isEmpty()) {
-            return List.of();
-        }
-        String[] names = targets.stream().map(MigrationTarget::dataSourceName).toArray(String[]::new);
-        return List.of(
-                new PanelAction("migrate", "Migrate now", null,
-                        List.of(PanelAction.Argument.oneOf(DATASOURCE, "Datasource", names)),
-                        arguments -> migrateNow(arguments.get(DATASOURCE))),
-                new PanelAction("clean-and-migrate", "Clean and migrate", CLEAN_CONFIRMATION,
-                        List.of(PanelAction.Argument.oneOf(DATASOURCE, "Datasource", names)),
-                        arguments -> cleanAndMigrate(arguments.get(DATASOURCE))));
+    public List<String> dataSources() {
+        return targets.stream().map(MigrationTarget::dataSourceName).toList();
     }
 
     /**
@@ -300,7 +274,8 @@ public final class MigrationExtension implements VidocqExtension, DevConsolePane
      * @param name the datasource
      * @return what was done, such as {@code default: 2 migrations applied, schema at version 3}
      */
-    String migrateNow(String name) {
+    @Override
+    public String migrateNow(String name) {
         MigrationTarget t = target(name);
         synchronized (lock(t)) {
             requireRunning();
@@ -317,7 +292,8 @@ public final class MigrationExtension implements VidocqExtension, DevConsolePane
      * @param name the datasource
      * @return what was done, or why nothing was, naming the key to set
      */
-    String cleanAndMigrate(String name) {
+    @Override
+    public String cleanAndMigrate(String name) {
         MigrationTarget t = target(name);
         if (t.cleanDisabled()) {
             return name + ": clean refused, nothing dropped; set " + cleanDisabledKey(name) + "=false to allow it";
@@ -388,11 +364,6 @@ public final class MigrationExtension implements VidocqExtension, DevConsolePane
         }
     }
 
-    /** The outcomes the report and the panel read now, for the tests. */
-    List<Outcome> outcomes() {
-        return outcomes;
-    }
-
     private Outcome outcome(String name) {
         return outcomes.stream().filter(o -> o.dataSourceName().equals(name)).findFirst().orElse(null);
     }
@@ -414,12 +385,6 @@ public final class MigrationExtension implements VidocqExtension, DevConsolePane
 
     private static String applied(MigrationResult r) {
         return r.applied() + (r.applied() == 1 ? " migration applied" : " migrations applied");
-    }
-
-    private static List<List<String>> rows(List<MigrationInfo.Migration> migrations) {
-        return migrations.stream()
-                .map(m -> List.of(m.version(), m.description(), m.type(), m.installedOn(), m.state()))
-                .toList();
     }
 
     // ── package-private helpers (unit-tested) ─────────────────────────────────
