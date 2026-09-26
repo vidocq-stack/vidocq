@@ -57,6 +57,14 @@ class ContinuousTestingDevGoalIT {
                 "-Dvidocq.chappe.listener.default.port=" + appPort, "-Dvidocq.devconsole.port=" + consolePort);
         try {
             Fixture.awaitLog(mvn, log, STARTED);
+            // Vidocq/vidocq#143: the fixture no longer declares the console — this proves vidocq:dev added it by
+            // itself, because the application has Chappe (Ruling R1). Deviation from the Task 13 brief's exact
+            // wording ("the log contains 'Dev tools:'"): DevModules only logs that line when a runtime extension's
+            // own -dev companion is added (DevModules.collect, non-empty `names`), which this fixture has none of
+            // — it depends on Chappe and vidocq-runtime-core only. DevConsoleJars, which adds the console itself,
+            // logs nothing on success (only "Dev tools: no dev console, ..." when Chappe is absent). The console
+            // actually starting is what proves the point, so this asserts its own boot line instead.
+            Fixture.awaitLog(mvn, log, "Vidocq dev console: http://");
             Map<String, Object> first = Fixture.awaitResults(project, r -> Fixture.is(r, "failed", "run-all"));
             assertEquals(3, Fixture.count(first, "run"));
             assertEquals(1, Fixture.count(first, "failures"));

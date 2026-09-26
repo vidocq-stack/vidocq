@@ -280,4 +280,34 @@ final class Fixture {
         }
         throw new IOException("no free port in " + FIRST_PORT + "-" + LAST_PORT);
     }
+
+    /**
+     * Inserts one {@code <dependency>} before {@code </dependencies>} of the copied project's {@code pom.xml}, as a
+     * project would declare it — {@code DevToolsPackagingIT} uses it to add a dev-only artifact at a chosen scope
+     * and prove the packaging goals still drop it.
+     */
+    static void addDependency(Path project, String groupId, String artifactId, String scope) throws IOException {
+        Path pom = project.resolve("pom.xml");
+        String dependency = "        <dependency>\n"
+                + "            <groupId>" + groupId + "</groupId>\n"
+                + "            <artifactId>" + artifactId + "</artifactId>\n"
+                + "            <scope>" + scope + "</scope>\n"
+                + "        </dependency>\n"
+                + "    </dependencies>";
+        String content = Files.readString(pom);
+        int at = content.lastIndexOf("</dependencies>");
+        if (at < 0) {
+            fail("no </dependencies> in " + pom);
+        }
+        int after = at + "</dependencies>".length();
+        Files.writeString(pom, content.substring(0, at) + dependency + content.substring(after));
+    }
+
+    /** The one {@code target/*-dist.zip} the project's own build wrote. */
+    static Path distZip(Path project) throws IOException {
+        try (Stream<Path> files = Files.list(project.resolve("target"))) {
+            return files.filter(p -> p.getFileName().toString().endsWith("-dist.zip")).findFirst()
+                    .orElseGet(() -> fail("no *-dist.zip in " + project.resolve("target")));
+        }
+    }
 }

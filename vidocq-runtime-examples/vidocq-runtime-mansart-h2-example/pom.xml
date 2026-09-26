@@ -152,12 +152,30 @@
             <version>${project.version}</version>
         </dependency>
 
-        <!-- The dev console: during `mvn vidocq:dev`, the startup report, the two pools live and the JVM at
-             http://127.0.0.1:8888/. An ordinary dependency, with no codegen bundle and no `requires`: Vidocq finds it
-             as a service, and its default, `auto`, keeps it off outside a dev launch. -->
+        <!-- Vidocq/vidocq#143: dev tools are dev-only, so `mvn vidocq:dev` now adds the console (and, when the
+             application has Chappe, each present extension's own -dev companion) by itself; this pom no longer
+             needs to declare it. DevConsoleSnapshotTest boots the application directly (not through vidocq:dev),
+             so it still needs the console and the two live panels it reads as ordinary test-scope dependencies. -->
         <dependency>
             <groupId>io.vidocq.runtime.extensions.essentials</groupId>
             <artifactId>vidocq-runtime-devconsole-extension</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+            <artifactId>vidocq-runtime-mansart-pool-extension-dev</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- Deviation from the Task 13 brief's file list: DevConsoleSnapshotTest also drives the migration panel's
+             actions (migratesFromTheConsoleAndRefusesToCleanByDefault), which moved to this -dev companion in Task
+             11 (commit a8b7f3a1) without this example's pom being updated — a pre-existing gap, not something this
+             task introduces. Added here, at test scope, for the same reason as the pool panel above. -->
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.essentials</groupId>
+            <artifactId>vidocq-runtime-migration-extension-dev</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
         </dependency>
 
         <dependency>

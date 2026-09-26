@@ -30,25 +30,38 @@
             <version>${project.version}</version>
         </dependency>
         <!--
-            I4 reads the mcp panel from the console's /api/snapshot. Run time only: the application compiles
-            against no console type, it just has to be on the module path of the launched JVM, which is what the
-            it-lib directory below is.
+            I4 reads the mcp panel from the console's /api/snapshot. Vidocq/vidocq#143: the console is dev-only, so
+            checkpom only stays quiet about it at test scope; it never runs through this module's own compiled or
+            packaged code, it just has to be on the module path of the launched JVM, which is what the it-lib
+            directory below is (copy-launch-lib now copies test scope too, see the surefire it.lib property).
         -->
         <dependency>
             <groupId>io.vidocq.runtime.extensions.essentials</groupId>
             <artifactId>vidocq-runtime-devconsole-extension</artifactId>
-            <scope>runtime</scope>
+            <scope>test</scope>
         </dependency>
         <!--
             Vidocq/vidocq#143: the mcp panel of the dev console moved to this -dev companion module, which only
-            vidocq:dev normally adds. I4 needs it on the launched JVM's module path too, run time only, exactly like
-            the console above: without it, the mcp section is written but no longer shown live.
+            vidocq:dev normally adds. I4 needs it on the launched JVM's module path too, exactly like the console
+            above: without it, the mcp section is written but no longer shown live. Test scope, same reason.
         -->
         <dependency>
             <groupId>io.vidocq.runtime.extensions.essentials</groupId>
             <artifactId>vidocq-runtime-langchain4j-cdi-mcp-extension-dev</artifactId>
             <version>${project.version}</version>
-            <scope>runtime</scope>
+            <scope>test</scope>
+        </dependency>
+        <!--
+            McpDevConsolePanelTest.restRequests() reads the rest panel live: the mcp panel is served through
+            Cassini's own REST routing (McpEndpoint is a JAX-RS resource), which this application gets transitively
+            from the mcp extension, but its -dev companion is a separate artifact that nothing brings in on its
+            own. Added here, test scope, for the same reason as the two dependencies above.
+        -->
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
+            <artifactId>vidocq-runtime-cassini-rest-extension-dev</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
         </dependency>
 
         <dependency>
@@ -69,7 +82,8 @@
                         <id>copy-compile-deps-to-module-path</id>
                         <phase>none</phase>
                     </execution>
-                    <!-- The lib/ directory of the launched JVMs: what the application needs at run time, no test jar. -->
+                    <!-- The lib/ directory of the launched JVMs: what the application needs at run time, no test
+                         jar. -->
                     <execution>
                         <id>copy-launch-lib</id>
                         <phase>process-test-classes</phase>
@@ -79,6 +93,31 @@
                         <configuration>
                             <outputDirectory>${project.build.directory}/it-lib</outputDirectory>
                             <includeScope>runtime</includeScope>
+                        </configuration>
+                    </execution>
+                    <!-- Vidocq/vidocq#143: the console and the two -dev companions I4 needs are test-scope
+                         dependencies now (checkpom stays quiet only at that scope). A second, narrower copy adds
+                         just those four artifacts (the companions' own devconsole-spi included) to the same it-lib
+                         — not a blanket `includeScope=test`, which would also copy junit-jupiter and its own
+                         transitive closure onto the launched JVM's module path and break I1's "only the
+                         application module moves" assertion. Every other transitive dependency of these four
+                         (chappe, cassini-rest, the mcp extension, vidocq-runtime-core) is already copied above,
+                         at runtime scope, as a direct or transitive dependency of the application itself. -->
+                    <execution>
+                        <id>copy-launch-lib-dev</id>
+                        <phase>process-test-classes</phase>
+                        <goals>
+                            <goal>copy-dependencies</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>${project.build.directory}/it-lib</outputDirectory>
+                            <includeScope>test</includeScope>
+                            <includeArtifactIds>
+                                vidocq-runtime-devconsole-spi,
+                                vidocq-runtime-devconsole-extension,
+                                vidocq-runtime-langchain4j-cdi-mcp-extension-dev,
+                                vidocq-runtime-cassini-rest-extension-dev
+                            </includeArtifactIds>
                         </configuration>
                     </execution>
                 </executions>

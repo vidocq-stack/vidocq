@@ -38,10 +38,13 @@
             <artifactId>vidocq-runtime-core</artifactId>
         </dependency>
         <!-- DevServicesTestHostIT reads the devservices section through the dev console snapshot, the
-             way vidocq-runtime-mansart-h2-example's DevConsoleSnapshotTest does. -->
+             way vidocq-runtime-mansart-h2-example's DevConsoleSnapshotTest does. Vidocq/vidocq#143: the console is
+             dev-only, and this test boots the application directly (not through vidocq:dev), so it stays a
+             dependency but moves to test scope, where checkpom accepts a dev-only artifact. -->
         <dependency>
             <groupId>io.vidocq.runtime.extensions.essentials</groupId>
             <artifactId>vidocq-runtime-devconsole-extension</artifactId>
+            <scope>test</scope>
         </dependency>
 
         <!-- The JUnit host (spec §7): a test dependency that brings vidocq-runtime-devservices-extension

@@ -26,9 +26,14 @@
             <groupId>io.vidocq.runtime</groupId>
             <artifactId>vidocq-runtime-core</artifactId>
         </dependency>
+        <!-- Vidocq/vidocq#143: no more declared console — vidocq:dev adds it by itself, so the ITs that use this
+             fixture (ContinuousTestingDevGoalIT) now prove that. It needs an HTTP server extension to do so
+             (Ruling 5): the fixture used to get Chappe only transitively through the console it declared, so it is
+             now declared explicitly (ledger Ruling R1), otherwise the fixture is not the case the spec's console
+             rule is about. -->
         <dependency>
             <groupId>io.vidocq.runtime.extensions.essentials</groupId>
-            <artifactId>vidocq-runtime-devconsole-extension</artifactId>
+            <artifactId>vidocq-runtime-chappe-webserver-extension</artifactId>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
