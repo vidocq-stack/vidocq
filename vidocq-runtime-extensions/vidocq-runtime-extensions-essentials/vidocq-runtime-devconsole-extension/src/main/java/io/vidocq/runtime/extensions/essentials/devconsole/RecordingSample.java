@@ -127,11 +127,13 @@ final class RecordingSample implements PanelSample {
             }
             List<String> heads = columns.stream().limit(MAX_COLUMNS).map(Texts::clean)
                     .map(cell -> cell == null ? "" : cell).toList();
+            int replay = heads.indexOf(PanelSample.REPLAY_COLUMN);
             List<List<String>> table = new ArrayList<>();
             for (List<String> row : rows.subList(0, Math.min(MAX_ROWS, rows.size()))) {
                 List<String> cells = new ArrayList<>(heads.size());
                 for (int i = 0; i < heads.size(); i++) {
-                    String cell = row != null && i < row.size() ? Texts.clean(row.get(i)) : null;
+                    String raw = row != null && i < row.size() ? row.get(i) : null;
+                    String cell = i == replay ? replayCell(raw) : Texts.clean(raw);
                     cells.add(cell == null ? "" : cell);
                 }
                 table.add(List.copyOf(cells));
@@ -343,6 +345,15 @@ final class RecordingSample implements PanelSample {
             }
         }
         out.endObject();
+    }
+
+    /**
+     * A cell of the {@value PanelSample#REPLAY_COLUMN} column: kept whole up to
+     * {@value PanelSample#MAX_REPLAY_CELL} characters, since a cut would break its JSON, and emptied past it.
+     */
+    private static String replayCell(String raw) {
+        return raw == null || raw.length() > PanelSample.MAX_REPLAY_CELL
+                ? null : Texts.clean(raw, PanelSample.MAX_REPLAY_CELL);
     }
 
     private static String unit(Unit unit) {

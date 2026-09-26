@@ -87,7 +87,9 @@ import java.util.function.Supplier;
  *       again on the next poll. A sample that took more than 5 ms is {@code slow}.</li>
  *   <li>In a {@code dev} launch only, {@code console.actionToken} is the token of this boot, which the page sends
  *       back with every action request, and each panel has {@code actions}: {@code [{"id", "label",
- *       "confirmation", "arguments": [{"name", "label", "allowed"}], "running", "last": {"text", "time", "ok"}}]},
+ *       "confirmation", "group", "description", "arguments": [{"name", "label", "allowed", "schema"}], "running",
+ *       "last": {"text", "time", "ok", "error"}}]}, with {@code group}, {@code description}, {@code schema} and
+ *       {@code error} written only when set, {@code schema} being the JSON object of a json argument;
  *       {@code allowed} {@code null} for an argument checked by a pattern, {@code last} {@code null} before the
  *       first run of the boot (see {@link ConsoleActions}). In any other launch, neither member is written.</li>
  *   <li>Every string of the report and of the samples is {@linkplain Texts#clean cleaned and cut}; a section keeps
@@ -544,8 +546,9 @@ final class Snapshot implements Handler {
     }
 
     /**
-     * The member {@code actions} of a panel of a dev boot: what each action is, whether it is running, and how it
-     * last ended this boot, {@code null} before its first run.
+     * The member {@code actions} of a panel of a dev boot: what each action is, its group and description when it
+     * has them, each argument with its schema when it is a json one, whether it is running, and how it last ended
+     * this boot, {@code null} before its first run.
      */
     private void writeActions(JsonWriter out, PanelEntry panel) {
         out.name("actions").beginArray();
@@ -553,8 +556,14 @@ final class Snapshot implements Handler {
             out.beginObject()
                     .name("id").value(action.id())
                     .name("label").value(Texts.clean(action.label()))
-                    .name("confirmation").value(Texts.clean(action.confirmation()))
-                    .name("arguments").beginArray();
+                    .name("confirmation").value(Texts.clean(action.confirmation()));
+            if (action.group() != null) {
+                out.name("group").value(Texts.clean(action.group()));
+            }
+            if (action.description() != null) {
+                out.name("description").value(Texts.block(action.description(), PanelAction.MAX_DESCRIPTION));
+            }
+            out.name("arguments").beginArray();
             for (PanelAction.Argument argument : action.arguments()) {
                 out.beginObject().name("name").value(argument.name())
                         .name("label").value(Texts.clean(argument.label()))
@@ -568,6 +577,10 @@ final class Snapshot implements Handler {
                     }
                     out.endArray();
                 }
+                if (argument.schema() != null) {
+                    out.name("schema");
+                    writeSchema(out, argument.schema());
+                }
                 out.endObject();
             }
             out.endArray();
@@ -578,11 +591,30 @@ final class Snapshot implements Handler {
                 out.nullValue();
             } else {
                 out.beginObject().name("text").value(last.text()).name("time").value(last.time())
-                        .name("ok").value(last.ok()).endObject();
+                        .name("ok").value(last.ok());
+                if (last.error()) {
+                    out.name("error").value(true);
+                }
+                out.endObject();
             }
             out.endObject();
         }
         out.endArray();
+    }
+
+    /**
+     * A json argument's schema, as the JSON object it is, so that the page reads it without parsing a string. The
+     * SPI already checked that it parses; one that does not, which cannot happen, is written {@code null}.
+     */
+    private static void writeSchema(JsonWriter out, String schema) {
+        Object parsed;
+        try {
+            parsed = JsonValues.parse(schema, PanelAction.Argument.MAX_JSON_DEPTH);
+        } catch (IllegalArgumentException unreadable) {
+            out.nullValue();
+            return;
+        }
+        JsonValues.write(out, parsed);
     }
 
     /** The lines of {@code section} but the first, when it is the summary, as the report prints it first. */

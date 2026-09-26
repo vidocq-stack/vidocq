@@ -212,4 +212,20 @@ class RecordingSampleTest {
         assertEquals(false, written(sample).get("truncated"));
         assertNull(written(sample).get("error"));
     }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void aReplayCellIsKeptWholeUpToItsLimitAndEmptiedPastIt() {
+        RecordingSample sample = new RecordingSample();
+        String replay = "tool.weather {\"arguments\":{\"city\":\"" + "a".repeat(300) + "\"}}";
+        String tooLong = "tool.weather {\"arguments\":{\"city\":\"" + "a".repeat(PanelSample.MAX_REPLAY_CELL) + "\"}}";
+
+        sample.table("calls", List.of("action", PanelSample.REPLAY_COLUMN),
+                List.of(List.of("a".repeat(300), replay), List.of("b", tooLong)));
+
+        List<List<String>> rows = (List<List<String>>) values(written(sample)).get(0).get("rows");
+        assertEquals(200, rows.get(0).get(0).length(), "another column is cut as always");
+        assertEquals(replay, rows.get(0).get(1));
+        assertEquals("", rows.get(1).get(1), "a replay cell past its limit is emptied, never cut");
+    }
 }

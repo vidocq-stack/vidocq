@@ -47,7 +47,7 @@ record PanelEntry(String id, String title, ReportSection section, DevConsolePane
                   List<PanelAction> actions) {
 
     /** The most actions of one panel the console shows. */
-    static final int MAX_ACTIONS = 16;
+    static final int MAX_ACTIONS = 128;
 
     private static final System.Logger LOG = System.getLogger(DevConsoleExtension.LOGGER_NAME);
 

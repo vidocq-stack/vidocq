@@ -55,17 +55,19 @@ import java.util.function.LongSupplier;
  * {@code Origin}, and the {@linkplain #tokenMatches token}; this class then checks what the request asks for:
  * <ol>
  *   <li>the panel and the action exist, else {@code 404};</li>
- *   <li>the body is at most {@value #MAX_BODY} bytes, else {@code 413};</li>
+ *   <li>the body is at most {@value #MAX_BODY} bytes, {@value #MAX_JSON_BODY} for an action with a json argument,
+ *       checked before it is read, else {@code 413};</li>
  *   <li>it is one JSON object of strings whose keys are exactly the declared arguments, each value accepted by its
- *       {@link PanelAction.Argument}, else {@code 400};</li>
+ *       {@link PanelAction.Argument}, a json argument's value one JSON object, else {@code 400};</li>
  *   <li>no other action of the same panel is running, else {@code 409}.</li>
  * </ol>
  * The action then runs on a virtual thread of its own. The request waits for it up to the time limit, 60 seconds by
- * default: {@code 200 {"result": "<text>"}} when it returned, {@code 500 {"error": "<class>"}} when it threw, the
- * simple name of the exception's class and never its message, and {@code 202 {"state": "running"}} past the limit,
- * the action going on; its outcome then shows in the snapshot. Every run is logged on {@code io.vidocq.devconsole}:
- * at INFO, {@code Vidocq dev console: action <panel>/<action> by <address>: <result>}; a failure at WARNING, with the
- * class of the exception only, its stack trace at DEBUG.
+ * default: {@code 200 {"result": "<summary>"}} when it returned, with {@code error}, {@code contentType},
+ * {@code body} and {@code details} when its {@link PanelAction.ActionResult} has them (ADR 0001, amendment 1),
+ * {@code 500 {"error": "<class>"}} when it threw, the simple name of the exception's class and never its message,
+ * and {@code 202 {"state": "running"}} past the limit, the action going on; its outcome then shows in the snapshot.
+ * Every run is logged on {@code io.vidocq.devconsole}: at INFO, {@code Vidocq dev console: action <panel>/<action>
+ * by <address>: <result>}; a failure at WARNING, with the class of the exception only, its stack trace at DEBUG.
  *
  * <p>A request refused for its origin or its token is logged as {@value #CROSS_SITE}, at WARNING, once per origin,
  * reason and boot, {@value #MAX_REFUSALS_LOGGED} distinct ones at most.
@@ -80,6 +82,8 @@ final class ConsoleActions {
     static final String CROSS_SITE = "VIDOCQ-DEVC-006";
     /** The largest body of an action request, in bytes. */
     static final int MAX_BODY = 4096;
+    /** The largest body of an action request that has a json argument, in bytes (ADR 0001, amendment 1). */
+    static final int MAX_JSON_BODY = 64 * 1024;
     /** How long a request waits for its action by default. */
     static final Duration TIME_LIMIT = Duration.ofSeconds(60);
     /** The most refusals logged per boot: a client that is no browser could vary its origin forever. */
@@ -100,11 +104,18 @@ final class ConsoleActions {
     /**
      * How an action ended.
      *
-     * @param text the line it returned, or the simple name of the class of what it threw
-     * @param time when it ended, by the server's clock, in epoch milliseconds
-     * @param ok   {@code false} when it threw
+     * @param text   the summary it returned, cleaned, or the simple name of the class of what it threw
+     * @param time   when it ended, by the server's clock, in epoch milliseconds
+     * @param ok     {@code false} when it threw
+     * @param result what it returned, {@code null} when it threw
      */
-    record Outcome(String text, long time, boolean ok) {}
+    record Outcome(String text, long time, boolean ok, PanelAction.ActionResult result) {
+
+        /** Whether the call went through with an outcome that is an error of its target. */
+        boolean error() {
+            return result != null && result.error();
+        }
+    }
 
     /**
      * @param token     the token of this boot, as {@link #newToken()} draws it
@@ -192,11 +203,12 @@ final class ConsoleActions {
         if (action == null) {
             return text(StatusCode.NOT_FOUND, "No such action.");
         }
+        int max = hasJson(action) ? MAX_JSON_BODY : MAX_BODY;
         String body;
         try {
-            body = body(request, MAX_BODY);
+            body = body(request, max);
         } catch (TooLarge tooLarge) {
-            return text(StatusCode.PAYLOAD_TOO_LARGE, "The body is larger than " + MAX_BODY + " bytes.");
+            return text(StatusCode.PAYLOAD_TOO_LARGE, "The body is larger than " + max + " bytes.");
         } catch (IOException | RuntimeException unreadable) {
             return text(StatusCode.BAD_REQUEST, "The body is not UTF-8 text.");
         }
@@ -223,8 +235,7 @@ final class ConsoleActions {
         try {
             Outcome outcome = done.get(timeLimit.toMillis(), TimeUnit.MILLISECONDS);
             return outcome.ok()
-                    ? json(StatusCode.OK, new JsonWriter().beginObject().name("result").value(outcome.text())
-                            .endObject().toString())
+                    ? json(StatusCode.OK, answer(outcome))
                     : json(StatusCode.INTERNAL_SERVER_ERROR, new JsonWriter().beginObject().name("error")
                             .value(outcome.text()).endObject().toString());
         } catch (TimeoutException | ExecutionException stillRunning) {
@@ -235,17 +246,45 @@ final class ConsoleActions {
         }
     }
 
+    /**
+     * The answer of an action that returned: {@code result}, its summary, then {@code error}, {@code contentType},
+     * {@code body} and {@code details}, each only when set, so that an action returning one line answers
+     * {@code {"result": "..."}} as it always did.
+     */
+    static String answer(Outcome outcome) {
+        JsonWriter out = new JsonWriter().beginObject().name("result").value(outcome.text());
+        PanelAction.ActionResult result = outcome.result();
+        if (result.error()) {
+            out.name("error").value(true);
+        }
+        if (result.body() != null) {
+            out.name("contentType").value(result.contentType()).name("body").value(result.body());
+        }
+        if (result.details() != null) {
+            out.name("details").value(result.details());
+        }
+        return out.endObject().toString();
+    }
+
+    /** Whether {@code action} takes a json argument, which allows it a body of {@value #MAX_JSON_BODY} bytes. */
+    private static boolean hasJson(PanelAction action) {
+        return action.arguments().stream().anyMatch(argument -> argument.schema() != null);
+    }
+
     /** Runs {@code action}, records and logs its outcome, and frees its panel for the next one. */
     private Outcome execute(String panelId, PanelAction action, Map<String, String> arguments, String by) {
         String name = Texts.clean(panelId) + "/" + action.id();
         Outcome outcome;
         try {
-            String result = action.run().apply(arguments);
-            outcome = new Outcome(result == null ? "done" : Texts.clean(result), clock.getAsLong(), true);
+            PanelAction.ActionResult result = action.call().apply(arguments);
+            if (result == null) {
+                result = PanelAction.ActionResult.of(null);
+            }
+            outcome = new Outcome(Texts.clean(result.summary()), clock.getAsLong(), true, result);
             LOG.log(System.Logger.Level.INFO, "Vidocq dev console: action " + name + " by " + by + ": "
                     + outcome.text());
         } catch (Throwable failure) {
-            outcome = new Outcome(Snapshot.className(failure), clock.getAsLong(), false);
+            outcome = new Outcome(Snapshot.className(failure), clock.getAsLong(), false, null);
             LOG.log(System.Logger.Level.WARNING, "Vidocq dev console: action " + name + " by " + by + " failed: "
                     + outcome.text());
             LOG.log(System.Logger.Level.DEBUG, "Dev console action " + name + " failed", failure);
@@ -276,8 +315,8 @@ final class ConsoleActions {
                 throw new IllegalArgumentException("Argument " + argument.name() + " is missing.");
             }
             if (!argument.accepts(value)) {
-                throw new IllegalArgumentException("Argument " + argument.name() + " has a value it does not "
-                        + "accept.");
+                throw new IllegalArgumentException("Argument " + argument.name() + (argument.schema() != null
+                        ? " is not a JSON object." : " has a value it does not accept."));
             }
             checked.put(argument.name(), value);
         }

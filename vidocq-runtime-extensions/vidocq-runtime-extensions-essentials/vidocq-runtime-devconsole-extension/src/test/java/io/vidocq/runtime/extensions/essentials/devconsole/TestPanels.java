@@ -35,6 +35,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.IntStream;
 
 /** The contributors and panels the snapshot tests show. */
 final class TestPanels {
@@ -217,6 +218,84 @@ final class TestPanels {
                         }
                         return "finally";
                     }));
+        }
+    }
+
+    /** A panel whose actions take a json argument and return structured results, as the MCP inspector's do. */
+    static final class InspectorPanel implements DevConsolePanel {
+
+        static final String SCHEMA = "{\"type\":\"object\",\"properties\":{\"city\":{\"type\":\"string\"}},"
+                + "\"required\":[\"city\"]}";
+
+        final List<Map<String, String>> runs = new CopyOnWriteArrayList<>();
+
+        @Override
+        public String id() {
+            return "acme-inspect";
+        }
+
+        @Override
+        public String title() {
+            return "Acme inspector";
+        }
+
+        @Override
+        public void contribute(StartupReportContext context, StartupReportSection section) {
+            section.summary("things to call");
+        }
+
+        @Override
+        public void sample(PanelSample sample) {
+            sample.counter("runs", runs.size(), Unit.COUNT);
+        }
+
+        @Override
+        public List<PanelAction> actions() {
+            return List.of(
+                    new PanelAction("tool.weather", "Weather", null,
+                            List.of(PanelAction.Argument.json("arguments", "Arguments", SCHEMA)), arguments -> {
+                                runs.add(arguments);
+                                return new PanelAction.ActionResult("ok in 3 ms", "application/json",
+                                        "{\"temp\":21}", false, "{\"request\":{\"method\":\"tools/call\"}}");
+                            }, "Tools", "The weather in a city.\nIn Celsius."),
+                    new PanelAction("tool.broken", "Broken", null,
+                            List.of(PanelAction.Argument.json("arguments", "Arguments", "{\"type\":\"object\"}")),
+                            arguments -> {
+                                runs.add(arguments);
+                                return new PanelAction.ActionResult("error -32602: Invalid params",
+                                        "application/json", "{\"code\":-32602}", true, null);
+                            }, "Tools", null),
+                    new PanelAction("note", "Note", null,
+                            List.of(PanelAction.Argument.matching("text", "Text", "[a-z]{1,200}")), arguments -> {
+                                runs.add(arguments);
+                                return "noted";
+                            }));
+        }
+    }
+
+    /** A panel offering more actions than the console keeps. */
+    static final class ManyActionsPanel implements DevConsolePanel {
+
+        @Override
+        public String id() {
+            return "acme-many";
+        }
+
+        @Override
+        public void contribute(StartupReportContext context, StartupReportSection section) {
+            section.summary("many things to do");
+        }
+
+        @Override
+        public void sample(PanelSample sample) {
+            // no value
+        }
+
+        @Override
+        public List<PanelAction> actions() {
+            return IntStream.range(0, 130)
+                    .mapToObj(i -> new PanelAction("tool.t" + i, "Tool " + i, null, arguments -> "ok"))
+                    .toList();
         }
     }
 }
