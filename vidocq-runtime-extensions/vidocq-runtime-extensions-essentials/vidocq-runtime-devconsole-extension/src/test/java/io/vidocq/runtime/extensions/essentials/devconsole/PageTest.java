@@ -156,4 +156,16 @@ class PageTest {
         assertTrue(script.contains("const FILTER_FROM = 10"), "a filter past ten actions");
         assertTrue(script.contains("\"Exchange\""), "the details folded under Exchange");
     }
+
+    @Test
+    void aJsonPropertyNamedProtoIsAnObjectKeyLikeAnyOther() {
+        String script = file("console.js");
+
+        long nullPrototypeObjects = script.lines().filter(line -> line.contains("= Object.create(null);")).count();
+        assertEquals(3, nullPrototypeObjects,
+                "skeleton(), formObject() and the request body: a bare {} would silently drop a \"__proto__\" key");
+        assertTrue(script.contains("Object.hasOwn(properties, name)"), "a schema property read by its own name");
+        assertTrue(script.contains("Object.hasOwn(object, property) ? object[property] : undefined"),
+                "a form value read by its own name, never an inherited member such as constructor or toString");
+    }
 }

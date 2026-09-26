@@ -681,14 +681,18 @@ function isFlatSchema(schema) {
       : SCALAR_TYPES.has(p.type)));
 }
 
-/** The raw editor's first value: the required properties, each with its default, or an empty value of its type. */
+/**
+ * The raw editor's first value: the required properties, each with its default, or an empty value of its type. A
+ * property named "__proto__" is a schema-declared name like any other: a bare {} would silently drop a write to
+ * that key (or repoint the object's own prototype) instead of storing it, so the object is prototype-less.
+ */
 function skeleton(schema) {
-  const object = {};
+  const object = Object.create(null);
   const properties = isObject(schema) && isObject(schema.properties) ? schema.properties : {};
   const required = isObject(schema) && Array.isArray(schema.required) ? schema.required : [];
   for (const name of required) {
     if (typeof name !== "string") continue;
-    const p = isObject(properties[name]) ? properties[name] : {};
+    const p = Object.hasOwn(properties, name) && isObject(properties[name]) ? properties[name] : {};
     object[name] = p.default !== undefined ? p.default
       : Array.isArray(p.enum) && p.enum.length ? p.enum[0]
       : SKELETON.has(p.type) ? structuredClone(SKELETON.get(p.type)) : null;
@@ -762,9 +766,13 @@ function jsonField(argument) {
   const show = () => { form.hidden = rawMode(); editor.hidden = !rawMode(); };
   show();
 
-  /** The form's values as an object; strict, it refuses a number that is none and a missing required property. */
+  /**
+   * The form's values as an object; strict, it refuses a number that is none and a missing required property. A
+   * property literally named "__proto__" is a name like any other: a bare {} would silently drop the write, which
+   * would then make it forever "required" instead of present.
+   */
   function formObject(strict) {
-    const object = {};
+    const object = Object.create(null);
     for (const [property, { input, kind }] of inputs) {
       const text = input.value.trim();
       if (text === "") continue;
@@ -794,7 +802,9 @@ function jsonField(argument) {
   }
   function toForm(object) {
     for (const [property, { input }] of inputs) {
-      const v = object[property];
+      // Object.hasOwn: a property object lacks, such as "constructor" or "toString", must read as absent, never
+      // as the inherited member of that name.
+      const v = Object.hasOwn(object, property) ? object[property] : undefined;
       input.value = v === undefined || v === null ? "" : typeof v === "object" ? JSON.stringify(v) : String(v);
     }
   }
@@ -884,7 +894,9 @@ function actionRow(panelId, action) {
   async function send() {
     const token = page.snapshot && page.snapshot.console && page.snapshot.console.actionToken;
     if (typeof token !== "string") { say("No token: reload the page.", "failed"); return; }
-    const body = {};
+    // Object.create(null): an argument named "__proto__" (a server-declared name like any other) must still reach
+    // the request body as an own property, not be swallowed by the prototype's own accessor of that name.
+    const body = Object.create(null);
     try {
       for (const field of fields) body[field.name] = field.value();
     } catch (invalid) {
