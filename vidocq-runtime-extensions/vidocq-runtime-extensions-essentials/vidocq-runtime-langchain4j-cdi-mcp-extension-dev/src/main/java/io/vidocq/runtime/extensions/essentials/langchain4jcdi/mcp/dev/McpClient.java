@@ -67,18 +67,21 @@ import java.util.concurrent.atomic.AtomicLong;
  * <p>Each request carries what {@code McpEraDetector} requires of the modern era: the protocol version in the
  * {@code MCP-Protocol-Version} header and in {@code _meta}, the method in {@code Mcp-Method}, the name or URI in
  * {@code Mcp-Name}, Base64-wrapped when it is not plain ASCII, the client's capabilities, and for a tool the
- * {@code Mcp-Param-*} headers of its designated arguments. It declares elicitation, sampling and roots, so that a
- * tool that needs them answers {@code input_required}, which the inspector reports, rather than a missing
- * capability. It accepts JSON and SSE; from a stream it keeps the final response and the events before it. A
- * response body past {@value #MAX_RESPONSE_BYTES} bytes is discarded rather than buffered in full, so that a
- * runaway tool result cannot exhaust the dev JVM; the wait for an answer is bounded by the constructor's
- * {@code timeout}, whether the server is slow to answer or slow to finish streaming it.
+ * {@code Mcp-Param-*} headers of its designated arguments. Its client capabilities are an empty object, which the
+ * server requires to be present: it declares neither elicitation, nor sampling, nor roots, so that a tool that checks
+ * {@code isSupported()} takes its fallback, and a tool that asks anyway gets the server's missing-capability error,
+ * which the inspector reports, rather than an input request that would park a server invocation. It accepts JSON and
+ * SSE; from a stream it keeps the final response and the events before it. A response body past
+ * {@value #MAX_RESPONSE_BYTES} bytes is discarded rather than buffered in full, so that a runaway tool result cannot
+ * exhaust the dev JVM; the wait for an answer is bounded by the constructor's {@code timeout}, whether the server is
+ * slow to answer or slow to finish streaming it.
  *
  * <p>Holds its own {@link HttpClient}, which JDK 21+ makes {@link AutoCloseable} with its own executor: this class
  * is {@link AutoCloseable} too, and {@link #close()} must be called once the client is no longer needed, or a
  * dev reload leaks the executor. {@link #close()} calls {@link HttpClient#shutdownNow()} rather than
  * {@link HttpClient#close()}: the latter waits for in-flight requests to finish, which would block a dev reload
- * during a running call up to this client's own {@code timeout}.
+ * during a running call up to this client's own {@code timeout}. It never goes through a proxy, even one set for
+ * the whole JVM: {@code /mcp} is the application's own endpoint.
  */
 final class McpClient implements AutoCloseable {
 
@@ -119,6 +122,7 @@ final class McpClient implements AutoCloseable {
         this.http = HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_1_1)
                 .connectTimeout(Duration.ofSeconds(5))
+                .proxy(HttpClient.Builder.NO_PROXY)
                 .build();
     }
 
@@ -322,10 +326,7 @@ final class McpClient implements AutoCloseable {
         return Json.createObjectBuilder()
                 .add(McpMetaKeys.PROTOCOL_VERSION, PROTOCOL)
                 .add(McpMetaKeys.CLIENT_INFO, Json.createObjectBuilder().add("name", CLIENT_NAME).add("version", "1"))
-                .add(McpMetaKeys.CLIENT_CAPABILITIES, Json.createObjectBuilder()
-                        .add("elicitation", JsonValue.EMPTY_JSON_OBJECT)
-                        .add("sampling", JsonValue.EMPTY_JSON_OBJECT)
-                        .add("roots", JsonValue.EMPTY_JSON_OBJECT))
+                .add(McpMetaKeys.CLIENT_CAPABILITIES, JsonValue.EMPTY_JSON_OBJECT)
                 .build();
     }
 

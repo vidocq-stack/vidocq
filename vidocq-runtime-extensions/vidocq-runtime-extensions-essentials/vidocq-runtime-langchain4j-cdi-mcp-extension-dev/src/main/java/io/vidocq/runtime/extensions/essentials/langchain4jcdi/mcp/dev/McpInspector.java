@@ -62,6 +62,8 @@ final class McpInspector {
     static final String NO_ADDRESS = "/mcp has no bound address";
     /** The MCP server is loaded twice ({@code VIDOCQ-MCP-003}): its registries cannot be read. */
     static final String TWIN = "loaded twice";
+    /** How many actions of a panel the console keeps: the others are dropped, which the inspector line says. */
+    static final int CONSOLE_MAX_ACTIONS = 128;
 
     private static final System.Logger LOG = System.getLogger(McpInspector.class.getName());
 
@@ -151,7 +153,10 @@ final class McpInspector {
         return history;
     }
 
-    /** Writes {@code inspector}: what it offers and where it calls, or why it offers nothing. */
+    /**
+     * Writes {@code inspector}: what it offers and where it calls, and that the console shows only the first
+     * {@value #CONSOLE_MAX_ACTIONS} actions when there are more; or why it offers nothing.
+     */
     void sample(PanelSample out) {
         if (client == null) {
             if (absent != null) {
@@ -159,7 +164,8 @@ final class McpInspector {
             }
             return;
         }
-        out.text("inspector", catalogue.summary() + " at " + client.endpoint());
+        out.text("inspector", catalogue.summary() + " at " + client.endpoint()
+                + (actions.size() > CONSOLE_MAX_ACTIONS ? " (first " + CONSOLE_MAX_ACTIONS + " shown)" : ""));
         history.writeTo(out);
     }
 
@@ -202,16 +208,14 @@ final class McpInspector {
      *
      * @param item  what to call
      * @param given its json argument's text by name, or nothing for a fixed resource
-     * @return what came back, the summary and the details scrubbed of the secrets' values
+     * @return what came back, the summary, the details and an error's body scrubbed of the secrets' values
      */
     PanelAction.ActionResult call(McpCatalogue.Item item, Map<String, String> given) {
         long start = System.nanoTime();
         String argumentName = item.kind().argument();
         JsonObject values = argumentName == null ? JsonValue.EMPTY_JSON_OBJECT : parse(given.get(argumentName));
         Set<String> secrets = Secrets.values(values);
-        PanelAction.ActionResult sent = send(item, values, secrets);
-        PanelAction.ActionResult result = new PanelAction.ActionResult(Secrets.scrub(sent.summary(), secrets),
-                sent.contentType(), sent.body(), sent.error(), sent.details());
+        PanelAction.ActionResult result = send(item, values, secrets);
         JsonObject masked = (JsonObject) Secrets.mask(values);
         history.add(new CallHistory.Call(System.currentTimeMillis(), item.id(), item.label(),
                 argumentName == null ? "" : masked.toString(), result.summary(), result.error(),
@@ -250,7 +254,7 @@ final class McpInspector {
         JsonObject request = client.request(method, params.build());
         try {
             McpClient.Exchange exchange = client.send(request, name, headers);
-            return McpResults.of(item.kind(), exchange, details(request, exchange, secrets));
+            return McpResults.of(item.kind(), exchange, details(request, exchange, secrets), secrets);
         } catch (McpTransportException failed) {
             return McpResults.transport(failed.getMessage(), details(request, null, secrets));
         } catch (RuntimeException unexpected) {

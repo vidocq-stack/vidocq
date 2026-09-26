@@ -22,6 +22,7 @@ package io.vidocq.runtime.extensions.essentials.langchain4jcdi.mcp.dev;
 import jakarta.json.Json;
 import jakarta.json.JsonArray;
 import jakarta.json.JsonArrayBuilder;
+import jakarta.json.JsonNumber;
 import jakarta.json.JsonObject;
 import jakarta.json.JsonObjectBuilder;
 import jakarta.json.JsonString;
@@ -37,9 +38,9 @@ import java.util.Set;
 /**
  * Spec §3.5: an argument whose name holds, ignoring case, one of the {@link #MARKERS} is shown as {@value #MASK} in
  * the history, the details and the console's log line. The MCP server receives the real value, and a result's body
- * is shown as the server returned it. Since a server's error message may quote a value, the string values of such
- * arguments, {@value #MIN_SCRUBBED} characters or longer, are also replaced wherever they appear in the summary and
- * the details.
+ * is shown as the server returned it. Since a server's error message may quote a value, the string and number values
+ * of such arguments, {@value #MIN_SCRUBBED} characters or longer, are also replaced wherever they appear in the
+ * summary, the details and the body of an error.
  */
 final class Secrets {
 
@@ -74,7 +75,7 @@ final class Secrets {
         return value;
     }
 
-    /** The string values of the members of {@code value} whose name is a secret's, at any depth. */
+    /** The string and number values of the members of {@code value} whose name is a secret's, at any depth. */
     static Set<String> values(JsonValue value) {
         Set<String> found = new LinkedHashSet<>();
         collect(value, found);
@@ -150,10 +151,16 @@ final class Secrets {
         }
     }
 
-    /** Every {@link JsonString} leaf beneath {@code value}, at any depth: the value of a secret-named member. */
+    /**
+     * Every {@link JsonString} leaf beneath {@code value}, and every {@link JsonNumber} leaf whose text is
+     * {@value #MIN_SCRUBBED} characters or longer (a one-time code), at any depth: the value of a secret-named member.
+     * A boolean is left out: {@code true} or {@code false} would mask ordinary words.
+     */
     private static void collectLeaves(JsonValue value, Set<String> found) {
         if (value instanceof JsonString string) {
             found.add(string.getString());
+        } else if (value instanceof JsonNumber number && number.toString().length() >= MIN_SCRUBBED) {
+            found.add(number.toString());
         } else if (value instanceof JsonObject object) {
             object.forEach((name, member) -> collectLeaves(member, found));
         } else if (value instanceof JsonArray array) {

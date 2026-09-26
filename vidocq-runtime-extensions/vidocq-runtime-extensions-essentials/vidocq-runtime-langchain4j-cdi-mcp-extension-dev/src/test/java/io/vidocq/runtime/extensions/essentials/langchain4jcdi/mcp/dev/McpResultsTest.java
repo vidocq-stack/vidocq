@@ -26,6 +26,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.StringReader;
 import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -46,7 +47,8 @@ class McpResultsTest {
     }
 
     private static ActionResult of(McpCatalogue.Kind kind, String result) {
-        return McpResults.of(kind, answered("{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":" + result + "}"), "{}");
+        return McpResults.of(kind, answered("{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":" + result + "}"), "{}",
+                Set.of());
     }
 
     @Test
@@ -109,7 +111,7 @@ class McpResultsTest {
     void aJsonRpcErrorShowsItsCodeAndMessage() {
         ActionResult result = McpResults.of(McpCatalogue.Kind.TOOL,
                 answered("{\"jsonrpc\":\"2.0\",\"id\":1,\"error\":{\"code\":-32602,\"message\":\"Invalid params\"}}"),
-                "{}");
+                "{}", Set.of());
 
         assertEquals("error -32602: Invalid params", result.summary());
         assertTrue(result.error());
@@ -137,5 +139,60 @@ class McpResultsTest {
         assertTrue(result.error());
         assertNull(result.body());
         assertEquals("{\"request\":{}}", result.details());
+    }
+
+    @Test
+    void aMissingClientCapabilityIsTheRefusalLineWithTheKindsItNames() {
+        ActionResult result = McpResults.of(McpCatalogue.Kind.TOOL, answered("{\"jsonrpc\":\"2.0\",\"id\":1,"
+                + "\"error\":{\"code\":-32021,\"message\":\"Missing required client capability: elicitation\","
+                + "\"data\":{\"requiredCapabilities\":{\"elicitation\":{}}}}}"), "{}", Set.of());
+
+        assertEquals("this tool asks the client for input (elicitation): not supported by the dev console inspector "
+                + "yet", result.summary());
+        assertTrue(result.error());
+        assertEquals("application/json", result.contentType());
+        assertTrue(result.body().contains("-32021"), result.body());
+    }
+
+    @Test
+    void aMissingClientCapabilityWithoutItsKindsIsThePlainRefusalLine() {
+        ActionResult result = McpResults.of(McpCatalogue.Kind.TOOL, answered("{\"jsonrpc\":\"2.0\",\"id\":1,"
+                + "\"error\":{\"code\":-32021,\"message\":\"Missing required client capability\"}}"), "{}",
+                Set.of());
+
+        assertEquals("this tool asks the client for input: not supported by the dev console inspector yet",
+                result.summary());
+        assertTrue(result.error());
+    }
+
+    @Test
+    void theBodyOfAnErrorOrAnInputRequestIsScrubbedOfTheSecretsButAToolResultIsNot() {
+        Set<String> secrets = Set.of("hunter22");
+        ActionResult error = McpResults.of(McpCatalogue.Kind.TOOL, answered("{\"jsonrpc\":\"2.0\",\"id\":1,"
+                + "\"error\":{\"code\":-32602,\"message\":\"Invalid key hunter22\",\"data\":{\"k\":\"hunter22\"}}}"),
+                "{}", secrets);
+        ActionResult input = McpResults.of(McpCatalogue.Kind.TOOL, answered("{\"jsonrpc\":\"2.0\",\"id\":1,"
+                + "\"result\":{\"resultType\":\"input_required\",\"inputRequests\":{\"input-1\":{"
+                + "\"method\":\"elicitation/create\",\"params\":{\"message\":\"confirm hunter22?\"}}}}}"),
+                "{}", secrets);
+        ActionResult tool = McpResults.of(McpCatalogue.Kind.TOOL, answered("{\"jsonrpc\":\"2.0\",\"id\":1,"
+                + "\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"key hunter22\"}]}}"), "{}", secrets);
+
+        assertEquals("error -32602: Invalid key ***", error.summary());
+        assertEquals("{\"code\":-32602,\"message\":\"Invalid key ***\",\"data\":{\"k\":\"***\"}}", error.body());
+        assertFalse(input.body().contains("hunter22"), input.body());
+        assertEquals("key hunter22", tool.body(), "a result's body is shown as the server returned it");
+    }
+
+    @Test
+    void theSummaryIsScrubbedBeforeItIsCutSoNoPrefixOfASecretSurvives() {
+        String secret = "hunter22-abcdefgh";
+        String message = "x".repeat(178) + secret + " is not a valid key";
+        ActionResult result = McpResults.of(McpCatalogue.Kind.TOOL, answered("{\"jsonrpc\":\"2.0\",\"id\":1,"
+                + "\"error\":{\"code\":-32602,\"message\":\"" + message + "\"}}"), "{}", Set.of(secret));
+
+        assertTrue(result.summary().length() <= ActionResult.MAX_SUMMARY, result.summary());
+        assertFalse(result.summary().contains("hunt"), result.summary());
+        assertTrue(result.summary().contains("x***"), result.summary());
     }
 }

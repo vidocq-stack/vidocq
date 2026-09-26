@@ -22,6 +22,7 @@ package io.vidocq.runtime.extensions.essentials.langchain4jcdi.mcp.dev;
 import io.vidocq.runtime.spi.devconsole.PanelAction;
 import jakarta.json.Json;
 import jakarta.json.JsonObject;
+import jakarta.json.JsonValue;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -30,6 +31,7 @@ import java.io.StringReader;
 import java.net.ServerSocket;
 import java.net.URI;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -237,6 +239,7 @@ class McpInspectorTest {
         assertEquals("error -32602: Invalid key *** for query", result.summary(), "the console's INFO line");
         assertFalse(result.details().contains("hunter22"), result.details());
         assertTrue(result.details().contains("\"apiKey\":\"***\""), result.details());
+        assertFalse(result.body().contains("hunter22"), "an error's body is the server's object: " + result.body());
         CallHistory.Call call = inspector.history().calls().getFirst();
         assertEquals("{\"query\":\"cats\",\"apiKey\":\"***\"}", call.arguments());
         assertEquals("tool.search {\"arguments\":{\"query\":\"cats\",\"apiKey\":\"***\"}}", call.replay());
@@ -299,5 +302,55 @@ class McpInspectorTest {
             assertFalse(textCall.details().contains(secret), secret + " in " + textCall.details());
             assertFalse(textCall.replay().contains(secret), secret + " in " + textCall.replay());
         }
+    }
+
+    @Test
+    void aToolThatNeedsACapabilityGetsTheServersMissingCapabilityErrorShownAsTheRefusalLine() {
+        stub.respond(request -> new StubMcp.Answer(400, "application/json", "{\"jsonrpc\":\"2.0\",\"id\":"
+                + request.get("id") + ",\"error\":{\"code\":-32021,\"message\":\"Missing required client "
+                + "capability: sampling\",\"data\":{\"requiredCapabilities\":{\"sampling\":{}}}}}", 0));
+
+        PanelAction.ActionResult result = action(inspector(), "tool.current-time").call()
+                .apply(Map.of("arguments", "{\"zone\":\"Europe/Paris\"}"));
+
+        assertNull(stub.rejected(), "McpEraDetector refused the request");
+        assertEquals(JsonValue.EMPTY_JSON_OBJECT, object(stub.received().getFirst().body()).getJsonObject("params")
+                .getJsonObject("_meta").getJsonObject("io.modelcontextprotocol/clientCapabilities"));
+        assertEquals("this tool asks the client for input (sampling): not supported by the dev console inspector yet",
+                result.summary());
+        assertTrue(result.error());
+    }
+
+    @Test
+    void aSecretStraddlingTheCutOfTheSummaryLeavesNoPrefixInTheConsolesLogLine() {
+        String secret = "hunter22-abcdefgh";
+        stub.respond(request -> StubMcp.error(request, 200, -32602, "x".repeat(178) + secret + " is not valid"));
+        McpInspector inspector = McpInspector.of(McpCatalogue.of(List.of(InspectorFixtures.tool("search")),
+                List.of(), List.of(), List.of()), stub.uri(), Duration.ofSeconds(5));
+
+        PanelAction.ActionResult result = action(inspector, "tool.search").call()
+                .apply(Map.of("arguments", "{\"query\":\"cats\",\"apiKey\":\"" + secret + "\"}"));
+
+        assertFalse(result.summary().contains("hunt"), result.summary());
+        assertFalse(inspector.history().calls().getFirst().summary().contains("hunt"));
+    }
+
+    @Test
+    void aCatalogueOfMoreThan128ItemsSaysTheConsoleShowsTheFirst128() {
+        List<dev.langchain4j.cdi.mcp.server.registry.McpToolDescriptor> tools = new ArrayList<>();
+        for (int i = 0; i < 129; i++) {
+            tools.add(InspectorFixtures.tool("currentTime"));
+        }
+        McpInspector many = McpInspector.of(McpCatalogue.of(tools, List.of(), List.of(), List.of()), stub.uri(),
+                Duration.ofSeconds(5));
+        RecordingSample sample = new RecordingSample();
+        RecordingSample fewSample = new RecordingSample();
+
+        many.sample(sample);
+        inspector().sample(fewSample);
+
+        assertEquals(129, many.actions().size());
+        assertTrue(sample.text("inspector").endsWith(" (first 128 shown)"), sample.text("inspector"));
+        assertFalse(fewSample.text("inspector").contains("shown"), fewSample.text("inspector"));
     }
 }

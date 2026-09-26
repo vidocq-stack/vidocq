@@ -111,4 +111,13 @@ class SecretsTest {
 
         assertEquals(Set.of("sk-aaaa1111", "sk-bbbb2222", "deep-secret-1"), secrets);
     }
+
+    @Test
+    void valuesGathersANumberUnderASecretNameOfFourCharactersOrMoreButNoBoolean() {
+        Set<String> secrets = Secrets.values(object("{\"otpToken\":123456,\"pinToken\":42,\"hasToken\":true,"
+                + "\"auth\":{\"password\":[98765.5]},\"count\":123456}"));
+
+        assertEquals(Set.of("123456", "98765.5"), secrets);
+        assertEquals("code *** refused", Secrets.scrub("code 123456 refused", secrets));
+    }
 }

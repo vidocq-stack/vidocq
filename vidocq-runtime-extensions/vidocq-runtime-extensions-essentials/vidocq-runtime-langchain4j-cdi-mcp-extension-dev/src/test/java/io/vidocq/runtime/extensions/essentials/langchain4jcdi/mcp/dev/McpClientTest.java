@@ -21,17 +21,22 @@ package io.vidocq.runtime.extensions.essentials.langchain4jcdi.mcp.dev;
 
 import jakarta.json.Json;
 import jakarta.json.JsonObject;
+import jakarta.json.JsonValue;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.StringReader;
+import java.lang.reflect.Field;
+import java.net.ProxySelector;
 import java.net.ServerSocket;
 import java.net.URI;
+import java.net.http.HttpClient;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Base64;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -86,8 +91,8 @@ class McpClientTest {
         assertEquals("2026-07-28", meta.getString("io.modelcontextprotocol/protocolVersion"));
         assertEquals("vidocq-dev-console",
                 meta.getJsonObject("io.modelcontextprotocol/clientInfo").getString("name"));
-        assertEquals(object("{\"elicitation\":{},\"sampling\":{},\"roots\":{}}"),
-                meta.getJsonObject("io.modelcontextprotocol/clientCapabilities"));
+        assertEquals(JsonValue.EMPTY_JSON_OBJECT, meta.getJsonObject("io.modelcontextprotocol/clientCapabilities"),
+                "no capability declared: a tool that needs one gets the server's missing-capability error");
         assertEquals("12:00", exchange.response().getJsonObject("result").getJsonArray("content")
                 .getJsonObject(0).getString("text"));
         assertEquals(200, exchange.status());
@@ -210,5 +215,14 @@ class McpClientTest {
         McpTransportException failure = assertThrows(McpTransportException.class, () -> callTool("current_time"));
 
         assertEquals("/mcp unreachable at " + stub.uri(), failure.getMessage());
+    }
+
+    @Test
+    void aJvmWideProxyNeverInterceptsTheCallsToTheApplicationsOwnMcp() throws Exception {
+        Field field = McpClient.class.getDeclaredField("http");
+        field.setAccessible(true);
+        HttpClient http = (HttpClient) field.get(client);
+
+        assertEquals(Optional.<ProxySelector>of(HttpClient.Builder.NO_PROXY), http.proxy());
     }
 }
