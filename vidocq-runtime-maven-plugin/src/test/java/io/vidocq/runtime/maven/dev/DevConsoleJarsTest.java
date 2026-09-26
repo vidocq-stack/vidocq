@@ -30,8 +30,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.jar.Attributes;
 import java.util.jar.JarOutputStream;
 import java.util.jar.Manifest;
@@ -66,6 +68,23 @@ class DevConsoleJarsTest {
                 markedJar(dir, "declared-console.jar"));
         assertEquals(1, DevConsoleJars.resolve(pluginMapWithConsole(dir), List.of(chappe, declared), i -> {}).size(),
                 "never twice: the declared console is kept");
+    }
+
+    /**
+     * The 4-arg overload records which keys it added (Vidocq/vidocq#143, spec §5.3 "never twice"): the caller
+     * threads this set into {@link DevModules#collect}, so a companion's own dependency on the SPI is not added
+     * again.
+     */
+    @Test
+    void addedKeysRecordsWhatWasActuallyAdded(@TempDir Path dir) throws Exception {
+        Artifact chappe = artifact("io.vidocq.runtime.extensions.essentials",
+                "vidocq-runtime-chappe-webserver-extension", plainJar(dir, "chappe.jar"));
+        Set<String> addedKeys = new HashSet<>();
+
+        List<Path> jars = DevConsoleJars.resolve(pluginMapWithConsole(dir), List.of(chappe), i -> {}, addedKeys);
+
+        assertEquals(2, jars.size());
+        assertEquals(Set.of(DevConsoleJars.CONSOLE_KEY, DevConsoleJars.SPI_KEY), addedKeys);
     }
 
     /** This plugin's own resolved dependencies, holding the console and its SPI, each a marked jar. */

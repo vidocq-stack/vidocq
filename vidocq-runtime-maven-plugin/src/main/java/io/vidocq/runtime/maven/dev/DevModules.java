@@ -93,10 +93,21 @@ final class DevModules {
         }
     }
 
-    /** The jars to add to the child's module path, in the order of the project's artifacts. */
+    /** As {@link #collect(Collection, Resolver, Consumer, Consumer, Set)}, with nothing already on the path. */
     static List<Path> collect(Collection<Artifact> projectArtifacts, Resolver resolver, Consumer<String> warn,
             Consumer<String> info) {
-        Set<String> onPath = new HashSet<>();
+        return collect(projectArtifacts, resolver, warn, info, Set.of());
+    }
+
+    /**
+     * The jars to add to the child's module path, in the order of the project's artifacts. {@code alreadyOnPath} —
+     * the keys ({@code groupId:artifactId}) of jars an earlier step already added, e.g. the dev console and its SPI
+     * ({@link DevConsoleJars#resolve(java.util.Map, Collection, Consumer, Set)}) — is read only: a companion's own
+     * transitive dependencies must not add any of them again (Vidocq/vidocq#143, spec §5.3 "never twice").
+     */
+    static List<Path> collect(Collection<Artifact> projectArtifacts, Resolver resolver, Consumer<String> warn,
+            Consumer<String> info, Set<String> alreadyOnPath) {
+        Set<String> onPath = new HashSet<>(alreadyOnPath);
         for (Artifact artifact : projectArtifacts) {
             onPath.add(artifact.getGroupId() + ":" + artifact.getArtifactId());
         }

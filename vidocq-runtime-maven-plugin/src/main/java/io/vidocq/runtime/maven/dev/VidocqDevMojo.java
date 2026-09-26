@@ -60,11 +60,13 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
@@ -344,15 +346,13 @@ public class VidocqDevMojo extends AbstractMojo {
         final DevServicesSession devServicesRef = devs;
 
         // Dev tools (Vidocq/vidocq#143): the console, then each extension's -dev companion, on the child's module
-        // path only. No binary ever contains them.
-        try {
-            modulePath.addAll(resolveDevConsole());
-        } catch (MojoExecutionException broken) {
-            closeDevServices(devServicesRef);
-            throw broken;
-        }
+        // path only. No binary ever contains them. devToolsOnPath is seeded by the console step with the keys it
+        // actually added, so a companion whose own transitive dependencies include the SPI never adds it again
+        // (spec §5.3 "never twice").
+        Set<String> devToolsOnPath = new HashSet<>();
+        modulePath.addAll(resolveDevConsole(devToolsOnPath));
         modulePath.addAll(DevModules.collect(project.getArtifacts(), this::resolveRuntime, getLog()::warn,
-                getLog()::info));
+                getLog()::info, devToolsOnPath));
 
         // Continuous testing (#122): the test directories are watched too, the child's dev console learns where
         // the results are, and every run gets the dev session's keys, so the tests use its containers.
@@ -619,21 +619,38 @@ public class VidocqDevMojo extends AbstractMojo {
      * dependency: {@code vidocq-runtime-devconsole-extension} sits inside the {@code vidocq-runtime-extensions}
      * reactor tree, whose parent pom activates this very plugin (checkpom) as a build tool on every extension —
      * a compile/runtime edge back onto it from here would make the reactor cyclic.
+     *
+     * <p>A jar that cannot be resolved (offline, or the local repository was never populated with this plugin's
+     * own release) costs the console only: a warning is logged and {@code vidocq:dev} continues without it, the
+     * same graceful degradation {@link DevModules#collect} gives an unresolvable companion. It never fails the
+     * goal.</p>
+     *
+     * @param addedKeys collects the {@code groupId:artifactId} of every jar actually added, so the caller can seed
+     *                  {@link DevModules#collect} with them (spec §5.3 "never twice")
      */
-    private List<Path> resolveDevConsole() throws MojoExecutionException {
+    private List<Path> resolveDevConsole(Set<String> addedKeys) {
         if (!DevConsoleJars.needsConsole(project.getArtifacts())) {
             getLog().info("Dev tools: no dev console, it needs vidocq-runtime-chappe-webserver-extension");
             return List.of();
         }
         Map<String, Artifact> consoleArtifacts = new LinkedHashMap<>();
         for (String key : List.of(DevConsoleJars.CONSOLE_KEY, DevConsoleJars.SPI_KEY)) {
-            consoleArtifacts.put(key, resolveConsoleArtifact(key));
+            Artifact artifact = resolveConsoleArtifact(key);
+            if (artifact == null) {
+                // A partial console (e.g. missing its SPI) would fail the child's boot — skip it entirely.
+                return List.of();
+            }
+            consoleArtifacts.put(key, artifact);
         }
-        return DevConsoleJars.resolve(consoleArtifacts, project.getArtifacts(), getLog()::info);
+        return DevConsoleJars.resolve(consoleArtifacts, project.getArtifacts(), getLog()::info, addedKeys);
     }
 
-    /** {@code key} ({@code groupId:artifactId}) at {@link #pluginVersion}, resolved through Aether as a jar. */
-    private Artifact resolveConsoleArtifact(String key) throws MojoExecutionException {
+    /**
+     * {@code key} ({@code groupId:artifactId}) at {@link #pluginVersion}, resolved through Aether as a jar, or
+     * {@code null} — with a warning, never a build failure — when it cannot be resolved (e.g. offline on a first
+     * run before {@code vidocq-runtime-devconsole-extension} was ever installed locally).
+     */
+    private Artifact resolveConsoleArtifact(String key) {
         int colon = key.indexOf(':');
         String groupId = key.substring(0, colon);
         String artifactId = key.substring(colon + 1);
@@ -647,8 +664,9 @@ public class VidocqDevMojo extends AbstractMojo {
             resolved.setFile(result.getArtifact().getFile());
             return resolved;
         } catch (ArtifactResolutionException e) {
-            throw new MojoExecutionException("Cannot resolve " + key + ":" + pluginVersion
-                    + " (the dev console): a broken plugin installation", e);
+            getLog().warn("Dev tools: cannot resolve " + key + ":" + pluginVersion + " (the dev console); vidocq:dev"
+                    + " continues without it. Run the build once online, or mvn -U.");
+            return null;
         }
     }
 

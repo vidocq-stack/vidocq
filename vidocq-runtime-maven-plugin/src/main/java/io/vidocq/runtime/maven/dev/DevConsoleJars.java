@@ -55,8 +55,20 @@ final class DevConsoleJars {
         return false;
     }
 
+    /** As {@link #resolve(Map, Collection, Consumer, Set)}, discarding which keys were actually added. */
     static List<Path> resolve(Map<String, Artifact> pluginArtifacts, Collection<Artifact> projectArtifacts,
             Consumer<String> info) {
+        return resolve(pluginArtifacts, projectArtifacts, info, new HashSet<>());
+    }
+
+    /**
+     * The console and its SPI, unless the project already has either or lacks Chappe. {@code addedKeys} — empty on
+     * entry, by convention — collects the {@code groupId:artifactId} of every jar actually added, so the caller can
+     * seed {@link DevModules#collect} with them: a companion whose own transitive dependencies include the SPI must
+     * not add it a second time (Vidocq/vidocq#143, spec §5.3 "never twice").
+     */
+    static List<Path> resolve(Map<String, Artifact> pluginArtifacts, Collection<Artifact> projectArtifacts,
+            Consumer<String> info, Set<String> addedKeys) {
         Set<String> onPath = new HashSet<>();
         for (Artifact artifact : projectArtifacts) {
             onPath.add(artifact.getGroupId() + ":" + artifact.getArtifactId());
@@ -75,6 +87,7 @@ final class DevConsoleJars {
                 throw new IllegalStateException("The vidocq plugin lacks " + key + ": a broken plugin installation");
             }
             jars.add(artifact.getFile().toPath());
+            addedKeys.add(key);
         }
         return jars;
     }

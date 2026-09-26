@@ -80,7 +80,11 @@ class PluginDescriptorContinuousTestingTest {
     @Test
     void devResolvesCompanionsThroughMavenResolver() throws Exception {
         assertParametersAreFields("dev", VidocqDevMojo.class);
-        assertTrue(child(mojo("dev"), "requirements") != null, "the dev mojo needs the RepositorySystem");
+        Element requirements = child(mojo("dev"), "requirements");
+        assertNotNull(requirements, "the dev mojo needs the RepositorySystem");
+        Element requirement = children(requirements).getFirst();
+        assertEquals("org.eclipse.aether.RepositorySystem", text(requirement, "role"));
+        assertEquals("repoSystem", text(requirement, "field-name"));
     }
 
     @Test

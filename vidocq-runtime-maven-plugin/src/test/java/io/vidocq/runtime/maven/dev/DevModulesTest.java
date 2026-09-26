@@ -31,8 +31,10 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.jar.Attributes;
 import java.util.jar.JarOutputStream;
 import java.util.jar.Manifest;
@@ -104,6 +106,25 @@ class DevModulesTest {
 
         assertEquals(List.of(), added);
         assertTrue(warnings.getFirst().contains("g:ext-dev:1.0"), warnings.toString());
+    }
+
+    /**
+     * The console step already put the SPI on the module path (Vidocq/vidocq#143, spec §5.3 "never twice"): even
+     * though the companion's own transitive dependencies include it, it must not be added a second time.
+     */
+    @Test
+    void aJarTheConsoleStepAlreadyAddedIsNotAddedAgainByCompanions(@TempDir Path dir) throws Exception {
+        Artifact knock = artifact("g", "ext", withDescriptor(dir, "ext.jar", "ext-dev"));
+        Path dev = markedJar(dir, "ext-dev.jar");
+        Path spi = markedJar(dir, "spi.jar");
+        Set<String> alreadyOnPath = new HashSet<>(Set.of("io.vidocq.runtime:vidocq-runtime-devconsole-spi"));
+
+        List<Path> added = DevModules.collect(List.of(knock), coords -> List.of(
+                new DevModules.Resolved("g:ext-dev", dev),
+                new DevModules.Resolved("io.vidocq.runtime:vidocq-runtime-devconsole-spi", spi)),
+                w -> {}, i -> {}, alreadyOnPath);
+
+        assertEquals(List.of(dev), added, "the SPI jar the console step already added must not be added twice");
     }
 
     /** A jar carrying the {@code META-INF/vidocq/dev-module} descriptor, no manifest attribute of its own. */
