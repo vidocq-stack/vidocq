@@ -120,11 +120,8 @@ public final class MigrationExtension implements VidocqExtension, StartupReportC
         });
     }
 
-    /**
-     * With the backends given, for the tests — including those of the {@code -dev} companion module, which drives
-     * this extension with a fake {@link SchemaMigrator} to test {@link MigrationControl} without a real backend.
-     */
-    public MigrationExtension(Supplier<List<SchemaMigrator>> backends) {
+    /** With the backends given, for the tests. */
+    MigrationExtension(Supplier<List<SchemaMigrator>> backends) {
         this.backends = backends;
     }
 

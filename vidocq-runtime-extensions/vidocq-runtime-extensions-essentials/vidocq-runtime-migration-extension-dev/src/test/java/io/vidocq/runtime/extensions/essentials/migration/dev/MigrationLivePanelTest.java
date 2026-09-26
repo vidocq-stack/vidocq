@@ -35,10 +35,12 @@ import io.vidocq.vauban.core.container.VaubanContainer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Constructor;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -62,11 +64,29 @@ class MigrationLivePanelTest {
     }
 
     private static MigrationExtension booted(SchemaMigrator backend, Map<String, String> config) {
-        MigrationExtension ext = new MigrationExtension(() -> List.of(backend));
+        MigrationExtension ext = newExtension(() -> List.of(backend));
         ext.configure(new MapConfig(config));
         ext.beforeStart(null);
         ext.onStart(new StartContext(LaunchMode.DEV));
         return ext;
+    }
+
+    /**
+     * Builds a {@link MigrationExtension} with a fake backend, exactly as the runtime module's own tests do —
+     * through its package-private constructor, reached here by reflection since this module cannot see it
+     * directly and the constructor must stay package-private (Vidocq/vidocq#143 fix round 1: it is a test seam,
+     * not part of the runtime's public API). Surefire runs this module's tests off the module path (the pom's
+     * {@code useModulePath=false}), so {@code setAccessible(true)} needs no {@code opens} in the runtime module's
+     * {@code module-info}; on a real module path this would need one, which the runtime module does not grant.
+     */
+    private static MigrationExtension newExtension(Supplier<List<SchemaMigrator>> backends) {
+        try {
+            Constructor<MigrationExtension> ctor = MigrationExtension.class.getDeclaredConstructor(Supplier.class);
+            ctor.setAccessible(true);
+            return ctor.newInstance(backends);
+        } catch (ReflectiveOperationException e) {
+            throw new AssertionError("MigrationExtension(Supplier) is no longer reachable by reflection", e);
+        }
     }
 
     private String run(String action, String datasource) {
@@ -109,7 +129,7 @@ class MigrationLivePanelTest {
 
     @Test
     void nothingMigratedOffersNoAction() {
-        MigrationExtension idle = new MigrationExtension(List::of);
+        MigrationExtension idle = newExtension(List::of);
         idle.configure(new MapConfig(Map.of()));
         assertTrue(panel.actions().isEmpty());
         assertTrue(sampled().isEmpty());
@@ -143,7 +163,7 @@ class MigrationLivePanelTest {
         assertEquals("table", devGroup.kind("applied"));
         assertEquals("boot: 1 applied", devGroup.text("last-run"));
 
-        MigrationExtension prod = new MigrationExtension(() -> List.of(new SchemaFake("1")));
+        MigrationExtension prod = newExtension(() -> List.of(new SchemaFake("1")));
         prod.configure(new MapConfig(Map.of("vidocq.pool.url", "jdbc:h2:mem:def")));
         prod.beforeStart(null);
         prod.onStart(new StartContext(LaunchMode.PROD));
