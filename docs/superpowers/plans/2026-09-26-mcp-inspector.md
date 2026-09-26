@@ -115,7 +115,10 @@ and section numbers below refer to it.
 8. **The inspector declares elicitation, sampling and roots.** langchain4j-cdi refuses an interaction whose
    capability the client did not declare with a JSON-RPC error; declaring them makes such a tool answer
    `input_required`, which the inspector then reports as spec §3.3 says. In `CONTINUATION` mode the parked
-   invocation ends by the server's own continuation timeout.
+   invocation ends by the server's own continuation timeout. The inspector cannot end it sooner: the stateless
+   2026-07-28 era has no `notifications/cancelled` for a finished HTTP exchange, and answering the input requests
+   (for example an elicitation `cancel`) would re-run the tool from the start in `REPLAY` mode, the default. The
+   docs of Task 11 say so. `REPLAY` parks nothing.
 9. **Confirmation reads the annotations model as langchain4j-cdi builds it.** `McpToolAnnotationsModel` keeps a
    member only when it differs from its default, so `destructiveHint` is `null` or `false` from `@Tool`; the rule is
    "ask unless `readOnlyHint` is `TRUE` and `destructiveHint` is not `TRUE`", which honours an explicit `TRUE` from a
