@@ -136,6 +136,11 @@ what came back and the JSON-RPC exchange. The actions gain what it needs, in a f
 * A new constructor takes `Function<Map<String, String>, ActionResult> call`, a `group` (at most 40 characters) and a
   `description` (at most 2,000). The record keeps one internal form: an old `run` is wrapped as
   `args -> ActionResult.of(run.apply(args))`, and `run()` still returns the line, so existing panels change nothing.
+* The records gain components: `PanelAction` is now `(id, label, confirmation, arguments, call, group, description)`
+  and `PanelAction.Argument` gains `schema`. `run()` and the old constructors stay, so code that builds actions or
+  calls `run()` compiles and behaves as before; a record deconstruction pattern, or reflection over the record
+  components, written against the old records must be updated. `equals` now compares the internal `call`: an old
+  `run` is wrapped anew by each constructor call, so two actions built from the same `run` are no longer equal.
 
 ### Transport
 

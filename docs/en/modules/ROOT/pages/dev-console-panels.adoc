@@ -557,6 +557,14 @@ The old constructors keep working unchanged: `PanelAction(id, label, confirmatio
 `args -> ActionResult.of(run.apply(args))` internally, and `run()` still returns a function to the summary line, so
 an action written before this section existed answers exactly `{"result": "..."}`, as before.
 
+The records themselves gained components, though: `PanelAction` is now
+`(id, label, confirmation, arguments, call, group, description)` and `PanelAction.Argument`
+`(name, label, allowedValues, pattern, schema)`. Code that builds actions and calls `run()` is unaffected; a record
+deconstruction pattern such as `case PanelAction(var id, var label, var confirmation, var arguments, var run)`, or
+reflection over the record components, written against the old records must be updated. `equals` now compares the
+internal `call`, and each constructor wraps an old `run` anew, so two actions built from the same `run` are no
+longer equal.
+
 [#action-groups]
 === Groups and descriptions [.tag-new]#NEW#
 
@@ -581,7 +589,9 @@ sends nothing; the user still has to submit. A value of `"***"` inside such a ce
 user to type again — how the MCP inspector's history marks an argument it masked as a secret.
 
 The console keeps such a cell whole up to `PanelSample.MAX_REPLAY_CELL`, 4,096 characters, and empties a longer one
-rather than truncate it into something that would not parse.
+rather than truncate it into something that would not parse. A cell of that column that is not of this form, or
+whose id is no action of the panel, is shown as text, cut at 200 characters as any other cell; the column keeps its
+header unless at least one of its cells is a Replay button.
 
 [#rules]
 == The rules [.tag-new]#NEW#

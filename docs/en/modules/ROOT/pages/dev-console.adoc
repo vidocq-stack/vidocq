@@ -404,7 +404,9 @@ and a resource template's variables are always a flat form, one `string` per arg
 The call goes through the application's own `/mcp`, from the console's own JVM, in protocol `2026-07-28`, with no
 session opened: the URL is the one the startup report prints for `/mcp`, a loopback one preferred when more than
 one listener carries it. When no listener has bound `/mcp`, the tab shows `absent: /mcp has no bound address` and
-offers nothing to call.
+offers nothing to call. The inspector sends no credentials and never goes through a proxy: when `/mcp` is behind
+authentication, every call answers `HTTP 401`. The console shows the first 128 actions of a panel; past that, the
+inspector's line ends with `(first 128 shown)`.
 
 **Confirmation.** Before it sends a tool call, the page asks `Call <name>? It runs the application's code, and may
 change data.` unless the tool is `readOnlyHint: true` and not `destructiveHint: true`. A prompt `get` or a resource
@@ -439,9 +441,10 @@ streamed answer). What each outcome shows:
 | the error object
 
 | a tool asking the client for input
-| `this tool asks the client for input (<kinds>): not supported by the dev console inspector yet`
+| `this tool asks the client for input (<kinds>): not supported by the dev console inspector yet`, or without
+`(<kinds>)` when the server names none
 | true
-| the input request
+| the server's missing-capability error, or its input request
 
 | transport failure
 | `/mcp unreachable at <url>`, `timed out after 55 s`, or `HTTP <status>`
@@ -452,12 +455,12 @@ streamed answer). What each outcome shows:
 A response body past 1 MiB fails the call as a transport failure; the panel never buffers more of it than that. The
 body and the details the page shows are truncated at 256 KiB regardless, as any action's are.
 
-**A tool that asks the client for input.** The inspector declares elicitation, sampling and roots so that such a
-tool answers `input_required` rather than a missing-capability error, and reports it with the refusal line above.
-In `CONTINUATION` mode, the tool's invocation stays parked on a server worker until the server's own continuation
-timeout: the inspector cannot end it sooner, since the stateless `2026-07-28` protocol has no way to cancel a
-finished HTTP exchange, and answering the input request would only re-run the tool from the start under the
-default mode. `REPLAY`, the default request-state mode, parks nothing: each round is its own call.
+**A tool that asks the client for input.** The inspector declares no client capability — neither elicitation, nor
+sampling, nor roots. A tool that checks `isSupported()` first, as langchain4j-cdi recommends, runs its fallback, which
+is how you test it. A tool that asks anyway gets the server's missing-capability error (`-32021`), which the
+inspector reports with the refusal line above, naming the capability. Nothing is parked on the server, whatever the
+request-state mode: in `CONTINUATION` mode too, the call ends with that error before any invocation waits for an
+answer.
 
 **History.** The panel keeps the last 20 calls of the boot, newest first, each with its time, action, outcome,
 duration and arguments, and a "Replay" button that fills the action's form with those arguments and sends nothing
@@ -465,13 +468,13 @@ until you submit. A dev reload clears the history along with the catalogue.
 
 **Secrets.** An argument whose name holds, ignoring case, `password`, `passwd`, `secret`, `token`, `apikey`,
 `api-key`, `api_key`, `credential` or `authorization`, at any depth, is shown as `***` in the history, the
-"Exchange" details and the console's log line; a string value of four characters or more that belongs to such an
-argument is also replaced by `***` wherever it appears in the summary and the details, in case a server's error
-message quotes it. The MCP server itself always receives the real value, and the result body is shown exactly as
-the server returned it. A masked value is left empty on a replay: type it again.
+"Exchange" details and the console's log line; a string or number value of four characters or more that belongs to
+such an argument is also replaced by `***` wherever it appears in the summary, the details and the body of an error
+or an input request, in case the server quotes it. The MCP server itself always receives the real value, and a
+result body is shown exactly as the server returned it. A masked value is left empty on a replay: type it again.
 
-**What v1 does not do.** Elicitation, sampling and roots are declared but never answered — a tool that needs one
-gets the refusal line above, not a dialog. There is no support for subscriptions, notifications or progress, for
+**What v1 does not do.** Elicitation, sampling and roots are not supported — a tool that needs one gets the
+refusal line above, not a dialog. There is no support for subscriptions, notifications or progress, for
 completion, or for calling an MCP server other than the application's own.
 
 [#security]
