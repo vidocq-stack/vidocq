@@ -41,6 +41,9 @@ module io.vidocq.runtime.extensions.essentials.devconsole {
     // for the tests only, which call the console over HTTP
     requires static java.net.http;
 
+    // the live halves of report sections, from the -dev modules vidocq:dev adds (Vidocq/vidocq#143)
+    uses io.vidocq.runtime.spi.devconsole.LivePanel;
+
     provides io.vidocq.runtime.spi.VidocqExtension
             with io.vidocq.runtime.extensions.essentials.devconsole.DevConsoleExtension;
 }

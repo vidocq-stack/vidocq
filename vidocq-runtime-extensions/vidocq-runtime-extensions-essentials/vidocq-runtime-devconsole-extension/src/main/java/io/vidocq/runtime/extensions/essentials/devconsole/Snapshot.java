@@ -23,7 +23,9 @@ import io.vidocq.chappe.api.Handler;
 import io.vidocq.chappe.api.Request;
 import io.vidocq.chappe.api.Response;
 import io.vidocq.chappe.api.StatusCode;
+import io.vidocq.runtime.spi.ExtensionContext;
 import io.vidocq.runtime.spi.devconsole.Chart;
+import io.vidocq.runtime.spi.devconsole.DevConsolePanel;
 import io.vidocq.runtime.spi.devconsole.PanelAction;
 import io.vidocq.runtime.spi.devconsole.Series;
 import io.vidocq.runtime.spi.report.ReportAnomaly;
@@ -116,6 +118,10 @@ final class Snapshot implements Handler {
     private final LongSupplier clock;
     /** The actions of this boot, {@code null} outside a dev launch. */
     private final ConsoleActions actions;
+    /** The live panels of this boot, from the {@code -dev} modules {@code vidocq:dev} added. */
+    private final LivePanels livePanels;
+    /** What a live panel's {@code start} may read, {@code null} in tests that never start one. */
+    private final ExtensionContext context;
     /** The panels whose failure was logged this boot. */
     private final Set<String> failed = ConcurrentHashMap.newKeySet();
     /** Five minutes of every measure, filled by {@link #tick()} whether or not a page is watching. */
@@ -169,12 +175,30 @@ final class Snapshot implements Handler {
      */
     Snapshot(String bootId, String vidocq, Supplier<Optional<StartupReportView>> report, List<PanelEntry> builtIns,
              LongSupplier clock, ConsoleActions actions) {
+        this(bootId, vidocq, report, builtIns, clock, actions, LivePanels.NONE, null);
+    }
+
+    /**
+     * @param bootId     the id of this boot, 64 random bits in hex
+     * @param vidocq     the Vidocq version, or {@code null}
+     * @param report     the startup report of this boot, empty until it is written
+     * @param builtIns   the console's own panels, shown last, from the first poll
+     * @param clock      the server's clock, in epoch milliseconds
+     * @param actions    the actions of a dev boot, {@code null} in any other: then no panel's {@code actions()} is
+     *                   called, and the snapshot carries neither the token nor an action
+     * @param livePanels the live panels of this boot, started the first time the report is read
+     * @param context    what a live panel's {@code start} may read, {@code null} in a test that starts none
+     */
+    Snapshot(String bootId, String vidocq, Supplier<Optional<StartupReportView>> report, List<PanelEntry> builtIns,
+             LongSupplier clock, ConsoleActions actions, LivePanels livePanels, ExtensionContext context) {
         this.bootId = Objects.requireNonNull(bootId, "bootId");
         this.vidocq = vidocq;
         this.report = Objects.requireNonNull(report, "report");
         this.builtIns = List.copyOf(builtIns);
         this.clock = Objects.requireNonNull(clock, "clock");
         this.actions = actions;
+        this.livePanels = Objects.requireNonNull(livePanels, "livePanels");
+        this.context = context;
     }
 
     /** The actions of this boot, {@code null} outside a dev launch. */
@@ -378,7 +402,8 @@ final class Snapshot implements Handler {
         }
     }
 
-    private static Contributed read(StartupReportView view, boolean dev) {
+    private Contributed read(StartupReportView view, boolean dev) {
+        livePanels.startAll(context);
         List<ReportSection> sections = view.sections();
         List<PanelEntry> panels = new ArrayList<>();
         Set<String> panelIds = new HashSet<>();
@@ -389,12 +414,21 @@ final class Snapshot implements Handler {
             }
             for (ReportSection section : sections) {
                 if (section.id().equals(id)) {
-                    panels.add(PanelEntry.contributed(contributor, section, dev));
+                    StartupReportContributor shown = contributor;
+                    var live = livePanels.forSection(id);
+                    if (live.isPresent()) {
+                        if (contributor instanceof DevConsolePanel) {
+                            livePanels.reportDouble(id, contributor);
+                        }
+                        shown = new LivePanelAdapter(contributor, live.get());
+                    }
+                    panels.add(PanelEntry.contributed(shown, section, dev));
                     panelIds.add(id);
                     break;
                 }
             }
         }
+        livePanels.reportOrphans(panelIds);
         List<ReportSection> others = sections.stream().filter(s -> !panelIds.contains(s.id())).toList();
         return new Contributed(view, List.copyOf(panels), others);
     }

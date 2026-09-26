@@ -142,6 +142,7 @@ public final class DevConsoleExtension implements VidocqExtension, StartupReport
     private volatile Thread ticker;
     private volatile LogsPanel logs;
     private volatile TestsPanel tests;
+    private volatile LivePanels livePanels = LivePanels.NONE;
 
     /** The console Vidocq loads as a service, remembering what it printed across the dev reloads of this JVM. */
     public DevConsoleExtension() {
@@ -208,9 +209,12 @@ public final class DevConsoleExtension implements VidocqExtension, StartupReport
                 ? TestsPanel.start(System.getProperty(TestsPanel.PROPERTY)).orElse(null)
                 : null;
         tests = tested;
+        // the live halves of report sections, from the -dev modules vidocq:dev adds (Vidocq/vidocq#143)
+        LivePanels live = LivePanels.load(DevConsoleExtension.class.getClassLoader());
+        livePanels = live;
         Snapshot boot = new Snapshot(HexFormat.of().toHexDigits(RandomGenerator.getDefault().nextLong()),
-                VIDOCQ_VERSION, context.startupReport(), ownPanels(context, resolved.launchMode(), logged, tested), clock,
-                actions);
+                VIDOCQ_VERSION, context.startupReport(), ownPanels(context, resolved.launchMode(), logged, tested),
+                clock, actions, live, context);
         Handler page = StaticFileHandler.builder()
                 .addClasspath(DevConsoleExtension.class.getClassLoader(), PAGE_RESOURCES)
                 .indexFile("index.html")
@@ -415,6 +419,9 @@ public final class DevConsoleExtension implements VidocqExtension, StartupReport
                 Thread.currentThread().interrupt();
             }
         }
+        LivePanels live = livePanels;
+        livePanels = LivePanels.NONE;
+        live.stopAll();
         LogsPanel logged = logs;
         logs = null;
         if (logged != null) {

@@ -139,6 +139,26 @@ final class TestPanels {
         }
     }
 
+    /** A contributor that is no panel, for a section a live panel may make live. */
+    static final class Static implements StartupReportContributor {
+
+        private final String id;
+
+        Static(String id) {
+            this.id = id;
+        }
+
+        @Override
+        public String id() {
+            return id;
+        }
+
+        @Override
+        public void contribute(StartupReportContext context, StartupReportSection section) {
+            section.summary("static");
+        }
+    }
+
     /**
      * A panel with actions: {@code clear}, which takes nothing; {@code set-level}, which takes a logger and a level;
      * {@code fail}, which throws with a secret in its message; {@code slow}, which waits for {@link #release}.

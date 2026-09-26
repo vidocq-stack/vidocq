@@ -34,6 +34,7 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -96,6 +97,12 @@ class SnapshotTest {
                 .map(panel -> PanelEntry.builtIn(panel, LaunchMode.DEV))
                 .toList();
         return new Snapshot(BOOT, "0.4.0-TEST", () -> Optional.ofNullable(report.get()), entries, () -> NOW);
+    }
+
+    /** A snapshot whose report is {@code view} from the first poll, with the live panels of {@code livePanels}. */
+    private static Snapshot snapshotOf(StartupReportView view, LivePanels livePanels) {
+        return new Snapshot(BOOT, "0.4.0-TEST", () -> Optional.of(view), List.of(), () -> NOW, null, livePanels,
+                null);
     }
 
     @SuppressWarnings("unchecked")
@@ -376,5 +383,33 @@ class SnapshotTest {
         assertEquals(List.of("Swagger UI", "http://127.0.0.1:18090/openapi/ui/",
                 Map.of("href", "http://127.0.0.1:18090/openapi/ui/")), lines.get(0));
         assertEquals(List.of("document", "/openapi"), lines.get(1), "a line that points nowhere has no object");
+    }
+
+    @Test
+    void aLivePanelMakesAStaticSectionLive() {
+        TestPanels.Static rest = new TestPanels.Static("rest");
+        LivePanelsTest.Live live = new LivePanelsTest.Live("rest") {
+            @Override
+            public void sample(io.vidocq.runtime.spi.devconsole.PanelSample sample) {
+                sample.counter("requests", 7, io.vidocq.runtime.spi.devconsole.Unit.COUNT);
+            }
+        };
+        Snapshot snapshot = snapshotOf(FakeReportView.of(rest), LivePanels.of(List.of(live), w -> {}));
+
+        PanelEntry entry = snapshot.panel("rest");
+
+        assertEquals("rest", entry.id());
+        assertEquals(live, ((LivePanelAdapter) entry.panel()).live());
+        assertEquals(List.of("start"), live.calls, "started when the report is first read");
+    }
+
+    @Test
+    void aLivePanelWithoutItsSectionIsNotShown() {
+        List<String> warnings = new ArrayList<>();
+        LivePanels panels = LivePanels.of(List.of(new LivePanelsTest.Live("absent")), warnings::add);
+        Snapshot snapshot = snapshotOf(FakeReportView.of(new TestPanels.Static("rest")), panels);
+
+        assertNull(snapshot.panel("absent"));
+        assertTrue(warnings.stream().anyMatch(w -> w.startsWith("[" + LivePanels.ORPHAN + "]")), warnings.toString());
     }
 }

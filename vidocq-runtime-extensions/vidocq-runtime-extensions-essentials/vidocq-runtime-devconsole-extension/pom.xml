@@ -79,6 +79,18 @@
                     <argLine>--add-reads io.vidocq.runtime.extensions.essentials.devconsole=io.vidocq.runtime.core</argLine>
                 </configuration>
             </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <configuration>
+                    <archive>
+                        <manifestEntries>
+                            <!-- Vidocq/vidocq#143: a dev tool; vidocq:dev adds it, no binary ever contains it. -->
+                            <Vidocq-Dev-Only>true</Vidocq-Dev-Only>
+                        </manifestEntries>
+                    </archive>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
 </project>
