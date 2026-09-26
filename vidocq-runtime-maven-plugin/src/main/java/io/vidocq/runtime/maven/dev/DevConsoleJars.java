@@ -55,6 +55,24 @@ final class DevConsoleJars {
         return false;
     }
 
+    /**
+     * The console keys that are neither among {@code projectArtifacts} nor in {@code alreadyOnPath}: the only ones to
+     * resolve, so that a project that declares the console never needs a repository for it.
+     */
+    static List<String> missingKeys(Collection<Artifact> projectArtifacts, Set<String> alreadyOnPath) {
+        Set<String> onPath = new HashSet<>(alreadyOnPath);
+        for (Artifact artifact : projectArtifacts) {
+            onPath.add(artifact.getGroupId() + ":" + artifact.getArtifactId());
+        }
+        List<String> missing = new ArrayList<>();
+        for (String key : List.of(CONSOLE_KEY, SPI_KEY)) {
+            if (!onPath.contains(key)) {
+                missing.add(key);
+            }
+        }
+        return missing;
+    }
+
     /** As {@link #resolve(Map, Collection, Consumer, Set)}, discarding which keys were actually added. */
     static List<Path> resolve(Map<String, Artifact> pluginArtifacts, Collection<Artifact> projectArtifacts,
             Consumer<String> info) {
@@ -62,14 +80,15 @@ final class DevConsoleJars {
     }
 
     /**
-     * The console and its SPI, unless the project already has either or lacks Chappe. {@code addedKeys} — empty on
-     * entry, by convention — collects the {@code groupId:artifactId} of every jar actually added, so the caller can
-     * seed {@link DevModules#collect} with them: a companion whose own transitive dependencies include the SPI must
-     * not add it a second time (Vidocq/vidocq#143, spec §5.3 "never twice").
+     * The console and its SPI, unless the project already has either or lacks Chappe. {@code addedKeys} holds, on
+     * entry, the keys an earlier step already put on the path (the dev services bring the SPI too), which are not
+     * added again; it collects the {@code groupId:artifactId} of every jar actually added, so the caller can seed
+     * {@link DevModules#collect} with them: a companion whose own transitive dependencies include the SPI must not
+     * add it a second time (Vidocq/vidocq#143, spec §5.3 "never twice").
      */
     static List<Path> resolve(Map<String, Artifact> pluginArtifacts, Collection<Artifact> projectArtifacts,
             Consumer<String> info, Set<String> addedKeys) {
-        Set<String> onPath = new HashSet<>();
+        Set<String> onPath = new HashSet<>(addedKeys);
         for (Artifact artifact : projectArtifacts) {
             onPath.add(artifact.getGroupId() + ":" + artifact.getArtifactId());
         }

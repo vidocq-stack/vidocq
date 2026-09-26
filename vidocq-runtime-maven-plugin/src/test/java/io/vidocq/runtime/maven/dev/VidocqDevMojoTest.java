@@ -25,6 +25,7 @@ import io.vidocq.runtime.devservices.host.DevServicesSession;
 import io.vidocq.runtime.devservices.spi.DevService;
 import io.vidocq.runtime.devservices.spi.DevServiceContext;
 import io.vidocq.runtime.maven.ConsoleColors;
+import org.apache.maven.artifact.Artifact;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.logging.SystemStreamLog;
 import org.junit.jupiter.api.Test;
@@ -34,6 +35,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -523,5 +525,45 @@ class VidocqDevMojoTest {
 
         assertTrue(gate.isEmpty(), "respawn");
         assertTrue(warnings.getFirst().contains("respawn"), warnings.toString());
+    }
+
+    /** Without Chappe there is no console, so vidocq:dev adds no dev tool at all, not even a companion. */
+    @Test
+    void withoutChappeNoDevToolIsAdded(@TempDir Path dir) throws Exception {
+        Artifact ext = DevModulesTest.artifact("g", "ext", DevModulesTest.withDescriptor(dir, "ext.jar", "ext-dev"));
+        List<String> lines = new ArrayList<>();
+        AtomicBoolean asked = new AtomicBoolean();
+
+        List<Path> added = VidocqDevMojo.devTools(List.of(ext), keys -> {
+            asked.set(true);
+            return List.of();
+        }, coords -> {
+            asked.set(true);
+            return List.of();
+        }, lines::add, lines::add, new HashSet<>());
+
+        assertEquals(List.of(), added);
+        assertFalse(asked.get(), "neither the console nor a companion is resolved");
+        assertEquals(List.of("Dev tools: no dev console, it needs vidocq-runtime-chappe-webserver-extension"), lines);
+    }
+
+    /** With Chappe, the console first, then each companion, sharing what is already on the path. */
+    @Test
+    void withChappeTheConsoleThenTheCompanionsAreAdded(@TempDir Path dir) throws Exception {
+        Artifact chappe = DevModulesTest.artifact("io.vidocq.runtime.extensions.essentials",
+                "vidocq-runtime-chappe-webserver-extension", DevModulesTest.plainJar(dir, "chappe.jar"));
+        Artifact ext = DevModulesTest.artifact("g", "ext", DevModulesTest.withDescriptor(dir, "ext.jar", "ext-dev"));
+        Path console = dir.resolve("console.jar");
+        Path spi = DevModulesTest.plainJar(dir, "spi.jar");
+        Path dev = DevModulesTest.markedJar(dir, "ext-dev.jar");
+
+        List<Path> added = VidocqDevMojo.devTools(List.of(chappe, ext), keys -> {
+            keys.add(DevConsoleJars.CONSOLE_KEY);
+            keys.add(DevConsoleJars.SPI_KEY);
+            return List.of(console, spi);
+        }, coords -> List.of(new DevModules.Resolved("g:ext-dev", dev),
+                new DevModules.Resolved(DevConsoleJars.SPI_KEY, spi)), w -> {}, i -> {}, new HashSet<>());
+
+        assertEquals(List.of(console, spi, dev), added);
     }
 }

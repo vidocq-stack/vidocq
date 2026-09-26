@@ -60,6 +60,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -327,12 +328,17 @@ public class VidocqDevMojo extends AbstractMojo {
         // vidocq.dev.systemProperties entry always wins (putIfAbsent), and each key the child does get from
         // a provider is marked vidocq.dev.provided.<key>=<id>. The containers live for the whole session —
         // source reloads respawn the child but never touch them.
+        // devToolsOnPath: the keys of the jars added below, beyond the project's own, shared by the dev services, the
+        // console and the companions so that none of them puts a module on the path twice (the dev services and the
+        // console both need the SPI).
+        Set<String> devToolsOnPath = new HashSet<>();
         DevServicesSession devs = null;
         Function<String, Optional<String>> applicationFiles = ApplicationFiles.of(classesDir.toPath());
         if (devServicesEnabled(applicationFiles)) {
             // Resolved before open(): a missing extension/devconsole-spi jar must abort before any
             // container is started, never leave a running session with nothing left to close it.
-            List<Path> extensionJars = DevServicesExtensionJar.resolve(pluginArtifactMap, project.getArtifacts());
+            List<Path> extensionJars = DevServicesExtensionJar.resolve(pluginArtifactMap, project.getArtifacts(),
+                    devToolsOnPath);
             try {
                 devs = DevServicesSession.open("vidocq:dev", projectDir, sysProps, applicationFiles,
                         System.getLogger("vidocq.dev.devservices"));
@@ -346,13 +352,9 @@ public class VidocqDevMojo extends AbstractMojo {
         final DevServicesSession devServicesRef = devs;
 
         // Dev tools (Vidocq/vidocq#143): the console, then each extension's -dev companion, on the child's module
-        // path only. No binary ever contains them. devToolsOnPath is seeded by the console step with the keys it
-        // actually added, so a companion whose own transitive dependencies include the SPI never adds it again
-        // (spec §5.3 "never twice").
-        Set<String> devToolsOnPath = new HashSet<>();
-        modulePath.addAll(resolveDevConsole(devToolsOnPath));
-        modulePath.addAll(DevModules.collect(project.getArtifacts(), this::resolveRuntime, getLog()::warn,
-                getLog()::info, devToolsOnPath));
+        // path only. No binary ever contains them.
+        modulePath.addAll(devTools(project.getArtifacts(), this::resolveDevConsole, this::resolveRuntime,
+                getLog()::warn, getLog()::info, devToolsOnPath));
 
         // Continuous testing (#122): the test directories are watched too, the child's dev console learns where
         // the results are, and every run gets the dev session's keys, so the tests use its containers.
@@ -628,13 +630,27 @@ public class VidocqDevMojo extends AbstractMojo {
      * @param addedKeys collects the {@code groupId:artifactId} of every jar actually added, so the caller can seed
      *                  {@link DevModules#collect} with them (spec §5.3 "never twice")
      */
-    private List<Path> resolveDevConsole(Set<String> addedKeys) {
-        if (!DevConsoleJars.needsConsole(project.getArtifacts())) {
-            getLog().info("Dev tools: no dev console, it needs vidocq-runtime-chappe-webserver-extension");
+    /**
+     * The dev tools for the child's module path: nothing without Chappe (a CLI application gets no dev tool, and
+     * a companion's live panel has no console to show it), otherwise the console, then each extension's companion.
+     * {@code onPath} holds the keys an earlier step already added; the console step adds its own, so a companion
+     * whose transitive dependencies include the SPI never adds it again (spec §5.3 "never twice").
+     */
+    static List<Path> devTools(Collection<Artifact> artifacts, Function<Set<String>, List<Path>> console,
+            DevModules.Resolver resolver, Consumer<String> warn, Consumer<String> info, Set<String> onPath) {
+        if (!DevConsoleJars.needsConsole(artifacts)) {
+            info.accept("Dev tools: no dev console, it needs vidocq-runtime-chappe-webserver-extension");
             return List.of();
         }
+        List<Path> jars = new ArrayList<>(console.apply(onPath));
+        jars.addAll(DevModules.collect(artifacts, resolver, warn, info, onPath));
+        return jars;
+    }
+
+    private List<Path> resolveDevConsole(Set<String> addedKeys) {
         Map<String, Artifact> consoleArtifacts = new LinkedHashMap<>();
-        for (String key : List.of(DevConsoleJars.CONSOLE_KEY, DevConsoleJars.SPI_KEY)) {
+        // Only what the project does not declare and no earlier step added: a declared console needs no repository.
+        for (String key : DevConsoleJars.missingKeys(project.getArtifacts(), addedKeys)) {
             Artifact artifact = resolveConsoleArtifact(key);
             if (artifact == null) {
                 // A partial console (e.g. missing its SPI) would fail the child's boot — skip it entirely.

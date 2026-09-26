@@ -98,6 +98,15 @@ public final class DevServicesExtensionJar {
      */
     public static List<Path> resolve(Map<String, Artifact> pluginArtifacts, Collection<Artifact> projectArtifacts)
             throws MojoExecutionException {
+        return resolve(pluginArtifacts, projectArtifacts, new HashSet<>());
+    }
+
+    /**
+     * As {@link #resolve(Map, Collection)}, adding to {@code addedKeys} the {@code groupId:artifactId} of every jar
+     * it returns, so that a later step never puts the same module on the path twice.
+     */
+    public static List<Path> resolve(Map<String, Artifact> pluginArtifacts, Collection<Artifact> projectArtifacts,
+            Set<String> addedKeys) throws MojoExecutionException {
         Set<String> onPath = new HashSet<>();
         if (projectArtifacts != null) {
             for (Artifact artifact : projectArtifacts) {
@@ -108,6 +117,7 @@ public final class DevServicesExtensionJar {
         for (String key : REQUIRED_KEYS) {
             if (!onPath.contains(key)) {
                 jars.add(find(pluginArtifacts, key));
+                addedKeys.add(key);
             }
         }
         return jars;

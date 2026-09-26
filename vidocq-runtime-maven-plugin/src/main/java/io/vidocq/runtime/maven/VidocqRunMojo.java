@@ -229,7 +229,10 @@ public class VidocqRunMojo extends AbstractMojo {
         if (devServicesEnabled(applicationFiles)) {
             // Resolved before open(): a missing extension/devconsole-spi jar must abort before any
             // container is started, never leave a running session with nothing left to close it.
-            List<Path> extensionJars = DevServicesExtensionJar.resolve(pluginArtifactMap, project.getArtifacts());
+            // Against what the module path kept: a dev-only jar the project declares was dropped above, so the
+            // plugin's own copy must come back here.
+            List<Path> extensionJars = DevServicesExtensionJar.resolve(pluginArtifactMap,
+                    ApplicationLaunch.keptArtifacts(project.getArtifacts(), true));
             try {
                 devs = DevServicesSession.open("vidocq:run", projectDir, systemProperties, applicationFiles,
                         System.getLogger("vidocq.run.devservices"));

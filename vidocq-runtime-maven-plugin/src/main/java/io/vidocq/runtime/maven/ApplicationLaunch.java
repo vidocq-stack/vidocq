@@ -20,11 +20,13 @@
 package io.vidocq.runtime.maven;
 
 import io.vidocq.vauban.maven.modularize.ModularizedJars;
+import org.apache.maven.artifact.Artifact;
 import org.apache.maven.project.MavenProject;
 
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -97,6 +99,23 @@ public final class ApplicationLaunch {
             }
         }
         return entries;
+    }
+
+    /**
+     * The artifacts whose jar {@link #modulePath} keeps with the same {@code dropDevOnly}: what a later step that
+     * adds jars of its own (the dev services under {@code vidocq:run}) must treat as already on the path. A dropped
+     * dev-only artifact is not among them, so that step adds its own copy back.
+     */
+    public static List<Artifact> keptArtifacts(Collection<Artifact> artifacts, boolean dropDevOnly) {
+        List<Artifact> kept = new ArrayList<>();
+        for (Artifact artifact : artifacts) {
+            if (dropDevOnly && artifact.getFile() != null && "jar".equals(artifact.getType())
+                    && DevOnlyJars.isDevOnly(artifact.getFile().toPath())) {
+                continue;
+            }
+            kept.add(artifact);
+        }
+        return kept;
     }
 
     /** The application archives of the universal-loader mode: the project's own build output. */

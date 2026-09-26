@@ -87,13 +87,42 @@ class DevConsoleJarsTest {
         assertEquals(Set.of(DevConsoleJars.CONSOLE_KEY, DevConsoleJars.SPI_KEY), addedKeys);
     }
 
-    /** This plugin's own resolved dependencies, holding the console and its SPI, each a marked jar. */
+    /** The dev services step already put the SPI on the path under vidocq:dev: the console step adds the console only. */
+    @Test
+    void aJarAnEarlierStepAddedIsNotAddedAgain(@TempDir Path dir) throws Exception {
+        Artifact chappe = artifact("io.vidocq.runtime.extensions.essentials",
+                "vidocq-runtime-chappe-webserver-extension", plainJar(dir, "chappe.jar"));
+        Set<String> onPath = new HashSet<>(Set.of(DevConsoleJars.SPI_KEY));
+
+        List<Path> jars = DevConsoleJars.resolve(pluginMapWithConsole(dir), List.of(chappe), i -> {}, onPath);
+
+        assertEquals(List.of(dir.resolve("console.jar")), jars);
+        assertEquals(Set.of(DevConsoleJars.CONSOLE_KEY, DevConsoleJars.SPI_KEY), onPath);
+    }
+
+    /** Only what is neither declared nor already added needs resolving, so a declared console needs no repository. */
+    @Test
+    void onlyTheMissingKeysAreResolved(@TempDir Path dir) throws Exception {
+        Artifact chappe = artifact("io.vidocq.runtime.extensions.essentials",
+                "vidocq-runtime-chappe-webserver-extension", plainJar(dir, "chappe.jar"));
+        Artifact console = artifact("io.vidocq.runtime.extensions.essentials", "vidocq-runtime-devconsole-extension",
+                markedJar(dir, "declared-console.jar"));
+        Artifact spi = artifact("io.vidocq.runtime", "vidocq-runtime-devconsole-spi", plainJar(dir, "spi.jar"));
+
+        assertEquals(List.of(), DevConsoleJars.missingKeys(List.of(chappe, console, spi), Set.of()));
+        assertEquals(List.of(DevConsoleJars.CONSOLE_KEY),
+                DevConsoleJars.missingKeys(List.of(chappe), Set.of(DevConsoleJars.SPI_KEY)));
+        assertEquals(List.of(DevConsoleJars.CONSOLE_KEY, DevConsoleJars.SPI_KEY),
+                DevConsoleJars.missingKeys(List.of(chappe), Set.of()));
+    }
+
+    /** This plugin's own resolved dependencies: the console, a marked jar, and its SPI, an ordinary API jar. */
     static Map<String, Artifact> pluginMapWithConsole(Path dir) throws Exception {
         Map<String, Artifact> map = new HashMap<>();
         map.put(DevConsoleJars.CONSOLE_KEY, artifact("io.vidocq.runtime.extensions.essentials",
                 "vidocq-runtime-devconsole-extension", markedJar(dir, "console.jar")));
         map.put(DevConsoleJars.SPI_KEY, artifact("io.vidocq.runtime", "vidocq-runtime-devconsole-spi",
-                markedJar(dir, "console-spi.jar")));
+                plainJar(dir, "console-spi.jar")));
         return map;
     }
 

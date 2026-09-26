@@ -19,6 +19,7 @@
  */
 package io.vidocq.runtime.maven;
 
+import io.vidocq.runtime.maven.dev.DevServicesExtensionJar;
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.artifact.DefaultArtifact;
 import org.apache.maven.artifact.handler.DefaultArtifactHandler;
@@ -33,6 +34,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.jar.Attributes;
 import java.util.jar.JarOutputStream;
@@ -67,6 +69,46 @@ class ApplicationLaunchTest {
         assertEquals(List.of(plainJar, markedJar).size(),
                 ApplicationLaunch.modulePath(project, build, classes, true, jar -> { }).size(),
                 "vidocq:dev keeps a declared dev-only jar");
+    }
+
+    /**
+     * vidocq:run with dev services: a dev-only jar the project declares is dropped from the path, so the opt-in step
+     * must see only what was kept and add the plugin's own copy back.
+     */
+    @Test
+    void theDevServicesStepSeesOnlyTheKeptArtifacts(@TempDir Path dir) throws Exception {
+        Artifact lib = artifact("vidocq-runtime-app-lib", jar(dir, "app-lib.jar", null));
+        Artifact declared = artifact("vidocq-runtime-devservices-extension", jar(dir, "declared-ds.jar", "true"));
+        Path pluginCopy = jar(dir, "plugin-ds.jar", "true");
+        Path pluginSpi = jar(dir, "plugin-spi.jar", null);
+        Artifact spi = artifact("vidocq-runtime-devconsole-spi", jar(dir, "app-spi.jar", null));
+        Artifact pluginDs = artifact("vidocq-runtime-devservices-extension", pluginCopy);
+        Artifact pluginSpiArtifact = artifact("vidocq-runtime-devconsole-spi", pluginSpi);
+
+        List<Artifact> kept = ApplicationLaunch.keptArtifacts(List.of(lib, declared, spi), true);
+
+        assertEquals(List.of(lib, spi), kept);
+        assertEquals(List.of(lib, declared, spi), ApplicationLaunch.keptArtifacts(List.of(lib, declared, spi), false));
+        assertEquals(List.of(pluginCopy), DevServicesExtensionJar.resolve(Map.of(
+                "io.vidocq.runtime:vidocq-runtime-devservices-extension", pluginDs,
+                "io.vidocq.runtime:vidocq-runtime-devconsole-spi", pluginSpiArtifact), kept));
+    }
+
+    /** The console SPI is an ordinary API jar: an all-in-one extension that requires it keeps it on the path. */
+    @Test
+    void theConsoleSpiIsKeptOnTheModulePath(@TempDir Path dir) throws Exception {
+        Path spiJar = Path.of(io.vidocq.runtime.spi.devconsole.DevConsolePanel.class.getProtectionDomain()
+                .getCodeSource().getLocation().toURI());
+        MavenProject project = project();
+        project.setArtifacts(Set.of(artifact("vidocq-runtime-devconsole-spi", spiJar)));
+        Path build = dir.resolve("target");
+        List<String> dropped = new ArrayList<>();
+
+        List<Path> kept = ApplicationLaunch.modulePath(project, build, build.resolve("classes"), true, jar -> { },
+                true, dropped::add);
+
+        assertEquals(List.of(spiJar), kept);
+        assertEquals(List.of(), dropped);
     }
 
     private static Path jar(Path dir, String name, String devOnly) throws Exception {

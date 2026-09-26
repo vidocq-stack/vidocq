@@ -28,6 +28,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
 import java.nio.file.Path;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -158,6 +159,24 @@ class DevServicesExtensionJarTest {
                 () -> DevServicesExtensionJar.resolve(pluginArtifacts, Set.of()));
 
         assertTrue(failure.getMessage().contains(DEVCONSOLE_SPI_KEY), failure.getMessage());
+    }
+
+    /**
+     * Under vidocq:dev the console step runs after this one: the keys added here are recorded so the console's SPI is
+     * not put on the path a second time.
+     */
+    @Test
+    void resolveRecordsTheKeysItAdds(@TempDir Path tmp) throws Exception {
+        Map<String, Artifact> pluginArtifacts = Map.of(
+                EXTENSION_KEY, artifact("io.vidocq.runtime", "vidocq-runtime-devservices-extension",
+                        tmp.resolve("extension.jar").toFile()),
+                DEVCONSOLE_SPI_KEY, artifact("io.vidocq.runtime", "vidocq-runtime-devconsole-spi",
+                        tmp.resolve("devconsole-spi.jar").toFile()));
+        Set<String> added = new HashSet<>();
+
+        DevServicesExtensionJar.resolve(pluginArtifacts, Set.of(), added);
+
+        assertEquals(Set.of(EXTENSION_KEY, DEVCONSOLE_SPI_KEY), added);
     }
 
     private static Artifact artifact(String groupId, String artifactId, File file) {
