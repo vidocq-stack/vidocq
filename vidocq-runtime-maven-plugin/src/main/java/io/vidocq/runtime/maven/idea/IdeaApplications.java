@@ -148,7 +148,7 @@ final class IdeaApplications {
             String moduleName = pomValue(project, "vidocq.idea.moduleName", project.getArtifactId(),
                     coordinates, errors);
             String pomPath = pomPath(project.getFile(), directory, coordinates, errors);
-            String debugHost = project.getProperties().getProperty("vidocq.dev.debugHost");
+            String debugHost = debugHost(project, coordinates, errors);
             int debugPort = debugPort(project, coordinates, errors);
             if (errors.size() > errorsBefore) {
                 continue;
@@ -228,7 +228,26 @@ final class IdeaApplications {
     }
 
     /**
-     * {@code vidocq.dev.debugHost}, from the module's own model, or 0 for the default (Vidocq/vidocq#143): the
+     * {@code vidocq.dev.debugHost}, from the module's own model, or {@code null} for the default
+     * (Vidocq/vidocq#143). Unlike {@link #pomValue}, blank is not an error here: it simply falls back to
+     * {@code JdwpAgent.DEFAULT_HOST}, exactly as an unset property does. A control character is still
+     * rejected, as {@link #pomValue} rejects it for the other per-application settings: unescaped, it would
+     * reach {@code RunConfigurationRenderer.escapeAttribute} and produce invalid XML.
+     */
+    private static String debugHost(MavenProject project, String coordinates, List<String> errors) {
+        String value = project.getProperties().getProperty("vidocq.dev.debugHost");
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        if (value.chars().anyMatch(Character::isISOControl)) {
+            errors.add(PREFIX + coordinates + ": vidocq.dev.debugHost must not contain control characters.");
+            return null;
+        }
+        return value;
+    }
+
+    /**
+     * {@code vidocq.dev.debugPort}, from the module's own model, or 0 for the default (Vidocq/vidocq#143): the
      * {@code (debug)} configuration attaches to the same host and port {@code vidocq:dev}'s own debug agent
      * would use for this module.
      */

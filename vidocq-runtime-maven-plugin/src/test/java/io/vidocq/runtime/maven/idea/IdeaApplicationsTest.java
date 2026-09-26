@@ -209,6 +209,71 @@ class IdeaApplicationsTest {
                 discovery.errors());
     }
 
+    /**
+     * Unlike blank ({@code IdeaApplication}'s compact constructor falls back to
+     * {@code JdwpAgent.DEFAULT_HOST}), a control character in {@code vidocq.dev.debugHost} would reach
+     * {@code RunConfigurationRenderer.escapeAttribute} unescaped and produce invalid XML (Vidocq/vidocq#143).
+     */
+    @Test
+    void debugHostWithAControlCharacterIsAConfigurationError() throws IOException {
+        MavenProject app = application("app", "com.example.App");
+        app.getProperties().setProperty("vidocq.dev.debugHost", "a\tb");
+
+        Discovery discovery = discover(app);
+
+        assertEquals(List.of(
+                "Vidocq idea: com.example:app: vidocq.dev.debugHost must not contain control characters."),
+                discovery.errors());
+    }
+
+    @Test
+    void aBlankDebugHostFallsBackToTheDefault() throws IOException {
+        MavenProject app = application("app", "com.example.App");
+        app.getProperties().setProperty("vidocq.dev.debugHost", "   ");
+
+        Discovery discovery = discover(app);
+
+        assertEquals(List.of(), discovery.errors());
+        assertEquals("127.0.0.1", discovery.applications().get(0).debugHost());
+    }
+
+    @Test
+    void debugPortValidationRejectsNonNumericZeroAndOutOfRangeValues() throws IOException {
+        MavenProject nonNumeric = application("non-numeric", "com.example.App");
+        nonNumeric.getProperties().setProperty("vidocq.dev.debugPort", "abc");
+        MavenProject zero = application("zero", "com.example.App");
+        zero.getProperties().setProperty("vidocq.dev.debugPort", "0");
+        MavenProject tooHigh = application("too-high", "com.example.App");
+        tooHigh.getProperties().setProperty("vidocq.dev.debugPort", "70000");
+
+        Discovery discovery = discover(nonNumeric, zero, tooHigh);
+
+        assertEquals(List.of(
+                "Vidocq idea: com.example:non-numeric: vidocq.dev.debugPort \"abc\" is not a valid port number.",
+                "Vidocq idea: com.example:zero: vidocq.dev.debugPort \"0\" is not a valid port number.",
+                "Vidocq idea: com.example:too-high: vidocq.dev.debugPort \"70000\" is not a valid port number."),
+                discovery.errors());
+    }
+
+    @Test
+    void debugHostAndDebugPortOnTheCommandLineAreIgnoredAndReported() throws IOException {
+        MavenProject alpha = application("alpha", "com.example.alpha.AlphaApp");
+        Properties userProperties = new Properties();
+        userProperties.setProperty("vidocq.dev.debugHost", "0.0.0.0");
+        userProperties.setProperty("vidocq.dev.debugPort", "18095");
+
+        Discovery discovery = IdeaApplications.discover(List.of(alpha), List.of(alpha), root, userProperties);
+
+        assertEquals("127.0.0.1", discovery.applications().get(0).debugHost());
+        assertEquals(5005, discovery.applications().get(0).debugPort());
+        assertHas(discovery, Level.WARN, "Vidocq idea: ignoring -Dvidocq.dev.debugHost from the command line:"
+                + " application settings are read from each module's pom, so that the files in .run/ do not"
+                + " depend on how Maven was invoked.");
+        assertHas(discovery, Level.WARN, "Vidocq idea: ignoring -Dvidocq.dev.debugPort from the command line:"
+                + " application settings are read from each module's pom, so that the files in .run/ do not"
+                + " depend on how Maven was invoked.");
+    }
+
     @Test
     void aModuleIsLeftOutByItsPom() throws IOException {
         MavenProject alpha = application("alpha", "com.example.alpha.AlphaApp");
