@@ -577,8 +577,8 @@ that match. A panel keeps 128 actions at most; an id seen again, or one past the
 A `table` column headed `PanelSample.REPLAY_COLUMN` (`"replay"`) turns each of its cells into a "Replay" button on
 the page: the cell is the id of an action of the same panel, a space, then a JSON object of its arguments by name,
 such as `tool.weather {"arguments":{"city":"Paris"}}`. The button fills that action's form with those arguments and
-sends nothing; the user still has to submit. A cell of `"***"` is left empty instead, for the user to type again —
-how the MCP inspector's history marks an argument it masked as a secret.
+sends nothing; the user still has to submit. A value of `"***"` inside such a cell is left empty instead, for the
+user to type again — how the MCP inspector's history marks an argument it masked as a secret.
 
 The console keeps such a cell whole up to `PanelSample.MAX_REPLAY_CELL`, 4,096 characters, and empties a longer one
 rather than truncate it into something that would not parse.
