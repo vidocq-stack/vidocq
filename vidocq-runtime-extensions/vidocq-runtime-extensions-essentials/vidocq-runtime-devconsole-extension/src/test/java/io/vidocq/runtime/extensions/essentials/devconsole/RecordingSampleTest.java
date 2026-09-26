@@ -228,4 +228,22 @@ class RecordingSampleTest {
         assertEquals(replay, rows.get(0).get(1));
         assertEquals("", rows.get(1).get(1), "a replay cell past its limit is emptied, never cut");
     }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void aReplayColumnCellThatIsNoReplayIsPlainTextCutAsAnyOther() {
+        RecordingSample sample = new RecordingSample();
+        String prose = "replay of match " + "b".repeat(PanelSample.MAX_REPLAY_CELL);
+        String notAnObject = "tool.weather [1,2]";
+
+        sample.table("games", List.of("game", PanelSample.REPLAY_COLUMN),
+                List.of(List.of("chess", "yes"), List.of("go", prose), List.of("x", notAnObject),
+                        List.of("y", "Tool.Weather {}")));
+
+        List<List<String>> rows = (List<List<String>>) values(written(sample)).get(0).get("rows");
+        assertEquals("yes", rows.get(0).get(1));
+        assertEquals(200, rows.get(1).get(1).length(), "not a replay: cut as any cell, never emptied");
+        assertEquals(notAnObject, rows.get(2).get(1));
+        assertEquals("Tool.Weather {}", rows.get(3).get(1), "not an action id");
+    }
 }

@@ -19,6 +19,7 @@
  */
 package io.vidocq.runtime.extensions.essentials.devconsole;
 
+import io.vidocq.runtime.spi.devconsole.PanelAction;
 import io.vidocq.runtime.spi.devconsole.PanelSample;
 import io.vidocq.runtime.spi.devconsole.Unit;
 
@@ -348,12 +349,36 @@ final class RecordingSample implements PanelSample {
     }
 
     /**
-     * A cell of the {@value PanelSample#REPLAY_COLUMN} column: kept whole up to
-     * {@value PanelSample#MAX_REPLAY_CELL} characters, since a cut would break its JSON, and emptied past it.
+     * A cell of the {@value PanelSample#REPLAY_COLUMN} column: a replay, an action id then a space and a JSON object,
+     * is kept whole up to {@value PanelSample#MAX_REPLAY_CELL} characters, since a cut would break its JSON, and
+     * emptied past it; any other cell, from a panel whose column merely has that name, is text cut as any other.
      */
     private static String replayCell(String raw) {
-        return raw == null || raw.length() > PanelSample.MAX_REPLAY_CELL
-                ? null : Texts.clean(raw, PanelSample.MAX_REPLAY_CELL);
+        if (!isReplay(raw)) {
+            return Texts.clean(raw);
+        }
+        return raw.length() > PanelSample.MAX_REPLAY_CELL ? null : Texts.clean(raw, PanelSample.MAX_REPLAY_CELL);
+    }
+
+    /**
+     * Whether {@code raw} reads as {@code <action id> <JSON object>}. A cell past
+     * {@value PanelSample#MAX_REPLAY_CELL} characters is not parsed: braces at both ends of its arguments are enough.
+     */
+    private static boolean isReplay(String raw) {
+        int space = raw == null ? -1 : raw.indexOf(' ');
+        if (space <= 0) {
+            return false;
+        }
+        try {
+            PanelSample.requireKey(raw.substring(0, space));
+            String arguments = raw.substring(space + 1);
+            if (raw.length() > PanelSample.MAX_REPLAY_CELL) {
+                return arguments.startsWith("{") && arguments.endsWith("}");
+            }
+            return JsonValues.parse(arguments, PanelAction.Argument.MAX_JSON_DEPTH) instanceof Map;
+        } catch (IllegalArgumentException notAReplay) {
+            return false;
+        }
     }
 
     private static String unit(Unit unit) {

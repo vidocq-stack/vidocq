@@ -65,7 +65,8 @@ public interface PanelSample {
      * action of the same panel, a space, then a JSON object of its arguments by name, such as
      * {@code tool.weather {"arguments":{"city":"Paris"}}}. The button fills that action's form with them and sends
      * nothing; a value {@code "***"} is left empty for the user to type. The console keeps such a cell whole up to
-     * {@value #MAX_REPLAY_CELL} characters, and empties a longer one.
+     * {@value #MAX_REPLAY_CELL} characters, and empties a longer one. A cell of this column that is no such replay,
+     * or whose id is no action of the panel, is shown as text, cut as any other cell.
      */
     String REPLAY_COLUMN = "replay";
 

@@ -158,6 +158,17 @@ class PageTest {
     }
 
     @Test
+    void aReplayColumnCellThatReplaysNoActionOfThePanelStaysText() {
+        String script = file("console.js");
+
+        assertTrue(script.contains("function replayButton(panelId, cell)"), "a replay is a button, or null");
+        assertTrue(script.contains("tr.append(el(\"td\", /^\\d+$/.test(cell) ? \"n\" : null, cell));"),
+                "a cell that is no replay is drawn as any other cell");
+        assertTrue(script.contains("i === replayAt && buttons ? \"\" : column"),
+                "the header stays when no cell of the column is a replay");
+    }
+
+    @Test
     void aJsonPropertyNamedProtoIsAnObjectKeyLikeAnyOther() {
         String script = file("console.js");
 

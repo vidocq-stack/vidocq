@@ -35,8 +35,9 @@
 //   blocking dialog. The page shows the line the action returned, or the class of what it threw.
 // - An action's json argument is a form generated from its JSON Schema when the schema is flat (isFlatSchema), a raw
 //   JSON editor otherwise, with a "JSON" switch that keeps the values. A structured answer shows its body, pretty
-//   printed when it is JSON, and its details folded under "Exchange". A sample table column named "replay" is a
-//   button that fills an action's form: nothing is sent until the user submits.
+//   printed when it is JSON, and its details folded under "Exchange". A cell of a sample table column named "replay"
+//   that reads as "<action id> <JSON object>" of an action of that panel is a button that fills its form: nothing is
+//   sent until the user submits. Any other cell of such a column stays text.
 
 const HISTORY_POINTS = 300;          // five minutes at one poll per second
 const WINDOW_MILLIS = 300_000;       // what a chart shows: the last five minutes
@@ -494,22 +495,35 @@ function setTile(t, value, before) {
   }
 }
 
-/** A table of a sample, its columns and rows; a REPLAY_COLUMN column is drawn as Replay buttons. */
+/**
+ * A table of a sample, its columns and rows; a cell of a REPLAY_COLUMN column that replays an action is drawn as a
+ * Replay button, and that column's header left blank when at least one cell is.
+ */
 function sampleTable(value, panelId) {
   const table = el("table", "ext");
   const columns = value.columns || [];
   const replayAt = columns.indexOf(REPLAY_COLUMN);
-  const head = el("tr");
-  columns.forEach((column, i) => head.append(el("th", null, i === replayAt ? "" : column)));
-  const thead = el("thead");
-  thead.append(head);
   const body = el("tbody");
+  let buttons = 0;
   for (const row of value.rows || []) {
     const tr = el("tr");
-    row.forEach((cell, i) => tr.append(i === replayAt ? replayCell(panelId, cell)
-      : el("td", /^\d+$/.test(cell) ? "n" : null, cell)));
+    row.forEach((cell, i) => {
+      const button = i === replayAt ? replayButton(panelId, cell) : null;
+      if (button) {
+        buttons++;
+        const td = el("td");
+        td.append(button);
+        tr.append(td);
+      } else {
+        tr.append(el("td", /^\d+$/.test(cell) ? "n" : null, cell));
+      }
+    });
     body.append(tr);
   }
+  const head = el("tr");
+  columns.forEach((column, i) => head.append(el("th", null, i === replayAt && buttons ? "" : column)));
+  const thead = el("thead");
+  thead.append(head);
   table.append(thead, body);
   const scroll = el("div", "scroll");
   scroll.append(table);
@@ -968,22 +982,21 @@ function actionRow(panelId, action) {
 
 /**
  * A cell of a REPLAY_COLUMN column: "<action id> <JSON object of its arguments>", as a button that fills that
- * action's form with them. Nothing is sent: the user submits. An empty or unreadable cell stays empty.
+ * action's form with them. Nothing is sent: the user submits. null for a cell that is no such replay, or whose id is
+ * no action of this panel: the table shows it as text, as a column that merely has that name expects.
  */
-function replayCell(panelId, cell) {
-  const td = el("td");
+function replayButton(panelId, cell) {
   const space = typeof cell === "string" ? cell.indexOf(" ") : -1;
-  if (space <= 0) return td;
+  if (space <= 0) return null;
   let values;
-  try { values = JSON.parse(cell.slice(space + 1)); } catch (unreadable) { return td; }
+  try { values = JSON.parse(cell.slice(space + 1)); } catch (unreadable) { return null; }
   const row = actionRows.get(actionKey(panelId, cell.slice(0, space)));
-  if (!row || !isObject(values)) return td;
+  if (!row || !isObject(values)) return null;
   const button = el("button", "replay", "Replay");
   button.type = "button";
   button.title = "Fill the form of this action with these arguments";
   button.addEventListener("click", () => row.fill(values));
-  td.append(button);
-  return td;
+  return button;
 }
 
 /** The key, values and href of a line of the report: a line that points somewhere ends with {href}. */
