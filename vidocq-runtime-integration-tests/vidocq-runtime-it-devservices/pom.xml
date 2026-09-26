@@ -37,6 +37,16 @@
             <groupId>io.vidocq.runtime</groupId>
             <artifactId>vidocq-runtime-core</artifactId>
         </dependency>
+        <!-- Fix round 1 (Vidocq/vidocq#143): DevServicesDevGoalIT runs a real `mvn vidocq:dev`, which needs Chappe
+             to add the console (Ruling 5) — VidocqDevMojo resolves the project's RUNTIME-scope artifacts only.
+             This application had Chappe only transitively through the console below, at compile scope; moving
+             that console to test scope downgraded Chappe to test scope too, so vidocq:dev logged "no dev console,
+             it needs vidocq-runtime-chappe-webserver-extension" instead of adding it. Same fix as Ruling R1 for
+             the continuous-testing fixture: declare Chappe explicitly. -->
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.essentials</groupId>
+            <artifactId>vidocq-runtime-chappe-webserver-extension</artifactId>
+        </dependency>
         <!-- DevServicesTestHostIT reads the devservices section through the dev console snapshot, the
              way vidocq-runtime-mansart-h2-example's DevConsoleSnapshotTest does. Vidocq/vidocq#143: the console is
              dev-only, and this test boots the application directly (not through vidocq:dev), so it stays a
