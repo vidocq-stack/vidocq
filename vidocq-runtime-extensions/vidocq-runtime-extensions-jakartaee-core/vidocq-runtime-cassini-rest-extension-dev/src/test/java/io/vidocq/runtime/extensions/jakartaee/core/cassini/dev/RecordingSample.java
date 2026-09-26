@@ -17,7 +17,7 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
-package io.vidocq.runtime.extensions.jakartaee.core.cassini;
+package io.vidocq.runtime.extensions.jakartaee.core.cassini.dev;
 
 import io.vidocq.runtime.spi.devconsole.PanelSample;
 import io.vidocq.runtime.spi.devconsole.Unit;
@@ -29,7 +29,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * What a panel wrote during one {@link io.vidocq.runtime.spi.devconsole.DevConsolePanel#sample sample}, checked as
+ * What a panel wrote during one {@link io.vidocq.runtime.spi.devconsole.LivePanel#sample sample}, checked as
  * the console checks it: every key follows {@link PanelSample#requireKey}, and the same key written twice keeps the
  * last value; groups do not nest.
  */

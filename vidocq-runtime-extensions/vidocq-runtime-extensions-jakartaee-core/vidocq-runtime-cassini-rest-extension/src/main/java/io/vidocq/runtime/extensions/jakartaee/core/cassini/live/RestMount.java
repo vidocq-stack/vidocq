@@ -17,7 +17,7 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
-package io.vidocq.runtime.extensions.jakartaee.core.cassini;
+package io.vidocq.runtime.extensions.jakartaee.core.cassini.live;
 
 import io.vidocq.cassini.spi.http.CassiniStatistics;
 import io.vidocq.cassini.spi.http.RouteDescription;
@@ -44,6 +44,9 @@ import java.util.Set;
  * {@link Class} and no object of the application — names, and the stack's own counters — so keeping it across a dev
  * reload keeps no class of the previous application alive.
  *
+ * <p>Public since Vidocq/vidocq#143: the runtime extension's {@code RestStartupSection} and the {@code -dev}
+ * companion's {@code RestPanel} both read it from outside this package.
+ *
  * @param name           {@code vidocq.rest} for the automatic mount, else the name of the declarative mount
  * @param listener       the Chappe listener it is mounted on
  * @param prefix         the mount prefix, empty for the root
@@ -53,8 +56,9 @@ import java.util.Set;
  * @param providerGroups its {@code @Provider} classes by the JAX-RS contracts they implement
  * @param statistics     the counters the stack keeps, {@code null} when it was built without them
  */
-record RestMount(String name, String listener, String prefix, boolean stripPrefix, List<String> resources,
-                 List<RouteDescription> routes, List<ProviderGroup> providerGroups, CassiniStatistics statistics) {
+public record RestMount(String name, String listener, String prefix, boolean stripPrefix, List<String> resources,
+                        List<RouteDescription> routes, List<ProviderGroup> providerGroups,
+                        CassiniStatistics statistics) {
 
     /**
      * The {@code @Provider} classes that implement one JAX-RS contract, sorted by binary name. A class that implements
@@ -63,8 +67,8 @@ record RestMount(String name, String listener, String prefix, boolean stripPrefi
      * @param kind    what the contract is, such as {@code exception mappers}
      * @param classes the binary names of the classes
      */
-    record ProviderGroup(String kind, List<String> classes) {
-        ProviderGroup {
+    public record ProviderGroup(String kind, List<String> classes) {
+        public ProviderGroup {
             classes = List.copyOf(classes);
         }
     }
@@ -86,7 +90,7 @@ record RestMount(String name, String listener, String prefix, boolean stripPrefi
             new Kind("features", Feature.class),
             new Kind("dynamic features", DynamicFeature.class));
 
-    RestMount {
+    public RestMount {
         resources = List.copyOf(resources);
         routes = List.copyOf(routes);
         providerGroups = List.copyOf(providerGroups);
@@ -99,8 +103,8 @@ record RestMount(String name, String listener, String prefix, boolean stripPrefi
      * @param routes     what the stack resolved, {@code CassiniStack.routes()}
      * @param statistics what it counts, {@code CassiniStack.statistics()}, or {@code null}
      */
-    static RestMount of(String name, String listener, String prefix, boolean stripPrefix, Set<Class<?>> classes,
-                        List<RouteDescription> routes, CassiniStatistics statistics) {
+    public static RestMount of(String name, String listener, String prefix, boolean stripPrefix,
+                               Set<Class<?>> classes, List<RouteDescription> routes, CassiniStatistics statistics) {
         List<String> resources = new ArrayList<>();
         List<Class<?>> providers = new ArrayList<>();
         for (Class<?> c : classes) {
@@ -127,7 +131,7 @@ record RestMount(String name, String listener, String prefix, boolean stripPrefi
     }
 
     /** The binary names of the {@code @Provider} classes, each once, sorted. */
-    List<String> providers() {
+    public List<String> providers() {
         return providerGroups.stream().flatMap(g -> g.classes().stream()).distinct().sorted().toList();
     }
 
@@ -135,12 +139,12 @@ record RestMount(String name, String listener, String prefix, boolean stripPrefi
      * Where a route is on the listener: under the prefix when Chappe strips it, as Cassini routes it otherwise, since
      * Cassini then sees, and matches, the full path.
      */
-    String pathOnListener(RouteDescription route) {
+    public String pathOnListener(RouteDescription route) {
         return stripPrefix ? prefix + route.path() : route.path();
     }
 
     /** The prefix as the report prints it: {@code /} for the root. */
-    String displayPrefix() {
+    public String displayPrefix() {
         return prefix.isEmpty() ? "/" : prefix;
     }
 }

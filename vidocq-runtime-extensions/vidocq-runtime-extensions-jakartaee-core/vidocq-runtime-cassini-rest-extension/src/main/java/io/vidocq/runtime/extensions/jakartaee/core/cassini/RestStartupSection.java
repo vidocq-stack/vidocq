@@ -21,6 +21,7 @@ package io.vidocq.runtime.extensions.jakartaee.core.cassini;
 
 import io.vidocq.cassini.spi.http.RouteDescription;
 import io.vidocq.runtime.extensions.essentials.chappe.ChappeMountPoint;
+import io.vidocq.runtime.extensions.jakartaee.core.cassini.live.RestMount;
 import io.vidocq.runtime.spi.report.StartupReportContext;
 import io.vidocq.runtime.spi.report.StartupReportSection;
 import io.vidocq.runtime.spi.report.Verbosity;

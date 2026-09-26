@@ -17,11 +17,10 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
-package io.vidocq.runtime.extensions.jakartaee.core.cassini;
+package io.vidocq.runtime.extensions.jakartaee.core.cassini.dev;
 
 import io.vidocq.runtime.extensions.jakartaee.core.cassini.live.RestMount;
 import io.vidocq.runtime.extensions.jakartaee.core.cassini.live.RestMounts;
-import io.vidocq.runtime.spi.report.Verbosity;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -29,9 +28,9 @@ import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class CassiniExtensionTest {
+/** The rest section, live: what {@link RestLivePanel} reads from the mounts {@code RestMounts} holds. */
+class RestLivePanelTest {
 
     @AfterEach
     void forget() {
@@ -39,30 +38,31 @@ class CassiniExtensionTest {
     }
 
     @Test
-    void contributes_the_rest_section() {
-        CassiniExtension extension = new CassiniExtension();
+    void itMakesTheRestSectionLiveWithItsCharts() {
+        RestLivePanel panel = new RestLivePanel();
 
-        assertEquals("rest", extension.id());
-        assertEquals("REST (Cassini)", extension.title());
+        assertEquals("rest", panel.id());
+        assertEquals(RestPanel.CHARTS, panel.charts());
     }
 
     @Test
-    void writes_what_the_mounts_of_this_boot_recorded() {
-        RestMounts.record(RestMount.of("vidocq.rest", "default", "", true, Set.of(), List.of(), null));
-        RestMounts.record(RestMount.of("health", "default", "/health", false, Set.of(), List.of(), null));
-        RecordingSection section = new RecordingSection();
+    void samplesTheMountsOfThisBoot() {
+        var stats = new RestPanelTest.FixedStatistics(3, 0, new long[] {0, 3, 0, 0, 0}, 3, 1);
+        RestMounts.record(RestMount.of("vidocq.rest", "default", "", true, Set.of(), List.of(), stats));
+        RecordingSample sample = new RecordingSample();
 
-        new CassiniExtension().contribute(new FakeReportContext(Verbosity.SUMMARY), section);
+        new RestLivePanel().sample(sample);
 
-        assertEquals("0 resource classes, 0 routes, 0 providers at /, /health", section.summary);
+        assertEquals(3, sample.groups().get("vidocq.rest").number("requests"));
     }
 
     @Test
-    void forgets_the_mounts_when_it_stops() {
-        RestMounts.record(RestMount.of("vidocq.rest", "default", "", true, Set.of(), List.of(), null));
+    void nothingMountedIsAbsentNotZero() {
+        RecordingSample sample = new RecordingSample();
 
-        new CassiniExtension().onStop();
+        new RestLivePanel().sample(sample);
 
-        assertTrue(RestMounts.all().isEmpty());
+        assertEquals("absent", sample.kind("requests"));
+        assertEquals("no REST resource mounted", sample.text("requests"));
     }
 }

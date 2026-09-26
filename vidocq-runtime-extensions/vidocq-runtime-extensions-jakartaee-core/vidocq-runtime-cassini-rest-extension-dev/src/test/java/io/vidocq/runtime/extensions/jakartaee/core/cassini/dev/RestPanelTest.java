@@ -17,12 +17,12 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
-package io.vidocq.runtime.extensions.jakartaee.core.cassini;
+package io.vidocq.runtime.extensions.jakartaee.core.cassini.dev;
 
 import io.vidocq.cassini.spi.http.CassiniStatistics;
+import io.vidocq.runtime.extensions.jakartaee.core.cassini.live.RestMount;
 import io.vidocq.runtime.spi.devconsole.Chart;
 import io.vidocq.runtime.spi.devconsole.Series;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
@@ -41,11 +41,6 @@ class RestPanelTest {
         public long responses(int statusClass) {
             return byClass[statusClass - 1];
         }
-    }
-
-    @AfterEach
-    void forget() {
-        RestMounts.clear();
     }
 
     private static RestMount mount(String name, CassiniStatistics statistics) {
@@ -128,17 +123,5 @@ class RestPanelTest {
                 assertTrue(written.contains(series.key()), chart.id() + " plots " + series.key());
             }
         }
-    }
-
-    @Test
-    void the_extension_samples_the_mounts_of_this_boot() {
-        var stats = new FixedStatistics(3, 0, new long[] {0, 3, 0, 0, 0}, 3, 1);
-        RestMounts.record(mount("vidocq.rest", stats));
-        RecordingSample sample = new RecordingSample();
-
-        new CassiniExtension().sample(sample);
-
-        assertEquals(3, sample.groups().get("vidocq.rest").number("requests"));
-        assertEquals(RestPanel.CHARTS, new CassiniExtension().charts());
     }
 }

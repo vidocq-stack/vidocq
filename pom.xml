@@ -206,6 +206,11 @@
                 <version>${project.version}</version>
             </dependency>
             <dependency>
+                <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
+                <artifactId>vidocq-runtime-cassini-rest-extension-dev</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
                 <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-cyrano-rest-client-extension</artifactId>
                 <version>${project.version}</version>

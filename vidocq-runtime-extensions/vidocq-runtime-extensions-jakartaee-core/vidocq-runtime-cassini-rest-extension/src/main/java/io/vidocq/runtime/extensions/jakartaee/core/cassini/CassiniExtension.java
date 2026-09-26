@@ -25,13 +25,13 @@ import io.vidocq.cassini.spi.bean.BeanProvider;
 import io.vidocq.cassini.spi.http.CassiniStack;
 import io.vidocq.runtime.extensions.essentials.chappe.ChappeListener;
 import io.vidocq.runtime.extensions.essentials.chappe.ChappeMountPoint;
+import io.vidocq.runtime.extensions.jakartaee.core.cassini.live.RestMount;
+import io.vidocq.runtime.extensions.jakartaee.core.cassini.live.RestMounts;
 import io.vidocq.runtime.spi.ExtensionContext;
 import io.vidocq.runtime.spi.VidocqConfiguration;
 import io.vidocq.runtime.spi.VidocqExtension;
-import io.vidocq.runtime.spi.devconsole.Chart;
-import io.vidocq.runtime.spi.devconsole.DevConsolePanel;
-import io.vidocq.runtime.spi.devconsole.PanelSample;
 import io.vidocq.runtime.spi.report.StartupReportContext;
+import io.vidocq.runtime.spi.report.StartupReportContributor;
 import io.vidocq.runtime.spi.report.StartupReportSection;
 import io.vidocq.vauban.core.container.VaubanContainerBuilder;
 import io.vidocq.vauban.core.context.RequestContext;
@@ -65,10 +65,12 @@ import java.util.Set;
  *
  * <p><b>Startup report:</b> writes the {@code rest} section — the routes of every Cassini stack mounted
  * during the boot, this extension's and the declarative {@code type=restful} mounts', in match order, with
- * the resource and provider classes. The dev console shows it as the {@code rest} panel, live: each mount's
- * requests, status classes, requests in flight and time in handlers, from {@code CassiniStack.statistics()}.</p>
+ * the resource and provider classes. The live panel of the dev console, each mount's requests, status classes,
+ * requests in flight and time in handlers from {@code CassiniStack.statistics()}, moved to the
+ * {@code vidocq-runtime-cassini-rest-extension-dev} companion (Vidocq/vidocq#143), which only {@code vidocq:dev}
+ * adds.</p>
  */
-public final class CassiniExtension implements VidocqExtension, DevConsolePanel {
+public final class CassiniExtension implements VidocqExtension, StartupReportContributor {
 
     static final String SECTION_ID = "rest";
     static final String SECTION_TITLE = "REST (Cassini)";
@@ -211,20 +213,6 @@ public final class CassiniExtension implements VidocqExtension, DevConsolePanel 
         } catch (IllegalStateException notInstalled) {
             return List.of();
         }
-    }
-
-    @Override
-    public List<Chart> charts() {
-        return RestPanel.CHARTS;
-    }
-
-    /**
-     * The live figures of every mount, from the counters each stack keeps: read from memory, without a lock, and
-     * nothing after {@code onStop}, which clears the mounts first.
-     */
-    @Override
-    public void sample(PanelSample sample) {
-        RestPanel.sample(RestMounts.all(), sample);
     }
 
     private static boolean hasDeclarativeCassiniMount(ExtensionContext context) {

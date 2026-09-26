@@ -26,6 +26,8 @@ import io.vidocq.cassini.spi.http.CassiniStack;
 import io.vidocq.chappe.api.Handler;
 import io.vidocq.runtime.extensions.essentials.chappe.spi.MountConfig;
 import io.vidocq.runtime.extensions.essentials.chappe.spi.MountHandlerProvider;
+import io.vidocq.runtime.extensions.jakartaee.core.cassini.live.RestMount;
+import io.vidocq.runtime.extensions.jakartaee.core.cassini.live.RestMounts;
 import io.vidocq.vauban.core.context.RequestContext;
 
 import java.util.LinkedHashSet;

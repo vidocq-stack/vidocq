@@ -19,6 +19,7 @@
     <modules>
         <module>vidocq-runtime-cassini-rest-extension</module>
         <module>vidocq-runtime-cassini-rest-extension-codegen</module>
+        <module>vidocq-runtime-cassini-rest-extension-dev</module>
     </modules>
 
     <build>

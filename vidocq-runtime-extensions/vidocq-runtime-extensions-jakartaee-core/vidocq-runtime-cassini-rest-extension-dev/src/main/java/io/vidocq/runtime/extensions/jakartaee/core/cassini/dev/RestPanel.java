@@ -17,9 +17,10 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
-package io.vidocq.runtime.extensions.jakartaee.core.cassini;
+package io.vidocq.runtime.extensions.jakartaee.core.cassini.dev;
 
 import io.vidocq.cassini.spi.http.CassiniStatistics;
+import io.vidocq.runtime.extensions.jakartaee.core.cassini.live.RestMount;
 import io.vidocq.runtime.spi.devconsole.Chart;
 import io.vidocq.runtime.spi.devconsole.PanelSample;
 import io.vidocq.runtime.spi.devconsole.Series;

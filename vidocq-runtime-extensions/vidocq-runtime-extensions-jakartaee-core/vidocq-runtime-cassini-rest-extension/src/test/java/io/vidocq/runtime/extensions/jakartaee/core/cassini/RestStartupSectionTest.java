@@ -20,6 +20,7 @@
 package io.vidocq.runtime.extensions.jakartaee.core.cassini;
 
 import io.vidocq.cassini.spi.http.RouteDescription;
+import io.vidocq.runtime.extensions.jakartaee.core.cassini.live.RestMount;
 import io.vidocq.runtime.spi.report.Verbosity;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.container.ContainerRequestContext;
